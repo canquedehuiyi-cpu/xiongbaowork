@@ -47,7 +47,7 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
-type Kind = ComposioApp["connection"]["kind"];
+type Kind = NonNullable<ComposioApp["connection"]>["kind"];
 
 function app(slug: string, name: string, kind: Kind, enabled: boolean) {
   return {

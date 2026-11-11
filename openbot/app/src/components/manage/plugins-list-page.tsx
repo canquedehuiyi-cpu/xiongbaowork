@@ -107,13 +107,13 @@ function summaryFor(
   auth: CatalogueItem["auth"] | undefined,
   youConnected: boolean,
 ): string {
-  if (auth === "user-oauth" && !youConnected) return "Not connected";
-  if (server.tools.length === 0) return "No tools yet";
+  if (auth === "user-oauth" && !youConnected) return "未连接";
+  if (server.tools.length === 0) return "还没有工具";
 
   const bots = new Set(server.tools.flatMap((tool) => tool.grantedTo)).size;
-  const tools = `${server.tools.length} ${server.tools.length === 1 ? "tool" : "tools"}`;
-  if (bots === 0) return `${tools} · no Bots`;
-  return `${tools} · ${bots} ${bots === 1 ? "Bot" : "Bots"}`;
+  const tools = `${server.tools.length} 个工具`;
+  if (bots === 0) return `${tools} · 没有员工`;
+  return `${tools} · ${bots} 位员工`;
 }
 
 /**
@@ -161,13 +161,13 @@ export function PluginsListPage({
 
   return (
     <PageShell
-      description="Connect services for your company, then choose which Bots can use each service’s tools."
-      title="Plugins"
+      description="为公司连接服务，再选哪些员工可以用每个服务的工具。"
+      title="插件"
     >
       {/* Pending, error, empty, rows — pending first, so no sentence asserts anything mid-fetch. */}
       {plugins.isPending ? null : plugins.error ? (
         <p className="mt-12 text-destructive text-sm" role="alert">
-          Couldn't load plugins. Reload the page.
+          读不到插件。请刷新页面。
         </p>
       ) : (
         <>
@@ -178,12 +178,12 @@ export function PluginsListPage({
           <AccessRequestsSection />
 
           <PageSection
-            description="Added for everybody. Open one to set it up and choose which Bots get its tools."
-            title="Connected"
+            description="已为所有人添加。打开一个进行设置，并选哪些员工拿到它的工具。"
+            title="已连接"
           >
             {plugins.data?.servers.length === 0 ? (
-              <PageEmpty icon={IconPlug} title="Nothing connected yet">
-                Pick one from the list below.
+              <PageEmpty icon={IconPlug} title="还没有连接任何服务">
+                从下面的列表里选一个。
               </PageEmpty>
             ) : (
               <PageRows>
@@ -250,12 +250,12 @@ export function PluginsListPage({
           </PageSection>
 
           <PageSection
-            description="Reviewed, first-party servers. Open one to add it."
-            title="Explore plugins"
+            description="审核过的官方服务器。打开一个就能添加。"
+            title="浏览插件"
           >
             {explore.length === 0 ? (
-              <PageEmpty icon={IconCircleCheck} title="All connected">
-                Every plugin in the catalogue is connected.
+              <PageEmpty icon={IconCircleCheck} title="都已连接">
+                目录里的插件都已连接。
               </PageEmpty>
             ) : (
               <PageRows>
@@ -279,7 +279,7 @@ export function PluginsListPage({
                             count={requestCounts?.byApp[entry.key] ?? 0}
                           />
                           <span className="text-muted-foreground text-xs">
-                            Not added
+                            未添加
                           </span>
                           <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
                         </ItemActions>
@@ -294,7 +294,7 @@ export function PluginsListPage({
 
           <PageSection
             description={moreAppsSectionDescription(provider)}
-            title="More apps"
+            title="更多应用"
           >
             <PageRows>
               {/*
@@ -356,7 +356,7 @@ function PendingRequests({ count }: { count: number }) {
   if (count === 0) return null;
   return (
     <span className="font-medium text-foreground text-xs tabular-nums">
-      {count} {count === 1 ? "request" : "requests"}
+      {count} 条申请
     </span>
   );
 }

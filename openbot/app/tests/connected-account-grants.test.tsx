@@ -92,6 +92,7 @@ function server(
     lastError: null,
     addedBy: null,
     dynamicClient: false,
+    adminConnectOnly: false,
     accountMode,
     sharedVendorConnected: false,
     ownerGrants: "any",

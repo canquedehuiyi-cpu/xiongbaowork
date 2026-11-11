@@ -194,7 +194,7 @@ describe("the Skills list", () => {
   test("New skill is a link to its own page", async () => {
     const { view } = renderAt("/admin/skills");
     await view.findByText("Triage the inbox");
-    expect(view.getByText("New skill").closest("a")?.getAttribute("href")).toBe(
+    expect(view.getByText("新建技能").closest("a")?.getAttribute("href")).toBe(
       "/admin/skills/new",
     );
   });

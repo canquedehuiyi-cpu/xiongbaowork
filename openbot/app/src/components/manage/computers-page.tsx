@@ -117,7 +117,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
    * instead, because the top of this page is a long scroll away from them.
    */
   const problem = fleet.error
-    ? "Couldn't load the computers. Reload the page."
+    ? "读不到电脑列表。请刷新页面。"
     : null;
   const hostProblem = hostAccess.error
     ? hostAccess.error.message
@@ -154,61 +154,59 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
    */
   const titleOf = (computer: ComputerProfile): string => {
     if (isOwnBrowser(computer)) {
-      if (personal) return "Your OpenBot browser";
+      if (personal) return "你的熊宝浏览器";
       const owner = computer.person?.name ?? computer.person?.email;
-      return owner
-        ? `${owner}'s OpenBot browser`
-        : "A person's OpenBot browser";
+      return owner ? `${owner} 的熊宝浏览器` : "某个人的熊宝浏览器";
     }
     // One person, so a row is one of their Bots.
-    if (personal) return computer.botId ? nameFor(computer.botId) : "Computer";
+    if (personal) return computer.botId ? nameFor(computer.botId) : "电脑";
     const person =
       computer.person?.name ?? computer.person?.email ?? computer.personId;
     if (computer.kind === "person") {
       return computer.botId
         ? `${person} · ${nameFor(computer.botId)}`
-        : `${person}'s computer`;
+        : `${person} 的电脑`;
     }
     return computer.botId ? nameFor(computer.botId) : computer.computer;
   };
 
   /** What a row carries, said once before its state. */
   const scopeOf = (computer: ComputerProfile): string => {
-    if (isOwnBrowser(computer)) return "Their own browser for Teach a Bot";
+    if (isOwnBrowser(computer)) return "这个人自己教员工做事时用的浏览器";
     if (computer.kind === "person") {
       return computer.botId
-        ? "This person's profile and folder for this Bot"
-        : "Runs every Bot this person uses";
+        ? "这个人为这位员工保留的浏览器资料和文件夹"
+        : "运行这个人用的每一位员工";
     }
     return isolation === "shared"
-      ? "This Bot's profile from before each person had their own"
-      : "Isolated: a computer of its own, shared by everyone who uses it";
+      ? "每个人有自己的资料之前，这位员工的浏览器资料"
+      : "独立：有自己的一台电脑，用它的人共用";
   };
 
   /** Whether its browser runs, and when it starts again. */
   const stateOf = (computer: ComputerProfile): string => {
     const since = computer.running
-      ? `Browser running since ${new Date(computer.startedAt ?? "").toLocaleTimeString()}`
-      : "No browser running";
+      ? `浏览器从 ${new Date(computer.startedAt ?? "").toLocaleTimeString("zh-CN")} 起在运行`
+      : "没有浏览器在运行";
     if (!isOwnBrowser(computer))
       return computer.running
         ? since
-        : `${since}. It starts when the Bot next needs it.`;
+        : `${since}。员工下次需要时会启动。`;
     // In the team edition the row already says it is that person's browser for Teach a Bot.
     if (!personal) return since;
     return computer.running
-      ? `${since}. You record in it with Teach a Bot.`
-      : `${since}. It opens when you record with Teach a Bot.`;
+      ? `${since}。你用「教员工做事」录制时就在这里录。`
+      : `${since}。你用「教员工做事」录制时它会打开。`;
   };
 
   return (
     <PageShell
       description={
         personal
-          ? "Your Bots share one computer. Each Bot keeps its own browser profile there, which keeps it signed in. A command one Bot runs can still read another Bot's files."
-          : "Each person's computer, and each isolated Bot's. Every Bot keeps its own browser profile on it, which keeps that Bot signed in. Resetting a computer signs every Bot on it out of everything."
+          ? "你的员工共用一台电脑。每位员工在上面有自己的浏览器资料，所以能保持登录。但一位员工运行的命令仍能读到另一位员工的文件。"
+          : "每个人的电脑，以及每位独立员工的电脑。每位员工在上面有自己的浏览器资料，所以能保持登录。重置一台电脑会让上面每位员工退出所有登录。"
       }
-      title={personal ? "Computer" : "Computers"}
+      title="电脑"
     >
       {problem ? (
         <p
@@ -221,21 +219,13 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
 
       {personal ? null : isolation === "shared" ? (
         <p className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-          <span className="font-medium">
-            Every person's Bots run on one computer.
-          </span>{" "}
-          Each person keeps their own browser profile and folder for each Bot,
-          so logins aren't shared. A command one Bot runs can still read
-          another's files. Set <code>COMPUTER_SUPERVISOR_URL</code> to give each
-          person a computer of their own.
+          <span className="font-medium">所有人的员工都在一台电脑上运行。</span>
+          每个人为每位员工保留自己的浏览器资料和文件夹，所以登录不会共用；但一位员工运行的命令仍能读到别人的文件。设置{" "}
+          <code>COMPUTER_SUPERVISOR_URL</code> 可以让每个人有自己的电脑。
         </p>
       ) : isolation === "per-person" ? (
         <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
-          Each person has their own computer, and every Bot they use runs on it,
-          public Bots made by other people included. Each Bot keeps its own
-          browser profile and folder there, but a command one Bot runs can reach
-          anything else on that person's computer. An isolated Bot has a
-          computer of its own.
+          每个人有自己的电脑，他用的每位员工（包括别人做的公开员工）都在上面运行。每位员工在上面有自己的浏览器资料和文件夹，但一位员工运行的命令能碰到这个人电脑上的其他东西。独立员工有自己的电脑。
         </p>
       ) : null}
 
@@ -267,7 +257,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
 
       <PageSection
         title={
-          personal ? "Your Bots' browsers" : "Computers in this deployment"
+          personal ? "你的员工的浏览器" : "这个部署里的电脑"
         }
       >
         {setState.error ? (
@@ -279,15 +269,15 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
           </p>
         ) : null}
         {computers === null && problem ? (
-          <PageEmpty icon={IconAlertTriangle} title="Couldn't load the list" />
+          <PageEmpty icon={IconAlertTriangle} title="读不到列表" />
         ) : computers === null ? null : computers.length === 0 ? (
           <PageEmpty
             icon={IconDeviceDesktop}
-            title={personal ? "No browsers yet" : "No computers yet"}
+            title={personal ? "还没有浏览器" : "还没有电脑"}
           >
             {personal
-              ? "One starts the first time a Bot opens a page."
-              : "One shows up the first time a Bot opens a page."}
+              ? "员工第一次打开网页时会启动一个。"
+              : "员工第一次打开网页时会出现一台。"}
           </PageEmpty>
         ) : (
           <PageRows>
@@ -305,12 +295,12 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
                         ? null
                         : ` · ${
                             computer.egress === undefined
-                              ? "Egress not reported"
+                              ? "没有报告出口"
                               : computer.egress === null
-                                ? "Leaves directly"
-                                : `Leaves through ${computer.egress}`
+                                ? "直接出网"
+                                : `经 ${computer.egress} 出网`
                           }`}
-                      {computer.updateAvailable ? " · Update available" : ""}
+                      {computer.updateAvailable ? " · 有可用更新" : ""}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -321,7 +311,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
                         size="sm"
                         variant="outline"
                       >
-                        Update computer
+                        更新电脑
                       </Button>
                     ) : null}
                     <Button
@@ -330,7 +320,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
                       size="sm"
                       variant="outline"
                     >
-                      {busy === rowId(computer) ? "Working…" : "Stop browser"}
+                      {busy === rowId(computer) ? "正在处理…" : "停止浏览器"}
                     </Button>
                     {personal && isOwnBrowser(computer) ? (
                       <Button
@@ -341,7 +331,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
                         size="sm"
                         variant="outline"
                       >
-                        Clear browser data
+                        清除浏览器数据
                       </Button>
                     ) : (
                       <Button
@@ -350,7 +340,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
                         size="sm"
                         variant="outline"
                       >
-                        Reset
+                        重置
                       </Button>
                     )}
                   </ItemActions>
@@ -379,17 +369,17 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
             <DialogTitle>
               {personal
                 ? confirming?.botId
-                  ? `Reset ${nameFor(confirming.botId)}'s browser?`
-                  : "Reset the computer?"
-                : `Reset ${confirming ? titleOf(confirming) : ""}?`}
+                  ? `重置 ${nameFor(confirming.botId)} 的浏览器？`
+                  : "重置这台电脑？"
+                : `重置 ${confirming ? titleOf(confirming) : ""}？`}
             </DialogTitle>
             <DialogDescription>
               {confirming?.kind === "person" && !confirming.botId
-                ? "Every Bot's profile on this person's computer is deleted. Each is signed out of every service and starts clean."
+                ? "这个人电脑上每位员工的浏览器资料都会被删除，每位员工都会退出所有服务，从头开始。"
                 : confirming && isOwnBrowser(confirming)
-                  ? "Its profile is deleted. The person is signed out of every site they signed in to in it."
-                  : "Its profile is deleted. The Bot is signed out of every service and starts clean."}{" "}
-              You can't undo this.
+                  ? "它的浏览器资料会被删除，这个人在里面登录过的每个网站都会退出。"
+                  : "它的浏览器资料会被删除，这位员工会退出所有服务，从头开始。"}
+              这一步不能撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -398,7 +388,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
               size="sm"
               variant="ghost"
             >
-              Cancel
+              取消
             </Button>
             <Button
               disabled={confirming !== null && busy === rowId(confirming)}
@@ -409,8 +399,8 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
               variant="destructive"
             >
               {confirming !== null && busy === rowId(confirming)
-                ? "Resetting…"
-                : "Reset it"}
+                ? "正在重置…"
+                : "重置"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -431,12 +421,10 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Update {confirmingUpdate ? titleOf(confirmingUpdate) : ""}?
+              更新 {confirmingUpdate ? titleOf(confirmingUpdate) : ""}？
             </DialogTitle>
             <DialogDescription>
-              It moves to the computer image {paths.deploymentName} now runs.
-              Its files and sign-ins are kept. If it's running, it restarts and
-              stops what it's doing.
+              它会换到{paths.deploymentName}现在用的电脑镜像，文件和登录都会保留。如果它正在运行，会重启并停下手上的事。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -445,7 +433,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
               size="sm"
               variant="ghost"
             >
-              Cancel
+              取消
             </Button>
             <Button
               disabled={
@@ -457,8 +445,8 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
               size="sm"
             >
               {confirmingUpdate !== null && busy === rowId(confirmingUpdate)
-                ? "Updating…"
-                : "Update it"}
+                ? "正在更新…"
+                : "更新"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -466,33 +454,28 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
 
       {personal ? (
         <p className="mt-4 text-muted-foreground text-sm">
-          <strong>Stop browser</strong> closes a browser and keeps its sign-ins.
-          It starts again the next time it's needed. <strong>Reset</strong>{" "}
-          deletes a Bot's browser profile and signs it out of everything.{" "}
+          <strong>停止浏览器</strong>会关掉浏览器但保留登录，下次需要时再启动。
+          <strong>重置</strong>会删除员工的浏览器资料，让它退出所有登录。
           {computers?.some(isOwnBrowser) ? (
             <>
-              <strong>Clear browser data</strong> does the same for your OpenBot
-              browser.{" "}
+              <strong>清除浏览器数据</strong>对你的熊宝浏览器做同样的事。
             </>
           ) : null}
-          Each shows in{" "}
+          每一项都会记在
           <Link className="underline" {...paths.audit()}>
             {paths.auditLabel}
           </Link>
-          .
+          里。
         </p>
       ) : (
         <p className="mt-4 text-muted-foreground text-sm">
-          <strong>Stop</strong> closes the computer's browsers and keeps their
-          logins. It starts again the next time a Bot needs it.{" "}
-          <strong>Reset</strong> deletes the profiles and signs every Bot on it
-          out of everything. <strong>Update computer</strong> shows when a
-          computer runs an older image. It moves the computer to the new one and
-          keeps its files and sign-ins. All three show in{" "}
+          <strong>停止</strong>会关掉电脑上的浏览器但保留登录，员工下次需要时再启动。
+          <strong>重置</strong>会删除浏览器资料，让上面每位员工退出所有登录。电脑用的是旧镜像时会出现
+          <strong>更新电脑</strong>，它会把电脑换到新镜像，保留文件和登录。这三项都会记在
           <Link className="underline" {...paths.audit()}>
             {paths.auditLabel}
           </Link>
-          .
+          里。
         </p>
       )}
       {children}
@@ -552,8 +535,8 @@ function HostFoldersSection({
 
   return (
     <PageSection
-      description="Choose folders a Bot can read on this computer. The desktop app asks before each edit or command. Access ends when you stop OpenBot."
-      title="Folders on this computer"
+      description="选择员工可以读取的这台电脑上的文件夹。每次改文件或运行命令前，桌面应用都会先问你。退出熊宝后访问就结束。"
+      title="这台电脑上的文件夹"
     >
       {problem ? (
         <p
@@ -566,19 +549,17 @@ function HostFoldersSection({
 
       {desktop && !connected && !loading ? (
         <p className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-          The desktop app is offline. Open it to approve folders or run
-          commands.
+          桌面应用不在线。打开它才能批准文件夹或运行命令。
         </p>
       ) : null}
 
       {loading ? null : !desktop ? (
-        <PageEmpty icon={IconDeviceDesktop} title="Needs OpenBot Desktop">
-          This OpenBot isn't running in the desktop app. Use OpenBot Desktop to
-          let Bots read folders on this computer.
+        <PageEmpty icon={IconDeviceDesktop} title="需要熊宝桌面版">
+          这里的熊宝不是在桌面应用里运行的。用熊宝桌面版才能让员工读取这台电脑上的文件夹。
         </PageEmpty>
       ) : botIds.length === 0 ? (
-        <PageEmpty icon={IconBolt} title="No Bots yet">
-          Create one, then choose its folders.
+        <PageEmpty icon={IconBolt} title="还没有员工">
+          先新建一位员工，再给它选文件夹。
         </PageEmpty>
       ) : (
         <PageRows>
@@ -606,7 +587,7 @@ function HostFoldersSection({
                     size="sm"
                     variant="outline"
                   >
-                    {requestingBotId === botId ? "Waiting…" : "Choose folder"}
+                    {requestingBotId === botId ? "正在等待…" : "选择文件夹"}
                   </Button>
                 </ItemActions>
               </Item>
@@ -619,8 +600,7 @@ function HostFoldersSection({
       {desktop ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-muted-foreground text-sm">
           <p>
-            Folders are read-only. When a Bot needs to write, the desktop app
-            asks you first.
+            文件夹是只读的。员工需要写入时，桌面应用会先问你。
           </p>
           <div className="flex items-center gap-3">
             <Button
@@ -629,10 +609,10 @@ function HostFoldersSection({
               size="sm"
               variant="outline"
             >
-              {stopping ? "Stopping…" : "Stop folder access"}
+              {stopping ? "正在停止…" : "停止文件夹访问"}
             </Button>
             <Link className="underline" {...paths.audit()}>
-              Open {paths.auditLabel}
+              打开{paths.auditLabel}
             </Link>
           </div>
         </div>
@@ -674,8 +654,8 @@ function FolderGrantList({
             <p className="truncate font-medium text-sm">{grant.displayName}</p>
             <p className="text-muted-foreground text-xs">
               {personal
-                ? "Read-only"
-                : `Approved by ${ownerLabel(grant)} · Read-only`}
+                ? "只读"
+                : `由${ownerLabel(grant)}批准 · 只读`}
             </p>
           </div>
           <Button
@@ -684,7 +664,7 @@ function FolderGrantList({
             size="sm"
             variant="ghost"
           >
-            {revokingGrantId === grant.id ? "Revoking…" : "Revoke"}
+            {revokingGrantId === grant.id ? "正在撤销…" : "撤销"}
           </Button>
         </div>
       ))}
@@ -711,17 +691,16 @@ function summaryFor(
   const waiting = pending.filter((request) => request.botId === botId).length;
   const parts = [];
   if (active > 0)
-    parts.push(`${active} read-only ${active === 1 ? "folder" : "folders"}`);
-  if (waiting > 0)
-    parts.push(`${waiting} pending ${waiting === 1 ? "request" : "requests"}`);
-  return parts.length > 0 ? parts.join(" · ") : "No folders approved.";
+    parts.push(`${active} 个只读文件夹`);
+  if (waiting > 0) parts.push(`${waiting} 个待处理的请求`);
+  return parts.length > 0 ? parts.join(" · ") : "没有批准任何文件夹。";
 }
 
 /** The Bot id Stop folder access is addressed to: every Bot at once. */
 const ALL_BOTS = "*";
 
 function ownerLabel(grant: { ownerName?: string; ownerEmail?: string }) {
-  return grant.ownerName ?? grant.ownerEmail ?? "the desktop owner";
+  return grant.ownerName ?? grant.ownerEmail ?? "桌面应用的主人";
 }
 
 /**
@@ -738,30 +717,30 @@ function pendingSentence(
 ): string {
   switch (request.kind) {
     case "list_files":
-      return "Listing files.";
+      return "正在列出文件。";
     case "read_file":
-      return "Reading a file.";
+      return "正在读一个文件。";
     case "cancel":
     case "stop":
-      return "Stopping folder work.";
+      return "正在停止文件夹里的工作。";
   }
   if (personal) {
     switch (request.kind) {
       case "write_file":
-        return "A file change is waiting for you. OpenBot Desktop is asking you in a window.";
+        return "有一处文件改动在等你。熊宝桌面版正在弹窗问你。";
       case "run_command":
-        return "A command is waiting for you or still running. OpenBot Desktop asks you in a window.";
+        return "有一条命令在等你或还在运行。熊宝桌面版会弹窗问你。";
       default:
-        return "Folder access is waiting for you. OpenBot Desktop is asking you in a window.";
+        return "有一个文件夹访问在等你。熊宝桌面版正在弹窗问你。";
     }
   }
   const owner = ownerLabel(request);
   switch (request.kind) {
     case "write_file":
-      return `File change waiting for approval from ${owner}, or to finish.`;
+      return `文件改动在等${owner}批准，或者还没做完。`;
     case "run_command":
-      return `Command waiting for approval from ${owner}, or to finish.`;
+      return `命令在等${owner}批准，或者还没做完。`;
     default:
-      return `Folder access waiting for approval from ${owner}.`;
+      return `文件夹访问在等${owner}批准。`;
   }
 }

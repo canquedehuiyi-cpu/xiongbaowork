@@ -1,4 +1,8 @@
-import { IconBrandGithub, IconChevronRight } from "@tabler/icons-react";
+import {
+  IconBrandGithub,
+  IconBrandSlack,
+  IconChevronRight,
+} from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -28,6 +32,7 @@ import {
 import { IDENTITY_SUMMARIES, isBrokeredGithub } from "@/lib/connections/rows";
 import { linkedAccountsQueryOptions } from "@/lib/identity/queries";
 import {
+  appKeyOf,
   connectionsQueryOptions,
   personalConnections,
   pluginsPageQueryOptions,
@@ -71,7 +76,7 @@ export function IdentityConnectionPage({
 
   return (
     <PageShell
-      backButton={{ label: "Connections", linkProps: { to: "/connections" } }}
+      backButton={{ label: "全部连接", linkProps: { to: "/connections" } }}
       description={IDENTITY_SUMMARIES[provider]}
       title={title}
     >
@@ -88,50 +93,63 @@ export function IdentityConnectionPage({
         </p>
       ) : null}
       <LinkedAccountSection provider={provider} />
-      {provider === "github" ? (
-        <>
-          <GithubSources />
-          <GithubTools />
-        </>
-      ) : null}
+      {provider === "github" ? <GithubSources /> : null}
+      <IdentityAppTools provider={provider} />
     </PageShell>
   );
 }
 
 /**
- * A brokered GitHub app, where one is enabled. It is a separate connection — tools that read and
- * change repositories as you — and the Connections list leaves its row out so GitHub is listed once,
- * which makes this the way to it.
+ * The app of the same name, where one is enabled: a brokered GitHub app, or this fork's catalogue
+ * `github` / `slack` app reached as the person asking. It is a separate connection — tools that read
+ * (and for a brokered GitHub, change) things as you — and this page is the way to it from the
+ * account link.
  */
-function GithubTools() {
+function IdentityAppTools({ provider }: { provider: "github" | "slack" }) {
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());
-  const app = plugins.data?.composioConfigured
-    ? plugins.data.servers.find(
-        (server) => isBrokeredGithub(server) && server.accountMode !== "shared",
-      )
-    : undefined;
+  const brokered =
+    provider === "github" && plugins.data?.composioConfigured
+      ? plugins.data.servers.find(
+          (server) =>
+            isBrokeredGithub(server) && server.accountMode !== "shared",
+        )
+      : undefined;
+  const catalogued = plugins.data?.servers.find(
+    (server) => appKeyOf(server) === provider,
+  );
+  const app = brokered ?? catalogued;
   if (!app) return null;
+  const Icon = provider === "github" ? IconBrandGithub : IconBrandSlack;
   const connected = personalConnections(
     connections.data?.connections ?? [],
   ).some((row) => row.serverId === app.id);
   return (
     <PageSection
-      description="Lets your Bots read and change your repositories as you. You connect this separately from your account above."
-      title="Tools"
+      description={
+        provider === "github"
+          ? "让你的员工以你的身份使用你的仓库。它和上面的账号关联是分开连接的。"
+          : "让你的员工以你的身份读取 Slack。它和上面的账号关联是分开连接的。"
+      }
+      title="工具"
     >
       <PageRows>
         <Item
-          render={<Link params={{ key: app.id }} to="/connections/$key" />}
+          render={
+            <Link
+              params={{ key: brokered ? app.id : provider }}
+              to="/connections/$key"
+            />
+          }
           size="sm"
         >
           <ItemMedia variant="icon">
-            <IconBrandGithub />
+            <Icon />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>GitHub tools</ItemTitle>
+            <ItemTitle>{app.title}</ItemTitle>
             <ItemDescription>
-              {connected ? "Connected" : "Not connected"}
+              {connected ? "已连接" : "未连接"}
             </ItemDescription>
           </ItemContent>
           <ItemActions>

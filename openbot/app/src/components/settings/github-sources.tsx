@@ -51,11 +51,11 @@ export function GithubSources() {
       action={
         <Button onClick={() => setAdding(true)} size="sm" variant="ghost">
           <IconPlus />
-          Add a repository
+          添加仓库
         </Button>
       }
-      description="Add a repository here, then add a webhook in GitHub with the address below and the same secret. Its events, like issues.opened, can then start work on a goal."
-      title="Repositories"
+      description="先在这里添加仓库，再到 GitHub 用下面的地址和同一个密钥添加 Webhook。之后仓库的事件（比如 issues.opened）就能让员工开始为目标干活。"
+      title="仓库"
     >
       {error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -68,13 +68,13 @@ export function GithubSources() {
           action={
             <Button onClick={() => setAdding(true)} size="sm" variant="outline">
               <IconPlus />
-              Add a repository
+              添加仓库
             </Button>
           }
           icon={IconBrandGithub}
-          title="No repositories yet"
+          title="还没有仓库"
         >
-          Repositories you add show up here with their webhook address.
+          你添加的仓库会和它的 Webhook 地址一起列在这里。
         </PageEmpty>
       ) : (
         <PageRows>
@@ -98,7 +98,7 @@ export function GithubSources() {
                     size="sm"
                     variant="outline"
                   >
-                    Disconnect
+                    断开
                   </Button>
                 </ItemActions>
               </Item>
@@ -123,9 +123,9 @@ function AddRepositoryDialog({ onClose }: { onClose: () => void }) {
     <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a repository</DialogTitle>
+          <DialogTitle>添加仓库</DialogTitle>
           <DialogDescription>
-            Use the same secret when you add the webhook in GitHub.
+            在 GitHub 添加 Webhook 时用同一个密钥。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4">
@@ -150,7 +150,7 @@ function AddRepositoryDialog({ onClose }: { onClose: () => void }) {
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor={`${formId}-repository`}>
-                  Repository
+                  仓库
                 </FieldLabel>
                 <Input
                   autoFocus
@@ -163,7 +163,7 @@ function AddRepositoryDialog({ onClose }: { onClose: () => void }) {
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formId}-secret`}>
-                  Webhook secret
+                  Webhook 密钥
                 </FieldLabel>
                 <Input
                   autoComplete="new-password"
@@ -184,7 +184,7 @@ function AddRepositoryDialog({ onClose }: { onClose: () => void }) {
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={create.isPending}
@@ -192,7 +192,7 @@ function AddRepositoryDialog({ onClose }: { onClose: () => void }) {
             size="sm"
             type="submit"
           >
-            Connect events
+            连接事件
           </Button>
         </DialogFooter>
       </DialogContent>

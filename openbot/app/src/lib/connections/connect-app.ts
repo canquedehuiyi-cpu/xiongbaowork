@@ -49,9 +49,10 @@ export function useConnectApp() {
         await navigate({ to: "/connections/$key", params: { key } });
         return;
       }
-      const start = await connect.mutateAsync(key);
-      if (start && "authorizationUrl" in start) {
-        window.location.href = start.authorizationUrl;
+      /* fork 的 `connectAccountMutationOptions` 只回授权链接或 null（字段式连接没有链接）。 */
+      const authorizationUrl = await connect.mutateAsync(key);
+      if (authorizationUrl) {
+        window.location.href = authorizationUrl;
         return;
       }
       await queryClient.invalidateQueries({

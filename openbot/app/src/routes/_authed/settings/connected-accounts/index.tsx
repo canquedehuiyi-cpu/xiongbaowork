@@ -3,8 +3,8 @@ import { legacyConnectedAccountsTarget } from "@/lib/agents/legacy-routes";
 import { searchTextEntry } from "@/lib/search-text";
 
 /**
- * Connected accounts moved from Settings to their own page, Connections（M5b，与上游一致）。熊宝原来的页面
- * 剪到了 `components/settings/connected-accounts-page.tsx`。
+ * Connected accounts moved from Settings to their own page, Connections（M5b，与上游一致）。熊宝原来那一页的
+ * 功能（按目录键匹配团队行、关联账号的提示、GitHub/Slack）都已并进 `/connections`。
  *
  * Kept as a redirect, carrying `?connected=`, `?authorized=` and `?linked=`, because a consent
  * somebody began before an upgrade still comes back here: the vendor holds the return address it was

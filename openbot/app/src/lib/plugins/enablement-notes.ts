@@ -61,7 +61,7 @@ export function consentBreadth(
   >,
 ): string | null {
   const { actionCount, permissionCount, scopedActionCount } = app;
-  if (permissionCount === null || scopedActionCount === null) return null;
+  if (permissionCount == null || scopedActionCount == null) return null;
   if (actionCount <= 0) return null;
   if (permissionCount === 0) {
     return actionCount === 1
@@ -117,7 +117,7 @@ export function schemeNeedsKey(authScheme: string | null): boolean {
 
 /** Whether connecting this app means typing a key from it rather than signing in. */
 export function needsKey(app: Pick<ComposioApp, "connection">): boolean {
-  return app.connection.kind === "fields";
+  return app.connection?.kind === "fields";
 }
 
 /**

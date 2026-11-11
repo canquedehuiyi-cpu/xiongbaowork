@@ -126,7 +126,7 @@ describe("the Computer page", () => {
         <RouterProvider router={router as never} />
       </QueryClientProvider>,
     );
-    await view.findByRole("heading", { name: /^Computers?$/ });
+    await view.findByRole("heading", { name: "电脑" });
     return view;
   }
 
@@ -149,7 +149,7 @@ describe("the Computer page", () => {
     title: string,
   ) {
     const section = view.getByRole("heading", {
-      name: /^(Your Bots' browsers|Computers in this deployment)$/,
+      name: /^(你的员工的浏览器|这个部署里的电脑)$/,
     }).parentElement?.parentElement as HTMLElement;
     return within(section)
       .getByText(title)
@@ -171,24 +171,24 @@ describe("the Computer page", () => {
         },
       ],
     });
-    const ada = browserRow(view, "Ada's OpenBot browser");
-    expect(ada.textContent).toContain("Their own browser for Teach a Bot");
-    expect(ada.textContent).not.toContain("Isolated");
-    expect(view.getByText("A person's OpenBot browser")).toBeTruthy();
-    expect(view.container.textContent).not.toContain("A Bot no longer here");
+    const ada = browserRow(view, "Ada 的熊宝浏览器");
+    expect(ada.textContent).toContain("这个人自己教员工做事时用的浏览器");
+    expect(ada.textContent).not.toContain("独立");
+    expect(view.getByText("某个人的熊宝浏览器")).toBeTruthy();
+    expect(view.container.textContent).not.toContain("已不在的员工");
 
-    within(ada).getByRole("button", { name: "Reset" }).click();
+    within(ada).getByRole("button", { name: "重置" }).click();
     const dialog = await view.findByRole("dialog");
-    expect(dialog.textContent).toContain("Reset Ada's OpenBot browser?");
+    expect(dialog.textContent).toContain("重置 Ada 的熊宝浏览器？");
     expect(dialog.textContent).toContain(
-      "The person is signed out of every site they signed in to in it.",
+      "这个人在里面登录过的每个网站都会退出。",
     );
-    expect(dialog.textContent).not.toContain("The Bot is signed out");
+    expect(dialog.textContent).not.toContain("这位员工会退出所有服务");
   });
 
   /** The section the desktop's folder picker is reached from. */
   function foldersSection(view: Awaited<ReturnType<typeof renderPage>>) {
-    return view.getByRole("heading", { name: "Folders on this computer" })
+    return view.getByRole("heading", { name: "这台电脑上的文件夹" })
       .parentElement?.parentElement as HTMLElement;
   }
 
@@ -202,10 +202,10 @@ describe("the Computer page", () => {
     const folders = foldersSection(view);
     expect(within(folders).getByText("Personal Assistant")).toBeTruthy();
     const choose = within(folders).getByRole("button", {
-      name: "Choose folder",
+      name: "选择文件夹",
     }) as HTMLButtonElement;
     expect(choose.disabled).toBe(false);
-    expect(folders.textContent).toContain("Folders are read-only.");
+    expect(folders.textContent).toContain("文件夹是只读的。");
   });
 
   // Started with scripts/start.sh, or anywhere but the desktop: no host will ever answer, so the
@@ -216,14 +216,14 @@ describe("the Computer page", () => {
       desktop: false,
     });
     const folders = foldersSection(view);
-    expect(within(folders).getByText("Needs OpenBot Desktop")).toBeTruthy();
+    expect(within(folders).getByText("需要熊宝桌面版")).toBeTruthy();
     expect(
-      within(folders).queryByRole("button", { name: "Choose folder" }),
+      within(folders).queryByRole("button", { name: "选择文件夹" }),
     ).toBeNull();
     expect(
-      within(folders).queryByRole("button", { name: "Stop folder access" }),
+      within(folders).queryByRole("button", { name: "停止文件夹访问" }),
     ).toBeNull();
-    expect(folders.textContent).not.toContain("The desktop app is offline");
+    expect(folders.textContent).not.toContain("桌面应用不在线");
   });
 
   /** A folder request still open, as `GET /api/host-access` lists it. */
@@ -262,8 +262,8 @@ describe("the Computer page", () => {
       pending: [waiting("stop", "*")],
     });
     const folders = foldersSection(view);
-    expect(folders.textContent).not.toContain("A Bot no longer here");
-    expect(folders.textContent).not.toContain("1 pending request");
+    expect(folders.textContent).not.toContain("已不在的员工");
+    expect(folders.textContent).not.toContain("1 个待处理的请求");
   });
 
   // In the team edition the desktop's owner may be somebody other than the admin reading, so a
@@ -279,25 +279,25 @@ describe("the Computer page", () => {
     });
     const text = foldersSection(view).textContent ?? "";
     expect(text).toContain(
-      "Folder access waiting for approval from the desktop owner.",
+      "文件夹访问在等桌面应用的主人批准。",
     );
     expect(text).toContain(
-      "File change waiting for approval from the desktop owner, or to finish.",
+      "文件改动在等桌面应用的主人批准，或者还没做完。",
     );
-    expect(text).toContain("Listing files.");
-    expect(text).not.toContain("Listing files from");
-    expect(text).toContain("Approved by the desktop owner · Read-only");
-    expect(text).not.toContain("OpenBot Desktop is asking you");
+    expect(text).toContain("正在列出文件。");
+    expect(text).not.toContain("正在列出文件来自");
+    expect(text).toContain("由桌面应用的主人批准 · 只读");
+    expect(text).not.toContain("熊宝桌面版正在弹窗问你");
   });
 
   test("in the team edition still tells an admin how to give each person a computer", async () => {
     const view = await renderPage("team");
     const text = view.container.textContent ?? "";
-    expect(view.getByRole("heading", { name: "Computers" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "电脑" })).toBeTruthy();
     expect(text).toContain("COMPUTER_SUPERVISOR_URL");
-    expect(text).toContain("Computers in this deployment");
+    expect(text).toContain("这个部署里的电脑");
     expect(text).toContain("dev@openbot.local · Personal Assistant");
-    expect(text).toContain("Leaves through network policy filter");
+    expect(text).toContain("经 network policy filter 出网");
   });
 
   /** This deployment's own Admin › 电脑, with the same answers. */

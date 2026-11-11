@@ -33,7 +33,7 @@ export type DirectoryAppState =
 export function directoryConnect(
   app: Pick<ComposioApp, "connection">,
 ): "sign-in" | "key" | "none" {
-  switch (app.connection.kind) {
+  switch (app.connection?.kind) {
     case "fields":
       return "key";
     case "no-auth":

@@ -280,3 +280,17 @@ describe("a gallery call that failed instead of drawing", () => {
     expect(browserCallFailed(undefined)).toBe(false);
   });
 });
+
+/*
+ * X6（Entra 代表用户调用）的拒绝：服务端在标记后面写一句给本人看的中文（`server/src/plugins` 的
+ * Entra 拒绝句子），对话里原样显示这一句，不当成执行失败。
+ */
+test("an Entra refusal is said in the server's own Chinese sentence", () => {
+  const sentence =
+    "「HR」要用你的 Microsoft 账号，但 OpenBot 还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录 OpenBot 一次，再重新提问。";
+  expect(refusalOf(`Refused. ${sentence}`)).toEqual({
+    reason: sentence,
+    declined: false,
+  });
+  expect(toolResultFailed(`Refused. ${sentence}`)).toBe(false);
+});
