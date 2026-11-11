@@ -461,6 +461,7 @@ import { createSetupSources, modelKeyOf } from "./setup/checklist";
 import { createComputerCheck } from "./setup/computer-check";
 import {
   ensureStaffingServer,
+  staffingAppMemory,
   withStaffingDefault,
 } from "./staffing/default-grant";
 import { createStaffingExecutor } from "./staffing/executor";
@@ -1586,9 +1587,13 @@ await startupLifecycle.run(async (startup) => {
     void (async () => {
       const pluginStore = await storeBuilt.promise;
       /*
-       * 「招聘与组群」这个应用两个版本都要在：没有它，小管家的默认授予读不到工具。添加应用不授予任何人什么。
+       * 「招聘与组群」这个应用：没有它，小管家的默认授予读不到工具。添加应用不授予任何人什么。团队版只在第一次
+       * 添加，管理员之后删掉就不再加回来；个人版和 Routines 一样一直在。
        */
-      await ensureStaffingServer(pluginStore).catch((error: unknown) =>
+      await ensureStaffingServer(
+        pluginStore,
+        staffingAppMemory(database),
+      ).catch((error: unknown) =>
         console.warn(
           "[plugins] 没能添加「招聘与组群」应用，小管家暂时不会招人：",
           error instanceof Error ? error.message : error,
