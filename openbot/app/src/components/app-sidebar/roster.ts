@@ -1,3 +1,4 @@
+import type { AgentProfile } from "@/lib/agents/queries";
 import type { ChannelSummary } from "@/lib/channels/queries";
 
 /**
@@ -88,4 +89,75 @@ export function conversationStamp(iso: string, now: Date = new Date()): string {
     return `${date.getMonth() + 1}月${date.getDate()}日`;
   }
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+/** Two or more employees in one conversation is a 群聊; it opens at `/group/$channelId`. */
+export function isGroupChannel(channel: ChannelSummary): boolean {
+  return channel.agentIds.length > 1;
+}
+
+/**
+ * One employee's conversations: every loaded channel it takes part in, a 群聊 it is in among them —
+ * what the 员工 row's unread and busy marks are about.
+ */
+export function channelsOf(
+  channels: ChannelSummary[] | undefined,
+  agentId: string,
+): ChannelSummary[] {
+  return (channels ?? []).filter((channel) =>
+    channel.agentIds.includes(agentId),
+  );
+}
+
+/** When a channel last moved: its last message, or its creation for one nobody spoke in. */
+function lastActivity(channel: ChannelSummary): string {
+  return channel.lastMessageAt ?? channel.createdAt;
+}
+
+/**
+ * Where clicking an employee in the 员工 list goes: its most recent 单聊 among the loaded pages.
+ *
+ * One-to-one only. A 群聊 the employee happens to be in is not "talking to it", and landing in a
+ * shared transcript from a click on one name would be a surprise. Undefined means there is none
+ * loaded, and the caller starts a new conversation addressed to it instead.
+ */
+export function latestDirectChannel(
+  channels: ChannelSummary[] | undefined,
+  agentId: string,
+): ChannelSummary | undefined {
+  let latest: ChannelSummary | undefined;
+  for (const channel of channels ?? []) {
+    if (channel.agentIds.length !== 1 || channel.agentIds[0] !== agentId)
+      continue;
+    if (!latest || lastActivity(channel) > lastActivity(latest))
+      latest = channel;
+  }
+  return latest;
+}
+
+/**
+ * The employees the 员工 list shows: everyone on the roster except those switched out of the list,
+ * unless the person pinned one or an administrator assigned it to them — those stay in reach.
+ */
+export function listedEmployees(
+  agents: readonly AgentProfile[] | undefined,
+): AgentProfile[] {
+  return (agents ?? []).filter(
+    (agent) => !agent.hidden || agent.pinned || agent.assignedToMe === true,
+  );
+}
+
+/** The conversation routes, read off the path: which conversation is open, if any. */
+export type ConversationRoute =
+  | { kind: "new" }
+  | { kind: "channel" | "group"; channelId: string };
+
+export function conversationRoute(pathname: string): ConversationRoute | null {
+  if (pathname === "/channel/new") return { kind: "new" };
+  const match = /^\/(channel|group)\/([^/]+)\/?$/.exec(pathname);
+  if (!match?.[1] || !match[2] || match[2] === "new") return null;
+  return {
+    kind: match[1] as "channel" | "group",
+    channelId: decodeURIComponent(match[2]),
+  };
 }
