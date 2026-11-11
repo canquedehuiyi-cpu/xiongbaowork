@@ -1,8 +1,9 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, notExists, sql } from "drizzle-orm";
 import { ownerTenantOfBot } from "../agents/bot-owner";
 import { createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import { agentSecuritySettings } from "../db/schema/agent-security-settings";
+import { approvalConversationGrants } from "../db/schema/approval-conversation-grants";
 import {
   approvalPreferences,
   approvalRequests,
@@ -10,7 +11,11 @@ import {
   approvalTeamRules,
   approvalTeamSettings,
 } from "../db/schema/approvals";
-import { agents, intelligenceChannelMappings } from "../db/schema/core";
+import {
+  agents,
+  channels,
+  intelligenceChannelMappings,
+} from "../db/schema/core";
 import { botTasks } from "../db/schema/tasks";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
@@ -18,6 +23,16 @@ import { currentEdition } from "../edition";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import {
+  ruleAccount,
+  ruleColumns,
+  saveRuleExtras,
+  saveTeamActionKinds,
+  saveTeamReviewerGuidance,
+  teamReviewerGuidance,
+  teamSettingsColumns,
+} from "./extra-columns";
+import {
+  accountBindingOf,
   type ApprovalAction,
   ApprovalNotFoundError,
   type ApprovalPolicyStore,
@@ -72,7 +87,21 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   customRulesEnabled: true,
   hostCommandsCap: "allow",
   enforceDangerousCommands: false,
+  // 上游：每种动作默认「打开」。本部署的审批底线不随它放宽（见 approvals/policy.ts 的 decideAction）。
+  actionKinds: {},
 };
+
+/**
+ * A conversation answer still in force: not turned off, and its conversation not deleted. Deleting a
+ * conversation ends what was allowed in it, though the soft-deleted row and its thread stay.
+ */
+const grantInForce = () =>
+  and(
+    isNull(approvalConversationGrants.revokedAt),
+    notExists(
+      sql`(select 1 from ${intelligenceChannelMappings} inner join ${channels} on ${channels.id} = ${intelligenceChannelMappings.channelId} where ${intelligenceChannelMappings.threadId} = ${approvalConversationGrants.threadId} and ${channels.deletedAt} is not null)`,
+    ),
+  );
 
 /** The real transaction callback type supplied by the tenant-bound DB client. */
 type StoredApprovalTransaction = Parameters<
@@ -86,6 +115,10 @@ const ruleScope = (action: ApprovalAction) =>
     eq(approvalRules.toolRef, action.toolRef),
     eq(approvalRules.effect, action.effect),
     eq(approvalRules.scope, action.scope),
+    // 一个账号保存的规则从不回答另一个账号；不点名账号的调用只由不点名账号的规则回答（上游 #1298）。
+    accountBindingOf(action)
+      ? sql`${ruleAccount} = ${accountBindingOf(action)}`
+      : sql`${ruleAccount} is null`,
     eq(approvalRules.behaviour, "allow"),
     isNull(approvalRules.revokedAt),
   );
@@ -148,6 +181,9 @@ export function createApprovalStore(
       eq(approvalRules.toolRef, action.toolRef),
       eq(approvalRules.effect, action.effect),
       eq(approvalRules.scope, action.scope),
+      accountBindingOf(action)
+        ? sql`${ruleAccount} = ${accountBindingOf(action)}`
+        : sql`${ruleAccount} is null`,
       eq(approvalRules.behaviour, "allow"),
       isNull(approvalRules.revokedAt),
     );
@@ -246,20 +282,49 @@ export function createApprovalStore(
             "Only an action handed to you can be marked done by you.",
           );
         // 只给「允许一次」的底线（删除类、对外发送、分享、公开发布）问的动作在任何规则之后都还要
-        // 问，存一条「总是允许」只会误导人。从 check-in 开始的任务（M3/upstream）同理：每一步都要问。
-        if (decision === "allow_always" && !offersStandingRule(request.action))
+        // 问，存一条「总是允许」或「在这段对话里都允许」只会误导人。管理员设成「每次都问」的种类、
+        // 从 check-in 开始的任务（M3/upstream）同理：每一步都要问。
+        if (
+          (decision === "allow_always" || decision === "allow_conversation") &&
+          !offersStandingRule(request.action)
+        )
           throw new ApprovalRefusedError(
             ONCE_ONLY_REFUSALS[request.action.policy?.source ?? ""] ??
-              "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
+              (request.action.policy?.closed
+                ? "管理员把这类操作设成了每次都要你确认，只能「允许一次」或拒绝。"
+                : "Tasks started from a check-in ask before every change. Allow this once, or deny it."),
           );
-        if (decision === "allow_always")
+        // The kind the card was for, so the answer reaches later actions of that kind and no other.
+        const kind = request.action.policy?.kind ?? null;
+        if (decision === "allow_always") {
+          const ruleId = crypto.randomUUID();
           await tx.insert(approvalRules).values({
-            id: crypto.randomUUID(),
+            id: ruleId,
             ownerUserId: owner,
             botId: request.action.botId,
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
+          });
+          // `kind` 与卡片点名的账号不在冻结的 approvals.ts 里，同一事务里补写（approvals/extra-columns.ts）。
+          await saveRuleExtras(tx, ruleId, {
+            kind,
+            account: accountBindingOf(request.action) ?? null,
+          });
+        }
+        if (decision === "allow_conversation")
+          await tx.insert(approvalConversationGrants).values({
+            id: crypto.randomUUID(),
+            ownerUserId: owner,
+            threadId: request.action.threadId,
+            approvalId: id,
+            botId: request.action.botId,
+            toolRef: request.action.toolRef,
+            effect: request.action.effect,
+            scope: request.action.scope,
+            // 卡片点名的账号：这段对话里的「都允许」只回答同一个账号（`conversationGrant`）。
+            account: accountBindingOf(request.action) ?? null,
+            kind,
           });
         const [updated] = await tx
           .update(approvalRequests)
@@ -339,6 +404,20 @@ export function createApprovalStore(
             .limit(1);
           if (!rule) return false;
         }
+        // Turned off before it ran: not carried out, as a revoked "Always allow" is not.
+        if (request.decision === "allow_conversation") {
+          const [grant] = await tx
+            .select({ id: approvalConversationGrants.id })
+            .from(approvalConversationGrants)
+            .where(
+              and(
+                eq(approvalConversationGrants.approvalId, id),
+                isNull(approvalConversationGrants.revokedAt),
+              ),
+            )
+            .limit(1);
+          if (!grant) return false;
+        }
         const rows = await tx
           .update(approvalRequests)
           .set({ status: "consumed", consumedAt: sql`now()` })
@@ -372,7 +451,7 @@ export function createApprovalStore(
     },
     async rules(owner) {
       return database
-        .select()
+        .select(ruleColumns)
         .from(approvalRules)
         .where(
           and(
@@ -427,6 +506,34 @@ export function createApprovalStore(
   };
 }
 
+/** A team rule as the trail records it: what it matches and does, without its bookkeeping. */
+function ruleRow(rule: typeof approvalTeamRules.$inferSelect) {
+  return {
+    id: rule.id,
+    botId: rule.botId,
+    toolRef: rule.toolRef,
+    effect: rule.effect,
+    scope: rule.scope,
+    behaviour: rule.behaviour,
+  };
+}
+
+/** The team rules in force, as the trail records them before and after a save. */
+async function teamRuleRows(executor: Database) {
+  if (currentEdition() === "personal") return [];
+  const rows = await executor
+    .select()
+    .from(approvalTeamRules)
+    .where(
+      and(
+        eq(approvalTeamRules.tenantId, TEAM_TENANT),
+        isNull(approvalTeamRules.revokedAt),
+      ),
+    )
+    .orderBy(desc(approvalTeamRules.createdAt));
+  return rows.map(ruleRow);
+}
+
 function createPolicyStore(database: Database): ApprovalPolicyStore {
   const audit = createAuditStore(database);
   /** One Bot's floors as the CURRENT frame sees them: its owner's row, or the defaults. */
@@ -455,7 +562,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
   };
   const liveRules = (owner: string) =>
     database
-      .select()
+      .select(ruleColumns)
       .from(approvalRules)
       .where(
         and(
@@ -484,7 +591,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
     // No team, and no screen for these: a team deployment's values are not read.
     if (currentEdition() === "personal") return { ...DEFAULT_TEAM };
     const [row] = await database
-      .select()
+      .select(teamSettingsColumns)
       .from(approvalTeamSettings)
       .where(
         and(
@@ -499,6 +606,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           customRulesEnabled: row.customRulesEnabled,
           hostCommandsCap: row.hostCommandsCap,
           enforceDangerousCommands: row.enforceDangerousCommands,
+          actionKinds: row.actionKinds ?? {},
         }
       : { ...DEFAULT_TEAM };
   };
@@ -533,14 +641,31 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
      * in the acting admin's frame.
      */
     async setTeamSettings(by, input) {
-      const next = { ...(await teamSettings()), ...input };
-      await database
-        .insert(approvalTeamSettings)
-        .values({ id: TEAM, ...next, updatedBy: by, tenantId: TEAM_TENANT })
-        .onConflictDoUpdate({
-          target: approvalTeamSettings.id,
-          set: { ...next, updatedBy: by, updatedAt: sql`now()` },
-        });
+      const current = await teamSettings();
+      // One kind at a time: a change to one leaves the others as the admin set them.
+      const next = {
+        ...current,
+        ...input,
+        actionKinds: { ...current.actionKinds, ...input.actionKinds },
+      };
+      // `actionKinds` 不在冻结的 approvals.ts 里：同一事务里先写其余设置，再补写这一列
+      // （approvals/extra-columns.ts）。
+      const { actionKinds, ...columns } = next;
+      await database.transaction(async (tx) => {
+        await tx
+          .insert(approvalTeamSettings)
+          .values({
+            id: TEAM,
+            ...columns,
+            updatedBy: by,
+            tenantId: TEAM_TENANT,
+          })
+          .onConflictDoUpdate({
+            target: approvalTeamSettings.id,
+            set: { ...columns, updatedBy: by, updatedAt: sql`now()` },
+          });
+        await saveTeamActionKinds(tx, actionKinds);
+      });
       await recordAuditEvent(audit, {
         eventType: "approval.settings_changed",
         targetType: "approval_settings",
@@ -567,7 +692,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       const [row] = await database
         .insert(approvalRules)
         .values({ id: crypto.randomUUID(), ownerUserId: owner, ...input })
-        .returning();
+        .returning(ruleColumns);
       if (!row) throw new ApprovalNotFoundError();
       await recordAuditEvent(audit, {
         eventType: "approval.rule_changed",
@@ -579,6 +704,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return row;
     },
     async createTeamRule(by, input) {
+      const before = await teamRuleRows(database);
       const [row] = await database
         .insert(approvalTeamRules)
         .values({
@@ -594,9 +720,135 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_rule",
         targetId: row.id,
         actorUserId: by,
-        payload: { change: "created", layer: "team", rule: input },
+        payload: {
+          change: "created",
+          layer: "team",
+          rule: input,
+          before,
+          after: await teamRuleRows(database),
+        },
       });
       return row;
+    },
+    /*
+     * One save, one row on the trail: the rules a description was written into are added together or
+     * not at all, and the row says who saved them, the team rules either side, and the sentence.
+     */
+    async createTeamRules(by, inputs, authoring) {
+      return database.transaction(async (tx) => {
+        const executor = tx as unknown as Database;
+        const before = await teamRuleRows(executor);
+        const rows = inputs.length
+          ? await tx
+              .insert(approvalTeamRules)
+              .values(
+                inputs.map((input) => ({
+                  id: crypto.randomUUID(),
+                  createdBy: by,
+                  ...input,
+                  // 团队规则盖 `team` 的章，和 createTeamRule 一样（G01-E）。
+                  tenantId: TEAM_TENANT,
+                })),
+              )
+              .returning()
+          : [];
+        await recordAuditEvent(createAuditStore(executor), {
+          eventType: "approval.rule_changed",
+          targetType: "approval_rule",
+          targetId: TEAM,
+          actorUserId: by,
+          payload: {
+            change: "created",
+            layer: "team",
+            added: rows.map(ruleRow),
+            before,
+            after: await teamRuleRows(executor),
+            ...(authoring ? { authoring } : {}),
+          },
+        });
+        return rows;
+      });
+    },
+    /*
+     * 本部署是多租户：在管理员自己的帧里读，行级安全只放出这个帧看得见的请求，不会为了重放去读别的
+     * 租户（上游是「每个人的」）。要跨人重放，另定读法再放开。
+     */
+    async recentRequests(limit) {
+      return database
+        .select()
+        .from(approvalRequests)
+        .orderBy(desc(approvalRequests.createdAt))
+        .limit(limit);
+    },
+    async reviewerGuidance() {
+      // No team and no admin screen: the gate reads none, as it reads no team settings.
+      if (currentEdition() === "personal") return null;
+      const [row] = await database
+        .select({ guidance: teamReviewerGuidance })
+        .from(approvalTeamSettings)
+        .where(
+          and(
+            eq(approvalTeamSettings.id, TEAM),
+            eq(approvalTeamSettings.tenantId, TEAM_TENANT),
+          ),
+        )
+        .limit(1);
+      return row?.guidance?.trim() || null;
+    },
+    /*
+     * One save, one row on the trail, in the same transaction: the guidance either side and how it
+     * was read, so "who told the reviewer this, and in what words" has an answer for as long as the
+     * trail is kept. The table only holds the words in force now.
+     */
+    async setReviewerGuidance(by, change) {
+      const after = change.text?.trim() || null;
+      return database.transaction(async (tx) => {
+        const [current] = await tx
+          .select({ guidance: teamReviewerGuidance })
+          .from(approvalTeamSettings)
+          .where(
+            and(
+              eq(approvalTeamSettings.id, TEAM),
+              eq(approvalTeamSettings.tenantId, TEAM_TENANT),
+            ),
+          )
+          .limit(1);
+        const before = current?.guidance?.trim() || null;
+        // 团队设置那一行盖 `team` 的章（见 setTeamSettings）；冲突更新不改 `tenantId`。
+        // `reviewerGuidance` 不在冻结的 approvals.ts 里：先确保这一行在，再补写这一列
+        // （approvals/extra-columns.ts）。
+        await tx
+          .insert(approvalTeamSettings)
+          .values({
+            id: TEAM,
+            updatedBy: by,
+            tenantId: TEAM_TENANT,
+          })
+          .onConflictDoUpdate({
+            target: approvalTeamSettings.id,
+            set: {
+              updatedBy: by,
+              updatedAt: sql`now()`,
+            },
+          });
+        await saveTeamReviewerGuidance(tx, after);
+        await recordAuditEvent(createAuditStore(tx as unknown as Database), {
+          eventType: "approval.guidance_changed",
+          targetType: "approval_settings",
+          targetId: TEAM,
+          actorUserId: by,
+          payload: {
+            ...(change.actor ? { actor: change.actor } : {}),
+            change: after === null ? "removed" : "saved",
+            before,
+            after,
+            ...(after !== null && change.reading
+              ? { reading: change.reading }
+              : {}),
+          },
+        });
+        return after;
+      });
     },
     async updateRule(owner, id, input) {
       const [row] = await database
@@ -609,7 +861,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
             isNull(approvalRules.revokedAt),
           ),
         )
-        .returning();
+        .returning(ruleColumns);
       if (!row) throw new ApprovalNotFoundError();
       await recordAuditEvent(audit, {
         eventType: "approval.rule_changed",
@@ -621,6 +873,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       return row;
     },
     async updateTeamRule(by, id, input) {
+      const before = await teamRuleRows(database);
       const [row] = await database
         .update(approvalTeamRules)
         .set(input)
@@ -638,11 +891,18 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_rule",
         targetId: id,
         actorUserId: by,
-        payload: { change: "updated", layer: "team", changed: input },
+        payload: {
+          change: "updated",
+          layer: "team",
+          changed: input,
+          before,
+          after: await teamRuleRows(database),
+        },
       });
       return row;
     },
     async revokeTeamRule(by, id) {
+      const before = await teamRuleRows(database);
       const rows = await database
         .update(approvalTeamRules)
         .set({ revokedAt: sql`now()` })
@@ -660,7 +920,12 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
         targetType: "approval_rule",
         targetId: id,
         actorUserId: by,
-        payload: { change: "revoked", layer: "team" },
+        payload: {
+          change: "revoked",
+          layer: "team",
+          before,
+          after: await teamRuleRows(database),
+        },
       });
     },
     async findEquivalent(input) {
@@ -807,6 +1072,63 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
       });
       return next;
     },
+    async conversationGrants(owner, threadId) {
+      return database
+        .select()
+        .from(approvalConversationGrants)
+        .where(
+          and(
+            eq(approvalConversationGrants.ownerUserId, owner),
+            eq(approvalConversationGrants.threadId, threadId),
+            grantInForce(),
+          ),
+        );
+    },
+    async allConversationGrants(owner) {
+      return database
+        .select()
+        .from(approvalConversationGrants)
+        .where(
+          and(
+            eq(approvalConversationGrants.ownerUserId, owner),
+            grantInForce(),
+          ),
+        )
+        .orderBy(desc(approvalConversationGrants.createdAt))
+        .limit(100);
+    },
+    async revokeConversationGrant(owner, id) {
+      const [row] = await database
+        .update(approvalConversationGrants)
+        .set({ revokedAt: sql`now()` })
+        .where(
+          and(
+            eq(approvalConversationGrants.ownerUserId, owner),
+            eq(approvalConversationGrants.id, id),
+            isNull(approvalConversationGrants.revokedAt),
+          ),
+        )
+        .returning();
+      if (!row) throw new ApprovalNotFoundError();
+      await recordAuditEvent(audit, {
+        eventType: "approval.rule_changed",
+        targetType: "approval_rule",
+        targetId: id,
+        actorUserId: owner,
+        payload: {
+          change: "revoked",
+          layer: "conversation",
+          rule: {
+            botId: row.botId,
+            toolRef: row.toolRef,
+            effect: row.effect,
+            scope: row.scope,
+            ...(row.kind ? { kind: row.kind } : {}),
+          },
+          threadId: row.threadId,
+        },
+      });
+    },
     async recordDecision(input) {
       await recordAuditEvent(audit, {
         eventType: "approval.evaluated",
@@ -822,6 +1144,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           scope: input.scope,
           ...targetSubject(input.target),
           outcome: input.outcome,
+          ...(input.call ? { call: input.call } : {}),
         },
       });
     },

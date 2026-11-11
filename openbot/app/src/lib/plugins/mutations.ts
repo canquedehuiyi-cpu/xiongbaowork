@@ -355,17 +355,24 @@ export function removePluginServerMutationOptions(queryClient: QueryClient) {
  */
 export function saveSkillMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: (input: SkillInput): Promise<unknown> =>
-      client("/api/plugins/skills", {
-        method: "POST",
-        body: input,
-        /*
-         * The server refuses for reasons a form cannot check — a slug somebody else already owns is
-         * the common one — and paraphrasing that would throw away the only part worth reading.
-         */
-        fallback: "这个技能没能保存。",
-      }),
+    mutationFn: saveSkill,
     onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
+/**
+ * The save on its own, and refetch nothing: for a caller that saves as one step of a longer write
+ * and refetches once at the end (approving a skill draft in Settings, Learning).
+ */
+export function saveSkill(input: SkillInput): Promise<unknown> {
+  return client("/api/plugins/skills", {
+    method: "POST",
+    body: input,
+    /*
+     * The server refuses for reasons a form cannot check — a slug somebody else already owns is
+     * the common one — and paraphrasing that would throw away the only part worth reading.
+     */
+    fallback: "这个技能没能保存。",
   });
 }
 

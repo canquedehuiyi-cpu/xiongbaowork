@@ -8,6 +8,29 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **服务端、桌面端同步到上游 OpenBot 最新 main（`e4a73d7b`，v1.0.0 之后 58 个提交），熊宝的功能全部保留。** 新增：
+  - 管理员可以用平常话问审计记录、问「如果员工做了某个动作会怎样」，并看到一行审计为什么这样走、是哪条规则拦的。
+  - 用一句话描述员工在某个应用里能做什么、网络白名单、边界规则、谁能做什么，保存前在过去的决定或访问上预演影响。
+  - 审批：「在这段对话里都允许」（只用于底线不管的动作）；管理员按动作种类设置；自动审核指引；团队规则用平常话写并在
+    过去的决定上重放。**熊宝的审批底线不变**：对外发送、删除、分享、发帖只能「允许一次」，付款、改凭据、改安全设置
+    交给本人；上游这一版把这些改成默认打开，熊宝不收。
+  - 对话可以由本人改名（共享群组只有发起人能改）；员工的每次运行有预算、工具调用失败会回来重试、给所有员工同一份
+    分段的工作说明；桌面端安装与启动的说明更清楚、可以收集排错日志。
+  - 新建定时任务仍然可以不指定对话（熊宝的行为；上游这一版要求必须指定）。
+  **升级须知：** 新迁移 `0176_channel_title`、`0177_approval_conversation_grants`（新表带行级安全）、
+  `0178_approval_reviewer_guidance`、`0179_team_channel_guard_title_opening`（共享群组里成员说第一句话不再被拦，
+  对话改名只有发起人能改）。前端界面（上游新侧栏与各页面）在后续版本同步。
+
+- **从对话中学习（不需要 Intelligence）。** 每人每天读一次自己和员工最近的对话，把反复让员工做、做法可以固定下来
+  的事整理成技能草案，放在设置「学习」里等你审：批准后存进你的技能库、交给那位员工，拒绝就丢掉。对话不离开熊宝，
+  不复制进任何新表（草案只记来自哪几段对话）；提草案用的是那位员工自己的模型，计入你的用量，本月任务额度用完时
+  跳过。默认开；每个人可以在设置「学习」里关掉，`OPENBOT_LOCAL_LEARNING=off` 整个部署关掉。**升级须知：** 新迁移
+  `0175_local_learning`（三张带行级安全的表）。
+
+- **录制送进你自己的学习空间。** 接入 Intelligence（设置了 `INTELLIGENCE_API_KEY`）后，「教员工做事」录下的操作
+  会连接到 Intelligence，并放进你自己的学习空间，由它分析出技能；以前运行时对这个连接一律返回 503，录制哪里都去不了。
+  只有录制会送出去，对话线程仍留在本地。没有接入 Intelligence 时行为不变。
+
 - **The whole web app is redrawn in 熊宝's black, white and red** (docs/design/ios-studio). A near-black
   canvas with graphite cards and hairlines; white (black on paper) for the primary action and the main
   text; red only for the selected place, what needs attention, the brand and a few signal lines. The
@@ -17,12 +40,20 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   red) on 员工管理, and one continuous entry strip on 能力与资源. Every other route shares the same
   controls, cards, badges and empty states. Presentation only: routes, queries, permissions and APIs
   are unchanged. Acceptance notes and screenshots are in docs/design/ios-studio/acceptance.
+
+## 0.2.7
+
+- **用 DeepSeek 时群聊能对话了，审批通过后也能接着做。** DeepSeek 的思考模式要求每次都把之前的思考过程
+  传回去，员工的对话历史里没有这部分，所以有前文的对话（群聊、审批后继续执行）会被 DeepSeek 拒绝（400）。
+  现在发往 `api.deepseek.com` 的对话请求一律关闭思考模式（请求里已经写明 `thinking` 的照写的发）。这是
+  部署级的设置，会作用到所有用 DeepSeek 的员工，包括在模型库里用自己密钥的；想保留思考模式，设
+  `DEEPSEEK_THINKING=enabled`（届时有前文的带工具对话仍会被拒）。
 - **界面同步到上游 OpenBot v1.0.0，保留员工/群组结构与中文。** 前端（`app/`）三方合并了上游 6fb38c8b 到 v1.0.0
   的界面改动，CopilotKit 前端从 1.77 升到 1.85。新增或换新的地方：
   - 员工详情页多了「需要你」、动态速览（「全部动态」打开 `/bots/<员工>/activity`，列出这位员工做过的每个动作）、
     本周完成、运行方式（框架、独立运行开关、内置员工的指令单独编辑），以及这位员工的记忆来源与主动巡检。
   - 「教员工做事」（录制任务、讲解、你的录制），入口在侧栏「更多」，设置里新增「浏览器」「学习」「本机」
-    （桌面端）和「部署设置」（管理员）。录制要送进学习空间还需要服务端的录制接收接口，在下一阶段补上。
+    （桌面端）和「部署设置」（管理员）。
   - 对话里可以按对话选模型和思考强度、员工提问时可以直接回答、审批改成决策卡，新对话有入门建议。
   - 管理端新增「模型提供方」「权限」「主动巡检」页，边界规则有单条规则页，技能有单页与新建页，审计可按员工筛选、
     可往前翻页，「自动学习」页可以审核、发布、分享学到的技能。
@@ -39,6 +70,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 - **用 `/` 选技能改由服务端读取。** 消息以 `/<技能>` 开头即可，浏览器不再把技能说明另外塞进消息。
 - **应用连接：先告诉你密钥去哪里拿；界面不再点名连接器提供商；管理员可以为需要专属客户端的应用
   （如 Shopify）保存部署自己的客户端。** 只能由管理员连接的应用，普通成员看到的是「需由管理员连接」。
+- **管理端能看到哪些应用在等部署客户端。** 应用目录列出还没保存客户端、因此暂时连不上的应用（如 Shopify），
+  保存客户端时直接挑；插件页对每个应用直接说明你能不能连接。
 - **拥有独立 Linux 用户的员工也有实时终端。** 打开员工的电脑可以看到「屏幕 / 终端」两个页签；接管后在终端里
   输入的命令以这位员工自己的系统用户运行（经新的 `xb-bot shell`），不是电脑进程的用户，也拿不到容器里的
   密钥；员工自己的命令仍然一条一条执行，不进这个终端。终端关闭、停止或重置电脑时，终端里起的进程
@@ -50,6 +83,12 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## 0.2.6
 
+- **网页上的「确认收货」交给你本人点。** 在淘宝、京东这类平台上，点了它货款就打给卖家、撤不回来，所以和
+  「提交订单」「微信支付」同一档，「总是允许」规则也不能绕过。「确认收货地址」「待收货」「收货人」照常。
+- **后台例行检查可以读 GitHub 了。** GitHub 有了经过审查的只读名单（照 GitHub 官方对每个工具的只读标注），
+  例行检查能读 Issue、PR、代码和文件。会读出泄露密钥的 secret scanning 两个工具不在名单里，聊天里用它们
+  也要先问你；GitHub 以后新增的工具，在列进名单之前聊天里同样先问。Linear、Slack 官方没有公开工具名，
+  例行检查仍然不读它们。
 - **中文的改密码、验证码、付款页面交给你本人做；部署边界规则按规范化的键名判定。** Bot 在网页上往
   「新密码」「验证码」「支付密码」「银行卡号」「CVV / 安全码」「身份证号」「付款码」这类输入框里填写，点
   「修改密码」「获取验证码」「提交订单 ¥99」「确认订单并支付」「微信支付」「绑定银行卡」这类按钮，或者在

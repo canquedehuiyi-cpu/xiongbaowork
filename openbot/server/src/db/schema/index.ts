@@ -3,7 +3,9 @@
 export * from "./admin";
 export * from "./agent-security-settings";
 export * from "./app-access-requests";
+export * from "./approval-conversation-grants";
 export * from "./approvals";
+export * from "./brokered-accounts";
 export * from "./components";
 export * from "./computer";
 export * from "./core";
@@ -20,6 +22,7 @@ export * from "./flow-source-runtime-records";
 export * from "./group";
 export * from "./identity";
 export * from "./learning";
+export * from "./local-learning";
 export * from "./lifecycle";
 export * from "./memory";
 export * from "./model";

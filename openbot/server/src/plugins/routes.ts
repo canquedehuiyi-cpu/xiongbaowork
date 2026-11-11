@@ -1,9 +1,14 @@
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { z } from "zod";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
+import {
+  type AccountModeSwitch,
+  AccountModeRefusedError,
+} from "./account-mode";
 import { reasonWithoutStatement } from "../db/query-failure";
 import { appsPage, appsPageZh, askAdminTo, askAdminToZh } from "../edition";
 import {
@@ -12,6 +17,11 @@ import {
   isPersonTenant,
   runAsTenant,
 } from "../tenant/context";
+import {
+  adminInputFor,
+  mountAppAccessRoutes,
+  unavailableSentence,
+} from "./app-access-routes";
 import {
   type BrokerApp,
   type BrokerField,
@@ -44,6 +54,7 @@ import {
   challengeFor,
   connectedAccountsUrlFor,
   createVerifier,
+  desktopReturnUrlFor,
   readConnectState,
   redeemAuthorizationCode,
   redirectUriFor,
@@ -56,6 +67,7 @@ import {
   deploymentFaultSentence,
   isDeploymentFault,
   isServerWriteRefusal,
+  isUuid,
   type OAuthClient,
   OAuthClientReadError,
   type PluginKind,
@@ -362,6 +374,8 @@ export function createPluginRoutes(
     AdminScope,
     "adminCapability" | "adminActAsOwner" | "asAdminPlatform"
   >,
+  /** 应用账号模式的切换（X1，`./account-mode`）。没给时账号模式路由答 503。 */
+  accountModes?: AccountModeSwitch,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   const adminCapability = adminScope?.adminCapability;
@@ -441,7 +455,17 @@ export function createPluginRoutes(
        * screen needs is whether to draw the app directory, which is a yes or a no.
        */
       composioConfigured: Boolean(composio),
-      servers: await store.listServers(),
+      /*
+       * `canConnect` 是针对这次请求者的判断：只有管理员能连接的应用（`adminConnectOnly`），成员看到
+       * false，其余为 true。前端照它渲染「连接」，不用自己拿角色去拼。连接路由和 store 照旧各自拒绝，
+       * 这个字段只是把同一条规则提前告诉页面。
+       */
+      servers: (await store.listServers()).map((server) => ({
+        ...server,
+        canConnect:
+          context.var.actor.role === "admin" ||
+          (!server.adminConnectOnly && server.accountMode !== "shared"),
+      })),
       // Scoped: the deployment's skills plus this person's own. An administrator sees them all.
       skills: await store.listSkills(skillActor(context)),
       /*
@@ -1021,13 +1045,24 @@ export function createPluginRoutes(
       (candidate) => candidate.connection.kind !== "unsupported",
     );
     const term = (context.req.query("q") ?? "").trim().toLowerCase();
-    const matched = term
-      ? connectable.filter((app) =>
-          [app.slug, app.name, app.description].some((field) =>
-            field.toLowerCase().includes(term),
-          ),
-        )
-      : connectable;
+    const matches = (app: BrokerApp) =>
+      !term ||
+      [app.slug, app.name, app.description].some((field) =>
+        field.toLowerCase().includes(term),
+      );
+    const matched = connectable.filter(matches);
+    /*
+     * 在等这个部署自己客户端的应用（#950，例如 Shopify）：不进 `apps`，因为现在还连不上；单独列出名字，
+     * 管理员在「部署专属客户端」里从这里挑，不用手填应用名。保存客户端以后，它就进 `apps`。
+     */
+    const awaitingClient = directory
+      .filter(
+        (candidate) =>
+          candidate.connection.kind === "unsupported" &&
+          candidate.connection.awaitsClient === true &&
+          matches(candidate),
+      )
+      .map((candidate) => ({ slug: candidate.slug, name: candidate.name }));
 
     /*
      * THE ONE CALL ON THIS ROUTE THAT IS NOT THE VENDOR'S, AND IT WAS THE ONE NOTHING ANSWERED FOR.
@@ -1061,6 +1096,7 @@ export function createPluginRoutes(
     );
     return context.json({
       apps: matched.map((app) => ({ ...app, enabled: enabled.has(app.slug) })),
+      awaitingClient,
     });
   });
 
@@ -1387,6 +1423,56 @@ export function createPluginRoutes(
       }
 
       /*
+       * SHARED 应用连的是部署的团队账号（X1，上游 #757）：只有管理员能连，账号身份是应用行上铸好的团队
+       * 身份，不是谁的会话；一个应用只有一个团队账号，已连接就先断开。和下面一样，路由里没有一处从请求读
+       * 账号身份。
+       */
+      const app = await appAccountOf(toolkit);
+      const shared =
+        app?.mode === "shared" && schemeKind(row.authScheme) !== "none";
+      if (shared) {
+        /*
+         * 会话里的角色是登录时定的；真正的门是管理员能力（重新读过角色）。在把团队身份交给 vendor 之前问
+         * （评审 I1），降权管理员的会话因此碰不到团队账号。
+         */
+        let writer = context.var.actor.role === "admin";
+        if (writer) {
+          try {
+            store.requireTeamAccountWriter();
+          } catch (error) {
+            if (!isServerWriteRefusal(error)) throw error;
+            writer = false;
+          }
+        }
+        if (!writer) {
+          return context.json(
+            {
+              error: `${row.title} 用的是一个共享的团队账号，只有管理员能连接它。没有建立任何连接。`,
+            },
+            403,
+          );
+        }
+        if (!app?.shared) {
+          return context.json(
+            {
+              error: `${row.title} 是共享账号应用，却没有团队身份。请把它切回个人账号再切回共享账号。`,
+            },
+            409,
+          );
+        }
+        if (app.shared.connectedAt) {
+          return context.json(
+            {
+              error: `${row.title} 已经连接了一个团队账号。要换一个，先断开它。`,
+            },
+            409,
+          );
+        }
+      }
+      const holderId =
+        shared && app?.shared ? app.shared.vendorUserId : context.var.actor.id;
+
+      /*
        * THE PERSON IS THE SESSION'S, HERE AND IN THE READ ABOVE IT.
        *
        * Nothing in this branch reads a user id out of the body or the query, and that is the
@@ -1396,11 +1482,25 @@ export function createPluginRoutes(
        * follows shipped three separate times, and it is structural here — there is no line that
        * could break it.
        */
-      const existing = await store.brokeredConnection({
-        toolkit,
-        userId: context.var.actor.id,
-      });
-      if (existing) {
+      const existing = shared
+        ? null
+        : await store.brokeredConnection({
+            toolkit,
+            userId: context.var.actor.id,
+          });
+      /*
+       * 「再连一个账号」（上游 #1298）：一个人可以在同一个应用上有两个邮箱，调用按名字指定用哪个（见
+       * `./brokered-accounts`），所以第二个账号不再由 vendor 替谁选。只在明确要求时（`?another=1`，应用
+       * 页面上的「再连一个账号」按钮）、且只对同意屏幕类的应用开放：平常按 Connect 仍按下面的规则拒绝，
+       * 输入密钥的应用仍是一人一个账号。
+       */
+      const another =
+        existing !== null &&
+        existing !== undefined &&
+        context.req.query("another") === "1" &&
+        schemeKind(row.authScheme) === "consent" &&
+        Boolean(composio.broker.accountsOf);
+      if (existing && !another) {
         /*
          * Named with the step to take rather than only refused: a second link would attach a
          * second account behind a row that already says connected, and the way to a new one is
@@ -1539,7 +1639,11 @@ export function createPluginRoutes(
        * who holds that client already, connects it (`adminConnectOnly`). 403, because the person
        * pressing Connect cannot make this request succeed by changing what they send.
        */
-      if (adminConnectOnly(authScheme) && context.var.actor.role !== "admin") {
+      if (
+        !shared &&
+        adminConnectOnly(authScheme) &&
+        context.var.actor.role !== "admin"
+      ) {
         return context.json(
           { error: adminConnectOnlySentence(row.title) },
           403,
@@ -1844,11 +1948,17 @@ export function createPluginRoutes(
            * the second person that nothing had ever been tried.
            */
           return context.json(
-            await store.connectBrokeredWithFields({
-              toolkit,
-              userId: context.var.actor.id,
-              values,
-            }),
+            shared
+              ? await store.connectSharedWithFields({
+                  toolkit,
+                  values,
+                  by: context.var.actor.id,
+                })
+              : await store.connectBrokeredWithFields({
+                  toolkit,
+                  userId: context.var.actor.id,
+                  values,
+                }),
           );
         } catch (error) {
           /*
@@ -1968,8 +2078,9 @@ export function createPluginRoutes(
       let redirectUrl: string;
       try {
         ({ redirectUrl } = await composio.broker.authorize({
-          userId: context.var.actor.id,
+          userId: holderId,
           toolkit,
+          ...(another ? { another: true } : {}),
           /*
            * THE REFUSAL ABOVE CHECKS THAT A SETTING IS SET; THIS CHECKS THAT IT IS AN ADDRESS.
            * `appUrl` is an environment string — `OPENBOT_APP_URL`, or the first `TRUSTED_ORIGINS`
@@ -1979,8 +2090,16 @@ export function createPluginRoutes(
            * this deployment cannot tell them anything; the guard moves it to before the link is
            * minted, where the sentence reaches an operator who can set the variable.
            */
+          /*
+           * `?from=desktop` is the press's own: the sign-in was started in OpenBot Desktop's window
+           * and runs in the person's browser, so it comes back to the page that hands them back to
+           * the window ({@link desktopReturnUrlFor}). Anybody can send it, and all it changes is which
+           * of this OpenBot's own pages the browser lands on.
+           */
           returnUrl: brokerReturnUrl(
-            connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
+            context.req.query("from") === "desktop"
+              ? desktopReturnUrlFor(connect.appUrl, serverId)
+              : connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
           ),
         }));
       } catch (error) {
@@ -2142,10 +2261,19 @@ export function createPluginRoutes(
    * that is not brokered has an OAuth flow below it to fall through to, so refusing there would be
    * wrong.
    */
+  /*
+   * 应用的账号模式与团队账号（X1）。只认识地址的 store（老的测试替身、没有账号模式的装配）没有这个方法，
+   * 那就当作 Personal，与 0180 之前一样。
+   */
+  const appAccountOf = (toolkit: string) =>
+    typeof store.appAccount === "function"
+      ? store.appAccount(toolkit)
+      : Promise.resolve(null);
+
   const brokeredAppFor = async (
     serverId: string,
   ): Promise<
-    | { toolkit: string; refusal?: undefined }
+    | { toolkit: string; shared: boolean; refusal?: undefined }
     | { toolkit?: undefined; refusal: { error: string; status: 400 | 503 } }
   > => {
     const row = await store.serverAddress(serverId);
@@ -2163,7 +2291,62 @@ export function createPluginRoutes(
         refusal: { error: PERSON_UNCONFIGURED, status: 503 },
       };
     }
-    return { toolkit };
+    const app = await appAccountOf(toolkit);
+    return {
+      toolkit,
+      shared:
+        app?.mode === "shared" &&
+        schemeKind(row?.authScheme ?? null) !== "none",
+    };
+  };
+
+  /*
+   * Shared 应用的团队账号（X1）：确认、重新检查与断开都只由管理员做，作用在应用行上，不碰任何人的
+   * `composio_connections`。重新检查对团队账号就是再问一次 vendor（与确认相同）。
+   */
+  const sharedAccountAct = async (
+    context: Context<{ Variables: AppVariables }>,
+    toolkit: string,
+    act: "confirm" | "disconnect",
+  ) => {
+    if (context.var.actor.role !== "admin") {
+      return context.json(
+        { error: "这个应用用的是共享的团队账号，只有管理员能管理它。" },
+        403,
+      );
+    }
+    try {
+      return context.json(
+        act === "confirm"
+          ? await store.confirmSharedConnection({
+              toolkit,
+              by: context.var.actor.id,
+            })
+          : await store.disconnectShared({
+              toolkit,
+              by: context.var.actor.id,
+              reason: "self",
+            }),
+      );
+    } catch (error) {
+      if (isServerWriteRefusal(error)) {
+        return context.json(
+          { error: "这个应用用的是共享的团队账号，只有管理员能管理它。" },
+          403,
+        );
+      }
+      if (error instanceof PluginRefusedError) {
+        return context.json({ error: withoutBrokerName(error.message) }, 400);
+      }
+      const refusal = personRefusal(
+        error,
+        act === "confirm"
+          ? "没能确认团队账号。请重试；如果一直这样，请检查代理服务的配置。"
+          : "没能断开团队账号。请再按一次「断开」，重复按是安全的。",
+        { route: `shared.${act}`, toolkit },
+      );
+      return context.json({ error: refusal.error }, refusal.status);
+    }
   };
 
   /**
@@ -2186,61 +2369,59 @@ export function createPluginRoutes(
    * BEHIND `requireUser` AND NOT ADMIN-GATED. An administrator adds the app once; confirming one's
    * own connection to it is not an administrative act.
    */
-  routes.post(
-    "/servers/:id/connection/confirm",
-    requireUser,
-    async (context) => {
-      const resolved = await brokeredAppFor(context.req.param("id"));
-      if (resolved.refusal) {
-        return context.json(
-          { error: resolved.refusal.error },
-          resolved.refusal.status,
-        );
-      }
+  routes.post("/servers/:id/connection/confirm", capable, async (context) => {
+    const resolved = await brokeredAppFor(context.req.param("id"));
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    if (resolved.shared)
+      return sharedAccountAct(context, resolved.toolkit, "confirm");
 
+    /*
+     * THE PERSON IS THE SESSION'S, AND THERE IS NO SECOND SOURCE FOR THEM. Nothing here reads a
+     * user id out of the body or the query, and that is the property rather than an
+     * implementation detail: a confirm writes the row every later brokered call is gated on, so
+     * a caller who could name somebody else would be one POST away from recording a connection
+     * under a person who never made one — or, the same defect turned around, from deleting the
+     * row of a person the vendor answers no for.
+     *
+     * The store's answer is passed straight back rather than restated here. `connected` is what
+     * Composio said, and a shape invented at this layer would be a second opinion about a fact
+     * only the vendor holds.
+     */
+    try {
+      return context.json(
+        await store.confirmBrokeredConnection({
+          toolkit: resolved.toolkit,
+          userId: context.var.actor.id,
+        }),
+      );
+    } catch (error) {
       /*
-       * THE PERSON IS THE SESSION'S, AND THERE IS NO SECOND SOURCE FOR THEM. Nothing here reads a
-       * user id out of the body or the query, and that is the property rather than an
-       * implementation detail: a confirm writes the row every later brokered call is gated on, so
-       * a caller who could name somebody else would be one POST away from recording a connection
-       * under a person who never made one — or, the same defect turned around, from deleting the
-       * row of a person the vendor answers no for.
+       * A BROKER THAT WOULD NOT ANSWER IS NOT A CONNECTION THAT IS ABSENT.
        *
-       * The store's answer is passed straight back rather than restated here. `connected` is what
-       * Composio said, and a shape invented at this layer would be a second opinion about a fact
-       * only the vendor holds.
+       * This route is called on every page load, so the tempting answer to a failure is
+       * `{ connected: false }` — and that would be this deployment inventing a fact only Composio
+       * holds, drawing "Not connected" over a live account and, one step on, deleting the row
+       * that says otherwise. The store deletes on a NO from the vendor, and a failure is not a
+       * no. So the page is told the ask failed, and what it goes on showing is the last answer
+       * Composio gave rather than a guess about this one.
        */
-      try {
-        return context.json(
-          await store.confirmBrokeredConnection({
-            toolkit: resolved.toolkit,
-            userId: context.var.actor.id,
-          }),
-        );
-      } catch (error) {
+      const refusal = personRefusal(
+        error,
         /*
-         * A BROKER THAT WOULD NOT ANSWER IS NOT A CONNECTION THAT IS ABSENT.
-         *
-         * This route is called on every page load, so the tempting answer to a failure is
-         * `{ connected: false }` — and that would be this deployment inventing a fact only Composio
-         * holds, drawing "Not connected" over a live account and, one step on, deleting the row
-         * that says otherwise. The store deletes on a NO from the vendor, and a failure is not a
-         * no. So the page is told the ask failed, and what it goes on showing is the last answer
-         * Composio gave rather than a guess about this one.
+         * English, because the route's existing tests pin "last answer"; upstream #1223's own
+         * wording, which names no broker.
          */
-        const refusal = personRefusal(
-          error,
-          /*
-           * English, because the route's existing tests pin "last answer"; upstream #1223's own
-           * wording, which names no broker.
-           */
-          "Couldn't check whether this account is connected. This shows the last answer. Try again, or ask an admin if it keeps happening.",
-          { route: "connection.confirm", toolkit: resolved.toolkit },
-        );
-        return context.json({ error: refusal.error }, refusal.status);
-      }
-    },
-  );
+        "Couldn't check whether this account is connected. This shows the last answer. Try again, or ask an admin if it keeps happening.",
+        { route: "connection.confirm", toolkit: resolved.toolkit },
+      );
+      return context.json({ error: refusal.error }, refusal.status);
+    }
+  });
 
   /**
    * Try this person's key against the app, because they pressed the button that asks.
@@ -2275,57 +2456,55 @@ export function createPluginRoutes(
    * BEHIND `requireUser` AND NOT ADMIN-GATED, for confirm's reason: this is somebody checking their
    * own account, not an administrator checking anybody's.
    */
-  routes.post(
-    "/servers/:id/connection/recheck",
-    requireUser,
-    async (context) => {
-      const resolved = await brokeredAppFor(context.req.param("id"));
-      if (resolved.refusal) {
-        return context.json(
-          { error: resolved.refusal.error },
-          resolved.refusal.status,
-        );
-      }
+  routes.post("/servers/:id/connection/recheck", capable, async (context) => {
+    const resolved = await brokeredAppFor(context.req.param("id"));
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    if (resolved.shared)
+      return sharedAccountAct(context, resolved.toolkit, "confirm");
 
-      try {
-        // The store's answer, whole. `verified` is the flag, `verifiedAt` is the date the row's
-        // sentence is drawn from, and `probe` is what says a call was really made — three facts,
-        // and a route that forwarded the boolean alone would leave the row to guess the other two.
-        return context.json(
-          await store.recheckBrokeredConnection({
-            toolkit: resolved.toolkit,
-            userId: context.var.actor.id,
-          }),
-        );
-      } catch (error) {
-        /*
-         * A REFUSAL THE STORE AUTHORED IS PASSED THROUGH AS ITSELF, BEFORE THE BROKER MAPPING, for
-         * the reason the connect route's field branch gives: a key the vendor rejected is the
-         * ordinary failure on this path, and the store's sentence for it already carries Composio's
-         * own words and the step to take. `brokerRefusal` cannot see that — a
-         * {@link PluginRefusedError} is neither an authored broker refusal nor a vendor object — so
-         * it would answer somebody whose key is wrong with "Composio said nothing about why" and
-         * send them to an administrator about this deployment's key. 400 because it is theirs to
-         * fix and the message says what to fix.
-         */
-        const generic =
-          "没能检查这个连接是否还能用，这里显示的是上一次检查的结果。请再按一次重新检查；如果一直这样，请联系管理员。";
-        if (error instanceof PluginRefusedError) {
-          return context.json({ error: withoutBrokerName(error.message) }, 400);
-        }
-        /*
-         * And a failure this deployment cannot explain says what is on the screen instead of
-         * guessing. Nothing was written on the way out of the store here, so the row still carries
-         * the last answer anybody earned rather than a verdict invented by a call that failed.
-         */
-        const refusal = personRefusal(error, generic, {
-          route: "connection.recheck",
+    try {
+      // The store's answer, whole. `verified` is the flag, `verifiedAt` is the date the row's
+      // sentence is drawn from, and `probe` is what says a call was really made — three facts,
+      // and a route that forwarded the boolean alone would leave the row to guess the other two.
+      return context.json(
+        await store.recheckBrokeredConnection({
           toolkit: resolved.toolkit,
-        });
-        return context.json({ error: refusal.error }, refusal.status);
+          userId: context.var.actor.id,
+        }),
+      );
+    } catch (error) {
+      /*
+       * A REFUSAL THE STORE AUTHORED IS PASSED THROUGH AS ITSELF, BEFORE THE BROKER MAPPING, for
+       * the reason the connect route's field branch gives: a key the vendor rejected is the
+       * ordinary failure on this path, and the store's sentence for it already carries Composio's
+       * own words and the step to take. `brokerRefusal` cannot see that — a
+       * {@link PluginRefusedError} is neither an authored broker refusal nor a vendor object — so
+       * it would answer somebody whose key is wrong with "Composio said nothing about why" and
+       * send them to an administrator about this deployment's key. 400 because it is theirs to
+       * fix and the message says what to fix.
+       */
+      const generic =
+        "没能检查这个连接是否还能用，这里显示的是上一次检查的结果。请再按一次重新检查；如果一直这样，请联系管理员。";
+      if (error instanceof PluginRefusedError) {
+        return context.json({ error: withoutBrokerName(error.message) }, 400);
       }
-    },
-  );
+      /*
+       * And a failure this deployment cannot explain says what is on the screen instead of
+       * guessing. Nothing was written on the way out of the store here, so the row still carries
+       * the last answer anybody earned rather than a verdict invented by a call that failed.
+       */
+      const refusal = personRefusal(error, generic, {
+        route: "connection.recheck",
+        toolkit: resolved.toolkit,
+      });
+      return context.json({ error: refusal.error }, refusal.status);
+    }
+  });
 
   /**
    * End this person's own brokered account, at the vendor first and here after.
@@ -2344,7 +2523,7 @@ export function createPluginRoutes(
    * BEHIND `requireUser` AND NOT ADMIN-GATED, for the reason confirm gives: this is somebody
    * ending their own account, not an administrator ending anybody's.
    */
-  routes.delete("/servers/:id/connection", requireUser, async (context) => {
+  routes.delete("/servers/:id/connection", capable, async (context) => {
     const resolved = await brokeredAppFor(context.req.param("id"));
     if (resolved.refusal) {
       return context.json(
@@ -2352,6 +2531,8 @@ export function createPluginRoutes(
         resolved.refusal.status,
       );
     }
+    if (resolved.shared)
+      return sharedAccountAct(context, resolved.toolkit, "disconnect");
 
     /*
      * WHOSE ACCOUNT THIS IS COMES FROM THE SESSION, here as on confirm and for a sharper reason: a
@@ -2404,6 +2585,194 @@ export function createPluginRoutes(
    * written. There is no useful distinction here for the person between a forged state and an expired
    * one, and spelling out which is which tells anybody probing this endpoint how far they got.
    */
+  /*
+   * 一个人在一个 broker 应用上的多个账号（上游 #1298）。账号永远是会话里那个人的：路由里没有一处从请求
+   * 里读用户 id，所以一个人只能列出、设默认、断开他自己的账号。账号 id 对浏览器不透明，不是 vendor 的 id。
+   *
+   * GET 每次按 vendor 现在列出的重建（`syncBrokeredAccounts`），所以页面上列出的从来不只是这里的一行记录。
+   */
+  const brokeredAccountsAt = async (
+    serverId: string,
+  ): Promise<
+    | { toolkit: string; title: string; refusal?: undefined }
+    | {
+        toolkit?: undefined;
+        refusal: { error: string; status: 400 | 503 };
+      }
+  > => {
+    const row = await store.serverAddress(serverId);
+    const resolved = await brokeredAppFor(serverId);
+    if (resolved.refusal) return { refusal: resolved.refusal };
+    const title = row?.title ?? serverId;
+    // Shared 应用只有一个团队账号，没有个人账号可列、可设默认、可单个断开（X1）。
+    if (resolved.shared)
+      return {
+        refusal: {
+          error: `${title} 用的是一个共享的团队账号，没有个人账号。`,
+          status: 400,
+        },
+      };
+    return { toolkit: resolved.toolkit, title };
+  };
+
+  routes.get("/servers/:id/accounts", requireUser, async (context) => {
+    const shared = await brokeredAppFor(context.req.param("id"));
+    if (!shared.refusal && shared.shared)
+      return context.json({ accounts: [], canAddAnother: false });
+    const resolved = await brokeredAccountsAt(context.req.param("id"));
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    try {
+      const accounts = await store.syncBrokeredAccounts({
+        toolkit: resolved.toolkit,
+        userId: context.var.actor.id,
+      });
+      return context.json({
+        accounts,
+        canAddAnother: Boolean(composio?.broker.accountsOf),
+      });
+    } catch (error) {
+      const refusal = personRefusal(
+        error,
+        `没能列出你的 ${resolved.title} 账号。请刷新页面。`,
+        { route: "accounts.list", toolkit: resolved.toolkit },
+      );
+      return context.json({ error: refusal.error }, refusal.status);
+    }
+  });
+
+  routes.post(
+    "/servers/:id/accounts/:accountId/default",
+    requireUser,
+    async (context) => {
+      const resolved = await brokeredAccountsAt(context.req.param("id"));
+      if (resolved.refusal) {
+        return context.json(
+          { error: resolved.refusal.error },
+          resolved.refusal.status,
+        );
+      }
+      const changed = await store.setDefaultBrokeredAccount({
+        toolkit: resolved.toolkit,
+        userId: context.var.actor.id,
+        id: context.req.param("accountId"),
+      });
+      if (!changed) {
+        return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
+      }
+      return context.json({ ok: true });
+    },
+  );
+
+  routes.delete(
+    "/servers/:id/accounts/:accountId",
+    requireUser,
+    async (context) => {
+      const resolved = await brokeredAccountsAt(context.req.param("id"));
+      if (resolved.refusal) {
+        return context.json(
+          { error: resolved.refusal.error },
+          resolved.refusal.status,
+        );
+      }
+      try {
+        const ended = await store.disconnectBrokeredAccount({
+          toolkit: resolved.toolkit,
+          userId: context.var.actor.id,
+          id: context.req.param("accountId"),
+          by: context.var.actor.id,
+        });
+        if (ended === null) {
+          return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
+        }
+        // 最后一个账号：整个连接一起断开，走这个应用一直以来的那条路径。
+        if ("only" in ended) {
+          return context.json(
+            await store.disconnectBrokered({
+              toolkit: resolved.toolkit,
+              userId: context.var.actor.id,
+              by: context.var.actor.id,
+              reason: "self",
+            }),
+          );
+        }
+        return context.json(ended);
+      } catch (error) {
+        const refusal = personRefusal(
+          error,
+          "没能断开这个账号。请再按一次「断开」，重复按是安全的；如果一直这样，请联系管理员。",
+          { route: "accounts.disconnect", toolkit: resolved.toolkit },
+        );
+        return context.json({ error: refusal.error }, refusal.status);
+      }
+    },
+  );
+
+  /*
+   * 应用的账号模式（X1，上游 #757）：Personal（每个人自己的账号）⇄ Shared（部署的一个团队账号）。只有
+   * 管理员能看预览和切换。切换先在 vendor 处撤销旧模式的每个账号，全部成功才改模式；见
+   * `./account-mode`。没有接线（`accountModes` 未给）的部署答 503。
+   *
+   * GET  /servers/:id/account-mode?mode=shared|personal → { mode, current, wouldRevoke: { holder, count } }
+   * PUT  /servers/:id/account-mode { mode, confirm }    → { changed, revoked } | { changed: false, preview } |
+   *                                                       { changed: false, failures: [{ account, error }] }
+   */
+  const accountModeOf = (value: unknown) =>
+    value === "personal" || value === "shared" ? value : null;
+  routes.get("/servers/:id/account-mode", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    if (!accountModes)
+      return context.json({ error: "这个部署没有启用账号模式切换。" }, 503);
+    const mode = accountModeOf(context.req.query("mode"));
+    if (!mode)
+      return context.json({ error: "mode 只能是 personal 或 shared。" }, 400);
+    try {
+      return context.json(
+        await accountModes.preview(context.req.param("id"), mode),
+      );
+    } catch (error) {
+      if (error instanceof AccountModeRefusedError)
+        return context.json({ error: error.message }, 400);
+      throw error;
+    }
+  });
+  routes.put("/servers/:id/account-mode", capable, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+    if (!accountModes)
+      return context.json({ error: "这个部署没有启用账号模式切换。" }, 503);
+    const body = (await context.req.json().catch(() => null)) as {
+      mode?: unknown;
+      confirm?: unknown;
+    } | null;
+    const mode = accountModeOf(body?.mode);
+    if (!mode)
+      return context.json({ error: "mode 只能是 personal 或 shared。" }, 400);
+    try {
+      const result = await accountModes.switchMode({
+        serverId: context.req.param("id"),
+        mode,
+        by: context.var.actor.id,
+        confirm: body?.confirm === true,
+      });
+      return context.json(result, "failures" in result ? 409 : 200);
+    } catch (error) {
+      if (error instanceof AccountModeRefusedError)
+        return context.json({ error: error.message }, 400);
+      const refusal = personRefusal(
+        error,
+        "没能切换账号模式，什么都没有改变。请重试。",
+        { route: "account-mode.switch", toolkit: context.req.param("id") },
+      );
+      return context.json({ error: refusal.error }, refusal.status);
+    }
+  });
+
   routes.get("/oauth/callback", async (context) => {
     const failed = connectedAccountsUrlFor(connect?.appUrl, {
       failed: true,
@@ -3163,6 +3532,162 @@ export function createPluginRoutes(
     });
   });
 
+  const grantRefList = z.array(z.string().trim().min(1).max(300)).max(2_000);
+  const grantChangeInput = z.strictObject({
+    add: grantRefList,
+    remove: grantRefList,
+    authoring: z
+      .strictObject({
+        source: z.literal("english"),
+        text: z.string().trim().min(1).max(2_000),
+      })
+      .optional(),
+    // M5: 上游在这里收共享应用的使用审批（sharedGrantApproval），留给 X 系列（共享使用/多账号）。
+    approval: z.unknown().optional(),
+  });
+
+  /**
+   * Turn several of one app's actions on and off for one Bot as one change: what the Bot's app page
+   * saves once an admin has read a set chosen from their description (upstream #1396).
+   *
+   * EXACTLY THE CHECKS THE TWO ROUTES ABOVE MAKE, asked of every action before any is written. Each
+   * action turned on goes through {@link enablementDecision} as `POST /grants` sends it, and each one
+   * turned off as `DELETE /grants` does, in the Bot owner's frame ({@link asBotOwner}). One refusal
+   * refuses the whole change, with every action's reason, so nobody is left with half of what they
+   * approved. Then each is written by the store as the routes write it, with its own row on the trail,
+   * and one more row says they were one change, with the sentence it came from.
+   *
+   * M5: 上游这里还有主人授权（owner grants）和共享应用的使用审批，留给 X 系列（owner grants、共享使用）；
+   * fork 的主人自助安装（上架）照 `enablementDecision` 走。
+   */
+  routes.post(
+    "/for/:agentId/apps/:app/grants",
+    signedInWithCapability,
+    async (context) => {
+      const agentId = context.req.param("agentId").trim();
+      const app = context.req.param("app").trim();
+      const parsed = grantChangeInput.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!parsed.success)
+        return context.json(
+          {
+            error: "请用 add 和 remove 发送要打开和关闭的操作，各是一组引用。",
+          },
+          400,
+        );
+      const add = [...new Set(parsed.data.add)];
+      const remove = [...new Set(parsed.data.remove)];
+      if (add.length + remove.length === 0)
+        return context.json({ error: "没有要改的。" }, 400);
+      const foreign = [...add, ...remove].find(
+        (ref) => !ref.startsWith(`${app}/`),
+      );
+      if (foreign)
+        return context.json({ error: `${foreign} 不是 ${app} 的操作。` }, 400);
+      if (add.some((ref) => remove.includes(ref)))
+        return context.json(
+          { error: "同一个操作不能在一次修改里既打开又关闭。" },
+          400,
+        );
+
+      return asBotOwner(context, agentId, async () => {
+        const problems: { ref: string; error: string }[] = [];
+        const selfService = new Map<string, boolean>();
+        for (const ref of add) {
+          const decision = await enablementDecision(
+            context,
+            "mcp",
+            ref,
+            agentId,
+            "grant",
+          );
+          if (decision.refusal !== null)
+            problems.push({ ref, error: decision.refusal });
+          else selfService.set(ref, decision.selfService);
+        }
+        for (const ref of remove) {
+          const decision = await enablementDecision(
+            context,
+            "mcp",
+            ref,
+            agentId,
+            "revoke",
+          );
+          if (decision.refusal !== null)
+            problems.push({ ref, error: decision.refusal });
+          else selfService.set(ref, decision.selfService);
+        }
+        if (problems.length > 0)
+          return context.json(
+            { error: problems[0]?.error ?? "", problems },
+            403,
+          );
+        /*
+         * And the check a set chosen from a description was held to, asked again at the save, as a
+         * team rule's is: every action turned on is one the app advertises now. Asked after the
+         * permission checks, so somebody who may not change this Bot learns nothing about the app
+         * from the answer. Turning off is not held to it: taking away is always allowed.
+         */
+        if (add.length > 0) {
+          const server = (await store.listServers()).find(
+            (row) => row.id === app,
+          );
+          const offered = new Set(server?.tools.map((tool) => tool.ref) ?? []);
+          const unknown = add.filter((ref) => !offered.has(ref));
+          if (unknown.length > 0)
+            return context.json(
+              {
+                error: `这个应用现在没有这些操作：${unknown.join("、")}。`,
+                problems: unknown.map((ref) => ({
+                  ref,
+                  error: `这个应用现在没有 ${ref} 这个操作。`,
+                })),
+              },
+              400,
+            );
+        }
+
+        const by = actorEmail(context);
+        try {
+          for (const ref of add)
+            await store.grant(
+              "mcp",
+              ref,
+              agentId,
+              by,
+              selfService.get(ref) ? { selfService: true } : undefined,
+            );
+          for (const ref of remove)
+            await store.revoke(
+              "mcp",
+              ref,
+              agentId,
+              by,
+              selfService.get(ref) ? { selfService: true } : undefined,
+            );
+        } catch (error) {
+          // A shared Bot's grant that is not this person's to write (see `store.grant`).
+          if (error instanceof PluginRefusedError)
+            return context.json({ error: error.message }, 403);
+          throw error;
+        }
+        await store.recordGrantsChanged({
+          app,
+          agentId,
+          by,
+          actorUserId: context.var.actor.id,
+          added: add,
+          removed: remove,
+          ...(parsed.data.authoring
+            ? { authoring: parsed.data.authoring }
+            : {}),
+        });
+        return context.json({ ok: true, added: add, removed: remove });
+      });
+    },
+  );
+
   /**
    * Spec E3 / D11: what an administrator has listed (上架) for owners to install themselves.
    *
@@ -3491,12 +4016,20 @@ export function createPluginRoutes(
   routes.get("/access-requests", signedInWithCapability, async (context) => {
     const refusal = decisionRefusal(context);
     if (refusal) return context.json({ error: refusal }, 403);
-    const requests = await (
+    const all = await (
       adminScope as NonNullable<typeof adminScope>
     ).asAdminPlatform(context.var.actor, () =>
       store.pendingAppAccessRequests(),
     );
-    return context.json({ requests });
+    // 上游的形状（X2）：`?app=` 只看一个应用的，`counts` 让插件列表给每个应用标数字而不用再读一次。
+    const byApp: Record<string, number> = {};
+    for (const request of all)
+      byApp[request.appKey] = (byApp[request.appKey] ?? 0) + 1;
+    const app = context.req.query("app")?.trim();
+    return context.json({
+      requests: app ? all.filter((request) => request.appKey === app) : all,
+      counts: { total: all.length, byApp },
+    });
   });
 
   /** 申请人自己的一条申请，卡片据此显示当前状态。别人的和不存在的一样答 404。 */
@@ -3510,16 +4043,285 @@ export function createPluginRoutes(
   /** 申请人撤回自己的一条 pending 申请。别人的读起来和不存在的一样，从这里看不出谁申请了什么。 */
   routes.delete("/access-requests/:id", requireUser, async (context) => {
     const id = context.req.param("id");
+    /*
+     * 不是申请 id 的，和不存在的一样答 404（fork 测试钉住的答复），不读库、不写轨迹：URL 参数谁都能随手
+     * 填，不让它成为往审计里写任意长字符串的入口。
+     */
+    if (!isUuid(id)) return context.json({ error: NO_SUCH_REQUEST }, 404);
     const cancelled = await store.cancelAppAccessRequest({
       id,
       requesterUserId: context.var.actor.id,
     });
-    if (cancelled) return context.json({ request: cancelled });
+    if (cancelled) {
+      await store.recordAppAccessEvent({
+        eventType: "app_access.cancelled",
+        targetId: cancelled.appKey,
+        actorUserId: context.var.actor.id,
+        payload: {
+          request: cancelled.id,
+          app: cancelled.appKey,
+          bot: cancelled.botId,
+          kind: cancelled.kind,
+        },
+      });
+      return context.json({ request: cancelled });
+    }
     const existing = await store.appAccessRequest(id);
-    if (existing && existing.requesterUserId === context.var.actor.id)
-      return context.json({ error: ALREADY_DECIDED }, 409);
+    const mine = existing?.requesterUserId === context.var.actor.id;
+    await store.recordAppAccessRefusal({
+      targetId: mine ? (existing?.appKey ?? "") : "",
+      actorUserId: context.var.actor.id,
+      payload: {
+        app: mine ? (existing?.appKey ?? "") : "",
+        request: id,
+        reason: mine ? "already_resolved" : "no_such_request",
+      },
+    });
+    if (mine) return context.json({ error: ALREADY_DECIDED }, 409);
     return context.json({ error: NO_SUCH_REQUEST }, 404);
   });
+
+  const composioConfigured = Boolean(composio);
+  /** 只为叫出一个这里还没有行的 broker 应用才问目录；适配器会缓存列表。 */
+  const appDirectory = composio ? () => composio.broker.listApps() : undefined;
+
+  /** 批准没能做成时写一行 `app_access.refused`，原因是给轨迹读的词，句子是给管理员读的中文。 */
+  const approvalRefused = async (
+    context: { var: AppVariables },
+    request: AppAccessRequestRecord,
+    reason: string,
+  ) =>
+    store.recordAppAccessEvent({
+      eventType: "app_access.refused",
+      targetId: request.appKey,
+      actorUserId: context.var.actor.id,
+      payload: {
+        app: request.appKey,
+        request: request.id,
+        bot: request.botId,
+        kind: request.kind,
+        reason,
+      },
+    });
+
+  /**
+   * 批准一条申请就是做它要的那件事，然后关单（收件箱的批准与卡片上的一按共用，见 `app-access-routes.ts`）。
+   *
+   * 先改、后关单（fork 的顺序，fork 测试钉住）：改完发现申请在此期间被撤回或驳回，答一个可区分的 409
+   * （`applied: true`），写明做了什么。上游先把申请「认领」成 approved 再改；fork 保留原顺序，见报告。
+   *
+   * - `enable`：应用有行、但缺只有管理员能填的东西（密钥、OAuth 客户端、读不懂的认证方式）时照实拒绝，
+   *   申请保持待处理；有行就上架（`addInstallListing`），之后员工的主人按 D08 自己装。还没有行的目录条目
+   *   先添加它（`addServer`，与 POST /servers 同一个），再上架；还没打开的 Composio 应用请管理员先在插件页
+   *   启用（它要选认证方式，批准替不了）。上架不授予。
+   * - `grant`：走现有的授予（`asBotOwner` + `enablementDecision` + `store.grant`）。不带 `refs` 只授予标为
+   *   只读、非破坏性的动作；带 `refs` 时只授予这些，且每一个都必须是这个应用的动作。
+   */
+  const carryOutApproval = async (
+    context: Context<{ Variables: AppVariables }>,
+    request: AppAccessRequestRecord,
+    chosen: string[] | undefined,
+    direct = false,
+  ): Promise<Response> => {
+    const title = request.appTitle;
+    const again = direct ? "再试一次" : "再批准这条申请";
+    let granted: string[] = [];
+    let enabled = false;
+
+    if (request.kind === "enable") {
+      const inspected = await store.inspectApp({
+        app: request.appKey,
+        agentId: request.botId,
+        userId: null,
+        composioConfigured,
+        directory: appDirectory,
+      });
+      if (inspected?.unavailable && inspected.unavailable !== "absent") {
+        await approvalRefused(context, request, inspected.unavailable);
+        return context.json(
+          { error: unavailableSentence(inspected.unavailable, title, again) },
+          inspected.unavailable === "composio_unconfigured" ? 503 : 409,
+        );
+      }
+      if (inspected && inspected.answeringId === null) {
+        if (!inspected.entry) {
+          await approvalRefused(context, request, "needs_admin_enable");
+          return context.json(
+            {
+              error: `「${title}」还没有在本部署打开。请先在${appsPageZh()}启用它（要选它怎么连接），然后${again}。`,
+            },
+            409,
+          );
+        }
+        const needed = adminInputFor(inspected.entry);
+        if (needed) {
+          await approvalRefused(context, request, "needs_admin_input");
+          return context.json(
+            {
+              error: `「${title}」还需要${needed}。请在${appsPageZh()}它的页面上添加，然后${again}。`,
+            },
+            409,
+          );
+        }
+        try {
+          await store.addServer({
+            key: inspected.entry.key,
+            by: actorEmail(context),
+          });
+        } catch (error) {
+          const sentence =
+            error instanceof CatalogueEntryUnknownError ||
+            error instanceof CustomServerRefusedError
+              ? error.message
+              : isDeploymentFault(error)
+                ? deploymentFaultSentence(error)
+                : null;
+          if (sentence === null) throw error;
+          await approvalRefused(context, request, "enable_failed");
+          return context.json(
+            { error: `没能打开「${title}」：${sentence}` },
+            409,
+          );
+        }
+        enabled = true;
+      } else if (
+        // 和 POST /listings 一样的检查：上架的是应用，必须是目录里的条目或本部署已添加的应用。
+        catalogueEntry(request.appKey) === null &&
+        !(await store.serverExists(request.appKey))
+      ) {
+        return context.json(
+          { error: `「${title}」已经不是本部署的应用，无法上架。` },
+          409,
+        );
+      }
+      await store.addInstallListing("mcp", request.appKey, actorEmail(context));
+    } else {
+      const outcome = await asBotOwner(context, request.botId, async () => {
+        const server = (await store.listServers()).find(
+          (candidate) => candidate.id === request.serverId,
+        );
+        if (!server)
+          return {
+            error: `「${title}」已经不是本部署的应用，无法授予。`,
+            status: 409 as const,
+          };
+        if (server.tools.length === 0)
+          return {
+            error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
+            status: 409 as const,
+          };
+        const advertised = server.tools.map((tool) => tool.ref);
+        const outside = (chosen ?? []).filter(
+          (ref) => !advertised.includes(ref),
+        );
+        if (outside.length > 0)
+          return {
+            error: `${outside.join("、")} 不是「${title}」的动作。`,
+            status: 400 as const,
+          };
+        const refs =
+          chosen ??
+          server.tools
+            .filter((tool) => tool.effect === "read" && !tool.destructive)
+            .map((tool) => tool.ref);
+        if (refs.length === 0)
+          return {
+            error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
+            status: 409 as const,
+          };
+        for (const ref of refs) {
+          const decision = await enablementDecision(
+            context,
+            "mcp",
+            ref,
+            request.botId,
+            "grant",
+          );
+          if (decision.refusal !== null) {
+            // 原文是英文、写给开发者的；收件箱里给管理员看中文，原文只进日志（M-2）。
+            logApproval("refused", request, [], decision.refusal);
+            return {
+              error: `无法把「${title}」授予这位员工：员工或应用已不存在，或这项授予不由管理员在这里决定。`,
+              status: 403 as const,
+              granted: [] as string[],
+            };
+          }
+        }
+        /*
+         * 逐个写入，记下写成了哪些。中途失败时前面写入的授予会留下（每个都是幂等的 upsert，重试会补齐），
+         * 所以响应和日志都写明已写入了哪些，申请保持 pending。
+         */
+        const written: string[] = [];
+        try {
+          for (const ref of refs) {
+            await store.grant("mcp", ref, request.botId, actorEmail(context));
+            written.push(ref);
+          }
+        } catch (error) {
+          logApproval(
+            "grant_failed",
+            request,
+            written,
+            error instanceof Error ? error.message : String(error),
+          );
+          const done = written.length > 0 ? written.join("、") : "无";
+          return {
+            error: `授予「${title}」时中途失败，申请保持待处理。已写入：${done}。${error instanceof PluginRefusedError ? "其余的这项授予不由管理员在这里决定。" : "其余的没有写入，可以稍后再批准一次补齐。"}`,
+            status: (error instanceof PluginRefusedError ? 403 : 500) as
+              | 403
+              | 500,
+            granted: written,
+          };
+        }
+        return { refs };
+      });
+      if ("error" in outcome) {
+        await approvalRefused(context, request, `grant_${outcome.status}`);
+        return context.json(
+          { error: outcome.error, granted: outcome.granted },
+          outcome.status,
+        );
+      }
+      granted = outcome.refs;
+    }
+
+    const decided = await decideAsRequester(context, request, "approved");
+    if (!decided) {
+      /*
+       * 上架或授予已经生效，但关单时发现申请在此期间已被撤回或驳回（I-1）。这和「什么都没做成」的
+       * 409 不是一回事：返回一个可以区分的答复（`applied: true`），写明做了什么、申请状态没改，
+       * 由管理员决定要不要到插件页撤销。
+       */
+      logApproval("applied_but_closed", request, granted);
+      const what =
+        request.kind === "enable"
+          ? `「${title}」已上架`
+          : `「${title}」已授予（${granted.join("、")}）`;
+      return context.json(
+        {
+          error: `${what}，但这条申请在此期间已被撤回或驳回，申请状态未改。如不需要，请到插件页${request.kind === "enable" ? "下架" : "撤销"}。`,
+          applied: true,
+          granted,
+        },
+        409,
+      );
+    }
+    await store.recordAppAccessEvent({
+      eventType: "app_access.approved",
+      targetId: decided.appKey,
+      actorUserId: context.var.actor.id,
+      payload: {
+        request: decided.id,
+        app: decided.appKey,
+        bot: decided.botId,
+        kind: decided.kind,
+        enabled,
+        granted: granted.length,
+        ...(direct ? { direct: true } : {}),
+      },
+    });
+    return context.json({ request: decided, granted, enabled });
+  };
 
   routes.post(
     "/access-requests/:id/approve",
@@ -3527,129 +4329,39 @@ export function createPluginRoutes(
     async (context) => {
       const refusal = decisionRefusal(context);
       if (refusal) return context.json({ error: refusal }, 403);
+      const body = (await context.req.json().catch(() => null)) as {
+        refs?: unknown;
+      } | null;
+      if (
+        body?.refs !== undefined &&
+        (!Array.isArray(body.refs) ||
+          body.refs.some((ref) => typeof ref !== "string"))
+      )
+        return context.json({ error: "动作必须是一组 ref。" }, 400);
       const request = await requestForAdmin(context, context.req.param("id"));
       if (!request) return context.json({ error: NO_SUCH_REQUEST }, 404);
       if (request.status !== "pending")
         return context.json({ error: ALREADY_DECIDED }, 409);
-      const title = request.appTitle;
-      let granted: string[] = [];
-
-      if (request.kind === "enable") {
-        // 和 POST /listings 一样的检查：上架的是应用，必须是目录里的条目或本部署已添加的应用。
-        if (
-          catalogueEntry(request.appKey) === null &&
-          !(await store.serverExists(request.appKey))
-        )
-          return context.json(
-            { error: `「${title}」已经不是本部署的应用，无法上架。` },
-            409,
-          );
-        await store.addInstallListing(
-          "mcp",
-          request.appKey,
-          actorEmail(context),
-        );
-      } else {
-        const outcome = await asBotOwner(context, request.botId, async () => {
-          const server = (await store.listServers()).find(
-            (candidate) => candidate.id === request.serverId,
-          );
-          if (!server)
-            return {
-              error: `「${title}」已经不是本部署的应用，无法授予。`,
-              status: 409 as const,
-            };
-          if (server.tools.length === 0)
-            return {
-              error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
-              status: 409 as const,
-            };
-          const refs = server.tools
-            .filter((tool) => tool.effect === "read" && !tool.destructive)
-            .map((tool) => tool.ref);
-          if (refs.length === 0)
-            return {
-              error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
-              status: 409 as const,
-            };
-          for (const ref of refs) {
-            const decision = await enablementDecision(
-              context,
-              "mcp",
-              ref,
-              request.botId,
-              "grant",
-            );
-            if (decision.refusal !== null) {
-              // 原文是英文、写给开发者的；收件箱里给管理员看中文，原文只进日志（M-2）。
-              logApproval("refused", request, [], decision.refusal);
-              return {
-                error: `无法把「${title}」授予这位员工：员工或应用已不存在，或这项授予不由管理员在这里决定。`,
-                status: 403 as const,
-                granted: [] as string[],
-              };
-            }
-          }
-          /*
-           * 逐个写入，记下写成了哪些。中途失败时前面写入的授予会留下（每个都是幂等的 upsert，重试会补齐），
-           * 所以响应和日志都写明已写入了哪些，申请保持 pending。
-           */
-          const written: string[] = [];
-          try {
-            for (const ref of refs) {
-              await store.grant("mcp", ref, request.botId, actorEmail(context));
-              written.push(ref);
-            }
-          } catch (error) {
-            logApproval(
-              "grant_failed",
-              request,
-              written,
-              error instanceof Error ? error.message : String(error),
-            );
-            const done = written.length > 0 ? written.join("、") : "无";
-            return {
-              error: `授予「${title}」时中途失败，申请保持待处理。已写入：${done}。${error instanceof PluginRefusedError ? "其余的这项授予不由管理员在这里决定。" : "其余的没有写入，可以稍后再批准一次补齐。"}`,
-              status: (error instanceof PluginRefusedError ? 403 : 500) as
-                | 403
-                | 500,
-              granted: written,
-            };
-          }
-          return { refs };
-        });
-        if ("error" in outcome)
-          return context.json(
-            { error: outcome.error, granted: outcome.granted },
-            outcome.status,
-          );
-        granted = outcome.refs;
-      }
-
-      const decided = await decideAsRequester(context, request, "approved");
-      if (!decided) {
-        /*
-         * 上架或授予已经生效，但关单时发现申请在此期间已被撤回或驳回（I-1）。这和「什么都没做成」的
-         * 409 不是一回事：返回一个可以区分的答复（`applied: true`），写明做了什么、申请状态没改，
-         * 由管理员决定要不要到插件页撤销。
-         */
-        logApproval("applied_but_closed", request, granted);
-        const what =
-          request.kind === "enable"
-            ? `「${title}」已上架`
-            : `「${title}」已授予（${granted.join("、")}）`;
-        return context.json(
-          {
-            error: `${what}，但这条申请在此期间已被撤回或驳回，申请状态未改。如不需要，请到插件页${request.kind === "enable" ? "下架" : "撤销"}。`,
-            applied: true,
-            granted,
-          },
-          409,
-        );
-      }
-      return context.json({ request: decided, granted });
+      return carryOutApproval(
+        context,
+        request,
+        body?.refs as string[] | undefined,
+      );
     },
   );
+
+  mountAppAccessRoutes({
+    routes,
+    store,
+    requireUser,
+    capable: signedInWithCapability,
+    canUseBot,
+    asBotOwner,
+    composioConfigured,
+    directory: appDirectory,
+    decisionRefusal,
+    carryOut: carryOutApproval,
+  });
 
   /** 驳回：只关掉这条申请，别的什么也不改。 */
   routes.post(
@@ -3664,6 +4376,17 @@ export function createPluginRoutes(
         return context.json({ error: ALREADY_DECIDED }, 409);
       const decided = await decideAsRequester(context, request, "dismissed");
       if (!decided) return context.json({ error: ALREADY_DECIDED }, 409);
+      await store.recordAppAccessEvent({
+        eventType: "app_access.dismissed",
+        targetId: decided.appKey,
+        actorUserId: context.var.actor.id,
+        payload: {
+          request: decided.id,
+          app: decided.appKey,
+          bot: decided.botId,
+          kind: decided.kind,
+        },
+      });
       return context.json({ request: decided });
     },
   );

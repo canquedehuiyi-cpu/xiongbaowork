@@ -1,7 +1,56 @@
+import { toolkitOf as arcadeToolkitOf } from "./arcade";
 import { schemeKind } from "./broker";
 import type { CatalogueEntry } from "./catalogue";
-import { toolkitOf } from "./composio";
+import { toolkitOf as composioToolkitOf } from "./composio";
 import type { TransportKind } from "./transport";
+
+/**
+ * 一个连接应用提供商（上游 #770）。两个都是传输层种类，类型由编译器约束为 TransportKind 的子集。
+ * 默认仍是 Composio；Arcade 只在 `OPENBOT_BROKER_PROVIDER=arcade` 或只配了 `ARCADE_API_KEY` 时启用。
+ */
+export type BrokerProvider = Extract<TransportKind, "composio" | "arcade">;
+
+export const BROKER_PROVIDERS = ["composio", "arcade"] as const;
+
+/** 这一行的 provenance 是否是某个提供商的 broker 应用。 */
+export function brokeredProvenance(p: string): p is BrokerProvider {
+  return p === "composio" || p === "arcade";
+}
+
+const TOOLKIT_OF: Record<BrokerProvider, (url: string) => string | null> = {
+  composio: composioToolkitOf,
+  arcade: arcadeToolkitOf,
+};
+
+/**
+ * 每个提供商的 id 前缀、url scheme、厂商名和 key 的环境变量。id 前缀是应用行的命名空间：
+ * `composio-gmail`、`arcade-Gmail`（Arcade 的 toolkit 区分大小写）。
+ */
+export const BROKERED_PROFILE: Record<
+  BrokerProvider,
+  { scheme: string; idPrefix: string; vendor: string; envVar: string }
+> = {
+  composio: {
+    scheme: "composio://",
+    idPrefix: "composio-",
+    vendor: "Composio",
+    envVar: "COMPOSIO_API_KEY",
+  },
+  arcade: {
+    scheme: "arcade://",
+    idPrefix: "arcade-",
+    vendor: "Arcade",
+    envVar: "ARCADE_API_KEY",
+  },
+};
+
+/** 按提供商读 url 里的应用名；各自的解析器，Arcade 保留大小写。 */
+export function toolkitOfFor(
+  provider: BrokerProvider,
+  url: string,
+): string | null {
+  return TOOLKIT_OF[provider](url);
+}
 
 /**
  * How one server row is reached: which protocol, whose credential, which app at a broker, and whose
@@ -203,7 +252,7 @@ export class CatalogueTransportUnroutableError extends ServerUnresolvableError {
  * compile-time door and the runtime one shut, rather than trading the second for the first.
  */
 function isBrokerTransport(kind: TransportKind): boolean {
-  return kind === "composio";
+  return brokeredProvenance(kind);
 }
 
 /**
@@ -251,16 +300,16 @@ export function accessFor(
   },
   entry: CatalogueEntry | null,
 ): ServerAccess {
-  if (entry && row.provenance === "composio") {
+  if (entry && brokeredProvenance(row.provenance)) {
     throw new ServerRowAmbiguousError(
-      `${entry.key} is a server this deployment ships an entry for, and a row with that id says its provenance is composio. Nothing can tell an edited column from a brokered app that took the name, so this row is not resolved at all: rename it, or correct its provenance.`,
+      `${entry.key} is a server this deployment ships an entry for, and a row with that id says its provenance is ${row.provenance}. Nothing can tell an edited column from a brokered app that took the name, so this row is not resolved at all: rename it, or correct its provenance.`,
     );
   }
 
   if (entry) {
     if (isBrokerTransport(entry.transport ?? "mcp")) {
       throw new CatalogueTransportUnroutableError(
-        `${entry.key} is a catalogue entry declaring the composio transport, which is reached from a row's provenance and the app slug in its url — neither of which an entry has. There is no app to broker to and no connection to check, so this entry is not resolved at all: give it the transport it is actually reached over.`,
+        `${entry.key} is a catalogue entry declaring the ${entry.transport ?? "mcp"} transport, which is a broker's and is reached from a row's provenance and the app slug in its url — neither of which an entry has. There is no app to broker to and no connection to check, so this entry is not resolved at all: give it the transport it is actually reached over.`,
       );
     }
 
@@ -289,7 +338,8 @@ export function accessFor(
     };
   }
 
-  if (row.provenance === "composio") {
+  if (brokeredProvenance(row.provenance)) {
+    const provider = row.provenance;
     /*
      * AND A BROKERED APP THAT NEEDS NO CREDENTIAL IS REACHED AS THE DEPLOYMENT, NOT AS THE ASKER.
      *
@@ -312,11 +362,11 @@ export function accessFor(
      * is the answer that does not under-attribute a call that really did run in somebody's mailbox.
      */
     return {
-      transport: "composio",
+      transport: provider,
       credential: "brokered",
       reachedAs:
         schemeKind(row.authScheme) === "none" ? "deployment" : "person",
-      toolkit: toolkitOf(row.url),
+      toolkit: TOOLKIT_OF[provider](row.url),
     };
   }
 

@@ -5,6 +5,8 @@ import {
   writeAppAccessRequestAnswer,
 } from "../../../shared/app-access-request";
 import type { AppAccessRequestKind } from "../db/schema/app-access-requests";
+import { nothingToRequest } from "./app-access";
+import { type AppDirectory, requestPlanFor } from "./app-access-store";
 import type { PluginStore } from "./store";
 import { type GrantedTool, REFUSAL_MARKER } from "./tools";
 
@@ -24,8 +26,9 @@ export const MAX_PENDING_APP_ACCESS_REQUESTS = 20;
  * 拿到的只是一个角色的名字，没有办法去找。这个工具替对方把申请直接放进管理员的收件箱，对话里留一张卡片
  * 说明这件事，对方还可以撤回。
  *
- * 类型由服务端定，不由模型定：员工已持有这个应用的工具，就是已就绪，不建申请；应用已上架（D08）但没给这
- * 位员工，申请 `grant`；还没上架，申请 `enable`。批准时走 fork 现有的上架和授予接口，这里不授予任何东西。
+ * 类型由服务端定，不由模型定，与浏览器入口同一个判定（`requestPlanFor`）：按应用对这个人的状态，
+ * 已就绪或本人自己能解决的不建申请；应用还没打开（disabled）申请 `enable`；有行但没给这位员工时，已上架
+ * （D08）申请 `grant`，还没上架申请 `enable`。批准时走 fork 现有的上架和授予接口，这里不授予任何东西。
  *
  * 归为写：它会在本租户里建一条申请，所以后台只读的主动研究拿不到它（`proactive/restriction.ts` 只放行
  * 认定为读的 ref）。但它只写这一条申请，不碰任何应用，也不出本租户，所以不走审批卡片。
@@ -33,13 +36,18 @@ export const MAX_PENDING_APP_ACCESS_REQUESTS = 20;
 export function appAccessTools(options: {
   store: Pick<
     PluginStore,
-    | "findAppForRequest"
+    | "inspectApp"
     | "listForAgent"
     | "isInstallListed"
+    | "appAccessRequest"
     | "fileAppAccessRequest"
   >;
   botId: string;
   actorId: string;
+  /** 部署有没有 Composio 的 key；broker 应用的状态要它（与浏览器入口同一个值）。 */
+  composioConfigured?: boolean;
+  /** 叫出一个这里还没有行的 broker 应用时问的目录。 */
+  directory?: AppDirectory;
 }): GrantedTool[] {
   const parameters = z
     .object({
@@ -71,36 +79,65 @@ export function appAccessTools(options: {
         if (!options.actorId)
           return `${REFUSAL_MARKER} 这次对话没有可以代为申请的人。`;
         const { app, reason } = parsed.data;
-        const found = await options.store.findAppForRequest(app);
-        if (!found)
+        /*
+         * 与浏览器入口同一个判定：同一次 `inspectApp`、同一个 `requestPlanFor`，所以能不能申请、
+         * 已有哪一条在等，两个入口答的一样；本人自己能解决的状态（连接、重连、团队账号未连接或未批准）
+         * 不建申请。
+         */
+        const plan = requestPlanFor(
+          await options.store.inspectApp({
+            app,
+            agentId: options.botId,
+            userId: options.actorId,
+            composioConfigured: options.composioConfigured ?? false,
+            ...(options.directory ? { directory: options.directory } : {}),
+          }),
+        );
+        if (plan.refused === "no_such_app")
           return `这个部署还没有叫「${app}」的应用，没有可以申请的。请如实告诉对方；不要改用浏览器去打开它的网站，也不要让对方去那里登录。`;
+        const title = plan.access.displayName;
         // 自己添加的应用不归管理员管：申请只会让管理员看到一个在他的帧里不存在的应用，永远批不了。
-        if (found.own)
-          return `「${found.title}」是你自己添加的应用，不需要向管理员申请。请在插件页自己把它装到这位员工上。`;
-        const held = await options.store.listForAgent(options.botId);
-        if (held.tools.some((tool) => tool.ref.startsWith(`${found.appKey}/`)))
-          return `「${found.title}」已经可以使用了，不需要申请。请直接调用它的工具。`;
-        const kind: AppAccessRequestKind = (await options.store.isInstallListed(
-          "mcp",
-          found.appKey,
-        ))
-          ? "grant"
-          : "enable";
-        const filed = await options.store.fileAppAccessRequest({
-          serverId: found.serverId,
-          botId: options.botId,
-          requesterUserId: options.actorId,
-          kind,
-          note: reason,
-          maxPending: MAX_PENDING_APP_ACCESS_REQUESTS,
-        });
+        if (plan.refused === "own_app")
+          return `「${title}」是你自己添加的应用，不需要向管理员申请。请在插件页自己把它装到这位员工上。`;
+        if (plan.refused === "nothing_to_request:ready")
+          return `「${title}」已经可以使用了，不需要申请。请直接调用它的工具。`;
+        if (plan.refused !== undefined)
+          return `${nothingToRequest(plan.access)}没有替对方向管理员提申请。请如实告诉对方；不要改用浏览器去打开它的网站。`;
+        /*
+         * 类型按状态定；fork 0153 起的一条细化（测试钉住）：应用有行、只是没给这位员工，而它还没上架时，
+         * 申请上架（D08，批准后员工的主人自己装），已上架才申请授予。卡片把这条上架申请算作这个状态的申请，
+         * 浏览器入口再按时答的就是它。
+         */
+        const kind: AppAccessRequestKind =
+          plan.kind === "grant" &&
+          plan.serverId !== null &&
+          !(await options.store.isInstallListed("mcp", plan.access.key))
+            ? "enable"
+            : plan.kind;
+        const waiting = plan.pendingId
+          ? await options.store.appAccessRequest(plan.pendingId)
+          : null;
+        const filed =
+          waiting?.status === "pending"
+            ? { outcome: "existing" as const, request: waiting }
+            : await options.store.fileAppAccessRequest({
+                serverId: plan.serverId,
+                ...(plan.serverId === null
+                  ? { appKey: plan.access.key, appTitle: title }
+                  : {}),
+                botId: options.botId,
+                requesterUserId: options.actorId,
+                kind,
+                note: reason,
+                maxPending: MAX_PENDING_APP_ACCESS_REQUESTS,
+              });
         if (filed.outcome === "limited")
-          return `${REFUSAL_MARKER} 对方已经有 ${MAX_PENDING_APP_ACCESS_REQUESTS} 条申请在等管理员处理，先撤回一条或等它们处理完，再申请「${found.title}」。`;
+          return `${REFUSAL_MARKER} 对方已经有 ${MAX_PENDING_APP_ACCESS_REQUESTS} 条申请在等管理员处理，先撤回一条或等它们处理完，再申请「${title}」。`;
         const card: AppAccessRequestCard = {
           requestId: filed.request.id,
-          appKey: found.appKey,
-          title: found.title,
-          kind,
+          appKey: plan.access.key,
+          title,
+          kind: filed.request.kind,
           status: filed.outcome,
         };
         return writeAppAccessRequestAnswer(card, toldTheModel(card));

@@ -250,7 +250,7 @@ describe("内置员工的提示词", () => {
       computerGuidance({ search: false, browserSearch: true }),
     );
     expect(searching).not.toContain(
-      "NEVER drive your browser to a search engine",
+      "Never drive your browser to a search engine",
     );
     expect(searching).not.toContain(
       "Do not open a search engine in your browser",
@@ -258,7 +258,7 @@ describe("内置员工的提示词", () => {
     expect(searching).toContain("searching with your browser");
     // 没有浏览器搜索引导的运行（远程 Bot、没有浏览器工具）照旧。
     expect(flat(computerGuidance({ search: false }))).toContain(
-      "NEVER drive your browser to a search engine",
+      "Never drive your browser to a search engine",
     );
   });
 

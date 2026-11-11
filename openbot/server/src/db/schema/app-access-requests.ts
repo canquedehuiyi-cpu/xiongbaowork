@@ -30,7 +30,7 @@ export type AppAccessRequestStatus =
   (typeof APP_ACCESS_REQUEST_STATUSES)[number];
 
 /**
- * 一条申请访问（恢复层迁移 0153，上游 0060 的子集）：员工在对话里用不了某个应用，替正在和它说话的人向
+ * 一条申请访问（恢复层迁移 0153 与 0187，上游 0060）：员工在对话里用不了某个应用，替正在和它说话的人向
  * 管理员申请。批准时调用 fork 现有的上架或授予接口，这张表本身不授予任何东西。
  *
  * 行属于申请人的租户。同一个人、同一位员工、同一个应用、同一种类型，同时只能有一条 pending。
@@ -40,9 +40,13 @@ export const appAccessRequests = pgTable(
   {
     tenantId: tenantId(),
     id: uuid("id").primaryKey().defaultRandom(),
-    serverId: text("server_id")
-      .notNull()
-      .references(() => mcpServers.id, { onDelete: "cascade" }),
+    /**
+     * 应用行。没有行的申请（请管理员打开一个还没添加的应用，X2 迁移 0187）为 null，改记
+     * {@link appKey} 与 {@link appTitle}。
+     */
+    serverId: text("server_id").references(() => mcpServers.id, {
+      onDelete: "cascade",
+    }),
     botId: text("bot_id")
       .notNull()
       .references(() => agents.id, { onDelete: "cascade" }),
@@ -51,6 +55,10 @@ export const appAccessRequests = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
+    /** 没有应用行时，申请的应用键（目录键或 `composio-<slug>`）；有行时为 null，读时从行上取。 */
+    appKey: text("app_key"),
+    /** 没有应用行时，提出申请那一刻的应用名。 */
+    appTitle: text("app_title"),
     note: text("note"),
     decidedBy: text("decided_by"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
@@ -79,12 +87,20 @@ export const appAccessRequests = pgTable(
       "app_access_requests_tenant_person",
       sql`${table.tenantId} NOT IN ('system', 'platform', 'team')`,
     ),
+    check(
+      "app_access_requests_app_named",
+      sql`${table.serverId} IS NOT NULL OR (${table.appKey} IS NOT NULL AND ${table.appTitle} IS NOT NULL)`,
+    ),
+    check(
+      "app_access_requests_app_key_length",
+      sql`(${table.appKey} IS NULL OR char_length(${table.appKey}) <= 200) AND (${table.appTitle} IS NULL OR char_length(${table.appTitle}) <= 200)`,
+    ),
     uniqueIndex("app_access_requests_pending_idx")
       .on(
         table.tenantId,
         table.requesterUserId,
         table.botId,
-        table.serverId,
+        sql`coalesce(${table.serverId}, ${table.appKey})`,
         table.kind,
       )
       .where(sql`${table.status} = 'pending'`),

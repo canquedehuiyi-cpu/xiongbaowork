@@ -10,12 +10,60 @@ import type { AuditEventInput, AuditInitiator } from "../audit";
 import { cutAtCodeUnits } from "../channels/text";
 import type { ContinuationReceipt } from "./continuation-protocol";
 
-/** `handled` answers a hand-off: the person did it themselves, so it is never executed for them. */
+/**
+ * `handled` answers a hand-off: the person did it themselves, so it is never executed for them.
+ * `allow_conversation` allows this action now and for the rest of this conversation: the same tool,
+ * the same Bot, the same target and account, in this conversation only (see `conversationGrant`).
+ */
 export type ApprovalDecision =
   | "allow_once"
+  | "allow_conversation"
   | "allow_always"
   | "deny"
   | "handled";
+export const APPROVAL_DECISIONS = [
+  "allow_once",
+  "allow_conversation",
+  "allow_always",
+  "deny",
+  "handled",
+] as const satisfies readonly ApprovalDecision[];
+/**
+ * The kinds of action OpenBot recognises by name and asks about whatever the person's own switch
+ * says (`safetyRequirement` in ./policy). An admin can close each kind further
+ * (`ApprovalTeamSettings.actionKinds`).
+ *
+ * 本部署的审批底线（#398）不随上游 #1394 打开：删除、对外发送、分享、公开发布总是先问且只给
+ * 「允许一次」，付款、改凭据、改安全设置交给本人。管理员的设置只能让它更严（交给本人），不能放宽。
+ */
+export type ActionKind =
+  | "deleting"
+  | "sending"
+  | "sharing"
+  | "publishing"
+  | "payments"
+  | "credentials"
+  | "security_settings";
+export const ACTION_KINDS = [
+  "deleting",
+  "sending",
+  "sharing",
+  "publishing",
+  "payments",
+  "credentials",
+  "security_settings",
+] as const satisfies readonly ActionKind[];
+/**
+ * What the admin lets members do about one kind of action. `open` (the default) leaves it to the
+ * deployment's floor; `ask` asks every time, with Allow once and Deny only. `hand_off` leaves it to
+ * the person to do themselves. A floor stricter than the setting wins (see `closedKind`).
+ */
+export type ActionKindPolicy = "open" | "ask" | "hand_off";
+export const ACTION_KIND_POLICIES = [
+  "open",
+  "ask",
+  "hand_off",
+] as const satisfies readonly ActionKindPolicy[];
 /**
  * What a matching custom rule does, in Dot's four behaviours: take action without asking; take
  * action only when the person explicitly asked for that exact action in this run's request; ask
@@ -94,6 +142,8 @@ export type ApprovalPolicyOutcome = {
     | "default"
     /** The person already declined this action, or an equivalent, earlier in this conversation. */
     | "person_declined"
+    /** The person allowed this action for the rest of this conversation (`conversationGrant`). */
+    | "conversation"
     /**
      * A task started from a check-in item: every change it makes asks first, whatever the person's
      * "Ask before making changes" says (tasks/turn.ts). Kept apart from `default` so turning that
@@ -102,6 +152,13 @@ export type ApprovalPolicyOutcome = {
     | "task";
   reason: string;
   ruleId?: string;
+  /** The kind of action OpenBot recognised this as, where it is one (see `ActionKind`). */
+  kind?: ActionKind;
+  /**
+   * The admin closed this kind to standing answers: it asks every time, so the card offers Allow
+   * once and Deny only (`offersStandingRule`).
+   */
+  closed?: true;
   review?: {
     verdict: "proceed" | "needs_approval" | "hand_off";
     preApproved: boolean;
@@ -191,7 +248,27 @@ export type ApprovalCandidate = {
    * the person approves, so not in the action's digest.
    */
   declined?: AuditEventInput;
+  /**
+   * 调用进的是这个人在该应用上的哪一个账号（按本人认得的地址），只在他有不止一个账号时才有（上游
+   * #1298）。它是「两个动作是不是同一个动作」的一部分：对一个邮箱的调用，永远不会被关于另一个邮箱的
+   * 批准、拒绝或保存的规则回答。
+   */
+  account?: string;
+  /**
+   * 同一个账号的稳定绑定：vendor 报的地址，没报时是账号那一行的 id（`row:<id>`）。`account` 是给人和
+   * 模型看的名字，没有地址的账号按位置叫「账号 2」，断开前面一个后会变成「账号 1」；保存的规则与「在这段
+   * 对话里都允许」绑定的是它，所以不会漂到另一个账号上。没给时用 `account`（见 {@link accountBindingOf}）。
+   */
+  accountBinding?: string;
 };
+
+/** 一个动作的账号按什么绑定：稳定绑定，没有时是它的名字；不点名账号时为 undefined。 */
+export function accountBindingOf(candidate: {
+  account?: string;
+  accountBinding?: string;
+}): string | undefined {
+  return candidate.accountBinding || candidate.account || undefined;
+}
 
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;
@@ -232,10 +309,37 @@ export type ApprovalRule = {
   effect: string;
   scope: string;
   behaviour: RuleBehaviour;
+  /** 规则只针对的那一个账号；NULL 是「这个应用，不论哪个账号」，能放行什么见 `ruleMatches`。 */
+  account?: string | null;
+  /**
+   * The kind of action the rule was saved from, by "Always allow here" on that kind's card, or null.
+   * An allow reaches an action of a kind only when it was saved from that kind (see `reachesKind`).
+   */
+  kind?: ActionKind | null;
   revokedAt: Date | null;
   createdAt: Date;
 };
-export type ApprovalTeamRule = Omit<ApprovalRule, "ownerUserId"> & {
+/**
+ * "Allow for this conversation": one action (Bot, tool, target, account), in one conversation, for
+ * one person. It ends when the person turns it off or deletes the conversation, and reaches no other
+ * conversation, Bot or tool.
+ */
+export type ApprovalConversationGrant = {
+  id: string;
+  ownerUserId: string;
+  threadId: string;
+  /** The request it was given on. */
+  approvalId: string;
+  botId: string;
+  toolRef: string;
+  effect: string;
+  scope: string;
+  /** 卡片点名的账号的稳定绑定（{@link accountBindingOf}）；不点名账号的动作为 null。 */
+  account: string | null;
+  kind: ActionKind | null;
+  createdAt: Date;
+};
+export type ApprovalTeamRule = Omit<ApprovalRule, "ownerUserId" | "kind"> & {
   createdBy: string | null;
 };
 export type ApprovalRuleInput = {
@@ -245,6 +349,12 @@ export type ApprovalRuleInput = {
   scope: string;
   behaviour: RuleBehaviour;
 };
+/**
+ * Where saved rules came from, when they were not typed into the form: a sentence in plain English
+ * that the deployment's model wrote them from, and the admin then saved. The boundary's own shape
+ * (`PolicyAuthoring` in computer/policy-store.ts).
+ */
+export type ApprovalRuleAuthoring = { source: "english"; text: string };
 export type ApprovalPreferences = {
   enabled: boolean;
   autoReview: boolean;
@@ -256,6 +366,8 @@ export type ApprovalTeamSettings = {
   hostCommandsCap: HostCommandPolicy;
   /** Every Bot asks before a dangerous command, whatever its own switch says (SEC1 D10). */
   enforceDangerousCommands: boolean;
+  /** The kinds the admin closed. A kind not named is `open`. */
+  actionKinds: Partial<Record<ActionKind, ActionKindPolicy>>;
 };
 /** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
 export type EmployeeToolMode = "direct" | "ask" | "disabled";
@@ -296,6 +408,16 @@ export type EmployeePolicy = {
   rules: ApprovalRule[];
   security: EmployeeSecuritySettings;
 };
+/**
+ * A save of the admin's guidance for auto-review: the words, or null to remove them, and the
+ * independent reading of the words the admin saw before saving (./reviewer-guidance.ts).
+ */
+export type ReviewerGuidanceChange = {
+  text: string | null;
+  /** The admin's email, as the trail's other admin rows name them. */
+  actor?: string;
+  reading?: { summary: string | null; explanation: string };
+};
 /** Rules, preferences and team settings. Optional on the store so older fakes keep working. */
 export type ApprovalPolicyStore = {
   preferences(ownerUserId: string): Promise<ApprovalPreferences>;
@@ -329,6 +451,34 @@ export type ApprovalPolicyStore = {
     input: Partial<ApprovalRuleInput>,
   ): Promise<ApprovalTeamRule>;
   revokeTeamRule(by: string, id: string): Promise<void>;
+  /**
+   * Several team rules saved as one change, as a description in English writes them: all or none,
+   * with one row on the trail naming who saved them, the team rules before and after, and the
+   * sentence they were written from. Optional so older fakes keep working.
+   */
+  createTeamRules?(
+    by: string,
+    input: readonly ApprovalRuleInput[],
+    authoring?: ApprovalRuleAuthoring,
+  ): Promise<ApprovalTeamRule[]>;
+  /**
+   * The newest requests across every person, for replaying candidate rules over what people were
+   * asked and what they answered. Admin reads only. Optional so older fakes keep working.
+   */
+  recentRequests?(limit: number): Promise<ApprovalRecord[]>;
+  /**
+   * The admin's guidance for auto-review, or null for none. Read by the gate for every review and by
+   * the admin's screen; never part of what members read. Optional so older fakes keep working.
+   */
+  reviewerGuidance?(): Promise<string | null>;
+  /**
+   * Save the admin's guidance, or remove it with `text: null`, with one `approval.guidance_changed`
+   * row naming who, the guidance before and after, and how it was read when it was saved.
+   */
+  setReviewerGuidance?(
+    by: string,
+    change: ReviewerGuidanceChange,
+  ): Promise<string | null>;
   /** The newest request in this conversation for an equivalent action, other than this call. */
   findEquivalent(input: {
     ownerUserId: string;
@@ -363,6 +513,20 @@ export type ApprovalPolicyStore = {
     botId: string,
     input: Partial<EmployeeSecuritySettings>,
   ): Promise<EmployeeSecuritySettings>;
+  /**
+   * The person's "Allow for this conversation" answers still in force in this conversation: not
+   * turned off, and the conversation not deleted. Optional so older fakes keep working.
+   */
+  conversationGrants?(
+    ownerUserId: string,
+    threadId: string,
+  ): Promise<ApprovalConversationGrant[]>;
+  /** Every one of this person's conversation answers still in force, for the inbox. */
+  allConversationGrants?(
+    ownerUserId: string,
+  ): Promise<ApprovalConversationGrant[]>;
+  /** Turn one off. Owner-scoped: another person's id is not found. Audited. */
+  revokeConversationGrant?(ownerUserId: string, id: string): Promise<void>;
   /** One audit row per settled action, so every verdict can be read back. */
   recordDecision(input: {
     ownerUserId: string;
@@ -374,6 +538,12 @@ export type ApprovalPolicyStore = {
     initiator?: AuditInitiator;
     /** What the action was aimed at, so the row can name the file or page it was about. */
     target?: unknown;
+    /**
+     * The call this verdict is about, where it came from a conversation. A request the gate opens
+     * for the same call carries the same two ids, so a replay counts the verdict and its request as
+     * the one action they are (approvals/rule-backtest.ts).
+     */
+    call?: { runId: string; toolCallId: string };
   }): Promise<void>;
 };
 export type ApprovalPermit = {
@@ -608,6 +778,8 @@ export function approvalAction(candidate: ApprovalCandidate): ApprovalAction {
         scope: candidate.scope,
         args: candidate.args,
         target: candidate.target,
+        // 只在有账号时才加，所以账号出现之前打开的请求摘要不变。
+        ...(candidate.account ? { account: candidate.account } : {}),
       }),
     )
     .digest("hex");
