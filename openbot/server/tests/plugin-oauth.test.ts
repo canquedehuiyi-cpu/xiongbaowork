@@ -6,6 +6,7 @@ import {
   challengeFor,
   connectedAccountsUrlFor,
   createVerifier,
+  desktopReturnUrlFor,
   readConnectState,
   redeemAuthorizationCode,
   redirectUriFor,
@@ -383,6 +384,12 @@ describe("where the callback sends somebody afterwards", () => {
         serverId: "google-drive",
       }),
     ).toBe("http://localhost:3010/settings/connected-accounts/google-drive");
+  });
+
+  test("a sign-in from OpenBot Desktop returns to the page that hands back to the window", () => {
+    expect(desktopReturnUrlFor("http://localhost:3010/", "google drive")).toBe(
+      "http://localhost:3010/desktop-return?app=google%20drive",
+    );
   });
 
   test("success carries no outcome, because the account already says it", () => {

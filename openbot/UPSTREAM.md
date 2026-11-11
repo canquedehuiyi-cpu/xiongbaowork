@@ -6,7 +6,7 @@
 | 项 | 值 |
 | --- | --- |
 | 分叉点 | `63f99cf`（2026-10-05，#734） |
-| 当前已同步到 | `ac9c16f7`（上游 v1.0.0，2026-11-09；服务端 M3、前端 M4） |
+| 当前已同步到 | 服务端与桌面端 `e4a73d7b`（上游 main，2026-11-10，M5a）；前端 `ac9c16f7`（v1.0.0，M4） |
 
 ## 同步方法
 
@@ -103,6 +103,31 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
 - 员工主动提醒（check-in）：只有提出了事情的那次才开看板卡片、计入当月任务额度（产品决定）；安静的不开卡、
   不计任务，额度用完的人不再调研（跳过原因 `quota`）。模型用量照旧按实际调用计量。
 
+### M5a：服务端、桌面端、共享代码同步到上游 main `e4a73d7b`
+
+上游 v1.0.0 在发布分支上，不是 main 的祖先；main 在 #1353 把发布分支压缩合并回来，内容上包含 v1.0.0。所以本轮以
+`v1.0.0` 为共同祖先、上游 main 为对方三方合并（`app/` 取 v1.0.0 不动，留给前端轮），47 个冲突文件。
+
+**用户定的标准**：核心是上游源码，功能一次性对齐，熊宝开发的东西一样不能丢；以前排除的上游功能（Arcade、owner grants、
+共享使用/多账号、personal-defaults、app-access、Entra OBO、个人版）现在也要收，服务端由插件会话的 X 系列做，本轮遇到
+只服务它们的改动处留 `// M5: 留给 X 系列（…）`。
+
+**取舍（用户决定）**
+- 审批底线保留熊宝的：上游 #1394 把删除/对外发送/分享/发帖默认打开、付款等改为先问，不收；上游其余审批功能全收，
+  只能往更严的方向起作用。上游 `approvals-open-by-default`、`what-if` 测试按熊宝底线改写。
+- 定时任务不指定对话也能建（上游 #1406 要求必须指定，不收）。
+
+**为 fork 做的改动**
+- 上游 0086–0088 迁移改为 overlay 0176–0178，新表 `approval_conversation_grants` 带 `tenant_id` 与行级安全；另加 0179，
+  修 0128 共享群组守卫（`opening` 归活动列、`title` 只有发起人能改）。`server/drizzle` 保持冻结。
+- `db/schema/approvals.ts` 被恢复测试按字节冻结：新表放 `db/schema/approval-conversation-grants.ts`，已有表上的新列经
+  `approvals/extra-columns.ts` 的 sql 片段读写。
+- 上游的 `plugins/plugin-store/*`、`route-groups/*` 拆分 fork 没有采用，main 在这些小文件里的改动（#1396 call-policy、
+  #1395、#1377、#1407 调用排队）移植进 `plugins/store.ts`、`routes.ts`。
+- 上游新测试按 fork 多租户改：coworker 参数位置、租户帧、受限角色写入、中文文案。#1407 提示词改为分段后，fork 几个
+  逐字钉住旧文案的测试只改了定位字符串。
+- `shared/harnesses.ts` 的「新员工」框架顺序保持 v1.0.0（上游 main 的源码与它自己的前端测试不一致，前端轮再看）。
+
 ### M4：前端同步到 `ac9c16f7`（v1.0.0）
 
 只做 `app/`（服务端在 M3 已到 v1.0.0）。三方合并以上游 `6fb38c8b:app` 为共同祖先，fork 的 `openbot/app` 为我方，
@@ -133,8 +158,9 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
 
 **留待后续**
 
-- 学习证据：对话不出库，录制接收接口（`/api/copilotkit/trajectory/:id/connect`）与本地学习证据提取在 L 阶段补，
-  见 `docs/automatic-learning.md`。
+- 学习证据（L 阶段已补）：录制的连接请求由 `server/src/recorder/trajectory-connect.ts` 自己应答，送进本人学习空间；
+  对话不出库，改在本地每人每天提出技能草案（`server/src/local-learning/`），本人批准后存进技能库。见
+  `docs/automatic-learning.md`。
 - 设置里的「审批」页（审批规则仍在 `/approvals`）、电脑工具按调用所属员工执行（`useBotOfCall` / `useOfferedTo`）、上游 manage 系列的
   电脑、凭据、审计分区、新建员工用上游 NewBotSheet 还是 fork 向导（需产品判断）。
 

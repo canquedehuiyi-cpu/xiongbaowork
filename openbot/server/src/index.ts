@@ -44,6 +44,7 @@ import {
 import { createBotReset } from "./agents/lifecycle-reset";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
+import { isUnattended, runModeOf } from "./agents/run-mode";
 import { createRuntimeAgentLoader } from "./agents/runtime-agents";
 import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
@@ -65,6 +66,7 @@ import {
 } from "./approvals/questions";
 import { waitForReplyInTranscript } from "./approvals/reply-in-transcript";
 import { createApprovalResumeTick } from "./approvals/resume-sweep";
+import { loadRuleVocabulary } from "./approvals/rule-vocabulary";
 import { createApprovalStore } from "./approvals/store";
 import { ApprovalRefusedError } from "./approvals/types";
 import { createServerApprovalService } from "./approvals/wiring";
@@ -81,6 +83,7 @@ import {
   recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "./audit";
+import { readAuditVocabulary } from "./audit-ask";
 import { startRetentionSweeps } from "./audit-retention";
 import { createAuth, sessionLifetimeMs } from "./auth";
 import { createAdminScope } from "./auth/admin-scope";
@@ -199,6 +202,7 @@ import { createSnapshotStore } from "./computer/snapshot-store";
 import { loadConfig } from "./config";
 import {
   chooseOpenAIApi,
+  deploymentModel,
   type LoadCurrentProject,
   mountCopilotRuntime,
   normalizeModelBaseUrls,
@@ -287,11 +291,15 @@ import {
   createLearningRuntime,
 } from "./learning/runtime";
 import { learningScopes } from "./learning/scopes";
-import { createLearningSettingsStore } from "./learning/settings";
+import {
+  configuredLearningContainer,
+  createLearningSettingsStore,
+} from "./learning/settings";
 import {
   createLearningSharingStore,
   createOpenSkillIndex,
 } from "./learning/sharing";
+import { createLocalLearningEngine } from "./local-learning/engine";
 import { createMemoryDefaults } from "./memory/defaults";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createIntelligenceMemory } from "./memory/intelligence";
@@ -437,7 +445,12 @@ import {
   productHeadlessBoundary,
 } from "./telemetry/product-boundaries";
 import { isAccessRevoked } from "./tenant/access";
-import { asPlatform, runAsTenant } from "./tenant/context";
+import {
+  asPlatform,
+  capabilityFor,
+  currentTenant,
+  runAsTenant,
+} from "./tenant/context";
 import {
   createPackageStatusReader,
   deploymentNameOf,
@@ -467,6 +480,7 @@ import {
   createWakerFlowShareRoutes,
 } from "./wakerflows/routes";
 import { createWakerFlowStore, flowRunEventWriter } from "./wakerflows/store";
+import { readAuditEvent, readWhatIfVocabulary } from "./what-if";
 import { repeatAfterEach } from "./work/loop";
 import { createWorkQueue, startWorkOfferedListener } from "./work/queue";
 
@@ -590,8 +604,14 @@ await startupLifecycle.run(async (startup) => {
    * Automatic Learning, only with a connected Intelligence (R0). Its settings are the deployment's,
    * and the `openbot` container is assigned automatically when nobody has chosen one (upstream #774).
    */
+  /*
+   * The environment's container, until the boot check finds this Intelligence has no such container
+   * (learning/auto-assign.ts). A name left over from a setup against another Intelligence then gives
+   * way to automatic assignment instead of failing every new thread (upstream #1363).
+   */
+  const configuredLearning = configuredLearningContainer(config.learning);
   const learningSettingsStore = intelligenceClient
-    ? createLearningSettingsStore(database, config.learning)
+    ? createLearningSettingsStore(database, configuredLearning)
     : undefined;
   /*
    * Who can create a Learning container here. First the runtime key itself, on an Intelligence that
@@ -638,6 +658,7 @@ await startupLifecycle.run(async (startup) => {
     const credentials = learningCredentials();
     const assign = createLearningAutoAssign({
       enabled: config.learningAutoAssign,
+      configured: configuredLearning,
       store: learningSettingsStore,
       probe: (containerId) =>
         probeLearningContainer(intelligenceClient, containerId),
@@ -734,6 +755,11 @@ await startupLifecycle.run(async (startup) => {
       ? createLearningRuntime({
           store: learningSettings,
           client: intelligenceClient,
+          // The environment's container, or a saved default, that this Intelligence was found not to
+          // have (upstream #1363/#1366).
+          forgotten: (containerId) =>
+            configuredLearning.forgotten(containerId) ||
+            (learningSettingsStore?.isSetAside(containerId) ?? false),
           people: {
             containerFor: personalLearningSpaces.containerFor,
             openSkills: () => openSkillIndex.sources(),
@@ -2010,6 +2036,51 @@ await startupLifecycle.run(async (startup) => {
   });
 
   /**
+   * M5: a read for one of upstream's admin drafting routes, across every person when the request
+   * holds the admin capability (`requireAdminUser` in app.ts mounts it), as the audit list reads as
+   * `platform` (G01-E P7). Anyone else reads in their own frame; the routes answer them with
+   * `requireAdmin` before any read.
+   */
+  const adminRead = <T>(work: () => T): T =>
+    capabilityFor(currentTenant()) === "admin" ? asPlatform(work) : work();
+
+  /**
+   * Writes a boundary from an admin's description, and reads it back (computer/policy-translate.ts),
+   * and likewise team approval rules, a Bot's actions in one app, the network allowlist and the
+   * guidance for auto-review (upstream #1372/#1381/#1396/#1397/#1398/#1399). The deployment's own
+   * model, with longer to answer than the router: an admin pressed a button and is waiting for a rule,
+   * which is a longer answer than a router's one name, and a reasoning model spends seconds before it
+   * starts.
+   */
+  const writeBoundaries = createModelCompleter({
+    model: runtimeModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+    timeoutMs: 45_000,
+    // Room for the thinking a current Claude model does before it answers, which counts against it.
+    maxTokens: 16_000,
+  });
+
+  /**
+   * Reads an admin's question about the audit trail as filters, and reads the filters back
+   * (audit-ask.ts, upstream #1380). The deployment's own model, given as long as a boundary's writer
+   * for the same reason: an admin pressed Ask and is waiting.
+   */
+  const askTheAuditTrail = createModelCompleter({
+    model: runtimeModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+    timeoutMs: 45_000,
+    maxTokens: 16_000,
+  });
+
+  /** Reads "what would happen if…" as one action (what-if.ts, upstream #1402), for an admin who pressed Ask. */
+  const readWhatIfQuestions = createModelCompleter({
+    model: runtimeModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+    timeoutMs: 45_000,
+    maxTokens: 16_000,
+  });
+
+  /**
    * The models a person may pick for a Bot's run, and how hard each can think, asked of whatever
    * serves the model: the provider, the gateway in OPENAI_BASE_URL, or a signed-in plan's own listing.
    * One person on their own machine picks from all of them; in a team, people pick among the models an
@@ -3034,8 +3105,11 @@ await startupLifecycle.run(async (startup) => {
     model: runtimeModel,
     resolveModelApiKey: resolveRuntimeModelApiKey,
     // The model the person picked for this conversation, or the catalogue's default.
-    pickedModelForActor: (actorId) => (input) =>
-      modelChoices.forRun(actorId, input.threadId),
+    // Given what started the run, so a run nobody is watching can think harder (upstream #1407).
+    pickedModelForActor: (actorId, initiator) => (input) =>
+      modelChoices.forRun(actorId, input.threadId, {
+        unattended: isUnattended(runModeOf(initiator)),
+      }),
     stallGuard,
     /*
      * Restricted by who started the run: a check-in reads only what the person connected (scope.ts).
@@ -3549,6 +3623,51 @@ await startupLifecycle.run(async (startup) => {
       }, 60_000),
     (resource) => resource.stop(),
   );
+  /*
+   * 本地学习（L1，local-learning/engine.ts）：每人每天读自己最近的对话，用那位员工的模型提出技能
+   * 草案，等本人在设置「学习」里审。对话不出库；模型调用经 `resolveAgentModel` 计到这个人名下，
+   * 本月任务额度用完就跳过。多副本时同一个人只有一个副本认领（带条件的 upsert）。
+   * `OPENBOT_LOCAL_LEARNING=off` 时不建、不扫。
+   */
+  const localLearningEngine = config.localLearning
+    ? createLocalLearningEngine({
+        database,
+        quota,
+        modelFor: async (agentId) => {
+          try {
+            const key = await resolveRuntimeModelApiKey();
+            return await resolveAgentModel(
+              agentId,
+              key ? deploymentModel(runtimeModel, key) : undefined,
+            );
+          } catch {
+            return null;
+          }
+        },
+        skillsFor: async (agentId) =>
+          (await pluginStore.listForAgent(agentId)).skills.map(
+            (skill) => skill.title,
+          ),
+      })
+    : undefined;
+  if (localLearningEngine)
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            await localLearningEngine.sweep();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "local-learning-sweep-error",
+                error: error instanceof Error ? error.name : "UnknownError",
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 30 * 60_000),
+      (resource) => resource.stop(),
+    );
   /*
    * Automations (D06 AUT1/AUT3/AUT4, C2/C3): a person's standing "run this Waker when..." rules.
    *
@@ -4400,6 +4519,47 @@ await startupLifecycle.run(async (startup) => {
       ...(learningModelEndpoint
         ? { learningModel: learningModelEndpoint }
         : {}),
+      // Upstream #1372/#1381/#1396/#1397/#1398/#1399: drafts written from an admin's description.
+      boundaryWriter: writeBoundaries,
+      approvalRules: {
+        vocabulary: () => adminRead(() => loadRuleVocabulary(database)),
+      },
+      // Upstream #1380: questions about the audit trail in plain English.
+      auditQuestions: {
+        complete: askTheAuditTrail,
+        vocabulary: () =>
+          adminRead(() =>
+            readAuditVocabulary(database, () => policyStore.get()),
+          ),
+      },
+      /*
+       * Upstream #1402, "what would happen if…": the stores the live path decides from, the same
+       * boundary, controls snapshot, grants and gate. Read across people as an administrator reads
+       * the trail (`adminRead`), since the question may be about anybody's Bot.
+       */
+      whatIf: {
+        complete: readWhatIfQuestions,
+        vocabulary: () => adminRead(() => readWhatIfVocabulary(database)),
+        readers: {
+          policy: () => policyStore.get(),
+          enterprise: () => {
+            const controls = enterpriseControls();
+            return controls ? { snapshot: controls.snapshot() } : null;
+          },
+          grant: (ref, botId) =>
+            adminRead(() => pluginStore.decide("mcp", ref, botId)),
+          ...(approvalService.store.policy
+            ? {
+                approvals: {
+                  policy: approvalService.store.policy,
+                  rules: (owner: string) =>
+                    adminRead(() => approvalService.store.rules(owner)),
+                },
+              }
+            : {}),
+        },
+        event: (id) => adminRead(() => readAuditEvent(database, id)),
+      },
       /*
        * Settings, Learning: who else's Bots use a person's own learned Skills. Only with the optional
        * Intelligence, which is where Learning is.
@@ -4460,6 +4620,7 @@ await startupLifecycle.run(async (startup) => {
       },
       memory: { store: personalMemoryStore, ingestion: memoryIngestion },
       proactive: { store: proactiveStore, engine: proactiveEngine },
+      localLearning: { database, engine: localLearningEngine },
       // Upstream's started work, at `/api/bot-tasks` (`/api/tasks` is the board, mounted below).
       tasks: { store: taskStore, runner: taskRunner },
       responsibilities: {
