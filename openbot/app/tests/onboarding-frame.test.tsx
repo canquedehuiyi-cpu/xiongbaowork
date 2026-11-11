@@ -354,7 +354,10 @@ test("a done primary reads green with a check", () => {
   expect(footerButtons(view)).toHaveLength(1);
   expect(done?.textContent).toBe("Notifications on");
   expect(done?.hasAttribute("data-done")).toBe(true);
-  expect(done?.className).toContain("bg-emerald-500/10");
+  // docs/design/ios-studio: done reads by its check and its words on a quiet graphite fill, not by
+  // a green; the check is still drawn beside the label.
+  expect(done?.className).toContain("bg-foreground/8");
+  expect(done?.querySelector("svg")).not.toBeNull();
 });
 
 test("an optional step keeps Not now's place when it goes, so the primary doesn't move", () => {

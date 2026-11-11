@@ -82,7 +82,7 @@ export function TeamDemo() {
             return (
               <div
                 className={cn(
-                  "flex min-w-0 items-center gap-3 rounded-xl bg-card p-3 ring-1 ring-border shadow-sm",
+                  "flex min-w-0 items-center gap-3 rounded-[14px] bg-background p-3 ring-1 ring-border",
                   card.example && "opacity-75",
                 )}
                 data-team-card={card.id}
@@ -105,17 +105,17 @@ export function TeamDemo() {
                 </div>
                 <span
                   className={cn(
-                    "text-xs flex shrink-0 items-center gap-1 text-blue-600 dark:text-blue-400 transition-opacity duration-300",
+                    "text-xs flex shrink-0 items-center gap-1 text-muted-foreground transition-opacity duration-300",
                     working ? "opacity-100" : "opacity-0",
                   )}
                 >
-                  <span className="size-1.5 rounded-full bg-blue-500" />
+                  <span className="size-1.5 rounded-full bg-signal" />
                   工作中
                 </span>
               </div>
             );
           })}
-          <div className="flex min-w-0 items-center gap-3 rounded-xl border border-dashed border-foreground/25 p-3">
+          <div className="flex min-w-0 items-center gap-3 rounded-[14px] border border-dashed border-foreground/25 p-3">
             <span className="size-11 shrink-0 rounded-full border border-dashed border-foreground/30" />
             <p className="text-sm truncate font-medium text-foreground/70">
               你自己的员工

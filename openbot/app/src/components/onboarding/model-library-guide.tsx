@@ -38,7 +38,7 @@ export function ModelLibraryGuide({
   return (
     <section
       aria-label="接入模型"
-      className="mt-8 flex flex-row items-start gap-3 rounded-lg border border-border bg-card p-4 max-w-md w-full mx-auto"
+      className="mt-8 flex flex-row items-start gap-3 rounded-[14px] border border-border bg-card p-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] max-w-md w-full mx-auto"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <h2 className="text-sm font-medium">还没有接入任何模型</h2>

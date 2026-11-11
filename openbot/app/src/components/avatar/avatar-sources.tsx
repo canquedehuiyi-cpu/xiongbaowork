@@ -869,11 +869,12 @@ export function SourcesStep({
     : editor.sources.length > 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
-      <h1 className="text-center text-3xl font-semibold tracking-tight">
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-4 lg:mx-0">
+      {/* The same heading as every onboarding step (`StepIntro`): centred on a phone, flush left beside the eyebrow on a desktop. */}
+      <h1 className="text-center font-bold text-[clamp(28px,3vw,40px)] leading-[1.12] tracking-[-0.03em] text-pretty lg:text-left">
         告诉你的分身，你的资料在哪里
       </h1>
-      <p className="text-center text-muted-foreground text-sm">
+      <p className="text-center text-[14px] text-muted-foreground leading-[1.65] lg:text-left">
         写下资料放在哪里、是什么，或者把你的本地文件夹、知识库、已连接的账号交给分身，它回答与你本人有关的问题时会参考这些信息来源。最多{" "}
         {AVATAR_SOURCE_LIMIT} 个，之后也可以在分身的详情页修改。
       </p>

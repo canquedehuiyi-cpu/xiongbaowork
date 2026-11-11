@@ -4,7 +4,8 @@ import {
   IconChevronLeft,
 } from "@tabler/icons-react";
 import { createContext, type ReactNode, useContext, useState } from "react";
-import AgentOrb from "@/components/agents/orb/agent-orb";
+import { BrandLogo } from "@/components/layout/brand-logo";
+import { Eyebrow } from "@/components/layout/page-shell";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Popover,
@@ -44,6 +45,10 @@ import { cn } from "@/lib/utils";
  * primary does not move mid-step. A step can also have no primary at all, and then "Not now" is
  * the only way on: it takes the primary's place and keeps its outline on a desktop too, so it never
  * reads as a link. A footnote, where a step has one, sits just above the buttons.
+ *
+ * DRAWN IN 熊宝'S BLACK, WHITE AND RED (docs/design/ios-studio): the logo and the product's names at
+ * the top, an eyebrow with the step's number over an open heading, the picture on a graphite pane
+ * behind a hairline, and red only where somebody is (the current step's mark and dash).
  */
 export function OnboardingFrame({
   titles,
@@ -97,7 +102,7 @@ export function OnboardingFrame({
 }) {
   const total = titles.length;
   const shape =
-    "h-[52px] w-full rounded-full px-5 text-sm font-semibold lg:h-10 lg:w-auto lg:min-w-32 lg:rounded-lg";
+    "h-[52px] w-full rounded-full px-5 text-sm font-semibold lg:h-10 lg:w-auto lg:min-w-32 lg:rounded-[10px]";
   return (
     <div
       className="grid min-h-svh w-full min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_auto_1fr_auto] bg-background text-foreground lg:h-svh lg:grid-cols-[minmax(28rem,40rem)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr_auto]"
@@ -119,7 +124,7 @@ export function OnboardingFrame({
           {index > 0 ? (
             <button
               aria-label="返回"
-              className="bg-background/80 backdrop-blur absolute left-4 grid size-11 place-items-center rounded-full text-foreground ring-1 ring-border shadow-lg outline-none transition-transform focus-visible:ring-3 focus-visible:ring-ring active:scale-95 motion-reduce:transition-none"
+              className="absolute left-4 grid size-11 place-items-center rounded-full bg-card text-foreground ring-1 ring-border shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] outline-none transition-transform focus-visible:ring-3 focus-visible:ring-ring active:scale-95 motion-reduce:transition-none"
               data-onboarding-back="phone"
               onClick={onBack}
               type="button"
@@ -130,9 +135,18 @@ export function OnboardingFrame({
           {total > 1 ? <StepDashes index={index} total={total} /> : null}
         </div>
         <div className="hidden lg:flex lg:items-center lg:justify-between lg:gap-4">
-          <div className="text-sm flex items-center gap-2 font-semibold">
-            <AgentOrb size="24px" />
-            {appConfig.brand.productName}
+          <div className="flex min-w-0 items-center gap-[11px]">
+            <BrandLogo className="rounded-[10px]" size={35} />
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-bold text-[15px] leading-[19px] tracking-[0.015em]">
+                {appConfig.brand.productName}
+              </span>
+              {appConfig.brand.englishName ? (
+                <span className="mt-[3px] truncate font-mono text-[9px] text-faint uppercase leading-[11px] tracking-[0.13em]">
+                  {appConfig.brand.englishName}
+                </span>
+              ) : null}
+            </span>
           </div>
           {titles.length > 1 ? (
             <StepMenu
@@ -152,6 +166,13 @@ export function OnboardingFrame({
         )}
         data-onboarding-intro=""
       >
+        {/* Decorative wayfinding, as on the workbench pages; the step's number is said in words above. */}
+        <div
+          aria-hidden="true"
+          className="mb-[14px] flex justify-center lg:mb-[18px] lg:justify-start"
+        >
+          <Eyebrow text={`${String(index + 1).padStart(2, "0")} ONBOARDING`} />
+        </div>
         {intro}
       </div>
 
@@ -164,7 +185,7 @@ export function OnboardingFrame({
       {demo ? (
         <div
           className={cn(
-            "col-start-1 flex min-w-0 flex-col px-4 lg:sticky lg:top-0 lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:my-0 lg:max-h-svh lg:overflow-y-auto lg:border-l lg:border-border lg:bg-muted/40 lg:px-10 lg:py-10",
+            "col-start-1 flex min-w-0 flex-col px-4 lg:sticky lg:top-0 lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:my-0 lg:max-h-svh lg:overflow-y-auto lg:border-l lg:border-border lg:bg-sidebar lg:px-10 lg:py-10",
             demoFirst ? "row-start-2 mb-6" : "row-start-3 mt-8",
           )}
           data-onboarding-demo=""
@@ -212,8 +233,9 @@ export function OnboardingFrame({
                   shape,
                   // Last on a desktop, so the way forward is the rightmost button; first on a phone.
                   "motion-reduce:transition-none lg:order-last",
+                  // Done reads by its check and its words, not by a colour: a quiet graphite fill.
                   primary.done &&
-                    "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10",
+                    "border-transparent bg-foreground/8 text-foreground shadow-none hover:bg-foreground/8 [&_svg]:text-foreground",
                 )}
                 data-done={primary.done ? "" : undefined}
                 data-onboarding-primary=""
@@ -313,7 +335,7 @@ function StepMenu({
                     className={cn(
                       "text-xs grid size-6 shrink-0 place-items-center rounded-full font-semibold tabular-nums",
                       current
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-signal text-signal-foreground"
                         : done
                           ? "bg-foreground/8 text-foreground"
                           : "text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]",
@@ -397,7 +419,7 @@ export function StepDashes({ index, total }: { index: number; total: number }) {
           aria-hidden
           className={cn(
             "h-1 min-w-0 flex-1 rounded-full transition-colors duration-300 motion-reduce:transition-none",
-            at === index ? "bg-foreground" : "bg-muted-foreground/35",
+            at === index ? "bg-signal" : "bg-muted-foreground/35",
           )}
           data-current={at === index ? "" : undefined}
           // biome-ignore lint/suspicious/noArrayIndexKey: the dashes are positions, fixed in order.
@@ -432,11 +454,11 @@ export function StepIntro({
   const title = given ?? named;
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center text-center lg:mx-0 lg:items-start lg:text-left">
-      <h1 className="text-3xl font-semibold tracking-tight text-pretty [overflow-wrap:anywhere] focus:outline-none">
+      <h1 className="font-bold text-[clamp(28px,3vw,40px)] leading-[1.12] tracking-[-0.03em] text-pretty [overflow-wrap:anywhere] focus:outline-none">
         {title}
       </h1>
       {children ? (
-        <div className="text-base mt-3 flex max-w-md flex-col gap-2 text-pretty text-muted-foreground">
+        <div className="mt-3 flex max-w-md flex-col gap-2 text-pretty text-[14px] text-muted-foreground leading-[1.65]">
           {children}
         </div>
       ) : null}
