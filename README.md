@@ -27,7 +27,7 @@ WSL 使用 Docker Desktop 时先启用该发行版的 WSL Integration，并确�
 
 <!-- g7:linux:begin -->
 ```bash
-OPENBOT_TAG=${OPENBOT_TAG:-v0.2.7}
+OPENBOT_TAG=${OPENBOT_TAG:-v0.2.8}
 OPENBOT_IMAGE=${OPENBOT_IMAGE:-ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OPENBOT_TAG}
 docker pull "$OPENBOT_IMAGE"
 if [ -e .env.delivery ]; then
@@ -66,7 +66,7 @@ echo
 
 <!-- g7:windows:begin -->
 ```powershell
-$OpenbotTag = if ($env:OPENBOT_TAG) { $env:OPENBOT_TAG } else { 'v0.2.7' }
+$OpenbotTag = if ($env:OPENBOT_TAG) { $env:OPENBOT_TAG } else { 'v0.2.8' }
 $OpenbotImage = if ($env:OPENBOT_IMAGE) { $env:OPENBOT_IMAGE } else { "ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OpenbotTag" }
 docker pull $OpenbotImage
 if ($LASTEXITCODE -ne 0) { throw '拉取镜像失败' }
