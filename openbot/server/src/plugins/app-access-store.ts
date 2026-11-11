@@ -119,6 +119,7 @@ type ServerRow = {
   authScheme: string | null;
   accountMode: string | null;
   ownerGrants: string | null;
+  ownerGrantsChosenAt: Date | null;
   credentialId: string | null;
   sharedConnectedAt: Date | null;
   sharedVerified: boolean;
@@ -141,6 +142,8 @@ type AppCandidate = {
   accountMode: "personal" | "shared" | null;
   /** 管理员为这个应用选的「谁可以给员工」（X3，迁移 0197）；没选为 null。 */
   ownerGrants: OwnerGrants | null;
+  /** `owner_grants` 是不是管理员的 PUT 写下的（应答行上有 `owner_grants_chosen_at`）。 */
+  ownerGrantsMarked: boolean;
   hasCredential: boolean;
   /** 这个应用只有调用者自己添加的行：是他自己的，不归管理员管。 */
   own: boolean;
@@ -300,6 +303,7 @@ export function appAccessMethods(context: {
         authScheme: mcpServers.authScheme,
         accountMode: mcpServers.accountMode,
         ownerGrants: mcpServers.ownerGrants,
+        ownerGrantsChosenAt: mcpServers.ownerGrantsChosenAt,
         credentialId: mcpServers.credentialId,
         sharedConnectedAt: mcpServers.sharedConnectedAt,
         sharedVerified: mcpServers.sharedVerified,
@@ -352,6 +356,7 @@ export function appAccessMethods(context: {
           listedConnect: null,
           accountMode: mode,
           ownerGrants: asOwnerGrants(head.ownerGrants),
+          ownerGrantsMarked: head.ownerGrantsChosenAt !== null,
           hasCredential: head.credentialId !== null,
           own:
             head.tenantId === currentTenant() && head.tenantId !== TEAM_TENANT,
@@ -416,6 +421,7 @@ export function appAccessMethods(context: {
       listedConnect: input.listedConnect ?? null,
       accountMode: null,
       ownerGrants: null,
+      ownerGrantsMarked: false,
       hasCredential: false,
       own: false,
       team: null,
@@ -991,11 +997,29 @@ export function appAccessMethods(context: {
      * 不一样；键是行 id。
      */
     async ownerGrantsSettings(): Promise<
-      Map<string, { ownerGrants: OwnerGrants; chosen: OwnerGrants | null }>
+      Map<
+        string,
+        {
+          ownerGrants: OwnerGrants;
+          chosen: OwnerGrants | null;
+          /** 管理员明确选的值；见 `ServerRecord.ownerGrantsChosen`。 */
+          adminChose: OwnerGrants | null;
+        }
+      >
     > {
       const { byName } = group(await allRows());
       return new Map(
-        [...byName].map(([name, app]) => [name, ownerGrantsSettingOf(app)]),
+        [...byName].map(([name, app]) => [
+          name,
+          {
+            ...ownerGrantsSettingOf(app),
+            adminChose:
+              app.ownerGrants === "any" ||
+              (app.ownerGrants === "admin" && app.ownerGrantsMarked)
+                ? app.ownerGrants
+                : null,
+          },
+        ]),
       );
     },
 
