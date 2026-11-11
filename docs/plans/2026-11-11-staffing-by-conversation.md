@@ -18,7 +18,7 @@
 - 迁移放 `openbot/server/recovery/recovery-20261018-v1/sql/`，编号 `0201`，journal `idx 201`、`when` 取提交当时的毫秒时间戳且大于 1794375869182。
 - 审批底线（`approvals/policy.ts`）、签到只读门、凭据只进 vault、#455/#456 的管理员门，一概不动。
 - 字段限长沿用 `CreateAgentInput`：`name` ≤80，`title` ≤120，`roleDescription` 1–1000，`instructions` ≤1000，`bible` ≤8000；定时任务 `instruction` ≤2000、`title` ≤100、cron 间隔 ≥15 分钟、启用中 ≤20。
-- 提议：7 天过期；每人 `pending` 上限 20；单次运行内 `propose_*` 调用上限 5。
+- 提议：7 天过期；每人 `pending` 上限 20；同一人在同一会话里 10 分钟内最多新建 5 份提议（工具连接里没有运行 id，按会话 + 时间窗计数）。
 - 用户可见文案一律中文；注释和测试名里不写 "review" / 「评审」（`comments-say-the-reason.test.ts`）；期望值不含 `undefined`（`assertion-shape.test.ts`）。
 - 新增 server 测试文件后运行 `node scripts/ci/server-shards.mjs --write` 并提交 `scripts/ci/server-tests.list.txt`。
 - 提交信息结尾：`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` 与 `Claude-Session: https://claude.ai/code/session_01MJUqVcFToyopKbNJ4sEoWY`。
@@ -158,7 +158,7 @@
   - `employee`：`create`（带 `quota.assertCapacityWithin(tx, actor.id, "wakers")`、`roleTemplate`；超额抛 `QuotaExceeded` 时什么都不建，提议回到 `pending`，向上抛出由路由答 402）→ 有 `model` 时 `update` 写 `modelRef`/`platformModelRef`（先 `allows`）→ 头像 `PortraitStore.set` → 技能逐个按现有自助授予规则 `grant("skill", …)` → 应用逐个：`inspectApp` 后，可授予的 `grant("mcp", ref, id, email, {as:"owner"})`，`needs-admin` 的 `fileAppAccessRequest({kind:"grant", maxPending: 20, …})` 记 `requested`，未连接的记 `needs_connection` → 定时任务逐个 `RoutineStore.create` → `staffingTools` 为真时授予 `staffing/*`。
   - `employee_change`：比对 `baseVersion`（员工 `updatedAt` 的 ISO 字符串），不一致抛 `ProposalStaleError`（不改任何东西，提议回到 `pending`）；然后 `update`（以当前员工资料为底合并 `set`）、增删授予、增删定时任务。
   - `group`：`GroupConversations.create(actor.id, {agentIds: members})`，再 `rename` 成 `name`。
-  - `group_change`：比对 `baseVersion`（群当前员工顺序的 JSON），然后 `rename`、`addBots`、`removeBots`、`reorder`。
+  - `group_change`：比对 `baseVersion`（`versionOfGroup({ name, order })`：群当前名字与员工顺序一起的 JSON，改名或改顺序都会让它变），然后 `rename`、`addBots`、`removeBots`、`reorder`。
   - 每一步写一个 `ResultItem`；任一步抛错只记 `failed` 并继续下一步（`create` 抛错例外：什么都没建，提议回到 `pending` 并向上抛出）；全部 `done/requested/needs_connection` 为 `applied`，否则 `partially_applied`。
   - `retry` 只重做 `failed` 的项。
   - 每一步沿用现有审计事件，payload 加 `proposalId`；结束写 `staffing.proposal_applied` 或 `staffing.proposal_partially_applied`。
@@ -225,7 +225,7 @@
   - `list_staff`：返回本人能用的员工（id、名字、头衔、角色模板）、本人发起的群（id、名字、员工顺序）、角色模板、`catalogue` 允许的模型、可装技能、`giveableApps` 与其状态。
   - `propose_*`：`parseDraft` → 查库校验（模型 `allows`、技能 `skillOwner`、应用 `inspectApp`、改动类读目标并取 `baseVersion`、群成员 `canRunAgent`、改群要求发起人）→ 剔除无效项进 `dropped` → `proposals.create` → 写 `staffing.proposal_created` → 返回 `writeStaffingProposalAnswer(card, sentence)`，`sentence` 给模型看：已起草、等待用户确认、剔除了什么，并明确「不要说已经建好」。
   - `propose_group` 的需求里对不上的角色：参数里允许 `missingRoles: string[]`，原样写进给模型的句子，提示它问用户要不要先招。
-  - 单次运行（`connection.threadId` + `botId`）内 `propose_*` 超过 5 次返回 `isError`。
+  - 同一主人在同一会话（`connection.actorId` + `connection.threadId`）里 10 分钟内已新建 5 份提议时，再调 `propose_*` 返回 `isError`（按 `staffing_proposals.created_at` 计数，不在内存里记）。
   - `proposal_status`：只读本人的提议，返回状态与 `result` 摘要。
   - 工具 `description` 写明第 7 节「小管家怎么说话」的规则。
 
@@ -236,7 +236,7 @@
     - `a model outside the catalogue is dropped and named`。
     - `a group with someone else's private bot is refused`。
     - `changing a group the person did not start is refused`。
-    - `the sixth propose call in one run is refused`。
+    - `the sixth proposal in ten minutes in one conversation is refused, and another conversation is not`。
     - `propose_* never creates a bot or a group`：调用后 `agents`、`channels` 行数不变。
     - `the catalogue lists every staffing tool as a read`：条目 `readTools` 含六个名字、`writeTools` 为空。
 - [ ] **Step 2: 运行确认失败。**
@@ -271,7 +271,7 @@
 
 **Files:**
 - Create: `app/src/components/staffing/staffing-proposal-card.tsx`（按 `kind` 分发）、`employee-proposal.tsx`（复用 `components/agents/proposed-bot.tsx` 的布局与样式）、`employee-change-proposal.tsx`、`group-proposal.tsx`、`proposal-result.tsx`、`app/src/lib/staffing/queries.ts`（`useProposal(id)`、`useEditProposal`、`useApplyProposal`、`useDiscardProposal`、`useRetryProposal`）
-- Modify: `app/src/components/channels/chat-transcript.tsx`（`ServerToolLine`：`readStaffingProposalAnswer(result)` 命中且工具名以 `propose_` 结尾时渲染卡片）、必要时 `channels/tool-activity.tsx`（不把卡片折进工具活动）
+- Modify: `app/src/components/channels/chat-transcript.tsx`（`ServerToolLine`：`readStaffingProposalAnswer(result)` 命中，且工具名去掉 `mcp__staffing__` 前缀后是 `propose_employee` / `propose_employee_change` / `propose_group` / `propose_group_change` 之一时渲染卡片（导出 `isStaffingProposalTool(name: string): boolean` 放在 `shared/staffing-proposal.ts`））、必要时 `channels/tool-activity.tsx`（不把卡片折进工具活动）
 - Test: `app/tests/staffing-proposal-card.test.tsx`
 
 **Interfaces:**
