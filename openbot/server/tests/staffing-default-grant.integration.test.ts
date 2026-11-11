@@ -430,3 +430,8 @@ afterAll(async () => {
     await database.delete(users).where(inArray(users.id, people));
   });
 });
+
+// Last-registered, so it runs after the cleanup above has used the pool.
+afterAll(async () => {
+  await database.$client.close();
+});
