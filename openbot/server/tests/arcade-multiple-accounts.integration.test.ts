@@ -279,7 +279,9 @@ describe("a person's second account at an Arcade app", () => {
     expect(await connectionRows()).toEqual([
       { userId: DANA, vendorUserId: null },
     ]);
+    // 本人名字下的账号也记进列表（它原本就连着），所以不点名的调用不会落到第二个账号上。
     expect(await accountRows()).toEqual([
+      { userId: DANA, vendorUserId: DANA, accountId: "" },
       { userId: DANA, vendorUserId: further, accountId: "" },
     ]);
   });

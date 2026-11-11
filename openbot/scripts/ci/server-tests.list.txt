@@ -90,6 +90,7 @@ tests/approvals-store.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/apps-page-wording.test.ts
+tests/arcade-account-sweeps.integration.test.ts
 tests/arcade-adapter-authorize.test.ts
 tests/arcade-adapter-connections.test.ts
 tests/arcade-adapter-errors.test.ts
@@ -118,6 +119,7 @@ tests/arcade-multiple-accounts.integration.test.ts
 tests/arcade-pagination-engine.test.ts
 tests/arcade-per-action.integration.test.ts
 tests/arcade-provider-check.test.ts
+tests/arcade-reconnect-adopt.integration.test.ts
 tests/arcade-revoke-invariant.test.ts
 tests/arcade-single-user-identity.integration.test.ts
 tests/arcade-single-user.test.ts

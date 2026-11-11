@@ -29,6 +29,12 @@ export type ArcadeDoubleState = {
   connectionReads: { toolkit: string; vendorUserId: string }[];
   confirmThrows?: unknown;
   authorizeThrows?: unknown;
+  /** 厂商确认回程的那一刻做一件事（例如在回程进行中取消尝试），只做一次。 */
+  onConfirm?: () => Promise<void>;
+  /** 撤销怎么答：不给时照实撤；`"throws"` 抛错；`false` 答没找到可撤的。 */
+  revokeAnswer?: "throws" | false;
+  /** 问连接时抛错（厂商不答）。 */
+  connectionReadThrows?: unknown;
 };
 
 export function arcadeDouble(options: {
@@ -63,6 +69,11 @@ export function arcadeDouble(options: {
       confirmReturn: async (q) => {
         state.confirms.push(q);
         if (state.confirmThrows) throw state.confirmThrows;
+        const hook = state.onConfirm;
+        if (hook) {
+          state.onConfirm = undefined;
+          await hook();
+        }
         const flow = state.flows.get(q.handle);
         if (!flow || flow.vendorUserId !== q.vendorUserId)
           return { mismatch: true };
@@ -101,6 +112,7 @@ export function arcadeDouble(options: {
         toolkit,
         vendorUserId: account.vendorUserId,
       });
+      if (state.connectionReadThrows) throw state.connectionReadThrows;
       return state.connected.has(
         `${account.vendorUserId}/${providerOf(toolkit)}`,
       );
@@ -108,6 +120,17 @@ export function arcadeDouble(options: {
     revoke: async ({ account, toolkit }) => {
       const key = `${account.vendorUserId}/${providerOf(toolkit)}`;
       state.revoked.push(key);
+      if (state.revokeAnswer === "throws") throw new Error("vendor down");
+      if (state.revokeAnswer === false) return false;
+      // 撤掉的是这个认证提供商下的连接：这个 vendor 用户在同一提供商下「已持有」的应用也都不再持有。
+      for (const held of [...state.held]) {
+        const [user, app] = held.split("/");
+        if (
+          user === account.vendorUserId &&
+          providerOf(app ?? "") === providerOf(toolkit)
+        )
+          state.held.delete(held);
+      }
       return state.connected.delete(key);
     },
     connectionFields: async () => [],

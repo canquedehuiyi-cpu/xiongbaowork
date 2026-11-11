@@ -327,6 +327,26 @@ export function createArcadeAttempts(context: {
               ),
             );
           reconnected = existing !== undefined;
+          /*
+           * 这个第二个账号原本就记着（它的「重新连接」，比如调用被拒后卡片上的那一按），还是第一次加上。
+           * 重新连接要前移连接日期，卡片据此知道已经做过；第一次加上的不是这条连接的重新连接，不动日期。
+           */
+          const furtherKnown =
+            further !== null &&
+            (
+              await transaction
+                .select({ id: brokeredAccounts.id })
+                .from(brokeredAccounts)
+                .where(
+                  and(
+                    eq(brokeredAccounts.provider, provider),
+                    eq(brokeredAccounts.app, input.toolkit),
+                    eq(brokeredAccounts.userId, further.userId),
+                    eq(brokeredAccounts.vendorUserId, further.vendorUserId),
+                  ),
+                )
+                .limit(1)
+            ).length > 0;
           const set = {
             verified: true,
             verifiedAt: now,
@@ -348,7 +368,12 @@ export function createArcadeAttempts(context: {
             })
             .onConflictDoUpdate({
               target: [composioConnections.toolkit, composioConnections.userId],
-              set,
+              /*
+               * 在已有的连接上又同意了一次（重新连接）：连接日期前移，卡片据此知道「重新连接」已经做过，
+               * 不再提示。第一次加上的第二个账号不动这个日期，它不是这条连接的重新连接。
+               */
+              set:
+                further && !furtherKnown ? set : { ...set, connectedAt: now },
             });
           if (further) {
             /*
@@ -366,6 +391,37 @@ export function createArcadeAttempts(context: {
                 accountId: "",
               })
               .onConflictDoNothing();
+            /*
+             * 本人名字下原本就连着（`reconnected`）时，把那个账号也记进列表并在没有默认时设为默认。不记
+             * 的话，账号列表还没同步过的人列表里只有第二个账号，不点名的调用（以及队友经 Team Bot 用他
+             * 的账号）就落到第二个账号上。名字下没有连接时不记：那里没有账号可用。
+             */
+            if (reconnected) {
+              await transaction
+                .insert(brokeredAccounts)
+                .values({
+                  provider,
+                  app: input.toolkit,
+                  userId: further.userId,
+                  vendorUserId: own,
+                  accountId: "",
+                })
+                .onConflictDoNothing();
+              await transaction.execute(sql`
+                UPDATE brokered_accounts SET is_default = true
+                 WHERE provider = ${provider}
+                   AND app = ${input.toolkit}
+                   AND user_id = ${further.userId}
+                   AND vendor_user_id = ${own}
+                   AND NOT EXISTS (
+                     SELECT 1 FROM brokered_accounts d
+                      WHERE d.provider = ${provider}
+                        AND d.app = ${input.toolkit}
+                        AND d.user_id = ${further.userId}
+                        AND d.is_default
+                   )
+              `);
+            }
           }
         } else {
           /*
@@ -382,7 +438,11 @@ export function createArcadeAttempts(context: {
           const updated = await transaction
             .update(mcpServers)
             .set({
-              sharedConnectedAt: sql`coalesce(${mcpServers.sharedConnectedAt}, ${now})`,
+              /*
+               * 连接日期前移：团队账号就地重新连接后，卡片据此知道已经重新连接过，不再显示「断开」。连接人
+               * 保留最初连接的那位管理员（这次是谁写在审计里）。
+               */
+              sharedConnectedAt: now,
               sharedConnectedBy: sql`coalesce(${mcpServers.sharedConnectedBy}, ${input.actorId})`,
               sharedVerified: true,
               sharedVerifiedAt: now,

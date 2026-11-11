@@ -42,8 +42,8 @@ import { withVendorDeadline } from "./vendor-deadline";
  * - 只剩一种遗留授权：回程进行中尝试被取消（竞争），厂商已经确认、记录时认领不到。
  *   团队账号：在厂商那边撤销。团队身份每个应用、每次切换随机铸出，撤销不会连带别的应用；只有厂商答
  *   「撤了」才算撤回，答 false 或抛错都如实留痕（审计 `mcp.cancelled_grant_left_live`）。
- *   个人账号：只留痕并告诉本人。授权是本人自己的、记在本人 id 下，不算越权；撤销会连带本人同一认证
- *   提供商下的其他应用（fork 还没有上游按认证提供商列出兄弟应用的那一层），所以不撤。
+ *   个人账号：照上游，撤掉它不连带别的东西时才撤（这个应用原本没有连接，本人在同一认证提供商下也没有
+ *   别的应用）；会连带、判断不了或厂商没确认撤销时只留痕并告诉本人。
  * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）：与整应用的
  *   「连接」走同一条尝试与回程。团队账号的清单与授权都只给此刻持有管理员能力的人（上游让成员读清单）。
  */
@@ -338,11 +338,13 @@ async function stillPermitted(
 }
 
 /**
- * 评审 I1：一个记不下来的授权在厂商那边已经生效时怎么办。
+ * 一个记不下来的授权在厂商那边已经生效时怎么办（回程进行中尝试被取消）。
  *
- * 团队账号：在厂商那边撤销。团队身份是每个应用、每次切换随机铸出的（`mintDeploymentVendorUserId`），
- * 它下面只有这一个应用，撤销不会连带别的应用；不撤，它就会在之后被别人的「确认」收养。撤销失败才落回
- * 留痕。个人：授权是本人自己的，记在本人 id 下；撤销会连带本人同一认证提供商下的其他应用，所以只留痕。
+ * 团队账号还没有连接：在厂商那边撤销。团队身份是每个应用、每次切换随机铸出的
+ * （`mintDeploymentVendorUserId`），它下面只有这一个应用，撤销不会连带别的应用；不撤，它就成了一个
+ * 来历不明的授权。团队账号已经连接着：不撤，只留痕（撤销会结束大家正在用的那条连接）。
+ * 个人：「再连一个账号」铸出的 id 下只有这一次同意，直接撤；本人名字下的，照上游在不连带别的东西时撤，
+ * 否则留痕。撤销没有被厂商确认时都落回留痕。
  */
 async function leftoverGrant(
   deps: ArcadeRouteDeps,
@@ -355,7 +357,35 @@ async function leftoverGrant(
   },
 ): Promise<"withdrawn" | "left-live"> {
   const { store, arcade } = deps;
+  /*
+   * 团队账号原本就连接着（就地重新连接，或在已连接的团队账号上为一个动作授权）：不撤。撤销结束的是团队
+   * 身份在这个认证提供商下的整条连接，也就是大家正在用的那一条，而应用行仍会说「已连接」。这次同意只是
+   * 加在它上面的权限，留着不比没有更危险，所以照上游只留痕。读不到应用行时同样不撤。
+   */
+  let teamAlreadyConnected = false;
   if (input.account.holder === "deployment" && input.toolkit) {
+    const teamToolkit = input.toolkit;
+    const app = await store.appAccount(teamToolkit).catch(() => undefined);
+    /*
+     * 「原本就连着」指的是这次同意所在的那个团队身份连着。同意期间应用被切回个人再切回共享，团队身份
+     * 换了新的：旧身份下这次同意谁也用不到，没有行指向它，照未连接的情况撤掉。
+     */
+    teamAlreadyConnected =
+      app === undefined ||
+      (Boolean(app?.shared?.connectedAt) &&
+        app?.shared?.vendorUserId === input.account.vendorUserId);
+    if (teamAlreadyConnected) {
+      input = {
+        ...input,
+        why: `${input.why}; ${app === undefined ? "the app's team account could not be read" : "the team account was already connected"}`,
+      };
+    }
+  }
+  if (
+    input.account.holder === "deployment" &&
+    input.toolkit &&
+    !teamAlreadyConnected
+  ) {
     const toolkit = input.toolkit;
     const withdrawn = await withVendorDeadline(() =>
       arcade.revoke({ account: input.account, toolkit }),
@@ -386,6 +416,52 @@ async function leftoverGrant(
       },
     );
     if (withdrawn) return "withdrawn";
+  }
+  if (input.account.holder === "person" && input.toolkit) {
+    /*
+     * 个人账号照上游的规则：能判断「撤掉它不连带任何别的东西」时就撤，判断不了或会连带时如实留痕。
+     * Arcade 按认证提供商存连接，撤掉这次的授权就是结束这个人在同一提供商下的连接。所以：这个应用本来
+     * 就有一条连接（这次同意是加在它上面的）不撤；他在同一提供商下还有别的应用、或者有应用问不出提供商
+     * 也不撤；都没有时撤掉，而且只有厂商答「撤了」才算撤回。
+     */
+    const toolkit = input.toolkit;
+    const account = input.account;
+    /*
+     * 「再连一个账号」的同意记在这个人自己的另一个 id 下（`<名字>~<后缀>`），那个 id 是这次按下时才铸
+     * 出来的，下面只有这一次同意：撤掉它不会连带任何别的应用或账号。不撤的话，没有任何一行记得这个 id，
+     * 之后谁也找不到它。
+     */
+    const further =
+      account.vendorUserId !== store.personAccount(account.userId).vendorUserId;
+    let keep: string | null = null;
+    try {
+      if (further) {
+        // 直接撤，见上。
+      } else if (
+        await store.brokeredConnection({ toolkit, userId: account.userId })
+      ) {
+        keep = "the account already held this app's connection";
+      } else {
+        const collateral = await arcadeConnectionSiblings({
+          store,
+          arcade,
+          userId: account.userId,
+          toolkit,
+        });
+        if (collateral.siblings.length > 0 || collateral.unanswered > 0)
+          keep = "other apps share this connection";
+      }
+    } catch {
+      keep = "the apps sharing this connection could not be resolved";
+    }
+    if (keep === null) {
+      const ended = await withVendorDeadline(() =>
+        arcade.revoke({ account, toolkit }),
+      ).catch(() => false);
+      if (ended === true) return "withdrawn";
+      keep = "the vendor did not confirm the withdrawal";
+    }
+    input = { ...input, why: `${input.why}; ${keep}` };
   }
   await store
     .recordCancelledGrantLeftLive({
@@ -613,7 +689,7 @@ export function mountArcadeRoutes(
           .catch(() => null);
         if (completedElsewhere === null) return refusedWith("not-recorded");
         if (!completedElsewhere) {
-          // 尝试在同意期间被取消了，授权却完成了：团队账号撤销，个人留痕（评审 I1）。
+          // 尝试在同意期间被取消了，授权却完成了：能撤的撤，撤了会误伤的留痕（见 `leftoverGrant`）。
           const outcome = await leftoverGrant(current, {
             actorId,
             attempt,
@@ -684,10 +760,17 @@ export function mountArcadeRoutes(
     }
     const app = await store.appAccount(toolkit);
     if (app?.mode !== "shared") {
+      /*
+       * 他调用时实际用的那个账号（默认账号；设成了第二个账号就是第二个），授权清单与逐个动作授权都问它：
+       * 否则授权加在名字下的账号上，调用却跑在默认的第二个账号上，两边对不上。
+       */
       return {
         toolkit,
         title: row.title,
-        account: store.personAccount(context.var.actor.id),
+        account: await store.defaultPersonAccount(
+          toolkit,
+          context.var.actor.id,
+        ),
       };
     }
     let writer =
@@ -764,12 +847,21 @@ export function mountArcadeRoutes(
       );
       actions = [{ action: toolkit, state: "unknown", reason: unreadable }];
     }
+    /*
+     * `needs-operator` 的 `missing` 是部署级密钥的键名（厂商报的，如 `GITHUB_SERVER_URL`），是运维的事，
+     * 只给此刻持有管理员能力的人看；别人看到的状态不变、名单为空：知道「要管理员先配置」就够了。
+     */
+    const admin =
+      context.var.actor.role === "admin" &&
+      (current.adminRefusal?.(context) ?? null) === null;
     return context.json({
-      actions: actions.map((entry) =>
-        entry.state === "unknown" && NAMES_A_BROKER.test(entry.reason)
-          ? { ...entry, reason: unreadable }
-          : entry,
-      ),
+      actions: actions.map((entry) => {
+        if (entry.state === "unknown" && NAMES_A_BROKER.test(entry.reason))
+          return { ...entry, reason: unreadable };
+        if (entry.state === "needs-operator" && !admin)
+          return { ...entry, missing: [] };
+        return entry;
+      }),
     });
   });
 
@@ -809,6 +901,22 @@ export function mountArcadeRoutes(
       !(await current.store.serverPublishesAction(serverId, action))
     ) {
       return context.json({ error: `${title} 没有这个名字的动作。` }, 400);
+    }
+    /*
+     * 动作分属不止一个认证提供商（或读不出属于哪一个）的应用，这里不授权：之后的断开、确认、列账号都要
+     * 先知道连接记在哪个提供商下，对这样的应用厂商的回答是拒绝，授权下来的连接就成了谁也结束不了的。
+     * 与整应用的「连接」对这种应用的拒绝一致，在铸任何东西之前。
+     */
+    const provider = await withVendorDeadline(() =>
+      current.arcade.authProviderOf(toolkit),
+    ).catch(() => null);
+    if (!provider) {
+      return context.json(
+        {
+          error: `${title} 的动作要登录不止一个账号，或者读不出它们登录的是哪一个，这里还不能授权它。没有动你的账号。`,
+        },
+        409,
+      );
     }
     if (!current.appUrl) {
       return context.json(
@@ -983,6 +1091,8 @@ export async function clearEndedArcadeSiblings(input: {
         }),
       );
       if (live) continue;
+      // 名字下没了，第二个账号还在：连接与第二个账号都留着，不当成已经结束。
+      if (await store.keepForOtherAccount(sibling, userId)) continue;
       await store.disconnectBrokered({
         toolkit: sibling,
         userId,
