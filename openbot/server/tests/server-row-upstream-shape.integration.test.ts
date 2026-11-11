@@ -32,7 +32,8 @@ import { bindTestRoleWriter } from "./support/role-writer";
  *   两处不会答得不一样。
  * - `ownerGrantsChosen` 只在确知是管理员选的时候才说选过。列里的 `any` 只有管理员的 PUT 能写；`admin` 还
  *   可能是升级时的回填或切换账号模式写回的，列里分不出是谁写的，所以不报成管理员选过。
- * - `sharedVendorConnected` 只在应用是 Shared 且团队账号已连接时为 true；团队身份不随它出去。
+ * - `sharedVendorConnected` 只在应用是 Shared 且团队账号已连接时为 true；团队身份不随它出去。原有的
+ *   `sharedAccount` 留着，其中「哪位管理员连接的」只告诉持有能力的管理员。
  * - `skippedTools` 在 fork 里恒为空数组：没有记录「上一次列出时因名字被略过的动作」的那一列。
  * - `entraScope` 任何能读服务器列表的人都读得到（它是一个资源名，不是凭据）。
  */
@@ -41,7 +42,9 @@ const suite = randomUUID().slice(0, 8);
 const slug = suite.replace(/-/g, "_");
 const ADMIN = `srs-${suite}-admin`;
 const MEMBER = `srs-${suite}-member`;
-const people = [ADMIN, MEMBER];
+/** 会话里还是管理员、数据库里已被收回管理员角色的人。 */
+const DEMOTED = `srs-${suite}-demoted`;
+const people = [ADMIN, MEMBER, DEMOTED];
 /** 个人账号应用，没人选过谁可以给：按账号的默认值，主人可以给。 */
 const PERSONAL = `srs_personal_${slug}`;
 /** 升级之前就有的个人账号应用：0197 回填成了 admin。 */
@@ -90,7 +93,7 @@ function as(actorId: string) {
     context.set("actor", {
       id: actorId,
       email: `${actorId}@example.test`,
-      role: actorId === ADMIN ? "admin" : "user",
+      role: actorId === ADMIN || actorId === DEMOTED ? "admin" : "user",
     } as never);
     await runAsTenant(actorId, () => next());
   };
@@ -306,7 +309,7 @@ describe("a server row says whether a Shared app's team account is connected", (
   });
 
   test("the fork's own sharedAccount stays beside it, and the team identity never leaves", async () => {
-    const { byId, text } = await rowsFor(MEMBER);
+    const { byId, text } = await rowsFor(ADMIN);
     expect(byId.get(SHARED_ON)?.sharedAccount).toEqual({
       connected: true,
       connectedAt: "2026-03-03T00:00:00.000Z",
@@ -320,6 +323,25 @@ describe("a server row says whether a Shared app's team account is connected", (
       verified: false,
     });
     expect(text).not.toContain(TEAM_IDENTITY);
+  });
+
+  test("a member is told the team account is connected, and not which administrator connected it", async () => {
+    const { byId, text } = await rowsFor(MEMBER);
+    expect(byId.get(SHARED_ON)?.sharedAccount).toEqual({
+      connected: true,
+      connectedAt: "2026-03-03T00:00:00.000Z",
+      connectedBy: null,
+      verified: true,
+    });
+    expect(text).not.toContain(ADMIN);
+    expect(text).not.toContain(TEAM_IDENTITY);
+  });
+
+  test("somebody whose admin role was taken away is answered as a member there too", async () => {
+    const { byId, text } = await rowsFor(DEMOTED);
+    expect(byId.get(SHARED_ON)?.sharedAccount?.connectedBy).toBeNull();
+    expect(byId.get(SHARED_ON)?.sharedAccount?.connected).toBe(true);
+    expect(text).not.toContain(ADMIN);
   });
 });
 

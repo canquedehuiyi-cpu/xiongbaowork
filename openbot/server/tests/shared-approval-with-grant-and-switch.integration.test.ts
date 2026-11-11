@@ -38,8 +38,11 @@ import {
   createSharedAudience,
   createSharedUseStore,
 } from "../src/plugins/shared-use-store";
-import { createPluginStore } from "../src/plugins/store";
-import { asPlatform, runAsTenant } from "../src/tenant/context";
+import {
+  createPluginStore,
+  ServerWriteRefusedError,
+} from "../src/plugins/store";
+import { asPlatform, runAsTenant, withCapability } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { bindTestRoleWriter } from "./support/role-writer";
 
@@ -79,7 +82,9 @@ const OTHERS_BOT = id("others-bot");
 const ORPHAN = id("orphan");
 /** 一位没有持有任何应用的员工（OWNER 的）。 */
 const IDLE_BOT = id("idle-bot");
-const bots = [BOT, TEAM_BOT, OTHERS_BOT, ORPHAN, IDLE_BOT];
+/** DEMOTED 自己的私人员工：他在自己的帧里就是它的主人。 */
+const DEMOTED_BOT = id("demoted-bot");
+const bots = [BOT, TEAM_BOT, OTHERS_BOT, ORPHAN, IDLE_BOT, DEMOTED_BOT];
 const slug = suite.replace(/-/g, "_");
 /** Shared 应用，已连团队账号。 */
 const TEAM_APP = `sag_team_${slug}`;
@@ -102,8 +107,35 @@ const broker = {
 } as unknown as ComposioBroker;
 
 const audit = createAuditStore(database);
-const sharedStore = createSharedUseStore(database);
-const audience = createSharedAudience(database, sharedStore, audit);
+const realSharedStore = createSharedUseStore(database);
+const realAudience = createSharedAudience(database, realSharedStore, audit);
+/** 让某一步读写失败，看路由在那之后怎么答。每个测试开始时清空。 */
+const faults = {
+  /** 这些员工的资料读不出来。 */
+  facts: new Set<string>(),
+  /** 应用的应答行读不出来（批准的名单因此算不出来）。 */
+  appId: false,
+  /** 批准已经写下之后，轨迹那一行写不上。 */
+  trail: false,
+};
+const sharedStore: typeof realSharedStore = {
+  ...realSharedStore,
+  botFacts: async (botId) => {
+    if (faults.facts.has(botId)) throw new Error("the profile read failed");
+    return realSharedStore.botFacts(botId);
+  },
+  appIdOf: async (...args) => {
+    if (faults.appId) throw new Error("the app row read failed");
+    return realSharedStore.appIdOf(...args);
+  },
+};
+const audience: typeof realAudience = {
+  ...realAudience,
+  record: async (event) => {
+    if (faults.trail) throw new Error("the trail write failed");
+    return realAudience.record(event);
+  },
+};
 const plugins = createPluginStore({
   database,
   auditStore: audit,
@@ -111,8 +143,8 @@ const plugins = createPluginStore({
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   broker,
-  sharedUse: audience.gate,
-  sharedAdmits: audience.admitsPerson,
+  sharedUse: realAudience.gate,
+  sharedAdmits: realAudience.admitsPerson,
 });
 const adminScope = createAdminScope({
   roleRepository: createRoleRepository(database),
@@ -388,6 +420,7 @@ beforeAll(async () => {
       [OTHERS_BOT, STRANGER, STRANGER, "private"],
       [ORPHAN, "team", null, "public"],
       [IDLE_BOT, OWNER, OWNER, "private"],
+      [DEMOTED_BOT, DEMOTED, DEMOTED, "private"],
     ] as const) {
       await database.insert(agents).values({
         id: bot,
@@ -418,6 +451,9 @@ beforeAll(async () => {
 beforeEach(async () => {
   vendor.revoked.length = 0;
   teamRules.length = 0;
+  faults.facts.clear();
+  faults.appId = false;
+  faults.trail = false;
   await asPlatform(async () => {
     // 轨迹只能追加，所以每个测试只看自己开始之后写下的行（按数据库自己的时钟）。
     const [clock] = await database.execute<{ now: string }>(
@@ -481,7 +517,7 @@ describe("granting a Shared app's action with who may use it", () => {
       outsideInput: false,
     });
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true });
+    expect(await response.json()).toEqual({ ok: true, approved: true });
     expect(await grantsOf(TEAM_BOT)).toEqual([ref(TEAM_APP, "SEND")]);
     // Team Bot 此刻开放给整个团队；记下的是管理员送来的、更窄的那一条。
     expect(await approvalsOf(TEAM_BOT)).toEqual([
@@ -511,6 +547,8 @@ describe("granting a Shared app's action with who may use it", () => {
   test("with no approval sent the grant stands alone, and the team account stays refused", async () => {
     const response = await grant(ADMIN, TEAM_APP, "LIST", BOT);
     expect(response.status).toBe(200);
+    // 没送批准的答复和以前一个样，不多一个键。
+    expect(await response.json()).toEqual({ ok: true });
     expect(await grantsOf(BOT)).toEqual([ref(TEAM_APP, "LIST")]);
     expect(await approvalsOf(BOT)).toEqual([]);
     expect(await gateFor(OWNER, BOT, TEAM_APP)).toMatchObject({
@@ -534,6 +572,7 @@ describe("granting a Shared app's action with who may use it", () => {
       outsideInput: true,
     });
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, approved: false });
     expect(await grantsOf(BOT)).toEqual([ref(KEPT, "LIST")]);
     expect(await approvalsOf(BOT)).toEqual([]);
   });
@@ -556,6 +595,7 @@ describe("granting a Shared app's action with who may use it", () => {
         outsideInput: true,
       });
       expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true, approved: false });
       expect(await grantsOf(BOT)).toEqual([ref(TEAM_APP, "LIST")]);
       expect(await approvalsOf(BOT)).toEqual([]);
       expect((await gateFor(OWNER, BOT, TEAM_APP)).allowed).toBe(false);
@@ -574,12 +614,47 @@ describe("granting a Shared app's action with who may use it", () => {
   });
 
   test("somebody whose admin role was taken away records no approval, whatever their session says", async () => {
-    await grant(DEMOTED, TEAM_APP, "LIST", BOT, {
+    const response = await grant(DEMOTED, TEAM_APP, "LIST", BOT, {
       audience: "team",
       outsideInput: true,
     });
+    expect(response.status).toBe(403);
+    expect(await grantsOf(BOT)).toEqual([]);
     expect(await approvalsOf(BOT)).toEqual([]);
     expect((await gateFor(OWNER, BOT, TEAM_APP)).allowed).toBe(false);
+  });
+
+  test("an approval that was written counts as approved even when its trail row could not be", async () => {
+    faults.trail = true;
+    const response = await grant(ADMIN, TEAM_APP, "LIST", BOT, {
+      audience: "owner",
+      outsideInput: false,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, approved: true });
+    expect(await approvalsOf(BOT)).toEqual([
+      [TEAM_APP, "owner", false, "admin", ADMIN],
+    ]);
+    expect(await gateFor(OWNER, BOT, TEAM_APP)).toEqual({ allowed: true });
+  });
+
+  test("a list of members too long to be a real list is not one this deployment reads", async () => {
+    for (const members of [
+      Array.from({ length: 501 }, (_unused, index) => ({
+        kind: "user",
+        value: `person-${index}`,
+      })),
+      [{ kind: "group", value: "g".repeat(201) }],
+    ]) {
+      const response = await grant(ADMIN, TEAM_APP, "LIST", BOT, {
+        audience: "people",
+        outsideInput: false,
+        members,
+      });
+      expect(response.status).toBe(400);
+    }
+    expect(await grantsOf(BOT)).toEqual([]);
+    expect(await approvalsOf(BOT)).toEqual([]);
   });
 
   test("a Bot with no owner has nowhere to record it: the grant stands and its calls stay refused", async () => {
@@ -588,12 +663,70 @@ describe("granting a Shared app's action with who may use it", () => {
       outsideInput: false,
     });
     expect(response.status).toBe(200);
+    // 授予成功、批准没记上：答复照实说，页面不该把它画成已经可用。
+    expect(await response.json()).toEqual({ ok: true, approved: false });
     expect(await grantsOf(ORPHAN)).toEqual([ref(TEAM_APP, "LIST")]);
     expect(await approvalsOf(ORPHAN)).toEqual([]);
     expect(await gateFor(ADMIN, ORPHAN, TEAM_APP)).toMatchObject({
       allowed: false,
       refusal: "shared_no_owner",
     });
+  });
+});
+
+describe("somebody whose admin role was taken away cannot approve their own Bot for the team account", () => {
+  /*
+   * 会话里的角色来自身份源，可以比 `user_roles` 晚一步：这个人在数据库里已经不是管理员，会话还写着 admin。
+   * 他给自己的员工授予时，管理员能力拿不到，请求就留在他自己的帧里——而那正是员工主人的帧，批准写得进去。
+   * 所以「是不是持有能力的管理员」要在写批准之前单独判断，不能靠帧。
+   */
+  test("a single grant with an approval attached is refused whole", async () => {
+    const response = await grant(DEMOTED, TEAM_APP, "LIST", DEMOTED_BOT, {
+      audience: "team",
+      outsideInput: true,
+    });
+    expect(response.status).toBe(403);
+    expect(await grantsOf(DEMOTED_BOT)).toEqual([]);
+    expect(await approvalsOf(DEMOTED_BOT)).toEqual([]);
+    expect(await gateFor(DEMOTED, DEMOTED_BOT, TEAM_APP)).toMatchObject({
+      allowed: false,
+      refusal: "shared_account_not_approved",
+    });
+  });
+
+  test("saving several actions at once is refused whole, with an approval sent or not", async () => {
+    for (const approval of [
+      {},
+      { approval: { audience: "team", outsideInput: true } },
+    ]) {
+      const response = await request(
+        DEMOTED,
+        "POST",
+        `/for/${DEMOTED_BOT}/apps/${TEAM_APP}/grants`,
+        { add: [ref(TEAM_APP, "LIST")], remove: [], ...approval },
+      );
+      expect(response.status).toBe(403);
+      expect(await grantsOf(DEMOTED_BOT)).toEqual([]);
+      expect(await approvalsOf(DEMOTED_BOT)).toEqual([]);
+    }
+    expect(await approvedEvents(DEMOTED_BOT)).toEqual([]);
+    expect(await gateFor(DEMOTED, DEMOTED_BOT, TEAM_APP)).toMatchObject({
+      allowed: false,
+      refusal: "shared_account_not_approved",
+    });
+  });
+
+  test("an administrator who still holds the role is approved by the same save", async () => {
+    const response = await request(
+      ADMIN,
+      "POST",
+      `/for/${BOT}/apps/${TEAM_APP}/grants`,
+      { add: [ref(TEAM_APP, "LIST")], remove: [] },
+    );
+    expect(response.status).toBe(200);
+    expect(await approvalsOf(BOT)).toEqual([
+      [TEAM_APP, "owner", false, "admin", ADMIN],
+    ]);
   });
 });
 
@@ -820,6 +953,106 @@ describe("the switch to Shared records the approvals an administrator sent with 
     expect(await approvalsOf(BOT)).toEqual([]);
   });
 
+  test("a Bot whose exposure cannot be read is left out, and the rest of the list still answers", async () => {
+    await holdMail();
+    faults.facts.add(TEAM_BOT);
+    const preview = await switchMode(ADMIN, MAIL, { mode: "shared" });
+    expect(preview.status).toBe(200);
+    expect(
+      (
+        (await preview.json()) as { preview: { bots: { botId: string }[] } }
+      ).preview.bots.map((bot) => bot.botId),
+    ).toEqual([BOT, OTHERS_BOT]);
+    const response = await switchMode(ADMIN, MAIL, {
+      mode: "shared",
+      confirm: true,
+      approvals: {
+        [BOT]: { audience: "owner", outsideInput: false },
+        [TEAM_BOT]: { audience: "team", outsideInput: false },
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      changed: true,
+      revoked: 0,
+      approved: [BOT],
+    });
+    expect(await approvalsOf(TEAM_BOT)).toEqual([]);
+  });
+
+  test("when the approvals cannot be worked out after the switch is done, the answer says the switch happened", async () => {
+    await holdMail();
+    await runAsTenant(OWNER, () =>
+      database
+        .insert(composioConnections)
+        .values({ toolkit: MAIL, userId: OWNER, verified: true }),
+    );
+    faults.appId = true;
+    const response = await switchMode(ADMIN, MAIL, {
+      mode: "shared",
+      confirm: true,
+      approvals: { [BOT]: { audience: "owner", outsideInput: false } },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      changed: true,
+      revoked: 1,
+      approved: [],
+      approvalsFailed: true,
+    });
+    expect(await modeOf(MAIL)).toBe("shared");
+    expect(await approvalsOf(BOT)).toEqual([]);
+
+    // 再送一次同样的请求把批准补上。
+    faults.appId = false;
+    const again = await switchMode(ADMIN, MAIL, {
+      mode: "shared",
+      confirm: true,
+      approvals: { [BOT]: { audience: "owner", outsideInput: false } },
+    });
+    expect(await again.json()).toEqual({
+      changed: true,
+      revoked: 0,
+      approved: [BOT],
+    });
+  });
+
+  test("an approval that was written is reported approved even when its trail row could not be", async () => {
+    await holdMail();
+    faults.trail = true;
+    const response = await switchMode(ADMIN, MAIL, {
+      mode: "shared",
+      confirm: true,
+      approvals: { [BOT]: { audience: "owner", outsideInput: false } },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      changed: true,
+      revoked: 0,
+      approved: [BOT],
+    });
+    expect(await approvalsOf(BOT)).toEqual([
+      [MAIL, "owner", false, "admin", ADMIN],
+    ]);
+  });
+
+  test("more approvals than any deployment has Bots is refused before anything is ended", async () => {
+    await holdMail();
+    const approvals = Object.fromEntries(
+      Array.from({ length: 2_001 }, (_unused, index) => [
+        `bot-${index}`,
+        { audience: "owner", outsideInput: false },
+      ]),
+    );
+    const response = await switchMode(ADMIN, MAIL, {
+      mode: "shared",
+      confirm: true,
+      approvals,
+    });
+    expect(response.status).toBe(400);
+    expect(await modeOf(MAIL)).toBe("personal");
+  });
+
   test("switching back to Personal ends the approvals the switch wrote", async () => {
     await holdMail();
     await switchMode(ADMIN, MAIL, {
@@ -885,5 +1118,104 @@ describe("the switch to Shared records the approvals an administrator sent with 
     expect(await approvalsOf(BOT)).toEqual([
       [TEAM_APP, "owner", false, "admin", ADMIN],
     ]);
+  });
+});
+
+describe("the switch itself says whether it changed the mode, so approvals sent with it overwrite only then", () => {
+  const telling = (mode: "shared" | "personal") =>
+    runAsTenant(ADMIN, () =>
+      withCapability(ADMIN, () =>
+        modes.switchModeTelling({
+          serverId: MAIL,
+          mode,
+          by: ADMIN,
+          confirm: true,
+        }),
+      ),
+    );
+
+  test("true for the switch that moved the app, false for one that found it already there", async () => {
+    expect(await telling("shared")).toEqual({
+      result: { changed: true, revoked: 0 },
+      switched: true,
+    });
+    expect(await telling("shared")).toEqual({
+      result: { changed: true, revoked: 0 },
+      switched: false,
+    });
+    // 切回去时团队身份下的账号被撤销，算一个。
+    expect(await telling("personal")).toEqual({
+      result: { changed: true, revoked: 1 },
+      switched: true,
+    });
+  });
+
+  test("a preview changes nothing and says so", async () => {
+    const previewed = await runAsTenant(ADMIN, () =>
+      withCapability(ADMIN, () =>
+        modes.switchModeTelling({
+          serverId: MAIL,
+          mode: "shared",
+          by: ADMIN,
+          confirm: false,
+        }),
+      ),
+    );
+    expect(previewed.switched).toBe(false);
+    expect(await modeOf(MAIL)).toBe("personal");
+  });
+});
+
+describe("who holds an app is read across owners only for an administrator holding the capability", () => {
+  /** ADMIN 自己添加的服务器：不是团队的，别人的授予不归它。 */
+  const OWN_SERVER = `sag-own-${suite}`;
+
+  test("a frame without the capability is refused before anything is read", async () => {
+    await holdMail();
+    for (const actor of [OWNER, ADMIN, DEMOTED])
+      await expect(
+        runAsTenant(actor, () => plugins.botsHolding(MAIL)),
+      ).rejects.toBeInstanceOf(ServerWriteRefusedError);
+  });
+
+  test("with the capability a team app answers every owner's Bots", async () => {
+    await holdMail();
+    expect(
+      await runAsTenant(ADMIN, () =>
+        withCapability(ADMIN, () => plugins.botsHolding(MAIL)),
+      ),
+    ).toEqual([BOT, ORPHAN, OTHERS_BOT, TEAM_BOT].sort());
+  });
+
+  test("a server that is not the team's does not open the door: other people's rows stay out of reach", async () => {
+    await asPlatform(async () => {
+      await database.insert(mcpServers).values({
+        id: OWN_SERVER,
+        tenantId: ADMIN,
+        title: "Mine",
+        vendor: "Custom",
+        url: "https://sag-own.example.com/mcp",
+        provenance: "custom",
+      });
+      // 另一个人名下、引用恰好以这个 id 开头的一条授予：不是这台服务器的，也不该被读到。
+      await database.insert(pluginGrants).values({
+        tenantId: STRANGER,
+        kind: "mcp",
+        ref: `${OWN_SERVER}/READ`,
+        agentId: OTHERS_BOT,
+        grantedBy: STRANGER,
+      });
+    });
+    try {
+      expect(
+        await runAsTenant(ADMIN, () =>
+          withCapability(ADMIN, () => plugins.botsHolding(OWN_SERVER)),
+        ),
+      ).toEqual([]);
+    } finally {
+      await asPlatform(() =>
+        database.delete(mcpServers).where(eq(mcpServers.id, OWN_SERVER)),
+      );
+    }
   });
 });

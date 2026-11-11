@@ -8022,18 +8022,20 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 一个应用一行，在应答它的那一行上：标了 `shared`、但只是某个应用地址上的重复行的，不是那个应用，列
      * 出来会给一个没有调用会用的账号画「连接」。只认活动提供商的地址。
      *
-     * `displayName` 是厂商给这个账号起的名字（一个组织、一个机器人），向厂商问，问不到不影响读取：它告诉
-     * 人「办事的是哪个团队账号」，厂商不说只是少一个标签。只为已经连接的问。
-     *
-     * `connectedBy` 是连接它的管理员的邮箱（人已经不在时退回存的 id），只在 `connectedBy` 为真时读；路由
-     * 只对管理员这样要。成员要知道的是应用有没有连上、是哪个账号在办事，不是哪位管理员的邮箱。
+     * 团队账号是哪个账号、谁连接的，只在 `details` 为真时读；路由只对持有能力的管理员这样要，其余的人
+     * 两样都是 null：
+     * - `displayName` 是厂商给这个账号起的名字，向厂商问，问不到不影响读取：厂商不说只是少一个标签。只为
+     *   已经连接的问。它常常就是一个邮箱（Composio 的显示名、Arcade 的 `email`），小团队里往往是管理员
+     *   自己的，所以不给成员；不给的时候也不去问厂商，成员刷新页面不花部署在厂商那边的配额。
+     * - `connectedBy` 是连接它的管理员的邮箱（人已经不在时退回存的 id）。
+     * 成员要知道的是应用有没有连上，这一行照样告诉他。上游对每个登录的人都给这两样。
      *
      * `checkable` 恒为 false：fork 从不拿团队账号的密钥去试一个动作（团队账号的「重新检查」是再问一次厂商
      * 它在不在），所以没有可以再花一次的检查。`probe` 照列里记的给。
      *
      * 团队账号在厂商那边的身份不在答案里。
      */
-    async sharedConnections(options: { connectedBy: boolean }): Promise<
+    async sharedConnections(options: { details: boolean }): Promise<
       {
         serverId: string;
         scope: "";
@@ -8077,7 +8079,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         ),
       ];
       const emails = new Map(
-        options.connectedBy && connectors.length > 0
+        options.details && connectors.length > 0
           ? (
               await database
                 .select({ id: users.id, email: users.email })
@@ -8094,7 +8096,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           const connected = row.sharedConnectedAt !== null;
           const accountsOf = broker?.accountsOf?.bind(broker);
           const displayName =
-            connected && toolkit && identity && accountsOf
+            options.details && connected && toolkit && identity && accountsOf
               ? await withVendorDeadline(() =>
                   accountsOf({ userId: identity, toolkit }),
                 )
@@ -8112,7 +8114,7 @@ export function createPluginStore(options: PluginStoreOptions) {
             connected,
             connectedAt: iso(row.sharedConnectedAt),
             connectedBy:
-              options.connectedBy && row.sharedConnectedBy
+              options.details && row.sharedConnectedBy
                 ? (emails.get(row.sharedConnectedBy) ?? row.sharedConnectedBy)
                 : null,
             verified: connected && row.sharedVerified,

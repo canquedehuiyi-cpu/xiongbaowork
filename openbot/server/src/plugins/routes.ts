@@ -469,7 +469,7 @@ export function createPluginRoutes(
   }
 
   /** Everything the Plugins page draws: the catalogue, what is added, and the skills. */
-  routes.get("/", requireUser, async (context) =>
+  routes.get("/", capable, async (context) =>
     context.json({
       catalogue: CATALOGUE.map((entry) => ({
         key: entry.key,
@@ -535,8 +535,16 @@ export function createPluginRoutes(
        * false，其余为 true。前端照它渲染「连接」，不用自己拿角色去拼。连接路由和 store 照旧各自拒绝，
        * 这个字段只是把同一条规则提前告诉页面。
        */
+      /*
+       * 团队账号是哪位管理员连接的（`sharedAccount.connectedBy`）只告诉持有能力的管理员，和
+       * `GET /connections?shared=1` 里团队账号那一行同一条规则；其余的人拿到 null，连没连上照样看得到。
+       * 所以这条路由挂在带能力的入口上：成员原样通过，管理员的角色在这里重新读过。
+       */
       servers: (await store.listServers()).map((server) => ({
         ...server,
+        ...(server.sharedAccount && decisionRefusal(context) !== null
+          ? { sharedAccount: { ...server.sharedAccount, connectedBy: null } }
+          : {}),
         canConnect:
           context.var.actor.role === "admin" ||
           (!server.adminConnectOnly && server.accountMode !== "shared"),
@@ -1431,7 +1439,7 @@ export function createPluginRoutes(
    * Not admin-only, and that is the point: an administrator registers the connector once, and then
    * everybody connects their own account. Somebody can only ever see or start their own.
    */
-  routes.get("/connections", requireUser, async (context) => {
+  routes.get("/connections", capable, async (context) => {
     /*
      * BOTH TABLES, ONE LIST, because the person asking has one question.
      *
@@ -1473,34 +1481,41 @@ export function createPluginRoutes(
      * time, and a collation that varies with the deployment's locale is not that.
      */
     /*
-     * `?shared=1`：每个 Shared 应用的团队账号也列出来，带 `holder: "deployment"`（上游的 `GET /connections`
-     * 一直这样列）。本人自己的行不带 `holder`，上游的前端把没有 `holder` 读作本人的。
+     * `?shared=1`：每个 Shared 应用的团队账号也列出来，带 `holder: "deployment"`，本人自己的行带
+     * `holder: "person"`（上游的 `GET /connections` 一直这样列）。
      *
      * 要带参数才列，因为不带参数的答案一直是「每一行都是我自己的连接」，读它的页面也这样用：多出一行团队
      * 账号，还没连接的 Shared 应用会被画成这个人已经连上了。照上游读法写的页面带上参数，并用 `holder` 把
      * 团队账号的行分出去。
      *
-     * `connectedBy`（哪位管理员连接的，邮箱）只对管理员读；成员拿到 null。团队账号在厂商那边的身份不在
-     * 这些行里。只认识自己连接的 store（没有账号模式的装配、老的测试替身）没有这个方法，就没有可列的。
+     * 团队账号是哪个账号、谁连接的，只告诉持有能力的管理员（`decisionRefusal`，和处理申请同一个判断，
+     * 所以这条路由挂在带能力的入口上）：`displayName` 是厂商给这个账号起的名字，常常就是一个邮箱，小团队
+     * 里往往是管理员自己的；`connectedBy` 是连接它的管理员的邮箱。成员和队友两样都拿到 null，仍然知道这个
+     * 应用连没连上。上游对每个登录的人都给这两样。团队账号在厂商那边的身份不在这些行里。
+     *
+     * 只认识自己连接的 store（没有账号模式的装配、老的测试替身）没有这个方法，就没有可列的。
      */
-    const withShared =
-      context.req.query("shared") === "1" &&
-      typeof store.sharedConnections === "function";
+    const withShared = context.req.query("shared") === "1";
     const [held, brokered, shared] = await Promise.all([
       store.connectionsFor(context.var.actor.id),
       store.brokeredConnectionsFor(context.var.actor.id),
-      withShared
+      withShared && typeof store.sharedConnections === "function"
         ? store.sharedConnections({
-            connectedBy: context.var.actor.role === "admin",
+            details: decisionRefusal(context) === null,
           })
         : [],
     ]);
-    const connections = [...held, ...brokered, ...shared].sort(
-      (left, right) => {
-        if (left.serverId < right.serverId) return -1;
-        return left.serverId > right.serverId ? 1 : 0;
-      },
-    );
+    // 带参数时本人的行写明 `holder: "person"`（上游每一行都带）；不带参数的答案一个键都不多。
+    const own = [...held, ...brokered];
+    const connections = [
+      ...(withShared
+        ? own.map((row) => ({ ...row, holder: "person" as const }))
+        : own),
+      ...shared,
+    ].sort((left, right) => {
+      if (left.serverId < right.serverId) return -1;
+      return left.serverId > right.serverId ? 1 : 0;
+    });
 
     return context.json({
       connections,
@@ -2442,6 +2457,9 @@ export function createPluginRoutes(
       ? store.appAccount(toolkit)
       : Promise.resolve(null);
 
+  /** 会话里写着管理员、但这次请求没有拿到管理员能力（角色已被收回，或这个部署没有接能力）时答的话。 */
+  const CAPABILITY_UNCONFIRMED = "你的管理员身份没能确认，没有改变任何东西。";
+
   /** 一行应用所属的那个应用现在的账号模式（读应答行）；不是 broker 应用、或没有这一行为 null。 */
   const accountModeOfServer = async (
     serverId: string,
@@ -2969,7 +2987,7 @@ export function createPluginRoutes(
    *
    * GET  /servers/:id/account-mode?mode=shared|personal → { mode, current, wouldRevoke: { holder, count }, bots }
    * PUT  /servers/:id/account-mode { mode, confirm, approvals? }
-   *        → { changed, revoked } | { changed, revoked, approved }（送了 approvals 时）|
+   *        → { changed, revoked } | { changed, revoked, approved, approvalsFailed? }（送了 approvals 时）|
    *          { changed: false, preview } | { changed: false, failures: [{ account, error }] }
    */
   const accountModeOf = (value: unknown) =>
@@ -3003,19 +3021,100 @@ export function createPluginRoutes(
       decisionRefusal(context) !== null
     )
       return [];
-    const appId = await sharedUse.store.appIdOf(serverId);
+    const shared = sharedUse;
+    const appId = await shared.store.appIdOf(serverId);
     const bots: { botId: string; exposure: SharedUseApproval }[] = [];
     for (const botId of await store.botsHolding(appId)) {
-      if (!(await sharedUse.audience.ownerOf(botId))) continue;
-      const facts = await asBotOwner(context, botId, () =>
-        sharedUse.store.botFacts(botId),
-      );
-      // 在主人的帧里也读不到资料（已删除）的员工，开放范围说不准，不列。
-      if (facts.ownerUserId === null) continue;
-      bots.push({ botId, exposure: exposureOf(facts) });
+      try {
+        if (!(await shared.audience.ownerOf(botId))) continue;
+        const facts = await asBotOwner(context, botId, () =>
+          shared.store.botFacts(botId),
+        );
+        // 在主人的帧里也读不到资料（已删除）的员工，开放范围说不准，不列。
+        if (facts.ownerUserId === null) continue;
+        bots.push({ botId, exposure: exposureOf(facts) });
+      } catch (error) {
+        // 一位员工读不出来不拖垮整份名单：它不列，也就不会被批准，调用照旧被拒绝。
+        console.error(
+          JSON.stringify({
+            type: "account-mode-bot-not-listed",
+            app: appId,
+            bot: botId,
+            note: "This Bot's exposure could not be read, so it is left out of the list and gets no approval from this switch.",
+            error: reasonWithoutStatement(error),
+          }),
+        );
+      }
     }
     return bots;
   };
+
+  /**
+   * 管理员定下的一条批准：写在员工主人名下，再写一行轨迹。答批准有没有记上。调用方已经确认过送的人持有
+   * 管理员能力，并且已经在员工主人的帧里（`asBotOwner`）。
+   *
+   * 没有地方记（员工没有主人，或应用在这之间不再是 Shared）答 false：没有批准是关着的方向，闸门拒绝团队
+   * 账号，和一次保存几个动作的那条路由答同一种情况时一样。
+   *
+   * 批准和轨迹是两步，分开对待：批准已经提交之后轨迹没写上，批准是生效的，答 true，另记一条日志说明
+   * 「批准已生效、轨迹缺这一行」。把这种情况报成没记上，页面和日志都会说一件相反的事。
+   */
+  const recordAdminApproval = async (
+    context: { var: AppVariables },
+    shared: NonNullable<typeof sharedUse>,
+    input: {
+      botId: string;
+      appId: string;
+      approval: SharedUseApproval;
+      reason?: string;
+    },
+  ): Promise<boolean> => {
+    try {
+      await shared.store.setApproval({
+        botId: input.botId,
+        serverId: input.appId,
+        approval: input.approval,
+        by: context.var.actor.id,
+      });
+    } catch (error) {
+      if (
+        error instanceof SharedUseFrameError ||
+        error instanceof SharedUseNotSharedError
+      )
+        return false;
+      throw error;
+    }
+    try {
+      await shared.audience.record({
+        eventType: "shared_use.approved",
+        targetId: input.appId,
+        actorUserId: context.var.actor.id,
+        payload: {
+          bot: input.botId,
+          server: input.appId,
+          audience: input.approval.audience,
+          outsideInput: input.approval.outsideInput,
+          ...(input.reason ? { reason: input.reason } : {}),
+        },
+      });
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "shared-use-approval-not-on-trail",
+          app: input.appId,
+          bot: input.botId,
+          by: context.var.actor.id,
+          audience: input.approval.audience,
+          outsideInput: input.approval.outsideInput,
+          note: "The approval was written and is in force; its shared_use.approved row could not be written.",
+          error: reasonWithoutStatement(error),
+        }),
+      );
+    }
+    return true;
+  };
+
+  const SWITCH_APPROVALS_MAX = 2_000;
 
   /** 请求体里的 `approvals`：按员工 id 的批准。没送为 null；读不懂时给出要答的那句话。 */
   const switchApprovalsFrom = (
@@ -3030,7 +3129,13 @@ export function createPluginRoutes(
           "approvals 要按员工 id 给出每位员工的共享使用批准，这一份读不懂，所以什么都没有改。",
       };
     const approvals = new Map<string, SharedUseApproval>();
-    for (const [botId, value] of Object.entries(sent)) {
+    const entries = Object.entries(sent);
+    // 一次切换批准的员工不会比持有这个应用的员工多；设个上限，不让一份请求体无界地长。
+    if (entries.length > SWITCH_APPROVALS_MAX)
+      return {
+        error: `approvals 一次最多 ${SWITCH_APPROVALS_MAX} 位员工，所以什么都没有改。`,
+      };
+    for (const [botId, value] of entries) {
       const approval = asSharedUseApproval(value);
       if (!approval)
         return {
@@ -3063,41 +3168,24 @@ export function createPluginRoutes(
         const written = await asBotOwner(context, botId, async () => {
           if (fill && (await shared.store.approvalFor(botId, appId)))
             return false;
-          await shared.store.setApproval({
+          return recordAdminApproval(context, shared, {
             botId,
-            serverId: appId,
+            appId,
             approval,
-            by: context.var.actor.id,
+            reason: "account_mode_switched",
           });
-          await shared.audience.record({
-            eventType: "shared_use.approved",
-            targetId: appId,
-            actorUserId: context.var.actor.id,
-            payload: {
-              bot: botId,
-              server: appId,
-              audience: approval.audience,
-              outsideInput: approval.outsideInput,
-              reason: "account_mode_switched",
-            },
-          });
-          return true;
         });
         if (written) approved.push(botId);
       } catch (error) {
-        if (
-          !(error instanceof SharedUseFrameError) &&
-          !(error instanceof SharedUseNotSharedError)
-        )
-          console.error(
-            JSON.stringify({
-              type: "account-mode-approval-not-recorded",
-              app: appId,
-              bot: botId,
-              note: "The app is Shared; this Bot has no approval and its calls on the team account are refused.",
-              error: reasonWithoutStatement(error),
-            }),
-          );
+        console.error(
+          JSON.stringify({
+            type: "account-mode-approval-not-recorded",
+            app: appId,
+            bot: botId,
+            note: "The app is Shared; writing this Bot's approval failed, so it has none and its calls on the team account are refused.",
+            error: reasonWithoutStatement(error),
+          }),
+        );
       }
     }
     return approved;
@@ -3141,41 +3229,13 @@ export function createPluginRoutes(
     const sent = switchApprovalsFrom(body?.approvals);
     if ("error" in sent) return context.json({ error: sent.error }, 400);
     const serverId = context.req.param("id");
+    let outcome: Awaited<ReturnType<typeof accountModes.switchModeTelling>>;
     try {
-      // 应用本来就是 Shared 时，这一步只补缺的批准；要在切换之前读。
-      const alreadyShared =
-        sent.approvals !== null &&
-        mode === "shared" &&
-        (await accountModeOfServer(serverId)) === "shared";
-      const result = await accountModes.switchMode({
+      outcome = await accountModes.switchModeTelling({
         serverId,
         mode,
         by: context.var.actor.id,
         confirm: body?.confirm === true,
-      });
-      if ("failures" in result) return context.json(result, 409);
-      if ("preview" in result)
-        return context.json({
-          ...result,
-          preview: {
-            ...result.preview,
-            bots:
-              mode === "shared" ? await sharedBotsOf(context, serverId) : [],
-          },
-        });
-      // 没送 `approvals` 的切换答的和以前一样，也不记任何批准。
-      if (sent.approvals === null) return context.json(result);
-      return context.json({
-        ...result,
-        approved:
-          mode === "shared"
-            ? await recordSwitchApprovals(
-                context,
-                serverId,
-                sent.approvals,
-                alreadyShared,
-              )
-            : [],
       });
     } catch (error) {
       if (error instanceof AccountModeRefusedError)
@@ -3186,6 +3246,67 @@ export function createPluginRoutes(
         { route: "account-mode.switch", toolkit: context.req.param("id") },
       );
       return context.json({ error: refusal.error }, refusal.status);
+    }
+    const { result } = outcome;
+    if ("failures" in result) return context.json(result, 409);
+    if ("preview" in result) {
+      try {
+        return context.json({
+          ...result,
+          preview: {
+            ...result.preview,
+            bots:
+              mode === "shared" ? await sharedBotsOf(context, serverId) : [],
+          },
+        });
+      } catch (error) {
+        // 只是预览：名单没读出来，什么都还没有改，照实说。
+        const refusal = personRefusal(
+          error,
+          "没能读出切换会影响哪些员工，什么都没有改变。请重试。",
+          { route: "account-mode.preview", toolkit: serverId },
+        );
+        return context.json({ error: refusal.error }, refusal.status);
+      }
+    }
+    /*
+     * 从这里往下，切换已经完成（或应用本来就是这个模式）。之后再出错，不能答「什么都没有改变」：人们的
+     * 账号已经在厂商那边结束了。
+     */
+    // 没送 `approvals` 的切换答的和以前一样，也不记任何批准。
+    if (sent.approvals === null) return context.json(result);
+    if (mode !== "shared") return context.json({ ...result, approved: [] });
+    /*
+     * 这次切换真的把应用改成了 Shared 时，送来的批准就是这次切换的批准，照写。应用本来就是 Shared 时只
+     * 补缺：已经有的批准是之前的决定。看的是切换自己说的「这次有没有改模式」，不是切换之前另读的一次：
+     * 两位管理员同时切换时，后到的那位读到的「还是 Personal」已经过时，照它去覆盖会改写先到的那位刚定
+     * 下的批准。
+     */
+    try {
+      return context.json({
+        ...result,
+        approved: await recordSwitchApprovals(
+          context,
+          serverId,
+          sent.approvals,
+          !outcome.switched,
+        ),
+      });
+    } catch (error) {
+      /*
+       * 名单没算出来（读库出错）。切换已经完成，应用是 Shared、这一步一条批准都没记，没有批准的员工每次
+       * 调用都被拒绝。再送一次同样的请求会走「本来就是 Shared」的那一支把批准补上，`approvalsFailed`
+       * 告诉页面要这样做。
+       */
+      console.error(
+        JSON.stringify({
+          type: "account-mode-approvals-not-recorded",
+          app: serverId,
+          note: "The switch finished; the approvals sent with it could not be recorded. Sending the same request again records them.",
+          error: reasonWithoutStatement(error),
+        }),
+      );
+      return context.json({ ...result, approved: [], approvalsFailed: true });
     }
   });
 
@@ -3878,16 +3999,19 @@ export function createPluginRoutes(
      * 批准（上游没送时会按员工此刻的开放范围自动批准；fork 在这条路由上留着更严的那条线）。
      *
      * 谁送的才算数，在进员工主人的帧之前判断，因为管理员能力是在管理员自己的帧里持有的：要持有能力的
-     * 管理员（`decisionRefusal`，和共享使用那几条路由同一个判断）。会话里还写着管理员、角色已被收回的人
-     * 送来的不算；员工的主人自助安装时送来的也不算（下面的 `selfService`）——主人不能给自己批准团队账号。
+     * 管理员（`decisionRefusal`，和共享使用那几条路由同一个判断）。只看帧不够：会话里还写着 admin、角色
+     * 已被收回的人拿不到能力，请求留在他自己的帧里，而给自己的员工授予时那正是员工主人的帧。这样的人
+     * 给 Shared 应用的授予带着批准来，整次拒绝，什么都不写。员工的主人自助安装时送来的不算数（下面的
+     * `selfService`），授予照他自己那条路写——主人不能给自己批准团队账号。
+     *
+     * 送了 `approval` 的答复多一个 `approved`：批准有没有记上。授予可以成功而批准没记上（应用不是 Shared、
+     * 员工没有主人、送的人不算数），那时员工对团队账号的调用仍被拒绝，页面不该把它画成已经可用。
      */
     const approvalSent =
-      kind === "mcp" &&
-      body.approval !== undefined &&
-      sharedUse !== undefined &&
-      decisionRefusal(context) === null
+      kind === "mcp" && body.approval !== undefined && sharedUse !== undefined
         ? { sent: body.approval, shared: sharedUse }
         : null;
+    const holdsCapability = decisionRefusal(context) === null;
     return asBotOwner(context, grantAgentId, async () => {
       const decision = await enablementDecision(
         context,
@@ -3902,15 +4026,20 @@ export function createPluginRoutes(
 
       // 应用不是 Shared 时没什么要记的；读不懂的批准整次拒绝，什么都不写（`sharedGrantApproval`）。
       const serverId = grantRef.split("/")[0] ?? "";
-      const decided =
-        approvalSent && !decision.selfService
-          ? await sharedGrantApproval(approvalSent.shared.store, {
-              serverId,
-              agentId: grantAgentId,
-              accountMode: await accountModeOfServer(serverId),
-              sent: approvalSent.sent,
-            })
-          : null;
+      let decided: Awaited<ReturnType<typeof sharedGrantApproval>> | null =
+        null;
+      if (approvalSent && !decision.selfService) {
+        const accountMode = await accountModeOfServer(serverId);
+        if (accountMode === "shared" && !holdsCapability)
+          return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
+        if (holdsCapability)
+          decided = await sharedGrantApproval(approvalSent.shared.store, {
+            serverId,
+            agentId: grantAgentId,
+            accountMode,
+            sent: approvalSent.sent,
+          });
+      }
       if (decided === "unreadable")
         return context.json(
           { error: "这份共享使用批准这个部署读不懂，所以什么都没有改。" },
@@ -3931,38 +4060,18 @@ export function createPluginRoutes(
           return context.json({ error: error.message }, 403);
         throw error;
       }
-      if (decided?.approval && approvalSent) {
-        try {
-          await approvalSent.shared.store.setApproval({
-            botId: grantAgentId,
-            serverId: decided.appId,
-            approval: decided.approval,
-            by: context.var.actor.id,
-          });
-          await approvalSent.shared.audience.record({
-            eventType: "shared_use.approved",
-            targetId: decided.appId,
-            actorUserId: context.var.actor.id,
-            payload: {
-              bot: grantAgentId,
-              server: decided.appId,
-              audience: decided.approval.audience,
-              outsideInput: decided.approval.outsideInput,
-            },
-          });
-        } catch (error) {
-          /*
-           * 没有地方记：员工没有主人，或应用在这之间不再是 Shared。没有批准是关着的方向（闸门拒绝团队
-           * 账号），授予照样留着，和一次保存几个动作的那条路由答同一种情况时一样。
-           */
-          if (
-            !(error instanceof SharedUseFrameError) &&
-            !(error instanceof SharedUseNotSharedError)
-          )
-            throw error;
-        }
-      }
-      return context.json({ ok: true });
+      const approved =
+        decided?.approval && approvalSent
+          ? await recordAdminApproval(context, approvalSent.shared, {
+              botId: grantAgentId,
+              appId: decided.appId,
+              approval: decided.approval,
+            })
+          : false;
+      return context.json({
+        ok: true,
+        ...(kind === "mcp" && body.approval !== undefined ? { approved } : {}),
+      });
     });
   });
 
@@ -4105,6 +4214,8 @@ export function createPluginRoutes(
           400,
         );
 
+      // 管理员能力是在管理员自己的帧里持有的，进了员工主人的帧就读不到，所以在这里先读。
+      const holdsCapability = decisionRefusal(context) === null;
       return asBotOwner(context, agentId, async () => {
         const problems: { ref: string; error: string }[] = [];
         const selfService = new Map<string, boolean>();
@@ -4175,6 +4286,20 @@ export function createPluginRoutes(
         }
 
         const asOwner = add.some((ref) => selfService.get(ref) === true);
+        /*
+         * 管理员这条路上给出一个 Shared 应用的动作，就是在定谁可以用团队账号，所以要持有管理员能力的人
+         * 才行（`holdsCapability`，在进员工主人的帧之前读的）。只看帧不够：会话里还写着 admin、角色已被
+         * 收回的人拿不到能力，请求留在他自己的帧里，而给自己的员工授予时那正是员工主人的帧，批准写得
+         * 进去。这样的保存整次拒绝，什么都不写。
+         */
+        if (
+          add.length > 0 &&
+          !asOwner &&
+          sharedUse &&
+          server?.accountMode === "shared" &&
+          !holdsCapability
+        )
+          return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
         const decided =
           add.length > 0 && !asOwner && sharedUse
             ? await sharedGrantApproval(sharedUse.store, {
