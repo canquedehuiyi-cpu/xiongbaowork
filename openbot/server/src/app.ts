@@ -1,10 +1,13 @@
 import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
+import type { WhatIfVocabulary } from "@openbot/shared/what-if";
 import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "hono/bun";
+import { createCapabilityChangeRoutes } from "./admin/capability-translate";
 import { enterpriseControls } from "./admin/controls";
 import { createEnterpriseGate } from "./admin/gate";
+import { createNetworkAllowlistRoutes } from "./admin/network-routes";
 import {
   createEnterpriseAdminRoutes,
   createProactiveAdminRoutes,
@@ -25,9 +28,13 @@ import {
 import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
+import { createReviewerGuidanceRoutes } from "./approvals/reviewer-guidance";
 import { createApprovalRoutes } from "./approvals/routes";
+import { createApprovalRuleDraftRoutes } from "./approvals/rule-translate";
+import type { RuleVocabulary } from "./approvals/rule-vocabulary";
 import type { ApprovalService } from "./approvals/service";
 import {
+  type AuditEvent,
   type AuditEventType,
   type AuditInitiator,
   AuditQueryError,
@@ -41,6 +48,7 @@ import {
   recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "./audit";
+import { type AuditVocabulary, createAuditAskRoutes } from "./audit-ask";
 import { createAdminScope } from "./auth/admin-scope";
 import { createDevRequireUser } from "./auth/dev-actor";
 import {
@@ -84,6 +92,7 @@ import type { ComponentStore } from "./components/store";
 import type { ComputerGateway } from "./computer/gateway";
 import type { PageFrameStore } from "./computer/page-frames";
 import type { PolicyStore } from "./computer/policy-store";
+import { createPolicyTranslateRoutes } from "./computer/policy-translate";
 import { createComputerRoutes } from "./computer/routes";
 import {
   configuredAuthProviders,
@@ -122,6 +131,8 @@ import {
   createPersonalLearningRoutes,
   type PersonalLearningRouteDeps,
 } from "./learning/sharing-routes";
+import type { LocalLearningEngine } from "./local-learning/engine";
+import { createLocalLearningRoutes } from "./local-learning/routes";
 import type { MemoryIngestion } from "./memory/ingestion";
 import { createMemoryRoutes } from "./memory/routes";
 import type { MemoryStore } from "./memory/store";
@@ -135,7 +146,9 @@ import type { SignInService } from "./passwords/service";
 import type { OnboardingStore } from "./people/onboarding";
 import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
+// M5: 留给 X 系列（共享账号/多账号：上游的 `BrokerProvider`、`AccountModeSwitch` 类型导入）
 import type { ComposioBroker, KeyGuideSource } from "./plugins/broker";
+import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
 import type { AccountModeSwitch } from "./plugins/account-mode";
 import type {
   SharedAudience,
@@ -173,6 +186,7 @@ import type { ResponsibilityStore } from "./responsibilities/types";
 import { createRoutineRoutes, type RoutineStore } from "./routines/routes";
 import type { RoutineRunner } from "./routines/runner";
 import type { IntentRouter } from "./routing/classify";
+import type { ModelCompleter } from "./routing/model";
 import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
 import type { SelfHostBanner } from "./self-host-banner";
@@ -184,7 +198,7 @@ import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import type { ProductTelemetry } from "./telemetry/product";
 import { createProductTelemetryRoutes } from "./telemetry/product-routes";
-import { capabilityFor, runAsTenant } from "./tenant/context";
+import { capabilityFor, currentTenant, runAsTenant } from "./tenant/context";
 import type { PackageStatusReader } from "./tenant-package";
 import {
   INSTRUCTIONS_LIMIT,
@@ -200,6 +214,8 @@ import {
   DIRECTORY_PATH as WEB_BOT_AUTH_DIRECTORY_PATH,
   directoryResponse as webBotAuthDirectory,
 } from "./web-bot-auth";
+import { createWhatIfRoutes } from "./what-if";
+import type { GovernanceReaders } from "./what-if-check";
 
 /**
  * How much of a multipart body is boundary, headers and other fields rather than file.
@@ -484,6 +500,14 @@ export function createApp(
     };
     memory?: { store: MemoryStore; ingestion: MemoryIngestion };
     proactive?: { store: ProactiveStore; engine: ProactiveEngine };
+    /**
+     * 本地学习（L1）的本人路由。`engine` 不在时（`OPENBOT_LOCAL_LEARNING=off`）路由照样回答设置页，
+     * 说明这个部署没有开启。
+     */
+    localLearning?: {
+      database: Database;
+      engine: LocalLearningEngine | undefined;
+    };
     /** Started items, each run as a task in a conversation of its own. See tasks/runner.ts. */
     tasks?: { store: TaskStore; runner: TaskRunner };
     responsibilities?: {
@@ -516,6 +540,43 @@ export function createApp(
      * learning/model-endpoint.ts. Absent, nothing is mounted.
      */
     learningModel?: LearningModelEndpoint;
+    /**
+     * The deployment's own model, for writing a boundary from an admin's description
+     * (computer/policy-translate.ts), team approval rules from one (approvals/rule-translate.ts), a
+     * Bot's actions in one app from one (plugins/grant-translate.ts), the network allowlist from
+     * one (admin/network-translate.ts), and for reading an admin's guidance for auto-review
+     * (approvals/reviewer-guidance.ts). Absent, `/api/computers/policy-translate` is not mounted,
+     * and approval rules, app actions, the network allowlist and guidance
+     * say a model is needed.
+     */
+    boundaryWriter?: ModelCompleter;
+    /**
+     * What a team approval rule can name: this OpenBot's apps, their tools and its Bots
+     * (approvals/rule-vocabulary.ts). Absent, `/api/approvals/team/rules/{translate,backtest,batch}`
+     * are not mounted.
+     */
+    approvalRules?: { vocabulary: () => Promise<RuleVocabulary> };
+    /**
+     * Questions about the audit trail in plain English (audit-ask.ts): the deployment's own model,
+     * and what a filter may name. Absent, `/api/admin/audit-events/ask` is not mounted.
+     */
+    auditQuestions?: {
+      complete: ModelCompleter;
+      vocabulary: () => Promise<AuditVocabulary>;
+      /** The clock a question's "yesterday" is read against. A test fixes it; absent is now. */
+      now?: () => Date;
+    };
+    /**
+     * "What would happen if…" (what-if.ts): the deployment's own model to read a question as one
+     * action, what an action may name, the stores the real deciders read, and one audit row by id
+     * for "Why did this happen?". Absent, `/api/admin/what-if` is not mounted.
+     */
+    whatIf?: {
+      complete: ModelCompleter;
+      vocabulary: () => Promise<WhatIfVocabulary>;
+      readers: GovernanceReaders;
+      event: (id: string) => Promise<AuditEvent | null>;
+    };
   },
   /**
    * Whether a conversation this deployment keeps is still there, for `GET /api/threads/:threadId`.
@@ -825,6 +886,84 @@ export function createApp(
       "/api/telemetry",
       createProductTelemetryRoutes(requireUser, coworker.productTelemetry),
     );
+  /*
+   * M5: upstream's admin routes that replay a draft over the trail (#1381, #1398, #1399) read it with
+   * the reader they are handed. Signed in through `requireAdminUser`, an administrator holds the
+   * admin capability (`adminCapability`, G01-E P7) for the request, and `adminAuditReader` then reads
+   * the whole deployment's trail as `platform`, as the list below does (`asAdminPlatform`). Anyone
+   * else reads in their own frame, which shows them only their own rows; each route still answers a
+   * non-admin with its own `requireAdmin`.
+   */
+  const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = (
+    context,
+    next,
+  ) =>
+    requireUser(context, async () => {
+      await adminCapability(context, next);
+    });
+  const adminAuditReader: AuditReader | undefined = auditReader
+    ? {
+        list: (query) => {
+          const frame = currentTenant();
+          return adminScope && capabilityFor(frame) === "admin"
+            ? adminScope.asAdminPlatform({ id: frame }, () =>
+                auditReader.list(query),
+              )
+            : auditReader.list(query);
+        },
+      }
+    : undefined;
+  /*
+   * M5: the same for the approval requests the team-rule and auto-review drafts are replayed over
+   * (`recentRequests`): every person's requests are their own rows, so an administrator holding the
+   * capability reads them as `platform`, and anybody else reads only their own.
+   */
+  const adminApprovals = (() => {
+    const service = coworker?.approvals;
+    const policy = service?.store?.policy;
+    const recent = policy?.recentRequests;
+    if (!service || !policy || !recent || !adminScope) return service;
+    return {
+      ...service,
+      store: {
+        ...service.store,
+        policy: {
+          ...policy,
+          recentRequests: (limit: number) => {
+            const frame = currentTenant();
+            return capabilityFor(frame) === "admin"
+              ? adminScope.asAdminPlatform({ id: frame }, () => recent(limit))
+              : recent(limit);
+          },
+        },
+      },
+    };
+  })();
+  // Before the enterprise routes it shares a prefix with: describing a network allowlist and
+  // replaying one over page visits. The list itself is still saved by `PUT /network` below.
+  app.route(
+    "/api/admin/enterprise/network",
+    createNetworkAllowlistRoutes({
+      requireUser: requireAdminUser,
+      ...(coworker?.boundaryWriter
+        ? { complete: coworker.boundaryWriter }
+        : {}),
+      ...(auditStore ? { auditStore } : {}),
+      ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+    }),
+  );
+  // Before `/api/admin/enterprise`, which shares the prefix: describing, previewing and saving
+  // permission changes together.
+  app.route(
+    "/api/admin/enterprise/capabilities",
+    createCapabilityChangeRoutes({
+      requireUser: requireAdminUser,
+      ...(coworker?.boundaryWriter
+        ? { complete: coworker.boundaryWriter }
+        : {}),
+      ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+    }),
+  );
   app.route(
     "/api/admin/enterprise",
     createEnterpriseAdminRoutes(requireUser, adminScope),
@@ -1105,8 +1244,8 @@ export function createApp(
         const query = auditQueryFromUrl(url);
         /*
          * The export answers the same filtered query as the list — `eventType`, `actorUserId`,
-         * `initiatorKind`, `targetType`, `targetId`, `from`, `to` — so the downloaded file and the
-         * table agree. Paging (`cursor`, `limit`) belongs to the JSON list and is ignored here; the
+         * `initiatorKind`, `targetType`, `targetId`, `bot`, `app`, `tool`, `effect`, `intent`,
+         * `rule`, `from`, `to` — so the downloaded file and the table agree. Paging (`cursor`, `limit`) belongs to the JSON list and is ignored here; the
          * export walks every matching page up to the cap in `readAuditExportRows` and names the file
          * after the day it was pulled. Read as `platform`, as the list is (below).
          */
@@ -1160,6 +1299,28 @@ export function createApp(
       }
     },
   );
+  if (coworker?.auditQuestions)
+    app.route(
+      "/api/admin/audit-events",
+      createAuditAskRoutes({
+        requireUser: requireAdminUser,
+        complete: coworker.auditQuestions.complete,
+        vocabulary: coworker.auditQuestions.vocabulary,
+        ...(coworker.auditQuestions.now
+          ? { now: coworker.auditQuestions.now }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+      }),
+    );
+  if (coworker?.whatIf)
+    app.route(
+      "/api/admin/what-if",
+      createWhatIfRoutes({
+        requireUser: requireAdminUser,
+        ...coworker.whatIf,
+        ...(auditStore ? { auditStore } : {}),
+      }),
+    );
   /*
    * Who is here, and what they may do.
    *
@@ -1701,8 +1862,20 @@ export function createApp(
                 : {}),
             })
           : undefined,
+        auditStore,
       ),
     );
+    // Beside `/policy` and named in DEPLOYMENT_ROUTES with it: the computer router's Bot guard
+    // steps aside for the name, and this answers it.
+    if (coworker?.boundaryWriter)
+      app.route(
+        "/api/computers",
+        createPolicyTranslateRoutes({
+          requireUser,
+          complete: coworker.boundaryWriter,
+          ...(auditStore ? { auditStore } : {}),
+        }),
+      );
   }
 
   if (hostAccessBroker) {
@@ -1991,6 +2164,40 @@ export function createApp(
       "/api/team-bots",
       createTeamBotRoutes(coworker.teamBots, requireUser, adminScope),
     );
+  // Before `/api/approvals` for the same reason: describing, replaying and saving team rules together.
+  if (coworker?.approvals && coworker.approvalRules)
+    app.route(
+      "/api/approvals/team/rules",
+      createApprovalRuleDraftRoutes({
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over the
+        // whole deployment's trail (`adminAuditReader`).
+        requireUser: requireAdminUser,
+        service: adminApprovals ?? coworker.approvals,
+        vocabulary: coworker.approvalRules.vocabulary,
+        ...(coworker.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+        ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+      }),
+    );
+  // Before `/api/approvals` too: the admin's guidance for auto-review, checked, replayed and saved.
+  if (coworker?.approvals)
+    app.route(
+      "/api/approvals/team/guidance",
+      createReviewerGuidanceRoutes({
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over the
+        // admin's OWN requests only (`approvals/store.ts` `recentRequests`). Not `adminApprovals`: this
+        // replay hands each request's conversation and arguments to a model and returns the model's
+        // reason, so over everybody's requests it would read other people's conversations back to the
+        // admin. The team-rule replay may read everybody's: it returns only what the audit trail shows.
+        requireUser: requireAdminUser,
+        service: coworker.approvals,
+        ...(coworker.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+      }),
+    );
   if (coworker?.approvals)
     app.route(
       "/api/approvals",
@@ -2015,6 +2222,15 @@ export function createApp(
       createPasswordRoutes(coworker.passwords, requireUser),
     );
   }
+  if (coworker?.localLearning)
+    app.route(
+      "/api/local-learning",
+      createLocalLearningRoutes({
+        ...coworker.localLearning,
+        requireUser,
+        auditStore,
+      }),
+    );
   if (coworker?.proactive)
     app.route(
       "/api/proactive",
@@ -2094,6 +2310,20 @@ export function createApp(
   }
 
   if (pluginStore) {
+    // Describing what one Bot may do in one app, and replaying it. The save is the grants route's own.
+    app.route(
+      "/api/plugins",
+      createAppGrantDraftRoutes({
+        // M5: replayed over the whole deployment's trail, as an administrator reads it.
+        requireUser: requireAdminUser,
+        store: pluginStore,
+        ...(coworker?.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+        ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+      }),
+    );
     app.route(
       "/api/plugins",
       createPluginRoutes(
