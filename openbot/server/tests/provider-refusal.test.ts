@@ -5,7 +5,6 @@ import { inArray, like } from "drizzle-orm";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createAgentFetch } from "../src/agents/endpoint";
 import { loadConfig } from "../src/config";
-import { currentEdition, setEdition } from "../src/edition";
 import {
   mountCopilotRuntime,
   type RegisteredAgent,
@@ -14,6 +13,8 @@ import {
 } from "../src/copilot";
 import { createDatabase } from "../src/db/client";
 import { threadRuns, threads } from "../src/db/schema";
+import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
+import { currentEdition, setEdition } from "../src/edition";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -314,6 +315,9 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  // A refused key goes through the real path, which records a model failure for Desktop to ask for
+  // the credential again. That state is one per process, so it is not left for the next file.
+  clearDesktopConnectionFailure("model");
   for (const [name, value] of [
     ["OPENAI_BASE_URL", saved.openai],
     ["ANTHROPIC_BASE_URL", saved.anthropic],

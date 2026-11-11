@@ -92,6 +92,9 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "app_access.approved": "批准应用申请",
   "app_access.dismissed": "忽略应用申请",
   "app_access.refused": "申请应用",
+  // M5: 留给 X 系列（owner grants：app_access.owner_granted / app_access.owner_revoked）
+  "plugin.grants_translated": "根据描述挑选员工在应用里的操作",
+  "plugin.grants_changed": "修改员工在应用里的操作",
   "computer.action_allowed": "使用电脑",
   "computer.action_refused": "使用电脑",
   "computer.action_failed": "使用电脑",
@@ -112,6 +115,8 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "computer.browser_cleared": "清空浏览器",
   "computer.updated": "更新电脑",
   "computer.policy_loaded": "启动电脑",
+  "computer.policy_changed": "修改边界规则",
+  "computer.policy_translated": "根据描述写边界规则",
   "computer.isolation_loaded": "启动电脑",
   "computer.terminated": "关闭电脑",
   "computer.terminated_inactive": "关闭闲置的电脑",
@@ -159,6 +164,9 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "person.deprovisioned": "移除成员",
   "person.reprovisioned": "重新添加成员",
   "audit.exported": "导出事件",
+  "audit.asked": "向审计记录提问",
+  "what_if.asked": "询问会发生什么",
+  "what_if.checked": "检查会发生什么",
   "session.signed_in": "登录",
   "session.refused": "登录",
   "session.break_glass": "使用紧急登录",
@@ -180,11 +188,15 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "approval.person_decided": "决定是否执行动作",
   "approval.withdrawn": "撤回请求",
   "approval.rule_changed": "修改审批规则",
+  "approval.rules_translated": "根据描述写审批规则",
+  "approval.guidance_changed": "修改自动审核的指引",
   "approval.settings_changed": "修改审批设置",
   "capability.changed": "修改权限",
+  "capability.changes_translated": "根据描述写权限修改",
   "enterprise.setting_changed": "修改组织设置",
   "network_policy.changed": "修改网络策略",
   "network_policy.removed": "删除网络策略",
+  "network_policy.translated": "根据描述写网络允许名单",
   "model.refused": "使用模型",
   "knowledge.notebook_created": "创建知识库",
   "knowledge.notebook_updated": "修改知识库",
@@ -360,4 +372,24 @@ export function auditEventWords(eventType: string): string {
           .replace(/^agent\./, "bot.")
           .replace(/\./g, " "),
       );
+}
+
+/**
+ * The rows an admin filters for most often, in the words the Audit page's views use: "Computer
+ * actions" and "App calls", then how they ended. The event words above say what a
+ * row was for a person reading one row ("Use the computer"); a filter is about a kind of row.
+ */
+const TYPE_WORDS: Record<string, string> = {
+  "computer.action_allowed": "Computer actions, allowed",
+  "computer.action_refused": "Computer actions, blocked",
+  "computer.action_failed": "Computer actions, failed",
+  "computer.action_stopped": "Computer actions, stopped",
+  "mcp.call_succeeded": "App calls, done",
+  "mcp.call_rejected": "App calls, blocked",
+  "mcp.call_failed": "App calls, failed",
+};
+
+/** One event type as a filter names it: a kind of row, then how it ended where that matters. */
+export function auditTypeWords(type: string): string {
+  return TYPE_WORDS[type] ?? auditEventWords(type);
 }
