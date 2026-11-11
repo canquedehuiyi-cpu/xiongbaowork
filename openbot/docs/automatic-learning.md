@@ -4,7 +4,8 @@
 >
 > - **可选接入**：只有设置了 `INTELLIGENCE_API_KEY` 的部署才启用自动学习；不设置时管理后台「自动学习」页说明未接入，其余功能不受影响。
 > - **能做的**：管理员在「自动学习」页选择默认学习容器与参与的员工；员工每次运行时取回 Intelligence 里**已发布**的学习技能（内置员工拿到技能目录与读取工具，远端员工收到校验过的技能快照）。
-> - **做不到的**：上游让对话线程存进 Intelligence，由它自动收集学习证据。本仓库的对话线程保存在自己的 PostgreSQL 里（任务看板、配额都依赖它），**不会自动作为学习证据送进 Intelligence**；技能需要在 Intelligence 里另行产生、审核、发布。下文关于「证据收集」「线程分配到容器」的段落对本仓库不适用。
+> - **从对话中学习（本地学习，不需要 Intelligence）**：上游让对话线程存进 Intelligence，由它收集学习证据。本仓库的对话线程保存在自己的 PostgreSQL 里，**不送进 Intelligence**；改为在本地每人每天读一次自己最近的对话，用那位员工的模型提出技能草案（`server/src/local-learning/`），本人在设置「学习」里批准后存进自己的技能库、交给那位员工。没有接入 Intelligence 也能学。下文关于「证据收集」「线程分配到容器」的段落对本仓库不适用。部署级开关见 `OPENBOT_LOCAL_LEARNING`（`docs/configuration.md`）。
+> - **录制（教员工做事）**：接入 Intelligence 时，Recorder 扩展录下的浏览器操作会送进**你自己的学习空间**（个人空间，一人一租户），由 Intelligence 分析出技能；对话线程仍留在本地。录制的连接请求由本仓库自己应答（`server/src/recorder/trajectory-connect.ts`），因为运行时自带的处理器只认把线程存在 Intelligence 里的运行时。未接入时录制入口会说明学习未开启。
 > - **授权**：自建 Intelligence 需要 CopilotKit 商业授权（`COPILOTKIT_LICENSE_TOKEN`）；托管版只需项目密钥，学习技能与记忆数据保存在 CopilotKit 云端。
 > - 数据表：`learning_settings`（部署级）与 `learning_thread_bindings`（按人，带 `tenant_id` 与行级安全），由迁移 `0154_learning` 重建。
 
@@ -45,7 +46,7 @@ Pausing OpenBot Learning preserves its mappings and thread assignments. It stops
 
 With no container assigned, the server asks Intelligence, using its runtime key, whether the project has a container with ID `openbot`. If it does, the server saves it as the default, exactly as an administrator saving it in Admin would, and records a `configuration.changed` audit row initiated by the deployment. It asks at start, every ten minutes, and when a turn or the Admin page reads Learning settings, at most once a minute. A container created later is picked up without a restart.
 
-- It never overrides a choice. Any saved Admin setting, including off or an empty default, means there is nothing to do, and so does `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID`.
+- It never overrides a choice. Any saved Admin setting, including off or an empty default, means there is nothing to do, and so does `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID`, once Intelligence confirms it has that container. One it does not have (a name left over from a setup against another Intelligence, say) is logged once as `configured_absent`, with the variable and its value, and ignored: the server assigns `openbot` as though nothing was named, rather than fail every new thread. A saved default container it does not have (one saved against hosted Intelligence before OpenBot Desktop switched to its own, say) is logged once as `saved_absent`, naming it, and ignored on this Intelligence the same way: the server uses `openbot` in its place, and Admin shows `openbot`. The saved choice is kept rather than cleared, so pointing the server back at the Intelligence it was chosen on uses it again. Saving another container in Admin replaces it.
 - It creates the container with the runtime key where Intelligence allows it, and otherwise only with a credential that can. See [Creating the container](#creating-the-container).
 - It is safe on many replicas. The save only succeeds where nothing was ever saved, so one replica wins and writes the audit row.
 - It never blocks startup or a turn. A missing container, a plan without Learning, or an unreachable Intelligence is logged once as a `learning-auto-assign` line and tried again later. The Admin page says which one applies.

@@ -177,8 +177,9 @@ and still open wherever they are pasted. They keep working until you finish the 
 
 **`OPENBOT_GENERATIVE_UI`** enables generated interfaces by default: streamed HTML/CSS/JavaScript
 in a sandboxed iframe, and A2UI 1.0 interfaces built from CopilotKit's standard catalog (every
-standard component except Map, Favicon, LinkCard and Citation). Their buttons send their named action
-and the values entered back to the current conversation's Bot.
+standard component except Map, Favicon, LinkCard and Citation), plus OpenBot's own Breakdown:
+editable amounts that add up to a total, each in its own colour, with a bar of how the total splits.
+Their buttons send their named action and the values entered back to the current conversation's Bot.
 Set `OPENBOT_GENERATIVE_UI=false` or `0` to disable both. `true`, `1`, an empty value, or an unset
 value leave the capability on. The server configures both runtime renderers and reports the same
 setting through `/api/capabilities` to the browser.
@@ -471,6 +472,12 @@ failures appear in the widget while text chat remains available. The call endpoi
 membership and limits connection attempts. OpenBot does not record call audio; provider retention
 policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc) and
 [Grok Voice](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech).
+
+## 本地学习（熊宝）
+
+| Variable                 | Meaning |
+| ------------------------ | ------- |
+| `OPENBOT_LOCAL_LEARNING` | 默认开。每人每天从自己最近的对话里提出技能草案，本人在设置「学习」里批准后才交给员工；对话不出库，提草案用的是那位员工自己的模型、计入这个人的用量，本月任务额度用完时跳过。设为 `off` 整个部署关掉。每个人也可以在设置「学习」里自己关掉。 |
 
 ## Authentication
 
@@ -904,9 +911,9 @@ them, including a saved off. See [automatic-learning.md](automatic-learning.md).
 
 | Variable                                 | Meaning                                                                                       |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` | Default Learning container for this deployment's Bots. 1 to 64 lowercase letters, digits and single hyphens, or the server refuses to start. |
+| `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` | Default Learning container for this deployment's Bots. 1 to 64 lowercase letters, digits and single hyphens, or the server refuses to start. Checked at start: a container the configured Intelligence does not have is logged (`configured_absent`) and ignored, and automatic assignment runs as though it was unset. |
 | `CPK_INTELLIGENCE_SKILLS_REVISION`       | An exact published skills revision to pin. Read only beside a container id. Unset follows the latest. |
-| `OPENBOT_LEARNING_AUTO_ASSIGN`           | `false` or `0` stops the server assigning the project's `openbot` container automatically. On otherwise, and off whenever `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` is set. |
+| `OPENBOT_LEARNING_AUTO_ASSIGN`           | `false` or `0` stops the server assigning the project's `openbot` container automatically. On otherwise. Stands aside for a `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` the configured Intelligence has. |
 | `INTELLIGENCE_SERVICE_TOKEN`             | An Intelligence service token that creates the `openbot` Learning container (local evaluation installs only; see [Creating the container](automatic-learning.md#creating-the-container)). Requires `INTELLIGENCE_PROJECT_ID`. |
 | `INTELLIGENCE_PROJECT_ID`                | The numeric ID of the runtime key's Intelligence project, where the service token creates the container. Set both or neither, or the server refuses to start. |
 | `OPENBOT_MEMORY_SOURCE_DEFAULTS`         | `false` or `0` stops OpenBot making each app a person connected into a memory source for the Bots they talk to. On otherwise. Existing sources are left as they are. |
