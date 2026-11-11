@@ -524,13 +524,12 @@ export function createPluginRoutes(
        */
       composioConfigured: Boolean(composio),
       /*
-       * broker 是不是逐个动作授权（上游的 `authorizesPerAction`）。这里恒为 false，即使活动的 broker 声明了
-       * 授权流程（Arcade 的 `authorizations`）：页面按这个字段画逐个动作的授权列表，列表背后是
-       * `GET /servers/:id/grants` 和 `POST /servers/:id/authorize` 两条路由，fork 没有并入它们。答 true 会
-       * 画出一排每按一次都失败的按钮。fork 的 Arcade 连接是整个应用一次授权（`./arcade-routes`），页面按
-       * 普通的「连接」画就对。并入那两条路由时，这里改回上游的 `Boolean(broker.authorizations)`。
+       * broker 是不是逐个动作授权（上游的 `authorizesPerAction`）。页面按这个字段画逐个动作的授权列表，
+       * 列表背后是 `GET /servers/:id/grants` 和 `POST /servers/:id/authorize`（`./arcade-routes`）。这两条
+       * 路由只在接上了 Arcade 的 broker 时有作用，所以按同一个条件答：答 true 而路由不在，会画出一排每按
+       * 一次都失败的按钮。Composio 的应用整个连接一次，答 false。
        */
-      authorizesPerAction: false,
+      authorizesPerAction: Boolean(composio?.arcade),
       /*
        * 这个部署的连接应用由哪一家提供（上游的 `provider`），是个名字，不是密钥，也不是能力。页面上写出
        * 厂商名字的地方（「浏览 Composio」、密钥是哪一项设置）从一行应用上推不出来，只有它能回答；按是不是
@@ -3344,7 +3343,13 @@ export function createPluginRoutes(
   // X5：Arcade 的回程验证与取消，只在 Arcade 是活动提供商时有作用。
   mountArcadeRoutes(routes, capable, () =>
     composio?.arcade
-      ? { store, arcade: composio.arcade, appUrl: connect?.appUrl }
+      ? {
+          store,
+          arcade: composio.arcade,
+          appUrl: connect?.appUrl,
+          // 团队账号的授权清单与逐个动作授权只给此刻持有管理员能力的人（与别的管理员路由同一个判断）。
+          adminRefusal: (context) => decisionRefusal(context),
+        }
       : null,
   );
 

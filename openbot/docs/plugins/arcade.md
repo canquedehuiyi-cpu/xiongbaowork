@@ -273,7 +273,7 @@ consent and return leg under the deployment's identity, and still needs shared u
 Bot before a call goes out on it). Two things are different and worth reading before pressing
 **Add**.
 
-### Connect asks for the whole app
+### Connect asks for the whole app, and each action can still be approved alone
 
 **Connect works as it does on Composio.** It asks Arcade for one consent covering every scope the
 app's actions publish (the `auth.authorize` call, with the app's own authorization requirement read
@@ -289,16 +289,25 @@ needs that row before it reaches Arcade, a page that opens the app asks Arcade w
 connection is still there and clears the row when it is not, and Disconnect ends it at Arcade and
 then here. Arcade still checks each action itself on every call.
 
-**与上游不同: approving one action at a time is not merged.** Upstream's action list under
-Connections authorizes a single action, for somebody who wants to grant less than the whole app.
-This fork has neither that route nor the list of what an account has authorized; Connect is the only
-consent, and it asks for the whole app. Two consequences:
+**Each action can still be approved alone**, for somebody who wants to grant less than the whole
+app. `GET /api/plugins/servers/:id/grants` answers what the account holds for each action
+(`authorized`, `needs-consent` with the scopes it would ask for, `needs-operator` naming a secret
+the deployment has to set first, or `unknown`), and `POST /api/plugins/servers/:id/authorize` with
+`{ "action": "<the action's name at Arcade>" }` starts a consent for that one action. The action has
+to be one the app publishes, spelled as Arcade spells it (`Gmail.SendEmail`, case and all). The
+consent comes back through the same verifier, bound to whoever pressed it, records the connection
+and lands on the app's page with `?action=<name>`. `GET /api/plugins` says `authorizesPerAction:
+true` where these routes are live, which is where Arcade is the wired broker. Two things follow:
 
-- An app whose actions name more than one auth provider instance **cannot be connected here at
-  all.** Connect refuses it, and the sentence it shows still tells the person to authorize actions
-  one at a time, which this fork has no screen for.
-- Narrowing what a Bot may do is done with the tool grant alone; see
-  [Scope versus tool grant](#scope-versus-tool-grant).
+- An app whose actions name more than one auth provider instance cannot be connected in one
+  consent, and Connect says so. Its actions are authorized one at a time instead.
+- On a provider with per-request scopes, approving actions one at a time is how a person grants
+  less than the whole app; see [Least privilege](#least-privilege-is-not-an-arcade-property).
+
+A Shared app's team account is read and authorized by an administrator only, and only one who holds
+the admin capability at that moment: a session that says admin after the role was taken away is
+refused before Arcade is asked anything. **与上游不同:** upstream lets any member read a Shared
+app's grant list (and refuses only the mint); here both are the administrator's.
 
 **与上游不同: a grant Arcade already holds is not adopted.** Upstream records the connection
 without a consent screen when Arcade already holds everything the app asks for, and records one for
@@ -371,12 +380,13 @@ fixed when the app is registered, and no request can ask for fewer.
 
 > **Least privilege is a property of (provider × how its OAuth app was registered), not of Arcade.**
 
-**与上游不同: this fork cannot ask for less than the whole app.** Upstream measures which case an
-app is, says so before anybody grants anything, and lets a person on a provider with per-request
-scopes approve one action at a time. Here **Connect asks for every scope the app publishes** and
-there is no narrower consent, so when somebody asks whether connecting an app "only lets it read",
-the answer is no: connecting gives the deployment everything the app's actions ask for, and what a
-Bot may do with it is the tool grant.
+So when somebody asks whether connecting an app "only lets it read", the answer is whatever that
+app's measurement says, not what Arcade says in general. **Connect asks for every scope the app
+publishes**, so least privilege on a provider that has it means approving actions one at a time
+(`POST /servers/:id/authorize`) instead. **与上游不同:** upstream's pre-redirect consent copy names
+the permission being asked for and lists the actions that share it; that screen is the web app's
+and is not in this fork yet, so the grant list (`GET /servers/:id/grants`) is where the scopes of
+each action can be read.
 
 ## Scope versus tool grant
 
@@ -497,23 +507,23 @@ wrong-account case among the causes, because the vendor will not say.
 
 Everything above that is marked, in one place:
 
-1. **Approving one action at a time is not merged**, nor the list of what an account has
-   authorized. Connect asks for the whole app, an app whose actions need more than one auth
-   provider instance cannot be connected, and least privilege cannot be had through the consent.
-2. **A grant left behind by a cancelled attempt**: a Shared app's team account is revoked at Arcade;
+1. **A grant left behind by a cancelled attempt**: a Shared app's team account is revoked at Arcade;
    a person's own is only recorded in the audit trail (`mcp.cancelled_grant_left_live`).
-3. **Cancelled and no-longer-permitted returns are judged before Arcade is asked to confirm**, so
+2. **Cancelled and no-longer-permitted returns are judged before Arcade is asked to confirm**, so
    those consents never take effect at Arcade.
-4. **A grant Arcade already holds is not adopted.** Connect answers an error when Arcade holds a
+3. **A grant Arcade already holds is not adopted.** Connect answers an error when Arcade holds a
    grant this deployment has no row for; revoke it in Arcade's dashboard, then connect again.
-5. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
+4. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
    person as a generic failure and the address is in the startup warning and the log.
-6. **No Reconnect card or button**: a call Arcade refuses for want of authorization simply fails,
+5. **No Reconnect card or button**: a call Arcade refuses for want of authorization simply fails,
    and connecting again is Disconnect, then Connect.
-7. **Siblings are reconciled after a disconnect, not named before it**, and not when an
+6. **Siblings are reconciled after a disconnect, not named before it**, and not when an
    administrator removes an app.
-8. **An Arcade row is written verified, dated the day of the consent.**
-9. **Nothing warns before an unclassified toolkit is enabled.**
+7. **An Arcade row is written verified, dated the day of the consent.**
+8. **Nothing warns before an unclassified toolkit is enabled.**
+9. **A Shared app's grant list is read by an administrator only**, as its per-action Authorize is;
+   upstream lets any member read it. The pre-redirect consent copy that names the permission being
+   asked for is the web app's and is not here yet.
 10. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
     `/settings/connected-accounts`, rows in `composio_connections` and on `mcp_servers`; the return
     leg's reason is not yet shown as a sentence; Composio's "deployment's own OAuth client" answers

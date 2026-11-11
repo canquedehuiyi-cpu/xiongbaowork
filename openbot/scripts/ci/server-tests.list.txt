@@ -116,6 +116,7 @@ tests/arcade-live.test.ts
 tests/arcade-malformed-listing-engine.test.ts
 tests/arcade-multiple-accounts.integration.test.ts
 tests/arcade-pagination-engine.test.ts
+tests/arcade-per-action.integration.test.ts
 tests/arcade-provider-check.test.ts
 tests/arcade-revoke-invariant.test.ts
 tests/arcade-single-user-identity.integration.test.ts
