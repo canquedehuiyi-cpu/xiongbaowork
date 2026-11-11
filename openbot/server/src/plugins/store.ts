@@ -107,7 +107,13 @@ import {
   serverCredentialKind,
 } from "./catalogue";
 import { accountArgumentFor } from "./account-argument";
-import { type AccountMode, accountFor } from "./shared-accounts";
+import {
+  type AccountMode,
+  type AccountRef,
+  accountFor,
+  personAccount,
+} from "./shared-accounts";
+import { underOwnName, type VendorNameOf } from "./single-user-identity";
 import { withVendorDeadline } from "./vendor-deadline";
 import { grantedByOwner, ownerStillGives } from "./owner-grants";
 import { steeringOf } from "./shared-use";
@@ -1720,6 +1726,12 @@ export type PluginStoreOptions = {
    * provenance，以及个人连接行记在哪个提供商名下。
    */
   brokerProvider?: BrokerProvider;
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）。不给时就是本人的用户 id，与以前完全一样。
+   * 单用户安装把它那一个人换成这台安装自己的名字（`./single-user-identity`）：每一次厂商调用以那个名字
+   * 发出，本地的行、授予和审计仍在本人的用户 id 下。
+   */
+  personVendorId?: VendorNameOf;
   /** Where the vendor sends people back; needed to (re)register a dynamic client. */
   redirectUri?: string;
   /**
@@ -1940,6 +1952,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     database,
     auditStore,
     provider: brokerProvider,
+    ...(options.personVendorId ? { vendorNameOf: options.personVendorId } : {}),
   });
 
   /**
@@ -1969,7 +1982,21 @@ export function createPluginStore(options: PluginStoreOptions) {
   const registerClient = options.registerClient ?? registerDynamicClient;
   // No default, unlike the seams above: there is no real implementation in this tree to fall back
   // to, and a deployment with no Composio key is supposed to have no broker. See `./broker`.
-  const broker = options.broker;
+  /*
+   * 一个人的账号在厂商那边的名字（上游 #927）。broker 在这里就包上换名：之后这个 store 里每一次带用户 id
+   * 的厂商调用（确认、重查、断开、逐个列账号、离职处理）都经过它，没有哪个调用点能漏掉。
+   */
+  const vendorNameOf: VendorNameOf =
+    options.personVendorId ?? ((userId) => userId);
+  const broker =
+    options.broker && options.personVendorId
+      ? underOwnName(options.broker, vendorNameOf)
+      : options.broker;
+  /** 连接行上记的名字：与本人的用户 id 相同时不写（NULL），所以要登录的部署写的行与以前一样。 */
+  const filedAs = (userId: string): { vendorUserId?: string } => {
+    const name = vendorNameOf(userId);
+    return name === userId ? {} : { vendorUserId: name };
+  };
   const entraTokens = options.entra;
   /**
    * 一个 `team` 服务器上每个人的行，而不只是这个帧看得到的（G01-E P21、I5）——`removeServer` 的那道门，
@@ -2052,6 +2079,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     broker,
     auditStore,
     provider: brokerProvider,
+    vendorNameOf,
   });
 
   /*
@@ -2622,7 +2650,11 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
-      return {};
+      /*
+       * 调用以这个人在厂商那边的名字发出（上游 #927）。对登录进来的人就是他自己的 id，什么也不带；
+       * 单用户安装的那个人带上这台安装自己的名字，否则这次调用会跑在共享名 `dev-local-user` 下。
+       */
+      return filedAs(actorId);
     }
 
     /*
@@ -8466,6 +8498,17 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
+     * 一个人自己的账号：本人的用户 id，加上他在厂商那边被记在哪个名字下（上游 #927 的 `personAccount`）。
+     *
+     * 路由开始一次带回程验证的授权、核对回来的浏览器时用它，所以「这个人今天的名字」只有这一个答案。
+     * 对登录进来的人两个值相同；单用户安装的那个人是这台安装自己的名字。
+     */
+    personAccount(userId: string): AccountRef {
+      const name = vendorNameOf(userId);
+      return personAccount(userId, name === userId ? null : name);
+    },
+
+    /**
      * Whether this person has one brokered app connected, and since when.
      *
      * THE ROW IS A CACHE OF COMPOSIO'S ANSWER, not a record of a flow this deployment watched
@@ -8693,6 +8736,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         verified: input.verified,
         verifiedAt,
         probeAction: input.probeAction,
+        // 厂商刚以这个名字答过这条连接，所以行也记在这个名字下（上游 #927）；与用户 id 相同时不写。
+        ...filedAs(input.userId),
         updatedAt: new Date(),
       };
 
@@ -8723,6 +8768,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           verified: input.verified,
           verifiedAt,
           probeAction: input.probeAction,
+          ...filedAs(input.userId),
           // X5：Arcade 的连接记在 Arcade 名下；Composio 用列默认值，写入的语句与以前一样。
           ...(brokerProvider === "composio"
             ? {}
@@ -8861,7 +8907,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       const { result, answered } = await composioAskAction(
         {
           url: `composio://${input.toolkit}`,
-          actorId: input.userId,
+          // 探测与调用一样，以这个人在厂商那边的名字发出（上游 #927）。
+          actorId: vendorNameOf(input.userId),
           // Spread rather than passed as `undefined`, so "any account of theirs" reaches the wire
           // as a body with no such key. See {@link ComposioActions.execute}.
           ...(input.accountId === undefined

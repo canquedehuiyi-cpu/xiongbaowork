@@ -338,6 +338,11 @@ import { asComposioBroker, createArcadeClient } from "./plugins/arcade-adapter";
 import { connectionsHeldBy } from "./plugins/arcade-attempts";
 import { assertActivatable } from "./plugins/broker";
 import {
+  ensureSingleUserIdentity,
+  underOwnName,
+  vendorNameFor,
+} from "./plugins/single-user-identity";
+import {
   arcadeVerifierNotice,
   ownsBrokerProject,
   selectProviderWiring,
@@ -1536,11 +1541,29 @@ await startupLifecycle.run(async (startup) => {
   if (composio) useComposioClient(composio.actions);
   if (arcade) useArcadeClient(arcade.actions);
   // 部署用的 broker：adapter 的 broker 加上逐个列账号（上游 #1298）；Arcade 时是桥接后的 broker。
-  const composioBroker = composio
+  /*
+   * 单用户安装在 broker 那边自己的名字（上游 #927），在 store 解析任何人的账号之前定下。每台单用户安装的
+   * 那个人都是 `dev-local-user`，没有这一步，共用一把 key 的每台安装在厂商那边共用一组账号。仍记在那个
+   * 共享名下的连接在这里退役（只删本地行），从不在厂商那边结束。见 `ensureSingleUserIdentity`。
+   * 要登录的部署这里什么也不写，换名函数原样交回每个人自己的 id。
+   */
+  const vendorNameOf = vendorNameFor(
+    await startup.step(() =>
+      ensureSingleUserIdentity(database, {
+        singleUser: config.singleUser,
+        provider: brokerWiring.provider,
+      }),
+    ),
+  );
+  const builtBroker = composio
     ? brokerWithAccounts(composio)
     : arcade
       ? asComposioBroker(arcade.broker)
       : undefined;
+  // store 与路由拿到的是同一个换过名的 broker：路由自己发起的授权也以这台安装自己的名字发出。
+  const composioBroker = builtBroker
+    ? underOwnName(builtBroker, vendorNameOf)
+    : undefined;
   if (arcade) {
     const notice = arcadeVerifierNotice(config.publicUrl, {
       ownsProject: ownsBrokerProject(config),
@@ -1658,6 +1681,8 @@ await startupLifecycle.run(async (startup) => {
      * attempted.
      */
     broker: composioBroker,
+    // 只有单用户安装带上换名；要登录的部署不给这个选项，store 与以前完全一样。
+    ...(config.singleUser ? { personVendorId: vendorNameOf } : {}),
     /*
      * Entra on-behalf-of, for a server an admin marked as reached as the signed-in person (上游
      * #931). The framed door above: the person's sign-in and the tokens minted from it are identity
@@ -4823,7 +4848,8 @@ await startupLifecycle.run(async (startup) => {
         }),
         apps: {
           configured: Boolean(composio || arcade),
-          provider: brokerWiring.provider ?? config.brokerProvider ?? "composio",
+          provider:
+            brokerWiring.provider ?? config.brokerProvider ?? "composio",
         },
         chat: Boolean(deliveryProviders.slack),
       }),

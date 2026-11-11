@@ -47,8 +47,14 @@ export function createArcadeAttempts(context: {
   database: Database;
   auditStore: AuditStore;
   provider: BrokerProvider;
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）；不给时就是本人的用户 id。完成时据此核对：个人的
+   * 完成只能记在这个人今天的名字下。
+   */
+  vendorNameOf?: (userId: string) => string;
 }) {
   const { database, auditStore, provider } = context;
+  const vendorNameOf = context.vendorNameOf ?? ((userId: string) => userId);
 
   /**
    * 按发起人和发起时刻点名一次尝试，比较到毫秒（JS 的 Date 只有毫秒）：用列默认值写入、带微秒的行
@@ -256,7 +262,7 @@ export function createArcadeAttempts(context: {
     }): Promise<{ claimed: boolean }> {
       if (
         input.account.holder === "person" &&
-        input.account.vendorUserId !== input.account.userId
+        input.account.vendorUserId !== vendorNameOf(input.account.userId)
       ) {
         throw new Error(
           "An Arcade account filed under a name other than the person's own is not recorded in this deployment.",
@@ -292,6 +298,13 @@ export function createArcadeAttempts(context: {
             verifiedAt: now,
             probeAction: null,
             provider,
+            /*
+             * 这次同意记在厂商的哪个名字下（上游 #927）。与本人的用户 id 相同时不写（NULL），所以要登录
+             * 的部署写的行与以前一样；单用户安装记下它自己的名字，启动时的退役不会把这一行当成共享名下的。
+             */
+            ...(input.account.vendorUserId === input.account.userId
+              ? {}
+              : { vendorUserId: input.account.vendorUserId }),
             updatedAt: now,
           };
           await transaction

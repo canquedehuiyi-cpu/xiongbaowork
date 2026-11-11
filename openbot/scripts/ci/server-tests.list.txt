@@ -117,6 +117,7 @@ tests/arcade-malformed-listing-engine.test.ts
 tests/arcade-pagination-engine.test.ts
 tests/arcade-provider-check.test.ts
 tests/arcade-revoke-invariant.test.ts
+tests/arcade-single-user-identity.integration.test.ts
 tests/arcade-single-user.test.ts
 tests/arcade-store-call.integration.test.ts
 tests/arcade-team-account.integration.test.ts
@@ -698,6 +699,8 @@ tests/shared-use-routes.integration.test.ts
 tests/shared-use-store.integration.test.ts
 tests/shared-use.test.ts
 tests/shipped-bot-instructions.test.ts
+tests/single-user-identity-store.integration.test.ts
+tests/single-user-identity.integration.test.ts
 tests/single-user.test.ts
 tests/skill-ownership.integration.test.ts
 tests/skill-tenant-slugs.integration.test.ts

@@ -152,6 +152,18 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   掉过 Parallel 的，也会被加上一次，不需要就关掉。同一个库从个人版换成团队版时，个人版写下的授予原样生效，启
   动日志会提醒管理员核对。
 
+- **单用户安装（包括个人版）在连接器提供商那边有了自己的名字（上游 #927）。** 以前每台单用户安装的那个人在
+  Composio 那边都叫 `dev-local-user`，几台安装共用一把 `COMPOSIO_API_KEY` 时，一台连接的 Gmail 会被另一台列出
+  和使用，一台断开就把两台的账号都结束了。现在每台安装第一次启动时得到自己的名字（`dev-local-user:` 加一段随
+  机串），记在库里，重启和多副本都不变。只换提供商那边的名字：对话、记忆和其他数据仍在原来的人名下。需要登录
+  的部署不受影响，每个人仍然记在自己的用户 id 下。
+  **升级须知：** 迁移 `0200_single_user_identity`：新表 `brokered_identities`（带行级安全），
+  `composio_connections` 加可空列 `vendor_user_id`，无回填。**单用户安装升级后第一次启动，之前连接的应用会显示
+  为未连接，每个应用要重新连接一次**：旧连接记在共享的名字下，提供商不支持把连接换到另一个名字下，也分不清那
+  些账号是哪台安装建的，所以本部署只删掉自己的连接记录（启动日志 `single-user-connections-retired` 列出这些应
+  用），不在提供商那边结束它们。如果这把 key 只有这一台安装在用，可以到 Composio 后台删掉用户 id 为
+  `dev-local-user` 的连接账号。详见 `docs/configuration.md`。
+
 - **Arcade 可以作为第二家连接器提供商（上游的 Arcade 连接器）。** 设置 `ARCADE_API_KEY` 之后，应用可以改经
   Arcade 连接。同一时间只有一家是活动的；只配了 `COMPOSIO_API_KEY` 的部署行为不变。
   - 两个 key 都配了，就要用 `OPENBOT_BROKER_PROVIDER`（`composio` 或 `arcade`）指明用哪家，否则拒绝启动；指

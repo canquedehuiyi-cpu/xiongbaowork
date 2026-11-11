@@ -97,9 +97,20 @@ export function createAccountBook(context: {
   auditStore: AuditStore;
   /** 活动的提供商（X5）；不给时是 Composio，与以前一样。 */
   provider?: BrokerProvider;
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）；不给时就是本人的用户 id。缓存的行记这个名字，
+   * 所以单用户安装换了名字之后，旧名字下的行在下一次同步时被当作厂商不再列出的账号删掉。
+   */
+  vendorNameOf?: (userId: string) => string;
 }) {
   const { database, broker, auditStore } = context;
   const PROVIDER: BrokerProvider = context.provider ?? "composio";
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）。缓存的行记的是这个名字，所以「这一行是不是这个人
+   * 自己的账号」也必须拿它来认：拿本地的用户 id 去认，单用户安装的那个人（名字是这台安装自己的）一个账号
+   * 都认不出来，按名字挑账号、Team Bot 用主人的默认账号、断开其中一个都会落空。
+   */
+  const nameOf = context.vendorNameOf ?? ((userId: string) => userId);
 
   const rowsFor = (toolkit: string, userId: string) =>
     database
@@ -143,7 +154,7 @@ export function createAccountBook(context: {
     const held = await rowsFor(toolkit, userId);
     const listed = (await broker.accountsOf({ userId, toolkit })).map(
       (found) => ({
-        vendorUserId: userId,
+        vendorUserId: nameOf(userId),
         accountId: found.accountId ?? "",
         identity: found.identity,
         connectedAt: found.connectedAt ? new Date(found.connectedAt) : null,
@@ -206,7 +217,7 @@ export function createAccountBook(context: {
     const { toolkit, title, userId, named } = input;
     const mine = async () =>
       ordered(await rowsFor(toolkit, userId)).filter((row) =>
-        filedUnderPerson(row.vendorUserId, userId),
+        filedUnderPerson(row.vendorUserId, nameOf(userId)),
       );
     let rows = await mine();
     const pinned = (row: Row, label: string): PinnedAccount => ({
@@ -294,7 +305,9 @@ export function createAccountBook(context: {
     );
     const mine = ordered(
       rows
-        .filter((row) => filedUnderPerson(row.vendorUserId, input.userId))
+        .filter((row) =>
+          filedUnderPerson(row.vendorUserId, nameOf(input.userId)),
+        )
         .map((row) => ({ ...row }) as unknown as Row),
     );
     const chosen = mine.find((row) => row.isDefault) ?? mine[0];
@@ -417,7 +430,7 @@ export function createAccountBook(context: {
     }): Promise<{ only: true } | { remaining: number } | null> {
       if (!UUID.test(input.id)) return null;
       const rows = (await rowsFor(input.toolkit, input.userId)).filter((row) =>
-        filedUnderPerson(row.vendorUserId, input.userId),
+        filedUnderPerson(row.vendorUserId, nameOf(input.userId)),
       );
       const row = rows.find((candidate) => candidate.id === input.id);
       if (!row) return null;

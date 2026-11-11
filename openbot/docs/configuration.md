@@ -549,14 +549,6 @@ container engine; set it yourself only for a container of your own that runs thi
 that containers and services call back on (Bots' tool calls, the model proxy, the routines worker)
 prove themselves with their own secrets and are not affected.
 
-**与上游不同: not in this fork.** The paragraphs below, up to `SIGNIN_ALLOWED_EMAIL_DOMAINS`, are
-upstream's and describe a per-installation name at the broker (the `brokered_identities` table)
-that this fork has not merged. Here the one person of a single-user deployment is filed at
-Composio as `dev-local-user`, so single-user deployments sharing one `COMPOSIO_API_KEY` share one
-set of connections, and nothing is retired at start. For the same reason a single-user deployment
-whose broker is Arcade refuses to start, so upstream's `ARCADE_API_KEY` half of this passage is left
-out; see [Arcade](plugins/arcade.md).
-
 **A single-user deployment has its own identity at Composio.** Composio keeps accounts apart
 by a user id OpenBot sends, and the one person of every single-user deployment is `dev-local-user`,
 so two of them on the same `COMPOSIO_API_KEY` used to share one set of
@@ -572,8 +564,9 @@ start, and **connects each of its apps once more**. Composio cannot move a conne
 user id: its connected-account update takes no user id. Nor can it say which deployment made a
 connection under the shared id, and before this change one deployment opening an app another had connected recorded that
 account as its own. So at that start the deployment removes its own records of connections under
-`dev-local-user` (its `brokered_connections` rows for the active broker whose `user_id` and
-`vendor_user_id` are both `dev-local-user`), logs the apps it removed as
+`dev-local-user` (its `composio_connections` rows for the active broker whose `user_id` is
+`dev-local-user` and whose `vendor_user_id` is empty or `dev-local-user`, and the account list
+cached for them in `brokered_accounts`), logs the apps it removed as
 `single-user-connections-retired`, and asks the broker nothing. Each app then reads as not connected
 and one Connect files it under the new id. The accounts themselves stay at the broker under
 `dev-local-user`, because another OpenBot on the same key may still be using them. If this was the
