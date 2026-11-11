@@ -47,7 +47,6 @@ class OfflineWebSocket extends EventTarget {
 
 let originalFetch: typeof fetch;
 let originalWebSocket: typeof WebSocket;
-const requests: string[] = [];
 const clients: QueryClient[] = [];
 
 beforeAll(() => {
@@ -56,16 +55,12 @@ beforeAll(() => {
   originalWebSocket = globalThis.WebSocket;
   globalThis.WebSocket = OfflineWebSocket as unknown as typeof WebSocket;
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return Response.json({ error: "not served" }, { status: 404 });
-    },
+    async () => Response.json({ error: "not served" }, { status: 404 }),
     { preconnect: originalFetch.preconnect },
   );
 });
 beforeEach(() => {
   window.localStorage.clear();
-  requests.length = 0;
 });
 afterEach(() => {
   cleanup();
