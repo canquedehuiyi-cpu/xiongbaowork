@@ -372,7 +372,15 @@ const proxy = Bun.serve({
       cancelled: false,
       answered: false,
     };
-    calls.push(call);
+    /*
+     * The model list (`GET /v1/models`, read by the server's model catalogue) is not a model call: it
+     * asks which models exist and runs nothing, so it is forwarded but not counted. It never showed
+     * up before only because the catalogue's background read could not reach the deployment's key
+     * (a TenantContextError outside any tenant frame), so the list was never asked for at all.
+     */
+    const modelList =
+      request.method === "GET" && /^\/(v1\/)?models$/.test(url.pathname);
+    if (!modelList) calls.push(call);
     if (phase === "confirm" && call.kind === "publish")
       confirmPublishTexts.push(text);
     request.signal.addEventListener("abort", () => {
