@@ -104,6 +104,7 @@ tests/arcade-composio-bridge.test.ts
 tests/arcade-config.test.ts
 tests/arcade-confirm-engine.test.ts
 tests/arcade-connection-kind-engine.test.ts
+tests/arcade-connections-listed.integration.test.ts
 tests/arcade-directory-deadline-engine.test.ts
 tests/arcade-disconnect-siblings-retry.integration.test.ts
 tests/arcade-empty-vendor-structures-engine.test.ts
