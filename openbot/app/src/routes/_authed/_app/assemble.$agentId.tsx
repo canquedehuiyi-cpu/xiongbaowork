@@ -35,6 +35,7 @@ import {
   knowledgeNotebooksQueryOptions,
   setKnowledgeBindingMutationOptions,
 } from "@/lib/knowledge/queries";
+import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import {
   invalidatePlugins,
   setPluginGrantMutationOptions,
@@ -418,8 +419,12 @@ function CatalogueSkills({
  * connected their own account: a catalogue `user-oauth` vendor, or a brokered app that needs an
  * account (the rule the connected-accounts page lists them by).
  */
-function connectsPerPerson(server: PluginServer, page: PluginsPage): boolean {
-  if (server.provenance === "composio") return server.authScheme !== "NO_AUTH";
+export function connectsPerPerson(
+  server: PluginServer,
+  page: PluginsPage,
+): boolean {
+  if (isBrokeredProvenance(server.provenance))
+    return server.authScheme !== "NO_AUTH";
   // The catalogue key, not the row id: a curated connector is the team's row `team:<key>`.
   const key = appKeyOf(server);
   return page.catalogue.some(

@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import {
   accountKeyOf,
   adminKeyOf,
@@ -453,6 +454,17 @@ const AUTH_SENTENCE: Record<string, string> = {
   none: "不需要凭据。",
 };
 
+/** One sentence on how a plugin is reached, for its details. Exported so the rule can be pinned. */
+export function howItConnects(card: PluginCard | null): string | undefined {
+  return card?.catalogue
+    ? AUTH_SENTENCE[card.catalogue.auth]
+    : isBrokeredProvenance(card?.server?.provenance)
+      ? card?.perPerson
+        ? "通过熊宝连接，每个人连接自己的账号。"
+        : "通过熊宝连接，不需要账号。"
+      : "管理员按地址添加的插件。";
+}
+
 /** The details of one plugin, drawn from what the tab already read — no second request. */
 function PluginDetails({
   card,
@@ -466,13 +478,7 @@ function PluginDetails({
   onClose: () => void;
 }) {
   const zh = useZh();
-  const how = card?.catalogue
-    ? AUTH_SENTENCE[card.catalogue.auth]
-    : card?.server?.provenance === "composio"
-      ? card.perPerson
-        ? "通过熊宝连接，每个人连接自己的账号。"
-        : "通过熊宝连接，不需要账号。"
-      : "管理员按地址添加的插件。";
+  const how = howItConnects(card);
   return (
     <Sheet
       onOpenChange={(open) => {

@@ -11,6 +11,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import {
   appKeyOf,
   connectionsQueryOptions,
@@ -88,8 +89,12 @@ export { textMatch };
  * their own account: a catalogue `user-oauth` vendor, or a brokered app that needs an account. The
  * same rule the assembly page and the connected-accounts page decide by.
  */
-function connectsPerPerson(server: PluginServer, page: PluginsPage): boolean {
-  if (server.provenance === "composio") return server.authScheme !== "NO_AUTH";
+export function connectsPerPerson(
+  server: PluginServer,
+  page: PluginsPage,
+): boolean {
+  if (isBrokeredProvenance(server.provenance))
+    return server.authScheme !== "NO_AUTH";
   // The catalogue key, not the row id: a curated connector is the team's row `team:<key>`.
   const key = appKeyOf(server);
   return page.catalogue.some(
