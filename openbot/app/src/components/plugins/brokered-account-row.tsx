@@ -1,6 +1,12 @@
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 import { IconArrowUpRight } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+=======
+import { IconArrowUpRight, IconUser } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 import { ConnectionFields } from "@/components/plugins/connection-fields";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +23,12 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+import { Separator } from "@/components/ui/separator";
+import { desktopShell } from "@/lib/desktop/shell";
+import { schemeNeedsKey } from "@/lib/plugins/enablement-notes";
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 import {
   type BrokerField,
   type BrokerFieldsAnswer,
@@ -28,6 +40,16 @@ import {
   type KeyGuide,
   recheckBrokeredConnectionMutationOptions,
 } from "@/lib/plugins/mutations";
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+import {
+  type BrokeredAccountKind,
+  brokeredKeyMissing,
+  type Edition,
+  type PluginsProvider,
+} from "@/lib/plugins/provider-vocabulary";
+import { brokeredAccountsQueryOptions } from "@/lib/plugins/queries";
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 
 /**
  * One person's own brokered account, on whichever screen is asking.
@@ -356,6 +378,31 @@ export function useBrokeredAccount(input: {
   }, [brokered, configured, serverId, confirmAccount]);
 
   /*
+   * ASKED AGAIN WHEN OPENBOT DESKTOP'S WINDOW IS BACK IN FRONT. The window sends the sign-in to the
+   * person's browser and this page stays where it is, so it never arrives on this page and the
+   * question above is never asked again. The browser hands the person back to the window when the
+   * sign-in is done (`/desktop-return`), and the focus that brings is when there is an answer.
+   * Once per sign-in, and gone with the page.
+   */
+  const pendingReturn = useRef<(() => void) | null>(null);
+  const confirmOnReturn = useCallback(() => {
+    if (!desktopShell() || pendingReturn.current) return;
+    const asked = () => {
+      pendingReturn.current = null;
+      confirmAccount(serverId);
+    };
+    pendingReturn.current = asked;
+    window.addEventListener("focus", asked, { once: true });
+  }, [confirmAccount, serverId]);
+  useEffect(
+    () => () => {
+      if (pendingReturn.current)
+        window.removeEventListener("focus", pendingReturn.current);
+    },
+    [],
+  );
+
+  /*
    * Find out whether the key still works, when somebody presses for it and at no other time.
    *
    * Deliberately not a second effect beside the confirm above. Composio never re-checks a key once
@@ -418,7 +465,12 @@ export function useBrokeredAccount(input: {
         );
         return;
       }
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
       window.location.href = authorizationUrl;
+=======
+      confirmOnReturn();
+      window.location.href = start.authorizationUrl;
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
     },
   });
 
@@ -563,6 +615,46 @@ export function useBrokeredAccount(input: {
    * at all, null included. Its null IS the new record. The one path where it writes a name and then
    * raises never reaches here — a refusal clears both answers — so what is left is authoritative.
    */
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+  /*
+   * ONE MORE ACCOUNT, ONE PERSON'S ACCOUNT MADE THE DEFAULT, ONE ENDED. Each refetches the plugin
+   * queries on its own `onSettled`, which is where the account list beneath the row is read from.
+   */
+  const connectAnother = useMutation({
+    ...connectAnotherAccountMutationOptions(returnTo),
+    onError: (thrown: Error) => report(thrown.message),
+    onSuccess: (start) => {
+      forgetConfirmation();
+      forgetRecheck();
+      if (start !== null && "connected" in start) {
+        void invalidatePlugins(queryClient);
+        return;
+      }
+      if (start === null) {
+        report(
+          "This app connects with a key, not a sign-in page, so nothing was connected. Reload the page and press Connect again.",
+        );
+        return;
+      }
+      confirmOnReturn();
+      window.location.href = start.authorizationUrl;
+    },
+  });
+  const makeDefault = useMutation({
+    ...setDefaultBrokeredAccountMutationOptions(queryClient),
+    onError: (thrown: Error) => report(thrown.message),
+  });
+  const disconnectAccount = useMutation({
+    ...disconnectBrokeredAccountMutationOptions(queryClient),
+    onError: (thrown: Error) => {
+      report(thrown.message);
+      forgetAnswers();
+    },
+    onSuccess: forgetAnswers,
+  });
+
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   const answered =
     recheck.data && recheck.data.probe !== null
       ? recheck.data
@@ -864,6 +956,23 @@ function KeyGuideNote({ guide }: { guide: KeyGuide }) {
 }
 
 /**
+ * The word beside Connect on an app that is added and not signed in to yet.
+ *
+ * Said in words beside the button, so a row whose app is on never reads as done by its switch or
+ * its title alone. It is what the Bot says about the same app.
+ */
+export function NotConnected() {
+  return (
+    <span
+      className="text-muted-foreground text-xs"
+      data-testid="account-not-connected"
+    >
+      Not connected
+    </span>
+  );
+}
+
+/**
  * The row itself, for a `PageRows` card on either screen.
  *
  * The `Item` and, for an app whose secret a person types, the dialog that takes it. Where the row
@@ -875,9 +984,34 @@ export function BrokeredAccountRow({
   connectedDescription,
   disconnectedDescription,
   disconnectedReassurance,
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   needsAdmin = false,
   title,
 }: {
+=======
+  heading,
+  notice,
+  provider,
+  reader = "admin",
+  startConnect = false,
+  title,
+}: {
+  /**
+   * Open the key form on arrival, once, for an app that takes a key and isn't connected: Browse
+   * apps sends somebody here straight after adding one. A sign-in app is started where it was added.
+   */
+  startConnect?: boolean;
+  /**
+   * Which edition draws this screen (`managePaths().edition`). The personal edition's one person is
+   * told to set connecting apps up themselves, never to ask an admin.
+   */
+  edition?: Edition;
+  /**
+   * Who reads the row. A person's own Connections page passes `person`, so a missing broker key is
+   * said without the variable an admin sets.
+   */
+  reader?: "admin" | "person";
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   account: BrokeredAccount;
   /** What being connected means on this screen, said beside the button rather than after it. */
   connectedDescription: string;
@@ -927,6 +1061,62 @@ export function BrokeredAccountRow({
   useEffect(() => {
     if (account.connected) setAsking(false);
   }, [account.connected]);
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+  /*
+   * And a key handed over for ANOTHER account closes it too: the row was connected before the form
+   * opened, so the effect above has nothing to see change.
+   */
+  useEffect(() => {
+    if (account.fieldsSubmitted) setAsking(false);
+  }, [account.fieldsSubmitted]);
+
+  /* The key form on arrival, when asked for: see `startConnect`. Once per visit. */
+  const started = useRef(false);
+  const { requestFields } = account;
+  useEffect(() => {
+    if (!startConnect || started.current) return;
+    if (!account.configured || account.connected || account.kind !== "fields")
+      return;
+    started.current = true;
+    setAsking(true);
+    requestFields();
+  }, [
+    startConnect,
+    account.configured,
+    account.connected,
+    account.kind,
+    requestFields,
+  ]);
+
+  /*
+   * THE PERSON'S ACCOUNTS AT THE APP, BY NAME, once the row is connected. While the list is loading
+   * or could not be read the row reads as it always did: one connection, with its own Disconnect.
+   */
+  const listing = useQuery({
+    ...brokeredAccountsQueryOptions(account.serverId),
+    enabled:
+      account.configured && account.connected && account.kind !== "no-auth",
+  });
+  const accounts =
+    account.connected && !listing.isPending && !listing.error && listing.data
+      ? listing.data.accounts
+      : [];
+  const canAddAnother =
+    account.connected &&
+    !listing.isPending &&
+    !listing.error &&
+    listing.data?.canAddAnother === true;
+  const several = accounts.length > 1;
+  const addAnother = () => {
+    if (account.kind === "fields") {
+      setAsking(true);
+      account.requestFields();
+      return;
+    }
+    account.connectAnother();
+  };
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 
   return (
     <>
@@ -1035,6 +1225,7 @@ export function BrokeredAccountRow({
                 需由管理员连接
               </span>
             ) : (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
               /* The arrow says this leaves OpenBot for the vendor's consent page. It does. */
               <Button
                 disabled={account.connecting}
@@ -1058,6 +1249,36 @@ export function BrokeredAccountRow({
                 连接
                 <IconArrowUpRight />
               </Button>
+=======
+              <>
+                <NotConnected />
+                {/* The arrow says this leaves OpenBot for the vendor's consent page. It does, for
+                 every app but a key app. */}
+                <Button
+                  disabled={account.connecting}
+                  onClick={() => {
+                    /*
+                     * A key app goes nowhere: it opens the form below and asks the app what belongs in
+                     * it. The question is asked on every open rather than once, because what an app
+                     * publishes is the vendor's and may differ from what it published last time.
+                     */
+                    if (account.kind === "fields") {
+                      setAsking(true);
+                      account.requestFields();
+                      return;
+                    }
+                    account.connect();
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Connect
+                  {/* A key app opens a form here and leaves for nowhere, so no arrow. */}
+                  {account.kind === "fields" ? null : <IconArrowUpRight />}
+                </Button>
+              </>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
             )}
           </ItemActions>
         )}

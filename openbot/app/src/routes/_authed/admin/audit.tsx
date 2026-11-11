@@ -138,6 +138,7 @@ function AuditPage() {
   }
 
   return (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     /*
      * THE ONE WIDE PAGE IN ADMIN, and the one that keeps a table. Five columns of short values is
      * what a log is; rows of prose would make every entry a paragraph and the scanning this page
@@ -259,6 +260,15 @@ function AuditPage() {
         ) : null}
       </PageSection>
     </PageShell>
+=======
+    <AuditPage
+      ask
+      bot={bot}
+      onClearBot={() => navigate({ to: "/admin/audit" })}
+    >
+      <RecordingSection />
+    </AuditPage>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   );
 }
 

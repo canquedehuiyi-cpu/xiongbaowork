@@ -28,6 +28,7 @@ import {
   advanceOnboardingMutationOptions,
   completeOnboardingMutationOptions,
 } from "@/lib/onboarding/mutations";
+import { BUSINESS_URL } from "@/lib/openbot-for-business";
 import { setupChecklistQueryOptions } from "@/lib/setup/queries";
 import { queryClient } from "@/query-client";
 
@@ -37,9 +38,15 @@ const PRODUCT = appConfig.brand.productName;
  * Every step, by id, with the number the server stores for it.
  *
  * `POST /api/me/onboarding` keeps a step as an integer, so each id has a number of its own. A
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
  * number per id, never a position in the list: the name step leaves the list for somebody whose
  * name is known, so a position would mean different steps to different people. 0 is the server's
  * "not started".
+=======
+ * number per id, never a position in the list: OpenBot for Business joins the list only for somebody trying
+ * OpenBot alone, and the name step leaves it for somebody whose name is known, so a position would
+ * mean different steps to different people. 0 is the server's "not started".
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
  */
 const STEP_NUMBER = {
   welcome: 1,
@@ -87,11 +94,18 @@ export const Route = createFileRoute("/_authed/onboarding")({
 });
 
 /*
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
  * THREE CLICKS AT MOST INTO THE APP, plus this deployment's own step. Welcome, then where the
  * person's 分身 finds their material (story F1, skippable), then the name. Upstream's Book a demo
  * step (a CopilotKit sales calendar for somebody trying OpenBot alone) is left out. Everything else
  * waits for the app: apps are connected when a Bot needs one, and notifications are offered once
  * the first task has started (`NotifyPrompt`), when what they are for is plain.
+=======
+ * THREE CLICKS AT MOST INTO THE APP. Welcome, then OpenBot for Business for somebody trying OpenBot alone,
+ * then the name. Everything else waits for the app: the setup checklist lives in Settings → Setup,
+ * apps are connected from Connections when a Bot needs one, and notifications are offered once the
+ * first task has started (`NotifyPrompt`), when what they are for is plain.
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
  */
 
 /**
@@ -148,6 +162,7 @@ function welcomeStep(
   };
 }
 
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 /**
  * Story F1: right after the welcome, where the person's 分身 finds their material. Skippable (spec
  * D3): the 分身 then stays 待配置 and is configured from its own detail page. The step carries its
@@ -161,6 +176,82 @@ function sourcesStep(nextStep: number, onAdvanced: () => void): OnboardingStep {
     title: "告诉你的分身，你的资料在哪里",
     intro: () => <SourcesStep nextStep={nextStep} onAdvanced={onAdvanced} />,
     primaryHidden: true,
+=======
+/*
+ * OPENBOT FOR BUSINESS IS FOR SOMEBODY TRYING OPENBOT ON THEIR OWN MACHINE, and only they see it (see
+ * `localEvaluation` in RouteComponent). None of it is said to an organization's own people, who
+ * already have OpenBot.
+ *
+ * WHAT IT IS COMES BEFORE ASKING FOR A CALL. The step opens on what OpenBot for Business adds, beside
+ * the picture of running OpenBot yourself (on this computer, with the agents you already have, for
+ * your organization), with Book a demo and Not now. Somebody who has never heard of it has no reason
+ * to book anything until they know what they would be booking.
+ *
+ * BOOK A DEMO OPENS THE CALENDAR IN THE STEP, in the picture's place, to book a demo or a call to
+ * scope a proof of concept. Until a call is booked the only way on is Not now: a Continue beside it
+ * read as going on with the booking. Once the calendar says a call is booked, Not now becomes
+ * Continue, in the same place.
+ *
+ * A calendar that can't load (offline, blocked, silent) puts the picture back, with Book a call, which
+ * opens the OpenBot for Business page in a new tab (on the Desktop, in the person's browser).
+ */
+function useBookDemoStep(): OnboardingStep {
+  const [calendar, setCalendar] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+  const [booked, setBooked] = React.useState(false);
+  const fail = React.useCallback(() => setFailed(true), []);
+  const book = React.useCallback(() => setBooked(true), []);
+  const value: OnboardingStep = {
+    id: "selfhost",
+    title: "OpenBot for Business",
+    intro: () => (
+      <StepIntro>
+        <p>
+          Bring {PRODUCT} to your whole team, on your own servers. Everyone
+          signs in with their work account and shares Bots in Slack and
+          Microsoft Teams. Admins get the controls and audit trail your company
+          needs.
+        </p>
+      </StepIntro>
+    ),
+    demo: () => <SelfHostDemo />,
+    primaryLabel: "Book a demo",
+    onPrimary: () => setCalendar(true),
+    secondary: { label: "Not now" },
+  };
+  if (!calendar) return value;
+  if (failed) {
+    return {
+      ...value,
+      // A new tab, so booking doesn't cost the place in onboarding, and then on to the next step.
+      primaryLabel: "Book a call",
+      onPrimary: (next) => {
+        window.open(BUSINESS_URL, "_blank", "noopener,noreferrer");
+        next();
+      },
+      notice: (
+        <p
+          className="text-sm text-center text-muted-foreground lg:text-left"
+          role="status"
+        >
+          Couldn't load the calendar. Book a call opens it in your browser.
+        </p>
+      ),
+    };
+  }
+  return {
+    ...value,
+    intro: () => (
+      <StepIntro>
+        <p>Pick a time to see a demo or scope a proof of concept with us.</p>
+      </StepIntro>
+    ),
+    demo: () => <BookingCalendar onBooked={book} onFailed={fail} />,
+    primaryLabel: undefined,
+    onPrimary: undefined,
+    primaryHidden: !booked,
+    secondary: booked ? undefined : { label: "Not now" },
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   };
 }
 
@@ -174,6 +265,28 @@ function RouteComponent() {
   const me = useQuery(currentUserQueryOptions());
 
   /*
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+   * OpenBot for Business is for somebody evaluating OpenBot locally, never for an organization's people: the
+   * server says single-user mode, which an organization's deployment, always behind sign-in, cannot
+   * be in. Until the answer arrives it is left out, and Welcome's button waits for it, so a slow or
+   * failed request never shows an organization's employees a page about booking a call, and an
+   * evaluator never walks past theirs.
+   *
+   * NOT GATED ON `selfHostBanner` AS WELL. That flag is off for any deployment with a paid
+   * Intelligence entitlement, and the stack `copilotkit local` installs runs on an enterprise
+   * evaluation licence, so every CLI evaluator, the person this step is for, would never see it.
+   */
+  const {
+    data: capabilities,
+    error: capabilitiesError,
+    refetch: retryCapabilities,
+    isFetching: loadingCapabilities,
+    isPending: askingCapabilities,
+  } = useQuery(deploymentCapabilitiesQueryOptions());
+
+  /*
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
    * A NAME ALREADY KNOWN IS NOT ASKED FOR AGAIN. A sign-in that brought a real name leaves the name
    * step out, and the last step left gets the person in instead.
    *
@@ -195,9 +308,15 @@ function RouteComponent() {
 
   /*
    * The step on screen: the address's, else the one the server saved, else the first. A step not in
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
    * this person's list (the name step once it is known) reads as the last one they have. Arriving
    * without a step writes it into the address in place, so the entry the person lands on already
    * names its step.
+=======
+   * this person's list (OpenBot for Business for an organization's person, the name step once it is known)
+   * reads as the last one they have, once the answer that decides it is in. Arriving without a step
+   * writes it into the address in place, so the entry the person lands on already names its step.
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
    */
   const reachable = (step: StepId | null | undefined): StepId | undefined => {
     if (!step) return undefined;
@@ -216,6 +335,11 @@ function RouteComponent() {
   const { mutate: save } = advance;
   React.useEffect(() => {
     if (savedStep === undefined || savedStep === STEP_NUMBER[current]) return;
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+    // OpenBot for Business waits for the answer that says whether this person has one.
+    if (current === "selfhost" && !capabilities) return;
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
     /*
      * A save that fails is tried again on the next move, since the saved step still differs. It is
      * said in the console rather than on the step: the person is where they meant to be, and only a
@@ -328,7 +452,12 @@ function RouteComponent() {
   };
   /*
    * Without the name step, the last step's buttons finish onboarding where they would have moved
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
    * on: Get started on the last step left. The sources step finishes from its own buttons.
+=======
+   * on: Get started on Welcome, and Book a demo, Continue (once booked), Book a call or Not now on
+   * OpenBot for Business.
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
    */
   const lastId = ids[ids.length - 1];
   const steps: OnboardingStep[] = ids.map((id) => {
@@ -345,10 +474,9 @@ function RouteComponent() {
       primaryLabel: finished ? "都好了" : (step.primaryLabel ?? "开始使用"),
       primaryDone: finished,
       primaryPending: complete.isPending,
-      onPrimary: () => {
-        step.onPrimary?.(() => undefined);
-        out();
-      },
+      // A step's own primary decides whether it moves on: Book a call does, so it finishes;
+      // Book a demo opens the calendar in the step and stays.
+      onPrimary: step.onPrimary ? () => step.onPrimary?.(out) : out,
       secondary: step.secondary
         ? { label: step.secondary.label, onClick: out }
         : undefined,
@@ -356,6 +484,13 @@ function RouteComponent() {
     };
   });
 
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+  // An OpenBot for Business step in the address waits for the answer that puts it in the list, rather than
+  // drawing Welcome for a moment and then jumping.
+  const waiting = askingCapabilities && current === "selfhost";
+
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   return (
     // Outside `_app` on purpose: no sidebar and no chrome until onboarding is done.
     // The fade runs only after the completion is saved, so a failed save never fades a page the

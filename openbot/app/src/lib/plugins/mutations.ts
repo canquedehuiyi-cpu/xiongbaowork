@@ -1,5 +1,6 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
+import { desktopConsentQuery } from "@/lib/desktop/shell";
 import { pluginKeys } from "./queries";
 
 /**
@@ -231,15 +232,31 @@ export function replaceServerTokenMutationOptions(queryClient: QueryClient) {
  *
  * Its own endpoint rather than a curated key, because the catalogue is the vendor's rather than
  * ours: the slug is all the server needs to look the app up and record the row.
+ *
+ * Answers the new row's id, which is what a sign-in started on the same press is asked against.
  */
 export function enableComposioAppMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     mutationFn: async (input: { slug: string }) => {
       await client("/api/plugins/composio/apps", {
         method: "POST",
         body: input,
         fallback: "这个应用没能添加。",
       });
+=======
+    mutationFn: async (input: { slug: string }): Promise<string> => {
+      const server = await client<{ id: string }>(
+        "/api/plugins/composio/apps",
+        "server",
+        {
+          method: "POST",
+          body: input,
+          fallback: "That app could not be added.",
+        },
+      );
+      return server.id;
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
     },
     onSettled: () => invalidatePlugins(queryClient),
   });
@@ -467,6 +484,58 @@ export function connectAccountMutationOptions(
 }
 
 /**
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
+=======
+ * Connect one more account at an app the person already has an account at: a second mailbox, a
+ * work calendar beside a personal one. The same press as Connect, asking for another account
+ * rather than for more permissions on the one that stands.
+ */
+export function connectAnotherAccountMutationOptions(
+  returnTo: "settings" | "admin" = "settings",
+) {
+  return mutationOptions({
+    mutationFn: (serverId: string): Promise<ConnectStart> =>
+      startConnect(serverId, returnTo, true),
+  });
+}
+
+async function startConnect(
+  serverId: string,
+  returnTo: "settings" | "admin",
+  another: boolean,
+): Promise<ConnectStart> {
+  const fallback = "Couldn't connect that account.";
+  const response = await client(
+    `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${another ? "&another=1" : ""}${desktopConsentQuery()}`,
+    { method: "POST", fallback },
+  );
+  // Read as `client` reads an envelope: a body that is not an object is a failed request.
+  const body = (await response.json().catch(() => null)) as unknown;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error(fallback);
+  }
+  const answer = body as {
+    authorizationUrl?: unknown;
+    connected?: unknown;
+  };
+  if (answer.connected === true) return { connected: true };
+  return typeof answer.authorizationUrl === "string"
+    ? { authorizationUrl: answer.authorizationUrl }
+    : null;
+}
+
+/**
+ * What one press of Connect started: a consent page to visit, an account that is already
+ * connected, or `null` for neither (an app whose key somebody types). See
+ * {@link connectAccountMutationOptions}.
+ */
+export type ConnectStart =
+  | { authorizationUrl: string }
+  | { connected: true }
+  | null;
+
+/**
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
  * What asking the vendor about an account comes back with.
  *
  * NAMED RATHER THAN WRITTEN INTO THE SIGNATURE AND AGAIN INTO A CAST. Every one of these three

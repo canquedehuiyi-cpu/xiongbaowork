@@ -32,8 +32,27 @@ import {
 import { botAttentionQueryOptions } from "@/lib/bot-lifecycle/queries";
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
 import { appConfig } from "@/lib/generated/application-config";
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 import { SidebarAccount } from "./sidebar-account";
 import { SidebarRoster } from "./sidebar-roster";
+=======
+import { EASE_OUT, ENTRANCE_SECONDS } from "@/lib/motion";
+import { isNavigationLink, useNavigationItems } from "@/lib/navigation";
+import { relativeTimeShort } from "@/lib/relative-time";
+import {
+  type MessageListEmphasis,
+  useMessageListEmphasis,
+} from "@/lib/settings/message-list";
+import { BotsNavBadge } from "../bot-profile/attention";
+import { BrowserNavItem } from "../browser/browser-nav-item";
+import { navigationRender } from "../edition/team-features-dialog";
+import { OpenBotVersion } from "../layout/openbot-version";
+import { Button } from "../ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
+import { Channel } from "./channel";
+import { ChannelPagination } from "./channel-pagination";
+import { useSignOut } from "./use-sign-out";
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 
 /*
  * The roster helpers moved to roster.ts with the conversation list; re-exported here because the
@@ -198,6 +217,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 function SidebarBrand() {
   const { toggleSidebar } = useSidebar();
   return (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     <SidebarHeader className="flex-row items-center justify-between gap-2 pt-[21px] pr-[12px] pb-[24px] pl-[21px]">
       <Link
         className="flex min-w-0 items-center gap-[11px] rounded-[10px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
@@ -226,6 +246,74 @@ function SidebarBrand() {
         <IconLayoutSidebar className="size-[16px]" />
       </Button>
     </SidebarHeader>
+=======
+    channel.lastReadAt === null || channel.lastMessageAt > channel.lastReadAt
+  );
+}
+
+/** Unseen activity somewhere you are not looking. The open channel never shows the dot. */
+export function isUnread(
+  channel: ChannelSummary,
+  openChannelId: string | undefined,
+): boolean {
+  return channel.id !== openChannelId && hasUnseenActivity(channel);
+}
+
+/**
+ * A roster row that can animate.
+ *
+ * Two movements only: a channel that did not exist fades in, and a channel that was just spoken in
+ * moves to the top. Nothing else animates, a roster that reacts to being read is a roster that
+ * moves under the cursor.
+ */
+function ChannelRow({
+  channel,
+  animateOrder,
+  emphasis,
+}: {
+  channel: ChannelSummary;
+  animateOrder: boolean;
+  emphasis: MessageListEmphasis;
+}) {
+  const shouldReduceMotion = useReducedMotion();
+  // Whether this row is unread, as a boolean, for the same reason `Channel` computes `isOpen`
+  // that way: navigating re-renders the rows whose answer changed, not the whole roster.
+  const unread = useParams({
+    strict: false,
+    select: (params) =>
+      isUnread(channel, (params as { channelId?: string }).channelId),
+  });
+  return (
+    <motion.div
+      animate={{ opacity: 1, transform: "translateY(0px)" }}
+      initial={{
+        opacity: 0,
+        transform: shouldReduceMotion ? "none" : "translateY(-8px)",
+      }}
+      exit={{ opacity: 0 }}
+      layout={animateOrder && !shouldReduceMotion ? "position" : false}
+      transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
+    >
+      <Channel
+        emphasis={emphasis}
+        channelId={channel.id}
+        participantIds={channel.agentIds}
+        name={channel.name}
+        summary={channel.summary ?? undefined}
+        untitled={untitledLine(channel)}
+        lastMessageAt={
+          channel.lastMessageAt
+            ? relativeTimeShort(channel.lastMessageAt)
+            : undefined
+        }
+        pinned={channel.pinned}
+        canRename={channel.canRename ?? false}
+        unread={unread}
+        // A turn running, or work the conversation waits on between turns: a hop, a routine.
+        busy={(channel.busy ?? false) || (channel.work?.length ?? 0) > 0}
+      />
+    </motion.div>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   );
 }
 
@@ -257,6 +345,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   return (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     <Sidebar {...props}>
       <SidebarBrand />
       <SidebarContent className="scroll-fade-b gap-0">
@@ -265,6 +354,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <div
               className={index > 0 ? "mt-[18px]" : undefined}
               key={group.label}
+=======
+    <Sidebar variant="inset" {...props}>
+      <SidebarHeader className="h-12 p-2">
+        <SidebarMenu>
+          <SidebarMenuItem className="flex flex-row gap-1.5">
+            {/* The same hover as every other row in the sidebar, not the menu button's accent tint. */}
+            <SidebarMenuButton
+              className="font-semibold text-[14px] tracking-tighter h-full leading-tight hover:bg-foreground/5 hover:text-sidebar-foreground active:bg-foreground/5 active:text-sidebar-foreground"
+              render={(props) => (
+                <Link {...appLinkOptions} {...props}>
+                  {appConfig.brand.productName}
+                </Link>
+              )}
+            />
+            {/* Square, as tall as the name beside it, with the sidebar's hover rather than `muted`, which
+                is nearly the sidebar's own colour. */}
+            <Button
+              aria-label="New conversation"
+              className="aspect-square h-full w-auto hover:bg-foreground/5 dark:hover:bg-foreground/5"
+              size="icon"
+              variant="ghost"
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/channel/new"
+                  activeProps={{
+                    className: "bg-foreground/5",
+                  }}
+                />
+              )}
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
             >
               <NavGroup {...group} />
             </div>
@@ -280,6 +400,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <div className="border-sidebar-border border-t px-[15px] pt-[6px]">
         <SidebarMenu className="gap-[4px]">
           <SidebarMenuItem>
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
             <SidebarMenuButton
               aria-controls="sidebar-more-nav"
               aria-expanded={moreOpen}
@@ -292,6 +413,62 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 className={moreOpen ? "rotate-180" : undefined}
               />
             </SidebarMenuButton>
+=======
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <SidebarMenuButton className="hover:bg-foreground/5 h-10" />
+                }
+              >
+                <UserAvatar />
+                {/* The name and the release the server runs, side by side: 80/20 of the row. */}
+                <span className="grid min-w-0 flex-1 grid-cols-[4fr_1fr] items-center gap-2">
+                  <span className="truncate text-sm trackint-tight">
+                    {currentUser?.name || currentUser?.email}
+                  </span>
+                  <OpenBotVersion className="text-right text-[10px] leading-3 text-muted-foreground" />
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="p-1.5"
+                side="top"
+                sideOffset={8}
+              >
+                {navigation
+                  .filter((item) => item.section === "account")
+                  .map((item) => (
+                    <DropdownMenuItem
+                      className={userMenuItemClassName}
+                      key={item.id}
+                      nativeButton={item.kind === "dialog"}
+                      // A link closes a narrow window's sheet as it is followed; a dialog has to
+                      // close it itself, or the sheet waits behind the dialog.
+                      render={navigationRender(
+                        item,
+                        item.kind === "dialog"
+                          ? { onClick: () => setOpenMobile(false) }
+                          : {},
+                      )}
+                    >
+                      <item.icon />
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
+                {signOutOffered ? (
+                  <DropdownMenuItem
+                    className={userMenuItemClassName}
+                    disabled={signOut.pending}
+                    onClick={signOut.run}
+                    variant="destructive"
+                  >
+                    <IconLogout />
+                    Sign out
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
           </SidebarMenuItem>
         </SidebarMenu>
         {moreOpen ? (

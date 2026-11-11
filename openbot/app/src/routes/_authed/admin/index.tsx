@@ -14,6 +14,7 @@ import {
   IconShieldCheck,
   IconSlash,
   IconUsers,
+  IconZoomQuestion,
 } from "@tabler/icons-react";
 import {
   createFileRoute,
@@ -172,6 +173,13 @@ const SECTIONS: {
           "这个部署里发生的每个动作、是谁做的，以及员工执行过的命令记录。",
         icon: IconListDetails,
         linkOptions: { to: "/admin/audit" },
+      },
+      {
+        title: "What would happen",
+        description:
+          "Ask what OpenBot would do if a Bot took an action, and see which control decides.",
+        icon: IconZoomQuestion,
+        linkOptions: { to: "/admin/what-if" },
       },
     ],
   },

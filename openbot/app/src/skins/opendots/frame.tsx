@@ -165,7 +165,10 @@ function Rail({
   /** Whether the rail carries the Bots badge: at desktop width, where the rail is on screen. */
   showBadge: boolean;
 }) {
-  const navigation = useNavigationItems();
+  // OpenDots draws Routines itself, as its own screen just above, so not a second time from the list.
+  const navigation = useNavigationItems().filter(
+    (item) => item.id !== "routines",
+  );
   return (
     <nav
       aria-label="工作区导航"

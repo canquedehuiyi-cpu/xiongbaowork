@@ -1,8 +1,18 @@
 import { IconHistory, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 import { useState } from "react";
 import { PageSection } from "@/components/layout/page-shell";
+=======
+import { Fragment, useState } from "react";
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import {
+  PageEmpty,
+  PageRows,
+  PageSection,
+} from "@/components/layout/page-shell";
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +37,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { relativeTime } from "@/lib/relative-time";
 import {
   deleteRoutineMutationOptions,
@@ -42,6 +53,7 @@ import {
 } from "@/lib/routines/queries";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
+import { NewRoutineButton } from "./new-routine-button";
 
 /**
  * What the last-run cell says, and in what tone.
@@ -226,6 +238,21 @@ export function RoutinesList({
   embedded?: boolean;
 } = {}) {
   const routines = useQuery(routinesQueryOptions());
+  /* Names and faces for the Bot chip, hidden Bots included: a routine outlives hiding its Bot. */
+  const shownBots = useQuery({
+    ...agentListQueryOptions(),
+    enabled: agentId === undefined,
+  });
+  const hiddenBots = useQuery({
+    ...agentListQueryOptions(true),
+    enabled: agentId === undefined,
+  });
+  const bots = new Map(
+    [...(shownBots.data ?? []), ...(hiddenBots.data ?? [])].map((bot) => [
+      bot.id,
+      bot,
+    ]),
+  );
   const setEnabled = useMutation(setRoutineEnabledMutationOptions(queryClient));
   const deleteRoutine = useMutation(deleteRoutineMutationOptions(queryClient));
   const runNow = useMutation(runRoutineNowMutationOptions(queryClient));
@@ -273,6 +300,7 @@ export function RoutinesList({
           读不到你的定时任务。
         </p>
       ) : rows.length === 0 ? (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
         <Empty className="h-[180px] border border-dashed">
           <EmptyHeader>
             <EmptyTitle className="text-muted-foreground">
@@ -285,11 +313,24 @@ export function RoutinesList({
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
+=======
+        <PageEmpty
+          action={<NewRoutineButton agentId={agentId} variant="outline" />}
+          icon={IconClock}
+          title={agentId ? "No routines for this Bot yet" : "No routines yet"}
+        >
+          {agentId
+            ? 'Set one up with New routine, or ask it something like "every weekday at 9, send me…".'
+            : 'Set one up with New routine, or ask a Bot something like "every weekday at 9, send me…".'}
+        </PageEmpty>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
       ) : (
         <div className="flex flex-col gap-2">
           {rows.map((routine) => {
             const lastRun = lastRunLabel(routine.lastRun);
+            const bot = bots.get(routine.agentId);
             return (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
               <Item key={routine.id} variant="muted">
                 {/* Paused reads at a glance: the content dims, and a chip below says the word. */}
                 <ItemContent className={routine.enabled ? "" : "opacity-60"}>
@@ -318,6 +359,85 @@ export function RoutinesList({
                   {/* A set, so it wraps onto its own line rather than crowding the title. */}
                   <ItemFooter>
                     <div className="flex flex-wrap items-center gap-1.5">
+=======
+              <Fragment key={routine.id}>
+                {index > 0 ? <Separator /> : null}
+                <Item size="sm">
+                  <ItemMedia variant="icon">
+                    {routine.enabled ? <IconClock /> : <IconPlayerPause />}
+                  </ItemMedia>
+                  {/* Paused reads at a glance: the content dims, and a chip below says the word. */}
+                  <ItemContent className={routine.enabled ? "" : "opacity-60"}>
+                    {/*
+                     * Named by the person, the name heads the row and the schedule takes a line of
+                     * its own under it, so a narrow window never squeezes the name to fit it.
+                     */}
+                    {routine.title ? (
+                      <>
+                        <ItemTitle>{routine.title}</ItemTitle>
+                        <p className="text-muted-foreground text-xs">
+                          {routine.schedule} · {routine.timezone}
+                        </p>
+                      </>
+                    ) : (
+                      <ItemTitle>
+                        {routine.schedule}
+                        <span className="font-normal text-muted-foreground text-xs">
+                          {routine.timezone}
+                        </span>
+                      </ItemTitle>
+                    )}
+                    <ItemDescription>{routine.instruction}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    {/*
+                     * Binary and immediate: it takes effect when switched, there is no save.
+                     * Disabled only while its own write is in flight, so switching one routine
+                     * does not freeze the rest of the list — the same idiom the per-tool plugins
+                     * page uses for its per-Bot grant switches.
+                     */}
+                    <Switch
+                      aria-label={`Enable the routine scheduled ${routine.schedule}`}
+                      checked={routine.enabled}
+                      disabled={
+                        setEnabled.isPending &&
+                        setEnabled.variables?.id === routine.id
+                      }
+                      onCheckedChange={(next) =>
+                        setEnabled.mutate({ id: routine.id, enabled: next })
+                      }
+                    />
+                  </ItemActions>
+                  {/* Two sets — where it stands, and what can be done to it — so they wrap onto a
+                      line of their own rather than crowding the title. */}
+                  <ItemFooter className="flex-wrap">
+                    <div
+                      className={cn(
+                        "flex flex-wrap items-center gap-1.5",
+                        routine.enabled ? "" : "opacity-60",
+                      )}
+                    >
+                      {/* Every Bot's routines are on one page, so each says whose it is. */}
+                      {agentId === undefined ? (
+                        <Link
+                          params={{ agentId: routine.agentId }}
+                          to="/bots/$agentId/routines"
+                        >
+                          <Chip className="text-foreground transition-colors hover:bg-muted">
+                            {bot ? (
+                              <span aria-hidden="true" className="contents">
+                                <AbstractAvatar
+                                  name={bot.name}
+                                  seed={bot.avatarSeed}
+                                  size={14}
+                                />
+                              </span>
+                            ) : null}
+                            {bot?.name ?? "A Bot"}
+                          </Chip>
+                        </Link>
+                      ) : null}
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
                       {routine.channel.gone ? (
                         <Chip className="border-destructive/40 text-destructive">
                           这个频道已不在

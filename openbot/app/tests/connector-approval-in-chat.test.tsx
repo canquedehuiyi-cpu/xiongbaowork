@@ -114,7 +114,8 @@ test("an app's call OpenBot asks about draws its card in the conversation", asyn
         policy: {
           behaviour: "ask",
           source: "safety",
-          reason: "Sending something to other people always asks you first.",
+          reason: "Sending something to other people asks you first.",
+          kind: "sending",
         },
       },
     },
@@ -122,11 +123,60 @@ test("an app's call OpenBot asks about draws its card in the conversation", asyn
   const view = draw();
   const card = within(await view.findByRole("region", { name: "等你批准" }));
   expect(
-    card.getByText("Sending something to other people always asks you first."),
+    card.getByText("Sending something to other people asks you first."),
   ).toBeTruthy();
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   expect(card.getByRole("radio", { name: "允许一次" })).toBeTruthy();
   expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
   expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
+=======
+  // Open by default: a send offers every answer, the conversation's among them.
+  for (const name of [
+    "Allow once",
+    "Allow for this conversation",
+    "Always allow here",
+    "Deny",
+  ])
+    expect(card.getByRole("radio", { name })).toBeTruthy();
+});
+
+test("a send the admin set to ask every time offers Allow once and Deny only", async () => {
+  inbox = [
+    {
+      id: "approval-2",
+      status: "pending",
+      createdAt: "2026-11-05T10:00:00.000Z",
+      action: {
+        botId: "personal-assistant",
+        toolRef: "arcade-GoogleCalendar/CreateEvent",
+        effect: "write",
+        scope: "arcade-GoogleCalendar",
+        threadId: "thread-1",
+        toolCallId: CALL,
+        args: { summary: "Spec review" },
+        target: {},
+        policy: {
+          behaviour: "ask",
+          source: "safety",
+          reason:
+            "Sending something to other people asks you every time. Your admin set this.",
+          kind: "sending",
+          closed: true,
+        },
+      },
+    },
+  ];
+  const view = draw();
+  const card = within(
+    await view.findByRole("region", { name: "Waiting for your approval" }),
+  );
+  expect(card.getByRole("radio", { name: "Allow once" })).toBeTruthy();
+  expect(card.getByRole("radio", { name: "Deny" })).toBeTruthy();
+  expect(
+    card.queryByRole("radio", { name: "Allow for this conversation" }),
+  ).toBeNull();
+  expect(card.queryByRole("radio", { name: "Always allow here" })).toBeNull();
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 });
 
 test("with nothing waiting, the call is the line it always was", async () => {

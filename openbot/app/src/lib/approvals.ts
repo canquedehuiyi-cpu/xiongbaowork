@@ -8,15 +8,46 @@ import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { client } from "@/lib/client";
 export type ApprovalDecision =
   | "allow_once"
+  | "allow_conversation"
   | "allow_always"
   | "deny"
   | "handled";
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 export type RuleBehaviour =
   | "allow"
   | "pre_approved"
   | "ask"
   | "hand_off"
   | "deny";
+=======
+export type RuleBehaviour = "allow" | "pre_approved" | "ask" | "hand_off";
+/** The kinds of action OpenBot asks about by name, as server/src/approvals/types.ts lists them. */
+export type ActionKind =
+  | "deleting"
+  | "sending"
+  | "sharing"
+  | "publishing"
+  | "payments"
+  | "credentials"
+  | "security_settings";
+/** What the admin lets members do about a kind: open, ask every time, or leave it to them. */
+export type ActionKindPolicy = "open" | "ask" | "hand_off";
+/**
+ * One "Allow for this conversation": what it allows, and in which conversation. Drawn in that
+ * conversation, with a way to turn it off.
+ */
+export type ConversationGrant = {
+  id: string;
+  threadId: string;
+  botId: string;
+  toolRef: string;
+  effect: string;
+  scope: string;
+  account?: string;
+  kind?: ActionKind;
+  createdAt: string;
+};
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 export type HostCommandPolicy = "ask" | "allow" | "never";
 export type ApprovalRuleInput = {
   botId: string;
@@ -92,11 +123,16 @@ export type ApprovalInboxData = {
         behaviour: "allow" | "ask" | "hand_off" | "deny";
         source: string;
         reason: string;
+        kind?: ActionKind;
+        /** The admin set this kind to ask every time: Allow once and Deny only. */
+        closed?: boolean;
       };
     };
   }[];
   rules: ApprovalRuleRow[];
   teamRules: ApprovalRuleRow[];
+  /** "Allow for this conversation" answers still in force, in every conversation. */
+  conversationGrants?: ConversationGrant[];
   preferences?: {
     enabled: boolean;
     autoReview: boolean;
@@ -106,8 +142,13 @@ export type ApprovalInboxData = {
     enforceAutoReview: boolean;
     customRulesEnabled: boolean;
     hostCommandsCap: HostCommandPolicy;
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     /** Every Bot asks before a dangerous command (SEC1 D10). */
     enforceDangerousCommands?: boolean;
+=======
+    /** The kinds the admin closed. A kind not named is open. */
+    actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   };
   /** The member's command policy after the team cap. */
   hostCommands?: HostCommandPolicy;
@@ -220,6 +261,11 @@ export const decideApproval = (id: string, decision: ApprovalDecision) =>
     body: { decision },
     fallback: "你的决定没能保存。",
   });
+export const revokeConversationGrant = (id: string) =>
+  client(`/api/approvals/conversation-grants/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    fallback: "Couldn't turn that off. Try again.",
+  });
 export const revokeApprovalRule = (id: string) =>
   client(`/api/approvals/rules/${encodeURIComponent(id)}`, {
     method: "DELETE",
@@ -247,7 +293,11 @@ export const setTeamApprovalSettings = (input: {
   enforceAutoReview?: boolean;
   customRulesEnabled?: boolean;
   hostCommandsCap?: HostCommandPolicy;
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   enforceDangerousCommands?: boolean;
+=======
+  actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 }) =>
   client("/api/approvals/team", {
     method: "PATCH",
@@ -308,7 +358,8 @@ export const updateTeamApprovalRule = (
     fallback: "这条团队规则没能修改。",
   });
 
-const approvalsKey = ["approvals"] as const;
+/** The inbox's key, which every approval write invalidates: requests, rules and settings alike. */
+export const approvalsKey = ["approvals"] as const;
 const settle = (queryClient: QueryClient) => () =>
   queryClient.invalidateQueries({ queryKey: approvalsKey });
 
@@ -326,6 +377,14 @@ export const updateApprovalRuleMutationOptions = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: ({ id, behaviour }: { id: string; behaviour: RuleBehaviour }) =>
       updateApprovalRule(id, { behaviour }),
+    onSettled: settle(queryClient),
+  });
+/** Turn off one "Allow for this conversation": the next such action there asks again. */
+export const revokeConversationGrantMutationOptions = (
+  queryClient: QueryClient,
+) =>
+  mutationOptions({
+    mutationFn: revokeConversationGrant,
     onSettled: settle(queryClient),
   });
 export const revokeApprovalRuleMutationOptions = (queryClient: QueryClient) =>
@@ -360,7 +419,7 @@ export const revokeTeamApprovalRuleMutationOptions = (
     mutationFn: revokeTeamApprovalRule,
     onSettled: settle(queryClient),
   });
-/** Allow once, always allow, deny, or "I did it myself" on one waiting action. */
+/** Allow once, for this conversation or always, deny, or "I did it myself" on one waiting action. */
 export const decideApprovalMutationOptions = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: ({ id, choice }: { id: string; choice: ApprovalDecision }) =>

@@ -508,7 +508,10 @@ function WorkspaceLinks({
    * is no rail. Bots is the row under the list of Bots above.
    */
   const drawerOnly = "md:hidden";
-  const navigation = useNavigationItems().filter((item) => item.id !== "bots");
+  // Routines is OpenDots' own row above, so the shared list's entry is not drawn twice.
+  const navigation = useNavigationItems().filter(
+    (item) => item.id !== "bots" && item.id !== "routines",
+  );
   return (
     <nav
       aria-label="工作区"

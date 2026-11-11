@@ -6,10 +6,12 @@ import {
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
+import { AiModelSection } from "@/components/settings/ai-connection";
 import { MessageListPreference } from "@/components/settings/message-list-preference";
 import { MyDevices } from "@/components/settings/my-devices";
 import { NameRow } from "@/components/settings/profile";
 import { StandingInstructionsRow } from "@/components/settings/standing-instructions";
+import { UsageDataSection } from "@/components/settings/usage-data";
 import { useTheme } from "@/components/theme-provider";
 import {
   Item,
@@ -56,7 +58,15 @@ function RouteComponent() {
           <StandingInstructionsRow />
         </PageRows>
       </PageSection>
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
       <PageSection title="外观">
+=======
+      {/* Only in OpenBot Desktop, which holds the AI connection and changes it in its own window. */}
+      <AiModelSection />
+      {/* Only in OpenBot Desktop, which sends usage data and keeps this choice. */}
+      <UsageDataSection />
+      <PageSection title="Appearance">
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
         <PageRows>
           <Item size="sm">
             <ItemMedia variant="icon">

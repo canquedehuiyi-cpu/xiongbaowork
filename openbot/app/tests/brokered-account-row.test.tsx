@@ -350,6 +350,10 @@ type Server = {
    * longer publishes is a 400 on the whole connection, however tidy the screen looked.
    */
   submitted: Record<string, string>[];
+  /** How many times the vendor was asked about the account (`/connection/confirm`). */
+  confirmsAsked: number;
+  /** What the vendor answers about the account from now on: a consent finished elsewhere. */
+  answer: (confirms: boolean) => void;
 };
 
 /**
@@ -397,6 +401,10 @@ function installDeployment(deployment: Deployment): Server {
       state.refusesFields = refusal;
     },
     submitted: [],
+    confirmsAsked: 0,
+    answer: (confirms) => {
+      state.confirms = confirms;
+    },
   };
 
   global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -456,6 +464,7 @@ function installDeployment(deployment: Deployment): Server {
       });
     }
     if (path.endsWith("/connection/confirm") && method === "POST") {
+      server.confirmsAsked += 1;
       // What the route answers with no key at all: nothing to ask, and no answer invented.
       if (!state.composioConfigured) {
         return new Response(
@@ -731,7 +740,10 @@ afterEach(() => {
  * the settings shell, neither of which this file is about. The index route is registered only so
  * the Back link has something to build an href from.
  */
-function renderAccountScreen(client: QueryClient) {
+function renderAccountScreen(
+  client: QueryClient,
+  at = `/connections/${APP_KEY}`,
+) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
     id: "/_authed",
@@ -763,7 +775,11 @@ function renderAccountScreen(client: QueryClient) {
   const router = createRouter({
     routeTree: tree,
     history: createMemoryHistory({
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
       initialEntries: [`/settings/connected-accounts/${APP_KEY}`],
+=======
+      initialEntries: [at],
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
     }),
   });
   return render(
@@ -1229,6 +1245,46 @@ test("a consent app's Connect leaves for the vendor's own page", async () => {
     await waitFor(() => expect(watched.navigations).toEqual([CONSENT_URL]));
   } finally {
     watched.restore();
+  }
+});
+
+test("in OpenBot Desktop, the page asks again once the window is back in front", async () => {
+  /*
+   * The window sends the sign-in to the person's browser and this page stays where it is, so it
+   * never arrives here again to confirm on load. The browser hands the person back to the window
+   * when the sign-in is done, and the focus that brings is when the account is asked about.
+   */
+  const server = installDeployment({
+    authScheme: "OAUTH2",
+    composioConfigured: true,
+    confirms: false,
+    recorded: false,
+  });
+  (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
+    invoke: async () => null,
+    transformCallback: () => 0,
+  };
+  const watched = watchNavigation();
+
+  try {
+    const view = renderAccountScreen(queryClient());
+    await userEvent.click(await view.findByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(watched.navigations).toEqual([CONSENT_URL]));
+    const before = server.confirmsAsked;
+
+    server.answer(true);
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() => expect(server.confirmsAsked).toBe(before + 1));
+    expect(
+      await view.findByRole("button", { name: "Disconnect" }),
+    ).toBeTruthy();
+    // Once per sign-in: a later focus asks nothing more.
+    window.dispatchEvent(new Event("focus"));
+    expect(server.confirmsAsked).toBe(before + 1);
+  } finally {
+    watched.restore();
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   }
 });
 
@@ -2710,4 +2766,46 @@ test("a re-check that spent nothing leaves the rejection the record still names"
   expect(view.getByText(/这个账号仍然保持连接/)).toBeTruthy();
   // Never the absolution, which is the other app's state and not this one's.
   expect(view.queryByText(/接受时没有对 Gmail 做检查/)).toBeNull();
+});
+
+/**
+ * ADDED IS NOT CONNECTED, ON THE APP'S PAGE TOO. A person who added an app and never signed in read
+ * a row with a Connect button and a sentence, and nothing that said plainly it wasn't connected.
+ */
+test("an added app nobody signed in to says Not connected beside Connect, on both pages", async () => {
+  installDeployment({
+    composioConfigured: true,
+    recorded: false,
+    confirms: false,
+  });
+
+  const person = renderAccountScreen(queryClient());
+  expect(await person.findByRole("button", { name: "Connect" })).toBeTruthy();
+  expect(person.getByText("Not connected")).toBeTruthy();
+  cleanup();
+
+  const admin = renderAdminScreen(queryClient());
+  expect(await admin.findByRole("button", { name: "Connect" })).toBeTruthy();
+  expect(admin.getByText("Not connected")).toBeTruthy();
+});
+
+/**
+ * BROWSE APPS SENDS A KEY APP HERE STRAIGHT AFTER ADDING IT (`?connect=true`), and the key form is
+ * what opens: there is no sign-in page to send anybody to.
+ */
+test("arriving to connect a key app opens its key form without a second press", async () => {
+  installDeployment({
+    authScheme: "API_KEY",
+    composioConfigured: true,
+    confirms: false,
+    fields: [PERPLEXITY_KEY],
+    recorded: false,
+  });
+
+  const view = renderAccountScreen(
+    queryClient(),
+    `/connections/${APP_KEY}?connect=true`,
+  );
+
+  expect(await view.findByLabelText("API Key")).toBeTruthy();
 });

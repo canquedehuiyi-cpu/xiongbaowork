@@ -5,9 +5,9 @@ import {
 } from "@openbot/shared/harnesses";
 import {
   IconCheck,
-  IconChevronDown,
   IconInfoCircle,
   IconLock,
+  IconPlugConnected,
   IconUsers,
 } from "@tabler/icons-react";
 import {
@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { HarnessMark } from "@/components/agents/harness-mark";
 import AgentOrb from "@/components/agents/orb/agent-orb";
 import { PluginLogo } from "@/components/plugins/plugin-logo";
+import { RoutinesAppHint } from "@/components/routines/routines-app-hint";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -66,6 +67,7 @@ import {
   giveableAppsQueryOptions,
 } from "@/lib/app-access/queries";
 import { isComposing } from "@/lib/composing";
+import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { myCapabilitiesQueryOptions } from "@/lib/enterprise/queries";
 import {
@@ -117,11 +119,10 @@ export function NewBotSheet({
  * Advancing from the endpoint also tests it, so there is no separate Test action to forget.
  */
 const STEPS = ["about", "runtime", "endpoint"] as const;
-/**
- * The web list as it comes: the frameworks people look for first, and "An agent you already run"
- * last, so the rows that show above the footer on the first screen are frameworks they know.
- */
-const CONNECTION_OPTIONS = WEB_HARNESSES;
+const CONNECTION_OPTIONS = [
+  ...WEB_HARNESSES.filter((harness) => harness.id === "byo-url"),
+  ...WEB_HARNESSES.filter((harness) => harness.id !== "byo-url"),
+];
 type Step = (typeof STEPS)[number];
 
 /**
@@ -201,10 +202,6 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
   /** Shared with the person's own computer unless they tick it. */
   const [isolated, setIsolated] = useState(false);
   const [step, setStep] = useState<Step>("about");
-  /** Where the address step was reached from, so Back returns there: the first screen or the list. */
-  const [pickedFrom, setPickedFrom] = useState<Step>("runtime");
-  /** Set by Back from the address step to the first screen, which then opens on its custom agents. */
-  const [backToCustom, setBackToCustom] = useState(false);
   const [direction, setDirection] = useState(1);
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string>();
@@ -266,13 +263,6 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
     );
     return () => window.clearTimeout(timer);
   }, [createdId, reduceMotion]);
-
-  // Back from the address lands where the framework was picked, below the simple form.
-  useEffect(() => {
-    if (step !== "about" || !backToCustom) return;
-    setBackToCustom(false);
-    showCustom(reduceMotion);
-  }, [step, backToCustom, reduceMotion]);
 
   const named = name.trim() !== "";
   const endpointIssue =
@@ -342,35 +332,8 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
       return custom ? go("runtime") : create({ kind: "builtin" });
   };
 
-  /**
-   * From the first screen to a custom agent: the whole list, or one framework picked from the custom
-   * agents below the form. The name is checked first, since the next screens never show it.
-   */
-  const connectCustom = (chosen?: Runtime) => {
-    const parsed = agentFormSchema.shape.name.safeParse(name);
-    if (!parsed.success) {
-      setNameError(parsed.error.issues[0]?.message);
-      document.getElementById("new-bot-name")?.focus();
-      return;
-    }
-    setNameError(undefined);
-    if (!chosen) return go("runtime");
-    setRuntime(chosen);
-    setPickedFrom("about");
-    go("endpoint");
-  };
-
-  /**
-   * Back returns to the previous screen without resetting any answers: to the first screen's custom
-   * agents when the framework was picked there, and to the list when it was picked from that.
-   */
-  const back = () => {
-    if (step === "endpoint" && pickedFrom === "about") {
-      setBackToCustom(true);
-      return go("about");
-    }
-    go(step === "endpoint" ? "runtime" : "about");
-  };
+  /** Back returns to the previous screen without resetting any answers. */
+  const previous = (): Step => (step === "endpoint" ? "runtime" : "about");
 
   /** Verify the endpoint before creating a custom Bot. */
   const connect = async () => {
@@ -437,7 +400,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
         submit();
       }}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pt-6 pb-6">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pt-8 pb-6">
         <MotionConfig reducedMotion="user">
           {/* Shares its layout id with the orb on the created view, so it travels there. */}
           <div className="flex items-center gap-3">
@@ -450,6 +413,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
             <SheetTitle className="text-2xl font-semibold tracking-tight">
               新建员工
             </SheetTitle>
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
             {/* On a phone the custom agents can't show above the footer, so this says they are there. */}
             {step === "about" && builtInAvailable && (
               <Button
@@ -462,11 +426,13 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
                 <IconChevronDown className="size-3.5" />
               </Button>
             )}
+=======
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
           </div>
 
           <motion.div
             animate={{ opacity: 1, x: 0 }}
-            className="mt-5"
+            className="mt-6"
             initial={{ opacity: 0, x: 24 * direction }}
             key={step}
             transition={{ duration: 0.2, ease: "easeOut" }}
@@ -503,12 +469,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
                   onVisibility={setVisibility}
                   visibility={visibility}
                 />
-                {builtInAvailable ? (
-                  <CustomAgents
-                    disabled={busy}
-                    onChoose={(chosen) => connectCustom(chosen)}
-                  />
-                ) : (
+                {!builtInAvailable && (
                   <p className="mt-3 text-sm text-muted-foreground">
                     管理员开启内置托管后，你才能在这里运行员工。
                   </p>
@@ -518,7 +479,6 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
               <RuntimeStep
                 onChoose={(chosen) => {
                   setRuntime(chosen);
-                  setPickedFrom("runtime");
                   go("endpoint");
                 }}
               />
@@ -560,7 +520,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
           <Button
             className="px-4"
             disabled={busy}
-            onClick={back}
+            onClick={() => go(previous())}
             size="lg"
             type="button"
             variant="ghost"
@@ -569,6 +529,27 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
           </Button>
         )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {step === "about" && builtInAvailable && (
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              disabled={busy}
+              onClick={() => {
+                const parsed = agentFormSchema.shape.name.safeParse(name);
+                if (!parsed.success) {
+                  setNameError(parsed.error.issues[0]?.message);
+                  document.getElementById("new-bot-name")?.focus();
+                  return;
+                }
+                setNameError(undefined);
+                go("runtime");
+              }}
+            >
+              <IconPlugConnected className="size-4" />
+              Connect a custom agent
+            </Button>
+          )}
           {step !== "runtime" && (
             <Button
               className="px-4"
@@ -652,14 +633,30 @@ function CreatedView({ name }: { name: string }) {
 
 type Visibility = AgentFormValues["visibility"];
 
-/** The two ways a Bot can be seen: a word and an icon each, which say enough between them. */
+/** The two ways a Bot can be seen, in the words the old wizard used for them. */
 const VISIBILITY_OPTIONS: Array<{
   value: Visibility;
   title: string;
+  description: string;
   icon: typeof IconLock;
 }> = [
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   { value: "private", title: "仅自己", icon: IconLock },
   { value: "public", title: "公开", icon: IconUsers },
+=======
+  {
+    value: "private",
+    title: "Private",
+    description: "Only you can see it and talk to it.",
+    icon: IconLock,
+  },
+  {
+    value: "public",
+    title: "Public",
+    description: "Everyone in your company can find and use it.",
+    icon: IconUsers,
+  },
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 ];
 
 /**
@@ -699,11 +696,15 @@ function AboutStep({
   personal: boolean;
 }) {
   return (
-    <FieldGroup className="gap-5">
+    <FieldGroup>
       <Field>
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
         <FieldLabel className={SECTION_LABEL} htmlFor="new-bot-name">
           名称
         </FieldLabel>
+=======
+        <FieldLabel htmlFor="new-bot-name">Name</FieldLabel>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
         <Input
           autoComplete="off"
           autoFocus
@@ -726,9 +727,15 @@ function AboutStep({
         )}
       </Field>
       <Field>
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
         <FieldLabel className={SECTION_LABEL} htmlFor="new-bot-instructions">
           指令
           <span className="font-normal normal-case tracking-normal">可选</span>
+=======
+        <FieldLabel htmlFor="new-bot-instructions">
+          Instructions
+          <span className="font-normal text-muted-foreground">Optional</span>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
         </FieldLabel>
         <Textarea
           autoComplete="off"
@@ -743,9 +750,13 @@ function AboutStep({
       {personal ? null : (
         <>
           <FieldSet>
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
             <FieldLegend className={SECTION_LABEL} variant="label">
               谁能看到它
             </FieldLegend>
+=======
+            <FieldLegend variant="label">Who can see it</FieldLegend>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
             <div className="grid gap-2 sm:grid-cols-2">
               {VISIBILITY_OPTIONS.map((option) => {
                 const Icon = option.icon;
@@ -758,7 +769,14 @@ function AboutStep({
                     type="button"
                   >
                     <Icon className="size-5 shrink-0 text-muted-foreground" />
-                    <span className="font-medium text-sm">{option.title}</span>
+                    <span className="min-w-0">
+                      <span className="block font-medium text-sm">
+                        {option.title}
+                      </span>
+                      <span className="block text-pretty text-muted-foreground text-xs">
+                        {option.description}
+                      </span>
+                    </span>
                   </button>
                 );
               })}
@@ -770,30 +788,49 @@ function AboutStep({
       {personal ? (
         <EveryAppList turnedOn={turnedOn} />
       ) : apps.length > 0 ? (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
         <FieldSet className="gap-2">
           <FieldLegend className={SECTION_LABEL} variant="label">
             它能用的应用
           </FieldLegend>
           <FieldDescription>它总是用提问者本人的账号。</FieldDescription>
           <div className="grid gap-x-4 sm:grid-cols-2">
+=======
+        <FieldSet>
+          <FieldLegend variant="label">Apps it can use</FieldLegend>
+          <FieldDescription>
+            It always uses the account of whoever is asking.
+          </FieldDescription>
+          <div className="grid gap-2 sm:grid-cols-2">
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
             {apps.map((app) => (
-              <label
-                className="flex items-center gap-3 py-1 text-sm"
-                htmlFor={`new-bot-app-${app.key}`}
+              // The tile holds the label, and beside Routines an example and a link the box's name
+              // must not take in, so they sit outside the label.
+              <div
+                className={cn(
+                  "flex items-center gap-3 rounded-lg bg-muted/50 pr-3 text-sm",
+                  app.key === ALWAYS_ON_APP && "sm:col-span-2",
+                )}
                 key={app.key}
               >
-                <Checkbox
-                  checked={!leftOut.has(app.key)}
-                  id={`new-bot-app-${app.key}`}
-                  onCheckedChange={(checked) =>
-                    onApp(app.key, checked === true)
-                  }
-                />
-                <PluginLogo logo={app.logo} />
-                <span className="min-w-0 truncate font-medium">
-                  {app.displayName}
-                </span>
-              </label>
+                <label
+                  className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3"
+                  htmlFor={`new-bot-app-${app.key}`}
+                >
+                  <Checkbox
+                    checked={!leftOut.has(app.key)}
+                    id={`new-bot-app-${app.key}`}
+                    onCheckedChange={(checked) =>
+                      onApp(app.key, checked === true)
+                    }
+                  />
+                  <PluginLogo logo={app.logo} />
+                  <span className="min-w-0 truncate font-medium">
+                    {app.displayName}
+                  </span>
+                </label>
+                {app.key === ALWAYS_ON_APP ? <RoutinesAppHint /> : null}
+              </div>
             ))}
           </div>
         </FieldSet>
@@ -812,10 +849,15 @@ function EveryAppList({ turnedOn }: { turnedOn: UseQueryResult<PluginsPage> }) {
   if (turnedOn.isPending) return null;
   const servers = turnedOn.data?.servers ?? [];
   return (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     <FieldSet className="gap-2">
       <FieldLegend className={SECTION_LABEL} variant="label">
         它能用的应用
       </FieldLegend>
+=======
+    <FieldSet>
+      <FieldLegend variant="label">Apps it can use</FieldLegend>
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
       <FieldDescription>
         你在「连接」里打开的每个应用，所有员工都能用。
       </FieldDescription>
@@ -824,16 +866,24 @@ function EveryAppList({ turnedOn }: { turnedOn: UseQueryResult<PluginsPage> }) {
           读不到你的应用。
         </p>
       ) : servers.length > 0 ? (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
         <ul aria-label="它能用的应用" className="grid gap-x-4 sm:grid-cols-2">
+=======
+        <ul aria-label="Apps it can use" className="grid gap-2 sm:grid-cols-2">
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
           {servers.map((server) => (
             <li
-              className="flex items-center gap-3 py-1 text-sm"
+              className={cn(
+                "flex items-center gap-3 rounded-lg bg-muted/50 p-3 text-sm",
+                server.id === ALWAYS_ON_APP && "sm:col-span-2",
+              )}
               key={server.id}
             >
               <PluginLogo logo={server.logo} />
               <span className="min-w-0 truncate font-medium">
                 {server.title}
               </span>
+              {server.id === ALWAYS_ON_APP ? <RoutinesAppHint /> : null}
             </li>
           ))}
         </ul>
@@ -859,9 +909,9 @@ type IsolationChoice = {
  * needs nothing and costs nothing more; Isolated is the exception somebody opts into. What it means
  * is in the tooltip beside it, and for a public Bot that includes who else ends up on that computer.
  *
- * NEVER HIDDEN. Where it cannot be ticked it is drawn disabled with the reason below it, so
- * somebody who heard about Isolated Bots finds out here why they cannot have one rather than
- * wondering where it went.
+ * NEVER HIDDEN. Where it cannot be ticked it is drawn disabled with the reason in place of its
+ * summary, so somebody who heard about Isolated Bots finds out here why they cannot have one rather
+ * than wondering where it went.
  *
  * A label for the word only, not the whole tile, so the tooltip's button beside it does not tick the
  * box when pressed.
@@ -880,12 +930,17 @@ function IsolatedOption({
       : null;
   return (
     <FieldSet>
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
       <FieldLegend className={SECTION_LABEL} variant="label">
         它的电脑
       </FieldLegend>
       <div className="flex items-start gap-3">
+=======
+      <FieldLegend variant="label">Its computer</FieldLegend>
+      <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-3">
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
         <Checkbox
-          aria-describedby={reason ? "new-bot-isolated-reason" : undefined}
+          aria-describedby="new-bot-isolated-summary"
           checked={checked && reason === null}
           className="mt-0.5"
           disabled={reason !== null}
@@ -922,14 +977,12 @@ function IsolatedOption({
               </TooltipContent>
             </Tooltip>
           </div>
-          {reason && (
-            <p
-              className="text-pretty text-muted-foreground text-xs"
-              id="new-bot-isolated-reason"
-            >
-              {reason}
-            </p>
-          )}
+          <p
+            className="text-pretty text-muted-foreground text-xs"
+            id="new-bot-isolated-summary"
+          >
+            {reason ?? "A computer of its own, instead of sharing yours."}
+          </p>
         </div>
       </div>
     </FieldSet>
@@ -937,18 +990,11 @@ function IsolatedOption({
 }
 
 /**
- * The first screen's section names: small, uppercase and grey, so the fields lead and the sections
- * are told apart by space.
- */
-const SECTION_LABEL =
-  "text-[0.7rem] text-muted-foreground uppercase tracking-wider data-[variant=label]:text-[0.7rem]";
-
-/**
  * Filled rather than outlined, so the list reads as a set of things to pick and not as a stack of
  * cards. The border is there but transparent until chosen, so choosing one never shifts the rows.
  */
 const OPTION_CLASSES =
-  "flex w-full items-center gap-3 rounded-lg border border-transparent bg-muted/50 px-3 py-2.5 text-left transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 aria-pressed:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
+  "flex w-full items-center gap-3 rounded-lg border border-transparent bg-muted/50 p-3 text-left transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 aria-pressed:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
 
 /**
  * Choose a custom framework and advance immediately to its connection settings.
@@ -961,6 +1007,7 @@ function RuntimeStep({ onChoose }: { onChoose: (runtime: Runtime) => void }) {
   useEffect(() => heading.current?.focus(), []);
 
   return (
+<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     <div className="flex flex-col">
       <h2 className={cn("mb-3", RUNTIME_HEADING)} ref={heading} tabIndex={-1}>
         连接自定义智能体
@@ -1044,15 +1091,34 @@ function CustomAgents({
       className="mt-8 flex scroll-mt-6 flex-col"
       id={CUSTOM_ID}
     >
+=======
+    <div className="flex flex-col gap-2">
+>>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
       <h2
-        className={cn("mb-1.5 font-medium outline-none", SECTION_LABEL)}
-        id={CUSTOM_HEADING_ID}
+        className="mb-2 break-words font-semibold text-lg tracking-tight outline-none"
+        ref={heading}
         tabIndex={-1}
       >
         连接自定义智能体
       </h2>
-      <FrameworkRows disabled={disabled} onChoose={onChoose} />
-    </section>
+
+      {CONNECTION_OPTIONS.map((harness) => (
+        <button
+          className={OPTION_CLASSES}
+          key={harness.id}
+          onClick={() => onChoose({ kind: "managed", harness: harness.id })}
+          type="button"
+        >
+          <HarnessMark id={harness.mark} name={harness.name} />
+          <span className="min-w-0">
+            <span className="block font-medium text-sm">{harness.name}</span>
+            <span className="block text-pretty text-muted-foreground text-xs">
+              {summaryFor(harness)}
+            </span>
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 

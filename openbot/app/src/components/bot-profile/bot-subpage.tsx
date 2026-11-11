@@ -14,16 +14,20 @@ export function BotSubpage({
   agentId,
   title,
   description,
+  action,
   children,
 }: {
   agentId: string;
   title: string;
   description: string;
+  /** The area's one primary verb, on the title's baseline. */
+  action?: React.ReactNode;
   children: (agent: AgentProfile) => React.ReactNode;
 }) {
   const agent = useQuery(agentQueryOptions(agentId));
   return (
     <PageShell
+      action={action}
       backButton={{
         label: agent.data?.name ?? "员工",
         linkProps: { params: { agentId }, to: "/wakers/$agentId" },
