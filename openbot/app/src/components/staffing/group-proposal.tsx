@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,11 +29,11 @@ import {
  * 小管家说「先帮我招一个××」，作为本人的一条消息发出去，对话里看得到。
  */
 
-/** 员工 id 换成名字；读不到的（列表还没回来）先用 id 顶着。 */
+/** 员工 id 换成名字；读不到的（列表还没回来，或本人看不到）说「一位员工」，不把 id 给人看。 */
 function useNames() {
   const agents = useQuery(agentListQueryOptions());
   return (id: string) =>
-    agents.data?.find((agent) => agent.id === id)?.name ?? id;
+    agents.data?.find((agent) => agent.id === id)?.name ?? "一位员工";
 }
 
 export function GroupProposal({
@@ -198,10 +198,42 @@ function MemberOrder({
   onChange: (members: string[]) => void;
 }) {
   const nameOf = useNames();
-  const move = (from: number, to: number) => {
+  const list = useRef<HTMLOListElement>(null);
+  /** 刚挪过的那位和按的方向：挪完把焦点放回它的同一个按钮上。 */
+  const moved = useRef<{ id: string; direction: "up" | "down" } | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+
+  /*
+   * 列表按 key 重排时，浏览器把挪动的那一行从页面上拿下再放回，焦点随之丢到页面开头，键盘用户连按「下移」
+   * 就按不下去了。下一帧把焦点还给同一位成员的同一个按钮；挪到头、那个按钮不能再按时，给另一个。
+   * 每次画完都看一眼：只有刚挪过（`moved` 有值）才做事。
+   */
+  useEffect(() => {
+    const target = moved.current;
+    if (!target) return;
+    moved.current = null;
+    const frame = requestAnimationFrame(() => {
+      const row = [...(list.current?.querySelectorAll("li") ?? [])].find(
+        (item) => item.getAttribute("data-member") === target.id,
+      );
+      const same = row?.querySelector<HTMLButtonElement>(
+        `button[data-move="${target.direction}"]`,
+      );
+      const other = row?.querySelector<HTMLButtonElement>(
+        `button[data-move="${target.direction === "up" ? "down" : "up"}"]`,
+      );
+      (same && !same.disabled ? same : other)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+
+  const move = (from: number, direction: "up" | "down") => {
+    const to = direction === "up" ? from - 1 : from + 1;
     const next = [...members];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
+    const [member] = next.splice(from, 1);
+    next.splice(to, 0, member);
+    moved.current = { id: member, direction };
+    setAnnouncement(`已把${nameOf(member)}移到第 ${to + 1} 位`);
     onChange(next);
   };
   return (
@@ -214,7 +246,7 @@ function MemberOrder({
           <ChannelAvatar key={id} participantIds={[id]} size={32} />
         ))}
       </div>
-      <ol className="flex flex-col">
+      <ol className="flex flex-col" ref={list}>
         {members.map((id, index) => {
           const name = nameOf(id);
           return (
@@ -230,8 +262,9 @@ function MemberOrder({
               <Button
                 aria-label={`上移 ${name}`}
                 className="h-11 min-w-11"
+                data-move="up"
                 disabled={index === 0}
-                onClick={() => move(index, index - 1)}
+                onClick={() => move(index, "up")}
                 variant="ghost"
               >
                 ↑
@@ -239,8 +272,9 @@ function MemberOrder({
               <Button
                 aria-label={`下移 ${name}`}
                 className="h-11 min-w-11"
+                data-move="down"
                 disabled={index === members.length - 1}
-                onClick={() => move(index, index + 1)}
+                onClick={() => move(index, "down")}
                 variant="ghost"
               >
                 ↓
@@ -249,6 +283,10 @@ function MemberOrder({
           );
         })}
       </ol>
+      {/* 读屏用户听得到挪到了第几位；看得见的人看列表就够了。 */}
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
     </div>
   );
 }

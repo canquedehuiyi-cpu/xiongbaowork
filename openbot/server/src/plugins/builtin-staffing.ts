@@ -1157,7 +1157,8 @@ async function keptApps(
           ? "needs-connection"
           : "grantable"
         : "needs-admin";
-    kept.push(entry);
+    // 存键不存叫法：卡片的「去连接」、收回、执行都按键找这个应用，别名到了那边就找不到了。
+    kept.push({ ...entry, app: inspected.access.key });
     statuses.push(
       `- ${inspected.access.displayName}（${status}）：${APP_STATUS_WORDS[status]}`,
     );

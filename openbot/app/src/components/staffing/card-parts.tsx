@@ -164,7 +164,6 @@ export function DecisionButtons({
         {busy === "discard" ? "正在作废…" : "作废"}
       </Button>
       <Button
-        aria-label={confirmLabel}
         className={TAP}
         disabled={busy !== null || confirmBlocked}
         onClick={onConfirm}

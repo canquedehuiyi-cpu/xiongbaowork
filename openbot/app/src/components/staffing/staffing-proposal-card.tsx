@@ -1,5 +1,6 @@
 import { asText } from "@/lib/plugins/tool-result";
 import {
+  type Proposal,
   type ProposalStatus,
   type ProposalSummary,
   useProposal,
@@ -23,9 +24,25 @@ import { ProposalResult } from "./proposal-result";
  * 副本。只有那四个起草工具的回答才读标记：别的工具的回答是别人写的字，里面出现一个像样的标记也不画卡片。
  */
 
-/** 缺的角色最多几项、每项多长：与服务端转述给员工时的上限一致（`builtin-staffing.ts`）。 */
+/** 缺的角色最多几项（与服务端转述给员工时一致，`builtin-staffing.ts`），每项多长：一个角色名，不是一句话。 */
 const MISSING_ROLES_MAX = 10;
-const MISSING_ROLE_LENGTH = 60;
+const MISSING_ROLE_LENGTH = 20;
+
+/** 句子里才有的标点和换行：带着它们的不是角色名，是员工写的一句话，不拿来替本人发消息。 */
+const SENTENCE = /[。；;!！?？\n\r\u2028\u2029]/;
+
+/** 照服务端 `oneLine`：控制字符换成空格、空白压成一个，过长的截断并加省略号（截断而不是丢掉）。 */
+function oneLine(text: string, max: number): string {
+  const chars = [
+    ...text
+      .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ];
+  return chars.length > max
+    ? `${chars.slice(0, max).join("")}…`
+    : chars.join("");
+}
 
 /** 这次工具调用的回答是不是一张招聘与组群卡片；是就给出卡片和建群时缺的角色。 */
 export function readStaffingCard(
@@ -42,7 +59,7 @@ export function readStaffingCard(
   };
 }
 
-/** 员工这次调用写的 `missingRoles`：只收短文字，读不出来就当没有。 */
+/** 员工这次调用写的 `missingRoles`：只收角色名（不带句子标点），过长的截短，读不出来就当没有。 */
 function missingRolesIn(args: string | undefined): string[] {
   if (!args) return [];
   let parsed: unknown;
@@ -57,8 +74,9 @@ function missingRolesIn(args: string | undefined): string[] {
     ...new Set(
       roles
         .filter((role): role is string => typeof role === "string")
-        .map((role) => role.replace(/\s+/g, " ").trim())
-        .filter((role) => role !== "" && role.length <= MISSING_ROLE_LENGTH),
+        .filter((role) => !SENTENCE.test(role))
+        .map((role) => oneLine(role, MISSING_ROLE_LENGTH))
+        .filter((role) => role !== ""),
     ),
   ].slice(0, MISSING_ROLES_MAX);
 }
@@ -71,7 +89,8 @@ export function StaffingProposalCard({
   missingRoles?: string[];
 }) {
   const view = useProposal(card.proposalId);
-  const fallbackTitle = TITLE[card.kind](card.title);
+  // 读到之前只按种类说：标记里的标题是员工写的，服务端还没认过。
+  const fallbackTitle = KIND_TITLE[card.kind];
 
   if (view.isPending)
     return (
@@ -102,7 +121,7 @@ export function StaffingProposalCard({
     );
 
   const { proposal } = view.data;
-  const title = TITLE[proposal.kind](titleOf(proposal.draft, card.title));
+  const title = titleOf(proposal);
   if (proposal.status === "applied" || proposal.status === "partially_applied")
     return <ProposalResult proposal={proposal} title={title} />;
   if (isClosed(proposal.status))
@@ -133,17 +152,21 @@ export function StaffingProposalCard({
   }
 }
 
-const TITLE: Record<StaffingProposalKind, (name: string) => string> = {
-  employee: (name) => `招聘「${name}」`,
-  employee_change: (name) => name,
-  group: (name) => `组建群聊「${name}」`,
-  group_change: (name) => name,
+/** 不看内容时的标题，与服务端摘要的泛称一致（`staffing/routes.ts`）。 */
+const KIND_TITLE: Record<StaffingProposalKind, string> = {
+  employee: "招聘员工",
+  employee_change: "调整员工",
+  group: "组建群聊",
+  group_change: "调整群聊",
 };
 
-/** 草稿里有名字（新员工、新群）用它，否则用标记里的标题（改动类是「调整「名字」」）。 */
-function titleOf(draft: unknown, fallback: string): string {
-  const name = (draft as { name?: unknown }).name;
-  return typeof name === "string" && name.trim() ? name.trim() : fallback;
+/** 新员工、新群用服务端草稿里的名字；改动类用泛称（改的是哪位、哪个群，卡片里写着）。 */
+function titleOf(proposal: Proposal): string {
+  if (proposal.kind === "employee" && proposal.draft.name.trim())
+    return `招聘「${proposal.draft.name.trim()}」`;
+  if (proposal.kind === "group" && proposal.draft.name.trim())
+    return `组建群聊「${proposal.draft.name.trim()}」`;
+  return KIND_TITLE[proposal.kind];
 }
 
 const KIND_WORDS: Record<StaffingProposalKind, string> = {

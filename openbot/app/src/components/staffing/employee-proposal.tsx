@@ -231,7 +231,7 @@ export function EmployeeProposal({
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">
-              这是你的第 {seats.used + 1} / {seats.limit} 个员工
+              这是第 {seats.used + 1} / {seats.limit} 个员工
             </p>
           )
         ) : null}
