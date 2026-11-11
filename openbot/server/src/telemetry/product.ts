@@ -233,6 +233,7 @@ milestones("learning", "setup", "human", {
     "learning.skill_closed",
     "learning.sharing_requested",
     "learning.sharing_decided",
+    "learning.local_candidate_reviewed",
   ],
 });
 export function projectAuditMilestone(
