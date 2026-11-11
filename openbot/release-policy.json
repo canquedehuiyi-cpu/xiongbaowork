@@ -1,6 +1,6 @@
 {
   "$schema": "./shared/release-policy.schema.json",
-  "version": "v0.2.7",
+  "version": "v0.2.8",
   "compatibility": {
     "launcherApi": 1,
     "configSchema": 1,
@@ -13,7 +13,7 @@
     "intelligenceCapabilities": []
   },
   "upgrade": {
-    "fromVersions": ["v0.2.6"],
+    "fromVersions": ["v0.2.7"],
     "requiresDowntime": true,
     "recovery": "restore-backup"
   }
