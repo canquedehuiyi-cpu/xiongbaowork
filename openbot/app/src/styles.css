@@ -5,15 +5,6 @@
 @import "prompt-area/tailwind.css";
 @import "@fontsource-variable/inter";
 @import "./theme.css";
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-/*
- * 上游这里还引入了 ./frame.css（OpenBot 自己的彩色玻璃外框）。熊宝用自己的红金玻璃底，不引入；
- * 皮肤各自画自己的外框，不受影响。
- */
-/* OpenBot's own typeface, the one open.bot is set in. Remove for theme.css's Inter. */
-@import "./typeface.css";
-=======
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 @import "./skins/skins.css";
 
 /*
@@ -265,19 +256,6 @@ body {
   .bg-card {
     background-image: var(--card-sheen);
   }
-}
-
-/*
- * 上游 typeface.css 给 OpenBot 自己的外观（没有皮肤时）换成 Atkinson Hyperlegible Next，但它的字体栈没有
- * 中文字体。同样的选择器、排在它后面，补上苹方与微软雅黑作为中文回退；皮肤仍用各自的字体。
- */
-:root:not([data-skin]),
-:root:not([data-skin]) body,
-:root:not([data-skin]) .font-sans,
-:root:not([data-skin]) .font-heading {
-  font-family:
-    "Atkinson Hyperlegible Next Variable", "PingFang SC", "Microsoft YaHei",
-    ui-sans-serif, system-ui, sans-serif;
 }
 
 /* While the sidebar's edge is dragged, it follows the pointer rather than easing after it. */

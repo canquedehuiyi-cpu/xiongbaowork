@@ -12,15 +12,12 @@ export type ApprovalDecision =
   | "allow_always"
   | "deny"
   | "handled";
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 export type RuleBehaviour =
   | "allow"
   | "pre_approved"
   | "ask"
   | "hand_off"
   | "deny";
-=======
-export type RuleBehaviour = "allow" | "pre_approved" | "ask" | "hand_off";
 /** The kinds of action OpenBot asks about by name, as server/src/approvals/types.ts lists them. */
 export type ActionKind =
   | "deleting"
@@ -47,7 +44,6 @@ export type ConversationGrant = {
   kind?: ActionKind;
   createdAt: string;
 };
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 export type HostCommandPolicy = "ask" | "allow" | "never";
 export type ApprovalRuleInput = {
   botId: string;
@@ -142,13 +138,10 @@ export type ApprovalInboxData = {
     enforceAutoReview: boolean;
     customRulesEnabled: boolean;
     hostCommandsCap: HostCommandPolicy;
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     /** Every Bot asks before a dangerous command (SEC1 D10). */
     enforceDangerousCommands?: boolean;
-=======
     /** The kinds the admin closed. A kind not named is open. */
     actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   };
   /** The member's command policy after the team cap. */
   hostCommands?: HostCommandPolicy;
@@ -264,7 +257,7 @@ export const decideApproval = (id: string, decision: ApprovalDecision) =>
 export const revokeConversationGrant = (id: string) =>
   client(`/api/approvals/conversation-grants/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    fallback: "Couldn't turn that off. Try again.",
+    fallback: "没能关掉，请再试一次。",
   });
 export const revokeApprovalRule = (id: string) =>
   client(`/api/approvals/rules/${encodeURIComponent(id)}`, {
@@ -293,11 +286,8 @@ export const setTeamApprovalSettings = (input: {
   enforceAutoReview?: boolean;
   customRulesEnabled?: boolean;
   hostCommandsCap?: HostCommandPolicy;
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   enforceDangerousCommands?: boolean;
-=======
   actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 }) =>
   client("/api/approvals/team", {
     method: "PATCH",
