@@ -25,7 +25,8 @@ import {
   type WakerGroup,
   wakerGroupKeys,
 } from "@/lib/waker-groups/queries";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
+import { seedQuietNeedsYou } from "./quiet-needs-you";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -37,6 +38,9 @@ import { settleReactWork } from "./settle-react-work";
  * of role, one description line and a 任务数 · 最近运行 footer — with the dashed create card after
  * the last profile. The person's own 分身 wears the page's one local red. Each card's actions stay
  * reachable in a row that hover or keyboard focus reveals.
+ *
+ * M5b：这面墙并进了上游的员工页（`/bots`，标题「员工」），卡片画在上游的分区里：你的员工一格（分身在第一位，
+ * 新建卡在最后），共享给你的另一格，编号跨分区接着数。
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -145,9 +149,10 @@ function seed({ crews = [] as WakerGroup[] } = {}) {
     configuredAt: "2026-11-01T00:00:00.000Z",
     sources: [],
   });
+  seedQuietNeedsYou(client);
 }
 
-function draw(entry = "/wakers") {
+function draw(entry = "/bots") {
   const root = createRootRoute({ component: () => <Outlet /> });
   const stub = (path: string) =>
     createRoute({
@@ -159,15 +164,16 @@ function draw(entry = "/wakers") {
     context: {},
     history: createMemoryHistory({ initialEntries: [entry] }),
     routeTree: root.addChildren([
-      WakersRoute.update({
+      BotsRoute.update({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots",
       } as never),
-      stub("/wakers/$agentId"),
-      stub("/assemble/$agentId"),
+      stub("/bots/$agentId"),
+      stub("/bots/$agentId/setup"),
       stub("/channel/new"),
-      stub("/role-templates"),
+      stub("/capabilities/roles"),
       stub("/tasks"),
+      stub("/pipelines"),
     ]),
   });
   const screen = render(
@@ -190,9 +196,9 @@ test("the header carries the eyebrow and subtitle, 角色模板 beside the prima
   const { screen } = draw();
   await screen.findByText("Code Reviewer");
 
-  expect(screen.getByRole("heading", { name: "员工管理" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "员工" })).toBeTruthy();
   expect(
-    screen.getByText("选择合适的员工开始任务，或为团队新建一位员工。"),
+    screen.getByText("管理你的员工、群组，以及别人共享给你的员工。"),
   ).toBeTruthy();
   expect(
     screen.container.querySelector("[data-slot=eyebrow]")?.textContent,
@@ -204,8 +210,8 @@ test("the header carries the eyebrow and subtitle, 角色模板 beside the prima
     "角色模板",
     "新建员工",
   ]);
-  expect(links[1]?.getAttribute("href")).toBe("/wakers?new=true");
-  expect(links[0]?.getAttribute("href")).toBe("/role-templates");
+  expect(links[1]?.getAttribute("href")).toBe("/bots?new=true");
+  expect(links[0]?.getAttribute("href")).toBe("/capabilities/roles");
   // Both draw their glyph as an icon, not as text: layers for 角色模板, a plus for 新建员工.
   expect(links[0]?.querySelector("svg")).not.toBeNull();
   expect(links[1]?.querySelector("svg")).not.toBeNull();
@@ -268,13 +274,21 @@ test("the grid is three columns (two at 1150px, one at 440px) of numbered profil
   const { screen } = draw();
   await screen.findByText("Code Reviewer");
 
-  const grid = screen.getByTestId("waker-grid");
-  // theme.css `.staff-grid` and its two breakpoints.
-  expect(grid.className).toContain("min-[1151px]:grid-cols-3");
-  expect(grid.className).toContain("min-[441px]:grid-cols-2");
-  expect(grid.className).toContain("grid-cols-1");
-  // The employees in the roster's order, numbered as drawn.
-  const cards = [...grid.children].slice(0, -1);
+  // One grid per section: 你的员工 (the 分身 first, then the create card), then 共享给你的.
+  const grids = screen.getAllByTestId("waker-grid");
+  expect(grids.map((grid) => grid.getAttribute("data-section"))).toEqual([
+    "yours",
+    "shared",
+  ]);
+  for (const grid of grids) {
+    // theme.css `.staff-grid` and its two breakpoints.
+    expect(grid.className).toContain("min-[1151px]:grid-cols-3");
+    expect(grid.className).toContain("min-[441px]:grid-cols-2");
+    expect(grid.className).toContain("grid-cols-1");
+  }
+  const grid = grids[0] as HTMLElement;
+  // The employees in the roster's order, numbered as drawn, across the sections.
+  const cards = screen.getAllByTestId("waker-card");
   expect(
     cards.map((card) => card.querySelector("[data-card-name]")?.textContent),
   ).toEqual(["我的分身", "Code Reviewer"]);
@@ -285,10 +299,10 @@ test("the grid is three columns (two at 1150px, one at 440px) of numbered profil
   expect(
     cards[0]?.querySelector("[data-card-index]")?.getAttribute("aria-hidden"),
   ).toBe("true");
-  // Then the dashed create card, laid out as one more profile.
+  // Then, after the last of 你的员工, the dashed create card, laid out as one more profile.
   const last = grid.lastElementChild as HTMLElement;
   expect(last.getAttribute("data-testid")).toBe("waker-create-card");
-  expect(last.getAttribute("href")).toBe("/wakers?new=true");
+  expect(last.getAttribute("href")).toBe("/bots?new=true");
   expect(last.className).toContain("border-dashed");
   expect(last.textContent).toContain("新建员工");
 });
@@ -394,7 +408,7 @@ test("the groups tab uses the same grid and card: GROUP / 01 profiles with membe
       },
     ],
   });
-  const { screen } = draw("/wakers?tab=groups");
+  const { screen } = draw("/bots?tab=groups");
   const card = await screen.findByTestId("crew-card");
   const grid = card.parentElement as HTMLElement;
   expect(grid.className).toContain("min-[1151px]:grid-cols-3");
@@ -445,7 +459,7 @@ test("an empty roster is the workbench empty state with its own way to create on
   // docs/design/ios-studio `.empty`: the mascot, a bold title, one line, and the action.
   expect(within(empty).getByText("这里还没有员工")).toBeTruthy();
   const create = within(empty).getByRole("button", { name: "新建员工" });
-  expect(create.getAttribute("href")).toBe("/wakers?new=true");
+  expect(create.getAttribute("href")).toBe("/bots?new=true");
   expect(screen.queryByTestId("waker-grid")).toBeNull();
   // An answered roster of none is a count of none.
   expect(screen.getByTestId("waker-count").textContent).toBe("0 名员工");

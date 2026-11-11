@@ -95,32 +95,33 @@ test("only this Bot's own rules can be changed, and the team rules that reach it
   const view = draw();
   expect(
     await view.findByRole("combobox", {
-      name: "Behaviour for Any action on Gmail",
+      name: /^「.*Gmail.*」的处理方式$/,
     }),
   ).toBeTruthy();
   expect(
-    view.queryByRole("combobox", { name: "Behaviour for Any action on Drive" }),
+    view.queryByRole("combobox", { name: /^「.*Drive.*」的处理方式$/ }),
   ).toBeNull();
   expect(
-    view.queryByRole("combobox", { name: "Behaviour for Any action on Slack" }),
+    view.queryByRole("combobox", { name: /^「.*Slack.*」的处理方式$/ }),
   ).toBeNull();
-  expect(view.getByText("Share on Drive")).toBeTruthy();
-  expect(view.getByText("Click")).toBeTruthy();
-  expect(view.queryByText("Any action in your folders")).toBeNull();
+  // 规则的读法归审批组（describe-rule），这里只认它说的是 Drive 上的分享。
+  expect(view.getAllByText(/Share.*Drive|分享.*Drive|Drive.*分享/).length).toBeGreaterThan(0);
+  expect(view.getAllByText(/Click|点击/).length).toBeGreaterThan(0);
+  expect(view.queryByText(/Any action in your folders|你的文件夹/)).toBeNull();
 });
 
 test("a rule added here is for this Bot, with no Bot to type", async () => {
   serving();
   const view = draw();
-  await view.findByText("Add a rule");
+  await view.findByText("添加规则");
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: /Add a rule/ }));
+  await user.click(view.getByRole("button", { name: /添加规则/ }));
   await user.type(
-    await view.findByRole("textbox", { name: "Tool or app" }),
+    await view.findByRole("textbox", { name: "工具或应用" }),
     "mcp/notion/*",
   );
-  expect(view.queryByRole("textbox", { name: "Bot" })).toBeNull();
-  await user.click(view.getByRole("button", { name: "Save rule" }));
+  expect(view.queryByRole("textbox", { name: "员工" })).toBeNull();
+  await user.click(view.getByRole("button", { name: "保存规则" }));
   await waitFor(() =>
     expect(sent).toContainEqual({
       path: "/api/approvals/rules",
@@ -149,7 +150,7 @@ test("a personal rule whose Bot is a pattern matching this Bot is shown and can 
   const view = draw();
   expect(
     await view.findByRole("combobox", {
-      name: "Behaviour for Any action on Linear",
+      name: /^「.*Linear.*」的处理方式$/,
     }),
   ).toBeTruthy();
 });

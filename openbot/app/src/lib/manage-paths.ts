@@ -14,7 +14,7 @@ export function managePaths(edition: "team" | "personal") {
   if (edition === "personal") {
     return {
       /** What the list of apps is called where a back button names it. */
-      pluginsLabel: "连接",
+      pluginsLabel: "全部连接",
       plugins: () => linkOptions({ to: "/connections" }),
       plugin: (key: string) =>
         linkOptions({ to: "/connections/$key", params: { key } }),

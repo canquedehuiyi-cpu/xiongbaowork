@@ -46,7 +46,7 @@ export const Route = createFileRoute("/_authed/admin/approvals_/guidance")({
 });
 
 const BACK = {
-  label: "Approvals",
+  label: "审批",
   linkProps: { to: "/admin/approvals" as const },
 };
 
@@ -95,8 +95,8 @@ function ReviewerGuidancePage() {
   return (
     <PageShell
       backButton={BACK}
-      description="Tell the reviewer what your organization needs a person for, or what is routine. It reads your guidance with every action it checks. Nothing changes until you save."
-      title="Guidance for auto-review"
+      description="告诉审核哪些事在你的组织里需要人来拍板，哪些是日常。它检查每个动作时都会读你的指引。保存之前什么都不会改变。"
+      title="自动审核的指引"
     >
       {saved.isPending ? null : saved.error ? (
         <p className="text-destructive text-sm" role="alert">
@@ -117,38 +117,32 @@ function ReviewerGuidancePage() {
                   render={(props) => <Link {...props} to="/admin/approvals" />}
                   variant="outline"
                 >
-                  Cancel
+                  取消
                 </Button>
                 <Button disabled={!ready || save.isPending} type="submit">
-                  {save.isPending ? "Saving…" : "Save guidance"}
+                  {save.isPending ? "正在保存…" : "保存指引"}
                 </Button>
               </>
             }
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="reviewer-guidance">Guidance</FieldLabel>
+                <FieldLabel htmlFor="reviewer-guidance">指引</FieldLabel>
                 <FieldDescription>
-                  Write it the way you'd brief a colleague. A second reading
-                  that sees only your words says what they change.
+                  像给同事交代事情那样写。另一次只看你原话的解读会说明它们改变了什么。
                 </FieldDescription>
                 <Textarea
                   id="reviewer-guidance"
                   maxLength={GUIDANCE_LIMIT}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Anything that emails someone outside the company needs a person"
+                  placeholder="凡是给公司以外的人发邮件的，都要有人拍板"
                   rows={4}
                   value={draft ?? saved.data ?? ""}
                 />
                 <p className="flex gap-1.5 text-muted-foreground text-sm">
                   <IconShieldLock className="mt-0.5 size-4 shrink-0" />
                   <span>
-                    Built-in safety always comes first. Deleting, sending,
-                    sharing, posting, paying and changing account settings ask
-                    first. Members can allow each once, for a conversation, or
-                    always, unless you set it to ask every time. Changing a
-                    password on a website is always left to the person. Guidance
-                    can't change that.
+                    内置的安全规则永远优先：删除、对外发送、分享、公开发布每次都要先问，只能「允许一次」；付款、改凭据、改安全设置总是交给本人去做。指引改变不了这些。
                   </span>
                 </p>
                 <div>
@@ -159,7 +153,7 @@ function ReviewerGuidancePage() {
                     type="button"
                     variant="outline"
                   >
-                    {check.isPending ? "Checking…" : "Check guidance"}
+                    {check.isPending ? "正在检查…" : "检查指引"}
                   </Button>
                 </div>
                 {check.error ? (
@@ -173,13 +167,13 @@ function ReviewerGuidancePage() {
                   check={checked.reading.check}
                   edited={
                     checked.text !== text
-                      ? "You've changed the guidance since it was checked. Check it again before you save."
+                      ? "检查之后你改过这段指引。保存前再检查一次。"
                       : null
                   }
                   explanation={checked.reading.explanation}
-                  failed="OpenBot won't save this."
-                  heading="What this changes"
-                  passed="Reads as guidance. Built-in safety still comes first."
+                  failed="熊宝不会保存这段指引。"
+                  heading="它改变什么"
+                  passed="读起来是指引。内置的安全规则仍然优先。"
                   warning={null}
                 />
               ) : null}
@@ -201,8 +195,8 @@ function ReviewerGuidancePage() {
       )}
       {saved.data ? (
         <PageSection
-          description="The reviewer goes back to its own instructions from the next action it checks."
-          title="Remove"
+          description="从它检查的下一个动作起，审核回到自己原本的指示。"
+          title="移除"
         >
           <Button
             className="mt-4"
@@ -212,17 +206,16 @@ function ReviewerGuidancePage() {
             }}
             variant="destructive"
           >
-            Remove guidance
+            移除指引
           </Button>
         </PageSection>
       ) : null}
       <Dialog onOpenChange={setRemoving} open={removing}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove the guidance?</DialogTitle>
+            <DialogTitle>移除这段指引？</DialogTitle>
             <DialogDescription>
-              The reviewer goes back to its own instructions from the next
-              action it checks.
+              从它检查的下一个动作起，审核回到自己原本的指示。
             </DialogDescription>
           </DialogHeader>
           {remove.error ? (
@@ -236,7 +229,7 @@ function ReviewerGuidancePage() {
               size="sm"
               variant="ghost"
             >
-              Cancel
+              取消
             </Button>
             <Button
               disabled={remove.isPending}
@@ -244,7 +237,7 @@ function ReviewerGuidancePage() {
               size="sm"
               variant="destructive"
             >
-              {remove.isPending ? "Removing…" : "Remove"}
+              {remove.isPending ? "正在移除…" : "移除"}
             </Button>
           </DialogFooter>
         </DialogContent>

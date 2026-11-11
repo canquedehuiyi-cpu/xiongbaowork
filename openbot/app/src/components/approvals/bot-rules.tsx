@@ -20,7 +20,7 @@ import { RuleForm, RuleRow } from "./rules";
 
 /**
  * The person's approval rules for one Bot, and the team rules that reach it, locked, as one card of
- * rows ending in the row that adds one. Rules for every Bot are in Settings → Approvals. A rule's
+ * rows ending in the row that adds one. Rules for every Bot are in 设置 › 审批. A rule's
  * `botId` is the Bot's id, or a pattern covering it.
  */
 export function BotApprovalRules({ agentId }: { agentId: string }) {
@@ -47,21 +47,20 @@ export function BotApprovalRules({ agentId }: { agentId: string }) {
     <PageSection
       description={
         <>
-          The strictest matching rule wins. An "ask" rule beats an "allow" rule.
-          Rules for every Bot are in{" "}
+          匹配的规则里最严的那条说了算：「先问我」压过「允许」。对所有员工生效的规则在
           <Link
-            className="underline underline-offset-4"
+            className="text-foreground underline underline-offset-4"
             to="/settings/approvals"
           >
-            Settings → Approvals
+            设置 › 审批
           </Link>
-          .
+          里。审批底线管的动作（对外发送、删除、分享、发帖等）不受这里的规则放宽。
           {rulesOff
-            ? " An admin has turned off personal rules. Yours are kept but don't apply."
+            ? "管理员关闭了个人规则。你的规则会保留，但暂时不生效。"
             : ""}
         </>
       }
-      title="Rules"
+      title="审批规则"
     >
       {error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -69,7 +68,7 @@ export function BotApprovalRules({ agentId }: { agentId: string }) {
         </p>
       ) : null}
       {saved === 0 ? (
-        <PageEmpty icon={IconChecklist} title="No rules for this Bot" />
+        <PageEmpty icon={IconChecklist} title="这位员工还没有规则" />
       ) : null}
       {saved > 0 || canAdd ? (
         <PageRows>
@@ -106,7 +105,7 @@ export function BotApprovalRules({ agentId }: { agentId: string }) {
               <RuleForm
                 botField={false}
                 forBot={agentId}
-                label="Add a rule"
+                label="添加规则"
                 save={addRule}
               />
             </>

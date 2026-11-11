@@ -26,7 +26,7 @@ import {
 import type { BrokerField, KeyGuide } from "@/lib/plugins/mutations";
 import type { PluginServer, PluginsPage } from "@/lib/plugins/queries";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
-import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
+import { Route as ConnectedAccountRoute } from "@/routes/_authed/_app/connections.$key";
 import { BROKERED_PROBE_OUTCOMES } from "../../server/src/plugins/store";
 
 /**
@@ -734,15 +734,15 @@ afterEach(() => {
 /**
  * The personal screen, at its real id.
  *
- * `routeTree.gen.ts` fixes both halves: id `/connected-accounts/$key` under `/_authed/settings`,
- * path `/connected-accounts/$key`. Decoy pathless/static parents are enough to make the join land
+ * `routeTree.gen.ts` fixes both halves: id `/connections/$key` under `/_authed/_app`, path
+ * `/connections/$key`（M5b：已连接的账号从设置搬到「连接」）. Decoy pathless/static parents are enough to make the join land
  * on the id `useParams({ from: … })` resolves against; the real ancestors check a session and mount
  * the settings shell, neither of which this file is about. The index route is registered only so
  * the Back link has something to build an href from.
  */
 function renderAccountScreen(
   client: QueryClient,
-  at = `/settings/connected-accounts/${APP_KEY}`,
+  at = `/connections/${APP_KEY}`,
 ) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
@@ -751,12 +751,12 @@ function renderAccountScreen(
     component: Outlet,
   });
   const settingsRoute = createRoute({
-    path: "/settings",
+    id: "/_app",
     getParentRoute: () => authedRoute,
     component: Outlet,
   });
   const indexRoute = createRoute({
-    path: "/connected-accounts/",
+    path: "/connections/",
     getParentRoute: () => settingsRoute,
     component: () => null,
   });
@@ -765,8 +765,8 @@ function renderAccountScreen(
       update: (options: unknown) => typeof ConnectedAccountRoute;
     }
   ).update({
-    id: "/connected-accounts/$key",
-    path: "/connected-accounts/$key",
+    id: "/connections/$key",
+    path: "/connections/$key",
     getParentRoute: () => settingsRoute,
   });
   const tree = rootRoute.addChildren([
@@ -2813,7 +2813,7 @@ test("arriving to connect a key app opens its key form without a second press", 
 
   const view = renderAccountScreen(
     queryClient(),
-    `/settings/connected-accounts/${APP_KEY}?connect=true`,
+    `/connections/${APP_KEY}?connect=true`,
   );
 
   expect(await view.findByLabelText("API Key")).toBeTruthy();

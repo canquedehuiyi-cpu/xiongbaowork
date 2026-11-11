@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_authed/admin/permissions_/describe")({
 });
 
 const BACK = {
-  label: "Permissions",
+  label: "权限",
   linkProps: { to: "/admin/permissions" as const },
 };
 
@@ -84,8 +84,8 @@ function DescribePermissionsPage() {
   return (
     <PageShell
       backButton={BACK}
-      description="Say who may use what, and your model writes the permission changes. Nothing changes until you save them."
-      title="Describe who can do what"
+      description="说出谁可以用什么，由你的模型写成权限改动。保存之前什么都不会改变。"
+      title="用一句话描述谁能做什么"
     >
       <form
         noValidate
@@ -101,21 +101,21 @@ function DescribePermissionsPage() {
                 render={(props) => <Link {...props} to="/admin/permissions" />}
                 variant="outline"
               >
-                Cancel
+                取消
               </Button>
               <Button disabled={!ready || save.isPending} type="submit">
-                {save.isPending ? "Saving…" : "Save changes"}
+                {save.isPending ? "正在保存…" : "保存改动"}
               </Button>
             </>
           }
         >
           <FieldGroup>
             <DescribeField
-              action="Write changes"
-              description="Say in a sentence who may or may not do something, and your model writes the changes from this OpenBot's roles and groups. A second reading that never sees your words says what the changes do."
+              action="写成改动"
+              description="用一句话说出谁可以或不可以做某件事，由你的模型按这个部署的角色和用户组写成改动。另一次从没见过你原话的解读会说明这些改动做什么。"
               id="permissions-english"
-              label="Describe the change"
-              placeholder="Contractors can't use their own computer"
+              label="描述这次改动"
+              placeholder="外包人员不能用自己的电脑"
               write={async (described) => {
                 const translation = await translateCapabilityChanges(described);
                 save.reset();
@@ -129,7 +129,7 @@ function DescribePermissionsPage() {
                 check={written.check}
                 edited={
                   edited
-                    ? "You've removed a change since they were written. The check and the reading above are for the written changes, not your edit."
+                    ? "写好之后你删掉过一条改动。上面的检查和解读说的是写出来的改动，不是你改过的版本。"
                     : null
                 }
                 explanation={written.explanation}
@@ -137,10 +137,10 @@ function DescribePermissionsPage() {
                   // No changes says so itself, with the model's reason.
                   written.changes.length === 0
                     ? ""
-                    : "These changes don't check, so OpenBot won't save them."
+                    : "这些改动没通过检查，熊宝不会保存。"
                 }
-                heading="What these changes do"
-                passed="Checks. Every change names a permission, role or group this OpenBot has."
+                heading="这些改动做什么"
+                passed="通过检查。每条改动都对得上这个部署里的权限、角色或用户组。"
                 warning={written.warning}
               />
             ) : null}

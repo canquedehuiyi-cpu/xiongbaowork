@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_authed/admin/approvals_/describe")({
 });
 
 const BACK = {
-  label: "Approvals",
+  label: "审批",
   linkProps: { to: "/admin/approvals" as const },
 };
 
@@ -90,8 +90,8 @@ function DescribeTeamRulesPage() {
   return (
     <PageShell
       backButton={BACK}
-      description="Say what Bots should do before an action, and your model writes the team rules. Nothing changes until you save them."
-      title="Describe team rules"
+      description="说出员工在动手之前该怎么做，由你的模型写成团队规则。保存之前什么都不会改变。"
+      title="用一句话描述团队规则"
     >
       <form
         noValidate
@@ -107,21 +107,21 @@ function DescribeTeamRulesPage() {
                 render={(props) => <Link {...props} to="/admin/approvals" />}
                 variant="outline"
               >
-                Cancel
+                取消
               </Button>
               <Button disabled={!ready || save.isPending} type="submit">
-                {save.isPending ? "Saving…" : "Save rules"}
+                {save.isPending ? "正在保存…" : "保存规则"}
               </Button>
             </>
           }
         >
           <FieldGroup>
             <DescribeField
-              action="Write rules"
-              description="Say in a sentence what Bots should do, and your model writes rules from this OpenBot's apps and Bots. A second reading that never sees your words says what the rules do."
+              action="写成规则"
+              description="用一句话说出员工该怎么做，由你的模型按这个部署的应用和员工写成规则。另一次从没见过你原话的解读会说明这些规则做什么。"
               id="team-rules-english"
-              label="Describe the rules"
-              placeholder="Ask before any Bot sends email from Gmail"
+              label="描述这些规则"
+              placeholder="任何员工用 Gmail 发邮件之前都先问"
               write={async (described) => {
                 const translation = await translateApprovalRules(described);
                 save.reset();
@@ -135,7 +135,7 @@ function DescribeTeamRulesPage() {
                 check={written.check}
                 edited={
                   edited
-                    ? "You've changed the rules since they were written. The check and the reading above are for the written rules, not your edit."
+                    ? "写好之后你改过这些规则。上面的检查和解读说的是写出来的规则，不是你改过的版本。"
                     : null
                 }
                 explanation={written.explanation}
@@ -143,10 +143,10 @@ function DescribeTeamRulesPage() {
                   // No rules says so itself, with the model's reason.
                   written.rules.length === 0
                     ? ""
-                    : "These rules don't check, so OpenBot won't save them."
+                    : "这些规则没通过检查，熊宝不会保存。"
                 }
-                heading="What these rules do"
-                passed="Checks. Every rule matches tools and Bots this OpenBot has."
+                heading="这些规则做什么"
+                passed="通过检查。每条规则都对得上这个部署里的工具和员工。"
                 warning={written.warning}
               />
             ) : null}

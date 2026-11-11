@@ -22,7 +22,7 @@ function ActivityPage() {
   return (
     <AuditPage
       bot={bot}
-      description="See what your Bots did, and which of their actions were allowed, blocked or didn't happen."
+      description="看看你的员工做了什么，以及哪些动作被放行、被拦下或没有发生。"
       onClearBot={() => navigate({ to: "/settings/activity" })}
     />
   );

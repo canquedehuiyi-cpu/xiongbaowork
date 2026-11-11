@@ -39,11 +39,11 @@ type Source = "none" | ResponsibilityRecord["subscriptions"][number]["source"];
 
 /** The event sources a new responsibility can subscribe to, in the order they are offered. */
 const SOURCES = {
-  none: "Run when asked",
+  none: "被要求时运行",
   github: "GitHub",
   slack: "Slack",
-  connector: "Connected app",
-  schedule: "Schedule",
+  connector: "已连接的应用",
+  schedule: "定时",
 } as const satisfies Partial<Record<Source, string>>;
 
 /**
@@ -85,9 +85,9 @@ export function NewResponsibilityDialog({
     <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New goal</DialogTitle>
+          <DialogTitle>新建长期职责</DialogTitle>
           <DialogDescription>
-            An ongoing goal. The Bot works on it in the conversation you pick.
+            交给员工一个长期目标，它会在你选的那段对话里去做。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 overflow-y-auto">
@@ -115,7 +115,7 @@ export function NewResponsibilityDialog({
               <FieldGroup className="sm:grid sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor={`${formId}-conversation`}>
-                    Conversation
+                    对话
                   </FieldLabel>
                   <Select
                     items={Object.fromEntries(
@@ -135,7 +135,7 @@ export function NewResponsibilityDialog({
                       className="w-full"
                       id={`${formId}-conversation`}
                     >
-                      <SelectValue placeholder="Choose a conversation" />
+                      <SelectValue placeholder="选择一段对话" />
                     </SelectTrigger>
                     <SelectContent>
                       {offered.map((channel) => (
@@ -148,7 +148,7 @@ export function NewResponsibilityDialog({
                 </Field>
                 {fixedBot === undefined ? (
                   <Field>
-                    <FieldLabel htmlFor={`${formId}-bot`}>Bot</FieldLabel>
+                    <FieldLabel htmlFor={`${formId}-bot`}>员工</FieldLabel>
                     <Select
                       items={Object.fromEntries(
                         availableBots.map((bot) => [bot.id, bot.name]),
@@ -158,7 +158,7 @@ export function NewResponsibilityDialog({
                       value={agentId || null}
                     >
                       <SelectTrigger className="w-full" id={`${formId}-bot`}>
-                        <SelectValue placeholder="Choose a Bot" />
+                        <SelectValue placeholder="选择一位员工" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableBots.map((bot) => (
@@ -179,7 +179,7 @@ export function NewResponsibilityDialog({
                   type="button"
                   variant="outline"
                 >
-                  Load more conversations
+                  加载更多对话
                 </Button>
               )}
               {(channels.error || bots.error) && (
@@ -188,19 +188,19 @@ export function NewResponsibilityDialog({
                 </p>
               )}
               <Field>
-                <FieldLabel htmlFor={`${formId}-title`}>Title</FieldLabel>
+                <FieldLabel htmlFor={`${formId}-title`}>标题</FieldLabel>
                 <Input
                   id={`${formId}-title`}
                   required
                   maxLength={160}
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
-                  placeholder="Keep the customer report up to date"
+                  placeholder="让客户报告保持最新"
                 />
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formId}-instruction`}>
-                  Instruction
+                  指令
                 </FieldLabel>
                 <Textarea
                   id={`${formId}-instruction`}
@@ -212,7 +212,7 @@ export function NewResponsibilityDialog({
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formId}-criteria`}>
-                  Success criteria
+                  成功标准
                 </FieldLabel>
                 <Textarea
                   id={`${formId}-criteria`}
@@ -220,13 +220,13 @@ export function NewResponsibilityDialog({
                   maxLength={3000}
                   value={successCriteria}
                   onChange={(event) => setSuccessCriteria(event.target.value)}
-                  placeholder="The report contains the current quarter's graph and a source link."
+                  placeholder="报告里有本季度的图表和来源链接。"
                 />
               </Field>
               <FieldGroup className="sm:grid sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor={`${formId}-source`}>
-                    Event source
+                    事件来源
                   </FieldLabel>
                   <Select
                     items={SOURCES}
@@ -250,15 +250,18 @@ export function NewResponsibilityDialog({
                   </Select>
                   {source === "github" && (
                     <FieldDescription>
-                      Events come from the repositories you connected in{" "}
-                      <Link to="/connections">Connections</Link>.
+                      事件来自你在
+                      <Link className="underline underline-offset-4" to="/connections">
+                        连接
+                      </Link>
+                      里接入的仓库。
                     </FieldDescription>
                   )}
                 </Field>
                 {source !== "none" && (
                   <Field>
                     <FieldLabel htmlFor={`${formId}-event`}>
-                      Event type
+                      事件类型
                     </FieldLabel>
                     <Input
                       id={`${formId}-event`}
@@ -267,7 +270,7 @@ export function NewResponsibilityDialog({
                       value={eventType}
                       onChange={(event) => setEventType(event.target.value)}
                       placeholder={
-                        source === "github" ? "issues.opened" : "Event type"
+                        source === "github" ? "issues.opened" : "事件类型"
                       }
                     />
                   </Field>
@@ -283,7 +286,7 @@ export function NewResponsibilityDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={create.isPending}
@@ -291,7 +294,7 @@ export function NewResponsibilityDialog({
             size="sm"
             type="submit"
           >
-            {create.isPending ? "Creating…" : "Create goal"}
+            {create.isPending ? "正在创建…" : "创建长期职责"}
           </Button>
         </DialogFooter>
       </DialogContent>

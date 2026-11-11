@@ -392,7 +392,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
   }
 
   const back = {
-    label: "连接",
+    label: "全部连接",
     linkProps: { to: "/connections" as const },
   };
 
