@@ -4,7 +4,8 @@ import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { markUntrusted } from "../untrusted-content";
-// M5: 上游这里还引入了 account-argument（多账号）和 app-access（应用卡片），留给 X 系列（共享使用/多账号、app-access）。
+// M5: 上游这里还引入了 app-access（应用卡片），留给 X 系列（app-access）。
+import { withAccountArgument } from "./account-argument";
 import { appCallsOfRun, sameArguments } from "./run-calls";
 import type { SelectableSkill } from "./selection";
 import {
@@ -287,12 +288,40 @@ export async function grantedTools(options: {
   initiator?: AuditInitiator;
   /** Whose account a call reaches, when not the asker's; see `callTool`'s `credentialActorId`. */
   credentialActorFor?: (ref: string) => Promise<string>;
+  /**
+   * 告诉模型谁的账号可以选（上游 #1298）：默认是提问者。Team Bot 用它主人的账号时传 null，模型就不会被
+   * 告知任何账号可选，调用进主人的默认账号（store 也拒绝队友点名账号）。不在这里调用
+   * `credentialActorFor`：它会花掉一次性的同意，只能在真正调用时问。
+   */
+  offersAccountsOf?: string | null;
 }): Promise<GrantedTool[]> {
   const { store, botId, actorId, initiator, credentialActorFor } = options;
   const granted = await store.listForAgent(botId);
 
-  // M5: 上游在这里按人给多账号应用的工具加 `account` 参数（account-argument），留给 X 系列（共享使用/多账号）。
-
+  /*
+   * 这个人在每个应用上有哪些账号，所以一个拿着 Gmail 工具的 Bot 知道有两个邮箱、各叫什么。只有在一个应用
+   * 上有不止一个账号时工具才变：schema 多一个列出它们的 `account` 参数（见 `./account-argument`），调用
+   * 路径再拿回来的名字和同一个人的账号对照。读不出来时每个工具保持应用原样，调用照旧进默认账号。
+   */
+  const holder =
+    options.offersAccountsOf === undefined ? actorId : options.offersAccountsOf;
+  let held: Awaited<ReturnType<PluginStore["accountChoicesForServers"]>> =
+    new Map();
+  if (holder) {
+    try {
+      held = await store.accountChoicesForServers(holder, [
+        ...new Set(granted.tools.map((tool) => tool.ref.split("/")[0] ?? "")),
+      ]);
+    } catch {
+      held = new Map();
+    }
+  }
+  const schemaFor = (tool: (typeof granted.tools)[number]) => {
+    const choices = held.get(tool.ref.split("/")[0] ?? "");
+    return choices
+      ? withAccountArgument(tool.inputSchema, choices.title, choices.choices)
+      : tool.inputSchema;
+  };
   /*
    * This run's app calls, a few at a time, and a read asked twice answered once. One per call of this
    * function, which is one per run: a run builds its tools afresh (`loadTools` in copilot.ts), so
@@ -315,7 +344,7 @@ export async function grantedTools(options: {
           .filter(Boolean)
           .join("\n\n")
       : tool.description,
-    parameters: parametersFor(tool.inputSchema),
+    parameters: parametersFor(schemaFor(tool)),
     execute: async (args: unknown) => {
       // The runtime hands through whatever the model produced. Anything that is not an object is
       // not a set of arguments, and the vendor should be the one to say so.

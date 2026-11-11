@@ -1423,7 +1423,19 @@ export function createPluginRoutes(
         toolkit,
         userId: context.var.actor.id,
       });
-      if (existing) {
+      /*
+       * 「再连一个账号」（上游 #1298）：一个人可以在同一个应用上有两个邮箱，调用按名字指定用哪个（见
+       * `./brokered-accounts`），所以第二个账号不再由 vendor 替谁选。只在明确要求时（`?another=1`，应用
+       * 页面上的「再连一个账号」按钮）、且只对同意屏幕类的应用开放：平常按 Connect 仍按下面的规则拒绝，
+       * 输入密钥的应用仍是一人一个账号。
+       */
+      const another =
+        existing !== null &&
+        existing !== undefined &&
+        context.req.query("another") === "1" &&
+        schemeKind(row.authScheme) === "consent" &&
+        Boolean(composio.broker.accountsOf);
+      if (existing && !another) {
         /*
          * Named with the step to take rather than only refused: a second link would attach a
          * second account behind a row that already says connected, and the way to a new one is
@@ -1993,6 +2005,7 @@ export function createPluginRoutes(
         ({ redirectUrl } = await composio.broker.authorize({
           userId: context.var.actor.id,
           toolkit,
+          ...(another ? { another: true } : {}),
           /*
            * THE REFUSAL ABOVE CHECKS THAT A SETTING IS SET; THIS CHECKS THAT IT IS AN ADDRESS.
            * `appUrl` is an environment string — `OPENBOT_APP_URL`, or the first `TRUSTED_ORIGINS`
@@ -2435,6 +2448,121 @@ export function createPluginRoutes(
    * written. There is no useful distinction here for the person between a forged state and an expired
    * one, and spelling out which is which tells anybody probing this endpoint how far they got.
    */
+  /*
+   * 一个人在一个 broker 应用上的多个账号（上游 #1298）。账号永远是会话里那个人的：路由里没有一处从请求
+   * 里读用户 id，所以一个人只能列出、设默认、断开他自己的账号。账号 id 对浏览器不透明，不是 vendor 的 id。
+   *
+   * GET 每次按 vendor 现在列出的重建（`syncBrokeredAccounts`），所以页面上列出的从来不只是这里的一行记录。
+   */
+  const brokeredAccountsAt = async (
+    serverId: string,
+  ): Promise<
+    | { toolkit: string; title: string; refusal?: undefined }
+    | {
+        toolkit?: undefined;
+        refusal: { error: string; status: 400 | 503 };
+      }
+  > => {
+    const row = await store.serverAddress(serverId);
+    const resolved = await brokeredAppFor(serverId);
+    if (resolved.refusal) return { refusal: resolved.refusal };
+    return { toolkit: resolved.toolkit, title: row?.title ?? serverId };
+  };
+
+  routes.get("/servers/:id/accounts", requireUser, async (context) => {
+    const resolved = await brokeredAccountsAt(context.req.param("id"));
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    try {
+      const accounts = await store.syncBrokeredAccounts({
+        toolkit: resolved.toolkit,
+        userId: context.var.actor.id,
+      });
+      return context.json({
+        accounts,
+        canAddAnother: Boolean(composio?.broker.accountsOf),
+      });
+    } catch (error) {
+      const refusal = personRefusal(
+        error,
+        `没能列出你的 ${resolved.title} 账号。请刷新页面。`,
+        { route: "accounts.list", toolkit: resolved.toolkit },
+      );
+      return context.json({ error: refusal.error }, refusal.status);
+    }
+  });
+
+  routes.post(
+    "/servers/:id/accounts/:accountId/default",
+    requireUser,
+    async (context) => {
+      const resolved = await brokeredAccountsAt(context.req.param("id"));
+      if (resolved.refusal) {
+        return context.json(
+          { error: resolved.refusal.error },
+          resolved.refusal.status,
+        );
+      }
+      const changed = await store.setDefaultBrokeredAccount({
+        toolkit: resolved.toolkit,
+        userId: context.var.actor.id,
+        id: context.req.param("accountId"),
+      });
+      if (!changed) {
+        return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
+      }
+      return context.json({ ok: true });
+    },
+  );
+
+  routes.delete(
+    "/servers/:id/accounts/:accountId",
+    requireUser,
+    async (context) => {
+      const resolved = await brokeredAccountsAt(context.req.param("id"));
+      if (resolved.refusal) {
+        return context.json(
+          { error: resolved.refusal.error },
+          resolved.refusal.status,
+        );
+      }
+      try {
+        const ended = await store.disconnectBrokeredAccount({
+          toolkit: resolved.toolkit,
+          userId: context.var.actor.id,
+          id: context.req.param("accountId"),
+          by: context.var.actor.id,
+        });
+        if (ended === null) {
+          return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
+        }
+        // 最后一个账号：整个连接一起断开，走这个应用一直以来的那条路径。
+        if ("only" in ended) {
+          return context.json(
+            await store.disconnectBrokered({
+              toolkit: resolved.toolkit,
+              userId: context.var.actor.id,
+              by: context.var.actor.id,
+              reason: "self",
+            }),
+          );
+        }
+        return context.json(ended);
+      } catch (error) {
+        const refusal = personRefusal(
+          error,
+          "没能断开这个账号。请再按一次「断开」，重复按是安全的；如果一直这样，请联系管理员。",
+          { route: "accounts.disconnect", toolkit: resolved.toolkit },
+        );
+        return context.json({ error: refusal.error }, refusal.status);
+      }
+    },
+  );
+
   routes.get("/oauth/callback", async (context) => {
     const failed = connectedAccountsUrlFor(connect?.appUrl, {
       failed: true,

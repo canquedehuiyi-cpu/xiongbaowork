@@ -331,7 +331,10 @@ import { createPlatformRoutes } from "./platform/routes";
 import { appAccessTools } from "./plugins/app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
-import { createComposioClient } from "./plugins/composio-adapter";
+import {
+  brokerWithAccounts,
+  createComposioClient,
+} from "./plugins/composio-adapter";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
 import { startBrokeredRelist } from "./plugins/relist";
@@ -1497,6 +1500,8 @@ await startupLifecycle.run(async (startup) => {
     ? createComposioClient(config.composioApiKey)
     : null;
   if (composio) useComposioClient(composio.actions);
+  // 部署用的 broker：adapter 的 broker 加上逐个列账号（上游 #1298）。
+  const composioBroker = composio ? brokerWithAccounts(composio) : undefined;
 
   /**
    * The private sign-in form and the Passwords vault. A Bot asks to be signed in; the person answers
@@ -1589,7 +1594,7 @@ await startupLifecycle.run(async (startup) => {
      * behind one screen. Undefined without a key, which leaves enabling an app refused rather than
      * attempted.
      */
-    broker: composio?.broker,
+    broker: composioBroker,
   });
 
   // Logo metadata is optional; a vendor outage must not prevent the API from starting.
@@ -2324,6 +2329,11 @@ await startupLifecycle.run(async (startup) => {
       initiator,
       // A Team Bot reaches its owner's accounts, and a teammate's own only with their consent.
       credentialActorFor: teamBots.credentialActorFor(actorId, botId),
+      // 账号可选（上游 #1298）只告诉在用自己账号的人；别人的 Team Bot 不告诉，读法不花同意。
+      offersAccountsOf:
+        (await teamBots.unaskedOwnAccount(actorId, botId)) === null
+          ? actorId
+          : null,
     })),
     // 申请访问：用不了某个应用时替对方向管理员申请（迁移 0153）。只建一条本租户的申请，不碰应用。
     ...appAccessTools({ store: pluginStore, botId, actorId }),
@@ -4356,7 +4366,9 @@ await startupLifecycle.run(async (startup) => {
     // The app directory, behind the same client the plugin store and the transport already share.
     // Absent without a key, which leaves the routes reporting no broker rather than listing apps
     // nobody could connect.
-    composio ? { broker: composio.broker, guides: composio.guides } : undefined,
+    composio && composioBroker
+      ? { broker: composioBroker, guides: composio.guides }
+      : undefined,
     process.env.OPENBOT_MODEL_OAUTH_FILE?.trim()
       ? createProviderOAuthProxy(process.env.OPENBOT_MODEL_OAUTH_FILE.trim())
       : undefined,
