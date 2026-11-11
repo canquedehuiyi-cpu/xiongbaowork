@@ -1,5 +1,11 @@
 import type { Database } from "../db/client";
-import { agentProfiles, agents, subscriptions } from "../db/schema";
+import {
+  agentProfiles,
+  agents,
+  pluginGrants,
+  subscriptions,
+} from "../db/schema";
+import { staffingGrantRows } from "../staffing/default-grant";
 import { runAsTenant } from "./context";
 
 /**
@@ -53,6 +59,10 @@ export function packageChannelId(tenantId: string, channelId: string): string {
 export async function provisionTenant(
   database: Database,
   user: { id: string; email: string; name?: string | null },
+  options: {
+    /** 新建出分身时一并给它「招聘与组群」（`staffing/default-grant.ts`）；开通的入口按需要传。 */
+    withStaffing?: boolean;
+  } = {},
 ): Promise<void> {
   // The rows name a tenant that does not exist yet, so the write has to run
   // inside that tenant's scope; RLS will not admit another scope's stamp.
@@ -69,7 +79,7 @@ export async function provisionTenant(
 
     // One 分身 per tenant, keyed by a deterministic id so a retried hook cannot make a second.
     const avatarId = avatarAgentId(user.id);
-    await database
+    const created = await database
       .insert(agents)
       .values({
         id: avatarId,
@@ -81,7 +91,18 @@ export async function provisionTenant(
             "你是用户的个人分身：代表用户收集、整理和跟进信息，语气自然、简洁、中文优先。你不确定的事要直说，不编造。",
         },
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: agents.id });
+
+    /*
+     * 新开通的分身默认会招人、组群。只在这一次真的建出了分身时写：开通在每次登录和每次启动都会再调，
+     * 已有的分身要是又被补一遍，本人收回或禁用过的就会回来。已有的分身由启动时的补授处理。
+     */
+    if (created.length > 0 && options.withStaffing === true)
+      await database
+        .insert(pluginGrants)
+        .values(staffingGrantRows(avatarId, user.id))
+        .onConflictDoNothing();
 
     await database
       .insert(agentProfiles)
