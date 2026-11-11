@@ -1,7 +1,11 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
-import { brokeredAccounts, mcpServers } from "../db/schema";
+import {
+  brokeredAccounts,
+  composioConnections,
+  mcpServers,
+} from "../db/schema";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
 import type { ComposioBroker } from "./broker";
 import { type BrokerProvider, toolkitOfFor } from "./access";
@@ -152,6 +156,25 @@ export function createAccountBook(context: {
     if (!broker?.accountsOf) return recordsOf(await rowsFor(toolkit, userId));
 
     const held = await rowsFor(toolkit, userId);
+    /*
+     * Arcade 按认证提供商列连接：一个只连了日历、从没连过邮件的人打开邮件的账号页，厂商答的是他日历
+     * 那条 Google 连接。记下来，就成了一条「邮件、本人名字」的账号行，之后移除或切换邮件的清扫会把
+     * 他当成邮件的用户。所以这个应用上没有他的连接行时，只答表里已有的，不问厂商、不写。Composio 按
+     * 应用列账号，照旧同步。
+     */
+    if (PROVIDER === "arcade") {
+      const [connected] = await database
+        .select({ toolkit: composioConnections.toolkit })
+        .from(composioConnections)
+        .where(
+          and(
+            eq(composioConnections.toolkit, toolkit),
+            eq(composioConnections.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (!connected) return recordsOf(held);
+    }
     /*
      * 这个人在厂商那边的每一个 id：他自己的名字，加上表里已经记下的「另一个账号」的 id（上游 #1298 的
      * Arcade 一半）。Composio 把一个人的所有账号记在同一个 id 下，这里就只有一个；Arcade 每个 id 一个

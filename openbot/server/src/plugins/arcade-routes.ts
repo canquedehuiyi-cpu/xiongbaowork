@@ -366,8 +366,14 @@ async function leftoverGrant(
   if (input.account.holder === "deployment" && input.toolkit) {
     const teamToolkit = input.toolkit;
     const app = await store.appAccount(teamToolkit).catch(() => undefined);
+    /*
+     * 「原本就连着」指的是这次同意所在的那个团队身份连着。同意期间应用被切回个人再切回共享，团队身份
+     * 换了新的：旧身份下这次同意谁也用不到，没有行指向它，照未连接的情况撤掉。
+     */
     teamAlreadyConnected =
-      app === undefined || Boolean(app?.shared?.connectedAt);
+      app === undefined ||
+      (Boolean(app?.shared?.connectedAt) &&
+        app?.shared?.vendorUserId === input.account.vendorUserId);
     if (teamAlreadyConnected) {
       input = {
         ...input,
@@ -1062,6 +1068,8 @@ export async function clearEndedArcadeSiblings(input: {
         }),
       );
       if (live) continue;
+      // 名字下没了，第二个账号还在：连接与第二个账号都留着，不当成已经结束。
+      if (await store.keepForOtherAccount(sibling, userId)) continue;
       await store.disconnectBrokered({
         toolkit: sibling,
         userId,

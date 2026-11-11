@@ -489,9 +489,13 @@ with an audit entry naming the app it ended with (`endedWith`).
 
 **A second account is never left behind by a sweep.** Where the person's own account is gone at
 Arcade but a second account still lives, the connection stays (the page reads connected, and a call
-can name the second account), and a refused call forgets only the account that is gone. Offboarding,
-removing an app and switching it to Shared also find accounts recorded in `brokered_accounts` whose
-connection row is already gone, and withdraw them at Arcade.
+can name the second account), a refused call forgets only the account that is gone, and a
+sibling cascade leaves such an app connected. Offboarding, removing an app and switching it to
+Shared also find accounts recorded in `brokered_accounts` whose connection row is already gone.
+Offboarding withdraws all of them. Removing and switching withdraw only the second accounts: the
+person's own name has no connection on that app, and withdrawing it would end their other apps on
+the same auth provider. Opening an app's accounts page records nothing for somebody with no
+connection on it, because Arcade lists connections per auth provider, not per app.
 
 ## Revoking at Arcade is not revoking at the provider
 

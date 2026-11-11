@@ -59,6 +59,10 @@ const PEOPLE = [
   "owner",
   "mate",
   "member",
+  "bystander-switch",
+  "bystander-remove",
+  "page",
+  "keeps",
 ].map(person);
 const toolkitFor = (name: string) => `${name}${suite}`;
 const app = (toolkit: string) => `arcade-${toolkit}`;
@@ -185,6 +189,35 @@ const accountIdsOf = (userId: string, toolkit: string) =>
     )
       .map((row) => row.vendorUserId)
       .sort(),
+  );
+/** 一个人的连接审计（任何应用），按应用名排好。 */
+const disconnectedEventsOf = (owner: string) =>
+  platform(async () =>
+    (
+      await database
+        .select({
+          targetId: auditEvents.targetId,
+          payload: auditEvents.payload,
+        })
+        .from(auditEvents)
+        .where(eq(auditEvents.eventType, "mcp.account_disconnected"))
+    )
+      .filter((row) => (row.payload as { owner?: string }).owner === owner)
+      .map((row) => row.targetId)
+      .sort(),
+  );
+/** 一个旧版本按认证提供商记下的账号行：这个应用上没有连接，却有一行本人名字。 */
+const staleOwnRow = (who: string, toolkit: string) =>
+  platform(() =>
+    database.insert(brokeredAccounts).values({
+      tenantId: who,
+      provider: "arcade",
+      app: toolkit,
+      userId: who,
+      vendorUserId: who,
+      accountId: "",
+      identity: `${who}@work.example`,
+    }),
   );
 const teamConnectedAt = (toolkit: string) =>
   platform(async () => {
@@ -694,5 +727,133 @@ describe("the grant list", () => {
         missing: ["GITHUB_SERVER_URL"],
       },
     ]);
+  });
+});
+
+describe("somebody who never connected the app a sweep is about", () => {
+  test("opening that app's accounts page writes no account row: Arcade answers about the provider, not the app", async () => {
+    const who = person("page");
+    const mail = toolkitFor("PageMail");
+    const calendar = toolkitFor("PageCalendar");
+    await enable(mail);
+    await enable(calendar);
+    await connectThrough({ id: who }, calendar);
+    identities.set(who, `${who}@work.example`);
+
+    const response = await call({ id: who }, `/servers/${app(mail)}/accounts`);
+
+    expect(
+      ((await response.json()) as { accounts: unknown[] }).accounts,
+    ).toEqual([]);
+    expect(await accountIdsOf(who, mail)).toEqual([]);
+  });
+
+  test.each([
+    ["switching the app to a shared account", "bystander-switch", "switch"],
+    ["removing the app", "bystander-remove", "remove"],
+  ] as const)(
+    "%s leaves their other app on the same provider connected, at Arcade and here, with nothing on their trail",
+    async (_, name, act) => {
+      const who = person(name);
+      const mail = toolkitFor(`${name}Mail`.replaceAll("-", ""));
+      const calendar = toolkitFor(`${name}Calendar`.replaceAll("-", ""));
+      await enable(mail);
+      await enable(calendar);
+      await connectThrough({ id: who }, calendar);
+      await staleOwnRow(who, mail);
+      state.revoked.length = 0;
+
+      if (act === "switch") {
+        await asAdmin(() =>
+          store.revokeEveryPersonOn({ toolkit: mail, by: ADMIN }),
+        );
+      } else {
+        await asAdmin(() => store.removeServer(app(mail), ADMIN));
+      }
+
+      expect(state.revoked).toEqual([]);
+      expect(state.connected.has(`${who}/google`)).toBe(true);
+      expect(await connectionOf(who, calendar)).toBeDefined();
+      expect(await disconnectedEventsOf(who)).toEqual([]);
+      expect(await accountIdsOf(who, mail)).toEqual([]);
+    },
+  );
+});
+
+describe("a sibling app whose second account is a connection of its own", () => {
+  test("is not ended when the person's own connection on the provider is: the second account and the row stay", async () => {
+    const who = person("keeps");
+    const mail = toolkitFor("KeepsMail");
+    const calendar = toolkitFor("KeepsCalendar");
+    await enable(mail);
+    await enable(calendar);
+    await connectThrough({ id: who }, mail);
+    await connectThrough({ id: who }, calendar);
+    const second = await connectThrough({ id: who }, calendar, "?another=1");
+    state.revoked.length = 0;
+
+    await asAdmin(() =>
+      store.revokeEveryPersonOn({ toolkit: mail, by: ADMIN }),
+    );
+
+    expect(state.revoked).toEqual([`${who}/google`]);
+    expect(state.connected.has(`${second}/google`)).toBe(true);
+    expect(await connectionOf(who, calendar)).toBeDefined();
+    expect(await accountIdsOf(who, calendar)).toEqual([second]);
+    expect(await disconnectedEvents(calendar)).toEqual([]);
+  });
+});
+
+describe("a team consent whose team identity was replaced while it was being given", () => {
+  test("is withdrawn under the old identity, though the app's new team account is connected", async () => {
+    const toolkit = toolkitFor("SwapMail");
+    await enable(toolkit, "shared");
+    const pressed = await call(
+      { id: ADMIN, admin: true },
+      `/servers/${app(toolkit)}/connect`,
+      { method: "POST" },
+    );
+    expect(pressed.status).toBe(200);
+    const attempt = await attemptOf(ADMIN);
+    const handle = `swap-${suite}`;
+    consented(state, handle, TEAM, attempt?.authId ?? "");
+    state.connected.add(`${TEAM}/google`);
+    state.revoked.length = 0;
+    // 回程进行中：另一位管理员把应用切回个人再切回共享（新的团队身份），连好了；发起人取消了尝试。
+    state.onConfirm = async () => {
+      await platform(() =>
+        database
+          .update(mcpServers)
+          .set({
+            sharedVendorUserId: `${TEAM}:renewed`,
+            sharedConnectedAt: new Date(),
+            sharedConnectedBy: ADMIN,
+          })
+          .where(eq(mcpServers.id, app(toolkit))),
+      );
+      await call(
+        { id: ADMIN, admin: true },
+        `/servers/${app(toolkit)}/authorize`,
+        {
+          method: "DELETE",
+        },
+      );
+    };
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+    let reason: string | null;
+    try {
+      reason = reasonOf(
+        await call(
+          { id: ADMIN, admin: true },
+          `/arcade/verify?flow_id=${handle}`,
+        ),
+      );
+    } finally {
+      logged.mockRestore();
+      state.onConfirm = undefined;
+    }
+
+    expect(reason).toBe("cancelled");
+    expect(state.revoked).toEqual([`${TEAM}/google`]);
   });
 });

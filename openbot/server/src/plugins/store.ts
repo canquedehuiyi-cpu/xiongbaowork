@@ -2151,6 +2151,44 @@ export function createPluginStore(options: PluginStoreOptions) {
   }
 
   /**
+   * 一个应用在这个人名字下已经没有连接时，他在这个应用上的第二个账号是不是还活着。活着就只忘掉名字
+   * 那一行（重定默认），连接行和第二个账号都留着：那个账号是单独的一条连接，名字下的撤销没有碰到它，
+   * 应用照样能用它。问不到的当作还活着（朝留着的方向，行在，清扫就还找得到它）。没有第二个账号答 false。
+   */
+  async function keepForOtherAccount(
+    toolkit: string,
+    userId: string,
+    read: <T>(work: () => Promise<T>) => Promise<T> = (work) => work(),
+  ): Promise<boolean> {
+    if (!broker) return false;
+    const ids = await read(() => accounts.furtherIds({ toolkit, userId }));
+    let lives = false;
+    for (const vendorUserId of ids) {
+      const answer = await withVendorDeadline(() =>
+        broker.isConnected({ userId: vendorUserId, toolkit }),
+      ).catch(() => true);
+      if (answer) {
+        lives = true;
+        break;
+      }
+    }
+    if (!lives) return false;
+    const ownName = vendorNameOf(userId);
+    await read(async () => {
+      const lost = (await accounts.rowsFor(toolkit, userId)).find(
+        (row) => row.vendorUserId === ownName,
+      );
+      if (lost) {
+        await database
+          .delete(brokeredAccounts)
+          .where(eq(brokeredAccounts.id, lost.id));
+        await accounts.settleDefault(toolkit, userId);
+      }
+    });
+    return true;
+  }
+
+  /**
    * 断开、移除、切换之后，结束这个人在同一认证提供商下、厂商也已经结束了的兄弟应用的连接行（上游 #770
    * 的级联，fork 放在 store 里给不经过断开路由的路径用）。
    *
@@ -2198,6 +2236,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           broker.isConnected({ userId: input.userId, toolkit: other.toolkit }),
         );
         if (live) continue;
+        // 名字下没了，第二个账号还在：连接留着，只忘掉名字那一行（见 `keepForOtherAccount`）。
+        if (await keepForOtherAccount(other.toolkit, input.userId, read))
+          continue;
         await revokeFurtherAccounts(
           other.toolkit,
           input.userId,
@@ -5785,13 +5826,25 @@ export function createPluginStore(options: PluginStoreOptions) {
             .where(eq(composioConnections.toolkit, toolkit))
             .orderBy(asc(composioConnections.userId)),
         );
-        // 连接行已经没了、账号表里还记着另一个账号的人也要撤（见 `accountsWithoutConnection`）。
-        const people = [
-          ...withConnection,
-          ...(await reach(() => accountsWithoutConnection({ toolkit }))).map(
-            (held) => ({ userId: held.userId }),
-          ),
-        ];
+        const people = withConnection;
+        /*
+         * 连接行已经没了、账号表里还记着账号的人（见 `accountsWithoutConnection`）：只撤他的第二个账号。
+         * 他名字下在这个应用上没有连接，撤他的名字撤的是他在同一认证提供商下别的应用的连接（Arcade 按
+         * 提供商存连接）——那是他正在用的，与这次移除无关。所以不撤名字、不接兄弟级联；只有真撤掉了
+         * 第二个账号才记审计。没有第二个账号的人什么都不做，账号行随下面的 `forgetApp` 一起删掉。
+         */
+        const accountsOnly = await reach(() =>
+          accountsWithoutConnection({ toolkit }),
+        );
+        const furtherEnded = new Set<string>();
+        for (const held of accountsOnly) {
+          const ids = await reach(() =>
+            accounts.furtherIds({ toolkit, userId: held.userId }),
+          );
+          if (ids.length === 0) continue;
+          if (await revokeFurtherAccounts(toolkit, held.userId, ids))
+            furtherEnded.add(held.userId);
+        }
         /*
          * Shared 应用的团队账号（X1）也是这个应用上的一个账号：应用移除时同样先在 vendor 撤销，记在同一条
          * 审计里，owner 是团队身份。应用行随后删除，团队账号的状态随之消失。
@@ -5857,6 +5910,22 @@ export function createPluginStore(options: PluginStoreOptions) {
             by,
             reason: "mcp_server_removed",
             read: reach,
+          });
+        }
+
+        for (const userId of furtherEnded) {
+          await recordAuditEvent(auditStore, {
+            eventType: "mcp.account_disconnected",
+            targetType: "mcp_server",
+            targetId: toolkit,
+            payload: {
+              actor: by,
+              server: toolkit,
+              owner: userId,
+              reason: "mcp_server_removed",
+              vendorRevocationRequested: true,
+              scope: "further_accounts",
+            },
           });
         }
 
@@ -8772,6 +8841,17 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
+     * 名字下没了连接的应用上，第二个账号是不是还活着；活着就只忘掉名字那一行并答 true（见
+     * `keepForOtherAccount`）。断开级联在结束一个兄弟应用之前问它。
+     */
+    async keepForOtherAccount(
+      toolkit: string,
+      userId: string,
+    ): Promise<boolean> {
+      return keepForOtherAccount(toolkit, userId);
+    },
+
+    /**
      * 这个应用是否公布了一个名字恰好是这样的动作（上游 `serverPublishesAction`）。
      *
      * 按厂商的名字问（`vendor_name`，没有时就是 `name`），而且区分大小写：逐个动作授权从头到尾说的都是
@@ -10511,19 +10591,59 @@ export function createPluginStore(options: PluginStoreOptions) {
             .where(eq(mcpServers.id, app.id))
         : [];
       return reachEveryPersonOn(row?.tenantId === TEAM_TENANT, async () => {
-        const people = [
-          ...(await database
-            .select({ userId: composioConnections.userId })
-            .from(composioConnections)
-            .where(eq(composioConnections.toolkit, input.toolkit))
-            .orderBy(asc(composioConnections.userId))),
-          // 连接行没了、账号表里还记着另一个账号的人（见 `accountsWithoutConnection`）。
-          ...(await accountsWithoutConnection({ toolkit: input.toolkit })).map(
-            (held) => ({ userId: held.userId }),
-          ),
-        ];
+        const people = await database
+          .select({ userId: composioConnections.userId })
+          .from(composioConnections)
+          .where(eq(composioConnections.toolkit, input.toolkit))
+          .orderBy(asc(composioConnections.userId));
         const failures: { account: string; error: string }[] = [];
         let revoked = 0;
+        /*
+         * 连接行已经没了、账号表里还记着账号的人：只撤他的第二个账号，与移除应用同一个理由（见
+         * `removeServer`）——撤他的名字会撤掉他在同一认证提供商下别的应用正在用的连接。不接兄弟级联。
+         */
+        for (const held of await accountsWithoutConnection({
+          toolkit: input.toolkit,
+        })) {
+          try {
+            const ids = await accounts.furtherIds({
+              toolkit: input.toolkit,
+              userId: held.userId,
+            });
+            const ended =
+              ids.length > 0 &&
+              (await revokeFurtherAccounts(input.toolkit, held.userId, ids));
+            await accounts.forget({
+              toolkit: input.toolkit,
+              userId: held.userId,
+            });
+            if (ids.length === 0) continue;
+            if (ended) {
+              await recordAuditEvent(auditStore, {
+                eventType: "mcp.account_disconnected",
+                targetType: "mcp_server",
+                targetId: input.toolkit,
+                payload: {
+                  actor: input.by,
+                  server: input.toolkit,
+                  owner: held.userId,
+                  reason: "mode_switched",
+                  vendorRevocationRequested: true,
+                  scope: "further_accounts",
+                },
+              });
+            }
+            revoked += 1;
+          } catch (error) {
+            failures.push({
+              account: held.userId,
+              error:
+                error instanceof Error
+                  ? withoutStatement(error)
+                  : String(error),
+            });
+          }
+        }
         for (const person of people) {
           try {
             const { vendorRevocationRequested } = await this.disconnectBrokered(
