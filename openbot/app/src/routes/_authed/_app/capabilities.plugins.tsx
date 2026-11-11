@@ -5,7 +5,12 @@ export const Route = createFileRoute("/_authed/_app/capabilities/plugins")({
   // 插件页签自己的参数（`/resources` 的 `view,category,page,q`），由 `/resources` 的重定向照带过来。
   validateSearch: (
     search: Record<string, unknown>,
-  ): { view?: "market" | "mine"; category?: string; page?: number; q?: string } => {
+  ): {
+    view?: "market" | "mine";
+    category?: string;
+    page?: number;
+    q?: string;
+  } => {
     const page = Number(search.page);
     return {
       ...(search.view === "market" || search.view === "mine"

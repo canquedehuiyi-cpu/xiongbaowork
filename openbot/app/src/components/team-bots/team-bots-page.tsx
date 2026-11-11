@@ -5,7 +5,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
-import { ChannelAvatar } from "@/components/channels/avatar";
 import {
   PANEL_FACE,
   PROFILE_TAG,
@@ -14,6 +13,7 @@ import {
   ProfilePanel,
   ProfileSection,
 } from "@/components/bot-profile/profile-kit";
+import { ChannelAvatar } from "@/components/channels/avatar";
 import { PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  AVATAR_MENU_ITEM,
-  NAVIGATION,
-  navigationFor,
-} from "@/lib/navigation";
+import { AVATAR_MENU_ITEM, NAVIGATION, navigationFor } from "@/lib/navigation";
 
 /*
  * OpenBot's destinations live in one list (`lib/navigation.ts`) that every skin draws from. Admin is

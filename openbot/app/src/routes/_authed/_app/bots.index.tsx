@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { WakersWall } from "@/components/wakers/wall";
 import {
   parseWakersSearch,
   type WakersSearch,
 } from "@/components/wakers/wakers-search";
+import { WakersWall } from "@/components/wakers/wall";
 
 /**
  * 员工（`/bots`）：上游的员工列表页，熊宝的员工管理（`/wakers`）重定向到这里（M5b）。

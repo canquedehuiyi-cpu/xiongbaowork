@@ -21,7 +21,6 @@ import {
   tokenReadout,
 } from "@/lib/quota/queries";
 
-
 type TenantRow = {
   id: string;
   email: string;

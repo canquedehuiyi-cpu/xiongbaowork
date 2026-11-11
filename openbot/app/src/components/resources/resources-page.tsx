@@ -16,8 +16,8 @@ import {
 import { ProjectsSection } from "@/components/resources/projects-section";
 import {
   isResourceTab,
-  ResourceTabs,
   type ResourceTab,
+  ResourceTabs,
   resourcePanelId,
   resourceTabId,
 } from "@/components/resources/resource-tabs";
@@ -52,7 +52,9 @@ export type ResourcesSearch = PluginsSearch & {
   edit?: string;
 };
 
-export function resourcesSearch(search: Record<string, unknown>): ResourcesSearch {
+export function resourcesSearch(
+  search: Record<string, unknown>,
+): ResourcesSearch {
   const page = Number(search.page);
   // A numeric slug arrives as a number: the default search parser reads `?edit=42` as JSON.
   const edit =
@@ -73,7 +75,6 @@ export function resourcesSearch(search: Record<string, unknown>): ResourcesSearc
     ...(typeof edit === "string" && edit ? { edit } : {}),
   };
 }
-
 
 export function ResourcesPage({
   search: rawSearch,

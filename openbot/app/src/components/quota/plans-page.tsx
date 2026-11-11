@@ -19,7 +19,6 @@ import {
 } from "@/lib/quota/queries";
 import { cn } from "@/lib/utils";
 
-
 /** The graphite panel these sections draw in (docs/design/ios-studio). */
 const PANEL =
   "rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]";

@@ -132,7 +132,12 @@ test("each /resources tab has a new home; sources is memory and connectors is Co
 
 test("/resources without a tab is the plugins tab, with its own parameters", () => {
   expect(
-    legacyResourcesTarget({ view: "mine", category: "office", page: 2, q: "表" }),
+    legacyResourcesTarget({
+      view: "mine",
+      category: "office",
+      page: 2,
+      q: "表",
+    }),
   ).toEqual({
     to: "/capabilities/plugins",
     search: { view: "mine", category: "office", page: 2, q: "表" },
@@ -150,8 +155,10 @@ test("/resources?tab=skills and /skills keep new and edit", () => {
     to: "/capabilities/skills",
     search: { new: true, edit: "weekly" },
     replace: true,
-  };
-  expect(legacyResourcesTarget({ tab: "skills", new: true, edit: "weekly" })).toEqual(skills);
+  } as const;
+  expect(
+    legacyResourcesTarget({ tab: "skills", new: true, edit: "weekly" }),
+  ).toEqual(skills);
   expect(legacySkillsTarget({ new: true, edit: "weekly" })).toEqual(skills);
 });
 

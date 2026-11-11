@@ -42,7 +42,6 @@ import {
   validateRoleProfile,
 } from "../../../../shared/role-profile";
 
-
 /** What the editor is working on: a new template, one of the person's own, or an official one. */
 type Draft = {
   id?: string;

@@ -33,7 +33,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { wakersBackLink } from "@/components/wakers/wakers-search";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
-import { cn } from "@/lib/utils";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
   knowledgeForAgentQueryOptions,
@@ -56,6 +55,7 @@ import {
   type PluginTool,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
+import { cn } from "@/lib/utils";
 
 /**
  * One coworker, assembled in one screen (ticket 015).

@@ -218,6 +218,17 @@ export type ComposioApp = {
   categories: string[];
   /** The size of the decision, shown before enabling. */
   actionCount: number;
+  /**
+   * How many of those actions the provider classified, how many distinct non-empty scope sets they
+   * ask for, and how many carry a scope at all (upstream #770). `0` means measured and none; `null`
+   * means the provider does not publish it.
+   *
+   * 上游是必有、可为 null；熊宝服务端（`server/src/plugins/broker.ts`）只在 Arcade 目录上给，Composio 目录不给，
+   * 所以这里是可选的，缺省和 null 一样读作「没公布」。
+   */
+  classifiedCount?: number | null;
+  permissionCount?: number | null;
+  scopedActionCount?: number | null;
   enabled: boolean;
   /**
    * How a person connects it, as the server decided from what the app publishes. Only the part
@@ -287,7 +298,9 @@ export type PluginsPage = {
  * So a Composio deployment renders byte-identically and a page served by an older server does not
  * blank. Also `"composio"` before the page has loaded.
  */
-export function pluginsProvider(page: PluginsPage | undefined): PluginsProvider {
+export function pluginsProvider(
+  page: PluginsPage | undefined,
+): PluginsProvider {
   return page?.provider ?? "composio";
 }
 
@@ -491,6 +504,13 @@ export type PluginConnection = {
    * sentences, while a missing gate and a closed gate are the same gate.
    */
   checkable?: boolean;
+  /**
+   * Whether the credential behind this row has been withdrawn or deleted, present only on a HELD
+   * row. A ROW IS NOT ACCESS: revoking a credential leaves this row pointing at it, so anything
+   * drawing the word "connected" has to read this. Undefined reads as not revoked.
+   * **熊宝服务端不下发**（上游字段，`lib/plugins/directory-state.ts` 读它）。
+   */
+  revoked?: boolean;
   /**
    * Whose account this row is: the signed-in person's own, or the one standing account of a Shared
    * app. Undefined reads as `"person"` — see {@link personalConnections}.

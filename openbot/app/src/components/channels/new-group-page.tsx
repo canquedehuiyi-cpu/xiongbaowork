@@ -2,8 +2,9 @@
  * M5b 第 0 步：从 `routes/_authed/_app/group/new.tsx` 剪出的页面主体，原样保留，地址改成重定向（/group/new → /channel/new）。
  * 各组在新路由里接这个组件，再按新结构调整其中的链接与文案。
  */
-import { useNavigate } from "@tanstack/react-router";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
