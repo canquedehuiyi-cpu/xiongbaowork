@@ -18,6 +18,11 @@ import {
   runAsTenant,
 } from "../tenant/context";
 import {
+  adminInputFor,
+  mountAppAccessRoutes,
+  unavailableSentence,
+} from "./app-access-routes";
+import {
   type BrokerApp,
   type BrokerField,
   BrokerUnconfiguredError,
@@ -62,6 +67,7 @@ import {
   deploymentFaultSentence,
   isDeploymentFault,
   isServerWriteRefusal,
+  isUuid,
   type OAuthClient,
   OAuthClientReadError,
   type PluginKind,
@@ -4010,12 +4016,20 @@ export function createPluginRoutes(
   routes.get("/access-requests", signedInWithCapability, async (context) => {
     const refusal = decisionRefusal(context);
     if (refusal) return context.json({ error: refusal }, 403);
-    const requests = await (
+    const all = await (
       adminScope as NonNullable<typeof adminScope>
     ).asAdminPlatform(context.var.actor, () =>
       store.pendingAppAccessRequests(),
     );
-    return context.json({ requests });
+    // 上游的形状（X2）：`?app=` 只看一个应用的，`counts` 让插件列表给每个应用标数字而不用再读一次。
+    const byApp: Record<string, number> = {};
+    for (const request of all)
+      byApp[request.appKey] = (byApp[request.appKey] ?? 0) + 1;
+    const app = context.req.query("app")?.trim();
+    return context.json({
+      requests: app ? all.filter((request) => request.appKey === app) : all,
+      counts: { total: all.length, byApp },
+    });
   });
 
   /** 申请人自己的一条申请，卡片据此显示当前状态。别人的和不存在的一样答 404。 */
@@ -4029,16 +4043,285 @@ export function createPluginRoutes(
   /** 申请人撤回自己的一条 pending 申请。别人的读起来和不存在的一样，从这里看不出谁申请了什么。 */
   routes.delete("/access-requests/:id", requireUser, async (context) => {
     const id = context.req.param("id");
+    /*
+     * 不是申请 id 的，和不存在的一样答 404（fork 测试钉住的答复），不读库、不写轨迹：URL 参数谁都能随手
+     * 填，不让它成为往审计里写任意长字符串的入口。
+     */
+    if (!isUuid(id)) return context.json({ error: NO_SUCH_REQUEST }, 404);
     const cancelled = await store.cancelAppAccessRequest({
       id,
       requesterUserId: context.var.actor.id,
     });
-    if (cancelled) return context.json({ request: cancelled });
+    if (cancelled) {
+      await store.recordAppAccessEvent({
+        eventType: "app_access.cancelled",
+        targetId: cancelled.appKey,
+        actorUserId: context.var.actor.id,
+        payload: {
+          request: cancelled.id,
+          app: cancelled.appKey,
+          bot: cancelled.botId,
+          kind: cancelled.kind,
+        },
+      });
+      return context.json({ request: cancelled });
+    }
     const existing = await store.appAccessRequest(id);
-    if (existing && existing.requesterUserId === context.var.actor.id)
-      return context.json({ error: ALREADY_DECIDED }, 409);
+    const mine = existing?.requesterUserId === context.var.actor.id;
+    await store.recordAppAccessRefusal({
+      targetId: mine ? (existing?.appKey ?? "") : "",
+      actorUserId: context.var.actor.id,
+      payload: {
+        app: mine ? (existing?.appKey ?? "") : "",
+        request: id,
+        reason: mine ? "already_resolved" : "no_such_request",
+      },
+    });
+    if (mine) return context.json({ error: ALREADY_DECIDED }, 409);
     return context.json({ error: NO_SUCH_REQUEST }, 404);
   });
+
+  const composioConfigured = Boolean(composio);
+  /** 只为叫出一个这里还没有行的 broker 应用才问目录；适配器会缓存列表。 */
+  const appDirectory = composio ? () => composio.broker.listApps() : undefined;
+
+  /** 批准没能做成时写一行 `app_access.refused`，原因是给轨迹读的词，句子是给管理员读的中文。 */
+  const approvalRefused = async (
+    context: { var: AppVariables },
+    request: AppAccessRequestRecord,
+    reason: string,
+  ) =>
+    store.recordAppAccessEvent({
+      eventType: "app_access.refused",
+      targetId: request.appKey,
+      actorUserId: context.var.actor.id,
+      payload: {
+        app: request.appKey,
+        request: request.id,
+        bot: request.botId,
+        kind: request.kind,
+        reason,
+      },
+    });
+
+  /**
+   * 批准一条申请就是做它要的那件事，然后关单（收件箱的批准与卡片上的一按共用，见 `app-access-routes.ts`）。
+   *
+   * 先改、后关单（fork 的顺序，fork 测试钉住）：改完发现申请在此期间被撤回或驳回，答一个可区分的 409
+   * （`applied: true`），写明做了什么。上游先把申请「认领」成 approved 再改；fork 保留原顺序，见报告。
+   *
+   * - `enable`：应用有行、但缺只有管理员能填的东西（密钥、OAuth 客户端、读不懂的认证方式）时照实拒绝，
+   *   申请保持待处理；有行就上架（`addInstallListing`），之后员工的主人按 D08 自己装。还没有行的目录条目
+   *   先添加它（`addServer`，与 POST /servers 同一个），再上架；还没打开的 Composio 应用请管理员先在插件页
+   *   启用（它要选认证方式，批准替不了）。上架不授予。
+   * - `grant`：走现有的授予（`asBotOwner` + `enablementDecision` + `store.grant`）。不带 `refs` 只授予标为
+   *   只读、非破坏性的动作；带 `refs` 时只授予这些，且每一个都必须是这个应用的动作。
+   */
+  const carryOutApproval = async (
+    context: Context<{ Variables: AppVariables }>,
+    request: AppAccessRequestRecord,
+    chosen: string[] | undefined,
+    direct = false,
+  ): Promise<Response> => {
+    const title = request.appTitle;
+    const again = direct ? "再试一次" : "再批准这条申请";
+    let granted: string[] = [];
+    let enabled = false;
+
+    if (request.kind === "enable") {
+      const inspected = await store.inspectApp({
+        app: request.appKey,
+        agentId: request.botId,
+        userId: null,
+        composioConfigured,
+        directory: appDirectory,
+      });
+      if (inspected?.unavailable && inspected.unavailable !== "absent") {
+        await approvalRefused(context, request, inspected.unavailable);
+        return context.json(
+          { error: unavailableSentence(inspected.unavailable, title, again) },
+          inspected.unavailable === "composio_unconfigured" ? 503 : 409,
+        );
+      }
+      if (inspected && inspected.answeringId === null) {
+        if (!inspected.entry) {
+          await approvalRefused(context, request, "needs_admin_enable");
+          return context.json(
+            {
+              error: `「${title}」还没有在本部署打开。请先在${appsPageZh()}启用它（要选它怎么连接），然后${again}。`,
+            },
+            409,
+          );
+        }
+        const needed = adminInputFor(inspected.entry);
+        if (needed) {
+          await approvalRefused(context, request, "needs_admin_input");
+          return context.json(
+            {
+              error: `「${title}」还需要${needed}。请在${appsPageZh()}它的页面上添加，然后${again}。`,
+            },
+            409,
+          );
+        }
+        try {
+          await store.addServer({
+            key: inspected.entry.key,
+            by: actorEmail(context),
+          });
+        } catch (error) {
+          const sentence =
+            error instanceof CatalogueEntryUnknownError ||
+            error instanceof CustomServerRefusedError
+              ? error.message
+              : isDeploymentFault(error)
+                ? deploymentFaultSentence(error)
+                : null;
+          if (sentence === null) throw error;
+          await approvalRefused(context, request, "enable_failed");
+          return context.json(
+            { error: `没能打开「${title}」：${sentence}` },
+            409,
+          );
+        }
+        enabled = true;
+      } else if (
+        // 和 POST /listings 一样的检查：上架的是应用，必须是目录里的条目或本部署已添加的应用。
+        catalogueEntry(request.appKey) === null &&
+        !(await store.serverExists(request.appKey))
+      ) {
+        return context.json(
+          { error: `「${title}」已经不是本部署的应用，无法上架。` },
+          409,
+        );
+      }
+      await store.addInstallListing("mcp", request.appKey, actorEmail(context));
+    } else {
+      const outcome = await asBotOwner(context, request.botId, async () => {
+        const server = (await store.listServers()).find(
+          (candidate) => candidate.id === request.serverId,
+        );
+        if (!server)
+          return {
+            error: `「${title}」已经不是本部署的应用，无法授予。`,
+            status: 409 as const,
+          };
+        if (server.tools.length === 0)
+          return {
+            error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
+            status: 409 as const,
+          };
+        const advertised = server.tools.map((tool) => tool.ref);
+        const outside = (chosen ?? []).filter(
+          (ref) => !advertised.includes(ref),
+        );
+        if (outside.length > 0)
+          return {
+            error: `${outside.join("、")} 不是「${title}」的动作。`,
+            status: 400 as const,
+          };
+        const refs =
+          chosen ??
+          server.tools
+            .filter((tool) => tool.effect === "read" && !tool.destructive)
+            .map((tool) => tool.ref);
+        if (refs.length === 0)
+          return {
+            error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
+            status: 409 as const,
+          };
+        for (const ref of refs) {
+          const decision = await enablementDecision(
+            context,
+            "mcp",
+            ref,
+            request.botId,
+            "grant",
+          );
+          if (decision.refusal !== null) {
+            // 原文是英文、写给开发者的；收件箱里给管理员看中文，原文只进日志（M-2）。
+            logApproval("refused", request, [], decision.refusal);
+            return {
+              error: `无法把「${title}」授予这位员工：员工或应用已不存在，或这项授予不由管理员在这里决定。`,
+              status: 403 as const,
+              granted: [] as string[],
+            };
+          }
+        }
+        /*
+         * 逐个写入，记下写成了哪些。中途失败时前面写入的授予会留下（每个都是幂等的 upsert，重试会补齐），
+         * 所以响应和日志都写明已写入了哪些，申请保持 pending。
+         */
+        const written: string[] = [];
+        try {
+          for (const ref of refs) {
+            await store.grant("mcp", ref, request.botId, actorEmail(context));
+            written.push(ref);
+          }
+        } catch (error) {
+          logApproval(
+            "grant_failed",
+            request,
+            written,
+            error instanceof Error ? error.message : String(error),
+          );
+          const done = written.length > 0 ? written.join("、") : "无";
+          return {
+            error: `授予「${title}」时中途失败，申请保持待处理。已写入：${done}。${error instanceof PluginRefusedError ? "其余的这项授予不由管理员在这里决定。" : "其余的没有写入，可以稍后再批准一次补齐。"}`,
+            status: (error instanceof PluginRefusedError ? 403 : 500) as
+              | 403
+              | 500,
+            granted: written,
+          };
+        }
+        return { refs };
+      });
+      if ("error" in outcome) {
+        await approvalRefused(context, request, `grant_${outcome.status}`);
+        return context.json(
+          { error: outcome.error, granted: outcome.granted },
+          outcome.status,
+        );
+      }
+      granted = outcome.refs;
+    }
+
+    const decided = await decideAsRequester(context, request, "approved");
+    if (!decided) {
+      /*
+       * 上架或授予已经生效，但关单时发现申请在此期间已被撤回或驳回（I-1）。这和「什么都没做成」的
+       * 409 不是一回事：返回一个可以区分的答复（`applied: true`），写明做了什么、申请状态没改，
+       * 由管理员决定要不要到插件页撤销。
+       */
+      logApproval("applied_but_closed", request, granted);
+      const what =
+        request.kind === "enable"
+          ? `「${title}」已上架`
+          : `「${title}」已授予（${granted.join("、")}）`;
+      return context.json(
+        {
+          error: `${what}，但这条申请在此期间已被撤回或驳回，申请状态未改。如不需要，请到插件页${request.kind === "enable" ? "下架" : "撤销"}。`,
+          applied: true,
+          granted,
+        },
+        409,
+      );
+    }
+    await store.recordAppAccessEvent({
+      eventType: "app_access.approved",
+      targetId: decided.appKey,
+      actorUserId: context.var.actor.id,
+      payload: {
+        request: decided.id,
+        app: decided.appKey,
+        bot: decided.botId,
+        kind: decided.kind,
+        enabled,
+        granted: granted.length,
+        ...(direct ? { direct: true } : {}),
+      },
+    });
+    return context.json({ request: decided, granted, enabled });
+  };
 
   routes.post(
     "/access-requests/:id/approve",
@@ -4046,129 +4329,39 @@ export function createPluginRoutes(
     async (context) => {
       const refusal = decisionRefusal(context);
       if (refusal) return context.json({ error: refusal }, 403);
+      const body = (await context.req.json().catch(() => null)) as {
+        refs?: unknown;
+      } | null;
+      if (
+        body?.refs !== undefined &&
+        (!Array.isArray(body.refs) ||
+          body.refs.some((ref) => typeof ref !== "string"))
+      )
+        return context.json({ error: "动作必须是一组 ref。" }, 400);
       const request = await requestForAdmin(context, context.req.param("id"));
       if (!request) return context.json({ error: NO_SUCH_REQUEST }, 404);
       if (request.status !== "pending")
         return context.json({ error: ALREADY_DECIDED }, 409);
-      const title = request.appTitle;
-      let granted: string[] = [];
-
-      if (request.kind === "enable") {
-        // 和 POST /listings 一样的检查：上架的是应用，必须是目录里的条目或本部署已添加的应用。
-        if (
-          catalogueEntry(request.appKey) === null &&
-          !(await store.serverExists(request.appKey))
-        )
-          return context.json(
-            { error: `「${title}」已经不是本部署的应用，无法上架。` },
-            409,
-          );
-        await store.addInstallListing(
-          "mcp",
-          request.appKey,
-          actorEmail(context),
-        );
-      } else {
-        const outcome = await asBotOwner(context, request.botId, async () => {
-          const server = (await store.listServers()).find(
-            (candidate) => candidate.id === request.serverId,
-          );
-          if (!server)
-            return {
-              error: `「${title}」已经不是本部署的应用，无法授予。`,
-              status: 409 as const,
-            };
-          if (server.tools.length === 0)
-            return {
-              error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
-              status: 409 as const,
-            };
-          const refs = server.tools
-            .filter((tool) => tool.effect === "read" && !tool.destructive)
-            .map((tool) => tool.ref);
-          if (refs.length === 0)
-            return {
-              error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
-              status: 409 as const,
-            };
-          for (const ref of refs) {
-            const decision = await enablementDecision(
-              context,
-              "mcp",
-              ref,
-              request.botId,
-              "grant",
-            );
-            if (decision.refusal !== null) {
-              // 原文是英文、写给开发者的；收件箱里给管理员看中文，原文只进日志（M-2）。
-              logApproval("refused", request, [], decision.refusal);
-              return {
-                error: `无法把「${title}」授予这位员工：员工或应用已不存在，或这项授予不由管理员在这里决定。`,
-                status: 403 as const,
-                granted: [] as string[],
-              };
-            }
-          }
-          /*
-           * 逐个写入，记下写成了哪些。中途失败时前面写入的授予会留下（每个都是幂等的 upsert，重试会补齐），
-           * 所以响应和日志都写明已写入了哪些，申请保持 pending。
-           */
-          const written: string[] = [];
-          try {
-            for (const ref of refs) {
-              await store.grant("mcp", ref, request.botId, actorEmail(context));
-              written.push(ref);
-            }
-          } catch (error) {
-            logApproval(
-              "grant_failed",
-              request,
-              written,
-              error instanceof Error ? error.message : String(error),
-            );
-            const done = written.length > 0 ? written.join("、") : "无";
-            return {
-              error: `授予「${title}」时中途失败，申请保持待处理。已写入：${done}。${error instanceof PluginRefusedError ? "其余的这项授予不由管理员在这里决定。" : "其余的没有写入，可以稍后再批准一次补齐。"}`,
-              status: (error instanceof PluginRefusedError ? 403 : 500) as
-                | 403
-                | 500,
-              granted: written,
-            };
-          }
-          return { refs };
-        });
-        if ("error" in outcome)
-          return context.json(
-            { error: outcome.error, granted: outcome.granted },
-            outcome.status,
-          );
-        granted = outcome.refs;
-      }
-
-      const decided = await decideAsRequester(context, request, "approved");
-      if (!decided) {
-        /*
-         * 上架或授予已经生效，但关单时发现申请在此期间已被撤回或驳回（I-1）。这和「什么都没做成」的
-         * 409 不是一回事：返回一个可以区分的答复（`applied: true`），写明做了什么、申请状态没改，
-         * 由管理员决定要不要到插件页撤销。
-         */
-        logApproval("applied_but_closed", request, granted);
-        const what =
-          request.kind === "enable"
-            ? `「${title}」已上架`
-            : `「${title}」已授予（${granted.join("、")}）`;
-        return context.json(
-          {
-            error: `${what}，但这条申请在此期间已被撤回或驳回，申请状态未改。如不需要，请到插件页${request.kind === "enable" ? "下架" : "撤销"}。`,
-            applied: true,
-            granted,
-          },
-          409,
-        );
-      }
-      return context.json({ request: decided, granted });
+      return carryOutApproval(
+        context,
+        request,
+        body?.refs as string[] | undefined,
+      );
     },
   );
+
+  mountAppAccessRoutes({
+    routes,
+    store,
+    requireUser,
+    capable: signedInWithCapability,
+    canUseBot,
+    asBotOwner,
+    composioConfigured,
+    directory: appDirectory,
+    decisionRefusal,
+    carryOut: carryOutApproval,
+  });
 
   /** 驳回：只关掉这条申请，别的什么也不改。 */
   routes.post(
@@ -4183,6 +4376,17 @@ export function createPluginRoutes(
         return context.json({ error: ALREADY_DECIDED }, 409);
       const decided = await decideAsRequester(context, request, "dismissed");
       if (!decided) return context.json({ error: ALREADY_DECIDED }, 409);
+      await store.recordAppAccessEvent({
+        eventType: "app_access.dismissed",
+        targetId: decided.appKey,
+        actorUserId: context.var.actor.id,
+        payload: {
+          request: decided.id,
+          app: decided.appKey,
+          bot: decided.botId,
+          kind: decided.kind,
+        },
+      });
       return context.json({ request: decided });
     },
   );
