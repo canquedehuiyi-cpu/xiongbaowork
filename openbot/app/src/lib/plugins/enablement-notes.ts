@@ -169,8 +169,7 @@ export function consentCopy(
 ): ConsentCopy {
   const asked = actions.find((action) => action.name === requested);
   const scopes = asked ? [...new Set(asked.scopes)].sort() : [];
-  const grants =
-    "哪些员工可以调用某个动作仍然单独设置，授权不会改变它。";
+  const grants = "哪些员工可以调用某个动作仍然单独设置，授权不会改变它。";
   if (!actions.some((action) => action.scopes.length > 0)) {
     const all = actions.length;
     return {

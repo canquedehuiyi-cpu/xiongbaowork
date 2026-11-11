@@ -115,103 +115,103 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
         <SharedAppNotice botId={agent.id} reason="publish" />
       ) : null}
       {lifecycle.isPending ? null : lifecycle.error ? (
-          <ProfileAlert>读不到这位员工的状态。</ProfileAlert>
-        ) : (
-          <ProfilePanel>
-            <Item size="sm">
-              <ItemMedia variant="icon">
-                <IconPlayerPause />
-              </ItemMedia>
-              <ItemContent>
-                <ItemTitle>暂停</ItemTitle>
-                <ItemDescription>
-                  {lifecycle.data.paused
-                    ? "不会再为你启动定时任务、长期职责、交接或跟进，正在跑的也已停下。"
-                    : "为你运行它的定时任务、长期职责、交接和跟进。"}
-                </ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <Switch
-                  aria-label="暂停"
-                  checked={lifecycle.data.paused}
-                  disabled={pause.isPending}
-                  onCheckedChange={(paused) =>
-                    pause.mutate({ agentId: agent.id, paused })
-                  }
-                />
-              </ItemActions>
-            </Item>
+        <ProfileAlert>读不到这位员工的状态。</ProfileAlert>
+      ) : (
+        <ProfilePanel>
+          <Item size="sm">
+            <ItemMedia variant="icon">
+              <IconPlayerPause />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>暂停</ItemTitle>
+              <ItemDescription>
+                {lifecycle.data.paused
+                  ? "不会再为你启动定时任务、长期职责、交接或跟进，正在跑的也已停下。"
+                  : "为你运行它的定时任务、长期职责、交接和跟进。"}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Switch
+                aria-label="暂停"
+                checked={lifecycle.data.paused}
+                disabled={pause.isPending}
+                onCheckedChange={(paused) =>
+                  pause.mutate({ agentId: agent.id, paused })
+                }
+              />
+            </ItemActions>
+          </Item>
+          <Item size="sm">
+            <ItemMedia variant="icon">
+              <IconBell />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>通知</ItemTitle>
+              <ItemDescription>
+                {NOTIFY_LABEL[lifecycle.data.notify]}。侧栏角标始终显示。
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <select
+                aria-label="通知"
+                className={selectClass}
+                disabled={notify.isPending}
+                onChange={(event) =>
+                  notify.mutate({
+                    agentId: agent.id,
+                    notify: event.target.value as BotNotify,
+                  })
+                }
+                value={lifecycle.data.notify}
+              >
+                {(Object.keys(NOTIFY_LABEL) as BotNotify[]).map((value) => (
+                  <option key={value} value={value}>
+                    {NOTIFY_LABEL[value]}
+                  </option>
+                ))}
+              </select>
+            </ItemActions>
+          </Item>
+          {permission === "default" ? (
             <Item size="sm">
               <ItemMedia variant="icon">
                 <IconBell />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>通知</ItemTitle>
+                <ItemTitle>浏览器通知</ItemTitle>
                 <ItemDescription>
-                  {NOTIFY_LABEL[lifecycle.data.notify]}。侧栏角标始终显示。
+                  这个浏览器里是关着的。打开后，员工需要你时会提醒你。
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
-                <select
-                  aria-label="通知"
-                  className={selectClass}
-                  disabled={notify.isPending}
-                  onChange={(event) =>
-                    notify.mutate({
-                      agentId: agent.id,
-                      notify: event.target.value as BotNotify,
-                    })
-                  }
-                  value={lifecycle.data.notify}
+                <Button
+                  onClick={() => void requestNotificationPermission()}
+                  size="sm"
+                  variant="outline"
                 >
-                  {(Object.keys(NOTIFY_LABEL) as BotNotify[]).map((value) => (
-                    <option key={value} value={value}>
-                      {NOTIFY_LABEL[value]}
-                    </option>
-                  ))}
-                </select>
+                  打开
+                </Button>
               </ItemActions>
             </Item>
-            {permission === "default" ? (
-              <Item size="sm">
-                <ItemMedia variant="icon">
-                  <IconBell />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle>浏览器通知</ItemTitle>
-                  <ItemDescription>
-                    这个浏览器里是关着的。打开后，员工需要你时会提醒你。
-                  </ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <Button
-                    onClick={() => void requestNotificationPermission()}
-                    size="sm"
-                    variant="outline"
-                  >
-                    打开
-                  </Button>
-                </ItemActions>
-              </Item>
-            ) : null}
-            <Item
-              render={<Link to="/channel/new" search={{ agent: agent.id }} />}
-              size="sm"
-            >
-              <ItemMedia variant="icon">
-                <IconMessage />
-              </ItemMedia>
-              <ItemContent>
-                <ItemTitle>给 {agent.name} 发消息</ItemTitle>
-                <ItemDescription>开始一段对话。</ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <IconChevronRight className="size-4 text-muted-foreground" />
-              </ItemActions>
-            </Item>
-<BotActivityRow agentId={agent.id} />
-          </ProfilePanel>
-        )}
+          ) : null}
+          <Item
+            render={<Link to="/channel/new" search={{ agent: agent.id }} />}
+            size="sm"
+          >
+            <ItemMedia variant="icon">
+              <IconMessage />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>给 {agent.name} 发消息</ItemTitle>
+              <ItemDescription>开始一段对话。</ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <IconChevronRight className="size-4 text-muted-foreground" />
+            </ItemActions>
+          </Item>
+          <BotActivityRow agentId={agent.id} />
+        </ProfilePanel>
+      )}
     </ProfileSection>
   );
 }

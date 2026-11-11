@@ -234,7 +234,7 @@ test("连接页有「员工可用的连接器」一区，能按名字搜索", as
   expect(list.getByText("Notion")).toBeTruthy();
   expect(list.getByText("Google Drive")).toBeTruthy();
 
-  fireEvent.change(connectors.getByRole("textbox", { name: "搜索连接器" }), {
+  fireEvent.change(connectors.getByRole("searchbox", { name: "搜索连接器" }), {
     target: { value: "drive" },
   });
   await connectors.findByText("Google Drive");

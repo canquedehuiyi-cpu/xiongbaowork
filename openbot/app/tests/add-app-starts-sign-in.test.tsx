@@ -299,9 +299,7 @@ describe("an added app nobody has signed in to", () => {
       await waitFor(() => {
         expect(
           within(slack).getByTestId("directory-not-connected").textContent,
-        ).toBe(
-          edition === "personal" ? "未连接" : "已添加，未连接",
-        );
+        ).toBe(edition === "personal" ? "未连接" : "已添加，未连接");
       });
       expect(
         within(slack).getByRole("button", { name: "连接 Slack" }),

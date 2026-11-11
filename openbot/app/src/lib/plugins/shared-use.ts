@@ -82,10 +82,10 @@ export function decideSharedUseMutationOptions(queryClient: QueryClient) {
       id: string;
       decision: "approve" | "decline";
     }) =>
-      client(
-        `/api/plugins/shared-use/${encodeURIComponent(id)}/${decision}`,
-        { method: "POST", fallback: "这个决定没能保存。" },
-      ),
+      client(`/api/plugins/shared-use/${encodeURIComponent(id)}/${decision}`, {
+        method: "POST",
+        fallback: "这个决定没能保存。",
+      }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["approvals"] }),
   });
 }

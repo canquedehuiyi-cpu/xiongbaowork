@@ -11,16 +11,6 @@ import {
 import { pluginKeys } from "@/lib/plugins/queries";
 
 /**
- * X 系列（X2 评审 M3）给每条申请加的三个字段。`lib/plugins/access-requests.ts` 归 E1，这里按可选读：
- * 服务端没给（旧版本）时什么都不多画。
- */
-type ScopedAccessRequest = AppAccessRequest & {
-  appliesTo?: "team_bot" | "bot";
-  requesterRole?: "owner" | "teammate" | "other";
-  scopeNote?: string | null;
-};
-
-/**
  * 管理员的访问申请收件箱，M5b 起放在 管理 → 审批（原来在 /approvals 的审批收件箱下面）。
  *
  * 访问申请是等管理员拍板的事，和团队审批设置、共享账号申请放在一起。批准时
@@ -94,10 +84,11 @@ function AdminAccessRequests() {
         >
           <p className="font-medium">{request.appTitle}</p>
           <p className="text-sm text-muted-foreground">{describe(request)}</p>
-          {(request as ScopedAccessRequest).scopeNote ? (
+          {/* X 系列（X2 评审 M3）加的字段，服务端没给（旧版本）时什么都不多画。 */}
+          {request.scopeNote ? (
             // 只在 Team Bot 上有：批准会写在员工身上，每个能用它的人都会拿到，不只是申请人。
             <p className="text-sm" data-scope-note>
-              {(request as ScopedAccessRequest).scopeNote}
+              {request.scopeNote}
             </p>
           ) : null}
           {request.note ? (
@@ -138,7 +129,7 @@ const REQUESTER_ROLE: Record<"owner" | "teammate", string> = {
   teammate: "（使用这位员工的队友）",
 };
 
-function describe(request: ScopedAccessRequest): string {
+function describe(request: AppAccessRequest): string {
   const role =
     !request.scopeNote &&
     (request.requesterRole === "owner" || request.requesterRole === "teammate")

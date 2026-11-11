@@ -243,9 +243,7 @@ function VisibilityRow({
                 await onSave(next as AgentProfile["visibility"]);
               } catch (failure) {
                 setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : SAVE_FAILED,
+                  failure instanceof Error ? failure.message : SAVE_FAILED,
                 );
               } finally {
                 setSaving(false);
@@ -343,9 +341,7 @@ function IsolatedRow({
                 await onSave(next);
               } catch (failure) {
                 setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : SAVE_FAILED,
+                  failure instanceof Error ? failure.message : SAVE_FAILED,
                 );
               } finally {
                 setSaving(false);
@@ -395,9 +391,7 @@ function EditTextDialog({
   const submit = async () => {
     const parsed = schema.safeParse(draft);
     if (!parsed.success) {
-      setError(
-        parsed.error.issues[0]?.message ?? "检查一下这一项再保存。",
-      );
+      setError(parsed.error.issues[0]?.message ?? "检查一下这一项再保存。");
       return;
     }
     setSaving(true);
@@ -405,9 +399,7 @@ function EditTextDialog({
       await onSave(parsed.data);
       onClose();
     } catch (failure) {
-      setError(
-        failure instanceof Error ? failure.message : SAVE_FAILED,
-      );
+      setError(failure instanceof Error ? failure.message : SAVE_FAILED);
     } finally {
       setSaving(false);
     }
@@ -497,9 +489,7 @@ function ConnectionSection({ agent }: { agent: AgentProfile }) {
                 builtIn ? undefined : "line-clamp-none break-all font-mono"
               }
             >
-              {builtIn
-                ? "在熊宝里运行，不需要连接。"
-                : agent.endpoint}
+              {builtIn ? "在熊宝里运行，不需要连接。" : agent.endpoint}
             </ItemDescription>
           </ItemContent>
         </Item>

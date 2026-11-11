@@ -43,8 +43,7 @@ export async function translateAppGrants(variables: {
     {
       method: "POST",
       body: { text: variables.text },
-      fallback:
-        "没能选出动作。请重试，或者手动打开它们。",
+      fallback: "没能选出动作。请重试，或者手动打开它们。",
     },
   );
   return (await response.json()) as AppGrantTranslation;

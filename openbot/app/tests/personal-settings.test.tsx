@@ -278,12 +278,8 @@ describe("the Computer page", () => {
       ],
     });
     const text = foldersSection(view).textContent ?? "";
-    expect(text).toContain(
-      "文件夹访问在等桌面应用的主人批准。",
-    );
-    expect(text).toContain(
-      "文件改动在等桌面应用的主人批准，或者还没做完。",
-    );
+    expect(text).toContain("文件夹访问在等桌面应用的主人批准。");
+    expect(text).toContain("文件改动在等桌面应用的主人批准，或者还没做完。");
     expect(text).toContain("正在列出文件。");
     expect(text).not.toContain("正在列出文件来自");
     expect(text).toContain("由桌面应用的主人批准 · 只读");

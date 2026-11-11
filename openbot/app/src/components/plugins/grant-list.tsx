@@ -230,9 +230,7 @@ export function GrantList({
         </p>
       ) : null}
       {term.length > 0 && groups.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          没有匹配的动作。
-        </p>
+        <p className="text-muted-foreground text-sm">没有匹配的动作。</p>
       ) : null}
       {choosing !== null ? (
         <ConsentNotice
@@ -297,9 +295,7 @@ function describe(grant: GrantState, canAuthorize: boolean): string {
         ? "不需要授权。"
         : "已授权。";
     case "needs-consent":
-      return canAuthorize
-        ? "还没有授权。"
-        : "还没有授权。管理员可以授权它。";
+      return canAuthorize ? "还没有授权。" : "还没有授权。管理员可以授权它。";
     case "needs-operator":
       return grant.missing.length > 0
         ? `缺少 ${grant.missing.join(", ")}，需要管理员设置。授权解决不了。`

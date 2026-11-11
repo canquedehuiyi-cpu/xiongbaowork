@@ -31,8 +31,7 @@ const KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 const CALLBACK = "http://t/api/plugins/oauth/callback";
 
-const FAILED =
-  "https://app.example/connections?connected=failed";
+const FAILED = "https://app.example/connections?connected=failed";
 
 function signedIn(): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (context, next) => {

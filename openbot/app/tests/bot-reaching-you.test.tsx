@@ -130,7 +130,9 @@ test("linking Slack needs only a conversation, and warns that it moves the accou
   const view = draw();
   const user = await openSlackLink(view);
   expect(view.queryByRole("combobox", { name: /^员工/ })).toBeNull();
-  expect(view.getByText(/在这里关联，会把它从现在关联的那段对话移过来/)).toBeTruthy();
+  expect(
+    view.getByText(/在这里关联，会把它从现在关联的那段对话移过来/),
+  ).toBeTruthy();
   await user.click(view.getByRole("combobox", { name: /^对话/ }));
   const options = (await view.findAllByRole("option")).map(
     (option) => option.textContent,
@@ -166,9 +168,9 @@ test("closing the dialog keeps the link code, so reopening the row shows it agai
   await user.click(view.getByRole("button", { name: /^关联 Slack/ }));
   expect(await view.findByText("link abc")).toBeTruthy();
   // With the conversation it links, so "this conversation" still names one.
-  expect(
-    view.getByRole("combobox", { name: /^对话/ }).textContent,
-  ).toContain("Finance desk");
+  expect(view.getByRole("combobox", { name: /^对话/ }).textContent).toContain(
+    "Finance desk",
+  );
   expect(
     writes.filter(
       (write) => write.request === "POST /api/delivery/opentag/start",
@@ -199,9 +201,7 @@ test("a transport the deployment cannot reach says why instead of opening", asyn
     view.queryByRole("button", { name: /^关联 Microsoft Teams/ }),
   ).toBeNull();
   expect(
-    view.getByText(
-      "还没设置，需要管理员先开启 Slack 和 Teams。",
-    ),
+    view.getByText("还没设置，需要管理员先开启 Slack 和 Teams。"),
   ).toBeTruthy();
 });
 
@@ -214,9 +214,7 @@ test("a phone is verified for the chosen conversation, then asks for its code", 
   await user.click(view.getByRole("button", { name: /^关联手机/ }));
   await chooseConversation(view, user, "Finance desk");
   await user.type(view.getByLabelText("手机号"), "+15551234567");
-  await user.click(
-    view.getByRole("button", { name: "发送验证码" }),
-  );
+  await user.click(view.getByRole("button", { name: "发送验证码" }));
   await waitFor(() =>
     expect(writes).toContainEqual({
       request: "POST /api/delivery/sms/start",

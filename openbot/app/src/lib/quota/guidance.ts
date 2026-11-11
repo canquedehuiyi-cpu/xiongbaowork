@@ -23,7 +23,11 @@ export type QuotaGuidance = Readonly<{
   sentence: string;
   /** What happens next, in a sentence: how to make room, or when it comes back on its own. */
   hint: string;
-  upgradeHref: QuotaErrorDetails["upgradeUrl"];
+  /*
+   * 套餐页本身（M5b 起在设置里）。服务端的 `upgradeUrl` 仍是 `/plans`（`client.ts` 只认它，契约不变），
+   * 那个地址也仍然重定向到这里；链接直接写落点，省一次跳转。
+   */
+  upgradeHref: "/settings/plans";
   /** Absent when nothing can be deleted to make room — a monthly tally only resets. */
   cleanup?: Readonly<{ href: QuotaCleanupHref; label: string }>;
 }>;
@@ -81,7 +85,7 @@ export function guidanceFor(details: QuotaErrorDetails): QuotaGuidance {
     hint: excluded
       ? `当前套餐不包含${copy.label}，升级套餐后即可使用。`
       : copy.hint,
-    upgradeHref: details.upgradeUrl,
+    upgradeHref: "/settings/plans",
     ...(copy.cleanup && !excluded ? { cleanup: copy.cleanup } : {}),
   };
 }

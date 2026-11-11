@@ -418,9 +418,7 @@ describe("where the callback sends somebody afterwards", () => {
      */
     expect(
       connectedAccountsUrlFor("http://localhost:3010", { failed: true }),
-    ).toBe(
-      "http://localhost:3010/connections?connected=failed",
-    );
+    ).toBe("http://localhost:3010/connections?connected=failed");
   });
 
   test("still points somewhere when no app URL is configured", () => {
@@ -455,9 +453,7 @@ describe("where the callback sends somebody afterwards", () => {
         { failed: true },
         "admin",
       ),
-    ).toBe(
-      "http://localhost:3010/connections?connected=failed",
-    );
+    ).toBe("http://localhost:3010/connections?connected=failed");
   });
 });
 

@@ -180,11 +180,11 @@ function answersSent(messages: Message[]): Map<string, string> {
 test("the next message carries every lookup's stored answer, never an interrupted one", async () => {
   const view = opened();
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  const box = await view.findByRole("textbox", { name: "Message" });
+  const box = await view.findByRole("textbox", { name: "消息" });
   // While the person reads, the server finishes the 9 lookups and stores their answers.
   storedAnswers = LOOKUPS.length;
   await user.type(box, "How do I know you're still working on it?");
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   await waitFor(() => expect(runs).toHaveLength(1));
 
   const sent = runs[0]?.messages ?? [];
@@ -216,9 +216,9 @@ test("a lookup nobody answered is still said to have no result", async () => {
   // The store has no more than the screen: the 9 never answered anywhere.
   const view = opened();
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  const box = await view.findByRole("textbox", { name: "Message" });
+  const box = await view.findByRole("textbox", { name: "消息" });
   await user.type(box, "Carry on");
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   await waitFor(() => expect(runs).toHaveLength(1));
 
   const answers = answersSent(runs[0]?.messages ?? []);

@@ -518,7 +518,8 @@ export function PluginPage({
    */
   const shared = server?.accountMode === "shared";
   const sharedConnection = (connections.data?.connections ?? []).find(
-    (row) => row.serverId === (server?.id ?? key) && row.holder === "deployment",
+    (row) =>
+      row.serverId === (server?.id ?? key) && row.holder === "deployment",
   );
   const accountRow = shared ? sharedConnection : connection;
 
@@ -739,9 +740,7 @@ export function PluginPage({
         title={paths.pluginsLabel}
       >
         <p className="mt-12 text-destructive text-sm" role="alert">
-          {personal
-            ? "读不到你的应用。请刷新页面。"
-            : "读不到插件。"}
+          {personal ? "读不到你的应用。请刷新页面。" : "读不到插件。"}
         </p>
       </PageShell>
     );
@@ -1480,7 +1479,9 @@ export function PluginPage({
                           <ItemTitle className="font-mono text-xs">
                             {tool.name}
                           </ItemTitle>
-                          <ItemDescription>{zh(tool.description)}</ItemDescription>
+                          <ItemDescription>
+                            {zh(tool.description)}
+                          </ItemDescription>
                         </>
                       )}
                     </ItemContent>

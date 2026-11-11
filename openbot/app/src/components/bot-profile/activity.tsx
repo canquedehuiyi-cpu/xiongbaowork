@@ -210,7 +210,8 @@ function ActivitySection({
   title: string;
 }) {
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       action={
         items.length > 0 ? (
           <span className="font-mono text-[11px] text-muted-foreground tabular-nums">

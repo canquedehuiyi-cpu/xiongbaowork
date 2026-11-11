@@ -250,7 +250,8 @@ export function AvatarSourcesSection({ profile }: { profile: AgentProfile }) {
   });
   if (!profile.mine || sources.data?.agentId !== profile.id) return null;
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       description="告诉分身你的资料放在哪里、是什么。文字声明只是说明，分身不会因此读取任何文件；本地文件夹是你电脑上交给分身只读查看的文件夹；知识库和连接器让分身读取你自己的知识库和已连接的账号。"
       title="信息来源"
     >
@@ -269,7 +270,8 @@ export function AvatarSourcesSection({ profile }: { profile: AgentProfile }) {
 export function ProjectSection({ profile }: { profile: AgentProfile }) {
   if (!profile.canManage) return null;
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       description="它在你电脑上干活时所在的项目。不选项目时，它在自己的工作区里执行文件和命令。项目在「能力 › 公开项目」里管理。"
       title="当前项目"
     >
@@ -330,7 +332,8 @@ export function RunningTasksSection({ agentId }: { agentId: string }) {
   const rows = running.data ?? [];
 
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       action={
         <Button
           render={(props) => (
@@ -402,7 +405,8 @@ export function RunningTasksSection({ agentId }: { agentId: string }) {
  */
 export function RecentAuditSection({ agentId }: { agentId: string }) {
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       description="谁在什么时候对它做了什么，读自现有的审计记录。"
       title="最近审计"
     >

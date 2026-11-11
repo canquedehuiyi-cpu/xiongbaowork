@@ -163,9 +163,7 @@ test("each app is named by its own name and says it is ready, with its tools", a
 test("an app this person has not connected says so and offers Connect", async () => {
   serving({ apps: [appAccess({ state: "not_connected" })] });
   const gmail = await row(draw(), "composio-gmail");
-  expect(
-    gmail.getByText("你还没连接自己的 Gmail 账号。"),
-  ).toBeTruthy();
+  expect(gmail.getByText("你还没连接自己的 Gmail 账号。")).toBeTruthy();
   expect(gmail.getByRole("button", { name: "连接 Gmail" })).toBeTruthy();
 });
 
@@ -197,19 +195,11 @@ test("an app only an admin can fix offers Request access, and a pending one read
   const view = draw();
   const slack = await row(view, "composio-slack");
   expect(
-    slack.getByText(
-      "团队的 Slack 账号还没连接。只有管理员能连接。",
-    ),
+    slack.getByText("团队的 Slack 账号还没连接。只有管理员能连接。"),
   ).toBeTruthy();
-  expect(
-    slack.getByRole("button", { name: "申请使用 Slack" }),
-  ).toBeTruthy();
+  expect(slack.getByRole("button", { name: "申请使用 Slack" })).toBeTruthy();
   const notion = await row(view, "notion");
-  expect(
-    notion.getByText(
-      "Notion 还没开启。只有管理员能开启。",
-    ),
-  ).toBeTruthy();
+  expect(notion.getByText("Notion 还没开启。只有管理员能开启。")).toBeTruthy();
   expect(notion.getByText("已申请")).toBeTruthy();
   expect(
     notion.getByRole("button", { name: "撤回对 Notion 的申请" }),
@@ -239,9 +229,7 @@ test("an app's sentence is never cut short, so who can fix it stays on screen at
     ],
   });
   const gmail = await row(draw(), "composio-gmail");
-  const sentence = gmail.getByText(
-    "Gmail 还没设置。需要管理员开启。",
-  );
+  const sentence = gmail.getByText("Gmail 还没设置。需要管理员开启。");
   expect(sentence.className).toContain("line-clamp-none");
   expect(sentence.className).not.toContain("line-clamp-2");
 });
@@ -263,9 +251,7 @@ test("on somebody else's Team Bot, an app on its owner's account says so, and an
   const view = draw();
   const gmail = await row(view, "composio-gmail");
   expect(
-    gmail.getByText(
-      /^可以用了。这位员工用的是它主人的 Gmail 账号。/,
-    ),
+    gmail.getByText(/^可以用了。这位员工用的是它主人的 Gmail 账号。/),
   ).toBeTruthy();
   const notion = await row(view, "notion");
   expect(
@@ -307,9 +293,7 @@ test("Routines' tools are listed as commands, like every other app's, not as wha
   });
   const view = draw();
   expect(
-    await view.findByText(
-      "Complete goal、Create goal、Create routine、Create trigger",
-    ),
+    await view.findByText("完成目标、新建目标、新建定时任务、新建触发方式"),
   ).toBeTruthy();
-  expect(view.queryByText(/Created a goal|Marked a goal complete/)).toBeNull();
+  expect(view.queryByText(/创建了目标|把目标标记为已完成/)).toBeNull();
 });

@@ -69,8 +69,12 @@ const NOTION = {
   account: "personal",
 };
 
+/** Every read of a Bot's apps, by its address. */
+let reads: string[] = [];
+
 function serving(held: AppAccess[]) {
   const writes: string[] = [];
+  reads = [];
   global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -80,8 +84,14 @@ function serving(held: AppAccess[]) {
     }
     if (url === "/api/plugins/giveable")
       return Response.json({ apps: [GMAIL, NOTION] });
-    if (url.includes("/api/plugins/for/") && url.endsWith("/apps"))
+    // 「你的应用」以主人身份读（`?view=owner`），「它能用什么」按普通身份读：两种都答同一份。
+    if (
+      url.includes("/api/plugins/for/") &&
+      /\/apps(\?view=owner)?$/.test(url)
+    ) {
+      reads.push(url);
       return Response.json({ apps: held });
+    }
     if (url.includes("/api/plugins/for/"))
       return Response.json({ tools: [], skills: [] });
     if (url.endsWith("/api/plugins"))
@@ -138,6 +148,8 @@ test("each app you could give has a switch, on where you gave it, and pressing i
   expect(gmail.getAttribute("aria-checked")).toBe("false");
   expect(notion.getAttribute("aria-checked")).toBe("true");
   expect(view.getByText("Expenses 不能用你的 Gmail。")).toBeTruthy();
+  // 开关读的是主人视角，服务端只在这时答 owner_grantable（X3）。
+  expect(reads).toContain("/api/plugins/for/expenses/apps?view=owner");
 
   fireEvent.click(gmail);
   await waitFor(() =>

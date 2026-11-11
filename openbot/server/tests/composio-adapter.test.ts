@@ -901,8 +901,7 @@ describe("beginning one person's connection", () => {
     const begun = await broker.authorize({
       userId: "user_1",
       toolkit: "linear",
-      returnUrl:
-        "https://openbot.test/connections/composio-linear",
+      returnUrl: "https://openbot.test/connections/composio-linear",
     });
 
     // The config this deployment already holds for the app — and no `authConfigs.create`, which
@@ -916,8 +915,7 @@ describe("beginning one person's connection", () => {
         "user_1",
         "ac_this_deployments",
         {
-          callbackUrl:
-            "https://openbot.test/connections/composio-linear",
+          callbackUrl: "https://openbot.test/connections/composio-linear",
         },
       ],
     ]);
@@ -950,8 +948,7 @@ describe("beginning one person's connection", () => {
     const refused = broker.authorize({
       userId: "user_1",
       toolkit: "linear",
-      returnUrl:
-        "https://openbot.test/connections/composio-linear",
+      returnUrl: "https://openbot.test/connections/composio-linear",
     });
 
     const refusal = await failureOf(refused);

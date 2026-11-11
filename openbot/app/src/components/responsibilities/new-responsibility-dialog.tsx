@@ -199,9 +199,7 @@ export function NewResponsibilityDialog({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${formId}-instruction`}>
-                  指令
-                </FieldLabel>
+                <FieldLabel htmlFor={`${formId}-instruction`}>指令</FieldLabel>
                 <Textarea
                   id={`${formId}-instruction`}
                   required
@@ -211,9 +209,7 @@ export function NewResponsibilityDialog({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${formId}-criteria`}>
-                  成功标准
-                </FieldLabel>
+                <FieldLabel htmlFor={`${formId}-criteria`}>成功标准</FieldLabel>
                 <Textarea
                   id={`${formId}-criteria`}
                   required
@@ -225,9 +221,7 @@ export function NewResponsibilityDialog({
               </Field>
               <FieldGroup className="sm:grid sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor={`${formId}-source`}>
-                    事件来源
-                  </FieldLabel>
+                  <FieldLabel htmlFor={`${formId}-source`}>事件来源</FieldLabel>
                   <Select
                     items={SOURCES}
                     onValueChange={(value) => {
@@ -251,7 +245,10 @@ export function NewResponsibilityDialog({
                   {source === "github" && (
                     <FieldDescription>
                       事件来自你在
-                      <Link className="underline underline-offset-4" to="/connections">
+                      <Link
+                        className="underline underline-offset-4"
+                        to="/connections"
+                      >
                         连接
                       </Link>
                       里接入的仓库。

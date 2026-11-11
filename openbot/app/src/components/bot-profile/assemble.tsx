@@ -30,11 +30,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import {
   knowledgeForAgentQueryOptions,
   knowledgeNotebooksQueryOptions,
   setKnowledgeBindingMutationOptions,
 } from "@/lib/knowledge/queries";
+import { useManagePaths } from "@/lib/manage-paths";
 import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import {
   invalidatePlugins,
@@ -106,7 +108,10 @@ export function AssembleSections({ profile }: { profile: AgentProfile }) {
       </ProfileSection>
 
       <SkillsZone agentId={profile.id} canManage={profile.canManage} />
-      <SelfInstallToolsZone agentId={profile.id} canManage={profile.canManage} />
+      <SelfInstallToolsZone
+        agentId={profile.id}
+        canManage={profile.canManage}
+      />
       <ConnectorZone agentId={profile.id} />
       <KnowledgeZone
         agentId={profile.id}
@@ -196,7 +201,8 @@ export function SkillsZone({
     setGrant.mutate({ agentId, granted: checked, kind: "skill", ref: slug });
 
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       description="工作需要时它会遵循的指令。勾选即把技能授予这位员工并记录这次授权；取消勾选即收回。"
       title="技能"
     >
@@ -381,6 +387,13 @@ export function SelfInstallToolsZone({
   const listings = useQuery(installListingsQueryOptions());
   const byMe = useQuery(installedByMeQueryOptions(agentId));
   const { mutation: setGrant, busy } = useTrackedGrant();
+  /*
+   * 个人版里只看不改（X4）：你连上的每个应用每位员工都能用，服务端对逐位员工收回应用工具一律 403。
+   * 勾选框照实画出、但不能按，说明写在区的描述里。
+   */
+  const personal =
+    useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
+  const editable = canManage && !personal;
 
   const listed = listedRefs(listings.data, "mcp");
   const servers = page.data?.servers ?? [];
@@ -405,8 +418,13 @@ export function SelfInstallToolsZone({
   const apps = [...listed, ...unlistedWithMine];
 
   return (
-    <ProfileSection className="mt-12"
-      description="管理员上架的应用里的工具。勾选即装到这位员工上并记录；取消勾选即卸下。"
+    <ProfileSection
+      className="mt-12"
+      description={
+        personal
+          ? "你连上的每个应用，每位员工都能用，这里只能看。不想让员工用某个应用，请到「连接」里把它关掉。"
+          : "管理员上架的应用里的工具。勾选即装到这位员工上并记录；取消勾选即卸下。"
+      }
       title="可自助安装的工具"
     >
       {page.isPending || listings.isPending || granted.isPending ? (
@@ -470,12 +488,12 @@ export function SelfInstallToolsZone({
                               aria-label={`安装工具 ${server.title}/${tool.name}`}
                               checked={isHeld(tool)}
                               disabled={
-                                !canManage ||
+                                !editable ||
                                 busy("mcp", tool.ref) ||
                                 (!appListed && !isHeld(tool))
                               }
                               onCheckedChange={(checked) => {
-                                if (!canManage) return;
+                                if (!editable) return;
                                 setGrant.mutate({
                                   agentId,
                                   granted: checked === true,
@@ -516,12 +534,14 @@ export function SelfInstallToolsZone({
  */
 export function ConnectorZone({ agentId }: { agentId: string }) {
   const granted = useQuery(agentPluginsQueryOptions(agentId));
+  const paths = useManagePaths();
   const tools = granted.data?.tools ?? [];
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       action={
         <Button
-          render={(props) => <Link {...props} to="/admin/plugins" />}
+          render={(props) => <Link {...props} {...paths.plugins()} />}
           size="sm"
           variant="outline"
         >
@@ -589,12 +609,11 @@ export function KnowledgeZone({
   const failed = notebooks.error ?? (mine ? bound.error : null);
 
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       action={
         <Button
-          render={(props) => (
-            <Link {...props} to="/capabilities/knowledge" />
-          )}
+          render={(props) => <Link {...props} to="/capabilities/knowledge" />}
           size="sm"
           variant="outline"
         >

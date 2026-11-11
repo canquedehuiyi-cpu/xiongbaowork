@@ -261,8 +261,10 @@ function draw(answers: Answers, page: Page = "activity") {
       path,
       component: () => null,
     } as never);
-  const mount = (route: { update: (options: never) => unknown }, path: string) =>
-    route.update({ getParentRoute: () => root, path } as never) as never;
+  const mount = (
+    route: { update: (options: never) => unknown },
+    path: string,
+  ) => route.update({ getParentRoute: () => root, path } as never) as never;
   const router = createRouter({
     context: {},
     history: createMemoryHistory({
@@ -450,9 +452,7 @@ test("a section whose read fails says so on its own, and the other sections stil
   answers.plugins = fail(500, "插件读不到");
   const held = draw(answers, "access");
   await waitFor(() =>
-    expect(
-      held.getByText("读不到这位员工能用什么，请刷新页面。"),
-    ).toBeTruthy(),
+    expect(held.getByText("读不到这位员工能用什么，请刷新页面。")).toBeTruthy(),
   );
   expect(held.queryByText("还没有应用")).toBeNull();
 });

@@ -110,7 +110,8 @@ test("a turn refused for quota opens the guidance dialog: what ran out, the upgr
   );
   expect(view.getByText("Free 套餐：本月任务已用 50/50")).toBeTruthy();
   const upgrade = Array.from(document.querySelectorAll("a")).find(
-    (anchor) => anchor.getAttribute("href") === "/plans",
+    // 服务端仍报 `/plans`（契约不变），链接直接写落点：设置里的套餐页。
+    (anchor) => anchor.getAttribute("href") === "/settings/plans",
   );
   expect(upgrade).toBeTruthy();
   // Closed again before the next test, so nothing of this dialog is left scheduled.

@@ -421,9 +421,7 @@ function RecentUse({
 }) {
   return (
     <Field aria-labelledby="app-grants-replay" aria-live="polite">
-      <FieldLabel id="app-grants-replay">
-        按 {botName} 最近的活动
-      </FieldLabel>
+      <FieldLabel id="app-grants-replay">按 {botName} 最近的活动</FieldLabel>
       {report === null ? (
         <FieldDescription>
           熊宝这里没有可以读的活动记录，所以没有东西可以拿来对照。

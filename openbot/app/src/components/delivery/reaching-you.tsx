@@ -367,9 +367,7 @@ function ConnectDialog({
         </DialogHeader>
         <DialogBody className="mt-4 grid gap-4 overflow-y-auto">
           <Field>
-            <FieldLabel htmlFor={`${formId}-conversation`}>
-              对话
-            </FieldLabel>
+            <FieldLabel htmlFor={`${formId}-conversation`}>对话</FieldLabel>
             <Select
               items={Object.fromEntries(
                 conversations.map((channel) => [
@@ -442,9 +440,7 @@ function ConnectDialog({
                 }}
               >
                 <Field>
-                  <FieldLabel htmlFor={`${formId}-phone`}>
-                    手机号
-                  </FieldLabel>
+                  <FieldLabel htmlFor={`${formId}-phone`}>手机号</FieldLabel>
                   <div className="flex items-center gap-2">
                     <Input
                       id={`${formId}-phone`}
@@ -483,9 +479,7 @@ function ConnectDialog({
                   }}
                 >
                   <Field>
-                    <FieldLabel htmlFor={`${formId}-code`}>
-                      验证码
-                    </FieldLabel>
+                    <FieldLabel htmlFor={`${formId}-code`}>验证码</FieldLabel>
                     <div className="flex items-center gap-2">
                       <Input
                         autoComplete="one-time-code"

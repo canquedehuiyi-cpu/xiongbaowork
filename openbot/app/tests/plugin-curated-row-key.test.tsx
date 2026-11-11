@@ -290,11 +290,15 @@ test("the admin page opened by row id still finds the catalogue entry", async ()
 test("connected accounts lists the connector for a person to connect", async () => {
   const view = renderSettings("/connections/");
 
-  const row = await view.findByText("百度网盘");
-  expect(row.closest("a")?.getAttribute("href")).toBe(`/connections/${KEY}`);
-  // Listed once, and not yet connected: the tile says so beside its Connect.
-  expect(view.getAllByText("百度网盘")).toHaveLength(1);
-  const tile = view.getByTestId(`account-${KEY}`);
+  const tile = await view.findByTestId(`account-${KEY}`);
+  expect(tile.closest("a")?.getAttribute("href")).toBe(`/connections/${KEY}`);
+  // Listed once among your accounts, and not yet connected: the tile says so beside its Connect.
+  // （M5b 起同一页下方还有「员工可用的连接器」一区，也会列出它；这里只数你的账号那一列。）
+  expect(
+    view
+      .getAllByText("百度网盘")
+      .filter((name) => name.closest('[data-testid^="account-"]')),
+  ).toHaveLength(1);
   expect(within(tile).getByText("未连接")).toBeTruthy();
 });
 

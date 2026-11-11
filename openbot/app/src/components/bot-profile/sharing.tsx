@@ -128,9 +128,7 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
               </ItemMedia>
               <ItemContent>
                 <ItemTitle>链接</ItemTitle>
-                <ItemDescription>
-                  打开一段只属于你的对话。
-                </ItemDescription>
+                <ItemDescription>打开一段只属于你的对话。</ItemDescription>
               </ItemContent>
               <ItemActions>
                 <Button
@@ -151,9 +149,7 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
           <PageEmpty
             icon={IconShare}
             title={
-              agent.visibility === "public"
-                ? "没有发布到团队"
-                : "没有发布"
+              agent.visibility === "public" ? "没有发布到团队" : "没有发布"
             }
           >
             {agent.visibility === "public"
@@ -253,9 +249,7 @@ function PublishDialog({
     <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {current ? "发布给了谁" : "发布到团队"}
-          </DialogTitle>
+          <DialogTitle>{current ? "发布给了谁" : "发布到团队"}</DialogTitle>
           <DialogDescription>
             发布不会改变它的可见性。你随时可以取消发布。
           </DialogDescription>
@@ -280,9 +274,7 @@ function PublishDialog({
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor={`${formId}-audience`}>
-                  发布给
-                </FieldLabel>
+                <FieldLabel htmlFor={`${formId}-audience`}>发布给</FieldLabel>
                 <Select
                   items={AUDIENCES}
                   onValueChange={(value) => {

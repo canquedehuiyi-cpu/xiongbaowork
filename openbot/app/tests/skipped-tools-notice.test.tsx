@@ -18,9 +18,7 @@ test("names every action the refresh left out, as a status and not an alert", ()
     <SkippedToolsNotice names={["notion.export", "notion.import"]} />,
   );
   const notice = view.getByRole("status");
-  expect(notice.textContent).toContain(
-    "这个应用列出的 2 个动作没有收进来",
-  );
+  expect(notice.textContent).toContain("这个应用列出的 2 个动作没有收进来");
   expect(notice.textContent).toContain("notion.export");
   expect(notice.textContent).toContain("notion.import");
   expect(view.queryByRole("alert")).toBeNull();

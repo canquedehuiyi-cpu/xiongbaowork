@@ -149,9 +149,7 @@ function AddRepositoryDialog({ onClose }: { onClose: () => void }) {
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor={`${formId}-repository`}>
-                  仓库
-                </FieldLabel>
+                <FieldLabel htmlFor={`${formId}-repository`}>仓库</FieldLabel>
                 <Input
                   autoFocus
                   id={`${formId}-repository`}

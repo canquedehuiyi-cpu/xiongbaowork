@@ -42,7 +42,7 @@ export function RoutinesConnectionPage() {
   return (
     <PageShell
       action={<NewRoutineButton />}
-      backButton={{ label: "连接", linkProps: { to: "/connections" } }}
+      backButton={{ label: "全部连接", linkProps: { to: "/connections" } }}
       description="定时任务是员工按计划去做的事。每位员工都能帮你设一条。"
       title="定时任务"
     >

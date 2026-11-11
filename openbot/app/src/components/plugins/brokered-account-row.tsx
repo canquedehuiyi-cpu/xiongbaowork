@@ -1075,8 +1075,8 @@ export function BrokeredAccountRow({
   /**
    * Which broker's name the sentences that name one use. A NAME, never a key or a capability.
    *
-   * 上游要求必传；fork 现有页面（`/settings/connected-accounts/$key`、`/admin/plugins/$key`）还没有
-   * 传，fork 服务端也还不下发 `provider`，所以这里缺省为 `composio`，与这两个页面原来的文案一致。
+   * 上游要求必传；fork 这里留成可选：`/connections/$key` 与 `/admin/plugins/$key` 都传了，但 X7 之前的
+   * 服务端不下发 `provider`，所以缺省为 `composio`，与这两个页面原来的文案一致。
    */
   provider?: PluginsProvider;
   account: BrokeredAccount;

@@ -357,8 +357,10 @@ function draw(answers: Answers, path = `/bots/${agentId}`) {
       path,
       component: () => null,
     } as never);
-  const mount = (route: { update: (options: never) => unknown }, path: string) =>
-    route.update({ getParentRoute: () => root, path } as never) as never;
+  const mount = (
+    route: { update: (options: never) => unknown },
+    path: string,
+  ) => route.update({ getParentRoute: () => root, path } as never) as never;
   const router = createRouter({
     // The memory page asks the deployment whether it offers memory before it loads.
     context: { queryClient },
@@ -533,9 +535,9 @@ describe("the employee's own page and its pages", () => {
       within(connection).getByTestId("coworker-framework").textContent,
     ).toBe("熊宝内置");
     // Upstream's Setup keeps 独立运行 with 身份, beside 可见性.
-    const runtime = (
-      screen.getByRole("heading", { level: 2, name: "身份" })
-    ).closest("section") as HTMLElement;
+    const runtime = screen
+      .getByRole("heading", { level: 2, name: "身份" })
+      .closest("section") as HTMLElement;
     const toggle = await waitFor(() => {
       const found = within(runtime).getByRole("switch", { name: "独立运行" });
       expect(found.hasAttribute("data-disabled")).toBe(false);
@@ -622,8 +624,6 @@ describe("the employee's own page and its pages", () => {
   test("「长期职责」一行打开这位员工自己的长期职责页", async () => {
     const screen = draw(fullAnswers());
     const row = (await screen.findByText("长期职责")).closest("a");
-    expect(row?.getAttribute("href")).toBe(
-      `/bots/${agentId}/responsibilities`,
-    );
+    expect(row?.getAttribute("href")).toBe(`/bots/${agentId}/responsibilities`);
   });
 });

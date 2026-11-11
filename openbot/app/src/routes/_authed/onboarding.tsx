@@ -259,10 +259,12 @@ function RouteComponent() {
   const [finished, setFinished] = React.useState(false);
   const [leaving, setLeaving] = React.useState(false);
   /*
-   * Where the fade lands. The model guide's way out goes to 能力与资源's model library tab, which the
-   * person can only reach once onboarding is finished.
+   * Where the fade lands. The model guide's way out goes to 能力's model library tab
+   * (`/capabilities/models`), which the person can only reach once onboarding is finished.
    */
-  const [destination, setDestination] = React.useState<"/" | "/resources">("/");
+  const [destination, setDestination] = React.useState<
+    "/" | "/capabilities/models"
+  >("/");
   const finish = async () => {
     await complete.mutateAsync(undefined);
     setFinished(true);
@@ -276,8 +278,8 @@ function RouteComponent() {
     // Navigation must also complete in a background tab, where animation frames may pause.
     const timer = setTimeout(
       () =>
-        destination === "/resources"
-          ? navigate({ to: "/resources", search: { tab: "models" } })
+        destination === "/capabilities/models"
+          ? navigate({ to: "/capabilities/models" })
           : navigate({ to: "/" }),
       reduced ? 0 : 300,
     );
@@ -309,10 +311,12 @@ function RouteComponent() {
     welcome: welcomeStep(
       !computerMissing,
       <ModelLibraryGuide
-        connecting={complete.isPending && destination === "/resources"}
+        connecting={
+          complete.isPending && destination === "/capabilities/models"
+        }
         onConnect={() => {
           // Finishing comes first: every screen behind it sends somebody unfinished straight back.
-          setDestination("/resources");
+          setDestination("/capabilities/models");
           void finish().catch(() => setDestination("/"));
         }}
       />,

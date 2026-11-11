@@ -337,7 +337,8 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
    */
   const me = useQuery({
     ...currentUserQueryOptions(),
-    enabled: (perActionGrants && sharedHere) || server?.adminConnectOnly === true,
+    enabled:
+      (perActionGrants && sharedHere) || server?.adminConnectOnly === true,
   }).data;
   const isAdmin = me?.role === "admin";
   const appNames = [key, server?.title ?? key];

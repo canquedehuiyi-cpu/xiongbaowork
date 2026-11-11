@@ -205,9 +205,7 @@ test("someone running OpenBot on their own computer gets the way to set channels
   available = { slack: false, teams: false, sms: false, push: false };
   serving();
   const view = draw({ role: "member", localEvaluation: true });
-  expect(
-    await view.findByRole("link", { name: "怎么设置" }),
-  ).toBeTruthy();
+  expect(await view.findByRole("link", { name: "怎么设置" })).toBeTruthy();
 });
 
 test("a member who can't set channels up is told their admin does, with no link", async () => {

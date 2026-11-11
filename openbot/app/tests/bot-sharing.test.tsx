@@ -121,9 +121,7 @@ test("an unpublished Bot of yours offers to publish it", async () => {
   const view = draw(BOT);
   const user = userEvent.setup({ document });
   await user.click(await view.findByRole("button", { name: /发布对象/ }));
-  expect(
-    await view.findByRole("button", { name: "发布到团队" }),
-  ).toBeTruthy();
+  expect(await view.findByRole("button", { name: "发布到团队" })).toBeTruthy();
   expect(view.queryByRole("button", { name: "取消发布" })).toBeNull();
 });
 
@@ -139,9 +137,7 @@ test("publishing to specific people sends them and their groups", async () => {
   const user = userEvent.setup({ document });
   await user.click(await view.findByRole("button", { name: /发布对象/ }));
   await user.click(view.getByRole("combobox", { name: /^发布给/ }));
-  await user.click(
-    await view.findByRole("option", { name: "指定的人或分组" }),
-  );
+  await user.click(await view.findByRole("option", { name: "指定的人或分组" }));
   await user.type(
     view.getByLabelText("指定的人（填邮箱）"),
     "a@example.test, b@example.test",
@@ -229,9 +225,7 @@ test("a public Bot that is not published says everyone can already use it", asyn
     "user",
   );
   const view = draw({ ...BOT, visibility: "public" });
-  expect(
-    await view.findByText(/熊宝上的所有人已经都能用它/),
-  ).toBeTruthy();
+  expect(await view.findByText(/熊宝上的所有人已经都能用它/)).toBeTruthy();
   expect(view.queryByText(/只有你能用它/)).toBeNull();
 });
 

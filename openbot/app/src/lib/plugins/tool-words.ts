@@ -39,13 +39,34 @@ export function toolName(serverId: string, name: string): string {
 const ROUTINES_TOOLS: ReadonlyMap<string, { label: string; summary: string }> =
   new Map([
     ["list_routines", { label: "列出定时任务", summary: "看有哪些定时任务。" }],
-    ["create_routine", { label: "新建定时任务", summary: "按时间表安排一项要做的事。" }],
-    ["update_routine", { label: "修改定时任务", summary: "改一项定时任务的内容或时间。" }],
-    ["delete_routine", { label: "删除定时任务", summary: "删掉一项定时任务。" }],
-    ["create_trigger", { label: "新建触发方式", summary: "让某件事发生时开始干活。" }],
-    ["pause_trigger", { label: "暂停触发方式", summary: "先停下一个触发方式。" }],
-    ["resume_trigger", { label: "恢复触发方式", summary: "让暂停的触发方式重新生效。" }],
-    ["delete_trigger", { label: "删除触发方式", summary: "删掉一个触发方式。" }],
+    [
+      "create_routine",
+      { label: "新建定时任务", summary: "按时间表安排一项要做的事。" },
+    ],
+    [
+      "update_routine",
+      { label: "修改定时任务", summary: "改一项定时任务的内容或时间。" },
+    ],
+    [
+      "delete_routine",
+      { label: "删除定时任务", summary: "删掉一项定时任务。" },
+    ],
+    [
+      "create_trigger",
+      { label: "新建触发方式", summary: "让某件事发生时开始干活。" },
+    ],
+    [
+      "pause_trigger",
+      { label: "暂停触发方式", summary: "先停下一个触发方式。" },
+    ],
+    [
+      "resume_trigger",
+      { label: "恢复触发方式", summary: "让暂停的触发方式重新生效。" },
+    ],
+    [
+      "delete_trigger",
+      { label: "删除触发方式", summary: "删掉一个触发方式。" },
+    ],
     ["list_goals", { label: "列出目标", summary: "看有哪些目标。" }],
     ["create_goal", { label: "新建目标", summary: "定一个要持续推进的目标。" }],
     ["update_goal", { label: "修改目标", summary: "改一个目标的内容。" }],

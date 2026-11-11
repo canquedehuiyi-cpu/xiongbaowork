@@ -550,17 +550,17 @@ async function ask(away: boolean, turnRuns = 2) {
   const view = openConversation();
   const user = userEvent.setup({ document: view.container.ownerDocument });
   await user.type(
-    await view.findByRole("textbox", { name: "Message" }, { timeout: 5000 }),
+    await view.findByRole("textbox", { name: "消息" }, { timeout: 5000 }),
     ASK,
   );
-  await user.click(view.getByRole("button", { name: "Send message" }));
+  await user.click(view.getByRole("button", { name: "发送消息" }));
   await waitFor(() => expect(runs).toHaveLength(1), { timeout: 5000 });
   if (away) focused = false;
   release();
   await waitFor(() => expect(runs).toHaveLength(turnRuns), { timeout: 5000 });
   await waitFor(
     () =>
-      expect(view.queryByRole("button", { name: "Stop the Bot" })).toBeNull(),
+      expect(view.queryByRole("button", { name: "停止员工" })).toBeNull(),
     { timeout: 5000 },
   );
   await settleReactWork();
@@ -575,7 +575,7 @@ test("a turn whose whole answer is an interface the Bot drew raises one notice w
 
   expect(shown).toEqual([
     {
-      title: "Trip Planner replied",
+      title: "Trip Planner回复了",
       body: "Weekend trip budget",
       tag: `openbot-${channel.id}`,
     },
@@ -588,7 +588,7 @@ test("a turn whose whole answer is an interface drawn from the A2UI catalog rais
 
   expect(shown).toEqual([
     {
-      title: "Trip Planner replied",
+      title: "Trip Planner回复了",
       body: "Weekend trip budget",
       tag: `openbot-${channel.id}`,
     },
@@ -608,7 +608,7 @@ test("a turn whose whole answer is a card raises one notice, over the card's tit
 
   expect(shown).toEqual([
     {
-      title: "Trip Planner replied",
+      title: "Trip Planner回复了",
       body: "Northwind Traders",
       tag: `openbot-${channel.id}`,
     },
@@ -643,7 +643,7 @@ test("a turn that draws and then says something raises one notice, over what it 
 
   expect(shown).toEqual([
     {
-      title: "Trip Planner replied",
+      title: "Trip Planner回复了",
       body: "Change any cost and the total updates.",
       tag: `openbot-${channel.id}`,
     },

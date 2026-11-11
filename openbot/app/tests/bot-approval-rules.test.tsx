@@ -95,7 +95,7 @@ test("only this Bot's own rules can be changed, and the team rules that reach it
   const view = draw();
   expect(
     await view.findByRole("combobox", {
-      name: /^「.*Gmail.*」的处理方式$/,
+      name: "「Gmail 上的任何操作」的处理方式",
     }),
   ).toBeTruthy();
   expect(
@@ -105,7 +105,9 @@ test("only this Bot's own rules can be changed, and the team rules that reach it
     view.queryByRole("combobox", { name: /^「.*Slack.*」的处理方式$/ }),
   ).toBeNull();
   // 规则的读法归审批组（describe-rule），这里只认它说的是 Drive 上的分享。
-  expect(view.getAllByText(/Share.*Drive|分享.*Drive|Drive.*分享/).length).toBeGreaterThan(0);
+  expect(
+    view.getAllByText(/Share.*Drive|分享.*Drive|Drive.*分享/).length,
+  ).toBeGreaterThan(0);
   expect(view.getAllByText(/Click|点击/).length).toBeGreaterThan(0);
   expect(view.queryByText(/Any action in your folders|你的文件夹/)).toBeNull();
 });

@@ -90,8 +90,7 @@ const KIND_HELP: Record<TriggerKind, string> = {
   pagerduty:
     "在 PagerDuty 的 Integrations → Generic Webhooks (v3) 里填好地址，再把创建时显示的密钥粘贴到这里。",
   email: "向这个地址发送或转发邮件，就会开始一次运行。",
-  slack:
-    "由这位员工收到的 Slack 事件触发。添加触发方式之前的消息会被忽略。",
+  slack: "由这位员工收到的 Slack 事件触发。添加触发方式之前的消息会被忽略。",
 };
 const VENDOR_SECRET: ReadonlySet<TriggerKind> = new Set([
   "linear",
@@ -197,7 +196,8 @@ export function Triggers({ goal }: { goal: ResponsibilityRecord }) {
       </div>
       {goal.status !== "active" && (
         <p className="text-muted-foreground text-xs">
-          这项长期职责{goal.status === "paused" ? "已暂停" : "已完成"}，触发方式不会让它开工。
+          这项长期职责{goal.status === "paused" ? "已暂停" : "已完成"}
+          ，触发方式不会让它开工。
         </p>
       )}
       {triggers.error && (
@@ -414,9 +414,7 @@ function TriggerRow({
                   : "text-amber-600 text-xs dark:text-amber-500"
               }
             >
-              {trigger.hasSecret
-                ? "签名密钥已保存"
-                : "等待填写签名密钥"}
+              {trigger.hasSecret ? "签名密钥已保存" : "等待填写签名密钥"}
             </span>
             <div className="flex items-center gap-2">
               <Input
@@ -424,9 +422,7 @@ function TriggerRow({
                 type="password"
                 autoComplete="new-password"
                 placeholder={
-                  trigger.hasSecret
-                    ? "粘贴新的密钥以轮换"
-                    : "粘贴签名密钥"
+                  trigger.hasSecret ? "粘贴新的密钥以轮换" : "粘贴签名密钥"
                 }
                 value={pasted}
                 onChange={(event) => setPasted(event.target.value)}
@@ -662,9 +658,7 @@ function NewTriggerDialog({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor={`${id}-path`}>
-                      仅当字段
-                    </FieldLabel>
+                    <FieldLabel htmlFor={`${id}-path`}>仅当字段</FieldLabel>
                     <Input
                       id={`${id}-path`}
                       placeholder="data.team.key"

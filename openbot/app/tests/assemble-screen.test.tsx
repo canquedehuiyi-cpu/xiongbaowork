@@ -173,7 +173,9 @@ function draw({
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: [`/bots/${agentId}/${at}`] }),
+    history: createMemoryHistory({
+      initialEntries: [`/bots/${agentId}/${at}`],
+    }),
     routeTree: root.addChildren([
       // `as never`, as in `assemble-install.test.tsx`: the file routes are registered in the
       // generated tree under their real parents, and this only re-addresses them for one render.

@@ -89,7 +89,8 @@ export function BotPermissions({ agentId }: { agentId: string }) {
   const editable = data?.editable === true;
   const busy = mode.isPending || security.isPending;
   return (
-    <ProfileSection className="mt-12"
+    <ProfileSection
+      className="mt-12"
       description={
         data
           ? data.ownedByAnother

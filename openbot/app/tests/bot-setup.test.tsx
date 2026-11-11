@@ -261,9 +261,7 @@ test("the starter Bot's Setup edits its instructions apart from what it does", a
 test("a Bot whose instructions are what it does has no separate Instructions row", async () => {
   serve(MANAGED);
   const view = draw("personal");
-  expect(
-    await view.findByRole("button", { name: /^它做什么/ }),
-  ).toBeTruthy();
+  expect(await view.findByRole("button", { name: /^它做什么/ })).toBeTruthy();
   expect(view.queryByRole("button", { name: /^指令/ })).toBeNull();
 
   await rename(view, "Receipts");
@@ -339,9 +337,7 @@ test("the Isolated row gives a Bot a computer of its own through the real route"
   const view = draw();
   const toggle = await isolatedSwitch(view);
   expect(toggle.getAttribute("aria-checked")).toBe("false");
-  expect(
-    view.getByText("和你的其他员工一起在你的电脑上运行。"),
-  ).toBeTruthy();
+  expect(view.getByText("和你的其他员工一起在你的电脑上运行。")).toBeTruthy();
 
   const user = userEvent.setup({ document: view.baseElement.ownerDocument });
   await user.click(toggle);

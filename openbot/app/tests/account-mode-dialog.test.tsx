@@ -82,9 +82,7 @@ function draw() {
 describe("switching an app to Shared", () => {
   test("names what goes, warns, and lists each Bot's approval before anything changes", async () => {
     const view = draw();
-    expect(
-      await view.findByText("14 个个人账号会被断开。"),
-    ).toBeTruthy();
+    expect(await view.findByText("14 个个人账号会被断开。")).toBeTruthy();
     expect(
       view.getByText(
         "用到这个应用的员工，不管谁在用，都会以这一个账号行事。下面是每位员工切换后会被批准的使用范围。",

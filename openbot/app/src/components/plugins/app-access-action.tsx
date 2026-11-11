@@ -337,12 +337,7 @@ function OwnerGiveAction({
   )
     return (
       <Button
-        render={
-          <Link
-            params={{ key: access.key }}
-            to="/connections/$key"
-          />
-        }
+        render={<Link params={{ key: access.key }} to="/connections/$key" />}
         aria-label={`连接 ${name}`}
         size="sm"
         variant="outline"
@@ -469,12 +464,7 @@ function PersonalConnectAction({
   if (access.connect === "key" || tab.needsKey)
     return (
       <Button
-        render={
-          <Link
-            params={{ key: access.key }}
-            to="/connections/$key"
-          />
-        }
+        render={<Link params={{ key: access.key }} to="/connections/$key" />}
         aria-label={`设置 ${name}`}
         size="sm"
       >
@@ -588,12 +578,7 @@ function ConnectAction({
   if (viaSettings)
     return (
       <Button
-        render={
-          <Link
-            params={{ key: access.key }}
-            to="/connections/$key"
-          />
-        }
+        render={<Link params={{ key: access.key }} to="/connections/$key" />}
         aria-label={`${label} ${access.displayName}`}
         size="sm"
         variant="outline"

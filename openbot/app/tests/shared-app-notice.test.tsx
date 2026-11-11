@@ -98,9 +98,7 @@ describe("SharedAppNotice", () => {
     pending = [{ serverId: "gh", id: "r0" }];
     const view = draw();
     expect(
-      await view.findByText(
-        "正在等管理员批准使用 Team GitHub 的团队账号。",
-      ),
+      await view.findByText("正在等管理员批准使用 Team GitHub 的团队账号。"),
     ).toBeTruthy();
     expect(view.queryByRole("button")).toBeNull();
   });

@@ -128,7 +128,13 @@ export function AccessSections({ agent }: { agent: AgentProfile }) {
  */
 function YourApps({ agent }: { agent: AgentProfile }) {
   const giveable = useQuery(giveableAppsQueryOptions());
-  const held = useQuery(botAppsQueryOptions(agent.id));
+  /*
+   * AS THE OWNER (`?view=owner`): only then does the server answer `owner_grantable` for an app an
+   * owner may give (X3). Read plainly, an owner's own Bot reads `not_granted`, and a switch drawn off
+   * that would not know the app was theirs to give. The query key differs from the plain read's, so
+   * "它能用什么" below keeps its own answer.
+   */
+  const held = useQuery(botAppsQueryOptions(agent.id, "owner"));
   const give = useMutation(giveBotAppMutationOptions(queryClient));
   const takeBack = useMutation(takeBackBotAppMutationOptions(queryClient));
   const error = give.error ?? takeBack.error;

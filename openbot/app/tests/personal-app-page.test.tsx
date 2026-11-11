@@ -185,9 +185,7 @@ describe("an app's page in the personal edition", () => {
   test("turns the app on and starts connecting your account in one press", async () => {
     const view = draw("personal", []);
     const user = userEvent.setup({ document });
-    await user.click(
-      await view.findByRole("button", { name: "连接 Notion" }),
-    );
+    await user.click(await view.findByRole("button", { name: "连接 Notion" }));
     await waitFor(() =>
       expect(writes).toEqual([
         "POST /api/plugins/servers",
@@ -324,9 +322,7 @@ describe("Gmail's page in the personal edition", () => {
   test("says what connecting Gmail does, not a documents app's sentence", async () => {
     const view = draw("personal", [gmailServer], "composio-gmail");
     expect(
-      await view.findByText(
-        "连接你的 Gmail 账号，你的员工就能用它。",
-      ),
+      await view.findByText("连接你的 Gmail 账号，你的员工就能用它。"),
     ).toBeTruthy();
     const text = view.container.textContent ?? "";
     expect(text).not.toContain("文档");
@@ -338,9 +334,7 @@ describe("Gmail's page in the personal edition", () => {
     const view = draw("team", [gmailServer], "composio-gmail");
     expect(await view.findByText("GMAIL_ADD_LABEL_TO_EMAIL")).toBeTruthy();
     expect(
-      view.getByText(
-        /不连也算配置完成；连上后只会碰到你自己的 Gmail 账号。/,
-      ),
+      view.getByText(/不连也算配置完成；连上后只会碰到你自己的 Gmail 账号。/),
     ).toBeTruthy();
     expect(view.container.textContent).not.toContain("文档");
   });
@@ -522,9 +516,7 @@ describe("turning an app off from its own page", () => {
       ]),
     );
     expect(await view.findByRole("button", { name: "连接" })).toBeTruthy();
-    expect(
-      view.getByRole("switch", { name: "打开或关掉 Exa" }),
-    ).toBeTruthy();
+    expect(view.getByRole("switch", { name: "打开或关掉 Exa" })).toBeTruthy();
     expect(router.state.location.pathname).toBe("/connections/composio-exa");
   });
 });

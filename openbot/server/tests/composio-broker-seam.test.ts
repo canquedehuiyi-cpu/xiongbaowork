@@ -86,8 +86,7 @@ describe("brokerReturnUrl", () => {
    * reasons.
    */
   test("says which setting fixes it, and never quotes the address", () => {
-    const address =
-      "openbot-tenant-42.internal.corp/connections/9f3c";
+    const address = "openbot-tenant-42.internal.corp/connections/9f3c";
 
     let thrown: unknown;
     try {
@@ -104,9 +103,9 @@ describe("brokerReturnUrl", () => {
   });
 
   test("hands back the address a configured deployment built", () => {
-    expect(
-      brokerReturnUrl("https://openbot.test/connections/x"),
-    ).toBe("https://openbot.test/connections/x");
+    expect(brokerReturnUrl("https://openbot.test/connections/x")).toBe(
+      "https://openbot.test/connections/x",
+    );
     expect(brokerReturnUrl("http://localhost:3001/admin/plugins/x")).toBe(
       "http://localhost:3001/admin/plugins/x",
     );

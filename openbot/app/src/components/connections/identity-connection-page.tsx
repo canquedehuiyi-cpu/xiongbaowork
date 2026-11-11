@@ -148,9 +148,7 @@ function IdentityAppTools({ provider }: { provider: "github" | "slack" }) {
           </ItemMedia>
           <ItemContent>
             <ItemTitle>{app.title}</ItemTitle>
-            <ItemDescription>
-              {connected ? "已连接" : "未连接"}
-            </ItemDescription>
+            <ItemDescription>{connected ? "已连接" : "未连接"}</ItemDescription>
           </ItemContent>
           <ItemActions>
             <IconChevronRight className="size-4 text-muted-foreground" />

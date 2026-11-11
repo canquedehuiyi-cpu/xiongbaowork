@@ -53,7 +53,9 @@ describe("where the pages a person manages live", () => {
     expect(href(paths.pluginTool("notion", "search"))).toBe(
       "/connections/notion",
     );
-    expect(href(paths.pluginBot("notion", "bot-1"))).toBe("/connections/notion");
+    expect(href(paths.pluginBot("notion", "bot-1"))).toBe(
+      "/connections/notion",
+    );
     expect(href(paths.brokerDirectory("composio"))).toBe(
       "/connections/browse/composio",
     );

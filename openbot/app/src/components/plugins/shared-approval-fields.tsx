@@ -41,9 +41,7 @@ export function SharedApprovalFields({
     ];
   return (
     <fieldset className="space-y-2 text-sm">
-      <legend className="font-medium">
-        谁能通过这位员工使用团队账号
-      </legend>
+      <legend className="font-medium">谁能通过这位员工使用团队账号</legend>
       {options.map((option) => (
         <label className="flex items-center gap-2" key={option.audience}>
           <input

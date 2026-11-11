@@ -89,8 +89,7 @@ export function summaryFor(
 ): string {
   const status = STATUS[goal.status].label;
   if (goal.status === "completed") return status;
-  if (goal.status === "paused")
-    return `${status} · 恢复之前不会开工`;
+  if (goal.status === "paused") return `${status} · 恢复之前不会开工`;
   const starts = [
     ...goal.subscriptions.map(
       (subscription) =>
@@ -296,9 +295,7 @@ export function ResponsibilityDialog({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${formId}-instruction`}>
-                  指令
-                </FieldLabel>
+                <FieldLabel htmlFor={`${formId}-instruction`}>指令</FieldLabel>
                 <Textarea
                   id={`${formId}-instruction`}
                   value={instruction}
@@ -308,9 +305,7 @@ export function ResponsibilityDialog({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor={`${formId}-criteria`}>
-                  成功标准
-                </FieldLabel>
+                <FieldLabel htmlFor={`${formId}-criteria`}>成功标准</FieldLabel>
                 <Textarea
                   id={`${formId}-criteria`}
                   value={successCriteria}
@@ -465,7 +460,9 @@ function Runs({
                   <ItemFooter className="min-w-0 flex-col items-stretch">
                     {run.waiting && (
                       <p>
-                        在等你{run.waiting.kind === "question" ? "回答问题" : "批准"}。到这位员工页面顶部或对话里处理。
+                        在等你
+                        {run.waiting.kind === "question" ? "回答问题" : "批准"}
+                        。到这位员工页面顶部或对话里处理。
                       </p>
                     )}
                     {run.error && (

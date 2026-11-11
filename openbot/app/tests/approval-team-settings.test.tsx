@@ -101,7 +101,7 @@ beforeEach(() => {
         return Response.json({ ok: true });
       }
       if (url === "/api/approvals") return Response.json(inbox);
-      if (url === "/api/approvals/shared-use")
+      if (url === "/api/plugins/shared-use")
         return Response.json({ requests: [] });
       if (url === "/api/me")
         return Response.json({

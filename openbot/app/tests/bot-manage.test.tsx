@@ -148,9 +148,7 @@ test("a Bot an admin assigned to you reads as pinned and cannot be hidden or unp
     hidden.hasAttribute("disabled") ||
       hidden.getAttribute("aria-disabled") === "true",
   ).toBe(true);
-  expect(
-    view.getAllByText(/管理员把它分配给了你/).length,
-  ).toBeGreaterThan(0);
+  expect(view.getAllByText(/管理员把它分配给了你/).length).toBeGreaterThan(0);
 });
 
 test("rows that open a dialog show a chevron, and Duplicate, which acts at once, does not", () => {
@@ -190,9 +188,7 @@ test("Reset promises no memory in the personal edition", async () => {
   servingResetPlan();
   const view = draw(BOT, {}, "personal");
   const row = view.getByRole("button", { name: /^重置/ });
-  expect(row.textContent).toContain(
-    "删除你和它的对话和它排期的工作。",
-  );
+  expect(row.textContent).toContain("删除你和它的对话和它排期的工作。");
   expect(row.textContent).not.toMatch(/记住|记忆/);
   fireEvent.click(row);
   expect(await view.findByText("1 段对话")).toBeTruthy();
@@ -240,9 +236,7 @@ test("the personal edition's Reset notice doesn't mention other people's data", 
   const view = draw(BOT, {}, "personal");
   fireEvent.click(view.getByRole("button", { name: /^重置/ }));
   expect(
-    await view.findByText(
-      "这会删除 Expenses 与你之间的东西。删除后无法撤销。",
-    ),
+    await view.findByText("这会删除 Expenses 与你之间的东西。删除后无法撤销。"),
   ).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/别人|其他人/);
 });
@@ -257,9 +251,7 @@ test("a team deployment keeps saying whose list changes and who a delete reaches
   servingResetPlan();
   const view = draw(BOT, {}, "team");
   expect(
-    view.getByText(
-      "让它一直在你的员工列表顶部。只改你自己的列表。",
-    ),
+    view.getByText("让它一直在你的员工列表顶部。只改你自己的列表。"),
   ).toBeTruthy();
   expect(
     view.getByText("从你的员工列表里拿掉。只改你自己的列表。"),

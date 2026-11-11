@@ -116,9 +116,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
    * A list that could not be read. A refused stop, reset or update is said beside the buttons
    * instead, because the top of this page is a long scroll away from them.
    */
-  const problem = fleet.error
-    ? "读不到电脑列表。请刷新页面。"
-    : null;
+  const problem = fleet.error ? "读不到电脑列表。请刷新页面。" : null;
   const hostProblem = hostAccess.error
     ? hostAccess.error.message
     : requestGrant.error
@@ -189,9 +187,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
       ? `浏览器从 ${new Date(computer.startedAt ?? "").toLocaleTimeString("zh-CN")} 起在运行`
       : "没有浏览器在运行";
     if (!isOwnBrowser(computer))
-      return computer.running
-        ? since
-        : `${since}。员工下次需要时会启动。`;
+      return computer.running ? since : `${since}。员工下次需要时会启动。`;
     // In the team edition the row already says it is that person's browser for Teach a Bot.
     if (!personal) return since;
     return computer.running
@@ -255,11 +251,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
         stopping={stopHostAccess.isPending}
       />
 
-      <PageSection
-        title={
-          personal ? "你的员工的浏览器" : "这个部署里的电脑"
-        }
-      >
+      <PageSection title={personal ? "你的员工的浏览器" : "这个部署里的电脑"}>
         {setState.error ? (
           <p
             className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
@@ -424,7 +416,8 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
               更新 {confirmingUpdate ? titleOf(confirmingUpdate) : ""}？
             </DialogTitle>
             <DialogDescription>
-              它会换到{paths.deploymentName}现在用的电脑镜像，文件和登录都会保留。如果它正在运行，会重启并停下手上的事。
+              它会换到{paths.deploymentName}
+              现在用的电脑镜像，文件和登录都会保留。如果它正在运行，会重启并停下手上的事。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -469,9 +462,12 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
         </p>
       ) : (
         <p className="mt-4 text-muted-foreground text-sm">
-          <strong>停止</strong>会关掉电脑上的浏览器但保留登录，员工下次需要时再启动。
-          <strong>重置</strong>会删除浏览器资料，让上面每位员工退出所有登录。电脑用的是旧镜像时会出现
-          <strong>更新电脑</strong>，它会把电脑换到新镜像，保留文件和登录。这三项都会记在
+          <strong>停止</strong>
+          会关掉电脑上的浏览器但保留登录，员工下次需要时再启动。
+          <strong>重置</strong>
+          会删除浏览器资料，让上面每位员工退出所有登录。电脑用的是旧镜像时会出现
+          <strong>更新电脑</strong>
+          ，它会把电脑换到新镜像，保留文件和登录。这三项都会记在
           <Link className="underline" {...paths.audit()}>
             {paths.auditLabel}
           </Link>
@@ -599,9 +595,7 @@ function HostFoldersSection({
 
       {desktop ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-muted-foreground text-sm">
-          <p>
-            文件夹是只读的。员工需要写入时，桌面应用会先问你。
-          </p>
+          <p>文件夹是只读的。员工需要写入时，桌面应用会先问你。</p>
           <div className="flex items-center gap-3">
             <Button
               disabled={!connected || stopping}
@@ -653,9 +647,7 @@ function FolderGrantList({
           <div className="min-w-0">
             <p className="truncate font-medium text-sm">{grant.displayName}</p>
             <p className="text-muted-foreground text-xs">
-              {personal
-                ? "只读"
-                : `由${ownerLabel(grant)}批准 · 只读`}
+              {personal ? "只读" : `由${ownerLabel(grant)}批准 · 只读`}
             </p>
           </div>
           <Button
@@ -690,8 +682,7 @@ function summaryFor(
   ).length;
   const waiting = pending.filter((request) => request.botId === botId).length;
   const parts = [];
-  if (active > 0)
-    parts.push(`${active} 个只读文件夹`);
+  if (active > 0) parts.push(`${active} 个只读文件夹`);
   if (waiting > 0) parts.push(`${waiting} 个待处理的请求`);
   return parts.length > 0 ? parts.join(" · ") : "没有批准任何文件夹。";
 }

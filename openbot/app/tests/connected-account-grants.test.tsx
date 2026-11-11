@@ -453,9 +453,7 @@ test("authorized actions are listed first, and the unauthorized ones follow with
       element.getAttribute("data-action"),
     ),
   ).toEqual(["Github.A", "Github.C", "Github.B", "Github.D"]);
-  expect(view.container.textContent).not.toContain(
-    "个动作没有授权",
-  );
+  expect(view.container.textContent).not.toContain("个动作没有授权");
 });
 
 test("past the first ten unauthorized actions the rest wait behind the search", async () => {
@@ -487,9 +485,7 @@ test("past the first ten unauthorized actions the rest wait behind the search", 
   expect(
     view.container.querySelector('[data-action="Gmail.Sendl"]'),
   ).toBeNull();
-  expect(view.container.textContent).toContain(
-    "还有 2 个动作没有授权",
-  );
+  expect(view.container.textContent).toContain("还有 2 个动作没有授权");
   // The search still narrows to exactly what matches, and reaches the tail.
   await userEvent.type(view.getByLabelText("搜索动作"), "sendk");
   await waitFor(() => row(view, "Gmail.Sendk"));
@@ -548,9 +544,7 @@ test("with mixed unauthorized states past ten, the ten drawn are in state order:
     "Gmail.C4",
     "Gmail.C5",
   ]);
-  expect(view.container.textContent).toContain(
-    "还有 3 个动作没有授权",
-  );
+  expect(view.container.textContent).toContain("还有 3 个动作没有授权");
 });
 
 // ---- 4: Shared ----

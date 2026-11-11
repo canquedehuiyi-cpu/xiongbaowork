@@ -418,7 +418,8 @@ test("what the /agents roster said is on the /bots cards: pinned first and tagge
   );
 });
 
-test("the roster's card links (home carousel) open the edit dialog on /wakers, not /agents", async () => {
+// M5b：员工墙并进 /bots，`/wakers?agent=<id>` 也改去那位员工自己的页面，所以卡片的「详情」直接链到 /bots/$agentId。
+test("the roster's card links (home carousel) open that employee's own page, not /agents", async () => {
   const root = createRootRoute({
     component: () => <AgentCard agent={base} />,
   });
@@ -427,14 +428,14 @@ test("the roster's card links (home carousel) open the edit dialog on /wakers, n
     routeTree: root.addChildren([
       createRoute({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots/$agentId",
         component: () => null,
       } as never),
     ]),
   });
   const screen = render(<RouterProvider router={router as never} />);
   const link = await screen.findByLabelText("查看 Backend Engineer 的详情");
-  expect(link.getAttribute("href")).toBe("/wakers?agent=agent-1");
+  expect(link.getAttribute("href")).toBe("/bots/agent-1");
 });
 
 /* /bots ------------------------------------------------------------------------------------------ */

@@ -87,9 +87,7 @@ describe("Shared account requests", () => {
     expect(view.getByText("现在：只有它的主人")).toBeTruthy();
     expect(view.getByText("申请：所有人，也接受外部输入")).toBeTruthy();
     expect(
-      view.getByText(
-        "有个动作被拦下了：能用这位员工的人比批准的多。",
-      ),
+      view.getByText("有个动作被拦下了：能用这位员工的人比批准的多。"),
     ).toBeTruthy();
   });
 

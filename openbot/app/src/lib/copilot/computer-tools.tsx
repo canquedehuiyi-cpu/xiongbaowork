@@ -292,6 +292,7 @@ function NavigationStep({
          * and a boundary's reason is the sentence written for the model, rule and all.
          */
         detail={siteOf(url)}
+        declined={outcome.declined === true}
         refused={outcome.refused === true}
         failed={didNotWork(outcome)}
         notYet={stillStarting(outcome)}

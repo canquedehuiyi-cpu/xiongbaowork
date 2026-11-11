@@ -115,7 +115,9 @@ function draw(grantedSlugs: string[]) {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: [`/bots/${agentId}/setup`] }),
+    history: createMemoryHistory({
+      initialEntries: [`/bots/${agentId}/setup`],
+    }),
     routeTree: root.addChildren([
       // `as never` on the parent: TanStack's own file route is already registered in the generated
       // tree with its real parent, and this only needs it answering to a different address for the
