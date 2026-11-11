@@ -49,7 +49,22 @@ function TeamBotsPage() {
   const me = useQuery(currentUserQueryOptions()).data;
   const clear = useMutation(clearTeamBotConsentsMutationOptions());
   const bots = data.data?.teamBots ?? [];
-  const shared = bots.filter((bot) => !bot.mine);
+  const isAdmin = me?.role === "admin";
+  /*
+   * What this person can start a chat with. A member is sent only what is published to them; an
+   * administrator is sent every publication, so theirs is narrowed to what reaches them as a member
+   * would: assigned to them, or published to the whole team (or to them by name) and visible to it.
+   * The rest is listed apart, for managing, with no 开始私聊 on it.
+   */
+  const reachesMe = (bot: TeamBot) =>
+    !isAdmin ||
+    bot.assigned ||
+    (bot.visibleToTeam &&
+      (bot.audience === "team" ||
+        (me?.email !== undefined && (bot.people ?? []).includes(me.email))));
+  const others = bots.filter((bot) => !bot.mine);
+  const shared = others.filter(reachesMe);
+  const publishedElsewhere = others.filter((bot) => !reachesMe(bot));
   const mine = bots.filter((bot) => bot.mine);
 
   /*
@@ -89,6 +104,18 @@ function TeamBotsPage() {
             </div>
           )}
         </ProfileSection>
+        {isAdmin && publishedElsewhere.length > 0 ? (
+          <ProfileSection
+            description="同事发布给别人的员工。你是管理员，所以看得到它们，可以在下面分配给分组；你自己不在它们的受众里，不能和它们私聊。"
+            title="全部发布（管理员）"
+          >
+            <div className={CARD_GRID}>
+              {publishedElsewhere.map((bot) => (
+                <TeamBotRow bot={bot} chat={false} key={bot.id} />
+              ))}
+            </div>
+          </ProfileSection>
+        ) : null}
         <ProfileSection title="你的">
           {data.isPending ? (
             <CardsSkeleton label="正在读取你发布的员工" />
@@ -182,7 +209,16 @@ function CardsSkeleton({ label }: { label: string }) {
  * who it is published to, whether teammates can see it yet), and its verbs at the foot. The person's
  * own carries its publish form under a hairline (`children`).
  */
-function TeamBotRow({ bot, children }: { bot: TeamBot; children?: ReactNode }) {
+function TeamBotRow({
+  bot,
+  chat = true,
+  children,
+}: {
+  bot: TeamBot;
+  /** Whether this person may chat with it; false for a publication an administrator only manages. */
+  chat?: boolean;
+  children?: ReactNode;
+}) {
   const queryClient = useQueryClient();
   const unpublish = useMutation(unpublishTeamBotMutationOptions(queryClient));
   const [copied, setCopied] = useState(false);
@@ -238,14 +274,16 @@ function TeamBotRow({ bot, children }: { bot: TeamBot; children?: ReactNode }) {
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-[7px] border-border border-t pt-[10px]">
-        <Button
-          render={(props) => (
-            <Link {...props} search={{ agent: bot.id }} to="/channel/new" />
-          )}
-          size="sm"
-        >
-          开始私聊
-        </Button>
+        {chat ? (
+          <Button
+            render={(props) => (
+              <Link {...props} search={{ agent: bot.id }} to="/channel/new" />
+            )}
+            size="sm"
+          >
+            开始私聊
+          </Button>
+        ) : null}
         <Button
           onClick={() =>
             void navigator.clipboard

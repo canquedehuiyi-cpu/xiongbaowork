@@ -54,7 +54,9 @@ class OfflineWebSocket extends EventTarget {
 
 let originalFetch: typeof fetch;
 let originalWebSocket: typeof WebSocket;
-let answer: (url: string) => Response | undefined;
+let answer: (url: string, method: string) => Response | undefined;
+/** The writes the page sent, in order: what a test checks the page asked the server to change. */
+const writes: { url: string; method: string; body: unknown }[] = [];
 const clients: QueryClient[] = [];
 
 beforeAll(() => {
@@ -63,15 +65,26 @@ beforeAll(() => {
   originalWebSocket = globalThis.WebSocket;
   globalThis.WebSocket = OfflineWebSocket as unknown as typeof WebSocket;
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) =>
-      answer(String(input)) ??
-      Response.json({ error: "not served" }, { status: 404 }),
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method !== "GET")
+        writes.push({
+          url: String(input),
+          method,
+          body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+        });
+      return (
+        answer(String(input), method) ??
+        Response.json({ error: "not served" }, { status: 404 })
+      );
+    },
     { preconnect: originalFetch.preconnect },
   );
 });
 beforeEach(() => {
   window.localStorage.clear();
   answer = () => undefined;
+  writes.length = 0;
 });
 afterEach(() => {
   cleanup();
@@ -411,17 +424,20 @@ function renderInRouter(node: ReactNode, queryClient: QueryClient) {
 
 test("对你 has 重置 again, opening the same confirmation as 管理", async () => {
   answer = (url) =>
-    url === "/api/bots/a-1/reset-plan"
+    url === "/api/bots/a-1/reset"
       ? Response.json({
-          conversations: 3,
-          memorySources: 0,
-          memories: 0,
-          routines: 1,
-          responsibilities: 0,
-          followUps: 0,
-          formedMemories: 0,
-          backgroundResearch: 0,
-          standingApprovals: 0,
+          plan: {
+            conversations: 3,
+            sharedConversationsKept: 0,
+            memorySources: 0,
+            memories: 0,
+            routines: 1,
+            responsibilities: 0,
+            followUps: 0,
+            formedMemories: 0,
+            backgroundResearch: 0,
+            standingApprovals: 0,
+          },
         })
       : undefined;
   const queryClient = client();
@@ -438,6 +454,15 @@ test("对你 has 重置 again, opening the same confirmation as 管理", async (
   await userEvent.click(await view.findByRole("button", { name: /^重置/ }));
   const dialog = await view.findByRole("dialog");
   expect(within(dialog).getByText("重置 分析师？")).toBeTruthy();
+  // What it would delete, counted before anything is.
+  expect(await within(dialog).findByText("3 段对话")).toBeTruthy();
+  expect(within(dialog).getByText("1 个定时任务")).toBeTruthy();
+  expect(
+    within(dialog).getByRole("button", { name: "删除并重置" }),
+  ).toHaveProperty("disabled", false);
+  await userEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+  expect(writes).toEqual([]);
 });
 
 test("the employee's page says where updates go, right after 对你, for all employees", async () => {
@@ -468,4 +493,143 @@ test("the employee's page says where updates go, right after 对你, for all emp
   expect(
     mine.compareDocumentPosition(routing) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
+});
+
+const ROUTING_ALL = {
+  routing: {
+    progress: "all",
+    decision: "all",
+    question: "all",
+    attention: "all",
+  },
+};
+
+function renderProfile(queryClient: QueryClient) {
+  queryClient.setQueryData(botLifecycleKeys.lifecycle("a-1"), {
+    agentId: "a-1",
+    paused: false,
+    pausedAt: null,
+    notify: "all",
+  });
+  return renderInRouter(
+    <BotProfile agent={agent("a-1", "分析师")} />,
+    queryClient,
+  );
+}
+
+test("turning a channel off on the employee's page saves the person's routing without it", async () => {
+  answer = (url, method) =>
+    url === "/api/bots/routing" && method === "GET"
+      ? Response.json(ROUTING_ALL)
+      : url.startsWith("/api/bots/routing/") && method === "PUT"
+        ? Response.json({ routing: ROUTING_ALL.routing })
+        : undefined;
+  const view = renderProfile(client());
+  await userEvent.click(
+    await view.findByRole("switch", { name: "进展：短信" }),
+  );
+  await waitFor(() =>
+    expect(writes).toEqual([
+      {
+        url: "/api/bots/routing/progress",
+        method: "PUT",
+        body: { transports: ["push", "slack", "teams"] },
+      },
+    ]),
+  );
+});
+
+test("routing that cannot be read says so on the employee's page", async () => {
+  answer = (url) =>
+    url === "/api/bots/routing"
+      ? Response.json({ error: "boom" }, { status: 500 })
+      : undefined;
+  const view = renderProfile(client());
+  const section = (
+    await view.findByRole("heading", { name: "消息发到哪里" })
+  ).closest("section") as HTMLElement;
+  expect((await within(section).findByRole("alert")).textContent).toBe(
+    "读不到你的消息去向设置，请刷新页面。",
+  );
+});
+
+test("a member's 审批 page has no access requests either", async () => {
+  answer = (url) =>
+    url === "/api/approvals" ? Response.json(INBOX) : undefined;
+  const { view } = renderRoute(ApprovalsRoute, "/approvals", client("user"));
+  expect(await view.findByRole("heading", { name: "等你处理" })).toBeTruthy();
+  expect(view.queryByRole("heading", { name: "访问申请" })).toBeNull();
+});
+
+test("an administrator's switch on 审批 changes the team's settings", async () => {
+  answer = (url, method) =>
+    url === "/api/approvals"
+      ? Response.json(INBOX)
+      : url === "/api/approvals/team" && method === "PATCH"
+        ? Response.json({ ok: true })
+        : url === "/api/plugins/access-requests"
+          ? Response.json({ requests: [] })
+          : undefined;
+  const { view } = renderRoute(ApprovalsRoute, "/approvals", client("admin"));
+  expect(await view.findByRole("heading", { name: "访问申请" })).toBeTruthy();
+  await userEvent.click(
+    await view.findByRole("switch", { name: "要求所有人开启自动审查" }),
+  );
+  await waitFor(() =>
+    expect(writes).toEqual([
+      {
+        url: "/api/approvals/team",
+        method: "PATCH",
+        body: { enforceAutoReview: true },
+      },
+    ]),
+  );
+});
+
+test("an administrator can start a chat only with what is published to them; the rest is listed apart", async () => {
+  const queryClient = client("admin");
+  const published = (
+    id: string,
+    name: string,
+    extra: Partial<Record<string, unknown>>,
+  ) => ({
+    id,
+    name,
+    title: "",
+    roleDescription: "",
+    mine: false,
+    audience: "team",
+    publishedAt: "2026-11-01T00:00:00Z",
+    assigned: false,
+    visibleToTeam: true,
+    ...extra,
+  });
+  queryClient.setQueryData(teamBotKeys.all, {
+    teamBots: [
+      published("tb-team", "全员助手", {}),
+      published("tb-me", "点名给我", {
+        audience: "people",
+        people: ["user@example.com"],
+      }),
+      published("tb-other", "别人的助手", {
+        audience: "people",
+        people: ["someone@example.com"],
+      }),
+    ],
+    publishable: [],
+  });
+  const { view } = renderRoute(TeamBotsRoute, "/team-bots", queryClient);
+  const usable = (
+    await view.findByRole("heading", { name: "你可以用的" })
+  ).closest("section") as HTMLElement;
+  expect(within(usable).getByText("2 位")).toBeTruthy();
+  expect(
+    within(usable).getAllByRole("button", { name: "开始私聊" }),
+  ).toHaveLength(2);
+  expect(within(usable).queryByText("别人的助手")).toBeNull();
+  const apart = view
+    .getByRole("heading", { name: "全部发布（管理员）" })
+    .closest("section") as HTMLElement;
+  expect(within(apart).getByText("别人的助手")).toBeTruthy();
+  expect(within(apart).queryByRole("button", { name: "开始私聊" })).toBeNull();
 });
