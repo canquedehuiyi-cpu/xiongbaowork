@@ -174,6 +174,11 @@ export function createStaffingProposalStore(db: Database) {
       return toProposal(row);
     },
 
+    /** 这次调用是否把一份到期的 pending 落成了 expired（只有第一个看到的人得到 true，用来只记一次轨迹）。 */
+    async expireIfLapsed(id: string): Promise<boolean> {
+      return Boolean(await markExpired(id));
+    },
+
     async get(id: string): Promise<Proposal | null> {
       const row = await byId(id);
       if (!row) return null;

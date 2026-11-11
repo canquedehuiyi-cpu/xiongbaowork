@@ -97,8 +97,11 @@ export class ProposalStaleError extends Error {
 
 /** 草稿过不了创建员工那条路径的检查：什么都没建，提议放回待确认，本人改了草稿再确认。 */
 export class ProposalRefusedError extends Error {
-  constructor(message: string) {
+  /** 是管理员对这个人关掉的能力，而不是草稿本身的毛病：路由答 403 而不是 400。 */
+  readonly capability: boolean;
+  constructor(message: string, capability = false) {
     super(message);
+    this.capability = capability;
     this.name = "ProposalRefusedError";
   }
 }
@@ -999,7 +1002,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     });
     if (!checked.ok) throw new ProposalRefusedError(checked.error);
     const refused = await capabilityRefusal(run, checked.value.visibility);
-    if (refused) throw new ProposalRefusedError(refused);
+    if (refused) throw new ProposalRefusedError(refused, true);
     const template = draft.roleTemplate;
     if (template && (!UUID.test(template.id) || template.version < 1))
       throw new ProposalRefusedError("所选角色模板无效，请重新选择。");

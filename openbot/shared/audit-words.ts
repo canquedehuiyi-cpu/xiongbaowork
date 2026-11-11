@@ -226,6 +226,10 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "learning.local_candidate_reviewed": "审核从对话中学到的技能草案",
   "staffing.proposal_applied": "执行招聘提议",
   "staffing.proposal_partially_applied": "部分执行招聘提议",
+  "staffing.proposal_created": "创建招聘提议",
+  "staffing.proposal_edited": "修改招聘提议",
+  "staffing.proposal_discarded": "作废招聘提议",
+  "staffing.proposal_expired": "招聘提议过期",
 };
 
 /**

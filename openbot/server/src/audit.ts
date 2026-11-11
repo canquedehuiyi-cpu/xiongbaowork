@@ -865,6 +865,15 @@ export const auditEventTypes = [
    */
   "staffing.proposal_applied",
   "staffing.proposal_partially_applied",
+  /*
+   * The rest of a staffing proposal's life. Target the proposal (`staffing_proposal`); payload `proposalId`.
+   * `created` is written where the proposal is drafted, `edited` when its owner changed the draft on the
+   * card, `discarded` when the owner dropped it, `expired` the first time a request met it past its seven days.
+   */
+  "staffing.proposal_created",
+  "staffing.proposal_edited",
+  "staffing.proposal_discarded",
+  "staffing.proposal_expired",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

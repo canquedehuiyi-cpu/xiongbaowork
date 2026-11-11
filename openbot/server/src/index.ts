@@ -383,6 +383,12 @@ import {
 import { coworkerFaceAccess } from "./portraits/coworker-access";
 import { createPortraitRoutes } from "./portraits/routes";
 import { createPortraitStore } from "./portraits/store";
+import { createStaffingExecutor } from "./staffing/executor";
+import {
+  createOwnerNameReader,
+  createThreadVisibility,
+} from "./staffing/routes";
+import { createStaffingProposalStore } from "./staffing/store";
 import { createProactiveEngine } from "./proactive/engine";
 import { checkInOfferTools } from "./proactive/offer-tool";
 import {
@@ -4069,6 +4075,7 @@ await startupLifecycle.run(async (startup) => {
    * own group thread, built exactly as a routine's is, so governance, learning and the computer tools
    * apply unchanged; Bots answering each other reuse the handoff desk's grant and caps.
    */
+  const staffingProposalStore = createStaffingProposalStore(database);
   const groupConversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
@@ -4837,6 +4844,29 @@ await startupLifecycle.run(async (startup) => {
         triggers: responsibilityTriggers,
       },
       groups: groupConversations,
+      staffing: {
+        store: staffingProposalStore,
+        executor: createStaffingExecutor({
+          database,
+          proposals: staffingProposalStore,
+          profiles: agentProfileStore,
+          quota,
+          plugins: pluginStore,
+          composioConfigured: Boolean(composioBroker),
+          ...(composioBroker
+            ? { directory: () => composioBroker.listApps() }
+            : {}),
+          routines: routineStore,
+          channels: channelStore,
+          groups: groupConversations,
+          portraits: createPortraitStore(database),
+          auditStore: bootAuditStore,
+          // Owner approvals of a Shared app are withdrawn with the owner's grants, as in `DELETE /give`.
+          shared: { store: sharedUseStore, audience: sharedAudience },
+        }),
+        canSeeThread: createThreadVisibility(database),
+        ownerName: createOwnerNameReader(database),
+      },
       teamBots,
       // AUT3: the WakerFlow target is registered above, so the form may offer it.
       wakerflowAutomations: true,
