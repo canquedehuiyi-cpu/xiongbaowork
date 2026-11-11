@@ -27,6 +27,7 @@ import { Route as AutonomousRoute } from "@/routes/_authed/_app/autonomous";
 import { Route as BotsIndexRoute } from "@/routes/_authed/_app/bots.index";
 import { Route as RoutinesRoute } from "@/routes/_authed/_app/routines";
 import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+import { seedQuietNeedsYou } from "./quiet-needs-you";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -42,6 +43,10 @@ import { settleReactWork } from "./settle-react-work";
  *
  * Every old address is exercised through the real exported route, so the redirect under test is the
  * one the app ships, and lands on the real workbench page.
+ *
+ * M5b：员工管理（`/wakers`）本身又并进了上游的员工页（`/bots`），所以 `/agents`、`/wakers` 都落到 `/bots`；
+ * `/agents?agent=<id>` 现在去那位员工自己的页面（`/bots/<id>`，和上游一样），编辑框改由每张卡上的「编辑」在
+ * `/bots?agent=<id>` 打开。
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -155,6 +160,7 @@ function seed({
   });
   client.setQueryData(runningTasksQueryOptions().queryKey, []);
   client.setQueryData(deviceKeys.list(), []);
+  seedQuietNeedsYou(client);
   return client;
 }
 
@@ -190,10 +196,11 @@ function draw(
       at(AutonomousRoute, "/autonomous"),
       stub("/wakers/$agentId"),
       stub("/bots/$agentId"),
-      stub("/assemble/$agentId"),
+      stub("/bots/$agentId/setup"),
       stub("/channel/new"),
       stub("/channel/$channelId"),
-      stub("/role-templates"),
+      stub("/capabilities/roles"),
+      stub("/pipelines"),
       stub("/responsibilities"),
       stub("/memory"),
     ]),
@@ -213,37 +220,41 @@ const cardOf = (screen: ReturnType<typeof render>, name: string) =>
       (card) => card.querySelector("[data-card-name]")?.textContent === name,
     ) as HTMLElement;
 
-/* /agents → /wakers ------------------------------------------------------------------------------ */
+/* /agents → /bots ------------------------------------------------------------------------------- */
 
-test("/agents?new=true lands on /wakers?new=true with the create dialog open over the wall", async () => {
+test("/agents?new=true lands on /bots?new=true with the create dialog open over the roster", async () => {
   const { screen, router } = draw("/agents?new=true");
 
-  await waitFor(() => expect(router.state.location.pathname).toBe("/wakers"));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/bots"));
   expect(router.state.location.search).toEqual({ new: true });
   expect(
     await within(document.body).findByRole("dialog", { name: "新建员工" }),
   ).toBeTruthy();
-  // The wall is behind it (inert while the modal is open), not a blank page holding a dialog.
-  expect(
-    screen.getByRole("heading", { hidden: true, name: "员工管理" }),
-  ).toBeTruthy();
+  // The roster is behind it (inert while the modal is open), not a blank page holding a dialog.
+  expect(screen.getByRole("heading", { hidden: true, name: "员工" })).toBeTruthy();
   expect(cardOf(screen, "Backend Engineer")).toBeTruthy();
 });
 
-test("/agents?agent=<id> lands on /wakers?agent=<id> with that employee's edit dialog open", async () => {
-  const { router } = draw("/agents?agent=agent-2");
+test("/agents?agent=<id> lands on that employee's own page", async () => {
+  const { screen, router } = draw("/agents?agent=agent-2");
 
-  await waitFor(() => expect(router.state.location.pathname).toBe("/wakers"));
-  expect(router.state.location.search).toEqual({ agent: "agent-2" });
-  expect(
-    await within(document.body).findByRole("dialog", { name: "Code Reviewer" }),
-  ).toBeTruthy();
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/bots/agent-2"),
+  );
+  expect(await screen.findByText("stub /bots/$agentId")).toBeTruthy();
 });
 
-test("a bare /agents lands on the unfiltered /wakers wall with no dialog", async () => {
+test("/wakers?agent=<id> lands on that employee's own page too", async () => {
+  const { router } = draw("/wakers?agent=agent-2");
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/bots/agent-2"),
+  );
+});
+
+test("a bare /agents lands on the unfiltered /bots roster with no dialog", async () => {
   const { screen, router } = draw("/agents");
 
-  await waitFor(() => expect(router.state.location.pathname).toBe("/wakers"));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/bots"));
   expect(router.state.location.search).toEqual({});
   expect(await screen.findByText("Backend Engineer")).toBeTruthy();
   expect(within(document.body).queryByRole("dialog")).toBeNull();
@@ -251,28 +262,40 @@ test("a bare /agents lands on the unfiltered /wakers wall with no dialog", async
 
 test("the redirect replaces /agents in history, so Back does not bounce through it again", async () => {
   const { router } = draw("/agents?new=true");
-  await waitFor(() => expect(router.state.location.pathname).toBe("/wakers"));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/bots"));
   expect(router.history.length).toBe(1);
 });
 
-test("on /wakers the header's 新建员工 and the create card open the create dialog in place", async () => {
-  const { screen, router, user } = draw("/wakers");
+test("/wakers carries its filters and groups tab onto /bots, replacing itself in history", async () => {
+  const { screen, router } = draw("/wakers?tab=groups&q=Backend");
+  await waitFor(() => expect(router.state.location.pathname).toBe("/bots"));
+  expect(router.state.location.search).toEqual({ tab: "groups", q: "Backend" });
+  expect(router.history.length).toBe(1);
+  expect(
+    (await screen.findByRole("tab", { name: /^群组/ })).getAttribute(
+      "aria-selected",
+    ),
+  ).toBe("true");
+});
+
+test("on /bots the header's 新建员工 and the create card open the create dialog in place", async () => {
+  const { screen, router, user } = draw("/bots");
   await screen.findByText("Backend Engineer");
 
   // The header's (the create card says 新建员工 too).
   const header = within(screen.getByTestId("wakers-header-actions"))
     .getByText("新建员工")
     .closest("a") as HTMLElement;
-  expect(header.getAttribute("href")).toBe("/wakers?new=true");
+  expect(header.getAttribute("href")).toBe("/bots?new=true");
   expect(screen.getByTestId("waker-create-card").getAttribute("href")).toBe(
-    "/wakers?new=true",
+    "/bots?new=true",
   );
 
   await user.click(header);
   const dialog = await within(document.body).findByRole("dialog", {
     name: "新建员工",
   });
-  expect(router.state.location.pathname).toBe("/wakers");
+  expect(router.state.location.pathname).toBe("/bots");
   expect(router.state.location.search).toEqual({ new: true });
 
   // The wizard's own 取消 on its first step closes it and drops the parameter.
@@ -280,14 +303,14 @@ test("on /wakers the header's 新建员工 and the create card open the create d
   await waitFor(() => expect(router.state.location.search).toEqual({}));
 });
 
-test("each card's 编辑 opens that employee's edit dialog on /wakers, keeping the wall's filters", async () => {
-  const { screen, router, user } = draw("/wakers?q=Backend");
+test("each card's 编辑 opens that employee's edit dialog on /bots, keeping the roster's filters", async () => {
+  const { screen, router, user } = draw("/bots?q=Backend");
   await screen.findByText("Backend Engineer");
 
   const edit = within(cardOf(screen, "Backend Engineer")).getByRole("link", {
     name: "编辑 Backend Engineer",
   });
-  expect(edit.getAttribute("href")).toBe("/wakers?q=Backend&agent=agent-1");
+  expect(edit.getAttribute("href")).toBe("/bots?q=Backend&agent=agent-1");
 
   await user.click(edit);
   expect(
@@ -308,7 +331,7 @@ test("each card's 编辑 opens that employee's edit dialog on /wakers, keeping t
   expect(within(document.body).queryByRole("dialog")).toBeNull();
 });
 
-test("what the /agents roster said is on the /wakers cards: pinned first and tagged, shared tagged", async () => {
+test("what the /agents roster said is on the /bots cards: pinned first and tagged, shared tagged", async () => {
   const shared: AgentProfile = {
     ...base,
     id: "agent-3",
@@ -322,10 +345,7 @@ test("what the /agents roster said is on the /wakers cards: pinned first and tag
     name: "Favourite",
     pinned: true,
   };
-  const { screen } = draw(
-    "/wakers",
-    seed({ agents: [base, shared, favourite] }),
-  );
+  const { screen } = draw("/bots", seed({ agents: [base, shared, favourite] }));
   await screen.findByText("Backend Engineer");
 
   // Default order: pinned employees first, as /agents put its 已置顶 section on top.
@@ -334,7 +354,10 @@ test("what the /agents roster said is on the /wakers cards: pinned first and tag
     .map((card) => card.querySelector("[data-card-name]")?.textContent);
   expect(names).toEqual(["Favourite", "Backend Engineer", "Shared Helper"]);
 
-  const pinnedTags = screen.getAllByText("已置顶");
+  // The tag on the card (the section above it carries the same word as its heading).
+  const pinnedTags = [
+    ...screen.container.querySelectorAll("[data-pinned=true]"),
+  ];
   expect(pinnedTags).toHaveLength(1);
   expect(cardOf(screen, "Favourite").contains(pinnedTags[0] as Node)).toBe(
     true,
@@ -365,19 +388,19 @@ test("the roster's card links (home carousel) open the edit dialog on /wakers, n
   expect(link.getAttribute("href")).toBe("/wakers?agent=agent-1");
 });
 
-/* /bots → /wakers -------------------------------------------------------------------------------- */
+/* /bots ------------------------------------------------------------------------------------------ */
 
-test("/bots lands on /wakers", async () => {
+test("/bots is the roster itself, no longer a redirect", async () => {
   const { screen, router } = draw("/bots");
 
-  await waitFor(() => expect(router.state.location.pathname).toBe("/wakers"));
-  expect(router.state.location.search).toEqual({});
   expect(await screen.findByText("Backend Engineer")).toBeTruthy();
+  expect(router.state.location.pathname).toBe("/bots");
+  expect(router.state.location.search).toEqual({});
 });
 
 test("what each employee needs from the person is on its card, which links to its /bots profile", async () => {
   const { screen } = draw(
-    "/wakers",
+    "/bots",
     seed({
       rows: [
         attention("agent-1", { questions: 2, approvals: 1, unread: 3 }),
@@ -406,7 +429,7 @@ test("what each employee needs from the person is on its card, which links to it
     expect(
       within(card).queryByRole("link", { name: `${name} 的动态` }),
     ).toBeNull();
-    expect(card.querySelector(`a[href="/wakers/${id}"]`)).not.toBeNull();
+    expect(card.querySelector(`a[href="/bots/${id}"]`)).not.toBeNull();
   }
 });
 

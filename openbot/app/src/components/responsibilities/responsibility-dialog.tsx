@@ -58,22 +58,22 @@ export const STATUS: Record<
   Status,
   { label: string; icon: typeof IconTarget }
 > = {
-  active: { label: "Active", icon: IconTarget },
-  paused: { label: "Paused", icon: IconPlayerPause },
-  completed: { label: "Completed", icon: IconCircleCheck },
+  active: { label: "进行中", icon: IconTarget },
+  paused: { label: "已暂停", icon: IconPlayerPause },
+  completed: { label: "已完成", icon: IconCircleCheck },
 };
 
 const SOURCE_LABEL: Record<Source, string> = {
-  manual: "Manual",
+  manual: "手动",
   slack: "Slack",
   github: "GitHub",
-  schedule: "Schedule",
-  connector: "Connected app",
+  schedule: "定时",
+  connector: "已连接的应用",
   webhook: "Webhook",
   linear: "Linear",
   sentry: "Sentry",
   pagerduty: "PagerDuty",
-  email: "Email",
+  email: "邮件",
 };
 
 /**
@@ -90,7 +90,7 @@ export function summaryFor(
   const status = STATUS[goal.status].label;
   if (goal.status === "completed") return status;
   if (goal.status === "paused")
-    return `${status} · Nothing starts it until you resume it`;
+    return `${status} · 恢复之前不会开工`;
   const starts = [
     ...goal.subscriptions.map(
       (subscription) =>
@@ -98,10 +98,10 @@ export function summaryFor(
     ),
     ...(triggers ?? [])
       .filter((trigger) => trigger.enabled)
-      .map((trigger) => `${KIND_LABEL[trigger.kind]} trigger`),
+      .map((trigger) => `${KIND_LABEL[trigger.kind]}触发`),
   ];
-  if (starts.length) return `${status} · Starts on ${starts.join(", ")}`;
-  return triggers ? `${status} · Runs when asked` : status;
+  if (starts.length) return `${status} · 由${starts.join("、")}开工`;
+  return triggers ? `${status} · 被要求时运行` : status;
 }
 
 /**
@@ -128,7 +128,7 @@ export function ResponsibilityDialog({
     goal.progress
       ? {
           key: "progress",
-          label: "Progress",
+          label: "进展",
           icon: IconProgress,
           text: goal.progress,
         }
@@ -136,7 +136,7 @@ export function ResponsibilityDialog({
     goal.lastResult
       ? {
           key: "result",
-          label: "Last result",
+          label: "上次结果",
           icon: IconFlag,
           text: goal.lastResult,
         }
@@ -161,16 +161,16 @@ export function ResponsibilityDialog({
                     <IconTarget />
                   </ItemMedia>
                   <ItemContent>
-                    <ItemTitle>Active</ItemTitle>
+                    <ItemTitle>启用</ItemTitle>
                     <ItemDescription>
                       {goal.status === "active"
-                        ? "Its events and triggers start it."
-                        : "Paused. Its triggers won't start it."}
+                        ? "它订阅的事件和触发方式会让它开工。"
+                        : "已暂停，触发方式不会让它开工。"}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <Switch
-                      aria-label="Active"
+                      aria-label="启用"
                       checked={goal.status === "active"}
                       disabled={action.isPending}
                       onCheckedChange={(active) =>
@@ -205,10 +205,9 @@ export function ResponsibilityDialog({
                     <IconPlayerPlay />
                   </ItemMedia>
                   <ItemContent>
-                    <ItemTitle>Run now</ItemTitle>
+                    <ItemTitle>立即运行</ItemTitle>
                     <ItemDescription>
-                      Runs it now, for real. The Bot does the work and can post
-                      and take actions.
+                      现在就真的运行一次：员工会去做这件事，可能会发消息和执行动作。
                     </ItemDescription>
                   </ItemContent>
                 </Item>
@@ -234,9 +233,9 @@ export function ResponsibilityDialog({
                     <IconCircleCheck />
                   </ItemMedia>
                   <ItemContent>
-                    <ItemTitle>Complete</ItemTitle>
+                    <ItemTitle>完成</ItemTitle>
                     <ItemDescription>
-                      Mark it done. Nothing starts it after this.
+                      标为已完成，之后不会再开工。
                     </ItemDescription>
                   </ItemContent>
                 </Item>
@@ -257,7 +256,7 @@ export function ResponsibilityDialog({
                 <IconMessage />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Open conversation</ItemTitle>
+                <ItemTitle>打开对话</ItemTitle>
               </ItemContent>
               <ItemActions>
                 <IconChevronRight className="size-4 text-muted-foreground" />
@@ -287,7 +286,7 @@ export function ResponsibilityDialog({
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor={`${formId}-title`}>Title</FieldLabel>
+                <FieldLabel htmlFor={`${formId}-title`}>标题</FieldLabel>
                 <Input
                   id={`${formId}-title`}
                   value={title}
@@ -298,7 +297,7 @@ export function ResponsibilityDialog({
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formId}-instruction`}>
-                  Instruction
+                  指令
                 </FieldLabel>
                 <Textarea
                   id={`${formId}-instruction`}
@@ -310,7 +309,7 @@ export function ResponsibilityDialog({
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formId}-criteria`}>
-                  Success criteria
+                  成功标准
                 </FieldLabel>
                 <Textarea
                   id={`${formId}-criteria`}
@@ -347,14 +346,14 @@ export function ResponsibilityDialog({
                       <IconWebhook />
                     </ItemMedia>
                     <ItemContent>
-                      <ItemTitle>Events</ItemTitle>
+                      <ItemTitle>订阅的事件</ItemTitle>
                       <ItemDescription className="line-clamp-none">
                         {goal.subscriptions
                           .map(
                             (subscription) =>
                               `${SOURCE_LABEL[subscription.source]} · ${subscription.eventType}`,
                           )
-                          .join(", ")}
+                          .join("、")}
                       </ItemDescription>
                     </ItemContent>
                   </Item>
@@ -373,7 +372,7 @@ export function ResponsibilityDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={edit.isPending}
@@ -381,7 +380,7 @@ export function ResponsibilityDialog({
             size="sm"
             type="submit"
           >
-            {edit.isPending ? "Saving…" : "Save"}
+            {edit.isPending ? "正在保存…" : "保存"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -390,12 +389,12 @@ export function ResponsibilityDialog({
 }
 
 const RUN_LABEL: Record<string, string> = {
-  queued: "Queued",
-  running: "Running",
-  waiting: "Waiting for you",
-  succeeded: "Succeeded",
-  failed: "Failed",
-  skipped: "Skipped",
+  queued: "排队中",
+  running: "运行中",
+  waiting: "等你处理",
+  succeeded: "成功",
+  failed: "失败",
+  skipped: "跳过",
 };
 function runStatusClass(status: string) {
   return status === "failed"
@@ -427,9 +426,9 @@ function Runs({
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-medium text-sm">Runs</h3>
+        <h3 className="font-medium text-sm">运行记录</h3>
         <Button onClick={onToggle} size="sm" type="button" variant="ghost">
-          {shown ? "Hide runs" : "View runs"}
+          {shown ? "收起运行记录" : "查看运行记录"}
         </Button>
       </div>
       {!shown ? null : runs.isPending ? null : runs.error ? (
@@ -459,15 +458,14 @@ function Runs({
                     params={{ channelId }}
                     className="text-sm underline"
                   >
-                    Open conversation
+                    打开对话
                   </Link>
                 </ItemActions>
                 {run.waiting || run.error || run.replyText ? (
                   <ItemFooter className="min-w-0 flex-col items-stretch">
                     {run.waiting && (
                       <p>
-                        Waiting for {run.waiting.kind}. Answer at the top of
-                        this Bot's page or in the conversation.
+                        在等你{run.waiting.kind === "question" ? "回答问题" : "批准"}。到这位员工页面顶部或对话里处理。
                       </p>
                     )}
                     {run.error && (
@@ -483,7 +481,7 @@ function Runs({
           ))}
         </div>
       ) : (
-        <p className="text-muted-foreground text-sm">No runs yet.</p>
+        <p className="text-muted-foreground text-sm">还没有运行记录。</p>
       )}
     </section>
   );

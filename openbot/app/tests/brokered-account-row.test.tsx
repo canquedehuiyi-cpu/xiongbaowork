@@ -866,7 +866,11 @@ test("a deployment with no Composio key names the setting and offers neither act
     confirms: true,
   });
 
-  const view = renderAccountScreen(queryClient());
+  /*
+   * 管理员的页面（M5b）：个人的「连接」页按上游改成「还没有设置 / 管理员要先打开」，不再对普通成员说环境变量名
+   * （见 composio-unconfigured-account.test.tsx）；能动手设置的管理员页面仍点名这个设置、两个动作都不给。
+   */
+  const view = renderAdminScreen(queryClient());
 
   expect(await view.findByText(NAMES_THE_SETTING)).toBeTruthy();
   expect(view.queryByText("缺少密钥")).toBeTruthy();
@@ -1121,8 +1125,9 @@ test("a key app nobody has connected keeps the screen's own reassurance", async 
    * thing an administrator reading this row needs to know — that the connector is finished whether
    * or not they ever connect themselves — and left them looking at a step they do not have to take.
    */
+  // 上游把「你自己的文档」改成点名这个应用的账号（Gmail 也曾被说成「文档」）。
   expect(
-    view.getByText(/不连也算配置完成；连上后只会碰到你自己的文档/),
+    view.getByText(/不连也算配置完成；连上后只会碰到你自己的 \S+ 账号/),
   ).toBeTruthy();
 });
 
