@@ -36,14 +36,8 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     cost: "页面上标签不叫 password 的密码框不在覆盖范围内，规则匹配的是标签。",
   },
   {
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     name: "不上社交媒体",
     description: "不让员工打开 Facebook 或 X。",
-    rule: 'intent == "navigate" && (contains(page.host, "facebook.com") || contains(page.host, "x.com"))',
-    cost: "只管列出的两个域名。从别处跳转过去的链接仍然放行。",
-=======
-    name: "Stay off social media",
-    description: "Stops a Bot opening Facebook or X.",
     // Each site, or a name ending in a dot and the site. `contains(page.host, "x.com")` also stopped
     // dropbox.com and netflix.com. The dot is `[.]` because cel-js keeps backslashes as written, so
     // `\\.` would match a backslash and the rule would stop nothing.
@@ -51,8 +45,7 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     formerRules: [
       'intent == "navigate" && (contains(page.host, "facebook.com") || contains(page.host, "x.com"))',
     ],
-    cost: "Only these two sites. A link that redirects there from elsewhere is allowed.",
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+    cost: "只管这两个网站。从别处跳转过去的链接仍然放行。",
   },
 ];
 

@@ -13,8 +13,8 @@ function RoutinesPage() {
     <BotSubpage
       action={<NewRoutineButton agentId={agentId} />}
       agentId={agentId}
-      description="Manage this Bot’s scheduled routines. Turn a routine off, run it now, or delete it."
-      title="Routines"
+      description="管理这位员工的定时任务：可以暂停、立即运行或删除。"
+      title="定时任务"
     >
       {(agent) => <RoutinesList agentId={agent.id} />}
     </BotSubpage>

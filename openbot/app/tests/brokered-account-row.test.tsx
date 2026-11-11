@@ -742,7 +742,7 @@ afterEach(() => {
  */
 function renderAccountScreen(
   client: QueryClient,
-  at = `/connections/${APP_KEY}`,
+  at = `/settings/connected-accounts/${APP_KEY}`,
 ) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
@@ -775,11 +775,7 @@ function renderAccountScreen(
   const router = createRouter({
     routeTree: tree,
     history: createMemoryHistory({
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-      initialEntries: [`/settings/connected-accounts/${APP_KEY}`],
-=======
       initialEntries: [at],
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
     }),
   });
   return render(
@@ -1268,7 +1264,7 @@ test("in OpenBot Desktop, the page asks again once the window is back in front",
 
   try {
     const view = renderAccountScreen(queryClient());
-    await userEvent.click(await view.findByRole("button", { name: "Connect" }));
+    await userEvent.click(await view.findByRole("button", { name: "连接" }));
     await waitFor(() => expect(watched.navigations).toEqual([CONSENT_URL]));
     const before = server.confirmsAsked;
 
@@ -1277,7 +1273,7 @@ test("in OpenBot Desktop, the page asks again once the window is back in front",
 
     await waitFor(() => expect(server.confirmsAsked).toBe(before + 1));
     expect(
-      await view.findByRole("button", { name: "Disconnect" }),
+      await view.findByRole("button", { name: "断开" }),
     ).toBeTruthy();
     // Once per sign-in: a later focus asks nothing more.
     window.dispatchEvent(new Event("focus"));
@@ -1395,19 +1391,34 @@ function accountState(overrides: Partial<BrokeredAccount>): BrokeredAccount {
     submittingFields: false,
     verified: false,
     verifiedAt: null,
+    reconnectsInPlace: false,
+    serverId: "gmail",
+    fieldsSubmitted: false,
+    connectAnother: () => {},
+    connectingAnother: false,
+    makeDefault: () => {},
+    disconnectAccount: () => {},
+    changingAccount: null,
     ...overrides,
   };
 }
 
 /** The row with both screens' arguments filled in, so only the account differs between cases. */
 function renderRow(account: BrokeredAccount) {
+  /*
+   * 上游起，这一行在已连接时会读这个人在应用上的账号列表（多账号），所以和上游一样包一层
+   * QueryClientProvider。
+   */
   return render(
-    <BrokeredAccountRow
-      account={account}
-      connectedDescription="A Bot granted its tools reads your Gmail as you."
-      disconnectedDescription="No Bot can read this as you."
-      title="Gmail"
-    />,
+    <QueryClientProvider client={queryClient()}>
+      <BrokeredAccountRow
+        account={account}
+        connectedDescription="A Bot granted its tools reads your Gmail as you."
+        disconnectedDescription="No Bot can read this as you."
+        provider="composio"
+        title="Gmail"
+      />
+    </QueryClientProvider>,
   );
 }
 
@@ -2780,13 +2791,13 @@ test("an added app nobody signed in to says Not connected beside Connect, on bot
   });
 
   const person = renderAccountScreen(queryClient());
-  expect(await person.findByRole("button", { name: "Connect" })).toBeTruthy();
-  expect(person.getByText("Not connected")).toBeTruthy();
+  expect(await person.findByRole("button", { name: "连接" })).toBeTruthy();
+  expect(person.getByText("未连接")).toBeTruthy();
   cleanup();
 
   const admin = renderAdminScreen(queryClient());
-  expect(await admin.findByRole("button", { name: "Connect" })).toBeTruthy();
-  expect(admin.getByText("Not connected")).toBeTruthy();
+  expect(await admin.findByRole("button", { name: "连接" })).toBeTruthy();
+  expect(admin.getByText("未连接")).toBeTruthy();
 });
 
 /**
@@ -2804,7 +2815,7 @@ test("arriving to connect a key app opens its key form without a second press", 
 
   const view = renderAccountScreen(
     queryClient(),
-    `/connections/${APP_KEY}?connect=true`,
+    `/settings/connected-accounts/${APP_KEY}?connect=true`,
   );
 
   expect(await view.findByLabelText("API Key")).toBeTruthy();

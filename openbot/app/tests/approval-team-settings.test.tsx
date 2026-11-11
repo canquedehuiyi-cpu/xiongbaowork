@@ -141,14 +141,14 @@ function draw() {
 
 test("an administrator sets the team-wide controls", async () => {
   const view = draw();
-  await view.findByText("Team settings");
+  await view.findByText("团队设置");
   const user = userEvent.setup({ document });
   await user.click(
     view.getByRole("combobox", {
-      name: "Commands on members' computers, at most",
+      name: "成员电脑上执行命令的上限",
     }),
   );
-  await user.click(await view.findByRole("option", { name: "Never" }));
+  await user.click(await view.findByRole("option", { name: "从不" }));
   await waitFor(() =>
     expect(sent).toContainEqual({
       path: "/api/approvals/team",
@@ -157,19 +157,19 @@ test("an administrator sets the team-wide controls", async () => {
     }),
   );
   // Team rules only: a member's own rules are theirs, in Settings.
-  expect(view.getAllByRole("button", { name: "Remove" }).length).toBe(1);
+  expect(view.getAllByRole("button", { name: "移除" }).length).toBe(1);
 });
 
 test("an administrator adds a team rule for every Bot", async () => {
   const view = draw();
-  await view.findByText("Add a team rule");
+  await view.findByText("添加团队规则");
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: /Add a team rule/ }));
+  await user.click(view.getByRole("button", { name: /添加团队规则/ }));
   await user.type(
-    await view.findByRole("textbox", { name: "Tool or app" }),
+    await view.findByRole("textbox", { name: "工具或应用" }),
     "mcp/slack/*",
   );
-  await user.click(view.getByRole("button", { name: "Save rule" }));
+  await user.click(view.getByRole("button", { name: "保存规则" }));
   await waitFor(() =>
     expect(sent).toContainEqual({
       path: "/api/approvals/team/rules",

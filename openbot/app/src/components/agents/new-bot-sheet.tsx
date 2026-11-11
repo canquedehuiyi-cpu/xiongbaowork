@@ -413,21 +413,6 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
             <SheetTitle className="text-2xl font-semibold tracking-tight">
               新建员工
             </SheetTitle>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-            {/* On a phone the custom agents can't show above the footer, so this says they are there. */}
-            {step === "about" && builtInAvailable && (
-              <Button
-                className="ml-auto h-auto px-0 text-muted-foreground text-xs sm:hidden"
-                onClick={() => showCustom(reduceMotion)}
-                type="button"
-                variant="link"
-              >
-                自定义智能体
-                <IconChevronDown className="size-3.5" />
-              </Button>
-            )}
-=======
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
           </div>
 
           <motion.div
@@ -547,7 +532,7 @@ function NewBotFlow({ onCreated }: { onCreated: (agentId: string) => void }) {
               }}
             >
               <IconPlugConnected className="size-4" />
-              Connect a custom agent
+              连接自定义智能体
             </Button>
           )}
           {step !== "runtime" && (
@@ -640,23 +625,18 @@ const VISIBILITY_OPTIONS: Array<{
   description: string;
   icon: typeof IconLock;
 }> = [
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-  { value: "private", title: "仅自己", icon: IconLock },
-  { value: "public", title: "公开", icon: IconUsers },
-=======
   {
     value: "private",
-    title: "Private",
-    description: "Only you can see it and talk to it.",
+    title: "仅自己",
+    description: "只有你能看到它、和它对话。",
     icon: IconLock,
   },
   {
     value: "public",
-    title: "Public",
-    description: "Everyone in your company can find and use it.",
+    title: "公开",
+    description: "公司里的每个人都能找到并使用它。",
     icon: IconUsers,
   },
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 ];
 
 /**
@@ -698,13 +678,7 @@ function AboutStep({
   return (
     <FieldGroup>
       <Field>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-        <FieldLabel className={SECTION_LABEL} htmlFor="new-bot-name">
-          名称
-        </FieldLabel>
-=======
-        <FieldLabel htmlFor="new-bot-name">Name</FieldLabel>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+        <FieldLabel htmlFor="new-bot-name">名称</FieldLabel>
         <Input
           autoComplete="off"
           autoFocus
@@ -727,15 +701,9 @@ function AboutStep({
         )}
       </Field>
       <Field>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-        <FieldLabel className={SECTION_LABEL} htmlFor="new-bot-instructions">
-          指令
-          <span className="font-normal normal-case tracking-normal">可选</span>
-=======
         <FieldLabel htmlFor="new-bot-instructions">
-          Instructions
-          <span className="font-normal text-muted-foreground">Optional</span>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+          指令
+          <span className="font-normal text-muted-foreground">可选</span>
         </FieldLabel>
         <Textarea
           autoComplete="off"
@@ -750,13 +718,7 @@ function AboutStep({
       {personal ? null : (
         <>
           <FieldSet>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-            <FieldLegend className={SECTION_LABEL} variant="label">
-              谁能看到它
-            </FieldLegend>
-=======
-            <FieldLegend variant="label">Who can see it</FieldLegend>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+            <FieldLegend variant="label">谁能看到它</FieldLegend>
             <div className="grid gap-2 sm:grid-cols-2">
               {VISIBILITY_OPTIONS.map((option) => {
                 const Icon = option.icon;
@@ -788,21 +750,10 @@ function AboutStep({
       {personal ? (
         <EveryAppList turnedOn={turnedOn} />
       ) : apps.length > 0 ? (
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-        <FieldSet className="gap-2">
-          <FieldLegend className={SECTION_LABEL} variant="label">
-            它能用的应用
-          </FieldLegend>
-          <FieldDescription>它总是用提问者本人的账号。</FieldDescription>
-          <div className="grid gap-x-4 sm:grid-cols-2">
-=======
         <FieldSet>
-          <FieldLegend variant="label">Apps it can use</FieldLegend>
-          <FieldDescription>
-            It always uses the account of whoever is asking.
-          </FieldDescription>
+          <FieldLegend variant="label">它能用的应用</FieldLegend>
+          <FieldDescription>它总是用提问者本人的账号。</FieldDescription>
           <div className="grid gap-2 sm:grid-cols-2">
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
             {apps.map((app) => (
               // The tile holds the label, and beside Routines an example and a link the box's name
               // must not take in, so they sit outside the label.
@@ -849,15 +800,8 @@ function EveryAppList({ turnedOn }: { turnedOn: UseQueryResult<PluginsPage> }) {
   if (turnedOn.isPending) return null;
   const servers = turnedOn.data?.servers ?? [];
   return (
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-    <FieldSet className="gap-2">
-      <FieldLegend className={SECTION_LABEL} variant="label">
-        它能用的应用
-      </FieldLegend>
-=======
     <FieldSet>
-      <FieldLegend variant="label">Apps it can use</FieldLegend>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+      <FieldLegend variant="label">它能用的应用</FieldLegend>
       <FieldDescription>
         你在「连接」里打开的每个应用，所有员工都能用。
       </FieldDescription>
@@ -866,11 +810,7 @@ function EveryAppList({ turnedOn }: { turnedOn: UseQueryResult<PluginsPage> }) {
           读不到你的应用。
         </p>
       ) : servers.length > 0 ? (
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-        <ul aria-label="它能用的应用" className="grid gap-x-4 sm:grid-cols-2">
-=======
-        <ul aria-label="Apps it can use" className="grid gap-2 sm:grid-cols-2">
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+        <ul aria-label="它能用的应用" className="grid gap-2 sm:grid-cols-2">
           {servers.map((server) => (
             <li
               className={cn(
@@ -930,15 +870,8 @@ function IsolatedOption({
       : null;
   return (
     <FieldSet>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-      <FieldLegend className={SECTION_LABEL} variant="label">
-        它的电脑
-      </FieldLegend>
-      <div className="flex items-start gap-3">
-=======
-      <FieldLegend variant="label">Its computer</FieldLegend>
+      <FieldLegend variant="label">它的电脑</FieldLegend>
       <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-3">
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
         <Checkbox
           aria-describedby="new-bot-isolated-summary"
           checked={checked && reason === null}
@@ -981,7 +914,7 @@ function IsolatedOption({
             className="text-pretty text-muted-foreground text-xs"
             id="new-bot-isolated-summary"
           >
-            {reason ?? "A computer of its own, instead of sharing yours."}
+            {reason ?? "给它一台自己的电脑，不和你共用。"}
           </p>
         </div>
       </div>
@@ -1007,93 +940,7 @@ function RuntimeStep({ onChoose }: { onChoose: (runtime: Runtime) => void }) {
   useEffect(() => heading.current?.focus(), []);
 
   return (
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-    <div className="flex flex-col">
-      <h2 className={cn("mb-3", RUNTIME_HEADING)} ref={heading} tabIndex={-1}>
-        连接自定义智能体
-      </h2>
-      <FrameworkRows onChoose={onChoose} />
-    </div>
-  );
-}
-
-/** RuntimeStep's heading, which the first screen's custom agents share. */
-const RUNTIME_HEADING =
-  "break-words font-semibold text-lg tracking-tight outline-none";
-
-/**
- * A framework row: no fill until hovered, so the list reads as a list and not as a stack of tiles.
- * Pressing one acts at once, so there is no chosen state to draw.
- */
-const FRAMEWORK_ROW_CLASSES =
-  "-mx-3 flex items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
-
-/** Every framework the sheet offers, one line each, name then summary; pressing one picks it. */
-function FrameworkRows({
-  disabled,
-  onChoose,
-}: {
-  disabled?: boolean;
-  onChoose: (runtime: Runtime) => void;
-}) {
-  return CONNECTION_OPTIONS.map((harness) => (
-    <button
-      className={FRAMEWORK_ROW_CLASSES}
-      disabled={disabled}
-      key={harness.id}
-      onClick={() => onChoose({ kind: "managed", harness: harness.id })}
-      type="button"
-    >
-      <HarnessMark id={harness.mark} name={harness.name} />
-      <span className="min-w-0 truncate text-sm">
-        <span className="font-medium">{harness.name}</span>
-        <span className="ml-2 text-muted-foreground">
-          {summaryFor(harness)}
-        </span>
-      </span>
-    </button>
-  ));
-}
-
-const CUSTOM_ID = "new-bot-custom";
-const CUSTOM_HEADING_ID = "new-bot-custom-heading";
-
-/**
- * Brings the first screen's custom agents to the top of the sheet body and puts focus on their
- * heading, without the browser scrolling a second time for the focus.
- */
-function showCustom(reduceMotion: boolean | null) {
-  document.getElementById(CUSTOM_ID)?.scrollIntoView({
-    block: "start",
-    behavior: reduceMotion ? "auto" : "smooth",
-  });
-  document.getElementById(CUSTOM_HEADING_ID)?.focus({ preventScroll: true });
-}
-
-/**
- * The first screen's second way to make a Bot, below the simple form: RuntimeStep's rows under a
- * section name like the form's own, without taking focus from Name. A wider gap than the form's own
- * sets it apart. In an 800px-tall window (OpenBot Desktop's common height on a Mac) the four
- * frameworks named first show above the footer before anything is scrolled, which is why the form
- * above is spaced as tightly as it is; new-bot-sheet-fit.test.tsx measures it in Chromium. Each row
- * acts on its own press, so Create Bot stays the form's.
- */
-function CustomAgents({
-  disabled,
-  onChoose,
-}: {
-  disabled: boolean;
-  onChoose: (runtime: Runtime) => void;
-}) {
-  return (
-    <section
-      aria-labelledby={CUSTOM_HEADING_ID}
-      className="mt-8 flex scroll-mt-6 flex-col"
-      id={CUSTOM_ID}
-    >
-=======
     <div className="flex flex-col gap-2">
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
       <h2
         className="mb-2 break-words font-semibold text-lg tracking-tight outline-none"
         ref={heading}

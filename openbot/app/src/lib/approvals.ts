@@ -85,6 +85,8 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   auto_review: "自动审查",
   default: "你的偏好",
   person_declined: "你已拒绝过",
+  conversation: "这段对话里已允许",
+  task: "检查任务每步都问",
 };
 /**
  * 这条请求能不能用「在这里总是允许」来回答。只给「允许一次」的底线（删除类、对外发送、分享与授权、

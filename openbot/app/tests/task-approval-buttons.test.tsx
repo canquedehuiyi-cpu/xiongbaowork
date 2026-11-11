@@ -129,16 +129,10 @@ test("in the conversation, a check-in task's approval offers Allow once and Deny
     ),
   ).toBeTruthy();
   expect(names(view.getByRole("region", { name: "own" }))).toEqual([
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     "允许一次",
+    "在这段对话里都允许",
     "在这里总是允许",
     "拒绝",
-=======
-    "Allow once",
-    "Allow for this conversation",
-    "Always allow here",
-    "Deny",
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   ]);
 });
 
@@ -154,15 +148,9 @@ test("on the Bot's page, the same: the task's row has no Always allow here, the 
     "拒绝",
   ]);
   expect(buttons(await row("notes.md"))).toEqual([
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     "允许一次",
+    "在这段对话里都允许",
     "在这里总是允许",
     "拒绝",
-=======
-    "Allow once",
-    "Allow for this conversation",
-    "Always allow here",
-    "Deny",
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   ]);
 });

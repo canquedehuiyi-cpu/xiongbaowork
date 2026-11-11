@@ -1,11 +1,7 @@
 import {
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-  IconPin,
-  IconPinFilled,
-=======
   IconPencil,
   IconPin,
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+  IconPinFilled,
   IconPinnedOff,
   IconTrash,
 } from "@tabler/icons-react";
@@ -48,7 +44,7 @@ export const Channel = memo(function Channel({
   lastMessage,
   lastMessageAt,
   pinned,
-  canRename,
+  canRename = false,
   unread,
   busy,
   emphasis,
@@ -64,8 +60,12 @@ export const Channel = memo(function Channel({
   lastMessage?: string;
   lastMessageAt?: string;
   pinned: boolean;
-  /** Whether this person started the conversation, and so may rename it. The server's answer. */
-  canRename: boolean;
+  /**
+   * Whether this person started the conversation, and so may rename it. The server's answer.
+   * Optional because the fork's `conversation-workspace.tsx` roster does not pass it yet; absent
+   * offers no Rename, which is what the server would refuse anyway when it cannot tell.
+   */
+  canRename?: boolean;
   unread: boolean;
   busy: boolean;
   emphasis: MessageListEmphasis;
@@ -176,7 +176,7 @@ export const Channel = memo(function Channel({
           {canRename ? (
             <ContextMenuItem onClick={() => setRenaming(true)}>
               <IconPencil />
-              Rename conversation…
+              重命名会话…
             </ContextMenuItem>
           ) : null}
           <ContextMenuItem
@@ -197,7 +197,7 @@ export const Channel = memo(function Channel({
         channelId={channelId}
         onOpenChange={setRenaming}
         open={renaming}
-        title={summary || untitled || ""}
+        title={summary || untitledTitle || ""}
       />
       <DeleteConversationDialog
         channelId={channelId}

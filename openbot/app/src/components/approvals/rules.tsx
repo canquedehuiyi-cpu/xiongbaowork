@@ -55,9 +55,9 @@ import {
 export const TOOL_PATTERN_EXAMPLE = "composio-gmail/*";
 
 export const HOST_LABELS: Record<HostCommandPolicy, string> = {
-  ask: "Ask every time",
-  allow: "Always allow",
-  never: "Never",
+  ask: "每次都问",
+  allow: "总是允许",
+  never: "从不",
 };
 
 /**
@@ -106,22 +106,22 @@ export function LabelSelect<T extends string>({
 const TEAM_BEHAVIOUR_LABELS = Object.fromEntries(
   Object.entries(BEHAVIOUR_LABELS).map(([key, label]) => [
     key,
-    `${label} (team rule)`,
+    `${label}（团队规则）`,
   ]),
 ) as Record<RuleBehaviour, string>;
 
 /** What kind of action a rule covers, in words. Any other kind is left unsaid. */
 const EFFECT_WORDS: Record<string, string> = {
-  read: "reading",
-  write: "changes",
-  destructive: "deleting",
-  delegate: "handing off work",
+  read: "读取",
+  write: "修改",
+  destructive: "删除",
+  delegate: "转交工作",
 };
 
-/** "for Expenses"; nothing until the names arrive, so a Bot is never named by its id. */
+/** "员工 报销助手"; nothing until the names arrive, so a Bot is never named by its id. */
 function forBot(name: string): string | null {
   if (!name) return null;
-  return name === GONE_BOT ? "for a Bot no longer here" : `for ${name}`;
+  return name === GONE_BOT ? GONE_BOT : `员工 ${name}`;
 }
 
 /** A rule saved from a folder's card is on the id OpenBot gave that folder (`host-access/broker.ts`). */
@@ -135,14 +135,16 @@ function folderWords(
   grantId: string,
   grants: readonly HostFolderGrant[] | undefined,
 ): string {
-  if (!grants) return "in a folder";
+  if (!grants) return "在一个文件夹中";
   const grant = grants.find((candidate) => candidate.id === grantId);
   return grant && !grant.revoked
-    ? `in ${grant.displayName}`
-    : "in a folder that's no longer shared";
+    ? `在 ${grant.displayName} 中`
+    : "在一个已不再共享的文件夹中";
 }
 
 /**
+ * 上游 main 的版本（fork 曾删掉，审批设置画在 inbox.tsx 里），中文化后留给第二阶段的员工详情和管理页接上。
+ *
  * One saved rule, as a row: what it matches, and what a Bot does about it. A locked rule — a team
  * rule seen by a member, or a personal rule the team has switched off — states its behaviour and
  * offers nothing to change.
@@ -180,17 +182,17 @@ export function RuleRow({
       ? null
       : folderRule
         ? folderWords(rule.scope, folders.data?.grants)
-        : `on ${rule.scope}`,
+        : `在 ${rule.scope} 上`,
     // A rule saved for one of several accounts at the app covers that account only.
-    rule.account ? `from ${rule.account}` : null,
+    rule.account ? `账号 ${rule.account}` : null,
     rule.botId === "*"
       ? null
       : rule.botId.includes("*")
-        ? `for Bots matching ${rule.botId}`
+        ? `名字匹配 ${rule.botId} 的员工`
         : forBot(botName(rule.botId)),
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("，");
   return (
     <Item size="sm">
       <ItemMedia variant="icon">
@@ -203,7 +205,7 @@ export function RuleRow({
             {match}
           </ItemDescription>
         ) : null}
-        {locked ? <ItemDescription>Locked</ItemDescription> : null}
+        {locked ? <ItemDescription>已锁定</ItemDescription> : null}
       </ItemContent>
       <ItemActions>
         {locked ? (
@@ -214,7 +216,7 @@ export function RuleRow({
           <>
             <LabelSelect
               disabled={disabled}
-              label={`Behaviour for ${title}`}
+              label={`「${title}」的处理方式`}
               labels={labels}
               onChange={onChange}
               value={rule.behaviour}
@@ -225,7 +227,7 @@ export function RuleRow({
               size="sm"
               variant="outline"
             >
-              Remove
+              移除
             </Button>
           </>
         )}
@@ -298,7 +300,7 @@ export function RuleForm({
         <ItemContent>
           <ItemTitle>{label}</ItemTitle>
           <ItemDescription>
-            A tool or app, and what a Bot does before using it.
+            一个工具或应用，以及员工用它之前要怎么做。
           </ItemDescription>
         </ItemContent>
         <ItemActions>
@@ -310,9 +312,9 @@ export function RuleForm({
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
             <DialogDescription>
-              Use * to match anything. An app's tools start with its name, so{" "}
-              {TOOL_PATTERN_EXAMPLE} means every Gmail tool. A target of
-              *.example.com means every page on that site.
+              用 * 匹配任意内容。应用的工具以应用名开头，所以{" "}
+              {TOOL_PATTERN_EXAMPLE} 表示所有 Gmail 工具。目标写
+              *.example.com 表示这个网站的所有页面。
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -329,14 +331,14 @@ export function RuleForm({
               <FieldGroup>
                 {field(
                   "toolRef",
-                  "Tool or app",
+                  "工具或应用",
                   `${TOOL_PATTERN_EXAMPLE}, computer_click, host/*`,
                 )}
-                {field("effect", "Kind of action", "* , write, read, delegate")}
-                {field("scope", "Target", "*, a site, a folder, a Bot name")}
-                {botField ? field("botId", "Bot", "* for every Bot") : null}
+                {field("effect", "动作类型", "*、write、read、delegate")}
+                {field("scope", "目标", "*、某个网站、某个文件夹、某位员工")}
+                {botField ? field("botId", "员工", "* 表示所有员工") : null}
                 <Field>
-                  <FieldLabel htmlFor={`${id}-behaviour`}>Behaviour</FieldLabel>
+                  <FieldLabel htmlFor={`${id}-behaviour`}>处理方式</FieldLabel>
                   <LabelSelect
                     id={`${id}-behaviour`}
                     labels={BEHAVIOUR_LABELS}
@@ -356,7 +358,7 @@ export function RuleForm({
           </DialogBody>
           <DialogFooter className="mt-4">
             <Button onClick={close} size="sm" variant="outline">
-              Cancel
+              取消
             </Button>
             <Button
               disabled={save.isPending || !rule.toolRef.trim()}
@@ -364,7 +366,7 @@ export function RuleForm({
               size="sm"
               type="submit"
             >
-              Save rule
+              {save.isPending ? "正在保存…" : "保存规则"}
             </Button>
           </DialogFooter>
         </DialogContent>

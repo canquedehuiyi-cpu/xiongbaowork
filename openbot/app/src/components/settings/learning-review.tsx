@@ -214,16 +214,15 @@ export function LearningReview() {
   const showList = autoApproveOn !== true || anyWaiting;
   // The heading says something waits only when a skill does: not while Learning runs, and not with nothing left to approve.
   const heading = !anyWaiting
-    ? { title: "New skills", description: undefined }
+    ? { title: "新技能", description: undefined }
     : canReview
       ? {
-          title: "Waiting for your review",
-          description: "Approve a skill to publish it to your Bots.",
+          title: "等你审核",
+          description: "批准一项技能，就会把它发布给你的员工。",
         }
       : {
-          title: "Waiting for an admin",
-          description:
-            "An admin reviews these. You can read what Learning proposes here.",
+          title: "等管理员审核",
+          description: "这些由管理员审核。你可以在这里看到学习提出的建议。",
         };
   const learnNowFor = async (group: {
     label: string;
@@ -257,18 +256,7 @@ export function LearningReview() {
   };
 
   return (
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-    <PageSection
-      title={canReview ? "等你审核" : "等管理员审核"}
-      description={
-        canReview
-          ? "批准一项技能，就会把它发布给你的员工。"
-          : "这些由管理员审核。你可以在这里看到学习提出的建议。"
-      }
-    >
-=======
     <PageSection title={heading.title} description={heading.description}>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
       {autoApproveOn !== null && (
         <PageRows>
           <Item size="sm">

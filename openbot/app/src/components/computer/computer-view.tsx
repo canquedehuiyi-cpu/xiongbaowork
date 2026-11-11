@@ -204,17 +204,7 @@ function NothingToSee({
               <span className="break-all">{hostOf(page.url)}</span>
               <span>这一轮里打开过。屏幕之后已经变了。</span>
             </>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-          ) : (
-            /*
-             * A turn that ended without getting anywhere: refused by a boundary, stopped, or failed.
-             * Saying "opened during this turn" here would describe something that did not happen.
-             */
-            <span>这一轮没有打开任何页面。</span>
-          )}
-=======
           ) : null}
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
         </>
       ) : problem ? (
         <>

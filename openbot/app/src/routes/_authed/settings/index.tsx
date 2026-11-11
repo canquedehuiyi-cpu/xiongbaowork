@@ -58,15 +58,11 @@ function RouteComponent() {
           <StandingInstructionsRow />
         </PageRows>
       </PageSection>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-      <PageSection title="外观">
-=======
-      {/* Only in OpenBot Desktop, which holds the AI connection and changes it in its own window. */}
+      {/* 只在熊宝桌面端出现：AI 连接由桌面端持有，并在它自己的窗口里修改。 */}
       <AiModelSection />
-      {/* Only in OpenBot Desktop, which sends usage data and keeps this choice. */}
+      {/* 只在熊宝桌面端出现：使用数据由桌面端发送，这个选择也由它保存。 */}
       <UsageDataSection />
-      <PageSection title="Appearance">
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+      <PageSection title="外观">
         <PageRows>
           <Item size="sm">
             <ItemMedia variant="icon">

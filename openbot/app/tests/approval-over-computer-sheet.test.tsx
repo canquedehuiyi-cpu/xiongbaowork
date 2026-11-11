@@ -166,16 +166,7 @@ test("on a narrow window the Computer sheet shows the approval it covers, and an
     within(card)
       .getAllByRole("radio")
       .map((radio) => radio.getAttribute("aria-label")),
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   ).toEqual(["允许一次", "拒绝"]);
-=======
-  ).toEqual([
-    "Allow once",
-    "Allow for this conversation",
-    "Always allow here",
-    "Deny",
-  ]);
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   // Only this conversation's: an approval waiting in another one is not drawn here.
   expect(
     within(sheet).getAllByRole("region", { name: "等你批准" }),

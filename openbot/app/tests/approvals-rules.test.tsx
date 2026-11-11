@@ -310,7 +310,6 @@ test("in the real transcript shape a waiting click is folded into browser activi
   expect(view.getByRole("button", { name: "我自己做了" })).toBeTruthy();
 });
 
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 /** A change the Bot's owner asked to be asked about (SEC1 D9), added for the one test below. */
 const ownerAsked = {
   id: "request-2",
@@ -330,62 +329,6 @@ const ownerAsked = {
       source: "owner_rule",
       reason: "A rule asks before this kind of action.",
     },
-=======
-test("personal approvals keep the person's controls without team-only explanations or shared Bots", async () => {
-  inboxOverride = {
-    teamRules: [],
-    team: { enforceAutoReview: false, customRulesEnabled: true },
-    hostCommands: "allow",
-  };
-  const view = draw(
-    <>
-      <ApprovalSettings />
-      <TeamBotConsents />
-    </>,
-    "personal",
-  );
-  await view.findByText("Rules for every Bot");
-  expect(view.queryByText(/Team rules are locked/)).toBeNull();
-  expect(view.queryByText("Shared Bots")).toBeNull();
-  expect(
-    view.getByRole("switch", { name: "Always ask before making changes" }),
-  ).toBeTruthy();
-  expect(view.getByRole("switch", { name: "Auto-review" })).toBeTruthy();
-});
-test("team approvals still show the shared Bot account controls", async () => {
-  const view = draw(<TeamBotConsents />);
-  expect(await view.findByText("Shared Bots")).toBeTruthy();
-  expect(view.getByRole("button", { name: "Reset" })).toBeTruthy();
-});
-
-/*
- * What always asks, said where the switches are, in the words onboarding uses, and only what is
- * true: a Bot deleting a file in its own workspace is an ordinary change
- * (server/src/approvals/policy.ts, NOT_ACCOUNT_ACTIONS), so the page must not promise that every
- * delete asks. The switch says it adds every change on top.
- */
-test.each(["team", "personal"] as const)(
-  "the %s edition says what always asks, and that a Bot's own workspace is left out of it",
-  async (edition) => {
-    inboxOverride = {
-      teamRules: [],
-      team: { enforceAutoReview: false, customRulesEnabled: true },
-    };
-    const view = draw(<ApprovalSettings />, edition);
-    await view.findByText("Rules for every Bot");
-    const said = view.container.textContent ?? "";
-    for (const sentence of [
-      "Bots ask for your approval before deleting, sending, sharing, posting, or paying in your apps or on websites. You can allow each one once, for a conversation, or always.",
-      "They also ask before every edit or command in a folder on your own computer.",
-      "Bots leave changing a password on a website for you to do yourself.",
-      "Bots can create, edit, and delete files in their own workspace without asking, unless your settings or rules say so.",
-      "Require your approval for every change to your apps, websites, and files, including routine edits and updates.",
-    ])
-      expect(said.replace(/\s+/g, " ")).toContain(sentence);
-    expect(said).not.toContain(
-      "Review a Bot's changes to websites, connected apps, and files.",
-    );
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   },
 };
 

@@ -23,11 +23,7 @@ import {
 import { type AuditOutcome, outcomeOf } from "@/lib/audit/outcome";
 import { silenceOf } from "@/lib/audit/silence";
 import { galleryComponent } from "@/lib/copilot/gallery-registry";
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-=======
-import { atStart } from "@/lib/manage-paths";
 import { cn } from "@/lib/utils";
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 
 /** One row as the API returns it. */
 export type AuditEvent = {
@@ -516,22 +512,22 @@ function permissionSubject(payload: Record<string, unknown>): string {
         : "";
   const scope =
     payload.scopeKind === "organization"
-      ? "Everybody"
+      ? "所有人"
       : payload.scopeKind === "role"
         ? payload.scopeId === "admin"
-          ? "Admins"
-          : "Members"
+          ? "管理员"
+          : "成员"
         : payload.scopeKind === "group" && typeof payload.scopeId === "string"
-          ? `Group: ${payload.scopeId}`
+          ? `用户组：${payload.scopeId}`
           : "";
   return [title, scope].filter(Boolean).join(" · ");
 }
 
 /** What a switch was set to, as the Permissions page says it: a group grants, the rest turn on or off. */
 function permissionSetting(payload: Record<string, unknown>): string {
-  if (payload.allowed === null) return "Set back to inherit";
-  if (payload.allowed === false) return "Turned off";
-  return payload.scopeKind === "group" ? "Granted" : "Turned on";
+  if (payload.allowed === null) return "已改回继承";
+  if (payload.allowed === false) return "已关闭";
+  return payload.scopeKind === "group" ? "已授予" : "已打开";
 }
 
 export function decisionText(event: AuditEvent, storedNames = true): string {
@@ -624,7 +620,7 @@ function approvalText(event: AuditEvent): string | undefined {
       | undefined;
     // Allowed by the person's own answer earlier in the conversation, not by a rule.
     if (outcome?.source === "conversation" && outcome.behaviour === "allow")
-      return "Allowed for this conversation";
+      return "这段对话里已允许";
     const behaviour = outcome?.behaviour;
     return typeof behaviour === "string"
       ? GATE_DECISIONS[behaviour]
@@ -632,7 +628,7 @@ function approvalText(event: AuditEvent): string | undefined {
   }
   // An admin's guidance for auto-review, saved or taken away. Nothing was decided about an action.
   if (event.eventType === "approval.guidance_changed")
-    return payload.after === null ? "Guidance removed" : "Guidance saved";
+    return payload.after === null ? "指引已删除" : "指引已保存";
   return undefined;
 }
 
@@ -644,29 +640,22 @@ function guidanceLines(payload: Record<string, unknown>): string[] {
   const reading = (payload.reading ?? {}) as { summary?: unknown };
   if (typeof payload.after === "string")
     return [
-      `Guidance: “${payload.after}”`,
+      `指引：「${payload.after}」`,
       ...(typeof reading.summary === "string" && reading.summary
-        ? [`Read as: ${reading.summary}`]
+        ? [`理解为：${reading.summary}`]
         : []),
     ];
   return typeof payload.before === "string"
-    ? [`Removed: “${payload.before}”`]
+    ? [`删除了：「${payload.before}」`]
     : [];
 }
 
 const PERSON_DECISIONS: Record<string, string> = {
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   allow_once: "有人允许了这一次",
+  allow_conversation: "有人在这段对话里都允许了",
   allow_always: "有人设为总是允许",
   deny: "有人拒绝了",
   handled: "有人亲自做了",
-=======
-  allow_once: "Allowed once by a person",
-  allow_conversation: "Allowed for this conversation by a person",
-  allow_always: "Always allowed by a person",
-  deny: "Denied by a person",
-  handled: "Done by a person",
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 };
 
 const GATE_DECISIONS: Record<string, string> = {
@@ -705,13 +694,13 @@ function policyChangeLines(payload: Record<string, unknown>): string[] {
   const mode = (payload.mode ?? {}) as { before?: unknown; after?: unknown };
   const authoring = (payload.authoring ?? {}) as { text?: unknown };
   return [
-    ...named(payload.added).map((name) => `Added: ${name}`),
-    ...named(payload.removed).map((name) => `Removed: ${name}`),
+    ...named(payload.added).map((name) => `新增：${name}`),
+    ...named(payload.removed).map((name) => `删除：${name}`),
     ...(mode.before !== mode.after && typeof mode.after === "string"
-      ? [mode.after === "dry-run" ? "Trial mode on" : "Trial mode off"]
+      ? [mode.after === "dry-run" ? "试运行已开启" : "试运行已关闭"]
       : []),
     ...(typeof authoring.text === "string"
-      ? [`Written from: “${authoring.text}”`]
+      ? [`根据这句话写成：「${authoring.text}」`]
       : []),
   ];
 }
@@ -756,7 +745,10 @@ function ruleExpression(
  * The deciding rule by its name, where the row recorded one: "Stopped by: Bots may not visit social
  * media sites". A trial-mode refusal went ahead, so it says the rule would have stopped it.
  */
-function ruleNameLine(event: AuditEvent, storedNames: boolean): string | null {
+export function ruleNameLine(
+  event: AuditEvent,
+  storedNames: boolean,
+): string | null {
   const { allowed, mode, ruleName } = decisionOf(event);
   if (
     !ruleExpression(event, storedNames) ||
@@ -764,10 +756,10 @@ function ruleNameLine(event: AuditEvent, storedNames: boolean): string | null {
     !ruleName.trim()
   )
     return null;
-  if (allowed !== false) return `Allowed by: ${ruleName}`;
+  if (allowed !== false) return `放行的规则：${ruleName}`;
   return mode === "dry-run"
-    ? `Would be stopped by: ${ruleName}`
-    : `Stopped by: ${ruleName}`;
+    ? `本会拦下它的规则：${ruleName}`
+    : `拦下它的规则：${ruleName}`;
 }
 
 /**
@@ -879,7 +871,7 @@ export function decisionDetails(
       event.eventType === "capability.changed") &&
     typeof ruleAuthoring.text === "string"
   )
-    lines.push(`Written from: “${ruleAuthoring.text}”`);
+    lines.push(`根据这句话写成：「${ruleAuthoring.text}」`);
   if (event.eventType === "approval.guidance_changed")
     lines.push(...guidanceLines(payload));
   if (
@@ -1087,7 +1079,7 @@ const DETAIL_LINE =
  * The control appears only when the clamp hides something, measured on the drawn line: how much
  * fits in two lines depends on how wide the table left the column, which nothing here can know.
  */
-function RuleExpression({ expression }: { expression: string }) {
+export function RuleExpression({ expression }: { expression: string }) {
   const [open, setOpen] = useState(false);
   const [cut, setCut] = useState(false);
   const text = useRef<HTMLDivElement>(null);
@@ -1127,7 +1119,7 @@ function RuleExpression({ expression }: { expression: string }) {
           onClick={() => setOpen((was) => !was)}
           type="button"
         >
-          {open ? "Show less" : "Show full rule"}
+          {open ? "收起" : "显示完整规则"}
         </button>
       ) : null}
     </>
@@ -1176,10 +1168,16 @@ const DECISIONS: Record<string, string> = {
   "bot.declined": "员工拒绝了",
   // Not a refusal, so not the refusal colour: nothing was blocked. The Bot was asked and never
   // answered, which is the same complaint as an action that was allowed and then did not happen.
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   "agent.stream_stalled": "员工不再回应",
   "agent.tool_limit_refused": "工具太多，超出了模型的上限",
   "computer.policy_loaded": "启动时的边界",
+  "computer.policy_changed": "边界规则已保存",
+  // A draft for the admin to read. Not "Allowed": nothing was decided and nothing changed.
+  "computer.policy_translated": "只是草稿，没有保存",
+  // A question read into filters. Not "Allowed": nothing was decided, and nothing left the trail.
+  "audit.asked": "只是提问，没有改动",
+  "what_if.asked": "只是提问，没有改动",
+  "what_if.checked": "只是检查，没有改动",
   "computer.isolation_loaded": "启动时的隔离",
   "computer.control_taken": "有人接管了操作",
   "computer.control_released": "已交还给员工",
@@ -1190,28 +1188,6 @@ const DECISIONS: Record<string, string> = {
   "computer.browser_cleared": "有人清空了浏览器",
   "computer.updated": "电脑已更新",
   "computer.stopped": "有人按了停止",
-=======
-  "agent.stream_stalled": "The Bot stopped responding",
-  "agent.tool_limit_refused": "Too many tools for its model",
-  "computer.policy_loaded": "Boundary at start-up",
-  "computer.policy_changed": "Boundaries saved",
-  // A draft for the admin to read. Not "Allowed": nothing was decided and nothing changed.
-  "computer.policy_translated": "Drafted, not saved",
-  // A question read into filters. Not "Allowed": nothing was decided, and nothing left the trail.
-  "audit.asked": "Asked, nothing changed",
-  "what_if.asked": "Asked, nothing changed",
-  "what_if.checked": "Checked, nothing changed",
-  "computer.isolation_loaded": "Isolation at start-up",
-  "computer.control_taken": "A person took control",
-  "computer.control_released": "Control went back to the Bot",
-  "computer.help_requested": "The Bot asked for help",
-  "computer.secret_requested": "The Bot asked for a secret",
-  "computer.secret_supplied": "A person supplied a secret",
-  "computer.reset": "The computer was reset",
-  "computer.browser_cleared": "A person cleared the browser",
-  "computer.updated": "The computer was updated",
-  "computer.stopped": "A person pressed stop",
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 
   "component.granted": "已授予这位员工",
   "component.revoked": "已从这位员工收回",
@@ -1237,18 +1213,14 @@ const DECISIONS: Record<string, string> = {
   "mcp.callback_refused": "无法确认是哪位员工",
 
   // A request closed without an answer: asking was turned off, or a rule now allows it.
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   "approval.withdrawn": "已撤回",
-=======
-  "approval.withdrawn": "Withdrawn",
   // A draft for the admin to read, as a boundary's is. Nothing was decided and nothing changed.
-  "approval.rules_translated": "Drafted, not saved",
-  "plugin.grants_translated": "Drafted, not saved",
-  "plugin.grants_changed": "Actions saved",
+  "approval.rules_translated": "只是草稿，没有保存",
+  "plugin.grants_translated": "只是草稿，没有保存",
+  "plugin.grants_changed": "操作已保存",
   // A draft network allowlist, as a boundary's is. Nothing was decided and nothing changed.
-  "network_policy.translated": "Drafted, not saved",
-  "capability.changes_translated": "Drafted, not saved",
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+  "network_policy.translated": "只是草稿，没有保存",
+  "capability.changes_translated": "只是草稿，没有保存",
 
   "configuration.changed": "配置已修改",
   "credential.created": "凭据已保存",

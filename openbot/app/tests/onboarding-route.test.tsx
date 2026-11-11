@@ -30,7 +30,6 @@ import type { RouterContext } from "@/router-context";
 import { Route as OnboardingRoute } from "@/routes/_authed/onboarding";
 import { settleReactWork } from "./settle-react-work";
 
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 /**
  * Where somebody is in onboarding lives in the address: `?step=<id>`. A reload stays on the step,
  * browser Back walks back one, and every move is saved, so arriving without a step opens the one
@@ -38,24 +37,6 @@ import { settleReactWork } from "./settle-react-work";
  * (你的资料, which carries its own ways forward), and the name, which is left out once the name is
  * known. The last step's way forward is the way out: it completes onboarding, plays its finish and
  * opens the app. Upstream's Book a demo step (a sales calendar) is left out of this deployment.
-=======
-/** Book a call opens the OpenBot for Business page, with its booking calendar, never CopilotKit's generic one. */
-const OPENBOT_FOR_BUSINESS = "https://open.bot/business";
-/**
- * The calendar Book a demo embeds: the OpenBot for Business event on Calendly, as an inline embed
- * for this page's host, without the event's details or Calendly's cookie banner. No colours here: the test DOM has no canvas
- * to read the app's tokens from.
- */
-const BOOKING_CALENDAR =
-  "https://calendly.com/d/dwfr-k64-8d2/openbot-for-business?embed_domain=localhost%3A3010&embed_type=Inline&hide_event_type_details=1&hide_gdpr_banner=1";
-
-/**
- * Where somebody is in onboarding lives in the address: `?step=<id>`. A reload stays on the step,
- * browser Back walks back one, and every move is saved, so arriving without a step opens the one
- * they were on. There are three steps at most: Welcome, OpenBot for Business for somebody trying OpenBot
- * alone, and the name, which is left out once the name is known. The last step's button is the way
- * out: it completes onboarding, plays its finish and opens the app.
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
  */
 
 beforeAll(() => GlobalRegistrator.register({ url: "http://localhost:3010" }));
@@ -276,40 +257,10 @@ const skipSources = (view: ReturnType<typeof render>) =>
 const reelScenes = (view: ReturnType<typeof render>) =>
   view.container.querySelectorAll("[data-intro-reel] > [aria-hidden] > span")
     .length;
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
 
 const WELCOME = "欢迎来到熊宝数字员工";
 const SOURCES = "告诉你的分身，你的资料在哪里";
 const NAME = "我们该怎么称呼你？";
-=======
-/** Book a demo's booking calendar. */
-const calendar = (view: ReturnType<typeof render>) => {
-  const found = view.container.querySelector<HTMLIFrameElement>(
-    '[data-booking-calendar] iframe[title="Booking calendar"]',
-  );
-  if (!found) throw new Error("no booking calendar");
-  return found;
-};
-/** Book a demo on OpenBot for Business, which puts the calendar in the step in place of the picture. */
-async function bookDemo(view: ReturnType<typeof render>) {
-  fireEvent.click(await view.findByRole("button", { name: "Book a demo" }));
-  await waitFor(() => calendar(view));
-}
-/** Stands in for `window.open`, and puts it back after. */
-async function withOpen(run: (opened: unknown[][]) => Promise<void>) {
-  const opened: unknown[][] = [];
-  const realOpen = window.open;
-  window.open = ((...args: unknown[]) => {
-    opened.push(args);
-    return null;
-  }) as typeof window.open;
-  try {
-    await run(opened);
-  } finally {
-    window.open = realOpen;
-  }
-}
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 
 test("arriving without a step writes the first one into the address, in place", async () => {
   const view = open("/onboarding");
@@ -346,31 +297,7 @@ test("somebody whose name isn't known has three steps: Welcome, their material, 
   const view = open("/onboarding?step=welcome");
   await heading(view, WELCOME);
 
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   expect(stepNames(await openSteps(view))).toEqual([WELCOME, SOURCES, NAME]);
-=======
-  expect(stepNames(await openSteps(view))).toEqual([
-    "Welcome to OpenBot",
-    "What should we call you?",
-  ]);
-});
-
-test("somebody trying OpenBot alone has three steps: Welcome, Book a demo, then the name", async () => {
-  localEvaluation = true;
-  const view = open("/onboarding?step=welcome");
-  await heading(view, "Welcome to OpenBot");
-  await waitFor(() =>
-    expect(view.getByRole("progressbar").getAttribute("aria-valuemax")).toBe(
-      "3",
-    ),
-  );
-
-  expect(stepNames(await openSteps(view))).toEqual([
-    "Welcome to OpenBot",
-    "OpenBot for Business",
-    "What should we call you?",
-  ]);
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 });
 
 test("on every step, its name in the list of steps is its heading", async () => {
@@ -401,15 +328,7 @@ test("on every step, its name in the list of steps is its heading", async () => 
     );
     await waitFor(() => expect(searchOf(view).step).not.toBe(step));
   }
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   expect(seen).toEqual([WELCOME, SOURCES, NAME]);
-=======
-  expect(seen).toEqual([
-    "Welcome to OpenBot",
-    "OpenBot for Business",
-    "What should we call you?",
-  ]);
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 });
 
 test("Welcome asks to set up permissions, with Always ask before making changes beside the words, not in the picture", async () => {
@@ -444,17 +363,10 @@ test("Welcome says what always asks before the switch, and the switch says it co
     name: "做任何改动前都先问我",
   });
   const always = view.getByText(
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     /^员工在你的应用或网站上删除、发送、分享或发布内容之前，总会先征得你的同意。/,
   );
   expect(always.textContent).toContain(
     "付款和账号安全设置的改动，员工会留给你亲自处理。",
-=======
-    /^Bots ask for your approval before deleting, sending, sharing, posting, or paying in your apps or on websites\./,
-  );
-  expect(always.textContent).toContain(
-    "Bots leave changing a password on a website for you to do yourself.",
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   );
   // Above the switch in the reading order, not under it.
   expect(
@@ -585,7 +497,6 @@ test("Back on a step opened by reload replaces it with the step before", async (
 });
 
 test("on a desktop, a step already passed can be picked from the list", async () => {
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   const view = open("/onboarding?step=sources");
   await heading(view, SOURCES);
 
@@ -604,27 +515,6 @@ test("on a desktop, a step already passed can be picked from the list", async ()
     }),
   );
   expect(await heading(view, SOURCES)).toBeTruthy();
-=======
-  localEvaluation = true;
-  const view = open("/onboarding?step=selfhost");
-  await heading(view, "OpenBot for Business");
-
-  const list = await openSteps(view);
-  expect(
-    within(list).queryByRole("button", { name: /What should we call you/ }),
-  ).toBe(null);
-  fireEvent.click(within(list).getByRole("button", { name: /Welcome/ }));
-
-  expect(await heading(view, "Welcome to OpenBot")).toBeTruthy();
-  expect(searchOf(view).step).toBe("welcome");
-  // It has seen Book a demo, so the list leads back to it.
-  fireEvent.click(
-    within(await openSteps(view)).getByRole("button", {
-      name: /OpenBot for Business/,
-    }),
-  );
-  expect(await heading(view, "OpenBot for Business")).toBeTruthy();
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 });
 
 test("a reload stays on the step in the address", async () => {
@@ -638,13 +528,8 @@ test("arriving with no step opens the one the server saved", async () => {
   saved = 4;
   const view = open("/onboarding");
 
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   expect(await heading(view, SOURCES)).toBeTruthy();
   await waitFor(() => expect(searchOf(view).step).toBe("sources"));
-=======
-  expect(await heading(view, "OpenBot for Business")).toBeTruthy();
-  await waitFor(() => expect(searchOf(view).step).toBe("selfhost"));
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 });
 
 test("a step that isn't one is ignored", async () => {
@@ -726,206 +611,6 @@ test("Get started on the name step saves the name, finishes, plays the orb's fin
   });
 });
 
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-=======
-test("somebody trying OpenBot alone gets Book a demo before the name, with the booking calendar in the step", async () => {
-  localEvaluation = true;
-  await withOpen(async (opened) => {
-    const view = open("/onboarding?step=welcome");
-    await heading(view, "Welcome to OpenBot");
-    fireEvent.click(await continueButton(view));
-
-    expect(await heading(view, "OpenBot for Business")).toBeTruthy();
-    expect(searchOf(view).step).toBe("selfhost");
-    // What it is comes first: the words and the picture, and no calendar until it is asked for.
-    expect(
-      view.container.querySelector('[data-demo="self-host"]'),
-    ).toBeTruthy();
-    expect(view.container.querySelector("iframe")).toBeNull();
-    expect(footerButtons(view)).toEqual(["Back", "Book a demo", "Not now"]);
-
-    await bookDemo(view);
-    expect(calendar(view).getAttribute("src")).toBe(BOOKING_CALENDAR);
-    expect(view.container.querySelector('[data-demo="self-host"]')).toBeNull();
-
-    // Before a booking there is one way on, and it says it skips: no Continue that reads as booking.
-    expect(footerButtons(view)).toEqual(["Back", "Not now"]);
-    expect(
-      view.container.querySelector("[data-onboarding-primary]"),
-    ).toBeNull();
-    expect(view.queryByRole("button", { name: "Continue" })).toBeNull();
-
-    fireEvent.click(view.getByRole("button", { name: "Not now" }));
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
-    expect(opened).toEqual([]);
-    expect(completed).toBe(false);
-  });
-});
-
-test("when the calendar can't load, Book a demo shows its picture and Book a call opens the business page in a new tab", async () => {
-  localEvaluation = true;
-  await withOpen(async (opened) => {
-    const view = open("/onboarding?step=selfhost");
-    await heading(view, "OpenBot for Business");
-    await bookDemo(view);
-
-    fireEvent.error(calendar(view));
-
-    expect(
-      await view.findByText(
-        "Couldn't load the calendar. Book a call opens it in your browser.",
-      ),
-    ).toBeTruthy();
-    expect(view.container.querySelector("iframe")).toBeNull();
-    expect(
-      view.container.querySelector('[data-demo="self-host"]'),
-    ).toBeTruthy();
-    expect(footerButtons(view)).toEqual(["Back", "Book a call", "Not now"]);
-
-    fireEvent.click(view.getByRole("button", { name: "Book a call" }));
-    expect(opened).toEqual([
-      [OPENBOT_FOR_BUSINESS, "_blank", "noopener,noreferrer"],
-    ]);
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
-  });
-});
-
-test("offline, Book a demo goes straight to Book a call", async () => {
-  localEvaluation = true;
-  // Shadows the prototype's getter for this test only.
-  Object.defineProperty(navigator, "onLine", {
-    configurable: true,
-    get: () => false,
-  });
-  try {
-    const view = open("/onboarding?step=selfhost");
-    await heading(view, "OpenBot for Business");
-    fireEvent.click(await view.findByRole("button", { name: "Book a demo" }));
-
-    expect(await ready(view, "Book a call")).toBeTruthy();
-    expect(view.container.querySelector("iframe")).toBeNull();
-  } finally {
-    Reflect.deleteProperty(navigator, "onLine");
-  }
-});
-
-test("a booking made in the calendar turns Not now into Continue; a message from anywhere else does not", async () => {
-  localEvaluation = true;
-  const view = open("/onboarding?step=selfhost");
-  await heading(view, "OpenBot for Business");
-  await bookDemo(view);
-  const frame = calendar(view);
-  const scheduled = { event: "calendly.event_scheduled", payload: {} };
-
-  act(() => {
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: scheduled,
-        origin: "https://example.com",
-        source: frame.contentWindow,
-      }),
-    );
-  });
-  expect(footerButtons(view)).toEqual(["Back", "Not now"]);
-
-  act(() => {
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: scheduled,
-        origin: "https://calendly.com",
-        source: frame.contentWindow,
-      }),
-    );
-  });
-  await waitFor(() =>
-    expect(footerButtons(view)).toEqual(["Back", "Continue"]),
-  );
-  // Continue takes Not now's place: no empty place kept under it that would lift it up.
-  expect(
-    view.container.querySelector("[data-onboarding-secondary-slot]"),
-  ).toBeNull();
-
-  fireEvent.click(view.getByRole("button", { name: "Continue" }));
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
-});
-
-test("Not now on Book a demo moves on without opening anything", async () => {
-  localEvaluation = true;
-  await withOpen(async (opened) => {
-    const view = open("/onboarding?step=selfhost");
-    await heading(view, "OpenBot for Business");
-
-    fireEvent.click(view.getByRole("button", { name: "Not now" }));
-
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
-    expect(opened).toEqual([]);
-  });
-});
-
-test("an organization's people never see the self-hosting step", async () => {
-  const view = open("/onboarding?step=welcome");
-  await heading(view, "Welcome to OpenBot");
-
-  fireEvent.click(await continueButton(view));
-
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
-  expect(
-    view.queryByRole("heading", { name: "OpenBot for Business" }),
-  ).toBeNull();
-});
-
-test("the self-hosting step in the address waits for the answer, rather than flashing step 1", async () => {
-  localEvaluation = true;
-  const view = open("/onboarding?step=selfhost");
-
-  expect(await heading(view, "OpenBot for Business")).toBeTruthy();
-  expect(
-    view.queryByRole("heading", { name: "Welcome to OpenBot" }),
-  ).toBeNull();
-});
-
-test("until the deployment answers, Welcome's Continue waits; a failure says so and offers Try again", async () => {
-  capabilitiesFail = true;
-  const view = open("/onboarding?step=welcome");
-  await heading(view, "Welcome to OpenBot");
-
-  expect(
-    (
-      await view.findByText("Couldn't load your setup. Try again to continue.")
-    ).getAttribute("role"),
-  ).toBe("alert");
-  expect(
-    view.getByRole("button", { name: "Continue" }).hasAttribute("disabled"),
-  ).toBe(true);
-
-  capabilitiesFail = false;
-  const asked = capabilitiesAsked;
-  fireEvent.click(view.getByRole("button", { name: "Try again" }));
-  await waitFor(() => expect(capabilitiesAsked).toBeGreaterThan(asked));
-  fireEvent.click(await continueButton(view));
-  expect(await heading(view, "What should we call you?")).toBeTruthy();
-  expect(
-    view.queryByText("Couldn't load your setup. Try again to continue."),
-  ).toBeNull();
-});
-
-test.each([
-  ["in the address", "/onboarding?step=selfhost", 0],
-  ["saved", "/onboarding", 2],
-])(
-  "a Book a demo step %s for an organization's person opens the name step, and saves that",
-  async (_label, path, stored) => {
-    saved = stored;
-    const view = open(path);
-
-    expect(await heading(view, "What should we call you?")).toBeTruthy();
-    await waitFor(() => expect(searchOf(view).step).toBe("name"));
-    await waitFor(() => expect(saved).toBe(3));
-    expect(saves).not.toContain(2);
-  },
-);
-
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 /*
  * A NAME ALREADY KNOWN IS NOT ASKED FOR. The name step leaves the list, and the last step left
  * finishes onboarding in its place: 你的资料, whose own ways on open the app.
@@ -959,76 +644,9 @@ test("a name step in the address, once the name is known, opens the last step th
   named = "Maya";
   const view = open("/onboarding?step=name");
 
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   expect(await heading(view, SOURCES)).toBeTruthy();
   await waitFor(() => expect(searchOf(view).step).toBe("sources"));
   expect(view.queryByRole("heading", { name: NAME })).toBe(null);
-=======
-  expect(await heading(view, "Welcome to OpenBot")).toBeTruthy();
-  await waitFor(() => expect(searchOf(view).step).toBe("welcome"));
-  expect(
-    view.queryByRole("heading", { name: "What should we call you?" }),
-  ).toBe(null);
-});
-
-test("somebody trying OpenBot alone whose name is known ends on Book a demo, where Not now opens the app", async () => {
-  named = "Maya";
-  localEvaluation = true;
-  await withOpen(async (opened) => {
-    const view = open("/onboarding?step=welcome");
-    await heading(view, "Welcome to OpenBot");
-    await waitFor(() =>
-      expect(view.getByRole("progressbar").getAttribute("aria-valuemax")).toBe(
-        "2",
-      ),
-    );
-    fireEvent.click(await continueButton(view));
-    await heading(view, "OpenBot for Business");
-    expect(footerButtons(view)).toEqual(["Back", "Book a demo", "Not now"]);
-
-    fireEvent.click(view.getByRole("button", { name: "Not now" }));
-
-    await waitFor(() => expect(completed).toBe(true));
-    await waitFor(() => expect(view.getByText("Home")).toBeTruthy(), {
-      timeout: 3000,
-    });
-    expect(opened).toEqual([]);
-  });
-});
-
-test("on the last step, Book a demo opens the calendar and stays, rather than opening the app", async () => {
-  named = "Maya";
-  localEvaluation = true;
-  const view = open("/onboarding?step=selfhost");
-  await heading(view, "OpenBot for Business");
-
-  await bookDemo(view);
-
-  expect(calendar(view).getAttribute("src")).toBe(BOOKING_CALENDAR);
-  expect(completed).toBe(false);
-  expect(footerButtons(view)).toEqual(["Back", "Not now"]);
-});
-
-test("somebody trying OpenBot alone whose name is known, without the calendar, books a call in a new tab, and that opens the app", async () => {
-  named = "Maya";
-  localEvaluation = true;
-  await withOpen(async (opened) => {
-    const view = open("/onboarding?step=selfhost");
-    await heading(view, "OpenBot for Business");
-    await bookDemo(view);
-    fireEvent.error(calendar(view));
-
-    fireEvent.click(await ready(view, "Book a call"));
-
-    expect(opened).toEqual([
-      [OPENBOT_FOR_BUSINESS, "_blank", "noopener,noreferrer"],
-    ]);
-    await waitFor(() => expect(completed).toBe(true));
-    await waitFor(() => expect(view.getByText("Home")).toBeTruthy(), {
-      timeout: 3000,
-    });
-  });
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
 });
 
 test("a completion that fails on the last step says so, stays, and can be pressed again", async () => {

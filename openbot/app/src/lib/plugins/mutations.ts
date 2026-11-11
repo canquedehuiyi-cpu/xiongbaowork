@@ -119,6 +119,87 @@ export function grantPlugin(variables: {
 }
 
 /**
+ * What switching a server's account mode would do, asked before it is done.
+ *
+ * `wouldRevoke` is who loses their account: a person's own connection when the switch is into
+ * Shared, or the deployment's shared one when it is switched back out of it.
+ *
+ * 与上游的差异：上游的预览还带 `bots`（切到 Shared 时每位已授予员工的现有受众），切换时可以带
+ * `approvals` 收窄它们。fork 服务端（X1 `account-mode.ts`）的预览只有 `mode`、`current`、
+ * `wouldRevoke`，也不收 `approvals`，所以这里照服务端的形状写，不发它不认的字段。
+ */
+export type AccountModePreview = {
+  mode: "personal" | "shared";
+  current: "personal" | "shared" | null;
+  wouldRevoke: { holder: "person" | "deployment"; count: number };
+};
+
+/**
+ * Ask what switching a server to this mode would change, without changing anything.
+ *
+ * `confirm: false` is the whole of the contract: the same route decides and the same body shape
+ * answers either way, so a preview is not a second endpoint to keep in step with the real switch —
+ * it is the real switch, asked not to commit.
+ */
+export async function accountModePreview(
+  serverId: string,
+  mode: "personal" | "shared",
+): Promise<AccountModePreview> {
+  const response = await client(
+    `/api/plugins/servers/${encodeURIComponent(serverId)}/account-mode`,
+    {
+      method: "PUT",
+      body: { mode, confirm: false },
+      fallback: "没能读到这次切换会改变什么。",
+    },
+  );
+  return ((await response.json()) as { preview: AccountModePreview }).preview;
+}
+
+/** Switch a server's account mode for real. */
+export function setAccountModeMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (variables: {
+      serverId: string;
+      mode: "personal" | "shared";
+    }) => {
+      await client(
+        `/api/plugins/servers/${encodeURIComponent(variables.serverId)}/account-mode`,
+        {
+          method: "PUT",
+          body: { mode: variables.mode, confirm: true },
+          fallback: "切换没有完成，什么都没有改变。",
+        },
+      );
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
+/**
+ * Who may give an app to a Bot: any Bot's owner (`any`) or only an admin (`admin`). The server writes
+ * the choice to the trail.
+ */
+export function setOwnerGrantsMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (variables: {
+      serverId: string;
+      ownerGrants: "any" | "admin";
+    }) => {
+      await client(
+        `/api/plugins/servers/${encodeURIComponent(variables.serverId)}/owner-grants`,
+        {
+          method: "PUT",
+          body: { ownerGrants: variables.ownerGrants },
+          fallback: "没能修改谁可以把这个应用给员工。",
+        },
+      );
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
+/**
  * Whether one Bot carries one plugin.
  *
  * Granting posts to the collection; withholding deletes from it, and the delete identifies the row
@@ -237,14 +318,6 @@ export function replaceServerTokenMutationOptions(queryClient: QueryClient) {
  */
 export function enableComposioAppMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-    mutationFn: async (input: { slug: string }) => {
-      await client("/api/plugins/composio/apps", {
-        method: "POST",
-        body: input,
-        fallback: "这个应用没能添加。",
-      });
-=======
     mutationFn: async (input: { slug: string }): Promise<string> => {
       const server = await client<{ id: string }>(
         "/api/plugins/composio/apps",
@@ -252,11 +325,10 @@ export function enableComposioAppMutationOptions(queryClient: QueryClient) {
         {
           method: "POST",
           body: input,
-          fallback: "That app could not be added.",
+          fallback: "这个应用没能添加。",
         },
       );
       return server.id;
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
     },
     onSettled: () => invalidatePlugins(queryClient),
   });
@@ -474,7 +546,7 @@ export function connectAccountMutationOptions(
   return mutationOptions({
     mutationFn: async (serverId: string): Promise<string | null> => {
       const authorizationUrl = await client<string | undefined>(
-        `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}`,
+        `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${desktopConsentQuery()}`,
         "authorizationUrl",
         { method: "POST", fallback: "这个账号没能连接。" },
       );
@@ -484,8 +556,6 @@ export function connectAccountMutationOptions(
 }
 
 /**
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-=======
  * Connect one more account at an app the person already has an account at: a second mailbox, a
  * work calendar beside a personal one. The same press as Connect, asking for another account
  * rather than for more permissions on the one that stands.
@@ -504,7 +574,7 @@ async function startConnect(
   returnTo: "settings" | "admin",
   another: boolean,
 ): Promise<ConnectStart> {
-  const fallback = "Couldn't connect that account.";
+  const fallback = "这个账号没能连接。";
   const response = await client(
     `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${another ? "&another=1" : ""}${desktopConsentQuery()}`,
     { method: "POST", fallback },
@@ -535,7 +605,6 @@ export type ConnectStart =
   | null;
 
 /**
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
  * What asking the vendor about an account comes back with.
  *
  * NAMED RATHER THAN WRITTEN INTO THE SIGNATURE AND AGAIN INTO A CAST. Every one of these three
@@ -595,6 +664,41 @@ export function disconnectBrokeredMutationOptions(queryClient: QueryClient) {
           method: "DELETE",
           fallback: "这个账号没能断开。",
         },
+      );
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
+const ACCOUNT_FALLBACK = "这个账号没能修改。";
+
+/** Make one of the person's accounts at an app the one their Bots use when they name none. */
+export function setDefaultBrokeredAccountMutationOptions(
+  queryClient: QueryClient,
+) {
+  return mutationOptions({
+    mutationFn: async (variables: { serverId: string; accountId: string }) => {
+      await client(
+        `/api/plugins/servers/${encodeURIComponent(variables.serverId)}/accounts/${encodeURIComponent(variables.accountId)}/default`,
+        { method: "POST", fallback: ACCOUNT_FALLBACK },
+      );
+    },
+    onSettled: () => invalidatePlugins(queryClient),
+  });
+}
+
+/**
+ * Disconnect one of the person's accounts at an app and keep the rest. The last one ends the
+ * connection, as Disconnect always has.
+ */
+export function disconnectBrokeredAccountMutationOptions(
+  queryClient: QueryClient,
+) {
+  return mutationOptions({
+    mutationFn: async (variables: { serverId: string; accountId: string }) => {
+      await client(
+        `/api/plugins/servers/${encodeURIComponent(variables.serverId)}/accounts/${encodeURIComponent(variables.accountId)}`,
+        { method: "DELETE", fallback: "这个账号没能断开。" },
       );
     },
     onSettled: () => invalidatePlugins(queryClient),

@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 import { TablePanel } from "@/components/admin/admin-kit";
+import { RuleExpression, ruleNameLine } from "@/components/audit/audit-cells";
 import { z } from "zod";
 import {
   PageEmpty,
@@ -138,7 +139,6 @@ function AuditPage() {
   }
 
   return (
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
     /*
      * THE ONE WIDE PAGE IN ADMIN, and the one that keeps a table. Five columns of short values is
      * what a log is; rows of prose would make every entry a paragraph and the scanning this page
@@ -260,15 +260,6 @@ function AuditPage() {
         ) : null}
       </PageSection>
     </PageShell>
-=======
-    <AuditPage
-      ask
-      bot={bot}
-      onClearBot={() => navigate({ to: "/admin/audit" })}
-    >
-      <RecordingSection />
-    </AuditPage>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
   );
 }
 
@@ -336,6 +327,7 @@ function Row({
     | { role?: string; name?: string }
     | string
     | undefined;
+  const ruleName = ruleNameLine(event, true);
   const outcome = outcomeOf(event.eventType);
   const refused = outcome === "refused";
   const stalled = event.eventType === "agent.stream_stalled";
@@ -524,11 +516,16 @@ function Row({
         {silence ? (
           <div className="mt-0.5 text-xs text-muted-foreground">{silence}</div>
         ) : null}
-        {/* Show concrete policy rules, but suppress the uninformative default `true` allow rule. */}
+        {/*
+         * The rule that decided, by the name an admin gave it (upstream #1378), then its CEL, clamped
+         * to two lines: a rule written from a sentence runs to a thousand characters. The
+         * uninformative default `true` allow rule is suppressed.
+         */}
+        {ruleName ? (
+          <div className="mt-0.5 text-xs text-muted-foreground">{ruleName}</div>
+        ) : null}
         {decision.rule && decision.rule !== "true" ? (
-          <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-            {decision.rule}
-          </div>
+          <RuleExpression expression={decision.rule} />
         ) : null}
         {decision.mode === "dry-run" &&
         decision.allowed === false &&
@@ -576,6 +573,13 @@ const DECISIONS: Record<string, string> = {
   // answered, which is the same complaint as an action that was allowed and then did not happen.
   "agent.stream_stalled": "员工不再回应",
   "computer.policy_loaded": "启动时的边界",
+  "computer.policy_changed": "边界规则已保存",
+  // Drafts and questions an admin read. Not "Allowed": nothing was decided and nothing changed.
+  "computer.policy_translated": "只是草稿，没有保存",
+  "approval.rules_translated": "只是草稿，没有保存",
+  "audit.asked": "只是提问，没有改动",
+  "what_if.asked": "只是提问，没有改动",
+  "what_if.checked": "只是检查，没有改动",
   "computer.isolation_loaded": "启动时的隔离",
   "computer.control_taken": "有人接管了操作",
   "computer.control_released": "已交还操作",

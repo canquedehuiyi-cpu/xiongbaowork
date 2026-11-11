@@ -1,4 +1,5 @@
-import { type PluginsPage, pluginsProvider } from "./queries";
+import { isBrokeredProvenance } from "./brokered";
+import type { PluginsPage } from "./queries";
 
 /**
  * The words an admin Plugins screen uses for the ACTIVE broker, and nothing of the other's (spec D11).
@@ -12,7 +13,19 @@ import { type PluginsPage, pluginsProvider } from "./queries";
  * Pure functions, so the vocabulary is pinned without a DOM. Nothing here carries a key or a
  * capability: the provider is a NAME.
  */
-export type PluginsProvider = NonNullable<PluginsPage["provider"]>;
+export type PluginsProvider = "composio" | "arcade";
+
+/**
+ * The provider a payload names, `"composio"` when the server did not say.
+ *
+ * 上游从 `./queries` 的 `pluginsProvider` 读，并把 `provider` 写进 `PluginsPage` 类型。fork 的
+ * queries.ts 还没有这两样（fork 服务端的 `GET /api/plugins` 也还不下发 `provider`），所以先在这里
+ * 就地读，缺省 `composio`。第二阶段 queries.ts 补上后改回 `pluginsProvider`。
+ */
+function providerOf(page: PluginsPage): PluginsProvider {
+  const named = (page as { provider?: unknown }).provider;
+  return named === "arcade" ? "arcade" : "composio";
+}
 
 /**
  * Which edition reads the sentence. The team edition's words are for an admin and for each person
@@ -34,9 +47,14 @@ function capitalised(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Whether a row came through a broker, whichever one. Filters; never names. */
+/**
+ * Whether a row came through a broker, whichever one. Filters; never names.
+ *
+ * 熊宝统一用 `./brokered` 的 `isBrokeredProvenance` 判断（同时认 composio 和 arcade），这里只是
+ * 上游名字的别名，留给沿用上游写法的调用方。
+ */
 export function brokeredProvenance(provenance: string): boolean {
-  return provenance === "composio" || provenance === "arcade";
+  return isBrokeredProvenance(provenance);
 }
 
 /*
@@ -66,16 +84,14 @@ export type ProviderVocabulary = {
 
 const VOCABULARY: Record<PluginsProvider, ProviderVocabulary> = {
   composio: {
-    directoryLabel: "Browse apps",
+    directoryLabel: "浏览应用",
     envVar: "COMPOSIO_API_KEY",
-    directoryDescription:
-      "A few hundred apps. Each person connects their own account.",
+    directoryDescription: "几百个应用，以提问者的身份连接。每个人连接自己的账号。",
   },
   arcade: {
-    directoryLabel: "Browse apps",
+    directoryLabel: "浏览应用",
     envVar: "ARCADE_API_KEY",
-    directoryDescription:
-      "Apps nobody here has reviewed. Each person connects their own account.",
+    directoryDescription: "这里没有人审核过的应用。每个人连接自己的账号。",
   },
 };
 
@@ -92,7 +108,7 @@ export function providerVocabulary(
  * fallback once spelled a vendor on its own and printed Composio's name on an Arcade deployment.
  */
 export function directoryReadFailure(_provider: PluginsProvider): string {
-  return "Couldn't load the apps you can connect. Reload the page.";
+  return "读不到可以连接的应用。请刷新页面。";
 }
 
 /**
@@ -107,12 +123,12 @@ export function directoryDescriptions(edition: Edition = "team"): {
 } {
   return edition === "personal"
     ? {
-        page: "Add an app and connect your account so your Bots can use it.",
-        search: "Search by name. OpenBot hasn't reviewed these apps.",
+        page: "添加一个应用并连接你的账号，你的员工就能用它。",
+        search: "按名字搜索。熊宝没有审核过这些应用。",
       }
     : {
-        page: "Add an app to make its tools available to Bots. Each person still connects their own account before a Bot reads anything.",
-        search: "Search by name. Nobody here has reviewed these apps.",
+        page: "添加一个应用后就能把它的工具授予员工；每个人仍要先连接自己的账号，员工才能读到任何东西。",
+        search: "按名字搜索。这里的应用都没有经过本部署审核。",
       };
 }
 
@@ -121,7 +137,7 @@ export function directoryDescriptions(edition: Edition = "team"): {
  * apps under Connections, with the directory as one more tile ({@link moreAppsRow}).
  */
 export function moreAppsSectionDescription(_provider: PluginsProvider): string {
-  return "More apps people can connect through OpenBot. Nobody here has reviewed them.";
+  return "更多可以通过熊宝连接的应用，这里没有人审核过它们。";
 }
 
 /**
@@ -144,12 +160,12 @@ export type MoreAppsRow = {
  * Composio's counts its directory and Arcade's claims no size.
  */
 const PERSONAL_DIRECTORY_DESCRIPTION: Record<PluginsProvider, string> = {
-  composio: "A few hundred more apps you can connect.",
-  arcade: "More apps you can connect.",
+  composio: "还有几百个你可以连接的应用。",
+  arcade: "更多你可以连接的应用。",
 };
 
 /** Where the personal edition's one person turns connecting apps on: Settings, Setup. */
-const PERSONAL_SET_UP = "Set it up in Settings under Setup.";
+const PERSONAL_SET_UP = "请到「设置」里的「部署设置」完成设置。";
 
 export function moreAppsRow(
   provider: PluginsProvider,
@@ -162,8 +178,8 @@ export function moreAppsRow(
       title: directoryLabel,
       description:
         edition === "personal"
-          ? `Not set up yet. ${PERSONAL_SET_UP}`
-          : `Not set up. Set ${envVar} on this deployment to browse its apps.`,
+          ? `还没有设置。${PERSONAL_SET_UP}`
+          : `还没有设置。请在这个部署上设置 ${envVar} 后再浏览这些应用。`,
       linked: false,
     };
   }
@@ -187,11 +203,10 @@ export function brokeredConnectionDescription(
   _provider: PluginsProvider,
   personal?: BrokeredApp,
 ): string {
-  if (!personal)
-    return "Each person connects their own account through OpenBot.";
+  if (!personal) return "每个人通过熊宝连接自己的账号。";
   if (personal.kind === "no-auth")
-    return `${capitalised(personal.title)} works through OpenBot without an account.`;
-  return `Connect your ${personal.title} account through OpenBot.`;
+    return `${capitalised(personal.title)} 不需要账号，通过熊宝直接可用。`;
+  return `通过熊宝连接你的 ${personal.title} 账号。`;
 }
 
 /**
@@ -214,12 +229,12 @@ export function brokeredReach(
   description: string;
   badge: string;
 } {
-  const badge = "Through OpenBot";
+  const badge = "通过熊宝";
   if (!personal) {
     return {
       description: takesKey
-        ? "Each person connects their own account with a key from the app, and a Bot sees only what that person can see."
-        : "This deployment holds one key for every app like this. Each person connects their own account, and a Bot sees only what that person can see. There is no token to paste.",
+        ? "每个人用这个应用给的密钥连接自己的账号，员工只看得到这个人能看到的东西。"
+        : "这个部署为这类应用统一持有一把密钥。每个人连接自己的账号，员工只看得到这个人能看到的东西，不需要粘贴令牌。",
       badge,
     };
   }
@@ -227,17 +242,17 @@ export function brokeredReach(
   return {
     description:
       kind === "consent"
-        ? `You sign in to ${title} in your browser. OpenBot never sees your password.`
+        ? `你在浏览器里登录 ${title}，熊宝永远看不到你的密码。`
         : kind === "fields"
-          ? `You connect with a key from your ${title} account. Your Bots use it as you.`
-          : "There's nothing to sign in to.",
+          ? `你用 ${title} 账号里的密钥连接，你的员工以你的身份使用它。`
+          : "不需要登录。",
     badge,
   };
 }
 
 /** What disconnecting a brokered account does, said where the button is. */
 export function brokeredDisconnectNote(_provider: PluginsProvider): string {
-  return "Disconnecting also removes OpenBot's access to your account.";
+  return "断开后，熊宝也就不能再访问你的账号。";
 }
 
 /**
@@ -256,10 +271,10 @@ export function brokeredKeyMissing(
   reader: "admin" | "person" = "admin",
 ): string {
   if (edition === "personal")
-    return `Connecting apps isn't set up yet, so you can't connect or disconnect this account here. ${PERSONAL_SET_UP}`;
+    return `连接应用还没有设置好，所以这个账号在这里既连不上也断不开。${PERSONAL_SET_UP}`;
   if (reader === "person")
-    return "Connecting apps isn't set up yet, so this account can't be connected or disconnected here. Ask an admin to set it up.";
-  return `Set ${VOCABULARY[provider].envVar} on this deployment. Until then, this account can't be connected or disconnected here. The app stays turned on, and its tool grants still stand.`;
+    return "连接应用还没有设置好，所以这个账号在这里既连不上也断不开。请联系管理员设置。";
+  return `请在这个部署上设置 ${VOCABULARY[provider].envVar}。没有它就连不到中转服务，所以这个账号在这里既连不上也断不开。应用仍保持启用，它工具上的授权也都还在。`;
 }
 
 /**
@@ -282,22 +297,22 @@ export function disconnectSiblingsNotice(answer: {
   const parts: string[] = [];
   if (siblings.length > 0) {
     parts.push(
-      `Disconnecting also ends your access to ${joinNames(siblings)}, which ${siblings.length === 1 ? "shares" : "share"} this connection.`,
+      `断开后，你对 ${joinNames(siblings)} 的访问也会一起结束，它们和这个应用共用这个连接。`,
     );
   }
   if (unanswered > 0) {
     parts.push(
       siblings.length > 0
-        ? `${unanswered} other ${unanswered === 1 ? "app" : "apps"} couldn't be checked and may be affected too.`
-        : `${unanswered} ${unanswered === 1 ? "app" : "apps"} on this connection couldn't be checked, so disconnecting may end ${unanswered === 1 ? "it" : "them"} too.`,
+        ? `另有 ${unanswered} 个应用没能查到，也可能受影响。`
+        : `这个连接上有 ${unanswered} 个应用没能查到，断开后它们也可能一起结束。`,
     );
   }
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
 function joinNames(names: readonly string[]): string {
-  if (names.length <= 2) return names.join(" and ");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  if (names.length <= 2) return names.join("和");
+  return `${names.slice(0, -1).join("、")}和${names[names.length - 1]}`;
 }
 
 /**
@@ -312,5 +327,5 @@ export function directoryRouteDecision(
   page: PluginsPage | undefined,
 ): "pending" | "render" | "redirect" {
   if (!page) return "pending";
-  return pluginsProvider(page) === routeProvider ? "render" : "redirect";
+  return providerOf(page) === routeProvider ? "render" : "redirect";
 }

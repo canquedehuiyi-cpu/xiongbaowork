@@ -125,22 +125,16 @@ test("an app's call OpenBot asks about draws its card in the conversation", asyn
   expect(
     card.getByText("Sending something to other people asks you first."),
   ).toBeTruthy();
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
   expect(card.getByRole("radio", { name: "允许一次" })).toBeTruthy();
   expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
   expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
-=======
-  // Open by default: a send offers every answer, the conversation's among them.
-  for (const name of [
-    "Allow once",
-    "Allow for this conversation",
-    "Always allow here",
-    "Deny",
-  ])
-    expect(card.getByRole("radio", { name })).toBeTruthy();
+  // 本部署的底线（#398）：对外发送只能「允许一次」，不跟上游 #1394 打开「在这段对话里都允许」。
+  expect(
+    card.queryByRole("radio", { name: "在这段对话里都允许" }),
+  ).toBeNull();
 });
 
-test("a send the admin set to ask every time offers Allow once and Deny only", async () => {
+test("管理员设成每次都问的发送，同样只给「允许一次 / 拒绝」", async () => {
   inbox = [
     {
       id: "approval-2",
@@ -168,15 +162,14 @@ test("a send the admin set to ask every time offers Allow once and Deny only", a
   ];
   const view = draw();
   const card = within(
-    await view.findByRole("region", { name: "Waiting for your approval" }),
+    await view.findByRole("region", { name: "等你批准" }),
   );
-  expect(card.getByRole("radio", { name: "Allow once" })).toBeTruthy();
-  expect(card.getByRole("radio", { name: "Deny" })).toBeTruthy();
+  expect(card.getByRole("radio", { name: "允许一次" })).toBeTruthy();
+  expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
   expect(
-    card.queryByRole("radio", { name: "Allow for this conversation" }),
+    card.queryByRole("radio", { name: "在这段对话里都允许" }),
   ).toBeNull();
-  expect(card.queryByRole("radio", { name: "Always allow here" })).toBeNull();
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+  expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
 });
 
 test("with nothing waiting, the call is the line it always was", async () => {

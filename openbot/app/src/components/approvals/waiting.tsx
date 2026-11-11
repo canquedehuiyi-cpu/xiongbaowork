@@ -230,21 +230,6 @@ function RequestRow({
             允许一次
           </Button>
           {offersStandingRule(request.action) ? (
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-            <Button
-              disabled={decision.isPending}
-              onClick={() =>
-                decision.mutate({
-                  id: request.id,
-                  choice: "allow_always",
-                })
-              }
-              size="sm"
-              variant="outline"
-            >
-              在这里总是允许
-            </Button>
-=======
             <>
               <Button
                 disabled={decision.isPending}
@@ -257,7 +242,7 @@ function RequestRow({
                 size="sm"
                 variant="outline"
               >
-                Allow for this conversation
+                在这段对话里都允许
               </Button>
               <Button
                 disabled={decision.isPending}
@@ -270,10 +255,9 @@ function RequestRow({
                 size="sm"
                 variant="outline"
               >
-                Always allow here
+                在这里总是允许
               </Button>
             </>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
           ) : null}
           <Button
             disabled={decision.isPending}
@@ -498,7 +482,8 @@ function AnswerDialog({
 
 /**
  * An action on the board: what it wants to do and where, with Deny and Allow on the right, and
- * Allow for this conversation and Always allow here in the menu. Where it acts and what it would send are always on screen, whole:
+ * 在这段对话里都允许 and 在这里总是允许 in the menu (only where `offersStandingRule` says the server
+ * takes a standing answer: never on this deployment's once-only floors). Where it acts and what it would send are always on screen, whole:
  * nobody allows something they were not shown.
  */
 function RequestBoardRow({ request }: { request: WaitingRequest }) {
@@ -564,7 +549,7 @@ function RequestBoardRow({ request }: { request: WaitingRequest }) {
                     disabled={decision.isPending}
                     onClick={() => decide("allow_conversation")}
                   >
-                    Allow for this conversation
+                    在这段对话里都允许
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={decision.isPending}

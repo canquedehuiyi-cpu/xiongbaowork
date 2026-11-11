@@ -245,29 +245,21 @@ function NewRulePage() {
                     )}
                   </ItemMedia>
                   <ItemContent>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-                    <ItemTitle>{template ? template.name : "自己写"}</ItemTitle>
-=======
                     <ItemTitle>
                       {template
                         ? template.name
                         : describe
-                          ? "Describe it in words"
-                          : "Write your own"}
+                          ? "用一句话描述"
+                          : "自己写"}
                     </ItemTitle>
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
                     <ItemDescription>
                       {template
                         ? taken
                           ? "已经在你的规则里了。"
                           : template.description
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-                        : "用 CEL 自己描述这个动作。"}
-=======
                         : describe
-                          ? "Say what no Bot may do, and your model writes the rule."
-                          : "Describe the action yourself, in CEL."}
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+                          ? "说出哪件事员工都不能做，由你的模型写成规则。"
+                          : "用 CEL 自己描述这个动作。"}
                     </ItemDescription>
                   </ItemContent>
                   {selected ? (
@@ -348,13 +340,8 @@ function NewRulePage() {
                 <Field>
                   <FieldLabel htmlFor="rule-expression">规则</FieldLabel>
                   <FieldDescription>
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-                    用 CEL
-                    写成。无法求值的规则算作命中，所以写错了只会多拦，不会漏放。
-=======
-                    Written in CEL. OpenBot checks the rule before it's added,
-                    so a typo can't stop every action.
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
+                    用 CEL 写成。添加前熊宝
+                    会先检查这条规则，写错一个字也不会把所有动作都拦下。
                   </FieldDescription>
                   <Textarea
                     autoCapitalize="off"
@@ -386,28 +373,11 @@ function NewRulePage() {
                 ) : null}
               </FieldGroup>
 
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-              <div className="mt-5">
-                <Button
-                  disabled={testing || !trimmed || !policy}
-                  onClick={() => void test()}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  {testing ? "正在测试…" : "拿最近的动作测试"}
-                </Button>
-                {tested ? <TestResult report={tested} /> : null}
-              </div>
-
-              {problem ? (
-=======
               {/*
                * A save refused for the reason the preview already gives under the rule says nothing
                * twice: the sentence is on screen, beside the rule it is about.
                */}
               {problem && problem !== preview.error?.message ? (
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
                 <p className="mt-5 text-destructive text-sm" role="alert">
                   {problem}
                 </p>
@@ -452,29 +422,3 @@ function RuleReference() {
     </details>
   );
 }
-<<<<<<< e3fb3519d1f6fe6b7f19b13cdfab1ee99530d1c9
-
-function TestResult({ report }: { report: DryRunReport }) {
-  if (report.scanned === 0) {
-    return (
-      <p className="mt-3 text-muted-foreground text-sm" role="status">
-        还没有记录到可供测试的动作。规则本身没问题；员工开始干活后，就能看到它拦下什么。
-      </p>
-    );
-  }
-  return (
-    <div className="mt-3" role="status">
-      <p className="text-muted-foreground text-sm">
-        {report.wouldRefuse === 0
-          ? `最近记录的 ${report.scanned} 个动作里，这条规则一个也不会拦。以后的动作仍可能被它拦下。`
-          : `最近记录的 ${report.scanned} 个动作里，这条规则会拦下 ${report.wouldRefuse} 个。`}
-      </p>
-      <DryRunChanges
-        changes={report.changes.filter((change) => change.would === "refused")}
-        total={report.wouldRefuse}
-      />
-    </div>
-  );
-}
-=======
->>>>>>> 776dcffce8776bcc9c2d17de3c5132451d0d868d
