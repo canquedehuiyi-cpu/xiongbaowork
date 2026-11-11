@@ -56,6 +56,7 @@ tests/approval-recovery-port.test.ts
 tests/approval-rule-backtest.test.ts
 tests/approval-rule-translate.test.ts
 tests/approval-rules-save.integration.test.ts
+tests/approvals-account.integration.test.ts
 tests/approvals-ask-once.test.ts
 tests/approvals-confirm-receipt.test.ts
 tests/approvals-consequential.integration.test.ts

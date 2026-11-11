@@ -59,7 +59,7 @@ export function globMatches(pattern: string, value: string): boolean {
 type AnyRule = Pick<
   ApprovalRule,
   "id" | "botId" | "toolRef" | "effect" | "scope" | "behaviour"
-> & { kind?: ActionKind | null };
+> & { kind?: ActionKind | null; account?: string | null };
 
 /**
  * The layers a rule can come from: the admin's, the Bot owner's (SEC1 D9), the person's, and this
@@ -90,7 +90,32 @@ export function reachesKind(rule: AnyRule, kind: ActionKind | undefined) {
   return rule.kind === kind;
 }
 
-export function ruleMatches(rule: AnyRule, candidate: ApprovalCandidate) {
+/**
+ * 一条规则是否针对这个动作。
+ *
+ * 哪个账号（上游 #1298），在这个人在该应用上有多个账号时：为一个账号保存的规则（按「这里始终允许」时
+ * 卡片点了它的名）只针对那个账号。不点名账号的个人规则（以及员工主人的规则）对每个账号仍然询问、交给
+ * 本人或拒绝，这是更严的方向；但它不再「允许」一次点名了账号的调用，因为它写下时这个人还没有第二个账号
+ * 可分，不能被读成对一个它从没见过的邮箱的同意。团队规则是管理员对这个应用的策略，不论调用进哪个账号
+ * 都成立。
+ *
+ * 只会让闸门更严：多出来的两个分支都是「不匹配」，而「不匹配」的结果是回到默认（询问）。
+ */
+export function ruleMatches(
+  rule: AnyRule,
+  candidate: ApprovalCandidate,
+  layer: RuleLayer = "personal_rule",
+) {
+  const ruleAccount = rule.account?.trim().toLowerCase() || null;
+  const callAccount = candidate.account?.trim().toLowerCase() || null;
+  if (ruleAccount !== null && ruleAccount !== callAccount) return false;
+  if (
+    ruleAccount === null &&
+    callAccount !== null &&
+    layer !== "team_rule" &&
+    (rule.behaviour === "allow" || rule.behaviour === "pre_approved")
+  )
+    return false;
   return (
     globMatches(rule.botId, candidate.botId) &&
     globMatches(rule.toolRef, candidate.toolRef) &&
@@ -174,7 +199,7 @@ export function strictestRule(
     ["conversation", granted ? [grantRule(granted)] : []],
   ] as const) {
     for (const rule of rules) {
-      if (!ruleMatches(rule, candidate)) continue;
+      if (!ruleMatches(rule, candidate, layer)) continue;
       if (!reachesKind(rule, options.kind)) continue;
       if (!best || rankOf(rule.behaviour) > rankOf(best.rule.behaviour))
         best = { rule, layer };

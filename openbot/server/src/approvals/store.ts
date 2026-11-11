@@ -21,6 +21,7 @@ import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import { currentEdition } from "../edition";
 import type { TaskProjector } from "../tasks/projector";
+import { ruleAccount } from "./rule-account";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import {
   ruleColumns,
@@ -106,6 +107,12 @@ type StoredApprovalTransaction = Parameters<
   Parameters<Database["transaction"]>[0]
 >[0];
 
+/** 读一条规则时连同它针对的账号一起读（迁移 0181，见 `./rule-account`）。 */
+const rulesWithAccount = {
+  ...ruleColumns,
+  account: ruleAccount,
+};
+
 const ruleScope = (action: ApprovalAction) =>
   and(
     eq(approvalRules.ownerUserId, action.actorId),
@@ -113,6 +120,10 @@ const ruleScope = (action: ApprovalAction) =>
     eq(approvalRules.toolRef, action.toolRef),
     eq(approvalRules.effect, action.effect),
     eq(approvalRules.scope, action.scope),
+    // 一个邮箱保存的规则从不回答另一个邮箱；不点名账号的调用只由不点名账号的规则回答（上游 #1298）。
+    action.account
+      ? sql`${ruleAccount} = ${action.account}`
+      : sql`${ruleAccount} is null`,
     eq(approvalRules.behaviour, "allow"),
     isNull(approvalRules.revokedAt),
   );
@@ -175,6 +186,9 @@ export function createApprovalStore(
       eq(approvalRules.toolRef, action.toolRef),
       eq(approvalRules.effect, action.effect),
       eq(approvalRules.scope, action.scope),
+      action.account
+        ? sql`${ruleAccount} = ${action.account}`
+        : sql`${ruleAccount} is null`,
       eq(approvalRules.behaviour, "allow"),
       isNull(approvalRules.revokedAt),
     );
@@ -299,6 +313,11 @@ export function createApprovalStore(
           });
           // `kind` 不在冻结的 approvals.ts 里，同一事务里补写（approvals/extra-columns.ts）。
           await saveRuleKind(tx, ruleId, kind);
+          // 卡片点名的账号（迁移 0181），同一事务里写上，见 `./rule-account`。
+          if (request.action.account)
+            await tx.execute(
+              sql`update "approval_rules" set "account" = ${request.action.account} where "id" = ${ruleId}`,
+            );
         }
         if (decision === "allow_conversation")
           await tx.insert(approvalConversationGrants).values({
@@ -439,7 +458,7 @@ export function createApprovalStore(
     },
     async rules(owner) {
       return database
-        .select(ruleColumns)
+        .select(rulesWithAccount)
         .from(approvalRules)
         .where(
           and(
@@ -550,7 +569,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
   };
   const liveRules = (owner: string) =>
     database
-      .select(ruleColumns)
+      .select(rulesWithAccount)
       .from(approvalRules)
       .where(
         and(
