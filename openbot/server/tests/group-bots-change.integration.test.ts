@@ -8,6 +8,7 @@ import {
   createGroupRoutes,
   createGroupStore,
   GroupRefusedError,
+  groupSourceForRun,
 } from "../src/channels/group";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
@@ -85,7 +86,7 @@ async function bot(owner: AgentActor, name: string) {
   return profile.id;
 }
 
-function groups() {
+function groups(options: { canUse?: boolean } = {}) {
   return createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
@@ -114,10 +115,17 @@ function groups() {
       createdChannels.push(channel.id);
       return channel;
     },
-    canUseBot: async (ownerUserId, agentId) =>
-      Boolean(
-        await profileStore.get({ id: ownerUserId, role: "user" }, agentId),
-      ),
+    ...(options.canUse === false
+      ? {}
+      : {
+          canUseBot: async (ownerUserId: string, agentId: string) =>
+            Boolean(
+              await profileStore.get(
+                { id: ownerUserId, role: "user" },
+                agentId,
+              ),
+            ),
+        }),
     progressEveryMs: 0,
   });
 }
@@ -309,5 +317,188 @@ describe("changing the bots of an existing group", () => {
       expect(await botsOf(owner, channelId)).toEqual(ids.slice().sort());
       expect((await call("DELETE", "bots", [ids[0] ?? ""])).status).toBe(400);
     });
+  });
+
+  test("a refusal to remove names the bot that is not in the group", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const { conversations, channelId } = await groupOf(owner, [
+        "Ada",
+        "Grace",
+      ]);
+      const outsider = await bot(owner, "Linus");
+      const refusal = await conversations
+        .removeBots(owner.id, channelId, [outsider])
+        .then(
+          () => null,
+          (error: Error) => error,
+        );
+      expect(refusal).toBeInstanceOf(GroupRefusedError);
+      expect(refusal?.message).toContain(outsider);
+    });
+  });
+
+  test("reorder with a repeated id is refused", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const { conversations, channelId, ids } = await groupOf(owner, [
+        "Ada",
+        "Grace",
+      ]);
+      await expect(
+        conversations.reorder(owner.id, channelId, [
+          ids[0] ?? "",
+          ids[0] ?? "",
+        ]),
+      ).rejects.toBeInstanceOf(GroupRefusedError);
+      expect(await conversations.store.order(channelId)).toEqual(ids);
+    });
+  });
+
+  test("adding a bot is refused where the access check is not wired", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const made = await groupOf(owner, ["Ada", "Grace"]);
+      const extra = await bot(owner, "Linus");
+      const bare = groups({ canUse: false });
+      await expect(
+        bare.addBots(owner.id, made.channelId, [extra]),
+      ).rejects.toBeInstanceOf(GroupRefusedError);
+      expect(await botsOf(owner, made.channelId)).toEqual(
+        made.ids.slice().sort(),
+      );
+    });
+  });
+
+  test("a non-creator's refusal is in Chinese", async () => {
+    const owner = await person();
+    const member = await person();
+    const { conversations, channelId, ids } = await as(owner, async () => {
+      const made = await groupOf(owner, ["Ada", "Grace"]);
+      await made.conversations.addMember(owner.id, made.channelId, {
+        email: `${member.id}@example.test`,
+      });
+      return made;
+    });
+    const refusal = await as(member, () =>
+      conversations.reorder(member.id, channelId, ids.slice().reverse()),
+    ).then(
+      () => null,
+      (error: Error) => error,
+    );
+    expect(refusal?.message).toBe("只有发起这个群聊的人才能调整群里的员工。");
+  });
+
+  describe("with another member's own thread rows in the group", () => {
+    /** The member talks to every bot, which mints their own thread row for each. */
+    async function memberWithThreads(
+      conversations: ReturnType<typeof groups>,
+      owner: AgentActor,
+      channelId: string,
+      ids: string[],
+    ) {
+      const member = await person();
+      await as(owner, () =>
+        conversations.addMember(owner.id, channelId, {
+          email: `${member.id}@example.test`,
+        }),
+      );
+      await as(member, async () => {
+        for (const agentId of ids)
+          await conversations.store.thread(member.id, channelId, agentId);
+      });
+      return member;
+    }
+
+    test("removing a bot and adding others lands the re-added bot last", async () => {
+      const owner = await person();
+      const { conversations, channelId, ids } = await as(owner, () =>
+        groupOf(owner, ["Ada", "Grace", "Linus"]),
+      );
+      const [a = "", b = "", d = ""] = ids;
+      await memberWithThreads(conversations, owner, channelId, ids);
+      await as(owner, async () => {
+        const c = await bot(owner, "Barbara");
+        await conversations.removeBots(owner.id, channelId, [d]);
+        await conversations.addBots(owner.id, channelId, [c]);
+        await conversations.addBots(owner.id, channelId, [d]);
+        const roster = await botsOf(owner, channelId);
+        expect(roster).toEqual([a, b, c, d].sort());
+        expect(await conversations.store.order(channelId)).toEqual([
+          a,
+          b,
+          c,
+          d,
+        ]);
+      });
+    });
+
+    test("the creator's reorder wins over the member's older rows", async () => {
+      const owner = await person();
+      const { conversations, channelId, ids } = await as(owner, () =>
+        groupOf(owner, ["Ada", "Grace", "Linus"]),
+      );
+      await memberWithThreads(conversations, owner, channelId, ids);
+      const flipped = ids.slice().reverse();
+      await as(owner, () =>
+        conversations.reorder(owner.id, channelId, flipped),
+      );
+      expect(
+        await as(owner, () => conversations.store.order(channelId)),
+      ).toEqual(flipped);
+    });
+  });
+
+  test("two removals at once leave the group at least two bots", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const { conversations, channelId, ids } = await groupOf(owner, [
+        "Ada",
+        "Grace",
+        "Linus",
+      ]);
+      const [first = "", second = ""] = ids;
+      const results = await Promise.allSettled([
+        conversations.removeBots(owner.id, channelId, [first]),
+        conversations.removeBots(owner.id, channelId, [second]),
+      ]);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(await botsOf(owner, channelId)).toHaveLength(2);
+    });
+  });
+
+  test("a removed bot's thread no longer carries group authority", async () => {
+    const owner = await person();
+    const member = await person();
+    const { conversations, channelId, ids } = await as(owner, async () => {
+      const made = await groupOf(owner, ["Ada", "Grace", "Linus"]);
+      await made.conversations.addMember(owner.id, made.channelId, {
+        email: `${member.id}@example.test`,
+      });
+      return made;
+    });
+    const [first = "", , third = ""] = ids;
+    // The member's own thread row for the Bot survives its removal: only they can delete it.
+    const threadId = await as(member, () =>
+      conversations.store.thread(member.id, channelId, third),
+    );
+    const run = { threadId, actorId: member.id, botId: third };
+    expect(await as(member, () => groupSourceForRun(database, run))).toEqual({
+      channelId,
+      botId: third,
+    });
+    await as(owner, () =>
+      conversations.removeBots(owner.id, channelId, [third]),
+    );
+    expect(await as(member, () => groupSourceForRun(database, run))).toBeNull();
+    expect(
+      await as(member, () =>
+        groupSourceForRun(database, {
+          ...run,
+          botId: first,
+          handoff: { claim: true },
+        }),
+      ),
+    ).toBeNull();
   });
 });

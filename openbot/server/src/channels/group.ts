@@ -22,17 +22,7 @@ import { createHash } from "node:crypto";
 import type { Message } from "@ag-ui/client";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  max,
-  min,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { HandoffCaps } from "../agents/handoff";
@@ -134,6 +124,8 @@ export class GroupRefusedError extends Error {
 
 const MIN_GROUP_BOTS = 2;
 const MAX_GROUP_BOTS = 20;
+const CAP_REFUSED = `一个群最多 ${MAX_GROUP_BOTS} 位员工。`;
+const FLOOR_REFUSED = `群里至少要留 ${MIN_GROUP_BOTS} 位员工。`;
 
 export type GroupStore = {
   list(channelId: string): Promise<GroupMessage[]>;
@@ -257,6 +249,86 @@ async function stampFor(
     .limit(1);
   if (!row) throw new GroupNotFoundError();
   return row.tenantId === TEAM_TENANT ? { tenantId: TEAM_TENANT } : {};
+}
+
+/** The group's Bots, read under a lock on the channel row so concurrent changes line up one by one. */
+async function lockedBots(tx: GroupExecutor, channelId: string) {
+  await tx
+    .select({ id: channels.id })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .for("update");
+  const rows = await tx
+    .select({ agentId: channelAgents.agentId })
+    .from(channelAgents)
+    .where(eq(channelAgents.channelId, channelId));
+  return rows.map((row) => row.agentId);
+}
+
+/** The given Bots in the order `order` ranks them: earliest thread row first, ties by id. */
+async function rankedBots(
+  tx: GroupExecutor,
+  channelId: string,
+  bots: readonly string[],
+) {
+  const rows = await tx
+    .select({
+      agentId: groupBotThreads.agentId,
+      first: min(groupBotThreads.createdAt),
+    })
+    .from(groupBotThreads)
+    .where(eq(groupBotThreads.channelId, channelId))
+    .groupBy(groupBotThreads.agentId);
+  const at = new Map(rows.map((row) => [row.agentId, row.first?.getTime()]));
+  const rank = (id: string) => at.get(id) ?? Number.POSITIVE_INFINITY;
+  return [...bots].sort(
+    (left, right) =>
+      (rank(left) === rank(right) ? 0 : rank(left) < rank(right) ? -1 : 1) ||
+      left.localeCompare(right),
+  );
+}
+
+/**
+ * Stamp the caller's own thread rows a millisecond apart in this order, starting from the earliest
+ * row anyone in the group has, so the caller's position is each Bot's earliest row. A Bot with no
+ * row of the caller's gets one.
+ */
+async function writeOrder(
+  mintThread: () => string,
+  tx: GroupExecutor,
+  ownerUserId: string,
+  channelId: string,
+  stamp: { tenantId?: typeof TEAM_TENANT },
+  agentIds: readonly string[],
+) {
+  const [earliest] = await tx
+    .select({ at: min(groupBotThreads.createdAt) })
+    .from(groupBotThreads)
+    .where(eq(groupBotThreads.channelId, channelId));
+  const base = earliest?.at?.getTime() ?? Date.now();
+  for (const [index, agentId] of agentIds.entries()) {
+    const createdAt = new Date(base + index);
+    const updated = await tx
+      .update(groupBotThreads)
+      .set({ createdAt })
+      .where(
+        and(
+          eq(groupBotThreads.channelId, channelId),
+          eq(groupBotThreads.ownerUserId, ownerUserId),
+          eq(groupBotThreads.agentId, agentId),
+        ),
+      )
+      .returning({ agentId: groupBotThreads.agentId });
+    if (updated.length === 0)
+      await tx.insert(groupBotThreads).values({
+        ownerUserId,
+        channelId,
+        agentId,
+        threadId: mintThread(),
+        createdAt,
+        ...stamp,
+      });
+  }
 }
 
 /**
@@ -482,33 +554,29 @@ export function createGroupStore(
     async addBots(ownerUserId, channelId, agentIds) {
       await database.transaction(async (tx) => {
         const stamp = await stampFor(tx, channelId);
-        // After every thread any member has: `order` ranks a Bot by its earliest row, so a new Bot
-        // stamped earlier than someone's row would not answer last.
-        const [latest] = await tx
-          .select({ at: max(groupBotThreads.createdAt) })
-          .from(groupBotThreads)
-          .where(eq(groupBotThreads.channelId, channelId));
-        const base = Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1);
+        const current = await lockedBots(tx, channelId);
+        if (current.length + agentIds.length > MAX_GROUP_BOTS)
+          throw new GroupRefusedError(CAP_REFUSED);
         await tx
           .insert(channelAgents)
           .values(agentIds.map((agentId) => ({ channelId, agentId, ...stamp })))
           .onConflictDoNothing();
-        for (const [index, agentId] of agentIds.entries())
-          await tx
-            .insert(groupBotThreads)
-            .values({
-              ownerUserId,
-              channelId,
-              agentId,
-              threadId: mintThread(),
-              createdAt: new Date(base + index),
-              ...stamp,
-            })
-            .onConflictDoNothing();
+        // The creator's rows are rewritten for the whole roster, not only the new Bots: other
+        // members' older rows (which they alone can delete) would otherwise outrank a re-added
+        // Bot's new row in `order`, which ranks each Bot by its earliest row.
+        const ranked = await rankedBots(tx, channelId, current);
+        await writeOrder(mintThread, tx, ownerUserId, channelId, stamp, [
+          ...ranked,
+          ...agentIds,
+        ]);
       });
     },
     async removeBots(ownerUserId, channelId, agentIds) {
       await database.transaction(async (tx) => {
+        // Two removals racing would each see enough Bots left and together leave the group short.
+        const current = await lockedBots(tx, channelId);
+        if (current.length - agentIds.length < MIN_GROUP_BOTS)
+          throw new GroupRefusedError(FLOOR_REFUSED);
         const removed = await tx
           .delete(channelAgents)
           .where(
@@ -536,36 +604,14 @@ export function createGroupStore(
     async reorder(ownerUserId, channelId, agentIds) {
       await database.transaction(async (tx) => {
         const stamp = await stampFor(tx, channelId);
-        // From the earliest row any member has, so no other member's later row can outrank the
-        // creator's position when `order` takes each Bot's earliest.
-        const [earliest] = await tx
-          .select({ at: min(groupBotThreads.createdAt) })
-          .from(groupBotThreads)
-          .where(eq(groupBotThreads.channelId, channelId));
-        const base = earliest?.at?.getTime() ?? Date.now();
-        for (const [index, agentId] of agentIds.entries()) {
-          const createdAt = new Date(base + index);
-          const updated = await tx
-            .update(groupBotThreads)
-            .set({ createdAt })
-            .where(
-              and(
-                eq(groupBotThreads.channelId, channelId),
-                eq(groupBotThreads.ownerUserId, ownerUserId),
-                eq(groupBotThreads.agentId, agentId),
-              ),
-            )
-            .returning({ agentId: groupBotThreads.agentId });
-          if (updated.length === 0)
-            await tx.insert(groupBotThreads).values({
-              ownerUserId,
-              channelId,
-              agentId,
-              threadId: mintThread(),
-              createdAt,
-              ...stamp,
-            });
-        }
+        await writeOrder(
+          mintThread,
+          tx,
+          ownerUserId,
+          channelId,
+          stamp,
+          agentIds,
+        );
       });
     },
     async waitingFor(approvalId) {
@@ -813,6 +859,14 @@ export async function groupSourceForRun(
     })
     .from(groupBotThreads)
     .innerJoin(channels, eq(channels.id, groupBotThreads.channelId))
+    // A Bot taken out of the group keeps its thread row, but no authority over the group.
+    .innerJoin(
+      channelAgents,
+      and(
+        eq(channelAgents.channelId, groupBotThreads.channelId),
+        eq(channelAgents.agentId, groupBotThreads.agentId),
+      ),
+    )
     .innerJoin(
       channelMemberships,
       and(
@@ -1539,9 +1593,7 @@ export function createGroupConversations(deps: {
     await roster(owner, channel);
     const creator = (await deps.store.people(channel))[0]?.userId;
     if (owner !== creator)
-      throw new GroupRefusedError(
-        "Only the person who started this group can take others out of it.",
-      );
+      throw new GroupRefusedError("只有发起这个群聊的人才能调整群里的员工。");
   };
   const botList = (input: unknown) => {
     const agentIds = z
@@ -1589,7 +1641,7 @@ export function createGroupConversations(deps: {
       const again = agentIds.find((id) => current.has(id));
       if (again) throw new GroupRefusedError(`员工 ${again} 已经在群里了。`);
       if (current.size + agentIds.length > MAX_GROUP_BOTS)
-        throw new GroupRefusedError(`一个群最多 ${MAX_GROUP_BOTS} 位员工。`);
+        throw new GroupRefusedError(CAP_REFUSED);
       for (const id of agentIds)
         if (!(await deps.canUseBot?.(owner, id)))
           throw new GroupRefusedError(
@@ -1611,7 +1663,7 @@ export function createGroupConversations(deps: {
       if (missing)
         throw new GroupRefusedError(`员工 ${missing} 不在这个群里。`);
       if (current.length - agentIds.length < MIN_GROUP_BOTS)
-        throw new GroupRefusedError(`群里至少要留 ${MIN_GROUP_BOTS} 位员工。`);
+        throw new GroupRefusedError(FLOOR_REFUSED);
       await deps.store.removeBots(owner, channel, agentIds);
       return { removed: agentIds };
     },
