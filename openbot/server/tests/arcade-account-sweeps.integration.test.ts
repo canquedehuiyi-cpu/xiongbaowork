@@ -1467,3 +1467,102 @@ describe("Reconnect from a card whose account row the accounts page has since fo
     expect(state.minted).toHaveLength(mintedBefore);
   });
 });
+
+/*
+ * 失效的第二个账号的行为了重连而留着，所以「剩下的账号」里也可能有同样失效、只是留着的行。默认只能交给
+ * 厂商说还活着的账号：否则 A、B 两个都失效时，不点名的调用在 A、B 之间来回换默认，永远到不了还活着的 C。
+ * 厂商答不上谁还活着时，默认不动：换到另一个可能失效的行不比留着更好，卡片照样出。
+ */
+describe("passing the default over among accounts kept after the vendor lost them", () => {
+  /** 本人名下的账号，加三个第二个账号 A、B、C；答 [A, B, C] 的 vendor id 与按地址找到的行 id。 */
+  async function fourAccounts(who: string, toolkit: string) {
+    await connectThrough({ id: who }, toolkit);
+    const ids: string[] = [];
+    for (const name of ["a", "b", "c"]) {
+      const id = await connectThrough({ id: who }, toolkit, "?another=1");
+      identities.set(id, `${who}@${name}.example`);
+      ids.push(id);
+    }
+    identities.set(who, `${who}@work.example`);
+    const page = await accountsPage(who, toolkit);
+    const rowOf = (name: string) =>
+      page.find((account) => account.label === `${who}@${name}.example`)?.id ??
+      "";
+    return { ids, rows: ["a", "b", "c"].map(rowOf) };
+  }
+  const defaultLabel = async (who: string, toolkit: string) =>
+    (
+      (await (
+        await call({ id: who }, `/servers/${app(toolkit)}/accounts`)
+      ).json()) as { accounts: { label: string; isDefault: boolean }[] }
+    ).accounts
+      .filter((account) => account.isDefault)
+      .map((account) => account.label);
+
+  const lives = person("liveonly");
+  const unsure = person("unsure");
+  beforeAll(() => platform(() => seedPeople(database, [lives, unsure])));
+  afterAll(() => platform(() => removePeople(database, [lives, unsure])));
+
+  test("goes only to an account the vendor says is alive, so with A and B lost a call naming no account runs in C", async () => {
+    const toolkit = toolkitFor("LiveOnlyMail");
+    await enable(toolkit);
+    const bot = await botFor(lives, toolkit);
+    const {
+      ids: [a, b, c],
+      rows: [rowA],
+    } = await fourAccounts(lives, toolkit);
+    await call(
+      { id: lives },
+      `/servers/${app(toolkit)}/accounts/${rowA}/default`,
+      { method: "POST" },
+    );
+    for (const id of [lives, a, b]) state.connected.delete(`${id}/google`);
+
+    reached.length = 0;
+    nextCall = notAllowed();
+    await refusalOf(listAs(lives, bot, toolkit));
+    nextCall = notAllowed();
+    await refusalOf(listAs(lives, bot, toolkit, `${lives}@b.example`));
+    expect(reached).toEqual([a, b]);
+    expect(await defaultLabel(lives, toolkit)).toEqual([`${lives}@c.example`]);
+
+    reached.length = 0;
+    await listAs(lives, bot, toolkit);
+    await listAs(lives, bot, toolkit);
+    expect(reached).toEqual([c, c]);
+  });
+
+  test("stays where it is when the vendor cannot say which accounts are alive", async () => {
+    const toolkit = toolkitFor("UnsureMail");
+    await enable(toolkit);
+    const bot = await botFor(unsure, toolkit);
+    const {
+      ids: [a, b],
+      rows: [rowA],
+    } = await fourAccounts(unsure, toolkit);
+    await call(
+      { id: unsure },
+      `/servers/${app(toolkit)}/accounts/${rowA}/default`,
+      { method: "POST" },
+    );
+    for (const id of [a, b]) state.connected.delete(`${id}/google`);
+    const original = arcade.isConnected;
+    arcade.isConnected = async (input) => {
+      if (input.account.vendorUserId === a) return original(input);
+      throw new Error("vendor timed out");
+    };
+    try {
+      nextCall = notAllowed();
+      const refusal = await refusalOf(listAs(unsure, bot, toolkit));
+      expect(readConnectPrompt(refusal ?? "")?.account).toBe(rowA);
+    } finally {
+      arcade.isConnected = original;
+    }
+
+    expect(await defaultLabel(unsure, toolkit)).toEqual([
+      `${unsure}@a.example`,
+    ]);
+    expect(await accountIdsOf(unsure, toolkit)).toContain(b);
+  });
+});

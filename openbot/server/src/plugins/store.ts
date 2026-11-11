@@ -12328,14 +12328,26 @@ export function createPluginStore(options: PluginStoreOptions) {
            * 「已连接」），丢掉的账号只能靠「再连一个账号」换一个新 id 找回。账号页的同步在厂商不再列出它
            * 时仍会删掉它。
            *
-           * 它若是默认账号，默认交给剩下的账号（与上游一致）：否则不点名的调用每一次都跑进这个没了的
-           * 账号、每一次都被拒。点名它仍得到带着这一行的卡片。
+           * 它若是默认账号，默认交给剩下账号里厂商说还活着的那个（与上游一致）：否则不点名的调用每一次都
+           * 跑进这个没了的账号、每一次都被拒。逐个问的正是上面判「没了」的同一个问题；答不上的当作不活着，
+           * 一个都不活时默认不动（见 `passOverDefault`）。点名它仍得到带着这一行的卡片。
            */
           const lost = (await accounts.rowsFor(refusedToolkit, holder)).find(
             (candidate) => candidate.vendorUserId === reachedAs,
           );
-          if (lost)
-            await accounts.passOverDefault(refusedToolkit, holder, lost.id);
+          if (lost && broker)
+            await accounts.passOverDefault(
+              refusedToolkit,
+              holder,
+              lost.id,
+              (vendorUserId) =>
+                withVendorDeadline(() =>
+                  broker.isConnected({
+                    userId: vendorUserId === ownName ? holder : vendorUserId,
+                    toolkit: refusedToolkit,
+                  }),
+                ),
+            );
           othersRemain = true;
         } else if (
           (

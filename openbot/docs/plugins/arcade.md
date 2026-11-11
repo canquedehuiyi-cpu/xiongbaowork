@@ -374,10 +374,12 @@ the card names that account (`account`, the row id from the accounts page), and
 It does so also where Arcade answers that the second account holds nothing any more: its row is kept
 rather than forgotten, so Reconnect asks consent for the same id and brings that account back,
 instead of landing on the person's own account (which may hold everything and answer
-`{ "connected": true }`). If that account was the default, the default passes to the earliest of
-the accounts that remain, as upstream does, so a call naming no account runs there; a call naming the
-lost account still gets the card that reconnects it, and a reconnected account does not take the
-default back by itself. A row id that is not the person's own on that app answers 404 and mints
+`{ "connected": true }`). If that account was the default, the default passes to an account Arcade
+says is still connected, the person's own one first, as upstream falls back, so a call naming no
+account runs there; a call naming the lost account still gets the card that reconnects it, and a
+reconnected account does not take the default back by itself. Other lost accounts are kept too, so
+they are never chosen; where none is confirmed alive, or Arcade does not answer, the default stays
+where it is and calls keep getting the card. A row id that is not the person's own on that app answers 404 and mints
 nothing. The accounts page still forgets the row if Arcade stops listing the account; Reconnect
 from a card whose row is gone answers 404 with a sentence pointing to **Connect another account**.
 A connected Shared app is reconnected in place the same way, by an administrator; its connection

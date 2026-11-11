@@ -169,19 +169,48 @@ export function createAccountBook(context: {
   };
 
   /**
-   * 一个默认账号在厂商那边没了、而这个人还有别的账号时，把默认交给剩下的账号里最早的那个，这一行本身留着。
+   * 一个默认账号在厂商那边没了、而这个人还有别的账号时，把默认交给厂商说还活着的那个，这一行本身留着。
    * 不点名的调用因此落到还在的账号上（与上游「忘掉没了的账号」一样），而不是每一次都被拒；留着的行让卡片
    * 仍能把同一个账号连回来。连回来之后它不自动恢复默认，本人可以在账号页上再设回去。
+   *
+   * 只交给 `isLive` 答「活着」的账号：失效的行为了重连都留着，剩下的行里也可能有同样失效的；交给最早的
+   * 那一行，A、B 两个都失效时默认会在它们之间来回换，永远到不了还活着的 C。本人名下的账号先问（上游回落
+   * 到的就是它），其余按列出的顺序。一个都没答「活着」时（都失效，或厂商答不上）默认不动：换到另一个
+   * 可能失效的行不比留着更好，调用照样被拒、照样出卡片。
    */
   const passOverDefault = async (
     toolkit: string,
     userId: string,
     rowId: string,
+    isLive: (vendorUserId: string) => Promise<boolean>,
   ) => {
-    const rows = ordered(await rowsFor(toolkit, userId));
+    const own = nameOf(userId);
+    const rows = ordered(await rowsFor(toolkit, userId)).filter((row) =>
+      filedUnderPerson(row.vendorUserId, own),
+    );
     const lost = rows.find((row) => row.id === rowId);
-    const next = rows.find((row) => row.id !== rowId);
-    if (!lost?.isDefault || !next) return;
+    if (!lost?.isDefault) return;
+    const candidates = rows
+      .filter((row) => row.vendorUserId !== lost.vendorUserId)
+      .sort(
+        (left, right) =>
+          Number(right.vendorUserId === own) -
+          Number(left.vendorUserId === own),
+      );
+    const answers = new Map<string, boolean>();
+    let next: Row | undefined;
+    for (const candidate of candidates) {
+      if (!answers.has(candidate.vendorUserId))
+        answers.set(
+          candidate.vendorUserId,
+          await isLive(candidate.vendorUserId).catch(() => false),
+        );
+      if (answers.get(candidate.vendorUserId)) {
+        next = candidate;
+        break;
+      }
+    }
+    if (!next) return;
     await database
       .update(brokeredAccounts)
       .set({ isDefault: false })
