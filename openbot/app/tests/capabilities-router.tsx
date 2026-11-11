@@ -45,6 +45,10 @@ export function capabilitiesRouter({
   const mount = (route: unknown, path: string) =>
     (route as { update: (options: unknown) => AnyRoute }).update({
       getParentRoute: () => root,
+      // `id` too: once the generated route tree has been imported in this process it has set each
+      // route's `id` (e.g. both 能力 › 技能 and the old `/skills` became `/skills`), and an `id` left
+      // over from it makes two routes collide here.
+      id: path,
       path,
     } as never);
   const stub = (path: string, name: string): AnyRoute =>
