@@ -108,6 +108,7 @@ import {
 } from "./catalogue";
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
+import { withVendorDeadline } from "./vendor-deadline";
 import { grantedByOwner, ownerStillGives } from "./owner-grants";
 import { steeringOf } from "./shared-use";
 import {
@@ -300,6 +301,36 @@ export type ServerRecord = {
     connectedBy: string | null;
     verified: boolean;
   } | null;
+  /**
+   * Shared 应用的团队账号是否已连接（上游的 `sharedVendorConnected`）。应用不是 Shared 时恒为 false：
+   * Personal 应用的调用从不进团队账号，说它「已连接」只会让页面讲一件对调用毫无影响的事。和
+   * `sharedAccount.connected` 是同一个事实，上游前端读这个名字，fork 原有的读法留着。
+   *
+   * 这一个和下面三个在类型上都是可选的，为的是已有测试里手写的 `ServerRecord` 字面量不用改；
+   * `listServers` 实际每一行都给。
+   */
+  sharedVendorConnected?: boolean;
+  /**
+   * 上一次列出时因为名字不能交给模型而略过的动作（上游的 `skippedTools`）。fork 里恒为空数组：上游把
+   * 这些名字记在 `mcp_servers.skipped_tools`（它的迁移 0059），fork 没有这一列，刷新时略过的名字不落库，
+   * 所以没有可报的。给出空数组而不是不给，是让照上游写的页面读 `.length` 时不落空。
+   */
+  skippedTools?: string[];
+  /**
+   * 谁可以把这个应用给员工，现在生效的（上游的 `ownerGrants`）：员工的主人（`any`）或只有管理员
+   * （`admin`），没有人选过时是按账号的默认值。和 `GET /servers/:id/owner-grants` 同一个算法。
+   */
+  ownerGrants?: "any" | "admin";
+  /**
+   * 管理员明确选的那个值，没有（或说不准是不是管理员选的）为 null（上游的 `ownerGrantsChosen`）。
+   *
+   * 只有 `any` 会被报出来。`mcp_servers.owner_grants` 里的 `any` 只有管理员的 PUT 能写，所以它一定是
+   * 管理员选的。`admin` 有三个来源：管理员的 PUT、升级时的回填（迁移 0197 把已有应用都写成 `admin`）、
+   * 切换账号模式（每次切换都写回 `admin`），列里分不出是哪一个，也没有别的列记着是谁写的。把它报成
+   * 「管理员选过」，对每一个升级前就有的应用都是假话，所以不报；生效的值照样在 `ownerGrants` 里。
+   * `GET /servers/:id/owner-grants` 的 `chosen` 仍是列的原值，两处在 `admin` 上因此不同。
+   */
+  ownerGrantsChosen?: "any" | "admin" | null;
   tools: ToolRecord[];
   /**
    * Grants on tools this server no longer advertises.
@@ -4054,6 +4085,17 @@ export function createPluginStore(options: PluginStoreOptions) {
     return row ?? null;
   }
 
+  /*
+   * 应用访问的状态（X2，`./app-access-store`）。先建好再并进下面的 store，这样 `listServers` 能直接问它
+   * 「谁可以给员工」，不必经 `this`（列表方法会被单独拿出去调用）。
+   */
+  const appAccess = appAccessMethods({
+    database,
+    auditStore,
+    provider: brokerProvider,
+    ...(options.sharedAdmits ? { sharedAudience: options.sharedAdmits } : {}),
+  });
+
   return {
     ...arcadeAttempts,
     /**
@@ -6403,6 +6445,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       const brokeredApps = await brokeredAppRowsAt(
         rows.filter((row) => appOf(row.url) !== null).map((row) => row.url),
       );
+      // 每一行的「谁可以给员工」，一次读出；和 `GET /servers/:id/owner-grants` 是同一个答案。
+      const ownerGrants = await appAccess.ownerGrantsSettings();
 
       return rows.map((row) => {
         // The entry is which app this row instantiates, and since ticket 028 that is a column rather
@@ -6434,6 +6478,15 @@ export function createPluginStore(options: PluginStoreOptions) {
             appOf(row.url) !== null &&
             adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
           entraScope: row.entraScope,
+          // 上游前端在行上读的几样；各自的规则写在 `ServerRecord` 的字段上。
+          sharedVendorConnected:
+            appOf(row.url) !== null &&
+            brokeredApps.get(row.url)?.accountMode === "shared" &&
+            Boolean(brokeredApps.get(row.url)?.sharedConnectedAt),
+          skippedTools: [],
+          ownerGrants: ownerGrants.get(row.id)?.ownerGrants ?? "admin",
+          ownerGrantsChosen:
+            ownerGrants.get(row.id)?.chosen === "any" ? "any" : null,
           ...(appOf(row.url) !== null
             ? {
                 sharedOnly: adminConnectOnly(
@@ -7582,12 +7635,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /** 应用访问的状态（X2，`./app-access-store`）：员工页与对话卡片读的「这个人能不能用这个应用」。 */
-    ...appAccessMethods({
-      database,
-      auditStore,
-      provider: brokerProvider,
-      ...(options.sharedAdmits ? { sharedAudience: options.sharedAdmits } : {}),
-    }),
+    ...appAccess,
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
@@ -7962,6 +8010,119 @@ export function createPluginStore(options: PluginStoreOptions) {
         scope: row.scope,
         connectedAt: iso(row.connectedAt) ?? "",
       }));
+    },
+
+    /**
+     * 每个 Shared 应用的团队账号，连没连上都列出来，`GET /connections?shared=1` 把它们排在本人自己的连接
+     * 旁边（上游的 `sharedConnections`）。
+     *
+     * 没连上的也列，`connected: false`：不列会读成「这个应用什么都不需要」，而这恰恰是管理员要动手的那个
+     * 状态，页面的「连接」就是照这一行画的。
+     *
+     * 一个应用一行，在应答它的那一行上：标了 `shared`、但只是某个应用地址上的重复行的，不是那个应用，列
+     * 出来会给一个没有调用会用的账号画「连接」。只认活动提供商的地址。
+     *
+     * `displayName` 是厂商给这个账号起的名字（一个组织、一个机器人），向厂商问，问不到不影响读取：它告诉
+     * 人「办事的是哪个团队账号」，厂商不说只是少一个标签。只为已经连接的问。
+     *
+     * `connectedBy` 是连接它的管理员的邮箱（人已经不在时退回存的 id），只在 `connectedBy` 为真时读；路由
+     * 只对管理员这样要。成员要知道的是应用有没有连上、是哪个账号在办事，不是哪位管理员的邮箱。
+     *
+     * `checkable` 恒为 false：fork 从不拿团队账号的密钥去试一个动作（团队账号的「重新检查」是再问一次厂商
+     * 它在不在），所以没有可以再花一次的检查。`probe` 照列里记的给。
+     *
+     * 团队账号在厂商那边的身份不在答案里。
+     */
+    async sharedConnections(options: { connectedBy: boolean }): Promise<
+      {
+        serverId: string;
+        scope: "";
+        holder: "deployment";
+        connected: boolean;
+        connectedAt: string | null;
+        connectedBy: string | null;
+        verified: boolean;
+        verifiedAt: string | null;
+        probe: string | null;
+        checkable: false;
+        displayName: string | null;
+      }[]
+    > {
+      const marked = (
+        await database
+          .select({
+            id: mcpServers.id,
+            url: mcpServers.url,
+            sharedVendorUserId: mcpServers.sharedVendorUserId,
+            sharedConnectedAt: mcpServers.sharedConnectedAt,
+            sharedConnectedBy: mcpServers.sharedConnectedBy,
+            sharedVerified: mcpServers.sharedVerified,
+            sharedVerifiedAt: mcpServers.sharedVerifiedAt,
+            sharedProbeAction: mcpServers.sharedProbeAction,
+          })
+          .from(mcpServers)
+          .where(eq(mcpServers.accountMode, "shared"))
+          .orderBy(asc(mcpServers.id))
+      ).filter((row) => appOf(row.url) !== null);
+      const answering = await brokeredAppRowsAt(marked.map((row) => row.url));
+      const shared = marked.filter(
+        (row) => answering.get(row.url)?.id === row.id,
+      );
+
+      const connectors = [
+        ...new Set(
+          shared
+            .map((row) => row.sharedConnectedBy)
+            .filter((by): by is string => by !== null),
+        ),
+      ];
+      const emails = new Map(
+        options.connectedBy && connectors.length > 0
+          ? (
+              await database
+                .select({ id: users.id, email: users.email })
+                .from(users)
+                .where(inArray(users.id, connectors))
+            ).map((person) => [person.id, person.email])
+          : [],
+      );
+
+      return Promise.all(
+        shared.map(async (row) => {
+          const toolkit = appOf(row.url);
+          const identity = row.sharedVendorUserId;
+          const connected = row.sharedConnectedAt !== null;
+          const accountsOf = broker?.accountsOf?.bind(broker);
+          const displayName =
+            connected && toolkit && identity && accountsOf
+              ? await withVendorDeadline(() =>
+                  accountsOf({ userId: identity, toolkit }),
+                )
+                  .then(
+                    (accounts) =>
+                      accounts.find((account) => account.identity)?.identity ??
+                      null,
+                  )
+                  .catch(() => null)
+              : null;
+          return {
+            serverId: row.id,
+            scope: "" as const,
+            holder: "deployment" as const,
+            connected,
+            connectedAt: iso(row.sharedConnectedAt),
+            connectedBy:
+              options.connectedBy && row.sharedConnectedBy
+                ? (emails.get(row.sharedConnectedBy) ?? row.sharedConnectedBy)
+                : null,
+            verified: connected && row.sharedVerified,
+            verifiedAt: iso(row.sharedVerifiedAt),
+            probe: row.sharedProbeAction,
+            checkable: false as const,
+            displayName,
+          };
+        }),
+      );
     },
 
     /**
@@ -9820,6 +9981,42 @@ export function createPluginStore(options: PluginStoreOptions) {
             }
           : null,
       };
+    },
+
+    /**
+     * 持有这个应用任何一个动作的每位员工，不论是谁的（账号模式切换的预览，上游的 `botsHolding`）：切到
+     * Shared 时管理员要看到的是会用上团队账号的每一位员工，而管理员自己的帧里只看得到团队员工和自己的
+     * 员工的授予，别人私人员工的看不到。经 {@link reachEveryPersonOn}，和同一个预览里数连接的
+     * {@link countPeopleConnectedTo} 是同一道门：先要管理员能力，只读以这个应用为键的授予，离开的只有员工
+     * id。按应用地址上的每一行找（授予写在行的名字下，重复行各有各的名字），排好序。
+     */
+    async botsHolding(serverId: string): Promise<string[]> {
+      requireServerWriter();
+      const [row] = await database
+        .select({ url: mcpServers.url, tenantId: mcpServers.tenantId })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, serverId))
+        .limit(1);
+      if (!row) return [];
+      const atApp = await database
+        .select({ id: mcpServers.id, catalogueKey: mcpServers.catalogueKey })
+        .from(mcpServers)
+        .where(
+          inArray(mcpServers.url, [
+            ...new Set([row.url, canonicalBrokeredUrl(row.url) ?? row.url]),
+          ]),
+        );
+      const names = [
+        ...new Set([
+          serverId,
+          ...atApp.map((other) => other.catalogueKey ?? other.id),
+        ]),
+      ];
+      return reachEveryPersonOn(row.tenantId === TEAM_TENANT, async () =>
+        [
+          ...new Set([...(await mcpGrantsForServers(names)).values()].flat()),
+        ].sort(),
+      );
     },
 
     /**
