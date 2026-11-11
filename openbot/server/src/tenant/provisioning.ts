@@ -1,11 +1,12 @@
+import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
   agents,
+  enterpriseSettings,
   pluginGrants,
   subscriptions,
 } from "../db/schema";
-import { staffingGrantRows } from "../staffing/default-grant";
 import { runAsTenant } from "./context";
 
 /**
@@ -16,6 +17,40 @@ import { runAsTenant } from "./context";
  */
 export function avatarAgentId(tenantId: string): string {
   return `avatar-${tenantId}`;
+}
+
+/** 小管家默认「招聘与组群」的授予记在 `plugin_grants.granted_by` 的标记。 */
+export const STAFFING_DEFAULT_BY = "openbot:staffing-default";
+
+/**
+ * 「招聘与组群」六个工具的授予 ref，如 `staffing/propose_employee`；与 `staffing/executor.ts` 给新员工授予时
+ * 同一个形状。
+ */
+export const STAFFING_REFS: readonly string[] = STAFFING_TOOL_NAMES.map(
+  (tool) => `staffing/${tool}`,
+);
+
+/**
+ * 「这位分身已经处理过默认招聘能力」的一行设置，每位分身一行（和 `personal_skills_given:` 同一种做法）。
+ * 有了它，本人之后收回的就不会被补回来。
+ */
+export function staffingGivenSetting(avatarId: string): string {
+  return `staffing_default_given:${avatarId}`;
+}
+
+/**
+ * 新开通分身时与它一起写下的授予行。授予记为主人做的（`owner`），因为这是本人的员工拿到的本人的能力，
+ * 本人可以在权限页上收回；开通在这个人自己的帧里写，所以只用行，不经插件库。
+ */
+export function staffingGrantRows(avatarId: string, tenantId: string) {
+  return STAFFING_REFS.map((ref) => ({
+    tenantId,
+    kind: "mcp" as const,
+    ref,
+    agentId: avatarId,
+    grantedBy: STAFFING_DEFAULT_BY,
+    grantedAs: "owner" as const,
+  }));
 }
 
 /**
@@ -102,6 +137,15 @@ export async function provisionTenant(
       await database
         .insert(pluginGrants)
         .values(staffingGrantRows(avatarId, user.id))
+        .onConflictDoNothing();
+    if (created.length > 0 && options.withStaffing === true)
+      await database
+        .insert(enterpriseSettings)
+        .values({
+          key: staffingGivenSetting(avatarId),
+          value: { value: true },
+          updatedBy: STAFFING_DEFAULT_BY,
+        })
         .onConflictDoNothing();
 
     await database

@@ -36,6 +36,7 @@ skills:
       要组群就用 mcp__staffing__propose_group（改已有的群用 propose_group_change）。
       这些工具只出一张卡片：用户在卡片上点确认之前什么也没有建，所以不要说已经建好了，
       要说"已经起草好，等你在卡片上确认"。想知道结果可以用 mcp__staffing__proposal_status 查。
+      手上没有 mcp__staffing__ 工具时，请用户到「我的分身」对话里说，由小管家起草。
       不要替用户发明他没有说过的职责。
     tools:
       - staffing/list_staff

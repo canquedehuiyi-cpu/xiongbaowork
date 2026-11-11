@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, like } from "drizzle-orm";
 import { STAFFING_TOOL_NAMES } from "../../shared/staffing-proposal";
@@ -14,15 +14,25 @@ import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
   agents,
+  enterpriseSettings,
+  mcpServers,
   pluginGrants,
   subscriptions,
   users,
 } from "../src/db/schema";
+import { setEdition } from "../src/edition";
+import {
+  personalDefaultsDeps,
+  personalRevokeRefusal,
+  withPersonalDefaults,
+} from "../src/plugins/personal-defaults";
 import { createPluginStore } from "../src/plugins/store";
 import {
   backfillStaffingForAvatars,
+  ensureStaffingServer,
   STAFFING_DEFAULT_BY,
   staffingBackfillDeps,
+  withStaffingDefault,
 } from "../src/staffing/default-grant";
 import { runAsTenant } from "../src/tenant/context";
 import { avatarAgentId, provisionTenant } from "../src/tenant/provisioning";
@@ -200,6 +210,168 @@ describe("小管家默认会招人组群", () => {
   });
 });
 
+const OPEN_APP = `team:staffing`;
+let addedServer = false;
+
+/** 启动时那一步：没有「招聘与组群」这个应用就添加。 */
+async function startupStep() {
+  const had = await asPlatform(() => plugins.serverAddress("staffing"));
+  await asPlatform(() => ensureStaffingServer(plugins));
+  if (!had) addedServer = true;
+}
+
+afterEach(() => setEdition("team"));
+
+/** 一位登记在这个人名下的普通员工（内置、非分身）。 */
+async function hire(userId: string, name: string): Promise<string> {
+  const id = `sdg-${suite}-${name}`;
+  await asPlatform(async () => {
+    await database.insert(agents).values({
+      id,
+      tenantId: userId,
+      name,
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: id,
+      tenantId: userId,
+      ownerUserId: userId,
+      title: name,
+      roleDescription: "测试员工",
+      avatarSeed: name,
+      visibility: "private",
+    });
+  });
+  return id;
+}
+
+const toolsOf = async (store: typeof plugins, userId: string, bot: string) =>
+  (await runAsTenant(userId, () => store.listForAgent(bot))).tools.map(
+    (tool) => tool.ref,
+  );
+
+describe("the grant reaches the avatar's run", () => {
+  test("after the startup step the avatar is offered the staffing tools", async () => {
+    await startupStep();
+    const userId = await newcomer("offered");
+    await provisionTenant(
+      database,
+      { id: userId, email: `${userId}@example.test` },
+      { withStaffing: true },
+    );
+    expect(await toolsOf(plugins, userId, avatarAgentId(userId))).toContain(
+      "staffing/propose_employee",
+    );
+  });
+
+  test("the owner's revoke is not undone: grant, revoke all, backfill again, still none", async () => {
+    const userId = await upgradedPerson("once");
+    const avatarId = avatarAgentId(userId);
+    expect(await backfill(userId)).toBe(1);
+    for (const row of await staffingRows(avatarId))
+      await runAsTenant(userId, () =>
+        plugins.revoke("mcp", row.ref, avatarId, userId),
+      );
+    expect(await staffingRows(avatarId)).toEqual([]);
+    expect(await backfill(userId)).toBe(0);
+    expect(await staffingRows(avatarId)).toEqual([]);
+  });
+
+  test("a revoke after provisioning is not undone either", async () => {
+    const userId = await newcomer("provisioned-once");
+    await provisionTenant(
+      database,
+      { id: userId, email: `${userId}@example.test` },
+      { withStaffing: true },
+    );
+    await asPlatform(() =>
+      database
+        .delete(pluginGrants)
+        .where(eq(pluginGrants.agentId, avatarAgentId(userId))),
+    );
+    expect(await backfill(userId)).toBe(0);
+    expect(await staffingRows(avatarAgentId(userId))).toEqual([]);
+  });
+
+  test("in the team edition an existing avatar gets the tools on its first read, once", async () => {
+    await startupStep();
+    setEdition("team");
+    const userId = await upgradedPerson("lazy-team");
+    const avatarId = avatarAgentId(userId);
+    const store = withStaffingDefault(
+      createPluginStore({
+        database,
+        auditStore: createAuditStore(database),
+        credentials: {
+          readSecret: async () => null,
+        } as unknown as CredentialSecretReader & CredentialStore,
+        encryptionKey: "x".repeat(44),
+        policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+      }),
+      {
+        database,
+        disabled: (id) => approvals.disabledTools(userId, id),
+      },
+    );
+    expect(await toolsOf(store, userId, avatarId)).toContain(
+      "staffing/propose_employee",
+    );
+    for (const row of await staffingRows(avatarId))
+      await runAsTenant(userId, () =>
+        store.revoke("mcp", row.ref, avatarId, userId),
+      );
+    expect(await toolsOf(store, userId, avatarId)).not.toContain(
+      "staffing/propose_employee",
+    );
+  });
+
+  test("in the personal edition an ordinary employee is not handed staffing, and the owner can switch it per employee", async () => {
+    await startupStep();
+    setEdition("personal");
+    const userId = await upgradedPerson("per-bot");
+    const helper = await hire(userId, "per-bot-helper");
+    const real = personalDefaultsDeps(database, userId);
+    const store = withPersonalDefaults(
+      createPluginStore({
+        database,
+        auditStore: createAuditStore(database),
+        credentials: {
+          readSecret: async () => null,
+        } as unknown as CredentialSecretReader & CredentialStore,
+        encryptionKey: "x".repeat(44),
+        policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+      }),
+      {
+        ...real,
+        bots: async () => (await real.bots()).filter((id) => id === helper),
+      },
+    );
+    expect(await toolsOf(store, userId, helper)).not.toContain(
+      "staffing/propose_employee",
+    );
+    expect(await staffingRows(helper)).toEqual([]);
+    expect(
+      personalRevokeRefusal("mcp", "staffing/propose_employee", {
+        id: helper,
+        type: "built_in",
+      }),
+    ).toBeNull();
+    await runAsTenant(userId, () =>
+      store.grant("mcp", "staffing/propose_employee", helper, userId),
+    );
+    expect(await toolsOf(store, userId, helper)).toContain(
+      "staffing/propose_employee",
+    );
+    await runAsTenant(userId, () =>
+      store.revoke("mcp", "staffing/propose_employee", helper, userId),
+    );
+    expect(await toolsOf(store, userId, helper)).not.toContain(
+      "staffing/propose_employee",
+    );
+  });
+});
+
 afterAll(async () => {
   await asPlatform(async () => {
     const avatars = people.map(avatarAgentId);
@@ -213,6 +385,14 @@ afterAll(async () => {
     await database
       .delete(pluginGrants)
       .where(inArray(pluginGrants.agentId, ids));
+    await database.delete(enterpriseSettings).where(
+      inArray(
+        enterpriseSettings.key,
+        avatars.map((id) => `staffing_default_given:${id}`),
+      ),
+    );
+    if (addedServer)
+      await database.delete(mcpServers).where(eq(mcpServers.id, OPEN_APP));
     await database
       .delete(agentProfiles)
       .where(inArray(agentProfiles.agentId, ids));

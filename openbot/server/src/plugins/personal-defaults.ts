@@ -149,6 +149,16 @@ export function alwaysOnHere(refOrRowId: string): boolean {
   return isAlwaysOn(ref);
 }
 
+/**
+ * 按员工单独授予、不属于「每位员工」的内置应用：「招聘与组群」。默认只给小管家，别的员工要不要有由招它的
+ * 人决定，主人也能逐个员工开关，所以个人版不把它补给每位员工，也不拒绝从一位员工身上收回它。
+ */
+export const PER_BOT_APP = "staffing";
+
+export function isPerBotApp(ref: string): boolean {
+  return ref === PER_BOT_APP || ref.startsWith(`${PER_BOT_APP}/`);
+}
+
 /** 有人想关掉它、或从一位员工身上收回它时，服务端的答复。 */
 export const ALWAYS_ON_REFUSAL = "例行任务一直开着，每位员工都能用。";
 
@@ -190,6 +200,7 @@ export function personalRevokeRefusal(
   if (currentEdition() !== "personal") return null;
   if (bot && !coveredByPersonalDefaults(bot.id, bot.type)) return null;
   if (kind === "mcp" && isAlwaysOn(ref)) return ALWAYS_ON_REFUSAL;
+  if (kind === "mcp" && isPerBotApp(ref)) return null;
   if (kind === "mcp") return EVERY_BOT_REFUSAL;
   if (kind === "bot") return EVERY_BOT_ASKS_REFUSAL;
   return null;
@@ -232,6 +243,8 @@ async function grantEveryTool(
     const first = tools[0];
     if (!first) continue;
     const key = appKeyOf(first.ref);
+    // 只按员工授予的应用：不补给每位员工（见 `PER_BOT_APP`）。
+    if (isPerBotApp(key)) continue;
     const grantedBy = isAlwaysOn(key) ? ALWAYS_ON_BY : by;
     for (const bot of bots) {
       const held = await deps.granted(bot, key);

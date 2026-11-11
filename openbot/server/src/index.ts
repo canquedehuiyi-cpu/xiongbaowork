@@ -463,6 +463,10 @@ import {
   backfillStaffingForAvatars,
   staffingBackfillDeps,
 } from "./staffing/default-grant";
+import {
+  ensureStaffingServer,
+  withStaffingDefault,
+} from "./staffing/default-grant";
 import { createStaffingExecutor } from "./staffing/executor";
 import {
   createOwnerNameReader,
@@ -1585,6 +1589,15 @@ await startupLifecycle.run(async (startup) => {
     );
     void (async () => {
       const pluginStore = await storeBuilt.promise;
+      /*
+       * 「招聘与组群」这个应用两个版本都要在：没有它，小管家的默认授予读不到工具。添加应用不授予任何人什么。
+       */
+      await ensureStaffingServer(pluginStore).catch((error: unknown) =>
+        console.warn(
+          "[plugins] 没能添加「招聘与组群」应用，小管家暂时不会招人：",
+          error instanceof Error ? error.message : error,
+        ),
+      );
       if (currentEdition() !== "personal") {
         await pluginStore.refreshOwnListings();
         /*
@@ -1797,10 +1810,17 @@ await startupLifecycle.run(async (startup) => {
     sharedAdmits: sharedAudience.admitsPerson,
     responsibilitySources: sharedUseStore.sourcesOf,
   });
-  const pluginStore = withPersonalDefaults(
-    storeWithoutDefaults,
-    personalDeps,
-    bootAuditStore,
+  /*
+   * 小管家默认会招人、组群（`staffing/default-grant.ts`）：在这个人自己的运行帧里读小管家的授予时补一次，
+   * 两个版本都一样，不跨租户。
+   */
+  const pluginStore = withStaffingDefault(
+    withPersonalDefaults(storeWithoutDefaults, personalDeps, bootAuditStore),
+    {
+      database,
+      disabled: (avatarId) =>
+        approvalService.disabledTools(currentTenant(), avatarId),
+    },
   );
   /*
    * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号
