@@ -480,6 +480,7 @@ import {
   asPlatform,
   capabilityFor,
   currentTenant,
+  isTenantFramed,
   runAsTenant,
 } from "./tenant/context";
 import {
@@ -2175,8 +2176,14 @@ await startupLifecycle.run(async (startup) => {
       model: runtimeModel.defaultModel,
       apiKey: resolveRuntimeModelApiKey,
     });
+  /*
+   * Where nobody is behind a read of the deployment's own model key, it is read as `platform` (G01):
+   * the check at boot, and the model list's reads at boot, on its timer and on a provider's refusal.
+   * The key is the deployment's (`credentialSecretRef`, a `system` row), never a person's.
+   */
+  const asDeployment = <T>(work: () => T): T => asPlatform(work);
   // At boot there is nobody to act as: the deployment's own key is read as `platform` (G01).
-  const modelCheckAtBoot = asPlatform(async () => {
+  const modelCheckAtBoot = asDeployment(async () => {
     const { stamp } = await modelKeyOf({
       plan: Boolean(runtimeModel.plan),
       provider: runtimeModel.provider,
@@ -2282,7 +2289,11 @@ await startupLifecycle.run(async (startup) => {
    */
   const modelCatalogue = createModelCatalogue({
     model: runtimeModel,
-    apiKey: resolveRuntimeModelApiKey,
+    // A picker or a run reads in its own request's frame; the background reads have none.
+    apiKey: () =>
+      isTenantFramed()
+        ? resolveRuntimeModelApiKey()
+        : asDeployment(resolveRuntimeModelApiKey),
     ...(config.singleUser
       ? {}
       : {

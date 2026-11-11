@@ -451,6 +451,7 @@ tests/migration-reach.test.ts
 tests/mobile-links.test.ts
 tests/model-availability-check.test.ts
 tests/model-billing.test.ts
+tests/model-catalogue-frame.integration.test.ts
 tests/model-catalogue.test.ts
 tests/model-choice-harness.test.ts
 tests/model-choice.integration.test.ts
