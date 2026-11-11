@@ -2,7 +2,7 @@ import type { ApprovalPolicyStore } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import { withoutStatement } from "../db/query-failure";
 import { schemeKind } from "./broker";
-import { toolkitOf } from "./composio";
+import { type BrokerProvider, toolkitOfFor } from "./access";
 import {
   type AccountMode,
   type Holder,
@@ -54,12 +54,16 @@ export function createAccountModeSwitch(deps: {
     | undefined;
   deploymentId: string | undefined;
   audit: AuditStore;
+  /** 活动的连接应用提供商（X5）；不给时是 Composio。 */
+  provider?: BrokerProvider;
 }) {
   const { store, teamRules } = deps;
 
   async function resolve(serverId: string) {
     const address = await store.serverAddress(serverId);
-    const toolkit = address ? toolkitOf(address.url) : null;
+    const toolkit = address
+      ? toolkitOfFor(deps.provider ?? "composio", address.url)
+      : null;
     const app = toolkit ? await store.appAccount(toolkit) : null;
     if (!toolkit || !app)
       throw new AccountModeRefusedError(

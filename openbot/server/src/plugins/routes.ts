@@ -17,12 +17,19 @@ import {
   isPersonTenant,
   runAsTenant,
 } from "../tenant/context";
+import { type BrokerProvider, toolkitOfFor } from "./access";
 import {
   adminInputFor,
   mountAppAccessRoutes,
   unavailableSentence,
 } from "./app-access-routes";
 import {
+  clearEndedArcadeSiblings,
+  mountArcadeRoutes,
+  startArcadeAuthorization,
+} from "./arcade-routes";
+import {
+  type ArcadeBroker,
   type BrokerApp,
   type BrokerField,
   BrokerUnconfiguredError,
@@ -36,7 +43,7 @@ import {
   schemeKind,
 } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
-import { toolkitOf, vendorSentence } from "./composio";
+import { vendorSentence } from "./composio";
 import {
   adminConnectOnly,
   adminConnectOnlySentence,
@@ -60,6 +67,7 @@ import {
   redirectUriFor,
   sealConnectState,
 } from "./oauth";
+import { personAccount } from "./shared-accounts";
 import {
   type AppAccessRequestRecord,
   CatalogueEntryUnknownError,
@@ -184,8 +192,9 @@ function brokerRefusal(
  * of the word), because that is the setting an admin sets and naming it is how a person knows what
  * to ask for.
  */
-const NAMES_THE_BROKER = /\bcomposio\b/i;
-const NAMES_THE_BROKER_EVERYWHERE = /\bcomposio\b/gi;
+// X5：Arcade 与 Composio 一样不在成员看到的句子里点名（#1223）。
+const NAMES_THE_BROKER = /\b(composio|arcade)\b/i;
+const NAMES_THE_BROKER_EVERYWHERE = /\b(composio|arcade)\b/gi;
 
 /**
  * A refusal the STORE wrote for the person, with only the broker's name taken out.
@@ -361,7 +370,16 @@ export function createPluginRoutes(
    * trap `connect` documents applies here with one more argument in it — every parameter from that
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
-  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
+  composio?: {
+    broker: ComposioBroker;
+    guides?: KeyGuideSource;
+    /**
+     * 活动的提供商（X5）。不给时是 Composio。Arcade 时 `arcade` 是它的 broker：连接走带发起人绑定的
+     * 授权尝试与回程验证（`./arcade-routes`），而不是 Composio 的确认。
+     */
+    provider?: BrokerProvider;
+    arcade?: ArcadeBroker;
+  },
   /**
    * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
    * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
@@ -378,6 +396,9 @@ export function createPluginRoutes(
   accountModes?: AccountModeSwitch,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  /** broker 应用的 url 说的是哪个应用，按活动提供商的解析器（X5；Composio 时与以前一样）。 */
+  const toolkitOf = (url: string) =>
+    toolkitOfFor(composio?.provider ?? "composio", url);
   const adminCapability = adminScope?.adminCapability;
   const signedInWithCapability: MiddlewareHandler<{
     Variables: AppVariables;
@@ -942,6 +963,15 @@ export function createPluginRoutes(
   routes.put("/composio/clients/:slug", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
+    if (composio?.arcade) {
+      return context.json(
+        {
+          error:
+            "当前的连接应用提供商是 Arcade。部署自己的 OAuth 客户端只适用于 Composio，Arcade 的客户端在 Arcade 后台配置。",
+        },
+        409,
+      );
+    }
     const toolkit = deploymentClientSlug(context.req.param("slug"));
     if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
     const client = deploymentClientFrom(
@@ -2100,6 +2130,45 @@ export function createPluginRoutes(
        * mailbox for as long as it stays valid — which is why the failure below answers with the
        * vendor's sentence and never with what was being minted when it failed.
        */
+      // X5：Arcade 的连接先在发起人名下认领一次尝试，回程由 `/arcade/verify` 核对并记录。
+      if (composio.arcade) {
+        if (another) {
+          return context.json(
+            {
+              error: `用 Arcade 连接时，一个人在 ${row.title} 上暂时只能连接一个账号。没有建立任何连接。`,
+            },
+            409,
+          );
+        }
+        let returnUrl: string;
+        try {
+          returnUrl = brokerReturnUrl(
+            connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
+          );
+        } catch (error) {
+          const refusal = personRefusal(
+            error,
+            `没能开始连接 ${row.title}。请重试；如果一直这样，请联系管理员。`,
+            { route: "connect.consent", toolkit },
+          );
+          return context.json({ error: refusal.error }, refusal.status);
+        }
+        return startArcadeAuthorization(
+          context,
+          { store, arcade: composio.arcade, appUrl: connect.appUrl },
+          {
+            serverId,
+            account:
+              shared && app?.shared
+                ? { holder: "deployment", vendorUserId: holderId }
+                : personAccount(holderId, null),
+            toolkit,
+            title: row.title,
+            returnUrl,
+          },
+        );
+      }
+
       let redirectUrl: string;
       try {
         ({ redirectUrl } = await composio.broker.authorize({
@@ -2566,14 +2635,23 @@ export function createPluginRoutes(
      * — nothing in the body or the query is looked at at all.
      */
     try {
-      return context.json(
-        await store.disconnectBrokered({
-          toolkit: resolved.toolkit,
+      const disconnected = await store.disconnectBrokered({
+        toolkit: resolved.toolkit,
+        userId: context.var.actor.id,
+        by: context.var.actor.id,
+        reason: "self",
+      });
+      // X5：Arcade 按认证提供商存连接，同一提供商下厂商那边也结束了的兄弟应用一并结束本地行。
+      if (composio?.arcade && disconnected.vendorRevocationRequested) {
+        const siblings = await clearEndedArcadeSiblings({
+          store,
+          arcade: composio.arcade,
           userId: context.var.actor.id,
-          by: context.var.actor.id,
-          reason: "self",
-        }),
-      );
+          toolkit: resolved.toolkit,
+        });
+        return context.json({ ...disconnected, siblings });
+      }
+      return context.json(disconnected);
     } catch (error) {
       /*
        * REPEATING IT IS THE RECOVERY, AND THE SENTENCE SAYS SO RATHER THAN GUESSING HOW FAR IT GOT.
@@ -2797,6 +2875,13 @@ export function createPluginRoutes(
       return context.json({ error: refusal.error }, refusal.status);
     }
   });
+
+  // X5：Arcade 的回程验证与取消，只在 Arcade 是活动提供商时有作用。
+  mountArcadeRoutes(routes, capable, () =>
+    composio?.arcade
+      ? { store, arcade: composio.arcade, appUrl: connect?.appUrl }
+      : null,
+  );
 
   routes.get("/oauth/callback", async (context) => {
     const failed = connectedAccountsUrlFor(connect?.appUrl, {

@@ -1233,6 +1233,13 @@
       "when": 1794323193638,
       "tag": "0187_app_access_upstream",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1794324710665,
+      "tag": "0192_arcade_provider",
+      "breakpoints": true
     }
   ]
 }

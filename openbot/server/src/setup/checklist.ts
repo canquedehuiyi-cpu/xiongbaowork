@@ -5,6 +5,7 @@ import type { CredentialStatusReader } from "../credentials";
 import type { Edition } from "../edition";
 import { entitlementWarning } from "../intelligence-entitlement-check";
 import type { ModelCheckOutcome } from "../model-availability-check";
+import type { BrokerProvider } from "../plugins/access";
 import type { RuntimeEntitlementResponse } from "../self-host-banner";
 
 /**
@@ -143,8 +144,11 @@ export type SetupFacts = {
   /** A Bot computer is configured. Absent, its routes are not mounted at all. */
   computer: boolean;
   computerStatus?: SetupStatus;
-  /** A broker for apps beyond the ones an admin adds: Composio, the one this fork takes. */
-  apps: { configured: boolean };
+  /**
+   * A broker for apps beyond the ones an admin adds, and which one this deployment would use
+   * (Composio, or Arcade since X5). Absent, Composio, as before.
+   */
+  apps: { configured: boolean; provider?: BrokerProvider };
   /** The OpenTag pairing that carries Slack and Microsoft Teams. */
   chat: boolean;
 };
@@ -155,8 +159,8 @@ const KEY_NAME = {
 } as const;
 const PROVIDER_NAME = { openai: "OpenAI", anthropic: "Anthropic" } as const;
 const BROKER = {
-  key: "COMPOSIO_API_KEY",
-  docs: `${DOCS}/plugins/composio.md`,
+  composio: { key: "COMPOSIO_API_KEY", docs: `${DOCS}/plugins/composio.md` },
+  arcade: { key: "ARCADE_API_KEY", docs: `${DOCS}/plugins/arcade.md` },
 } as const;
 
 /** What a member is told about a dependency that is set up and was never checked. */
@@ -247,7 +251,11 @@ export function setupRows(
       gapDetail: personal
         ? `Without it, you can connect only the apps ${product} comes with.`
         : "Without it, people can connect only the apps an admin adds.",
-      fix: { kind: "env", names: [BROKER.key], docsUrl: BROKER.docs },
+      fix: {
+        kind: "env",
+        names: [BROKER[facts.apps.provider ?? "composio"].key],
+        docsUrl: BROKER[facts.apps.provider ?? "composio"].docs,
+      },
     }),
     deployment({
       id: "chat",
@@ -582,7 +590,7 @@ export function createSetupSources(input: {
   computer: boolean;
   /** Authenticated reachability and policy delivery, with per-operation deadlines and no wake. */
   computerCheck?: () => Promise<SetupStatus>;
-  apps: { configured: boolean };
+  apps: SetupFacts["apps"];
   chat: boolean;
 }): SetupSources {
   const keyFacts = {

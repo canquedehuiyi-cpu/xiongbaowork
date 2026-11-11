@@ -92,9 +92,12 @@ tests/arcade-adapter-connections.test.ts
 tests/arcade-adapter-errors.test.ts
 tests/arcade-adapter-status.test.ts
 tests/arcade-adapter.test.ts
+tests/arcade-attempt-constraints.test.ts
+tests/arcade-attempt-store.integration.test.ts
 tests/arcade-auth-provider.test.ts
 tests/arcade-authorize-status-engine.test.ts
 tests/arcade-classify.test.ts
+tests/arcade-completion-transaction.integration.test.ts
 tests/arcade-composio-bridge.test.ts
 tests/arcade-config.test.ts
 tests/arcade-confirm-engine.test.ts
@@ -107,8 +110,11 @@ tests/arcade-listing.test.ts
 tests/arcade-live.test.ts
 tests/arcade-malformed-listing-engine.test.ts
 tests/arcade-pagination-engine.test.ts
+tests/arcade-provider-check.test.ts
 tests/arcade-revoke-invariant.test.ts
 tests/arcade-single-user.test.ts
+tests/arcade-store-call.integration.test.ts
+tests/arcade-team-account.integration.test.ts
 tests/arcade-toolkit-listing-deadline-engine.test.ts
 tests/arcade-transport-registry.test.ts
 tests/arcade-transport.test.ts
@@ -117,6 +123,7 @@ tests/arcade-unreadable-total-engine.test.ts
 tests/arcade-vendor-error-engine.test.ts
 tests/arcade-vendor-read-contract.test.ts
 tests/arcade-verifier-notice.test.ts
+tests/arcade-verify.integration.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
 tests/assertion-shape.test.ts
@@ -655,6 +662,7 @@ tests/self-host-banner.test.ts
 tests/server-readiness-gates.test.ts
 tests/server-side-tools.integration.test.ts
 tests/settings-instructions-routes.test.ts
+tests/setup-checklist-arcade.test.ts
 tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
 tests/shared-brokered-accounts.integration.test.ts
