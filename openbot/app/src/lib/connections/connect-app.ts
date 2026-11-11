@@ -7,6 +7,7 @@ import {
   invalidatePlugins,
 } from "@/lib/plugins/mutations";
 import {
+  appKeyOf,
   connectionsQueryOptions,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
@@ -33,7 +34,14 @@ export function useConnectApp() {
         ...pluginsPageQueryOptions(),
         staleTime: 0,
       })
-    ).servers.find((item) => item.id === key);
+    ).servers.find(
+      /*
+       * By the row's id or its catalogue key: a curated connector added since G01-E is the row
+       * `team:<key>` while the tile names it `<key>`, so matching the id alone would re-add it on
+       * every press and never find it to connect.
+       */
+      (item) => item.id === key || appKeyOf(item) === key,
+    );
 
   async function run(key: string, action: "connect" | "add") {
     setError(null);
@@ -45,12 +53,12 @@ export function useConnectApp() {
         return;
       }
       const server = await freshServer(key);
-      if (!server?.hasCredential && !server?.dynamicClient) {
+      if (!server || (!server.hasCredential && !server.dynamicClient)) {
         await navigate({ to: "/connections/$key", params: { key } });
         return;
       }
       /* fork 的 `connectAccountMutationOptions` 只回授权链接或 null（字段式连接没有链接）。 */
-      const authorizationUrl = await connect.mutateAsync(key);
+      const authorizationUrl = await connect.mutateAsync(server.id);
       if (authorizationUrl) {
         window.location.href = authorizationUrl;
         return;

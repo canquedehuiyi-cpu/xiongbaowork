@@ -163,7 +163,13 @@ function RouteComponent() {
   const personal =
     useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   // Held for this visit, keyed on the app, and dropped from the address below.
-  const [arrival] = useState(() => ({ key, connect: connect === true }));
+  const [arrival] = useState(() => ({
+    key,
+    connect: connect === true,
+    // Asked for the account link on arrival: the link page drops `?linked=` from the address once it
+    // has read it, and the page must not flip to the app's page (losing the notice) when it does.
+    identity: identity === true || linked !== undefined,
+  }));
   const startConnect = arrival.key === key && arrival.connect;
   const navigate = Route.useNavigate();
   useEffect(() => {
@@ -184,6 +190,7 @@ function RouteComponent() {
     if (
       identity === true ||
       linked !== undefined ||
+      (arrival.key === key && arrival.identity) ||
       (plugins.data !== undefined && !appHere)
     ) {
       return <IdentityConnectionPage linked={linked} provider={key} />;

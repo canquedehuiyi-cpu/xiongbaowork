@@ -25,9 +25,10 @@ import {
 } from "@/components/plugins/brokered-account-row";
 import type { BrokerField, KeyGuide } from "@/lib/plugins/mutations";
 import type { PluginServer, PluginsPage } from "@/lib/plugins/queries";
-import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { Route as ConnectedAccountRoute } from "@/routes/_authed/_app/connections.$key";
+import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { BROKERED_PROBE_OUTCOMES } from "../../server/src/plugins/store";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * The brokered account row, on both screens that draw it.
@@ -2822,4 +2823,86 @@ test("arriving to connect a key app opens its key form without a second press", 
   );
 
   expect(await view.findByLabelText("API Key")).toBeTruthy();
+});
+
+/*
+ * 「再连一个账号」 only where the server serves it: `?another=1` is accepted for a sign-in app alone
+ * (`server/src/plugins/routes.ts`), and a key app stays one account a person, so the button there
+ * would open a form whose submit is always refused with 409.
+ */
+test("one more account is offered on a sign-in app and not on a key app, even when the list says it can", async () => {
+  global.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    if (String(input).includes("/accounts"))
+      return Response.json({
+        accounts: [
+          {
+            id: "acc-1",
+            identity: "me@example.com",
+            label: null,
+            isDefault: true,
+            connectedAt: CHECKED_AT,
+          },
+        ],
+        canAddAnother: true,
+      });
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+
+  const consent = renderRow(accountState({ connected: true, kind: "consent" }));
+  expect(
+    await consent.findByRole("button", { name: /再连一个账号/ }),
+  ).toBeTruthy();
+  cleanup();
+
+  const key = renderRow(
+    accountState({
+      connected: true,
+      kind: "fields",
+      verified: true,
+      verifiedAt: CHECKED_AT,
+    }),
+  );
+  await waitFor(() => expect(key.getByText("已连接")).toBeTruthy());
+  await settleReactWork();
+  expect(key.queryByRole("button", { name: /再连一个账号/ })).toBeNull();
+});
+
+/*
+ * The GitHub link callback lands on `/connections/github?linked=…`. Where this deployment also has a
+ * `github` app enabled, the page is the account link because of that `linked`, and the link page
+ * drops it from the address once read: the page must stay the account link, with its notice.
+ */
+test("coming back from linking GitHub stays on the account link, notice and all, though a github app is enabled", async () => {
+  global.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const path = String(input).split("?")[0] ?? "";
+    if (path === "/api/plugins")
+      return Response.json({
+        servers: [
+          {
+            id: "team:github",
+            title: "GitHub",
+            vendor: "GitHub",
+            provenance: "first-party",
+            tools: [{ name: "issues", ref: "github/issues", grantedTo: [] }],
+          },
+        ],
+        skills: [],
+        catalogue: [],
+      });
+    if (path.startsWith("/api/identity"))
+      return Response.json({ accounts: [] });
+    return Response.json({});
+  }) as typeof fetch;
+
+  const view = renderAccountScreen(
+    queryClient(),
+    "/connections/github?linked=failed",
+  );
+
+  expect(
+    await view.findByText("GitHub 账号没能关联，请再试一次。"),
+  ).toBeTruthy();
+  await settleReactWork();
+  await settleReactWork();
+  expect(view.getByText("GitHub 账号没能关联，请再试一次。")).toBeTruthy();
 });

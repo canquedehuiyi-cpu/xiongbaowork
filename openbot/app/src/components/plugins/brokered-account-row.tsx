@@ -1306,9 +1306,11 @@ export function BrokeredAccountRow({
                 ) : null}
                 {/*
                  * ONE MORE ACCOUNT BESIDE THE ONES CONNECTED, where the app can tell a person's
-                 * accounts apart. A key app opens the form; a sign-in app leaves for its page.
+                 * accounts apart — and only for a sign-in app: the server serves `?another=1`
+                 * for consent apps alone (a key app stays one account a person), so offering it
+                 * on a key app would open a form whose submit is always refused with 409.
                  */}
-                {canAddAnother && account.kind !== "no-auth" && !needsAdmin ? (
+                {canAddAnother && account.kind === "consent" && !needsAdmin ? (
                   <Button
                     disabled={
                       account.connectingAnother || account.requestingFields
@@ -1319,7 +1321,7 @@ export function BrokeredAccountRow({
                     variant="outline"
                   >
                     再连一个账号
-                    {account.kind === "consent" ? <IconArrowUpRight /> : null}
+                    <IconArrowUpRight />
                   </Button>
                 ) : null}
                 {/* With several accounts each has its own Disconnect, in its row below. */}
