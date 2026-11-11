@@ -239,7 +239,7 @@ describe("Add in the personal edition", () => {
       const { view, user } = draw("personal");
 
       const row = await view.findByTestId(`directory-${target.slug}`);
-      await user.click(within(row).getByRole("button", { name: "Add" }));
+      await user.click(within(row).getByRole("button", { name: "添加" }));
 
       const id = `${target.provider}-${target.slug}`;
       await waitFor(() => {
@@ -249,17 +249,17 @@ describe("Add in the personal edition", () => {
       });
       // Added and not yet signed in: said plainly, while the other tab is open.
       await waitFor(() => {
-        expect(within(row).getByText("Not connected")).toBeTruthy();
-        expect(row.textContent).toContain(`Waiting for ${target.name}…`);
+        expect(within(row).getByText("未连接")).toBeTruthy();
+        expect(row.textContent).toContain(`正在等 ${target.name}…`);
       });
-      expect(row.textContent).not.toContain("Added");
+      expect(row.textContent).not.toContain("已添加");
 
       // Signed in at the other tab: the row reads connected once the server says so.
       connected = [id];
       await waitFor(
         () => {
-          expect(row.textContent).toContain("Connected");
-          expect(row.textContent).not.toContain("Not connected");
+          expect(row.textContent).toContain("已连接");
+          expect(row.textContent).not.toContain("未连接");
         },
         { timeout: 5_000 },
       );
@@ -272,7 +272,7 @@ describe("Add in the personal edition", () => {
     const { view, user, history } = draw("personal");
 
     const row = await view.findByTestId("directory-posthog");
-    await user.click(within(row).getByRole("button", { name: "Add" }));
+    await user.click(within(row).getByRole("button", { name: "添加" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/connections/composio-posthog");
@@ -300,23 +300,23 @@ describe("an added app nobody has signed in to", () => {
         expect(
           within(slack).getByTestId("directory-not-connected").textContent,
         ).toBe(
-          edition === "personal" ? "Not connected" : "Added, not connected",
+          edition === "personal" ? "未连接" : "已添加，未连接",
         );
       });
       expect(
-        within(slack).getByRole("button", { name: "Connect Slack" }),
+        within(slack).getByRole("button", { name: "连接 Slack" }),
       ).toBeTruthy();
       if (edition === "personal")
-        expect(slack.textContent).not.toContain("Added");
+        expect(slack.textContent).not.toContain("已添加");
 
       // The one this person did sign in to says so.
       const github = view.getByTestId("directory-github");
-      expect(github.textContent).toContain("Connected");
-      expect(github.textContent).not.toContain("Not connected");
+      expect(github.textContent).toContain("已连接");
+      expect(github.textContent).not.toContain("未连接");
 
       // Connect starts the person's own sign-in, the same as a Bot's card.
       await user.click(
-        within(slack).getByRole("button", { name: "Connect Slack" }),
+        within(slack).getByRole("button", { name: "连接 Slack" }),
       );
       await waitFor(() => {
         expect(tabs[0]?.url).toBe("https://sign-in.example/composio-slack");
@@ -330,7 +330,7 @@ describe("an added app nobody has signed in to", () => {
     const { view, user } = draw("team");
 
     const row = await view.findByTestId("directory-slack");
-    await user.click(within(row).getByRole("button", { name: "Add" }));
+    await user.click(within(row).getByRole("button", { name: "添加" }));
     await waitFor(() => expect(writes).toEqual(["add slack"]));
     await settleReactWork();
     expect(tabs).toHaveLength(0);

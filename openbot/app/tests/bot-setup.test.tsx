@@ -121,6 +121,9 @@ function serve(
     endpoint,
     hasAuth: false,
     hasCallbackToken: false,
+    modelRef: null,
+    platformModelRef: null,
+    persona: null,
     isolated: options.isolated ?? false,
     ...(options.instructions === undefined
       ? {}
@@ -152,6 +155,8 @@ function serve(
     undefined,
     true,
     MANAGED,
+    // 熊宝的路由在这里多了配额（quota）和管理员代管（adminScope）两个参数，上游这一位是共享使用。
+    undefined,
     undefined,
     // The addresses this deployment runs, as app.ts names them from its configuration.
     { token: "deployment-token", endpoints: [MANAGED, PICKED] },
@@ -207,26 +212,21 @@ function draw(edition?: "team" | "personal") {
 
 async function rename(view: ReturnType<typeof draw>, to: string) {
   const user = userEvent.setup({ document: view.baseElement.ownerDocument });
-  await user.click(await view.findByRole("button", { name: /^Name/ }));
+  await user.click(await view.findByRole("button", { name: /^名称/ }));
   const field = await view.findByDisplayValue("Expenses");
   await user.clear(field);
   await user.type(field, to);
-  await user.click(view.getByRole("button", { name: "Save" }));
+  await user.click(view.getByRole("button", { name: "保存" }));
 }
 
 test("the personal edition's Setup has no Visibility or Isolated: one person, one computer", async () => {
   serve(MANAGED);
   const view = draw("personal");
-  expect(await view.findByRole("button", { name: /^Name/ })).toBeTruthy();
-  expect(
-    view
-      .getByRole("link", {
-        name: "Give each Bot its own computer with OpenBot for Business.",
-      })
-      .getAttribute("href"),
-  ).toBe("https://open.bot/business");
-  expect(view.queryByText("Visibility")).toBeNull();
-  expect(view.queryByText("Isolated")).toBeNull();
+  expect(await view.findByRole("button", { name: /^名称/ })).toBeTruthy();
+  // 上游这里还有一条「OpenBot for Business」的营销链接；熊宝不卖上游的 Business 版，不收。
+  expect(view.queryByRole("link", { name: /OpenBot for Business/ })).toBeNull();
+  expect(view.queryByText("可见性")).toBeNull();
+  expect(view.queryByText("独立运行")).toBeNull();
 });
 
 /*
@@ -240,16 +240,16 @@ test("the starter Bot's Setup edits its instructions apart from what it does", a
   const view = draw("personal");
   const user = userEvent.setup({ document: view.baseElement.ownerDocument });
 
-  const described = await view.findByRole("button", { name: /^What it does/ });
+  const described = await view.findByRole("button", { name: /^它做什么/ });
   expect(described.textContent).toContain("Review receipts.");
   expect(described.textContent).not.toContain("You are");
-  const instructed = view.getByRole("button", { name: /^Instructions/ });
+  const instructed = view.getByRole("button", { name: /^指令/ });
   expect(instructed.textContent).toContain(instructions);
 
   await user.click(instructed);
   const field = await view.findByDisplayValue(instructions);
   await user.type(field, " I live in Berlin.");
-  await user.click(view.getByRole("button", { name: "Save" }));
+  await user.click(view.getByRole("button", { name: "保存" }));
 
   await waitFor(() => expect(updates).toHaveLength(1));
   expect(updates[0]).toMatchObject({
@@ -262,9 +262,9 @@ test("a Bot whose instructions are what it does has no separate Instructions row
   serve(MANAGED);
   const view = draw("personal");
   expect(
-    await view.findByRole("button", { name: /^What it does/ }),
+    await view.findByRole("button", { name: /^它做什么/ }),
   ).toBeTruthy();
-  expect(view.queryByRole("button", { name: /^Instructions/ })).toBeNull();
+  expect(view.queryByRole("button", { name: /^指令/ })).toBeNull();
 
   await rename(view, "Receipts");
   await waitFor(() => expect(updates).toHaveLength(1));
@@ -305,8 +305,8 @@ test("a Bot on the harness OpenBot runs says it can use its tools, and offers no
   const view = draw("personal");
 
   expect(await view.findByText(KEY_FROM_OPENBOT)).toBeTruthy();
-  expect(view.queryByText(/can't use tools/)).toBeNull();
-  expect(view.queryByRole("button", { name: "Generate key" })).toBeNull();
+  expect(view.queryByText(/用不了授予它的任何工具/)).toBeNull();
+  expect(view.queryByRole("button", { name: "生成令牌" })).toBeNull();
 });
 
 test("a Bot somebody hosts is still offered a key for its tools", async () => {
@@ -315,10 +315,10 @@ test("a Bot somebody hosts is still offered a key for its tools", async () => {
 
   expect(
     await view.findByText(
-      "This Bot has no key yet. It can talk but can't use tools. Generate a key and add it to your agent's configuration.",
+      "这位员工没有凭据，所以能对话，但用不了授予它的任何工具。生成一个，放进这位员工的配置里。",
     ),
   ).toBeTruthy();
-  expect(view.getByRole("button", { name: "Generate key" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "生成令牌" })).toBeTruthy();
 });
 
 test("someone who cannot manage the Bot reads its setup but cannot open an editor", async () => {
@@ -326,12 +326,12 @@ test("someone who cannot manage the Bot reads its setup but cannot open an edito
   const view = draw();
 
   expect(await view.findByText("Expenses")).toBeTruthy();
-  expect(view.queryByRole("button", { name: /^Name/ })).toBeNull();
+  expect(view.queryByRole("button", { name: /^名称/ })).toBeNull();
 });
 
 /** The Isolated row's switch, found by the row's own title. */
 async function isolatedSwitch(view: ReturnType<typeof draw>) {
-  return view.findByRole("switch", { name: "Isolated" });
+  return view.findByRole("switch", { name: "独立运行" });
 }
 
 test("the Isolated row gives a Bot a computer of its own through the real route", async () => {
@@ -340,7 +340,7 @@ test("the Isolated row gives a Bot a computer of its own through the real route"
   const toggle = await isolatedSwitch(view);
   expect(toggle.getAttribute("aria-checked")).toBe("false");
   expect(
-    view.getByText("Runs on your computer, alongside your other Bots."),
+    view.getByText("和你的其他员工一起在你的电脑上运行。"),
   ).toBeTruthy();
 
   const user = userEvent.setup({ document: view.baseElement.ownerDocument });
@@ -363,7 +363,7 @@ test("an isolated Bot's Visibility row says, before it is made public and while 
   const view = draw();
   expect(
     await view.findByText(
-      `Only you can see it and start conversations with it. ${ISOLATED_MAKING_PUBLIC}`,
+      `只有你能看到它、和它开始对话。${ISOLATED_MAKING_PUBLIC}`,
     ),
   ).toBeTruthy();
   cleanup();
@@ -372,7 +372,7 @@ test("an isolated Bot's Visibility row says, before it is made public and while 
   const shared = draw();
   expect(
     await shared.findByText(
-      `Everyone on OpenBot can find and use it. ${ISOLATED_PUBLIC_SHARES_LOGINS}`,
+      `熊宝上的所有人都能找到并使用它。${ISOLATED_PUBLIC_SHARES_LOGINS}`,
     ),
   ).toBeTruthy();
   cleanup();
@@ -381,7 +381,7 @@ test("an isolated Bot's Visibility row says, before it is made public and while 
   serve(MANAGED, actor.id, { visibility: "public" });
   const plain = draw();
   expect(
-    await plain.findByText("Everyone on OpenBot can find and use it."),
+    await plain.findByText("熊宝上的所有人都能找到并使用它。"),
   ).toBeTruthy();
 });
 

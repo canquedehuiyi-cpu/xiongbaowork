@@ -177,16 +177,16 @@ describe("an app's page in the personal edition", () => {
   test("offers Connect for an app that isn't added, instead of a switch for everybody", async () => {
     const view = draw("personal", []);
     expect(
-      await view.findByRole("button", { name: "Connect Notion" }),
+      await view.findByRole("button", { name: "连接 Notion" }),
     ).toBeTruthy();
-    expect(view.queryByText("Enable for this deployment")).toBeNull();
+    expect(view.queryByText("为这个部署启用")).toBeNull();
   });
 
   test("turns the app on and starts connecting your account in one press", async () => {
     const view = draw("personal", []);
     const user = userEvent.setup({ document });
     await user.click(
-      await view.findByRole("button", { name: "Connect Notion" }),
+      await view.findByRole("button", { name: "连接 Notion" }),
     );
     await waitFor(() =>
       expect(writes).toEqual([
@@ -198,10 +198,10 @@ describe("an app's page in the personal edition", () => {
 
   test("has no choices that only matter with other people", async () => {
     const view = draw("personal", [notionServer]);
-    await view.findByText("Your account");
-    expect(view.queryByText("Bot owners can give it to their Bots")).toBeNull();
-    expect(view.queryByText("Whose account")).toBeNull();
-    expect(view.container.textContent).not.toContain("this deployment");
+    await view.findByText("你的账号");
+    expect(view.queryByText("员工的主人可以把它给自己的员工")).toBeNull();
+    expect(view.queryByText("用谁的账号")).toBeNull();
+    expect(view.container.textContent).not.toContain("这个部署");
   });
 
   test("lists the app's tools for every Bot, with nothing to give one at a time", async () => {
@@ -220,18 +220,18 @@ describe("an app's page in the personal edition", () => {
     const view = draw("personal", [withTools]);
     expect(await view.findByText("Search")).toBeTruthy();
     // The setting by its name in Settings > Approvals; it was once "Ask before acting", named nowhere.
-    expect(view.getByText(/Every Bot can use these/).textContent).toContain(
-      "While Always ask before making changes is on,",
+    expect(view.getByText(/每位员工都能用这些/).textContent).toContain(
+      "「做任何改动前都先问我」打开时，",
     );
-    expect(view.container.textContent).not.toContain("Ask before acting");
-    expect(view.queryByRole("button", { name: "Grant tools…" })).toBeNull();
-    expect(view.queryByText("By Bot")).toBeNull();
+    expect(view.container.textContent).not.toContain("行动前先问");
+    expect(view.queryByRole("button", { name: "授予工具…" })).toBeNull();
+    expect(view.queryByText("按员工")).toBeNull();
     expect(view.queryByRole("link", { name: /search/ })).toBeNull();
   });
 
   test("goes back to Connections", async () => {
     const view = draw("personal", [notionServer]);
-    const back = await view.findByRole("button", { name: /Connections/ });
+    const back = await view.findByRole("button", { name: /全部连接/ });
     expect(back.getAttribute("href")).toBe("/connections");
   });
 });
@@ -304,7 +304,7 @@ describe("Gmail's page in the personal edition", () => {
     expect(row.textContent).toContain(
       "Adds and/or removes specified Gmail labels for a message.",
     );
-    expect(row.textContent).toContain("changes things");
+    expect(row.textContent).toContain("会改动");
     expect(view.getByText("Send email")).toBeTruthy();
     expect(view.getByText("Get draft")).toBeTruthy();
     expect(view.getByText("Retrieves a single Gmail draft.")).toBeTruthy();
@@ -312,9 +312,9 @@ describe("Gmail's page in the personal edition", () => {
     const profile = view
       .getByText("Get profile")
       .closest("[data-slot=item]") as HTMLElement;
-    expect(profile.textContent).toBe("Get profilereads");
-    expect(view.getAllByText("changes things")).toHaveLength(2);
-    expect(view.getAllByText("reads")).toHaveLength(3);
+    expect(profile.textContent).toBe("Get profile只读");
+    expect(view.getAllByText("会改动")).toHaveLength(2);
+    expect(view.getAllByText("只读")).toHaveLength(3);
 
     const text = view.container.textContent ?? "";
     expect(text).not.toContain("GMAIL_");
@@ -325,12 +325,12 @@ describe("Gmail's page in the personal edition", () => {
     const view = draw("personal", [gmailServer], "composio-gmail");
     expect(
       await view.findByText(
-        "Connect your Gmail account so your Bots can use it.",
+        "连接你的 Gmail 账号，你的员工就能用它。",
       ),
     ).toBeTruthy();
     const text = view.container.textContent ?? "";
-    expect(text).not.toContain("documents");
-    expect(text).not.toContain("connector");
+    expect(text).not.toContain("文档");
+    expect(text).not.toContain("连接器");
     expect(text).not.toContain("Composio");
   });
 
@@ -339,10 +339,10 @@ describe("Gmail's page in the personal edition", () => {
     expect(await view.findByText("GMAIL_ADD_LABEL_TO_EMAIL")).toBeTruthy();
     expect(
       view.getByText(
-        /Setup is complete without it, and it reaches only your own Gmail account\./,
+        /不连也算配置完成；连上后只会碰到你自己的 Gmail 账号。/,
       ),
     ).toBeTruthy();
-    expect(view.container.textContent).not.toContain("documents");
+    expect(view.container.textContent).not.toContain("文档");
   });
 });
 
@@ -413,7 +413,7 @@ test("Gmail's page says what each tool does as a person would, not as its descri
   );
   const text = view.container.textContent ?? "";
   expect(text).not.toMatch(/Tool to|DELETES|by (its )?ID/);
-  expect(view.getAllByText("changes things")).toHaveLength(6);
+  expect(view.getAllByText("会改动")).toHaveLength(6);
 });
 
 test("team Admin keeps the descriptions as the app wrote them", async () => {
@@ -479,27 +479,27 @@ describe("turning an app off from its own page", () => {
     const { view, router } = drawAtConnections([exaServer], "composio-exa");
     const user = userEvent.setup({ document });
     await user.click(
-      await view.findByRole("switch", { name: "Turn Exa on or off" }),
+      await view.findByRole("switch", { name: "打开或关掉 Exa" }),
     );
     expect(await view.findByText("The Connections list")).toBeTruthy();
     expect(router.state.location.pathname).toBe("/connections");
     expect(writes.filter((write) => write.startsWith("DELETE"))).toEqual([
       "DELETE /api/plugins/servers/composio-exa",
     ]);
-    expect(view.queryByText("Not an app")).toBeNull();
+    expect(view.queryByText("不是应用")).toBeNull();
   });
 
   test("a catalogue app stays on its page, off, with Connect to turn it back on", async () => {
     const { view, router } = drawAtConnections([notionServer], "notion");
     const user = userEvent.setup({ document });
     await user.click(
-      await view.findByRole("switch", { name: "Turn Notion on or off" }),
+      await view.findByRole("switch", { name: "打开或关掉 Notion" }),
     );
     expect(
-      await view.findByRole("button", { name: "Connect Notion" }),
+      await view.findByRole("button", { name: "连接 Notion" }),
     ).toBeTruthy();
     expect(router.state.location.pathname).toBe("/connections/notion");
-    expect(view.queryByText("Not an app")).toBeNull();
+    expect(view.queryByText("不是应用")).toBeNull();
   });
 
   test("disconnecting your account leaves the app on, on its page, with Connect", async () => {
@@ -515,15 +515,15 @@ describe("turning an app off from its own page", () => {
     ];
     const { view, router } = drawAtConnections([exaServer], "composio-exa");
     const user = userEvent.setup({ document });
-    await user.click(await view.findByRole("button", { name: "Disconnect" }));
+    await user.click(await view.findByRole("button", { name: "断开" }));
     await waitFor(() =>
       expect(writes.filter((write) => write.startsWith("DELETE"))).toEqual([
         "DELETE /api/plugins/servers/composio-exa/connection",
       ]),
     );
-    expect(await view.findByRole("button", { name: "Connect" })).toBeTruthy();
+    expect(await view.findByRole("button", { name: "连接" })).toBeTruthy();
     expect(
-      view.getByRole("switch", { name: "Turn Exa on or off" }),
+      view.getByRole("switch", { name: "打开或关掉 Exa" }),
     ).toBeTruthy();
     expect(router.state.location.pathname).toBe("/connections/composio-exa");
   });
@@ -531,8 +531,8 @@ describe("turning an app off from its own page", () => {
 
 test("the team edition's page is unchanged", async () => {
   const view = draw("team", [notionServer]);
-  expect(await view.findByText("Enable for this deployment")).toBeTruthy();
-  expect(view.getByText("Bot owners can give it to their Bots")).toBeTruthy();
+  expect(await view.findByText("为这个部署启用")).toBeTruthy();
+  expect(view.getByText("员工的主人可以把它给自己的员工")).toBeTruthy();
 });
 
 test("Routines' tool and per-Bot pages say always on, rather than offer a switch the server refuses", async () => {
@@ -561,7 +561,7 @@ test("Routines' tool and per-Bot pages say always on, rather than offer a switch
     () => <PluginBotPage agentId="bot-1" pluginKey="routines" />,
   ]) {
     const view = draw("team", [routines], "routines", page, bots);
-    expect(await view.findByText("Always on")).toBeTruthy();
+    expect(await view.findByText("一直开着")).toBeTruthy();
     expect(view.queryByRole("switch")).toBeNull();
     cleanup();
   }
@@ -576,8 +576,8 @@ test("Routines is always on in the team edition too, with no switch to turn it o
     dynamicClient: false,
   } as PluginServer;
   const view = draw("team", [routines], "routines");
-  expect(await view.findByText("Always on")).toBeTruthy();
-  expect(view.queryByText("Enable for this deployment")).toBeNull();
+  expect(await view.findByText("一直开着")).toBeTruthy();
+  expect(view.queryByText("为这个部署启用")).toBeNull();
   expect(view.queryByRole("switch", { name: /Routines/ })).toBeNull();
 });
 

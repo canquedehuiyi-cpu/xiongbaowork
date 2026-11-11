@@ -206,7 +206,8 @@ async function renderPage(audit: Record<string, unknown[]>) {
   ]);
   queryClient.setQueryData(agentKeys.list(true), []);
   const router = createRouter({
-    routeTree: createRootRoute({ component: () => <AuditPage /> }),
+    // Admin › 审计 renders the page with `ask`, which is what puts 「为什么？」 on a row.
+    routeTree: createRootRoute({ component: () => <AuditPage ask /> }),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   const view = render(
@@ -273,7 +274,7 @@ test("Admin keeps routing, a build's components, the computer's start-up and the
         "Local computer access is off for you.",
         "capability:localComputer",
         // Admin asks the controls about the row: see what-if/why-button.tsx.
-        "Why?",
+        "为什么？",
       ],
     },
     {

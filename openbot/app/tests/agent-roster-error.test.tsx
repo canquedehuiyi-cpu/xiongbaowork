@@ -16,11 +16,11 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { Route as AgentsRoute } from "@/routes/_authed/_app/agents/index";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
 import { Route as HomeRoute } from "@/routes/_authed/_app/index";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
 
 /**
  * Both agent-facing screens read the same `agentListQueryOptions()` query, and both drew their
@@ -44,6 +44,10 @@ import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
  * follow the real redirect, and hold the wall to the same promises the roster made: a failure is
  * said as a failure, loading is a skeleton, a failed background refetch keeps the cached roster, and
  * hidden and pinned employees stay visible and reachable.
+ *
+ * M5b：员工管理（`/wakers`）又并进了上游的员工页（`/bots`），`/agents` 现在直接落到 `/bots`。名单画在上游的分区
+ * 里：置顶的在「已置顶」，隐藏的在折起来的「已隐藏」（点「显示」展开），分区标题和卡片上的标签用同一个词，所以
+ * 数标签时只数卡片上的（`[data-pinned]`、`[data-hidden]`）。
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -156,7 +160,7 @@ function renderHome(queryClient: QueryClient) {
 }
 
 /**
- * `/wakers`'s component (which `/agents` redirects to) calls `Route.useSearch()` and `useNavigate()`,
+ * `/bots`'s component (which `/agents` redirects to) calls `Route.useSearch()` and `useNavigate()`,
  * which read `this.id`
  * off the very `Route` singleton the source file exports — so, unlike `/`, a bare root standing in
  * for it is not enough; those hooks fail to resolve a match unless that exact object is present in
@@ -237,20 +241,20 @@ function restoreRouteState(
  * `options` clone each time, so the constant itself is never written to after this line.
  */
 const pristineAgentsRouteState = captureRouteState(AgentsRoute);
-/** The same fixed point for `/wakers`, which `renderAgents` now wires in as the redirect's target. */
-const pristineWakersRouteState = captureRouteState(WakersRoute);
+/** The same fixed point for `/bots`, which `renderAgents` now wires in as the redirect's target. */
+const pristineBotsRouteState = captureRouteState(BotsRoute);
 
 let agentsRouteSnapshot: Record<string, unknown>;
-let wakersRouteSnapshot: Record<string, unknown>;
+let botsRouteSnapshot: Record<string, unknown>;
 
 beforeEach(() => {
   agentsRouteSnapshot = captureRouteState(pristineAgentsRouteState);
-  wakersRouteSnapshot = captureRouteState(pristineWakersRouteState);
+  botsRouteSnapshot = captureRouteState(pristineBotsRouteState);
 });
 
 afterEach(() => {
   restoreRouteState(AgentsRoute, agentsRouteSnapshot);
-  restoreRouteState(WakersRoute, wakersRouteSnapshot);
+  restoreRouteState(BotsRoute, botsRouteSnapshot);
 });
 
 function renderAgents(queryClient: QueryClient) {
@@ -275,14 +279,14 @@ function renderAgents(queryClient: QueryClient) {
     getParentRoute: () => appRoute,
   });
   // The archived roster's redirect target, under the same decoy chain so its own
-  // `Route.useSearch()` / `useNavigate()` resolve to `/_authed/_app/wakers`, its real id.
+  // `Route.useSearch()` / `useNavigate()` resolve to `/_authed/_app/bots/`, its real id.
   const wall = (
-    WakersRoute as unknown as {
-      update: (options: unknown) => typeof WakersRoute;
+    BotsRoute as unknown as {
+      update: (options: unknown) => typeof BotsRoute;
     }
   ).update({
-    id: "/wakers",
-    path: "/wakers",
+    id: "/bots/",
+    path: "/bots/",
     getParentRoute: () => appRoute,
   });
   const tree = rootRoute.addChildren([
@@ -300,12 +304,19 @@ function renderAgents(queryClient: QueryClient) {
   return Object.assign(view, { router });
 }
 
-/** Waits until the archived `/agents` has redirected onto the `/wakers` wall. */
-async function landedOnWakers(view: ReturnType<typeof renderAgents>) {
+/** Waits until the archived `/agents` has redirected onto the `/bots` roster. */
+async function landedOnBots(view: ReturnType<typeof renderAgents>) {
   await waitFor(() =>
-    expect(view.router.state.location.pathname).toBe("/wakers"),
+    expect(view.router.state.location.pathname.replace(/\/$/, "")).toBe(
+      "/bots",
+    ),
   );
   expect(view.router.state.location.search).toEqual({});
+}
+
+/** Unfold the 已隐藏 section, where a hidden coworker's card waits until asked for. */
+async function showHidden(view: ReturnType<typeof renderAgents>) {
+  fireEvent.click(await view.findByRole("button", { name: "显示" }));
 }
 
 /** The wall's card for one employee, by the name its title link carries. */
@@ -328,7 +339,7 @@ const wallNames = (view: ReturnType<typeof renderAgents>) =>
 
 test("a failed roster on /agents reports the failure, not an empty roster", async () => {
   const view = renderAgents(failingQueryClient());
-  await landedOnWakers(view);
+  await landedOnBots(view);
 
   // Said as the failure it is, with a way to ask again.
   const failure = await view.findByText(/^读不到员工：/);
@@ -364,7 +375,7 @@ test("a failed roster on / reports the failure and explains the disabled compose
   ).toBeTruthy();
 });
 
-test("/agents lands on a /wakers wall holding skeletons while the roster is pending, not an empty state", async () => {
+test("/agents lands on a /bots roster holding skeletons while the roster is pending, not an empty state", async () => {
   // A fetch that never settles is `isPending` forever — the state each section's loading arm
   // renders once the router has finished its own (also async) initial match, which is why this
   // still waits rather than reading `view.container` on the very next line.
@@ -372,7 +383,7 @@ test("/agents lands on a /wakers wall holding skeletons while the roster is pend
     new Promise<Response>(() => {})) as unknown as typeof fetch;
 
   const view = renderAgents(failingQueryClient());
-  await landedOnWakers(view);
+  await landedOnBots(view);
 
   // The wall's loading arm: one row of card-sized skeletons.
   const skeletons = await waitFor(() => {
@@ -416,7 +427,7 @@ test("a failed REFETCH on /agents keeps the roster it already had, not the error
   const queryClient = staleQueryClient([mine, shared]);
 
   const view = renderAgents(queryClient);
-  await landedOnWakers(view);
+  await landedOnBots(view);
   await waitForFailedRefetch(queryClient);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
@@ -468,7 +479,7 @@ test("a failed REFETCH on /agents with one empty slice shows it as empty, not br
   const queryClient = staleQueryClient([mine]);
 
   const view = renderAgents(queryClient);
-  await landedOnWakers(view);
+  await landedOnBots(view);
   await waitForFailedRefetch(queryClient);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
@@ -489,7 +500,7 @@ test("a failed REFETCH on /agents with the other slice empty also shows it as em
   const queryClient = staleQueryClient([shared]);
 
   const view = renderAgents(queryClient);
-  await landedOnWakers(view);
+  await landedOnBots(view);
   await waitForFailedRefetch(queryClient);
 
   expect(await view.findByText("Shared Agent")).toBeTruthy();
@@ -514,36 +525,39 @@ function servingRosters(visible: AgentProfile[], hidden: AgentProfile[]) {
   }) as unknown as typeof fetch;
 }
 
-test("a hidden coworker from /agents is on the /wakers wall after the listed ones, tagged, with an 编辑 that opens it", async () => {
+test("a hidden coworker from /agents is on the /bots roster after the listed ones, tagged, with an 编辑 that opens it", async () => {
   const mine = agent({ id: "mine-1", name: "Mine Agent" });
   const tucked = agent({ id: "hidden-1", name: "Tucked Agent", hidden: true });
   servingRosters([mine], [tucked]);
 
   const view = renderAgents(failingQueryClient());
-  await landedOnWakers(view);
+  await landedOnBots(view);
 
-  expect(await view.findByText("已隐藏")).toBeTruthy();
+  // Under its own 已隐藏 section, folded until asked for, as upstream's Hidden is.
+  expect(await view.findByRole("heading", { name: "已隐藏" })).toBeTruthy();
+  expect(view.queryByText("Tucked Agent")).toBeNull();
+  await showHidden(view);
   // After the listed employees, as the old Hidden section sat below both rosters.
   await waitFor(() =>
     expect(wallNames(view)).toEqual(["Mine Agent", "Tucked Agent"]),
   );
   // The tag is on the hidden card only.
-  expect(view.getAllByText("已隐藏")).toHaveLength(1);
+  expect(view.container.querySelectorAll("[data-hidden]")).toHaveLength(1);
   expect(
     cardOf(view, "Tucked Agent").querySelector("[data-hidden]")?.textContent,
   ).toBe("已隐藏");
   expect(cardOf(view, "Mine Agent").querySelector("[data-hidden]")).toBeNull();
   // The card's own 编辑 is the way to the dialog that holds Unhide, now over the wall.
   const link = view.getByLabelText("编辑 Tucked Agent");
-  expect(link.getAttribute("href")).toBe("/wakers?agent=hidden-1");
+  expect(link.getAttribute("href")).toBe("/bots?agent=hidden-1");
 });
 
-test("with nothing hidden, the wall /agents lands on has no 已隐藏 tag at all", async () => {
+test("with nothing hidden, the roster /agents lands on has no 已隐藏 tag at all", async () => {
   servingRosters([agent({ id: "mine-1", name: "Mine Agent" })], []);
   const queryClient = failingQueryClient();
 
   const view = renderAgents(queryClient);
-  await landedOnWakers(view);
+  await landedOnBots(view);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
   // Absent because the hidden roster came back empty, not because it has not come back yet.
@@ -557,34 +571,35 @@ test("with nothing hidden, the wall /agents lands on has no 已隐藏 tag at all
   expect(wallNames(view)).toEqual(["Mine Agent"]);
 });
 
-test("a pinned coworker from /agents leads the /wakers wall, tagged 已置顶, once", async () => {
+test("a pinned coworker from /agents leads the /bots roster, tagged 已置顶, once", async () => {
   const kept = agent({ id: "mine-1", name: "Kept Agent" });
   const favourite = agent({ id: "mine-2", name: "Favourite", pinned: true });
   servingRosters([kept, favourite], []);
 
   const view = renderAgents(failingQueryClient());
-  await landedOnWakers(view);
+  await landedOnBots(view);
 
-  expect(await view.findByText("已置顶")).toBeTruthy();
-  // At the top of the wall, ahead of the roster order that listed it second.
+  // Under its own 已置顶 section, at the top.
+  expect(await view.findByRole("heading", { name: "已置顶" })).toBeTruthy();
+  // At the top of the roster, ahead of the roster order that listed it second.
   expect(wallNames(view)).toEqual(["Favourite", "Kept Agent"]);
   // Once, tagged, rather than twice.
   expect(view.getAllByText("Favourite")).toHaveLength(1);
-  expect(view.getAllByText("已置顶")).toHaveLength(1);
+  expect(view.container.querySelectorAll("[data-pinned]")).toHaveLength(1);
   expect(
     cardOf(view, "Favourite").querySelector("[data-pinned]")?.textContent,
   ).toBe("已置顶");
   expect(cardOf(view, "Kept Agent").querySelector("[data-pinned]")).toBeNull();
 });
 
-test("with every coworker pinned, the /wakers wall lists them instead of claiming none", async () => {
+test("with every coworker pinned, the /bots roster lists them instead of claiming none", async () => {
   servingRosters(
     [agent({ id: "mine-1", name: "Favourite", pinned: true })],
     [],
   );
 
   const view = renderAgents(failingQueryClient());
-  await landedOnWakers(view);
+  await landedOnBots(view);
 
   // Pinning everything moves nothing off the wall: it is listed, tagged, and nothing claims none.
   expect(await view.findByText("Favourite")).toBeTruthy();
@@ -597,11 +612,11 @@ test("with every coworker pinned, the /wakers wall lists them instead of claimin
   expect(view.queryByText("这里还没有员工")).toBeNull();
 });
 
-test("with nothing pinned, the wall /agents lands on has no 已置顶 tag", async () => {
+test("with nothing pinned, the roster /agents lands on has no 已置顶 tag", async () => {
   servingRosters([agent({ id: "mine-1", name: "Mine Agent" })], []);
 
   const view = renderAgents(failingQueryClient());
-  await landedOnWakers(view);
+  await landedOnBots(view);
 
   expect(await view.findByText("Mine Agent")).toBeTruthy();
   expect(view.queryByText("已置顶")).toBeNull();

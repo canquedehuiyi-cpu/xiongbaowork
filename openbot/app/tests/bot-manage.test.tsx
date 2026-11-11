@@ -36,6 +36,9 @@ const BOT: AgentProfile = {
   builtIn: true,
   hasAuth: false,
   hasCallbackToken: false,
+  // 熊宝的员工资料多了模型绑定和人设。
+  modelRef: null,
+  persona: null,
   isolated: false,
   isolationActive: false,
   isolationOffReason: null,

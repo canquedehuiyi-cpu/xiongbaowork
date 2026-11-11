@@ -125,7 +125,7 @@ test("search narrows the rows already loaded, and says how many match", async ()
   const view = await renderAudit();
   await userEvent
     .setup({ document })
-    .type(view.getByRole("searchbox", { name: "Search events" }), "save deal");
+    .type(view.getByRole("searchbox", { name: "搜索事件" }), "save deal");
   await waitFor(() => expect(whats(view.container)).toEqual(["点击页面"]));
   expect(view.getByText("3 条事件中的 1 条")).toBeDefined();
 });

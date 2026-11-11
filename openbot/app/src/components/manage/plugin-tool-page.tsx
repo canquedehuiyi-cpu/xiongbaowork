@@ -75,13 +75,13 @@ export function PluginToolPage({
   const tool = server?.tools.find((row) => row.name === toolName);
 
   const back = {
-    label: server?.title ?? "Plugin",
+    label: server?.title ?? "插件",
     linkProps: paths.plugin(key),
   };
 
   /* Nothing rather than a placeholder, so no sentence asserts anything while the fetch is open. */
   if (plugins.isPending) {
-    return <PageShell title="Tool">{null}</PageShell>;
+    return <PageShell title="工具">{null}</PageShell>;
   }
 
   /*
@@ -94,7 +94,7 @@ export function PluginToolPage({
     return (
       <PageShell backButton={back} title={toolName}>
         <p className="mt-12 text-destructive text-sm" role="alert">
-          Couldn't load plugins. Reload the page.
+          读不到插件。请刷新页面。
         </p>
       </PageShell>
     );
@@ -104,7 +104,7 @@ export function PluginToolPage({
     return (
       <PageShell
         backButton={back}
-        description="This connector has no tool with that name."
+        description="这个连接器没有叫这个名字的工具。"
         title={toolName}
       >
         {/*
@@ -113,11 +113,11 @@ export function PluginToolPage({
          */}
         <PageEmpty
           icon={server ? IconTool : IconPlugOff}
-          title={server ? "Tool not found" : "This connector is off"}
+          title={server ? "找不到这个工具" : "这个连接器没有打开"}
         >
           {server
-            ? "It may have been removed since the tool list was last refreshed."
-            : "Turn it on to see its tools."}
+            ? "上次刷新工具列表之后，它可能已经被移除了。"
+            : "打开它才能看到它的工具。"}
         </PageEmpty>
       </PageShell>
     );
@@ -141,7 +141,7 @@ export function PluginToolPage({
   return (
     <PageShell
       backButton={back}
-      description={tool.description || "This tool has no description."}
+      description={tool.description || "这个工具没有说明。"}
       title={toolName}
     >
       {error ? (
@@ -153,10 +153,10 @@ export function PluginToolPage({
       <PageSection
         description={
           tool.effect === "write"
-            ? "This tool changes something at the vendor. Boundaries about writes apply to it."
-            : "This tool only reads. Boundaries about writes don't apply to it."
+            ? "这个工具会在服务商那边改动东西，针对写入的边界规则对它生效。"
+            : "这个工具只读，针对写入的边界规则对它不生效。"
         }
-        title="What it does"
+        title="它做什么"
       >
         <PageRows>
           {/*
@@ -166,10 +166,9 @@ export function PluginToolPage({
            */}
           <Item size="sm">
             <ItemContent>
-              <ItemTitle>Effect</ItemTitle>
+              <ItemTitle>影响</ItemTitle>
               <ItemDescription>
-                Set by the connector, not the tool's name. Anything unknown
-                counts as a write.
+                由连接器标注，不看工具的名字。不知道的一律当作会改动。
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -180,7 +179,7 @@ export function PluginToolPage({
                     : "text-muted-foreground text-xs"
                 }
               >
-                {tool.effect === "write" ? "changes things" : "reads"}
+                {tool.effect === "write" ? "会改动" : "只读"}
               </span>
             </ItemActions>
           </Item>
@@ -188,12 +187,12 @@ export function PluginToolPage({
       </PageSection>
 
       <PageSection
-        description="A Bot can call this tool only while its switch is on. Turning it off applies from the next call."
-        title="Bots"
+        description="员工只有在开关打开时才能调用这个工具。关掉从下一次调用开始生效。"
+        title="员工"
       >
         {bots.length === 0 ? (
-          <PageEmpty icon={IconBolt} title="No Bots yet">
-            Create one to give it this tool.
+          <PageEmpty icon={IconBolt} title="还没有员工">
+            先新建一位员工，再把这个工具给它。
           </PageEmpty>
         ) : (
           <PageRows>
@@ -205,12 +204,12 @@ export function PluginToolPage({
                     <ItemContent>
                       <ItemTitle>{bot.name}</ItemTitle>
                       <ItemDescription>
-                        {bot.hidden ? "Hidden from your roster. " : ""}
+                        {bot.hidden ? "已从你的员工列表里隐藏。" : ""}
                         {held
                           ? canCallBack(bot)
-                            ? `Can call this tool. Every call is still checked against boundaries and logged in ${paths.auditLabel}.`
-                            : "Allowed, but this Bot has no callback token. Every call is refused. Issue one on its page, or set AGENT_TOOL_TOKEN."
-                          : "Can't call this tool. The Bot never sees it."}
+                            ? `可以调用这个工具。每次调用仍要经过边界规则检查，并记在${paths.auditLabel}里。`
+                            : "已允许，但这位员工没有回调令牌，每次调用都会被拒绝。请在它的页面上签发一个，或者设置 AGENT_TOOL_TOKEN。"
+                          : "不能调用这个工具，员工看不到它。"}
                       </ItemDescription>
                     </ItemContent>
                     <ItemActions>
@@ -222,11 +221,11 @@ export function PluginToolPage({
                       {alwaysOn ? (
                         // Refused one Bot at a time by the server: Routines is every Bot's.
                         <span className="text-muted-foreground text-xs">
-                          Always on
+                          一直开着
                         </span>
                       ) : (
                         <Switch
-                          aria-label={`Let ${bot.name} call ${toolName}`}
+                          aria-label={`允许 ${bot.name} 调用 ${toolName}`}
                           checked={held}
                           disabled={
                             setGrant.isPending &&

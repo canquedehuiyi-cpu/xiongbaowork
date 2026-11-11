@@ -87,7 +87,7 @@ export function NewResponsibilityDialog({
         <DialogHeader>
           <DialogTitle>新建长期职责</DialogTitle>
           <DialogDescription>
-            交给员工一个长期目标，它会在你选的那段对话里去做。
+            交给员工一件要持续去做的事，它会在你选的那段对话里去做。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 overflow-y-auto">

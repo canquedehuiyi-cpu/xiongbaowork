@@ -163,30 +163,33 @@ test("Admin's Audit still says this deployment", async () => {
 
 test("an app's page under Connections says what OpenBot does, not a deployment", async () => {
   const view = draw("personal", () => <PluginPage pluginKey="notion" />);
-  await view.findByText("Connection");
+  await view.findAllByText("连接");
   const text = view.container.textContent ?? "";
-  expect(text).toContain("OpenBot registers an OAuth client");
-  expect(text).toContain("OpenBot registers itself with the vendor");
-  expect(text).toContain("OpenBot has no public URL");
-  expect(text).not.toContain("deployment");
+  expect(text).toContain("熊宝登记一个 OAuth 客户端");
+  expect(text).toContain("首次连接时熊宝数字员工会自动向服务商登记");
+  expect(text).toContain("熊宝数字员工没有公网地址");
+  expect(text).not.toContain("部署");
 });
 
 test("the same page in Admin keeps its word", async () => {
   const view = draw("team", () => <PluginPage pluginKey="notion" />);
-  await view.findByText("Connection");
+  await view.findAllByText("连接");
   const text = view.container.textContent ?? "";
-  expect(text).toContain("The deployment registers an OAuth client");
-  expect(text).toContain("This deployment registers itself with the vendor");
+  expect(text).toContain("部署登记一个 OAuth 客户端");
+  expect(text).toContain("首次连接时本部署会自动向服务商登记");
 });
 
 test("a brokered app's sentences name no deployment in personal, and keep it in Admin", () => {
   const personal = managePaths("personal").edition;
   expect(
     brokeredReach("composio", { title: "Gmail", kind: "consent" }).description,
-  ).not.toContain("deployment");
-  expect(brokeredKeyMissing("composio", personal)).not.toContain("deployment");
-  expect(brokeredReach("composio").description).toContain(
-    "This deployment holds one key",
+  ).not.toMatch(/这个部署|本部署/);
+  // 「部署设置」是设置里一页的名字，不是在说「这个部署」。
+  expect(brokeredKeyMissing("composio", personal)).not.toMatch(
+    /这个部署|本部署/,
   );
-  expect(brokeredKeyMissing("composio")).toContain("on this deployment.");
+  expect(brokeredReach("composio").description).toContain(
+    "这个部署为这类应用统一持有一把密钥",
+  );
+  expect(brokeredKeyMissing("composio")).toContain("请在这个部署上设置");
 });

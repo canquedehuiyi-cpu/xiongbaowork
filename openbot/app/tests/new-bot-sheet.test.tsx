@@ -548,10 +548,12 @@ test("personal: the sheet lists every app that is turned on, with nothing to unt
     "Gmail",
     "Parallel Search",
     // Routines says what asking for one sounds like, and where they all are.
-    // （提示文字来自 `RoutinesAppHint`，那个文件还是英文、不归本组；它中文化后把这里改成整句断言。）
-    expect.stringMatching(/^Routines./),
+    "Routines比如「每个工作日 9 点，给我发……」查看定时任务",
   ]);
-  expect(within(list).getByRole("link").getAttribute("href")).toBe("/routines");
+  // 熊宝的定时任务在自主工作里（`/routines` 重定向到 `/autonomous?trigger=schedule`）。
+  expect(within(list).getByRole("link").getAttribute("href")).toBe(
+    "/autonomous?trigger=schedule",
+  );
   expect(
     view.getByText("你在「连接」里打开的每个应用，所有员工都能用。"),
   ).toBeTruthy();

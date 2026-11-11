@@ -124,9 +124,9 @@ test("a new goal needs no Bot picked, and offers only this Bot's conversations",
   const view = draw();
   await view.findByText("Reconcile receipts");
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: /New goal/ }));
-  expect(view.queryByRole("combobox", { name: /^Bot/ })).toBeNull();
-  await user.click(view.getByRole("combobox", { name: /^Conversation/ }));
+  await user.click(view.getByRole("button", { name: /新建长期职责/ }));
+  expect(view.queryByRole("combobox", { name: /^员工/ })).toBeNull();
+  await user.click(view.getByRole("combobox", { name: /^对话/ }));
   const options = (await view.findAllByRole("option")).map(
     (option) => option.textContent,
   );
@@ -134,11 +134,11 @@ test("a new goal needs no Bot picked, and offers only this Bot's conversations",
   expect(options).not.toContain("Docs desk");
 
   await user.click(view.getByRole("option", { name: "Finance desk" }));
-  await user.type(view.getByLabelText("Title"), "Close the month");
-  await user.type(view.getByLabelText("Instruction"), "Close it.");
-  await user.type(view.getByLabelText("Success criteria"), "Closed.");
+  await user.type(view.getByLabelText("标题"), "Close the month");
+  await user.type(view.getByLabelText("指令"), "Close it.");
+  await user.type(view.getByLabelText("成功标准"), "Closed.");
   fireEvent.submit(
-    (view.getByRole("button", { name: /Create/ }) as HTMLButtonElement)
+    (view.getByRole("button", { name: /创建/ }) as HTMLButtonElement)
       .form as HTMLFormElement,
   );
   await waitFor(() =>
@@ -155,15 +155,15 @@ test("a new goal needs no Bot picked, and offers only this Bot's conversations",
 test("the section, its buttons, its empty state and its dialog all call it a goal", async () => {
   serving([]);
   const view = draw();
-  expect(await view.findByText("No goals yet")).toBeTruthy();
-  expect(view.getByText("Goals")).toBeTruthy();
-  const buttons = view.getAllByRole("button", { name: "New goal" });
+  expect(await view.findByText("还没有长期职责")).toBeTruthy();
+  expect(view.getByText("长期职责")).toBeTruthy();
+  const buttons = view.getAllByRole("button", { name: "新建长期职责" });
   expect(buttons).toHaveLength(2);
   const user = userEvent.setup({ document });
   await user.click(buttons[0] as HTMLElement);
   const dialog = await view.findByRole("dialog");
-  expect(dialog.textContent).toContain("New goal");
-  expect(view.getByRole("button", { name: "Create goal" })).toBeTruthy();
-  // One word for one thing: the route and the API say responsibilities, the person never does.
-  expect(document.body.textContent).not.toMatch(/responsibilit/i);
+  expect(dialog.textContent).toContain("新建长期职责");
+  expect(view.getByRole("button", { name: "创建长期职责" })).toBeTruthy();
+  // One word for one thing: 长期职责 everywhere, never 目标 or an English word for it.
+  expect(document.body.textContent).not.toMatch(/responsibilit|goal|目标/i);
 });
