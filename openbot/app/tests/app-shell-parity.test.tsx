@@ -25,6 +25,7 @@ import {
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "@/components/app-sidebar/app-shell";
+import { ConversationWorkspace } from "@/components/app-sidebar/conversation-workspace";
 import { SettingsNav } from "@/components/settings/settings-sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
@@ -169,7 +170,8 @@ type Options = {
   nextCursor?: string | null;
   attention?: unknown[];
   plan?: string | null;
-  secondary?: "settings";
+  /** The column between the sidebar and the page: settings' navigation, or the conversation workspace `_app.tsx` passes. */
+  secondary?: "settings" | "workspace";
 };
 
 function renderShell(path: string, options: Options = {}) {
@@ -230,7 +232,13 @@ function renderShell(path: string, options: Options = {}) {
   const rootRoute = createRootRoute({
     component: () => (
       <AppShell
-        secondary={options.secondary === "settings" ? <SettingsNav /> : null}
+        secondary={
+          options.secondary === "settings" ? (
+            <SettingsNav />
+          ) : options.secondary === "workspace" ? (
+            <ConversationWorkspace />
+          ) : null
+        }
       >
         <Outlet />
       </AppShell>
@@ -370,11 +378,38 @@ test("the search narrows the list to what it has loaded", async () => {
   );
 });
 
-test("no conversation column beside a conversation: the list is in the sidebar", async () => {
-  const { view } = renderShell("/channel/c-analyst-new");
-  await view.findByRole("navigation", { name: "主导航" });
-  expect(view.queryByRole("complementary")).toBeNull();
-  expect(view.queryByRole("tablist")).toBeNull();
+/*
+ * 经用户同意修改：用户决定找回 #452 去掉的熊宝中间栏，所以这一条从「对话旁边没有中间栏」改成锁定找回后的样子——
+ * 外壳照 `_app.tsx` 那样带上中间栏时，对话旁边有一栏讲这位员工、带「对话任务 / 自动任务」页签；侧栏里仍然没有
+ * 页签；窄屏不画这一栏；离开对话页就没有它。
+ */
+test("beside a conversation, a column about its employee sits between the sidebar and the chat, and a narrow screen does not draw it", async () => {
+  const { view } = renderShell("/channel/c-analyst-new", {
+    secondary: "workspace",
+  });
+  const column = await view.findByRole("complementary", {
+    name: "分析师的对话",
+  });
+  const sidebar = view.container.querySelector('[data-slot="sidebar"]');
+  expect(sidebar).not.toBeNull();
+  expect(
+    follows(sidebar as Element, column) &&
+      follows(column, view.container.querySelector("main") as Element),
+  ).toBe(true);
+  // The tabs are the column's own; the sidebar still has none.
+  expect(within(sidebar as HTMLElement).queryByRole("tablist")).toBeNull();
+  expect(
+    view.getAllByRole("tablist").map((tabs) => tabs.getAttribute("aria-label")),
+  ).toEqual(["任务类型"]);
+  expect(column.contains(view.getByRole("tablist"))).toBe(true);
+  // Under the md breakpoint the column is not drawn; the sidebar's 员工 list reaches the same conversations.
+  expect(column.className.split(/\s+/)).toEqual(
+    expect.arrayContaining(["hidden", "md:flex"]),
+  );
+  cleanup();
+  const elsewhere = renderShell("/tasks", { secondary: "workspace" });
+  await elsewhere.view.findByRole("navigation", { name: "主导航" });
+  expect(elsewhere.view.queryByRole("complementary")).toBeNull();
 });
 
 /* ------------------------------------------------------------------------------------------------ */
