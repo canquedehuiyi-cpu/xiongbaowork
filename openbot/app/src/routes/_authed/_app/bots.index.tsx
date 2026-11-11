@@ -1,16 +1,23 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { WakersWall } from "@/components/wakers/wall";
+import {
+  parseWakersSearch,
+  type WakersSearch,
+} from "@/components/wakers/wakers-search";
 
 /**
- * Bot 会话, archived into 员工管理 (`/wakers`): this page listed the same employees as the wall, each
- * with what it needs from the person. That summary is now on each card there (from the same
- * `GET /api/bots/attention` read the sidebar already makes), and each card links to the employee's
- * own `/bots/$agentId` profile, which stays where it was.
+ * 员工（`/bots`）：上游的员工列表页，熊宝的员工管理（`/wakers`）重定向到这里（M5b）。
  *
- * The file stays so `/bots` keeps resolving for bookmarks and old links. It carried no parameters,
- * so the wall opens unfiltered. `replace`, so Back does not bounce through the redirect.
+ * 第 0 步先把剪出来的员工墙（`components/wakers/wall.tsx`）原样挂在这里，`/bots` 和 `/wakers` 的旧链接都不会
+ * 落到空页面；地址参数沿用员工墙的（`tab=groups`、筛选、排序、`new=true`、`agent`）。换成上游 `BotRoster`
+ * 加熊宝工具栏是 B 组的事。
  */
 export const Route = createFileRoute("/_authed/_app/bots/")({
-  beforeLoad: () => {
-    throw redirect({ replace: true, search: {}, to: "/wakers" });
-  },
+  validateSearch: (search: Record<string, unknown>): WakersSearch =>
+    parseWakersSearch(search),
+  component: BotsPage,
 });
+
+function BotsPage() {
+  return <WakersWall search={Route.useSearch()} />;
+}

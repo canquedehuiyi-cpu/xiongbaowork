@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import { Streamdown } from "streamdown";
 import { PageShell } from "@/components/layout/page-shell";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { legacyResponsibilitiesTarget } from "@/lib/agents/legacy-routes";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { conversationLabel } from "@/lib/channels/label";
 import { channelListQueryOptions } from "@/lib/channels/queries";
@@ -51,6 +52,14 @@ export function responsibilitiesSearch(search: Record<string, unknown>): {
 export const Route = createFileRoute("/_authed/_app/responsibilities")({
   component: ResponsibilitiesPage,
   validateSearch: responsibilitiesSearch,
+  /*
+   * M5b：一位员工的长期职责现在在那位员工自己的「长期职责」分页里，所以 `?agent=X` 转过去；不带 `agent`
+   * 时仍是这张跨员工的全量页。
+   */
+  beforeLoad: ({ search }) => {
+    const target = legacyResponsibilitiesTarget(search);
+    if (target) throw redirect(target);
+  },
 });
 /*
  * docs/design/ios-studio, for a working page: graphite cards on a hairline, 13px labels over the

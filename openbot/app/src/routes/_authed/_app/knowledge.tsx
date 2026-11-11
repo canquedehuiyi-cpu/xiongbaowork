@@ -1,20 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { LEGACY_PAGES } from "@/lib/agents/legacy-routes";
 
 /**
- * `/knowledge` was archived into 能力与资源 › 知识库: the screen that was here — create a knowledge
- * base, keep 资料 in it, decide which employees may read it — is that tab now
- * (`components/knowledge/knowledge-screen.tsx`).
- *
- * The path stays so bookmarks and older links keep working. It took no search parameters, so there
- * is nothing to carry over. Replace, not push, so Back does not land here again only to be sent
- * forward.
+ * `/knowledge` 早先并进了能力与资源 › 知识库，现在是能力 › 知识库（M5b）。没有地址参数可带。
  */
 export const Route = createFileRoute("/_authed/_app/knowledge")({
   beforeLoad: () => {
-    throw redirect({
-      to: "/resources",
-      search: { tab: "knowledge" },
-      replace: true,
-    });
+    throw redirect({ to: LEGACY_PAGES["/knowledge"], replace: true });
   },
 });

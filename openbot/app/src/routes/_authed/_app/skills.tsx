@@ -1,14 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { legacySkillsTarget } from "@/lib/agents/legacy-routes";
 
 /**
- * `/skills` was archived into 能力与资源 › 技能: the screen that was here — your own skills with
- * their edit and delete menu, the deployment's, and the authoring panel — is that tab now
- * (`components/skills/skills-screen.tsx`).
- *
- * The path stays so bookmarks and older links keep working, and it keeps its meaning: its search
- * parameters are carried over, so `/skills?new=true` still opens the authoring form and
- * `/skills?edit=<slug>` still opens that skill. Replace, not push, so Back does not land here again
- * only to be sent forward.
+ * `/skills` 现在是能力 › 技能（M5b，与上游一致）。对话里提议的技能会链到这里，那些消息还留在历史里，所以保留成
+ * 重定向；`/skills?new=true` 仍打开写技能的面板，`/skills?edit=<slug>` 仍打开那条技能。
  */
 export const Route = createFileRoute("/_authed/_app/skills")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -23,14 +18,6 @@ export const Route = createFileRoute("/_authed/_app/skills")({
     } as { new?: true; edit?: string };
   },
   beforeLoad: ({ search }) => {
-    throw redirect({
-      to: "/resources",
-      search: {
-        tab: "skills",
-        ...(search.new ? { new: true as const } : {}),
-        ...(search.edit ? { edit: search.edit } : {}),
-      },
-      replace: true,
-    });
+    throw redirect(legacySkillsTarget(search));
   },
 });

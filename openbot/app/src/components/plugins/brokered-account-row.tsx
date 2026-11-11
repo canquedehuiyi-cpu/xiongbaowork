@@ -1,10 +1,5 @@
 import { IconArrowUpRight, IconUser } from "@tabler/icons-react";
-import {
-  queryOptions,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionFields } from "@/components/plugins/connection-fields";
 import { Button } from "@/components/ui/button";
@@ -24,7 +19,6 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
-import { client } from "@/lib/client";
 import { desktopShell } from "@/lib/desktop/shell";
 import {
   type BrokerField,
@@ -47,6 +41,7 @@ import {
   type Edition,
   type PluginsProvider,
 } from "@/lib/plugins/provider-vocabulary";
+import { brokeredAccountsQueryOptions } from "@/lib/plugins/queries";
 
 /**
  * One person's own brokered account, on whichever screen is asking.
@@ -291,52 +286,6 @@ export type BrokeredAccount = {
   /** Which account a press is in flight for, so only its buttons wait. */
   changingAccount: string | null;
 };
-
-/** One of the signed-in person's accounts at an app, as `/servers/:id/accounts` answers it. */
-type BrokeredAccountRecord = {
-  /** Which account a Disconnect or Make default press is about. Opaque. */
-  id: string;
-  /** What the app says the account is: an email address or a login. Null where it said none. */
-  identity: string | null;
-  /** What the person and their Bots call it: the identity, or「账号 N」where there is none. */
-  label: string;
-  /** The account a Bot uses when it doesn't name one. */
-  isDefault: boolean;
-  connectedAt: string | null;
-};
-
-/**
- * The person's own accounts at one brokered app (X1 `GET /api/plugins/servers/:id/accounts`). The
- * server asks the app each time, so an account connected or ended elsewhere is listed as it stands.
- *
- * 上游把它放在 `@/lib/plugins/queries`（`brokeredAccountsQueryOptions`、`pluginKeys.accounts`）。
- * fork 的 queries.ts 还没有这两样，本阶段不改别人的文件，先在这里就地定义；键在 `["plugins"]` 之下，
- * 所以每一次插件写入的 `invalidatePlugins` 都会刷新它。第二阶段并回 queries.ts。
- */
-function brokeredAccountsQueryOptions(serverId: string) {
-  return queryOptions({
-    queryKey: ["plugins", "accounts", serverId] as const,
-    queryFn: async (): Promise<{
-      accounts: BrokeredAccountRecord[];
-      canAddAnother: boolean;
-    }> => {
-      const response = await client(
-        `/api/plugins/servers/${encodeURIComponent(serverId)}/accounts`,
-        { fallback: "没能列出你的账号。请刷新页面。" },
-      );
-      const body = (await response.json()) as {
-        accounts?: unknown;
-        canAddAnother?: unknown;
-      };
-      return {
-        accounts: Array.isArray(body.accounts)
-          ? (body.accounts as BrokeredAccountRecord[])
-          : [],
-        canAddAnother: body.canAddAnother === true,
-      };
-    },
-  });
-}
 
 export function useBrokeredAccount(input: {
   serverId: string;
