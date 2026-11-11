@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   STAFFING_TOOL_NAMES,
   type StaffingProposalCard,
@@ -12,7 +12,13 @@ import { type AuditStore, recordAuditEvent } from "../audit";
 import type { GroupStore } from "../channels/group";
 import { cutAtCodeUnits } from "../channels/text";
 import type { Database } from "../db/client";
-import { channelMemberships, channels } from "../db/schema";
+import {
+  agents,
+  channelAgents,
+  channelMemberships,
+  channels,
+  staffingProposals,
+} from "../db/schema";
 import type { ModelShelf } from "../models/routes";
 import type { RoleTemplateStore } from "../roles/store";
 import type { RoutineStore } from "../routines/store";
@@ -464,66 +470,71 @@ async function listStaff(run: Run): Promise<string> {
   const { deps } = run;
   const lines: string[] = [];
 
+  lines.push("你能用的员工：");
   const staff = (await deps.profiles.list(run.actor)).filter((profile) =>
     canRunAgent(run.actor, profile),
   );
-  lines.push("你能用的员工：");
-  if (staff.length === 0) lines.push("- （还没有）");
-  for (const profile of staff.slice(0, LIST_MAX)) {
+  listed(lines, staff, "还没有", (profile) => {
     const template = profile.roleTemplate
       ? `；角色模板 ${profile.roleTemplate.id}（版本 ${profile.roleTemplate.version}）`
       : "";
     const mine = canManageAgent(run.actor, profile) ? "；你能修改" : "";
-    lines.push(
-      `- ${profile.name}（id: ${profile.id}）头衔：${profile.title || "无"}；职责：${short(profile.roleDescription)}${template}${mine}`,
-    );
-  }
+    return `${oneLine(profile.name, NAME_CHARS)}（id: ${profile.id}）头衔：${oneLine(profile.title, NAME_CHARS) || "无"}；职责：${short(profile.roleDescription)}${template}${mine}`;
+  });
 
   lines.push("", "你发起的群聊：");
-  const started = await groupsStartedBy(run);
-  if (started.length === 0) lines.push("- （还没有）");
-  for (const group of started)
-    lines.push(
-      `- ${group.name}（id: ${group.id}）回答顺序：${group.order.join(" → ")}`,
-    );
+  listed(
+    lines,
+    await groupsStartedBy(run),
+    "还没有",
+    (group) =>
+      `${oneLine(group.name, NAME_CHARS)}（id: ${group.id}）回答顺序：${group.order.join(" → ")}`,
+  );
 
   lines.push("", "你的角色模板（可以作为 roleTemplate 传）：");
-  const templates = await deps.roleTemplates.list();
-  if (templates.length === 0) lines.push("- （还没有）");
-  for (const template of templates.slice(0, LIST_MAX))
-    lines.push(
-      `- ${template.name}（id: ${template.id}，版本 ${template.version}）头衔：${template.profile.identity.title || "无"}；职责：${short(template.profile.identity.roleDescription)}`,
-    );
+  listed(
+    lines,
+    await deps.roleTemplates.list(),
+    "还没有",
+    (template) =>
+      `${oneLine(template.name, NAME_CHARS)}（id: ${template.id}，版本 ${template.version}）头衔：${oneLine(template.profile.identity.title, NAME_CHARS) || "无"}；职责：${short(template.profile.identity.roleDescription)}`,
+  );
   const official = deps.roleTemplates.official();
   if (official.length > 0) {
     lines.push("官方模板（只能照着写各字段，不能作为 roleTemplate 传）：");
-    for (const template of official.slice(0, LIST_MAX))
-      lines.push(
-        `- ${template.name} 头衔：${template.profile.identity.title || "无"}；职责：${short(template.profile.identity.roleDescription)}`,
-      );
+    listed(
+      lines,
+      official,
+      "没有",
+      (template) =>
+        `${oneLine(template.name, NAME_CHARS)} 头衔：${oneLine(template.profile.identity.title, NAME_CHARS) || "无"}；职责：${short(template.profile.identity.roleDescription)}`,
+    );
   }
 
   lines.push("", "能选的模型（model 二选一；不选就用部署默认的模型）：");
   const shelf = await deps.catalogue.choices(run.ownerId);
-  for (const model of shelf.library)
-    lines.push(
-      `- 模型库：${model.label ?? model.modelName}（${model.modelName}）→ { "modelRef": "${model.id}" }`,
-    );
-  for (const model of shelf.pool.filter((entry) => entry.available))
-    lines.push(
-      `- 平台体验模型：${model.label}（${model.modelName}）→ { "platformModelRef": "${model.id}" }`,
-    );
-  if (
-    shelf.library.length === 0 &&
-    !shelf.pool.some((entry) => entry.available)
-  )
-    lines.push("- （只有部署默认的模型）");
+  const models = [
+    ...shelf.library.map(
+      (model) =>
+        `模型库：${oneLine(model.label ?? model.modelName, NAME_CHARS)}（${oneLine(model.modelName, NAME_CHARS)}）→ { "modelRef": "${model.id}" }`,
+    ),
+    ...shelf.pool
+      .filter((entry) => entry.available)
+      .map(
+        (model) =>
+          `平台体验模型：${oneLine(model.label, NAME_CHARS)}（${oneLine(model.modelName, NAME_CHARS)}）→ { "platformModelRef": "${model.id}" }`,
+      ),
+  ];
+  listed(lines, models, "只有部署默认的模型", (line) => line);
 
   lines.push("", "能装的技能：");
-  const skills = await installableSkills(run);
-  if (skills.length === 0) lines.push("- （没有）");
-  for (const skill of skills.slice(0, LIST_MAX))
-    lines.push(`- ${skill.slug}：${skill.title}`);
+  listed(
+    lines,
+    await installableSkills(run),
+    "没有",
+    (skill) =>
+      `${oneLine(skill.slug, NAME_CHARS)}：${oneLine(skill.title, NAME_CHARS)}`,
+  );
 
   lines.push(
     "",
@@ -535,11 +546,13 @@ async function listStaff(run: Run): Promise<string> {
         composioConfigured: deps.composioConfigured,
       })
     : [];
-  if (giveable.length === 0) lines.push("- （没有）");
-  for (const app of giveable.slice(0, LIST_MAX))
-    lines.push(
-      `- ${app.displayName}（app: ${app.key}）可直接给；${ACCOUNT_WORDS[app.account]}`,
-    );
+  listed(
+    lines,
+    giveable,
+    "没有",
+    (app) =>
+      `${oneLine(app.displayName, NAME_CHARS)}（app: ${oneLine(app.key, NAME_CHARS)}）可直接给；${ACCOUNT_WORDS[app.account]}`,
+  );
   return lines.join("\n");
 }
 
@@ -549,17 +562,62 @@ const ACCOUNT_WORDS: Record<string, string> = {
   deployment: "用部署的账号",
 };
 
-/** 列表里一行放得下的长度。 */
-function short(text: string): string {
-  const chars = [...text.replace(/\s+/g, " ").trim()];
-  return chars.length > 60 ? `${chars.slice(0, 60).join("")}…` : chars.join("");
+/**
+ * 一节列表：最多 {@link LIST_MAX} 行，截掉的说出还有几个，免得模型以为列出的就是全部；空的说一句，不留空白
+ * （空白读起来像工具什么都没说，模型会自己补）。
+ */
+function listed<T>(
+  lines: string[],
+  items: readonly T[],
+  empty: string,
+  render: (item: T) => string,
+): void {
+  if (items.length === 0) {
+    lines.push(`- （${empty}）`);
+    return;
+  }
+  for (const item of items.slice(0, LIST_MAX)) lines.push(`- ${render(item)}`);
+  if (items.length > LIST_MAX)
+    lines.push(`- ……还有 ${items.length - LIST_MAX} 个没有列出`);
 }
 
-/** 本人发起、仍在里面的群聊（至少两位员工），名字与员工的回答顺序。 */
+/** 名字、头衔这类一行的字段最多这么长。 */
+const NAME_CHARS = 80;
+
+/**
+ * 别人写的文字（员工名、群名、模板名……）放进给模型的列表前压成一行：去掉控制字符与换行，限长。否则一个
+ * 带换行的名字就能在列表里伪造出一行「员工」，模型会照着它起草。
+ */
+function oneLine(text: string, max: number): string {
+  const chars = [
+    ...text
+      .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ];
+  return chars.length > max
+    ? `${chars.slice(0, max).join("")}…`
+    : chars.join("");
+}
+
+/** 列表里一行放得下的摘要。 */
+function short(text: string): string {
+  return oneLine(text, 60);
+}
+
+/**
+ * 本人发起、仍在里面的群聊，名字与员工的回答顺序。至少两位员工在 SQL 里先筛掉（一对一的对话占多数，
+ * 不必逐个去问），剩下的再看第一个成员是不是本人（与 `creatorOnly` 同一条）。全在本人的帧里读。
+ */
 async function groupsStartedBy(
   run: Run,
 ): Promise<{ id: string; name: string; order: string[] }[]> {
   const { deps } = run;
+  const groupIds = deps.database
+    .select({ id: channelAgents.channelId })
+    .from(channelAgents)
+    .groupBy(channelAgents.channelId)
+    .having(sql`count(*) >= 2`);
   const rows = await deps.database
     .select({ id: channels.id, title: channels.title, name: channels.name })
     .from(channels)
@@ -570,15 +628,12 @@ async function groupsStartedBy(
         eq(channelMemberships.userId, run.ownerId),
       ),
     )
-    .where(isNull(channels.deletedAt));
+    .where(and(isNull(channels.deletedAt), inArray(channels.id, groupIds)));
   const started: { id: string; name: string; order: string[] }[] = [];
   for (const row of rows) {
-    if (started.length >= LIST_MAX) break;
-    const bots = await deps.groups.store.bots(row.id);
-    if (bots.length < 2) continue;
     if ((await deps.groups.store.people(row.id))[0]?.userId !== run.ownerId)
       continue;
-    const current = new Set(bots);
+    const current = new Set(await deps.groups.store.bots(row.id));
     const order = (await deps.groups.store.order(row.id)).filter((id) =>
       current.has(id),
     );
@@ -857,7 +912,7 @@ function missingRolesOf(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((item): item is string => typeof item === "string")
-    .map((item) => short(item.replace(/[\p{Cc}]/gu, "")))
+    .map((item) => short(item))
     .filter((item) => item !== "")
     .slice(0, MISSING_ROLES_MAX);
 }
@@ -975,6 +1030,16 @@ async function roleTemplateRefusal(
   return null;
 }
 
+/** 这位员工是不是在本部署里跑的（`agents.type`），在本人的帧里读。 */
+async function runsHere(run: Run, agentId: string): Promise<boolean> {
+  const [row] = await run.deps.database
+    .select({ type: agents.type })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+  return row?.type === "built_in";
+}
+
 const modelId = (model: NonNullable<EmployeeDraft["model"]>) =>
   "modelRef" in model ? model.modelRef : model.platformModelRef;
 
@@ -987,7 +1052,8 @@ async function modelRefusal(
   model: NonNullable<EmployeeDraft["model"]>,
   target: AgentProfile | null,
 ): Promise<string | null> {
-  if (target && target.endpoint !== null)
+  // 与 `profiles.update` 同一个判断：只有在这里跑的员工（`agents.type` 为 built_in）才能绑模型。
+  if (target && !(await runsHere(run, target.id)))
     return "这位员工在别的服务器上运行，模型要在那边选。";
   const shelf = await run.deps.catalogue.choices(run.ownerId);
   if ("modelRef" in model)
@@ -1151,13 +1217,22 @@ async function proposalStatus(
   if (typeof proposalId !== "string" || !UUID.test(proposalId.trim()))
     return notFound;
   const id = proposalId.trim();
-  const { proposals } = run.deps;
+  const { proposals, database } = run.deps;
+  /*
+   * 先看是不是本人的，再碰它：`expireIfLapsed` 与 `get` 都会把到期的提议落成 expired，别人的提议不该因为
+   * 这个人问了一句就变了状态、留下一行记在这个人名下的轨迹。别人的与不存在的一个说法，不让员工借这个工具
+   * 探出别人有没有提议。
+   */
+  const [owned] = await database
+    .select({ ownerId: staffingProposals.ownerId })
+    .from(staffingProposals)
+    .where(eq(staffingProposals.id, id))
+    .limit(1);
+  if (!owned || owned.ownerId !== run.ownerId) return notFound;
   const lapsed = await proposals.expireIfLapsed(id);
   const proposal = await proposals.get(id);
-  if (lapsed && proposal)
-    await audit(run, "staffing.proposal_expired", proposal);
-  // 别人的提议与不存在的一个说法，不让员工借这个工具探出别人有没有提议。
-  if (!proposal || proposal.ownerId !== run.ownerId) return notFound;
+  if (!proposal) return notFound;
+  if (lapsed) await audit(run, "staffing.proposal_expired", proposal);
   const lines = [
     `${KIND_WORDS[proposal.kind]}提议（proposalId: ${proposal.id}）：${STATUS_WORDS[proposal.status]}`,
   ];

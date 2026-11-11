@@ -12190,7 +12190,11 @@ export function createPluginStore(options: PluginStoreOptions) {
               token,
               ...(placement ? { placement } : {}),
               // Shared 应用以团队账号的身份调用；其余进调用所开账号的主人（提问者，或 Team Bot 的主人）。
-              actorId: runsAs,
+              // 内置传输没有账号可开，`actorId` 就是授权本身：说话的人。Team Bot 上它若取了主人，队友
+              // 起草的提议、排的定时任务就会记到主人名下。
+              actorId: access.transport.startsWith("builtin-")
+                ? input.actorId
+                : runsAs,
               botId: input.botId,
               ...((pinned?.accountId ?? ownersAccountId)
                 ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }
