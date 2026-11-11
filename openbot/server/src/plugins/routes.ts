@@ -533,10 +533,11 @@ export function createPluginRoutes(
       /*
        * 这个部署的连接应用由哪一家提供（上游的 `provider`），是个名字，不是密钥，也不是能力。页面上写出
        * 厂商名字的地方（「浏览 Composio」、密钥是哪一项设置）从一行应用上推不出来，只有它能回答；按是不是
-       * 连接应用来筛选的地方不需要它。没有接 broker 时答 composio，那样的部署和以前画得一样。和下面按地址
-       * 认应用的解析器（`toolkitOf`）读的是同一个值，所以页面显示的名字和路由用的解析器不会分开。
+       * 连接应用来筛选的地方不需要它。没有接 broker 时答 store 读写的那一家（撤掉 key 之后留下 Arcade 连接的
+       * 部署仍答 arcade，上游 #1017），一行连接都没有的部署答 composio，和以前画得一样。和下面按地址认应用的
+       * 解析器（`toolkitOf`）读的是同一个值，所以页面显示的名字和路由用的解析器不会分开。
        */
-      provider: composio?.provider ?? "composio",
+      provider: composio?.provider ?? store.brokerProvider ?? "composio",
       /*
        * `canConnect` 是针对这次请求者的判断：只有管理员能连接的应用（`adminConnectOnly`），成员看到
        * false，其余为 true。前端照它渲染「连接」，不用自己拿角色去拼。连接路由和 store 照旧各自拒绝，

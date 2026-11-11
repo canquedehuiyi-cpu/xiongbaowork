@@ -191,6 +191,15 @@ describe("an Arcade deployment whose key was withdrawn", () => {
     expect(response.status).toBe(503);
   });
 
+  test("and the page names Arcade rather than Composio", async () => {
+    const { routes } = built("arcade");
+    const response = await routes.request("/api/plugins");
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { provider: string }).provider).toBe(
+      "arcade",
+    );
+  });
+
   test("read as Composio's instead, the same row is not recognised as a connected app at all", async () => {
     // 这就是没有 `storedProvider` 时的读法：解析器不认 arcade://，这一行掉进了别的分支。
     const { store, routes } = built(undefined);
