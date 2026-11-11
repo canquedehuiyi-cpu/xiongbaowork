@@ -118,7 +118,10 @@ const SPEAKING_RULES = [
   "- 永远不要说「已经建好了」「已经改好了」，除非 proposal_status 答的是已执行完（applied）。",
 ].join("\n");
 
-/** 新员工与员工改动共用的字段说明。员工靠职责描述和人设干活，指令只是可选的补充。 */
+/**
+ * 新员工与员工改动共用的字段说明。员工靠职责描述和人设干活。单独的工作指令（`instructions`）只有个人起步
+ * 员工有（`profile-types.ts`），别的员工会忽略它，所以只在改动里提供，见 {@link CHANGE_FIELDS}。
+ */
 const EMPLOYEE_FIELDS: Record<string, unknown> = {
   name: { type: "string", description: "名字，最多 80 字。" },
   title: { type: "string", description: "头衔，最多 120 字。" },
@@ -136,11 +139,6 @@ const EMPLOYEE_FIELDS: Record<string, unknown> = {
       principles: { type: "string" },
       habits: { type: "string" },
     },
-  },
-  instructions: {
-    type: "string",
-    description:
-      "可选的补充指令，最多 1000 字。员工不靠它运行，别把主要要求只写在这里。",
   },
   bible: { type: "string", description: "可选的长篇工作手册，最多 8000 字。" },
   avatar: {
@@ -194,6 +192,16 @@ const EMPLOYEE_FIELDS: Record<string, unknown> = {
   },
 };
 
+/** 改员工时多一项：个人起步员工的工作指令。别的员工没有单独的指令，起草时剔除并说明。 */
+const CHANGE_FIELDS: Record<string, unknown> = {
+  ...EMPLOYEE_FIELDS,
+  instructions: {
+    type: "string",
+    description:
+      "只对个人起步员工有效的工作指令，最多 1000 字。别的员工按职责描述工作，没有单独的指令：给了也会被剔除，请改 roleDescription。",
+  },
+};
+
 const TOOLS: readonly McpTool[] = Object.freeze([
   {
     name: "list_staff",
@@ -211,7 +219,7 @@ const TOOLS: readonly McpTool[] = Object.freeze([
       "替这个人起草一位新员工。只是起草：对话里会出现一张卡片，这个人在卡片上确认之后才真正建好。",
       "",
       "员工靠 roleDescription（职责描述）和 persona（人设）干活：把它的工作内容、做事方式和说话风格写进这两项；",
-      "instructions 只是可选的补充，员工不靠它运行。",
+      "新员工没有单独的工作指令，更长的规范写进 bible（工作手册）。",
       "有合适的角色模板时，传 roleTemplate: { id, version }（取自 list_staff 的「你的角色模板」），并照模板写各字段；",
       "官方模板只能照着写，不能作为 roleTemplate 传。",
       "模型、技能、应用里无效的项会被剔除，结果里会写明剔除了什么、为什么。",
@@ -260,7 +268,7 @@ const TOOLS: readonly McpTool[] = Object.freeze([
         set: {
           type: "object",
           description: "只含要改的字段。",
-          properties: EMPLOYEE_FIELDS,
+          properties: CHANGE_FIELDS,
         },
         appsRemove: {
           type: "array",
@@ -771,7 +779,6 @@ async function checkEmployee(
     title: draft.title,
     roleDescription: draft.roleDescription,
     visibility: draft.visibility,
-    ...(draft.instructions ? { instructions: draft.instructions } : {}),
     ...(draft.persona ? { persona: draft.persona } : {}),
     ...(draft.bible ? { bible: draft.bible } : {}),
     ...(draft.avatar && "seed" in draft.avatar
@@ -822,6 +829,19 @@ async function checkEmployeeChange(
   if (baseVersion === null)
     throw new DraftRefused(`找不到员工 ${draft.agentId}，所以没有起草。`);
   const { set } = draft;
+  // 只有个人起步员工有单独的指令（读出来是文字）；别的员工会忽略它，卡片上也就不该出现。
+  if (
+    set.instructions !== undefined &&
+    typeof target.instructions !== "string"
+  ) {
+    dropped.push({
+      field: "instructions",
+      value: [...set.instructions].slice(0, 20).join(""),
+      reason:
+        "这位员工没有单独的工作指令，它按职责描述工作；要改它的做法，请改 roleDescription。",
+    });
+    delete set.instructions;
+  }
   assertAgentInput({
     name: set.name ?? target.name,
     title: set.title ?? target.title,

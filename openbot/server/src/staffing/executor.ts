@@ -46,7 +46,6 @@ import {
 import { MAX_PENDING_APP_ACCESS_REQUESTS } from "../plugins/app-access-tool";
 import {
   approveOwnersSharedUse,
-  ownerAppsAllowed,
   ownerGrantRefusal,
   withdrawOwnersSharedUse,
 } from "../plugins/owner-grants";
@@ -120,6 +119,9 @@ export class ProposalRefusedError extends Error {
  * （`shared/staffing-proposal.ts`），勾了「也给它招聘与组群能力」的员工不会少一个工具。
  */
 export { STAFFING_TOOL_NAMES };
+
+/** 「招聘与组群」在目录里的键（`plugins/catalogue.ts`）。 */
+const STAFFING_APP = "staffing";
 
 export type StaffingExecutorDeps = {
   database: Database;
@@ -332,6 +334,22 @@ function mergedPersona(current: Persona | null, given: Persona): Persona {
   };
 }
 
+/** 员工改动里写进员工资料的那几项：有任何一项就有一步「更新资料」。 */
+const PROFILE_FIELDS: (keyof EmployeeChangeDraft["set"])[] = [
+  "name",
+  "title",
+  "roleDescription",
+  "visibility",
+  "instructions",
+  "persona",
+  "bible",
+  "model",
+];
+
+/** 改动只改指令、员工又不是个人起步员工时的原因：写下去不会有任何效果，照实说，不报「已更新」。 */
+const NO_INSTRUCTIONS_HERE =
+  "这位员工没有单独的工作指令，它按职责描述工作；要改它的做法，请改职责描述。";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createStaffingExecutor(deps: StaffingExecutorDeps) {
@@ -438,12 +456,25 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
   ): Promise<Outcome> {
     const current = await deps.profiles.get(run.agentActor, agentId);
     if (!current) return failed("找不到这位员工。");
+    // 只有个人起步员工有单独的指令（读出来是文字，别的员工读出来是 null）；别的员工按职责描述工作，编辑那条路径会忽略它。
+    const starter = typeof current.instructions === "string";
+    const instructions = starter ? set.instructions : undefined;
+    const others = PROFILE_FIELDS.some(
+      (field) => field !== "instructions" && set[field] !== undefined,
+    );
+    if (
+      set.instructions !== undefined &&
+      !starter &&
+      !others &&
+      !(set.avatar && "seed" in set.avatar)
+    )
+      return failed(NO_INSTRUCTIONS_HERE);
     const checked = checkedInput({
       name: set.name ?? current.name,
       title: set.title ?? current.title,
       roleDescription: set.roleDescription ?? current.roleDescription,
       visibility: set.visibility ?? current.visibility,
-      ...(set.instructions ? { instructions: set.instructions } : {}),
+      ...(instructions ? { instructions } : {}),
       ...(set.persona
         ? { persona: mergedPersona(current.persona, set.persona) }
         : {}),
@@ -585,6 +616,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     run: Run,
     agentId: string,
     entry: { app: string; actions: string[] },
+    options: { request?: boolean } = {},
   ): Promise<Outcome> {
     const inspected = await deps.plugins.inspectApp({
       app: entry.app,
@@ -699,6 +731,9 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         ? done(`员工已经有「${name}」了。`)
         : failed(`「${name}」的 ${lacking.join("、")} 要由管理员单独授予。`);
     }
+
+    // 不替人提申请的一项（见 `giveStaffingTools`）：照实说为什么本人给不了。
+    if (options.request === false) return failed(refusal);
 
     // 申请只为本人能用的员工提，同浏览器里的申请入口。
     const bot = await deps.profiles.get(run.agentActor, agentId);
@@ -889,24 +924,22 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     return done("已删除定时任务。");
   }
 
-  /** 本人能给的「招聘与组群」；管理员对这个人关掉了「把自己的应用给自己的员工」时不给。 */
+  /**
+   * 「也给它招聘与组群能力」：和员工页上给任何应用同一条路（`giveApp`）——部署里有没有这个应用、管理员是否
+   * 把它收归自己（`owner_grants = admin`）、是否对这个人关掉了「把自己的应用给自己的员工」，都按此刻的答案。
+   * 本人给不了时照实说原因，不替人向管理员提申请：这是卡片上一个默认不勾的选项，不是本人点名要的应用；
+   * 真要的话，本人在员工页上申请。
+   */
   async function giveStaffingTools(
     run: Run,
     agentId: string,
   ): Promise<Outcome> {
-    if (!(await ownerAppsAllowed(run.actor.id)))
-      return failed("管理员关闭了「把自己的应用给自己的员工」，所以没有做。");
-    for (const tool of STAFFING_TOOL_NAMES)
-      await deps.plugins.grant(
-        "mcp",
-        `staffing/${tool}`,
-        agentId,
-        run.actor.email,
-        {
-          as: "owner",
-        },
-      );
-    return done("已给它招聘与组群的能力。");
+    return giveApp(
+      run,
+      agentId,
+      { app: STAFFING_APP, actions: [] },
+      { request: false },
+    );
   }
 
   /** 建好员工之后的各步，顺序固定：重试按位置对上上一次的结果。 */
@@ -970,18 +1003,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
   function employeeChangeSteps(run: Run, draft: EmployeeChangeDraft): Step[] {
     const { agentId, set } = draft;
     const steps: Step[] = [];
-    const profileFields: (keyof EmployeeChangeDraft["set"])[] = [
-      "name",
-      "title",
-      "roleDescription",
-      "visibility",
-      "instructions",
-      "persona",
-      "bible",
-      "model",
-    ];
     const seed = set.avatar && "seed" in set.avatar;
-    if (seed || profileFields.some((field) => set[field] !== undefined))
+    if (seed || PROFILE_FIELDS.some((field) => set[field] !== undefined))
       steps.push({
         step: "update",
         target: agentId,
@@ -1111,6 +1134,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     steps: readonly Step[],
     previous: readonly ResultItem[],
     results: ResultItem[],
+    progress: () => Promise<void>,
   ): Promise<void> {
     for (const [index, step] of steps.entries()) {
       const before = previous[index];
@@ -1131,6 +1155,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         ...(step.target === undefined ? {} : { target: step.target }),
         ...outcome,
       });
+      await progress();
     }
   }
 
@@ -1147,7 +1172,6 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       title: draft.title,
       roleDescription: draft.roleDescription,
       visibility: draft.visibility,
-      ...(draft.instructions ? { instructions: draft.instructions } : {}),
       ...(draft.persona ? { persona: draft.persona } : {}),
       ...(draft.bible ? { bible: draft.bible } : {}),
       ...(draft.avatar && "seed" in draft.avatar
@@ -1238,6 +1262,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     draft: ProposalDraft,
     previous: readonly ResultItem[],
     results: ResultItem[],
+    progress: () => Promise<void>,
   ): Promise<void> {
     switch (proposal.kind) {
       case "employee": {
@@ -1248,6 +1273,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
           employeeSteps(run, created.target, draft as EmployeeDraft),
           previous.slice(1),
           results,
+          progress,
         );
         return;
       }
@@ -1256,18 +1282,21 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
           employeeChangeSteps(run, draft as EmployeeChangeDraft),
           previous,
           results,
+          progress,
         );
       case "group":
         return runSteps(
           groupSteps(run, draft as GroupDraft, previous),
           previous,
           results,
+          progress,
         );
       case "group_change":
         return runSteps(
           groupChangeSteps(run, draft as GroupChangeDraft),
           previous,
           results,
+          progress,
         );
     }
   }
@@ -1284,16 +1313,35 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     previous: readonly ResultItem[],
   ): Promise<Proposal> {
     const results: ResultItem[] = [];
+    const sofar = () => [...results, ...previous.slice(results.length)];
+    // 每做完一步记一次：建好的员工最先落库，之后哪一步出了意外，行里都有到此为止做成了什么。
+    const progress = async () => {
+      await deps.proposals.recordProgress(proposal.id, sofar());
+    };
     try {
-      await carryOut(run, proposal, draft, previous, results);
+      if (previous.length > 0) await progress();
+      await carryOut(run, proposal, draft, previous, results, progress);
+      // 落定也在这里面：它自己出错时同样走下面的退路，不让提议停在执行中。
+      return await finish(run, proposal, results);
     } catch (error) {
-      const kept = [...results, ...previous.slice(results.length)];
-      if (kept.length === 0)
-        await deps.proposals.release(proposal.id, run.actor.id);
-      else await deps.proposals.finish(proposal.id, "partially_applied", kept);
+      const kept = sofar();
+      try {
+        if (kept.length === 0)
+          await deps.proposals.release(proposal.id, run.actor.id);
+        else
+          await deps.proposals.finish(proposal.id, "partially_applied", kept);
+      } catch (fallback) {
+        // 退路也走不通（数据库断开）：行留在执行中，读的人在 `STALE_APPLYING_MS` 之后把它落定。
+        console.error(
+          JSON.stringify({
+            type: "staffing-settle-failed",
+            proposalId: proposal.id,
+            error: String(fallback),
+          }),
+        );
+      }
       throw error;
     }
-    return finish(run, proposal, results);
   }
 
   async function finish(

@@ -133,16 +133,20 @@ export function EmployeeProposal({
               />
             )}
           </Field>
-          <Field label="补充指令">
+        </Section>
+
+        <Section open={Boolean(draft.bible)} title="工作手册">
+          <Field
+            hint="更长的做事规范，整段交给它；确认之前请读完。"
+            label="工作手册"
+          >
             {(id) => (
               <Textarea
                 className="max-h-56 overflow-y-auto"
                 id={id}
-                maxLength={1000}
-                onChange={(event) =>
-                  change({ instructions: event.target.value })
-                }
-                value={draft.instructions ?? ""}
+                maxLength={8000}
+                onChange={(event) => change({ bible: event.target.value })}
+                value={draft.bible ?? ""}
               />
             )}
           </Field>
@@ -174,7 +178,9 @@ export function EmployeeProposal({
               key: entry.app,
               label: entry.app,
               detail:
-                entry.actions.length > 0 ? entry.actions.join("、") : undefined,
+                entry.actions.length > 0
+                  ? entry.actions.join("、")
+                  : READ_ONLY_ACTIONS,
             }))}
             noun="应用"
             onRemove={(app) =>
@@ -206,6 +212,11 @@ export function EmployeeProposal({
             }
           />
         </Section>
+
+        <Visibility
+          onPrivate={() => change({ visibility: "private" })}
+          visibility={draft.visibility}
+        />
 
         <label className="flex min-h-11 cursor-pointer items-center gap-3 border-border border-t text-sm">
           <input
@@ -248,6 +259,43 @@ export function EmployeeProposal({
         />
       </div>
     </CardShell>
+  );
+}
+
+/** 应用没有点名动作时给的是什么（服务端 `giveApp`：本人能直接给的只读动作）。 */
+export const READ_ONLY_ACTIONS = "能直接给的只读动作";
+
+/**
+ * 谁能用它。公开是确认之后最难收回的一件事（团队里每个人都看得到、用得上），所以用信号色写明，并给一个
+ * 改回只有自己能用的按钮；私有照常一行字。
+ */
+function Visibility({
+  visibility,
+  onPrivate,
+}: {
+  visibility: EmployeeDraft["visibility"];
+  onPrivate: () => void;
+}) {
+  if (visibility !== "public")
+    return (
+      <p className="flex min-h-11 items-center border-border border-t text-sm">
+        <span className="text-muted-foreground">可见范围：</span>
+        <span>只有你能用</span>
+      </p>
+    );
+  return (
+    <div className="flex flex-col gap-1 border-border border-t py-2 text-sm">
+      <p>
+        <span className="text-muted-foreground">可见范围：</span>
+        <span className="font-bold text-signal">公开给全团队</span>
+      </p>
+      <p className="text-signal text-xs">
+        确认之后，团队里的每个人都能看到并使用它。
+      </p>
+      <Button className="h-11 self-start" onClick={onPrivate} variant="outline">
+        改成只有你能用
+      </Button>
+    </div>
   );
 }
 

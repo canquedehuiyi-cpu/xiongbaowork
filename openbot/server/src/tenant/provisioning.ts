@@ -1,12 +1,15 @@
+import { eq } from "drizzle-orm";
 import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
 import type { Database } from "../db/client";
 import {
   agentProfiles,
   agents,
   enterpriseSettings,
+  mcpServers,
   pluginGrants,
   subscriptions,
 } from "../db/schema";
+import { ownerAppsAllowed } from "../plugins/owner-grants";
 import { runAsTenant } from "./context";
 
 /**
@@ -36,6 +39,26 @@ export const STAFFING_REFS: readonly string[] = STAFFING_TOOL_NAMES.map(
  */
 export function staffingGivenSetting(avatarId: string): string {
   return `staffing_default_given:${avatarId}`;
+}
+
+/**
+ * 小管家的默认授予此刻能不能做。它是替本人做的一次主人授予，所以过员工页上「给」的同一组条件：部署里有
+ * 「招聘与组群」这个应用（管理员删掉了就没有），管理员没有把它收归自己（`owner_grants = admin`），也没有对
+ * 这个人关掉「把自己的应用给自己的员工」。在调用方的帧里读（应用行是团队的，谁的帧都读得到）。
+ *
+ * 不能做时调用方跳过、也不记下处理过：管理员之后放开，下一次读取小管家的授予时再补。
+ */
+export async function staffingDefaultAllowed(
+  database: Pick<Database, "select">,
+  userId: string,
+): Promise<boolean> {
+  const rows = await database
+    .select({ ownerGrants: mcpServers.ownerGrants })
+    .from(mcpServers)
+    .where(eq(mcpServers.catalogueKey, "staffing"));
+  if (rows.length === 0) return false;
+  if (rows.some((row) => row.ownerGrants === "admin")) return false;
+  return ownerAppsAllowed(userId);
 }
 
 /**
@@ -133,12 +156,16 @@ export async function provisionTenant(
      * 新开通的分身默认会招人、组群。只在这一次真的建出了分身时写：开通在每次登录和每次启动都会再调，
      * 已有的分身要是又被补一遍，本人收回或禁用过的就会回来。已有的分身由启动时的补授处理。
      */
-    if (created.length > 0 && options.withStaffing === true)
+    const staffing =
+      created.length > 0 &&
+      options.withStaffing === true &&
+      (await staffingDefaultAllowed(database, user.id));
+    if (staffing)
       await database
         .insert(pluginGrants)
         .values(staffingGrantRows(avatarId, user.id))
         .onConflictDoNothing();
-    if (created.length > 0 && options.withStaffing === true)
+    if (staffing)
       await database
         .insert(enterpriseSettings)
         .values({

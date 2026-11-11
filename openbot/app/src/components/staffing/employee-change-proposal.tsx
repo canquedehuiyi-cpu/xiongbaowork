@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
 import type { AgentRoleFields } from "@/lib/roles/queries";
 import { routinesQueryOptions } from "@/lib/routines/queries";
-import type { ModelDraft, Proposal } from "@/lib/staffing/queries";
+import type {
+  AppDraft,
+  ModelDraft,
+  Proposal,
+  RoutineDraft,
+} from "@/lib/staffing/queries";
 import type { Persona } from "../../../../shared/persona";
 import {
   ActionProblem,
@@ -10,6 +15,7 @@ import {
   DecisionButtons,
   useDecision,
 } from "./card-parts";
+import { READ_ONLY_ACTIONS } from "./employee-proposal";
 import { BeforeAfter } from "./group-proposal";
 
 /**
@@ -80,7 +86,9 @@ export function EmployeeChangeProposal({
             label="职责描述"
           />
         ) : null}
-        {set.instructions !== undefined ? (
+        {/* 单独的工作指令只有个人起步员工有（读出来是文字）；别的员工按职责描述工作，写了也不会被用上。 */}
+        {set.instructions !== undefined &&
+        typeof current?.instructions === "string" ? (
           <BeforeAfter
             after={set.instructions}
             before={was(current?.instructions)}
@@ -118,28 +126,37 @@ export function EmployeeChangeProposal({
           />
         ) : null}
         {set.visibility !== undefined ? (
-          <BeforeAfter
-            after={VISIBILITY[set.visibility]}
-            before={current ? VISIBILITY[current.visibility] : null}
-            label="可见范围"
-          />
+          <div className="flex flex-col gap-0.5">
+            <BeforeAfter
+              after={VISIBILITY[set.visibility]}
+              before={current ? VISIBILITY[current.visibility] : null}
+              label="可见范围"
+              signal={set.visibility === "public"}
+            />
+            {set.visibility === "public" ? (
+              <p className="text-signal text-xs">
+                确认之后，团队里的每个人都能看到并使用它。
+              </p>
+            ) : null}
+          </div>
         ) : null}
         {set.skills && set.skills.length > 0 ? (
           <Added label="新增技能" items={set.skills} />
         ) : null}
         {set.apps && set.apps.length > 0 ? (
-          <Added label="新增应用" items={set.apps.map((entry) => entry.app)} />
-        ) : null}
-        {set.routines && set.routines.length > 0 ? (
-          <Added
-            items={set.routines.map((routine) => routine.title || routine.cron)}
-            label="新增定时任务"
+          <Listed
+            items={set.apps.map((entry) => appLine(entry, READ_ONLY_ACTIONS))}
+            label="新增应用"
           />
         ) : null}
+        {set.routines && set.routines.length > 0 ? (
+          <NewRoutines routines={set.routines} />
+        ) : null}
         {draft.appsRemove.length > 0 ? (
-          <Removed
-            items={draft.appsRemove.map((entry) => entry.app)}
+          <Listed
+            items={draft.appsRemove.map((entry) => appLine(entry, "整个应用"))}
             label="收回应用"
+            struck
           />
         ) : null}
         {draft.routinesRemove.length > 0 ? (
@@ -166,7 +183,67 @@ const PERSONA_PARTS: { key: keyof Persona; label: string }[] = [
   { key: "habits", label: "口头约束" },
 ];
 
-const VISIBILITY = { private: "私有", public: "公开" } as const;
+const VISIBILITY = {
+  private: "只有你能用",
+  public: "公开给全团队",
+} as const;
+
+/** 一个应用与它的动作；没点名动作时说给的是什么。 */
+function appLine(entry: AppDraft, whenNone: string): string {
+  return `${entry.app}：${entry.actions.length > 0 ? entry.actions.join("、") : whenNone}`;
+}
+
+/** 逐项列出（应用与它的动作各占一行），收回的带删除线。 */
+function Listed({
+  label,
+  items,
+  struck = false,
+}: {
+  label: string;
+  items: string[];
+  struck?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <ul className="flex flex-col gap-0.5">
+        {items.map((item) => (
+          <li className="break-words" key={item}>
+            {struck ? <s>{item}</s> : item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** 新加的定时任务：名字与时间，再整段给出每次触发要做的事——那是它会照着做的全文。 */
+function NewRoutines({ routines }: { routines: RoutineDraft[] }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-muted-foreground text-xs">新增定时任务</p>
+      <ul className="flex flex-col gap-2">
+        {routines.map((routine) => {
+          const when = `${routine.cron}${routine.timezone ? `，${routine.timezone}` : ""}`;
+          return (
+            <li
+              className="flex flex-col gap-0.5"
+              // 同一份草稿里不会有两条名字、时间、指令都一样的定时任务。
+              key={`${routine.title ?? ""}|${routine.cron}|${routine.instruction}`}
+            >
+              <p className="break-words font-medium">
+                {routine.title ? `${routine.title}（${when}）` : when}
+              </p>
+              <p className="whitespace-pre-wrap break-words text-muted-foreground">
+                {routine.instruction}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function modelName(model: ModelDraft): string {
   return "modelRef" in model ? model.modelRef : model.platformModelRef;

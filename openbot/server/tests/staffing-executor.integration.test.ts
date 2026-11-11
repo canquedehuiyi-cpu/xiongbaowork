@@ -261,6 +261,31 @@ const createdBot = async (proposalId: string) => {
   return created;
 };
 
+/**
+ * 「也给它招聘与组群能力」和别的应用一样按部署里的应用来给，所以部署里要有这个应用。本来没有时由本文件
+ * 添加、由本文件删除（按行 id）。
+ */
+let addedStaffingRow: string | null = null;
+beforeAll(async () => {
+  await asPlatform(async () => {
+    const [present] = await database
+      .select({ id: mcpServers.id })
+      .from(mcpServers)
+      .where(eq(mcpServers.catalogueKey, "staffing"))
+      .limit(1);
+    const row =
+      present ?? (await plugins.addServer({ key: "staffing", by: "boot" }));
+    if (!present) addedStaffingRow = row.id;
+  });
+});
+afterAll(async () => {
+  const added = addedStaffingRow;
+  if (added)
+    await asPlatform(() =>
+      database.delete(mcpServers).where(eq(mcpServers.id, added)),
+    );
+});
+
 beforeAll(async () => {
   releaseAdmin = await seedAdministrator(database, ADMIN);
   await asPlatform(async () => {

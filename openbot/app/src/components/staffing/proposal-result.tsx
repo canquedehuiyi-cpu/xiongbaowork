@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   type Proposal,
   type ResultItem,
+  useDiscardProposal,
   useRetryProposal,
 } from "@/lib/staffing/queries";
 import { ActionProblem, CardShell, TAP } from "./card-parts";
@@ -51,6 +52,7 @@ export function ProposalResult({
   title: string;
 }) {
   const retry = useRetryProposal(proposal.id);
+  const discard = useDiscardProposal(proposal.id);
   const [error, setError] = useState<unknown>(null);
   const items = proposal.result ?? [];
   // 结果的条目顺序固定（服务端按步骤顺序写），同一步可能出现多次（几个技能、几个应用），所以带上位置。
@@ -69,6 +71,16 @@ export function ProposalResult({
       setError(cause);
     }
   };
+  // 失败的步骤重试也做不成（比如群已经不在了）时，作废让它有个了结；做成的几步不回滚。
+  const drop = async () => {
+    setError(null);
+    try {
+      await discard.mutateAsync();
+    } catch (cause) {
+      setError(cause);
+    }
+  };
+  const busy = retry.isPending || discard.isPending;
 
   return (
     <CardShell proposalId={proposal.id} status={proposal.status} title={title}>
@@ -83,10 +95,18 @@ export function ProposalResult({
             重试只按草稿里的内容把失败的几步再做一遍，已经做成的不会重做。
           </p>
           {error ? <ActionProblem error={error} /> : null}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
             <Button
               className={TAP}
-              disabled={retry.isPending}
+              disabled={busy}
+              onClick={() => void drop()}
+              variant="ghost"
+            >
+              {discard.isPending ? "正在作废…" : "作废"}
+            </Button>
+            <Button
+              className={TAP}
+              disabled={busy}
               onClick={() => void again()}
               variant="outline"
             >
@@ -94,6 +114,11 @@ export function ProposalResult({
             </Button>
           </div>
         </div>
+      ) : null}
+      {proposal.status === "discarded" ? (
+        <p className="mt-3 text-muted-foreground text-xs">
+          已作废：做成的几步保留，失败的不再重试。
+        </p>
       ) : null}
       {open ? (
         <div className="mt-3 flex justify-end">

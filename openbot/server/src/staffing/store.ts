@@ -1,4 +1,15 @@
-import { and, count, eq, gt, gte, isNull, lte, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "../db/client";
 import { staffingProposals } from "../db/schema/staffing";
 import type {
@@ -17,6 +28,12 @@ import type {
 
 export const PROPOSAL_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 export const PENDING_PER_OWNER_LIMIT = 20;
+
+/**
+ * 「执行中」最后一次被写之后过了这么久还没落定，就当执行它的那次请求已经不在了（进程重启、连接断开）。
+ * 执行每做完一步都会写一次结果，所以正在做的提议不会被误判；十分钟远长于一次执行要花的时间。
+ */
+export const STALE_APPLYING_MS = 10 * 60 * 1000;
 
 export class ProposalLimitError extends Error {
   constructor() {
@@ -47,6 +64,15 @@ export class ProposalStateError extends Error {
 }
 
 type Row = typeof staffingProposals.$inferSelect;
+
+/**
+ * 提议的 id 是 uuid。别的写法（地址栏里随手改的、模型编的）在查库之前就当作找不到：交给数据库，它的类型
+ * 错误会变成 500，而对问的人来说这就是一份不存在的提议。
+ */
+const PROPOSAL_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const isProposalId = (id: string): boolean => PROPOSAL_ID.test(id);
 
 function toProposal(row: Row): Proposal {
   return {
@@ -91,6 +117,31 @@ export function createStaffingProposalStore(db: Database) {
     )[0];
 
   /**
+   * 停得太久的「执行中」落定：有结果（做了一部分，含建好的员工）的落成部分完成，失败的项可以重试；什么都没
+   * 记下的放回待确认。一条带条件的更新，和还在做的那次请求的落定互不覆盖：谁先写，另一个就拿到 0 行。
+   */
+  const settleStale = async (id: string) =>
+    (
+      await db
+        .update(staffingProposals)
+        .set({
+          status: sql`CASE WHEN jsonb_typeof(${staffingProposals.result}) = 'array' AND jsonb_array_length(${staffingProposals.result}) > 0 THEN 'partially_applied' ELSE 'pending' END`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(staffingProposals.id, id),
+            eq(staffingProposals.status, "applying"),
+            lte(
+              staffingProposals.updatedAt,
+              sql`now() - make_interval(secs => ${STALE_APPLYING_MS / 1000})`,
+            ),
+          ),
+        )
+        .returning()
+    )[0];
+
+  /**
    * 条件更新没命中时说明原因。别人的提议与不存在的提议一个样（NotFound），
    * 不让人借错误类型探出别人有没有提议。
    */
@@ -118,6 +169,7 @@ export function createStaffingProposalStore(db: Database) {
     to: Row["status"],
     options: { expiredAsError?: boolean; requireLive?: boolean } = {},
   ): Promise<Proposal> {
+    if (!isProposalId(id)) throw new ProposalNotFoundError();
     const [row] = await db
       .update(staffingProposals)
       .set({ status: to, updatedAt: sql`now()` })
@@ -176,12 +228,27 @@ export function createStaffingProposalStore(db: Database) {
 
     /** 这次调用是否把一份到期的 pending 落成了 expired（只有第一个看到的人得到 true，用来只记一次轨迹）。 */
     async expireIfLapsed(id: string): Promise<boolean> {
+      if (!isProposalId(id)) return false;
       return Boolean(await markExpired(id));
     },
 
+    /**
+     * 读一份提议。到期的 pending 在这里落成 expired；停得太久的 applying 在这里落定（见 {@link settleStale}），
+     * 所以卡片、`proposal_status` 与执行器读到的都不会是一个永远不会结束的「执行中」。在调用方的帧里。
+     */
     async get(id: string): Promise<Proposal | null> {
+      if (!isProposalId(id)) return null;
       const row = await byId(id);
       if (!row) return null;
+      if (
+        row.status === "applying" &&
+        Date.now() - row.updatedAt.getTime() >= STALE_APPLYING_MS
+      ) {
+        const settled = await settleStale(id);
+        if (settled) return toProposal(settled);
+        const latest = await byId(id);
+        return latest ? toProposal(latest) : null;
+      }
       if (row.status === "pending" && row.expiresAt.getTime() <= Date.now()) {
         const expired = await markExpired(id);
         if (expired) return toProposal(expired);
@@ -196,6 +263,7 @@ export function createStaffingProposalStore(db: Database) {
       ownerId: string,
       draft: ProposalDraft,
     ): Promise<Proposal> {
+      if (!isProposalId(id)) throw new ProposalNotFoundError();
       const [row] = await db
         .update(staffingProposals)
         .set({
@@ -229,14 +297,59 @@ export function createStaffingProposalStore(db: Database) {
     reopenFailed: (id: string, ownerId: string) =>
       transition(id, ownerId, "partially_applied", "applying"),
 
-    discard: (id: string, ownerId: string) =>
-      transition(id, ownerId, "pending", "discarded", { requireLive: true }),
+    /**
+     * 作废：待确认的（还没过期），或者部分完成的——每一步都失败、重试也做不成的提议要有个了结，否则它一直
+     * 挂着「失败可重试」。部分完成的已经做成的项不回滚，作废只是不再重试。
+     */
+    async discard(id: string, ownerId: string): Promise<Proposal> {
+      if (!isProposalId(id)) throw new ProposalNotFoundError();
+      const [row] = await db
+        .update(staffingProposals)
+        .set({ status: "discarded", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(staffingProposals.id, id),
+            eq(staffingProposals.ownerId, ownerId),
+            inArray(staffingProposals.status, ["pending", "partially_applied"]),
+            or(
+              eq(staffingProposals.status, "partially_applied"),
+              gt(staffingProposals.expiresAt, sql`now()`),
+            ),
+          ),
+        )
+        .returning();
+      if (!row) throw await refusal(id, ownerId, false);
+      return toProposal(row);
+    },
+
+    /**
+     * 执行途中记下到此为止的结果（只在仍是「执行中」时）：建好的员工一建好就在行里，之后出了什么意外，
+     * 重试也不会再建一个；每写一次也刷新 `updated_at`，表示还有人在做（见 {@link STALE_APPLYING_MS}）。
+     */
+    async recordProgress(id: string, result: ResultItem[]): Promise<boolean> {
+      if (!isProposalId(id)) return false;
+      const [row] = await db
+        .update(staffingProposals)
+        .set({
+          result: result as unknown as Record<string, unknown>,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(staffingProposals.id, id),
+            eq(staffingProposals.status, "applying"),
+          ),
+        )
+        .returning({ id: staffingProposals.id });
+      return row !== undefined;
+    },
 
     async finish(
       id: string,
       status: "applied" | "partially_applied",
       result: ResultItem[],
     ): Promise<Proposal> {
+      if (!isProposalId(id)) throw new ProposalNotFoundError();
       const [row] = await db
         .update(staffingProposals)
         .set({

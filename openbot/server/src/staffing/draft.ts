@@ -225,8 +225,8 @@ function employeeFields(
   given: Record<string, unknown>,
   partial: boolean,
   dropped: DroppedItem[],
-): Partial<EmployeeDraft> {
-  const out: Partial<EmployeeDraft> = {};
+): EmployeeChangeDraft["set"] {
+  const out: EmployeeChangeDraft["set"] = {};
   const has = (key: string) => given[key] !== undefined;
   if (has("name") || !partial) {
     out.name = text(given.name, "名字", NAME_MAX, { required: true });
@@ -268,9 +268,20 @@ function employeeFields(
   return out;
 }
 
+/** 新员工的草稿里给了工作指令时，告诉本人的话：它不会被用上。 */
+export const NO_SEPARATE_INSTRUCTIONS =
+  "新员工没有单独的工作指令，它按职责描述工作；要求请写进职责描述或工作手册。";
+
 function employee(input: unknown, dropped: DroppedItem[]): EmployeeDraft {
   const given = record(input, "员工草稿");
-  const fields = employeeFields(given, false, dropped);
+  const { instructions, ...fields } = employeeFields(given, false, dropped);
+  // 只有个人起步员工有单独的指令（`profile-types.ts`），新员工不会是它：写下来也不会被用上，卡片不该展示。
+  if (instructions !== undefined)
+    dropped.push({
+      field: "instructions",
+      value: [...instructions].slice(0, 20).join(""),
+      reason: NO_SEPARATE_INSTRUCTIONS,
+    });
   const draft = fields as EmployeeDraft;
   if (given.roleTemplate !== undefined) {
     const template = record(given.roleTemplate, "角色模板");
@@ -295,7 +306,7 @@ function employeeChange(
     given.set === undefined ? {} : record(given.set, "改动内容"),
     true,
     dropped,
-  ) as EmployeeChangeDraft["set"];
+  );
   const draft: EmployeeChangeDraft = {
     agentId: id(given.agentId, "员工"),
     set,

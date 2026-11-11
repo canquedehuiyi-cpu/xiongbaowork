@@ -38,13 +38,9 @@ skills:
       要说"已经起草好，等你在卡片上确认"。想知道结果可以用 mcp__staffing__proposal_status 查。
       手上没有 mcp__staffing__ 工具时，请用户到「我的分身」对话里说，由小管家起草。
       不要替用户发明他没有说过的职责。
-    tools:
-      - staffing/list_staff
-      - staffing/propose_employee
-      - staffing/propose_employee_change
-      - staffing/propose_group
-      - staffing/propose_group_change
-      - staffing/proposal_status
+    # 不声明 tools：招聘与组群工具靠员工自己的授予生效（小管家默认有），这里声明不会多给任何东西；
+    # 声明了反而让这一轮按技能挑工具（plugins/selection.ts），确认之后的那一轮可能拿不到 proposal_status。
+    tools: []
   - slug: skill-creator
     title: 造技能
     summary: 把一套反复要说的话固化成一个可 / 调用的技能。

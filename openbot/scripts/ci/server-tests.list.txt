@@ -722,11 +722,14 @@ tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
 tests/staffing-app-key.integration.test.ts
+tests/staffing-bot-creator-tools.test.ts
 tests/staffing-default-grant.integration.test.ts
 tests/staffing-draft.test.ts
 tests/staffing-executor.integration.test.ts
+tests/staffing-gates.integration.test.ts
 tests/staffing-proposals-table.integration.test.ts
 tests/staffing-routes.integration.test.ts
+tests/staffing-settle.integration.test.ts
 tests/staffing-store.integration.test.ts
 tests/stall-guard.test.ts
 tests/starter-tour-routes.test.ts

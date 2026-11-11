@@ -29,7 +29,6 @@ export type EmployeeDraft = {
   title: string;
   avatar?: { preset: PortraitPreset } | { seed: string };
   roleDescription: string;
-  instructions?: string;
   persona?: Persona;
   bible?: string;
   roleTemplate?: { id: string; version: number };
@@ -41,9 +40,15 @@ export type EmployeeDraft = {
   staffingTools: boolean;
 };
 
+/**
+ * 员工改动。`instructions` 只对个人起步员工有意义（`profile-types.ts` 的 `instructions`：别的员工按职责描述
+ * 工作，会忽略它），所以它只在改动里出现，新员工的草稿里没有。
+ */
 export type EmployeeChangeDraft = {
   agentId: string;
-  set: Partial<Omit<EmployeeDraft, "roleTemplate" | "staffingTools">>;
+  set: Partial<Omit<EmployeeDraft, "roleTemplate" | "staffingTools">> & {
+    instructions?: string;
+  };
   appsRemove: { app: string; actions: string[] }[];
   routinesRemove: string[];
 };

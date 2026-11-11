@@ -43,7 +43,6 @@ export type EmployeeDraft = {
   title: string;
   avatar?: { preset: string } | { seed: string };
   roleDescription: string;
-  instructions?: string;
   persona?: Persona;
   bible?: string;
   roleTemplate?: { id: string; version: number };
@@ -55,9 +54,12 @@ export type EmployeeDraft = {
   staffingTools: boolean;
 };
 
+/** 员工改动。`instructions` 只对个人起步员工有意义，所以只在改动里出现（同服务端 `types.ts`）。 */
 export type EmployeeChangeDraft = {
   agentId: string;
-  set: Partial<Omit<EmployeeDraft, "roleTemplate" | "staffingTools">>;
+  set: Partial<Omit<EmployeeDraft, "roleTemplate" | "staffingTools">> & {
+    instructions?: string;
+  };
   appsRemove: AppDraft[];
   routinesRemove: string[];
 };

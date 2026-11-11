@@ -129,8 +129,12 @@ export function StaffingProposalCard({
 
   const { proposal } = view.data;
   const title = titleOf(proposal);
-  if (proposal.status === "applied" || proposal.status === "partially_applied")
-    return <ProposalResult proposal={proposal} title={title} />;
+  // 作废了的部分完成提议：仍然逐项给出做成了什么（做成的不回滚），只是不再重试。
+  const settled =
+    proposal.status === "applied" ||
+    proposal.status === "partially_applied" ||
+    (proposal.status === "discarded" && (proposal.result?.length ?? 0) > 0);
+  if (settled) return <ProposalResult proposal={proposal} title={title} />;
   if (isClosed(proposal.status))
     return (
       <CardShell
