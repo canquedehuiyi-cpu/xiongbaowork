@@ -45,22 +45,68 @@ class OfflineWebSocket extends EventTarget {
   send() {}
 }
 
+/** Pages on sight, as the browser's observer does: armed observers are kept so a test can see them. */
+class ScrollObserver {
+  static armed = new Set<ScrollObserver>();
+  readonly root: Element | null;
+  constructor(
+    private callback: IntersectionObserverCallback,
+    options: IntersectionObserverInit = {},
+  ) {
+    this.root = (options.root as Element | null) ?? null;
+  }
+  observe() {
+    ScrollObserver.armed.add(this);
+  }
+  unobserve() {}
+  disconnect() {
+    ScrollObserver.armed.delete(this);
+  }
+  takeRecords() {
+    return [];
+  }
+  /** The observers watching a list inside `within`, e.g. the column rather than the sidebar. */
+  static armedIn(within: Element) {
+    return [...ScrollObserver.armed].filter(
+      (observer) => observer.root !== null && within.contains(observer.root),
+    );
+  }
+  /** Every sentinel armed inside `within` comes into view. */
+  static scrollIntoView(within: Element) {
+    for (const observer of ScrollObserver.armedIn(within))
+      observer.callback(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        observer as unknown as IntersectionObserver,
+      );
+  }
+}
+
 let originalFetch: typeof fetch;
 let originalWebSocket: typeof WebSocket;
+let originalObserver: typeof IntersectionObserver;
+/** How the server answers a read; unanswered reads are a 404. */
+let answer: (url: string) => Promise<Response> | undefined;
 const clients: QueryClient[] = [];
 
 beforeAll(() => {
   GlobalRegistrator.register({ url: "http://localhost:3010" });
   originalFetch = globalThis.fetch;
   originalWebSocket = globalThis.WebSocket;
+  originalObserver = globalThis.IntersectionObserver;
   globalThis.WebSocket = OfflineWebSocket as unknown as typeof WebSocket;
+  globalThis.IntersectionObserver =
+    ScrollObserver as unknown as typeof IntersectionObserver;
   globalThis.fetch = Object.assign(
-    async () => Response.json({ error: "not served" }, { status: 404 }),
+    async (input: RequestInfo | URL) =>
+      (await answer(String(input))) ??
+      Response.json({ error: "not served" }, { status: 404 }),
     { preconnect: originalFetch.preconnect },
   );
 });
 beforeEach(() => {
   window.localStorage.clear();
+  answer = () => undefined;
+  ScrollObserver.armed.clear();
 });
 afterEach(() => {
   cleanup();
@@ -71,6 +117,7 @@ afterAll(async () => {
   await settleReactWork();
   globalThis.fetch = originalFetch;
   globalThis.WebSocket = originalWebSocket;
+  globalThis.IntersectionObserver = originalObserver;
   GlobalRegistrator.unregister();
 });
 
@@ -129,7 +176,13 @@ const CHANNELS = [
   }),
 ];
 
-function renderApp(path: string) {
+function renderApp(
+  path: string,
+  {
+    channels = CHANNELS,
+    nextCursor = null,
+  }: { channels?: ChannelSummary[]; nextCursor?: string | null } = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -226,11 +279,21 @@ function renderApp(path: string) {
         lastRun: null,
       },
     ],
-    proactive: [],
+    proactive: [
+      {
+        id: "p-1",
+        focus: "库存告急",
+        enabled: true,
+        intervalMinutes: 60,
+        nextRunAt: "2026-11-08T01:00:00Z",
+        lastRunAt: null,
+        lastStatus: "ok",
+      },
+    ],
     lastActivityAt: null,
   });
   queryClient.setQueryData(channelKeys.list(), {
-    pages: [{ channels: CHANNELS, nextCursor: null }],
+    pages: [{ channels, nextCursor }],
     pageParams: [""],
   });
   const rootRoute = createRootRoute({
@@ -308,8 +371,10 @@ test("对话任务 / 自动任务: the second lists what it does on its own, eac
     "自动任务",
   ]);
   await userEvent.click(within(tabs).getByRole("tab", { name: "自动任务" }));
+  // Four of its own (one automation, one routine, one responsibility, one check-in), where its
+  // conversations were three: the count is the automations'.
   await waitFor(() =>
-    expect(within(column).getByText("共3个任务")).toBeTruthy(),
+    expect(within(column).getByText("共4个任务")).toBeTruthy(),
   );
   const rows = within(column)
     .getAllByRole("link")
@@ -318,7 +383,18 @@ test("对话任务 / 自动任务: the second lists what it does on its own, eac
     ["每周一汇总销售自动任务", "/autonomous?detail=automation%3Aauto-1"],
     ["每天九点看库存定时任务 · 已停用", "/autonomous?detail=routine%3Ar-1"],
     ["盯住退货率长期职责", "/autonomous?detail=responsibility%3Aresp-1"],
+    ["库存告急主动巡检", "/autonomous?detail=proactive%3Ap-1"],
   ]);
+  // The tabs name the panel they switch, and the panel is labelled by the open one.
+  const panel = within(column).getByRole("tabpanel");
+  expect(
+    within(tabs)
+      .getAllByRole("tab")
+      .map((tab) => tab.getAttribute("aria-controls")),
+  ).toEqual([panel.id, panel.id]);
+  expect(panel.getAttribute("aria-labelledby")).toBe(
+    within(tabs).getByRole("tab", { name: "自动任务" }).id,
+  );
   expect(hrefOf(within(column).getByRole("link", { name: "新建" }))).toBe(
     "/autonomous",
   );
@@ -366,4 +442,89 @@ test("off the conversation pages there is no column", async () => {
   const { view } = renderApp("/tasks");
   await view.findByRole("navigation", { name: "主导航" });
   expect(view.queryByRole("complementary")).toBeNull();
+});
+
+test("one employee's few conversations do not page through everybody's history on sight", async () => {
+  const older = Promise.withResolvers<Response>();
+  answer = (url) =>
+    url === "/api/channels?cursor=older" ? older.promise : undefined;
+  const { view } = renderApp("/channel/c-writer", { nextCursor: "older" });
+  const column = await view.findByRole("complementary", {
+    name: "写手的对话",
+  });
+  const button = await within(column).findByRole("button", {
+    name: "加载更早的会话",
+  });
+  // Nothing armed in the column: the sentinel in view of a short list loads nothing by itself.
+  ScrollObserver.scrollIntoView(column);
+  expect(ScrollObserver.armedIn(column)).toEqual([]);
+  // Asked for, the next page loads.
+  await userEvent.click(button);
+  older.resolve(
+    Response.json({
+      channels: [
+        channel("c-writer-old", ["agent-writer"], { summary: "旧稿" }),
+      ],
+      nextCursor: null,
+    }),
+  );
+  expect(await within(column).findByText("旧稿")).toBeTruthy();
+});
+
+test("with older pages unloaded the count says what is loaded, and the whole only once it is", async () => {
+  const first = renderApp("/channel/c-analyst-new", { nextCursor: "older" });
+  const column = await first.view.findByRole("complementary", {
+    name: "分析师的对话",
+  });
+  expect(within(column).getByText("已加载3个")).toBeTruthy();
+  expect(within(column).queryByText("共3个任务")).toBeNull();
+  cleanup();
+  const whole = renderApp("/channel/c-analyst-new");
+  const all = await whole.view.findByRole("complementary", {
+    name: "分析师的对话",
+  });
+  expect(within(all).getByText("共3个任务")).toBeTruthy();
+});
+
+test("while whose conversation it is is still being read, the column waits instead of listing every one", async () => {
+  const pending = Promise.withResolvers<Response>();
+  answer = (url) =>
+    url === "/api/channels/c-elsewhere" ? pending.promise : undefined;
+  const { view } = renderApp("/group/c-elsewhere");
+  const waiting = await view.findByRole("complementary", {
+    name: "正在读取对话",
+  });
+  expect(waiting.getAttribute("aria-busy")).toBe("true");
+  expect(view.queryByRole("complementary", { name: "全部对话" })).toBeNull();
+  expect(within(waiting).queryAllByRole("link")).toEqual([]);
+  pending.resolve(
+    Response.json({
+      channel: {
+        id: "c-elsewhere",
+        name: "c-elsewhere",
+        agentIds: ["agent-writer", "agent-analyst"],
+        threadId: "c-elsewhere",
+        active: true,
+        lastMessageAt: null,
+      },
+    }),
+  );
+  expect(
+    await view.findByRole("complementary", { name: "写手的对话" }),
+  ).toBeTruthy();
+});
+
+test("an employee the roster does not list is named from its own record", async () => {
+  answer = (url) =>
+    url === "/api/agents/agent-ghost"
+      ? Promise.resolve(
+          Response.json({ agent: agent("agent-ghost", "隐身员工") }),
+        )
+      : undefined;
+  const { view } = renderApp("/channel/c-ghost", {
+    channels: [channel("c-ghost", ["agent-ghost"], { summary: "悄悄话" })],
+  });
+  expect(
+    await view.findByRole("complementary", { name: "隐身员工的对话" }),
+  ).toBeTruthy();
 });

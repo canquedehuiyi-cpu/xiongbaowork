@@ -389,10 +389,10 @@ test("beside a conversation, a column about its employee sits between the sideba
   });
   const sidebar = view.container.querySelector('[data-slot="sidebar"]');
   expect(sidebar).not.toBeNull();
-  expect(
-    follows(sidebar as Element, column) &&
-      follows(column, view.container.querySelector("main") as Element),
-  ).toBe(true);
+  expect(follows(sidebar as Element, column)).toBe(true);
+  expect(follows(column, view.container.querySelector("main") as Element)).toBe(
+    true,
+  );
   // The tabs are the column's own; the sidebar still has none.
   expect(within(sidebar as HTMLElement).queryByRole("tablist")).toBeNull();
   expect(
