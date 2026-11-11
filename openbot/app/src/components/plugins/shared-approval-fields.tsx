@@ -9,8 +9,8 @@ export function sharedSectionSentence(
 ): string | null {
   if (!shared) return null;
   return effect === "write"
-    ? "Anyone who can use this Bot can do this as the shared account."
-    : "Anyone who can use this Bot can read what this account can read.";
+    ? "能用这位员工的人，都能以团队账号的身份做这些。"
+    : "能用这位员工的人，都能读到这个账号读得到的东西。";
 }
 
 /**
@@ -28,21 +28,21 @@ export function SharedApprovalFields({
   const named = value.audience === "people" || value.members.length > 0;
   const options: { audience: SharedUseApproval["audience"]; label: string }[] =
     [
-      { audience: "owner", label: "Only its owner" },
+      { audience: "owner", label: "只有它的主人" },
       ...(named
         ? [
             {
               audience: "people" as const,
-              label: `Named: ${describeApproval({ ...value, audience: "people", outsideInput: false })}`,
+              label: `指定的人：${describeApproval({ ...value, audience: "people", outsideInput: false })}`,
             },
           ]
         : []),
-      { audience: "team", label: "Everyone" },
+      { audience: "team", label: "所有人" },
     ];
   return (
     <fieldset className="space-y-2 text-sm">
       <legend className="font-medium">
-        Who can use the shared account through this Bot
+        谁能通过这位员工使用团队账号
       </legend>
       {options.map((option) => (
         <label className="flex items-center gap-2" key={option.audience}>
@@ -69,7 +69,7 @@ export function SharedApprovalFields({
           }
           type="checkbox"
         />
-        Messages from outside (email, Slack, webhooks) can use it
+        外部来的消息（邮件、Slack、Webhook）也可以用它
       </label>
     </fieldset>
   );

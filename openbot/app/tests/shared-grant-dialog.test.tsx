@@ -23,10 +23,10 @@ afterAll(() => GlobalRegistrator.unregister());
 describe("sharedSectionSentence", () => {
   test("says what a shared write and a shared read let people do", () => {
     expect(sharedSectionSentence("write", true)).toBe(
-      "Anyone who can use this Bot can do this as the shared account.",
+      "能用这位员工的人，都能以团队账号的身份做这些。",
     );
     expect(sharedSectionSentence("read", true)).toBe(
-      "Anyone who can use this Bot can read what this account can read.",
+      "能用这位员工的人，都能读到这个账号读得到的东西。",
     );
     expect(sharedSectionSentence("write", false)).toBeNull();
   });
@@ -46,13 +46,13 @@ describe("SharedApprovalFields", () => {
     }
     const view = render(<Harness />);
     expect(
-      (view.getByRole("radio", { name: "Everyone" }) as HTMLInputElement)
+      (view.getByRole("radio", { name: "所有人" }) as HTMLInputElement)
         .checked,
     ).toBe(true);
-    await userEvent.click(view.getByRole("radio", { name: "Only its owner" }));
+    await userEvent.click(view.getByRole("radio", { name: "只有它的主人" }));
     await userEvent.click(
       view.getByRole("checkbox", {
-        name: "Messages from outside (email, Slack, webhooks) can use it",
+        name: "外部来的消息（邮件、Slack、Webhook）也可以用它",
       }),
     );
     expect(seen).toEqual({

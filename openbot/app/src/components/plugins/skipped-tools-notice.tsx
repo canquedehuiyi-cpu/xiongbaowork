@@ -30,9 +30,9 @@ export function SkippedToolsNotice({
         role="status"
       >
         {names.length === 1
-          ? "Your Bots can't use one action this app lists, because of how it's named: "
-          : `Your Bots can't use ${names.length} actions this app lists, because of how they're named: `}
-        {words.join(", ")}.
+          ? "这个应用列出的一个动作因为名字的写法，你的员工用不了："
+          : `这个应用列出的 ${names.length} 个动作因为名字的写法，你的员工用不了：`}
+        {words.join("、")}。
       </p>
     );
   }
@@ -42,15 +42,15 @@ export function SkippedToolsNotice({
       role="status"
     >
       {names.length === 1
-        ? "One action this app lists was left out, because a tool name may only use letters, digits, underscores and hyphens: "
-        : `${names.length} actions this app lists were left out, because a tool name may only use letters, digits, underscores and hyphens: `}
+        ? "这个应用列出的一个动作没有收进来，因为工具名只能用字母、数字、下划线和连字符："
+        : `这个应用列出的 ${names.length} 个动作没有收进来，因为工具名只能用字母、数字、下划线和连字符：`}
       {names.map((name, index) => (
         <span key={name}>
-          {index > 0 ? ", " : null}
+          {index > 0 ? "、" : null}
           <code className="font-mono text-xs">{name}</code>
         </span>
       ))}
-      .
+      。
     </p>
   );
 }

@@ -85,10 +85,10 @@ describe("describeApproval", () => {
   test("says who, in plain words", () => {
     expect(
       describeApproval({ audience: "owner", outsideInput: false, members: [] }),
-    ).toBe("Only its owner");
+    ).toBe("只有它的主人");
     expect(
       describeApproval({ audience: "team", outsideInput: true, members: [] }),
-    ).toBe("Everyone, and outside input");
+    ).toBe("所有人，也接受外部输入");
     expect(
       describeApproval({
         audience: "people",
@@ -98,6 +98,6 @@ describe("describeApproval", () => {
           { kind: "user", value: "u1" },
         ],
       }),
-    ).toBe("The group platform and 1 person");
+    ).toBe("群组 platform 和 1 个人");
   });
 });

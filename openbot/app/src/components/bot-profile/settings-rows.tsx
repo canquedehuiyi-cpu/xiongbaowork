@@ -22,6 +22,14 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import {
+  accessSummary,
+  countLabel,
+  memorySummary,
+  reachSummary,
+  setupSummary,
+  sharingSummary,
+} from "@/lib/agents/bot-summaries";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { approvalInboxOptions, ruleCoversBot } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
@@ -37,67 +45,6 @@ import { responsibilitiesQueryOptions } from "@/lib/responsibilities";
 import { routinesQueryOptions } from "@/lib/routines/queries";
 import { teamBotsQueryOptions } from "@/lib/team-bots";
 import { connectorCount } from "./access";
-
-/*
- * 每一行的摘要，用中文说。上游把这几句放在 `lib/agents/bot-summaries.ts`（英文，B 组的文件，为了以后同步上游
- * 原样保留）；熊宝的说法在这里，规则和上游一一对应。
- */
-
-function countLabel(count: number, unit: string, none: string): string {
-  return count === 0 ? none : `${count} ${unit}`;
-}
-
-function accessSummary(skills: number, apps: number): string {
-  const parts = [
-    skills ? `${skills} 个技能` : "",
-    apps ? `${apps} 个应用` : "",
-  ].filter(Boolean);
-  return parts.length ? parts.join("，") : "什么都没授予";
-}
-
-function sharingSummary(
-  published: { audience: "team" | "people" } | undefined,
-  visibility: "public" | "private",
-): string {
-  if (!published) return visibility === "public" ? "所有人（公开）" : "没有共享";
-  return published.audience === "team" ? "整个团队" : "指定的人和分组";
-}
-
-/** 内置的员工只说「内置」；个人版说它由什么框架运行，不说本机地址；其余说它的地址。 */
-function setupSummary(
-  agent: { builtIn: boolean; endpoint: string | null; framework?: string },
-  edition: "team" | "personal",
-): string {
-  if (agent.builtIn || !agent.endpoint) return "内置";
-  if (edition === "personal" && agent.framework)
-    return `运行在 ${agent.framework} 上`;
-  try {
-    return new URL(agent.endpoint).host;
-  } catch {
-    return agent.endpoint;
-  }
-}
-
-const TRANSPORT_LABEL: Record<string, string> = {
-  slack: "Slack",
-  teams: "Microsoft Teams",
-  sms: "短信",
-};
-
-function reachSummary(transports: readonly string[]): string {
-  const places = [...new Set(transports)]
-    .map((transport) => TRANSPORT_LABEL[transport] ?? transport)
-    .sort((a, b) => a.localeCompare(b));
-  return places.length ? places.join("、") : "只在熊宝里";
-}
-
-function memorySummary(sources: number, research: boolean): string {
-  const parts = [
-    sources ? `${sources} 个来源` : "",
-    research ? "主动巡检已开" : "",
-  ].filter(Boolean);
-  return parts.length ? parts.join("，") : "什么都没接";
-}
 
 type Row = {
   to:
@@ -150,6 +97,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
               (goal) => goal.agentId === agent.id && goal.status === "active",
             ).length,
             "个进行中",
+            "个进行中",
             "没有进行中的",
           )
         : "",
@@ -200,6 +148,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
                 rule.botId !== "*" && ruleCoversBot(rule.botId, agent.id),
             ).length,
             "条规则",
+            "条规则",
             "没有规则",
           )
         : "",
@@ -212,6 +161,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
         ? countLabel(
             routines.data.routines.filter((row) => row.agentId === agent.id)
               .length,
+            "个定时任务",
             "个定时任务",
             "没有定时任务",
           )

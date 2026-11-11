@@ -134,7 +134,7 @@ test("guidanceFor names the plan, used/limit, /plans and the cleanup screen for 
     sentence: "Team 套餐：员工已用 3/3",
     hint: "删除不再需要的员工即可腾出名额，或升级套餐获得更多名额。",
     upgradeHref: "/plans",
-    cleanup: { href: "/wakers", label: "管理员工" },
+    cleanup: { href: "/bots", label: "管理员工" },
   });
   expect(guidanceFor(details("devices", 1, 1))).toEqual({
     metric: "devices",
@@ -143,7 +143,7 @@ test("guidanceFor names the plan, used/limit, /plans and the cleanup screen for 
     hint: "移除不再使用的设备即可腾出名额，或升级套餐获得更多名额。",
     upgradeHref: "/plans",
     // 设置 › 我的设备 is where a registered device (what the quota counts) is removed.
-    cleanup: { href: "/settings", label: "管理设备" },
+    cleanup: { href: "/settings/devices", label: "管理设备" },
   });
   expect(guidanceFor(details("customModels", 5, 5))).toEqual({
     metric: "customModels",
@@ -151,7 +151,7 @@ test("guidanceFor names the plan, used/limit, /plans and the cleanup screen for 
     sentence: "Team 套餐：自定义模型已用 5/5",
     hint: "从模型库删除不再使用的模型即可腾出名额，或升级套餐获得更多名额。",
     upgradeHref: "/plans",
-    cleanup: { href: "/resources", label: "管理模型库" },
+    cleanup: { href: "/capabilities/models", label: "管理模型库" },
   });
   const tasks = guidanceFor(details("tasksPerMonth", 100, 100));
   expect(tasks).toEqual({
@@ -212,7 +212,7 @@ test("a 402 mutation opens the dialog with used/limit, the /plans link and the c
   });
   expect(dialog.textContent).toContain("Team 套餐：员工已用 2/2");
   expect(hrefOf(dialog, "升级套餐")).toBe("/plans");
-  expect(hrefOf(dialog, "管理员工")).toBe("/wakers");
+  expect(hrefOf(dialog, "管理员工")).toBe("/bots");
   // The screen's own inline message is kept beside the dialog. The modal dialog marks everything
   // outside its portal aria-hidden while open, so the alert is only reachable with `hidden: true`.
   const alert = await view.findByRole("alert", { hidden: true });

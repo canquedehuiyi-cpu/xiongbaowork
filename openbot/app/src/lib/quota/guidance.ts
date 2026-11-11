@@ -10,7 +10,11 @@ import { type QuotaErrorDetails, RequestError } from "@/lib/client";
  */
 
 /** The screens that free a slot. Every one is a registered route in `routeTree.gen.ts`. */
-export type QuotaCleanupHref = "/wakers" | "/settings" | "/resources";
+/** M5b：员工列表在 /bots、我的设备在设置里自己的分区、模型库是「能力」的一个页签。 */
+export type QuotaCleanupHref =
+  | "/bots"
+  | "/settings/devices"
+  | "/capabilities/models";
 
 export type QuotaGuidance = Readonly<{
   metric: QuotaErrorDetails["metric"];
@@ -36,14 +40,14 @@ const COPY: Readonly<Record<QuotaErrorDetails["metric"], MetricCopy>> = {
     label: "员工",
     title: "员工数量已达套餐上限",
     hint: "删除不再需要的员工即可腾出名额，或升级套餐获得更多名额。",
-    cleanup: { href: "/wakers", label: "管理员工" },
+    cleanup: { href: "/bots", label: "管理员工" },
   },
   devices: {
     label: "设备",
     title: "设备数量已达套餐上限",
     hint: "移除不再使用的设备即可腾出名额，或升级套餐获得更多名额。",
     // The count is `registered_devices`, which 设置 › 我的设备 lists and removes (DELETE /api/devices/:id).
-    cleanup: { href: "/settings", label: "管理设备" },
+    cleanup: { href: "/settings/devices", label: "管理设备" },
   },
   /*
    * A plan's `customModels` is a yes/no, which the server turns into a ceiling of 0 or unlimited, so
@@ -54,7 +58,7 @@ const COPY: Readonly<Record<QuotaErrorDetails["metric"], MetricCopy>> = {
     label: "自定义模型",
     title: "当前套餐不支持更多自定义模型",
     hint: "从模型库删除不再使用的模型即可腾出名额，或升级套餐获得更多名额。",
-    cleanup: { href: "/resources", label: "管理模型库" },
+    cleanup: { href: "/capabilities/models", label: "管理模型库" },
   },
   tasksPerMonth: {
     label: "本月任务",

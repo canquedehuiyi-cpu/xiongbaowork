@@ -52,8 +52,8 @@ export function sharedUseRequestsQueryOptions(enabled: boolean) {
   return queryOptions({
     queryKey: sharedUseKeys.requests(),
     queryFn: () =>
-      client<SharedUseRequest[]>("/api/approvals/shared-use", "requests", {
-        fallback: "Couldn't load shared account requests.",
+      client<SharedUseRequest[]>("/api/plugins/shared-use", "requests", {
+        fallback: "读不到团队账号的使用申请。",
       }),
     enabled,
     refetchInterval: 10_000,
@@ -65,8 +65,8 @@ export function botSharedAppsQueryOptions(botId: string) {
     queryKey: sharedUseKeys.bot(botId),
     queryFn: async (): Promise<BotSharedApps> => {
       const response = await client(
-        `/api/approvals/shared-use/bot/${encodeURIComponent(botId)}`,
-        { fallback: "Couldn't load this Bot's shared apps." },
+        `/api/plugins/shared-use/bot/${encodeURIComponent(botId)}`,
+        { fallback: "读不到这位员工用的团队账号应用。" },
       );
       return response.json();
     },
@@ -83,8 +83,8 @@ export function decideSharedUseMutationOptions(queryClient: QueryClient) {
       decision: "approve" | "decline";
     }) =>
       client(
-        `/api/approvals/shared-use/${encodeURIComponent(id)}/${decision}`,
-        { method: "POST", fallback: "Couldn't save that decision." },
+        `/api/plugins/shared-use/${encodeURIComponent(id)}/${decision}`,
+        { method: "POST", fallback: "这个决定没能保存。" },
       ),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["approvals"] }),
   });
@@ -97,10 +97,10 @@ export function requestSharedUseMutationOptions(queryClient: QueryClient) {
       serverId: string;
       reason: "publish" | "trigger";
     }) =>
-      client("/api/approvals/shared-use", {
+      client("/api/plugins/shared-use", {
         method: "POST",
         body,
-        fallback: "Couldn't send the request.",
+        fallback: "申请没能发出。",
       }),
     onSettled: (_data, _error, body) =>
       queryClient.invalidateQueries({
@@ -109,10 +109,33 @@ export function requestSharedUseMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/**
+ * An administrator takes back one Bot's approval on one app, the owner's or an admin's. Its calls on
+ * the team account are refused from then until there is an approval again. 服务端在 X3：
+ * `DELETE /api/plugins/shared-use/bot/:botId/:serverId` → `{ revoked }`。
+ */
+export function revokeSharedUseMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async ({
+      botId,
+      serverId,
+    }: {
+      botId: string;
+      serverId: string;
+    }) =>
+      client<boolean>(
+        `/api/plugins/shared-use/bot/${encodeURIComponent(botId)}/${encodeURIComponent(serverId)}`,
+        "revoked",
+        { method: "DELETE", fallback: "这项批准没能撤销。" },
+      ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+  });
+}
+
 export function describeApproval(approval: SharedUseApproval): string {
-  const outside = approval.outsideInput ? ", and outside input" : "";
-  if (approval.audience === "owner") return `Only its owner${outside}`;
-  if (approval.audience === "team") return `Everyone${outside}`;
+  const outside = approval.outsideInput ? "，也接受外部输入" : "";
+  if (approval.audience === "owner") return `只有它的主人${outside}`;
+  if (approval.audience === "team") return `所有人${outside}`;
   const groups = approval.members
     .filter((member) => member.kind === "group")
     .map((member) => member.value);
@@ -120,10 +143,8 @@ export function describeApproval(approval: SharedUseApproval): string {
     (member) => member.kind === "user",
   ).length;
   const parts = [
-    ...(groups.length
-      ? [`The group${groups.length > 1 ? "s" : ""} ${groups.join(", ")}`]
-      : []),
-    ...(people ? [`${people} ${people === 1 ? "person" : "people"}`] : []),
+    ...(groups.length ? [`群组 ${groups.join("、")}`] : []),
+    ...(people ? [`${people} 个人`] : []),
   ];
-  return `${parts.join(" and ") || "Nobody named"}${outside}`;
+  return `${parts.join(" 和 ") || "没有指定任何人"}${outside}`;
 }

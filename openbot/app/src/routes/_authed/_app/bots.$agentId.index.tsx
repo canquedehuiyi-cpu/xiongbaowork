@@ -4,6 +4,7 @@ import { ManageSection } from "@/components/bot-profile/manage";
 import { BotProfile } from "@/components/bot-profile/profile";
 import { BotSettingsRows } from "@/components/bot-profile/settings-rows";
 import { PageShell } from "@/components/layout/page-shell";
+import { wakersBackLink } from "@/components/wakers/wakers-search";
 import { agentQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
 
@@ -27,7 +28,8 @@ function BotProfilePage() {
     agent.error instanceof RequestError && agent.error.status === 404;
   return (
     <PageShell
-      backButton={{ label: "员工", linkProps: { to: "/bots" } }}
+      // Back to the roster as the person left it: its filters, sort and view (the 员工 wall's own).
+      backButton={{ label: "员工", linkProps: wakersBackLink() }}
       // No description: the employee's own role, on its card just below, says what this page is about.
       title={agent.data?.name ?? "员工"}
     >

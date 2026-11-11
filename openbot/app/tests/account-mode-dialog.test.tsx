@@ -83,22 +83,22 @@ describe("switching an app to Shared", () => {
   test("names what goes, warns, and lists each Bot's approval before anything changes", async () => {
     const view = draw();
     expect(
-      await view.findByText("14 personal accounts will be disconnected."),
+      await view.findByText("14 个个人账号会被断开。"),
     ).toBeTruthy();
     expect(
       view.getByText(
-        "Everyone using a Bot with this app will act as this one account.",
+        "用到这个应用的员工，不管谁在用，都会以这一个账号行事。下面是每位员工切换后会被批准的使用范围。",
       ),
     ).toBeTruthy();
     expect(view.getByText(/triage/)).toBeTruthy();
-    expect(view.getByText(/Everyone, and outside input/)).toBeTruthy();
+    expect(view.getByText(/所有人，也接受外部输入/)).toBeTruthy();
     expect(sent).toEqual([{ body: { mode: "shared", confirm: false } }]);
   });
 
   test("confirming sends the switch once", async () => {
     const view = draw();
     await userEvent.click(
-      await view.findByRole("button", { name: "Make Linear shared" }),
+      await view.findByRole("button", { name: "把 Linear 改成团队账号" }),
     );
     expect(sent.at(-1)).toEqual({ body: { mode: "shared", confirm: true } });
   });
@@ -107,11 +107,11 @@ describe("switching an app to Shared", () => {
     failing = true;
     const view = draw();
     await userEvent.click(
-      await view.findByRole("button", { name: "Make Linear shared" }),
+      await view.findByRole("button", { name: "把 Linear 改成团队账号" }),
     );
     expect(await view.findByText("Composio said no.")).toBeTruthy();
     expect(
-      view.getByRole("button", { name: "Make Linear shared" }),
+      view.getByRole("button", { name: "把 Linear 改成团队账号" }),
     ).toBeTruthy();
   });
 });

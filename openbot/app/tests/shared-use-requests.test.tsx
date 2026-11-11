@@ -46,7 +46,7 @@ beforeEach(() => {
         return Response.json({
           user: { id: "me", email: "me@example.test", role },
         });
-      if (url === "/api/approvals/shared-use")
+      if (url === "/api/plugins/shared-use")
         return Response.json({ requests: [request] });
       if (init?.method === "POST") {
         posted.push(url);
@@ -82,13 +82,13 @@ describe("Shared account requests", () => {
     role = "admin";
     const view = draw();
     expect(
-      await view.findByText("Helpdesk wants the shared Team GitHub account"),
+      await view.findByText("Helpdesk 想用 Team GitHub 的团队账号"),
     ).toBeTruthy();
-    expect(view.getByText("Now: Only its owner")).toBeTruthy();
-    expect(view.getByText("Asked: Everyone, and outside input")).toBeTruthy();
+    expect(view.getByText("现在：只有它的主人")).toBeTruthy();
+    expect(view.getByText("申请：所有人，也接受外部输入")).toBeTruthy();
     expect(
       view.getByText(
-        "An action was blocked. This Bot reaches more people than approved.",
+        "有个动作被拦下了：能用这位员工的人比批准的多。",
       ),
     ).toBeTruthy();
   });
@@ -96,15 +96,15 @@ describe("Shared account requests", () => {
   test("approving posts once", async () => {
     role = "admin";
     const view = draw();
-    await userEvent.click(await view.findByRole("button", { name: "Approve" }));
-    expect(posted).toEqual(["/api/approvals/shared-use/r1/approve"]);
+    await userEvent.click(await view.findByRole("button", { name: "批准" }));
+    expect(posted).toEqual(["/api/plugins/shared-use/r1/approve"]);
   });
 
   test("a request another admin already answered says so", async () => {
     role = "admin";
     alreadyDecided = true;
     const view = draw();
-    await userEvent.click(await view.findByRole("button", { name: "Decline" }));
+    await userEvent.click(await view.findByRole("button", { name: "拒绝" }));
     expect(
       await view.findByText("That request has already been decided."),
     ).toBeTruthy();
@@ -114,6 +114,6 @@ describe("Shared account requests", () => {
     role = "user";
     const view = draw();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(view.queryByText(/Shared account requests/)).toBeNull();
+    expect(view.queryByText(/团队账号使用申请/)).toBeNull();
   });
 });

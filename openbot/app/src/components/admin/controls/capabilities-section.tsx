@@ -124,9 +124,9 @@ export function CapabilitiesSection() {
                   <IconSparkles />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>Describe it in words</ItemTitle>
+                  <ItemTitle>用一句话描述</ItemTitle>
                   <ItemDescription>
-                    Say who may use what, and your model writes the changes.
+                    说出谁可以用什么，由你的模型写成改动。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>

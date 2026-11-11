@@ -116,6 +116,8 @@ type Setup = {
    */
   authorizesPerAction?: boolean;
   grants?: GrantState[];
+  /** Whether the grants route is missing（M5b：X8 合入前的部署）, answering 404. */
+  grantsMissing?: boolean;
   /** Whether the grants read answers 500. */
   accountMode?: "shared" | null;
   role?: "admin" | "user";
@@ -148,6 +150,8 @@ function install(setup: Setup) {
   authorizeCalls.length = 0;
   global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input).split("?")[0] ?? "";
+    if (path.endsWith("/grants") && setup.grantsMissing)
+      return json({ error: "Not Found" }, 404);
     if (path.endsWith("/grants")) return json({ actions: setup.grants ?? [] });
     if (path.endsWith("/connect") && setup.connectRefusal) {
       return json({ error: setup.connectRefusal }, 503);
@@ -736,6 +740,24 @@ test("on Arcade the grant list says nothing of Composio, in text or attributes",
   fireEvent.click(view.getByText("授权"));
   await view.findByRole("group", { name: /之前$/ });
   expect(everythingRendered(view)).not.toMatch(/composio/i);
+});
+
+/*
+ * A DEPLOYMENT THAT CLAIMS THE CAPABILITY BUT HAS NO ROUTE（M5b，X8 合入前）draws nothing rather than a
+ * "couldn't read" with a Retry that can never succeed.
+ */
+test("a grants route that answers 404 draws no grant list and no error", async () => {
+  install({
+    provider: "arcade",
+    connected: true,
+    authorizesPerAction: true,
+    grantsMissing: true,
+  });
+  const view = renderScreen();
+  await view.findByText("断开");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(view.queryByLabelText("搜索动作")).toBeNull();
+  expect(view.queryByText(/现在读不到这个账号允许做什么/)).toBeNull();
 });
 
 test("a Composio deployment draws no grant list and never reads the grants", async () => {

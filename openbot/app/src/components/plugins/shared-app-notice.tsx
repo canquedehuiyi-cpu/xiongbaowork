@@ -33,8 +33,7 @@ export function SharedAppNotice({
       <div className="space-y-1 text-sm">
         {apps.map((app) => (
           <p key={app.serverId}>
-            Saving also lets everyone who can use this Bot use the shared{" "}
-            {app.title} account.
+            保存后，能用这位员工的每个人也都能用 {app.title} 的团队账号。
           </p>
         ))}
       </div>
@@ -49,16 +48,15 @@ export function SharedAppNotice({
       {apps.map((app) =>
         waiting.has(app.serverId) ? (
           <p className="text-muted-foreground" key={app.serverId}>
-            Waiting for an admin to approve the shared {app.title} account.
+            正在等管理员批准使用 {app.title} 的团队账号。
           </p>
         ) : app.covered ? null : (
           <div className="flex flex-wrap items-center gap-2" key={app.serverId}>
             <p className="text-amber-700 dark:text-amber-400">
-              This Bot can't use the shared {app.title} account until an admin
-              approves who can use the Bot.
+              管理员批准谁能用这位员工之前，它用不了 {app.title} 的团队账号。
             </p>
             <Button
-              aria-label={`Request approval for ${app.title}`}
+              aria-label={`为 ${app.title} 申请批准`}
               disabled={ask.isPending}
               onClick={() =>
                 ask.mutate({ botId, serverId: app.serverId, reason })
@@ -67,7 +65,7 @@ export function SharedAppNotice({
               type="button"
               variant="outline"
             >
-              Request approval
+              申请批准
             </Button>
           </div>
         ),

@@ -21,11 +21,10 @@ import {
 } from "@/lib/plugins/shared-use";
 
 const WHY: Record<SharedUseRequestReason, string> = {
-  refused_call:
-    "An action was blocked. This Bot reaches more people than approved.",
-  publish: "Its owner widened who can reach it.",
-  trigger: "Its owner added a trigger that lets outside messages steer it.",
-  grant: "It was given the app's actions.",
+  refused_call: "有个动作被拦下了：能用这位员工的人比批准的多。",
+  publish: "它的主人放宽了谁能用它。",
+  trigger: "它的主人加了一个触发方式，外部消息可以指挥它。",
+  grant: "它拿到了这个应用的动作。",
 };
 
 /**
@@ -42,7 +41,7 @@ export function SharedUseRequests() {
   if (!isAdmin || !requests.data?.length) return null;
 
   return (
-    <PageSection title="Shared account requests">
+    <PageSection title="团队账号使用申请">
       {decide.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
           {decide.error.message}
@@ -58,20 +57,20 @@ export function SharedUseRequests() {
               </ItemMedia>
               <ItemContent>
                 <ItemTitle className="line-clamp-none">
-                  {request.botName} wants the shared {request.title} account
+                  {request.botName} 想用 {request.title} 的团队账号
                 </ItemTitle>
                 <ItemDescription className="line-clamp-none">
                   {WHY[request.reason as SharedUseRequestReason] ??
                     request.reason}
                 </ItemDescription>
                 <p className="text-sm">
-                  Now:{" "}
+                  现在：
                   {request.current
                     ? describeApproval(request.current)
-                    : "Not approved"}
+                    : "未批准"}
                 </p>
                 <p className="text-sm">
-                  Asked: {describeApproval(request.proposed)}
+                  申请：{describeApproval(request.proposed)}
                 </p>
               </ItemContent>
               <ItemFooter className="justify-start">
@@ -82,7 +81,7 @@ export function SharedUseRequests() {
                   }
                   size="sm"
                 >
-                  Approve
+                  批准
                 </Button>
                 <Button
                   disabled={decide.isPending}
@@ -92,7 +91,7 @@ export function SharedUseRequests() {
                   size="sm"
                   variant="outline"
                 >
-                  Decline
+                  拒绝
                 </Button>
               </ItemFooter>
             </Item>

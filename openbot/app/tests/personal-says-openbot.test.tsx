@@ -152,13 +152,13 @@ function draw(edition: "team" | "personal", screen: () => ReactNode) {
 test("Activity says OpenBot started what OpenBot started", async () => {
   const Activity = ActivityRoute.options.component as ComponentType;
   const view = draw("personal", () => <Activity />);
-  expect(await view.findByText("Started by OpenBot")).toBeTruthy();
-  expect(view.container.textContent).not.toContain("deployment");
+  expect(await view.findByText("由熊宝发起")).toBeTruthy();
+  expect(view.container.textContent).not.toContain("部署");
 });
 
 test("Admin's Audit still says this deployment", async () => {
   const view = draw("team", () => <AuditPage />);
-  expect(await view.findByText("Started by this deployment")).toBeTruthy();
+  expect(await view.findByText("由本部署发起")).toBeTruthy();
 });
 
 test("an app's page under Connections says what OpenBot does, not a deployment", async () => {

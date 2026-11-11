@@ -27,7 +27,8 @@ import { responsibilitiesQueryOptions } from "@/lib/responsibilities";
 /**
  * 长期职责 as a section of a skin's screen: one row per responsibility, saying where it stands, each
  * opening this fork's own 长期职责 page, where it is worded, triggered, paused and completed. Given an
- * employee, only that employee's, and the page opens narrowed to it (`?agent=`).
+ * employee, only that employee's, and each row opens that employee's own 长期职责 page
+ * (`/bots/$agentId/responsibilities`).
  *
  * Upstream's skins draw its own responsibilities list with its dialogs in place. This fork's page is
  * a different design (its triggers, GitHub bindings and runs), so the skins link to it rather than
@@ -39,8 +40,10 @@ export function BotResponsibilities({ agentId }: { agentId?: string }) {
   const shown = (goals.data ?? []).filter(
     (goal) => agentId === undefined || goal.agentId === agentId,
   );
-  const page = (
-    <Link search={agentId ? { agent: agentId } : {}} to="/responsibilities" />
+  const page = agentId ? (
+    <Link params={{ agentId }} to="/bots/$agentId/responsibilities" />
+  ) : (
+    <Link to="/responsibilities" />
   );
   const add = (
     <Button render={page} size="sm" variant="ghost">

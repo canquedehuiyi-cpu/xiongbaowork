@@ -32,9 +32,9 @@ beforeEach(() => {
         return Response.json({
           user: { id: "me", email: "me@example.test", role },
         });
-      if (url.startsWith("/api/approvals/shared-use/bot/"))
+      if (url.startsWith("/api/plugins/shared-use/bot/"))
         return Response.json({ apps, pending });
-      if (url === "/api/approvals/shared-use" && init?.method === "POST") {
+      if (url === "/api/plugins/shared-use" && init?.method === "POST") {
         posted.push(JSON.parse(String(init.body)));
         return Response.json({ id: "r1", created: true });
       }
@@ -79,11 +79,11 @@ describe("SharedAppNotice", () => {
     pending = [];
     const view = draw();
     const ask = await view.findByRole("button", {
-      name: "Request approval for Team GitHub",
+      name: "为 Team GitHub 申请批准",
     });
     expect(
       view.getByText(
-        /can't use the shared Team GitHub account until an admin approves/,
+        /管理员批准谁能用这位员工之前，它用不了 Team GitHub 的团队账号/,
       ),
     ).toBeTruthy();
     await userEvent.click(ask);
@@ -99,7 +99,7 @@ describe("SharedAppNotice", () => {
     const view = draw();
     expect(
       await view.findByText(
-        "Waiting for an admin to approve the shared Team GitHub account.",
+        "正在等管理员批准使用 Team GitHub 的团队账号。",
       ),
     ).toBeTruthy();
     expect(view.queryByRole("button")).toBeNull();
@@ -112,7 +112,7 @@ describe("SharedAppNotice", () => {
     const view = draw();
     expect(
       await view.findByText(
-        /Saving also lets everyone who can use this Bot use the shared Team GitHub account/,
+        /保存后，能用这位员工的每个人也都能用 Team GitHub 的团队账号/,
       ),
     ).toBeTruthy();
   });

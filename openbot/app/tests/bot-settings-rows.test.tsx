@@ -202,7 +202,7 @@ test("the rows for goals, reach, memory and rules say what this Bot has and open
   };
   await row("长期职责", "1 个进行中", "responsibilities");
   await row("触达方式", "Slack", "reach");
-  await row("记忆", "1 个来源", "memory");
+  await row("记忆", "1 个信息源", "memory");
   await row("审批与权限", "1 条规则", "approvals");
 });
 

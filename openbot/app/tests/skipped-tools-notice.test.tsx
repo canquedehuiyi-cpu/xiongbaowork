@@ -19,7 +19,7 @@ test("names every action the refresh left out, as a status and not an alert", ()
   );
   const notice = view.getByRole("status");
   expect(notice.textContent).toContain(
-    "2 actions this app lists were left out",
+    "这个应用列出的 2 个动作没有收进来",
   );
   expect(notice.textContent).toContain("notion.export");
   expect(notice.textContent).toContain("notion.import");
@@ -29,7 +29,7 @@ test("names every action the refresh left out, as a status and not an alert", ()
 test("one name is said in the singular", () => {
   const view = render(<SkippedToolsNotice names={["notion.export"]} />);
   expect(view.getByRole("status").textContent).toContain(
-    "One action this app lists was left out",
+    "这个应用列出的一个动作没有收进来",
   );
 });
 
@@ -44,7 +44,7 @@ test("in the personal edition, says the actions in words rather than as the app 
   );
   const notice = view.getByRole("status").textContent ?? "";
   expect(notice).toBe(
-    "Your Bots can't use one action this app lists, because of how it's named: Export.",
+    "这个应用列出的一个动作因为名字的写法，你的员工用不了：Export。",
   );
   expect(notice).not.toContain("notion.export");
 });

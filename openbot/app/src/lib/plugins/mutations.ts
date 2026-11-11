@@ -2,6 +2,7 @@ import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { desktopConsentQuery } from "@/lib/desktop/shell";
 import { pluginKeys } from "./queries";
+import type { SharedUseApproval } from "./shared-use";
 
 /**
  * Writes against what a deployment has installed: MCP servers, skills, and which Bots carry them.
@@ -101,11 +102,16 @@ export function invalidatePlugins(queryClient: QueryClient) {
  * grant, so the audit trail is unchanged, but the reader is refreshed once at the end rather than
  * between every pair. Anything granting a single one should use the mutation below instead, which
  * carries the refetch with it.
+ *
+ * `approval` IS HOW A GRANT ON A SHARED APP NARROWS ITS OWN AUDIENCE（上游形状；X7 起服务端收它，之前的
+ * 服务端忽略这个字段）。Sent only when present: a grant that carries no opinion about audience must not
+ * read as one that narrowed it to nothing.
  */
 export function grantPlugin(variables: {
   kind: PluginKind;
   ref: string;
   agentId: string;
+  approval?: SharedUseApproval;
 }): Promise<unknown> {
   return client("/api/plugins/grants", {
     method: "POST",
@@ -113,6 +119,7 @@ export function grantPlugin(variables: {
       kind: variables.kind,
       ref: variables.ref,
       agentId: variables.agentId,
+      ...(variables.approval ? { approval: variables.approval } : {}),
     },
     fallback: "这位员工的设置没能修改。",
   });
@@ -124,14 +131,15 @@ export function grantPlugin(variables: {
  * `wouldRevoke` is who loses their account: a person's own connection when the switch is into
  * Shared, or the deployment's shared one when it is switched back out of it.
  *
- * 与上游的差异：上游的预览还带 `bots`（切到 Shared 时每位已授予员工的现有受众），切换时可以带
- * `approvals` 收窄它们。fork 服务端（X1 `account-mode.ts`）的预览只有 `mode`、`current`、
- * `wouldRevoke`，也不收 `approvals`，所以这里照服务端的形状写，不发它不认的字段。
+ * `bots` is every Bot currently granted this app's actions when switching to Shared (empty when
+ * switching to Personal), each with its exposure now, which is what the switch would approve for it.
+ * 按上游形状接（X7 补上 `bots` 与 `approvals`）；X7 合入前的服务端不给 `bots`，读成空数组。
  */
 export type AccountModePreview = {
   mode: "personal" | "shared";
-  current: "personal" | "shared" | null;
+  current?: "personal" | "shared" | null;
   wouldRevoke: { holder: "person" | "deployment"; count: number };
+  bots: { botId: string; exposure: SharedUseApproval }[];
 };
 
 /**
@@ -153,21 +161,36 @@ export async function accountModePreview(
       fallback: "没能读到这次切换会改变什么。",
     },
   );
-  return ((await response.json()) as { preview: AccountModePreview }).preview;
+  const { preview } = (await response.json()) as {
+    preview: Omit<AccountModePreview, "bots"> & {
+      bots?: AccountModePreview["bots"];
+    };
+  };
+  return { ...preview, bots: preview.bots ?? [] };
 }
 
-/** Switch a server's account mode for real. */
+/**
+ * Switch a server's account mode for real.
+ *
+ * `approvals` carries the administrator's narrowed approvals, keyed by Bot id, for Bots the preview
+ * listed; a Bot not named gets its exposure as listed.
+ */
 export function setAccountModeMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: async (variables: {
       serverId: string;
       mode: "personal" | "shared";
+      approvals?: Record<string, SharedUseApproval>;
     }) => {
       await client(
         `/api/plugins/servers/${encodeURIComponent(variables.serverId)}/account-mode`,
         {
           method: "PUT",
-          body: { mode: variables.mode, confirm: true },
+          body: {
+            mode: variables.mode,
+            confirm: true,
+            ...(variables.approvals ? { approvals: variables.approvals } : {}),
+          },
           fallback: "切换没有完成，什么都没有改变。",
         },
       );

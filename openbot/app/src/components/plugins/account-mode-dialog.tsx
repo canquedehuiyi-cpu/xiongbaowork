@@ -1,4 +1,3 @@
-// app/src/components/plugins/account-mode-dialog.tsx
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,11 +57,13 @@ export function AccountModeDialog({
   const goes =
     preview.data?.wouldRevoke.holder === "deployment"
       ? count > 0
-        ? "The shared account will be disconnected."
-        : "No shared account is connected."
-      : `${count} personal ${count === 1 ? "account" : "accounts"} will be disconnected.`;
+        ? "团队账号会被断开。"
+        : "现在没有连接团队账号。"
+      : `${count} 个个人账号会被断开。`;
   const action =
-    target === "shared" ? `Make ${title} shared` : `Make ${title} personal`;
+    target === "shared"
+      ? `把 ${title} 改成团队账号`
+      : `把 ${title} 改成个人账号`;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -70,17 +71,17 @@ export function AccountModeDialog({
         <DialogHeader>
           <DialogTitle>
             {target === "shared"
-              ? `Share one ${title} account?`
-              : `Give everyone their own ${title} account?`}
+              ? `所有人共用一个 ${title} 团队账号？`
+              : `让每个人用自己的 ${title} 账号？`}
           </DialogTitle>
           <DialogDescription>
-            {preview.data ? goes : "Checking what this would change…"}
+            {preview.data ? goes : "正在查看这会改变什么…"}
           </DialogDescription>
         </DialogHeader>
         {target === "shared" ? (
           <div className="mt-4 space-y-3 text-sm">
             <p>
-              Everyone using a Bot with this app will act as this one account.
+              用到这个应用的员工，不管谁在用，都会以这一个账号行事。下面是每位员工切换后会被批准的使用范围。
             </p>
             {preview.data?.bots.length ? (
               <ul className="space-y-1">
@@ -107,7 +108,7 @@ export function AccountModeDialog({
             size="sm"
             variant="outline"
           >
-            Cancel
+            取消
           </Button>
           <Button
             disabled={!preview.data || change.isPending}

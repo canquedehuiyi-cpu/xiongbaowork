@@ -275,7 +275,7 @@ describe("长期职责按员工筛选", () => {
     expect(view.getByText("每周对账")).toBeTruthy();
   });
 
-  test("皮肤里的长期职责分区链到按这位员工筛选的页面", async () => {
+  test("皮肤里的长期职责分区链到这位员工自己的长期职责页", async () => {
     serve(answers);
     const { view } = drawAt(
       "/",
@@ -283,10 +283,10 @@ describe("长期职责按员工筛选", () => {
         path: "/",
         component: () => <BotResponsibilities agentId="agent-a" />,
       },
-      ["/responsibilities"],
+      ["/bots/$agentId/responsibilities"],
     );
     const row = (await view.findByText("盯住慢查询")).closest("a");
-    expect(row?.getAttribute("href")).toBe("/responsibilities?agent=agent-a");
+    expect(row?.getAttribute("href")).toBe("/bots/agent-a/responsibilities");
     expect(view.queryByText("每周对账")).toBeNull();
   });
 });

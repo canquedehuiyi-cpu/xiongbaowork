@@ -487,17 +487,17 @@ test("Waiting for your review shows only once a skill is waiting, not while Lear
       <LearningSettingsPage />
     </QueryClientProvider>,
   );
-  await view.findByRole("button", { name: "Learning in progress…" });
-  await view.findByText("Your skills");
-  expect(view.queryByText("Waiting for your review")).toBeNull();
-  expect(view.queryByText(/Approve a skill to publish it/)).toBeNull();
-  expect(view.getByRole("heading", { name: "New skills" })).toBeTruthy();
+  await view.findByRole("button", { name: "正在学习…" });
+  await view.findByText("你的技能");
+  expect(view.queryByText("等你审核")).toBeNull();
+  expect(view.queryByText(/批准一项技能，就会把它发布给你的员工/)).toBeNull();
+  expect(view.getByRole("heading", { name: "新技能" })).toBeTruthy();
 
   // The run finished and its skill was approved automatically: still nothing waits.
   review = { ...base, sources: [source([], null)] };
   await queryClient.invalidateQueries({ queryKey: ["learning", "review"] });
-  await view.findByRole("button", { name: "Learn now" });
-  expect(view.queryByText("Waiting for your review")).toBeNull();
+  await view.findByRole("button", { name: "立即学习" });
+  expect(view.queryByText("等你审核")).toBeNull();
 
   // One skill is waiting: now the heading says so.
   review = {
@@ -506,29 +506,29 @@ test("Waiting for your review shows only once a skill is waiting, not while Lear
   };
   await queryClient.invalidateQueries({ queryKey: ["learning", "review"] });
   expect(
-    await view.findByRole("heading", { name: "Waiting for your review" }),
+    await view.findByRole("heading", { name: "等你审核" }),
   ).toBeTruthy();
   expect(
-    view.getByText("Approve a skill to publish it to your Bots."),
+    view.getByText("批准一项技能，就会把它发布给你的员工。"),
   ).toBeTruthy();
   expect(view.getByText("Refund order")).toBeTruthy();
-  expect(view.queryByRole("heading", { name: "New skills" })).toBeNull();
+  expect(view.queryByRole("heading", { name: "新技能" })).toBeNull();
 });
 
 test("with nothing waiting, the empty state shows under New skills, not under a Waiting heading", async () => {
   review = { canReview: true, autoApprove: false, sources: [] };
   const view = draw();
-  expect(await view.findByText("Nothing to review")).toBeTruthy();
-  expect(view.queryByText("Waiting for your review")).toBeNull();
-  expect(view.getByRole("heading", { name: "New skills" })).toBeTruthy();
+  expect(await view.findByText("没有待审核的内容")).toBeTruthy();
+  expect(view.queryByText("等你审核")).toBeNull();
+  expect(view.getByRole("heading", { name: "新技能" })).toBeTruthy();
   cleanup();
   queryClient.clear();
 
   // On a team where admins approve, the same rule holds for Waiting for an admin.
   review = { canReview: false, autoApprove: null, sources: [] };
   const team = draw();
-  expect(await team.findByText("Nothing to review")).toBeTruthy();
-  expect(team.queryByText("Waiting for an admin")).toBeNull();
+  expect(await team.findByText("没有待审核的内容")).toBeTruthy();
+  expect(team.queryByText("等管理员审核")).toBeNull();
 });
 
 test("a source Learning is off for says so plainly, without the read failure alert", async () => {
