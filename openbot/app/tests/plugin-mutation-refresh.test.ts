@@ -377,6 +377,8 @@ const NOT_A_MUTATION_FACTORY: Record<string, string> = {
     "The refetch itself — the thing every case above asserts was asked for, not a press.",
   grantPlugin:
     "The bare write, for a caller granting a batch and refreshing once at the end. It carries no refetch on purpose, and the mutation that wraps it is covered above.",
+  saveSkill:
+    "The bare save, for a caller that saves as one step of a longer write (approving a skill draft from Settings, Learning, whose own factory refetches on settle). It carries no refetch on purpose, and `saveSkillMutationOptions`, which wraps it, is covered above.",
 };
 
 /**

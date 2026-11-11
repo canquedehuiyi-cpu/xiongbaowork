@@ -38,9 +38,19 @@ export type PinnedAccount = {
   /** vendor 的账号 id；只凭 user id 就能指名时为 null。 */
   accountId: string | null;
   label: string;
+  /**
+   * 审批绑定的是哪个账号（`ApprovalCandidate.accountBinding`）：vendor 报的地址，没报时是这一行的 id
+   * （`row:<id>`）。`label` 没有地址时按位置叫「账号 N」，断开前面的账号后会变；这个不会，所以为一个账号
+   * 保存的规则不会落到另一个账号上（X1 评审 M1）。
+   */
+  binding: string;
   /** 这个人在该应用上有几个账号，也就说明了有没有选择可做。 */
   among: number;
 };
+
+/** 一行账号在审批里的稳定绑定；见 {@link PinnedAccount.binding}。 */
+export const accountBinding = (row: { id: string; identity: string | null }) =>
+  row.identity ?? `row:${row.id}`;
 
 /** 点名的账号不是这个人的：给人看的句子，由调用路径记审计后拒绝。 */
 export type AccountRefusal = { refused: string };
@@ -203,6 +213,7 @@ export function createAccountBook(context: {
       vendorUserId: row.vendorUserId,
       accountId: row.accountId === "" ? null : row.accountId,
       label,
+      binding: accountBinding(row),
       among: rows.length,
     });
 

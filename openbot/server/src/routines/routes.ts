@@ -6,6 +6,7 @@ import type { AppVariables } from "../auth/guards";
 import type { RoutineRunner } from "./runner";
 import { MINIMUM_INTERVAL_MS } from "./schedule";
 import {
+  NO_SHARED_CHANNEL,
   RoutineLimitError,
   RoutineNotFoundError,
   RoutineRefusedError,
@@ -33,14 +34,20 @@ export type { RoutineStore } from "./store";
  * `schedule.ts` and are inherited by the call there. A second copy of a guardrail is a guardrail that
  * drifts, and the store's refusals are already written to be read aloud.
  *
+ * M5: upstream #1406 added its own `POST /` for the same page (a Routines page in the sidebar with New
+ * routine). The fork's create above it was kept as the one route, and upstream's additions were folded
+ * in: a title, a sentence per missing field, and a person's sentence for a conversation the Bot is not
+ * in. Upstream requires a conversation; the fork keeps it optional and lets the store ask, as its
+ * `routine-create.integration.test.ts` pins.
+ *
  * THERE IS ALSO NO GET-BY-ID. A routine id is never a page's own state — nothing links to one, and
  * nothing needs to fetch one in isolation — so the list is the read, the same way the channel
  * roster is a list with no companion single-channel screen.
  *
  * Owner-scoped through the store on every route, never by filtering a broader read afterwards:
- * `listFor`, `create`, `setEnabled` and `remove` all take the caller's id and answer as if a routine that
- * belongs to somebody else does not exist, which is what keeps a wrong id and somebody else's id
- * indistinguishable from outside.
+ * `create`, `listFor`, `setEnabled` and `remove` all take the caller's id and answer as if a routine
+ * that belongs to somebody else does not exist, which is what keeps a wrong id and somebody else's
+ * id indistinguishable from outside.
  */
 export function createRoutineRoutes(
   routineStore: RoutineStore,
@@ -67,6 +74,7 @@ export function createRoutineRoutes(
     const body = (await context.req.json().catch(() => null)) as {
       agentId?: unknown;
       instruction?: unknown;
+      title?: unknown;
       cron?: unknown;
       timezone?: unknown;
       channelId?: unknown;
@@ -82,13 +90,15 @@ export function createRoutineRoutes(
      * an empty body is refused as a bad request rather than reaching the store with `undefined` in a
      * not-null column.
      */
-    if (!agentId || !instruction.trim() || !cron) {
-      return context.json(
-        {
-          error: "A routine needs a coworker, an instruction, and a schedule.",
-        },
-        400,
-      );
+    // One sentence per missing field, so the form can say which one (upstream #1406).
+    if (!agentId) {
+      return context.json({ error: "请为这个定时任务选一位员工。" }, 400);
+    }
+    if (!instruction.trim()) {
+      return context.json({ error: "请写下员工要做什么。" }, 400);
+    }
+    if (!cron) {
+      return context.json({ error: "请选择什么时候运行。" }, 400);
     }
     /*
      * Spec D15 on the way in: a coworker belonging to another workspace is answered exactly like one that
@@ -110,11 +120,17 @@ export function createRoutineRoutes(
       typeof body?.channelId === "string" && body.channelId.trim()
         ? body.channelId
         : undefined;
+    // The store owns the title's rules (`validTitle`): a blank one is no title.
+    const title =
+      typeof body?.title === "string" && body.title.trim()
+        ? body.title.trim()
+        : undefined;
     try {
       const created = await routineStore.create({
         ownerUserId: context.var.actor.id,
         agentId,
         instruction,
+        ...(title ? { title } : {}),
         cron,
         ...(timezone ? { timezone } : {}),
         ...(channelId ? { channelId } : {}),
@@ -143,6 +159,21 @@ export function createRoutineRoutes(
         throw new Error("a routine that was just created is not on the list");
       return context.json({ routine: routineDto(row) }, 201);
     } catch (error) {
+      /*
+       * The store lists the shared conversations by id for a model to pick from; a person who picked
+       * a conversation on the form is told in a sentence instead (upstream #1406). Only when they
+       * picked one: without a conversation the store's own question is the answer, as before.
+       */
+      if (
+        channelId &&
+        error instanceof RoutineRefusedError &&
+        error.message.startsWith(NO_SHARED_CHANNEL)
+      ) {
+        return context.json(
+          { error: "这位员工不在那个对话里。换一个对话，或者新建一个对话。" },
+          400,
+        );
+      }
       return mapStoreError(context, error);
     }
   });
