@@ -36,6 +36,7 @@ tests/agent-tool-call-input.test.ts
 tests/app-access-requests.integration.test.ts
 tests/app-access-routes.integration.test.ts
 tests/app-access-state.test.ts
+tests/app-access-tool.test.ts
 tests/app-access-upstream.integration.test.ts
 tests/app-discovery.test.ts
 tests/app-grants-describe.integration.test.ts

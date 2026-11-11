@@ -329,6 +329,7 @@ import { createPipelineStore } from "./pipeline/store";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
 import { appAccessTools } from "./plugins/app-access-tool";
+import { showAppAccessTools } from "./plugins/show-app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
 import { createAccountModeSwitch } from "./plugins/account-mode";
@@ -2315,8 +2316,7 @@ await startupLifecycle.run(async (startup) => {
       ownerUserId: actorId,
       agentId: botId,
     }),
-    // M3: upstream gives every Bot `appAccessTools` here (plugins/app-access-tool.ts), how it puts an
-    // app it cannot reach in front of the person; the fork's plugins do not have it.
+    // 上游在这里给每位员工 `show_app_access`；fork 放在下面 `request_app_access` 旁边（X2）。
     /*
      * Held by every Bot: offering a check-in on what the person just looked at, which the card turns
      * on only if they accept. A read; see the file. The engine is made further down, and a tool is
@@ -2349,6 +2349,14 @@ await startupLifecycle.run(async (startup) => {
     // 申请访问：用不了某个应用时替对方向管理员申请（迁移 0153）。只建一条本租户的申请，不碰应用。
     // 类型与浏览器入口同一个判定，broker 应用的状态要知道 Composio 配没配，否则 broker 应用会被读成没打开。
     ...appAccessTools({
+      store: pluginStore,
+      botId,
+      actorId,
+      composioConfigured: Boolean(composioBroker),
+      ...(composioBroker ? { directory: () => composioBroker.listApps() } : {}),
+    }),
+    // 看应用权限（X2，上游 `show_app_access`）：把一个应用对这个人是什么画成卡片。只读，不建申请。
+    ...showAppAccessTools({
       store: pluginStore,
       botId,
       actorId,
