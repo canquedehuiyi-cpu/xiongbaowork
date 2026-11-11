@@ -82,7 +82,8 @@ const broker: ComposioBroker = {
   revokeAccount: async () => {},
 };
 
-const sent: { actorId?: string; tool: string }[] = [];
+const sent: { actorId?: string; accountId?: string | null; tool: string }[] =
+  [];
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
@@ -92,7 +93,13 @@ const store = createPluginStore({
   broker,
   personVendorId: vendorNameFor(OWN),
   callVendor: async (connection, tool) => {
-    sent.push({ actorId: connection.actorId, tool });
+    sent.push({
+      actorId: connection.actorId,
+      ...(connection.accountId === undefined
+        ? {}
+        : { accountId: connection.accountId }),
+      tool,
+    });
     return { text: "[]", isError: false, truncated: false };
   },
 });
@@ -240,6 +247,23 @@ describe("the single-user person's account in the store", () => {
           .where(eq(brokeredAccounts.app, toolkit)),
       ),
     ).toEqual([{ userId: DEV_ACTOR.id, vendorUserId: OWN }]);
+  });
+
+  test("a call naming one of the person's accounts runs in that account, under the own name", async () => {
+    // 账号缓存的行记在这台安装自己的名字下；按名字挑账号时认的也必须是这个名字，否则本人的账号一个都挑不到。
+    sent.length = 0;
+    const answer = await as(DEV_ACTOR.id, () =>
+      store.callTool({
+        ref: `${appId}/GMAIL_FETCH_EMAILS`,
+        args: { account: "me@example.com" },
+        botId: BOT,
+        actorId: DEV_ACTOR.id,
+      }),
+    );
+    expect(answer.isError).toBe(false);
+    expect(sent).toEqual([
+      { actorId: OWN, accountId: `ca_${OWN}`, tool: "GMAIL_FETCH_EMAILS" },
+    ]);
   });
 
   test("a disconnect ends the account filed under the own name", async () => {
