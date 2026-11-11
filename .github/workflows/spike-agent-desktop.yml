@@ -190,19 +190,20 @@ jobs:
 
           # 4 快照
           note "== 快照 =="
-          rt snap1 AD snapshot --app "$APP_NAME" -i
+          rt snap1 AD snapshot --timeout-ms 10000 --app "$APP_NAME" -i
           note "SNAP1_NODES=$(T count "$OUT/snap1.out")"
           note "SNAP1_ROLES=$(T roles "$OUT/snap1.out")"
-          rt snap1b AD snapshot --app "$APP_NAME" -i
-          rt snap_full AD snapshot --app "$APP_NAME"
+          rt snap1b AD snapshot --timeout-ms 10000 --app "$APP_NAME" -i
+          rt snap_full AD snapshot --timeout-ms 10000 --app "$APP_NAME"
           note "SNAP_FULL_NODES=$(T count "$OUT/snap_full.out")"
-          rt snap_compact AD snapshot --app "$APP_NAME" --compact
+          rt snap_compact AD snapshot --timeout-ms 10000 --app "$APP_NAME" --compact
           note "SNAP_COMPACT_NODES=$(T count "$OUT/snap_compact.out")"
-          rt snap_focused AD snapshot --app "$APP_NAME" --surface focused -i
+          rt snap_focused AD snapshot --timeout-ms 10000 --app "$APP_NAME" --surface focused -i
           note "SNAP_FOCUSED_NODES=$(T count "$OUT/snap_focused.out")"
           note "SNAP1B_NODES=$(T count "$OUT/snap1b.out")"
           REF1=$(T ref "$OUT/snap1.out" 2>>"$SUM")
           note "REF1=$REF1"
+          grep "^cand\|^candidates" "$SUM" | head -30
           REF="$REF1"
 
           # 5 点击输入框
@@ -221,7 +222,7 @@ jobs:
             note "== 输入尝试 $label =="
             rt "type_$label" "$label"
             sleep 1
-            rt "readback_$label" AD snapshot --app "$APP_NAME" -i
+            rt "readback_$label" AD snapshot --timeout-ms 10000 --app "$APP_NAME" -i
             note "READBACK_$label has_text=$(T has "$OUT/readback_$label.out" "$TEXT") nodes=$(T count "$OUT/readback_$label.out")"
             if [ "$(T has "$OUT/readback_$label.out" "$TEXT")" = yes ]; then TYPED=$label; break; fi
             NEW=$(T ref "$OUT/readback_$label.out" 2>/dev/null); [ -n "$NEW" ] && REF="$NEW"
@@ -230,16 +231,16 @@ jobs:
 
           # 补测：清空后用 --headed type（物理输入）写入，再读回
           if [ -n "$REF" ]; then
-            rt snap_x AD snapshot --app "$APP_NAME" -i
+            rt snap_x AD snapshot --timeout-ms 10000 --app "$APP_NAME" -i
             REF=$(T ref "$OUT/snap_x.out" 2>>"$SUM")
             clr() { tmo 60 "$BIN" clear "$REF"; }
             rt clear_x clr
-            rt snap_x2 AD snapshot --app "$APP_NAME" -i
+            rt snap_x2 AD snapshot --timeout-ms 10000 --app "$APP_NAME" -i
             note "CLEARED has_text=$(T has "$OUT/snap_x2.out" "$TEXT")"
             REF=$(T ref "$OUT/snap_x2.out" 2>/dev/null)
             rt type_headed_after_clear d_headed
             sleep 1
-            rt readback_headed AD snapshot --app "$APP_NAME" -i
+            rt readback_headed AD snapshot --timeout-ms 10000 --app "$APP_NAME" -i
             note "HEADED_TYPE_READBACK has_text=$(T has "$OUT/readback_headed.out" "$TEXT")"
             REF=$(T ref "$OUT/readback_headed.out" 2>/dev/null)
           fi
@@ -264,7 +265,7 @@ jobs:
           esac
           sleep 3
           [ -n "$LAST" ] && rt stale_setvalue_after_close setv "$LAST"
-          rt snap_after_close AD snapshot --app "$APP_NAME" -i
+          rt snap_after_close AD snapshot --timeout-ms 10000 --app "$APP_NAME" -i
 
           # 8 MCP 模式
           note "== MCP =="
