@@ -5,21 +5,22 @@ import {
   createMemoryHistory,
   createRootRoute,
   createRouter,
-  Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
+import { ConnectorsTab } from "@/components/resources/capability-tabs";
 import { authKeys } from "@/lib/auth/queries";
 import type { ComponentRecord } from "@/lib/components/queries";
 import type { InstallListing, PluginsPage } from "@/lib/plugins/queries";
-import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
+import { capabilitiesRouter } from "./capabilities-router";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Stories E1 and E4 (D08) on `/resources`: "能力与资源" holds the zones — models (E4), skills (the
- * person's own and the deployment's), connectors with their grant and account state, knowledge
- * bases, memory sources and components — each now one tab of the parity shell (plan F4), and each
- * fails on its own.
+ * Stories E1 and E4 (D08): the zones — models (E4), skills (the person's own and the deployment's),
+ * connectors with their grant and account state, knowledge bases, memory sources and components —
+ * each fail on their own. M5b 起它们是「能力」的各个页签（`/capabilities/*`，照上游）；连接器搬到了「连接」页
+ * （`/connections`），那一页 import 的就是这里单独画出来的 `ConnectorsTab`。
  *
  * Every zone is drawn from a fake `fetch` keyed by path; a path in `fail` answers 500, so a failure
  * is asserted as that tab's own alert while the other tabs still show their rows.
@@ -268,21 +269,11 @@ function draw({ fail = [], tab }: { fail?: string[]; tab: string }) {
     onboarding: null,
   });
 
-  const root = createRootRoute({ component: () => <Outlet /> });
-  const router = createRouter({
-    context: {},
-    history: createMemoryHistory({
-      initialEntries: [`/resources?tab=${tab}`],
-    }),
-    routeTree: root.addChildren([
-      // `as never`, as in the assembly tests: the file route is registered in the generated tree
-      // under its real parent, and this only re-addresses it for one render.
-      ResourcesRoute.update({
-        getParentRoute: () => root,
-        path: "/resources",
-      } as never),
-    ]),
-  });
+  openTab = tab;
+  const router =
+    tab === "connectors"
+      ? connectorsRouter()
+      : capabilitiesRouter({ at: ADDRESS[tab] ?? tab, queryClient });
 
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -292,11 +283,52 @@ function draw({ fail = [], tab }: { fail?: string[]; tab: string }) {
   return { view, requested };
 }
 
+/** Where each zone is now: its tab of 能力. */
+const ADDRESS: Record<string, string> = {
+  models: "/capabilities/models",
+  skills: "/capabilities/skills",
+  knowledge: "/capabilities/knowledge",
+  sources: "/capabilities/memory",
+  components: "/capabilities/components",
+};
+
+/** The name of each zone's content region. */
+const LABEL: Record<string, string> = {
+  models: "模型库",
+  skills: "技能",
+  knowledge: "知识库",
+  sources: "记忆与信息源",
+  components: "组件",
+  connectors: "连接器",
+};
+
+/** The zone the last `draw` opened. */
+let openTab = "";
+
+/**
+ * 连接器 on its own, as the 连接 page draws it (`/connections` imports `ConnectorsTab`); its links are
+ * real, so it is drawn in a router of its own.
+ */
+function connectorsRouter() {
+  function Connectors() {
+    const [query, setQuery] = useState("");
+    return (
+      <section aria-label="连接器">
+        <ConnectorsTab onQuery={setQuery} query={query} />
+      </section>
+    );
+  }
+  return createRouter({
+    history: createMemoryHistory({ initialEntries: ["/connections"] }),
+    routeTree: createRootRoute({ component: Connectors }),
+  });
+}
+
 type View = ReturnType<typeof draw>["view"];
 
-/** The selected tab's panel, so a row is asserted in the tab it belongs to. */
+/** The open zone's content, so a row is asserted in the tab it belongs to. */
 async function panel(view: View) {
-  return within(await view.findByRole("tabpanel"));
+  return within(await view.findByRole("region", { name: LABEL[openTab] }));
 }
 
 /**
@@ -352,9 +384,9 @@ const healthy: Record<
   },
 };
 
-test("each zone is its own tab of the one screen, and draws its rows there", async () => {
-  // The parity shell (plan F4) replaced the single long page: the zones are tabs now, and the order
-  // of the tabs is asserted in `resources-parity.test.tsx`.
+test("each zone is its own tab of 能力 (connectors are drawn as 连接 draws them), and draws its rows there", async () => {
+  // The zones are tabs of 能力 now, each its own address; the order of the tabs is asserted in
+  // `resources-parity.test.tsx`.
   for (const { tab, check } of Object.values(healthy)) {
     const { view } = draw({ tab });
     await check(view);

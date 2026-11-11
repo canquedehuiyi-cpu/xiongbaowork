@@ -1,7 +1,3 @@
-/*
- * M5b 第 0 步：从 `routes/_authed/_app/role-templates.tsx` 剪出的页面主体，原样保留，地址改成重定向（/role-templates → /capabilities/roles）。
- * 各组在新路由里接这个组件，再按新结构调整其中的链接与文案。
- */
 import { IconLayersSubtract, IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
@@ -14,7 +10,7 @@ import {
   ProfilePanel,
   ProfileSection,
 } from "@/components/bot-profile/profile-kit";
-import { PageShell } from "@/components/layout/page-shell";
+import { TabHeader } from "@/components/resources/resource-kit";
 import { RoleEditor, RoleGeneratePanel } from "@/components/roles/role-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +68,8 @@ const blankDraft = (): Draft => ({
 });
 
 /**
- * 角色模板 (story ROLE1): the person's own role templates and the package's official ones.
+ * 能力 › 角色模板 (story ROLE1): the person's own role templates and the package's official ones.
+ * 画在能力的外壳里（`routes/_authed/_app/capabilities.roles.tsx`）；`/role-templates` 重定向到那里。
  *
  * A template is identity, persona and 工作手册, written by hand, pasted as Markdown or proposed by
  * smart generation — and saved only when the person saves it. Coworkers made from one are copies
@@ -147,18 +144,17 @@ export function RoleTemplatesScreen() {
    * anything narrower, the editor under the list.
    */
   return (
-    <PageShell
-      action={
-        <Button onClick={() => open(blankDraft())}>
-          <IconPlus />
-          新建模板
-        </Button>
-      }
-      description="角色模板包含身份、人设和工作手册，可以复用给新员工。模板更新后，员工不会自动跟随，需要在员工详情里按模板更新。"
-      title="角色模板"
-      width="workbench"
-    >
-      <div className="grid grid-cols-1 gap-[28px] min-[1100px]:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
+    <>
+      <TabHeader
+        actions={
+          <Button onClick={() => open(blankDraft())}>
+            <IconPlus />
+            新建模板
+          </Button>
+        }
+        description="角色模板包含身份、人设和工作手册，可以复用给新员工。模板更新后，员工不会自动跟随，需要在员工详情里按模板更新。"
+      />
+      <div className="mt-[22px] grid grid-cols-1 gap-[28px] min-[1100px]:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-[28px]">
           <ProfileSection
             action={
@@ -383,13 +379,13 @@ export function RoleTemplatesScreen() {
           <div className="flex min-h-[180px] flex-col items-center justify-center gap-[10px] rounded-[16px] border border-border border-dashed px-[20px] py-[28px] text-center">
             <p className="font-semibold text-[14px]">选一个模板查看或编辑</p>
             <p className="max-w-[44ch] text-[13px] text-muted-foreground">
-              或者点右上角「新建模板」：手写、粘贴
+              或者点上方的「新建模板」：手写、粘贴
               Markdown，或用一句话智能生成。保存后才会生效。
             </p>
           </div>
         )}
       </div>
-    </PageShell>
+    </>
   );
 }
 

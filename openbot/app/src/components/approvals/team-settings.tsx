@@ -45,6 +45,7 @@ import {
 import { reviewerGuidanceQueryOptions } from "@/lib/reviewer-guidance/queries";
 import { queryClient } from "@/query-client";
 import { HOST_LABELS, LabelSelect, RuleForm, RuleRow } from "./rules";
+import { SharedUseRequests } from "./shared-use-requests";
 
 /**
  * The kinds of action Bots ask about by name, in the order members meet them.
@@ -98,7 +99,7 @@ const ACTION_KIND_LABELS: Record<ActionKindPolicy, string> = {
 };
 
 /**
- * 上游 main 的版本（fork 曾删掉，团队设置画在 inbox.tsx 里），中文化后留给第二阶段的管理页接上。
+ * 上游 main 的版本（fork 曾删掉，团队设置画在 inbox.tsx 里），M5b 接在 管理 → 审批。
  *
  * What every member's Bots must do, set by an administrator: the team-wide controls, the rules that
  * apply to everyone, and requests to use a shared account. Members read the team rules, locked, in
@@ -326,10 +327,8 @@ export function TeamApprovalSettings() {
           <RuleForm label="添加团队规则" save={addTeamRule} />
         </PageRows>
       </PageSection>
-      {/*
-       * M5b 第二阶段：上游这里接着画 `SharedUseRequests`（./shared-use-requests，共享账号的使用申请），
-       * fork 还没有这个组件，接管理页时一并补上。
-       */}
+      {/* 共享账号的使用申请（X 系列入口 4，上游 main 原样接回）：只给管理员画，没有待处理的就不画。 */}
+      <SharedUseRequests />
     </>
   );
 }

@@ -1,7 +1,6 @@
 import {
   IconPencil,
   IconPin,
-  IconPinFilled,
   IconPinnedOff,
   IconTrash,
 } from "@tabler/icons-react";
@@ -19,17 +18,13 @@ import {
 import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import type { MessageListEmphasis } from "@/lib/settings/message-list";
 import { useTypedReveal } from "@/lib/typed-reveal";
-
-/** The row's first line: the conversation's title, or the employee's name under that emphasis. */
-const PRIMARY_TEXT = "font-semibold text-[13px] leading-5";
-/** What the second line leads with. */
-const SECONDARY_TEXT = "text-muted-foreground";
+import { ChannelItemContent } from "./channel-item-content";
 
 /**
- * One conversation in the workspace column (description (1) of the parity brief): the title in bold,
- * then 「聊天 | time」, the open one on the sidebar's grey. Memoized: `use-channel-events` preserves
- * unchanged row identity, and `content-visibility` keeps off-screen rows cheap without
- * virtualization.
+ * One conversation in the sidebar's list: the faces of whoever is in it (two or more stack, which is
+ * how a 群聊 reads in the list), the employee's name and the time, then the conversation's title.
+ * Memoized: `use-channel-events` preserves unchanged row identity, and `content-visibility` keeps
+ * off-screen rows cheap without virtualization.
  *
  * Right-click opens Pin, Rename and Delete. Rename is offered only to the person who started the
  * conversation, which is who the server lets rename it. Deleting is confirmed in a dialog that
@@ -41,10 +36,9 @@ export const Channel = memo(function Channel({
   name,
   summary,
   untitled,
-  lastMessage,
   lastMessageAt,
   pinned,
-  canRename = false,
+  canRename,
   unread,
   busy,
   emphasis,
@@ -56,16 +50,10 @@ export const Channel = memo(function Channel({
   summary?: string;
   /** Used as the thread title until the conversation has been named. See `untitledLine`. */
   untitled?: string;
-  /** The fork's older name for `untitled`, still passed by `conversation-workspace.tsx`. */
-  lastMessage?: string;
   lastMessageAt?: string;
   pinned: boolean;
-  /**
-   * Whether this person started the conversation, and so may rename it. The server's answer.
-   * Optional because the fork's `conversation-workspace.tsx` roster does not pass it yet; absent
-   * offers no Rename, which is what the server would refuse anyway when it cannot tell.
-   */
-  canRename?: boolean;
+  /** Whether this person started the conversation, and so may rename it. The server's answer. */
+  canRename: boolean;
   unread: boolean;
   busy: boolean;
   emphasis: MessageListEmphasis;
@@ -81,9 +69,8 @@ export const Channel = memo(function Channel({
   });
   /* Types in only on arrival; an already-named row draws it outright. */
   const revealed = useTypedReveal(summary);
-  const untitledTitle = untitled || lastMessage;
-  const threadTitle = revealed.text || untitledTitle || "新会话";
-  const title = summary || untitledTitle || "新会话";
+  const threadTitle = revealed.text || untitled || "新会话";
+  const title = summary || untitled || "新会话";
   const group = participantIds.length > 1;
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
@@ -107,57 +94,24 @@ export const Channel = memo(function Channel({
             to={group ? "/group/$channelId" : "/channel/$channelId"}
             params={{ channelId }}
             type="button"
-            className="flex w-full flex-row items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-foreground/5 [contain-intrinsic-size:auto_3rem] [content-visibility:auto]"
+            className="flex w-full flex-row items-center gap-2 rounded-[9px] border border-transparent px-2.5 py-2 hover:bg-foreground/[0.03] [contain-intrinsic-size:auto_3.25rem] [content-visibility:auto]"
             activeProps={{
-              className: "bg-sidebar",
+              // The open conversation lifts onto the sidebar's plate, as the open nav row does.
+              className: "border-foreground/[0.06] bg-sidebar-accent",
             }}
           >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`min-w-0 flex-1 truncate ${PRIMARY_TEXT}`}
-                  title={emphasis === "agent" ? name : title}
-                >
-                  {emphasis === "agent" ? name : threadTitle}
-                  {emphasis !== "agent" && revealed.typing ? (
-                    <span className="ml-0.5 inline-block h-3 w-px translate-y-px bg-foreground/70 align-middle" />
-                  ) : null}
-                </span>
-                {pinned ? (
-                  <IconPinFilled
-                    aria-label="已置顶"
-                    className="size-3 shrink-0 text-muted-foreground/70"
-                  />
-                ) : null}
-                {unread ? (
-                  <span className="size-2 shrink-0 rounded-full bg-primary">
-                    <span className="sr-only">未读</span>
-                  </span>
-                ) : null}
-              </div>
-              {/*
-               * The reference's second line, 「聊天 | 10月6日 00:56」. With the 员工名字 emphasis the
-               * name takes the first line, so the title moves down here in place of the kind.
-               */}
-              <div className="mt-px flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground leading-4">
-                <span className={`min-w-0 truncate ${SECONDARY_TEXT}`}>
-                  {emphasis === "agent" ? threadTitle : group ? "群聊" : "聊天"}
-                </span>
-                {lastMessageAt ? (
-                  <span className="shrink-0 whitespace-nowrap">
-                    {` | ${lastMessageAt}`}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            {busy ? (
-              <span className="flex shrink-0 items-center gap-0.5">
-                <span className="sr-only">处理中…</span>
-                <span className="size-1 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
-                <span className="size-1 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
-                <span className="size-1 animate-bounce rounded-full bg-primary" />
-              </span>
-            ) : null}
+            <ChannelItemContent
+              busy={busy}
+              displayedTitle={threadTitle}
+              emphasis={emphasis}
+              lastMessageAt={lastMessageAt}
+              name={name}
+              participantIds={participantIds}
+              pinned={pinned}
+              revealing={revealed.typing}
+              title={title}
+              unread={unread}
+            />
           </Link>
         </ContextMenuTrigger>
         <ContextMenuContent>
@@ -197,7 +151,7 @@ export const Channel = memo(function Channel({
         channelId={channelId}
         onOpenChange={setRenaming}
         open={renaming}
-        title={summary || untitledTitle || ""}
+        title={summary || untitled || ""}
       />
       <DeleteConversationDialog
         channelId={channelId}

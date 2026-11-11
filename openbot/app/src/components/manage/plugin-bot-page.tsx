@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { useManagePaths } from "@/lib/manage-paths";
@@ -48,6 +49,7 @@ import {
   setPluginGrantMutationOptions,
 } from "@/lib/plugins/mutations";
 import {
+  appKeyOf,
   type PluginTool,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
@@ -113,6 +115,7 @@ export function PluginBotPage({
    * say there is no such Bot.
    */
   const hiddenAgents = useQuery(agentListQueryOptions(true));
+  const nameFor = useBotNames();
   const [error, setError] = useState<string | null>(null);
   /** What the list is narrowed to, over action names. Never over what is switched on. */
   const [search, setSearch] = useState("");
@@ -133,7 +136,14 @@ export function PluginBotPage({
     onError: (thrown: Error) => setError(thrown.message),
   });
 
-  const server = plugins.data?.servers.find((row) => row.id === key);
+  /*
+   * Either name: the route may carry the catalogue key or, from an old link, the row id, which for a
+   * curated connector is the team's `team:<catalogue key>` since G01-E（熊宝）.
+   */
+  const server = plugins.data?.servers.find(
+    (row) => row.id === key || appKeyOf(row) === key,
+  );
+  const appKey = server ? appKeyOf(server) : key;
   /*
    * Shared only once the server itself says so. `exposure` is fetched for exactly that case — it is
    * this Bot's whole shared-apps picture, and here it is read for one app's current approval, so a
@@ -158,7 +168,7 @@ export function PluginBotPage({
   });
   const [grantingShared, setGrantingShared] = useState(false);
   const appTitle =
-    plugins.data?.catalogue.find((item) => item.key === key)?.title ??
+    plugins.data?.catalogue.find((item) => item.key === appKey)?.title ??
     server?.title ??
     key;
   const bot =
@@ -213,7 +223,7 @@ export function PluginBotPage({
     return (
       <PageShell
         backButton={{ label: paths.pluginsLabel, linkProps: paths.plugins() }}
-        description="没有打开叫这个名字的应用。"
+        description="这个部署没有启用叫这个名字的应用。"
         title={appTitle}
       >
         <PageEmpty icon={IconPlugOff} title="这个应用没有打开">
@@ -237,7 +247,7 @@ export function PluginBotPage({
         title="插件"
       >
         <p className="mt-12 text-destructive text-sm" role="alert">
-          读不到插件。请刷新页面。
+          读不到插件。
         </p>
       </PageShell>
     );
@@ -274,7 +284,8 @@ export function PluginBotPage({
    * missing from both is answered above), and on this Admin page the id is then the only name there
    * is, so it stands in. Screens a person reads go through `useBotNames`, which never shows an id.
    */
-  const botName = bot?.name ?? agentId;
+  // `nameFor` answers "" while the roster loads, so the id stands in only until a name is known.
+  const botName = bot?.name ?? (nameFor(agentId) || agentId);
   const held = (tool: PluginTool) => tool.grantedTo.includes(agentId);
 
   /*
@@ -308,7 +319,9 @@ export function PluginBotPage({
    * not for the whole of it. `undefined` while `exposure` has not answered yet, which is exactly what
    * routes a switch flipped mid-load to the dialog: see the comment on `onCheckedChange` below.
    */
-  const sharedApp = exposure.data?.apps.find((app) => app.serverId === key);
+  const sharedApp = exposure.data?.apps.find(
+    (app) => app.serverId === (server?.id ?? key),
+  );
 
   /*
    * The confirm button on the shared-grant dialog: the one write a switched-on Switch is still
@@ -453,7 +466,7 @@ export function PluginBotPage({
           {alwaysOn ? null : (
             <DescribeGrants
               agentId={agentId}
-              appKey={key}
+              appKey={appKey}
               appTitle={appTitle}
               botName={botName}
               sharedNeeded={

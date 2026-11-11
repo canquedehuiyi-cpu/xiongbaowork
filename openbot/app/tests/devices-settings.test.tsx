@@ -56,7 +56,7 @@ test("a registered phone is listed and can be removed", async () => {
   serving();
   const view = draw(<NativeDevices />);
   expect(await view.findByText("iOS")).toBeTruthy();
-  fireEvent.click(view.getByRole("button", { name: "Remove" }));
+  fireEvent.click(view.getByRole("button", { name: "移除" }));
   await waitFor(() =>
     expect(requests).toContain("DELETE /api/delivery/devices/d1"),
   );
@@ -65,6 +65,6 @@ test("a registered phone is listed and can be removed", async () => {
 test("recent deliveries are listed, each by its kind and channel", async () => {
   serving();
   const view = draw(<RecentDeliveries />);
-  expect(await view.findByText("Question")).toBeTruthy();
-  expect(view.getByText(/^Push · Sent · /)).toBeTruthy();
+  expect(await view.findByText("提问")).toBeTruthy();
+  expect(view.getByText(/^推送 · 已发出 · /)).toBeTruthy();
 });

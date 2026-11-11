@@ -40,6 +40,9 @@ import {
 import { queryClient } from "@/query-client";
 
 /**
+ * 上游的「记住一条事实」对话框与记忆列表（`MemoryList`），中文化后保留以便同步上游。熊宝的能力 › 记忆与信息源
+ * 用的是 `memory-screen.tsx`，那里有同样的「让它记住一条事实」表单和每条记忆的卡片。
+ *
  * A fact the person tells their Bots directly. It reaches every one of them.
  *
  * The page's one primary verb, so it is a button for `PageShell`'s `action` that opens a dialog,
@@ -63,13 +66,13 @@ export function RememberFact() {
         variant="ghost"
       >
         <IconPlus />
-        Remember a fact
+        记住一条事实
       </Button>
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remember a fact</DialogTitle>
-            <DialogDescription>All your Bots will know it.</DialogDescription>
+            <DialogTitle>记住一条事实</DialogTitle>
+            <DialogDescription>你所有的员工都会知道。</DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
             {/* The submit button is in the footer and reaches this form by id, so DialogBody stays a
@@ -88,7 +91,7 @@ export function RememberFact() {
             >
               <Field>
                 <FieldLabel htmlFor={`${formId}-content`}>
-                  Something you want your Bots to know
+                  你希望员工知道的事
                 </FieldLabel>
                 <Textarea
                   id={`${formId}-content`}
@@ -96,7 +99,7 @@ export function RememberFact() {
                   maxLength={6000}
                   value={content}
                   onChange={(event) => setContent(event.target.value)}
-                  placeholder="I prefer meetings in the morning."
+                  placeholder="我偏好上午开会。"
                 />
               </Field>
             </form>
@@ -108,7 +111,7 @@ export function RememberFact() {
           </DialogBody>
           <DialogFooter className="mt-4">
             <Button onClick={() => setOpen(false)} size="sm" variant="outline">
-              Cancel
+              取消
             </Button>
             <Button
               disabled={remember.isPending || !content.trim()}
@@ -116,7 +119,7 @@ export function RememberFact() {
               size="sm"
               type="submit"
             >
-              Remember
+              记住
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -139,13 +142,9 @@ export function MemoryList({
   const memories = useQuery(memoriesQueryOptions());
   const agents = useQuery(agentListQueryOptions());
   const botName = (id: string | null) =>
-    agents.data?.find((agent) => agent.id === id)?.name ?? "your Bot";
+    agents.data?.find((agent) => agent.id === id)?.name ?? "一位员工";
   return (
-    <PageSection
-      action={action}
-      description={description}
-      title="Your memories"
-    >
+    <PageSection action={action} description={description} title="你的记忆">
       {memories.isPending ? null : memories.error ? (
         <p role="alert" className="mt-4 text-destructive text-sm">
           {memories.error.message}
@@ -163,8 +162,8 @@ export function MemoryList({
           ))}
         </PageRows>
       ) : (
-        <PageEmpty icon={IconBrain} title="No memories yet">
-          Add one with Remember a fact.
+        <PageEmpty icon={IconBrain} title="还没有任何记忆">
+          用「记住一条事实」加一条。
         </PageEmpty>
       )}
     </PageSection>
@@ -194,14 +193,14 @@ function MemoryRow({
   // forgotten here but not paused or reviewed.
   const heldByIntelligence = memory.formedBy === "intelligence";
   const status = heldByIntelligence
-    ? "Kept in the back end"
+    ? "保存在后端"
     : !memory.enabled
-      ? "Turned off"
+      ? "已停用"
       : memory.formedBy === "bot"
-        ? `Formed by ${botName}${memory.reviewState === "unreviewed" ? " · needs review" : ""}`
+        ? `由 ${botName} 记下${memory.reviewState === "unreviewed" ? " · 待复核" : ""}`
         : memory.reviewState === "unreviewed"
-          ? "Imported · needs review"
-          : "Reviewed";
+          ? "导入的 · 待复核"
+          : "已复核";
   return (
     <Item size="sm">
       <ItemMedia variant="icon">
@@ -216,15 +215,15 @@ function MemoryRow({
         </ItemDescription>
         {memory.formedBy === "bot" && (
           <ItemDescription className="line-clamp-none">
-            From {memory.sourceApp ?? "a conversation"}
+            来自 {memory.sourceApp ?? "一段对话"}
             {memory.observedAt
-              ? `, read ${new Date(memory.observedAt).toLocaleString()}`
+              ? `，读取于 ${new Date(memory.observedAt).toLocaleString("zh-CN")}`
               : ""}
             {memory.sourceLink && (
               <>
                 {" · "}
                 <a href={memory.sourceLink} target="_blank" rel="noreferrer">
-                  Open record
+                  查看记录
                 </a>
               </>
             )}
@@ -241,7 +240,7 @@ function MemoryRow({
               size="sm"
               variant="outline"
             >
-              Edit
+              编辑
             </Button>
             {memory.reviewState === "unreviewed" && (
               <Button
@@ -249,7 +248,7 @@ function MemoryRow({
                 variant="outline"
                 onClick={() => update({ reviewState: "confirmed" })}
               >
-                Confirm
+                确认
               </Button>
             )}
             <Button
@@ -258,7 +257,7 @@ function MemoryRow({
               disabled={forget.isPending}
               onClick={() => forget.mutate(memory.id)}
             >
-              Forget
+              忘掉
             </Button>
           </div>
         </ItemFooter>
@@ -272,7 +271,7 @@ function MemoryRow({
         <ItemActions>
           {/* Binary and immediate: Bots stop or start using it when switched. */}
           <Switch
-            aria-label={`Use this memory: ${clip(memory.content)}`}
+            aria-label={`使用这条记忆：${clip(memory.content)}`}
             checked={memory.enabled}
             disabled={save.isPending}
             onCheckedChange={(enabled) => update({ enabled })}
@@ -323,13 +322,13 @@ function EditMemoryDialog({
     <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit memory</DialogTitle>
+          <DialogTitle>编辑记忆</DialogTitle>
           <DialogDescription>{memory.provenance}</DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4">
           <Field>
             <FieldLabel className="sr-only" htmlFor={id}>
-              Memory
+              记忆
             </FieldLabel>
             <Textarea
               autoFocus
@@ -348,14 +347,14 @@ function EditMemoryDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={saving || !content.trim()}
             onClick={() => onSave(content)}
             size="sm"
           >
-            Save
+            保存
           </Button>
         </DialogFooter>
       </DialogContent>

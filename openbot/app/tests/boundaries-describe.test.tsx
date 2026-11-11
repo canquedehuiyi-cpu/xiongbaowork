@@ -192,8 +192,8 @@ function open(path: string) {
 /** Typed as a person types it, so the field's own state sees every keystroke. */
 async function describeRule(view: ReturnType<typeof render>, text: string) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  await user.type(await view.findByLabelText("Describe the rule"), text);
-  await user.click(view.getByRole("button", { name: "Write rule" }));
+  await user.type(await view.findByLabelText("描述这条规则"), text);
+  await user.click(view.getByRole("button", { name: "写成规则" }));
 }
 
 test("a description fills the rule, shows its reading and compile result, replays it, and Add saves it with the description", async () => {
@@ -201,21 +201,21 @@ test("a description fills the rule, shows its reading and compile result, replay
   translation = SOCIAL;
   const { view, router } = open("/admin/boundaries/new");
 
-  fireEvent.click(await view.findByText("Describe it in words"));
+  fireEvent.click(await view.findByText("用一句话描述"));
   await describeRule(view, "Bots may not visit social media sites");
 
   expect(await view.findByText(SOCIAL.explanation as string)).toBeTruthy();
   expect(described).toEqual(["Bots may not visit social media sites"]);
-  expect((view.getByLabelText("Rule") as HTMLTextAreaElement).value).toBe(
+  expect((view.getByLabelText("规则") as HTMLTextAreaElement).value).toBe(
     SOCIAL.rule,
   );
   expect(
-    view.getByText("Compiles. OpenBot can check it on every action."),
+    view.getByText("能编译。熊宝可以在每个动作上检查它。"),
   ).toBeTruthy();
   // Replayed as soon as it rests in the field, on its own.
   expect(
     await view.findByText(
-      "Of the last 3 recorded actions, this rule would have stopped 1.",
+      "最近记录的 3 个动作里，这条规则会拦下 1 个。",
     ),
   ).toBeTruthy();
   expect(replayed).toEqual([
@@ -224,7 +224,7 @@ test("a description fills the rule, shows its reading and compile result, replay
   // Nothing is saved until the admin adds it.
   expect(saved).toHaveLength(0);
 
-  fireEvent.click(view.getByRole("button", { name: "Add rule" }));
+  fireEvent.click(view.getByRole("button", { name: "添加规则" }));
   await waitFor(() => expect(saved).toHaveLength(1));
   expect(saved[0]).toEqual({
     mode: "enforce",
@@ -251,21 +251,21 @@ test("editing the written rule by hand is allowed and called out", async () => {
   translation = SOCIAL;
   const { view } = open("/admin/boundaries/new");
 
-  fireEvent.click(await view.findByText("Describe it in words"));
+  fireEvent.click(await view.findByText("用一句话描述"));
   await describeRule(view, "Bots may not visit social media sites");
   await view.findByText(SOCIAL.explanation as string);
-  expect(view.queryByText(/You've changed the rule/)).toBeNull();
+  expect(view.queryByText(/写好之后你改过这条规则/)).toBeNull();
 
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  await user.type(view.getByLabelText("Rule"), ' || page.host == "bsky.app"');
+  await user.type(view.getByLabelText("规则"), ' || page.host == "bsky.app"');
 
   expect(
     view.getByText(
-      "You've changed the rule since it was written. The check and the reading above are for the written rule, not your edit.",
+      "写好之后你改过这条规则。上面的检查和解读说的是写出来的规则，不是你改过的版本。",
     ),
   ).toBeTruthy();
   expect(
-    (view.getByRole("button", { name: "Add rule" }) as HTMLButtonElement)
+    (view.getByRole("button", { name: "添加规则" }) as HTMLButtonElement)
       .disabled,
   ).toBe(false);
 });
@@ -276,15 +276,15 @@ test("What it stops is filled from the reading when empty, and what the admin ty
   const { view } = open("/admin/boundaries/new");
   const user = userEvent.setup({ document: view.container.ownerDocument });
 
-  fireEvent.click(await view.findByText("Describe it in words"));
+  fireEvent.click(await view.findByText("用一句话描述"));
   await describeRule(view, "Bots may not visit social media sites");
   await view.findByText(SOCIAL.explanation as string);
-  const stops = view.getByLabelText("What it stops") as HTMLInputElement;
+  const stops = view.getByLabelText("它拦住什么") as HTMLInputElement;
   expect(stops.value).toBe("Stops a Bot opening Facebook.");
 
   // Written again, the field still holds only what the last rule put there, so it is replaced.
   translation = { ...SOCIAL, summary: "Stops a Bot opening Facebook or X." };
-  await user.click(view.getByRole("button", { name: "Write rule" }));
+  await user.click(view.getByRole("button", { name: "写成规则" }));
   await waitFor(() =>
     expect(stops.value).toBe("Stops a Bot opening Facebook or X."),
   );
@@ -293,11 +293,11 @@ test("What it stops is filled from the reading when empty, and what the admin ty
   await user.clear(stops);
   await user.type(stops, "Keeps Bots off social sites.");
   translation = { ...SOCIAL, summary: "Stops a Bot opening Reddit." };
-  await user.click(view.getByRole("button", { name: "Write rule" }));
+  await user.click(view.getByRole("button", { name: "写成规则" }));
   await waitFor(() => expect(described).toHaveLength(3));
-  // Back to "Write rule" once the answer has been taken in.
-  await view.findByRole("button", { name: "Write rule" });
-  expect((view.getByLabelText("Rule") as HTMLTextAreaElement).value).toBe(
+  // Back to 「写成规则」 once the answer has been taken in.
+  await view.findByRole("button", { name: "写成规则" });
+  expect((view.getByLabelText("规则") as HTMLTextAreaElement).value).toBe(
     SOCIAL.rule,
   );
   expect(stops.value).toBe("Keeps Bots off social sites.");
@@ -319,18 +319,18 @@ test("a rule that never compiled is shown with the error and can't be added as w
   };
   const { view } = open("/admin/boundaries/new");
 
-  fireEvent.click(await view.findByText("Describe it in words"));
+  fireEvent.click(await view.findByText("用一句话描述"));
   await describeRule(
     view,
     "Block any URL with a query string longer than 200 characters",
   );
 
   expect(
-    await view.findByText(/Doesn't compile, so OpenBot won't save it/),
+    await view.findByText(/编译不通过，熊宝不会保存它/),
   ).toBeTruthy();
-  expect(view.queryByText("What this rule does")).toBeNull();
+  expect(view.queryByText("这条规则做什么")).toBeNull();
   expect(
-    (view.getByRole("button", { name: "Add rule" }) as HTMLButtonElement)
+    (view.getByRole("button", { name: "添加规则" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
   // Nothing to replay: its error is already on screen. Waited past the preview's rest first.
@@ -347,15 +347,15 @@ test("a description that only grants permission is answered, not filled in", asy
   };
   const { view } = open("/admin/boundaries/new");
 
-  fireEvent.click(await view.findByText("Describe it in words"));
+  fireEvent.click(await view.findByText("用一句话描述"));
   await describeRule(view, "Let Bots use Gmail");
 
   expect(
     await view.findByText(
-      "That says what Bots may do. A rule here stops an action, so describe what no Bot may do.",
+      "这句话说的是员工可以做什么。这里的规则用来拦下动作，请描述哪件事员工都不能做。",
     ),
   ).toBeTruthy();
-  expect((view.getByLabelText("Rule") as HTMLTextAreaElement).value).toBe("");
+  expect((view.getByLabelText("规则") as HTMLTextAreaElement).value).toBe("");
 });
 
 test("with no model set up, the server's sentence is shown and nothing is filled in", async () => {
@@ -367,7 +367,7 @@ test("with no model set up, the server's sentence is shown and nothing is filled
   };
   const { view } = open("/admin/boundaries/new");
 
-  fireEvent.click(await view.findByText("Describe it in words"));
+  fireEvent.click(await view.findByText("用一句话描述"));
   await describeRule(view, "Bots may not visit social media sites");
 
   expect(
@@ -375,7 +375,7 @@ test("with no model set up, the server's sentence is shown and nothing is filled
       "OpenBot needs a model key to write a rule from a description. Add one on the Credentials page, or write the rule in CEL.",
     ),
   ).toBeTruthy();
-  expect((view.getByLabelText("Rule") as HTMLTextAreaElement).value).toBe("");
+  expect((view.getByLabelText("规则") as HTMLTextAreaElement).value).toBe("");
 });
 
 test("on a rule's own page, a description rewrites it in place, keeps its name, and Save rule sends the description", async () => {
@@ -392,15 +392,15 @@ test("on a rule's own page, a description rewrites it in place, keeps its name, 
   const { view } = open("/admin/boundaries/1");
 
   expect(
-    ((await view.findByLabelText("Rule")) as HTMLTextAreaElement).value,
+    ((await view.findByLabelText("规则")) as HTMLTextAreaElement).value,
   ).toBe(old);
-  expect(view.queryByRole("button", { name: "Save rule" })).toBeNull();
+  expect(view.queryByRole("button", { name: "保存规则" })).toBeNull();
 
   await describeRule(view, "Bots may not visit social media sites");
   await view.findByText(SOCIAL.explanation as string);
   expect(
     await view.findByText(
-      "Of the last 3 recorded actions, this rule would have stopped 1.",
+      "最近记录的 3 个动作里，这条规则会拦下 1 个。",
     ),
   ).toBeTruthy();
   // The page's own "Recently stopped" first (the policy without this rule), then the new version
@@ -411,7 +411,7 @@ test("on a rule's own page, a description rewrites it in place, keeps its name, 
   ]);
   expect(saved).toHaveLength(0);
 
-  fireEvent.click(view.getByRole("button", { name: "Save rule" }));
+  fireEvent.click(view.getByRole("button", { name: "保存规则" }));
   await waitFor(() => expect(saved).toHaveLength(1));
   expect(saved[0]).toEqual({
     mode: "enforce",

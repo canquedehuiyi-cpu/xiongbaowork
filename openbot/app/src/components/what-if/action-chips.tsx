@@ -1,7 +1,5 @@
 import {
-  WHAT_IF_INITIATOR_WORDS,
   WHAT_IF_INITIATORS,
-  WHAT_IF_INTENT_WORDS,
   WHAT_IF_INTENTS,
   type WhatIfAction,
   type WhatIfInitiator,
@@ -30,6 +28,27 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+/* The shared words are English; the chips say them in Chinese. */
+const WHAT_IF_INITIATOR_WORDS: Record<WhatIfInitiator, string> = {
+  person: "有人在对话里",
+  routine: "定时任务",
+  handoff: "其他员工",
+  responsibility: "它盯着的目标",
+  memory: "它自己定的跟进",
+};
+
+const WHAT_IF_INTENT_WORDS: Record<WhatIfIntent, string> = {
+  navigate: "打开页面",
+  activate: "按按钮或链接",
+  type: "在字段里输入",
+  read: "阅读页面",
+  read_file: "读取文件",
+  write_file: "保存文件",
+  list_files: "列出文件",
+  download_file: "下载文件",
+  run_command: "运行命令",
+};
+
 /**
  * One action as chips: who, what started it, and what it does. A question read by the model arrives
  * here, and every chip can be changed, so the action that is checked is the one the admin confirmed.
@@ -55,14 +74,14 @@ export function ActionChips({
   const intent = action.intent as WhatIfIntent | "";
   const detail =
     intent === "run_command"
-      ? ({ key: "command", title: "Command" } as const)
+      ? ({ key: "command", title: "命令" } as const)
       : intent === "read_file" ||
           intent === "write_file" ||
           intent === "download_file" ||
           intent === "list_files"
-        ? ({ key: "file", title: "File" } as const)
+        ? ({ key: "file", title: "文件" } as const)
         : intent === "activate" || intent === "type"
-          ? ({ key: "label", title: "Button or field" } as const)
+          ? ({ key: "label", title: "按钮或字段" } as const)
           : null;
 
   return (
@@ -70,8 +89,8 @@ export function ActionChips({
       <MenuChip
         chip="bot"
         empty={!bot}
-        title="Bot"
-        value={bot?.name ?? "Choose"}
+        title="员工"
+        value={bot?.name ?? "选择"}
       >
         <DropdownMenuRadioGroup
           onValueChange={(value) => {
@@ -99,11 +118,11 @@ export function ActionChips({
       <MenuChip
         chip="person"
         empty={!person && !action.group}
-        title="Runs as"
+        title="以谁的身份"
         value={
           action.group
-            ? `Anyone in ${action.group}`
-            : (person?.name ?? person?.email ?? "Choose")
+            ? `${action.group} 组里的任何人`
+            : (person?.name ?? person?.email ?? "选择")
         }
       >
         <DropdownMenuRadioGroup
@@ -117,7 +136,7 @@ export function ActionChips({
           value={action.group ? `group:${action.group}` : action.person}
         >
           <DropdownMenuGroup>
-            <DropdownMenuLabel>People</DropdownMenuLabel>
+            <DropdownMenuLabel>人员</DropdownMenuLabel>
             {(vocabulary?.people ?? []).map((entry) => (
               <DropdownMenuRadioItem key={entry.id} value={entry.id}>
                 <span className="truncate">{entry.name ?? entry.email}</span>
@@ -128,7 +147,7 @@ export function ActionChips({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Anyone in a group</DropdownMenuLabel>
+                <DropdownMenuLabel>某个组里的任何人</DropdownMenuLabel>
                 {vocabulary.groups.map((group) => (
                   <DropdownMenuRadioItem key={group} value={`group:${group}`}>
                     <span className="truncate">{group}</span>
@@ -142,7 +161,7 @@ export function ActionChips({
 
       <MenuChip
         chip="initiator"
-        title="Started by"
+        title="发起方"
         value={WHAT_IF_INITIATOR_WORDS[action.initiator]}
       >
         <DropdownMenuRadioGroup
@@ -161,8 +180,8 @@ export function ActionChips({
 
       <MenuChip
         chip="surface"
-        title="Uses"
-        value={action.surface === "app" ? "An app" : "Its computer"}
+        title="用的是"
+        value={action.surface === "app" ? "一个应用" : "它的电脑"}
       >
         <DropdownMenuRadioGroup
           onValueChange={(value) =>
@@ -181,9 +200,9 @@ export function ActionChips({
           }
           value={action.surface}
         >
-          <DropdownMenuRadioItem value="app">An app</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="app">一个应用</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="computer">
-            Its computer
+            它的电脑
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
       </MenuChip>
@@ -193,8 +212,8 @@ export function ActionChips({
           <MenuChip
             chip="app"
             empty={!app}
-            title="App"
-            value={app?.name ?? "Choose"}
+            title="应用"
+            value={app?.name ?? "选择"}
           >
             <DropdownMenuRadioGroup
               onValueChange={(value) => set({ app: value, tool: "" })}
@@ -210,8 +229,8 @@ export function ActionChips({
           <MenuChip
             chip="tool"
             empty={!tool}
-            title="Tool"
-            value={tool ? humanise(tool.name) : "Choose"}
+            title="工具"
+            value={tool ? humanise(tool.name) : "选择"}
           >
             {app?.tools.length ? (
               <DropdownMenuRadioGroup
@@ -222,7 +241,7 @@ export function ActionChips({
                   <DropdownMenuRadioItem key={entry.name} value={entry.name}>
                     <span className="truncate">{humanise(entry.name)}</span>
                     <span className="ml-auto ps-3 text-muted-foreground text-xs">
-                      {entry.effect === "write" ? "Changes" : "Reads"}
+                      {entry.effect === "write" ? "改动" : "读取"}
                     </span>
                   </DropdownMenuRadioItem>
                 ))}
@@ -230,17 +249,15 @@ export function ActionChips({
             ) : (
               <DropdownMenuGroup>
                 <DropdownMenuLabel className="font-normal">
-                  {app ? "This app lists no tools." : "Choose an app first."}
+                  {app ? "这个应用没有列出工具。" : "先选一个应用。"}
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
             )}
           </MenuChip>
           {tool ? (
             <StaticChip
-              title="Effect"
-              value={
-                tool.effect === "write" ? "Changes something" : "Only reads"
-              }
+              title="影响"
+              value={tool.effect === "write" ? "会改动东西" : "只读取"}
             />
           ) : null}
         </>
@@ -249,8 +266,8 @@ export function ActionChips({
           <MenuChip
             chip="intent"
             empty={!intent}
-            title="Does"
-            value={intent ? WHAT_IF_INTENT_WORDS[intent] : "Choose"}
+            title="做什么"
+            value={intent ? WHAT_IF_INTENT_WORDS[intent] : "选择"}
           >
             <DropdownMenuRadioGroup
               onValueChange={(value) => set({ intent: value as WhatIfIntent })}
@@ -266,10 +283,10 @@ export function ActionChips({
           <TextChip
             chip="host"
             empty={!action.host}
-            label="Web site"
+            label="网站"
             onChange={(host) => set({ host })}
             placeholder="www.linkedin.com"
-            title="Site"
+            title="网站"
             value={action.host}
           />
           {detail ? (
@@ -283,7 +300,7 @@ export function ActionChips({
                   ? "rm -rf build"
                   : detail.key === "file"
                     ? "reports/q3.csv"
-                    : "Submit"
+                    : "提交"
               }
               title={detail.title}
               value={action[detail.key]}
@@ -393,7 +410,7 @@ function TextChip({
         >
           <ChipText
             title={title}
-            value={value || (optional ? "Any" : "Enter")}
+            value={value || (optional ? "任意" : "填写")}
           />
           <IconChevronDown className="text-muted-foreground" />
         </PopoverTrigger>
@@ -410,7 +427,7 @@ function TextChip({
               {label}
               {optional ? (
                 <span className="ms-1 font-normal text-muted-foreground">
-                  (optional)
+                  （可选）
                 </span>
               ) : null}
             </label>
@@ -423,7 +440,7 @@ function TextChip({
             />
             <div>
               <Button size="sm" type="submit">
-                Apply
+                应用
               </Button>
             </div>
           </form>

@@ -28,6 +28,7 @@ import {
   channelListQueryOptions,
 } from "@/lib/channels/queries";
 import {
+  AUTO_CONVERSATION,
   browserTimeZone,
   cronFrom,
   MONTH_DAYS,
@@ -58,7 +59,7 @@ function conversationsWith(
 function conversationName(channel: ChannelSummary): string {
   const title = (channel.summary || untitledLine(channel) || "").trim();
   // What the sidebar calls one nobody has named or written in yet.
-  return title ? openingOf(title, 60) : "New conversation";
+  return title ? openingOf(title, 60) : "新对话";
 }
 
 const MONTH_DAY_LABEL = Object.fromEntries(
@@ -68,6 +69,12 @@ const MONTH_DAY_LABEL = Object.fromEntries(
 const WEEKDAY_ITEMS = Object.fromEntries(
   WEEKDAY_LABEL.map((label, index) => [String(index), label]),
 ) as Record<string, string>;
+
+/** Where the Routines page went: 自主工作, narrowed to schedules (`/routines` redirects there too). */
+const ROUTINES_LIST = {
+  to: "/autonomous",
+  search: { trigger: "schedule" },
+} as const;
 
 /**
  * New routine, on a screen of its own: a Bot, what it does, when, and where it posts.
@@ -112,9 +119,12 @@ export function NewRoutinePage({
         ...(value.title.trim() ? { title: value.title.trim() } : {}),
         cron: cronFrom(value),
         timezone: timeZone,
-        channelId: value.channelId,
+        // 自动：不传 channelId，由服务端找这个人和这位员工共有的对话。
+        ...(value.channelId === AUTO_CONVERSATION
+          ? {}
+          : { channelId: value.channelId }),
       });
-      await navigate({ to: "/routines" });
+      await navigate(ROUTINES_LIST);
     },
   });
 
@@ -124,9 +134,9 @@ export function NewRoutinePage({
 
   return (
     <PageShell
-      backButton={{ label: "Routines", linkProps: { to: "/routines" } }}
-      description="Pick a Bot, say what it should do, and choose when. It posts what it did in a conversation with you."
-      title="New routine"
+      backButton={{ label: "定时任务", linkProps: ROUTINES_LIST }}
+      description="选一位员工，说说要做什么，再定好时间。它每次做完都会在和你的对话里说一声。"
+      title="新建定时任务"
     >
       <form
         noValidate
@@ -139,10 +149,10 @@ export function NewRoutinePage({
           footer={
             <>
               <Button
-                render={(props) => <Link {...props} to="/routines" />}
+                render={(props) => <Link {...props} {...ROUTINES_LIST} />}
                 variant="outline"
               >
-                Cancel
+                取消
               </Button>
               <form.Subscribe
                 selector={(state) => [state.canSubmit, state.isSubmitting]}
@@ -155,8 +165,8 @@ export function NewRoutinePage({
                     type="submit"
                   >
                     {isSubmitting || createRoutine.isPending
-                      ? "Creating…"
-                      : "Create routine"}
+                      ? "正在创建…"
+                      : "创建定时任务"}
                   </Button>
                 )}
               </form.Subscribe>
@@ -170,7 +180,7 @@ export function NewRoutinePage({
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>Bot</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>员工</FieldLabel>
                     <Select
                       items={botItems}
                       onValueChange={(value) => {
@@ -179,6 +189,7 @@ export function NewRoutinePage({
                         // Another Bot is in other conversations: start a new one unless this one is shared.
                         const current = form.getFieldValue("channelId");
                         if (
+                          current !== AUTO_CONVERSATION &&
                           !conversationsWith(channels.data, next).some(
                             (channel) => channel.id === current,
                           )
@@ -193,7 +204,7 @@ export function NewRoutinePage({
                         className="w-full"
                         id={field.name}
                       >
-                        <SelectValue placeholder="Choose a Bot" />
+                        <SelectValue placeholder="选一位员工" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
@@ -227,9 +238,9 @@ export function NewRoutinePage({
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>What to do</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>要做什么</FieldLabel>
                     <FieldDescription>
-                      Write it as one run of the work. Leave the schedule out.
+                      写成做一次的样子，不用写时间安排。
                     </FieldDescription>
                     <Textarea
                       aria-invalid={isInvalid}
@@ -239,7 +250,7 @@ export function NewRoutinePage({
                       onChange={(event) =>
                         field.handleChange(event.target.value)
                       }
-                      placeholder="Send me a summary of yesterday's new leads"
+                      placeholder="把昨天新增的线索整理成摘要发给我"
                       rows={3}
                       value={field.state.value}
                     />
@@ -252,7 +263,7 @@ export function NewRoutinePage({
             </form.Field>
 
             <Field>
-              <FieldLabel htmlFor="repeat">When</FieldLabel>
+              <FieldLabel htmlFor="repeat">什么时候</FieldLabel>
               <div className="flex flex-wrap gap-3">
                 <form.Field name="repeat">
                   {(field) => (
@@ -292,7 +303,7 @@ export function NewRoutinePage({
                               value={field.state.value}
                             >
                               <SelectTrigger
-                                aria-label="Day of the week"
+                                aria-label="星期几"
                                 className="min-w-36 flex-1"
                               >
                                 <SelectValue />
@@ -324,7 +335,7 @@ export function NewRoutinePage({
                               value={field.state.value}
                             >
                               <SelectTrigger
-                                aria-label="Day of the month"
+                                aria-label="每月几号"
                                 className="min-w-24"
                               >
                                 <SelectValue />
@@ -346,7 +357,7 @@ export function NewRoutinePage({
                         <form.Field name="time">
                           {(field) => (
                             <Input
-                              aria-label="Time"
+                              aria-label="时间"
                               className="w-32"
                               onChange={(event) =>
                                 field.handleChange(event.target.value)
@@ -368,8 +379,8 @@ export function NewRoutinePage({
                     <span className="font-medium text-foreground">
                       {scheduleSentence(values)}
                     </span>
-                    , your time ({timeZone}). For anything else, like every
-                    other Tuesday, ask the Bot in a conversation.
+                    ，按你的时区（{timeZone}
+                    ）。别的安排，比如隔周二一次，在对话里跟员工说就行。
                   </FieldDescription>
                 )}
               </form.Subscribe>
@@ -383,10 +394,11 @@ export function NewRoutinePage({
                 // still checks the Bot is in it.
                 const here =
                   presetChannelId && agentId === presetAgentId
-                    ? { [presetChannelId]: "This conversation" }
+                    ? { [presetChannelId]: "这段对话" }
                     : {};
                 const items: Record<string, string> = {
-                  [NEW_CONVERSATION]: "A new conversation",
+                  [NEW_CONVERSATION]: "新开一段对话",
+                  [AUTO_CONVERSATION]: "自动（由系统找对话）",
                   ...here,
                   ...Object.fromEntries(
                     shared.map((channel) => [
@@ -401,11 +413,13 @@ export function NewRoutinePage({
                   <form.Field name="channelId">
                     {(field) => (
                       <Field>
-                        <FieldLabel htmlFor={field.name}>Posts in</FieldLabel>
+                        <FieldLabel htmlFor={field.name}>发到哪里</FieldLabel>
                         <FieldDescription>
                           {field.state.value === NEW_CONVERSATION
-                            ? "OpenBot starts a conversation for this routine, named after it."
-                            : "Each run posts in this conversation."}
+                            ? "熊宝为这条定时任务新开一段对话，用它的名称命名。"
+                            : field.state.value === AUTO_CONVERSATION
+                              ? "不指定对话：系统会找你和这位员工共有的那段对话；如果有不止一段，会请你改选一段。"
+                              : "每次运行都发到这段对话里。"}
                         </FieldDescription>
                         <Select
                           disabled={!agentId}
@@ -445,9 +459,9 @@ export function NewRoutinePage({
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>名称</FieldLabel>
                     <FieldDescription>
-                      Optional. The Routines page shows it by this name.
+                      选填。定时任务列表里用这个名称显示它。
                     </FieldDescription>
                     <Input
                       aria-invalid={isInvalid}
@@ -457,7 +471,7 @@ export function NewRoutinePage({
                       onChange={(event) =>
                         field.handleChange(event.target.value)
                       }
-                      placeholder="Morning leads"
+                      placeholder="早间线索"
                       value={field.state.value}
                     />
                     {isInvalid ? (

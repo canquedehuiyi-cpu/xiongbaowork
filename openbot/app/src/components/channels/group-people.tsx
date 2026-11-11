@@ -31,6 +31,8 @@ import {
  * Who is in a group, from its top bar: how many people, and a dialog listing them where the creator
  * can take someone out, anyone else can leave, and anyone in it can add a person who has signed in
  * here. Everyone added sees the whole conversation.
+ *
+ * 熊宝原来把成员和「添加成员」放在输入框上方（group-chat.tsx 的 People / AddPerson），M5b 跟上游挪到顶栏这里。
  */
 export function GroupPeopleButton({ channelId }: { channelId: string }) {
   const queryClient = useQueryClient();
@@ -49,7 +51,7 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
   const iCreated = people.some(
     (person) => person.creator && person.userId === me?.id,
   );
-  const count = `${people.length} ${people.length === 1 ? "person" : "people"}`;
+  const count = `${people.length} 人`;
 
   return (
     <>
@@ -65,10 +67,9 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>People in this group</DialogTitle>
+            <DialogTitle>群聊成员</DialogTitle>
             <DialogDescription>
-              Everyone here sees the whole conversation. Every Bot in it answers
-              them.
+              群里的每个人都能看到完整的对话，群里的每位员工都会回答他们。
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4 grid gap-4 overflow-y-auto">
@@ -85,26 +86,24 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                       </ItemMedia>
                       <ItemContent>
                         <ItemTitle>
-                          {self ? "You" : (person.name ?? person.email)}
+                          {self ? "你" : (person.name ?? person.email)}
                         </ItemTitle>
                         <ItemDescription>
-                          {person.creator ? "Started this group" : person.email}
+                          {person.creator ? "发起了这个群聊" : person.email}
                         </ItemDescription>
                       </ItemContent>
                       {removable ? (
                         <ItemActions>
                           <Button
                             aria-label={
-                              self
-                                ? "Leave this group"
-                                : `Remove ${person.email}`
+                              self ? "退出这个群聊" : `移除 ${person.email}`
                             }
                             disabled={remove.isPending}
                             onClick={() => remove.mutate(person.userId)}
                             size="sm"
                             variant="outline"
                           >
-                            {self ? "Leave" : "Remove"}
+                            {self ? "退出" : "移除"}
                           </Button>
                         </ItemActions>
                       ) : null}
@@ -121,9 +120,9 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
               }}
             >
               <Input
-                aria-label="Their email"
+                aria-label="对方的邮箱"
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="Add someone by email"
+                placeholder="输入邮箱添加成员"
                 type="email"
                 value={email}
               />
@@ -132,7 +131,7 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                 size="sm"
                 type="submit"
               >
-                Add
+                添加
               </Button>
             </form>
             {add.error || remove.error ? (

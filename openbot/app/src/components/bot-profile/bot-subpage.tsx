@@ -4,8 +4,8 @@ import { PageShell } from "@/components/layout/page-shell";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
 
 /**
- * The frame of every `/bots/$agentId/<area>` page: back to the employee's page under 员工管理
- * (`/wakers/$agentId`, where `/bots/$agentId` forwards) by name, then the area.
+ * The frame of every `/bots/$agentId/<area>` page: back to the employee's own page
+ * (`/bots/$agentId`) by name, then the area.
  *
  * One frame so each area page is only its own rows, and so a Bot the person cannot reach says so in
  * the same words everywhere.
@@ -30,7 +30,7 @@ export function BotSubpage({
       action={action}
       backButton={{
         label: agent.data?.name ?? "员工",
-        linkProps: { params: { agentId }, to: "/wakers/$agentId" },
+        linkProps: { params: { agentId }, to: "/bots/$agentId" },
       }}
       description={description}
       title={title}

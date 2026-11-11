@@ -1,12 +1,17 @@
 import {
   IconArrowLeft,
   IconBell,
+  IconBook,
   IconBrowser,
+  IconChecks,
   IconDeviceDesktop,
+  IconDevices,
+  IconGauge,
+  IconHistory,
   IconKey,
   IconLayoutGrid,
   IconListCheck,
-  IconPlug,
+  IconLock,
   IconSchool,
   IconSettings,
 } from "@tabler/icons-react";
@@ -16,6 +21,7 @@ import type * as React from "react";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { desktopShell } from "@/lib/desktop/shell";
+import { managePaths } from "@/lib/manage-paths";
 import { mayOpenSetup, setupChecklistQueryOptions } from "@/lib/setup/queries";
 
 type SettingsSidebarItem = {
@@ -36,8 +42,8 @@ type SettingsSidebarItem = {
 };
 
 /*
- * M4: 待接入 上游设置里的「通知」（/settings/notifications）和「审批」（/settings/approvals）两页，
- * fork 目前没有这两个路由，等页面接进来再加入口。
+ * M5b：分区照上游 main 的设置侧栏，加上熊宝自己的「套餐与用量」「我的设备」。「已连接的账号」不在这里了，
+ * 它和员工可用的连接器一起放在主导航的「连接」；@Waker 留在主导航，不进设置。
  */
 export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
   {
@@ -48,19 +54,28 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     linkOptions: { to: "/settings" },
   },
   {
-    /* Where upstream has it, after 通用. Whether your employees check in for you, for all of them; where updates reach you is linked. */
+    /* Where updates go for every employee at once, and whether they check in; how much each sends is on its own page. */
     title: "通知",
     icon: IconBell,
     linkOptions: { to: "/settings/notifications" },
   },
   {
-    /*
-     * The same subject as Admin's Plugins, from the other side: there an administrator decides what
-     * this deployment may reach at all, here you decide what it may reach as you.
-     */
-    title: "已连接的账号",
-    icon: IconPlug,
-    linkOptions: { to: "/settings/connected-accounts" },
+    /* Whether employees ask first, rules for all of them, and what is waiting on you. Team settings are an administrator's. */
+    title: "审批",
+    icon: IconChecks,
+    linkOptions: { to: "/settings/approvals" },
+  },
+  {
+    /* The account's plan and this month's usage; `/plans` still lands here, for the server's `upgradeUrl`. */
+    title: "套餐与用量",
+    icon: IconGauge,
+    linkOptions: { to: "/settings/plans" },
+  },
+  {
+    /* Machines paired to run employees for you. Paired once, then left alone. */
+    title: "我的设备",
+    icon: IconDevices,
+    linkOptions: { to: "/settings/devices" },
   },
   {
     /* The browsers signed in to the Recorder extension as you; each can be disconnected here. */
@@ -101,6 +116,48 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     linkOptions: { to: "/settings/components-gallery" },
   },
 ];
+
+/**
+ * What the personal edition keeps of Admin (upstream main): there is no Admin there, and the one
+ * person still stores keys, writes skills, resets the computer and reads the trail. The pages live
+ * under `settings/_personal`, whose guard sends the team edition back to Settings.
+ */
+const PERSONAL_SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
+  {
+    title: "密钥",
+    icon: IconLock,
+    linkOptions: { to: "/settings/credentials" },
+  },
+  {
+    title: "技能",
+    icon: IconBook,
+    linkOptions: { to: "/settings/skills" },
+  },
+  {
+    title: "电脑",
+    icon: IconDeviceDesktop,
+    linkOptions: { to: "/settings/computer" },
+  },
+  {
+    title: managePaths("personal").auditLabel,
+    icon: IconHistory,
+    linkOptions: { to: "/settings/activity" },
+  },
+];
+
+/** The entries for an edition: the personal one calls 密码 已保存的登录, as Connections does, and adds its own. */
+export function settingsSidebarItems(
+  edition: "team" | "personal",
+): SettingsSidebarItem[] {
+  return edition === "personal"
+    ? [
+        ...SETTINGS_SIDEBAR_ITEMS.map((item) =>
+          item.title === "密码" ? { ...item, title: "已保存的登录" } : item,
+        ),
+        ...PERSONAL_SETTINGS_SIDEBAR_ITEMS,
+      ]
+    : SETTINGS_SIDEBAR_ITEMS;
+}
 
 /** The app sidebar's row, at the settings column's 13px. */
 const rowClassName =
@@ -144,7 +201,7 @@ export function SettingsNav() {
         <IconArrowLeft />
         返回
       </Link>
-      {SETTINGS_SIDEBAR_ITEMS.filter(
+      {settingsSidebarItems(capabilities?.edition ?? "team").filter(
         (option) =>
           (!option.setup || canSetUp) &&
           (!option.desktopOnly || desktopShell() !== null),

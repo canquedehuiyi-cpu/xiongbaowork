@@ -1,14 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { WakerDetailPage } from "@/components/bot-profile/waker-detail-sections";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ManageSection } from "@/components/bot-profile/manage";
+import { BotProfile } from "@/components/bot-profile/profile";
+import { BotSettingsRows } from "@/components/bot-profile/settings-rows";
+import { PageShell } from "@/components/layout/page-shell";
+import { agentQueryOptions } from "@/lib/agents/queries";
+import { RequestError } from "@/lib/client";
 
 /**
- * 员工详情首页（`/bots/$agentId`）。
+ * 员工自己的页面（`/bots/$agentId`）：上游 main 的 `BotProfile` + `BotSettingsRows` + `ManageSection`，
+ * 熊宝的角色档案、暂停与通知（`BotControls`）、等你处理的事、动态和分身的信息来源都在 `BotProfile` 里。
+ * 原 `/wakers/$agentId` 一页放下的其余各段拆进了 `/bots/$agentId/*` 的分页，由「这位员工的设置」里的行打开。
  *
- * 上游 main 的这一页是 `BotProfile` + `BotSettingsRows` + `ManageSection`（取法：
- * `git show origin/main:app/src/routes/_authed/_app/bots.$agentId.index.tsx`）。熊宝的
- * `components/bot-profile/profile.tsx` 还没有 `BotProfile`，原样恢复会让整棵路由树加载失败，所以 M5b 第 0 步先挂
- * 熊宝原来的员工详情（从 `/wakers/$agentId` 剪出的 `WakerDetailPage`），`/bots/$id` 和 `/wakers/$id` 的旧链接都不会
- * 落空。换成上游结构、把各段拆进分页是 C 组的事。
+ * 浏览器通知的 `noticePath`、桌面端的打开请求和旧消息里的链接都指向这个地址，所以它必须是正式页面。
  */
 export const Route = createFileRoute("/_authed/_app/bots/$agentId/")({
   component: BotProfilePage,
@@ -16,5 +20,42 @@ export const Route = createFileRoute("/_authed/_app/bots/$agentId/")({
 
 function BotProfilePage() {
   const { agentId } = Route.useParams();
-  return <WakerDetailPage agentId={agentId} />;
+  const navigate = useNavigate();
+  const agent = useQuery(agentQueryOptions(agentId));
+  const toRoster = () => void navigate({ to: "/bots" });
+  const missing =
+    agent.error instanceof RequestError && agent.error.status === 404;
+  return (
+    <PageShell
+      backButton={{ label: "员工", linkProps: { to: "/bots" } }}
+      // No description: the employee's own role, on its card just below, says what this page is about.
+      title={agent.data?.name ?? "员工"}
+    >
+      {agent.isPending ? null : agent.error ? (
+        <p className="mt-6 text-destructive text-sm" role="alert">
+          {missing
+            ? "找不到这位员工，或者你没有权限查看它。"
+            : "打不开这位员工，可能没有共享给你。"}
+        </p>
+      ) : (
+        <BotProfile
+          agent={agent.data}
+          manage={
+            <ManageSection
+              agent={agent.data}
+              onDeleted={toRoster}
+              onDuplicated={(copyId) =>
+                void navigate({
+                  params: { agentId: copyId },
+                  to: "/bots/$agentId",
+                })
+              }
+              onHidden={toRoster}
+            />
+          }
+          settings={<BotSettingsRows agent={agent.data} />}
+        />
+      )}
+    </PageShell>
+  );
 }

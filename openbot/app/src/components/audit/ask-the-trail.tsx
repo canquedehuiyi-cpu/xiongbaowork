@@ -61,7 +61,7 @@ export function AskTheTrail({
           <IconSparkles />
         </InputGroupAddon>
         <InputGroupInput
-          aria-label="Ask about the audit trail"
+          aria-label="问问审计记录"
           maxLength={QUESTION_LIMIT}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
@@ -69,7 +69,7 @@ export function AskTheTrail({
             if (event.key === "Enter" && isComposing(event))
               event.preventDefault();
           }}
-          placeholder="Ask what Bots did, like “Gmail changes by a routine last week”"
+          placeholder="问问员工做了什么，比如「上周定时任务在 Gmail 里改了什么」"
           value={text}
         />
         <InputGroupAddon align="inline-end">
@@ -79,7 +79,7 @@ export function AskTheTrail({
             type="submit"
             variant="default"
           >
-            {asking ? "Asking…" : "Ask"}
+            {asking ? "正在提问…" : "提问"}
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
@@ -119,7 +119,7 @@ export function AuditAnswerNote({
           data-audit-unanswered
         >
           <IconInfoCircle className="mt-0.5 size-4 shrink-0" />
-          <span>The trail can't answer this. {answer.unanswered}</span>
+          <span>审计记录回答不了这个问题。{answer.unanswered}</span>
         </p>
       ) : (
         <>
@@ -130,7 +130,7 @@ export function AuditAnswerNote({
             >
               <IconFilter className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               <span>
-                <span className="font-medium">What the filters show: </span>
+                <span className="font-medium">筛选显示的是：</span>
                 <span className="text-muted-foreground">{answer.reading}</span>
               </span>
             </p>
@@ -141,13 +141,12 @@ export function AuditAnswerNote({
               data-audit-unanswered
             >
               <IconAlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <span>The rows answer part of this. {answer.unanswered}</span>
+              <span>这些记录只回答了一部分。{answer.unanswered}</span>
             </p>
           ) : null}
           {edited ? (
             <p className="text-muted-foreground">
-              You've changed the filters since. The reading above is for the
-              filters as answered.
+              之后你改过筛选。上面的解读说的是回答时的筛选。
             </p>
           ) : null}
         </>

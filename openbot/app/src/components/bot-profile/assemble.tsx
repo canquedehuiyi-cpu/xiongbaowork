@@ -1,12 +1,11 @@
 /*
- * M5b 第 0 步：从 `routes/_authed/_app/assemble.$agentId.tsx` 剪出的页面主体，原样保留，地址改成重定向（/assemble/$agentId → /bots/$agentId/setup）。
- * 各组在新路由里接这个组件，再按新结构调整其中的链接与文案。
+ * 装配（原 `/assemble/$agentId`，M5b 搬进员工的「设置」分页 `/bots/$agentId/setup`，旧地址重定向到那里）：
+ * 模型、人设、技能、可自助安装的工具、连接器和知识库。定时任务在「定时任务」分页（`/bots/$agentId/routines`）。
  */
-import { IconExternalLink, IconUserCircle } from "@tabler/icons-react";
+import { IconExternalLink } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   ModelItem,
   PersonaSection,
@@ -19,8 +18,6 @@ import {
   ProfilePanel,
   ProfileSection,
 } from "@/components/bot-profile/profile-kit";
-import { PageShell } from "@/components/layout/page-shell";
-import { RoutinesList } from "@/components/routines/routines-list";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -31,8 +28,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { wakersBackLink } from "@/components/wakers/wakers-search";
-import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
+import type { AgentProfile } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
   knowledgeForAgentQueryOptions,
@@ -59,7 +55,7 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * One coworker, assembled in one screen (ticket 015).
+ * One coworker, assembled in one place (ticket 015), now the lower half of its Setup page.
  *
  * WHY ITS OWN SCREEN. Everything it touches already has somewhere to live — the model picker and the
  * persona in the coworker's dialog, the skills on their page, the routines on theirs — and that is
@@ -74,178 +70,52 @@ import { cn } from "@/lib/utils";
  * a Bot would be a second place to get any of the three wrong.
  */
 
-export function AssemblePage({ agentId }: { agentId: string }) {
-  const agent = useQuery(agentQueryOptions(agentId));
-  const profile = agent.data;
-  const { save } = useProfileSave(agentId, profile ?? emptyProfile);
-
-  const back = { label: "员工", linkProps: wakersBackLink() };
-  if (agent.isPending) {
-    return (
-      <PageShell backButton={back} title="装配" width="workbench">
-        <Skeleton
-          aria-label="正在读取员工"
-          className="h-[92px] rounded-[16px]"
-          role="status"
-        />
-      </PageShell>
-    );
-  }
-  if (!profile) {
-    return (
-      <PageShell backButton={back} title="装配" width="workbench">
-        <p
-          className={cn(
-            PANEL_FACE,
-            "max-w-[640px] px-[16px] py-[14px] text-[13px] text-destructive",
-          )}
-          role="alert"
-        >
-          你不能装配这位员工。
-        </p>
-      </PageShell>
-    );
-  }
-
-  /*
-   * Drawn in the workbench frame (docs/design/ios-studio), in the detail page's card language: the
-   * employee's face and role as a short 「角色档案」 strip, then the zones in two columns on a wide
-   * screen — who it is (model, persona, routines) on the left, what it can reach (skills, tools,
-   * connectors, knowledge) on the right — and one column on anything narrower.
-   */
+export function AssembleSections({ profile }: { profile: AgentProfile }) {
+  const { save } = useProfileSave(profile.id, profile);
   return (
-    <PageShell
-      action={
-        <Button
-          render={(props) => (
-            <Link
-              params={{ agentId: profile.id }}
-              to="/wakers/$agentId"
-              {...props}
-            />
-          )}
-          variant="outline"
-        >
-          <IconUserCircle />
-          员工详情
-        </Button>
-      }
-      backButton={back}
-      crumb={`装配 · ${profile.name}`}
-      description="它用的模型、它的性格、它能碰到什么——一起决定，从下一轮开始生效。"
-      title={profile.name}
-      width="workbench"
-    >
-      <div
-        className={cn(
-          PANEL_FACE,
-          "flex min-w-0 items-center gap-[12px] rounded-[16px] px-[16px] py-[13px]",
-        )}
-      >
-        <span className="inline-flex shrink-0 rounded-[13px] shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_13%,transparent)] [&_svg]:scale-[1.42]">
-          <AbstractAvatar
-            name={profile.name}
-            portrait={{ kind: "coworker", id: profile.id }}
-            seed={profile.avatarSeed}
-            size={44}
-          />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-bold text-[15px] leading-[22px]">
-            {profile.title}
-          </p>
-          <p className="line-clamp-2 text-[13px] text-muted-foreground leading-[1.55]">
-            {profile.roleDescription}
-          </p>
-        </div>
-      </div>
-
+    <>
       {!profile.canManage ? (
-        <p className="mt-[12px] rounded-[14px] border border-border border-dashed px-[14px] py-[11px] text-[13px] text-muted-foreground">
+        <p className="mt-12 rounded-[14px] border border-border border-dashed px-[14px] py-[11px] text-[13px] text-muted-foreground">
           这位员工归别人所有，所以这里只能看，要改请到它主人那里。
         </p>
       ) : null}
-
-      <div className="mt-[28px] grid grid-cols-1 gap-[28px] min-[1180px]:grid-cols-2">
-        <div className="flex min-w-0 flex-col gap-[28px]">
-          <ProfileSection
-            description="这位员工说话时由哪个模型回答。"
-            title="模型"
-          >
-            <div className={cn(PANEL_FACE, "mt-[10px] overflow-hidden")}>
-              <ModelItem
-                builtIn={profile.builtIn}
-                canManage={profile.canManage}
-                modelRef={profile.modelRef}
-                onSave={(binding) => save(binding)}
-                platformModelRef={profile.platformModelRef ?? null}
-              />
-            </div>
-          </ProfileSection>
-
-          <ProfileSection
-            description="它是谁，和它的职责分开维护。"
-            title="人设"
-          >
-            <div className={cn(PANEL_FACE, "mt-[10px] px-[14px] py-[12px]")}>
-              <PersonaSection agentId={profile.id} profile={profile} />
-            </div>
-          </ProfileSection>
-
-          <ProfileSection description="它按计划自己做的事。" title="定时任务">
-            <div className="mt-[10px]">
-              <RoutinesList agentId={profile.id} embedded />
-            </div>
-          </ProfileSection>
-        </div>
-        <div className="flex min-w-0 flex-col gap-[28px]">
-          <SkillsZone agentId={profile.id} canManage={profile.canManage} />
-          <SelfInstallToolsZone
-            agentId={profile.id}
+      <ProfileSection
+        className="mt-12"
+        description="这位员工说话时由哪个模型回答。"
+        title="模型"
+      >
+        <div className={cn(PANEL_FACE, "mt-[10px] overflow-hidden")}>
+          <ModelItem
+            builtIn={profile.builtIn}
             canManage={profile.canManage}
-          />
-          <ConnectorZone agentId={profile.id} />
-          <KnowledgeZone
-            agentId={profile.id}
-            canManage={profile.canManage}
-            mine={profile.mine}
+            modelRef={profile.modelRef}
+            onSave={(binding) => save(binding)}
+            platformModelRef={profile.platformModelRef ?? null}
           />
         </div>
-      </div>
-    </PageShell>
+      </ProfileSection>
+
+      <ProfileSection
+        className="mt-12"
+        description="它是谁，和它的职责分开维护。"
+        title="人设"
+      >
+        <div className={cn(PANEL_FACE, "mt-[10px] px-[14px] py-[12px]")}>
+          <PersonaSection agentId={profile.id} profile={profile} />
+        </div>
+      </ProfileSection>
+
+      <SkillsZone agentId={profile.id} canManage={profile.canManage} />
+      <SelfInstallToolsZone agentId={profile.id} canManage={profile.canManage} />
+      <ConnectorZone agentId={profile.id} />
+      <KnowledgeZone
+        agentId={profile.id}
+        canManage={profile.canManage}
+        mine={profile.mine}
+      />
+    </>
   );
 }
-
-/**
- * Stands in for the profile while it loads, so the save hook is called on every render rather than
- * only after the row arrives.
- *
- * Nothing on screen reads it — the loading branch returns first — and an empty `id` means a save
- * built from it could only ever fail on the server, which is the right way for a write that should
- * never happen to fail.
- */
-const emptyProfile = {
-  id: "",
-  name: "",
-  title: "",
-  roleDescription: "",
-  avatarSeed: "",
-  visibility: "private" as const,
-  builtIn: false,
-  endpoint: null,
-  modelRef: null,
-  persona: null,
-  hasAuth: false,
-  hasCallbackToken: false,
-  hidden: false,
-  pinned: false,
-  systemOwned: false,
-  canManage: false,
-  mine: false,
-  isolated: false,
-  isolationActive: false,
-  isolationOffReason: null,
-} satisfies AgentProfile;
 
 /**
  * The grant mutation, with every write still in flight tracked by what it names.
@@ -326,7 +196,7 @@ export function SkillsZone({
     setGrant.mutate({ agentId, granted: checked, kind: "skill", ref: slug });
 
   return (
-    <ProfileSection
+    <ProfileSection className="mt-12"
       description="工作需要时它会遵循的指令。勾选即把技能授予这位员工并记录这次授权；取消勾选即收回。"
       title="技能"
     >
@@ -535,7 +405,7 @@ export function SelfInstallToolsZone({
   const apps = [...listed, ...unlistedWithMine];
 
   return (
-    <ProfileSection
+    <ProfileSection className="mt-12"
       description="管理员上架的应用里的工具。勾选即装到这位员工上并记录；取消勾选即卸下。"
       title="可自助安装的工具"
     >
@@ -578,11 +448,8 @@ export function SelfInstallToolsZone({
                 connectsPerPerson(server, page.data) ? (
                   <p className="mt-[2px] text-[12px] text-muted-foreground">
                     这个应用以使用者本人的账号访问：装上之后，还要先在
-                    <Link
-                      className="mx-1 underline"
-                      to="/settings/connected-accounts"
-                    >
-                      已连接的账号
+                    <Link className="mx-1 underline" to="/connections">
+                      连接
                     </Link>
                     里连接你自己的账号，员工才能真正调用。
                   </p>
@@ -651,7 +518,7 @@ export function ConnectorZone({ agentId }: { agentId: string }) {
   const granted = useQuery(agentPluginsQueryOptions(agentId));
   const tools = granted.data?.tools ?? [];
   return (
-    <ProfileSection
+    <ProfileSection className="mt-12"
       action={
         <Button
           render={(props) => <Link {...props} to="/admin/plugins" />}
@@ -722,11 +589,11 @@ export function KnowledgeZone({
   const failed = notebooks.error ?? (mine ? bound.error : null);
 
   return (
-    <ProfileSection
+    <ProfileSection className="mt-12"
       action={
         <Button
           render={(props) => (
-            <Link {...props} search={{ tab: "knowledge" }} to="/resources" />
+            <Link {...props} to="/capabilities/knowledge" />
           )}
           size="sm"
           variant="outline"

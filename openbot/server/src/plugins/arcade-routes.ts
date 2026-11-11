@@ -31,7 +31,7 @@ import { withVendorDeadline } from "./vendor-deadline";
  * 3. 记录在一个事务里只成功一次（`completeAuthorizationAttempt`）。
  *
  * 链接和厂商的回答从不进响应 body、日志或审计：授权链接是持有即可用的凭证，状态回答里有访问令牌。
- * 失败回到「已连接账号」页，`?authorized=<原因>`，原因只是一个词。
+ * 失败回到「连接」页（`/connections`），`?authorized=<原因>`，原因只是一个词。
  *
  * 与上游的差异（保底线、缩范围，报告里逐条写明）：
  * - 「已取消」与「不再允许」（应用切成了共享、团队身份换了、没有管理员能力了）在请厂商确认

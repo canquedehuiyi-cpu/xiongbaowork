@@ -57,7 +57,7 @@ export const reviewerGuidanceQueryOptions = () =>
     queryKey: reviewerGuidanceKeys.saved,
     queryFn: (): Promise<string | null> =>
       client("/api/approvals/team/guidance", "guidance", {
-        fallback: "Couldn't load the guidance for auto-review.",
+        fallback: "读不到自动审核的指引。",
       }),
   });
 
@@ -68,7 +68,7 @@ export const guidanceBacktestPreviewQueryOptions = () =>
     queryFn: async (): Promise<GuidanceBacktestPreview> =>
       (
         await client("/api/approvals/team/guidance/backtest", {
-          fallback: "Couldn't count the requests to test against.",
+          fallback: "数不出可以拿来测试的请求。",
         })
       ).json(),
   });

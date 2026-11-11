@@ -53,17 +53,14 @@ export function mainChannel(
 
 /**
  * The tab whose own screen this path is, or null on any other OpenBot page. Chat is the conversation
- * routes; Apps is 已连接的账号 under Settings, the apps a Bot uses as you. A Bot's page, Routines,
+ * routes; Apps is OpenBot's 连接 (Connections), the apps a Bot uses as you. A Bot's page, Routines,
  * Capabilities and the rest light no tab, because they are not that tab's screen.
  */
 export function tabFor(pathname: string): MuseTab | null {
   if (pathname === "/s/activity") return "activity";
   if (pathname === "/s/ideas") return "ideas";
   if (pathname === "/s/goals") return "goals";
-  if (
-    pathname === "/settings/connected-accounts" ||
-    pathname.startsWith("/settings/connected-accounts/")
-  ) {
+  if (pathname === "/connections" || pathname.startsWith("/connections/")) {
     return "apps";
   }
   if (

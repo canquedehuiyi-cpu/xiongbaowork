@@ -1,9 +1,8 @@
 import {
-  AUDIT_EFFECT_WORDS,
   AUDIT_EFFECTS,
-  AUDIT_INTENT_WORDS,
   AUDIT_INTENTS,
   type AuditEffect,
+  type AuditIntent,
   type AuditFilters,
   auditFilterParams,
   hasAuditFilters,
@@ -63,9 +62,9 @@ export type ChipFilters = AuditFilters & { outcome?: AuditOutcome[] };
 type ChipKey = keyof ChipFilters;
 
 const OUTCOMES: { value: AuditOutcome; label: string }[] = [
-  { value: "allowed", label: "Allowed" },
-  { value: "refused", label: "Blocked" },
-  { value: "did-not-happen", label: "Did not happen" },
+  { value: "allowed", label: "已放行" },
+  { value: "refused", label: "已拦截" },
+  { value: "did-not-happen", label: "没有发生" },
 ];
 
 const OUTCOME_TYPES: Record<
@@ -135,25 +134,25 @@ export function sameFilters(a: ChipFilters, b: ChipFilters): boolean {
 }
 
 const STARTED_BY: Record<string, string> = {
-  person: "A person",
-  routine: "A routine",
-  handoff: "Another Bot",
-  responsibility: "A goal",
-  memory: "A memory source",
-  deployment: "OpenBot",
+  person: "某个人",
+  routine: "定时任务",
+  handoff: "其他员工",
+  responsibility: "目标",
+  memory: "记忆来源",
+  deployment: "本部署",
 };
 
 /** Groups of event types an admin adds by name, from the lists the saved views are built from. */
 const TYPE_GROUPS: { label: string; types: readonly string[] }[] = [
-  { label: "Blocked", types: REFUSED_EVENT_TYPES },
-  { label: "Did not happen", types: DID_NOT_HAPPEN_EVENT_TYPES },
+  { label: "已拦截", types: REFUSED_EVENT_TYPES },
+  { label: "没有发生", types: DID_NOT_HAPPEN_EVENT_TYPES },
   {
-    label: "App calls",
+    label: "应用调用",
     types: ["mcp.call_succeeded", "mcp.call_failed", "mcp.call_rejected"],
   },
-  { label: "Computer actions", types: COMPUTER_ACTION_EVENT_TYPES },
+  { label: "电脑操作", types: COMPUTER_ACTION_EVENT_TYPES },
   {
-    label: "Approvals",
+    label: "审批",
     types: [
       "approval.evaluated",
       "approval.person_decided",
@@ -165,11 +164,34 @@ const TYPE_GROUPS: { label: string; types: readonly string[] }[] = [
 /** One event type in words: the same words the reading is given (`auditTypeWords`). */
 const typeWords = auditTypeWords;
 
+/*
+ * The shared words (`AUDIT_INTENT_WORDS`, `AUDIT_EFFECT_WORDS`) are also what the model reads the
+ * filters back in, so they stay English there; a chip says them in Chinese.
+ */
+const INTENT_WORDS: Record<AuditIntent, string> = {
+  activate: "按按钮或链接",
+  type: "输入或按键",
+  navigate: "打开页面",
+  read: "滚动或阅读页面",
+  read_file: "读取文件",
+  download_file: "下载文件",
+  write_file: "保存文件",
+  list_files: "列出文件",
+  run_command: "运行命令",
+  read_tool: "只读的应用调用",
+  write_tool: "会改动东西的应用调用",
+};
+
+const EFFECT_WORDS: Record<AuditEffect, string> = {
+  read: "只读取",
+  write: "会改动东西",
+};
+
 /** Several values in one chip: the first two, then how many more. */
 function some(values: string[]): string {
   return values.length <= 2
-    ? values.join(", ")
-    : `${values.slice(0, 2).join(", ")} +${values.length - 2}`;
+    ? values.join("、")
+    : `${values.slice(0, 2).join("、")} +${values.length - 2}`;
 }
 
 const dateWords = (iso: string) =>
@@ -222,13 +244,13 @@ export function chipText(
 ): string {
   switch (key) {
     case "outcome":
-      return `Outcome: ${some((filters.outcome ?? []).map((value) => OUTCOMES.find((entry) => entry.value === value)?.label ?? value))}`;
+      return `结果：${some((filters.outcome ?? []).map((value) => OUTCOMES.find((entry) => entry.value === value)?.label ?? value))}`;
     case "bot":
-      return `Bot: ${some(botsOf(filters.bot).map((id) => names.labels.bots[id] ?? (names.nameFor(id) || id)))}`;
+      return `员工：${some(botsOf(filters.bot).map((id) => names.labels.bots[id] ?? (names.nameFor(id) || id)))}`;
     case "actorUserId":
-      return `Person: ${personName(filters.actorUserId as string, names)}`;
+      return `人员：${personName(filters.actorUserId as string, names)}`;
     case "initiatorKind":
-      return `Started by: ${some((filters.initiatorKind ?? []).map((kind) => STARTED_BY[kind] ?? kind))}`;
+      return `发起方：${some((filters.initiatorKind ?? []).map((kind) => STARTED_BY[kind] ?? kind))}`;
     case "eventType": {
       const types = filters.eventType ?? [];
       const group = TYPE_GROUPS.find(
@@ -236,22 +258,22 @@ export function chipText(
           entry.types.length === types.length &&
           entry.types.every((type) => types.includes(type)),
       );
-      return `Type: ${group?.label ?? some(types.map(typeWords))}`;
+      return `类型：${group?.label ?? some(types.map(typeWords))}`;
     }
     case "app":
-      return `App: ${some((filters.app ?? []).map((key) => appName(key, names)))}`;
+      return `应用：${some((filters.app ?? []).map((key) => appName(key, names)))}`;
     case "tool":
-      return `Tool: ${some((filters.tool ?? []).map(humanise))}`;
+      return `工具：${some((filters.tool ?? []).map(humanise))}`;
     case "effect":
-      return `Effect: ${AUDIT_EFFECT_WORDS[filters.effect as AuditEffect] ?? filters.effect}`;
+      return `影响：${EFFECT_WORDS[filters.effect as AuditEffect] ?? filters.effect}`;
     case "intent":
-      return `Action: ${some((filters.intent ?? []).map((intent) => AUDIT_INTENT_WORDS[intent] ?? intent))}`;
+      return `动作：${some((filters.intent ?? []).map((intent) => INTENT_WORDS[intent] ?? intent))}`;
     case "rule":
-      return `Rule: ${ruleName(filters.rule as string, names)}`;
+      return `规则：${ruleName(filters.rule as string, names)}`;
     case "from":
-      return `After: ${dateWords(filters.from as string)}`;
+      return `晚于：${dateWords(filters.from as string)}`;
     case "to":
-      return `Before: ${dateWords(filters.to as string)}`;
+      return `早于：${dateWords(filters.to as string)}`;
   }
 }
 
@@ -331,7 +353,7 @@ function FilterOptions({
   );
   const loading = (
     <DropdownMenuLabel className="font-normal text-muted-foreground">
-      {vocabulary ? "Nothing to choose yet" : "Loading…"}
+      {vocabulary ? "还没有可选的" : "正在加载…"}
     </DropdownMenuLabel>
   );
 
@@ -392,14 +414,14 @@ function FilterOptions({
         "effect",
         AUDIT_EFFECTS.map((effect) => ({
           value: effect,
-          label: AUDIT_EFFECT_WORDS[effect],
+          label: EFFECT_WORDS[effect],
         })),
       );
     case "intent":
       return (
         <>
           {AUDIT_INTENTS.map((intent) =>
-            tick("intent", intent, AUDIT_INTENT_WORDS[intent]),
+            tick("intent", intent, INTENT_WORDS[intent]),
           )}
         </>
       );
@@ -420,18 +442,18 @@ function FilterOptions({
 }
 
 const FILTER_TITLES: Record<ChipKey, string> = {
-  outcome: "Outcome",
-  bot: "Bot",
-  initiatorKind: "Started by",
-  actorUserId: "Person",
-  eventType: "Type",
-  app: "App",
-  tool: "Tool",
-  effect: "Effect",
-  intent: "Action",
-  rule: "Rule",
-  from: "After",
-  to: "Before",
+  outcome: "结果",
+  bot: "员工",
+  initiatorKind: "发起方",
+  actorUserId: "人员",
+  eventType: "类型",
+  app: "应用",
+  tool: "工具",
+  effect: "影响",
+  intent: "动作",
+  rule: "规则",
+  from: "晚于",
+  to: "早于",
 };
 
 /** The menu a chip opens: change what it holds, or take it off. */
@@ -451,7 +473,7 @@ function Chip({
   const text = chipText(filterKey, filters, names);
   const remove = (
     <Button
-      aria-label={`Remove ${text}`}
+      aria-label={`移除 ${text}`}
       className="-ml-1 rounded-l-none text-muted-foreground hover:text-foreground"
       onClick={() => onChange(without(filters, filterKey))}
       size="icon-sm"
@@ -541,7 +563,7 @@ function DateFilter({
           }}
         >
           <label className="font-medium text-sm" htmlFor={id}>
-            {filterKey === "from" ? "Events after" : "Events before"}
+            {filterKey === "from" ? "这个时间之后的事件" : "这个时间之前的事件"}
           </label>
           <Input
             id={id}
@@ -551,7 +573,7 @@ function DateFilter({
           />
           <div>
             <Button size="sm" type="submit">
-              Apply
+              应用
             </Button>
           </div>
         </form>
@@ -562,9 +584,9 @@ function DateFilter({
 
 const HOUR = 3_600_000;
 const SINCE: { label: string; hours: number }[] = [
-  { label: "Last 24 hours", hours: 24 },
-  { label: "Last 7 days", hours: 24 * 7 },
-  { label: "Last 30 days", hours: 24 * 30 },
+  { label: "最近 24 小时", hours: 24 },
+  { label: "最近 7 天", hours: 24 * 7 },
+  { label: "最近 30 天", hours: 24 * 30 },
 ];
 
 /**
@@ -618,7 +640,7 @@ export function AuditFilterChips({
           }
         >
           <IconCirclePlus />
-          Add filter
+          添加筛选
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-auto min-w-52">
           {addable.map((key) => (
@@ -651,7 +673,7 @@ export function AuditFilterChips({
           ))}
           {!filters.from ? (
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>Time</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger>时间</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-auto min-w-44">
                 {SINCE.map((since) => (
                   <DropdownMenuItem
@@ -681,7 +703,7 @@ export function AuditFilterChips({
           size="sm"
           variant="ghost"
         >
-          Clear filters
+          清除筛选
         </Button>
       ) : null}
     </>

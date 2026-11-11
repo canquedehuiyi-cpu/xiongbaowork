@@ -210,9 +210,9 @@ function Rail({
           <IconClockHour3 />
         </Link>
       </RailTip>
-      {/* OpenBot's own destinations, from the one list every frame reads. */}
+      {/* OpenBot's own destinations, from the one list every frame reads; 「更多」's sit with them. */}
       {navigation
-        .filter((item) => item.section === "primary")
+        .filter((item) => item.section !== "account")
         .map((item) => (
           <RailDestination item={item} key={item.id} showBadge={showBadge} />
         ))}

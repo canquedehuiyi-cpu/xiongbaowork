@@ -30,12 +30,12 @@ const PLATFORM: Record<"ios" | "android", string> = {
 
 type Delivery = Reachability["deliveries"][number];
 
-/** Each channel as the switches under "Where updates go" name it. */
+/** Each channel as the switches under 「更新发到哪里」 name it. */
 const CHANNEL: Record<Delivery["transport"], string> = {
-  push: "Push",
+  push: "推送",
   slack: "Slack",
   teams: "Microsoft Teams",
-  sms: "SMS",
+  sms: "短信",
 };
 
 /**
@@ -44,10 +44,10 @@ const CHANNEL: Record<Delivery["transport"], string> = {
  * approval as a Decision, and a check-in ping as Something needs you.
  */
 const KIND: Record<Delivery["kind"], string> = {
-  reply: "Progress",
-  approval: "Decision",
-  question: "Question",
-  attention: "Something needs you",
+  reply: "进展",
+  approval: "需要你决定",
+  question: "提问",
+  attention: "有事需要你",
 };
 
 /**
@@ -55,25 +55,25 @@ const KIND: Record<Delivery["kind"], string> = {
  * and `unknown` is a send that may or may not have gone; the error under the row says which.
  */
 const STATE: Record<Delivery["state"], string> = {
-  queued: "Waiting to send",
-  running: "Sending",
-  accepted: "Sending",
-  sent: "Sent",
-  delivered: "Delivered",
-  failed: "Failed",
-  unknown: "Not confirmed",
-  opted_out: "Not sent",
+  queued: "等待发送",
+  running: "发送中",
+  accepted: "发送中",
+  sent: "已发出",
+  delivered: "已送达",
+  failed: "发送失败",
+  unknown: "未确认",
+  opted_out: "未发送",
 };
 
-/** The phones that receive push notifications for every one of the person's Bots. */
+/** The phones that receive push notifications for every one of the person's employees. */
 export function NativeDevices() {
   const reach = useQuery(deliveryQueryOptions());
   const remove = useMutation(removePushDeviceMutationOptions(queryClient));
   const error = reach.error ?? remove.error;
   return (
     <PageSection
-      description="Sign in to the OpenBot app on your phone and turn on notifications to add it here."
-      title="Your devices"
+      description="在手机上登录熊宝应用并打开通知，它就会出现在这里。"
+      title="接收通知的手机"
     >
       {error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -82,8 +82,8 @@ export function NativeDevices() {
       ) : null}
       {reach.isPending || !reach.data ? null : reach.data.devices.length ===
         0 ? (
-        <PageEmpty icon={IconDevices} title="No devices yet">
-          Phones and computers you sign in on show up here.
+        <PageEmpty icon={IconDevices} title="还没有设备">
+          你登录过的手机和电脑会出现在这里。
         </PageEmpty>
       ) : (
         <PageRows>
@@ -104,7 +104,7 @@ export function NativeDevices() {
                     size="sm"
                     variant="outline"
                   >
-                    Remove
+                    移除
                   </Button>
                 </ItemActions>
               </Item>
@@ -120,7 +120,7 @@ export function NativeDevices() {
 export function RecentDeliveries() {
   const reach = useQuery(deliveryQueryOptions());
   return (
-    <PageSection title="Recent deliveries">
+    <PageSection title="最近送达">
       {reach.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
           {reach.error.message}
@@ -128,8 +128,8 @@ export function RecentDeliveries() {
       ) : null}
       {reach.isPending || !reach.data ? null : reach.data.deliveries.length ===
         0 ? (
-        <PageEmpty icon={IconSend} title="No deliveries yet">
-          Notifications sent to your devices show up here.
+        <PageEmpty icon={IconSend} title="还没有送达记录">
+          发到你设备上的通知会出现在这里。
         </PageEmpty>
       ) : (
         <PageRows>

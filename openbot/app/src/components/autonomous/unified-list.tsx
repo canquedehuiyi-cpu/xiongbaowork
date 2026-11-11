@@ -882,7 +882,7 @@ function EditAction({
   }
   if (entry.source === "proactive") {
     return (
-      <Link className={LINK_ACTION} search={{ tab: "sources" }} to="/resources">
+      <Link className={LINK_ACTION} to="/capabilities/memory">
         编辑
       </Link>
     );

@@ -125,6 +125,45 @@ test("an administrator sees each pending request: the app, who asked, for which 
   ).toBeTruthy();
 });
 
+test("X 系列：Team Bot 的申请显示批准范围（scopeNote），私人员工的申请写出申请人是谁", async () => {
+  const note =
+    "批准将对整个 Team Bot 生效：授予写在员工身上，每一个能用这位员工的人都会拿到它，不只是申请人。申请人是使用这位员工的队友，不是它的主人。";
+  pending.push(
+    {
+      ...pending[0],
+      id: "r3",
+      appTitle: "Jira",
+      requesterName: "赵六",
+      appliesTo: "team_bot",
+      requesterRole: "teammate",
+      scopeNote: note,
+    } as (typeof pending)[number],
+    {
+      ...pending[0],
+      id: "r4",
+      appTitle: "Figma",
+      requesterName: "钱七",
+      appliesTo: "bot",
+      requesterRole: "owner",
+      scopeNote: null,
+    } as (typeof pending)[number],
+  );
+  try {
+    const view = draw();
+    await view.findByText("Jira");
+    expect(view.getByText(note)).toBeTruthy();
+    // scopeNote 已经说了申请人是谁，描述里不再重复。
+    expect(
+      view.getByText("赵六 替员工「小助理」申请上架这个应用"),
+    ).toBeTruthy();
+    expect(
+      view.getByText("钱七（员工的主人） 替员工「小助理」申请上架这个应用"),
+    ).toBeTruthy();
+  } finally {
+    pending.splice(2);
+  }
+});
+
 test("approve and dismiss post to the request's own routes", async () => {
   const view = draw();
   await view.findByText("Notion");

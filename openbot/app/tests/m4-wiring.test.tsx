@@ -28,13 +28,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
 import { KEY_FROM_OPENBOT } from "@/components/agents/callback-token-panel";
@@ -252,23 +246,27 @@ describe("长期职责按员工筛选", () => {
 
   function page(path: string) {
     serve(answers);
-    return drawAt(path, {
-      path: "/responsibilities",
-      route: ResponsibilitiesRoute,
-    });
+    return drawAt(
+      path,
+      {
+        path: "/responsibilities",
+        route: ResponsibilitiesRoute,
+      },
+      ["/bots/$agentId/responsibilities"],
+    );
   }
 
-  test("带 ?agent= 时只列这位员工的，并能回到全部", async () => {
-    const { view, router } = page("/responsibilities?agent=agent-a");
-    expect(await view.findByText("盯住慢查询")).toBeTruthy();
-    expect(view.queryByText("每周对账")).toBeNull();
-    const note = await view.findByRole("status");
+  /*
+   * M5b 第二阶段：一位员工的长期职责搬进了那位员工自己的「长期职责」分页，所以旧的 `?agent=` 链接
+   * 转过去（原来这里断言全量页按员工筛选、带「看全部」回链，那是旧布局本身）。
+   */
+  test("带 ?agent= 时转到这位员工自己的长期职责分页", async () => {
+    const { router } = page("/responsibilities?agent=agent-a");
     await waitFor(() =>
-      expect(note.textContent).toContain("只显示 后端工程师 的长期职责"),
+      expect(router.state.location.pathname).toBe(
+        "/bots/agent-a/responsibilities",
+      ),
     );
-    fireEvent.click(within(note).getByRole("link", { name: "看全部" }));
-    await waitFor(() => expect(router.state.location.searchStr).toBe(""));
-    expect(await view.findByText("每周对账")).toBeTruthy();
   });
 
   test("不带参数时照旧列出全部", async () => {

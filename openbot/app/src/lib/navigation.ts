@@ -69,6 +69,11 @@ export type NavigationItem = {
   section: "primary" | "more" | "account";
   /** Admin routes are guarded on the server; the entry is hidden from people who cannot open them. */
   adminOnly?: boolean;
+  /**
+   * 不在 `to` 下面、却归这一项管的页面，打开它们时这一项仍然亮着：定时任务和长期职责归自主工作，
+   * WakerFlow 详情归能力。旧地址（`/wakers`、`/resources` 等）都重定向到新地址，不用列。
+   */
+  owns?: readonly string[];
 };
 
 /** An entry that is a page. Every entry is one; kept so the skins can keep filtering on it. */
@@ -99,6 +104,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/autonomous",
     icon: IconBolt,
     section: "primary",
+    owns: ["/responsibilities", "/routines"],
   },
   {
     id: "reachability",
@@ -113,6 +119,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/capabilities",
     icon: IconBoxSeam,
     section: "primary",
+    owns: ["/wakerflows"],
   },
   {
     id: "connections",
@@ -180,6 +187,16 @@ export function navigationFor(
     return NAVIGATION.filter((item) => item.id !== "admin");
   }
   return NAVIGATION.filter((item) => !item.adminOnly || role === "admin");
+}
+
+/** Whether `pathname` is the entry's own page, a page under it, or one of the pages it owns. */
+export function navigationOwns(
+  item: NavigationItem,
+  pathname: string,
+): boolean {
+  const under = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
+  return under(item.to) || (item.owns ?? []).some(under);
 }
 
 /** `navigationFor` the signed-in person, on this deployment's edition. */

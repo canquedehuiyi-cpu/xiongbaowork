@@ -5,7 +5,12 @@ import { useRef, useState } from "react";
 import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
 import AgentOrb from "@/components/agents/orb/agent-orb";
 import { ChannelAvatar } from "@/components/channels/avatar";
-import { canSend, type Recipient } from "@/components/channels/compose-state";
+import {
+  canSend,
+  type Recipient,
+  startsGroup,
+  toFieldChange,
+} from "@/components/channels/compose-state";
 import {
   type ComposerDraft,
   toAgentOptions,
@@ -18,11 +23,14 @@ import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
 import {
   Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
   ComboboxContent,
   ComboboxEmpty,
-  ComboboxInput,
   ComboboxItem,
   ComboboxList,
+  useComboboxAnchor,
 } from "@/components/ui/combobox";
 import {
   type AgentProfile,
@@ -37,8 +45,10 @@ import { searchTextEntry } from "@/lib/search-text";
 import { newId } from "../../../../lib/new-id";
 
 /**
- * Creates the channel on first send. The selected coworker stays in the URL so profile links and
- * reloads preserve the pending recipient without creating an empty channel.
+ * Creates the conversation on first send. One employee in the To: field is an ordinary channel; two
+ * or more are a group (群聊), answering in the order they were picked. The first employee stays in
+ * the URL so profile links and reloads preserve the pending recipient without creating an empty
+ * channel. (M5b: 熊宝原来只能选一位、群聊从单独的「新建群聊」页开始；现在跟上游一样在这里多选。)
  */
 /** What `GET /api/agents/:id` answers for a Bot this person cannot see. */
 const AGENT_NOT_FOUND = "Couldn't find that Bot.";
@@ -111,7 +121,7 @@ function NewConversation({ composition }: { composition: string }) {
   const [creatingBot, setCreatingBot] = useState(false);
   const [pickerOpen, setPickerOpen] = useState<boolean | undefined>(undefined);
   const navigate = Route.useNavigate();
-  const { startChosen, pending } = useStartChannel();
+  const { startChosen, startGroup, pending } = useStartChannel();
   const { data: profiles, isError: rosterError } = useQuery(
     agentListQueryOptions(),
   );
@@ -168,30 +178,49 @@ function NewConversation({ composition }: { composition: string }) {
           ? "你用不了这位员工。它可能还没发布、没有共享给你，或者还没写好说明。"
           : "读不到这位员工。"
         : null;
-  /*
-   * One recipient. Upstream's To: takes several Bots and starts a group from them; this deployment
-   * starts a group (群组) from its own group pages instead, so `compose-state` holds one.
-   */
-  const selected = chosen ? [chosen] : [];
+  /** Employees picked in the To: field, in the order they will answer; the URL's one until one is picked. */
+  const [picked, setPicked] = useState<AgentProfile[] | null>(null);
+  const selected = picked ?? (chosen ? [chosen] : []);
+  const anchor = useComboboxAnchor();
   const recipients: Recipient[] = selected.map((profile) => ({
     id: profile.id,
     name: profile.name,
   }));
+  const group = startsGroup(recipients);
   /*
-   * A model can be picked before the first message when the conversation is with a Bot that runs
+   * A model can be picked before the first message when the conversation is with one Bot that runs
    * on OpenBot's own model. The pick is saved with the conversation, before the message runs.
    */
-  const pickable = selected[0]?.runsOnOpenBotModel === true;
+  const pickable =
+    !group && selected.length === 1 && selected[0]?.runsOnOpenBotModel === true;
   const models = useQuery({
     ...modelCatalogueQueryOptions(),
     enabled: pickable,
   });
   const draftModel = useDraftModel(pickable ? models.data : undefined);
-  const skillCommands = useSkillCommands(recipients[0]?.id ?? "");
+  // A group's first message goes to all of its employees, so no one employee's commands are offered.
+  const skillCommands = useSkillCommands(
+    group ? "" : (recipients[0]?.id ?? ""),
+  );
 
   const submit = async (draft: ComposerDraft) => {
     const recipient = recipients[0];
     if (!recipient || !canSend(recipients, draft.text)) return;
+    if (group) {
+      setError(null);
+      try {
+        // An `@` addresses one employee, as it does in every later message of the group.
+        await startGroup(
+          recipients.map((entry) => entry.id),
+          draft.text,
+          draft.agentId,
+        );
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "群聊没能开始。");
+        throw caught;
+      }
+      return;
+    }
 
     setError(null);
     setSent(seedMessage(draft.text, newId()));
@@ -233,29 +262,49 @@ function NewConversation({ composition }: { composition: string }) {
           }
           itemToStringLabel={(item: AgentProfile) => item.name}
           itemToStringValue={(item: AgentProfile) => item.id}
-          onValueChange={(next: AgentProfile | null) => {
+          multiple
+          onValueChange={(next: AgentProfile[], details) => {
+            const kept = toFieldChange(selected, next, details.reason);
+            setPicked(kept);
             setAskedForBot(false);
-            // Recipient changes are not separate navigation history entries.
+            // The first employee stays in the URL so a reload keeps the conversation's recipient;
+            // the rest of a group lives in the page. Not a separate navigation history entry.
             void navigate({
               replace: true,
-              search: next ? { agent: next.id } : {},
+              search: kept[0] ? { agent: kept[0].id } : {},
               state: ownedBy(composition),
             });
           }}
-          value={chosen ?? null}
+          value={selected}
         >
-          <ComboboxInput
-            ref={pickerInput}
-            // The popup opening is not enough on its own: typing filters through this input, so
-            // the caret starts here whenever the recipient question is still open. A recipient
-            // already chosen means the composer takes focus instead.
-            autoFocus={!chosen}
-            placeholder="选择一位员工…"
-            // InputGroup owns focus rings via `has-[…:focus-visible]`; disable that wrapper ring here.
-            className="border-none w-full bg-transparent! text-sm has-[[data-slot=input-group-control]:focus-visible]:ring-0"
-          />
+          <ComboboxChips
+            ref={anchor}
+            className="flex-1 border-none bg-transparent! focus-within:ring-0 dark:bg-transparent!"
+          >
+            {selected.map((profile) => (
+              <ComboboxChip
+                className="gap-1.5 pl-1"
+                key={profile.id}
+                removeLabel={`移除 ${profile.name}`}
+              >
+                <ChannelAvatar participantIds={[profile.id]} size={16} />
+                {profile.name}
+              </ComboboxChip>
+            ))}
+            <ComboboxChipsInput
+              ref={pickerInput}
+              // The popup opening is not enough on its own: typing filters through this input, so
+              // the caret starts here whenever the recipient question is still open. A recipient
+              // already chosen means the composer takes focus instead.
+              autoFocus={!chosen}
+              placeholder={
+                selected.length ? "再加一位员工，开个群聊…" : "选择一位员工…"
+              }
+            />
+          </ComboboxChips>
           {/* Allow max-w to constrain the popup even though its anchor is full-width. */}
           <ComboboxContent
+            anchor={anchor}
             className="flex min-w-0 max-w-lg flex-col"
             sideOffset={12}
           >
@@ -289,7 +338,7 @@ function NewConversation({ composition }: { composition: string }) {
         </Combobox>
       </div>
       {/*
-       * The fork's own new-employee wizard (the one 员工管理 opens), rather than upstream's New Bot
+       * The fork's own new-employee wizard (the one 员工 › 新建员工 opens), rather than upstream's New Bot
        * sheet, so an employee made here has the same persona, model and portrait steps.
        */}
       <CreateAgentDialog
@@ -299,13 +348,21 @@ function NewConversation({ composition }: { composition: string }) {
           setCreatingBot(false);
           void queryClient
             .fetchQuery(agentQueryOptions(agentId))
-            .then(() => {
+            .then((profile) => {
               setAskedForBot(false);
-              void navigate({
-                replace: true,
-                search: { agent: agentId },
-                state: ownedBy(composition),
+              // Joins whoever is already in To:, so a group can be put together with a new employee.
+              setPicked((current) => {
+                const existing = current ?? selected;
+                return existing.some((bot) => bot.id === profile.id)
+                  ? existing
+                  : [...existing, profile];
               });
+              if (selected.length === 0)
+                void navigate({
+                  replace: true,
+                  search: { agent: agentId },
+                  state: ownedBy(composition),
+                });
             })
             .catch(() => {
               setError("员工已经建好，但没能选中它。请在收件人列表里选它。");
@@ -335,16 +392,29 @@ function NewConversation({ composition }: { composition: string }) {
         // A welcome in the empty pane (docs/design/ios-studio): who this will reach, or what to do
         // first when nobody is chosen yet.
         empty={
-          <WorkbenchEmpty
-            className="mt-[12vh]"
-            description={
-              chosen
-                ? chosen.title || "说说要做的事，附件和 @ 都可以用。"
-                : "在上面的「发给」里选一位员工，再写下要做的事。"
-            }
-            mood={chosen ? "happy" : "cute"}
-            title={chosen ? `给${chosen.name}发第一条消息` : "先选一位员工"}
-          />
+          group ? (
+            <WorkbenchEmpty
+              className="mt-[12vh]"
+              description="每位员工都会依次回答；想只问其中一位，就 @它的名字。"
+              mood="happy"
+              title={`跟${selected.map((bot) => bot.name).join("、")}开个群聊`}
+            />
+          ) : (
+            <WorkbenchEmpty
+              className="mt-[12vh]"
+              description={
+                selected[0]
+                  ? selected[0].title || "说说要做的事，附件和 @ 都可以用。"
+                  : "在上面的「发给」里选一位员工，再写下要做的事；选两位以上就是群聊。"
+              }
+              mood={selected[0] ? "happy" : "cute"}
+              title={
+                selected[0]
+                  ? `给${selected[0].name}发第一条消息`
+                  : "先选一位员工"
+              }
+            />
+          )
         }
         disabled={Boolean(loadError) || waitingForUrlAgent}
         /*
@@ -365,7 +435,7 @@ function NewConversation({ composition }: { composition: string }) {
           : {})}
         messages={sent ? [sent] : []}
         starterSuggestions={
-          !sent ? (
+          !group && !sent ? (
             <StarterSuggestions
               agentId={recipients[0]?.id}
               disabled={pending || Boolean(loadError) || waitingForUrlAgent}

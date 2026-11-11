@@ -18,29 +18,28 @@ export function RulePreview({
   if (preview.isPending) return null;
   return (
     <Field aria-labelledby="rule-preview" aria-live="polite">
-      <FieldLabel id="rule-preview">On recent activity</FieldLabel>
+      <FieldLabel id="rule-preview">拿最近的动作试一试</FieldLabel>
       {preview.error ? (
         <p className="text-destructive text-sm" role="alert">
           {preview.error.message}
         </p>
       ) : preview.data.scanned === 0 ? (
         <FieldDescription>
-          No recorded actions to test against yet. You'll see what this rule
-          stops once Bots have acted.
+          还没有记录到可以拿来测试的动作。员工开始干活后，就能看到这条规则会拦下什么。
         </FieldDescription>
       ) : (
         <div>
           <FieldDescription>
             {preview.data.wouldRefuse === 0
-              ? `Of the last ${preview.data.scanned} recorded actions, this rule would have stopped none. It may still stop future ones.`
-              : `Of the last ${preview.data.scanned} recorded actions, this rule would have stopped ${preview.data.wouldRefuse}.`}
+              ? `最近记录的 ${preview.data.scanned} 个动作里，这条规则一个也不会拦。以后的动作它仍可能拦下。`
+              : `最近记录的 ${preview.data.scanned} 个动作里，这条规则会拦下 ${preview.data.wouldRefuse} 个。`}
           </FieldDescription>
           <DryRunChanges
             changes={preview.data.changes.filter(
               (change) => change.would === "refused",
             )}
             total={preview.data.wouldRefuse}
-            verdict="Would stop"
+            verdict="会拦下"
           />
         </div>
       )}

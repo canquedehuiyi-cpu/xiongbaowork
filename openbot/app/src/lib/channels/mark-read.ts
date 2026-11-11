@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { hasUnseenActivity } from "@/components/app-sidebar/app-sidebar";
+import { hasUnseenActivity } from "@/components/app-sidebar/roster";
 import { markChannelReadMutationOptions } from "./mutations";
 import { channelListQueryOptions } from "./queries";
 

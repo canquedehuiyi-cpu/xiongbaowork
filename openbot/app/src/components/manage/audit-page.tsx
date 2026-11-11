@@ -63,24 +63,24 @@ import { cn } from "@/lib/utils";
  * answered.
  */
 const FILTERS = [
-  { label: "Everything", icon: IconList, search: "" },
+  { label: "全部", icon: IconList, search: "" },
   {
-    label: "Computer actions",
+    label: "电脑操作",
     icon: IconDeviceDesktop,
     search: eventTypeFilter(COMPUTER_ACTION_EVENT_TYPES),
   },
   {
-    label: "Blocked",
+    label: "已拦截",
     icon: IconBan,
     search: eventTypeFilter(REFUSED_EVENT_TYPES),
   },
   {
-    label: "Did not happen",
+    label: "没有发生",
     icon: IconAlertTriangle,
     search: eventTypeFilter(DID_NOT_HAPPEN_EVENT_TYPES),
   },
   {
-    label: "Nobody watching",
+    label: "无人值守",
     icon: IconEyeOff,
     search: "?initiatorKind=routine,handoff,responsibility,memory",
   },
@@ -137,7 +137,7 @@ const whyFor = (event: AuditEvent) =>
 
 /** What the page says under its title in Admin, where an admin reviews every Bot against policy. */
 const ADMIN_DESCRIPTION =
-  "Review Bot actions and actions blocked by this deployment’s policy.";
+  "员工做过的每个动作，以及这个部署的策略拒绝过的每个动作。";
 
 /**
  * `children` are sections only the team edition's Admin adds below the page's own (the admin's
@@ -205,7 +205,7 @@ export function AuditPage({
   const asked = ask ? withFilters(view, chips) : withBot(view, bot);
   const search = edition === "personal" ? withoutOpenBotWorking(asked) : asked;
   const [query, setQuery] = useState("");
-  // A page at a time, newest first; "Show older events" under the last row asks for the next.
+  // A page at a time, newest first; 「更早的记录」 under the last row asks for the next.
   /*
    * The rows already shown stay while the next filters' rows load, so the toolbar and the chip menu
    * open in it are not taken down and drawn again on every tick. Only the first load draws nothing.
@@ -240,7 +240,7 @@ export function AuditPage({
     setExportCapped(null);
     try {
       const response = await client(auditExportUrl(search), {
-        fallback: "Couldn't export these events. Try again.",
+        fallback: "导出审计记录失败",
       });
       // A file that stopped early must say so, or it reads as the whole trail.
       const capped = Number(response.headers.get("x-audit-export-truncated"));
@@ -258,7 +258,7 @@ export function AuditPage({
       setExportError(
         error instanceof Error
           ? error.message
-          : "Couldn't export these events. Try again.",
+          : "导出审计记录失败",
       );
     } finally {
       setExporting(false);
@@ -307,7 +307,7 @@ export function AuditPage({
           {events.isPending ? null : events.isError &&
             !events.isFetchNextPageError ? (
             <p className="px-4 text-destructive text-sm" role="alert">
-              Couldn't load these events. Reload the page.
+              读不到审计记录。
             </p>
           ) : (
             <AuditTable
@@ -318,7 +318,7 @@ export function AuditPage({
                   <div className="flex flex-col items-center gap-2 py-3">
                     {events.isFetchNextPageError ? (
                       <p className="text-destructive text-sm" role="alert">
-                        Couldn't load older events. Try again.
+                        读不到更早的记录，请重试。
                       </p>
                     ) : null}
                     <Button
@@ -328,8 +328,8 @@ export function AuditPage({
                       variant="outline"
                     >
                       {events.isFetchingNextPage
-                        ? "Loading…"
-                        : "Show older events"}
+                        ? "正在加载…"
+                        : "更早的记录"}
                     </Button>
                   </div>
                 ) : null
@@ -346,9 +346,9 @@ export function AuditPage({
                    * group: the pressed one is filled, the rest sit flat inside the same outline.
                    */}
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-foreground text-xs">View</span>
+                    <span className="text-muted-foreground text-xs">视图</span>
                     <fieldset
-                      aria-label="View"
+                      aria-label="视图"
                       className="inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5"
                     >
                       {FILTERS.map((filter) => {
@@ -379,10 +379,10 @@ export function AuditPage({
                     <div className="relative w-64">
                       <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        aria-label="Search events"
+                        aria-label="搜索事件"
                         className="h-8 pl-8"
                         onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Search events…"
+                        placeholder="搜索事件…"
                         type="search"
                         value={query}
                       />
@@ -390,12 +390,12 @@ export function AuditPage({
                     {/* Beside the other filters, on the row that wraps: it narrows what is asked for. */}
                     {bot && !ask ? (
                       <Button
-                        aria-label={`Show every Bot, not only ${nameFor(bot)}`}
+                        aria-label={`显示所有员工，而不只是 ${nameFor(bot)}`}
                         onClick={onClearBot}
                         size="sm"
                         variant="outline"
                       >
-                        Only {nameFor(bot)}
+                        只看 {nameFor(bot)}
                         <IconX />
                       </Button>
                     ) : null}
@@ -428,7 +428,7 @@ export function AuditPage({
                         variant="outline"
                       >
                         <IconRefresh />
-                        Refresh
+                        刷新
                       </Button>
                       <Button
                         disabled={exporting}
@@ -437,7 +437,7 @@ export function AuditPage({
                         variant="outline"
                       >
                         <IconDownload />
-                        {exporting ? "Exporting…" : "Export CSV"}
+                        {exporting ? "正在导出…" : "导出 CSV"}
                       </Button>
                     </div>
                   </div>
@@ -448,14 +448,13 @@ export function AuditPage({
                   ) : null}
                   {exportCapped ? (
                     <p className="text-muted-foreground text-sm" role="status">
-                      The file has the newest {exportCapped.toLocaleString()}{" "}
-                      events, not all of them. Narrow the filter or dates to
-                      export the rest.
+                      文件只包含最新的 {exportCapped.toLocaleString()}{" "}
+                      条记录，不是全部。缩小筛选条件或日期范围，再导出其余部分。
                     </p>
                   ) : null}
                   {rows.length === 0 ? (
-                    <PageEmpty icon={IconSearch} title="No matches">
-                      No events match this filter yet.
+                    <PageEmpty icon={IconSearch} title="没有匹配的事件">
+                      这个筛选下还没有事件。
                     </PageEmpty>
                   ) : null}
                 </div>

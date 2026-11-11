@@ -304,7 +304,7 @@ function RouteComponent() {
                 {explore.length > EXPLORE_SHOWN ? (
                   <Link
                     className="text-[13px] text-muted-foreground hover:text-foreground"
-                    to="/wakers"
+                    to="/bots"
                   >
                     全部员工
                   </Link>

@@ -4,6 +4,7 @@ import {
   IconPlayerPause,
 } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   attentionSummary,
@@ -13,6 +14,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { type AgentProfile, isSharedWithYou } from "@/lib/agents/queries";
 import type { BotAttention } from "@/lib/bot-lifecycle/queries";
 import { relativeTime } from "@/lib/relative-time";
+import { teamBotLink } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import type { TaskStats, WakerGroup } from "@/lib/waker-groups/queries";
 import {
@@ -92,7 +94,7 @@ export type DeviceLine = {
 export type CardStats = { stats: TaskStats; truncated: boolean } | null;
 
 /**
- * One employee on the 员工管理 wall, drawn as docs/design/ios-studio/04-员工管理.png draws its
+ * One employee on the 员工 page (`/bots`, card view), drawn as docs/design/ios-studio/04-员工管理.png draws its
  * 「角色档案」: a mono `PROFILE / 01` index at the top left and a status badge at the top right
  * (「● 在线 · 本地」, 「休息 · 未绑定」 …), a 44px rounded-square face beside the 16px name and one
  * line of role, one line of duties, and a 任务数 · 最近运行 footer under a hairline. The person's
@@ -136,7 +138,7 @@ export function CoworkerCard({
   busy: boolean;
   crews: WakerGroup[];
   device: DeviceLine | null;
-  /** The wall's address plus `agent`: 编辑 opens the edit dialog over the same narrowed wall. */
+  /** The roster's address plus `agent`: 编辑 opens the edit dialog over the same narrowed roster. */
   editSearch: WakersSearch;
   /** The card's place on the wall as drawn, for its `PROFILE / 01` index. */
   index: string;
@@ -204,6 +206,15 @@ export function CoworkerCard({
             {agent.pinned ? (
               <span className={CARD_TAG} data-pinned="true">
                 已置顶
+              </span>
+            ) : null}
+            {agent.assignedToMe ? (
+              <span
+                className={CARD_TAG}
+                data-assigned="true"
+                title="管理员把它分配给了你所在的分组，它固定在你的置顶里。"
+              >
+                已分配给你
               </span>
             ) : null}
             {isSharedWithYou(agent) ? (
@@ -306,7 +317,7 @@ export function CoworkerCard({
                 className="rounded-sm outline-none after:absolute after:inset-0 after:rounded-[16px] focus-visible:after:ring-2 focus-visible:after:ring-ring/60"
                 data-card-name=""
                 params={{ agentId: agent.id }}
-                to="/wakers/$agentId"
+                to="/bots/$agentId"
               >
                 {agent.name}
               </Link>
@@ -451,20 +462,27 @@ export function CoworkerCard({
           >
             进对话
           </Link>
-          {/* Spec D7: the coworker's own assembly screen, one tap from its card. */}
+          {/*
+            Spec D7: the coworker's assembly (model, persona, skills, knowledge), one tap from its
+            card. 装配页搬进了员工详情的「设置」分页（M5b）。
+          */}
           <Link
             className={buttonVariants({ size: "xs", variant: "ghost" })}
             params={{ agentId: agent.id }}
-            to="/assemble/$agentId"
+            to="/bots/$agentId/setup"
           >
             装配
           </Link>
-          {/* The edit dialog the archived 员工列表 opened, now over this wall. */}
+          {/*
+            团队员工（原 `/team-bots` 的「复制链接」）：别人共享给你的员工，把开始对话的链接发给同事。
+          */}
+          {agent.mine ? null : <CopyLinkButton agent={agent} />}
+          {/* The edit dialog the archived 员工列表 opened, now over this roster. */}
           <Link
             aria-label={`编辑 ${agent.name}`}
             className={buttonVariants({ size: "xs", variant: "ghost" })}
             search={editSearch}
-            to="/wakers"
+            to="/bots"
           >
             编辑
           </Link>
@@ -479,9 +497,28 @@ export function CoworkerCard({
   );
 }
 
+/** 复制开始对话的链接（`/channel/new?agent=`），复制好了就说一声。 */
+function CopyLinkButton({ agent }: { agent: AgentProfile }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      aria-label={`复制 ${agent.name} 的链接`}
+      onClick={() =>
+        void navigator.clipboard
+          ?.writeText(teamBotLink(agent.id))
+          .then(() => setCopied(true))
+      }
+      size="xs"
+      variant="ghost"
+    >
+      {copied ? "已复制" : "复制链接"}
+    </Button>
+  );
+}
+
 /**
- * The wall's create cell, after the last profile: a dashed card laid out like one more profile
- * (`PROFILE / NEW`), which opens the create dialog (spec D2) over this wall — the same deep link as
+ * The create cell after the last of 你的: a dashed card laid out like one more profile
+ * (`PROFILE / NEW`), which opens the create wizard (spec D2) over the roster — the same deep link as
  * the header's 新建员工.
  */
 export function CreateCoworkerCard({ search }: { search: WakersSearch }) {
@@ -490,7 +527,7 @@ export function CreateCoworkerCard({ search }: { search: WakersSearch }) {
       className={CREATE_CARD}
       data-testid="waker-create-card"
       search={search}
-      to="/wakers"
+      to="/bots"
     >
       <CreateCardFace
         hint="为团队新建一位员工"

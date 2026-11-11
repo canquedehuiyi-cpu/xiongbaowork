@@ -22,14 +22,6 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
-import {
-  accessSummary,
-  countLabel,
-  memorySummary,
-  reachSummary,
-  setupSummary,
-  sharingSummary,
-} from "@/lib/agents/bot-summaries";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { approvalInboxOptions, ruleCoversBot } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
@@ -45,6 +37,67 @@ import { responsibilitiesQueryOptions } from "@/lib/responsibilities";
 import { routinesQueryOptions } from "@/lib/routines/queries";
 import { teamBotsQueryOptions } from "@/lib/team-bots";
 import { connectorCount } from "./access";
+
+/*
+ * 每一行的摘要，用中文说。上游把这几句放在 `lib/agents/bot-summaries.ts`（英文，B 组的文件，为了以后同步上游
+ * 原样保留）；熊宝的说法在这里，规则和上游一一对应。
+ */
+
+function countLabel(count: number, unit: string, none: string): string {
+  return count === 0 ? none : `${count} ${unit}`;
+}
+
+function accessSummary(skills: number, apps: number): string {
+  const parts = [
+    skills ? `${skills} 个技能` : "",
+    apps ? `${apps} 个应用` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join("，") : "什么都没授予";
+}
+
+function sharingSummary(
+  published: { audience: "team" | "people" } | undefined,
+  visibility: "public" | "private",
+): string {
+  if (!published) return visibility === "public" ? "所有人（公开）" : "没有共享";
+  return published.audience === "team" ? "整个团队" : "指定的人和分组";
+}
+
+/** 内置的员工只说「内置」；个人版说它由什么框架运行，不说本机地址；其余说它的地址。 */
+function setupSummary(
+  agent: { builtIn: boolean; endpoint: string | null; framework?: string },
+  edition: "team" | "personal",
+): string {
+  if (agent.builtIn || !agent.endpoint) return "内置";
+  if (edition === "personal" && agent.framework)
+    return `运行在 ${agent.framework} 上`;
+  try {
+    return new URL(agent.endpoint).host;
+  } catch {
+    return agent.endpoint;
+  }
+}
+
+const TRANSPORT_LABEL: Record<string, string> = {
+  slack: "Slack",
+  teams: "Microsoft Teams",
+  sms: "短信",
+};
+
+function reachSummary(transports: readonly string[]): string {
+  const places = [...new Set(transports)]
+    .map((transport) => TRANSPORT_LABEL[transport] ?? transport)
+    .sort((a, b) => a.localeCompare(b));
+  return places.length ? places.join("、") : "只在熊宝里";
+}
+
+function memorySummary(sources: number, research: boolean): string {
+  const parts = [
+    sources ? `${sources} 个来源` : "",
+    research ? "主动巡检已开" : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join("，") : "什么都没接";
+}
 
 type Row = {
   to:
@@ -89,22 +142,21 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
   const allRows: Row[] = [
     {
       to: "/bots/$agentId/responsibilities",
-      title: "Goals",
+      title: "长期职责",
       icon: IconTargetArrow,
       summary: goals.data
         ? countLabel(
             goals.data.filter(
               (goal) => goal.agentId === agent.id && goal.status === "active",
             ).length,
-            "active",
-            "active",
-            "None active",
+            "个进行中",
+            "没有进行中的",
           )
         : "",
     },
     {
       to: "/bots/$agentId/reach",
-      title: "Reaching you",
+      title: "触达方式",
       icon: IconDeviceMobile,
       summary: reach.data
         ? reachSummary(
@@ -116,12 +168,12 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
           )
         : "",
     },
-    // Not where memory isn't offered: there this Bot's check-ins are on What it can do.
+    // Not where memory isn't offered: there this employee's check-ins are on 它能做什么.
     ...(memory
       ? [
           {
             to: "/bots/$agentId/memory" as const,
-            title: "Memory",
+            title: "记忆",
             icon: IconBrain,
             summary:
               sources.data && research.data
@@ -139,7 +191,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
       : []),
     {
       to: "/bots/$agentId/approvals",
-      title: "Approval rules",
+      title: "审批与权限",
       icon: IconChecks,
       summary: approvals.data
         ? countLabel(
@@ -147,29 +199,27 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
               (rule) =>
                 rule.botId !== "*" && ruleCoversBot(rule.botId, agent.id),
             ).length,
-            "rule",
-            "rules",
-            "No rules",
+            "条规则",
+            "没有规则",
           )
         : "",
     },
     {
       to: "/bots/$agentId/routines",
-      title: "Routines",
+      title: "定时任务",
       icon: IconClock,
       summary: routines.data
         ? countLabel(
             routines.data.routines.filter((row) => row.agentId === agent.id)
               .length,
-            "routine",
-            "routines",
-            "No routines",
+            "个定时任务",
+            "没有定时任务",
           )
         : "",
     },
     {
       to: "/bots/$agentId/access",
-      title: "Skills and access",
+      title: "技能与应用",
       icon: IconPuzzle,
       summary: plugins.data
         ? accessSummary(
@@ -182,7 +232,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
       ? [
           {
             to: "/bots/$agentId/sharing" as const,
-            title: "Sharing",
+            title: "共享",
             icon: IconUsersGroup,
             summary: teamBots.data
               ? sharingSummary(published, agent.visibility)
@@ -192,7 +242,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
       : []),
     {
       to: "/bots/$agentId/setup",
-      title: "Setup",
+      title: "设置",
       icon: IconSettings,
       summary: setupSummary(agent, personal ? "personal" : "team"),
     },
@@ -206,7 +256,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
   const rows = personal
     ? allRows.flatMap((row): Row[] =>
         row.to === "/bots/$agentId/access"
-          ? [{ ...row, title: "What it can do" }]
+          ? [{ ...row, title: "它能做什么" }]
           : row.to === "/bots/$agentId/responsibilities" ||
               row.to === "/bots/$agentId/reach" ||
               row.to === "/bots/$agentId/approvals"
@@ -216,7 +266,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
     : allRows;
 
   return (
-    <PageSection title="Settings for this Bot">
+    <PageSection title="这位员工的设置">
       <PageRows>
         {rows.map(({ to, title, icon: Icon, summary }, index) => (
           <Fragment key={to}>

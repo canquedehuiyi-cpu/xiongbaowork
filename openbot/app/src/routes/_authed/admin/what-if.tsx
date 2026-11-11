@@ -43,6 +43,39 @@ export const Route = createFileRoute("/_authed/admin/what-if")({
 const QUESTION_LIMIT = 500;
 
 /** An action handed over in the address, or none. Only the action's own fields are read. */
+/*
+ * What is still missing, in Chinese. `missingFrom` is shared with the server, whose refusals stay in
+ * its own words; this page says them in the person's.
+ */
+const MISSING_WORDS: Record<string, string> = {
+  "Choose a Bot.": "选一位员工。",
+  "Choose a person or a group, not both.": "选一个人或一个组，不能都选。",
+  "Choose whose account it runs on.": "选它用谁的账号运行。",
+  "Choose what starts the run.": "选是什么发起这次运行。",
+  "Choose an app.": "选一个应用。",
+  "Choose one of the app's tools.": "选这个应用的一个工具。",
+  "Choose an app or the computer.": "选一个应用，或者它的电脑。",
+  "Choose what the Bot does on its computer.": "选员工在电脑上做什么。",
+  "Enter a web site, such as www.linkedin.com.":
+    "填一个网站，比如 www.linkedin.com。",
+  "Enter the web site it's on.": "填它所在的网站。",
+};
+
+function missingWords(missing: string | null): string | null {
+  if (missing === null) return null;
+  const tooLong = /^Keep the (\w+) under (\d+) characters\.$/.exec(missing);
+  if (tooLong) {
+    const field =
+      tooLong[1] === "command"
+        ? "命令"
+        : tooLong[1] === "file"
+          ? "文件"
+          : "按钮或字段";
+    return `${field}请控制在 ${tooLong[2]} 个字符以内。`;
+  }
+  return MISSING_WORDS[missing] ?? missing;
+}
+
 function actionFrom(raw: string | undefined): WhatIfAction | null {
   if (!raw) return null;
   try {
@@ -108,8 +141,8 @@ function WhatIfPage() {
   };
 
   const missing = vocabulary.data
-    ? missingFrom(action, vocabulary.data)
-    : "Loading this OpenBot's Bots and apps.";
+    ? missingWords(missingFrom(action, vocabulary.data))
+    : "正在读取这个部署的员工和应用。";
 
   const check = async () => {
     if (missing || checking) return;
@@ -126,8 +159,8 @@ function WhatIfPage() {
 
   return (
     <PageShell
-      description="Ask what OpenBot would do if a Bot took an action. Every control answers in the order OpenBot checks them, and you see which one decides."
-      title="What would happen"
+      description="问问员工做某个动作时熊宝会怎么处理。每一道管控按熊宝检查的顺序作答，你能看到是哪一道做的决定。"
+      title="动作推演"
     >
       <form
         className="flex flex-col gap-2"
@@ -142,7 +175,7 @@ function WhatIfPage() {
             <IconSparkles />
           </InputGroupAddon>
           <InputGroupInput
-            aria-label="Ask what would happen"
+            aria-label="问问会发生什么"
             maxLength={QUESTION_LIMIT}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
@@ -150,7 +183,7 @@ function WhatIfPage() {
               if (event.key === "Enter" && isComposing(event))
                 event.preventDefault();
             }}
-            placeholder="Could the Sales Bot send email from Gmail when a routine runs it?"
+            placeholder="定时任务运行销售员工时，它能用 Gmail 发邮件吗？"
             value={text}
           />
           <InputGroupAddon align="inline-end">
@@ -160,7 +193,7 @@ function WhatIfPage() {
               type="submit"
               variant="default"
             >
-              {asking ? "Reading…" : "Ask"}
+              {asking ? "正在解读…" : "提问"}
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
@@ -185,10 +218,10 @@ function WhatIfPage() {
       <PageSection
         description={
           asked
-            ? "This is how OpenBot read your question. Change anything it got wrong, then check it."
-            : "Ask a question above, or set the action yourself."
+            ? "这是熊宝对你问题的理解。哪里不对就改掉，再检查。"
+            : "在上面提一个问题，或者自己设定这个动作。"
         }
-        title="The action"
+        title="动作"
       >
         <PageCard
           className="mt-4"
@@ -198,13 +231,13 @@ function WhatIfPage() {
               onClick={() => void check()}
               type="button"
             >
-              {checking ? "Checking…" : "Check"}
+              {checking ? "正在检查…" : "检查"}
             </Button>
           }
         >
           {vocabulary.isError ? (
             <p className="text-destructive text-sm" role="alert">
-              Couldn't load this OpenBot's Bots and apps. Reload the page.
+              读不到这个部署的员工和应用，请刷新页面。
             </p>
           ) : (
             <ActionChips
@@ -231,8 +264,8 @@ function WhatIfPage() {
 
       {checked ? (
         <PageSection
-          description="Each control, in the order OpenBot checks them."
-          title="What happens"
+          description="每一道管控，按熊宝检查的顺序排列。"
+          title="会发生什么"
         >
           <WhatIfResultView result={checked.result} />
         </PageSection>

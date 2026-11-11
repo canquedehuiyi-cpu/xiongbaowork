@@ -12,13 +12,13 @@ import { queryClient } from "@/query-client";
 
 /** A kind of action, as the start of a sentence about where it is allowed. */
 const KIND_WORDS: Record<ActionKind, string> = {
-  deleting: "Deleting",
-  sending: "Sending to other people",
-  sharing: "Sharing",
-  publishing: "Posting",
-  payments: "Paying",
-  credentials: "Changing sign-in details",
-  security_settings: "Changing security settings",
+  deleting: "删除",
+  sending: "对外发送",
+  sharing: "分享",
+  publishing: "公开发布",
+  payments: "付款",
+  credentials: "修改登录信息",
+  security_settings: "修改安全设置",
 };
 
 /**
@@ -29,7 +29,7 @@ const KIND_WORDS: Record<ActionKind, string> = {
  */
 function allowedWords(grant: ConversationGrant): string {
   if (grant.toolRef.startsWith("computer_") && grant.kind)
-    return `${KIND_WORDS[grant.kind]} on ${grant.scope}`;
+    return `在 ${grant.scope} 上${KIND_WORDS[grant.kind]}`;
   const phrase = approvalPhrase(grant);
   return phrase.charAt(0).toUpperCase() + phrase.slice(1);
 }
@@ -53,7 +53,7 @@ export function ConversationAllowances({ threadId }: { threadId: string }) {
   if (grants.length === 0) return null;
   return (
     <section
-      aria-label="Allowed in this conversation"
+      aria-label="这段对话里已允许"
       className="flex flex-col gap-1 pb-2"
     >
       {grants.map((grant) => {
@@ -68,18 +68,18 @@ export function ConversationAllowances({ threadId }: { threadId: string }) {
               className="size-4 shrink-0 text-muted-foreground"
             />
             <p className="min-w-0 flex-1 truncate text-muted-foreground">
-              <span className="font-medium text-foreground">{action}</span> is
-              allowed in this conversation.
+              「<span className="font-medium text-foreground">{action}</span>
+              」在这段对话里已允许。
             </p>
             <Button
-              aria-label={`Turn off: ${action}`}
+              aria-label={`关闭：${action}`}
               className="shrink-0"
               disabled={revoke.isPending}
               onClick={() => revoke.mutate(grant.id)}
               size="xs"
               variant="ghost"
             >
-              Turn off
+              关闭
             </Button>
           </div>
         );

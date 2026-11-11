@@ -11,9 +11,19 @@ import {
 import { pluginKeys } from "@/lib/plugins/queries";
 
 /**
- * 管理员的访问申请收件箱，放在审批页上、审批收件箱下面。
+ * X 系列（X2 评审 M3）给每条申请加的三个字段。`lib/plugins/access-requests.ts` 归 E1，这里按可选读：
+ * 服务端没给（旧版本）时什么都不多画。
+ */
+type ScopedAccessRequest = AppAccessRequest & {
+  appliesTo?: "team_bot" | "bot";
+  requesterRole?: "owner" | "teammate" | "other";
+  scopeNote?: string | null;
+};
+
+/**
+ * 管理员的访问申请收件箱，M5b 起放在 管理 → 审批（原来在 /approvals 的审批收件箱下面）。
  *
- * 管理员本来就在审批页处理「在等你的事」，访问申请也是等管理员拍板的事，放在这里不用另找入口。批准时
+ * 访问申请是等管理员拍板的事，和团队审批设置、共享账号申请放在一起。批准时
  * 服务端调用现有的上架（`enable`）或授予只读动作（`grant`）；做不到时它的中文原因显示在那条申请上，
  * 申请留着。只给管理员看；服务端同样只认持有插件管理权限的人。
  */
@@ -84,6 +94,12 @@ function AdminAccessRequests() {
         >
           <p className="font-medium">{request.appTitle}</p>
           <p className="text-sm text-muted-foreground">{describe(request)}</p>
+          {(request as ScopedAccessRequest).scopeNote ? (
+            // 只在 Team Bot 上有：批准会写在员工身上，每个能用它的人都会拿到，不只是申请人。
+            <p className="text-sm" data-scope-note>
+              {(request as ScopedAccessRequest).scopeNote}
+            </p>
+          ) : null}
           {request.note ? (
             // 理由由员工（模型）写下，不是申请人的原话。
             <p className="text-sm">员工给出的理由：{request.note}</p>
@@ -116,9 +132,21 @@ function AdminAccessRequests() {
   );
 }
 
-function describe(request: AppAccessRequest): string {
-  const who =
-    request.requesterName ?? request.requesterEmail ?? request.requesterUserId;
+/** 申请人和员工的关系；`scopeNote` 已经说过时不再重复。 */
+const REQUESTER_ROLE: Record<"owner" | "teammate", string> = {
+  owner: "（员工的主人）",
+  teammate: "（使用这位员工的队友）",
+};
+
+function describe(request: ScopedAccessRequest): string {
+  const role =
+    !request.scopeNote &&
+    (request.requesterRole === "owner" || request.requesterRole === "teammate")
+      ? REQUESTER_ROLE[request.requesterRole]
+      : "";
+  const who = `${
+    request.requesterName ?? request.requesterEmail ?? request.requesterUserId
+  }${role}`;
   const bot = request.botName ?? request.botId;
   const what =
     request.kind === "enable" ? "上架这个应用" : "把这个应用授予这位员工";

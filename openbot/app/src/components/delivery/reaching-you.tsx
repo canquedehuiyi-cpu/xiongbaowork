@@ -94,19 +94,19 @@ const TRANSPORT: Record<
   { link: string; icon: typeof IconBrandSlack; summary: string }
 > = {
   slack: {
-    link: "Link Slack",
+    link: "关联 Slack",
     icon: IconBrandSlack,
-    summary: "Continue a conversation from Slack.",
+    summary: "在 Slack 里接着对话。",
   },
   teams: {
-    link: "Link Microsoft Teams",
+    link: "关联 Microsoft Teams",
     icon: IconBrandTeams,
-    summary: "Continue a conversation from Microsoft Teams.",
+    summary: "在 Microsoft Teams 里接着对话。",
   },
   sms: {
-    link: "Connect a phone",
+    link: "关联手机",
     icon: IconDeviceMobileMessage,
-    summary: "Continue a conversation by text message.",
+    summary: "用短信接着对话。",
   },
 };
 
@@ -155,40 +155,39 @@ export function ReachingYou({ agentId: fixedBot }: { agentId?: string }) {
     (transport === "sms" && challengeId !== "");
   const summary = (transport: Transport) => {
     if (transport === "sms" && challengeId) {
-      return "A verification code is on its way. Enter it to finish.";
+      return "验证码已经发出，填进来就完成了。";
     }
     if (heldLink(transport)) {
-      return "Your link code is ready to send. Open this to see it again.";
+      return "关联口令已经备好，可以去发送了。点开再看一次。";
     }
     if (open(transport)) return TRANSPORT[transport].summary;
     return transport === "sms"
-      ? "Text messages aren't set up yet. An admin has to turn them on first."
-      : "Not set up yet. An admin has to turn on Slack and Teams first.";
+      ? "短信还没设置，需要管理员先开启。"
+      : "还没设置，需要管理员先开启 Slack 和 Teams。";
   };
 
   return (
     <>
       {fixedBot === undefined ? (
         <p className="mt-6 text-muted-foreground text-sm">
-          Your devices, recent deliveries, and where each kind of update goes
-          are in{" "}
+          你的设备、最近的投递记录和每类消息发到哪里，在
           <Link
-            className="underline underline-offset-4"
+            className="text-foreground underline underline-offset-4"
             to="/settings/notifications"
           >
-            Settings → Notifications
+            设置 › 通知
           </Link>
-          .
+          里。
         </p>
       ) : null}
-      <PageSection title="Connected destinations">
+      <PageSection title="已关联的去处">
         {listError ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
             {listError.message}
           </p>
         ) : null}
         {reach.isPending || !destinations ? null : destinations.length === 0 ? (
-          <PageEmpty icon={IconSend} title="No destinations connected" />
+          <PageEmpty icon={IconSend} title="还没有关联任何去处" />
         ) : (
           <PageRows>
             {destinations.map((binding, index) => {
@@ -211,7 +210,7 @@ export function ReachingYou({ agentId: fixedBot }: { agentId?: string }) {
                       <ItemDescription>
                         {botName(binding.agentId)}
                         {binding.optedOutAt
-                          ? " · You texted STOP. Text START to resume."
+                          ? " · 你发过 STOP 退订，发 START 即可恢复。"
                           : null}
                       </ItemDescription>
                     </ItemContent>
@@ -222,7 +221,7 @@ export function ReachingYou({ agentId: fixedBot }: { agentId?: string }) {
                         size="sm"
                         variant="outline"
                       >
-                        Disconnect
+                        断开
                       </Button>
                     </ItemActions>
                   </Item>
@@ -233,8 +232,8 @@ export function ReachingYou({ agentId: fixedBot }: { agentId?: string }) {
         )}
       </PageSection>
       <PageSection
-        description="In a Slack or Teams channel that others can read, the Bot replies to you in a direct message."
-        title="Connect a conversation"
+        description="在别人也能看到的 Slack 或 Teams 频道里，员工会私信回复你。"
+        title="关联一段对话"
       >
         {reach.data ? (
           <PageRows>
@@ -363,14 +362,13 @@ function ConnectDialog({
         <DialogHeader>
           <DialogTitle>{TRANSPORT[transport].link}</DialogTitle>
           <DialogDescription>
-            Each account or phone number works with one conversation at a time.
-            Linking it here moves it from the one it's linked to now.
+            每个账号或手机号同一时间只对应一段对话。在这里关联，会把它从现在关联的那段对话移过来。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 grid gap-4 overflow-y-auto">
           <Field>
             <FieldLabel htmlFor={`${formId}-conversation`}>
-              Conversation
+              对话
             </FieldLabel>
             <Select
               items={Object.fromEntries(
@@ -386,7 +384,7 @@ function ConnectDialog({
               value={channelId || null}
             >
               <SelectTrigger className="w-full" id={`${formId}-conversation`}>
-                <SelectValue placeholder="Choose a conversation" />
+                <SelectValue placeholder="选择一段对话" />
               </SelectTrigger>
               <SelectContent>
                 {conversations.map((channel) => (
@@ -399,7 +397,7 @@ function ConnectDialog({
           </Field>
           {fixedBot === undefined ? (
             <Field>
-              <FieldLabel htmlFor={`${formId}-bot`}>Bot</FieldLabel>
+              <FieldLabel htmlFor={`${formId}-bot`}>员工</FieldLabel>
               <Select
                 items={Object.fromEntries(
                   (selected?.agentIds ?? []).map((id) => [id, botName(id)]),
@@ -410,7 +408,7 @@ function ConnectDialog({
                 value={pickedBot || null}
               >
                 <SelectTrigger className="w-full" id={`${formId}-bot`}>
-                  <SelectValue placeholder="Choose a Bot" />
+                  <SelectValue placeholder="选择一位员工" />
                 </SelectTrigger>
                 <SelectContent>
                   {selected?.agentIds.map((id) => (
@@ -429,7 +427,7 @@ function ConnectDialog({
               size="sm"
               variant="outline"
             >
-              Load more conversations
+              加载更多对话
             </Button>
           ) : null}
           {transport === "sms" ? (
@@ -445,7 +443,7 @@ function ConnectDialog({
               >
                 <Field>
                   <FieldLabel htmlFor={`${formId}-phone`}>
-                    Phone number
+                    手机号
                   </FieldLabel>
                   <div className="flex items-center gap-2">
                     <Input
@@ -463,7 +461,7 @@ function ConnectDialog({
                       type="submit"
                       variant={challengeId ? "outline" : "default"}
                     >
-                      Send verification code
+                      发送验证码
                     </Button>
                   </div>
                 </Field>
@@ -486,7 +484,7 @@ function ConnectDialog({
                 >
                   <Field>
                     <FieldLabel htmlFor={`${formId}-code`}>
-                      Verification code
+                      验证码
                     </FieldLabel>
                     <div className="flex items-center gap-2">
                       <Input
@@ -501,7 +499,7 @@ function ConnectDialog({
                         size="sm"
                         type="submit"
                       >
-                        Confirm phone
+                        确认手机号
                       </Button>
                     </div>
                   </Field>
@@ -512,10 +510,10 @@ function ConnectDialog({
             <Item size="sm" variant="muted">
               <ItemContent>
                 <ItemDescription className="line-clamp-none">
-                  Send this message to the OpenBot app in a direct message in{" "}
+                  在 {Math.ceil((linked.expiresAt - Date.now()) / 60_000)}{" "}
+                  分钟内，在{" "}
                   {linked.platform === "teams" ? "Microsoft Teams" : "Slack"}{" "}
-                  within {Math.ceil((linked.expiresAt - Date.now()) / 60_000)}{" "}
-                  minutes. It links that account to this conversation and Bot.
+                  里私信熊宝应用发送这条消息，就会把那个账号关联到这段对话和这位员工。
                 </ItemDescription>
                 <ItemTitle className="break-all font-mono">
                   {linked.command}
@@ -530,7 +528,7 @@ function ConnectDialog({
                   size="sm"
                   variant="outline"
                 >
-                  {copied ? "Copied" : "Copy"}
+                  {copied ? "已复制" : "复制"}
                 </Button>
               </ItemActions>
             </Item>
@@ -543,7 +541,7 @@ function ConnectDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" variant="outline">
-            Close
+            关闭
           </Button>
           {/* A phone's two steps each submit their own field, beside it. */}
           {transport === "sms" ? null : (

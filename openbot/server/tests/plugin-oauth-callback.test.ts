@@ -32,7 +32,7 @@ const KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 const CALLBACK = "http://t/api/plugins/oauth/callback";
 
 const FAILED =
-  "https://app.example/settings/connected-accounts?connected=failed";
+  "https://app.example/connections?connected=failed";
 
 function signedIn(): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (context, next) => {
@@ -148,7 +148,7 @@ describe("a consent that came back the way it left", () => {
     const asked = await withWillingVendor(async (asked) => {
       const response = await hono.request(callbackUrl(state));
       expect(response.headers.get("location")).toBe(
-        "https://app.example/settings/connected-accounts/notion",
+        "https://app.example/connections/notion",
       );
       return asked;
     });
@@ -212,7 +212,7 @@ describe("a consent started from a team row id", () => {
     await withWillingVendor(async () => {
       const response = await hono.request(callbackUrl(state));
       expect(response.headers.get("location")).toBe(
-        "https://app.example/settings/connected-accounts/team%3Anotion",
+        "https://app.example/connections/team%3Anotion",
       );
     });
     expect(recorded).toEqual([
@@ -333,7 +333,7 @@ describe("whose frame the callback writes in (G01)", () => {
         hono.request(callbackUrl(state)),
       );
       expect(response.headers.get("location")).toBe(
-        "https://app.example/settings/connected-accounts/notion",
+        "https://app.example/connections/notion",
       );
     });
     expect(frames).toEqual([
@@ -749,7 +749,7 @@ describe("listing the app's tools as the person who just connected", () => {
         hono.request(callbackUrl(state)),
       );
       expect(response.headers.get("location")).toBe(
-        "https://app.example/settings/connected-accounts/notion",
+        "https://app.example/connections/notion",
       );
     });
     expect(order).toEqual(["record:user-1", "discover:notion:user-1:user-1"]);
@@ -776,7 +776,7 @@ describe("listing the app's tools as the person who just connected", () => {
       await withWillingVendor(async () => {
         const response = await hono.request(callbackUrl(state));
         expect(response.headers.get("location")).toBe(
-          "https://app.example/settings/connected-accounts/notion",
+          "https://app.example/connections/notion",
         );
       });
     } finally {

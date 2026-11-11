@@ -37,7 +37,7 @@ export async function askAuditTrail(question: string): Promise<AuditAnswer> {
       // So "yesterday" is the admin's yesterday.
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
-    fallback: "Couldn't answer that. Try again, or set the filters yourself.",
+    fallback: "没能回答这个问题。再试一次，或者自己设置筛选。",
   });
   return (await response.json()) as AuditAnswer;
 }

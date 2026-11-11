@@ -17,16 +17,16 @@ import {
 import { routinesQueryOptions } from "@/lib/routines/queries";
 import { NewRoutineButton } from "./new-routine-button";
 
-/** "No routines yet", "1 routine, on", "3 routines, 2 on". */
+/** 「还没有定时任务。」「1 条定时任务，开着。」「3 条定时任务，2 条开着。」 */
 function routinesSummary(
   routines: { enabled: boolean }[] | undefined,
 ): string | null {
   if (!routines) return null;
-  if (routines.length === 0) return "No routines yet.";
+  if (routines.length === 0) return "还没有定时任务。";
   const on = routines.filter((routine) => routine.enabled).length;
-  const count = `${routines.length} routine${routines.length === 1 ? "" : "s"}`;
-  if (routines.length === 1) return `${count}, ${on === 1 ? "on" : "off"}.`;
-  return `${count}, ${on} on.`;
+  const count = `${routines.length} 条定时任务`;
+  if (routines.length === 1) return `${count}，${on === 1 ? "开着" : "关着"}。`;
+  return `${count}，${on} 条开着。`;
 }
 
 /**
@@ -42,23 +42,27 @@ export function RoutinesConnectionPage() {
   return (
     <PageShell
       action={<NewRoutineButton />}
-      backButton={{ label: "Connections", linkProps: { to: "/connections" } }}
-      description="Routines are work your Bots do on a schedule. Every Bot can set one up for you."
-      title="Routines"
+      backButton={{ label: "连接", linkProps: { to: "/connections" } }}
+      description="定时任务是员工按计划去做的事。每位员工都能帮你设一条。"
+      title="定时任务"
     >
       {/* One destination, so no heading: it would only repeat the row's own title. */}
       <PageSection>
         <PageRows className="mt-0">
-          <Item render={<Link to="/routines" />} size="sm">
+          {/* 定时任务的列表在「自主工作」里（`/routines` 也转到那里）。 */}
+          <Item
+            render={<Link search={{ trigger: "schedule" }} to="/autonomous" />}
+            size="sm"
+          >
             <ItemMedia variant="icon">
               <IconClock />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Your routines</ItemTitle>
+              <ItemTitle>你的定时任务</ItemTitle>
               <ItemDescription>
                 {routines.error
-                  ? "Open Routines to see them."
-                  : (summary ?? "Open Routines to see them.")}
+                  ? "在「自主工作」里查看。"
+                  : (summary ?? "在「自主工作」里查看。")}
               </ItemDescription>
             </ItemContent>
             <ItemActions>

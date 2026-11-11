@@ -23,11 +23,11 @@ export function explainable(event: AuditEvent): boolean {
 }
 
 const RECORDED_WORDS = {
-  allowed: "Allowed",
-  refused: "Refused",
-  asks: "Asked first",
-  hands_off: "Handed to the person",
-  failed: "Allowed, then didn't finish",
+  allowed: "已放行",
+  refused: "已拒绝",
+  asks: "先问了",
+  hands_off: "交给了本人",
+  failed: "放行了，但没做完",
 } as const;
 
 /**
@@ -72,15 +72,14 @@ export function WhyButton({ event }: { event: AuditEvent }) {
         variant="ghost"
       >
         <IconHelpCircle />
-        Why?
+        为什么？
       </Button>
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Why did this happen?</DialogTitle>
+            <DialogTitle>为什么会这样？</DialogTitle>
             <DialogDescription>
-              Each of OpenBot's controls, asked about this event's own facts
-              with today's settings.
+              用今天的设置，拿这条事件自己的事实逐一去问熊宝的每一道管控。
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4 overflow-y-auto">
@@ -105,7 +104,7 @@ export function WhyButton({ event }: { event: AuditEvent }) {
                     {RECORDED_WORDS[answer.recorded.outcome]}
                   </span>
                   <span>
-                    <span className="font-medium">Then: </span>
+                    <span className="font-medium">当时：</span>
                     <span className="text-muted-foreground">
                       {answer.recorded.summary}
                     </span>
@@ -113,8 +112,7 @@ export function WhyButton({ event }: { event: AuditEvent }) {
                 </div>
                 {differs ? (
                   <p className="text-amber-700 text-sm dark:text-amber-500">
-                    Today's settings decide this differently. Something has
-                    changed since it happened.
+                    按今天的设置，结果会不一样：事情发生之后有设置改过。
                   </p>
                 ) : null}
                 <WhatIfResultView inDialog result={answer.result} />
@@ -134,11 +132,11 @@ export function WhyButton({ event }: { event: AuditEvent }) {
                 size="sm"
                 variant="outline"
               >
-                Try a change
+                试试改动
               </Button>
             ) : null}
             <Button onClick={() => setOpen(false)} size="sm">
-              Done
+              完成
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -61,6 +61,7 @@ import {
 } from "@/lib/plugins/listed";
 import { moreAppsRow } from "@/lib/plugins/provider-vocabulary";
 import {
+  appKeyOf,
   connectionsQueryOptions,
   personalConnections,
   pluginsPageQueryOptions,
@@ -295,12 +296,21 @@ function RouteComponent() {
    * ONLY THE PERSON'S OWN. A Shared app's row is the deployment's, not this person's, and the
    * "Connected" badge this set feeds would otherwise tell them they hold an account they don't.
    */
+  /*
+   * EACH ROW BY BOTH ITS NAMES（熊宝 G01-E）。A curated connector added for the team is the row
+   * `team:<catalogue key>`, while the catalogue names the bare key and a connection names the row.
+   * Matching one against the other left an added connector off the list for everybody, so both sets
+   * hold the row id and the app key it answers to.
+   */
+  const servers = plugins.data?.servers ?? [];
+  const appKeyOfRow = new Map(servers.map((s) => [s.id, appKeyOf(s)]));
   const connected = new Set(
-    personalConnections(connections.data?.connections ?? []).map(
-      (row) => row.serverId,
-    ),
+    personalConnections(connections.data?.connections ?? []).flatMap((row) => [
+      row.serverId,
+      appKeyOfRow.get(row.serverId) ?? row.serverId,
+    ]),
   );
-  const added = new Set((plugins.data?.servers ?? []).map((s) => s.id));
+  const added = new Set(servers.flatMap((s) => [s.id, appKeyOf(s)]));
 
   /*
    * Only vendors reached as a person, and only ones an administrator has enabled.
@@ -496,7 +506,8 @@ function RouteComponent() {
               <div className="mt-4 grid grid-cols-1 gap-3 @min-[36rem]:grid-cols-2">
                 {matching.map((row) => (
                   <ConnectionItem
-                    key={row.key}
+                    /* A GitHub or Slack account link and the app of the same name can both be listed. */
+                    key={`${row.mark.kind}:${row.key}`}
                     onPress={
                       row.state === "available" &&
                       (row.action === "connect" || row.action === "add")
@@ -617,7 +628,11 @@ function ConnectionItem({
         onPress ? (
           <button disabled={pending} onClick={onPress} type="button" />
         ) : (
-          <Link params={{ key: row.key }} to="/connections/$key" />
+          <Link
+            params={{ key: row.key }}
+            search={row.mark.kind === "provider" ? { identity: true } : {}}
+            to="/connections/$key"
+          />
         )
       }
       size="sm"

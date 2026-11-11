@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authed/_app/bots/$agentId/access")({
 });
 
 /**
- * Skills and access. In the personal edition this is "What it can do", one page instead of five:
+ * 技能与应用。个人版里叫「它能做什么」，一页顶团队版的五页（"What it can do" upstream):
  * what it can use, what it asks you before doing, the goals it works on, and its check-ins, which
  * are separate pages in the team edition. Check-ins sit on the Bot's Memory page there, and the
  * personal edition has no memory (see `offersMemory`), so they are here.
@@ -26,10 +26,10 @@ function AccessPage() {
       agentId={agentId}
       description={
         personal
-          ? "Manage what this Bot can use, what it asks you before doing, what it works on, and its check-ins."
-          : "Manage the skills, apps, and other Bots this Bot can use."
+          ? "管理这位员工能用什么、动手前要问你什么、它在做的长期职责和主动巡检。"
+          : "管理这位员工能用的技能、应用，以及它能找哪些员工帮忙。"
       }
-      title={personal ? "What it can do" : "Skills and access"}
+      title={personal ? "它能做什么" : "技能与应用"}
     >
       {(agent) => (
         <>

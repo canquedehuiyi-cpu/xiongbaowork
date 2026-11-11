@@ -2,7 +2,9 @@ import {
   IconArrowLeft,
   IconBrain,
   IconBuildingBank,
+  IconBuildingSkyscraper,
   IconBulb,
+  IconChecks,
   IconCode,
   IconDeviceDesktop,
   IconKey,
@@ -29,6 +31,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { managePaths } from "@/lib/manage-paths";
 
 const appLinkOptions = { to: "/" } satisfies LinkOptions;
 const adminLinkOptions = { to: "/admin" } satisfies LinkOptions;
@@ -60,6 +63,12 @@ const GROUPS: {
         title: "边界规则",
         icon: IconShieldCheck,
         linkOptions: { to: "/admin/boundaries" },
+      },
+      {
+        /* Team approval settings, shared-account requests and the access requests from /approvals. */
+        title: "审批",
+        icon: IconChecks,
+        linkOptions: { to: "/admin/approvals" },
       },
       {
         title: "电脑",
@@ -132,14 +141,25 @@ const GROUPS: {
     label: "发生过什么",
     items: [
       {
-        title: "审计",
+        title: managePaths("team").auditLabel,
         icon: IconListDetails,
         linkOptions: { to: "/admin/audit" },
       },
       {
-        title: "What would happen",
+        title: "动作推演",
         icon: IconZoomQuestion,
         linkOptions: { to: "/admin/what-if" },
+      },
+    ],
+  },
+  {
+    /* 熊宝的多租户：所有租户、停用与恢复、各自的用量和审计（M5b 从 /platform 搬来）。 */
+    label: "平台",
+    items: [
+      {
+        title: "平台管理",
+        icon: IconBuildingSkyscraper,
+        linkOptions: { to: "/admin/platform" },
       },
     ],
   },

@@ -365,7 +365,7 @@ function PluginAction({
         render={(props) => (
           <Link
             params={{ key: accountKeyOf(card) }}
-            to="/settings/connected-accounts/$key"
+            to="/connections/$key"
             {...props}
           />
         )}

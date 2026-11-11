@@ -29,7 +29,7 @@ export function auditVocabularyQueryOptions() {
     queryFn: async (): Promise<AuditVocabulary> =>
       (
         await client("/api/admin/audit-events/vocabulary", {
-          fallback: "Couldn't load the filters",
+          fallback: "读不到可选的筛选",
         })
       ).json(),
   });

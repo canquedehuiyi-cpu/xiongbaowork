@@ -268,7 +268,7 @@ test("a skill written on Settings > Skills shows under a new Bot's Your skills, 
   const tide = await view.findByRole("switch", { name: "Tide report" });
   expect(tide.getAttribute("aria-checked")).toBe("true");
   expect(view.queryByText("/tide-report")).toBeNull();
-  expect(view.queryByText("No skills yet")).toBeNull();
+  expect(view.queryByText("还没有技能")).toBeNull();
   // A skill OpenBot ships is not one the person wrote.
   expect(view.queryByRole("switch", { name: "Find a document" })).toBeNull();
 });

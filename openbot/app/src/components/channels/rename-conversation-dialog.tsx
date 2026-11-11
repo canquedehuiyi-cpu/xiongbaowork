@@ -79,10 +79,8 @@ export function RenameConversationDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rename conversation</DialogTitle>
-          <DialogDescription>
-            Leave it empty to go back to the name OpenBot chose.
-          </DialogDescription>
+          <DialogTitle>重命名会话</DialogTitle>
+          <DialogDescription>留空就恢复成熊宝起的名字。</DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4">
           <form
@@ -93,7 +91,7 @@ export function RenameConversationDialog({
             }}
           >
             <Field>
-              <FieldLabel htmlFor={`${formId}-name`}>Name</FieldLabel>
+              <FieldLabel htmlFor={`${formId}-name`}>名称</FieldLabel>
               <Input
                 autoComplete="off"
                 autoFocus
@@ -106,7 +104,7 @@ export function RenameConversationDialog({
                 }}
                 // All of it selected, so typing replaces the name and an arrow key keeps it.
                 onFocus={(event) => event.currentTarget.select()}
-                placeholder="New conversation"
+                placeholder="新对话"
                 value={draft}
               />
             </Field>
@@ -119,7 +117,7 @@ export function RenameConversationDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={() => onOpenChange(false)} size="sm" variant="ghost">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={rename.isPending}
@@ -127,7 +125,7 @@ export function RenameConversationDialog({
             size="sm"
             type="submit"
           >
-            {rename.isPending ? "Saving…" : "Save"}
+            {rename.isPending ? "正在保存…" : "保存"}
           </Button>
         </DialogFooter>
       </DialogContent>

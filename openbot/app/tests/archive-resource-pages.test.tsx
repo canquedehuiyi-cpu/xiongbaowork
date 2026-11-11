@@ -1,27 +1,19 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { authKeys } from "@/lib/auth/queries";
 import type { PluginsPage } from "@/lib/plugins/queries";
-import { Route as KnowledgeRoute } from "@/routes/_authed/_app/knowledge";
-import { Route as MemoryRoute } from "@/routes/_authed/_app/memory";
-import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
-import { Route as SkillsRoute } from "@/routes/_authed/_app/skills";
+import { capabilitiesRouter } from "./capabilities-router";
 import { settleReactWork } from "./settle-react-work";
 
 /**
  * 「所有重复的都归档」: the standalone 技能 / 知识库 / 记忆 pages duplicated tabs of 能力与资源, so
- * their full screens now live in those tabs and the old URLs are redirects that keep their meaning —
- * `/skills?new=true` still opens the authoring form, only now over `/resources?tab=skills`.
+ * their full screens live in those tabs and the old URLs are redirects that keep their meaning —
+ * `/skills?new=true` still opens the authoring form. M5b 起那些页签是「能力」的子路由（`/capabilities/*`，
+ * 照上游），`/resources?tab=` 也成了重定向，所以这里连同它一起测：每个旧地址落在它原来指的页签上。
  *
  * The real route files are mounted at their paths under one root; `fetch` is a fake keyed by path
  * that records every request, so "only the selected tab reads" is asserted on what was asked for.
@@ -176,31 +168,7 @@ function draw(entry: string) {
     onboarding: null,
   });
 
-  const root = createRootRoute({ component: () => <Outlet /> });
-  const router = createRouter({
-    context: {},
-    history: createMemoryHistory({ initialEntries: [entry] }),
-    routeTree: root.addChildren([
-      // `as never`, as in the other route tests: each file route is registered in the generated tree
-      // under its real parent, and this only re-addresses it for one render.
-      ResourcesRoute.update({
-        getParentRoute: () => root,
-        path: "/resources",
-      } as never),
-      SkillsRoute.update({
-        getParentRoute: () => root,
-        path: "/skills",
-      } as never),
-      KnowledgeRoute.update({
-        getParentRoute: () => root,
-        path: "/knowledge",
-      } as never),
-      MemoryRoute.update({
-        getParentRoute: () => root,
-        path: "/memory",
-      } as never),
-    ]),
-  });
+  const router = capabilitiesRouter({ at: entry, queryClient });
 
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -217,27 +185,35 @@ function draw(entry: string) {
 
 async function landsOn(
   router: ReturnType<typeof draw>["router"],
-  search: Record<string, unknown>,
+  pathname: string,
+  search: Record<string, unknown> = {},
 ) {
   await waitFor(() => {
-    expect(router.state.location.pathname).toBe("/resources");
+    expect(router.state.location.pathname).toBe(pathname);
     expect(router.state.location.search).toEqual(search);
   });
 }
 
+/** Whether the capability tab of that name is the open one. */
 const selectedTab = (view: ReturnType<typeof draw>["view"], name: string) =>
-  view.getByRole("tab", { name }).getAttribute("aria-selected");
+  within(view.getByRole("navigation", { name: "能力" }))
+    .getByRole("link", { name })
+    .getAttribute("aria-current");
+
+/** The open tab's content, named for the tab. */
+const tabPanel = async (view: ReturnType<typeof draw>["view"], name: string) =>
+  within(await view.findByRole("region", { name }));
 
 test("/skills redirects to the 技能 tab", async () => {
   const { view, router } = draw("/skills");
-  await landsOn(router, { tab: "skills" });
+  await landsOn(router, "/capabilities/skills");
   await view.findByText("我的笔记法");
-  expect(selectedTab(view, "技能")).toBe("true");
+  expect(selectedTab(view, "技能")).toBe("page");
 });
 
-test("/skills?new=true redirects to /resources?tab=skills&new=true and opens the authoring form", async () => {
+test("/skills?new=true redirects to /capabilities/skills?new=true and opens the authoring form", async () => {
   const { view, router } = draw("/skills?new=true");
-  await landsOn(router, { tab: "skills", new: true });
+  await landsOn(router, "/capabilities/skills", { new: true });
   expect(
     await view.findByRole("heading", { level: 1, name: "新建技能" }),
   ).toBeTruthy();
@@ -246,13 +222,13 @@ test("/skills?new=true redirects to /resources?tab=skills&new=true and opens the
 
 test("/skills?edit=<slug> redirects with the slug, and the edit form opens on that skill", async () => {
   const { view, router } = draw("/skills?edit=my-notes");
-  await landsOn(router, { tab: "skills", edit: "my-notes" });
+  await landsOn(router, "/capabilities/skills", { edit: "my-notes" });
   expect(await view.findByRole("button", { name: "保存改动" })).toBeTruthy();
 });
 
 test("the 技能 tab is the full skills screen: the command to type, edit and delete on your own, and 撰写 opens the form in place", async () => {
-  const { view, router, user } = draw("/resources?tab=skills");
-  const panel = within(await view.findByRole("tabpanel"));
+  const { view, router, user } = draw("/capabilities/skills");
+  const panel = await tabPanel(view, "技能");
   await panel.findByText("我的笔记法");
 
   // The command a person types, which only the old page showed.
@@ -267,19 +243,19 @@ test("the 技能 tab is the full skills screen: the command to type, edit and de
     await view.findByRole("menuitem", { name: "删除 /my-notes" }),
   ).toBeTruthy();
   await user.click(view.getByRole("menuitem", { name: "编辑" }));
-  await landsOn(router, { tab: "skills", edit: "my-notes" });
+  await landsOn(router, "/capabilities/skills", { edit: "my-notes" });
   expect(panel.queryByRole("button", { name: "周报 的操作" })).toBeNull();
 
   // No way out to the standalone page any more: the tab is the page.
   expect(panel.queryByText("打开技能页")).toBeNull();
 });
 
-test("撰写 in the 技能 tab stays on /resources and opens the form", async () => {
-  const { view, router, user } = draw("/resources?tab=skills");
-  const panel = within(await view.findByRole("tabpanel"));
+test("撰写 in the 技能 tab stays on /capabilities/skills and opens the form", async () => {
+  const { view, router, user } = draw("/capabilities/skills");
+  const panel = await tabPanel(view, "技能");
   await panel.findByText("我的笔记法");
   await user.click(panel.getByRole("button", { name: "撰写" }));
-  await landsOn(router, { tab: "skills", new: true });
+  await landsOn(router, "/capabilities/skills", { new: true });
   expect(
     await view.findByRole("heading", { level: 1, name: "新建技能" }),
   ).toBeTruthy();
@@ -287,8 +263,8 @@ test("撰写 in the 技能 tab stays on /resources and opens the form", async ()
 
 test("/knowledge redirects to the 知识库 tab, which holds the whole knowledge screen", async () => {
   const { view, router } = draw("/knowledge");
-  await landsOn(router, { tab: "knowledge" });
-  const panel = within(await view.findByRole("tabpanel"));
+  await landsOn(router, "/capabilities/knowledge");
+  const panel = await tabPanel(view, "知识库");
 
   // Create, the list with each base's grant count, and the open base's 资料 and 授权.
   expect(await panel.findByLabelText("新知识库名称")).toBeTruthy();
@@ -308,10 +284,15 @@ test("/knowledge redirects to the 知识库 tab, which holds the whole knowledge
   expect(panel.queryByText("打开知识库页")).toBeNull();
 });
 
-test("/memory redirects to the 信息源与记忆 tab, which holds the whole memory screen", async () => {
+test("/memory and /settings/memory redirect to the 记忆与信息源 tab, which holds the whole memory screen", async () => {
+  {
+    const { router } = draw("/settings/memory");
+    await landsOn(router, "/capabilities/memory");
+    cleanup();
+  }
   const { view, router } = draw("/memory");
-  await landsOn(router, { tab: "sources" });
-  const panel = within(await view.findByRole("tabpanel"));
+  await landsOn(router, "/capabilities/memory");
+  const panel = await tabPanel(view, "记忆与信息源");
 
   expect(await panel.findByText("飞书文档同步")).toBeTruthy();
   expect(panel.getByRole("button", { name: "立即同步" })).toBeTruthy();
@@ -323,7 +304,7 @@ test("/memory redirects to the 信息源与记忆 tab, which holds the whole mem
   expect(view.queryByRole("alert")).toBeNull();
 });
 
-test("only the selected tab mounts and reads", async () => {
+test("only the open tab mounts and reads", async () => {
   const families = {
     skills: ["/api/plugins"],
     knowledge: ["/api/knowledge/notebooks"],
@@ -340,7 +321,9 @@ test("only the selected tab mounts and reads", async () => {
     sources: "飞书文档同步",
   };
   for (const tab of Object.keys(families) as (keyof typeof families)[]) {
-    const { view, requested } = draw(`/resources?tab=${tab}`);
+    const { view, requested } = draw(
+      tab === "sources" ? "/capabilities/memory" : `/capabilities/${tab}`,
+    );
     await view.findAllByText(ready[tab]);
     await settleReactWork();
     for (const path of families[tab]) expect(requested).toContain(path);
@@ -348,6 +331,47 @@ test("only the selected tab mounts and reads", async () => {
       if (other === tab) continue;
       for (const path of paths) expect(requested).not.toContain(path);
     }
+    cleanup();
+  }
+});
+
+test("/role-templates redirects to the 角色模板 tab", async () => {
+  responses["/api/role-templates"] = () => ({ templates: [], official: [] });
+  const { view, router } = draw("/role-templates");
+  await landsOn(router, "/capabilities/roles");
+  const panel = await tabPanel(view, "角色模板");
+  expect(await panel.findByText("我的模板")).toBeTruthy();
+  expect(panel.getByRole("button", { name: "新建模板" })).toBeTruthy();
+});
+
+test("every old /resources?tab= link lands on the tab it meant, connectors on 连接", async () => {
+  const cases: [string, string, Record<string, unknown>][] = [
+    ["/resources", "/capabilities/plugins", {}],
+    [
+      "/resources?tab=plugins&view=mine&page=2",
+      "/capabilities/plugins",
+      { view: "mine", page: 2 },
+    ],
+    [
+      "/resources?tab=skills&edit=my-notes",
+      "/capabilities/skills",
+      { edit: "my-notes" },
+    ],
+    ["/resources?tab=connectors", "/connections", {}],
+    [
+      "/resources?tab=knowledge&q=手册",
+      "/capabilities/knowledge",
+      { q: "手册" },
+    ],
+    ["/resources?tab=wakerflows", "/capabilities/wakerflows", {}],
+    ["/resources?tab=projects", "/capabilities/projects", {}],
+    ["/resources?tab=models", "/capabilities/models", {}],
+    ["/resources?tab=components", "/capabilities/components", {}],
+    ["/resources?tab=sources", "/capabilities/memory", {}],
+  ];
+  for (const [from, pathname, search] of cases) {
+    const { router } = draw(from);
+    await landsOn(router, pathname, search);
     cleanup();
   }
 });

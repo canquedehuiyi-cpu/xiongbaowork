@@ -82,7 +82,7 @@ export function DescribeField({
           type="button"
           variant="outline"
         >
-          {writing ? "Writing…" : action}
+          {writing ? "正在写…" : action}
         </Button>
       </div>
       {problem ? (
@@ -109,15 +109,15 @@ export function DescribeRule({
 }) {
   return (
     <DescribeField
-      action="Write rule"
-      description="Say in a sentence what no Bot may do, and your model writes the rule. A second reading that never sees your words says what the rule does."
+      action="写成规则"
+      description="用一句话说出哪件事员工都不能做，由你的模型写成规则。另一次从没见过你原话的解读会说明这条规则做什么。"
       id="rule-description-english"
-      label="Describe the rule"
-      placeholder="Bots may not visit social media sites"
+      label="描述这条规则"
+      placeholder="员工不能访问社交媒体网站"
       write={async (described) => {
         const translation = await translatePolicyRule(described);
         if (translation.effect === "allow")
-          return "That says what Bots may do. A rule here stops an action, so describe what no Bot may do.";
+          return "这句话说的是员工可以做什么。这里的规则用来拦下动作，请描述哪件事员工都不能做。";
         onWritten({ ...translation, text: described });
         return null;
       }}

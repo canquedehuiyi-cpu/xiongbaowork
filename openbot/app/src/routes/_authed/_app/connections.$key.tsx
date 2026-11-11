@@ -48,6 +48,7 @@ import {
   disconnectSiblingsNotice,
 } from "@/lib/plugins/provider-vocabulary";
 import {
+  appKeyOf,
   connectionSiblingsQueryOptions,
   connectionsQueryOptions,
   type PluginServer,
@@ -125,9 +126,22 @@ export const Route = createFileRoute("/_authed/_app/connections/$key")({
    */
   validateSearch: (
     search: Record<string, unknown>,
-  ): { linked?: string; action?: string; connect?: true } => ({
+  ): {
+    linked?: string;
+    action?: string;
+    connect?: true;
+    identity?: true;
+  } => ({
     ...searchTextEntry("linked", search.linked),
     ...searchTextEntry("action", search.action),
+    /*
+     * `?identity=true` opens GitHub's or Slack's account-link page even where this deployment has
+     * also enabled the app of the same name（熊宝的目录里有 `github`、`slack` 两个按提问者身份读取的应用，
+     * 与上游只把这两个键当身份关联不同）。The tiles on Connections that link an account carry it.
+     */
+    ...(search.identity === true || search.identity === "true"
+      ? { identity: true as const }
+      : {}),
     /*
      * `?connect=true` is Browse apps sending somebody here to finish adding an app that takes a
      * key: the page opens with the key form. Read once and dropped, so a reload does not reopen it.
@@ -144,7 +158,8 @@ export const Route = createFileRoute("/_authed/_app/connections/$key")({
  */
 function RouteComponent() {
   const { key } = Route.useParams();
-  const { linked, action, connect } = Route.useSearch();
+  const { linked, action, connect, identity } = Route.useSearch();
+  const plugins = useQuery(pluginsPageQueryOptions());
   const personal =
     useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   // Held for this visit, keyed on the app, and dropped from the address below.
@@ -156,7 +171,24 @@ function RouteComponent() {
     navigate({ search: ({ connect: _c, ...rest }) => rest, replace: true });
   }, [connect, navigate]);
   if (key === "github" || key === "slack") {
-    return <IdentityConnectionPage linked={linked} provider={key} />;
+    /*
+     * TWO THINGS ANSWER TO THESE TWO NAMES HERE. Upstream has only the account link; this fork's
+     * catalogue also has a `github` and a `slack` app reached as the person asking, and its consent
+     * comes back to `/connections/<key>`. So the account link is drawn when asked for by name
+     * (`?identity=true`, or the link callback's `?linked=`), or when no app by that name is enabled;
+     * otherwise this is the app's page.
+     */
+    const appHere = (plugins.data?.servers ?? []).some(
+      (server) => server.id === key || appKeyOf(server) === key,
+    );
+    if (
+      identity === true ||
+      linked !== undefined ||
+      (plugins.data !== undefined && !appHere)
+    ) {
+      return <IdentityConnectionPage linked={linked} provider={key} />;
+    }
+    /* Otherwise the app's page, which waits for the same read and says so if it failed. */
   }
   // Routines has nothing to connect or switch: its page says what it is and leads to the routines.
   if (key === ALWAYS_ON_APP) return <RoutinesConnectionPage />;
@@ -242,8 +274,16 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
     },
   });
 
-  const entry = plugins.data?.catalogue.find((item) => item.key === key);
-  const server = (plugins.data?.servers ?? []).find((s) => s.id === key);
+  /*
+   * OPENED BY ROW ID OR BY CATALOGUE KEY（熊宝 G01-E）。A curated connector added for the team is the
+   * row `team:<catalogue key>`, while the catalogue and old links name the key, and a connection names
+   * the row. Either finds the row; the catalogue entry is then looked up by the row's own app key.
+   */
+  const server = (plugins.data?.servers ?? []).find(
+    (s) => s.id === key || appKeyOf(s) === key,
+  );
+  const appKey = server ? appKeyOf(server) : key;
+  const entry = plugins.data?.catalogue.find((item) => item.key === appKey);
   const enabled = server !== undefined;
   /*
    * READ THROUGH `personalConnections`, never the raw list: a Shared app's row is the deployment's
@@ -252,7 +292,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
    */
   const connection = personalConnections(
     connections.data?.connections ?? [],
-  ).find((row) => row.serverId === key);
+  ).find((row) => row.serverId === (server?.id ?? key));
   /*
    * Asked of the row rather than the catalogue, because a brokered app has no catalogue entry at
    * all: the deployment recorded how it is reached when the app was enabled, and that record is the
@@ -291,9 +331,13 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
   const perActionGrants = plugins.data?.authorizesPerAction ?? false;
   /* Who is asking only matters to a Shared app's Authorize, so it is not read for anything else. */
   const sharedHere = server?.accountMode === "shared";
+  /*
+   * Also read for an app only an administrator connects（fork 的 `adminConnectOnly`）: a member is
+   * told an administrator has to connect it rather than offered a Connect the server refuses.
+   */
   const me = useQuery({
     ...currentUserQueryOptions(),
-    enabled: perActionGrants && sharedHere,
+    enabled: (perActionGrants && sharedHere) || server?.adminConnectOnly === true,
   }).data;
   const isAdmin = me?.role === "admin";
   const appNames = [key, server?.title ?? key];
@@ -545,6 +589,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
                  types never leaves this page — but which Bots can read this person's mail is the
                  whole point of the screen and holds for both kinds. */
               disconnectedReassurance={reassurance}
+              needsAdmin={server.adminConnectOnly === true && !isAdmin}
               notice={siblingsNotice ?? undefined}
               provider={provider}
               title={server.title}
@@ -677,7 +722,8 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
                     disabled={!enabled || connect.isPending}
                     onClick={() => {
                       setNotice(null);
-                      connect.mutate(key);
+                      // The catalogue key: the consent route looks the vendor up by it.
+                      connect.mutate(appKey);
                     }}
                     size="sm"
                     type="button"

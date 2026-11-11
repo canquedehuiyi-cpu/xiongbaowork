@@ -82,18 +82,16 @@ const ALEX = {
 test("the top bar says how many people are in the group", async () => {
   serving([ME, ALEX]);
   const view = draw();
-  expect(await view.findByRole("button", { name: "2 people" })).toBeTruthy();
+  expect(await view.findByRole("button", { name: "2 人" })).toBeTruthy();
 });
 
 test("the creator sees everyone and can take another person out", async () => {
   serving([ME, ALEX]);
   const view = draw();
-  fireEvent.click(await view.findByRole("button", { name: "2 people" }));
+  fireEvent.click(await view.findByRole("button", { name: "2 人" }));
   expect(await view.findByText("Alex")).toBeTruthy();
-  expect(view.getByText("You")).toBeTruthy();
-  fireEvent.click(
-    view.getByRole("button", { name: "Remove alex@example.test" }),
-  );
+  expect(view.getByText("你")).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "移除 alex@example.test" }));
   await waitFor(() =>
     expect(requests).toContain("DELETE /api/groups/group-1/members/u2 "),
   );
@@ -102,13 +100,13 @@ test("the creator sees everyone and can take another person out", async () => {
 test("adding someone by email lists them without reopening the dialog", async () => {
   serving([ME]);
   const view = draw();
-  fireEvent.click(await view.findByRole("button", { name: "1 person" }));
+  fireEvent.click(await view.findByRole("button", { name: "1 人" }));
   const user = userEvent.setup({ document });
   await user.type(
-    await view.findByRole("textbox", { name: "Their email" }),
+    await view.findByRole("textbox", { name: "对方的邮箱" }),
     "sam@example.test",
   );
-  fireEvent.click(view.getByRole("button", { name: "Add" }));
+  fireEvent.click(view.getByRole("button", { name: "添加" }));
   await waitFor(() =>
     expect(requests).toContain(
       'POST /api/groups/group-1/members {"email":"sam@example.test"}',

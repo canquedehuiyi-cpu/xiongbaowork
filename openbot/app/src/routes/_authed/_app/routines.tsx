@@ -8,7 +8,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
  * page answered.
  *
  * A routine's wording is still changed in conversation, not in a form. A coworker's own routines,
- * with each one's full run history, remain on its assembly screen (`/assemble/$agentId`).
+ * with each one's full run history, remain on its own page (`/bots/$agentId/routines`).
  *
  * The file stays so the address keeps resolving for bookmarks and old links. `replace`, so Back does
  * not bounce through the redirect.

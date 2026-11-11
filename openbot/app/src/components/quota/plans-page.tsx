@@ -1,6 +1,6 @@
 /*
- * M5b 第 0 步：从 `routes/_authed/_app/plans.tsx` 剪出的页面主体，原样保留，地址改成重定向（/plans → /settings/plans）。
- * 各组在新路由里接这个组件，再按新结构调整其中的链接与文案。
+ * 套餐与用量（M5b：原 `routes/_authed/_app/plans.tsx` 的页面主体，挂在设置里的 `/settings/plans`；
+ * `/plans` 重定向到这里，服务端 `upgradeUrl` 的契约不断）。
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";

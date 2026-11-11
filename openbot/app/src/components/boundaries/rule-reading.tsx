@@ -101,13 +101,13 @@ export function RuleReading({
       check={written.compile}
       edited={
         edited
-          ? "You've changed the rule since it was written. The check and the reading above are for the written rule, not your edit."
+          ? "写好之后你改过这条规则。上面的检查和解读说的是写出来的规则，不是你改过的版本。"
           : null
       }
       explanation={written.explanation}
-      failed="Doesn't compile, so OpenBot won't save it."
-      heading="What this rule does"
-      passed="Compiles. OpenBot can check it on every action."
+      failed="编译不通过，熊宝不会保存它。"
+      heading="这条规则做什么"
+      passed="能编译。熊宝可以在每个动作上检查它。"
       warning={written.warning}
     />
   );

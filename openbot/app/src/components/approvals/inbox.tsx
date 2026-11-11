@@ -56,7 +56,19 @@ const ATTENTION_CARD =
 const SETTING_ROW =
   "flex items-center justify-between gap-4 px-[14px] py-[12px] cursor-pointer";
 
-export function ApprovalInbox() {
+/**
+ * What waits on the person (questions and actions to approve), then their own settings, their rules
+ * and, for an administrator, the team's.
+ *
+ * M5b：设置 → 审批 用上游的 `ApprovalSettings` 画「你的设置」和规则、管理 → 审批 用上游的
+ * `TeamApprovalSettings` 画团队设置，所以那里传 `waitingOnly`，这里只画「等你处理」，不重复画一遍。
+ */
+export function ApprovalInbox({
+  waitingOnly = false,
+}: {
+  /** Draw only what waits on the person; the settings and rules are drawn by the page around it. */
+  waitingOnly?: boolean;
+} = {}) {
   const cache = useQueryClient();
   const inbox = useQuery(approvalInboxOptions());
   const refresh = () => cache.invalidateQueries({ queryKey: ["approvals"] });
@@ -321,268 +333,288 @@ export function ApprovalInbox() {
         </div>
       </section>
 
-      <section aria-labelledby="approvals-mine" className="flex flex-col">
-        <SectionTitle id="approvals-mine" title="你的设置" />
-        <div className={`${CARD_FACE} flex flex-col divide-y divide-border`}>
-          <label htmlFor="ask-before-changes" className={SETTING_ROW}>
-            <span className="min-w-0">
-              <span className="block font-semibold text-[14px]">
-                改动前先问我
-              </span>
-              <span className="text-[13px] text-muted-foreground">
-                员工改动网站、已连接的应用和文件之前，先给你过目。
-              </span>
-            </span>
-            <Switch
-              id="ask-before-changes"
-              aria-label="改动前先问我"
-              checked={inbox.data?.enabled ?? false}
-              disabled={inbox.isLoading || preference.isPending}
-              onCheckedChange={(enabled) => preference.mutate(enabled)}
-            />
-          </label>
-          {inbox.data?.preferences ? (
-            <>
-              <label htmlFor="auto-review" className={SETTING_ROW}>
+      {waitingOnly ? null : (
+        <>
+          <section aria-labelledby="approvals-mine" className="flex flex-col">
+            <SectionTitle id="approvals-mine" title="你的设置" />
+            <div
+              className={`${CARD_FACE} flex flex-col divide-y divide-border`}
+            >
+              <label htmlFor="ask-before-changes" className={SETTING_ROW}>
                 <span className="min-w-0">
-                  <span
-                    id="auto-review-title"
-                    className="block font-semibold text-[14px]"
-                  >
-                    自动审查
+                  <span className="block font-semibold text-[14px]">
+                    改动前先问我
                   </span>
-                  <span
-                    id="auto-review-description"
-                    className="text-[13px] text-muted-foreground"
-                  >
-                    {enforced ? "团队要求开启。" : ""}
-                    在可能影响你的账户或对外分享信息的动作之前，会有一个模型对照你的要求、你的规则和安全要求检查一遍；它拿不准时会来问你。
+                  <span className="text-[13px] text-muted-foreground">
+                    员工改动网站、已连接的应用和文件之前，先给你过目。
                   </span>
                 </span>
                 <Switch
-                  id="auto-review"
-                  // Named by its title alone and described by the sentence under it, so the name does
-                  // not depend on how a label wrapping a composite control is resolved.
-                  aria-labelledby="auto-review-title"
-                  aria-describedby="auto-review-description"
-                  checked={enforced || inbox.data.preferences.autoReview}
-                  disabled={enforced || preferences.isPending}
-                  onCheckedChange={(autoReview) =>
-                    preferences.mutate({ autoReview })
-                  }
+                  id="ask-before-changes"
+                  aria-label="改动前先问我"
+                  checked={inbox.data?.enabled ?? false}
+                  disabled={inbox.isLoading || preference.isPending}
+                  onCheckedChange={(enabled) => preference.mutate(enabled)}
                 />
               </label>
-              <label htmlFor="host-commands" className={SETTING_ROW}>
-                <span className="min-w-0">
-                  <span className="block font-semibold text-[14px]">
-                    在你电脑上执行命令
-                  </span>
-                  <span className="text-[13px] text-muted-foreground">
-                    {inbox.data.hostCommands &&
-                    inbox.data.hostCommands !==
-                      inbox.data.preferences.hostCommands
-                      ? `团队把这一项限定为「${HOST_LABELS[inbox.data.hostCommands]}」。`
-                      : ""}
-                    桌面客户端仍会在每条命令于你电脑上执行前先给你看。
-                  </span>
-                </span>
-                <select
-                  id="host-commands"
-                  aria-label="在你电脑上执行命令"
-                  className={selectClass}
-                  value={inbox.data.preferences.hostCommands}
-                  disabled={preferences.isPending}
-                  onChange={(event) =>
-                    preferences.mutate({
-                      hostCommands: event.target.value as HostCommandPolicy,
-                    })
-                  }
-                >
-                  {(Object.keys(HOST_LABELS) as HostCommandPolicy[]).map(
-                    (key) => (
-                      <option key={key} value={key}>
-                        {HOST_LABELS[key]}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-            </>
-          ) : null}
-        </div>
-      </section>
+              {inbox.data?.preferences ? (
+                <>
+                  <label htmlFor="auto-review" className={SETTING_ROW}>
+                    <span className="min-w-0">
+                      <span
+                        id="auto-review-title"
+                        className="block font-semibold text-[14px]"
+                      >
+                        自动审查
+                      </span>
+                      <span
+                        id="auto-review-description"
+                        className="text-[13px] text-muted-foreground"
+                      >
+                        {enforced ? "团队要求开启。" : ""}
+                        在可能影响你的账户或对外分享信息的动作之前，会有一个模型对照你的要求、你的规则和安全要求检查一遍；它拿不准时会来问你。
+                      </span>
+                    </span>
+                    <Switch
+                      id="auto-review"
+                      // Named by its title alone and described by the sentence under it, so the name does
+                      // not depend on how a label wrapping a composite control is resolved.
+                      aria-labelledby="auto-review-title"
+                      aria-describedby="auto-review-description"
+                      checked={enforced || inbox.data.preferences.autoReview}
+                      disabled={enforced || preferences.isPending}
+                      onCheckedChange={(autoReview) =>
+                        preferences.mutate({ autoReview })
+                      }
+                    />
+                  </label>
+                  <label htmlFor="host-commands" className={SETTING_ROW}>
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-[14px]">
+                        在你电脑上执行命令
+                      </span>
+                      <span className="text-[13px] text-muted-foreground">
+                        {inbox.data.hostCommands &&
+                        inbox.data.hostCommands !==
+                          inbox.data.preferences.hostCommands
+                          ? `团队把这一项限定为「${HOST_LABELS[inbox.data.hostCommands]}」。`
+                          : ""}
+                        桌面客户端仍会在每条命令于你电脑上执行前先给你看。
+                      </span>
+                    </span>
+                    <select
+                      id="host-commands"
+                      aria-label="在你电脑上执行命令"
+                      className={selectClass}
+                      value={inbox.data.preferences.hostCommands}
+                      disabled={preferences.isPending}
+                      onChange={(event) =>
+                        preferences.mutate({
+                          hostCommands: event.target.value as HostCommandPolicy,
+                        })
+                      }
+                    >
+                      {(Object.keys(HOST_LABELS) as HostCommandPolicy[]).map(
+                        (key) => (
+                          <option key={key} value={key}>
+                            {HOST_LABELS[key]}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                </>
+              ) : null}
+            </div>
+          </section>
 
-      <section aria-labelledby="approvals-rules" className="flex flex-col">
-        <SectionTitle id="approvals-rules" title="规则" />
-        <p className="-mt-[3px] mb-[10px] max-w-[80ch] text-pretty text-[13px] text-muted-foreground leading-[1.6]">
-          匹配到的规则里最严格的一条生效，所以「先问」会压过「允许」。团队规则已锁定。修改密码、安全设置和付款永远交给你来做。
-          {rulesOff ? "团队关闭了个人规则，它们会保留但不生效。" : ""}
-        </p>
-        {rulesEmpty ? (
-          <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
-            还没有保存的规则。
-          </p>
-        ) : (
-          /*
-           * A table you scan: one rule per row, what it covers said in words beside how it is handled. On a phone
-           * the card scrolls sideways inside itself instead of widening the page.
-           */
-          <div className={`${CARD_FACE} overflow-x-auto`}>
-            <table className="w-full min-w-[520px] border-collapse text-left text-[13px]">
-              <caption className="sr-only">审批规则</caption>
-              <thead>
-                <tr className="border-border border-b text-[11px] text-faint uppercase tracking-[0.06em]">
-                  <th className="px-[14px] py-[9px] font-medium" scope="col">
-                    处理方式
-                  </th>
-                  <th className="px-[10px] py-[9px] font-medium" scope="col">
-                    规则
-                  </th>
-                  <th
-                    className="px-[14px] py-[9px] text-right font-medium"
-                    scope="col"
+          <section aria-labelledby="approvals-rules" className="flex flex-col">
+            <SectionTitle id="approvals-rules" title="规则" />
+            <p className="-mt-[3px] mb-[10px] max-w-[80ch] text-pretty text-[13px] text-muted-foreground leading-[1.6]">
+              匹配到的规则里最严格的一条生效，所以「先问」会压过「允许」。团队规则已锁定。修改密码、安全设置和付款永远交给你来做。
+              {rulesOff ? "团队关闭了个人规则，它们会保留但不生效。" : ""}
+            </p>
+            {rulesEmpty ? (
+              <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
+                还没有保存的规则。
+              </p>
+            ) : (
+              /*
+               * A table you scan: one rule per row, what it covers said in words beside how it is handled. On a phone
+               * the card scrolls sideways inside itself instead of widening the page.
+               */
+              <div className={`${CARD_FACE} overflow-x-auto`}>
+                <table className="w-full min-w-[520px] border-collapse text-left text-[13px]">
+                  <caption className="sr-only">审批规则</caption>
+                  <thead>
+                    <tr className="border-border border-b text-[11px] text-faint uppercase tracking-[0.06em]">
+                      <th
+                        className="px-[14px] py-[9px] font-medium"
+                        scope="col"
+                      >
+                        处理方式
+                      </th>
+                      <th
+                        className="px-[10px] py-[9px] font-medium"
+                        scope="col"
+                      >
+                        规则
+                      </th>
+                      <th
+                        className="px-[14px] py-[9px] text-right font-medium"
+                        scope="col"
+                      >
+                        <span className="sr-only">操作</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {inbox.data?.teamRules.map((rule) => (
+                      <RuleRow
+                        key={rule.id}
+                        rule={rule}
+                        locked={!isAdmin}
+                        disabled={
+                          revokeTeam.isPending || changeTeamRule.isPending
+                        }
+                        onRevoke={() => revokeTeam.mutate(rule.id)}
+                        onChange={(behaviour) =>
+                          changeTeamRule.mutate({ id: rule.id, behaviour })
+                        }
+                        team
+                      />
+                    ))}
+                    {inbox.data?.rules.map((rule) => (
+                      <RuleRow
+                        key={rule.id}
+                        rule={rule}
+                        locked={rulesOff}
+                        disabled={revoke.isPending || changeRule.isPending}
+                        onRevoke={() => revoke.mutate(rule.id)}
+                        onChange={(behaviour) =>
+                          changeRule.mutate({ id: rule.id, behaviour })
+                        }
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {inbox.data?.preferences && !rulesOff ? (
+              <RuleForm
+                label="添加规则"
+                pending={addRule.isPending}
+                onSave={(input) => addRule.mutate(input)}
+              />
+            ) : null}
+          </section>
+
+          {isAdmin && inbox.data?.team ? (
+            <section aria-labelledby="approvals-team" className="flex flex-col">
+              <SectionTitle id="approvals-team" title="团队设置" />
+              <div
+                className={`${CARD_FACE} flex flex-col divide-y divide-border`}
+              >
+                <label htmlFor="enforce-auto-review" className={SETTING_ROW}>
+                  <span
+                    id="enforce-auto-review-title"
+                    className="font-semibold text-[14px]"
                   >
-                    <span className="sr-only">操作</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {inbox.data?.teamRules.map((rule) => (
-                  <RuleRow
-                    key={rule.id}
-                    rule={rule}
-                    locked={!isAdmin}
-                    disabled={revokeTeam.isPending || changeTeamRule.isPending}
-                    onRevoke={() => revokeTeam.mutate(rule.id)}
-                    onChange={(behaviour) =>
-                      changeTeamRule.mutate({ id: rule.id, behaviour })
-                    }
-                    team
-                  />
-                ))}
-                {inbox.data?.rules.map((rule) => (
-                  <RuleRow
-                    key={rule.id}
-                    rule={rule}
-                    locked={rulesOff}
-                    disabled={revoke.isPending || changeRule.isPending}
-                    onRevoke={() => revoke.mutate(rule.id)}
-                    onChange={(behaviour) =>
-                      changeRule.mutate({ id: rule.id, behaviour })
+                    要求所有人开启自动审查
+                  </span>
+                  <Switch
+                    id="enforce-auto-review"
+                    aria-labelledby="enforce-auto-review-title"
+                    checked={inbox.data.team.enforceAutoReview}
+                    disabled={team.isPending}
+                    onCheckedChange={(enforceAutoReview) =>
+                      team.mutate({ enforceAutoReview })
                     }
                   />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {inbox.data?.preferences && !rulesOff ? (
-          <RuleForm
-            label="添加规则"
-            pending={addRule.isPending}
-            onSave={(input) => addRule.mutate(input)}
-          />
-        ) : null}
-      </section>
-
-      {isAdmin && inbox.data?.team ? (
-        <section aria-labelledby="approvals-team" className="flex flex-col">
-          <SectionTitle id="approvals-team" title="团队设置" />
-          <div className={`${CARD_FACE} flex flex-col divide-y divide-border`}>
-            <label htmlFor="enforce-auto-review" className={SETTING_ROW}>
-              <span
-                id="enforce-auto-review-title"
-                className="font-semibold text-[14px]"
-              >
-                要求所有人开启自动审查
-              </span>
-              <Switch
-                id="enforce-auto-review"
-                aria-labelledby="enforce-auto-review-title"
-                checked={inbox.data.team.enforceAutoReview}
-                disabled={team.isPending}
-                onCheckedChange={(enforceAutoReview) =>
-                  team.mutate({ enforceAutoReview })
-                }
-              />
-            </label>
-            <label htmlFor="custom-rules" className={SETTING_ROW}>
-              <span
-                id="custom-rules-title"
-                className="font-semibold text-[14px]"
-              >
-                允许成员设置个人规则
-              </span>
-              <Switch
-                id="custom-rules"
-                aria-labelledby="custom-rules-title"
-                checked={inbox.data.team.customRulesEnabled}
-                disabled={team.isPending}
-                onCheckedChange={(customRulesEnabled) =>
-                  team.mutate({ customRulesEnabled })
-                }
-              />
-            </label>
-            <label htmlFor="enforce-dangerous-commands" className={SETTING_ROW}>
-              <span className="min-w-0">
-                <span
-                  id="enforce-dangerous-commands-title"
-                  className="block font-semibold text-[14px]"
+                </label>
+                <label htmlFor="custom-rules" className={SETTING_ROW}>
+                  <span
+                    id="custom-rules-title"
+                    className="font-semibold text-[14px]"
+                  >
+                    允许成员设置个人规则
+                  </span>
+                  <Switch
+                    id="custom-rules"
+                    aria-labelledby="custom-rules-title"
+                    checked={inbox.data.team.customRulesEnabled}
+                    disabled={team.isPending}
+                    onCheckedChange={(customRulesEnabled) =>
+                      team.mutate({ customRulesEnabled })
+                    }
+                  />
+                </label>
+                <label
+                  htmlFor="enforce-dangerous-commands"
+                  className={SETTING_ROW}
                 >
-                  强制危险命令审批
-                </span>
-                <span className="text-[13px] text-muted-foreground">
-                  所有员工运行危险命令前都要先问，员工自己的开关关不掉。
-                </span>
-              </span>
-              <Switch
-                id="enforce-dangerous-commands"
-                aria-labelledby="enforce-dangerous-commands-title"
-                checked={inbox.data.team.enforceDangerousCommands === true}
-                disabled={team.isPending}
-                onCheckedChange={(enforceDangerousCommands) =>
-                  team.mutate({ enforceDangerousCommands })
-                }
+                  <span className="min-w-0">
+                    <span
+                      id="enforce-dangerous-commands-title"
+                      className="block font-semibold text-[14px]"
+                    >
+                      强制危险命令审批
+                    </span>
+                    <span className="text-[13px] text-muted-foreground">
+                      所有员工运行危险命令前都要先问，员工自己的开关关不掉。
+                    </span>
+                  </span>
+                  <Switch
+                    id="enforce-dangerous-commands"
+                    aria-labelledby="enforce-dangerous-commands-title"
+                    checked={inbox.data.team.enforceDangerousCommands === true}
+                    disabled={team.isPending}
+                    onCheckedChange={(enforceDangerousCommands) =>
+                      team.mutate({ enforceDangerousCommands })
+                    }
+                  />
+                </label>
+                <label htmlFor="host-commands-cap" className={SETTING_ROW}>
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-[14px]">
+                      成员电脑上执行命令的上限
+                    </span>
+                    <span className="text-[13px] text-muted-foreground">
+                      成员自己更严格的设置仍然生效。
+                    </span>
+                  </span>
+                  <select
+                    id="host-commands-cap"
+                    aria-label="成员电脑上执行命令的上限"
+                    className={selectClass}
+                    value={inbox.data.team.hostCommandsCap}
+                    disabled={team.isPending}
+                    onChange={(event) =>
+                      team.mutate({
+                        hostCommandsCap: event.target
+                          .value as HostCommandPolicy,
+                      })
+                    }
+                  >
+                    {(Object.keys(HOST_LABELS) as HostCommandPolicy[]).map(
+                      (key) => (
+                        <option key={key} value={key}>
+                          {HOST_LABELS[key]}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+              </div>
+              <RuleForm
+                label="添加团队规则"
+                pending={addTeamRule.isPending}
+                onSave={(input) => addTeamRule.mutate(input)}
               />
-            </label>
-            <label htmlFor="host-commands-cap" className={SETTING_ROW}>
-              <span className="min-w-0">
-                <span className="block font-semibold text-[14px]">
-                  成员电脑上执行命令的上限
-                </span>
-                <span className="text-[13px] text-muted-foreground">
-                  成员自己更严格的设置仍然生效。
-                </span>
-              </span>
-              <select
-                id="host-commands-cap"
-                aria-label="成员电脑上执行命令的上限"
-                className={selectClass}
-                value={inbox.data.team.hostCommandsCap}
-                disabled={team.isPending}
-                onChange={(event) =>
-                  team.mutate({
-                    hostCommandsCap: event.target.value as HostCommandPolicy,
-                  })
-                }
-              >
-                {(Object.keys(HOST_LABELS) as HostCommandPolicy[]).map(
-                  (key) => (
-                    <option key={key} value={key}>
-                      {HOST_LABELS[key]}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
-          </div>
-          <RuleForm
-            label="添加团队规则"
-            pending={addTeamRule.isPending}
-            onSave={(input) => addTeamRule.mutate(input)}
-          />
-        </section>
-      ) : null}
+            </section>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

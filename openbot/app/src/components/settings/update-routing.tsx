@@ -32,6 +32,9 @@ import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
 
 /**
+ * 「消息发到哪里」（M5b 从熊宝员工详情页的 `bot-profile/profile.tsx` 搬来，跟上游一样放在设置 › 通知里，
+ * 对这个人所有员工生效）。
+ *
  * How each channel is turned on: Slack and Teams through an OpenTag pairing, text messages through Twilio, push through
  * the OpenBot phone app. Each is a setting where OpenBot runs, read at start-up, so the docs say what to set; the two
  * sections sit together there. The setup checklist links the same page for Slack and Teams.
@@ -41,29 +44,29 @@ export const CHANNEL_SETUP_DOCS =
 
 const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {
   progress: {
-    title: "Progress",
-    description: "Replies and results from work you weren't watching.",
+    title: "进展",
+    description: "你没在看时，员工做的事的回复和结果。",
   },
   decision: {
-    title: "Decisions",
-    description: "Approvals a Bot needs before it acts.",
+    title: "决定",
+    description: "员工动手前需要你批准的事。",
   },
   question: {
-    title: "Questions",
-    description: "Things a Bot asked you and is waiting on.",
+    title: "提问",
+    description: "员工问了你、正在等你回答的事。",
   },
   attention: {
-    title: "Something needs you",
+    title: "有事需要你",
     description:
-      "What your Bots' check-ins found, at most once an hour, every Bot in one message.",
+      "员工在主动巡检里发现、需要你处理的事，每小时最多一次，所有员工汇总在一条提醒里。",
   },
 };
 
 const TRANSPORTS: { id: UpdateTransport; label: string }[] = [
-  { id: "push", label: "Push" },
+  { id: "push", label: "推送" },
   { id: "slack", label: "Slack" },
   { id: "teams", label: "Microsoft Teams" },
-  { id: "sms", label: "SMS" },
+  { id: "sms", label: "短信" },
 ];
 
 /**
@@ -111,14 +114,14 @@ export function UpdateRoutingSection() {
       // Said only above the switches: above the empty state it would point at nothing to choose.
       description={
         choosing
-          ? "Choose where to receive each type of update when you’re away. All updates remain available in the web app."
+          ? "你没在看时，每类消息发到哪里。网页上始终显示全部。对你所有的员工生效。"
           : undefined
       }
-      title="Where updates go"
+      title="消息发到哪里"
     >
       {routing.isPending || reach.isPending ? null : routing.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't load where your updates go. Reload the page.
+          读不到你的消息去向设置，请刷新页面。
         </p>
       ) : shown.length === 0 ? (
         <PageEmpty
@@ -133,18 +136,18 @@ export function UpdateRoutingSection() {
                 rel="noopener noreferrer"
                 target="_blank"
               >
-                How to set them up
+                怎么设置
               </a>
             ) : undefined
           }
           icon={IconRoute}
-          title="Updates stay in OpenBot"
+          title="消息只在熊宝里显示"
         >
           {desktop
-            ? "Push, Slack, Microsoft Teams and text messages need OpenBot running on a server."
+            ? "推送、Slack、Microsoft Teams 和短信需要熊宝运行在服务器上。"
             : setsUp
-              ? "Push, Slack, Microsoft Teams and text messages show up here once they're set up where OpenBot runs."
-              : "Push, Slack, Microsoft Teams and text messages show up here once your admin sets them up."}
+              ? "在熊宝运行的地方设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。"
+              : "管理员设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。"}
         </PageEmpty>
       ) : (
         <PageRows>
@@ -172,7 +175,7 @@ export function UpdateRoutingSection() {
                         key={transport.id}
                       >
                         <Switch
-                          aria-label={`${KIND_LABEL[kind].title} by ${transport.label}`}
+                          aria-label={`${KIND_LABEL[kind].title}：${transport.label}`}
                           checked={
                             configured(transport.id) && allowed(transport.id)
                           }

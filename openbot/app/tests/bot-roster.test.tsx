@@ -23,7 +23,8 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * The Bots roster: one list of every Bot a person can reach, replacing the Bots, Agents and Team
- * Bots screens. The harness is this repository's: `GlobalRegistrator` around the file, `cleanup`
+ * Bots screens. 熊宝（M5b）：中文分区名，名单默认画成员工墙的卡片；这里多数用例画列表（`view: "list"`），
+ * 和上游一样一行一位员工。 The harness is this repository's: `GlobalRegistrator` around the file, `cleanup`
  * after each test, a `QueryClient` per test with `retry: false`, and `fetch` stubbed per test.
  */
 
@@ -50,6 +51,8 @@ function bot(overrides: Partial<AgentProfile> & { id: string }): AgentProfile {
     builtIn: true,
     hasAuth: false,
     hasCallbackToken: false,
+    modelRef: null,
+    persona: null,
     isolated: false,
     isolationActive: false,
     isolationOffReason: null,
@@ -78,6 +81,8 @@ function serving(
     if (url === "/api/proactive/suggestions")
       return Response.json({ suggestions: [] });
     if (url === "/api/tasks") return Response.json({ tasks: [] });
+    // 熊宝的任务读取在 `/api/bot-tasks`（上游是 `/api/tasks`，熊宝那里是任务看板）。
+    if (url === "/api/bot-tasks") return Response.json({ tasks: [] });
     if (url.startsWith("/api/channels"))
       return Response.json({ channels: [], nextCursor: null });
     return Response.json({
@@ -93,13 +98,20 @@ beforeEach(() => {
   });
 });
 
-function draw() {
+function draw(view: "list" | "cards" = "list") {
   const rootRoute = createRootRoute();
   const routeTree = rootRoute.addChildren([
     createRoute({
       getParentRoute: () => rootRoute,
       path: "/",
-      component: BotRoster,
+      component: () => (
+        <BotRoster search={view === "list" ? { view: "list" } : {}} />
+      ),
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/bots",
+      component: () => null,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -132,7 +144,7 @@ test("sections read Pinned, Yours, Shared with you, and each Bot appears once", 
   const headings = [...view.container.querySelectorAll("h2")].map(
     (heading) => heading.textContent,
   );
-  expect(headings).toEqual(["Pinned", "Yours", "Shared with you"]);
+  expect(headings).toEqual(["已置顶", "你的员工", "共享给你的"]);
   expect(view.getAllByText("Favourite")).toHaveLength(1);
 });
 
@@ -146,10 +158,8 @@ test("a row opens the Bot's own page", async () => {
 test("with every Bot of yours pinned, Yours says so instead of claiming none", async () => {
   serving([bot({ id: "favourite", name: "Favourite", pinned: true })], []);
   const view = draw();
-  expect(await view.findByText("Your Bots are all pinned above.")).toBeTruthy();
-  expect(
-    view.queryByText("You don't have any Bots yet. Create one with New Bot."),
-  ).toBeNull();
+  expect(await view.findByText("你的员工都已置顶在上面。")).toBeTruthy();
+  expect(view.queryByText("你新建的员工会出现在这里。")).toBeNull();
 });
 
 test("a hidden Bot is under Hidden, folded until asked for, and its row opens its page", async () => {
@@ -158,9 +168,9 @@ test("a hidden Bot is under Hidden, folded until asked for, and its row opens it
     [bot({ id: "tucked", name: "Tucked", hidden: true })],
   );
   const view = draw();
-  expect(await view.findByText("Hidden")).toBeTruthy();
+  expect(await view.findByText("已隐藏")).toBeTruthy();
   expect(view.queryByText("Tucked")).toBeNull();
-  fireEvent.click(view.getByRole("button", { name: "Show" }));
+  fireEvent.click(view.getByRole("button", { name: "显示" }));
   const row = view.getByText("Tucked").closest("a");
   expect(row?.getAttribute("href")).toBe("/bots/tucked");
 });
@@ -174,17 +184,16 @@ test("with nothing hidden there is no Hidden section", async () => {
       "success",
     ),
   );
-  expect(view.queryByText("Hidden")).toBeNull();
+  expect(view.queryByText("已隐藏")).toBeNull();
 });
 
 test("a roster that never loaded says so, not that you have no Bots", async () => {
   global.fetch = (async () =>
     new Response(null, { status: 500 })) as unknown as typeof fetch;
   const view = draw();
-  expect(await view.findByRole("alert")).toBeTruthy();
-  expect(
-    view.queryByText("You don't have any Bots yet. Create one with New Bot."),
-  ).toBeNull();
+  expect(await view.findByText(/读不到员工/)).toBeTruthy();
+  expect(view.getByText(/读不到员工/).closest("[role=alert]")).not.toBeNull();
+  expect(view.queryByText("你新建的员工会出现在这里。")).toBeNull();
 });
 
 test("a failed refetch keeps the roster it already had, not the error", async () => {
@@ -200,9 +209,7 @@ test("a failed refetch keeps the roster it already had, not the error", async ()
     ),
   );
   expect(view.getByText("Mine")).toBeTruthy();
-  expect(
-    view.queryByText("Couldn't load your Bots. Reload the page."),
-  ).toBeNull();
+  expect(view.queryByText(/读不到员工/)).toBeNull();
 });
 
 test("a Bot with something waiting stays in its own section, with its count", async () => {
@@ -233,7 +240,7 @@ test("a Bot with something waiting stays in its own section, with its count", as
     (heading) => heading.textContent,
   );
   // What it waits on is on the Needs you board, by name; the Bot itself stays where it is.
-  expect(headings).toEqual(["Yours", "Shared with you"]);
+  expect(headings).toEqual(["你的员工", "共享给你的"]);
   expect(view.getAllByText("Waiting")).toHaveLength(1);
 });
 
@@ -257,8 +264,8 @@ test("a Bot's check-in items are counted in the words the badge and Needs you us
     ],
   );
   const view = draw();
-  expect(await view.findByText("2 things need you")).toBeTruthy();
-  expect(view.container.textContent).not.toContain("suggestion");
+  expect(await view.findByText("2 件事需要你")).toBeTruthy();
+  expect(view.container.textContent).not.toContain("建议");
 });
 
 test("personal edition labels starter Bots as included with OpenBot", async () => {
@@ -271,8 +278,6 @@ test("personal edition labels starter Bots as included with OpenBot", async () =
   );
   const view = draw();
   await view.findByText("Starter");
-  expect(
-    view.getByRole("heading", { name: "Included with OpenBot" }),
-  ).toBeTruthy();
-  expect(view.queryByText("Shared with you")).toBeNull();
+  expect(view.getByRole("heading", { name: "熊宝自带的员工" })).toBeTruthy();
+  expect(view.queryByText("共享给你的")).toBeNull();
 });

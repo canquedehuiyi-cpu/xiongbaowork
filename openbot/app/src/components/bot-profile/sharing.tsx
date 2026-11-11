@@ -42,7 +42,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { countLabel } from "@/lib/agents/bot-summaries";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
@@ -85,7 +84,7 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
 
   return (
     <>
-      <PageSection title="Published">
+      <PageSection title="发布">
         {unpublish.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
             {unpublish.error.message}
@@ -100,13 +99,13 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
               <ItemContent>
                 <ItemTitle>
                   {published.audience === "team"
-                    ? "To the whole team"
-                    : `To ${[...(published.people ?? []), ...(published.groups ?? []).map((group) => `group ${group}`)].join(", ")}`}
+                    ? "已发布给整个团队"
+                    : `已发布给 ${[...(published.people ?? []), ...(published.groups ?? []).map((group) => `分组 ${group}`)].join("、")}`}
                 </ItemTitle>
                 <ItemDescription>
                   {published.visibleToTeam
-                    ? "Each person's conversations with it are private."
-                    : "Teammates can't see it until it has a real name and a description."}
+                    ? "每个人和它的对话都只有自己能看到。"
+                    : "它有了正式的名字和描述之后，同事才看得到它。"}
                 </ItemDescription>
               </ItemContent>
               {agent.mine ? (
@@ -117,7 +116,7 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
                     size="sm"
                     variant="outline"
                   >
-                    Unpublish
+                    取消发布
                   </Button>
                 </ItemActions>
               ) : null}
@@ -128,9 +127,9 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
                 <IconLink />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Link</ItemTitle>
+                <ItemTitle>链接</ItemTitle>
                 <ItemDescription>
-                  Opens a private conversation with it.
+                  打开一段只属于你的对话。
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -143,7 +142,7 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
                   size="sm"
                   variant="outline"
                 >
-                  {copied ? "Copied" : "Copy link"}
+                  {copied ? "已复制" : "复制链接"}
                 </Button>
               </ItemActions>
             </Item>
@@ -153,22 +152,22 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
             icon={IconShare}
             title={
               agent.visibility === "public"
-                ? "Not published to the team"
-                : "Not published"
+                ? "没有发布到团队"
+                : "没有发布"
             }
           >
             {agent.visibility === "public"
-              ? "It's public, so everyone on OpenBot can already use it."
+              ? "它是公开的，熊宝上的所有人已经都能用它。"
               : agent.mine
-                ? "Only you can use it."
+                ? "只有你能用它。"
                 : null}
           </PageEmpty>
         )}
       </PageSection>
       {agent.mine && (published || publishable) ? (
         <PageSection
-          description="Publishing doesn't change its visibility. You can unpublish at any time."
-          title={published ? "Who it is published to" : "Publish"}
+          description="发布不会改变它的可见性。你随时可以取消发布。"
+          title={published ? "发布给了谁" : "发布到团队"}
         >
           {/* More than one value — an audience, then people and groups — so a summary row and a
               dialog rather than a form on the page. */}
@@ -183,7 +182,7 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
                 <IconUsersGroup />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Audience</ItemTitle>
+                <ItemTitle>发布对象</ItemTitle>
                 <ItemDescription>{audienceSummary(published)}</ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -202,8 +201,8 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
       ) : null}
       {me?.role === "admin" && published ? (
         <PageSection
-          description="Pins this Bot at the top of every group member's Bots list. Use * for the whole team."
-          title="Assign to groups"
+          description="把这位员工置顶在分组里每位成员的员工列表里，成员不能隐藏它。用 * 表示整个团队。"
+          title="分配给分组"
         >
           <Assignments bot={published} />
         </PageSection>
@@ -214,18 +213,20 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
 
 /** The current answer on the Audience row: who it is published to, as a count. */
 function audienceSummary(current: TeamBot | undefined): string {
-  if (!current) return "Not published";
-  if (current.audience === "team") return "The whole team";
+  if (!current) return "没有发布";
+  if (current.audience === "team") return "整个团队";
+  const people = current.people?.length ?? 0;
+  const groups = current.groups?.length ?? 0;
   const parts = [
-    countLabel(current.people?.length ?? 0, "person", "people", ""),
-    countLabel(current.groups?.length ?? 0, "group", "groups", ""),
+    people ? `${people} 个人` : "",
+    groups ? `${groups} 个分组` : "",
   ].filter(Boolean);
-  return parts.length ? parts.join(", ") : "Specific people or groups";
+  return parts.length ? parts.join("、") : "指定的人或分组";
 }
 
 const AUDIENCES = {
-  team: "The whole team",
-  people: "Specific people or groups",
+  team: "整个团队",
+  people: "指定的人或分组",
 } as const;
 
 /**
@@ -253,11 +254,10 @@ function PublishDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {current ? "Who it is published to" : "Publish"}
+            {current ? "发布给了谁" : "发布到团队"}
           </DialogTitle>
           <DialogDescription>
-            Publishing doesn't change its visibility. You can unpublish at any
-            time.
+            发布不会改变它的可见性。你随时可以取消发布。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 overflow-y-auto">
@@ -281,7 +281,7 @@ function PublishDialog({
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor={`${formId}-audience`}>
-                  Published to
+                  发布给
                 </FieldLabel>
                 <Select
                   items={AUDIENCES}
@@ -310,21 +310,21 @@ function PublishDialog({
                 <>
                   <Field>
                     <FieldLabel htmlFor={`${formId}-people`}>
-                      People, by email
+                      指定的人（填邮箱）
                     </FieldLabel>
                     <Input
                       id={`${formId}-people`}
                       onChange={(event) => setEmails(event.target.value)}
-                      placeholder="Comma separated"
+                      placeholder="用逗号分隔"
                       value={emails}
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor={`${formId}-groups`}>Groups</FieldLabel>
+                    <FieldLabel htmlFor={`${formId}-groups`}>分组</FieldLabel>
                     <Input
                       id={`${formId}-groups`}
                       onChange={(event) => setGroups(event.target.value)}
-                      placeholder="Comma separated"
+                      placeholder="用逗号分隔"
                       value={groups}
                     />
                   </Field>
@@ -341,7 +341,7 @@ function PublishDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={publish.isPending}
@@ -349,7 +349,7 @@ function PublishDialog({
             size="sm"
             type="submit"
           >
-            {current ? "Update" : "Publish to team"}
+            {current ? "更新" : "发布到团队"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -373,7 +373,7 @@ function Assignments({ bot }: { bot: TeamBot }) {
         </p>
       ) : null}
       {assigned.length === 0 ? (
-        <PageEmpty icon={IconUsersGroup} title="Not assigned to any group" />
+        <PageEmpty icon={IconUsersGroup} title="还没有分配给任何分组" />
       ) : null}
       <PageRows>
         {assigned.map((name) => (
@@ -383,11 +383,11 @@ function Assignments({ bot }: { bot: TeamBot }) {
                 <IconUsers />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>{name === "*" ? "Whole team" : name}</ItemTitle>
+                <ItemTitle>{name === "*" ? "整个团队" : name}</ItemTitle>
               </ItemContent>
               <ItemActions>
                 <Button
-                  aria-label={`Remove ${name}`}
+                  aria-label={`移除 ${name === "*" ? "整个团队" : name}`}
                   disabled={remove.isPending}
                   onClick={() =>
                     remove.mutate({ botId: bot.id, group: name, remove: true })
@@ -395,7 +395,7 @@ function Assignments({ bot }: { bot: TeamBot }) {
                   size="sm"
                   variant="outline"
                 >
-                  Remove
+                  移除
                 </Button>
               </ItemActions>
             </Item>
@@ -410,7 +410,7 @@ function Assignments({ bot }: { bot: TeamBot }) {
             <IconPlus />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Assign to a group</ItemTitle>
+            <ItemTitle>分配给一个分组</ItemTitle>
           </ItemContent>
           <ItemActions>
             <IconChevronRight className="size-4 text-muted-foreground" />
@@ -433,9 +433,9 @@ function AssignDialog({ bot, onClose }: { bot: TeamBot; onClose: () => void }) {
     <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Assign {bot.name} to a group</DialogTitle>
+          <DialogTitle>把 {bot.name} 分配给一个分组</DialogTitle>
           <DialogDescription>
-            It's pinned at the top of every member's Bots list.
+            它会置顶在每位成员的员工列表里。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4">
@@ -447,11 +447,11 @@ function AssignDialog({ bot, onClose }: { bot: TeamBot; onClose: () => void }) {
             }}
           >
             <Field>
-              <FieldLabel htmlFor={`${formId}-group`}>Group, or *</FieldLabel>
+              <FieldLabel htmlFor={`${formId}-group`}>分组，或 *</FieldLabel>
               <Input
                 id={`${formId}-group`}
                 onChange={(event) => setGroup(event.target.value)}
-                placeholder="* for the whole team"
+                placeholder="* 表示整个团队"
                 value={group}
               />
             </Field>
@@ -464,7 +464,7 @@ function AssignDialog({ bot, onClose }: { bot: TeamBot; onClose: () => void }) {
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={!group.trim() || assign.isPending}
@@ -472,7 +472,7 @@ function AssignDialog({ bot, onClose }: { bot: TeamBot; onClose: () => void }) {
             size="sm"
             type="submit"
           >
-            Assign
+            分配
           </Button>
         </DialogFooter>
       </DialogContent>

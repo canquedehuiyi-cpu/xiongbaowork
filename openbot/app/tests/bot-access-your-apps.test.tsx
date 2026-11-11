@@ -129,12 +129,12 @@ test("each app you could give has a switch, on where you gave it, and pressing i
   ]);
   const view = draw(BOT);
   const gmail = await view.findByRole("switch", {
-    name: "Let Expenses use Gmail",
+    name: "让 Expenses 使用 Gmail",
   });
-  const notion = view.getByRole("switch", { name: "Let Expenses use Notion" });
+  const notion = view.getByRole("switch", { name: "让 Expenses 使用 Notion" });
   expect(gmail.getAttribute("aria-checked")).toBe("false");
   expect(notion.getAttribute("aria-checked")).toBe("true");
-  expect(view.getByText("Expenses can't use your Gmail.")).toBeTruthy();
+  expect(view.getByText("Expenses 不能用你的 Gmail。")).toBeTruthy();
 
   fireEvent.click(gmail);
   await waitFor(() =>
@@ -154,19 +154,19 @@ test("an app an admin gave this Bot is on, and not yours to switch off", async (
   serving([appAccess({ givenByOwner: false })]);
   const view = draw(BOT);
   const gmail = await view.findByRole("switch", {
-    name: "Let Expenses use Gmail",
+    name: "让 Expenses 使用 Gmail",
   });
   expect(gmail.getAttribute("aria-checked")).toBe("true");
   expect(
     gmail.hasAttribute("disabled") ||
       gmail.getAttribute("aria-disabled") === "true",
   ).toBe(true);
-  expect(view.getByText("An admin gave it to this Bot.")).toBeTruthy();
+  expect(view.getByText("管理员把它给了这位员工。")).toBeTruthy();
 });
 
 test("somebody else's Bot has no Your apps section", async () => {
   serving([]);
   const view = draw({ ...BOT, mine: false });
-  await view.findByText("What it can use");
-  expect(view.queryByText("Your apps")).toBeNull();
+  await view.findByText("它能用什么");
+  expect(view.queryByText("你的应用")).toBeNull();
 });

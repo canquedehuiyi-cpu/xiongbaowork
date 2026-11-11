@@ -118,7 +118,7 @@ function drawNavigation(
   );
 }
 
-const SCREEN = { name: "Open the Bot's screen full size" };
+const SCREEN = { name: "全屏打开员工的屏幕" };
 
 test("a navigation a boundary refused draws one line and no screen", async () => {
   const view = drawNavigation(
@@ -129,11 +129,11 @@ test("a navigation a boundary refused draws one line and no screen", async () =>
     }),
   );
 
-  expect(await view.findByText("Blocked: Open")).toBeTruthy();
+  expect(await view.findByText("已拦截：打开网页")).toBeTruthy();
   expect(view.getByText("x.com")).toBeTruthy();
   expect(view.queryByRole("button", SCREEN)).toBeNull();
   expect(view.container.querySelector("figure")).toBeNull();
-  expect(view.queryByText(/did not open a page/)).toBeNull();
+  expect(view.queryByText(/did not open a page|没有打开任何页面/)).toBeNull();
   // The rule is the model's sentence. The Bot's answer says why, in words.
   expect(view.queryByText(/page\.host/)).toBeNull();
 });
@@ -146,7 +146,7 @@ test("a navigation that failed draws one line and no screen", async () => {
     }),
   );
 
-  expect(await view.findByText("Opened, didn't work")).toBeTruthy();
+  expect(await view.findByText("打开了网页，没有成功")).toBeTruthy();
   expect(view.getByText("openbot-check.invalid")).toBeTruthy();
   expect(view.queryByRole("button", SCREEN)).toBeNull();
   expect(view.container.querySelector("figure")).toBeNull();
@@ -157,7 +157,7 @@ test("a navigation still held for the person's approval draws nothing of its own
 
   expect(view.queryByRole("button", SCREEN)).toBeNull();
   expect(view.container.querySelector("figure")).toBeNull();
-  expect(view.queryByText(/Opened|Blocked/)).toBeNull();
+  expect(view.queryByText(/打开了网页|已拦截/)).toBeNull();
 });
 
 test("a navigation that opened a page keeps its card, naming the page", async () => {
@@ -174,14 +174,14 @@ test("a navigation that opened a page keeps its card, naming the page", async ()
     "example.com",
   );
   expect(await view.findByText("Example Domain")).toBeTruthy();
-  expect(view.queryByText(/didn't work|Blocked/)).toBeNull();
+  expect(view.queryByText(/没有成功|已拦截/)).toBeNull();
 });
 
 test("a navigation still loading keeps its card, so the conversation does not move under it", () => {
   const view = drawNavigation("https://example.com", undefined, "executing");
 
   expect(view.getByRole("button", SCREEN)).toBeTruthy();
-  expect(view.queryByText(/didn't work|Blocked/)).toBeNull();
+  expect(view.queryByText(/没有成功|已拦截/)).toBeNull();
 });
 
 test("the screen itself draws nothing for a finished turn with no page, and a card for one with a page", async () => {

@@ -56,11 +56,10 @@ import { atStart, useManagePaths } from "@/lib/manage-paths";
 import {
   addCuratedServerMutationOptions,
   connectAccountMutationOptions,
-  grantPlugin,
-  invalidatePlugins,
   refreshPluginServerMutationOptions,
   registerOAuthClientMutationOptions,
   removePluginServerMutationOptions,
+  replaceServerTokenMutationOptions,
   setOwnerGrantsMutationOptions,
 } from "@/lib/plugins/mutations";
 import {
@@ -70,6 +69,13 @@ import {
   brokeredReach,
 } from "@/lib/plugins/provider-vocabulary";
 import {
+  type CrewGrantOutcome,
+  crewMembers,
+  crewSummary,
+  grantToMembers,
+} from "@/lib/plugins/crew-grant";
+import {
+  appKeyOf,
   type CatalogueItem,
   connectionsQueryOptions,
   type PluginServer,
@@ -83,6 +89,8 @@ import {
 } from "@/lib/plugins/shared-use";
 import { toolInWords, toolName } from "@/lib/plugins/tool-words";
 import { toolsListError } from "@/lib/plugins/tools-error";
+import { useZh } from "@/lib/translations/queries";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
 /**
  * One vendor: what it needs from this deployment, and which Bots hold its tools.
@@ -251,6 +259,8 @@ export function PluginPage({
   startConnect?: boolean;
 }) {
   const paths = useManagePaths();
+  /* 熊宝：目录里的标题、简介和工具说明按界面语言翻成中文（服务端存的仍是原文）。 */
+  const zh = useZh();
   // One person: adding and connecting are one step, and nothing here is about other people.
   const personal =
     useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
@@ -259,6 +269,24 @@ export function PluginPage({
   const queryClient = useQueryClient();
   const plugins = useQuery(pluginsPageQueryOptions());
   const provider = pluginsProvider(plugins.data);
+  /*
+   * OPENED BY ROW ID OR BY CATALOGUE KEY（熊宝 G01-E）。A curated connector added for the team is the
+   * row `team:<catalogue key>`, while links into this page and the catalogue name the key. Either
+   * finds the row; the catalogue entry is then looked up by the row's own app key, never by whatever
+   * string happened to be in the address.
+   */
+  const server = plugins.data?.servers.find(
+    (item) => item.id === key || appKeyOf(item) === key,
+  );
+  const appKey = server ? appKeyOf(server) : key;
+  const entry = plugins.data?.catalogue.find((item) => item.key === appKey);
+  /* The row's own id, for every write against the row once there is one. */
+  const rowId = server?.id ?? key;
+  /*
+   * The workspace's crews, for the grant dialog: a crew is a way to say which coworkers, not a holder
+   * of anything itself — pressing one ticks its members, and each member gets its own grant.
+   */
+  const crews = useQuery(wakerGroupsQueryOptions());
   /*
    * The administrator's OWN connections, not the deployment's.
    *
@@ -282,7 +310,7 @@ export function PluginPage({
    */
   const connection = personalConnections(
     connections.data?.connections ?? [],
-  ).find((row) => row.serverId === key);
+  ).find((row) => row.serverId === (server?.id ?? key));
   const youConnected = connection !== undefined;
   /*
    * A CONNECTIONS READ THAT FAILED IS SAID RATHER THAN DEFAULTED, AND ONLY WHERE IT IS READ.
@@ -332,6 +360,14 @@ export function PluginPage({
     done: number;
     total: number;
   } | null>(null);
+  /*
+   * Who the last grant batch could not reach, each with the server's reason. A crew is several
+   * people, and "2 refused" does not say which two, so the dialog names them.
+   */
+  const [refusals, setRefusals] = useState<{
+    text: string;
+    members: { agentId: string; line: string }[];
+  } | null>(null);
 
   /* Every write reports into one banner rather than each growing its own handler. */
   const report = { onError: (thrown: Error) => setError(thrown.message) };
@@ -341,6 +377,10 @@ export function PluginPage({
   });
   const registerClient = useMutation({
     ...registerOAuthClientMutationOptions(queryClient),
+    ...report,
+  });
+  const replaceServerToken = useMutation({
+    ...replaceServerTokenMutationOptions(queryClient),
     ...report,
   });
   const refresh = useMutation({
@@ -369,7 +409,9 @@ export function PluginPage({
     onSuccess: async (_data, serverId) => {
       const listed = queryClient
         .getQueryData(pluginsPageQueryOptions().queryKey)
-        ?.catalogue.some((item) => item.key === serverId);
+        ?.catalogue.some(
+          (item) => item.key === serverId || item.key === appKey,
+        );
       if (!listed) await navigate(paths.plugins());
     },
   });
@@ -401,8 +443,6 @@ export function PluginPage({
       window.location.href = authorizationUrl;
     },
   });
-  const entry = plugins.data?.catalogue.find((item) => item.key === key);
-  const server = plugins.data?.servers.find((item) => item.id === key);
   /*
    * Everybody on the roster, and anybody hidden from it who holds one of this app's grants,
    * withdrawn ones included: see `grantRoster`. Named from the roster rows themselves, because the
@@ -434,7 +474,9 @@ export function PluginPage({
   );
 
   const auth = connectionKindFor(server, entry?.auth);
-  const title = entry?.title ?? server?.title ?? key;
+  /* What the catalogue calls this vendor's credential, for one placed somewhere other than a header. */
+  const credentialLabel = entry?.credentialLabel ?? "访问令牌";
+  const title = zh(entry?.title ?? server?.title ?? key);
 
   /* Bound once because the brokered row below is told it twice — once inside the whole
      disconnected sentence and once on its own — and two copies of it would drift. */
@@ -451,7 +493,7 @@ export function PluginPage({
    */
   const shared = server?.accountMode === "shared";
   const sharedConnection = (connections.data?.connections ?? []).find(
-    (row) => row.serverId === key && row.holder === "deployment",
+    (row) => row.serverId === (server?.id ?? key) && row.holder === "deployment",
   );
   const accountRow = shared ? sharedConnection : connection;
 
@@ -472,7 +514,7 @@ export function PluginPage({
     report: setError,
     // Back to this page afterwards, not to the personal settings screen.
     returnTo: "admin",
-    serverId: key,
+    serverId: rowId,
     /*
      * Absent where this person has never connected the app, and false rather than asserted: with no
      * row there is nothing that could have been checked, which is exactly what the server's own
@@ -505,19 +547,34 @@ export function PluginPage({
     ? { title, kind: brokeredAccount.kind }
     : undefined;
 
+  /*
+   * Whether this vendor's credential is placed somewhere other than a bearer header (a key in a
+   * query parameter, a per-customer address). The catalogue names such a credential; a plain bearer
+   * token has no label of its own.
+   */
+  const placedCredential = entry?.credentialLabel !== undefined;
+
   /** Adding is two writes when a token was typed: the credential, then the record pointing at it. */
   const add = async () => {
     setError(null);
     try {
+      /*
+       * A PLACED CREDENTIAL never goes through `POST /api/admin/credentials`: it reaches the vault
+       * only through `POST /servers/:id/token`, which checks its shape before sealing it. So the add
+       * sends no credential id, and the typed value follows through that one checked door.
+       */
       const credentialId =
-        auth === "deployment-bearer"
-          ? await storeMcpToken(key, token || undefined)
+        auth === "deployment-bearer" && !placedCredential
+          ? await storeMcpToken(appKey, token || undefined)
           : undefined;
       await addCurated.mutateAsync({
-        key,
+        key: appKey,
         instanceHost: instanceHost || undefined,
         credentialId,
       });
+      if (placedCredential && token.trim()) {
+        await replaceServerToken.mutateAsync({ serverId: key, token });
+      }
       if (auth === "user-oauth" && client.clientId && client.clientSecret) {
         await registerClient.mutateAsync({ serverId: key, ...client });
       }
@@ -549,36 +606,86 @@ export function PluginPage({
   };
 
   /*
-   * One write per grant, in selection order. The server records each grant as its own audit row, so
-   * a bulk action here is honestly N decisions; a refusal stops the rest and leaves the dialog open
-   * with the banner saying why.
-   *
-   * One refetch for the batch, at the end. Going through the grant mutation invalidated every plugin
-   * query after each write and awaited it, so a batch of twenty grants was twenty round trips
-   * interleaved with twenty refetches of a list nobody could see behind the dialog — most of the
-   * wait, for nothing anybody read. It is invalidated even when a grant is refused, because the ones
-   * before it landed and the screen behind is now stale about them.
+   * A SERVER THAT IS ALREADY ADDED HAS ITS TOKEN REPLACED IN ONE REQUEST, `POST /servers/:id/token`,
+   * which stores the new token and points the server at it in one transaction. Not a store and then
+   * a re-add: storing a token for a key that holds one revokes the old one at once, so a re-add that
+   * failed after it left the server on a revoked credential. Refused, the dialog stays open over what
+   * was typed so it can be corrected rather than retyped.
    */
-  const grantSelected = async () => {
+  const replaceToken = async () => {
     setError(null);
-    const total = selectedBots.size * selectedRefs.size;
-    setGranting({ done: 0, total });
-    let done = 0;
+    if (!token.trim()) {
+      setDialog(null);
+      return;
+    }
     try {
-      for (const agentId of selectedBots) {
-        for (const ref of selectedRefs) {
-          await grantPlugin({ agentId, kind: "mcp", ref });
-          done += 1;
-          setGranting({ done, total });
-        }
-      }
+      await replaceServerToken.mutateAsync({ serverId: rowId, token });
+      setToken("");
       setDialog(null);
     } catch (thrown) {
       setError((thrown as Error).message);
-    } finally {
-      await invalidatePlugins(queryClient);
-      setGranting(null);
     }
+  };
+
+  /* An instance host is moved by re-adding the catalogue server with the new host and no credential
+     id, which keeps the token it holds. */
+  const moveInstance = async () => {
+    setError(null);
+    if (!instanceHost.trim()) {
+      setDialog(null);
+      return;
+    }
+    try {
+      await addCurated.mutateAsync({
+        key: appKey,
+        instanceHost: instanceHost.trim(),
+      });
+      setInstanceHost("");
+      setDialog(null);
+    } catch (thrown) {
+      setError((thrown as Error).message);
+    }
+  };
+
+  /*
+   * One write per grant per member, through the shared group helper: one member being refused no
+   * longer stops the others, and one refetch at the end. A selection made by pressing a crew is the
+   * same selection as one made by ticking its members — the crew itself is never sent.
+   */
+  const grantSelected = async () => {
+    setError(null);
+    setRefusals(null);
+    const agentIds = [...selectedBots];
+    const refs = [...selectedRefs];
+    setGranting({ done: 0, total: agentIds.length * refs.length });
+    const outcome: CrewGrantOutcome | null = await grantToMembers({
+      queryClient,
+      kind: "mcp",
+      refs,
+      agentIds,
+      onProgress: (done, total) => setGranting({ done, total }),
+    }).catch((thrown: unknown) => {
+      setError(thrown instanceof Error ? thrown.message : String(thrown));
+      return null;
+    });
+    setGranting(null);
+    if (!outcome) return;
+    const summary = crewSummary(outcome, { what: `${refs.length} 个工具` });
+    if (!summary.failed) {
+      setDialog(null);
+      return;
+    }
+    const nameOf = (agentId: string) =>
+      bots.find((bot) => bot.id === agentId)?.name ?? agentId;
+    setRefusals({
+      text: summary.text,
+      members: outcome.members
+        .filter((member) => member.refused.length > 0)
+        .map((member) => ({
+          agentId: member.agentId,
+          line: `${nameOf(member.agentId)}：${member.refused.length} 个工具被拒绝（${member.refused[0]?.reason ?? "没有给出原因"}）`,
+        })),
+    });
   };
 
   /*
@@ -608,7 +715,7 @@ export function PluginPage({
         <p className="mt-12 text-destructive text-sm" role="alert">
           {personal
             ? "读不到你的应用。请刷新页面。"
-            : "读不到插件。请刷新页面。"}
+            : "读不到插件。"}
         </p>
       </PageShell>
     );
@@ -648,7 +755,7 @@ export function PluginPage({
   return (
     <PageShell
       backButton={{ label: paths.pluginsLabel, linkProps: paths.plugins() }}
-      description={entry?.summary ?? server?.summary}
+      description={zh(entry?.summary ?? server?.summary ?? "") || undefined}
       title={title}
     >
       {error ? (
@@ -723,7 +830,7 @@ export function PluginPage({
                   onCheckedChange={(next) => {
                     setError(null);
                     if (next) void add();
-                    else remove.mutate(key);
+                    else remove.mutate(rowId);
                   }}
                 />
               </ItemActions>
@@ -814,7 +921,7 @@ export function PluginPage({
                     onCheckedChange={(next) => {
                       setError(null);
                       ownerGrants.mutate({
-                        serverId: key,
+                        serverId: rowId,
                         ownerGrants: next ? "any" : "admin",
                       });
                     }}
@@ -837,7 +944,7 @@ export function PluginPage({
         names={botNames}
         onOpenChange={(open) => !open && setModeTarget(null)}
         open={modeTarget !== null}
-        serverId={key}
+        serverId={rowId}
         target={modeTarget ?? "shared"}
         title={title}
       />
@@ -967,9 +1074,11 @@ export function PluginPage({
                 size="sm"
               >
                 <ItemContent>
-                  <ItemTitle>访问令牌</ItemTitle>
+                  <ItemTitle>{credentialLabel}</ItemTitle>
                   <ItemDescription>
-                    每次调用这个服务商时都会发送。
+                    {entry?.credentialHint
+                      ? `${entry.credentialHint}管理员录入一次，所有人共用；部署按服务商要求放进请求，不会显示或记录。`
+                      : "每次调用这个服务商时作为 Bearer 令牌发送。"}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -989,7 +1098,7 @@ export function PluginPage({
                */
               <Item size="sm">
                 <ItemContent>
-                  <ItemTitle>OAuth client</ItemTitle>
+                  <ItemTitle>OAuth 客户端</ItemTitle>
                   <ItemDescription>
                     首次连接时{atStart(paths.deploymentName)}
                     会自动向服务商登记，不需要粘贴任何东西。
@@ -1011,7 +1120,7 @@ export function PluginPage({
                 size="sm"
               >
                 <ItemContent>
-                  <ItemTitle>OAuth client</ItemTitle>
+                  <ItemTitle>OAuth 客户端</ItemTitle>
                   <ItemDescription>
                     向服务商标识{paths.deploymentName}
                     。它本身碰不到任何人的文档。
@@ -1159,7 +1268,8 @@ export function PluginPage({
                             disabled={connectSelf.isPending}
                             onClick={() => {
                               setError(null);
-                              connectSelf.mutate(key);
+                              // The catalogue key: the consent route looks the vendor up by it.
+                              connectSelf.mutate(appKey);
                             }}
                             size="sm"
                             type="button"
@@ -1271,7 +1381,7 @@ export function PluginPage({
           action={
             <div className="flex gap-1.5">
               <Button
-                onClick={() => refresh.mutate(key)}
+                onClick={() => refresh.mutate(rowId)}
                 size="sm"
                 type="button"
                 variant="ghost"
@@ -1289,6 +1399,7 @@ export function PluginPage({
                   onClick={() => {
                     setSelectedBots(new Set());
                     setSelectedRefs(new Set());
+                    setRefusals(null);
                     setDialog("grant");
                   }}
                   size="sm"
@@ -1333,13 +1444,13 @@ export function PluginPage({
                   >
                     <ItemContent>
                       {personal ? (
-                        <ToolInWords serverId={key} tool={tool} />
+                        <ToolInWords serverId={rowId} tool={tool} />
                       ) : (
                         <>
                           <ItemTitle className="font-mono text-xs">
                             {tool.name}
                           </ItemTitle>
-                          <ItemDescription>{tool.description}</ItemDescription>
+                          <ItemDescription>{zh(tool.description)}</ItemDescription>
                         </>
                       )}
                     </ItemContent>
@@ -1415,7 +1526,7 @@ export function PluginPage({
                          * Bot to stand with, so there is nothing here to approve.
                          */}
                         {shared ? (
-                          <BotApprovalText botId={bot.id} serverId={key} />
+                          <BotApprovalText botId={bot.id} serverId={rowId} />
                         ) : null}
                         <span className="text-muted-foreground text-xs">
                           {heldSummary(
@@ -1487,14 +1598,14 @@ export function PluginPage({
                 ? `${title} 的 OAuth 客户端`
                 : dialog === "instance"
                   ? `${title} 的实例地址`
-                  : `${title} 的访问令牌`}
+                  : `${title} 的${credentialLabel}`}
             </DialogTitle>
             <DialogDescription>
               {dialog === "client"
                 ? `来自服务商的控制台。密钥保存在${paths.deploymentName}的保险库里，永远不会再显示。`
                 : dialog === "instance"
                   ? "你在这个服务商那里的主机名。保存前会按他们的格式校验。"
-                  : `保存在${paths.deploymentName}的保险库里，永远不会再显示。`}
+                  : `${entry?.credentialHint ?? ""}保存在${paths.deploymentName}的保险库里，永远不会再显示。`}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -1541,7 +1652,9 @@ export function PluginPage({
                 </Field>
               ) : (
                 <Field>
-                  <FieldLabel htmlFor="access-token">访问令牌</FieldLabel>
+                  <FieldLabel htmlFor="access-token">
+                    {credentialLabel}
+                  </FieldLabel>
                   <Input
                     id="access-token"
                     onChange={(event) => setToken(event.target.value)}
@@ -1562,8 +1675,16 @@ export function PluginPage({
                   void add();
                   return;
                 }
+                if (dialog === "token") {
+                  void replaceToken();
+                  return;
+                }
+                if (dialog === "instance") {
+                  void moveInstance();
+                  return;
+                }
                 if (dialog === "client") {
-                  registerClient.mutate({ serverId: key, ...client });
+                  registerClient.mutate({ serverId: rowId, ...client });
                 }
                 setDialog(null);
               }}
@@ -1594,6 +1715,16 @@ export function PluginPage({
               </DialogDescription>
             </DialogHeader>
             <DialogBody className="mt-4 space-y-5">
+              {refusals ? (
+                <div className="text-destructive text-sm" role="alert">
+                  <p>{refusals.text}</p>
+                  <ul className="mt-1 list-disc pl-5 text-xs">
+                    {refusals.members.map((member) => (
+                      <li key={member.agentId}>{member.line}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {/*
                * Each set of tickboxes is a group named by its own heading, so a screen reader
                * reaching a bare tool name is told which list it is in. "Changes things" is the whole
@@ -1609,6 +1740,38 @@ export function PluginPage({
                 <p className="mb-2 font-medium text-sm" id="grant-to-heading">
                   授予给
                 </p>
+                {(crews.data?.length ?? 0) > 0 ? (
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {(crews.data ?? []).map((crew) => {
+                      /*
+                       * Only members this dialog draws a row for: a member it cannot show would be
+                       * granted without ever appearing in "授予 …" above the button.
+                       */
+                      const members = crewMembers(crew, (agentId) =>
+                        bots.some((bot) => bot.id === agentId),
+                      );
+                      return (
+                        <Button
+                          aria-label={`选择${crew.name}的 ${members.length} 位员工`}
+                          disabled={members.length === 0}
+                          key={crew.id}
+                          onClick={() =>
+                            setSelectedBots((previous) => {
+                              const next = new Set(previous);
+                              for (const agentId of members) next.add(agentId);
+                              return next;
+                            })
+                          }
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                        >
+                          {crew.name} · {members.length}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   {bots.map((bot) => (
                     <div className="flex items-center gap-2" key={bot.id}>

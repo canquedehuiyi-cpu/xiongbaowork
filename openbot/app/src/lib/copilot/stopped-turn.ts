@@ -32,7 +32,7 @@ export function stoppedReason(reported: unknown): string {
         : "";
   const unreachable = backEndUnreachable(said);
   if (unreachable) return unreachable;
-  return said.trim() || "The Bot stopped without saying why.";
+  return said.trim() || "员工停下了，没有说原因。";
 }
 
 /**
@@ -63,8 +63,8 @@ function backEndUnreachable(said: string): string | null {
   if (!match) return null;
   console.warn("OpenBot couldn't reach its back end.", said);
   return match[1] === "run"
-    ? "OpenBot couldn't reach its back end, so your message wasn't sent. Try again, or quit and reopen OpenBot."
-    : "OpenBot couldn't reach its back end. Try again, or quit and reopen OpenBot.";
+    ? "熊宝连不上后端，你的消息没有发出去。再试一次，或者退出后重新打开熊宝。"
+    : "熊宝连不上后端。再试一次，或者退出后重新打开熊宝。";
 }
 
 /**

@@ -59,20 +59,20 @@ function usePersonal(): boolean {
 
 /** Each count the notice lists, in the words the person reads, skipping the kinds with nothing. */
 function resetLines(plan: ResetPlan): string[] {
-  const lines: [number, string, string][] = [
-    [plan.conversations, "conversation", "conversations"],
-    [plan.memorySources, "memory source", "memory sources"],
-    [plan.memories, "imported memory", "imported memories"],
-    [plan.routines, "routine", "routines"],
-    [plan.responsibilities, "goal", "goals"],
-    [plan.followUps, "scheduled follow-up", "scheduled follow-ups"],
-    [plan.formedMemories, "memory it formed", "memories it formed"],
-    [plan.backgroundResearch, "background research", "background research"],
-    [plan.standingApprovals, "standing permission", "standing permissions"],
+  const lines: [number, string][] = [
+    [plan.conversations, "段对话"],
+    [plan.memorySources, "个记忆来源"],
+    [plan.memories, "条导入的记忆"],
+    [plan.routines, "个定时任务"],
+    [plan.responsibilities, "个长期职责"],
+    [plan.followUps, "个已排期的跟进"],
+    [plan.formedMemories, "条它自己形成的记忆"],
+    [plan.backgroundResearch, "项后台研究"],
+    [plan.standingApprovals, "项长期许可"],
   ];
   return lines
     .filter(([count]) => count > 0)
-    .map(([count, one, many]) => `${count} ${count === 1 ? one : many}`);
+    .map(([count, noun]) => `${count} ${noun}`);
 }
 
 function ResetDialog({
@@ -96,27 +96,27 @@ function ResetDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reset {agent.name}?</DialogTitle>
+          <DialogTitle>重置 {agent.name}？</DialogTitle>
           <DialogDescription>
             {personal
-              ? `This deletes what ${agent.name} has with you. You can't undo this.`
-              : `This deletes what ${agent.name} has with you. Other people's conversations and data stay. You can't undo this.`}
+              ? `这会删除 ${agent.name} 与你之间的东西。删除后无法撤销。`
+              : `这会删除 ${agent.name} 与你之间的东西，只限于你。别人的对话和数据不会被碰。删除后无法撤销。`}
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 overflow-y-auto">
           {plan.isPending ? null : plan.error ? (
             <p className="text-destructive text-sm" role="alert">
-              Couldn't check what a reset would delete. Try again.
+              算不出重置会删除哪些东西，请再试一次。
             </p>
           ) : reset.isSuccess ? (
-            <p className="text-sm">Done. {agent.name} starts fresh with you.</p>
+            <p className="text-sm">已重置。{agent.name} 和你从头开始。</p>
           ) : (
             <div className="grid gap-2 text-sm">
               {lines.length === 0 ? (
-                <p>There's nothing of yours to delete.</p>
+                <p>没有属于你的东西可删。</p>
               ) : (
                 <>
-                  <p>This will delete:</p>
+                  <p>将会删除：</p>
                   <ul className="list-disc pl-5">
                     {lines.map((line) => (
                       <li key={line}>{line}</li>
@@ -126,15 +126,14 @@ function ResetDialog({
               )}
               {plan.data.sharedConversationsKept > 0 ? (
                 <p className="text-muted-foreground">
-                  {plan.data.sharedConversationsKept} conversation
-                  {plan.data.sharedConversationsKept === 1 ? " is" : "s are"}{" "}
-                  shared with other people or Bots and will be kept.
+                  有 {plan.data.sharedConversationsKept}{" "}
+                  段对话是和其他人或员工共享的，会保留。
                 </p>
               ) : null}
               {/* Where memory isn't offered there are no memories to keep (see `offersMemory`). */}
               {memory ? (
                 <p className="text-muted-foreground">
-                  Memories you told a Bot yourself are kept.
+                  你自己的记忆——你直接告诉员工的那些——会保留。
                 </p>
               ) : null}
             </div>
@@ -151,7 +150,7 @@ function ResetDialog({
             size="sm"
             variant="outline"
           >
-            {reset.isSuccess ? "Close" : "Cancel"}
+            {reset.isSuccess ? "关闭" : "取消"}
           </Button>
           {reset.isSuccess ? null : (
             <Button
@@ -160,7 +159,7 @@ function ResetDialog({
               size="sm"
               variant="destructive"
             >
-              {reset.isPending ? "Resetting…" : "Delete and reset"}
+              {reset.isPending ? "正在重置…" : "删除并重置"}
             </Button>
           )}
         </DialogFooter>
@@ -196,13 +195,13 @@ export function ManageSection({
   const memory = useOffersMemory();
   const personal = usePersonal();
   // Said only where somebody else has a list of their own.
-  const onlyYours = personal ? "" : " Only your list changes.";
+  const onlyYours = personal ? "" : "只改你自己的列表。";
   const error = setPinned.error ?? setHidden.error ?? duplicate.error;
   // An administrator put it in this person's list; it stays pinned and cannot be hidden.
   const assigned = agent.assignedToMe === true;
 
   return (
-    <PageSection title="Manage">
+    <PageSection title="管理">
       {error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
           {error.message}
@@ -214,18 +213,18 @@ export function ManageSection({
             <IconPin />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Pinned</ItemTitle>
+            <ItemTitle>置顶</ItemTitle>
             <ItemDescription>
               {assigned
-                ? "An admin assigned it to you. It stays at the top of your Bots list."
+                ? "管理员把它分配给了你，它会一直在你的员工列表顶部。"
                 : agent.pinned
-                  ? `At the top of your Bots list.${onlyYours}`
-                  : `Keep it at the top of your Bots list.${onlyYours}`}
+                  ? `在你的员工列表顶部。${onlyYours}`
+                  : `让它一直在你的员工列表顶部。${onlyYours}`}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
             <Switch
-              aria-label="Pinned"
+              aria-label="置顶"
               checked={agent.pinned || assigned}
               disabled={assigned || setPinned.isPending}
               onCheckedChange={(pinned) =>
@@ -240,18 +239,18 @@ export function ManageSection({
             <IconEyeOff />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Hidden</ItemTitle>
+            <ItemTitle>隐藏</ItemTitle>
             <ItemDescription>
               {assigned
-                ? "An admin assigned it to you. You can't hide it."
+                ? "管理员把它分配给了你，不能隐藏。"
                 : agent.hidden
-                  ? `Under Hidden on your Bots list.${onlyYours}`
-                  : `Take it off your Bots list.${onlyYours}`}
+                  ? `在你员工列表的「已隐藏」里。${onlyYours}`
+                  : `从你的员工列表里拿掉。${onlyYours}`}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
             <Switch
-              aria-label="Hidden"
+              aria-label="隐藏"
               checked={agent.hidden}
               disabled={assigned || setHidden.isPending}
               onCheckedChange={async (hidden) => {
@@ -278,9 +277,9 @@ export function ManageSection({
             <IconCopy />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Duplicate</ItemTitle>
+            <ItemTitle>复制</ItemTitle>
             <ItemDescription>
-              Make your own copy. Its conversations and keys aren't copied.
+              复制一份归你自己。它的对话和密钥不会被复制。
             </ItemDescription>
           </ItemContent>
         </Item>
@@ -293,12 +292,12 @@ export function ManageSection({
             <IconRefresh />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>Reset</ItemTitle>
+            <ItemTitle>重置</ItemTitle>
             <ItemDescription>
               {/* Where memory isn't offered a Bot remembers nothing to delete (see `offersMemory`). */}
               {memory
-                ? "Delete your conversations with it, what it remembers for you, and its scheduled work. You'll see the list first."
-                : "Delete your conversations with it and its scheduled work. You'll see the list first."}
+                ? "删除你和它的对话、它为你记住的东西和它排期的工作。删除前会先列给你看。"
+                : "删除你和它的对话和它排期的工作。删除前会先列给你看。"}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
@@ -318,12 +317,12 @@ export function ManageSection({
                 <IconTrash />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Delete</ItemTitle>
+                <ItemTitle>删除</ItemTitle>
                 <ItemDescription>
                   {/* A deleted Bot's conversations stay readable (channel-chat.tsx says so there). */}
                   {personal
-                    ? "Deletes it. You can still read your conversations with it. You can't undo this."
-                    : "Deletes it for everyone. You can't undo this."}
+                    ? "删除它。你仍然可以查看和它的对话。删除后无法撤销。"
+                    : "对所有人删除它。删除后无法撤销。"}
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -337,11 +336,11 @@ export function ManageSection({
       <Dialog onOpenChange={setDeleteOpen} open={deleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {agent.name}?</DialogTitle>
+            <DialogTitle>删除 {agent.name}？</DialogTitle>
             <DialogDescription>
               {personal
-                ? "You can still read your conversations with it, but it can't reply. You can't undo this."
-                : "It's deleted for everyone. You can't undo this."}
+                ? "你仍然可以查看和它的对话，但它不会再回复。删除后无法撤销。"
+                : "所有人都不能再用它。删除后无法撤销。"}
             </DialogDescription>
           </DialogHeader>
           {remove.error ? (
@@ -357,7 +356,7 @@ export function ManageSection({
               size="sm"
               variant="outline"
             >
-              Cancel
+              取消
             </Button>
             <Button
               disabled={remove.isPending}
@@ -368,7 +367,7 @@ export function ManageSection({
               size="sm"
               variant="destructive"
             >
-              {remove.isPending ? "Deleting…" : "Delete"}
+              {remove.isPending ? "正在删除…" : "删除"}
             </Button>
           </DialogFooter>
         </DialogContent>

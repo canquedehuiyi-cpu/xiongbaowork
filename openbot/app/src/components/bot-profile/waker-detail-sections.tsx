@@ -1,25 +1,14 @@
 /*
- * M5b 第 0 步：从 `routes/_authed/_app/wakers_.$agentId.tsx` 剪出的页面主体，原样保留，地址改成重定向（/wakers/$agentId → /bots/$agentId）。
- * 各组在新路由里接这个组件，再按新结构调整其中的链接与文案。
+ * 熊宝员工详情页的各段（原 `/wakers/$agentId` 一页放下的内容，M5b 拆进上游的 `/bots/$agentId/*` 分页）：
+ * 角色档案卡和分身的信息来源在首页（`BotProfile`），「本周完成」、看板上的进行中任务和最近审计在「动态」，
+ * 当前项目在「设置」。职责、技能授权、记忆、权限、定时任务各有分页，用的是上游的组件。
  */
-import {
-  IconExternalLink,
-  IconPlayerPause,
-  IconTools,
-} from "@tabler/icons-react";
+import { IconPlayerPause } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentAuditTrail } from "@/components/agents/audit-trail";
 import { AvatarSourcesPanel } from "@/components/avatar/avatar-sources";
-import { BotActivityGlance } from "@/components/bot-profile/activity";
-import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
-import { BotPermissions } from "@/components/bot-profile/permissions";
-import {
-  BotControls,
-  UpdateRoutingSection,
-} from "@/components/bot-profile/profile";
 import {
   PANEL_FACE,
   PROFILE_TAG,
@@ -27,15 +16,10 @@ import {
   ProfilePanel,
   ProfileSection,
 } from "@/components/bot-profile/profile-kit";
-import { BotRuntimeSection } from "@/components/bot-profile/runtime";
-import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
-import { MemorySources } from "@/components/memory/sources";
-import { BotNeedsYou } from "@/components/needs-you/board";
 import { DoneTasks, useNeedsYou } from "@/components/needs-you/needs-you";
 import { EditablePortrait } from "@/components/portraits/portrait-picker";
 import { ProjectPicker } from "@/components/projects/project-picker";
-import { ProactiveResearchSettings } from "@/components/suggestions/proactive-panel";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -46,63 +30,27 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CardIndex, PERSONAL_SURFACE } from "@/components/wakers/card-chrome";
 import { STATUS_WORD } from "@/components/wakers/coworker-card";
-import {
-  type WakerStatus,
-  wakersBackLink,
-} from "@/components/wakers/wakers-search";
-import {
-  type AgentProfile,
-  agentQueryOptions,
-  isSharedWithYou,
-} from "@/lib/agents/queries";
+import type { WakerStatus } from "@/components/wakers/wakers-search";
+import { type AgentProfile, isSharedWithYou } from "@/lib/agents/queries";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import {
   agentRunningTasksQueryOptions,
   botLifecycleQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
-import { RequestError } from "@/lib/client";
 import {
   modelChoiceName,
   modelLibraryQueryOptions,
   poolChoiceName,
 } from "@/lib/models/queries";
-import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { relativeTime } from "@/lib/relative-time";
-import {
-  type ResponsibilityRecord,
-  responsibilitiesQueryOptions,
-} from "@/lib/responsibilities";
-import { routinesQueryOptions } from "@/lib/routines/queries";
 import { cn } from "@/lib/utils";
 
-/**
- * One coworker's detail page (story D5): what it is responsible for, what it is doing now, which
- * skills and tools it holds, and what has recently happened to it.
- *
- * A sibling of `/wakers` (the trailing underscore), not a child: the card wall has no outlet and
- * this page is a whole screen of its own. It reads only what other screens already serve — the
- * coworker's profile, its responsibilities and routines, the board's running rows, its plugin
- * grants and its audit trail — and edits none of those here: changing a skill is the assembly
- * screen's job, and a second place to grant one would be a second place to get the policy wrong.
- * What it does edit is upstream's Bot page's own: the person's 对你 controls, its memory sources
- * and check-ins, and the 运行方式 rows (its own computer, the starter's instructions).
- *
+/*
  * Each section owns its loading, error and empty state, so one read failing never blanks the
- * others.
- *
- * Drawn in the workbench frame (docs/design/ios-studio): the employee's name in the breadcrumb bar
- * and as the compact heading, then its 「角色档案」 — the 44px face, role, status badge and model, in
- * the same card language as its card on the 员工管理 wall, the person's own 分身 wearing that wall's
- * one local red. Below it the page splits in two on a wide screen: what it is doing and holds on the
- * left, and what is between this person and it (对你, project, sources, routing) beside it on the
- * right; one column on anything narrower, the settings first.
+ * others. Drawn in the employee screens' card language (`profile-kit`, docs/design/ios-studio): the
+ * 「角色档案」 card is the one it wears on the 员工 roster, drawn wide, the person's own 分身 wearing that
+ * roster's one local red.
  */
-
-const RESPONSIBILITY_STATUS: Record<ResponsibilityRecord["status"], string> = {
-  active: "进行中",
-  paused: "已暂停",
-  completed: "已完成",
-};
 
 /** The board's own words for where a task came from (`SOURCE_LABEL` on /tasks), kept identical. */
 const TASK_SOURCE_LABEL: Record<string, string> = {
@@ -121,112 +69,6 @@ function PanelSkeleton({ label }: { label: string }) {
       className="mt-[10px] h-[54px] rounded-[14px]"
       role="status"
     />
-  );
-}
-
-export function WakerDetailPage({ agentId }: { agentId: string }) {
-  const agent = useQuery(agentQueryOptions(agentId));
-  const back = { label: "员工管理", linkProps: wakersBackLink() };
-
-  if (agent.isPending) {
-    return (
-      <PageShell backButton={back} title="员工详情" width="workbench">
-        <Skeleton
-          aria-label="正在读取员工"
-          className="h-[132px] rounded-[16px]"
-          role="status"
-        />
-      </PageShell>
-    );
-  }
-  if (!agent.data) {
-    const missing =
-      agent.error instanceof RequestError && agent.error.status === 404;
-    return (
-      <PageShell backButton={back} title="员工详情" width="workbench">
-        {missing ? (
-          <p
-            className={cn(
-              PANEL_FACE,
-              "max-w-[640px] px-[16px] py-[14px] text-[13px] text-destructive",
-            )}
-            role="alert"
-          >
-            找不到这位员工，或者你没有权限查看它。
-          </p>
-        ) : (
-          <div className="max-w-[640px]">
-            <QueryError
-              error={agent.error}
-              label="读不到这位员工"
-              onRetry={() => void agent.refetch()}
-              retrying={agent.isFetching}
-            />
-          </div>
-        )}
-      </PageShell>
-    );
-  }
-
-  const profile = agent.data;
-  return (
-    <PageShell
-      action={
-        <Button
-          render={(props) => (
-            <Link
-              params={{ agentId: profile.id }}
-              to="/assemble/$agentId"
-              {...props}
-            />
-          )}
-          variant="outline"
-        >
-          <IconTools />
-          装配
-        </Button>
-      }
-      backButton={back}
-      crumb={profile.name}
-      title={profile.name}
-      width="workbench"
-    >
-      <ProfileCard profile={profile} />
-      <div className="mt-[12px] empty:hidden">
-        <BotPausedBanner agentId={profile.id} />
-      </div>
-
-      {/*
-       * One employee, one page (user decision: 合并成一个详情页). What is between this person and the
-       * employee — the old /bots profile's 对你 and its update routing — sits in the side column, and
-       * what it is doing for them and what it is set up with fills the main one.
-       */}
-      <div className="mt-[28px] grid grid-cols-1 gap-x-[28px] gap-y-[28px] min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
-        <div className="flex min-w-0 flex-col gap-[28px] min-[1180px]:col-start-2 min-[1180px]:row-start-1 [&>*]:mt-0!">
-          <BotControls agent={profile} />
-          <ProjectSection profile={profile} />
-          <AvatarSourcesSection profile={profile} />
-          <BotRuntimeSection agent={profile} />
-          <UpdateRoutingSection />
-        </div>
-        <div className="flex min-w-0 flex-col gap-[28px] min-[1180px]:col-start-1 min-[1180px]:row-start-1 [&>*]:mt-0!">
-          <BotNeedsYou agentId={profile.id} />
-          <BotActivityGlance agentId={profile.id} />
-          <DoneThisWeek agentId={profile.id} />
-          <RunningTasksSection agentId={profile.id} />
-          <DutiesSection profile={profile} />
-          <SkillGrantsSection agentId={profile.id} />
-          <MemorySection agentId={profile.id} />
-          <BotPermissions agentId={profile.id} />
-          <ProfileSection
-            description="谁在什么时候对它做了什么，读自现有的审计记录。"
-            title="最近审计"
-          >
-            <AgentAuditTrail agentId={profile.id} />
-          </ProfileSection>
-        </div>
-      </div>
-    </PageShell>
   );
 }
 
@@ -380,7 +222,7 @@ export function ProfileCard({ profile }: { profile: AgentProfile }) {
         <ModelLine profile={profile} />
         <p className="min-w-0">
           {profile.canManage
-            ? "你是它的主人，点头像可以更换，其它设置在装配页修改。"
+            ? "你是它的主人，点头像可以更换，其它设置在下面「这位员工的设置」里修改。"
             : "这位员工归别人所有，这里只能看。"}
         </p>
       </div>
@@ -392,32 +234,6 @@ export function ProfileCard({ profile }: { profile: AgentProfile }) {
 export function DoneThisWeek({ agentId }: { agentId: string }) {
   const { done } = useNeedsYou(agentId);
   return <DoneTasks done={done} />;
-}
-
-/**
- * This employee's memory sources and check-ins (upstream's /bots/$agentId/memory), on its own page.
- * What the person told every employee directly is not this employee's, so it stays in 能力与资源,
- * and this says where.
- */
-export function MemorySection({ agentId }: { agentId: string }) {
-  return (
-    <>
-      {/* A flex item of the page's column, which already spaces it from the section above. */}
-      <p className="text-[13px] text-muted-foreground">
-        你直接告诉所有员工的事在
-        <Link
-          className="text-foreground underline underline-offset-4"
-          search={{ tab: "sources" }}
-          to="/resources"
-        >
-          能力与资源 › 信息源与记忆
-        </Link>
-        里。
-      </p>
-      <MemorySources agentId={agentId} />
-      <ProactiveResearchSettings agentId={agentId} />
-    </>
-  );
 }
 
 /**
@@ -434,7 +250,7 @@ export function AvatarSourcesSection({ profile }: { profile: AgentProfile }) {
   });
   if (!profile.mine || sources.data?.agentId !== profile.id) return null;
   return (
-    <ProfileSection
+    <ProfileSection className="mt-12"
       description="告诉分身你的资料放在哪里、是什么。文字声明只是说明，分身不会因此读取任何文件；本地文件夹是你电脑上交给分身只读查看的文件夹；知识库和连接器让分身读取你自己的知识库和已连接的账号。"
       title="信息来源"
     >
@@ -453,8 +269,8 @@ export function AvatarSourcesSection({ profile }: { profile: AgentProfile }) {
 export function ProjectSection({ profile }: { profile: AgentProfile }) {
   if (!profile.canManage) return null;
   return (
-    <ProfileSection
-      description="它在你电脑上干活时所在的项目。不选项目时，它在自己的工作区里执行文件和命令。项目在「能力与资源」里管理。"
+    <ProfileSection className="mt-12"
+      description="它在你电脑上干活时所在的项目。不选项目时，它在自己的工作区里执行文件和命令。项目在「能力 › 公开项目」里管理。"
       title="当前项目"
     >
       <div className={cn(PANEL_FACE, "mt-[10px] px-[14px] py-[11px]")}>
@@ -508,159 +324,13 @@ export function ModelLine({ profile }: { profile: AgentProfile }) {
   );
 }
 
-/** A small heading inside a section, above one of its groups. */
-function SubHead({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="mt-[16px] font-semibold text-[13px] text-foreground/90">
-      {children}
-    </h3>
-  );
-}
-
-/** A state word on a row (theme.css `.badge`), beside its title. */
-function RowTag({ children }: { children: ReactNode }) {
-  return (
-    <span className={cn(PROFILE_TAG, "h-[19px] px-[7px] text-[10.5px]")}>
-      {children}
-    </span>
-  );
-}
-
-/** 职责: the role it was given, the long-running duties it holds, and the routines it runs. */
-export function DutiesSection({ profile }: { profile: AgentProfile }) {
-  const duties = useQuery(responsibilitiesQueryOptions());
-  const mine = (duties.data ?? []).filter(
-    (duty) => duty.agentId === profile.id,
-  );
-
-  return (
-    <ProfileSection description="它被交代要负责的事。" title="职责">
-      <p
-        className={cn(
-          PANEL_FACE,
-          "mt-[10px] px-[14px] py-[11px] text-[13.5px] leading-[1.6]",
-        )}
-        data-testid="role-description"
-      >
-        {profile.roleDescription || (
-          <span className="text-muted-foreground">还没写角色描述。</span>
-        )}
-      </p>
-
-      <SubHead>长期职责</SubHead>
-      {duties.isPending ? (
-        <PanelSkeleton label="正在读取长期职责" />
-      ) : duties.isError ? (
-        <div className="mt-[10px]">
-          <QueryError
-            error={duties.error}
-            label="读不到长期职责"
-            onRetry={() => void duties.refetch()}
-            retrying={duties.isFetching}
-          />
-        </div>
-      ) : mine.length === 0 ? (
-        <ProfileEmpty>它还没有长期职责。</ProfileEmpty>
-      ) : (
-        <ProfilePanel>
-          {mine.map((duty) => (
-            <Item key={duty.id} size="sm">
-              <ItemContent>
-                <ItemTitle>
-                  {duty.title}
-                  <RowTag>
-                    {RESPONSIBILITY_STATUS[duty.status] ?? duty.status}
-                  </RowTag>
-                </ItemTitle>
-                <ItemDescription>{duty.instruction}</ItemDescription>
-              </ItemContent>
-            </Item>
-          ))}
-        </ProfilePanel>
-      )}
-
-      <Link
-        className="mt-2 inline-block text-muted-foreground text-xs underline-offset-2 hover:underline"
-        search={{ agent: profile.id }}
-        to="/responsibilities"
-      >
-        去长期职责页管理
-      </Link>
-
-      <h3 className="mt-6 font-medium text-sm">定时任务</h3>
-      <RoutineSummary agentId={profile.id} />
-    </ProfileSection>
-  );
-}
-
-/**
- * The coworker's routines, read-only: what runs, when, and whether it is switched on.
- *
- * Not the routines list, which runs a routine now, pauses it and deletes it: opening a coworker to
- * look at it must not be one click from making it act. Those controls stay on the assembly page,
- * which this links to, beside every other change to the coworker.
- */
-export function RoutineSummary({ agentId }: { agentId: string }) {
-  const routines = useQuery(routinesQueryOptions());
-  const mine = (routines.data?.routines ?? []).filter(
-    (routine) => routine.agentId === agentId,
-  );
-
-  return (
-    <div data-testid="routine-summary">
-      {routines.isPending ? (
-        <PanelSkeleton label="正在读取定时任务" />
-      ) : routines.isError ? (
-        <div className="mt-[10px]">
-          <QueryError
-            error={routines.error}
-            label="读不到定时任务"
-            onRetry={() => void routines.refetch()}
-            retrying={routines.isFetching}
-          />
-        </div>
-      ) : mine.length === 0 ? (
-        <ProfileEmpty>这位员工还没有定时任务</ProfileEmpty>
-      ) : (
-        <ProfilePanel>
-          {mine.map((routine) => (
-            <Item key={routine.id} size="sm">
-              <ItemContent className={routine.enabled ? "" : "opacity-60"}>
-                <ItemTitle>
-                  <span className="font-mono text-[12.5px]">
-                    {routine.schedule}
-                  </span>
-                  <span className="font-normal text-muted-foreground text-xs">
-                    {routine.timezone}
-                  </span>
-                  <RowTag>{routine.enabled ? "已启用" : "已暂停"}</RowTag>
-                </ItemTitle>
-                <ItemDescription className="line-clamp-2">
-                  {routine.instruction}
-                </ItemDescription>
-              </ItemContent>
-            </Item>
-          ))}
-        </ProfilePanel>
-      )}
-      <Link
-        className="mt-[8px] inline-flex items-center gap-[4px] rounded-[6px] text-[12px] text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/60"
-        params={{ agentId }}
-        to="/assemble/$agentId"
-      >
-        去装配页管理定时任务
-      </Link>
-    </div>
-  );
-}
-
 /** 进行中任务: the board's rows this coworker is executing right now. */
 export function RunningTasksSection({ agentId }: { agentId: string }) {
   const running = useQuery(agentRunningTasksQueryOptions(agentId));
   const rows = running.data ?? [];
 
   return (
-    <ProfileSection
+    <ProfileSection className="mt-12"
       action={
         <Button
           render={(props) => (
@@ -726,75 +396,17 @@ export function RunningTasksSection({ agentId }: { agentId: string }) {
   );
 }
 
-/** 技能授权: what a run of this coworker actually holds, read-only; granting is the assembly page's. */
-export function SkillGrantsSection({ agentId }: { agentId: string }) {
-  const granted = useQuery(agentPluginsQueryOptions(agentId));
-  const skills = granted.data?.skills ?? [];
-  const tools = granted.data?.tools ?? [];
-
+/**
+ * 最近审计: who did what to this employee and when, read from the audit trail the deployment keeps.
+ * On the employee's 动态 page, beside what it is doing.
+ */
+export function RecentAuditSection({ agentId }: { agentId: string }) {
   return (
-    <ProfileSection
-      action={
-        <Button
-          render={(props) => (
-            <Link params={{ agentId }} to="/assemble/$agentId" {...props} />
-          )}
-          size="sm"
-          variant="outline"
-        >
-          <IconExternalLink />
-          去装配页修改
-        </Button>
-      }
-      description="它运行时实际拥有的技能和工具。这里只读，授予或收回请到装配页。"
-      title="技能授权"
+    <ProfileSection className="mt-12"
+      description="谁在什么时候对它做了什么，读自现有的审计记录。"
+      title="最近审计"
     >
-      {granted.isPending ? (
-        <PanelSkeleton label="正在读取技能授权" />
-      ) : granted.isError ? (
-        <div className="mt-[10px]">
-          <QueryError
-            error={granted.error}
-            label="读不到技能授权"
-            onRetry={() => void granted.refetch()}
-            retrying={granted.isFetching}
-          />
-        </div>
-      ) : skills.length === 0 && tools.length === 0 ? (
-        <ProfileEmpty>
-          <span className="font-medium text-foreground/80">
-            还没有授予任何技能或工具
-          </span>
-          <span className="ml-[6px]">所以它现在只能对话。</span>
-        </ProfileEmpty>
-      ) : (
-        <ProfilePanel>
-          {skills.map((skill) => (
-            <Item data-grant="skill" key={skill.slug} size="sm">
-              <ItemContent>
-                <ItemTitle>
-                  {skill.title}
-                  <RowTag>技能</RowTag>
-                </ItemTitle>
-                <ItemDescription>{skill.summary || "技能"}</ItemDescription>
-              </ItemContent>
-            </Item>
-          ))}
-          {tools.map((tool) => (
-            <Item data-grant="tool" key={tool.ref} size="sm">
-              <ItemContent>
-                <ItemTitle>
-                  {tool.toolName}
-                  <RowTag>工具</RowTag>
-                </ItemTitle>
-                <ItemDescription>
-                  {tool.description || "连接器工具"}
-                </ItemDescription>
-              </ItemContent>
-            </Item>
-          ))}
-        </ProfilePanel>
-      )}
+      <AgentAuditTrail agentId={agentId} />
     </ProfileSection>
   );
 }

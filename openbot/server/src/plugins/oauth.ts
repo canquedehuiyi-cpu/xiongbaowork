@@ -131,7 +131,12 @@ export function connectedAccountsUrlFor(
     }
   }
 
-  const base = `${origin}/settings/connected-accounts`;
+  /*
+   * `/connections`, the page connected accounts moved to（M5b，与上游一致）。The old
+   * `/settings/connected-accounts` address stays in the app as a redirect for consents begun
+   * before the move, whose vendor still holds the return address it was given then.
+   */
+  const base = `${origin}/connections`;
 
   /*
    * Success returns to the account, not the list.

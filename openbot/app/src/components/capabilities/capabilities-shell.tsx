@@ -1,89 +1,60 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  Link,
-  type LinkOptions,
-  linkOptions,
-  useMatchRoute,
-} from "@tanstack/react-router";
+import { linkOptions } from "@tanstack/react-router";
 import type * as React from "react";
 import { PageShell } from "@/components/layout/page-shell";
-import { Button } from "@/components/ui/button";
+import {
+  ALL_CAPABILITY_TABS,
+  CapabilityTabs,
+  useCurrentCapabilityTab,
+} from "@/components/resources/resource-tabs";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 
 /**
- * What a person gives their own Bots beyond the apps they connect: the skills they write and what
- * their Bots remember about them. Connections, the apps a Bot reaches as them, is its own page.
+ * 能力：员工除了你给它连的应用之外还能用的东西——插件、技能、知识库、WakerFlow、公开项目、模型库、组件、
+ * 记忆与信息源、角色模板。连接（员工以你的身份去碰的应用，以及员工可用的连接器）是自己的一页。
  *
- * Skills used to sit beside Bots and Memory in Settings, though both answer the same question: what
- * do my Bots know how to do, and what do they know about me?
- */
-const TABS = [
-  { label: "Skills", linkOptions: { to: "/capabilities/skills" } },
-  { label: "Memory", linkOptions: { to: "/capabilities/memory" } },
-] as const satisfies readonly { label: string; linkOptions: LinkOptions }[];
-
-/**
- * The tabs are links drawn as buttons. Each page keeps its own address, so it can be bookmarked,
- * opened in a new tab and reached by Back. The match is fuzzy so a tab stays lit on a page beneath
- * it.
- */
-export function CapabilitiesTabs() {
-  const matchRoute = useMatchRoute();
-  return (
-    <nav aria-label="Capabilities" className="mt-6 flex items-center gap-1">
-      {TABS.map((tab) => (
-        <Button
-          key={tab.label}
-          render={(props) => <Link {...tab.linkOptions} {...props} />}
-          variant={
-            matchRoute({ ...tab.linkOptions, fuzzy: true })
-              ? "secondary"
-              : "ghost"
-          }
-        >
-          {tab.label}
-        </Button>
-      ))}
-    </nav>
-  );
-}
-
-/**
- * The frame each tab draws itself in: the Capabilities title with the tabs beneath it, and no
- * description, since every section beneath them has its own title and says what it is for.
+ * 结构照上游 main（`/capabilities/*`，每个页签一个子路由，各自画这个外壳），页签照熊宝原来「能力与资源」
+ * 的九个入口和「资源入口」画法（`components/resources/resource-tabs.tsx`）。
  *
- * A component each page renders rather than the `/capabilities` layout route drawing it once,
- * because Skills wraps its whole page — heading included — in the side panel that writes and edits a
- * skill. A heading drawn by the layout would sit outside that panel and stay full width while it is
- * open.
+ * 外壳由每个页签自己画、而不是 `/capabilities` 布局路由画一次，因为技能页把整块内容放在写技能、改技能的侧边
+ * 面板里；布局路由画的标题会落在面板外面。
  */
 export function CapabilitiesShell({ children }: { children: React.ReactNode }) {
-  const matchRoute = useMatchRoute();
+  const current = useCurrentCapabilityTab();
   const personal =
     useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   /*
-   * The personal edition has no Capabilities page: Skills opens from the Bots page, so it is titled
-   * for itself and goes back there, with no tabs to a page that isn't in the menu. It has no Memory
-   * either; that route sends it to the Bots page before this draws (see `offersMemory`).
+   * 个人版没有「能力」页：技能从员工页打开，所以标题就是这一页自己的名字，返回员工页，不画页签（页签指向的页
+   * 不在个人版的菜单里）。个人版也没有记忆，那个路由在画这里之前就把它送回员工页了（见 `offersMemory`）。
    */
   if (personal) {
-    const tab =
-      TABS.find((item) => matchRoute({ ...item.linkOptions, fuzzy: true })) ??
-      TABS[0];
+    const tab = current ?? ALL_CAPABILITY_TABS[1];
     return (
       <PageShell
-        backButton={{ label: "Bots", linkProps: linkOptions({ to: "/bots" }) }}
+        backButton={{ label: "员工", linkProps: linkOptions({ to: "/bots" }) }}
         className="@container"
-        title={tab.label}
+        title={tab?.label ?? "技能"}
       >
         {children}
       </PageShell>
     );
   }
   return (
-    <PageShell className="@container" title="Capabilities">
-      <CapabilitiesTabs />
-      {children}
+    <PageShell
+      className="@container"
+      description="释放你的员工潜能，解锁更多可能"
+      eyebrow="05 RESOURCE CENTER"
+      title="能力"
+      width="workbench"
+    >
+      <CapabilityTabs />
+      <section
+        aria-label={current?.label}
+        className="outline-none"
+        data-slot="capability-panel"
+      >
+        {children}
+      </section>
     </PageShell>
   );
 }

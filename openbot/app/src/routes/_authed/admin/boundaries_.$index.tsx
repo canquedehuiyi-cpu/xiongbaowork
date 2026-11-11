@@ -148,7 +148,7 @@ function RuleDetail({ policy, rule }: { policy: ActionPolicy; rule: string }) {
                 (change) => change.would === "allowed",
               )}
               total={reach.data.wouldAllow}
-              verdict="Stopped"
+              verdict="已拦下"
             />
           </>
         )}
@@ -283,10 +283,10 @@ function RuleEditor({ policy, rule }: { policy: ActionPolicy; rule: string }) {
           changed ? (
             <>
               <Button onClick={reset} type="button" variant="outline">
-                Cancel
+                取消
               </Button>
               <Button disabled={!ready || savePolicy.isPending} type="submit">
-                {savePolicy.isPending ? "Saving…" : "Save rule"}
+                {savePolicy.isPending ? "正在保存…" : "保存规则"}
               </Button>
             </>
           ) : undefined
@@ -295,7 +295,7 @@ function RuleEditor({ policy, rule }: { policy: ActionPolicy; rule: string }) {
         <FieldGroup>
           <DescribeRule onWritten={takeWritten} />
           <Field>
-            <FieldLabel htmlFor="rule-expression">Rule</FieldLabel>
+            <FieldLabel htmlFor="rule-expression">规则</FieldLabel>
             <Textarea
               autoCapitalize="off"
               autoCorrect="off"
@@ -307,7 +307,7 @@ function RuleEditor({ policy, rule }: { policy: ActionPolicy; rule: string }) {
             />
             {duplicate ? (
               <p className="text-destructive text-sm">
-                This rule is already in place.
+                这条规则已经在了。
               </p>
             ) : null}
             {written ? <RuleReading rule={draft} written={written} /> : null}

@@ -92,15 +92,15 @@ function draw(
 
 test("someone who cannot manage the Bot is not offered Delete", () => {
   const view = draw({ ...BOT, canManage: false, mine: false });
-  expect(view.queryByText("Delete")).toBeNull();
-  expect(view.getByText("Duplicate")).toBeTruthy();
+  expect(view.queryByText("删除")).toBeNull();
+  expect(view.getByText("复制")).toBeTruthy();
 });
 
 test("hiding a Bot takes the person back to the roster", async () => {
   serving();
   const onHidden = mock(() => {});
   const view = draw(BOT, { onHidden });
-  fireEvent.click(view.getByRole("switch", { name: "Hidden" }));
+  fireEvent.click(view.getByRole("switch", { name: "隐藏" }));
   await waitFor(() => expect(onHidden).toHaveBeenCalledTimes(1));
 });
 
@@ -108,7 +108,7 @@ test("unhiding a hidden Bot keeps the person on its page", async () => {
   serving();
   const onHidden = mock(() => {});
   const view = draw({ ...BOT, hidden: true }, { onHidden });
-  fireEvent.click(view.getByRole("switch", { name: "Hidden" }));
+  fireEvent.click(view.getByRole("switch", { name: "隐藏" }));
   await waitFor(() =>
     expect(requests.some((request) => request.startsWith("POST"))).toBe(true),
   );
@@ -121,7 +121,7 @@ test("duplicating opens the copy", async () => {
   serving();
   const onDuplicated = mock((_copyId: string) => {});
   const view = draw(BOT, { onDuplicated });
-  fireEvent.click(view.getByRole("button", { name: /Duplicate/ }));
+  fireEvent.click(view.getByRole("button", { name: /复制/ }));
   await waitFor(() =>
     expect(onDuplicated).toHaveBeenCalledWith("expenses-copy"),
   );
@@ -134,8 +134,8 @@ test("a Bot an admin assigned to you reads as pinned and cannot be hidden or unp
     canManage: false,
     assignedToMe: true,
   });
-  const pinned = view.getByRole("switch", { name: "Pinned" });
-  const hidden = view.getByRole("switch", { name: "Hidden" });
+  const pinned = view.getByRole("switch", { name: "置顶" });
+  const hidden = view.getByRole("switch", { name: "隐藏" });
   expect(pinned.getAttribute("aria-checked")).toBe("true");
   expect(
     pinned.hasAttribute("disabled") ||
@@ -146,7 +146,7 @@ test("a Bot an admin assigned to you reads as pinned and cannot be hidden or unp
       hidden.getAttribute("aria-disabled") === "true",
   ).toBe(true);
   expect(
-    view.getAllByText(/An admin assigned it to you/).length,
+    view.getAllByText(/管理员把它分配给了你/).length,
   ).toBeGreaterThan(0);
 });
 
@@ -156,9 +156,9 @@ test("rows that open a dialog show a chevron, and Duplicate, which acts at once,
     view
       .getByRole("button", { name })
       .querySelector(".tabler-icon-chevron-right");
-  expect(chevron(/^Reset/)).not.toBeNull();
-  expect(chevron(/^Delete/)).not.toBeNull();
-  expect(chevron(/^Duplicate/)).toBeNull();
+  expect(chevron(/^重置/)).not.toBeNull();
+  expect(chevron(/^删除/)).not.toBeNull();
+  expect(chevron(/^复制/)).toBeNull();
 });
 
 /** A reset plan with a conversation to delete, so the notice lists something. */
@@ -186,25 +186,25 @@ function servingResetPlan() {
 test("Reset promises no memory in the personal edition", async () => {
   servingResetPlan();
   const view = draw(BOT, {}, "personal");
-  const row = view.getByRole("button", { name: /^Reset/ });
+  const row = view.getByRole("button", { name: /^重置/ });
   expect(row.textContent).toContain(
-    "Delete your conversations with it and its scheduled work.",
+    "删除你和它的对话和它排期的工作。",
   );
-  expect(row.textContent).not.toMatch(/remember|memor/i);
+  expect(row.textContent).not.toMatch(/记住|记忆/);
   fireEvent.click(row);
-  expect(await view.findByText("1 conversation")).toBeTruthy();
-  expect(document.body.textContent).not.toMatch(/remember|memor/i);
+  expect(await view.findByText("1 段对话")).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/记住|记忆/);
 });
 
 test("Reset still names what a Bot remembers for you in the team edition", async () => {
   servingResetPlan();
   const view = draw(BOT, {}, "team");
-  const row = view.getByRole("button", { name: /^Reset/ });
-  expect(row.textContent).toContain("what it remembers for you");
+  const row = view.getByRole("button", { name: /^重置/ });
+  expect(row.textContent).toContain("它为你记住的东西");
   fireEvent.click(row);
-  expect(await view.findByText("1 conversation")).toBeTruthy();
+  expect(await view.findByText("1 段对话")).toBeTruthy();
   expect(
-    view.getByText("Memories you told a Bot yourself are kept."),
+    view.getByText("你自己的记忆——你直接告诉员工的那些——会保留。"),
   ).toBeTruthy();
 });
 
@@ -216,38 +216,38 @@ test("Reset still names what a Bot remembers for you in the team edition", async
 test("the personal edition's rows say nothing about other people", async () => {
   const view = draw(BOT, {}, "personal");
   const text = () => document.body.textContent ?? "";
-  expect(view.getByText("Keep it at the top of your Bots list.")).toBeTruthy();
-  expect(view.getByText("Take it off your Bots list.")).toBeTruthy();
-  const remove = view.getByRole("button", { name: /^Delete/ });
+  expect(view.getByText("让它一直在你的员工列表顶部。")).toBeTruthy();
+  expect(view.getByText("从你的员工列表里拿掉。")).toBeTruthy();
+  const remove = view.getByRole("button", { name: /^删除/ });
   expect(remove.textContent).toContain(
-    "Deletes it. You can still read your conversations with it. You can't undo this.",
+    "删除它。你仍然可以查看和它的对话。删除后无法撤销。",
   );
-  expect(text()).not.toMatch(/only your list|for everyone/i);
+  expect(text()).not.toMatch(/只改你自己的列表|所有人/);
   fireEvent.click(remove);
   expect(
     await view.findByText(
-      "You can still read your conversations with it, but it can't reply. You can't undo this.",
+      "你仍然可以查看和它的对话，但它不会再回复。删除后无法撤销。",
     ),
   ).toBeTruthy();
-  expect(text()).not.toMatch(/for everyone|other people/i);
+  expect(text()).not.toMatch(/所有人|别人|其他人/);
 });
 
 test("the personal edition's Reset notice doesn't mention other people's data", async () => {
   servingResetPlan();
   const view = draw(BOT, {}, "personal");
-  fireEvent.click(view.getByRole("button", { name: /^Reset/ }));
+  fireEvent.click(view.getByRole("button", { name: /^重置/ }));
   expect(
     await view.findByText(
-      "This deletes what Expenses has with you. You can't undo this.",
+      "这会删除 Expenses 与你之间的东西。删除后无法撤销。",
     ),
   ).toBeTruthy();
-  expect(document.body.textContent).not.toMatch(/other people/i);
+  expect(document.body.textContent).not.toMatch(/别人|其他人/);
 });
 
 test("a hidden or pinned Bot in the personal edition says where it is, and no more", () => {
   const view = draw({ ...BOT, hidden: true, pinned: true }, {}, "personal");
-  expect(view.getByText("At the top of your Bots list.")).toBeTruthy();
-  expect(view.getByText("Under Hidden on your Bots list.")).toBeTruthy();
+  expect(view.getByText("在你的员工列表顶部。")).toBeTruthy();
+  expect(view.getByText("在你员工列表的「已隐藏」里。")).toBeTruthy();
 });
 
 test("a team deployment keeps saying whose list changes and who a delete reaches", async () => {
@@ -255,19 +255,19 @@ test("a team deployment keeps saying whose list changes and who a delete reaches
   const view = draw(BOT, {}, "team");
   expect(
     view.getByText(
-      "Keep it at the top of your Bots list. Only your list changes.",
+      "让它一直在你的员工列表顶部。只改你自己的列表。",
     ),
   ).toBeTruthy();
   expect(
-    view.getByText("Take it off your Bots list. Only your list changes."),
+    view.getByText("从你的员工列表里拿掉。只改你自己的列表。"),
   ).toBeTruthy();
-  expect(view.getByRole("button", { name: /^Delete/ }).textContent).toContain(
-    "Deletes it for everyone. You can't undo this.",
+  expect(view.getByRole("button", { name: /^删除/ }).textContent).toContain(
+    "对所有人删除它。删除后无法撤销。",
   );
-  fireEvent.click(view.getByRole("button", { name: /^Reset/ }));
+  fireEvent.click(view.getByRole("button", { name: /^重置/ }));
   expect(
     await view.findByText(
-      "This deletes what Expenses has with you. Other people's conversations and data stay. You can't undo this.",
+      "这会删除 Expenses 与你之间的东西，只限于你。别人的对话和数据不会被碰。删除后无法撤销。",
     ),
   ).toBeTruthy();
 });

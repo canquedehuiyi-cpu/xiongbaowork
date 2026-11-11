@@ -285,8 +285,8 @@ function NavigationStep({
     if (!said) return null;
     return (
       <ActionLine
-        label="Opened"
-        attempted="Open"
+        label="打开了网页"
+        attempted="打开网页"
         /*
          * The site alone, even for a refusal. The Bot's answer right after says why it could not go,
          * and a boundary's reason is the sentence written for the model, rule and all.
@@ -421,9 +421,7 @@ export function ComputerTools() {
           label="读取了页面"
           attempted="读取页面"
           detail={
-            elements.length
-              ? `${elements.length} thing${elements.length === 1 ? "" : "s"} it can act on`
-              : undefined
+            elements.length ? `${elements.length} 个可操作的元素` : undefined
           }
         />
       );

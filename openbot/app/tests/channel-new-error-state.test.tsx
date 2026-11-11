@@ -298,7 +298,9 @@ test("/channel/new in the team edition with several Bots leaves the To: field em
   );
 
   await expectSendHeldForABot(view);
-  await expectRecipient(view, "");
+  expect(
+    view.queryByRole("button", { hidden: true, name: /^移除 / }),
+  ).toBeNull();
 });
 
 test("/channel/new keeps a successful visible recipient enabled", async () => {
@@ -382,7 +384,7 @@ test("New employee is a fixed action outside the auto-highlighted recipient opti
   expect(await view.findByRole("dialog", { name: "New Bot" })).toBeTruthy();
 });
 
-test("creating an employee from To: makes it the recipient", async () => {
+test("creating an employee preserves existing recipients and selects the created one", async () => {
   const query = queryClientWithAgents([GENERAL_ASSISTANT]);
   query.setQueryData(
     agentKeys.detail("created-bot"),
@@ -395,25 +397,13 @@ test("creating an employee from To: makes it the recipient", async () => {
     await view.findByRole("button", { name: "新建员工 招一位新员工" }),
   );
   fireEvent.click(await view.findByRole("button", { name: "Finish creation" }));
-  await waitFor(() =>
-    expect(view.router.state.location.search).toEqual({
-      agent: "created-bot",
-    }),
-  );
-  await expectRecipient(view, "Created Bot");
-});
-
-/** The one employee in To:, as the picker's input shows it: their name, or nothing. */
-async function expectRecipient(
-  view: ReturnType<typeof renderChannelNew>,
-  name: string,
-) {
-  await waitFor(() =>
+  await waitFor(() => {
     expect(
-      (view.getByRole("combobox", { hidden: true }) as HTMLInputElement).value,
-    ).toBe(name),
-  );
-}
+      view.getByRole("button", { name: "移除 General Assistant" }),
+    ).toBeTruthy();
+    expect(view.getByRole("button", { name: "移除 Created Bot" })).toBeTruthy();
+  });
+});
 
 /** What the sidebar's + does: a plain link to `/channel/new`, no recipient, no state. */
 async function pressPlus(view: ReturnType<typeof renderChannelNew>) {
@@ -443,7 +433,9 @@ test("+ while composing a new conversation with a Bot picked starts a fresh one"
   fireEvent.click(
     await view.findByRole("option", { name: /General Assistant/ }),
   );
-  await expectRecipient(view, "General Assistant");
+  expect(
+    await view.findByRole("button", { name: "移除 General Assistant" }),
+  ).toBeTruthy();
   expect(view.router.state.location.search).toEqual({
     agent: "general-assistant",
   });
@@ -455,7 +447,14 @@ test("+ while composing a new conversation with a Bot picked starts a fresh one"
   expect(view.router.state.location.href).toBe("/channel/new");
   // And the caret is back in To:, where the new conversation starts, not left in the old message.
   await expectPickerOpenAndFocused(view);
-  await expectRecipient(view, "");
+  await waitFor(() =>
+    expect(
+      view.queryByRole("button", {
+        hidden: true,
+        name: "移除 General Assistant",
+      }),
+    ).toBeNull(),
+  );
   expect(
     (view.getByRole("combobox", { hidden: true }) as HTMLInputElement)
       .placeholder,
@@ -468,28 +467,35 @@ test("+ while composing a new conversation with a Bot picked starts a fresh one"
   await expectSendHeldForABot(view);
 });
 
-test("picking another employee keeps the conversation being written", async () => {
+test("picking and removing Bots keeps the conversation being written", async () => {
   const second = agent({ id: "second-bot", name: "Second Bot" });
   const view = renderChannelNew(
     queryClientWithAgents([GENERAL_ASSISTANT, second]),
     "/channel/new?agent=general-assistant",
   );
-  await typeDraft("for you instead", view);
+  await typeDraft("for both of you", view);
   const input = await view.findByRole("combobox", { hidden: true });
-  const user = userEvent.setup({ document });
-  await user.clear(input);
-  await user.type(input, "Second");
+  await userEvent.setup({ document }).type(input, "Second");
   fireEvent.click(await view.findByRole("option", { name: /Second Bot/ }));
+  await view.findByRole("button", { hidden: true, name: "移除 Second Bot" });
+  fireEvent.click(
+    view.getByRole("button", {
+      hidden: true,
+      name: "移除 General Assistant",
+    }),
+  );
 
-  // The page's own navigation moved the Bot in the URL; nothing was thrown away.
+  // The page's own navigation moved the first Bot in the URL; nothing was thrown away.
   await waitFor(() =>
     expect(view.router.state.location.search).toEqual({ agent: "second-bot" }),
   );
-  await expectRecipient(view, "Second Bot");
+  expect(
+    view.getByRole("button", { hidden: true, name: "移除 Second Bot" }),
+  ).toBeTruthy();
   expect(
     (await view.findByRole("textbox", { hidden: true, name: "消息" }))
       .textContent,
-  ).toBe("for you instead");
+  ).toBe("for both of you");
 });
 
 /** The To: picker is open and the caret is in it, ready for a Bot's name: what one + press gives. */
@@ -614,7 +620,10 @@ test("Enter with no Bot chosen keeps the message, says so, and opens the To: pic
       name: /General Assistant/,
     }),
   );
-  await expectRecipient(view, "General Assistant");
+  await view.findByRole("button", {
+    hidden: true,
+    name: "移除 General Assistant",
+  });
   await waitFor(() => expect(view.queryByText("先选一位员工。")).toBeNull());
   expect(editor.textContent).toBe("hello there");
   await waitFor(() => expect(document.activeElement).toBe(editor));
@@ -637,7 +646,9 @@ test("+ in the personal edition opens To: empty with the Bot menu open, and pick
   expect(
     view.getByRole("option", { hidden: true, name: /Errand Helper/ }),
   ).toBeTruthy();
-  await expectRecipient(view, "");
+  expect(
+    view.queryByRole("button", { hidden: true, name: /^移除 / }),
+  ).toBeNull();
   expect(view.router.state.location.href).toBe("/channel/new");
 });
 
@@ -679,7 +690,9 @@ test("+ with only one Bot still opens the menu with it, and the Bot picked there
       queryClientWithEdition([GENERAL_ASSISTANT], "team"),
     );
     await expectPickerOpenAndFocused(view);
-    await expectRecipient(view, "");
+    expect(
+      view.queryByRole("button", { hidden: true, name: /^移除 / }),
+    ).toBeNull();
 
     fireEvent.click(
       await view.findByRole("option", {
@@ -687,7 +700,10 @@ test("+ with only one Bot still opens the menu with it, and the Bot picked there
         name: /General Assistant/,
       }),
     );
-    await expectRecipient(view, "General Assistant");
+    await view.findByRole("button", {
+      hidden: true,
+      name: "移除 General Assistant",
+    });
     await typeDraft("what changed in the latest release?", view);
     await userEvent.setup({ document }).keyboard("{Enter}");
 

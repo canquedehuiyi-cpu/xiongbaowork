@@ -3,6 +3,10 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useState } from "react";
 import useMeasure from "react-use-measure";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import {
+  IsolatedOption,
+  type IsolationChoice,
+} from "@/components/agents/new-bot-sheet";
 import { TemplatePicker } from "@/components/roles/role-editor";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +47,8 @@ import {
   testAgentConnection,
 } from "@/lib/agents/queries";
 import { isComposing } from "@/lib/composing";
+import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
+import { myCapabilitiesQueryOptions } from "@/lib/enterprise/queries";
 import type { AnyRoleTemplate } from "@/lib/roles/queries";
 import { queryClient } from "@/query-client";
 
@@ -53,6 +59,9 @@ import { queryClient } from "@/query-client";
  * coworker is, who may see it, and where it runs. The last one is the fork — a built-in coworker
  * needs nothing more, a managed one needs an endpoint — and a flat form showing endpoint fields to
  * everybody made the common case read like the hard one.
+ *
+ * 熊宝的新建入口只有这一个（员工页 `/bots?new=true`、新对话页），上游 NewBotSheet 的「独立运行」开关并在
+ * 「它在哪里运行」这一步（M5b）：字段名照上游，`POST /api/agents` 的 `isolated`。
  */
 export function CreateAgentDialog({
   open,
@@ -61,7 +70,7 @@ export function CreateAgentDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  /** The new coworker's id, so the caller can open its dialog on it. */
+  /** The new coworker's id, so the caller can open its page. */
   onCreated: (agentId: string) => void;
 }) {
   return (
@@ -167,6 +176,20 @@ function CreateAgentWizard({
    */
   const { data: capabilities } = useQuery(agentCapabilitiesQueryOptions());
   const builtInAvailable = capabilities?.builtInAvailable ?? true;
+  /*
+   * A computer of its own (upstream's Isolated), as the New Bot sheet asks it: whether this deployment
+   * can make one, and whether an administrator lets this person ask. Unavailable until the deployment
+   * says otherwise, since promising a computer that cannot be made is the worse mistake; allowed
+   * unless the switch says no, since the server refuses a create without it either way. The
+   * personal edition has one person and one computer, so it is not asked there.
+   */
+  const personal =
+    useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
+  const isolationAvailable = capabilities?.isolationAvailable ?? false;
+  const { data: mine } = useQuery(myCapabilitiesQueryOptions());
+  const isolationAllowed = mine?.capabilities.isolatedComputers !== false;
+  /** Shared with the person's own computer unless they tick it. */
+  const [isolated, setIsolated] = useState(false);
 
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -265,7 +288,15 @@ function CreateAgentWizard({
       go(step + 1);
       return;
     }
-    const input = agentInputFrom(values);
+    const input = agentInputFrom({
+      ...values,
+      // Only what the box shows: a tick the person can no longer change is not sent, and an
+      // unticked box sends nothing, so the create is the one it always was.
+      isolated:
+        !personal && isolated && isolationAvailable && isolationAllowed
+          ? true
+          : undefined,
+    });
     const fromTemplate = template
       ? {
           ...input,
@@ -370,6 +401,16 @@ function CreateAgentWizard({
                         }}
                         onTest={() => void testConnection()}
                         connection={connection}
+                        isolation={
+                          personal
+                            ? null
+                            : {
+                                checked: isolated,
+                                available: isolationAvailable,
+                                allowed: isolationAllowed,
+                                onChange: setIsolated,
+                              }
+                        }
                         set={set}
                         showKindError={tried && kind === null}
                         testing={testing}
@@ -572,6 +613,7 @@ function KindStep({
   set,
   endpointError,
   connection,
+  isolation,
   testing,
   onTest,
 }: {
@@ -587,6 +629,8 @@ function KindStep({
   ) => void;
   endpointError?: string;
   connection: ConnectionVerdict | null;
+  /** 「独立运行」的状态；个人版不问（null）。 */
+  isolation: IsolationChoice | null;
   testing: boolean;
   onTest: () => void;
 }) {
@@ -682,6 +726,18 @@ function KindStep({
             </p>
           </Field>
         </FieldGroup>
+      ) : null}
+      {/*
+        Asked where it runs, as upstream's New Bot sheet asks it: never hidden, drawn disabled with
+        the reason where it cannot be ticked.
+      */}
+      {isolation ? (
+        <div className="mt-4">
+          <IsolatedOption
+            {...isolation}
+            isPublic={values.visibility === "public"}
+          />
+        </div>
       ) : null}
     </StepItem>
   );

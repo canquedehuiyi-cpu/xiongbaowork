@@ -833,7 +833,7 @@ function EveryAppList({ turnedOn }: { turnedOn: UseQueryResult<PluginsPage> }) {
 }
 
 /** The Isolated box's state and what decides whether it can be ticked. */
-type IsolationChoice = {
+export type IsolationChoice = {
   checked: boolean;
   /** Whether this deployment can make a computer for one Bot. */
   available: boolean;
@@ -855,8 +855,10 @@ type IsolationChoice = {
  *
  * A label for the word only, not the whole tile, so the tooltip's button beside it does not tick the
  * box when pressed.
+ *
+ * 熊宝：新建员工用的是熊宝向导（`create-agent-dialog.tsx`），这个开关从这里导出给向导用，两处说法一致。
  */
-function IsolatedOption({
+export function IsolatedOption({
   checked,
   available,
   allowed,

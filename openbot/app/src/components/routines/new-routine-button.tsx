@@ -35,7 +35,7 @@ export function NewRoutineButton({
       variant={variant}
     >
       <IconPlus />
-      New routine
+      新建定时任务
     </Button>
   );
 }
@@ -64,7 +64,7 @@ export function RoutineComposerButton({
       <TooltipTrigger
         render={
           <Button
-            aria-label="Set up a routine"
+            aria-label="设一条定时任务"
             data-slot="composer-routine"
             render={(props) => (
               <Link
@@ -80,7 +80,7 @@ export function RoutineComposerButton({
           </Button>
         }
       />
-      <TooltipContent>Set up a routine</TooltipContent>
+      <TooltipContent>设一条定时任务</TooltipContent>
     </Tooltip>
   );
 }

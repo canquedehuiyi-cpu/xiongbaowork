@@ -263,17 +263,17 @@ test("a rule about an app is tested as it is written, and lists the app calls it
     });
   const { view } = open("/admin/boundaries/new");
 
-  fireEvent.click(await view.findByText("Write your own"));
+  fireEvent.click(await view.findByText("自己写"));
   // Typed a key at a time: replayed once it rests, not once a keystroke.
   await userEvent
     .setup({ document })
-    .type(view.getByLabelText("Rule"), salesforceWrites);
+    .type(view.getByLabelText("规则"), salesforceWrites);
 
   // Nobody presses anything: the answer arrives under the rule.
   expect(view.queryByRole("button", { name: /test/i })).toBeNull();
   expect(
     await view.findByText(
-      "Of the last 9 recorded actions, this rule would have stopped 2.",
+      "最近记录的 9 个动作里，这条规则会拦下 2 个。",
     ),
   ).toBeTruthy();
   // Once, when the rule rested, and the rule on its own: the rule in force stops what it stops
@@ -285,12 +285,12 @@ test("a rule about an app is tested as it is written, and lists the app calls it
   // The app call reads as Audit reads it: the action in words, the app's tool, who started it.
   expect(view.getByText("Update record")).toBeTruthy();
   expect(view.getByText("salesforce/update_record")).toBeTruthy();
-  expect(view.getByText("Started by a routine")).toBeTruthy();
-  expect(view.getByRole("img", { name: "App call" })).toBeTruthy();
+  expect(view.getByText("由定时任务发起")).toBeTruthy();
+  expect(view.getByRole("img", { name: "应用调用" })).toBeTruthy();
   // Beside the computer action it would also stop.
   expect(view.getByText("sf data update record")).toBeTruthy();
-  expect(view.getByRole("img", { name: "Computer action" })).toBeTruthy();
-  expect(view.getAllByText("Would stop")).toHaveLength(2);
+  expect(view.getByRole("img", { name: "电脑操作" })).toBeTruthy();
+  expect(view.getAllByText("会拦下")).toHaveLength(2);
 });
 
 test("a rule that doesn't compile says why under it, and isn't replayed as one that stops everything", async () => {
@@ -301,13 +301,13 @@ test("a rule that doesn't compile says why under it, and isn't replayed as one t
     Response.json({ error: why, rule: candidate.deny.at(-1) }, { status: 400 });
   const { view } = open("/admin/boundaries/new");
 
-  fireEvent.click(await view.findByText("Write your own"));
+  fireEvent.click(await view.findByText("自己写"));
   await userEvent
     .setup({ document })
-    .type(view.getByLabelText("Rule"), 'elemnt.name == "Submit"');
+    .type(view.getByLabelText("规则"), 'elemnt.name == "Submit"');
 
   expect((await view.findByRole("alert")).textContent).toBe(why);
-  expect(view.queryByText(/recorded actions/)).toBeNull();
+  expect(view.queryByText(/最近记录的/)).toBeNull();
 });
 
 test("a rule's page lists the app calls it stopped", async () => {
@@ -340,11 +340,11 @@ test("a rule's page lists the app calls it stopped", async () => {
   const { view } = open("/admin/boundaries/0");
 
   expect(
-    await view.findByText("It stopped 1 of the last 4 recorded actions."),
+    await view.findByText("最近记录的 4 个动作里，它拦下了 1 个。"),
   ).toBeTruthy();
   expect(view.getByText("Delete record")).toBeTruthy();
   expect(view.getByText("salesforce/delete_record")).toBeTruthy();
-  expect(view.getByText("Stopped")).toBeTruthy();
+  expect(view.getByText("已拦下")).toBeTruthy();
   // Replayed without the rule: what it stopped is what would have gone through.
   expect(replayed).toEqual([
     { mode: "enforce", deny: [], allow: ["true"], labels: {} },

@@ -2,7 +2,7 @@ import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { reviewerGuidanceKeys } from "./queries";
 
-const FALLBACK = "The guidance for auto-review couldn't be saved.";
+const FALLBACK = "自动审核的指引没能保存。";
 
 const invalidateGuidance = (queryClient: QueryClient) =>
   queryClient.invalidateQueries({ queryKey: reviewerGuidanceKeys.all });
@@ -30,7 +30,7 @@ export const removeReviewerGuidanceMutationOptions = (
     mutationFn: () =>
       client("/api/approvals/team/guidance", {
         method: "DELETE",
-        fallback: "The guidance for auto-review couldn't be removed.",
+        fallback: "自动审核的指引没能移除。",
       }),
     onSuccess: () => invalidateGuidance(queryClient),
   });

@@ -1,7 +1,9 @@
 import {
   IconBrain,
   IconBuildingBank,
+  IconBuildingSkyscraper,
   IconBulb,
+  IconChecks,
   IconChevronRight,
   IconCode,
   IconDeviceDesktop,
@@ -71,6 +73,13 @@ const SECTIONS: {
         description: "决定员工绝不能做什么的规则。",
         icon: IconShieldCheck,
         linkOptions: { to: "/admin/boundaries" },
+      },
+      {
+        title: "审批",
+        description:
+          "成员的员工动手前要不要先问、团队规则，以及共享账号和应用的使用申请。",
+        icon: IconChecks,
+        linkOptions: { to: "/admin/approvals" },
       },
       {
         title: "电脑",
@@ -175,11 +184,24 @@ const SECTIONS: {
         linkOptions: { to: "/admin/audit" },
       },
       {
-        title: "What would happen",
+        title: "动作推演",
         description:
-          "Ask what OpenBot would do if a Bot took an action, and see which control decides.",
+          "问问员工做某个动作时熊宝会怎么处理，看是哪一道管控做的决定。",
         icon: IconZoomQuestion,
         linkOptions: { to: "/admin/what-if" },
+      },
+    ],
+  },
+  {
+    title: "平台",
+    description: "",
+    items: [
+      {
+        title: "平台管理",
+        description:
+          "这个部署服务的所有租户、各自的用量和审计，以及停用与恢复。",
+        icon: IconBuildingSkyscraper,
+        linkOptions: { to: "/admin/platform" },
       },
     ],
   },

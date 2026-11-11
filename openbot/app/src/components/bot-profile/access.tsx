@@ -154,8 +154,8 @@ function YourApps({ agent }: { agent: AgentProfile }) {
   ];
   return (
     <PageSection
-      description={`Turn on an app to let ${agent.name} use it. It always uses the account of whoever is asking.`}
-      title="Your apps"
+      description={`打开一个应用，${agent.name} 就能用它。它用的始终是正在找它的那个人自己的账号。`}
+      title="你的应用"
     >
       {error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -164,7 +164,7 @@ function YourApps({ agent }: { agent: AgentProfile }) {
       ) : null}
       {giveable.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't load your apps. Reload the page.
+          读不到你的应用，请刷新页面。
         </p>
       ) : rows.length === 0 ? (
         <PageEmpty
@@ -175,13 +175,13 @@ function YourApps({ agent }: { agent: AgentProfile }) {
               variant="outline"
             >
               <IconPlug />
-              Connections
+              连接
             </Button>
           }
           icon={IconApps}
-          title="No apps to give yet"
+          title="还没有可以给的应用"
         >
-          Connect an app to let your Bots use it.
+          连接一个应用，你的员工就能用它。
         </PageEmpty>
       ) : (
         <PageRows>
@@ -190,7 +190,7 @@ function YourApps({ agent }: { agent: AgentProfile }) {
             const locked = granted && !app.access?.givenByOwner;
             const yours =
               app.account === "personal"
-                ? `your ${app.displayName}`
+                ? `你的 ${app.displayName}`
                 : app.displayName;
             return (
               <Fragment key={app.key}>
@@ -203,15 +203,15 @@ function YourApps({ agent }: { agent: AgentProfile }) {
                     <ItemTitle>{app.displayName}</ItemTitle>
                     <ItemDescription>
                       {locked
-                        ? "An admin gave it to this Bot."
+                        ? "管理员把它给了这位员工。"
                         : granted
-                          ? `${agent.name} can use ${yours}.`
-                          : `${agent.name} can't use ${yours}.`}
+                          ? `${agent.name} 能用${yours}。`
+                          : `${agent.name} 不能用${yours}。`}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <Switch
-                      aria-label={`Let ${agent.name} use ${app.displayName}`}
+                      aria-label={`让 ${agent.name} 使用 ${app.displayName}`}
                       checked={granted}
                       disabled={busy || locked}
                       onCheckedChange={(next) => {
@@ -254,8 +254,8 @@ function YourSkills({ agentId }: { agentId: string }) {
   const carried = new Set((held.data?.skills ?? []).map((skill) => skill.slug));
   return (
     <PageSection
-      description="Turn on a skill to use it with this Bot. Type / in a conversation to run it."
-      title="Your skills"
+      description="打开一个技能，就能让这位员工用它。在对话里输入 / 运行。"
+      title="你的技能"
     >
       {grant.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -264,7 +264,7 @@ function YourSkills({ agentId }: { agentId: string }) {
       ) : null}
       {page.isPending || held.isPending ? null : page.error || held.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't load your skills. Reload the page.
+          读不到你的技能，请刷新页面。
         </p>
       ) : skills.length === 0 ? (
         <PageEmpty
@@ -275,13 +275,13 @@ function YourSkills({ agentId }: { agentId: string }) {
               variant="outline"
             >
               <IconPlus />
-              Write a skill
+              写一个技能
             </Button>
           }
           icon={IconBox}
-          title="No skills yet"
+          title="还没有技能"
         >
-          Skills you write show up here.
+          你写的技能会出现在这里。
         </PageEmpty>
       ) : (
         <PageRows>
@@ -347,7 +347,7 @@ function Granted({ agentId, mine }: { agentId: string; mine: boolean }) {
   if (!plugins.data) {
     return (
       <p className="mt-6 text-destructive text-sm" role="alert">
-        Couldn't load what this Bot can use. Reload the page.
+        读不到这位员工能用什么，请刷新页面。
       </p>
     );
   }
@@ -365,19 +365,19 @@ function Granted({ agentId, mine }: { agentId: string; mine: boolean }) {
   const count = states.length + rest.length + skills.length;
   return (
     <PageSection
-      description="Review this Bot’s available apps and skills, and check which apps are ready to use. The Bot cannot use apps or skills outside this list."
-      title="What it can use"
+      description="查看这位员工能用的应用和技能，以及哪些应用已经能用。不在这个列表里的应用和技能，它用不了。"
+      title="它能用什么"
     >
       {apps.error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't check whether each app is ready for you. Reload the page.
+          查不到每个应用对你来说能不能用，请刷新页面。
         </p>
       ) : null}
       {count === 0 ? (
-        <PageEmpty icon={IconApps} title="No apps yet">
+        <PageEmpty icon={IconApps} title="还没有应用">
           {mine
-            ? "Turn one on under Your apps, or ask an admin. Until then this Bot can only talk with you."
-            : "An admin has to add them. Until then this Bot can only talk with you."}
+            ? "在上面「你的应用」里打开一个，或者找管理员。在那之前，这位员工只能和你对话。"
+            : "需要管理员添加。在那之前，这位员工只能和你对话。"}
         </PageEmpty>
       ) : (
         <PageRows>
@@ -458,7 +458,7 @@ function Granted({ agentId, mine }: { agentId: string; mine: boolean }) {
                   <ItemDescription>{skill.summary}</ItemDescription>
                 </ItemContent>
                 <ItemActions>
-                  <span className="text-muted-foreground text-sm">Skill</span>
+                  <span className="text-muted-foreground text-sm">技能</span>
                 </ItemActions>
               </Item>
             </Fragment>
@@ -471,13 +471,13 @@ function Granted({ agentId, mine }: { agentId: string; mine: boolean }) {
 
 /** The first few tool labels, and how many more. */
 function toolList(labels: string[]): string {
-  return `${labels.slice(0, 4).join(", ")}${labels.length > 4 ? ` and ${labels.length - 4} more` : ""}`;
+  return `${labels.slice(0, 4).join("、")}${labels.length > 4 ? ` 等 ${labels.length} 个` : ""}`;
 }
 
 function ToolCount({ count }: { count: number }) {
   return (
     <span className="text-muted-foreground text-sm tabular-nums">
-      {count} {count === 1 ? "tool" : "tools"}
+      {count} 个工具
     </span>
   );
 }
@@ -501,7 +501,7 @@ function ManageLink({
   const paths = useManagePaths();
   return (
     <Button
-      aria-label={`Manage ${title} on this Bot`}
+      aria-label={`管理这位员工的 ${title}`}
       render={<Link {...paths.pluginBot(appKey, agentId)} />}
       size="icon-sm"
       variant="ghost"

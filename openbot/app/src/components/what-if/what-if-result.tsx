@@ -58,40 +58,40 @@ const ICONS: Record<
 
 /** What the row's detail line is about, by control. */
 const BASIS_WORDS: Record<WhatIfLayerId, string> = {
-  grant: "Not given",
-  app_allowlist: "Setting",
-  capabilities: "Permission",
-  network: "Allowlist",
-  boundaries: "Rule",
-  safety: "Why",
-  approvals: "Rule",
+  grant: "没有授予",
+  app_allowlist: "设置",
+  capabilities: "权限",
+  network: "允许列表",
+  boundaries: "规则",
+  safety: "原因",
+  approvals: "规则",
 };
 
 /** The page each control's setting is on, as the sidebar names it. */
 const PAGE_WORDS: Record<NonNullable<WhatIfLayer["page"]>, string> = {
-  "/admin/plugins": "Open Plugins",
-  "/admin/permissions": "Open Permissions",
-  "/admin/computers": "Open Computers",
-  "/admin/boundaries": "Open Boundaries",
-  "/admin/approvals": "Open Approvals",
+  "/admin/plugins": "打开插件",
+  "/admin/permissions": "打开权限",
+  "/admin/computers": "打开电脑",
+  "/admin/boundaries": "打开边界规则",
+  "/admin/approvals": "打开审批",
 };
 
 const VERDICTS: Record<WhatIfVerdict, { label: string; tone: string }> = {
   allows: {
-    label: "Allows",
+    label: "允许",
     tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   },
-  refuses: { label: "Refuses", tone: "bg-destructive/10 text-destructive" },
+  refuses: { label: "拒绝", tone: "bg-destructive/10 text-destructive" },
   asks: {
-    label: "Asks first",
+    label: "先问",
     tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   },
   hands_off: {
-    label: "Hands off",
+    label: "交给本人",
     tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   },
   trial: {
-    label: "Would refuse",
+    label: "本会拒绝",
     tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   },
 };
@@ -114,22 +114,22 @@ export const OUTCOMES: Record<
   }
 > = {
   allowed: {
-    label: "Allowed",
+    label: "会放行",
     icon: IconCircleCheck,
     tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   },
   refused: {
-    label: "Refused",
+    label: "会被拒绝",
     icon: IconBan,
     tone: "bg-destructive/10 text-destructive",
   },
   asks: {
-    label: "Asks first",
+    label: "会先问",
     icon: IconMessageQuestion,
     tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   },
   hands_off: {
-    label: "Person does it",
+    label: "由本人来做",
     icon: IconHandStop,
     tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   },
@@ -176,11 +176,11 @@ function LayerRow({ layer }: { layer: WhatIfLayer }) {
           {layer.title}
           {layer.decides ? (
             <span className="ms-2 whitespace-nowrap font-medium text-foreground text-xs">
-              Decides
+              起决定作用
             </span>
           ) : layer.unreached ? (
             <span className="ms-2 whitespace-nowrap font-normal text-muted-foreground text-xs">
-              Not reached
+              走不到这一步
             </span>
           ) : null}
         </ItemTitle>
@@ -196,8 +196,8 @@ function LayerRow({ layer }: { layer: WhatIfLayer }) {
           {layer.basis ? (
             <span className="[overflow-wrap:anywhere]">
               <span className="font-medium text-foreground/80">
-                {BASIS_WORDS[layer.id]}:
-              </span>{" "}
+                {BASIS_WORDS[layer.id]}：
+              </span>
               {layer.basis}
             </span>
           ) : null}
@@ -254,7 +254,7 @@ export function WhatIfResultView({
             <ItemTitle className="line-clamp-none">{outcome.label}</ItemTitle>
             <ItemDescription className="line-clamp-none">
               {decider
-                ? `${decider.title} decide${decider.title.endsWith("s") ? "" : "s"}. ${decider.summary}`
+                ? `由「${decider.title}」决定。${decider.summary}`
                 : result.headline.replace(/^[^.]*\.\s*/, "")}
             </ItemDescription>
           </ItemContent>
@@ -271,13 +271,12 @@ export function WhatIfResultView({
       <div className="mt-3 flex flex-col gap-1.5 text-muted-foreground text-xs">
         {result.notApplicable.length > 0 ? (
           <p>
-            Doesn't apply to this kind of action:{" "}
-            {result.notApplicable.join(", ")}.
+            对这类动作不适用：{result.notApplicable.join("、")}。
           </p>
         ) : null}
         {result.notChecked.length > 0 ? (
           <div>
-            <p>Not checked here, because only a real action shows it:</p>
+            <p>这里没有检查，因为只有真实的动作才看得出来：</p>
             <ul className="mt-1 list-disc ps-4">
               {result.notChecked.map((line) => (
                 <li key={line}>{line}</li>

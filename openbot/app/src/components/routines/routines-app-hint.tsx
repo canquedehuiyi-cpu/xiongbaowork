@@ -8,12 +8,13 @@ import { Link } from "@tanstack/react-router";
 export function RoutinesAppHint() {
   return (
     <span className="ml-auto flex min-w-0 items-center gap-2 text-muted-foreground text-xs">
-      <span className="truncate">e.g. “every weekday at 9, send me…”</span>
+      <span className="truncate">比如「每个工作日 9 点，给我发……」</span>
       <Link
         className="shrink-0 font-medium text-foreground underline-offset-2 hover:underline"
-        to="/routines"
+        search={{ trigger: "schedule" }}
+        to="/autonomous"
       >
-        Open Routines
+        查看定时任务
       </Link>
     </span>
   );

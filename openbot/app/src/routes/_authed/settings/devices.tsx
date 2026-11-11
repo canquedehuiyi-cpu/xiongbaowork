@@ -3,8 +3,8 @@ import { PageShell } from "@/components/layout/page-shell";
 import { MyDevices } from "@/components/settings/my-devices";
 
 /**
- * 我的设备（M5b：从设置的通用页拆出来，单独一个设置分区）。第 0 步先挂现有的 `MyDevices`；从通用页摘掉它、
- * 加进设置侧栏是 E 组的事。
+ * 我的设备（M5b：从设置的通用页拆出来，单独一个设置分区）。设备是个人的执行环境：配对一次，之后无人值守地跑，
+ * 所以和其他「设好就不用管」的东西放在设置里。
  */
 export const Route = createFileRoute("/_authed/settings/devices")({
   component: DevicesSettingsPage,
@@ -12,7 +12,11 @@ export const Route = createFileRoute("/_authed/settings/devices")({
 
 function DevicesSettingsPage() {
   return (
-    <PageShell title="我的设备">
+    <PageShell
+      description="配对你自己的电脑，让员工在上面替你干活。配对一次之后，它会自己连回来。"
+      title="我的设备"
+      width="workbench"
+    >
       <MyDevices />
     </PageShell>
   );

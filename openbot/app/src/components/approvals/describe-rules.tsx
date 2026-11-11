@@ -51,11 +51,11 @@ const FIELDS: {
 }[] = [
   {
     key: "toolRef",
-    label: "Tool or app",
+    label: "工具或应用",
     placeholder: "composio-gmail/*, computer_click, host/*",
   },
-  { key: "effect", label: "Kind of action", placeholder: "*, write, read" },
-  { key: "scope", label: "Target", placeholder: "*, an app, a site" },
+  { key: "effect", label: "动作类型", placeholder: "*、write、read" },
+  { key: "scope", label: "目标", placeholder: "*、某个应用、某个网站" },
 ];
 
 /**
@@ -66,9 +66,9 @@ function botLabels(
   bots: readonly AgentProfile[] | undefined,
   current: string,
 ): Record<string, string> {
-  const labels: Record<string, string> = { "*": "Every Bot" };
+  const labels: Record<string, string> = { "*": "所有员工" };
   for (const bot of bots ?? []) labels[bot.id] = bot.name;
-  if (!(current in labels)) labels[current] = current || "No Bot";
+  if (!(current in labels)) labels[current] = current || "没有员工";
   return labels;
 }
 
@@ -93,9 +93,9 @@ export function RuleRowsEditor({
     );
   return (
     <Field>
-      <FieldLabel>Rules</FieldLabel>
+      <FieldLabel>规则</FieldLabel>
       <FieldDescription>
-        Use * to match anything. Change any rule before you save.
+        用 * 匹配任意内容。保存前可以改动任何一条规则。
       </FieldDescription>
       <div className="flex flex-col gap-4">
         {rules.map((rule, index) => {
@@ -113,10 +113,10 @@ export function RuleRowsEditor({
               <FieldSet className="gap-3">
                 <div className="flex items-center justify-between gap-2">
                   <FieldLegend className="mb-0" variant="label">
-                    Rule {row}
+                    规则 {row}
                   </FieldLegend>
                   <Button
-                    aria-label={`Remove rule ${row}`}
+                    aria-label={`移除规则 ${row}`}
                     onClick={() =>
                       onChange(rules.filter((_, at) => at !== index))
                     }
@@ -159,7 +159,7 @@ export function RuleRowsEditor({
                     );
                   })}
                   <Field>
-                    <FieldLabel htmlFor={`${id}-botId`}>Bot</FieldLabel>
+                    <FieldLabel htmlFor={`${id}-botId`}>员工</FieldLabel>
                     <LabelSelect
                       id={`${id}-botId`}
                       labels={botLabels(bots.data, rule.botId)}
@@ -174,7 +174,7 @@ export function RuleRowsEditor({
                   </Field>
                   <Field>
                     <FieldLabel htmlFor={`${id}-behaviour`}>
-                      Behaviour
+                      处理方式
                     </FieldLabel>
                     <LabelSelect
                       id={`${id}-behaviour`}
@@ -198,7 +198,7 @@ export function RuleRowsEditor({
             variant="outline"
           >
             <IconPlus />
-            Add a rule
+            再加一条规则
           </Button>
         </div>
       ) : null}
@@ -206,22 +206,19 @@ export function RuleRowsEditor({
   );
 }
 
-const plural = (count: number, one: string, many = `${one}s`) =>
-  `${count} ${count === 1 ? one : many}`;
-
 /**
- * The backtest's answer in one sentence: "Would have changed 4 decisions: removes 4 asks, of which 1
- * a person had denied; adds 0 asks." Safety requirements and auto-review are never counted.
+ * The backtest's answer in one sentence: 「会改变 4 个决定：少问 4 次，其中 1 次有人拒绝过；多问 0 次。」
+ * Safety requirements and auto-review are never counted.
  */
 export function backtestHeadline(report: ApprovalBacktest): string {
-  if (report.changed === 0) return "Would have changed no decisions.";
+  if (report.changed === 0) return "不会改变任何决定。";
   const removed =
     report.removedAsks > 0
-      ? `removes ${plural(report.removedAsks, "ask")}, of which ${report.removedDenied} a person had denied`
-      : `removes ${plural(report.removedAsks, "ask")}`;
+      ? `少问 ${report.removedAsks} 次，其中 ${report.removedDenied} 次有人拒绝过`
+      : `少问 ${report.removedAsks} 次`;
   const moved = report.changed - report.removedAsks - report.addedAsks;
-  return `Would have changed ${plural(report.changed, "decision")}: ${removed}; adds ${plural(report.addedAsks, "ask")}.${
-    moved > 0 ? ` ${moved} more would move between asking and handing off.` : ""
+  return `会改变 ${report.changed} 个决定：${removed}；多问 ${report.addedAsks} 次。${
+    moved > 0 ? `另有 ${moved} 个会在「先问」和「交给本人」之间变动。` : ""
   }`;
 }
 
@@ -234,36 +231,36 @@ export function replayWords(
   asksMore: boolean,
 ): string {
   return [
-    `Replayed over the last ${plural(report.scanned, "action")} OpenBot checked.`,
+    `用熊宝最近检查过的 ${report.scanned} 个动作重放了一遍。`,
     report.matched === 0
-      ? "These rules are about none of them."
-      : `These rules are about ${report.matched} of them.`,
+      ? "这些规则跟其中任何一个都无关。"
+      : `这些规则涉及其中 ${report.matched} 个。`,
     report.fixed > 0
-      ? `${report.fixed} ${report.fixed === 1 ? "was" : "were"} decided by a safety requirement, auto-review or a task, which rules don't change.`
+      ? `其中 ${report.fixed} 个由安全要求、自动审核或任务决定，规则改变不了。`
       : null,
     asksMore
-      ? "Actions that ran with nothing to check aren't recorded, so a new ask can reach further than this shows."
+      ? "没经过检查就执行的动作不会被记录，所以新的「先问」可能比这里显示的管得更多。"
       : null,
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("");
 }
 
 /** What the person said when they were asked, in their words. */
 const ANSWERS: Record<NonNullable<BacktestChange["person"]>, string> = {
-  allow_once: "A person allowed it once.",
-  allow_conversation: "A person allowed it for that conversation.",
-  allow_always: "A person always allowed it.",
-  deny: "A person denied it.",
-  handled: "A person did it themselves.",
-  waiting: "Still waiting for a person.",
-  withdrawn: "Withdrawn without an answer.",
+  allow_once: "有人允许了一次。",
+  allow_conversation: "有人在那段对话里都允许了。",
+  allow_always: "有人选了总是允许。",
+  deny: "有人拒绝了。",
+  handled: "有人自己做了。",
+  waiting: "还在等人处理。",
+  withdrawn: "没等到回答就撤回了。",
 };
 
 const WOULD: Record<string, string> = {
-  allow: "Wouldn't ask",
-  ask: "Would ask",
-  hand_off: "Would hand off",
+  allow: "不会再问",
+  ask: "会先问",
+  hand_off: "会交给本人",
 };
 
 /** The approval row a change was replayed from, so Audit's own cells draw it. */
@@ -291,14 +288,14 @@ function auditRowOf(change: BacktestChange): AuditEvent {
 /** Where an action acted, by its tool: an app, a computer, a folder, another Bot. */
 export function mediaOf(toolRef: string): ReplayRow["media"] {
   if (toolRef.startsWith("computer_"))
-    return { icon: <IconDeviceDesktop />, label: "Computer action" };
+    return { icon: <IconDeviceDesktop />, label: "电脑操作" };
   if (toolRef.startsWith("host/"))
-    return { icon: <IconFolder />, label: "Folder on a computer" };
+    return { icon: <IconFolder />, label: "电脑上的文件夹" };
   if (toolRef.startsWith("bot/"))
-    return { icon: <IconUsers />, label: "Work handed to another Bot" };
+    return { icon: <IconUsers />, label: "转交给其他员工的工作" };
   if (toolRef.startsWith("openbot/"))
-    return { icon: <IconLock />, label: "Private information" };
-  return { icon: <IconPlug />, label: "App call" };
+    return { icon: <IconLock />, label: "私密信息" };
+  return { icon: <IconPlug />, label: "应用调用" };
 }
 
 function replayRowOf(change: BacktestChange): ReplayRow {
@@ -308,7 +305,7 @@ function replayRowOf(change: BacktestChange): ReplayRow {
     id: change.id,
     event: auditRowOf(change),
     media: mediaOf(change.toolRef),
-    verdict: fixed ? "Unchanged" : (WOULD[change.would] ?? change.would),
+    verdict: fixed ? "不变" : (WOULD[change.would] ?? change.would),
     verdictClassName: fixed
       ? "text-muted-foreground"
       : change.change === "removes_ask"
@@ -316,7 +313,7 @@ function replayRowOf(change: BacktestChange): ReplayRow {
           ? "text-destructive"
           : "text-amber-600 dark:text-amber-500"
         : "text-foreground",
-    note: [fixed ? change.reason : null, answer].filter(Boolean).join(" "),
+    note: [fixed ? change.reason : null, answer].filter(Boolean).join(""),
   };
 }
 
@@ -336,15 +333,14 @@ export function RulesBacktest({
   if (preview.isPending) return null;
   return (
     <Field aria-labelledby="rules-backtest" aria-live="polite">
-      <FieldLabel id="rules-backtest">On recent activity</FieldLabel>
+      <FieldLabel id="rules-backtest">拿最近的动作试一试</FieldLabel>
       {preview.error ? (
         <p className="text-destructive text-sm" role="alert">
           {preview.error.message}
         </p>
       ) : preview.data.report.scanned === 0 ? (
         <FieldDescription>
-          No checked actions to test against yet. You'll see what these rules
-          change once Bots have acted.
+          还没有检查过的动作可以拿来测试。员工开始干活后，就能看到这些规则会改变什么。
         </FieldDescription>
       ) : (
         <div className="flex flex-col gap-3">

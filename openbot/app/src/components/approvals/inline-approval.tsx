@@ -54,10 +54,9 @@ const CHOICE_WORDS: Record<
     tone: "positive",
   },
   allow_conversation: {
-    label: "Allow for this conversation",
-    description:
-      "The Bot does it now, and again in this conversation without asking.",
-    done: "Allowed for this conversation",
+    label: "在这段对话里都允许",
+    description: "员工现在就做，这段对话里再遇到同样的操作不再问你。",
+    done: "已在这段对话里都允许",
     tone: "positive",
   },
   allow_always: {

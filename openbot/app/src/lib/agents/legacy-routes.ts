@@ -48,6 +48,7 @@ type LegacyWakersSearch = {
   role?: string;
   env?: "device" | "unbound";
   sort?: "name" | "recent" | "tasks";
+  view?: "list";
   new?: true;
   agent?: string;
 };

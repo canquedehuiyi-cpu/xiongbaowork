@@ -7,7 +7,10 @@ import type { ReactNode } from "react";
 import { MemoryList, RememberFact } from "@/components/memory/memories";
 import { settleReactWork } from "./settle-react-work";
 
-/** Settings → Memory: what the person's Bots know about them, and which Bot learned it. */
+/**
+ * 上游的记忆列表与「记住一条事实」（`components/memory/memories.tsx`，中文化后保留）：员工知道你的什么，
+ * 以及是哪位员工记下的。
+ */
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
@@ -88,25 +91,25 @@ function draw(node: ReactNode) {
   );
 }
 
-test("a memory a Bot formed names the Bot that formed it", async () => {
+test("员工记下的记忆写明是哪位员工记下的", async () => {
   serving();
   const view = draw(<MemoryList />);
-  expect(await view.findByText(/Formed by Expenses/)).toBeTruthy();
+  expect(await view.findByText(/由 Expenses 记下/)).toBeTruthy();
 });
 
-test("remembering a fact saves it", async () => {
+test("记住一条事实会保存它", async () => {
   serving();
   const view = draw(<RememberFact />);
   const user = userEvent.setup({ document });
   // The form lives in a dialog behind the page's action, not on the page.
-  fireEvent.click(view.getByRole("button", { name: "Remember a fact" }));
+  fireEvent.click(view.getByRole("button", { name: "记住一条事实" }));
   await user.type(
     await view.findByRole("textbox", {
-      name: "Something you want your Bots to know",
+      name: "你希望员工知道的事",
     }),
     "I work from Lisbon.",
   );
-  fireEvent.click(view.getByRole("button", { name: "Remember" }));
+  fireEvent.click(view.getByRole("button", { name: "记住" }));
   await waitFor(() =>
     expect(writes).toContainEqual({
       request: "POST /api/memory",
@@ -115,40 +118,40 @@ test("remembering a fact saves it", async () => {
   );
 });
 
-test("each memory's switch is named for the memory it turns on or off", async () => {
+test("每条记忆的开关以它开关的那条记忆命名", async () => {
   serving();
   const view = draw(<MemoryList />);
   expect(
     await view.findByRole("switch", {
-      name: "Use this memory: I prefer mornings.",
+      name: "使用这条记忆：I prefer mornings.",
     }),
   ).toBeTruthy();
   expect(
     view.getByRole("switch", {
-      name: "Use this memory: Receipts go to finance@.",
+      name: "使用这条记忆：Receipts go to finance@.",
     }),
   ).toBeTruthy();
 });
 
-test("reopening Remember a fact after a failure starts clean", async () => {
+test("失败后重新打开「记住一条事实」是干净的", async () => {
   serving();
   refuseWrite = "Memory is full.";
   const view = draw(<RememberFact />);
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: "Remember a fact" }));
+  await user.click(view.getByRole("button", { name: "记住一条事实" }));
   await user.type(
     await view.findByRole("textbox", {
-      name: "Something you want your Bots to know",
+      name: "你希望员工知道的事",
     }),
     "I work from Lisbon.",
   );
-  await user.click(view.getByRole("button", { name: "Remember" }));
+  await user.click(view.getByRole("button", { name: "记住" }));
   expect((await view.findByRole("alert")).textContent).toBe("Memory is full.");
   await user.keyboard("{Escape}");
   await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
-  await user.click(view.getByRole("button", { name: "Remember a fact" }));
+  await user.click(view.getByRole("button", { name: "记住一条事实" }));
   const field = (await view.findByRole("textbox", {
-    name: "Something you want your Bots to know",
+    name: "你希望员工知道的事",
   })) as HTMLTextAreaElement;
   expect(field.value).toBe("");
   expect(view.queryByRole("alert")).toBeNull();

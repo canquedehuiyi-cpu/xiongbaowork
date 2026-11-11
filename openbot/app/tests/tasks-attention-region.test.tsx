@@ -179,7 +179,7 @@ test("a card names its coworker, the whole crew, or the id it was given", async 
 });
 
 /*
- * Spec A3: the executor opens that coworker's own page (D5's /wakers/$agentId), and only a coworker
+ * Spec A3: the executor opens that coworker's own page (/bots/$agentId since M5b; D5's /wakers/$agentId before), and only a coworker
  * that exists is offered as a way in — the crew's parent and a vanished id stay plain text.
  */
 test("the executor is a link to the coworker's detail page, and only a known one is", async () => {
@@ -212,7 +212,7 @@ test("the executor is a link to the coworker's detail page, and only a known one
   const link = (await view.findByText("阿审")).closest("a");
   expect(link).not.toBeNull();
   if (!link) return;
-  expect(link.getAttribute("href")).toBe("/wakers/agent-known");
+  expect(link.getAttribute("href")).toBe("/bots/agent-known");
   expect(link.closest("li")?.textContent).toContain("有名字的活");
   // Exactly one executor link on the region: neither 整组 nor the bare id became one.
   expect(view.container.querySelectorAll("a[data-executor]")).toHaveLength(1);
@@ -311,7 +311,7 @@ function drawRouted(tasks: CardTask[], queryClient = testClient()) {
       } as never),
       createRoute({
         getParentRoute: () => root,
-        path: "/wakers/$agentId",
+        path: "/bots/$agentId",
         component: () => null,
       } as never),
     ]),

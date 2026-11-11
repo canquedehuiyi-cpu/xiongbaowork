@@ -152,9 +152,7 @@ test("any other run error keeps its own words and opens nothing", () => {
       }),
     ).toBe("模型供应商那边出了错（HTTP 500）。供应商没有说明原因。");
     expect(currentQuotaGuidance()).toBeNull();
-    expect(runErrorReason(undefined)).toBe(
-      "The Bot stopped without saying why.",
-    );
+    expect(runErrorReason(undefined)).toBe("员工停下了，没有说原因。");
   } finally {
     stop();
   }

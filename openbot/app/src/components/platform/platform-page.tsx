@@ -1,6 +1,6 @@
 /*
- * M5b 第 0 步：从 `routes/_authed/_app/platform.tsx` 剪出的页面主体，原样保留，地址改成重定向（/platform → /admin/platform）。
- * 各组在新路由里接这个组件，再按新结构调整其中的链接与文案。
+ * 平台管理（M5b：原 `routes/_authed/_app/platform.tsx` 的页面主体，挂在 `/admin/platform`；`/platform` 重定向到这里）。
+ * 服务端只认 `role === "admin"`。暂停租户要二次确认。
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";

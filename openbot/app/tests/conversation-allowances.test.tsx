@@ -86,18 +86,18 @@ test("a conversation shows what it allows, and Turn off turns it off", async () 
   grants = [slackSend];
   const view = draw("thread-1");
   const line = await view.findByRole("region", {
-    name: "Allowed in this conversation",
+    name: "这段对话里已允许",
   });
   expect(line.textContent).toContain(
-    "Send message on Slack is allowed in this conversation.",
+    "「Send message（Slack）」在这段对话里已允许。",
   );
   fireEvent.click(
-    view.getByRole("button", { name: "Turn off: Send message on Slack" }),
+    view.getByRole("button", { name: "关闭：Send message（Slack）" }),
   );
   await waitFor(() => expect(revoked).toEqual(["grant-1"]));
   await waitFor(() =>
     expect(
-      view.queryByRole("region", { name: "Allowed in this conversation" }),
+      view.queryByRole("region", { name: "这段对话里已允许" }),
     ).toBeNull(),
   );
 });
@@ -110,7 +110,7 @@ test("another conversation's answer isn't shown here", async () => {
     expect(queryClient.getQueryData(["approvals"])).toBeTruthy(),
   );
   expect(
-    view.queryByRole("region", { name: "Allowed in this conversation" }),
+    view.queryByRole("region", { name: "这段对话里已允许" }),
   ).toBeNull();
 });
 
@@ -125,9 +125,9 @@ test("a step on a website says the kind it allows there, not every click", async
   ];
   const view = draw("thread-1");
   const line = await view.findByRole("region", {
-    name: "Allowed in this conversation",
+    name: "这段对话里已允许",
   });
   expect(line.textContent).toContain(
-    "Sending to other people on chat.example.com is allowed in this conversation.",
+    "「在 chat.example.com 上对外发送」在这段对话里已允许。",
   );
 });

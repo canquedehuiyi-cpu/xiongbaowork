@@ -13,8 +13,8 @@ function ResponsibilitiesPage() {
   return (
     <BotSubpage
       agentId={agentId}
-      description="Review this Bot’s ongoing goals, what triggered each run, and its results."
-      title="Goals"
+      description="查看这位员工的长期职责、每次运行是什么触发的，以及结果。"
+      title="长期职责"
     >
       {(agent) => <BotResponsibilities agentId={agent.id} />}
     </BotSubpage>

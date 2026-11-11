@@ -33,7 +33,7 @@ export function NotificationsSheet({ onClose }: { onClose: () => void }) {
         <LinkRow
           detail="员工不用问就能做哪些事"
           icon={IconHandStop}
-          render={<Link onClick={onClose} to="/approvals" />}
+          render={<Link onClick={onClose} to="/settings/approvals" />}
           tint="lavender"
           title="审批规则"
         />

@@ -24,7 +24,7 @@ export async function checkReviewerGuidance(
   const response = await client("/api/approvals/team/guidance/check", {
     method: "POST",
     body: { text },
-    fallback: "Couldn't check the guidance. Try again.",
+    fallback: "没能检查这段指引，请再试一次。",
   });
   return (await response.json()) as GuidanceReading;
 }
@@ -39,7 +39,7 @@ export async function backtestReviewerGuidance(
   const response = await client("/api/approvals/team/guidance/backtest", {
     method: "POST",
     body: { text },
-    fallback: "Couldn't test the guidance on recent requests.",
+    fallback: "没能用最近的请求测试这段指引。",
   });
   return (await response.json()) as GuidanceBacktest;
 }

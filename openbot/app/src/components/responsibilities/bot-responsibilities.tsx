@@ -31,9 +31,9 @@ import { responsibilitiesQueryOptions } from "@/lib/responsibilities";
  *
  * Upstream's skins draw its own responsibilities list with its dialogs in place. This fork's page is
  * a different design (its triggers, GitHub bindings and runs), so the skins link to it rather than
- * carrying a second editor.
+ * carrying a second editor. The employee's own 长期职责 page (`/bots/$agentId/responsibilities`)
+ * carries upstream's list and dialogs (`./responsibilities.tsx`).
  */
-// M4: 待接入 上游 components/responsibilities/*（在皮肤里就地新建、编辑长期职责的对话框）；目前链到 /responsibilities（带员工筛选）。
 export function BotResponsibilities({ agentId }: { agentId?: string }) {
   const goals = useQuery(responsibilitiesQueryOptions());
   const shown = (goals.data ?? []).filter(

@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, within } from "@testing-library/react";
 import { CapabilitiesShell } from "@/components/capabilities/capabilities-shell";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { settleReactWork } from "./settle-react-work";
@@ -52,19 +52,22 @@ function draw(edition: "team" | "personal", at: string) {
   );
 }
 
-test("in the personal edition, Skills is its own page that goes back to Bots", async () => {
+test("in the personal edition, 技能 is its own page that goes back to 员工", async () => {
   const view = draw("personal", "/capabilities/skills");
-  expect(await view.findByRole("heading", { name: "Skills" })).toBeTruthy();
-  expect(view.getByRole("button", { name: /Bots/ }).getAttribute("href")).toBe(
+  expect(await view.findByRole("heading", { name: "技能" })).toBeTruthy();
+  expect(view.getByRole("button", { name: /员工/ }).getAttribute("href")).toBe(
     "/bots",
   );
-  expect(view.queryByRole("navigation", { name: "Capabilities" })).toBeNull();
+  expect(view.queryByRole("navigation", { name: "能力" })).toBeNull();
 });
 
-test("the team edition keeps the Capabilities page and its tabs", async () => {
+test("the team edition keeps the 能力 page and its tabs", async () => {
   const view = draw("team", "/capabilities/skills");
+  expect(await view.findByRole("heading", { name: "能力" })).toBeTruthy();
+  const tabs = view.getByRole("navigation", { name: "能力" });
   expect(
-    await view.findByRole("heading", { name: "Capabilities" }),
-  ).toBeTruthy();
-  expect(view.getByRole("navigation", { name: "Capabilities" })).toBeTruthy();
+    within(tabs)
+      .getByRole("link", { name: "技能" })
+      .getAttribute("aria-current"),
+  ).toBe("page");
 });

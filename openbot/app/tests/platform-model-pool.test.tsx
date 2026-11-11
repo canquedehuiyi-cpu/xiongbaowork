@@ -18,12 +18,12 @@ import type {
   ModelLibrary,
   PlatformPoolModel,
 } from "@/lib/models/queries";
-import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
+import { Route as ModelsTabRoute } from "@/routes/_authed/_app/capabilities.models";
 import { settleReactWork } from "./settle-react-work";
 
 /**
  * Stories H1, H2, H6 and K1 on the screens a person uses: the platform's experience models listed
- * read-only on 能力与资源, the coworker's model picker offering the pool beside the person's own
+ * read-only on 能力 › 模型库, the coworker's model picker offering the pool beside the person's own
  * library, a remote coworker named as hosted elsewhere, and the Free plan's own-key form locked
  * behind an upgrade.
  *
@@ -166,15 +166,17 @@ function drawResources() {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/resources?tab=models"] }),
+    history: createMemoryHistory({
+      initialEntries: ["/capabilities/models"],
+    }),
     routeTree: root.addChildren([
-      ResourcesRoute.update({
+      ModelsTabRoute.update({
         getParentRoute: () => root,
-        path: "/resources",
+        path: "/capabilities/models",
       } as never),
       createRoute({
         getParentRoute: () => root,
-        path: "/plans",
+        path: "/settings/plans",
         component: () => null,
       } as never),
     ]),
@@ -217,7 +219,7 @@ async function openPicker() {
   return user;
 }
 
-test("能力与资源 lists the platform's experience models read-only, with how many coworkers use each", async () => {
+test("能力 › 模型库 lists the platform's experience models read-only, with how many coworkers use each", async () => {
   serve({ models: [], templates: [], pool, customModels: true });
   const view = within(drawResources().baseElement as HTMLElement);
 
@@ -249,7 +251,7 @@ test("on Free the own-key form is drawn locked, with the way to the plans page",
   const upgrade = await view.findByRole("link", {
     name: "升级 Pro 解锁自定义 key",
   });
-  expect(upgrade.getAttribute("href")).toBe("/plans");
+  expect(upgrade.getAttribute("href")).toBe("/settings/plans");
 
   const legend = view.getByText("接入一个模型");
   const fieldset = legend.closest("fieldset") as HTMLFieldSetElement;

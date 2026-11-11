@@ -92,14 +92,15 @@ test("Connections > Routines says what Routines is and leads to the Routines pag
   });
   expect(
     await view.findByText(
-      "Routines are work your Bots do on a schedule. Every Bot can set one up for you.",
+      "定时任务是员工按计划去做的事。每位员工都能帮你设一条。",
     ),
   ).toBeTruthy();
-  const row = await view.findByRole("link", { name: /Your routines/ });
-  expect(row.getAttribute("href")).toBe("/routines");
-  expect(await within(row).findByText("2 routines, 1 on.")).toBeTruthy();
+  const row = await view.findByRole("link", { name: /你的定时任务/ });
+  // 熊宝的定时任务列表在「自主工作」里（`/routines` 也转到那里）。
+  expect(row.getAttribute("href")).toBe("/autonomous?trigger=schedule");
+  expect(await within(row).findByText("2 条定时任务，1 条开着。")).toBeTruthy();
   expect(
-    view.getByRole("button", { name: "New routine" }).getAttribute("href"),
+    view.getByRole("button", { name: "新建定时任务" }).getAttribute("href"),
   ).toBe("/routines/new");
   // No tools listing: nothing here is a tool to grant.
   expect(view.queryByText(/create_routine/)).toBeNull();
@@ -109,7 +110,7 @@ test("an empty Routines page offers New routine, and a Bot's own page starts it 
   const empty = { routines: [], sweep: SWEEP };
   const page = draw(<RoutinesList />, empty);
   expect(
-    (await page.findByRole("button", { name: "New routine" })).getAttribute(
+    (await page.findByRole("button", { name: "新建定时任务" })).getAttribute(
       "href",
     ),
   ).toBe("/routines/new");
@@ -117,9 +118,9 @@ test("an empty Routines page offers New routine, and a Bot's own page starts it 
   queryClient.clear();
 
   const botPage = draw(<RoutinesList agentId="lead-desk" />, empty);
-  expect(await botPage.findByText("No routines for this Bot yet")).toBeTruthy();
+  expect(await botPage.findByText("这位员工还没有定时任务")).toBeTruthy();
   expect(
-    (await botPage.findByRole("button", { name: "New routine" })).getAttribute(
+    (await botPage.findByRole("button", { name: "新建定时任务" })).getAttribute(
       "href",
     ),
   ).toBe("/routines/new?agentId=lead-desk");
@@ -139,7 +140,7 @@ test("the clock beside the message box opens New routine for this Bot, posting h
     <RoutineComposerButton agentId="lead-desk" channelId="conversation-1" />,
     { routines: [], sweep: SWEEP },
   );
-  const clock = await view.findByRole("button", { name: "Set up a routine" });
+  const clock = await view.findByRole("button", { name: "设一条定时任务" });
   expect(clock.getAttribute("href")).toBe(
     "/routines/new?agentId=lead-desk&channelId=conversation-1",
   );
@@ -148,23 +149,19 @@ test("the clock beside the message box opens New routine for this Bot, posting h
 test("the schedule picker writes the cron it reads back in words", () => {
   const at = { time: "09:00", weekday: "1", monthDay: "1" };
   const cases = [
-    [{ ...at, repeat: "weekdays" }, "0 9 * * 1-5", "Every weekday at 9:00 AM"],
-    [
-      { ...at, repeat: "daily", time: "18:30" },
-      "30 18 * * *",
-      "Every day at 6:30 PM",
-    ],
+    [{ ...at, repeat: "weekdays" }, "0 9 * * 1-5", "每个工作日 09:00"],
+    [{ ...at, repeat: "daily", time: "18:30" }, "30 18 * * *", "每天 18:30"],
     [
       { ...at, repeat: "weekly", weekday: "5", time: "00:15" },
       "15 0 * * 5",
-      "Every Friday at 12:15 AM",
+      "每周五 00:15",
     ],
     [
       { ...at, repeat: "monthly", monthDay: "22", time: "12:00" },
       "0 12 22 * *",
-      "On the 22nd of every month at 12:00 PM",
+      "每月 22 日 12:00",
     ],
-    [{ ...at, repeat: "hourly" }, "0 * * * *", "Every hour, on the hour"],
+    [{ ...at, repeat: "hourly" }, "0 * * * *", "每小时整点"],
   ] as const;
   for (const [schedule, cron, words] of cases) {
     expect(cronFrom(schedule)).toBe(cron);

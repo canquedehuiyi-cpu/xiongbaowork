@@ -117,11 +117,11 @@ test("an unpublished Bot of yours offers to publish it", async () => {
   );
   const view = draw(BOT);
   const user = userEvent.setup({ document });
-  await user.click(await view.findByRole("button", { name: /Audience/ }));
+  await user.click(await view.findByRole("button", { name: /发布对象/ }));
   expect(
-    await view.findByRole("button", { name: "Publish to team" }),
+    await view.findByRole("button", { name: "发布到团队" }),
   ).toBeTruthy();
-  expect(view.queryByRole("button", { name: "Unpublish" })).toBeNull();
+  expect(view.queryByRole("button", { name: "取消发布" })).toBeNull();
 });
 
 test("publishing to specific people sends them and their groups", async () => {
@@ -134,18 +134,18 @@ test("publishing to specific people sends them and their groups", async () => {
   );
   const view = draw(BOT);
   const user = userEvent.setup({ document });
-  await user.click(await view.findByRole("button", { name: /Audience/ }));
-  await user.click(view.getByRole("combobox", { name: /^Published to/ }));
+  await user.click(await view.findByRole("button", { name: /发布对象/ }));
+  await user.click(view.getByRole("combobox", { name: /^发布给/ }));
   await user.click(
-    await view.findByRole("option", { name: "Specific people or groups" }),
+    await view.findByRole("option", { name: "指定的人或分组" }),
   );
   await user.type(
-    view.getByLabelText("People, by email"),
+    view.getByLabelText("指定的人（填邮箱）"),
     "a@example.test, b@example.test",
   );
-  await user.type(view.getByLabelText("Groups"), "finance");
+  await user.type(view.getByLabelText("分组"), "finance");
   fireEvent.submit(
-    (view.getByRole("button", { name: "Publish to team" }) as HTMLButtonElement)
+    (view.getByRole("button", { name: "发布到团队" }) as HTMLButtonElement)
       .form as HTMLFormElement,
   );
   await waitFor(() =>
@@ -164,13 +164,13 @@ test("publishing to specific people sends them and their groups", async () => {
 test("a published Bot of yours can be updated, unpublished and its link copied", async () => {
   serving({ teamBots: [PUBLISHED], publishable: [] }, "user");
   const view = draw(BOT);
-  expect(await view.findByRole("button", { name: "Unpublish" })).toBeTruthy();
-  expect(view.getByRole("button", { name: "Copy link" })).toBeTruthy();
+  expect(await view.findByRole("button", { name: "取消发布" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "复制链接" })).toBeTruthy();
   // Not an administrator: no group assignment.
-  expect(view.queryByRole("button", { name: /Assign to a group/ })).toBeNull();
+  expect(view.queryByRole("button", { name: /分配给一个分组/ })).toBeNull();
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: /Audience/ }));
-  expect(await view.findByRole("button", { name: "Update" })).toBeTruthy();
+  await user.click(view.getByRole("button", { name: /发布对象/ }));
+  expect(await view.findByRole("button", { name: "更新" })).toBeTruthy();
 });
 
 test("an administrator can assign a published Bot to groups but not publish someone else's", async () => {
@@ -179,15 +179,15 @@ test("an administrator can assign a published Bot to groups but not publish some
     "admin",
   );
   const view = draw({ ...BOT, mine: false });
-  expect(await view.findByText("Not assigned to any group")).toBeTruthy();
-  expect(view.queryByRole("button", { name: /Audience/ })).toBeNull();
-  expect(view.queryByRole("button", { name: "Update" })).toBeNull();
-  expect(view.queryByRole("button", { name: "Unpublish" })).toBeNull();
+  expect(await view.findByText("还没有分配给任何分组")).toBeTruthy();
+  expect(view.queryByRole("button", { name: /发布对象/ })).toBeNull();
+  expect(view.queryByRole("button", { name: "更新" })).toBeNull();
+  expect(view.queryByRole("button", { name: "取消发布" })).toBeNull();
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: /Assign to a group/ }));
-  await user.type(await view.findByLabelText("Group, or *"), "finance");
+  await user.click(view.getByRole("button", { name: /分配给一个分组/ }));
+  await user.type(await view.findByLabelText("分组，或 *"), "finance");
   fireEvent.submit(
-    (view.getByRole("button", { name: "Assign" }) as HTMLButtonElement)
+    (view.getByRole("button", { name: "分配" }) as HTMLButtonElement)
       .form as HTMLFormElement,
   );
   await waitFor(() =>
@@ -206,9 +206,9 @@ test("an administrator removes a group a Bot is assigned to", async () => {
     "admin",
   );
   const view = draw({ ...BOT, mine: false });
-  expect(await view.findByText("Whole team")).toBeTruthy();
+  expect(await view.findByText("整个团队")).toBeTruthy();
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: "Remove finance" }));
+  await user.click(view.getByRole("button", { name: "移除 finance" }));
   await waitFor(() =>
     expect(writes).toContainEqual(
       expect.objectContaining({ method: "DELETE", body: undefined }),
@@ -227,14 +227,14 @@ test("a public Bot that is not published says everyone can already use it", asyn
   );
   const view = draw({ ...BOT, visibility: "public" });
   expect(
-    await view.findByText(/everyone on OpenBot can already use it/),
+    await view.findByText(/熊宝上的所有人已经都能用它/),
   ).toBeTruthy();
-  expect(view.queryByText(/Only you can use it/)).toBeNull();
+  expect(view.queryByText(/只有你能用它/)).toBeNull();
 });
 
 test("someone else's unpublished private Bot is not described as yours alone", async () => {
   serving({ teamBots: [], publishable: [] }, "admin");
   const view = draw({ ...BOT, mine: false });
-  expect(await view.findByText("Not published")).toBeTruthy();
-  expect(view.queryByText(/Only you can use it/)).toBeNull();
+  expect(await view.findByText("没有发布")).toBeTruthy();
+  expect(view.queryByText(/只有你能用它/)).toBeNull();
 });

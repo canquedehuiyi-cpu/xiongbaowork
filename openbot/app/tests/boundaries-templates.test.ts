@@ -12,7 +12,7 @@ import {
  */
 
 const social = RULE_TEMPLATES.find(
-  (template) => template.name === "Stay off social media",
+  (template) => template.name === "不上社交媒体",
 )!;
 
 /** Opening `host`, with every other field bound empty, as the gateway builds a navigation. */

@@ -182,7 +182,7 @@ function BotsSection({
             label="新建员工"
             onClick={onNavigate}
             render={(props) => (
-              <Link {...props} search={{ new: true }} to="/wakers" />
+              <Link {...props} search={{ new: true }} to="/bots" />
             )}
           >
             <IconPlus />
@@ -545,7 +545,7 @@ function WorkspaceLinks({
       {navigation.map((item) => (
         <NavigationTarget
           aria-current={place.section === item.id ? "page" : undefined}
-          className={cn(row(item.id), item.section === "primary" && drawerOnly)}
+          className={cn(row(item.id), item.section !== "account" && drawerOnly)}
           item={item}
           key={item.id}
           onClick={onNavigate}

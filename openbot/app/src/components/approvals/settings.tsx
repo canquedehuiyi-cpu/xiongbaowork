@@ -43,9 +43,12 @@ import {
 import { HOST_LABELS, LabelSelect, RuleForm, RuleRow } from "./rules";
 
 /**
- * The person's own approval settings: whether their Bots ask before changing things, and the rules
- * that apply to every one of their Bots. Team rules are listed so the person can see them, locked;
- * administrators change them in Admin → Approvals. Rules for a single Bot are on that Bot's page.
+ * The person's own approval settings: whether their employees ask before changing things, and the
+ * rules that apply to every one of them. Team rules are listed so the person can see them, locked;
+ * administrators change them in 管理 → 审批. Rules for a single employee are on that employee's page.
+ *
+ * What always asks (the floor) is stated in ask-first-copy.ts's words and is decided by the server
+ * before any of these switches or rules is read; nothing here can loosen it.
  */
 export function ApprovalSettings() {
   const inbox = useQuery(approvalInboxOptions());
@@ -95,11 +98,11 @@ export function ApprovalSettings() {
       ) : null}
       {me?.role === "admin" && !personal ? (
         <p className="mt-6 text-muted-foreground text-sm">
-          Team settings and shared account requests are in{" "}
+          团队设置、共享账号申请和同事替员工申请的应用，在{" "}
           <Link className="underline underline-offset-4" to="/admin/approvals">
-            Admin → Approvals
+            管理 → 审批
           </Link>
-          .
+          。
         </p>
       ) : null}
       <PageSection
@@ -111,13 +114,13 @@ export function ApprovalSettings() {
            * says.
            */
           <>
-            {ALWAYS_ASKS} They also ask before every edit or command in a folder
-            on your own computer. {HANDED_TO_YOU} Bots can create, edit, and
-            delete files in their own workspace without asking, unless your
-            settings or rules say so.
+            {ALWAYS_ASKS}
+            在你自己电脑上的文件夹里，每一次编辑或运行命令之前也会先问你。
+            {HANDED_TO_YOU}
+            员工在自己的工作区里新建、编辑和删除文件不用问你，除非你的设置或规则另有要求。
           </>
         }
-        title="Before a Bot acts"
+        title="员工动手之前"
       >
         <PageRows>
           <Item size="sm">
@@ -147,15 +150,13 @@ export function ApprovalSettings() {
                   <IconEyeCheck />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle id="auto-review-title">Auto-review</ItemTitle>
+                  <ItemTitle id="auto-review-title">自动审核</ItemTitle>
                   <ItemDescription
                     className="line-clamp-none"
                     id="auto-review-description"
                   >
-                    {enforced ? "An admin requires this. " : ""}
-                    Before a Bot does something that could affect your accounts
-                    or share information, OpenBot checks it against your request
-                    and your rules. If it can't tell, it asks you.
+                    {enforced ? "管理员要求开启。" : ""}
+                    员工要做可能影响你的账号或对外分享信息的事之前，熊宝会先对照你的要求和规则检查一遍；拿不准时再来问你。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -178,21 +179,20 @@ export function ApprovalSettings() {
                   <IconTerminal2 />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>Commands on your computer</ItemTitle>
+                  <ItemTitle>在你电脑上运行命令</ItemTitle>
                   <ItemDescription className="line-clamp-none">
                     {inbox.data.hostCommands &&
                     inbox.data.hostCommands !==
                       inbox.data.preferences.hostCommands
-                      ? `An admin limits this to "${HOST_LABELS[inbox.data.hostCommands]}". `
+                      ? `管理员把这一项限定为「${HOST_LABELS[inbox.data.hostCommands]}」。`
                       : ""}
-                    The OpenBot desktop app still shows you each command before
-                    it runs.
+                    每条命令运行前，熊宝桌面端仍会先给你看。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <LabelSelect
                     disabled={preferences.isPending}
-                    label="Commands on your computer"
+                    label="在你电脑上运行命令"
                     labels={HOST_LABELS}
                     onChange={(hostCommands) =>
                       preferences.mutate({ hostCommands })
@@ -208,22 +208,21 @@ export function ApprovalSettings() {
       <PageSection
         description={
           <>
-            The strictest matching rule wins. An "ask" rule beats an "allow"
-            rule.{personal ? " " : " Team rules are locked. "}Rules for one Bot
-            are on{" "}
+            多条规则同时匹配时，以最严格的为准：「先问」胜过「允许」。
+            {personal ? "" : "团队规则已锁定。"}只针对某一位员工的规则，在
             <Link className="underline underline-offset-4" to="/bots">
-              that Bot's page
+              那位员工的页面
             </Link>
-            .
+            上。
             {rulesOff
-              ? " An admin has turned off personal rules. Yours are kept but don't apply."
+              ? "管理员关闭了个人规则。你的规则会保留，但暂不生效。"
               : ""}
           </>
         }
-        title="Rules for every Bot"
+        title="对所有员工生效的规则"
       >
         {saved === 0 ? (
-          <PageEmpty icon={IconChecklist} title="No rules yet" />
+          <PageEmpty icon={IconChecklist} title="还没有规则" />
         ) : null}
         {saved > 0 || canAdd ? (
           <PageRows>
@@ -257,7 +256,7 @@ export function ApprovalSettings() {
             {canAdd ? (
               <>
                 {saved > 0 ? <Separator /> : null}
-                <RuleForm botField={false} label="Add a rule" save={addRule} />
+                <RuleForm botField={false} label="添加规则" save={addRule} />
               </>
             ) : null}
           </PageRows>
@@ -265,8 +264,8 @@ export function ApprovalSettings() {
       </PageSection>
       {agents.data !== undefined && otherBots.length > 0 ? (
         <PageSection
-          description="These don't match a Bot you can open. They still apply to any Bot they match. Remove the ones you don't want."
-          title="Rules for other Bots"
+          description="这些规则对不上你能打开的任何一位员工，但仍对它们匹配到的员工生效。不需要的可以移除。"
+          title="其他员工的规则"
         >
           <PageRows>
             {otherBots.map((rule, index) => (

@@ -158,7 +158,7 @@ function RouteComponent() {
       {crews.data === undefined ? null : crews.data.length === 0 ? (
         <WorkbenchEmpty
           className="border border-border"
-          description="流程的步骤只能交给群组里的员工。先到「员工管理 › 群组」建一个群组，再来这里排流程。"
+          description="流程的步骤只能交给群组里的员工。先到「员工 › 群组」建一个群组，再来这里排流程。"
           title="还没有群组"
         />
       ) : (
@@ -333,7 +333,7 @@ function TemplateEditor(props: {
         />
         {props.coworkers.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
-            这个群组里还没有员工。先到「员工管理 › 群组」把人加进来 ——
+            这个群组里还没有员工。先到「员工 › 群组」把人加进来 ——
             流程的步骤只能交给组里的员工。
           </p>
         ) : steps.length === 0 ? (

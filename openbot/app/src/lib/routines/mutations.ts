@@ -1,7 +1,7 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { channelKeys } from "@/lib/channels/queries";
 import { client } from "@/lib/client";
-import { NEW_CONVERSATION } from "./form";
+import { AUTO_CONVERSATION, NEW_CONVERSATION } from "./form";
 import { routineKeys } from "./queries";
 
 /**
@@ -37,6 +37,7 @@ export type RoutineInput = {
   timezone: string;
   /**
    * A conversation the person and the Bot share, or `NEW_CONVERSATION` to start one for it.
+   * Absent (or `AUTO_CONVERSATION`, the form's 「自动」 choice) lets the server choose.
    *
    * Optional, unlike upstream (#1406 made it required): 熊宝 lets a routine be made without naming
    * a conversation, and the server then picks the one this person shares with the coworker, and
@@ -74,7 +75,8 @@ export function createRoutineMutationOptions(queryClient: QueryClient) {
         }).catch(() => undefined);
       }
       const { channelId: chosen, ...rest } = input;
-      const channelId = started ?? chosen;
+      const channelId =
+        started ?? (chosen === AUTO_CONVERSATION ? undefined : chosen);
       try {
         return await client<{ id: string }>("/api/routines", "routine", {
           method: "POST",

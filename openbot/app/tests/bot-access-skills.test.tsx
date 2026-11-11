@@ -172,7 +172,7 @@ test("a skill is named by its title, never listed again by its slug", async () =
   const view = draw(BOT);
   const tide = await view.findByRole("switch", { name: "Tide report" });
   expect(tide.getAttribute("aria-checked")).toBe("true");
-  await view.findByText("Type / in a conversation to run it.", {
+  await view.findByText("在对话里输入 / 运行。", {
     exact: false,
   });
   // Once in Your skills and once in What it can use, by the same name.
@@ -204,8 +204,8 @@ test("switching a skill on grants it to this Bot", async () => {
 test("on a Bot that is not yours there are no skill switches", async () => {
   serving({ held: [] });
   const view = draw({ ...BOT, mine: false, canManage: false });
-  expect(await view.findByText("No apps yet")).toBeTruthy();
-  expect(view.getByText(/^An admin has to add them\./)).toBeTruthy();
+  expect(await view.findByText("还没有应用")).toBeTruthy();
+  expect(view.getByText(/^需要管理员添加。/)).toBeTruthy();
   expect(view.queryByRole("switch")).toBeNull();
 });
 
@@ -218,9 +218,9 @@ test("your skills failing to load says so, not that you have none", async () => 
       : served(input, init)) as unknown as typeof fetch;
   const view = draw(BOT);
   expect(
-    await view.findByText("Couldn't load your skills. Reload the page."),
+    await view.findByText("读不到你的技能，请刷新页面。"),
   ).toBeTruthy();
-  expect(view.queryByText(/No skills yet/)).toBeNull();
+  expect(view.queryByText(/还没有技能/)).toBeNull();
 });
 
 test("this Bot's own skills failing to load says so, rather than drawing every switch off", async () => {
@@ -232,7 +232,7 @@ test("this Bot's own skills failing to load says so, rather than drawing every s
       : served(input, init)) as unknown as typeof fetch;
   const view = draw(BOT);
   expect(
-    await view.findByText("Couldn't load your skills. Reload the page."),
+    await view.findByText("读不到你的技能，请刷新页面。"),
   ).toBeTruthy();
   expect(view.queryByRole("switch", { name: "mine-on" })).toBeNull();
 });

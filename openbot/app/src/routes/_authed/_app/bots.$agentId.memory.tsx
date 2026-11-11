@@ -6,8 +6,8 @@ import { deploymentOffersMemory } from "@/lib/deployment/queries";
 
 export const Route = createFileRoute("/_authed/_app/bots/$agentId/memory")({
   /*
-   * The personal edition has no memory (see `offersMemory`). This Bot's check-ins, the other half of
-   * this page, are on What it can do there, so an old link to this page opens that.
+   * The personal edition has no memory (see `offersMemory`). This employee's check-ins, the other
+   * half of this page, are on 它能做什么 there, so an old link to this page opens that.
    */
   beforeLoad: async ({ context, params }) => {
     if (!(await deploymentOffersMemory(context.queryClient))) {
@@ -26,20 +26,20 @@ function MemoryPage() {
   return (
     <BotSubpage
       agentId={agentId}
-      description="Choose which apps this Bot learns from and manage its check-ins."
-      title="Memory"
+      description="选择这位员工从哪些应用里学习，并管理它的主动巡检。"
+      title="记忆"
     >
       {(agent) => (
         <>
           <p className="mt-6 text-muted-foreground text-sm">
-            What your Bots remember about you is in{" "}
+            你直接告诉所有员工的事在
             <Link
-              className="underline underline-offset-4"
+              className="text-foreground underline underline-offset-4"
               to="/capabilities/memory"
             >
-              Capabilities
+              能力 › 记忆与信息源
             </Link>
-            .
+            里。
           </p>
           <MemorySources agentId={agent.id} />
           <ProactiveResearchSettings agentId={agent.id} />

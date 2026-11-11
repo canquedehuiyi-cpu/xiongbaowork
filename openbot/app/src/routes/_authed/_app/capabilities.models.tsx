@@ -1,10 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CapabilitiesShell } from "@/components/capabilities/capabilities-shell";
+import { ModelsTab } from "@/components/resources/model-zones";
 
-/** M5b 第 0 步占位：能力 › 模型库。D 组在这里接熊宝现有的页签内容。 */
+/** 能力 › 模型库：员工用的模型库，以及平台提供的体验模型（只读）。 */
 export const Route = createFileRoute("/_authed/_app/capabilities/models")({
-  component: CapabilityPlaceholder,
+  component: ModelsPage,
 });
 
-function CapabilityPlaceholder() {
-  return <h1 className="px-6 py-4 font-semibold text-lg">模型库</h1>;
+function ModelsPage() {
+  return (
+    <CapabilitiesShell>
+      <ModelsTab />
+    </CapabilitiesShell>
+  );
 }

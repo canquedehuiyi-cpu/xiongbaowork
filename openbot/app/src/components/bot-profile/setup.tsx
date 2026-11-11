@@ -6,12 +6,14 @@ import {
   IconNotes,
   IconPlugConnected,
   IconShieldCheck,
+  IconStack2,
   IconTag,
   IconTextCaption,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import type { ZodType } from "zod";
+import { OPENBOT_HARNESS_NAME } from "@openbot/shared/harnesses";
 import { CallbackTokenPanel } from "@/components/agents/callback-token-panel";
 import { PageRows, PageSection } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
@@ -68,28 +70,30 @@ import { queryClient } from "@/query-client";
 
 type TextField = "name" | "title" | "roleDescription" | "instructions";
 
+const SAVE_FAILED = "没能保存，请再试一次。";
+
 const TEXT_FIELDS: {
   field: TextField;
   label: string;
   icon: typeof IconId;
   multiline?: boolean;
 }[] = [
-  { field: "name", label: "Name", icon: IconId },
-  { field: "title", label: "Title", icon: IconTag },
+  { field: "name", label: "名称", icon: IconId },
+  { field: "title", label: "头衔", icon: IconTag },
   {
     field: "roleDescription",
     // Not "Role": beside "Title" it read as a second job title, when it is the standing
     // instruction the Bot carries into every channel. The create dialog says the same.
     // The starter Bot is the exception: this is what it does, for the person, and what it is
     // told is the row below.
-    label: "What it does",
+    label: "它做什么",
     icon: IconTextCaption,
     multiline: true,
   },
   {
     // Only the starter Bot has this row. See `AgentProfile.instructions`.
     field: "instructions",
-    label: "Instructions",
+    label: "指令",
     icon: IconNotes,
     multiline: true,
   },
@@ -122,7 +126,7 @@ export function SetupSections({ agent }: { agent: AgentProfile }) {
 
   return (
     <>
-      <PageSection title="Identity">
+      <PageSection title="身份">
         <PageRows>
           {fields.map(({ field, label, icon: Icon }, index) => (
             <Fragment key={field}>
@@ -172,9 +176,9 @@ export function SetupSections({ agent }: { agent: AgentProfile }) {
                   <IconShieldCheck />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>System owned</ItemTitle>
+                  <ItemTitle>随熊宝自带</ItemTitle>
                   <ItemDescription>
-                    Comes with OpenBot. It doesn't belong to a person.
+                    随熊宝自带，不属于任何一个人。
                   </ItemDescription>
                 </ItemContent>
               </Item>
@@ -213,24 +217,24 @@ function VisibilityRow({
         <IconEye />
       </ItemMedia>
       <ItemContent>
-        <ItemTitle>Visibility</ItemTitle>
+        <ItemTitle>可见性</ItemTitle>
         <ItemDescription>
           {error ??
             (agent.visibility === "private"
               ? agent.isolationActive
-                ? `Only you can see it and start conversations with it. ${ISOLATED_MAKING_PUBLIC}`
-                : "Only you can see it and start conversations with it."
+                ? `只有你能看到它、和它开始对话。${ISOLATED_MAKING_PUBLIC}`
+                : "只有你能看到它、和它开始对话。"
               : agent.isolationActive
-                ? `Everyone on OpenBot can find and use it. ${ISOLATED_PUBLIC_SHARES_LOGINS}`
-                : "Everyone on OpenBot can find and use it.")}
+                ? `熊宝上的所有人都能找到并使用它。${ISOLATED_PUBLIC_SHARES_LOGINS}`
+                : "熊宝上的所有人都能找到并使用它。")}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
         {agent.canManage ? (
           <Select
             disabled={saving}
-            // The label map, so the closed trigger says "Private" rather than the raw value.
-            items={{ private: "Private", public: "Public" }}
+            // The label map, so the closed trigger says 私有 rather than the raw value.
+            items={{ private: "私有", public: "公开" }}
             onValueChange={async (next) => {
               if (next === agent.visibility) return;
               setError(null);
@@ -241,7 +245,7 @@ function VisibilityRow({
                 setError(
                   failure instanceof Error
                     ? failure.message
-                    : "Couldn't save. Try again.",
+                    : SAVE_FAILED,
                 );
               } finally {
                 setSaving(false);
@@ -253,13 +257,13 @@ function VisibilityRow({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="private">Private</SelectItem>
-              <SelectItem value="public">Public</SelectItem>
+              <SelectItem value="private">私有</SelectItem>
+              <SelectItem value="public">公开</SelectItem>
             </SelectContent>
           </Select>
         ) : (
           <span className="text-muted-foreground text-sm">
-            {agent.visibility === "private" ? "Private" : "Public"}
+            {agent.visibility === "private" ? "私有" : "公开"}
           </span>
         )}
       </ItemActions>
@@ -300,7 +304,7 @@ function IsolatedRow({
     (agent.isolated || (available && allowed));
 
   const summary = agent.systemOwned
-    ? "Comes with OpenBot, so it runs on the computer of whoever is using it."
+    ? "随熊宝自带，所以在使用它的人自己的电脑上运行。"
     : agent.isolated
       ? agent.isolationActive
         ? isolatedExplained(isPublic)
@@ -321,7 +325,7 @@ function IsolatedRow({
         <IconDeviceDesktop />
       </ItemMedia>
       <ItemContent>
-        <ItemTitle id={`isolated-${agent.id}`}>Isolated</ItemTitle>
+        <ItemTitle id={`isolated-${agent.id}`}>独立运行</ItemTitle>
         <ItemDescription className="line-clamp-none">
           {error ?? summary}
         </ItemDescription>
@@ -341,7 +345,7 @@ function IsolatedRow({
                 setError(
                   failure instanceof Error
                     ? failure.message
-                    : "Couldn't save. Try again.",
+                    : SAVE_FAILED,
                 );
               } finally {
                 setSaving(false);
@@ -350,7 +354,7 @@ function IsolatedRow({
           />
         ) : (
           <span className="text-muted-foreground text-sm">
-            {agent.isolated ? "On" : "Off"}
+            {agent.isolated ? "开" : "关"}
           </span>
         )}
       </ItemActions>
@@ -361,8 +365,8 @@ function IsolatedRow({
 /** Where a Bot without a computer of its own runs: on the computer of whoever is using it. */
 function sharedSummary(isPublic: boolean): string {
   return isPublic
-    ? "Runs on the computer of whoever is using it."
-    : "Runs on your computer, alongside your other Bots.";
+    ? "在使用它的人自己的电脑上运行。"
+    : "和你的其他员工一起在你的电脑上运行。";
 }
 
 /**
@@ -392,7 +396,7 @@ function EditTextDialog({
     const parsed = schema.safeParse(draft);
     if (!parsed.success) {
       setError(
-        parsed.error.issues[0]?.message ?? "Check this field and try again.",
+        parsed.error.issues[0]?.message ?? "检查一下这一项再保存。",
       );
       return;
     }
@@ -402,9 +406,7 @@ function EditTextDialog({
       onClose();
     } catch (failure) {
       setError(
-        failure instanceof Error
-          ? failure.message
-          : "Couldn't save. Try again.",
+        failure instanceof Error ? failure.message : SAVE_FAILED,
       );
     } finally {
       setSaving(false);
@@ -452,10 +454,10 @@ function EditTextDialog({
             size="sm"
             variant="outline"
           >
-            Cancel
+            取消
           </Button>
           <Button disabled={saving} onClick={() => void submit()} size="sm">
-            {saving ? "Saving…" : "Save"}
+            {saving ? "正在保存…" : "保存"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -470,21 +472,33 @@ function EditTextDialog({
 function ConnectionSection({ agent }: { agent: AgentProfile }) {
   const builtIn = !agent.endpoint || agent.builtIn;
   return (
-    <PageSection title="Connection">
+    <PageSection title="运行方式">
       <PageRows>
+        <Item size="sm">
+          <ItemMedia variant="icon">
+            <IconStack2 />
+          </ItemMedia>
+          <ItemContent>
+            <ItemTitle>框架</ItemTitle>
+            <ItemDescription data-testid="coworker-framework">
+              {frameworkName(agent)}
+            </ItemDescription>
+          </ItemContent>
+        </Item>
+        <Separator />
         <Item size="sm">
           <ItemMedia variant="icon">
             <IconPlugConnected />
           </ItemMedia>
           <ItemContent>
-            <ItemTitle>{builtIn ? "Built in" : "Agent URL"}</ItemTitle>
+            <ItemTitle>{builtIn ? "内置" : "员工地址"}</ItemTitle>
             <ItemDescription
               className={
                 builtIn ? undefined : "line-clamp-none break-all font-mono"
               }
             >
               {builtIn
-                ? "Runs inside OpenBot. There's nothing to connect."
+                ? "在熊宝里运行，不需要连接。"
                 : agent.endpoint}
             </ItemDescription>
           </ItemContent>
@@ -499,4 +513,19 @@ function ConnectionSection({ agent }: { agent: AgentProfile }) {
       ) : null}
     </PageSection>
   );
+}
+
+/**
+ * What runs it, by the name the server gives (`AgentProfile.framework`). OpenBot itself is said as
+ * this product; an employee connected by address with no framework named says so rather than guessing.
+ */
+export function frameworkName(
+  agent: Pick<AgentProfile, "framework" | "builtIn">,
+): string {
+  if (
+    agent.framework === OPENBOT_HARNESS_NAME ||
+    (!agent.framework && agent.builtIn)
+  )
+    return "熊宝内置";
+  return agent.framework ?? "未注明（按地址接入的外部员工）";
 }

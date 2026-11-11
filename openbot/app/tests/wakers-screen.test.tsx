@@ -23,7 +23,8 @@ import {
   type WakerGroup,
   wakerGroupKeys,
 } from "@/lib/waker-groups/queries";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
+import { seedQuietNeedsYou } from "./quiet-needs-you";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -32,6 +33,9 @@ import { settleReactWork } from "./settle-react-work";
  * The reads are seeded, because the two facts worth asserting are on different sides of the wiring:
  * that the status line says what the board and the roster actually say, and that tapping a coworker's
  * chip sends the whole roster rather than a delta.
+ *
+ * M5b：员工墙（原 `/wakers`）并进了上游的员工页（`/bots`），卡片画在上游的分区里（你的员工、共享给你的、
+ * 折起来的已隐藏……），断言跟着新地址走。
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -163,6 +167,7 @@ function seed(
       status: "running",
     })),
   );
+  seedQuietNeedsYou(queryClient);
   return queryClient;
 }
 
@@ -170,30 +175,23 @@ function draw() {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/wakers"] }),
+    history: createMemoryHistory({ initialEntries: ["/bots"] }),
     routeTree: root.addChildren([
-      WakersRoute.update({
+      BotsRoute.update({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots",
       } as never),
-      // Each card's 动态 opens the employee's Bot profile (archived 员工列表/Bot 会话 merged into this
-      // wall), and a Link needs its address to resolve. The generator's options are wider than this
-      // literal; the tree only needs the path.
+      // Spec D5: each card opens the coworker's own page. A Link needs its address to resolve; the
+      // generator's options are wider than this literal, and the tree only needs the path.
       createRoute({
         getParentRoute: () => root,
         path: "/bots/$agentId",
         component: () => null,
       } as never),
-      // Spec D7: each card links to the coworker's own assembly screen.
+      // Spec D7: each card links to the coworker's assembly, now its page's 设置 tab.
       createRoute({
         getParentRoute: () => root,
-        path: "/assemble/$agentId",
-        component: () => null,
-      } as never),
-      // Spec D5: each card opens the coworker's own detail page.
-      createRoute({
-        getParentRoute: () => root,
-        path: "/wakers/$agentId",
+        path: "/bots/$agentId/setup",
         component: () => null,
       } as never),
     ]),
@@ -203,6 +201,11 @@ function draw() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+}
+
+/** Unfold the 已隐藏 section, where a hidden coworker's card waits until asked for. */
+async function showHidden(screen: ReturnType<typeof draw>) {
+  await userEvent.click(await screen.findByRole("button", { name: "显示" }));
 }
 
 /** The status badge each card wears, by coworker name. */
@@ -278,6 +281,9 @@ test("the status line says what the board says, and 暂停 is the bot lifecycle,
   await waitFor(() =>
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
+  // A hidden coworker is folded under 已隐藏 until asked for.
+  expect(screen.queryByText("Night Auditor")).toBeNull();
+  await showHidden(screen);
   // Working because a task card is running now, not because a status column said so; the crew it
   // belongs to is named on the card.
   expect(screen.getByText("正在处理一个任务。 · 编程群组")).toBeTruthy();
@@ -288,9 +294,12 @@ test("the status line says what the board says, and 暂停 is the bot lifecycle,
   expect(badgeOf(screen, "Backend Engineer")).toBe("working");
   expect(badgeOf(screen, "Code Reviewer")).toBe("paused");
   expect(badgeOf(screen, "QA Engineer")).toBe("resting");
-  // Hidden is not paused: it runs, so it is 在线, and wears its own 已隐藏 tag.
+  // Hidden is not paused: it runs, so it is 在线, and wears its own 已隐藏 tag (the section it sits
+  // under carries the same word as its heading).
   expect(badgeOf(screen, "Night Auditor")).toBe("working");
-  const hiddenTags = screen.getAllByText("已隐藏");
+  const hiddenTags = [
+    ...screen.container.querySelectorAll("[data-hidden=true]"),
+  ];
   expect(hiddenTags).toHaveLength(1);
   expect(
     hiddenTags[0]?.closest("[data-slot=item-title]")?.textContent,
@@ -327,20 +336,23 @@ test("each card shows its avatar, its role, and links to its assembly and detail
   const assemble = screen
     .getAllByText("装配")
     .map((node) => node.closest("a")?.getAttribute("href"));
-  expect(assemble).toEqual(["/assemble/agent-1", "/assemble/agent-2"]);
+  expect(assemble).toEqual([
+    "/bots/agent-1/setup",
+    "/bots/agent-2/setup",
+  ]);
 
   // Spec D5: the card (its name) opens the coworker's detail page, not the roster's editor dialog.
   const open = ["Backend Engineer", "Code Reviewer"].map((name) =>
     screen.getByRole("link", { name }).getAttribute("href"),
   );
-  expect(open).toEqual(["/wakers/agent-1", "/wakers/agent-2"]);
+  expect(open).toEqual(["/bots/agent-1", "/bots/agent-2"]);
 
-  // Spec D2: creating a coworker is a create dialog over this wall, deep-linked (the archived
-  // `/agents?new=true` redirects here).
+  // Spec D2: creating a coworker is a create dialog over this roster, deep-linked (the archived
+  // `/agents?new=true` and `/wakers?new=true` redirect here).
   const create = within(screen.getByTestId("wakers-header-actions"))
     .getByText("新建员工")
     .closest("a");
-  expect(create?.getAttribute("href")).toBe("/wakers?new=true");
+  expect(create?.getAttribute("href")).toBe("/bots?new=true");
 });
 
 test("the status filter narrows the wall to the coworkers in that state", async () => {
@@ -481,6 +493,7 @@ test("a pause read that fails is said as 状态未知, and no pause button guess
   queryClient.setQueryData(runningTasksQueryOptions().queryKey, [
     { id: "task-1", executorAgentId: "agent-1", status: "running" },
   ]);
+  seedQuietNeedsYou(queryClient);
   queryClientForDraw = queryClient;
 
   const screen = draw();
@@ -651,10 +664,13 @@ test("a board that cannot be read is said as unknown, not as idle", async () => 
     bots: [attentionRow(parked, true)],
     lastPingId: null,
   });
+  seedQuietNeedsYou(queryClient);
   queryClientForDraw = queryClient;
 
   const screen = draw();
   await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+  // Night Auditor is hidden, so its card is under the folded 已隐藏 section.
+  await showHidden(screen);
   // The page-level line, named by its own words now that the cards say it too.
   expect(screen.getByText(/所以下面显示的状态无法确认/)).toBeTruthy();
   /*
