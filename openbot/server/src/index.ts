@@ -4144,6 +4144,11 @@ await startupLifecycle.run(async (startup) => {
     // A group is shared (`team`), so the people later added to it read it in their own frames.
     createChannel: async (ownerUserId, agentIds, options) =>
       channelStore.create(await actorFor(ownerUserId), agentIds, options),
+    // Adding a Bot to an existing group passes the same access filter as naming it at creation.
+    canUseBot: async (ownerUserId, agentId) =>
+      Boolean(
+        await agentProfileStore.get(await actorFor(ownerUserId), agentId),
+      ),
     // The owner says whether a Bot's words may reach the other people in a group.
     privateShare: createPrivateShareCheck({ approvals: approvalService.store }),
     // A Team Bot's consent card raised in a group turn is drawn in the shared transcript.
