@@ -1,22 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AccessRequestInbox } from "@/components/approvals/access-requests";
-import { ApprovalInbox } from "@/components/approvals/inbox";
-import { PageShell } from "@/components/layout/page-shell";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { LEGACY_PAGES } from "@/lib/agents/legacy-routes";
+
+/**
+ * `/approvals` 离开了侧栏（M5b，与上游一致），这里只剩重定向：等你处理的审批、审批偏好和所有员工的规则在
+ * 设置 › 审批（`/settings/approvals`）；管理员的团队审批设置、共享使用申请和访问申请在 管理 › 审批（`/admin/approvals`）。
+ */
 export const Route = createFileRoute("/_authed/_app/approvals")({
-  component: ApprovalsPage,
+  beforeLoad: () => {
+    throw redirect({ to: LEGACY_PAGES["/approvals"], replace: true });
+  },
 });
-function ApprovalsPage() {
-  return (
-    <PageShell
-      title="审批"
-      description="决定员工可以做什么，以及查看在等你的那些动作。"
-      width="workbench"
-    >
-      <div className="space-y-8">
-        <ApprovalInbox />
-        {/* 只有管理员看得到：员工替同事申请使用的应用（迁移 0153）。 */}
-        <AccessRequestInbox />
-      </div>
-    </PageShell>
-  );
-}

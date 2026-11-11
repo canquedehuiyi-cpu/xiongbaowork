@@ -101,9 +101,7 @@ export function BotsAccountsDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            render={(props) => (
-              <Link to="/settings/connected-accounts" {...props} />
-            )}
+            render={(props) => <Link to="/connections" {...props} />}
           >
             管理第三方服务账号
           </Button>

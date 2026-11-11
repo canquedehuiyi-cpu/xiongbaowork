@@ -52,8 +52,8 @@ import { queryClient } from "@/query-client";
 
 /**
  * Connected apps a Bot reads facts from. Given a Bot, only that Bot's sources, and a new one is that
- * Bot's without asking. Upstream's, on this fork's employee detail page (`/wakers/$agentId`); the
- * all-employee list stays in 能力与资源 › 信息源与记忆 (`memory-screen.tsx`).
+ * Bot's without asking. Upstream's, on the employee's 记忆 page (`/bots/$agentId/memory`); the
+ * all-employee list stays in 能力 › 记忆与信息源 (`memory-screen.tsx`).
  *
  * Each source is a row; adding one is a dialog behind the section's action. The draft lives here
  * rather than in the dialog, so the Bot's read actions are already loaded when it opens.

@@ -21,10 +21,10 @@ import {
   generateWakerFlowPlan,
   getWakerFlow,
   getWakerFlowRequest,
+  WAKERFLOW_SUGGESTIONS,
   type WakerFlowCandidate,
   type WakerFlowPlan,
   type WakerFlowRequest,
-  WAKERFLOW_SUGGESTIONS,
   wakerFlowKeys,
   wakerFlowQueryOptions,
 } from "@/lib/wakerflows";
@@ -392,7 +392,7 @@ function WakerFlowWorkbench({
       ? choices.error.message
       : "可用于规划的模型没能加载。"
     : !choices.isPending && models.length === 0
-      ? "还没有可用于规划的模型。请先在「能力与资源」中接入并启用一个模型。"
+      ? "还没有可用于规划的模型。请先在「能力 › 模型库」中接入并启用一个模型。"
       : null;
 
   return (
@@ -473,8 +473,7 @@ function WakerFlowWorkbench({
                 {!choices.error ? (
                   <Link
                     className="text-foreground underline underline-offset-2"
-                    search={{ tab: "models" }}
-                    to="/resources"
+                    to="/capabilities/models"
                   >
                     去接入模型
                   </Link>

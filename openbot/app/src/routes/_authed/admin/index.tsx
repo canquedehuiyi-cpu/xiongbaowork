@@ -1,7 +1,9 @@
 import {
   IconBrain,
   IconBuildingBank,
+  IconBuildingSkyscraper,
   IconBulb,
+  IconChecks,
   IconChevronRight,
   IconCode,
   IconDeviceDesktop,
@@ -14,6 +16,7 @@ import {
   IconShieldCheck,
   IconSlash,
   IconUsers,
+  IconZoomQuestion,
 } from "@tabler/icons-react";
 import {
   createFileRoute,
@@ -70,6 +73,13 @@ const SECTIONS: {
         description: "决定员工绝不能做什么的规则。",
         icon: IconShieldCheck,
         linkOptions: { to: "/admin/boundaries" },
+      },
+      {
+        title: "审批",
+        description:
+          "成员的员工动手前要不要先问、团队规则，以及共享账号和应用的使用申请。",
+        icon: IconChecks,
+        linkOptions: { to: "/admin/approvals" },
       },
       {
         title: "电脑",
@@ -172,6 +182,26 @@ const SECTIONS: {
           "这个部署里发生的每个动作、是谁做的，以及员工执行过的命令记录。",
         icon: IconListDetails,
         linkOptions: { to: "/admin/audit" },
+      },
+      {
+        title: "动作推演",
+        description:
+          "问问员工做某个动作时熊宝会怎么处理，看是哪一道管控做的决定。",
+        icon: IconZoomQuestion,
+        linkOptions: { to: "/admin/what-if" },
+      },
+    ],
+  },
+  {
+    title: "平台",
+    description: "",
+    items: [
+      {
+        title: "平台管理",
+        description:
+          "这个部署服务的所有租户、各自的用量和审计，以及停用与恢复。",
+        icon: IconBuildingSkyscraper,
+        linkOptions: { to: "/admin/platform" },
       },
     ],
   },

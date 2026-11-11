@@ -51,7 +51,7 @@ export function groupQueryOptions(channelId: string) {
     queryFn: async (): Promise<GroupConversation> => {
       const response = await client(
         `/api/groups/${encodeURIComponent(channelId)}`,
-        { fallback: "This group conversation could not be loaded." },
+        { fallback: "读不到这个群聊。" },
       );
       return (await response.json()) as GroupConversation;
     },
@@ -91,7 +91,7 @@ export function sendGroupMessageMutationOptions(
       await client(`/api/groups/${encodeURIComponent(channelId)}`, {
         method: "POST",
         body: input,
-        fallback: "Your message could not be sent to the group.",
+        fallback: "消息没能发到群里。",
       });
     },
     onSettled: () =>
@@ -106,7 +106,7 @@ export function createGroupMutationOptions(queryClient: QueryClient) {
       const response = await client("/api/groups", {
         method: "POST",
         body: { agentIds },
-        fallback: "The group could not be started.",
+        fallback: "群聊没能开始。",
       });
       return ((await response.json()) as { channel: AgentChannel }).channel;
     },
@@ -116,15 +116,21 @@ export function createGroupMutationOptions(queryClient: QueryClient) {
 }
 
 /** Add a person who has signed in here to a group this person is in. */
-export function addGroupMemberMutationOptions(channelId: string) {
+export function addGroupMemberMutationOptions(
+  queryClient: QueryClient,
+  channelId: string,
+) {
   return mutationOptions({
     mutationFn: async (email: string) => {
       await client(`/api/groups/${encodeURIComponent(channelId)}/members`, {
         method: "POST",
         body: { email },
-        fallback: "That person could not be added.",
+        fallback: "没能加上这个人。",
       });
     },
+    // So the list of people shows them straight away.
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: groupKeys.detail(channelId) }),
   });
 }
 
@@ -137,7 +143,7 @@ export function removeGroupMemberMutationOptions(
     mutationFn: async (userId: string) => {
       await client(
         `/api/groups/${encodeURIComponent(channelId)}/members/${encodeURIComponent(userId)}`,
-        { method: "DELETE", fallback: "That person could not be removed." },
+        { method: "DELETE", fallback: "没能移除这个人。" },
       );
     },
     onSettled: () =>

@@ -257,7 +257,7 @@ function draw(entry: string) {
       } as never),
       createRoute({
         getParentRoute: () => root,
-        path: "/resources",
+        path: "/capabilities/wakerflows",
         component: () => null,
       } as never),
     ]),
@@ -920,7 +920,8 @@ test("跳过 skips the question, and a step waiting on an approval only links to
   );
   // Now parked on an approval: no answer box here, only the way to where it is answered.
   const link = await view.findByRole("link", { name: "去审批" });
-  expect(link.getAttribute("href")).toBe("/approvals");
+  // 审批收件箱 M5b 起在设置 › 审批（`/approvals` 仍重定向到那里）。
+  expect(link.getAttribute("href")).toBe("/settings/approvals");
   expect(view.queryByRole("button", { name: "提交回答" })).toBeNull();
 });
 

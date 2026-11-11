@@ -1,0 +1,739 @@
+import {
+  IconApps,
+  IconBrandGoogleDrive,
+  IconBrandNotion,
+  IconCheck,
+  IconChevronRight,
+  IconKey,
+  IconLock,
+  IconPlug,
+  IconSearch,
+} from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import * as React from "react";
+import {
+  PageEmpty,
+  PageRows,
+  PageSection,
+  PageShell,
+} from "@/components/layout/page-shell";
+import { RowMark } from "@/components/layout/row-mark";
+import { AppInitial, PluginLogo } from "@/components/plugins/plugin-logo";
+import { ConnectorsTab } from "@/components/resources/capability-tabs";
+import { providerIcon } from "@/components/settings/linked-accounts";
+import {
+  linkedNotice,
+  visibleLinkedNotice,
+} from "@/components/settings/linked-notice";
+import { Button } from "@/components/ui/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Separator } from "@/components/ui/separator";
+import { useConnectApp } from "@/lib/connections/connect-app";
+import {
+  type ConnectionRow,
+  connectionRows,
+  personalAppsNeedingSetup,
+  personalConnectionRows,
+} from "@/lib/connections/rows";
+import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
+import {
+  identityProvidersQueryOptions,
+  linkedAccountsQueryOptions,
+} from "@/lib/identity/queries";
+import { keyedLookup } from "@/lib/lookup";
+import { useManagePaths } from "@/lib/manage-paths";
+import {
+  brokeredAccountsListedOn,
+  serversListedFor,
+  sharedAccountsListedOn,
+} from "@/lib/plugins/listed";
+import { moreAppsRow } from "@/lib/plugins/provider-vocabulary";
+import {
+  appKeyOf,
+  connectionsQueryOptions,
+  personalConnections,
+  pluginsPageQueryOptions,
+  pluginsProvider,
+} from "@/lib/plugins/queries";
+import { searchTextEntry } from "@/lib/search-text";
+
+/**
+ * The services a Bot reads as you.
+ *
+ * Yours, not the deployment's. An administrator decides which vendors this deployment may reach at
+ * all; this is the other half of that decision, and it is one nobody can make for you — there is no
+ * endpoint for an administrator to connect an account on somebody's behalf. A Bot calling one of
+ * these runs on your own grant, so it sees exactly what you can see and nothing else.
+ */
+export const Route = createFileRoute("/_authed/_app/connections/")({
+  component: RouteComponent,
+  /*
+   * `?connected=` is how the OAuth callback reports back, carrying a server key on success and
+   * `failed` otherwise. `?linked=` is the same for the GitHub account-link callback: `github` on
+   * success, `github-taken` when that GitHub account belongs to another OpenBot user, `failed`
+   * otherwise (see linked-notice.ts). Each is the only channel available: the callback is a
+   * redirect from another company's server, so there is no response body to read.
+   *
+   * The key is omitted rather than set to undefined. Present-but-undefined makes `search` a required
+   * prop on every Link to this route, which is a lot of ripple for a parameter only the callback sets.
+   *
+   * EACH IS READ AS TEXT WHATEVER THE ROUTER PARSED IT INTO (`searchText`): the router JSON-parses
+   * search values, so a server key or reason code that happens to be digits or JSON-shaped arrives
+   * as a number or an object, and a `typeof` guard would quietly turn the callback's report into
+   * no report at all.
+   */
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { connected?: string; authorized?: string; linked?: string } => ({
+    ...searchTextEntry("connected", search.connected),
+    /*
+     * A CHANNEL OF ITS OWN, BESIDE `?connected=` AND NEVER FOLDED INTO IT. That one is the Composio
+     * OAuth callback's and carries a server key or `failed`; this one is the brokered per-action
+     * verifier's and carries a reason code. Two senders answering different questions on one
+     * parameter is how a notice comes to be drawn for the wrong thing.
+     */
+    ...searchTextEntry("authorized", search.authorized),
+    ...searchTextEntry("linked", search.linked),
+  }),
+});
+
+/**
+ * WHAT THE VERIFIER REFUSED, IN WORDS — AND THE WORDS LIVE HERE AND NOWHERE ELSE.
+ *
+ * THE SENTENCE NEVER TRAVELS IN THE URL. A message rendered from a query string is a message
+ * anybody can author on this deployment's own origin: a link could be sent around carrying whatever
+ * sentence its author liked, shown in this page's own voice under this deployment's own address.
+ * What travels is an opaque code the server chose from a closed set, and this map is the only place
+ * it becomes something a person reads — which is also what keeps one sentence from being maintained
+ * in two places that drift apart.
+ *
+ * AN UNRECOGNISED CODE DRAWS NOTHING, deliberately. A code this build does not know is either
+ * somebody probing the parameter or a deployment mid-upgrade, and a generic "something went wrong"
+ * for both would be a sentence that tells a person nothing and an invitation to keep trying.
+ *
+ * A MAP, NOT AN OBJECT, BECAUSE THE KEY COMES OUT OF A URL. An object literal inherits from
+ * `Object.prototype`, so an object lookup answers `toString`, `constructor` and `__proto__` with
+ * members nobody put here — none of them nullish, so no `?? null` turns them back into "draws
+ * nothing", and `Record<string, string>` says they cannot happen so the compiler never asks. What
+ * reached the page was a function (an alert with nothing in it) or, for `__proto__`, an object,
+ * which React refuses to draw: "Objects are not valid as a React child" took the whole Connected
+ * accounts screen down for whoever opened the link. A `Map` holds only what was put in it, so the
+ * unrecognised code and the borrowed member are once again the same case, by construction rather
+ * than by a list of names to keep out.
+ */
+export const AUTHORIZATION_NOTICES: ReadonlyMap<string, string> = new Map([
+  ["no-broker", "连接应用还没有设置好，所以什么都没有记下。请联系管理员设置。"],
+  [
+    "not-supported",
+    "这里的应用在它自己的页面上按「连接」一次连好，不按单个动作授权。",
+  ],
+  [
+    "missing-handle",
+    "这个链接没有说明要完成哪一次授权，所以什么都没有做。请从应用的页面重新开始。",
+  ],
+  [
+    "no-attempt",
+    "没有正在进行、等你完成的授权。它可能已经过期，或者是在另一个会话里开始的。请从应用的页面重新开始。",
+  ],
+  [
+    "vendor-unavailable",
+    "熊宝去完成这次授权时应用没有回应，所以什么都没有记下。请稍后再打开这个链接试一次。",
+  ],
+  [
+    "not-your-authorization",
+    "这个链接和你正在进行的授权对不上，所以什么都没有记下。请在开始授权的那个标签页里完成它，或者从应用的页面重新开始。",
+  ],
+  [
+    "not-finished",
+    "这次授权还没有完成，所以什么都没有记下。请先在应用那边完成，再打开这个链接。",
+  ],
+  [
+    "authorization-failed",
+    "应用没有完成这次授权，所以什么都没有记下。请从应用的页面重新开始。",
+  ],
+  [
+    "context-changed",
+    "授权进行期间这个应用的账号变了，所以什么都没有记下，给旧账号的访问已经撤销。请从应用的页面重新开始。",
+  ],
+  [
+    "name-changed",
+    "这次授权开始之后，熊宝在这个应用那边登记你的名字因为更新变了，所以什么都没有记下，也没有在应用那边确认或撤销任何东西。请在应用的页面按「连接」重新开始。",
+  ],
+  [
+    "not-permitted",
+    "你已经不能再连接这个应用的账号，所以什么都没有记下：授权进行期间你的权限或应用的设置变了。如果你本来应该能完成它，请联系管理员。",
+  ],
+  [
+    "cancelled",
+    "这次授权在完成过程中被取消了，所以什么都没有记下，它给出的访问已经撤销。",
+  ],
+  [
+    "cancelled-left-live",
+    "这次授权在完成过程中被取消了，所以没有记下新的连接；但它在应用那边给出的访问留着没有撤销：撤销会连带结束你已有的连接（这个应用本来就连着，或者同一个账号还连着你别的应用），或者应用没有确认撤销。应用可能仍然允许这次授权要的访问，这件事已经记进审计记录。要收回它，请在应用的页面断开。",
+  ],
+  [
+    "not-recorded",
+    "没能记下这次授权，所以什么都没有保存。请从应用的页面重新开始；如果一直这样，请联系管理员。",
+  ],
+]);
+
+/**
+ * The personal edition's words for the codes whose team sentence sends somebody to an admin. It has
+ * one person and no admin: they set connecting apps up themselves (Settings, Setup), and nobody else
+ * changes what they can reach. Every other code reads the same in both editions.
+ */
+export const PERSONAL_AUTHORIZATION_NOTICES: ReadonlyMap<string, string> =
+  new Map([
+    [
+      "no-broker",
+      "连接应用还没有设置好，所以什么都没有记下。请到「设置」里的「部署设置」完成设置。",
+    ],
+    [
+      "not-permitted",
+      "你已经不能再连接这个应用的账号，所以什么都没有记下：授权进行期间应用的设置变了。请从应用的页面重新开始。",
+    ],
+    [
+      "not-recorded",
+      "没能记下这次授权，所以什么都没有保存。请从应用的页面重新开始；如果一直这样，请查看熊宝的日志。",
+    ],
+  ]);
+
+/** The sentence for a code the verifier sent back, or null for one this build does not know. */
+export function authorizationNoticeFor(
+  authorized: string | undefined,
+  edition: "team" | "personal" = "team",
+): string | null {
+  if (!authorized) return null;
+  const team = keyedLookup(AUTHORIZATION_NOTICES, authorized) ?? null;
+  if (team === null || edition !== "personal") return team;
+  return keyedLookup(PERSONAL_AUTHORIZATION_NOTICES, authorized) ?? team;
+}
+
+/** The same marks the admin connector list uses: these are the same vendors seen from your side. */
+const MARKS: ReadonlyMap<
+  string,
+  React.ComponentType<{ className?: string }>
+> = new Map([
+  ["google-drive", IconBrandGoogleDrive],
+  ["notion", IconBrandNotion],
+]);
+
+/* A Map for the same reason the notices above are one: a lookup answers with what was put in it and
+ * nothing a plain object would have inherited, so a catalogue key called `toString` draws the
+ * fallback mark rather than handing React `Object.prototype.toString` to render as a component.
+ * The read goes through `keyedLookup` so the rule has one home rather than one comment per page;
+ * see `app/src/lib/lookup.ts`. A missing key draws the app's initial, in `ConnectionMark`. */
+const markFor = (key: string) => keyedLookup(MARKS, key);
+
+function RouteComponent() {
+  const { connected: outcome, authorized, linked } = Route.useSearch();
+  /*
+   * ALL THREE READ ONCE HERE, AND ALL THREE DROPPED FROM THE URL BELOW — not just `?linked=`.
+   *
+   * Every parameter this screen accepts is a report of something that has already happened: the
+   * Composio callback's `?connected=`, the brokered verifier's `?authorized=` and the GitHub
+   * account-link callback's `?linked=`. A report is news exactly once. Left in the address bar it
+   * is read again on every reload and on every back-navigation, so a failure that is minutes old
+   * is redrawn as though it had just happened — somebody is told again that their account could
+   * not be connected, or that there is no authorization in progress, about an attempt they have
+   * since finished successfully. Only `?linked=` was ever cleaned, which is how the other two came
+   * to replay.
+   *
+   * THE SNAPSHOT IS WHAT THE PAGE DRAWS FROM, and it is why the strip can be unconditional. Read
+   * live off the search, the notice would vanish the instant the parameter did; held here, the
+   * sentence outlives the URL it arrived in. That is what `?linked=` was already doing, and the
+   * other two now do it for the same reason rather than by accident.
+   */
+  /*
+   * The verifier's CODE is what is held, not its sentence: the sentence depends on the edition, and
+   * the edition may not have been read yet on the first render.
+   */
+  const [arrival] = React.useState(() => ({
+    outcome,
+    authorized,
+    linked: linkedNotice(linked),
+  }));
+  /* The same cached list the Linked accounts section reads, so a Disconnect there retracts a success here. */
+  const links = useQuery(linkedAccountsQueryOptions());
+  const providers = useQuery(identityProvidersQueryOptions());
+  const notice = visibleLinkedNotice(arrival.linked, links.data);
+  const navigate = Route.useNavigate();
+  /*
+   * ONE NAVIGATE FOR ALL THREE, never one per parameter. `search` replaces the whole object, so two
+   * effects each dropping their own key race: whichever lands second rebuilds from a snapshot taken
+   * before the first, and puts the key the first had just removed back.
+   */
+  React.useEffect(() => {
+    if (
+      outcome === undefined &&
+      authorized === undefined &&
+      linked === undefined
+    ) {
+      return;
+    }
+    navigate({
+      search: ({ connected: _c, authorized: _a, linked: _l, ...rest }) => rest,
+      replace: true,
+    });
+  }, [outcome, authorized, linked, navigate]);
+  const [search, setSearch] = React.useState("");
+  const [connectorQuery, setConnectorQuery] = React.useState("");
+  const plugins = useQuery(pluginsPageQueryOptions());
+  const connections = useQuery(connectionsQueryOptions());
+
+  /*
+   * ONLY THE PERSON'S OWN. A Shared app's row is the deployment's, not this person's, and the
+   * "Connected" badge this set feeds would otherwise tell them they hold an account they don't.
+   */
+  /*
+   * EACH ROW BY BOTH ITS NAMES（熊宝 G01-E）。A curated connector added for the team is the row
+   * `team:<catalogue key>`, while the catalogue names the bare key and a connection names the row.
+   * Matching one against the other left an added connector off the list for everybody, so both sets
+   * hold the row id and the app key it answers to.
+   */
+  const servers = plugins.data?.servers ?? [];
+  const appKeyOfRow = new Map(servers.map((s) => [s.id, appKeyOf(s)]));
+  const connected = new Set(
+    personalConnections(connections.data?.connections ?? []).flatMap((row) => [
+      row.serverId,
+      appKeyOfRow.get(row.serverId) ?? row.serverId,
+    ]),
+  );
+  const added = new Set(servers.flatMap((s) => [s.id, appKeyOf(s)]));
+
+  /*
+   * Only vendors reached as a person, and only ones an administrator has enabled.
+   *
+   * A vendor with a shared token has nothing for you to decide: it answers the same for everybody,
+   * so listing it here would offer a choice you do not have. And a vendor nobody has enabled cannot
+   * be connected at all, because there is no OAuth client to consent against.
+   */
+  const yours = (plugins.data?.catalogue ?? []).filter(
+    (entry) => entry.auth === "user-oauth" && added.has(entry.key),
+  );
+
+  /*
+   * Brokered apps belong here for the same reason the OAuth ones do: they answer as you.
+   *
+   * The filter above names the catalogue's `user-oauth` kind, which a brokered row cannot have
+   * because it has no catalogue entry at all — so the one connector that is nothing but per-person
+   * accounts was the one this page never listed.
+   *
+   * EXCEPT THE ONES THAT NEED NO ACCOUNT, WHICH IS THE SAME RULE THE `user-oauth` FILTER ABOVE IS.
+   * That one keeps out a vendor with a shared token because it "has nothing for you to decide"; a
+   * Composio `NO_AUTH` app has exactly as little, one layer further in. There is no account to make:
+   * `/servers/:id/connect` refuses to create one and the call gate lets it through with no row, so
+   * a row for it here can never turn green. What an admin enabling Hacker News put on every
+   * person's page was a permanently grey "Not connected" that reads as an unfinished task, opening
+   * a page that says the app needs no account and draws no button — the list and the page it opens
+   * contradicting each other, with the list the more believable of the two.
+   *
+   * ASKED OF THE RECORDED SCHEME, which this read already carries and the detail route already
+   * consumes. Anything that is not the vendor's `NO_AUTH` is an app somebody connects, an
+   * unrecorded scheme included: a row whose column was never written is far likelier to be a key or
+   * consent app, and dropping it here would hide a connection somebody does have.
+   */
+  const listed = plugins.data ? serversListedFor(plugins.data) : [];
+  /*
+   * THE PERSONAL EDITION LISTS EVERY APP HERE, added or not, because the one person is the one who
+   * adds it: a tile's press adds the app and connects it in one go (`useConnectApp`).
+   */
+  const personal =
+    useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
+  const connectApp = useConnectApp();
+  const paths = useManagePaths();
+  // The broker's directory of more apps, as one more tile, where a broker is set up.
+  const provider = pluginsProvider(plugins.data);
+  const moreApps = moreAppsRow(
+    provider,
+    plugins.data?.composioConfigured ?? false,
+    paths.edition,
+  );
+  const browse = personal && moreApps.linked ? moreApps : null;
+  const authorizationNotice = authorizationNoticeFor(
+    arrival.authorized,
+    paths.edition,
+  );
+  /*
+   * Apps that need a key or an OAuth client typed first stay out of the personal grid until asked
+   * for, or searched for by name. See `personalConnectionRows`.
+   */
+  const [showSetup, setShowSetup] = React.useState(false);
+  const query = search.trim().toLocaleLowerCase();
+  const needingSetup = personal
+    ? personalAppsNeedingSetup({
+        catalogue: plugins.data?.catalogue ?? [],
+        added,
+        connected,
+      })
+    : 0;
+  const rows = personal
+    ? personalConnectionRows({
+        everything: showSetup || query !== "",
+        catalogue: plugins.data?.catalogue ?? [],
+        added,
+        brokered: brokeredAccountsListedOn(listed),
+        connected,
+        links: links.data ?? [],
+        providers: providers.data,
+      })
+    : connectionRows({
+        catalogue: yours,
+        brokered: brokeredAccountsListedOn(listed),
+        shared: sharedAccountsListedOn(listed),
+        connected,
+        links: links.data ?? [],
+        providers: providers.data,
+      });
+  const matching = rows.filter((row) =>
+    `${row.title} ${row.summary}`.toLocaleLowerCase().includes(query),
+  );
+  const inUse = rows.filter((row) => row.state !== "available").length;
+  /*
+   * The apps decide whether there is a list at all, and the account links only add to it: a failed
+   * links read costs the GitHub and Slack rows and says so, not the whole page.
+   */
+  const loading =
+    plugins.isPending ||
+    connections.isPending ||
+    links.isPending ||
+    providers.isPending;
+
+  return (
+    <PageShell
+      className="@container"
+      description={
+        personal
+          ? "添加应用并连接你的账号，你的员工就能用它们。"
+          : "连接你的账号，让员工可以代你使用应用。"
+      }
+      title="连接"
+    >
+      {/*
+       * For `?connected=` only the failure is worth saying. A success needs no sentence: the row it
+       * came back to now reads "Connected", which is the same news told by the thing it is news
+       * about. `?linked=` is different and says both outcomes, through `linkedNotice` below.
+       */}
+      {arrival.outcome === "failed" ? (
+        <p className="mt-4 text-destructive text-sm" role="alert">
+          这个账号没能连接，什么都没有保存——请重试。
+        </p>
+      ) : null}
+      {notice ? (
+        notice.tone === "error" ? (
+          <p className="mt-4 text-destructive text-sm" role="alert">
+            {notice.text}
+          </p>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground" role="status">
+            {notice.text}
+          </p>
+        )
+      ) : null}
+      {/*
+       * The brokered per-action verifier's own channel. It lands here rather than on an app's page
+       * because three of its refusals have no app to name, and a notice that sometimes appears one
+       * level in and sometimes here would be a notice people learn to look for in two places.
+       */}
+      {authorizationNotice ? (
+        <p className="mt-4 text-destructive text-sm" role="alert">
+          {authorizationNotice}
+        </p>
+      ) : null}
+      {connectApp.error ? (
+        <p className="mt-4 text-destructive text-sm" role="alert">
+          {connectApp.error}
+        </p>
+      ) : null}
+      {/*
+       * One section, so it carries no heading of its own: "Your connections" under "Connections"
+       * said the same thing twice, 48px apart, and the description now sits under the page title.
+       */}
+      <PageSection>
+        {/*
+         * BOTH APP READS DECIDE THIS. A `/api/plugins` that succeeded beside a
+         * `/api/plugins/connections` that failed would leave the `connected` set empty and every row
+         * asserting "Connect" over accounts somebody already has, so either failure is one sentence:
+         * nothing is listed rather than a list that may be wrong.
+         */}
+        {loading ? null : plugins.error || connections.error ? (
+          <p className="mt-4 text-destructive text-sm" role="alert">
+            读不到你的连接，所以这里什么都不列，免得列出错的。请刷新页面；如果一直这样，请联系管理员。
+          </p>
+        ) : rows.length === 0 ? (
+          <PageEmpty icon={IconPlug} title="还没有应用">
+            管理员打开应用之后，它们会出现在这里。
+          </PageEmpty>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <InputGroup className="h-9 flex-1 border-transparent bg-muted/60 shadow-none dark:bg-muted/60">
+                <InputGroupAddon>
+                  <IconSearch aria-hidden="true" className="size-4" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  aria-label="搜索连接"
+                  placeholder="搜索连接"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </InputGroup>
+              <p className="shrink-0 text-xs text-muted-foreground">
+                已在用 {inUse} 个 · 共 {rows.length} 个
+              </p>
+            </div>
+            {matching.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground" role="status">
+                没有匹配“{search.trim()}”的连接。
+              </p>
+            ) : (
+              /*
+               * A grid of separate cards, where every other list is one `PageRows` card of divided
+               * rows. The accepted exception: connections are apps you pick out by their mark, so
+               * they are laid out as tiles two across rather than read down as a list.
+               */
+              <div className="mt-4 grid grid-cols-1 gap-3 @min-[36rem]:grid-cols-2">
+                {matching.map((row) => (
+                  <ConnectionItem
+                    /* A GitHub or Slack account link and the app of the same name can both be listed. */
+                    key={`${row.mark.kind}:${row.key}`}
+                    onPress={
+                      row.state === "available" &&
+                      (row.action === "connect" || row.action === "add")
+                        ? () =>
+                            void connectApp.run(
+                              row.key,
+                              row.action as "connect" | "add",
+                            )
+                        : undefined
+                    }
+                    pending={connectApp.pending === row.key}
+                    row={row}
+                  />
+                ))}
+                {browse ? (
+                  <Item
+                    className="min-h-14 min-w-0 flex-nowrap gap-3 bg-card px-3 py-1.5"
+                    data-testid="account-browse"
+                    render={<Link {...paths.brokerDirectory(provider)} />}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <RowMark className="size-9">
+                      <IconApps className="size-4" />
+                    </RowMark>
+                    <ItemContent className="min-w-0 gap-0.5">
+                      <ItemTitle className="block w-auto truncate">
+                        {browse.title}
+                      </ItemTitle>
+                      <ItemDescription className="line-clamp-1 text-xs">
+                        {browse.description}
+                      </ItemDescription>
+                    </ItemContent>
+                  </Item>
+                ) : null}
+              </div>
+            )}
+            {needingSetup > 0 && !showSetup && query === "" ? (
+              <Button
+                className="mt-3"
+                onClick={() => setShowSetup(true)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                显示 {needingSetup} 个需要先设置的应用
+              </Button>
+            ) : null}
+          </>
+        )}
+        {links.error || providers.error ? (
+          <p className="mt-4 text-destructive text-sm" role="alert">
+            读不到 GitHub 和 Slack，所以没有列出它们。请刷新页面。
+          </p>
+        ) : null}
+      </PageSection>
+      {/*
+       * 员工可用的连接器（熊宝）：原来是「能力与资源」的一个页签，用户定了放在「连接」。上面是你自己的账号，这里是
+       * 部署里有哪些连接器、授予了几位员工——授予是管理员的事。个人版只有一个人、所有应用都在上面的列表里添加和连接，
+       * 所以只在团队版画这一区。搜索词只在本页里记着，不进地址：`?connected=` 这些回程参数读一次就清掉，混进去容易互相覆盖。
+       */}
+      {personal ? null : (
+        <PageSection title="员工可用的连接器">
+          <ConnectorsTab onQuery={setConnectorQuery} query={connectorQuery} />
+        </PageSection>
+      )}
+      {/*
+       * The rest of what a Bot signs in with. Saved logins and keys live under Settings; these rows
+       * are a way in from beside the apps that use them, in the personal edition.
+       */}
+      {personal ? (
+        <PageSection title="登录信息和密钥">
+          <PageRows>
+            <Item render={<Link to="/settings/passwords" />} size="sm">
+              <ItemMedia variant="icon">
+                <IconLock />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>保存的登录</ItemTitle>
+                <ItemDescription>
+                  帮员工登录网站时你保存下来的登录信息。
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              </ItemActions>
+            </Item>
+            <Separator />
+            <Item render={<Link {...paths.credentials()} />} size="sm">
+              <ItemMedia variant="icon">
+                <IconKey />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>密钥</ItemTitle>
+                <ItemDescription>
+                  你的应用和模型用到的 API 密钥和令牌。
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              </ItemActions>
+            </Item>
+          </PageRows>
+        </PageSection>
+      ) : null}
+    </PageShell>
+  );
+}
+
+/**
+ * One connection: its mark, its name, one line, and where it stands. Opens its own page, or, given
+ * `onPress`, is the press that connects it (the personal edition's Connect and Add).
+ */
+function ConnectionItem({
+  row,
+  onPress,
+  pending = false,
+}: {
+  row: ConnectionRow;
+  onPress?: () => void;
+  pending?: boolean;
+}) {
+  return (
+    <Item
+      className="min-h-14 min-w-0 flex-nowrap gap-3 bg-card px-3 py-1.5 text-left"
+      data-testid={`account-${row.key}`}
+      render={
+        onPress ? (
+          <button disabled={pending} onClick={onPress} type="button" />
+        ) : (
+          <Link
+            params={{ key: row.key }}
+            search={row.mark.kind === "provider" ? { identity: true } : {}}
+            to="/connections/$key"
+          />
+        )
+      }
+      size="sm"
+      variant="outline"
+    >
+      <RowMark className="size-9">
+        <ConnectionMark mark={row.mark} name={row.title} />
+      </RowMark>
+      <ItemContent className="min-w-0 gap-0.5">
+        <ItemTitle className="block w-auto truncate">{row.title}</ItemTitle>
+        {row.summary ? (
+          <ItemDescription
+            className="line-clamp-1 break-all text-xs"
+            title={row.summary}
+          >
+            {row.summary}
+          </ItemDescription>
+        ) : null}
+      </ItemContent>
+      <ItemActions className="shrink-0">
+        <ConnectionStateLabel pending={pending} row={row} />
+      </ItemActions>
+    </Item>
+  );
+}
+
+function ConnectionMark({
+  mark,
+  name,
+}: {
+  mark: ConnectionRow["mark"];
+  name: string;
+}) {
+  if (mark.kind === "logo") return <PluginLogo logo={mark.logo} name={name} />;
+  const Mark =
+    mark.kind === "provider" ? providerIcon(mark.provider) : markFor(mark.key);
+  if (!Mark) return <AppInitial name={name} />;
+  return <Mark className="size-4" />;
+}
+
+/** Where a tile stands, or the word for what pressing it does. */
+const ACTION_LABEL = { connect: "连接", add: "添加", setup: "设置" };
+
+function ConnectionStateLabel({
+  row,
+  pending,
+}: {
+  row: ConnectionRow;
+  pending: boolean;
+}) {
+  const { state } = row;
+  if (state === "connected") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <IconCheck
+          aria-hidden="true"
+          className="size-3.5 text-emerald-600 dark:text-emerald-400"
+        />
+        {row.noAccount ? "已打开" : "已连接"}
+      </span>
+    );
+  }
+  if (state === "team") {
+    return <span className="text-xs text-muted-foreground">团队账号</span>;
+  }
+  const pill = (
+    <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+      {pending
+        ? row.action === "add"
+          ? "正在添加…"
+          : "正在连接…"
+        : state === "needs_reconnect"
+          ? "重新连接"
+          : ACTION_LABEL[row.action ?? "connect"]}
+    </span>
+  );
+  // Added and not signed in to: said in words, beside the press that connects it.
+  if (state === "available" && row.notConnected && !pending) {
+    return (
+      <span className="flex items-center gap-2">
+        <span
+          className="text-xs text-muted-foreground"
+          data-testid="tile-not-connected"
+        >
+          未连接
+        </span>
+        {pill}
+      </span>
+    );
+  }
+  return pill;
+}

@@ -115,6 +115,13 @@ export type AppAccessRequest = {
   createdAt: string;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  /*
+   * X3（X2 评审 M3）补的三项，只在服务端给出时有：员工是不是已发布的 Team Bot、申请人和员工的关系、
+   * 以及 Team Bot 时给管理员看的范围说明（批准会对每个能用这位员工的人生效）。
+   */
+  appliesTo?: "team_bot" | "bot";
+  requesterRole?: "owner" | "teammate" | "other";
+  scopeNote?: string | null;
 };
 
 /** The administrator's inbox: the requests asked for, and a count per app for the Plugins list. */
@@ -159,14 +166,28 @@ export function giveableAppsQueryOptions() {
   });
 }
 
+/**
+ * WHOSE EYES THE STATE IS READ THROUGH. `owner` asks as the Bot's owner deciding whether to give it
+ * the app (`?view=owner`): only then does the fork's server answer `owner_grantable` (X3). Without it
+ * an owner looking at their own Bot reads `not_granted` and can ask an admin, which is X2's
+ * behaviour and stays the default. Upstream's server answers the owner's view unasked.
+ */
+export type AppAccessView = "owner" | undefined;
+
+const viewQuery = (view: AppAccessView) => (view ? `?view=${view}` : "");
+
 /** Every work app this Bot holds, with what each is for the person asking. */
-export function botAppsQueryOptions(agentId: string) {
+export function botAppsQueryOptions(agentId: string, view?: AppAccessView) {
   return queryOptions({
-    queryKey: appAccessKeys.bot(agentId),
+    queryKey: view
+      ? ([...appAccessKeys.bot(agentId), "view", view] as const)
+      : appAccessKeys.bot(agentId),
     queryFn: (): Promise<AppAccess[]> =>
-      client(`/api/plugins/for/${encodeURIComponent(agentId)}/apps`, "apps", {
-        fallback: "读不到这位员工的应用。",
-      }),
+      client(
+        `/api/plugins/for/${encodeURIComponent(agentId)}/apps${viewQuery(view)}`,
+        "apps",
+        { fallback: "读不到这位员工的应用。" },
+      ),
   });
 }
 
@@ -174,12 +195,18 @@ export function botAppsQueryOptions(agentId: string) {
  * One app, by key or by name, whether or not this Bot holds it — what a card in a conversation
  * asks, so it never draws a stale state.
  */
-export function botAppQueryOptions(agentId: string, app: string) {
+export function botAppQueryOptions(
+  agentId: string,
+  app: string,
+  view?: AppAccessView,
+) {
   return queryOptions({
-    queryKey: appAccessKeys.app(agentId, app),
+    queryKey: view
+      ? ([...appAccessKeys.app(agentId, app), "view", view] as const)
+      : appAccessKeys.app(agentId, app),
     queryFn: (): Promise<AppAccess> =>
       client(
-        `/api/plugins/for/${encodeURIComponent(agentId)}/apps/${encodeURIComponent(app)}`,
+        `/api/plugins/for/${encodeURIComponent(agentId)}/apps/${encodeURIComponent(app)}${viewQuery(view)}`,
         "app",
         { fallback: `读不到 ${app} 对这位员工的用途。` },
       ),

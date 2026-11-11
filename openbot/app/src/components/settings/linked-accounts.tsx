@@ -398,15 +398,15 @@ function LinkedAccountRow({ account }: { account: LinkedAccount }) {
   );
 }
 
-/**
- * Write text to the clipboard, answering whether it landed. The clipboard is missing on plain-http
- * hosts and a write is refused when permission is denied; both are a "no", not an exception.
- */
-/** Every account this person can link, together: the fork's settings page (connected accounts). */
+/** Every account this person can link, together (GitHub and Slack), as one section. */
 export function LinkedAccountsSection() {
   return <LinkedAccountSection />;
 }
 
+/**
+ * Write text to the clipboard, answering whether it landed. The clipboard is missing on plain-http
+ * hosts and a write is refused when permission is denied; both are a "no", not an exception.
+ */
 export async function copyText(
   text: string,
   clipboard: Pick<Clipboard, "writeText"> | undefined,

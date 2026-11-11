@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { WakerGroup } from "@/lib/waker-groups/queries";
 import { grantPlugin, invalidatePlugins, type PluginKind } from "./mutations";
+import type { SharedUseApproval } from "./shared-use";
 
 /**
  * Granting to a group, written once for every screen that offers it (spec E2).
@@ -77,6 +78,11 @@ export async function grantToMembers(input: {
   agentIds: readonly string[];
   /** Called after each write settles, with how many have so far. */
   onProgress?: (settled: number, total: number) => void;
+  /**
+   * Who may use a Shared app's one account through each member, sent with every grant（X7：服务端
+   * 不会自己记共享使用批准，不送的话成员对团队账号的调用会被拒绝）。Only for a Shared app.
+   */
+  approval?: SharedUseApproval;
 }): Promise<CrewGrantOutcome> {
   const agentIds = [...new Set(input.agentIds)];
   const refs = [...new Set(input.refs)];
@@ -88,7 +94,12 @@ export async function grantToMembers(input: {
       const outcome: MemberGrantOutcome = { agentId, granted: [], refused: [] };
       for (const ref of refs) {
         try {
-          await grantPlugin({ kind: input.kind, ref, agentId });
+          await grantPlugin({
+            kind: input.kind,
+            ref,
+            agentId,
+            ...(input.approval ? { approval: input.approval } : {}),
+          });
           outcome.granted.push(ref);
         } catch (thrown) {
           outcome.refused.push({ ref, reason: reasonOf(thrown) });

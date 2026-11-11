@@ -8,25 +8,20 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { authKeys } from "@/lib/auth/queries";
 import type { PluginsPage } from "@/lib/plugins/queries";
-import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
+import { capabilitiesRouter } from "./capabilities-router";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * 能力与资源 against the reference's description (6) as docs/design/ios-studio (05-能力与资源.png)
- * draws it: six entries as one continuous panel of cells instead of a text tab row — the selected
- * one marked, with its line of description read as its description — this fork's own three as the
- * small links on the 「资源入口」 title line, and the 插件 tab as the pill switch over a category
+ * 能力（M5b 起照上游的 `/capabilities/*`，熊宝的「资源入口」画法）against the reference's description (6)
+ * as docs/design/ios-studio (05-能力与资源.png) draws it: six entries as one continuous panel of cells
+ * instead of a text tab row — the open one marked, with its line of description read as its
+ * description — the other three as the small links on the 「资源入口」 title line, every one of them
+ * a link to its own address, and the 插件 tab as the pill switch over a category
  * panel (search on top) and a three-column card grid paged twenty at a time. Drawn from a fake
  * `fetch` keyed by path, the same harness as `resources-parity.test.tsx`.
  */
@@ -180,7 +175,7 @@ function resetResponses() {
 }
 
 function draw({
-  entry: initial = "/resources",
+  entry: initial = "/capabilities/plugins",
   fail = [],
   role = "user",
 }: {
@@ -210,17 +205,7 @@ function draw({
     onboarding: null,
   });
 
-  const root = createRootRoute({ component: () => <Outlet /> });
-  const router = createRouter({
-    context: {},
-    history: createMemoryHistory({ initialEntries: [initial] }),
-    routeTree: root.addChildren([
-      ResourcesRoute.update({
-        getParentRoute: () => root,
-        path: "/resources",
-      } as never),
-    ]),
-  });
+  const router = capabilitiesRouter({ at: initial, queryClient });
 
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -245,33 +230,33 @@ async function cardItems(view: View) {
   return within(list).getAllByRole("listitem");
 }
 
-const ENTRIES = ["插件", "技能", "连接器", "知识库", "WakerFlow", "公开项目"];
+const ENTRIES = ["插件", "技能", "知识库", "WakerFlow", "公开项目", "模型库"];
 
-test("the page is titled 能力与资源 with the reference's subtitle", async () => {
+test("the page is titled 能力 with the reference's subtitle", async () => {
   const { view } = draw();
   expect((await view.findByRole("heading", { level: 1 })).textContent).toBe(
-    "能力与资源",
+    "能力",
   );
   expect(view.getByText("释放你的员工潜能，解锁更多可能")).toBeTruthy();
 });
 
-test("six entry cells in one panel are the tablist's first tabs; the selected one carries its description and is marked", async () => {
+test("six entry cells in one panel are the first links of the navigation; the open one carries its description and is marked", async () => {
   const { view } = draw();
-  const tablist = await view.findByRole("tablist", { name: "能力与资源" });
-  const row = tablist.querySelector("[data-slot='resource-entry-cards']");
+  const nav = await view.findByRole("navigation", { name: "能力" });
+  const row = nav.querySelector("[data-slot='resource-entry-cards']");
   expect(row).toBeTruthy();
   expect(row?.className).toContain("grid-cols-6");
-  const cards = within(row as HTMLElement).getAllByRole("tab");
+  const cards = within(row as HTMLElement).getAllByRole("link");
   expect(
     cards.map(
-      (tab) =>
-        tab.querySelector("[data-slot='entry-label']")?.textContent ?? "",
+      (link) =>
+        link.querySelector("[data-slot='entry-label']")?.textContent ?? "",
     ),
   ).toEqual(ENTRIES);
 
-  const plugins = within(tablist).getByRole("tab", { name: "插件" });
-  expect(plugins.getAttribute("aria-selected")).toBe("true");
-  // The description is the selected card's own, read as its description, not its name.
+  const plugins = within(nav).getByRole("link", { name: "插件" });
+  expect(plugins.getAttribute("aria-current")).toBe("page");
+  // The description is the open card's own, read as its description, not its name.
   const describedBy = plugins.getAttribute("aria-describedby");
   expect(describedBy).toBeTruthy();
   expect(document.getElementById(describedBy ?? "")?.textContent).toBe(
@@ -282,12 +267,12 @@ test("six entry cells in one panel are the tablist's first tabs; the selected on
       .querySelector("[data-slot='entry-arrow']")
       ?.getAttribute("data-state"),
   ).toBe("active");
-  // The selected cell itself is marked (its red bottom line in docs/design/ios-studio), and its
+  // The open cell itself is marked (its red bottom line in docs/design/ios-studio), and its
   // icon plate turns red; the other cells are not.
   expect(plugins.getAttribute("data-state")).toBe("active");
 
-  const skills = within(tablist).getByRole("tab", { name: "技能" });
-  expect(skills.getAttribute("aria-selected")).toBe("false");
+  const skills = within(nav).getByRole("link", { name: "技能" });
+  expect(skills.getAttribute("aria-current")).toBeNull();
   expect(skills.querySelector("[data-slot='entry-description']")).toBeNull();
   expect(
     skills
@@ -297,14 +282,14 @@ test("six entry cells in one panel are the tablist's first tabs; the selected on
   expect(skills.getAttribute("data-state")).toBe("idle");
 });
 
-test("this fork's own entries are the secondary links of the 资源入口 section that still drive ?tab=", async () => {
+test("组件, 记忆与信息源 and 角色模板 are the secondary links of the 资源入口 section, each to its own address", async () => {
   const { view, router, user } = draw();
-  const tablist = await view.findByRole("tablist", { name: "能力与资源" });
-  const more = tablist.querySelector("[data-slot='resource-more-tabs']");
+  const nav = await view.findByRole("navigation", { name: "能力" });
+  const more = nav.querySelector("[data-slot='resource-more-tabs']");
   expect(more).toBeTruthy();
   // docs/design/ios-studio puts them on the right of the section's title line, 「资源入口」, with no
-  // caption of their own; the heading names the section the whole tablist sits in.
-  const section = tablist.closest("section");
+  // caption of their own; the heading names the section the whole navigation sits in.
+  const section = nav.closest("section");
   expect(
     section?.getAttribute("aria-labelledby")
       ? document.getElementById(section.getAttribute("aria-labelledby") ?? "")
@@ -312,45 +297,22 @@ test("this fork's own entries are the secondary links of the 资源入口 sectio
       : null,
   ).toBe("资源入口");
   const moreScope = within(more as HTMLElement);
-  expect(moreScope.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-    "模型库",
-    "组件",
-    "信息源与记忆",
-  ]);
-
-  await user.click(moreScope.getByRole("tab", { name: "组件" }));
-  await waitFor(() =>
-    expect(router.state.location.search).toEqual({ tab: "components" }),
-  );
   expect(
-    view.getByRole("tab", { name: "组件" }).getAttribute("aria-selected"),
-  ).toBe("true");
-});
+    moreScope.getAllByRole("link").map((link) => link.textContent),
+  ).toEqual(["组件", "记忆与信息源", "角色模板"]);
 
-test("arrow keys move across all nine entries and write ?tab= without stacking history", async () => {
-  const { view, router, user } = draw();
-  const plugins = await view.findByRole("tab", { name: "插件" });
-  const before = router.history.length;
-  plugins.focus();
-  await user.keyboard("{ArrowRight}");
+  await user.click(moreScope.getByRole("link", { name: "组件" }));
   await waitFor(() =>
-    expect(router.state.location.search).toEqual({ tab: "skills" }),
+    expect(router.state.location.pathname).toBe("/capabilities/components"),
   );
-  expect(document.activeElement).toBe(view.getByRole("tab", { name: "技能" }));
-  await user.keyboard("{ArrowLeft}{ArrowLeft}");
+  // Each tab draws its own shell, so the navigation is read again from the page.
   await waitFor(() =>
-    expect(router.state.location.search).toEqual({ tab: "sources" }),
+    expect(
+      within(view.getByRole("navigation", { name: "能力" }))
+        .getByRole("link", { name: "组件" })
+        .getAttribute("aria-current"),
+    ).toBe("page"),
   );
-  expect(document.activeElement).toBe(
-    view.getByRole("tab", { name: "信息源与记忆" }),
-  );
-  // Three arrow presses replaced the entry each time; a click is still a step Back returns to.
-  expect(router.history.length).toBe(before);
-  await user.click(view.getByRole("tab", { name: "技能" }));
-  await waitFor(() =>
-    expect(router.state.location.search).toEqual({ tab: "skills" }),
-  );
-  expect(router.history.length).toBe(before + 1);
 });
 
 test("插件 has the pill switch, a rail with the search on top and 全部 first, and a heading with the count", async () => {
@@ -458,7 +420,7 @@ test("many pages collapse the middle into an ellipsis", async () => {
 
 test("each plugin card's detail button names its plugin", async () => {
   const { view } = draw();
-  await view.findByRole("tab", { name: "插件" });
+  await view.findByRole("link", { name: "插件" });
   const names = (await view.findAllByRole("button", { name: /^详情/ })).map(
     (button) => button.textContent?.trim(),
   );

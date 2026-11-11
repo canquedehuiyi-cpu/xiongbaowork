@@ -230,7 +230,7 @@ function mount(children: ReactNode) {
   });
   const settings = createRoute({
     getParentRoute: () => root,
-    path: "/settings/connected-accounts/$key",
+    path: "/connections/$key",
     component: () => null,
   });
   const router = createRouter({
@@ -265,7 +265,9 @@ test("asks about the app on the Bot that refused, not on another", async () => {
   const asked = serving(appAccess({ state: "not_connected" }));
   mount(<AppAccessCard prompt={prompt()} />);
   await waitFor(() =>
-    expect(asked).toContain("/api/plugins/for/expenses/apps/composio-gmail"),
+    expect(asked).toContain(
+      "/api/plugins/for/expenses/apps/composio-gmail?view=owner",
+    ),
   );
 });
 
@@ -302,7 +304,7 @@ test("an account the vendor lost: Reconnect, though the server still reads ready
   expect(drawn.textContent).toContain("你的 Gmail 连接需要重新连接。");
   expect(
     (await view.findByText("重新连接")).closest("a")?.getAttribute("href"),
-  ).toBe("/settings/connected-accounts/composio-gmail");
+  ).toBe("/connections/composio-gmail");
 });
 
 test("an account lost and then connected again: the newer connection wins", async () => {
@@ -397,7 +399,9 @@ test("an older refusal that names no Bot asks about the Bot the surface declared
   );
   const drawn = await card(view);
   expect(drawn.getAttribute("data-state")).toBe("not_connected");
-  expect(asked).toContain("/api/plugins/for/travel/apps/composio-gmail");
+  expect(asked).toContain(
+    "/api/plugins/for/travel/apps/composio-gmail?view=owner",
+  );
 });
 
 test("with no Bot to ask about at all, it is the Connect card it always was", async () => {

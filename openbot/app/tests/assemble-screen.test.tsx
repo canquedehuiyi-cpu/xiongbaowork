@@ -16,8 +16,11 @@ import { modelKeys } from "@/lib/models/queries";
 import { personaKeys } from "@/lib/personas/queries";
 import { type GrantedPlugins, pluginKeys } from "@/lib/plugins/queries";
 import { type RoutineRecord, routineKeys } from "@/lib/routines/queries";
-import { Route as AssembleRoute } from "@/routes/_authed/_app/assemble.$agentId";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+// 装配搬进了员工的「设置」分页（M5b），`/assemble/$agentId` 重定向到那里。
+import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as AssembleRoute } from "@/routes/_authed/_app/bots.$agentId.setup";
+import { Route as RoutinesRoute } from "@/routes/_authed/_app/bots.$agentId.routines";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -118,9 +121,12 @@ const granted: GrantedPlugins = {
 function draw({
   profile = base,
   agentStatus = 200,
+  at = "setup",
 }: {
   profile?: AgentProfile;
   agentStatus?: number;
+  /** Which of the employee's pages: Setup, where the assembly zones are, or Routines. */
+  at?: "setup" | "routines";
 } = {}) {
   const queryClient = new QueryClient({
     // `staleTime` so the seeded answers are used as seeded rather than refetched from the stub.
@@ -167,17 +173,27 @@ function draw({
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: [`/assemble/${agentId}`] }),
+    history: createMemoryHistory({
+      initialEntries: [`/bots/${agentId}/${at}`],
+    }),
     routeTree: root.addChildren([
       // `as never`, as in `assemble-install.test.tsx`: the file routes are registered in the
       // generated tree under their real parents, and this only re-addresses them for one render.
-      WakersRoute.update({
+      BotsRoute.update({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots",
+      } as never),
+      BotProfileRoute.update({
+        getParentRoute: () => root,
+        path: "/bots/$agentId",
       } as never),
       AssembleRoute.update({
         getParentRoute: () => root,
-        path: "/assemble/$agentId",
+        path: "/bots/$agentId/setup",
+      } as never),
+      RoutinesRoute.update({
+        getParentRoute: () => root,
+        path: "/bots/$agentId/routines",
       } as never),
     ]),
   });
@@ -215,17 +231,25 @@ function draw({
   };
 }
 
-const ZONES = ["模型", "人设", "技能", "连接器", "定时任务"] as const;
+/*
+ * M5b：装配搬进员工的「设置」分页，定时任务有了自己的分页（`/bots/$agentId/routines`），所以设置页上是
+ * 模型、人设、技能、连接器（还有可自助安装的工具和知识库），定时任务在下一条用例里到它自己的分页上看。
+ */
+const ZONES = ["模型", "人设", "技能", "连接器"] as const;
 
-test("one screen holds all five zones of the coworker", async () => {
+test("the Setup page holds the coworker's assembly zones; its routines are on their own page", async () => {
   const { view } = draw();
 
-  await view.findByRole("heading", { level: 2, name: "定时任务" });
+  await view.findByRole("heading", { level: 2, name: "连接器" });
   for (const zone of ZONES) {
     expect(view.getByRole("heading", { level: 2, name: zone })).toBeTruthy();
   }
   // Each zone draws what it manages, not just its heading.
-  expect(view.getByRole("combobox")).toBeTruthy();
+  // The model zone's own picker; the Setup page above it has a second one, for 可见性.
+  const modelZone = view
+    .getByRole("heading", { level: 2, name: "模型" })
+    .closest("section");
+  expect(modelZone?.querySelector('[role="combobox"]')).toBeTruthy();
   expect(
     view.container.querySelector<HTMLTextAreaElement>("#persona-tone")
       ?.readOnly,
@@ -233,13 +257,13 @@ test("one screen holds all five zones of the coworker", async () => {
   expect(view.getByRole("button", { name: "保存" })).toBeTruthy();
   expect(view.getByText("仔细审核")).toBeTruthy();
   expect(view.getByText("github_search")).toBeTruthy();
-  expect(view.getByText("汇总昨天的合并请求")).toBeTruthy();
+  expect(view.queryByText("汇总昨天的合并请求")).toBeNull();
   // A manager sees no read-only notice.
   expect(view.queryByText(/这里只能看/)).toBeNull();
 });
 
-test("the routines zone lists only this coworker's routines", async () => {
-  const { view } = draw();
+test("the routines page lists only this coworker's routines", async () => {
+  const { view } = draw({ at: "routines" });
 
   await view.findByText("汇总昨天的合并请求");
   // The routine list is the person's whole list; the screen narrows it to this coworker.
@@ -287,7 +311,8 @@ test("a coworker the server will not hand over is refused, not assembled", async
   const { view } = draw({ agentStatus: 404 });
 
   const refusal = await view.findByRole("alert");
-  expect(refusal.textContent).toBe("你不能装配这位员工。");
+  // 员工各分页共用的说法（`BotSubpage`）。
+  expect(refusal.textContent).toBe("打不开这位员工，可能没有共享给你。");
   for (const zone of ZONES) {
     expect(view.queryByRole("heading", { level: 2, name: zone })).toBeNull();
   }

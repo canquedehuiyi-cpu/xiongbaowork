@@ -448,15 +448,26 @@ function CrewCard({
            * stay the same ones a person could reach member by member.
            */
           crew.members.length > 0 ? (
-            <Link
-              className="rounded-sm font-semibold text-foreground/90 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
-              search={{
-                crew: crew.members.map((member) => member.agentId).join(","),
-              }}
-              to="/tasks"
-            >
-              在看板上看
-            </Link>
+            <span className="flex items-center gap-[10px]">
+              {/*
+               * 组团流程：给这个群组排好顺序的工作。流程页按群组列出，所以这里只带人过去，不带参数。
+               */}
+              <Link
+                className="rounded-sm font-semibold text-foreground/90 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+                to="/pipelines"
+              >
+                组团流程
+              </Link>
+              <Link
+                className="rounded-sm font-semibold text-foreground/90 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+                search={{
+                  crew: crew.members.map((member) => member.agentId).join(","),
+                }}
+                to="/tasks"
+              >
+                在看板上看
+              </Link>
+            </span>
           ) : (
             <span>看板：还没有成员</span>
           )

@@ -1,6 +1,6 @@
-import { IconArrowUpRight } from "@tabler/icons-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { IconArrowUpRight, IconUser } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionFields } from "@/components/plugins/connection-fields";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,19 +15,33 @@ import {
   ItemActions,
   ItemContent,
   ItemDescription,
+  ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { Separator } from "@/components/ui/separator";
+import { desktopShell } from "@/lib/desktop/shell";
 import {
   type BrokerField,
   type BrokerFieldsAnswer,
   brokeredConnectionFieldsMutationOptions,
   confirmBrokeredConnectionMutationOptions,
   connectAccountMutationOptions,
+  connectAnotherAccountMutationOptions,
   connectBrokeredWithFieldsMutationOptions,
+  disconnectBrokeredAccountMutationOptions,
   disconnectBrokeredMutationOptions,
+  invalidatePlugins,
   type KeyGuide,
   recheckBrokeredConnectionMutationOptions,
+  setDefaultBrokeredAccountMutationOptions,
 } from "@/lib/plugins/mutations";
+import {
+  type BrokeredAccountKind,
+  brokeredKeyMissing,
+  type Edition,
+  type PluginsProvider,
+} from "@/lib/plugins/provider-vocabulary";
+import { brokeredAccountsQueryOptions } from "@/lib/plugins/queries";
 
 /**
  * One person's own brokered account, on whichever screen is asking.
@@ -53,7 +67,7 @@ import {
  * a row that branched on it would be re-asking the same three-way question at every branch, each
  * copy free to forget a literal the others remembered.
  */
-export type BrokeredAccountKind = "consent" | "fields" | "no-auth";
+export type { BrokeredAccountKind };
 
 /** The schemes whose secret a person types, which is the whole of what `fields` means here. */
 const FIELD_SCHEMES = [
@@ -180,6 +194,17 @@ export type BrokeredAccount = {
   configured: boolean;
   /** See {@link BrokeredAccountKind}. Derived here so no branch below re-asks. */
   kind: BrokeredAccountKind;
+  /**
+   * Whether Connect takes a fresh consent over the account that stands, so a connected row can
+   * offer Reconnect in one press.
+   *
+   * TRUE WHERE THE BROKER AUTHORIZES PER ACTION, which is Arcade: a consent there adds what it asks
+   * for to the one connection, and the connect route lets it through over a standing row. A Bot's
+   * card sends a person here to reconnect on both brokers, and on Arcade this is where it finishes,
+   * with no Disconnect first. FALSE ON COMPOSIO, where a second consent adds a second account, which
+   * is what Connect another account asks for. Reconnecting there is Disconnect and then Connect.
+   */
+  reconnectsInPlace: boolean;
   /** Leave for the vendor's consent screen. */
   connect: () => void;
   /** End the account at Composio, not only here. */
@@ -247,6 +272,19 @@ export type BrokeredAccount = {
   /** Spend one read-only call at the vendor to find out whether the key still works. */
   recheck: () => void;
   rechecking: boolean;
+  /** The app this row is about, for the account list beneath it. */
+  serverId: string;
+  /** Whether the last key handed over was taken, which closes the form it was typed into. */
+  fieldsSubmitted: boolean;
+  /** Leave for the app's sign-in page to add one more account beside the ones connected. */
+  connectAnother: () => void;
+  connectingAnother: boolean;
+  /** Make one of the person's accounts the one their Bots use when they name none. */
+  makeDefault: (accountId: string) => void;
+  /** Disconnect one of the person's accounts and keep the rest. */
+  disconnectAccount: (accountId: string) => void;
+  /** Which account a press is in flight for, so only its buttons wait. */
+  changingAccount: string | null;
 };
 
 export function useBrokeredAccount(input: {
@@ -289,6 +327,13 @@ export function useBrokeredAccount(input: {
    * from and never how an app connects. Null where the app is not brokered at all.
    */
   authScheme: string | null;
+  /**
+   * See {@link BrokeredAccount.reconnectsInPlace}. The server's computed capability, passed in.
+   *
+   * 可选、缺省为 false：调用方从 `GET /api/plugins` 的 `authorizesPerAction` 算出它（X8-4 起熊宝服务端
+   * 在 Arcade 是活动 broker 时下发 true）；没有传的读作 Composio 的行为（不在原账号上重连）。
+   */
+  reconnectsInPlace?: boolean;
   /** Which screen the vendor's callback puts somebody down on. */
   returnTo: "settings" | "admin";
   /**
@@ -313,6 +358,7 @@ export function useBrokeredAccount(input: {
     verified,
     verifiedAt,
   } = input;
+  const reconnectsInPlace = input.reconnectsInPlace ?? false;
 
   /*
    * Ask the vendor whether this person's brokered account is actually live, on arrival.
@@ -356,6 +402,31 @@ export function useBrokeredAccount(input: {
   }, [brokered, configured, serverId, confirmAccount]);
 
   /*
+   * ASKED AGAIN WHEN OPENBOT DESKTOP'S WINDOW IS BACK IN FRONT. The window sends the sign-in to the
+   * person's browser and this page stays where it is, so it never arrives on this page and the
+   * question above is never asked again. The browser hands the person back to the window when the
+   * sign-in is done (`/desktop-return`), and the focus that brings is when there is an answer.
+   * Once per sign-in, and gone with the page.
+   */
+  const pendingReturn = useRef<(() => void) | null>(null);
+  const confirmOnReturn = useCallback(() => {
+    if (!desktopShell() || pendingReturn.current) return;
+    const asked = () => {
+      pendingReturn.current = null;
+      confirmAccount(serverId);
+    };
+    pendingReturn.current = asked;
+    window.addEventListener("focus", asked, { once: true });
+  }, [confirmAccount, serverId]);
+  useEffect(
+    () => () => {
+      if (pendingReturn.current)
+        window.removeEventListener("focus", pendingReturn.current);
+    },
+    [],
+  );
+
+  /*
    * Find out whether the key still works, when somebody presses for it and at no other time.
    *
    * Deliberately not a second effect beside the confirm above. Composio never re-checks a key once
@@ -393,9 +464,19 @@ export function useBrokeredAccount(input: {
      * shown to this person in their own browser; there is deliberately nothing here that could
      * complete it for them, and nothing about being an administrator changes that.
      */
-    onSuccess: (authorizationUrl) => {
+    onSuccess: (start) => {
       forgetConfirmation();
       forgetRecheck();
+      /*
+       * ALREADY CONNECTED, AND NOTHING TO LEAVE FOR. The vendor already held everything this app
+       * asks for, so the route recorded the connection on this press (`{ connected: true }`, X8).
+       * The held answers were just dropped, so the row falls back to the recorded one, and the
+       * refetch is what brings that row in. NOT the key-app branch below: nothing was refused.
+       */
+      if (start !== null && "connected" in start) {
+        void invalidatePlugins(queryClient);
+        return;
+      }
       /*
        * NO URL IS AN ANSWER, NOT A URL TO FOLLOW.
        *
@@ -412,13 +493,14 @@ export function useBrokeredAccount(input: {
        * would leave nobody any reason to correct it — and the sentence names the one act that ends
        * the state, which is a reload against a deployment whose app has caught up.
        */
-      if (authorizationUrl === null) {
+      if (start === null) {
         report(
           "这个应用用你持有的密钥连接，而不是通过授权页面，所以没有页面可以带你过去，也没有连接任何东西。请刷新页面后再按一次“连接”。",
         );
         return;
       }
-      window.location.href = authorizationUrl;
+      confirmOnReturn();
+      window.location.href = start.authorizationUrl;
     },
   });
 
@@ -563,6 +645,43 @@ export function useBrokeredAccount(input: {
    * at all, null included. Its null IS the new record. The one path where it writes a name and then
    * raises never reaches here — a refusal clears both answers — so what is left is authoritative.
    */
+  /*
+   * ONE MORE ACCOUNT, ONE PERSON'S ACCOUNT MADE THE DEFAULT, ONE ENDED. Each refetches the plugin
+   * queries on its own `onSettled`, which is where the account list beneath the row is read from.
+   */
+  const connectAnother = useMutation({
+    ...connectAnotherAccountMutationOptions(returnTo),
+    onError: (thrown: Error) => report(thrown.message),
+    onSuccess: (start) => {
+      forgetConfirmation();
+      forgetRecheck();
+      if (start !== null && "connected" in start) {
+        void invalidatePlugins(queryClient);
+        return;
+      }
+      if (start === null) {
+        report(
+          "这个应用用你持有的密钥连接，而不是通过授权页面，所以没有页面可以带你过去，也没有连接任何东西。请刷新页面后再按一次“连接”。",
+        );
+        return;
+      }
+      confirmOnReturn();
+      window.location.href = start.authorizationUrl;
+    },
+  });
+  const makeDefault = useMutation({
+    ...setDefaultBrokeredAccountMutationOptions(queryClient),
+    onError: (thrown: Error) => report(thrown.message),
+  });
+  const disconnectAccount = useMutation({
+    ...disconnectBrokeredAccountMutationOptions(queryClient),
+    onError: (thrown: Error) => {
+      report(thrown.message);
+      forgetAnswers();
+    },
+    onSuccess: forgetAnswers,
+  });
+
   const answered =
     recheck.data && recheck.data.probe !== null
       ? recheck.data
@@ -652,6 +771,7 @@ export function useBrokeredAccount(input: {
      */
     disconnected: disconnect.isSuccess,
     kind: kindOf(authScheme),
+    reconnectsInPlace,
     fields: published?.fields ?? null,
     guide: published?.guide ?? null,
     requestFields: () => {
@@ -672,6 +792,26 @@ export function useBrokeredAccount(input: {
     },
     submittingFields: submission.isPending,
     submissionError: submission.error?.message ?? null,
+    serverId,
+    fieldsSubmitted: submission.isSuccess,
+    connectAnother: () => {
+      report(null);
+      connectAnother.mutate(serverId);
+    },
+    connectingAnother: connectAnother.isPending,
+    makeDefault: (accountId: string) => {
+      report(null);
+      makeDefault.mutate({ serverId, accountId });
+    },
+    disconnectAccount: (accountId: string) => {
+      report(null);
+      disconnectAccount.mutate({ serverId, accountId });
+    },
+    changingAccount: makeDefault.isPending
+      ? (makeDefault.variables?.accountId ?? null)
+      : disconnectAccount.isPending
+        ? (disconnectAccount.variables?.accountId ?? null)
+        : null,
   };
 }
 
@@ -706,18 +846,29 @@ function accountSentence(input: {
   disconnectedReassurance: string | undefined;
   /** See {@link BrokeredAccountRow}'s `needsAdmin`. */
   needsAdmin: boolean;
+  provider: PluginsProvider;
+  /** Which edition draws this screen (`managePaths().edition`). */
+  edition: Edition;
+  /** Who reads the row: see {@link brokeredKeyMissing}. */
+  reader: "admin" | "person";
+  /** The one connected account's name, where the app reported one. */
+  identity?: string | null;
 }): string {
   const {
     account,
     connectedDescription,
     disconnectedDescription,
     disconnectedReassurance,
+    edition,
+    identity,
     needsAdmin,
+    provider,
+    reader,
     title,
   } = input;
 
   if (!account.configured) {
-    return "请在这个部署上设置 COMPOSIO_API_KEY。没有它就连不到中转服务，所以这个账号在这里既连不上也断不开。应用仍保持启用，它工具上的授权也都还在。";
+    return brokeredKeyMissing(provider, edition, reader);
   }
 
   /*
@@ -834,7 +985,7 @@ function accountSentence(input: {
    * mail is an argument, not a branch — see this file's opening comment.
    */
   return account.connected
-    ? `已通过 ${title} 的授权页面连接。${connectedDescription}`
+    ? `已通过 ${title} 的授权页面连接${identity ? `，账号是 ${identity}` : ""}。${connectedDescription}`
     : disconnectedDescription;
 }
 
@@ -864,6 +1015,23 @@ function KeyGuideNote({ guide }: { guide: KeyGuide }) {
 }
 
 /**
+ * The word beside Connect on an app that is added and not signed in to yet.
+ *
+ * Said in words beside the button, so a row whose app is on never reads as done by its switch or
+ * its title alone. It is what the Bot says about the same app.
+ */
+export function NotConnected() {
+  return (
+    <span
+      className="text-muted-foreground text-xs"
+      data-testid="account-not-connected"
+    >
+      未连接
+    </span>
+  );
+}
+
+/**
  * The row itself, for a `PageRows` card on either screen.
  *
  * The `Item` and, for an app whose secret a person types, the dialog that takes it. Where the row
@@ -875,9 +1043,52 @@ export function BrokeredAccountRow({
   connectedDescription,
   disconnectedDescription,
   disconnectedReassurance,
+  edition = "team",
+  heading,
   needsAdmin = false,
+  notice,
+  provider = "composio",
+  reader = "admin",
+  startConnect = false,
   title,
 }: {
+  /**
+   * Open the key form on arrival, once, for an app that takes a key and isn't connected: Browse
+   * apps sends somebody here straight after adding one. A sign-in app is started where it was added.
+   */
+  startConnect?: boolean;
+  /**
+   * Which edition draws this screen (`managePaths().edition`). The personal edition's one person is
+   * told to set connecting apps up themselves, never to ask an admin.
+   */
+  edition?: Edition;
+  /**
+   * Who reads the row. A person's own Connections page passes `person`, so a missing broker key is
+   * said without the variable an admin sets.
+   */
+  reader?: "admin" | "person";
+  /**
+   * The row's own title, where "你的账号" is wrong for it.
+   *
+   * A shared app is nobody's own account, so the screen that draws one passes its own heading
+   * rather than live with the row's default sense of ownership.
+   */
+  heading?: string;
+  /**
+   * A sentence beneath the row's description, for what the description itself is not about.
+   *
+   * Separate from `connectedDescription`/`disconnectedDescription` because those two already carry
+   * everything the connection state decides; a notice is the screen's own fact about the row —
+   * that it is shared, say — which holds regardless of which of those two is showing.
+   */
+  notice?: string;
+  /**
+   * Which broker's name the sentences that name one use. A NAME, never a key or a capability.
+   *
+   * 上游要求必传；fork 这里留成可选：`/connections/$key` 与 `/admin/plugins/$key` 都传了，但 X7 之前的
+   * 服务端不下发 `provider`，所以缺省为 `composio`，与这两个页面原来的文案一致。
+   */
+  provider?: PluginsProvider;
   account: BrokeredAccount;
   /** What being connected means on this screen, said beside the button rather than after it. */
   connectedDescription: string;
@@ -927,6 +1138,59 @@ export function BrokeredAccountRow({
   useEffect(() => {
     if (account.connected) setAsking(false);
   }, [account.connected]);
+  /*
+   * And a key handed over for ANOTHER account closes it too: the row was connected before the form
+   * opened, so the effect above has nothing to see change.
+   */
+  useEffect(() => {
+    if (account.fieldsSubmitted) setAsking(false);
+  }, [account.fieldsSubmitted]);
+
+  /* The key form on arrival, when asked for: see `startConnect`. Once per visit. */
+  const started = useRef(false);
+  const { requestFields } = account;
+  useEffect(() => {
+    if (!startConnect || started.current) return;
+    if (!account.configured || account.connected || account.kind !== "fields")
+      return;
+    started.current = true;
+    setAsking(true);
+    requestFields();
+  }, [
+    startConnect,
+    account.configured,
+    account.connected,
+    account.kind,
+    requestFields,
+  ]);
+
+  /*
+   * THE PERSON'S ACCOUNTS AT THE APP, BY NAME, once the row is connected. While the list is loading
+   * or could not be read the row reads as it always did: one connection, with its own Disconnect.
+   */
+  const listing = useQuery({
+    ...brokeredAccountsQueryOptions(account.serverId),
+    enabled:
+      account.configured && account.connected && account.kind !== "no-auth",
+  });
+  const accounts =
+    account.connected && !listing.isPending && !listing.error && listing.data
+      ? listing.data.accounts
+      : [];
+  const canAddAnother =
+    account.connected &&
+    !listing.isPending &&
+    !listing.error &&
+    listing.data?.canAddAnother === true;
+  const several = accounts.length > 1;
+  const addAnother = () => {
+    if (account.kind === "fields") {
+      setAsking(true);
+      account.requestFields();
+      return;
+    }
+    account.connectAnother();
+  };
 
   return (
     <>
@@ -934,21 +1198,35 @@ export function BrokeredAccountRow({
         <ItemContent>
           {/* Not "Connect your account": the row is also the connected state, and a title has to
               read for both. */}
-          <ItemTitle>你的账号</ItemTitle>
+          {/* 中文里一个账号和几个账号都是「你的账号」，所以只看页面有没有自己的标题。 */}
+          <ItemTitle>{heading ?? "你的账号"}</ItemTitle>
           {/* Unclamped where the key is missing: that sentence is the only place the setting is
               named, so it is the point rather than a hint. */}
           <ItemDescription
             className={account.configured ? undefined : "line-clamp-none"}
           >
-            {accountSentence({
-              account,
-              connectedDescription,
-              disconnectedDescription,
-              disconnectedReassurance,
-              needsAdmin,
-              title,
-            })}
+            {several
+              ? `你连接了 ${accounts.length} 个 ${title} 账号。员工默认用你的默认账号，除非你让它用另一个。`
+              : accountSentence({
+                  account,
+                  connectedDescription,
+                  disconnectedDescription,
+                  disconnectedReassurance,
+                  edition,
+                  identity: accounts[0]?.identity ?? null,
+                  needsAdmin,
+                  provider,
+                  reader,
+                  title,
+                })}
           </ItemDescription>
+          {/* A fact about the row itself rather than about the connection, so it holds under
+              either of the sentences above and is never clamped away. */}
+          {notice ? (
+            <ItemDescription className="line-clamp-none">
+              {notice}
+            </ItemDescription>
+          ) : null}
         </ItemContent>
         {/*
          * AN APP THAT NEEDS NO ACCOUNT HAS NOTHING HERE AT ALL — no Connect, and not a disabled one
@@ -1016,15 +1294,58 @@ export function BrokeredAccountRow({
                     {account.rechecking ? "正在检查…" : "重新检查"}
                   </Button>
                 ) : null}
-                <Button
-                  disabled={account.disconnecting}
-                  onClick={account.disconnect}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  断开
-                </Button>
+                {/*
+                 * RECONNECT OVER THE ACCOUNT THAT STANDS, where the broker adds a consent to it.
+                 * This is where a Bot's card sends somebody whose call the vendor refused, and on
+                 * Arcade one press asks for everything the app needs. The arrow says it leaves
+                 * OpenBot for the vendor's consent page, as Connect's does.
+                 */}
+                {account.reconnectsInPlace &&
+                account.kind === "consent" &&
+                !needsAdmin ? (
+                  <Button
+                    disabled={account.connecting}
+                    onClick={account.connect}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    重新连接
+                    <IconArrowUpRight />
+                  </Button>
+                ) : null}
+                {/*
+                 * ONE MORE ACCOUNT BESIDE THE ONES CONNECTED, where the app can tell a person's
+                 * accounts apart — and only for a sign-in app: the server serves `?another=1`
+                 * for consent apps alone (a key app stays one account a person), so offering it
+                 * on a key app would open a form whose submit is always refused with 409.
+                 */}
+                {canAddAnother && account.kind === "consent" && !needsAdmin ? (
+                  <Button
+                    disabled={
+                      account.connectingAnother || account.requestingFields
+                    }
+                    onClick={addAnother}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    再连一个账号
+                    <IconArrowUpRight />
+                  </Button>
+                ) : null}
+                {/* With several accounts each has its own Disconnect, in its row below. */}
+                {several ? null : (
+                  <Button
+                    disabled={account.disconnecting}
+                    onClick={account.disconnect}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    断开
+                  </Button>
+                )}
               </>
             ) : needsAdmin ? (
               /*
@@ -1035,33 +1356,56 @@ export function BrokeredAccountRow({
                 需由管理员连接
               </span>
             ) : (
-              /* The arrow says this leaves OpenBot for the vendor's consent page. It does. */
-              <Button
-                disabled={account.connecting}
-                onClick={() => {
-                  /*
-                   * A key app goes nowhere: it opens the form below and asks the app what belongs in
-                   * it. The question is asked on every open rather than once, because what an app
-                   * publishes is the vendor's and may differ from what it published last time.
-                   */
-                  if (account.kind === "fields") {
-                    setAsking(true);
-                    account.requestFields();
-                    return;
-                  }
-                  account.connect();
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                连接
-                <IconArrowUpRight />
-              </Button>
+              <>
+                <NotConnected />
+                {/* The arrow says this leaves OpenBot for the vendor's consent page. It does, for
+                 every app but a key app. */}
+                <Button
+                  disabled={account.connecting}
+                  onClick={() => {
+                    /*
+                     * A key app goes nowhere: it opens the form below and asks the app what belongs in
+                     * it. The question is asked on every open rather than once, because what an app
+                     * publishes is the vendor's and may differ from what it published last time.
+                     */
+                    if (account.kind === "fields") {
+                      setAsking(true);
+                      account.requestFields();
+                      return;
+                    }
+                    account.connect();
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  连接
+                  {/* A key app opens a form here and leaves for nowhere, so no arrow. */}
+                  {account.kind === "fields" ? null : <IconArrowUpRight />}
+                </Button>
+              </>
             )}
           </ItemActions>
         )}
       </Item>
+
+      {/*
+       * ONE ROW PER ACCOUNT, where there are several: its name, whether Bots use it by default, and
+       * what can be done to it. With one account the row above already names it.
+       */}
+      {several
+        ? accounts.map((held) => (
+            <AccountListRow
+              changing={account.changingAccount === held.id}
+              connectedAt={held.connectedAt}
+              isDefault={held.isDefault}
+              key={held.id}
+              label={held.label}
+              onDisconnect={() => account.disconnectAccount(held.id)}
+              onMakeDefault={() => account.makeDefault(held.id)}
+            />
+          ))
+        : null}
 
       <Dialog onOpenChange={setAsking} open={asking}>
         <DialogContent>
@@ -1142,6 +1486,66 @@ export function BrokeredAccountRow({
           </DialogBody>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+/** One of a person's several accounts at an app, beneath the row that names the app. */
+function AccountListRow({
+  changing,
+  connectedAt,
+  isDefault,
+  label,
+  onDisconnect,
+  onMakeDefault,
+}: {
+  changing: boolean;
+  connectedAt: string | null;
+  isDefault: boolean;
+  label: string;
+  onDisconnect: () => void;
+  onMakeDefault: () => void;
+}) {
+  return (
+    <>
+      <Separator />
+      <Item size="sm">
+        <ItemMedia variant="icon">
+          <IconUser />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle className="break-all">{label}</ItemTitle>
+          <ItemDescription>
+            {isDefault
+              ? "默认账号。员工都用这个账号，除非你让它用另一个。"
+              : connectedAt
+                ? `连接于 ${formatDate(connectedAt)}。你让员工用它时才会用。`
+                : "你让员工用它时才会用。"}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          {isDefault ? null : (
+            <Button
+              disabled={changing}
+              onClick={onMakeDefault}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              设为默认
+            </Button>
+          )}
+          <Button
+            disabled={changing}
+            onClick={onDisconnect}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            断开
+          </Button>
+        </ItemActions>
+      </Item>
     </>
   );
 }

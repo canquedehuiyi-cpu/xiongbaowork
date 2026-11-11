@@ -287,7 +287,7 @@ function ConnectForm({
       {locked ? (
         <p className="text-sm" role="note">
           免费版只能使用平台体验模型。
-          <Link className="underline" to="/plans">
+          <Link className="underline" to="/settings/plans">
             升级 Pro 解锁自定义 key
           </Link>
         </p>

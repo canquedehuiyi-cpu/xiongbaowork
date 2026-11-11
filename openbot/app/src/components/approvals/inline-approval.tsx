@@ -53,6 +53,12 @@ const CHOICE_WORDS: Record<
     done: "已允许一次",
     tone: "positive",
   },
+  allow_conversation: {
+    label: "在这段对话里都允许",
+    description: "员工现在就做，这段对话里再遇到同样的操作不再问你。",
+    done: "已在这段对话里都允许",
+    tone: "positive",
+  },
   allow_always: {
     label: "在这里总是允许",
     description: "员工现在就做，以后在这里不再问你。",
@@ -113,7 +119,7 @@ export function InlineApproval({
       : [
           "allow_once",
           ...(offersStandingRule(request.action)
-            ? (["allow_always"] as ApprovalDecision[])
+            ? (["allow_conversation", "allow_always"] as ApprovalDecision[])
             : []),
           "deny",
         ];

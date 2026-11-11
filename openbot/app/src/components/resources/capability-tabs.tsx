@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { PluginLogo } from "@/components/plugins/plugin-logo";
-import { Button } from "@/components/ui/button";
 import {
   Item,
   ItemActions,
@@ -35,7 +34,11 @@ import {
 } from "./resource-kit";
 
 /*
- * ── Stories E1/E4 (D08-7): connectors as their own tab of 能力与资源, and the card every tab draws. ──
+ * ── Stories E1/E4 (D08-7): connectors, and the card every capability tab draws. ──
+ *
+ * 连接器原来是能力与资源的一个页签，M5b 起放在「连接」页（`/connections`）的「员工可用的连接器」一区，那一页
+ * import 这里的 `ConnectorsTab`；`/resources?tab=connectors` 重定向到那里。所以这里不再放去「已连接的账号」的
+ * 按钮——它就在同一页上。
  *
  * Connectors are drawn from the one `/api/plugins` read, so that request failing is the tab's alert;
  * the read beside it (what you connected) only takes away the detail it adds. The skills tab, which
@@ -164,16 +167,6 @@ export function ConnectorsTab({
   return (
     <>
       <TabHeader
-        actions={
-          <Button
-            render={(props) => (
-              <Link search={{}} to="/settings/connected-accounts" {...props} />
-            )}
-            variant="outline"
-          >
-            已连接的账号
-          </Button>
-        }
         description="员工干活时可以碰到的系统。授予是管理员的动作，所以这里列出有什么、授予了几位员工、你自己的账号连上没有，以及在哪里决定。"
         search={
           <TabSearch label="搜索连接器" onChange={onQuery} value={query} />
@@ -220,15 +213,7 @@ export function ConnectorsTab({
         >
           管理员的插件页
         </Link>
-        里管理；你自己的账号在
-        <Link
-          className="text-foreground underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground"
-          search={{}}
-          to="/settings/connected-accounts"
-        >
-          已连接的账号
-        </Link>
-        里连接。
+        里管理；你自己的账号在本页上方的列表里连接。
       </p>
     </>
   );

@@ -150,7 +150,7 @@ export function grantedWakers(server: PluginServer | null): number {
 }
 
 /**
- * The key `/settings/connected-accounts/$key` opens a per-person app under: the catalogue key for a
+ * The key `/connections/$key` opens a per-person app under: the catalogue key for a
  * reviewed app, the server's own id for a brokered one — the same keys that page lists them by.
  */
 export function accountKeyOf(card: PluginCard): string {

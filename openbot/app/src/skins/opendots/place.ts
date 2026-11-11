@@ -12,6 +12,10 @@ export type Section =
   | "bots"
   | "capabilities"
   | "connections"
+  | "tasks"
+  | "autonomous"
+  | "reachability"
+  | "pipelines"
   | "other";
 
 /**
@@ -55,6 +59,10 @@ const BOT_TABS: Record<string, string> = {
   sharing: "共享",
 };
 
+function under(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
 /**
  * The page a pathname is, as OpenDots names its own views: a Bot's name for a chat with it,
  * "Activity" and "Memories" for its two workspace views, and OpenBot's own page names otherwise.
@@ -93,10 +101,7 @@ export function parsePlace(
       ownsWatch: true,
     };
   }
-  // `/bots/$agentId` forwards to the employee's page under 员工管理, `/wakers/$agentId`.
-  const bot =
-    path.match(/^\/bots\/([^/]+)(?:\/([^/]+))?$/) ??
-    path.match(/^\/wakers\/([^/]+)(?:\/([^/]+))?$/);
+  const bot = path.match(/^\/bots\/([^/]+)(?:\/([^/]+))?$/);
   if (bot) {
     return {
       section: "bots",
@@ -106,20 +111,34 @@ export function parsePlace(
       ownsWatch: false,
     };
   }
-  if (path === "/bots" || path === "/agents" || path === "/wakers") {
-    return { section: "bots", label: "员工管理", ownsWatch: false };
+  if (path === "/bots" || path === "/agents") {
+    return { section: "bots", label: "全部员工", ownsWatch: false };
   }
   if (path === "/s/routines" || path === "/routines") {
     return { section: "routines", label: "定时任务", ownsWatch: false };
   }
-  if (path === "/s/memories" || path === "/memory") {
+  if (path === "/s/memories" || path === "/capabilities/memory") {
     return { section: "memories", label: "记忆", ownsWatch: false };
   }
-  if (path === "/resources" || path.startsWith("/resources/")) {
-    return { section: "capabilities", label: "能力与资源", ownsWatch: false };
+  // WakerFlow 的详情页留在原地址，在导航里算作「能力」。
+  if (under(path, "/capabilities") || under(path, "/wakerflows")) {
+    return { section: "capabilities", label: "能力", ownsWatch: false };
   }
-  if (path.startsWith("/settings/connected-accounts")) {
-    return { section: "connections", label: "已连接的账号", ownsWatch: false };
+  if (under(path, "/connections")) {
+    return { section: "connections", label: "连接", ownsWatch: false };
+  }
+  // 熊宝自己的工作面，各占主导航的一项。
+  if (path === "/tasks") {
+    return { section: "tasks", label: "任务看板", ownsWatch: false };
+  }
+  if (path === "/autonomous" || path === "/responsibilities") {
+    return { section: "autonomous", label: "自主工作", ownsWatch: false };
+  }
+  if (path === "/reachability") {
+    return { section: "reachability", label: "@Waker", ownsWatch: false };
+  }
+  if (path === "/pipelines") {
+    return { section: "pipelines", label: "组团流程", ownsWatch: false };
   }
   return {
     section: "other",

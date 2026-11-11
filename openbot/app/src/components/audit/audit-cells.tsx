@@ -12,10 +12,18 @@ import {
 } from "@openbot/shared/connect-prompt";
 import { isOpenBotActor } from "@openbot/shared/openbot-actor";
 import { connectorName, humanise, inFolder } from "@openbot/shared/tool-name";
-import { Fragment, type ReactNode } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { type AuditOutcome, outcomeOf } from "@/lib/audit/outcome";
 import { silenceOf } from "@/lib/audit/silence";
 import { galleryComponent } from "@/lib/copilot/gallery-registry";
+import { cn } from "@/lib/utils";
 
 /** One row as the API returns it. */
 export type AuditEvent = {
@@ -325,6 +333,12 @@ export function subjectText(event: AuditEvent, storedNames = true): string {
       typeof payload.granted === "number"
       ? `${payload.offered} / ${payload.granted} 个工具`
       : "";
+  // What an admin asked the trail, in their words.
+  if (event.eventType === "audit.asked" || event.eventType === "what_if.asked")
+    return typeof payload.question === "string" ? payload.question : "";
+  // Which permission, for whom: one sentence can save several switches, each a row of its own.
+  if (event.eventType === "capability.changed")
+    return permissionSubject(payload);
   if (!storedNames) {
     const words = subjectWords(event);
     if (words !== undefined) return words;
@@ -485,8 +499,41 @@ function givenWithoutAsking(event: AuditEvent): boolean {
  * What came of a row. `storedNames` is false on the personal edition's Activity; see
  * {@link givenWithoutAsking}.
  */
+/**
+ * "Local computer access · Group: Sales", in the Permissions page's own words. Rows written before
+ * they carried the title name the permission by its key.
+ */
+function permissionSubject(payload: Record<string, unknown>): string {
+  const title =
+    typeof payload.title === "string"
+      ? payload.title
+      : typeof payload.capability === "string"
+        ? payload.capability
+        : "";
+  const scope =
+    payload.scopeKind === "organization"
+      ? "所有人"
+      : payload.scopeKind === "role"
+        ? payload.scopeId === "admin"
+          ? "管理员"
+          : "成员"
+        : payload.scopeKind === "group" && typeof payload.scopeId === "string"
+          ? `用户组：${payload.scopeId}`
+          : "";
+  return [title, scope].filter(Boolean).join(" · ");
+}
+
+/** What a switch was set to, as the Permissions page says it: a group grants, the rest turn on or off. */
+function permissionSetting(payload: Record<string, unknown>): string {
+  if (payload.allowed === null) return "已改回继承";
+  if (payload.allowed === false) return "已关闭";
+  return payload.scopeKind === "group" ? "已授予" : "已打开";
+}
+
 export function decisionText(event: AuditEvent, storedNames = true): string {
   const payload = event.payload ?? {};
+  if (event.eventType === "capability.changed")
+    return permissionSetting(payload);
   const outcome = outcomeOf(event);
   if (!storedNames && givenWithoutAsking(event)) return "自动允许";
   /*
@@ -568,17 +615,44 @@ function approvalText(event: AuditEvent): string | undefined {
       ? PERSON_DECISIONS[payload.decision]
       : undefined;
   if (event.eventType === "approval.evaluated") {
-    const behaviour = (payload.outcome as { behaviour?: unknown } | undefined)
-      ?.behaviour;
+    const outcome = payload.outcome as
+      | { behaviour?: unknown; source?: unknown }
+      | undefined;
+    // Allowed by the person's own answer earlier in the conversation, not by a rule.
+    if (outcome?.source === "conversation" && outcome.behaviour === "allow")
+      return "这段对话里已允许";
+    const behaviour = outcome?.behaviour;
     return typeof behaviour === "string"
       ? GATE_DECISIONS[behaviour]
       : undefined;
   }
+  // An admin's guidance for auto-review, saved or taken away. Nothing was decided about an action.
+  if (event.eventType === "approval.guidance_changed")
+    return payload.after === null ? "指引已删除" : "指引已保存";
   return undefined;
+}
+
+/**
+ * What a guidance save says under its decision: the words saved, and how the reading the admin saw
+ * put them, or the words a removal took away.
+ */
+function guidanceLines(payload: Record<string, unknown>): string[] {
+  const reading = (payload.reading ?? {}) as { summary?: unknown };
+  if (typeof payload.after === "string")
+    return [
+      `指引：「${payload.after}」`,
+      ...(typeof reading.summary === "string" && reading.summary
+        ? [`理解为：${reading.summary}`]
+        : []),
+    ];
+  return typeof payload.before === "string"
+    ? [`删除了：「${payload.before}」`]
+    : [];
 }
 
 const PERSON_DECISIONS: Record<string, string> = {
   allow_once: "有人允许了这一次",
+  allow_conversation: "有人在这段对话里都允许了",
   allow_always: "有人设为总是允许",
   deny: "有人拒绝了",
   handled: "有人亲自做了",
@@ -603,6 +677,35 @@ function refusalLine(payload: Record<string, unknown>): string | undefined {
 }
 
 /**
+ * What a boundary save changed, one line each: the rules added and removed by their names, trial
+ * mode switched, and the sentence a rule was written from when it was written in plain English.
+ */
+function policyChangeLines(payload: Record<string, unknown>): string[] {
+  const named = (changes: unknown) =>
+    Array.isArray(changes)
+      ? changes
+          .map((change: { name?: unknown; rule?: unknown }) =>
+            typeof change?.name === "string" && change.name
+              ? change.name
+              : change?.rule,
+          )
+          .filter((name): name is string => typeof name === "string")
+      : [];
+  const mode = (payload.mode ?? {}) as { before?: unknown; after?: unknown };
+  const authoring = (payload.authoring ?? {}) as { text?: unknown };
+  return [
+    ...named(payload.added).map((name) => `新增：${name}`),
+    ...named(payload.removed).map((name) => `删除：${name}`),
+    ...(mode.before !== mode.after && typeof mode.after === "string"
+      ? [mode.after === "dry-run" ? "试运行已开启" : "试运行已关闭"]
+      : []),
+    ...(typeof authoring.text === "string"
+      ? [`根据这句话写成：「${authoring.text}」`]
+      : []),
+  ];
+}
+
+/**
  * Why a component was not shown, for a page anybody can open. The stored reason is the one the Bot
  * is given, which names the component and its data by their ids and sends the person to an admin.
  */
@@ -611,22 +714,66 @@ const COMPONENT_REFUSALS: Record<string, string> = {
   "component.function_refused": "它不能读取这些数据。",
 };
 
+type RecordedDecision = {
+  allowed?: boolean;
+  mode?: string;
+  rule?: string | null;
+  /** The rule's name on the Boundaries page. Absent on rows written before rows carried it. */
+  ruleName?: string;
+  carriedOut?: boolean;
+};
+
+function decisionOf(event: AuditEvent): RecordedDecision {
+  return (event.payload?.decision ?? {}) as RecordedDecision;
+}
+
+/**
+ * The policy rule that decided a row, as its CEL, for Admin only. Undefined for the default `true`
+ * allow rule, which says nothing, and on a page anybody can open, where it is an admin's expression.
+ */
+function ruleExpression(
+  event: AuditEvent,
+  storedNames = true,
+): string | undefined {
+  const rule = decisionOf(event).rule;
+  return storedNames && typeof rule === "string" && rule && rule !== "true"
+    ? rule
+    : undefined;
+}
+
+/**
+ * The deciding rule by its name, where the row recorded one: "Stopped by: Bots may not visit social
+ * media sites". A trial-mode refusal went ahead, so it says the rule would have stopped it.
+ */
+export function ruleNameLine(
+  event: AuditEvent,
+  storedNames: boolean,
+): string | null {
+  const { allowed, mode, ruleName } = decisionOf(event);
+  if (
+    !ruleExpression(event, storedNames) ||
+    typeof ruleName !== "string" ||
+    !ruleName.trim()
+  )
+    return null;
+  if (allowed !== false) return `放行的规则：${ruleName}`;
+  return mode === "dry-run"
+    ? `本会拦下它的规则：${ruleName}`
+    : `拦下它的规则：${ruleName}`;
+}
+
 /**
  * Every reason line under the decision, in the order the cell draws them. Admin (`storedNames`)
  * reads each as recorded; a page anybody can open says a component's refusal in words and leaves
- * out the policy rule that decided an action, which is an admin's expression.
+ * out the policy rule that decided an action, which is an admin's expression. The rule's own CEL is
+ * not one of these lines: the cell draws it last and clamped ({@link ruleExpression}).
  */
 export function decisionDetails(
   event: AuditEvent,
   storedNames = true,
 ): string[] {
   const payload = event.payload ?? {};
-  const decision = (payload.decision ?? {}) as {
-    allowed?: boolean;
-    mode?: string;
-    rule?: string | null;
-    carriedOut?: boolean;
-  };
+  const decision = decisionOf(event);
   const failed = outcomeOf(event) === "did-not-happen";
   const lines: string[] = [];
   const refused =
@@ -705,9 +852,28 @@ export function decisionDetails(
   const silence =
     event.eventType === "agent.stream_stalled" ? silenceOf(payload) : null;
   if (silence) lines.push(silence);
-  // Show concrete policy rules, but suppress the uninformative default `true` allow rule.
-  if (storedNames && decision.rule && decision.rule !== "true")
-    lines.push(decision.rule);
+  if (event.eventType === "computer.policy_changed")
+    lines.push(...policyChangeLines(payload));
+  /*
+   * The rule that decided, by the name an admin gave it. A rule written from a sentence is a
+   * thousand characters of CEL, and printed whole as a reason line it made a Blocked row hundreds of
+   * pixels tall and named nothing. The expression is still drawn, clamped, under these lines.
+   */
+  const named = ruleNameLine(event, storedNames);
+  if (named) lines.push(named);
+  // Rules, a Bot's actions, a network allowlist and permissions saved from a description say
+  // the sentence they were written from, as a boundary does.
+  const ruleAuthoring = (payload.authoring ?? {}) as { text?: unknown };
+  if (
+    (event.eventType === "approval.rule_changed" ||
+      event.eventType === "plugin.grants_changed" ||
+      event.eventType === "network_policy.changed" ||
+      event.eventType === "capability.changed") &&
+    typeof ruleAuthoring.text === "string"
+  )
+    lines.push(`根据这句话写成：「${ruleAuthoring.text}」`);
+  if (event.eventType === "approval.guidance_changed")
+    lines.push(...guidanceLines(payload));
   if (
     decision.mode === "dry-run" &&
     decision.allowed === false &&
@@ -739,6 +905,8 @@ export function searchTextOf(
     // Both ways a reason is said, as for the subject above.
     ...decisionDetails(event),
     ...decisionDetails(event, false),
+    // The rule's CEL, clamped on screen and found whole.
+    ruleExpression(event) ?? "",
   ]
     .join(" ")
     .toLowerCase();
@@ -867,6 +1035,7 @@ export function DecisionCell({
   storedNames?: boolean;
 }) {
   const outcome = outcomeOf(event);
+  const expression = ruleExpression(event, storedNames);
   return (
     <>
       <span
@@ -887,13 +1056,72 @@ export function DecisionCell({
          * column what is left, the sentence wraps inside it, and a long unbroken word (a URL a
          * router quoted) breaks rather than widening the table.
          */
-        <div
-          className="mt-0.5 max-w-[22rem] text-muted-foreground text-xs [overflow-wrap:anywhere]"
-          key={line}
-        >
+        <div className={DETAIL_LINE} key={line}>
           {line}
         </div>
       ))}
+      {expression ? <RuleExpression expression={expression} /> : null}
+    </>
+  );
+}
+
+const DETAIL_LINE =
+  "mt-0.5 max-w-[22rem] text-muted-foreground text-xs [overflow-wrap:anywhere]";
+
+/**
+ * The rule's CEL, two lines at most until somebody asks for the rest.
+ *
+ * A rule written from a sentence runs to a thousand characters, and drawn whole it made one Blocked
+ * row taller than the window. Mono, like the other identifiers on a row, and muted, because the
+ * rule's name above it is what a person reads; the expression is there to check it against. The
+ * whole text stays in the row, so it is found by search and copied whole.
+ *
+ * The control appears only when the clamp hides something, measured on the drawn line: how much
+ * fits in two lines depends on how wide the table left the column, which nothing here can know.
+ */
+export function RuleExpression({ expression }: { expression: string }) {
+  const [open, setOpen] = useState(false);
+  const [cut, setCut] = useState(false);
+  const text = useRef<HTMLDivElement>(null);
+  const id = useId();
+
+  useLayoutEffect(() => {
+    const element = text.current;
+    // Open, nothing is hidden to measure; the control stays, to close it again.
+    if (!element || open) return;
+    const measure = () =>
+      setCut(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [open]);
+
+  return (
+    <>
+      <div
+        className={cn(
+          DETAIL_LINE,
+          "font-mono",
+          // Text the clamp hides is still read out, so a screen reader hears the rule whole.
+          !open && "line-clamp-2",
+        )}
+        id={id}
+        ref={text}
+      >
+        {expression}
+      </div>
+      {cut ? (
+        <button
+          aria-controls={id}
+          aria-expanded={open}
+          className="mt-0.5 rounded-sm text-muted-foreground text-xs underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          onClick={() => setOpen((was) => !was)}
+          type="button"
+        >
+          {open ? "收起" : "显示完整规则"}
+        </button>
+      ) : null}
     </>
   );
 }
@@ -943,6 +1171,13 @@ const DECISIONS: Record<string, string> = {
   "agent.stream_stalled": "员工不再回应",
   "agent.tool_limit_refused": "工具太多，超出了模型的上限",
   "computer.policy_loaded": "启动时的边界",
+  "computer.policy_changed": "边界规则已保存",
+  // A draft for the admin to read. Not "Allowed": nothing was decided and nothing changed.
+  "computer.policy_translated": "只是草稿，没有保存",
+  // A question read into filters. Not "Allowed": nothing was decided, and nothing left the trail.
+  "audit.asked": "只是提问，没有改动",
+  "what_if.asked": "只是提问，没有改动",
+  "what_if.checked": "只是检查，没有改动",
   "computer.isolation_loaded": "启动时的隔离",
   "computer.control_taken": "有人接管了操作",
   "computer.control_released": "已交还给员工",
@@ -979,6 +1214,13 @@ const DECISIONS: Record<string, string> = {
 
   // A request closed without an answer: asking was turned off, or a rule now allows it.
   "approval.withdrawn": "已撤回",
+  // A draft for the admin to read, as a boundary's is. Nothing was decided and nothing changed.
+  "approval.rules_translated": "只是草稿，没有保存",
+  "plugin.grants_translated": "只是草稿，没有保存",
+  "plugin.grants_changed": "操作已保存",
+  // A draft network allowlist, as a boundary's is. Nothing was decided and nothing changed.
+  "network_policy.translated": "只是草稿，没有保存",
+  "capability.changes_translated": "只是草稿，没有保存",
 
   "configuration.changed": "配置已修改",
   "credential.created": "凭据已保存",

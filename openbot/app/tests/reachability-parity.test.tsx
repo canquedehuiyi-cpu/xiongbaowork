@@ -231,7 +231,7 @@ function draw(path = "/reachability", reach: Reachability = REACH) {
       } as never),
       createRoute({
         getParentRoute: () => root,
-        path: "/settings/connected-accounts",
+        path: "/connections",
         component: () => null,
       } as never),
     ]),

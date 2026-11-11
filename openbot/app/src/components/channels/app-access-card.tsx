@@ -154,7 +154,12 @@ function LiveAppAccessCard({
   prompt: ConnectPrompt;
 }) {
   const live = useQuery({
-    ...botAppQueryOptions(agentId, prompt.serverId),
+    /*
+     * As the Bot's owner would decide it（X3 `?view=owner`）: the owner of the Bot in this
+     * conversation is offered "give" on an app open to owners, rather than a request to an admin.
+     * Anybody else reads the same state as without it.
+     */
+    ...botAppQueryOptions(agentId, prompt.serverId, "owner"),
     /*
      * Read again whenever this tab has the focus back. What changes the state usually happens in
      * another tab — a consent screen, an admin's page for the app — and the person returning here
@@ -217,7 +222,11 @@ function LiveAppAccessCard({
       </div>
       {access && access.state !== "ready" ? (
         <div className="flex justify-end">
-          <AppAccessAction access={access} agentId={agentId} />
+          <AppAccessAction
+            access={access}
+            account={prompt.account}
+            agentId={agentId}
+          />
         </div>
       ) : offer ? (
         <div className="flex justify-end">

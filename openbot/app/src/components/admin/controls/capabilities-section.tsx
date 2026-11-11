@@ -1,9 +1,11 @@
 import {
   IconChevronRight,
+  IconSparkles,
   IconToggleRight,
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { PageRows } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
@@ -107,6 +109,24 @@ export function CapabilitiesSection() {
                     {overrideCount === 0
                       ? "无。所有人都按上面的开关来"
                       : `已设置 ${overrideCount} 项`}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <IconChevronRight className="size-4 text-muted-foreground" />
+                </ItemActions>
+              </Item>
+              <Separator />
+              <Item
+                render={<Link to="/admin/permissions/describe" />}
+                size="sm"
+              >
+                <ItemMedia variant="icon">
+                  <IconSparkles />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>用一句话描述</ItemTitle>
+                  <ItemDescription>
+                    说出谁可以用什么，由你的模型写成改动。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>

@@ -43,20 +43,20 @@ export function CredentialsPage() {
           variant="ghost"
         >
           <IconPlus />
-          Add credential
+          添加凭据
         </Button>
       }
       description={
         personal
-          ? "API keys and tokens your apps and models use. A saved key can't be viewed again."
-          : "Manage this deployment’s keys and tokens. Saved secrets cannot be viewed again."
+          ? "你的应用和模型用到的 API 密钥和令牌。保存后的密钥不能再查看。"
+          : "管理这个部署的密钥和令牌。保存后的密钥不能再查看。"
       }
       title={paths.credentialsLabel}
     >
-      <PageSection title="Saved credentials">
+      <PageSection title="已保存的凭据">
         {credentials.isPending ? null : credentials.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
-            Couldn't load credentials. Reload the page.
+            读不到凭据。请刷新页面。
           </p>
         ) : credentials.data?.length === 0 ? (
           <PageEmpty
@@ -69,13 +69,13 @@ export function CredentialsPage() {
                 variant="outline"
               >
                 <IconPlus />
-                Add credential
+                添加凭据
               </Button>
             }
             icon={IconKey}
-            title="No credentials yet"
+            title="还没有凭据"
           >
-            Keys and tokens for models and connectors are kept here.
+            模型和连接器用的密钥和令牌保存在这里。
           </PageEmpty>
         ) : (
           <PageRows>
@@ -86,7 +86,7 @@ export function CredentialsPage() {
                     <ItemTitle>{credential.provider}</ItemTitle>
                     <ItemDescription>
                       {credential.kind} · {credential.keyId} ·{" "}
-                      {credential.revokedAt ? "revoked" : "active"}
+                      {credential.revokedAt ? "已撤销" : "使用中"}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -99,7 +99,7 @@ export function CredentialsPage() {
                       size="sm"
                       variant="outline"
                     >
-                      Revoke
+                      撤销
                     </Button>
                   </ItemActions>
                 </Item>

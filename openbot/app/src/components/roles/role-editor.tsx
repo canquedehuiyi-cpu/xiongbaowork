@@ -298,7 +298,7 @@ export function RoleGeneratePanel({
       />
       {choices.length === 0 ? (
         <p className="text-muted-foreground text-xs">
-          模型库里还没有可用的模型，先在「能力与资源」里连接一个。
+          模型库里还没有可用的模型，先在「能力 › 模型库」里接入一个。
         </p>
       ) : (
         <select

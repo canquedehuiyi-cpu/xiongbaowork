@@ -130,6 +130,7 @@ test("in the conversation, a check-in task's approval offers Allow once and Deny
   ).toBeTruthy();
   expect(names(view.getByRole("region", { name: "own" }))).toEqual([
     "允许一次",
+    "在这段对话里都允许",
     "在这里总是允许",
     "拒绝",
   ]);
@@ -148,6 +149,7 @@ test("on the Bot's page, the same: the task's row has no Always allow here, the 
   ]);
   expect(buttons(await row("notes.md"))).toEqual([
     "允许一次",
+    "在这段对话里都允许",
     "在这里总是允许",
     "拒绝",
   ]);

@@ -107,7 +107,9 @@ test("the audit trail shows the newest page, and 更早的记录 reaches the res
 
   // The first page, and a way to ask for what is older.
   await view.findByRole("button", { name: "更早的记录" });
-  expect(view.container.querySelectorAll("tbody tr").length).toBe(50);
+  expect(view.container.querySelectorAll("tbody tr[data-outcome]").length).toBe(
+    50,
+  );
   expect(view.container.textContent).toContain("Button 50");
   expect(view.container.textContent).not.toContain("Button 51");
 
@@ -115,7 +117,9 @@ test("the audit trail shows the newest page, and 更早的记录 reaches the res
 
   // The older page, asked for with the same view and the server's cursor, under the newer rows.
   await waitFor(() =>
-    expect(view.container.querySelectorAll("tbody tr").length).toBe(60),
+    expect(
+      view.container.querySelectorAll("tbody tr[data-outcome]").length,
+    ).toBe(60),
   );
   expect(view.container.textContent).toContain("Button 60");
   expect(asked).toHaveLength(2);

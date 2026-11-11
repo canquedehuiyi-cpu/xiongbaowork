@@ -48,10 +48,10 @@ export function ChannelItemContent({
           </span>
           {/*
            * While a Bot works on it, the row says so where its time goes, in the one colour that means a Bot is acting
-           * right now: said as well as shown by the orb, and the time is news only once the work is done.
+           * right now (熊宝的红): said as well as shown by the orb, and the time is news only once the work is done.
            */}
           {busy ? (
-            <span className="shrink-0 whitespace-nowrap font-medium text-[12px] text-indigo-600 leading-4 dark:text-indigo-300">
+            <span className="shrink-0 whitespace-nowrap font-medium text-[12px] text-signal-ink leading-4">
               工作中
             </span>
           ) : (
@@ -60,10 +60,15 @@ export function ChannelItemContent({
             </span>
           )}
           {unread ? (
-            <span className="size-2 shrink-0 rounded-full bg-primary" />
+            <span className="size-2 shrink-0 rounded-full bg-signal">
+              <span className="sr-only">未读</span>
+            </span>
           ) : null}
           {pinned ? (
-            <IconPinFilled className="size-3 shrink-0 text-muted-foreground/70" />
+            <IconPinFilled
+              aria-label="已置顶"
+              className="size-3 shrink-0 text-muted-foreground/70"
+            />
           ) : null}
         </div>
         <div

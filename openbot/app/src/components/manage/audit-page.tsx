@@ -9,14 +9,27 @@ import {
   IconSearch,
   IconX,
 } from "@tabler/icons-react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from "@tanstack/react-query";
+import { type ReactNode, useEffect, useState } from "react";
+import { AskTheTrail, AuditAnswerNote } from "@/components/audit/ask-the-trail";
 import type { AuditEvent } from "@/components/audit/audit-cells";
+import {
+  AuditFilterChips,
+  type ChipFilters,
+  sameFilters,
+  withFilters,
+} from "@/components/audit/audit-filters";
 import { AuditTable } from "@/components/audit/audit-table";
 import { PageEmpty, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { explainable, WhyButton } from "@/components/what-if/why-button";
 import { useBotNames } from "@/lib/agents/bot-names";
+import type { AuditAnswer, AuditFilterLabels } from "@/lib/audit/ask";
 import {
   CALLS_RECORDED_AS_CHANGES,
   COMPUTER_ACTION_EVENT_TYPES,
@@ -26,7 +39,11 @@ import {
   oneRowPerAction,
   REFUSED_EVENT_TYPES,
 } from "@/lib/audit/outcome";
-import { auditEventsQueryOptions, auditExportUrl } from "@/lib/audit/queries";
+import {
+  auditEventsQueryOptions,
+  auditExportUrl,
+  auditVocabularyQueryOptions,
+} from "@/lib/audit/queries";
 import { client } from "@/lib/client";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { useManagePaths } from "@/lib/manage-paths";
@@ -46,24 +63,24 @@ import { cn } from "@/lib/utils";
  * answered.
  */
 const FILTERS = [
-  { label: "Everything", icon: IconList, search: "" },
+  { label: "全部", icon: IconList, search: "" },
   {
-    label: "Computer actions",
+    label: "电脑操作",
     icon: IconDeviceDesktop,
     search: eventTypeFilter(COMPUTER_ACTION_EVENT_TYPES),
   },
   {
-    label: "Blocked",
+    label: "已拦截",
     icon: IconBan,
     search: eventTypeFilter(REFUSED_EVENT_TYPES),
   },
   {
-    label: "Did not happen",
+    label: "没有发生",
     icon: IconAlertTriangle,
     search: eventTypeFilter(DID_NOT_HAPPEN_EVENT_TYPES),
   },
   {
-    label: "Nobody watching",
+    label: "无人值守",
     icon: IconEyeOff,
     search: "?initiatorKind=routine,handoff,responsibility,memory",
   },
@@ -114,9 +131,13 @@ function withSkillTitles(
   });
 }
 
+/** Admin's "Why?" on a row one of OpenBot's controls decided: see `what-if/why-button.tsx`. */
+const whyFor = (event: AuditEvent) =>
+  explainable(event) ? <WhyButton event={event} /> : null;
+
 /** What the page says under its title in Admin, where an admin reviews every Bot against policy. */
 const ADMIN_DESCRIPTION =
-  "Review Bot actions and actions blocked by this deployment’s policy.";
+  "员工做过的每个动作，以及这个部署的策略拒绝过的每个动作。";
 
 /**
  * `children` are sections only the team edition's Admin adds below the page's own (the admin's
@@ -125,12 +146,25 @@ const ADMIN_DESCRIPTION =
  *
  * `bot` narrows every view to one Bot's rows, asked of the server; `onClearBot` takes it off.
  */
+const NO_LABELS: AuditFilterLabels = {
+  bots: {},
+  people: {},
+  apps: {},
+  rules: {},
+};
+
 export function AuditPage({
+  ask = false,
   bot,
   children,
   description = ADMIN_DESCRIPTION,
   onClearBot,
 }: {
+  /**
+   * Admin's Ask and its filter chips: questions in English, and the trail's own filters by app,
+   * tool, effect, action and rule. The personal edition's Activity has neither.
+   */
+  ask?: boolean;
   bot?: string;
   children?: ReactNode;
   description?: string;
@@ -138,16 +172,48 @@ export function AuditPage({
 } = {}) {
   const paths = useManagePaths();
   const [view, setView] = useState<string>(FILTERS[0].search);
+  /*
+   * Admin's filters, as chips: asked of the server beside the view, from an answer or added by hand.
+   * A Bot's own Activity page links here with `bot`, which arrives as that Bot's chip, so the one Bot
+   * filter there is the chip, and taking it off takes it out of the address too.
+   */
+  const [chips, setChipState] = useState<ChipFilters>(() =>
+    ask && bot ? { bot } : {},
+  );
+  useEffect(() => {
+    if (ask && bot)
+      setChipState((current) =>
+        current.bot === bot ? current : { ...current, bot },
+      );
+  }, [ask, bot]);
+  const setChips = (next: ChipFilters) => {
+    setChipState(next);
+    if (bot && next.bot !== bot) onClearBot?.();
+  };
+  const [answer, setAnswer] = useState<
+    (AuditAnswer & { question: string }) | null
+  >(null);
+  // This deployment's Bots, apps and rules, asked for the first time a chip menu opens.
+  const [vocabularyWanted, setVocabularyWanted] = useState(false);
+  const vocabulary = useQuery({
+    ...auditVocabularyQueryOptions(),
+    enabled: ask && vocabularyWanted,
+  }).data;
   // The stored event names and OpenBot's own working are Admin's to read; the personal edition's
   // Activity is anybody's page. Its route has the edition loaded before this draws.
   const edition = useQuery(deploymentCapabilitiesQueryOptions()).data?.edition;
-  const search =
-    edition === "personal"
-      ? withoutOpenBotWorking(withBot(view, bot))
-      : withBot(view, bot);
+  const asked = ask ? withFilters(view, chips) : withBot(view, bot);
+  const search = edition === "personal" ? withoutOpenBotWorking(asked) : asked;
   const [query, setQuery] = useState("");
-  // A page at a time, newest first; "Show older events" under the last row asks for the next.
-  const events = useInfiniteQuery(auditEventsQueryOptions(search));
+  // A page at a time, newest first; 「更早的记录」 under the last row asks for the next.
+  /*
+   * The rows already shown stay while the next filters' rows load, so the toolbar and the chip menu
+   * open in it are not taken down and drawn again on every tick. Only the first load draws nothing.
+   */
+  const events = useInfiniteQuery({
+    ...auditEventsQueryOptions(search),
+    placeholderData: keepPreviousData,
+  });
   // Activity names a skill by the title its page shows; the trail keeps only its slug.
   const skills = useQuery({
     ...pluginsPageQueryOptions(),
@@ -174,7 +240,7 @@ export function AuditPage({
     setExportCapped(null);
     try {
       const response = await client(auditExportUrl(search), {
-        fallback: "Couldn't export these events. Try again.",
+        fallback: "导出审计记录失败",
       });
       // A file that stopped early must say so, or it reads as the whole trail.
       const capped = Number(response.headers.get("x-audit-export-truncated"));
@@ -190,9 +256,7 @@ export function AuditPage({
       URL.revokeObjectURL(url);
     } catch (error) {
       setExportError(
-        error instanceof Error
-          ? error.message
-          : "Couldn't export these events. Try again.",
+        error instanceof Error ? error.message : "导出审计记录失败",
       );
     } finally {
       setExporting(false);
@@ -212,10 +276,36 @@ export function AuditPage({
         <div
           className={children ? "flex h-[60vh] min-h-80 flex-col" : "contents"}
         >
+          {/*
+           * Above the table rather than in its toolbar: a question being typed and its answer outlast
+           * anything the table draws again. The answer's chips are the toolbar's, beside the search.
+           */}
+          {ask ? (
+            <div className="flex shrink-0 flex-col gap-2 px-4 pb-3">
+              <AskTheTrail
+                onAnswer={(next) => {
+                  setAnswer(next);
+                  // The answer is the whole question, so it starts from every event. One the trail
+                  // can't give clears the chips too, so no earlier filters stand under it as its rows.
+                  setView(FILTERS[0].search);
+                  setChips(next.filters);
+                }}
+              />
+              {answer ? (
+                <AuditAnswerNote
+                  answer={answer}
+                  edited={
+                    answer.answerable !== "no" &&
+                    !sameFilters(chips, answer.filters)
+                  }
+                />
+              ) : null}
+            </div>
+          ) : null}
           {events.isPending ? null : events.isError &&
             !events.isFetchNextPageError ? (
             <p className="px-4 text-destructive text-sm" role="alert">
-              Couldn't load these events. Reload the page.
+              读不到审计记录。
             </p>
           ) : (
             <AuditTable
@@ -226,7 +316,7 @@ export function AuditPage({
                   <div className="flex flex-col items-center gap-2 py-3">
                     {events.isFetchNextPageError ? (
                       <p className="text-destructive text-sm" role="alert">
-                        Couldn't load older events. Try again.
+                        读不到更早的记录，请重试。
                       </p>
                     ) : null}
                     <Button
@@ -235,9 +325,7 @@ export function AuditPage({
                       size="sm"
                       variant="outline"
                     >
-                      {events.isFetchingNextPage
-                        ? "Loading…"
-                        : "Show older events"}
+                      {events.isFetchingNextPage ? "正在加载…" : "更早的记录"}
                     </Button>
                   </div>
                 ) : null
@@ -246,16 +334,17 @@ export function AuditPage({
               nameFor={nameFor}
               query={query}
               storedNames={edition !== "personal"}
+              {...(ask ? { rowAction: whyFor } : {})}
               toolbar={({ count, filters }) => (
                 <div className="flex shrink-0 flex-col gap-3 border-border border-b px-4 pb-3">
                   {/*
                    * The saved views are one control with one answer, so they are drawn as a segmented
                    * group: the pressed one is filled, the rest sit flat inside the same outline.
                    */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground text-xs">View</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground text-xs">视图</span>
                     <fieldset
-                      aria-label="View"
+                      aria-label="视图"
                       className="inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5"
                     >
                       {FILTERS.map((filter) => {
@@ -286,28 +375,46 @@ export function AuditPage({
                     <div className="relative w-64">
                       <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        aria-label="Search events"
+                        aria-label="搜索事件"
                         className="h-8 pl-8"
                         onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Search events…"
+                        placeholder="搜索事件…"
                         type="search"
                         value={query}
                       />
                     </div>
                     {/* Beside the other filters, on the row that wraps: it narrows what is asked for. */}
-                    {bot ? (
+                    {bot && !ask ? (
                       <Button
-                        aria-label={`Show every Bot, not only ${nameFor(bot)}`}
+                        aria-label={`显示所有员工，而不只是 ${nameFor(bot)}`}
                         onClick={onClearBot}
                         size="sm"
                         variant="outline"
                       >
-                        Only {nameFor(bot)}
+                        只看 {nameFor(bot)}
                         <IconX />
                       </Button>
                     ) : null}
-                    {filters}
-                    <span className="ml-1 text-muted-foreground text-xs tabular-nums">
+                    {/*
+                     * Admin's one set of filters: the answer's chips and Add filter, asked of the
+                     * server. Anywhere else, the buttons that narrow the rows already loaded.
+                     */}
+                    {ask ? (
+                      <AuditFilterChips
+                        filters={chips}
+                        labels={answer?.labels ?? NO_LABELS}
+                        nameFor={nameFor}
+                        onChange={setChips}
+                        onOpen={() => setVocabularyWanted(true)}
+                        vocabulary={vocabulary}
+                      />
+                    ) : (
+                      filters
+                    )}
+                    <span
+                      className="ml-1 text-muted-foreground text-xs tabular-nums"
+                      data-audit-count
+                    >
                       {count}
                     </span>
                     <div className="ml-auto flex items-center gap-2">
@@ -317,7 +424,7 @@ export function AuditPage({
                         variant="outline"
                       >
                         <IconRefresh />
-                        Refresh
+                        刷新
                       </Button>
                       <Button
                         disabled={exporting}
@@ -326,7 +433,7 @@ export function AuditPage({
                         variant="outline"
                       >
                         <IconDownload />
-                        {exporting ? "Exporting…" : "Export CSV"}
+                        {exporting ? "正在导出…" : "导出 CSV"}
                       </Button>
                     </div>
                   </div>
@@ -337,14 +444,13 @@ export function AuditPage({
                   ) : null}
                   {exportCapped ? (
                     <p className="text-muted-foreground text-sm" role="status">
-                      The file has the newest {exportCapped.toLocaleString()}{" "}
-                      events, not all of them. Narrow the filter or dates to
-                      export the rest.
+                      文件只包含最新的 {exportCapped.toLocaleString()}{" "}
+                      条记录，不是全部。缩小筛选条件或日期范围，再导出其余部分。
                     </p>
                   ) : null}
                   {rows.length === 0 ? (
-                    <PageEmpty icon={IconSearch} title="No matches">
-                      No events match this filter yet.
+                    <PageEmpty icon={IconSearch} title="没有匹配的事件">
+                      这个筛选下还没有事件。
                     </PageEmpty>
                   ) : null}
                 </div>

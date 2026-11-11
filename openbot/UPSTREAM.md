@@ -6,7 +6,7 @@
 | 项 | 值 |
 | --- | --- |
 | 分叉点 | `63f99cf`（2026-10-05，#734） |
-| 当前已同步到 | 服务端与桌面端 `e4a73d7b`（上游 main，2026-11-10，M5a）；前端 `ac9c16f7`（v1.0.0，M4） |
+| 当前已同步到 | `e4a73d7b`（上游 main，2026-11-10）：服务端与桌面端 M5a，前端 M5b |
 
 ## 同步方法
 
@@ -127,6 +127,47 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
 - 上游新测试按 fork 多租户改：coworker 参数位置、租户帧、受限角色写入、中文文案。#1407 提示词改为分段后，fork 几个
   逐字钉住旧文案的测试只改了定位字符串。
 - `shared/harnesses.ts` 的「新员工」框架顺序保持 v1.0.0（上游 main 的源码与它自己的前端测试不一致，前端轮再看）。
+
+### M5b：前端同步到上游 main `e4a73d7b`，页面结构改成上游的
+
+分两步，同一个 PR。
+
+**第一步：三方合并。** 以 `v1.0.0:app` 为共同祖先、fork 的 `openbot/app`（已含 #370 黑白红）为我方、上游 `origin/main:app`
+为对方：34 个内容冲突、13 个一边删一边改。上游 #1370 去掉 `frame.css` 彩色玻璃、字体换回 Inter，照收；黑白红令牌不动。
+
+**第二步：页面结构改成上游的（推翻 M4「保留 fork 结构」的决定，以及 QoderWake 复刻方案里「五个一级入口、现有 URL 是兼容契约」）。**
+上游 main 有、fork 没有的 69 个文件取回 65 个（不收 OpenBot for Business 营销：business-link、business-orb、team-features-dialog、
+booking-calendar），全部中文化。以前排除的上游前端（个人版 `settings/_personal`、多账号、账号模式、Arcade、owner grants、
+共享使用、app-access、Entra OBO）服务端已由 X 系列补齐，这一轮一并收。
+
+**用户的决定**
+- 侧栏照上游：新对话、搜索、全部会话（群聊直接在列表里）、主导航、「更多」、账户菜单；去掉 fork 的中间栏和员工/群组页签。
+  主导航：员工、任务看板、自主工作、@Waker、能力、连接、教员工做事；「更多」：组团流程。账户菜单：我的分身、套餐与用量、设置、
+  管理、主题、语言、退出。
+- 默认皮肤是熊宝黑白红；上游外观用现有的 OpenDuet / OpenDots / OpenMuse 皮肤承载。
+- 新建员工只用熊宝向导，并入上游「独立运行」开关；上游 NewBotSheet 保留文件与测试，没有入口。
+- 设置页保留应用侧栏；能力默认插件页签；连接器放「连接」页。
+- 只校验旧布局本身的断言按新结构重写或删除，逐条列在 PR 里。
+
+**地址**（旧地址全部保留为重定向，规则集中在 `app/src/lib/agents/legacy-routes.ts`）
+- `/wakers` → `/bots`（员工页：上游分区 + 员工墙卡片、筛选、卡片/列表、员工|群组页签）；`/wakers/$id` → `/bots/$id`（首页 + 9 个分页）；
+  `/assemble/$id` → `/bots/$id/setup`；`/team-bots` → `/bots`（「共享给你的」）。
+- `/resources?tab=` → `/capabilities/<页签>`（插件、技能、知识库、WakerFlow、公开项目、模型库、组件、记忆与信息源、角色模板）；
+  `/knowledge`、`/memory`、`/skills`、`/role-templates` 同理；连接器 → `/connections`。
+- `/settings/connected-accounts(/$key)` → `/connections(/$key)`；服务端 OAuth 回跳与 Arcade verify 回程改到 `/connections`。
+  这也修好了 GitHub 关联回跳到 `/connections/github` 时的 404。
+- `/approvals` → `/settings/approvals`（管理员的部分在 `/admin/approvals`）；`/plans` → `/settings/plans`（`/plans` 继续可用，
+  服务端 `upgradeUrl` 契约不变）；`/platform` → `/admin/platform`；`/group/new` → `/channel/new`（多选收件人，两位以上开群聊）。
+- 不变：`/tasks`、`/autonomous`、`/reachability`（@Waker 留在主导航）、`/pipelines`、`/wakerflows/*`、`/responsibilities`（不带员工时）。
+
+**为 fork 做的改动**
+- 审批底线不放宽：「在这段对话里都允许 / 总是允许」只在共享函数 `offersStandingRule` 放行时出现；团队审批设置里付款、
+  安全设置、密码和登录信息只显示「总是交给成员本人」。
+- 新建定时任务多一个「自动（由系统找对话）」选项（上游 #1406 要求必须选对话，不收）。
+- 共享使用批准由前端在授予与切换账号模式时显式送回（fork 服务端不像上游那样自动批准）。
+- 能力探测：上游前端读、而 fork 服务端在 X7/X8 之前不给的字段（`provider`、`authorizesPerAction`、`skippedTools` 等）缺省时按旧行为显示；
+  逐个动作授权只在 `authorizesPerAction` 为真时出现。
+- `shared/harnesses.ts` 的「新员工」框架顺序随前端改成上游 main 的。
 
 ### M4：前端同步到 `ac9c16f7`（v1.0.0）
 

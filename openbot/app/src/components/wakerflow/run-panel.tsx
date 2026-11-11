@@ -487,7 +487,7 @@ function RunDetail(props: {
                 // D5: an approval has one place to be answered, and it is not here.
                 <p className="mt-2 text-xs">
                   这一步在等审批。{" "}
-                  <Link className="underline" to="/approvals">
+                  <Link className="underline" to="/settings/approvals">
                     去审批
                   </Link>
                 </p>

@@ -61,7 +61,7 @@ export function AgentCard({
           size="xs"
           aria-label={`查看 ${agent.name} 的详情`}
           className="-ml-2 text-muted-foreground after:absolute after:inset-0"
-          render={<Link to="/wakers" search={{ agent: agent.id }} />}
+          render={<Link params={{ agentId: agent.id }} to="/bots/$agentId" />}
         >
           详情
         </Button>

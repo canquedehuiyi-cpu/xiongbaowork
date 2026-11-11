@@ -8,25 +8,19 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { authKeys } from "@/lib/auth/queries";
 import type { PluginsPage } from "@/lib/plugins/queries";
-import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
+import { capabilitiesRouter } from "./capabilities-router";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Parity plan F4, 能力与资源: `/resources` is one shell of tabs — the reference's six entries in its
- * order (插件 · 技能 · 连接器 · 知识库 · WakerFlow · 公开项目) as entry cards, then this fork's own
- * entries in a secondary row under them — with the selected tab in `?tab=`, and only that tab's
- * reads made.
+ * Parity plan F4, 能力（M5b 起照上游的 `/capabilities/*`）: every tab is its own address under one
+ * shell — 插件 · 技能 · 知识库 · WakerFlow · 公开项目 · 模型库 as the 资源入口 entry cards, then
+ * 组件 · 记忆与信息源 · 角色模板 as the secondary links on the section's title line — and only the open
+ * tab's reads are made. 连接器 moved to 连接 (`/connections`).
  *
  * The 插件 tab is the market: 插件市场 / 我的插件, a category sidebar, a card grid paged twenty at a
  * time, and a details sheet per card. Everything is drawn from a fake `fetch` keyed by path.
@@ -181,7 +175,7 @@ function resetResponses() {
 }
 
 function draw({
-  entry: initial = "/resources",
+  entry: initial = "/capabilities",
   fail = [],
   role = "user",
 }: {
@@ -211,17 +205,7 @@ function draw({
     onboarding: null,
   });
 
-  const root = createRootRoute({ component: () => <Outlet /> });
-  const router = createRouter({
-    context: {},
-    history: createMemoryHistory({ initialEntries: [initial] }),
-    routeTree: root.addChildren([
-      ResourcesRoute.update({
-        getParentRoute: () => root,
-        path: "/resources",
-      } as never),
-    ]),
-  });
+  const router = capabilitiesRouter({ at: initial, queryClient });
 
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -269,90 +253,102 @@ async function card(view: View, title: string) {
 const ORDER = [
   "插件",
   "技能",
-  "连接器",
   "知识库",
   "WakerFlow",
   "公开项目",
   "模型库",
   "组件",
-  "信息源与记忆",
+  "记忆与信息源",
+  "角色模板",
 ];
 
-test("the six reference entries come first in order, then this fork's own in the row under them; 插件 is the default", async () => {
-  const { view } = draw();
-  const tablist = await view.findByRole("tablist", { name: "能力与资源" });
-  const tabs = within(tablist).getAllByRole("tab");
-  // An entry card's name is its label; the selected card's description is not part of it.
+/** The capability tab links, by name; a card's name is its label, not its description. */
+function tabLink(view: View, name: string) {
+  return within(view.getByRole("navigation", { name: "能力" })).getByRole(
+    "link",
+    { name },
+  );
+}
+
+test("the six entry cards come first in order, then the three secondary links; /capabilities opens 插件", async () => {
+  const { view, router } = draw();
+  const nav = await view.findByRole("navigation", { name: "能力" });
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/capabilities/plugins"),
+  );
+  const links = within(nav).getAllByRole("link");
   expect(
-    tabs.map(
-      (tab) =>
-        tab.querySelector("[data-slot='entry-label']")?.textContent ??
-        tab.textContent,
+    links.map(
+      (link) =>
+        link.querySelector("[data-slot='entry-label']")?.textContent ??
+        link.textContent,
     ),
   ).toEqual(ORDER);
-  expect(
-    within(tablist)
-      .getByRole("tab", { name: "插件" })
-      .getAttribute("aria-selected"),
-  ).toBe("true");
+  await waitFor(() =>
+    expect(tabLink(view, "插件").getAttribute("aria-current")).toBe("page"),
+  );
 
-  // The reference's six are the entry cards; this fork's entries are the row under them.
-  const cards = tablist.querySelector("[data-slot='resource-entry-cards']");
-  const more = tablist.querySelector("[data-slot='resource-more-tabs']");
-  expect(within(cards as HTMLElement).getAllByRole("tab")).toHaveLength(6);
+  // Six entry cards, then the section's own secondary links on its title line.
+  const cards = nav.querySelector("[data-slot='resource-entry-cards']");
+  const more = nav.querySelector("[data-slot='resource-more-tabs']");
+  expect(within(cards as HTMLElement).getAllByRole("link")).toHaveLength(6);
   expect(
     within(more as HTMLElement)
-      .getAllByRole("tab")
-      .map((tab) => tab.textContent),
-  ).toEqual(["模型库", "组件", "信息源与记忆"]);
+      .getAllByRole("link")
+      .map((link) => link.textContent),
+  ).toEqual(["组件", "记忆与信息源", "角色模板"]);
 
-  // The selected tab's panel is labelled by it.
-  const panel = view.getByRole("tabpanel");
-  expect(panel.getAttribute("aria-labelledby")).toBe(
-    within(tablist).getByRole("tab", { name: "插件" }).id,
-  );
+  // Each tab is a real address, and the open tab's content is a region named for it.
+  expect(links.map((link) => link.getAttribute("href"))).toEqual([
+    "/capabilities/plugins",
+    "/capabilities/skills",
+    "/capabilities/knowledge",
+    "/capabilities/wakerflows",
+    "/capabilities/projects",
+    "/capabilities/models",
+    "/capabilities/components",
+    "/capabilities/memory",
+    "/capabilities/roles",
+  ]);
+  expect(view.getByRole("region", { name: "插件" })).toBeTruthy();
 });
 
-test("the selected tab round-trips through ?tab=, including Back and a deep link", async () => {
+test("the open tab is the address: a click, Back and a deep link all land on it", async () => {
   const { view, router, user } = draw();
   await cardTitles(view);
 
-  await user.click(view.getByRole("tab", { name: "技能" }));
+  await user.click(tabLink(view, "技能"));
   await waitFor(() =>
-    expect(router.state.location.search).toEqual({ tab: "skills" }),
+    expect(router.state.location.pathname).toBe("/capabilities/skills"),
   );
   expect(await view.findByText("周报")).toBeTruthy();
-  expect(
-    view.getByRole("tab", { name: "技能" }).getAttribute("aria-selected"),
-  ).toBe("true");
+  expect(tabLink(view, "技能").getAttribute("aria-current")).toBe("page");
 
   router.history.back();
   await waitFor(() =>
-    expect(
-      view.getByRole("tab", { name: "插件" }).getAttribute("aria-selected"),
-    ).toBe("true"),
+    expect(tabLink(view, "插件").getAttribute("aria-current")).toBe("page"),
   );
   cleanup();
 
-  const deep = draw({ entry: "/resources?tab=knowledge" });
-  expect(
-    (await deep.view.findByRole("tab", { name: "知识库" })).getAttribute(
-      "aria-selected",
-    ),
-  ).toBe("true");
+  const deep = draw({ entry: "/capabilities/knowledge" });
+  await deep.view.findByRole("navigation", { name: "能力" });
+  expect(tabLink(deep.view, "知识库").getAttribute("aria-current")).toBe(
+    "page",
+  );
   expect(
     await within(
       await deep.view.findByRole("list", { name: "知识库列表" }),
     ).findByText("产品手册"),
   ).toBeTruthy();
-  // A deep link to an unknown tab falls back to the default rather than a blank page.
+  // An old link to an unknown tab of 能力与资源 falls back to the default rather than a blank page.
   cleanup();
   const unknown = draw({ entry: "/resources?tab=nope" });
-  expect(
-    (await unknown.view.findByRole("tab", { name: "插件" })).getAttribute(
-      "aria-selected",
+  await unknown.view.findByRole("navigation", { name: "能力" });
+  await waitFor(() =>
+    expect(tabLink(unknown.view, "插件").getAttribute("aria-current")).toBe(
+      "page",
     ),
-  ).toBe("true");
+  );
 });
 
 test("a tab that is not selected makes none of its reads", async () => {
@@ -447,7 +443,7 @@ test("more than twenty plugins page twenty at a time, with the page in the URL",
   cleanup();
 
   // A deep link to page two lands there.
-  const deep = draw({ entry: "/resources?tab=plugins&page=2" });
+  const deep = draw({ entry: "/capabilities/plugins?page=2" });
   await waitFor(async () =>
     expect(await cardTitles(deep.view)).toHaveLength(5),
   );
@@ -467,7 +463,7 @@ test("each card opens its details, with the tools, how many hold them and the wa
   expect(details.getByText("create_page")).toBeTruthy();
   expect(details.getByText("已授予 2 位员工")).toBeTruthy();
   expect(details.getByText("去授权").closest("a")?.getAttribute("href")).toBe(
-    "/settings/connected-accounts/notion",
+    "/connections/notion",
   );
 });
 
@@ -485,7 +481,7 @@ test("install and authorise follow what this person may do", async () => {
       .getByText("去授权")
       .closest("a")
       ?.getAttribute("href"),
-  ).toBe("/settings/connected-accounts/notion");
+  ).toBe("/connections/notion");
   cleanup();
 
   const admin = draw({ role: "admin" });
@@ -531,7 +527,7 @@ test("nothing in the catalogue and nothing installed are each said, not left bla
 
 test("another tab's failure is that tab's own alert with a retry", async () => {
   const { view } = draw({
-    entry: "/resources?tab=knowledge",
+    entry: "/capabilities/knowledge",
     fail: ["/api/knowledge/notebooks"],
   });
   const alert = await view.findByRole("alert");
@@ -540,7 +536,7 @@ test("another tab's failure is that tab's own alert with a retry", async () => {
 });
 
 test("a WakerFlow tab with no flows says so and offers the standalone page", async () => {
-  const { view } = draw({ entry: "/resources?tab=wakerflows" });
+  const { view } = draw({ entry: "/capabilities/wakerflows" });
   expect(await view.findByText("还没有 WakerFlow")).toBeTruthy();
   expect(
     view.getByText("打开 WakerFlow 页").closest("a")?.getAttribute("href"),

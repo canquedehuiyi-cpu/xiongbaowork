@@ -20,7 +20,7 @@ import { cleanup, render, waitFor, within } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { EditSkill } from "@/components/skills/edit-skill";
 import { type PluginsPage, pluginKeys } from "@/lib/plugins/queries";
-import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
+import { Route as SkillsTabRoute } from "@/routes/_authed/_app/capabilities.skills";
 import { Route as AdminSkillsRoute } from "@/routes/_authed/admin/skills";
 
 /**
@@ -117,20 +117,20 @@ function restoreRouteState(
   Object.assign(route, snapshot);
 }
 
-const pristineResourcesRouteState = captureRouteState(ResourcesRoute);
+const pristineSkillsRouteState = captureRouteState(SkillsTabRoute);
 let skillsRouteSnapshot: Record<string, unknown>;
 
 beforeEach(() => {
-  skillsRouteSnapshot = captureRouteState(pristineResourcesRouteState);
+  skillsRouteSnapshot = captureRouteState(pristineSkillsRouteState);
 });
 
 afterEach(() => {
-  restoreRouteState(ResourcesRoute, skillsRouteSnapshot);
+  restoreRouteState(SkillsTabRoute, skillsRouteSnapshot);
 });
 
 /**
- * 能力与资源 › 技能 (`/resources?tab=skills`, which the standalone `/skills` page was archived
- * into), at the id its `Route.useSearch()` reads: `/_authed/_app/resources`.
+ * 能力 › 技能 (`/capabilities/skills`, which the standalone `/skills` page and 能力与资源's 技能 tab
+ * were archived into), at the id its `Route.useSearch()` reads: `/_authed/_app/capabilities/skills`.
  */
 function renderSkills(client: QueryClient) {
   const rootRoute = createRootRoute({ component: Outlet });
@@ -145,9 +145,9 @@ function renderSkills(client: QueryClient) {
     component: Outlet,
   });
   const skills = (
-    ResourcesRoute as unknown as { update: (options: unknown) => unknown }
+    SkillsTabRoute as unknown as { update: (options: unknown) => unknown }
   ).update({
-    path: "/resources",
+    path: "/capabilities/skills",
     getParentRoute: () => appRoute,
   });
   const tree = rootRoute.addChildren([
@@ -155,7 +155,7 @@ function renderSkills(client: QueryClient) {
   ]);
   const router = createRouter({
     routeTree: tree,
-    history: createMemoryHistory({ initialEntries: ["/resources?tab=skills"] }),
+    history: createMemoryHistory({ initialEntries: ["/capabilities/skills"] }),
   });
   return render(
     <QueryClientProvider client={client}>

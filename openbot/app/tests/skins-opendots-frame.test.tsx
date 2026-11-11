@@ -374,15 +374,15 @@ describe("OpenDots frame", () => {
       "/channel/new", // new chat
       "/channel/trip", // a conversation with one Bot
       "/group/standup", // a group conversation
-      "/wakers", // 员工管理, this deployment's Bots page
-      "/wakers?new=true", // creating a Bot
+      "/bots", // 员工, where approvals, responsibilities and Team Bots now live
+      "/bots?new=true", // creating a Bot
       "/bots/ada", // each Bot's own pages
       "/bots/brook",
       "/bots/cass",
       "/s/routines", // routines
       "/s/memories", // memory
-      "/resources", // 能力与资源: skills and memory
-      "/settings/connected-accounts", // 已连接的账号
+      "/capabilities", // 能力: plugins, skills, memory and the rest
+      "/connections", // 连接
       "/settings", // the skin picker, approvals and reachability
     ]) {
       expect(links).toContain(href);
@@ -413,11 +413,11 @@ describe("OpenDots frame", () => {
       for (const href of [
         "/channel/new",
         "/channel/trip",
-        "/wakers",
+        "/bots",
         "/s/routines",
         "/s/memories",
-        "/resources",
-        "/settings/connected-accounts",
+        "/capabilities",
+        "/connections",
         "/settings",
       ]) {
         expect(links).toContain(href);
@@ -450,7 +450,10 @@ describe("OpenDots frame", () => {
     async (_who, signedIn) => {
       actor = signedIn;
       const { view } = draw("/");
-      const expected = navigationFor(signedIn.role).filter(isNavigationLink);
+      // Routines is OpenDots' own rail button, to its own screen, so the list's entry is left out.
+      const expected = navigationFor(signedIn.role)
+        .filter(isNavigationLink)
+        .filter((item) => item.id !== "routines");
       const rail = await view.findByRole("navigation", {
         name: "工作区导航",
       });
@@ -498,7 +501,7 @@ describe("OpenDots frame", () => {
     "/group/standup",
     "/bots/ada/setup",
     "/s/routines",
-    "/settings/connected-accounts",
+    "/connections",
   ])(
     "Settings is reachable on %s, even when nothing else loads",
     async (path) => {

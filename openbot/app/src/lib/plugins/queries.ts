@@ -1,5 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 import { client } from "@/lib/client";
+// This import closes a cycle: `./provider-vocabulary` imports a type from this file (and upstream reads
+// `pluginsProvider` from here). It is safe for one reason, and the reason is the rule: the binding
+// that crosses it, `directoryReadFailure`, is an `export function` declaration, fully initialised
+// during module instantiation, and it is only ever called from inside a `queryFn`, long after both
+// modules have finished evaluating. Nothing may call across this import at module scope.
+import {
+  directoryReadFailure,
+  type PluginsProvider,
+} from "./provider-vocabulary";
 
 /**
  * Re-exported, not re-declared.
@@ -86,6 +95,59 @@ export type PluginServer = {
    * administrator is theirs to combine it with. The connect route refuses whatever a screen draws.
    */
   adminConnectOnly: boolean;
+  /**
+   * The Microsoft Entra scope a server added by URL is reached with as the person asking, or null
+   * for one reached on the deployment's own token (upstream #931). Optional because a server replica
+   * older than this field does not send it, mid-rollout.
+   */
+  entraScope?: string | null;
+  /**
+   * Whether this app is PERSONAL, held one credential per person, or SHARED, with a single
+   * deployment-held account that every Bot holding a grant acts as (X1 #427).
+   *
+   * 熊宝服务端只在 broker 行上下发（默认 `personal`），非 broker 行没有这个字段，所以这里是可选的；
+   * 上游是必有、可为 null。缺省读作个人账号。
+   */
+  accountMode?: "personal" | "shared" | null;
+  /**
+   * 熊宝服务端下发的 Shared 应用团队账号状态（X1 #427）：是否已连接、何时、由谁、是否经过检查。vendor 处的
+   * 身份不下发。非 Shared 应用为 null，非 broker 行没有这个字段。
+   *
+   * 上游把同一件事拆成 `sharedVendorConnected`（服务器上）和连接列表里的 deployment 行
+   * （`holder/connected/connectedBy/displayName`）；熊宝服务端不下发那些，读这里。
+   */
+  sharedAccount?: {
+    connected: boolean;
+    connectedAt: string | null;
+    connectedBy: string | null;
+    verified: boolean;
+  } | null;
+  /**
+   * 上游字段：Shared 应用的团队账号是否已连接。**熊宝服务端不下发**，同一个事实在
+   * {@link PluginServer.sharedAccount}`.connected`；留成可选只为让恢复的上游组件能编译，读它的地方应改读
+   * `sharedAccount`。
+   */
+  sharedVendorConnected?: boolean;
+  /**
+   * Whether this app may only hold the deployment's one shared account: it connects on this
+   * deployment's own OAuth client (upstream #950's `sharedOnly`). The same judgement as
+   * {@link PluginServer.adminConnectOnly}; 熊宝 Personal 模式下管理员仍可以自己的名义连接。Optional:
+   * only broker rows carry it, and absent reads as false.
+   */
+  sharedOnly?: boolean;
+  /**
+   * Who may give this app to a Bot: any Bot's owner (`any`) or only an admin (`admin`), with the
+   * default filled in. **熊宝服务端的列表不下发**（见 x-series-interfaces 第 8 条），由
+   * `GET /servers/:id/owner-grants` 单独给出，读 {@link ownerGrantsQueryOptions}。
+   */
+  ownerGrants?: "any" | "admin";
+  /** What an admin chose, or null where the default is in force. 同上，列表不下发。 */
+  ownerGrantsChosen?: "any" | "admin" | null;
+  /**
+   * What the last refresh left out for its names. A warning: the rest were stored. **熊宝服务端不下发**；
+   * optional, as upstream's is for an older replica.
+   */
+  skippedTools?: string[];
   tools: PluginTool[];
   /** Empty for a healthy connector. See {@link WithdrawnGrant}. */
   withdrawn: WithdrawnGrant[];
@@ -139,6 +201,12 @@ export type CatalogueItem = {
   credentialHint?: string;
   /** True for a vendor that gives every customer their own hostname. */
   perInstance: boolean;
+  /**
+   * Whether connecting needs nothing typed first: no account, or an OAuth vendor the deployment
+   * registers itself with. Optional so an older server's answer still reads, as "no".
+   * **熊宝服务端不下发**。
+   */
+  oneStep?: boolean;
 };
 
 /** One app in Composio's directory, as the picker shows it. */
@@ -150,6 +218,17 @@ export type ComposioApp = {
   categories: string[];
   /** The size of the decision, shown before enabling. */
   actionCount: number;
+  /**
+   * How many of those actions the provider classified, how many distinct non-empty scope sets they
+   * ask for, and how many carry a scope at all (upstream #770). `0` means measured and none; `null`
+   * means the provider does not publish it.
+   *
+   * 上游是必有、可为 null；熊宝服务端（`server/src/plugins/broker.ts`）只在 Arcade 目录上给，Composio 目录不给，
+   * 所以这里是可选的，缺省和 null 一样读作「没公布」。
+   */
+  classifiedCount?: number | null;
+  permissionCount?: number | null;
+  scopedActionCount?: number | null;
   enabled: boolean;
   /**
    * How a person connects it, as the server decided from what the app publishes. Only the part
@@ -199,7 +278,32 @@ export type PluginsPage = {
    * server.
    */
   composioConfigured: boolean;
+  /**
+   * Whether this deployment's broker authorizes ONE ACTION AT A TIME (Arcade's per-action grant
+   * list). A declared capability, read with a presence test and never a vendor name.
+   *
+   * 上游必有；熊宝服务端 X8-4 起下发（Arcade 是活动 broker 时为 true）。更早的服务端不下发，所以仍是可选的，
+   * 缺省读作 false。
+   */
+  authorizesPerAction?: boolean;
+  /**
+   * Which vendor brokers this deployment's apps, as a NAME. Read it through {@link pluginsProvider}.
+   * Optional because a payload from an older server does not carry it. **熊宝服务端不下发**。
+   */
+  provider?: PluginsProvider;
 };
+
+/**
+ * The provider a payload names, `"composio"` when the server did not say.
+ *
+ * So a Composio deployment renders byte-identically and a page served by an older server does not
+ * blank. Also `"composio"` before the page has loaded.
+ */
+export function pluginsProvider(
+  page: PluginsPage | undefined,
+): PluginsProvider {
+  return page?.provider ?? "composio";
+}
 
 /** What one Bot holds, which is all the runtime needs to offer it. */
 export type GrantedPlugins = {
@@ -224,6 +328,10 @@ export const pluginKeys = {
   connections: () => ["plugins", "connections"] as const,
   composioApps: (query: string) =>
     ["plugins", "composio", "apps", query] as const,
+  siblings: (serverId: string) => ["plugins", "siblings", serverId] as const,
+  accounts: (serverId: string) => ["plugins", "accounts", serverId] as const,
+  ownerGrants: (serverId: string) =>
+    ["plugins", "owner-grants", serverId] as const,
   deploymentClients: () => ["plugins", "composio", "clients"] as const,
   listings: () => ["plugins", "listings"] as const,
   installedByMe: (agentId: string) =>
@@ -287,7 +395,8 @@ export function listedRefs(
  * this row, which are the names `plugin_grants` stores, and only without any from the row id itself.
  */
 export function appKeyOf(server: PluginServer): string {
-  const ref = server.tools[0]?.ref ?? server.withdrawn[0]?.ref;
+  // Optional reads: a partial row (a test fixture, a stale cache) must still name itself.
+  const ref = server.tools?.[0]?.ref ?? server.withdrawn?.[0]?.ref;
   const slash = ref?.indexOf("/") ?? -1;
   if (ref && slash > 0) return ref.slice(0, slash);
   return server.id.startsWith("team:") ? server.id.slice(5) : server.id;
@@ -397,6 +506,27 @@ export type PluginConnection = {
    * sentences, while a missing gate and a closed gate are the same gate.
    */
   checkable?: boolean;
+  /**
+   * Whether the credential behind this row has been withdrawn or deleted, present only on a HELD
+   * row. A ROW IS NOT ACCESS: revoking a credential leaves this row pointing at it, so anything
+   * drawing the word "connected" has to read this. Undefined reads as not revoked.
+   * **熊宝服务端不下发**（上游字段，`lib/plugins/directory-state.ts` 读它）。
+   */
+  revoked?: boolean;
+  /**
+   * Whose account this row is: the signed-in person's own, or the one standing account of a Shared
+   * app. Undefined reads as `"person"` — see {@link personalConnections}.
+   *
+   * 上游字段；**熊宝服务端不下发**：团队账号的状态记在应用行上（{@link PluginServer.sharedAccount}），连接
+   * 列表里只有本人的行。下面三项同理。
+   */
+  holder?: "person" | "deployment";
+  /** Whether the deployment's one shared account is connected, on a DEPLOYMENT row. 熊宝不下发。 */
+  connected?: boolean;
+  /** The email of whoever connected the shared account, on a DEPLOYMENT row. 熊宝不下发。 */
+  connectedBy?: string | null;
+  /** The vendor's own name for the connected account, on a DEPLOYMENT row. 熊宝不下发。 */
+  displayName?: string | null;
 };
 
 export type PluginConnections = {
@@ -405,17 +535,16 @@ export type PluginConnections = {
 };
 
 /**
- * The rows that are the person's own connection, for a screen asking "is this mine".
+ * The connections that are the signed-in person's own. A Shared app's row is the deployment's, and
+ * every screen that asks "is this mine" must never read it as yes.
  *
- * Upstream filters out rows held by the deployment for everybody (shared accounts, #757). This
- * fork does not take shared accounts, so every row `/api/plugins/connections` answers is the
- * asking person's own and the whole list is returned. Kept as a function so the screens read the
- * same as upstream's and the filter has one place to live if shared accounts ever arrive.
+ * 熊宝服务端的连接列表里只有本人的行（团队账号记在应用行上），所以这道筛选眼下什么也不筛；照上游写，规则
+ * 只有这一处。
  */
 export function personalConnections(
   rows: PluginConnection[],
 ): PluginConnection[] {
-  return rows;
+  return rows.filter((row) => row.holder !== "deployment");
 }
 
 /**
@@ -428,7 +557,12 @@ export function connectionsQueryOptions() {
   return queryOptions({
     queryKey: pluginKeys.connections(),
     queryFn: async (): Promise<PluginConnections> => {
-      const response = await client("/api/plugins/connections", {
+      /*
+       * `?shared=1` asks for the team-account rows too (X7, `holder: "deployment"`); the person's own
+       * rows carry no holder and are read as theirs by `personalConnections`. A server from before
+       * X7 ignores the parameter and answers the person's rows alone.
+       */
+      const response = await client("/api/plugins/connections?shared=1", {
         fallback: "读不到你已连接的账号。",
       });
       return response.json();
@@ -449,18 +583,60 @@ export function pluginsPageQueryOptions() {
 }
 
 /**
- * Composio's app directory, narrowed by a search term.
+ * What disconnecting this app would also end, as the server computed it.
+ *
+ * `siblings` are other apps' toolkit names (never this one) and `unanswered` is a COUNT of apps that
+ * could not be asked about. A deployment whose broker holds one account per app always answers
+ * empty.
+ */
+export type ConnectionSiblings = { siblings: string[]; unanswered: number };
+
+/**
+ * 上游 #1298 的 `GET /api/plugins/servers/:id/connection/siblings`。**熊宝服务端没有这个接口**（Arcade 断开时
+ * 只在 `DELETE .../connection` 的回应里带 `siblings`），请求会 404；留着只为恢复的上游组件能编译，接线时
+ * 由连接组决定去留。
+ */
+export function connectionSiblingsQueryOptions(serverId: string) {
+  return queryOptions({
+    queryKey: pluginKeys.siblings(serverId),
+    queryFn: async (): Promise<ConnectionSiblings> => {
+      const response = await client(
+        `/api/plugins/servers/${encodeURIComponent(serverId)}/connection/siblings`,
+        { fallback: "读不到还有哪些应用共用这个连接。" },
+      );
+      const body: Partial<ConnectionSiblings> = await response.json();
+      /*
+       * NARROWED RATHER THAN TRUSTED: an answer that is not this shape is read as "nothing to say",
+       * which draws no warning, rather than a throw that takes the whole page down for a sentence.
+       */
+      return {
+        siblings: Array.isArray(body.siblings) ? body.siblings : [],
+        unanswered:
+          typeof body.unanswered === "number" && body.unanswered > 0
+            ? body.unanswered
+            : 0,
+      };
+    },
+  });
+}
+
+/**
+ * The active broker's app directory, narrowed by a search term.
  *
  * The term goes to our own endpoint because the vendor's client drops a search parameter and
  * answers with an unfiltered page, so filtering has to happen somewhere that admits to doing it.
+ * `provider` only words the failure; 缺省 composio，和 {@link pluginsProvider} 一样。
  */
-export function composioAppsQueryOptions(query: string) {
+export function composioAppsQueryOptions(
+  query: string,
+  provider: PluginsProvider = "composio",
+) {
   return queryOptions({
     queryKey: pluginKeys.composioApps(query),
     queryFn: async (): Promise<{ apps: ComposioApp[] }> => {
       const response = await client(
         `/api/plugins/composio/apps?q=${encodeURIComponent(query)}`,
-        { fallback: "读不到可以连接的应用。请刷新页面。" },
+        { fallback: directoryReadFailure(provider) },
       );
       return response.json();
     },
@@ -497,6 +673,82 @@ export function agentPluginsQueryOptions(agentId: string) {
         { fallback: "读不到这位员工的插件。" },
       );
       return response.json();
+    },
+  });
+}
+
+/** One of the signed-in person's accounts at an app, as `/servers/:id/accounts` answers it. */
+export type BrokeredAccountRecord = {
+  /** Which account a Disconnect or Make default press is about. Opaque. */
+  id: string;
+  /** What the app says the account is: an email address or a login. Null where it said none. */
+  identity: string | null;
+  /** What the person and their Bots call it: the identity, or「账号 N」where there is none. */
+  label: string;
+  /** The account a Bot uses when it doesn't name one. */
+  isDefault: boolean;
+  connectedAt: string | null;
+};
+
+export type BrokeredAccounts = {
+  accounts: BrokeredAccountRecord[];
+  /** Whether this app can take another account beside the ones listed. The server decides. */
+  canAddAnother: boolean;
+};
+
+/**
+ * The person's own accounts at one brokered app (X1 `GET /api/plugins/servers/:id/accounts`). The
+ * server asks the app each time, so an account connected or ended elsewhere is listed as it stands.
+ * 键在 `["plugins"]` 之下，所以每一次插件写入的 `invalidatePlugins` 都会刷新它。
+ */
+export function brokeredAccountsQueryOptions(serverId: string) {
+  return queryOptions({
+    queryKey: pluginKeys.accounts(serverId),
+    queryFn: async (): Promise<BrokeredAccounts> => {
+      const response = await client(
+        `/api/plugins/servers/${encodeURIComponent(serverId)}/accounts`,
+        { fallback: "没能列出你的账号。请刷新页面。" },
+      );
+      const body = (await response.json()) as {
+        accounts?: unknown;
+        canAddAnother?: unknown;
+      };
+      return {
+        accounts: Array.isArray(body.accounts)
+          ? (body.accounts as BrokeredAccountRecord[])
+          : [],
+        canAddAnother: body.canAddAnother === true,
+      };
+    },
+  });
+}
+
+/** Who may give an app to a Bot, as `GET /servers/:id/owner-grants` answers it (X3). */
+export type OwnerGrants = {
+  ownerGrants: "any" | "admin";
+  /** What an admin chose, or null where the default is in force. */
+  chosen: "any" | "admin" | null;
+};
+
+/**
+ * 熊宝服务端把「主人可授予」单独放在 `GET /api/plugins/servers/:id/owner-grants`（服务器列表不带
+ * `ownerGrants`/`ownerGrantsChosen`，x-series-interfaces 第 8 条）。没有这个应用时 404。写入是
+ * `./mutations` 里的 owner-grants mutation，同在 `["plugins"]` 键下，写完一起刷新。
+ */
+export function ownerGrantsQueryOptions(serverId: string) {
+  return queryOptions({
+    queryKey: pluginKeys.ownerGrants(serverId),
+    queryFn: async (): Promise<OwnerGrants> => {
+      const response = await client(
+        `/api/plugins/servers/${encodeURIComponent(serverId)}/owner-grants`,
+        { fallback: "读不到谁能把这个应用交给员工。" },
+      );
+      const body = (await response.json()) as Partial<OwnerGrants>;
+      return {
+        ownerGrants: body.ownerGrants === "any" ? "any" : "admin",
+        chosen:
+          body.chosen === "any" || body.chosen === "admin" ? body.chosen : null,
+      };
     },
   });
 }

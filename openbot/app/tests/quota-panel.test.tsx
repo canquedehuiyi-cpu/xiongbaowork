@@ -14,7 +14,7 @@ import userEvent from "@testing-library/user-event";
 import { UsagePanel } from "@/components/quota/usage-panel";
 import { authKeys } from "@/lib/auth/queries";
 import { quotaKeys, type TokenUsage, tokenReadout } from "@/lib/quota/queries";
-import { Route as PlansRoute } from "@/routes/_authed/_app/plans";
+import { Route as PlansRoute } from "@/routes/_authed/settings/plans";
 
 /**
  * Ticket 022 acceptance at the two screens that decide it (spec K2/K3): the panel must show the plan
@@ -128,7 +128,7 @@ function seed() {
  * The plans page on its own, at the address the panel links to, as a viewer with this role. Moving a
  * plan is a platform administrator's act, so the role decides whether the page offers a switch.
  */
-function draw(role: "admin" | "user", at = "/plans") {
+function draw(role: "admin" | "user", at = "/settings/plans") {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
@@ -138,7 +138,7 @@ function draw(role: "admin" | "user", at = "/plans") {
       // only needs to answer to a different address for one render.
       PlansRoute.update({
         getParentRoute: () => root,
-        path: "/plans",
+        path: "/settings/plans",
       } as never),
     ]),
   });
@@ -181,7 +181,7 @@ function drawPanel(client: QueryClient) {
       panelRoute,
       PlansRoute.update({
         getParentRoute: () => root,
-        path: "/plans",
+        path: "/settings/plans",
       } as never),
     ]),
   });

@@ -1,14 +1,14 @@
-import type { AgentProfile } from "@/lib/agents/queries";
 import type { ChannelSummary } from "@/lib/channels/queries";
 
 /**
  * The conversation list, narrowed to what the person typed.
  *
- * Matches the channel's name, its summary, and the last message, because those are the things the
- * row can actually show — searching against something invisible returns results a person cannot
- * account for. The last message is included because it is still what the row draws until the
- * conversation has been named. Message history beyond that line is not here to search: it lives in
- * the thread store, and reaching for it is a server endpoint rather than a filter.
+ * Matches the channel's name, its summary, its opening and the last message, because those are the
+ * things the row can actually show — searching against something invisible returns results a person
+ * cannot account for. The opening and the last message are included because one of them is what the
+ * second line draws until the conversation has been named. Message history beyond that line is not
+ * here to search: it lives in the thread store, and reaching for it is a server endpoint rather than
+ * a filter.
  *
  * An empty query returns the input array unchanged rather than a copy, so typing and clearing does
  * not hand `AnimatePresence` a new array identity and restage the whole list.
@@ -25,8 +25,8 @@ export function matchingChannels(
     return channels;
   }
   return channels.filter((channel) =>
-    [channel.name, channel.summary, channel.lastMessage].some((field) =>
-      field?.toLowerCase().includes(needle),
+    [channel.name, channel.summary, channel.opening, channel.lastMessage].some(
+      (field) => field?.toLowerCase().includes(needle),
     ),
   );
 }
@@ -69,86 +69,23 @@ export function isUnread(
   return channel.id !== openChannelId && hasUnseenActivity(channel);
 }
 
-export type ConversationTab = "wakers" | "groups";
-
-/** Which side a conversation belongs to: two or more coworkers is a group conversation. */
-export function channelTab(channel: ChannelSummary): ConversationTab {
-  return channel.agentIds.length > 1 ? "groups" : "wakers";
-}
-
 /**
- * One employee's conversations: every loaded channel it takes part in.
- *
- * A group conversation belongs to each of its members, so it shows under every one of them rather
- * than under nobody — the workspace column is "what this employee is in", and a group it is in is
- * part of that.
+ * 会话行上的时间，像聊天软件那样短：今天的写「14:05」，今年的写「10月6日」，更早的写「2025/10/6」。
+ * 按这个浏览器的时区。上游的 `relativeTimeShort` 写的是英文缩写（"5m"、"2d"），熊宝的侧栏不用它。
  */
-export function channelsOf(
-  channels: ChannelSummary[] | undefined,
-  agentId: string,
-): ChannelSummary[] {
-  return (channels ?? []).filter((channel) =>
-    channel.agentIds.includes(agentId),
-  );
-}
-
-/** When a channel last moved: its last message, or its creation for one nobody spoke in. */
-function lastActivity(channel: ChannelSummary): string {
-  return channel.lastMessageAt ?? channel.createdAt;
-}
-
-/**
- * Where clicking an employee goes: its most recent one-to-one conversation among the loaded pages.
- *
- * One-to-one only. A group conversation the employee happens to be in is not "talking to it", and
- * landing in a shared transcript from a click on one name would be a surprise. Undefined means
- * there is none loaded, and the caller starts a new conversation addressed to it instead.
- */
-export function latestDirectChannel(
-  channels: ChannelSummary[] | undefined,
-  agentId: string,
-): ChannelSummary | undefined {
-  let latest: ChannelSummary | undefined;
-  for (const channel of channels ?? []) {
-    if (channel.agentIds.length !== 1 || channel.agentIds[0] !== agentId)
-      continue;
-    if (!latest || lastActivity(channel) > lastActivity(latest))
-      latest = channel;
-  }
-  return latest;
-}
-
-/**
- * The employees the sidebar lists: everyone on the roster except those switched out of the list,
- * unless the person pinned one or an administrator assigned it to them — those stay in reach.
- */
-export function listedEmployees(
-  agents: readonly AgentProfile[] | undefined,
-): AgentProfile[] {
-  return (agents ?? []).filter(
-    (agent) => !agent.hidden || agent.pinned || agent.assignedToMe === true,
-  );
-}
-
-/** `10月6日 00:56`, the reference's stamp on a conversation row, in this browser's time zone. */
-export function conversationStamp(iso: string): string {
+export function conversationStamp(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** The conversation routes the workspace column sits beside, read off the path. */
-export type ConversationRoute =
-  | { kind: "new" }
-  | { kind: "channel" | "group"; channelId: string };
-
-export function conversationRoute(pathname: string): ConversationRoute | null {
-  if (pathname === "/channel/new") return { kind: "new" };
-  const match = /^\/(channel|group)\/([^/]+)\/?$/.exec(pathname);
-  if (!match?.[1] || !match[2] || match[2] === "new") return null;
-  return {
-    kind: match[1] as "channel" | "group",
-    channelId: decodeURIComponent(match[2]),
-  };
+  if (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  ) {
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
 }

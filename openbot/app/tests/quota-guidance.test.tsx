@@ -127,31 +127,31 @@ function hrefOf(container: HTMLElement, text: string): string | null {
   return anchor ? anchor.getAttribute("href") : null;
 }
 
-test("guidanceFor names the plan, used/limit, /plans and the cleanup screen for every metric", () => {
+test("guidanceFor names the plan, used/limit, /settings/plans and the cleanup screen for every metric", () => {
   expect(guidanceFor(details("wakers", 3, 3))).toEqual({
     metric: "wakers",
     title: "员工数量已达套餐上限",
     sentence: "Team 套餐：员工已用 3/3",
     hint: "删除不再需要的员工即可腾出名额，或升级套餐获得更多名额。",
-    upgradeHref: "/plans",
-    cleanup: { href: "/wakers", label: "管理员工" },
+    upgradeHref: "/settings/plans",
+    cleanup: { href: "/bots", label: "管理员工" },
   });
   expect(guidanceFor(details("devices", 1, 1))).toEqual({
     metric: "devices",
     title: "设备数量已达套餐上限",
     sentence: "Team 套餐：设备已用 1/1",
     hint: "移除不再使用的设备即可腾出名额，或升级套餐获得更多名额。",
-    upgradeHref: "/plans",
+    upgradeHref: "/settings/plans",
     // 设置 › 我的设备 is where a registered device (what the quota counts) is removed.
-    cleanup: { href: "/settings", label: "管理设备" },
+    cleanup: { href: "/settings/devices", label: "管理设备" },
   });
   expect(guidanceFor(details("customModels", 5, 5))).toEqual({
     metric: "customModels",
     title: "当前套餐不支持更多自定义模型",
     sentence: "Team 套餐：自定义模型已用 5/5",
     hint: "从模型库删除不再使用的模型即可腾出名额，或升级套餐获得更多名额。",
-    upgradeHref: "/plans",
-    cleanup: { href: "/resources", label: "管理模型库" },
+    upgradeHref: "/settings/plans",
+    cleanup: { href: "/capabilities/models", label: "管理模型库" },
   });
   const tasks = guidanceFor(details("tasksPerMonth", 100, 100));
   expect(tasks).toEqual({
@@ -159,7 +159,7 @@ test("guidanceFor names the plan, used/limit, /plans and the cleanup screen for 
     title: "本月任务次数已用完",
     sentence: "Team 套餐：本月任务已用 100/100",
     hint: "额度会在下个周期自动恢复；现在就需要更多，可以升级套餐。",
-    upgradeHref: "/plans",
+    upgradeHref: "/settings/plans",
   });
   expect(tasks.hint).toContain("下个周期自动恢复");
   expect("cleanup" in tasks).toBe(false);
@@ -177,7 +177,7 @@ test("a ceiling of 0 offers only the upgrade: nothing to delete, nothing that co
     title: "当前套餐不支持更多自定义模型",
     sentence: "Team 套餐：自定义模型已用 0/0",
     hint: "当前套餐不包含自定义模型，升级套餐后即可使用。",
-    upgradeHref: "/plans",
+    upgradeHref: "/settings/plans",
   });
   for (const metric of ["wakers", "devices", "tasksPerMonth"] as const) {
     const guidance = guidanceFor(details(metric, 0, 0));
@@ -198,7 +198,7 @@ test("a refusal reported with no dialog mounted is dropped, not replayed later",
   expect(seen).toEqual([details("devices"), null]);
 });
 
-test("a 402 mutation opens the dialog with used/limit, the /plans link and the cleanup link", async () => {
+test("a 402 mutation opens the dialog with used/limit, the /settings/plans link and the cleanup link", async () => {
   serve(402, {
     error: "This workspace has reached its allowance.",
     ...details("wakers"),
@@ -211,8 +211,8 @@ test("a 402 mutation opens the dialog with used/limit, the /plans link and the c
     name: "员工数量已达套餐上限",
   });
   expect(dialog.textContent).toContain("Team 套餐：员工已用 2/2");
-  expect(hrefOf(dialog, "升级套餐")).toBe("/plans");
-  expect(hrefOf(dialog, "管理员工")).toBe("/wakers");
+  expect(hrefOf(dialog, "升级套餐")).toBe("/settings/plans");
+  expect(hrefOf(dialog, "管理员工")).toBe("/bots");
   // The screen's own inline message is kept beside the dialog. The modal dialog marks everything
   // outside its portal aria-hidden while open, so the alert is only reachable with `hidden: true`.
   const alert = await view.findByRole("alert", { hidden: true });
@@ -240,7 +240,7 @@ test("a 402 read opens the dialog without being retried, and a monthly tally off
   });
   expect(dialog.textContent).toContain("Team 套餐：本月任务已用 30/30");
   expect(dialog.textContent).toContain("下个周期自动恢复");
-  expect(hrefOf(dialog, "升级套餐")).toBe("/plans");
+  expect(hrefOf(dialog, "升级套餐")).toBe("/settings/plans");
   expect(dialog.querySelectorAll("a")).toHaveLength(1);
   // Behind the open modal the inline message is aria-hidden, hence `hidden: true`.
   const alert = await view.findByRole("alert", { hidden: true });

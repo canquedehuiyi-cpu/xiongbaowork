@@ -30,7 +30,9 @@ export function stoppedReason(reported: unknown): string {
       : typeof reported === "string"
         ? reported
         : "";
-  return said.trim() || "The Bot stopped without saying why.";
+  const unreachable = backEndUnreachable(said);
+  if (unreachable) return unreachable;
+  return said.trim() || "员工停下了，没有说原因。";
 }
 
 /**
@@ -44,6 +46,25 @@ export function runErrorReason(event: unknown): string {
   const quota = reportIfQuotaRunError(event);
   if (quota) return `${quota.title}。${quota.sentence}。${quota.hint}`;
   return stoppedReason((event as { message?: unknown } | undefined)?.message);
+}
+
+/**
+ * The one reason that is NOT passed on in its own words: the browser couldn't reach the runtime.
+ *
+ * CopilotKit's Intelligence agent writes it as `REST <mode> request failed: <whatever came back>`,
+ * and what came back is the server's raw body, JSON included (`{"error":"Failed to resolve Learning
+ * Container"}`). Nothing in it is the person's to act on, so they are told what happened in their
+ * terms and the original goes to the console for whoever is debugging.
+ */
+const REST_REQUEST_FAILED = /^REST (\w+) request failed\b/;
+
+function backEndUnreachable(said: string): string | null {
+  const match = REST_REQUEST_FAILED.exec(said.trim());
+  if (!match) return null;
+  console.warn("OpenBot couldn't reach its back end.", said);
+  return match[1] === "run"
+    ? "熊宝连不上后端，你的消息没有发出去。再试一次，或者退出后重新打开熊宝。"
+    : "熊宝连不上后端。再试一次，或者退出后重新打开熊宝。";
 }
 
 /**

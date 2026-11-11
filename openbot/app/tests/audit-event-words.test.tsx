@@ -176,7 +176,7 @@ test("the search box still finds a row by its stored name", async () => {
   await userEvent
     .setup({ document })
     .type(
-      view.getByRole("searchbox", { name: "Search events" }),
+      view.getByRole("searchbox", { name: "搜索事件" }),
       "parallel/web_search",
     );
   await waitFor(() =>

@@ -10,7 +10,11 @@ import { type QuotaErrorDetails, RequestError } from "@/lib/client";
  */
 
 /** The screens that free a slot. Every one is a registered route in `routeTree.gen.ts`. */
-export type QuotaCleanupHref = "/wakers" | "/settings" | "/resources";
+/** M5b：员工列表在 /bots、我的设备在设置里自己的分区、模型库是「能力」的一个页签。 */
+export type QuotaCleanupHref =
+  | "/bots"
+  | "/settings/devices"
+  | "/capabilities/models";
 
 export type QuotaGuidance = Readonly<{
   metric: QuotaErrorDetails["metric"];
@@ -19,7 +23,11 @@ export type QuotaGuidance = Readonly<{
   sentence: string;
   /** What happens next, in a sentence: how to make room, or when it comes back on its own. */
   hint: string;
-  upgradeHref: QuotaErrorDetails["upgradeUrl"];
+  /*
+   * 套餐页本身（M5b 起在设置里）。服务端的 `upgradeUrl` 仍是 `/plans`（`client.ts` 只认它，契约不变），
+   * 那个地址也仍然重定向到这里；链接直接写落点，省一次跳转。
+   */
+  upgradeHref: "/settings/plans";
   /** Absent when nothing can be deleted to make room — a monthly tally only resets. */
   cleanup?: Readonly<{ href: QuotaCleanupHref; label: string }>;
 }>;
@@ -36,14 +44,14 @@ const COPY: Readonly<Record<QuotaErrorDetails["metric"], MetricCopy>> = {
     label: "员工",
     title: "员工数量已达套餐上限",
     hint: "删除不再需要的员工即可腾出名额，或升级套餐获得更多名额。",
-    cleanup: { href: "/wakers", label: "管理员工" },
+    cleanup: { href: "/bots", label: "管理员工" },
   },
   devices: {
     label: "设备",
     title: "设备数量已达套餐上限",
     hint: "移除不再使用的设备即可腾出名额，或升级套餐获得更多名额。",
     // The count is `registered_devices`, which 设置 › 我的设备 lists and removes (DELETE /api/devices/:id).
-    cleanup: { href: "/settings", label: "管理设备" },
+    cleanup: { href: "/settings/devices", label: "管理设备" },
   },
   /*
    * A plan's `customModels` is a yes/no, which the server turns into a ceiling of 0 or unlimited, so
@@ -54,7 +62,7 @@ const COPY: Readonly<Record<QuotaErrorDetails["metric"], MetricCopy>> = {
     label: "自定义模型",
     title: "当前套餐不支持更多自定义模型",
     hint: "从模型库删除不再使用的模型即可腾出名额，或升级套餐获得更多名额。",
-    cleanup: { href: "/resources", label: "管理模型库" },
+    cleanup: { href: "/capabilities/models", label: "管理模型库" },
   },
   tasksPerMonth: {
     label: "本月任务",
@@ -77,7 +85,7 @@ export function guidanceFor(details: QuotaErrorDetails): QuotaGuidance {
     hint: excluded
       ? `当前套餐不包含${copy.label}，升级套餐后即可使用。`
       : copy.hint,
-    upgradeHref: details.upgradeUrl,
+    upgradeHref: "/settings/plans",
     ...(copy.cleanup && !excluded ? { cleanup: copy.cleanup } : {}),
   };
 }
