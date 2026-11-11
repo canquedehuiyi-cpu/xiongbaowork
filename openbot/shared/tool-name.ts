@@ -136,7 +136,7 @@ export function appToolName(server: string, tool: string): ToolName {
 
 /**
  * The connector a server key names, the way a person would say it: "google-drive" as "Google
- * Drive", and a broker's "composio-airtable" as the app alone.
+ * Drive", and a broker's "composio-airtable" or "arcade-Gmail" as the app alone.
  */
 export function connectorName(server: string): string {
   return wordsOf(brokeredApp(server) ?? server)
@@ -820,7 +820,7 @@ export function answersTheModel(name: string): boolean {
 /**
  * The app behind a brokered server key, or null for a server this deployment dials itself.
  *
- * A brokered server is keyed `<broker>-<app>` — `composio-gmail` — because the broker is how the
+ * A brokered server is keyed `<broker>-<app>` — `composio-gmail`, `arcade-Gmail` — because the broker is how the
  * credential is held and two brokers could both offer Gmail. Neither of those is the reader's
  * business: they asked their Bot about their email, not about which company holds the grant. This
  * is the same argument the research relabelling above makes, and the answer is the same — which
@@ -837,8 +837,11 @@ function brokeredApp(server: string): string | null {
   return null;
 }
 
-/** The brokers whose apps this deployment keys `<broker>-<app>`. See `server/src/plugins/access.ts`. */
-const BROKER_PREFIXES = ["composio-"] as const;
+/**
+ * The brokers whose apps this deployment keys `<broker>-<app>`: Composio, and Arcade (X5). See
+ * `BROKERED_PROFILE` in `server/src/plugins/access.ts`, which names each one's prefix.
+ */
+const BROKER_PREFIXES = ["composio-", "arcade-"] as const;
 
 /**
  * `routines` and `routine` are the same word for this purpose.

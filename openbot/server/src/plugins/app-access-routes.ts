@@ -8,10 +8,30 @@ import {
   nothingToRequest,
   type Unavailable,
 } from "./app-access";
-import { type AppDirectory, requestPlanFor } from "./app-access-store";
+import {
+  type AppDirectory,
+  type AppInspection,
+  requestPlanFor,
+} from "./app-access-store";
 import { MAX_PENDING_APP_ACCESS_REQUESTS } from "./app-access-tool";
 import type { CatalogueEntry } from "./catalogue";
-import type { AppAccessRequestRecord, PluginStore } from "./store";
+import {
+  approveOwnersSharedUse,
+  ownerAppsAllowed,
+  ownerGrantRefusal,
+  withdrawOwnersSharedUse,
+} from "./owner-grants";
+import { personalRevokeRefusalFor } from "./personal-defaults";
+import {
+  type SharedAudience,
+  SharedUseNotSharedError,
+  type SharedUseStore,
+} from "./shared-use-store";
+import {
+  type AppAccessRequestRecord,
+  isServerWriteRefusal,
+  type PluginStore,
+} from "./store";
 
 type RouteContext = Context<{ Variables: AppVariables }>;
 
@@ -77,7 +97,9 @@ export function unavailableSentence(
  * - 只能问、只能为自己能用的员工申请（`canUseBot`，否则 404，不说员工存不存在）。
  * - 只有目录、行或 broker 目录能作证的应用能申请打开；随手写的 `composio-` 键答没有这个应用。
  * - 类型是服务端的：本人自己能解决的状态（连接、重连、本人自己添加的应用）不建申请。
- * - 一按批准只给管理员（持有能力，`decisionRefusal`）；批准给的是只读、非破坏性的动作，写操作仍逐个授予。
+ * - 一按批准只给管理员（持有能力，`decisionRefusal`）。团队版里批准给的是只读、非破坏性的动作，写操作仍逐个
+ *   授予；个人版里批准前的那次刷新经过个人默认，会给出全部工具（见 `./personal-defaults`），普通写挡在本人的
+ *   「改动之前先问」后面。
  * - Shared 应用在 X3 并入共享使用批准之前对谁都读作 `shared_not_approved`，没有可申请的（X1 的共享闸门
  *   没有批准就拒绝，管理员与员工主人也不例外）。
  */
@@ -105,6 +127,8 @@ export function mountAppAccessRoutes(options: {
     chosen: string[] | undefined,
     direct?: boolean,
   ) => Promise<Response>;
+  /** 共享使用批准（X3）：主人的授予在 Shared 应用上设下受众时用；没给时只授予、不设受众。 */
+  shared?: { store: SharedUseStore; audience: SharedAudience };
 }) {
   const {
     routes,
@@ -145,6 +169,10 @@ export function mountAppAccessRoutes(options: {
   const ownersHeld = (context: RouteContext, agentId: string) => () =>
     options.asBotOwner(context, agentId, () => store.listForAgent(agentId));
 
+  /** `?view=owner`：按员工主人的视角读，他自己能给的应用读作 `owner_grantable`（X3）。 */
+  const ownerView = (context: RouteContext) =>
+    context.req.query("view") === "owner";
+
   const inspect = (context: RouteContext, agentId: string, app: string) =>
     store.inspectApp({
       app,
@@ -153,6 +181,7 @@ export function mountAppAccessRoutes(options: {
       composioConfigured,
       directory,
       ownersHeld: ownersHeld(context, agentId),
+      ownerView: ownerView(context),
     });
 
   /** 员工持有的每个应用对这个人是什么。只对这个人能用的员工答，否则 404。 */
@@ -167,6 +196,7 @@ export function mountAppAccessRoutes(options: {
         composioConfigured,
         directory,
         ownersHeld: ownersHeld(context, agentId),
+        ownerView: ownerView(context),
       }),
     });
   });
@@ -345,7 +375,8 @@ export function mountAppAccessRoutes(options: {
    * `app_access.requested`，然后带 `direct` 的 `app_access.approved`。
    *
    * 同样的检查、同样的改动：能申请什么是 `requestable` 的答案，批准做什么是收件箱的 `carryOut`。没有
-   * `refs`：一按给的是收件箱不带 refs 时给的，应用的只读、非破坏性动作。
+   * `refs`：团队版里一按给的是收件箱不带 refs 时给的，应用的只读、非破坏性动作；个人版里批准前的刷新经过
+   * 个人默认，会给出全部工具（见 `./personal-defaults`）。
    *
    * 没能做成就什么也不留：这次新提的申请撤回（写一行带 `direct` 的 `app_access.cancelled`）；本来就在等的
    * 那条原样留着。
@@ -391,5 +422,241 @@ export function mountAppAccessRoutes(options: {
           ),
         );
     }
+  });
+
+  /**
+   * 员工的主人把自己的应用给自己的员工（X3，上游 `/give` 等）。
+   *
+   * 能给什么是 {@link ownerGrantRefusal} 的答案：自己的员工、管理员打开并对主人开放的应用、`ownerApps` 能力。
+   * 否则 403 并写进轨迹。给的是和管理员一按批准一样的东西：应用的只读、非破坏性动作（内置的例行任务例外，
+   * 它的每个动作只管提问人自己的例行任务）。会写、会发的动作仍逐个由管理员授予。每一条都标为
+   * `granted_as = owner`，在 Team Bot 上永远用提问人自己的账号。员工已经持有这个应用的任何动作时什么都不给。
+   */
+  const actorEmail = (context: RouteContext) =>
+    context.var.actor?.email ?? "unknown";
+
+  const ownersApp = async (
+    context: RouteContext,
+  ): Promise<Response | { agentId: string; inspected: AppInspection }> => {
+    const agentId = context.req.param("agentId") ?? "";
+    const app = context.req.param("app") ?? "";
+    if (!(await canUseBot(context.var.actor, agentId)))
+      return context.json({ error: "没有这位员工。" }, 404);
+    const inspected =
+      app.length > MAX_NAME ? null : await inspect(context, agentId, app);
+    if (!inspected || !(inspected.vouched || inspected.access.granted))
+      return context.json({ error: `这个部署没有叫「${app}」的应用。` }, 404);
+    return { agentId, inspected };
+  };
+
+  routes.post("/for/:agentId/apps/:app/give", requireUser, async (context) => {
+    const found = await ownersApp(context);
+    if (found instanceof Response) return found;
+    const { agentId, inspected } = found;
+    const { access } = inspected;
+    const refusal = await ownerGrantRefusal(
+      store,
+      context.var.actor.id,
+      agentId,
+      inspected,
+    );
+    if (refusal)
+      return refused(context, {
+        app: access.key,
+        bot: agentId,
+        reason: "owner_grant_refused",
+        error: refusal,
+        status: 403,
+      });
+    const serverId = inspected.answeringId ?? "";
+    /*
+     * 主人可以给的 Shared 应用给了就能用：这次授予设下谁可以经这位员工用团队账号——能用这位员工的人，
+     * 别人没有（`approveOwnerGrant`）。员工已经持有主人的授予时也再问一次，好让管理员关掉又打开主人决定
+     * 之后，按一下「给」就把受众放回来。
+     */
+    const approveShared = async () => {
+      if (!options.shared) return;
+      try {
+        await approveOwnersSharedUse(
+          options.shared.audience,
+          options.shared.store,
+          { botId: agentId, serverId, ownerId: context.var.actor.id },
+        );
+      } catch (error) {
+        // 这之间应用被切走了模式：不设受众（闭合的方向），授予照常答复，不报 500。
+        if (!(error instanceof SharedUseNotSharedError)) throw error;
+      }
+    };
+    if (access.granted) {
+      if (access.givenByOwner) await approveShared();
+      return context.json({ granted: [] as string[] });
+    }
+    const server = (await store.listServers()).find(
+      (candidate) => candidate.id === serverId,
+    );
+    const tools = server?.tools ?? [];
+    if (tools.length === 0)
+      return refused(context, {
+        app: access.key,
+        bot: agentId,
+        reason: "no_tools",
+        error: `${access.displayName} 还没有可以给的动作。请管理员刷新它的工具。`,
+        status: 409,
+      });
+    const builtin = inspected.entry?.auth.kind === "builtin";
+    const refs = tools
+      .filter(
+        (tool) => builtin || (tool.effect === "read" && !tool.destructive),
+      )
+      .map((tool) => tool.ref);
+    if (refs.length === 0)
+      return refused(context, {
+        app: access.key,
+        bot: agentId,
+        reason: "no_read_only_tools",
+        error: `${access.displayName} 没有员工只读就能用的动作。请管理员为这位员工选择它能做什么。`,
+        status: 409,
+      });
+    for (const ref of refs)
+      await store.grant("mcp", ref, agentId, actorEmail(context), {
+        as: "owner",
+      });
+    await store.recordAppAccessEvent({
+      eventType: "app_access.owner_granted",
+      targetId: access.key,
+      actorUserId: context.var.actor.id,
+      payload: { app: access.key, bot: agentId, refs },
+    });
+    await approveShared();
+    return context.json({ granted: refs });
+  });
+
+  /**
+   * 员工的主人收回自己在一个应用上给的。只收回主人自己的授予：管理员做的那条不是主人能给的，留着。仍要
+   * 求员工是他的；不问应用是否还对主人开放，收回总是可以的。
+   */
+  routes.delete(
+    "/for/:agentId/apps/:app/give",
+    requireUser,
+    async (context) => {
+      /*
+       * 个人版里个人默认管着的员工持有每个已连接应用（`./personal-defaults`），收回会在它下一次运行时被补回来。
+       * 答一个「已收回」却悄悄还原，不如照实拒绝，和 `DELETE /grants` 同一个答复。分身和远端员工不被补齐，
+       * 照常收回。
+       */
+      const personalRefusal = await personalRevokeRefusalFor(
+        store,
+        "mcp",
+        context.req.param("app") ?? "",
+        context.req.param("agentId") ?? "",
+      );
+      if (personalRefusal) return context.json({ error: personalRefusal }, 403);
+      const found = await ownersApp(context);
+      if (found instanceof Response) return found;
+      const { agentId, inspected } = found;
+      if ((await store.agentOwner(agentId)) !== context.var.actor.id)
+        return refused(context, {
+          app: inspected.access.key,
+          bot: agentId,
+          reason: "owner_revoke_refused",
+          error: "只能改你自己的员工的应用。",
+          status: 403,
+        });
+      const ids = [
+        ...new Set([
+          inspected.access.key,
+          ...inspected.rowIds,
+          ...(inspected.answeringId ? [inspected.answeringId] : []),
+        ]),
+      ];
+      const refs = await store.revokeOwnerGrants(
+        ids,
+        agentId,
+        actorEmail(context),
+      );
+      if (refs.length > 0)
+        await store.recordAppAccessEvent({
+          eventType: "app_access.owner_revoked",
+          targetId: inspected.access.key,
+          actorUserId: context.var.actor.id,
+          payload: { app: inspected.access.key, bot: agentId, refs },
+        });
+      // 主人的授予设下的团队账号受众一起撤回；管理员批准的留着，和他的授予一样。
+      if (options.shared && inspected.answeringId)
+        await withdrawOwnersSharedUse(
+          options.shared.audience,
+          options.shared.store,
+          {
+            serverId: inspected.answeringId,
+            botId: agentId,
+            actorId: context.var.actor.id,
+          },
+        );
+      return context.json({ revoked: refs });
+    },
+  );
+
+  /** 这个人可以给自己员工的应用。管理员对他关掉了这个功能时为空。 */
+  routes.get("/giveable", requireUser, async (context) => {
+    if (!(await ownerAppsAllowed(context.var.actor.id)))
+      return context.json({ apps: [] });
+    return context.json({
+      apps: await store.giveableApps({
+        userId: context.var.actor.id,
+        composioConfigured,
+      }),
+    });
+  });
+
+  /** 谁可以把一个应用给员工：现在生效的，与管理员选的（没选为 null）。 */
+  routes.get("/servers/:id/owner-grants", requireUser, async (context) => {
+    const setting = await store.ownerGrantsSetting(context.req.param("id"));
+    if (!setting) return context.json({ error: "这个应用还没有添加。" }, 404);
+    return context.json(setting);
+  });
+
+  /**
+   * 管理员改谁可以把一个应用给员工：员工的主人（`any`）、只有管理员（`admin`）、按账号的默认值（null）。
+   * 只有持有能力的管理员；进轨迹。不再是 `any` 时，主人的授予设下的团队账号受众被撤回（授予留着，由管理员
+   * 决定留不留，它们的调用在管理员批准谁可以用之前被拒绝）。
+   */
+  routes.put("/servers/:id/owner-grants", capable, async (context) => {
+    if (context.var.actor?.role !== "admin")
+      return context.json({ error: "只有管理员可以改这一项。" }, 403);
+    const body = (await context.req.json().catch(() => null)) as {
+      ownerGrants?: unknown;
+    } | null;
+    const value = body?.ownerGrants;
+    if (value !== null && value !== "any" && value !== "admin")
+      return context.json(
+        { error: "请选择 any、admin，或用 null 回到默认值。" },
+        400,
+      );
+    const serverId = context.req.param("id");
+    let changed: { withdrawn: string[] } | null;
+    try {
+      changed = await store.setOwnerGrants({
+        serverId,
+        ownerGrants: value,
+        by: actorEmail(context),
+      });
+    } catch (error) {
+      if (isServerWriteRefusal(error))
+        return context.json(
+          { error: "你的管理员身份没能确认，没有改变任何东西。" },
+          403,
+        );
+      throw error;
+    }
+    if (!changed) return context.json({ error: "这个应用还没有添加。" }, 404);
+    if (options.shared)
+      for (const bot of changed.withdrawn)
+        await options.shared.audience.record({
+          eventType: "shared_use.owner_withdrawn",
+          targetId: serverId,
+          actorUserId: context.var.actor.id,
+          payload: { bot, server: serverId, why: "owner_grants_changed" },
+        });
+    return context.json({ ok: true, withdrawn: changed.withdrawn });
   });
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
 import {
   ApprovalAlreadyAnsweredError,
@@ -49,6 +50,7 @@ import {
   pluginGrants,
   skills,
   skillTools,
+  teamBotPublications,
   userRoles,
   users,
 } from "../db/schema";
@@ -60,8 +62,9 @@ import {
   type InstallListingKind,
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
+import { sharedUseApprovals, sharedUseRequests } from "../db/schema/shared-use";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
-import { appsPage, appsPageZh } from "../edition";
+import { appsPage, appsPageZh, currentEdition } from "../edition";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
 import { isProactiveInitiator } from "../proactive/initiator";
 import type { CheckPrivateShare } from "../proactive/private-share";
@@ -73,9 +76,13 @@ import {
 } from "../tenant/context";
 import {
   accessFor,
+  BROKERED_PROFILE,
+  type BrokerProvider,
   type ServerAccess,
   ServerUnresolvableError,
+  toolkitOfFor,
 } from "./access";
+import { createArcadeAttempts } from "./arcade-attempts";
 import {
   type BrokerConnection,
   BrokerRefusalError,
@@ -101,8 +108,10 @@ import {
 } from "./catalogue";
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
+import { grantedByOwner, ownerStillGives } from "./owner-grants";
 import { steeringOf } from "./shared-use";
-import { appAccessMethods } from "./app-access-store";
+import { type SharedUseGate, sharedUseAppLockKey } from "./shared-use-store";
+import { appAccessMethods, type SharedAudienceCheck } from "./app-access-store";
 import {
   type BrokeredAccountRecord,
   createAccountBook,
@@ -127,6 +136,12 @@ import {
   deploymentClientSlug,
   toolkitOfDeploymentClientKey,
 } from "./deployment-clients";
+import {
+  decideEntraScope,
+  type EntraOnBehalf,
+  entraTokenFor,
+  MOVED_WHILE_ADDING,
+} from "./entra-access";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
@@ -259,6 +274,11 @@ export type ServerRecord = {
    * and never from the app's name. The connect route and the store refuse whatever a screen draws.
    */
   adminConnectOnly: boolean;
+  /**
+   * The Entra scope a server added by URL is reached with as the signed-in person, or null where it
+   * is reached on the deployment's own credential. See `mcpServers.entraScope`. 上游 #931。
+   */
+  entraScope?: string | null;
   /**
    * 上游 #950 的 `sharedOnly`：这个应用只能作为共享的团队账号连接（部署自己的 S2S 客户端）。与
    * `adminConnectOnly` 同一个判断；fork 在 Personal 模式下仍允许管理员以自己的名义连接（既有行为），切到
@@ -775,6 +795,9 @@ export const RELIST_ATTEMPTS = 3;
  * FIRST OCCURRENCE WINS, and the order is the vendor's own. Anything else needs a rule for which
  * of two identical names is the real one, and there is no such rule.
  */
+/** 模型 API 接受的工具名字符（X5）。 */
+const OFFERABLE_TOOL_NAME = /^[A-Za-z0-9_-]+$/;
+
 export function storableTools(
   serverId: string,
   listed: ListedTool[],
@@ -802,12 +825,20 @@ export function storableTools(
       destructive: boolean;
       unclassified: boolean;
       version: string | null;
+      vendorName?: string;
     }
   >();
 
   for (const tool of listed) {
     const name = tool.name.replaceAll(NUL, "");
     if (byName.has(name)) continue;
+    /*
+     * X5：厂商名与本部署的名字不同的动作（Arcade），本部署的名字必须是模型工具名能用的字符。认不出的
+     * 名字（第二个点、别的字符）不猜着修，只把这一个动作排除，其余照常记录。只看带 `vendorName` 的，
+     * 其他传输层的清单与以前一样。
+     */
+    const vendorName = tool.vendorName?.replaceAll(NUL, "");
+    if (vendorName !== undefined && !OFFERABLE_TOOL_NAME.test(name)) continue;
     /*
      * vendor 只字未提的工具，只在 catalogue 名单没有覆盖它时记为 unclassified。MCP 的沉默不记
      * effect，条目在就由名单整体决定（名单外按读），所以条目在就算覆盖；broker 的沉默记成了
@@ -850,6 +881,9 @@ export function storableTools(
       // vendor 只字未提、又没有名单覆盖；见 `mcpTools.unclassified`。
       unclassified,
       version: tool.version?.replaceAll(NUL, "") ?? null,
+      ...(vendorName !== undefined && vendorName !== name
+        ? { vendorName }
+        : {}),
     });
   }
 
@@ -1010,7 +1044,34 @@ export type AppAccessRequestRecord = {
   requestedBy: string;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  /**
+   * 批准作用在哪（X3，X2 评审 M3）：`team_bot` 是已发布的 Team Bot——授予写在员工身上，批准后每一个能用
+   * 这位员工的人都拿到它，不只是申请人；`bot` 是其余的员工。行为不变（上游的设计），只是说清楚。
+   */
+  appliesTo: "team_bot" | "bot";
+  /**
+   * 申请人和这位员工的关系：员工的主人（`owner`）、Team Bot 的队友（`teammate`，不是主人、用的是别人发布
+   * 的员工），或其余（`other`，例如没有主人的公开员工）。读不到员工资料时按 `other`。
+   */
+  requesterRole: "owner" | "teammate" | "other";
+  /** 给管理员看的中文提示；`appliesTo` 为 `team_bot` 时说明批准对整个 Team Bot 生效，其余为 null。 */
+  scopeNote: string | null;
 };
+
+/** {@link AppAccessRequestRecord.scopeNote} 的句子。 */
+export function appAccessScopeNote(
+  appliesTo: "team_bot" | "bot",
+  requesterRole: "owner" | "teammate" | "other",
+): string | null {
+  if (appliesTo !== "team_bot") return null;
+  const who =
+    requesterRole === "owner"
+      ? "申请人是这位员工的主人。"
+      : requesterRole === "teammate"
+        ? "申请人是使用这位员工的队友，不是它的主人。"
+        : "";
+  return `批准将对整个 Team Bot 生效：授予写在员工身上，每一个能用这位员工的人都会拿到它，不只是申请人。${who}`;
+}
 
 /** 路由和工具传进来的申请 id 是任意文字；不是 uuid 的在查询之前就答"没有"，不让 Postgres 报类型错误。 */
 export const isUuid = (value: string) =>
@@ -1591,13 +1652,48 @@ export type PluginStoreOptions = {
    * above — invent a broker to get a store.
    */
   broker?: ComposioBroker;
+  /**
+   * 活动的连接应用提供商（X5）。不给时是 Composio，与以前完全一样。决定 broker 应用的 id 前缀、url scheme、
+   * provenance，以及个人连接行记在哪个提供商名下。
+   */
+  brokerProvider?: BrokerProvider;
   /** Where the vendor sends people back; needed to (re)register a dynamic client. */
   redirectUri?: string;
+  /**
+   * Tokens Entra issues for a person on their behalf, for a server an admin marked as reached as
+   * the signed-in person (`auth/entra.ts`, 上游 #931). Absent on a deployment with no Microsoft
+   * sign-in, where such a server cannot be added and a call to one already stored is refused.
+   * Carries the resources the deployment registered for it (`MICROSOFT_OAUTH_OBO_RESOURCES`) and
+   * OpenBot's own API, which no scope may name; see `plugins/entra-access.ts`.
+   */
+  entra?: EntraOnBehalf;
+  /**
+   * The asker's consent before a call goes out on their own Microsoft sign-in through a Team Bot
+   * someone else published (`teamBots.ownSignInConsent`, X6). Asked here, against the row the token
+   * is sent for, so a server marked after the Team Bot rule looked at it is still asked about.
+   * Throws the consent card; absent, nothing is asked beyond the rule below that a marked server is
+   * never reached as anybody but the asker.
+   */
+  entraConsent?: (input: {
+    actorId: string;
+    botId: string;
+    serverId: string;
+  }) => Promise<void>;
   /**
    * 一个职责的触发来源（`manual`、`schedule`、渠道……），给共享账号闸门判断这次运行是否由外部输入驱动
    * （`./shared-use`）。没给时，由职责开始的运行一律按外部输入处理，团队账号不接受——闭合的方向。
    */
   responsibilitySources?: (responsibilityId: string) => Promise<string[]>;
+  /**
+   * 共享使用闸门（X3，`./shared-use-store`）：员工对这个 Shared 应用的批准是否放这次运行进团队账号。没给时
+   * 团队账号对每一次调用都拒绝（X1 评审 C1），闭合的方向。
+   */
+  sharedUse?: SharedUseGate;
+  /**
+   * 同一个闸门的只读问法（`SharedAudience.admitsPerson`）：应用卡片与工具说一个 Shared 应用对这个人是否
+   * 可用时问它。没给时读作没批准。
+   */
+  sharedAdmits?: SharedAudienceCheck;
 };
 
 /**
@@ -1771,6 +1867,17 @@ function refusedByRowSecurity(error: unknown): boolean {
 
 export function createPluginStore(options: PluginStoreOptions) {
   const { database, auditStore, credentials, encryptionKey } = options;
+  /** 活动的提供商与它的命名（X5）。默认 Composio：`composio-<slug>`、`composio://<slug>`。 */
+  const brokerProvider: BrokerProvider = options.brokerProvider ?? "composio";
+  const brokered = BROKERED_PROFILE[brokerProvider];
+  /** 一个 broker 应用行的 url 说的是哪个应用，按活动提供商的解析器（Arcade 保留大小写）。 */
+  const appOf = (url: string) => toolkitOfFor(brokerProvider, url);
+  /** 进行中的 Arcade 授权（X5）；方法并进 store，Composio 部署从不调用。 */
+  const arcadeAttempts = createArcadeAttempts({
+    database,
+    auditStore,
+    provider: brokerProvider,
+  });
 
   /**
    * Whether this Bot's profile, as the caller's frame sees it, is stamped `team` (G01-E P8b): its
@@ -1800,6 +1907,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   // No default, unlike the seams above: there is no real implementation in this tree to fall back
   // to, and a deployment with no Composio key is supposed to have no broker. See `./broker`.
   const broker = options.broker;
+  const entraTokens = options.entra;
   /**
    * 一个 `team` 服务器上每个人的行，而不只是这个帧看得到的（G01-E P21、I5）——`removeServer` 的那道门，
    * 提出来让账号模式切换（X1）共用同一个入口：切到 Shared 前要结束每个人在这个团队应用上的个人账号，
@@ -1811,6 +1919,60 @@ export function createPluginStore(options: PluginStoreOptions) {
     work: () => Promise<T>,
   ): Promise<T> => (team ? runAsTenant("platform", work) : work());
   /**
+   * 结束一个应用（地址上的每一行）的共享使用批准，跨每位员工的主人（经 {@link reachEveryPersonOn}，调用方
+   * 先过 `requireServerWriter`）。在应用的排他锁下（`sharedUseAppLockKey`，写批准拿它的共享锁）。`onlyOwners`
+   * 只结束主人的授予设下的受众；`requests` 同时把待处理的申请作废——它们是按旧的账号算的。答被结束批准的
+   * 员工。
+   */
+  const endSharedUseAt = (input: {
+    appId: string;
+    url: string;
+    team: boolean;
+    onlyOwners?: boolean;
+    requests?: boolean;
+  }): Promise<string[]> =>
+    reachEveryPersonOn(input.team, () =>
+      database.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${sharedUseAppLockKey(input.url, input.appId)}))`,
+        );
+        const toolkit = toolkitOf(input.url);
+        const atApp = toolkit
+          ? (
+              await tx
+                .select({ id: mcpServers.id, url: mcpServers.url })
+                .from(mcpServers)
+                .where(like(mcpServers.url, "composio://%"))
+            )
+              .filter((row) => toolkitOf(row.url) === toolkit)
+              .map((row) => row.id)
+          : [];
+        const ids = [...new Set([input.appId, ...atApp])];
+        const ended = await tx
+          .delete(sharedUseApprovals)
+          .where(
+            and(
+              inArray(sharedUseApprovals.serverId, ids),
+              ...(input.onlyOwners
+                ? [eq(sharedUseApprovals.approvedAs, "owner")]
+                : []),
+            ),
+          )
+          .returning({ botId: sharedUseApprovals.agentId });
+        if (input.requests)
+          await tx
+            .update(sharedUseRequests)
+            .set({ status: "superseded", decidedAt: new Date() })
+            .where(
+              and(
+                inArray(sharedUseRequests.serverId, ids),
+                eq(sharedUseRequests.status, "pending"),
+              ),
+            );
+        return [...new Set(ended.map((row) => row.botId))];
+      }),
+    );
+  /**
    * 写团队账号状态时一行都没写到：调用方没有写这个团队应用行的权限（行级安全静默过滤）。报错而不是
    * 答成功（评审 I1），否则页面会说一件没发生的事。
    */
@@ -1819,7 +1981,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       `${title} 的团队账号状态没有写进去：这次请求不能修改这个应用。没有改变任何东西。`,
     );
   /** 一个人在每个 broker 应用上的多个账号（上游 #1298）；见 `./brokered-accounts`。 */
-  const accounts = createAccountBook({ database, broker, auditStore });
+  const accounts = createAccountBook({
+    database,
+    broker,
+    auditStore,
+    provider: brokerProvider,
+  });
 
   /*
    * One exchange at a time per (server, person). A rotating vendor invalidates the refresh
@@ -2177,6 +2344,14 @@ export function createPluginStore(options: PluginStoreOptions) {
       credentialId: string | null;
       /** `team` for a server an administrator added: its secret is then read through the broker. */
       tenantId: string;
+      /** Where the call goes; a `person-entra` token is only sent to the host its scope is bound to. */
+      url: string;
+      /**
+       * The Entra scope a `person-entra` server is reached with; see `mcpServers.entraScope`.
+       * REQUIRED, and checked below (review M-2): a reading that leaves the column out must not
+       * resolve a marked server as one on the deployment's credential and spend that credential.
+       */
+      entraScope: string | null;
       /*
        * NO `authScheme` HERE, DELIBERATELY. The scheme that decides whether a brokered call needs a
        * connection row is the APP'S, read through `brokeredAppScheme` below — and this row's own
@@ -2295,7 +2470,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       const answer = accountFor(
         {
           title: row.title,
-          provenance: "composio",
+          provenance: brokerProvider,
           authScheme: appScheme,
           accountMode: app?.accountMode ?? null,
         },
@@ -2382,6 +2557,36 @@ export function createPluginStore(options: PluginStoreOptions) {
       }
 
       return {};
+    }
+
+    /*
+     * A server reached as the signed-in person through Microsoft (上游 #931): a token Entra issues
+     * for the person asking, from their own Microsoft sign-in, for this server's scope. Never the
+     * deployment's credential, for the reason the `person-oauth` branch below gives. Held in memory
+     * by `auth/entra.ts` until shortly before it expires, never written down here.
+     */
+    /*
+     * Fail closed on a row read without the column (review M-2). `accessFor` answers
+     * `deployment-token` for a custom row with no `entraScope`, which is right for a row that has
+     * none and wrong for one whose reader forgot to select it: the deployment's credential would go
+     * out for a server marked to be reached as the person. Every row here comes from a full
+     * `select()`, so the key is always present; a row without it is ours to fix, never a call.
+     */
+    if (!entry && (row as { entraScope?: unknown }).entraScope === undefined) {
+      throw new PluginInvariantError(
+        `${row.id} was read without its entra_scope column, so how it is reached cannot be told.`,
+      );
+    }
+
+    if (access.credential === "person-entra") {
+      return {
+        token: await entraTokenFor(
+          entraTokens,
+          row,
+          actorId,
+          (sentence) => new PluginRefusedError(sentence, null),
+        ),
+      };
     }
 
     if (access.credential !== "person-oauth") {
@@ -3637,7 +3842,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   async function brokeredAppRow(
     toolkit: string,
   ): Promise<BrokeredAppRow | null> {
-    const url = `composio://${toolkit}`;
+    const url = `${brokered.scheme}${toolkit}`;
     return (await brokeredAppRowsAt([url])).get(url) ?? null;
   }
 
@@ -3753,43 +3958,68 @@ export function createPluginStore(options: PluginStoreOptions) {
         decidedBy: appAccessRequests.decidedBy,
         decidedAt: appAccessRequests.decidedAt,
         createdAt: appAccessRequests.createdAt,
+        botOwner: agentProfiles.ownerUserId,
+        published: teamBotPublications.agentId,
       })
       .from(appAccessRequests)
       .leftJoin(mcpServers, eq(mcpServers.id, appAccessRequests.serverId))
       .leftJoin(agents, eq(agents.id, appAccessRequests.botId))
       .leftJoin(users, eq(users.id, appAccessRequests.requesterUserId))
+      .leftJoin(
+        agentProfiles,
+        eq(agentProfiles.agentId, appAccessRequests.botId),
+      )
+      .leftJoin(
+        teamBotPublications,
+        and(
+          eq(teamBotPublications.agentId, appAccessRequests.botId),
+          eq(teamBotPublications.tenantId, TEAM_TENANT),
+        ),
+      )
       .where(where)
       .orderBy(
         sql`${appAccessRequests.createdAt} desc`,
         asc(appAccessRequests.id),
       );
-    return rows.map((row) => ({
-      id: row.id,
-      tenantId: row.tenantId,
-      serverId: row.serverId ?? "",
-      appKey: row.catalogueKey ?? row.serverId ?? row.requestAppKey ?? "",
-      appTitle:
-        row.appTitle ??
-        row.requestAppTitle ??
-        row.serverId ??
-        row.requestAppKey ??
-        "",
-      botId: row.botId,
-      botName: row.botName,
-      requesterUserId: row.requesterUserId,
-      requesterName: row.requesterName,
-      requesterEmail: row.requesterEmail,
-      kind: row.kind as AppAccessRequestKind,
-      status: row.status as AppAccessRequestStatus,
-      note: row.note,
-      decidedBy: row.decidedBy,
-      decidedAt: iso(row.decidedAt),
-      createdAt: iso(row.createdAt) ?? "",
-      agentId: row.botId,
-      requestedBy: row.requesterUserId,
-      resolvedAt: iso(row.decidedAt),
-      resolvedBy: row.decidedBy,
-    }));
+    return rows.map((row) => {
+      const appliesTo = row.published !== null ? "team_bot" : "bot";
+      const requesterRole =
+        row.botOwner !== null && row.botOwner === row.requesterUserId
+          ? "owner"
+          : appliesTo === "team_bot"
+            ? "teammate"
+            : "other";
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        serverId: row.serverId ?? "",
+        appKey: row.catalogueKey ?? row.serverId ?? row.requestAppKey ?? "",
+        appTitle:
+          row.appTitle ??
+          row.requestAppTitle ??
+          row.serverId ??
+          row.requestAppKey ??
+          "",
+        botId: row.botId,
+        botName: row.botName,
+        requesterUserId: row.requesterUserId,
+        requesterName: row.requesterName,
+        requesterEmail: row.requesterEmail,
+        kind: row.kind as AppAccessRequestKind,
+        status: row.status as AppAccessRequestStatus,
+        note: row.note,
+        decidedBy: row.decidedBy,
+        decidedAt: iso(row.decidedAt),
+        createdAt: iso(row.createdAt) ?? "",
+        agentId: row.botId,
+        requestedBy: row.requesterUserId,
+        resolvedAt: iso(row.decidedAt),
+        resolvedBy: row.decidedBy,
+        appliesTo,
+        requesterRole,
+        scopeNote: appAccessScopeNote(appliesTo, requesterRole),
+      } satisfies AppAccessRequestRecord;
+    });
   }
 
   /** 把一条仍是 pending 的申请关掉，只关一次；没关上（不存在、看不见、已处理）答 null。 */
@@ -3818,6 +4048,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   }
 
   return {
+    ...arcadeAttempts,
     /**
      * Add a server from the catalogue.
      *
@@ -4029,7 +4260,18 @@ export function createPluginStore(options: PluginStoreOptions) {
       title: string;
       url: string;
       credentialId?: string;
+      /**
+       * The Entra scope to reach this server with as the signed-in person (上游 #931), for example
+       * `api://hr-api/.default`. Null puts it back on `credentialId`. Absent keeps whatever the
+       * server already has, as `credentialId` does. See `decideEntraScope`.
+       */
+      entraScope?: string | null;
       by: string;
+      /**
+       * Who is adding it, by id. A server reached as the signed-in person is asked what it offers
+       * as the admin adding it, since there is no deployment credential to ask with.
+       */
+      actorId?: string;
     }): Promise<ServerRecord> {
       requireServerWriter();
       const refusal = customUrlRefusal(input.url);
@@ -4098,6 +4340,12 @@ export function createPluginStore(options: PluginStoreOptions) {
           `Names beginning composio- belong to the Composio apps this deployment enables, so ${input.id} is not a name a server added by URL can take. Choose another.`,
         );
       }
+      // X5：`arcade-` 同样是 broker 应用的命名空间，不论 Arcade 当前是否启用。
+      if (input.id.startsWith("arcade-")) {
+        throw new CustomServerRefusedError(
+          `以 arcade- 开头的名字属于这个部署启用的 Arcade 应用，${input.id} 不能用作按地址添加的服务器名。请换一个。`,
+        );
+      }
       if (!/^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(input.id)) {
         throw new CustomServerRefusedError(
           "A server name is lower-case letters, numbers and hyphens.",
@@ -4154,6 +4402,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           provenance: mcpServers.provenance,
           // The third of what `accessFor` resolves a row with. See there.
           authScheme: mcpServers.authScheme,
+          // Kept when the caller names none; see `decideEntraScope`.
+          entraScope: mcpServers.entraScope,
         })
         .from(mcpServers)
         .where(eq(mcpServers.id, input.id));
@@ -4167,6 +4417,19 @@ export function createPluginStore(options: PluginStoreOptions) {
        * survivable. See {@link requireNotBrokered}.
        */
       requireNotBrokered(input.id, existing);
+
+      // How it is reached once this write lands, or why it may not be (上游 #931).
+      const entra = decideEntraScope(
+        input,
+        existing,
+        entraTokens
+          ? {
+              resources: entraTokens.resources ?? [],
+              own: entraTokens.own ?? [],
+            }
+          : undefined,
+      );
+      if ("refusal" in entra) throw new CustomServerRefusedError(entra.refusal);
 
       if (
         existing &&
@@ -4189,7 +4452,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
-      await database
+      const written = await database
         .insert(mcpServers)
         .values({
           id: input.id,
@@ -4200,6 +4463,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           url: input.url,
           provenance: "custom",
           credentialId: credentialId ?? null,
+          entraScope: entra.scope ?? null,
           addedBy: input.by,
         })
         .onConflictDoUpdate({
@@ -4239,10 +4503,33 @@ export function createPluginStore(options: PluginStoreOptions) {
              * this endpoint does, and nothing asks it to.
              */
             ...(credentialId ? { credentialId } : {}),
+            // Kept when the caller names none, for the reason `decideEntraScope` gives.
+            ...(entra.named !== undefined ? { entraScope: entra.named } : {}),
             addedBy: input.by,
             updatedAt: new Date(),
           },
-        });
+          /*
+           * THE ADDRESS RULES AGAIN, UNDER THE ROW LOCK (review M-1).
+           *
+           * Both rules above — a credential is spent at the address it was given to, and a marked
+           * server is not moved — were read off `existing` before this write, so two requests at
+           * once could each pass and land a marked server at the other's address. The conflict
+           * update is taken against the row as it stands now, locked: it lands only where the
+           * address is unchanged, or where neither the row nor this write carries a credential or a
+           * mark. Otherwise nothing is written and the add is refused below.
+           */
+          setWhere: or(
+            eq(mcpServers.url, sql`excluded.url`),
+            and(
+              isNull(mcpServers.entraScope),
+              isNull(mcpServers.credentialId),
+              entra.scope || credentialId ? sql`false` : sql`true`,
+            ),
+          ),
+        })
+        .returning({ id: mcpServers.id });
+      if (written.length === 0)
+        throw new CustomServerRefusedError(MOVED_WHILE_ADDING);
 
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",
@@ -4256,10 +4543,17 @@ export function createPluginStore(options: PluginStoreOptions) {
           // Named in the trail, because "who added a server nobody reviewed" is a question somebody
           // will ask and the answer should not require reading the catalogue of a past build.
           provenance: "custom",
+          ...(entra.scope
+            ? { reachedAs: "person", entraScope: entra.scope }
+            : {}),
         },
       });
 
-      await this.refreshTools(input.id);
+      // A marked server is asked what it offers as the admin adding it, on their own Entra token.
+      await this.refreshTools(
+        input.id,
+        entra.scope ? (input.actorId ?? "") : undefined,
+      );
       const added = (await this.listServers()).find(
         (server) => server.id === input.id,
       );
@@ -4628,8 +4922,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       // could not then write would be one nothing here names (G01-E P10).
       requireServerWriter();
 
-      const url = `composio://${input.slug}`;
-      if (toolkitOf(url) !== input.slug) {
+      const url = `${brokered.scheme}${input.slug}`;
+      if (appOf(url) !== input.slug) {
         throw new CustomServerRefusedError(
           `${input.slug} is not a name a Composio app can have. An app is named in letters, numbers, underscores and hyphens, because that name is read back out of this row's url to decide which app a call is against.`,
         );
@@ -4704,16 +4998,16 @@ export function createPluginStore(options: PluginStoreOptions) {
       await database
         .insert(mcpServers)
         .values({
-          id: `composio-${input.slug}`,
+          id: `${brokered.idPrefix}${input.slug}`,
           // The team's, like every server (G01-E P10).
           tenantId: TEAM_TENANT,
           title: input.title,
           logo: input.logo ?? null,
           // The broker, whoever publishes the app behind it. `vendor` is what the first-party rule
           // is checked against, and Composio is who this deployment is actually talking to.
-          vendor: "Composio",
+          vendor: brokered.vendor,
           url,
-          provenance: "composio",
+          provenance: brokerProvider,
           // Nothing for the vault to hold. A brokered call runs as the person asking, on their own
           // connection at the vendor, which is a `composio_connections` row rather than a secret.
           credentialId: null,
@@ -4773,8 +5067,8 @@ export function createPluginStore(options: PluginStoreOptions) {
              * host somebody typed is answering that rule about a server this deployment no longer
              * dials.
              */
-            provenance: "composio",
-            vendor: "Composio",
+            provenance: brokerProvider,
+            vendor: brokered.vendor,
             addedBy: input.by,
             updatedAt: new Date(),
             /*
@@ -4825,7 +5119,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * in a binding so that nothing below can take it by mistake.
        */
       const answering =
-        (await brokeredAppRow(input.slug))?.id ?? `composio-${input.slug}`;
+        (await brokeredAppRow(input.slug))?.id ??
+        `${brokered.idPrefix}${input.slug}`;
 
       /**
        * WHICH ROW EACH ACT OF AN ENABLE NAMES, WRITTEN DOWN BECAUSE NOTHING ELSE CAN SAY IT.
@@ -6099,7 +6394,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        * ONE EXTRA READ FOR THE WHOLE LIST, and none where the deployment has enabled no apps.
        */
       const brokeredApps = await brokeredAppRowsAt(
-        rows.filter((row) => toolkitOf(row.url) !== null).map((row) => row.url),
+        rows.filter((row) => appOf(row.url) !== null).map((row) => row.url),
       );
 
       return rows.map((row) => {
@@ -6125,13 +6420,14 @@ export function createPluginStore(options: PluginStoreOptions) {
             entry.auth.clientRegistration === "dynamic",
           // The app's, for a row whose url names one; this row's own column for everything else,
           // which is a null on every server that is not brokered. See the read above.
-          authScheme: toolkitOf(row.url)
+          authScheme: appOf(row.url)
             ? (brokeredApps.get(row.url)?.authScheme ?? null)
             : row.authScheme,
           adminConnectOnly:
-            toolkitOf(row.url) !== null &&
+            appOf(row.url) !== null &&
             adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
-          ...(toolkitOf(row.url) !== null
+          entraScope: row.entraScope,
+          ...(appOf(row.url) !== null
             ? {
                 sharedOnly: adminConnectOnly(
                   brokeredApps.get(row.url)?.authScheme ?? null,
@@ -6245,7 +6541,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         .orderBy(ownRowFirst())
         .limit(1);
       if (!row) return undefined;
-      const toolkit = toolkitOf(row.url);
+      const toolkit = appOf(row.url);
       if (!toolkit) return row;
       return { ...row, authScheme: await brokeredAppScheme(toolkit) };
     },
@@ -6414,6 +6710,16 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (row.tenantId === TEAM_TENANT && isPersonTenant(row.ownerUserId))
         return row.ownerUserId;
       return null;
+    },
+
+    /** 员工的类型（`built_in` / `remote_ag_ui` / `remote_mastra`）；这一帧看不见或不存在时为 undefined。 */
+    async agentType(agentId: string): Promise<string | undefined> {
+      const [row] = await database
+        .select({ type: agents.type })
+        .from(agents)
+        .where(eq(agents.id, agentId))
+        .limit(1);
+      return row?.type;
     },
 
     async agentOwner(agentId: string): Promise<string | null | undefined> {
@@ -6602,8 +6908,36 @@ export function createPluginStore(options: PluginStoreOptions) {
      * configured while no hop ever happened.
      *
      * The join keeps a grant held by a Bot that no longer exists from counting.
+     *
+     * 个人版里是其余每一位没删除的员工，授予与否都一样（上游 personal-defaults 同一处）：只有一个人，每位员工
+     * 都是他的，没有谁需要被挡在另一位员工外面，也没有别人来授予。读的是这一帧行安全看得见的员工，所以
+     * 别人租户里的员工永远不在里面。团队版照旧只认授予。
      */
     async botsReachableFrom(agentId: string): Promise<string[]> {
+      /*
+       * 「每位员工」和个人默认是同一个范围：内置的普通员工，不含分身和远端员工（`./personal-defaults` 的
+       * `coveredByPersonalDefaults`）。范围外的员工照团队版只认授予，所以从它身上收回的另一位员工真的够不着了；
+       * 也不会被自动交到分身或外部端点手上。
+       */
+      if (
+        currentEdition() === "personal" &&
+        (await this.agentType(agentId)) === "built_in" &&
+        !agentId.startsWith("avatar-")
+      ) {
+        const everyOther = await database
+          .select({ id: agents.id })
+          .from(agents)
+          .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+          .where(
+            and(
+              ne(agents.id, agentId),
+              isNull(agentProfiles.deletedAt),
+              eq(agents.type, "built_in"),
+              sql`${agents.id} NOT LIKE 'avatar-%'`,
+            ),
+          );
+        return everyOther.map((row) => row.id);
+      }
       const rows = await database
         .select({ ref: pluginGrants.ref })
         .from(pluginGrants)
@@ -6623,8 +6957,23 @@ export function createPluginStore(options: PluginStoreOptions) {
        * Spec E3: an owner installed a listed entry on their own Waker, with no administrator in the
        * loop. Recorded in the trail so a reader can tell that grant from one an administrator made.
        */
-      options?: { selfService?: boolean },
+      options?: {
+        selfService?: boolean;
+        /**
+         * 谁做的这条授予（X3，`plugin_grants.granted_as`）：默认管理员；`owner` 是员工的主人把自己的应用
+         * 给自己的员工（`./owner-grants`）。主人的授予从不覆盖管理员的：同一个动作已经有授予时什么都不写，
+         * 也不进轨迹（那一条是管理员的，或主人自己之前的）。管理员在主人的那一条上再授予，就成了管理员的。
+         */
+        as?: "admin" | "owner";
+      },
     ): Promise<void> {
+      /*
+       * 主人自助安装（D08）也是主人做的授予：新写的行记为 `owner`，在 Team Bot 上用提问人自己的账号。已有的行
+       * 不改谁做的——管理员的仍是管理员的，主人的标记也不会被一次自助安装改回管理员；`grantedBy` 照旧更新
+       * （它决定这是不是主人自己装的、能不能自己卸下）。
+       */
+      const selfService = options?.selfService === true;
+      const grantedAs = selfService ? "owner" : (options?.as ?? "admin");
       /*
        * A team Bot's grant is stamped `team` (G01-E P8b/P10): that is the stamp `listForAgent` reads
        * for it, in its owner's frame, a teammate's and `platform`. Stamped with the writer's frame
@@ -6634,18 +6983,28 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const team = await isTeamBot(agentId);
       try {
-        await database
-          .insert(pluginGrants)
-          .values({
-            kind,
-            ref,
-            agentId,
-            grantedBy: by,
-            ...(team ? { tenantId: TEAM_TENANT } : {}),
-          })
-          .onConflictDoUpdate({
+        const insert = database.insert(pluginGrants).values({
+          kind,
+          ref,
+          agentId,
+          grantedBy: by,
+          grantedAs,
+          ...(team ? { tenantId: TEAM_TENANT } : {}),
+        });
+        if (selfService)
+          await insert.onConflictDoUpdate({
             target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
             set: { grantedBy: by, updatedAt: new Date() },
+          });
+        else if (grantedAs === "owner") {
+          const written = await insert
+            .onConflictDoNothing()
+            .returning({ ref: pluginGrants.ref });
+          if (written.length === 0) return;
+        } else
+          await insert.onConflictDoUpdate({
+            target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
+            set: { grantedBy: by, grantedAs: "admin", updatedAt: new Date() },
           });
       } catch (error) {
         if (refusedByRowSecurity(error)) {
@@ -6664,13 +7023,20 @@ export function createPluginStore(options: PluginStoreOptions) {
         eventType: "configuration.changed",
         targetType: grantTargetType(kind),
         targetId: ref,
+        // OpenBot 自己替人做的授予（`openbot:` 开头，见 `./personal-defaults`）记为部署发起，不读成有人按了按钮。
+        ...(by.startsWith("openbot:")
+          ? { initiator: { kind: "deployment" } as AuditInitiator }
+          : {}),
         payload: {
           actor: by,
           change: "plugin_granted",
           kind,
           ref,
           bot: agentId,
-          selfService: options?.selfService === true,
+          selfService,
+          ...(grantedAs === "owner" && !selfService
+            ? { grantedAs: "owner" }
+            : {}),
         },
       });
     },
@@ -6703,6 +7069,107 @@ export function createPluginStore(options: PluginStoreOptions) {
           ...(input.authoring ? { authoring: input.authoring } : {}),
         },
       });
+    },
+
+    /**
+     * 一次给员工同一个应用的几个动作，轨迹上只写一行：目标是应用，payload 里列出 `refs`（上游 #1315）。
+     *
+     * 给 OpenBot 自己替人做的授予用（个人版里每个应用的全部动作，见 `./personal-defaults`）：逐个调用
+     * {@link grant} 时，一次升级给三位员工各加七个动作，Activity 上就是二十一行「有人改了设置」。`by` 是
+     * OpenBot 自己的名字（`openbot:` 开头）时，这一行记为部署发起。
+     *
+     * 只写还没有的：同一个动作已有授予（管理员的、主人的或平台的）时一行都不动，所以主人的授予不会被改成
+     * 管理员的，平台的 `system` 行也不会被这一帧碰到。Team Bot 的授予照 {@link grant} 记成 `team`。
+     *
+     * @returns 真正写下的 refs
+     */
+    async grantTools(
+      app: string,
+      refs: string[],
+      agentId: string,
+      by: string,
+    ): Promise<string[]> {
+      if (refs.length === 0) return [];
+      const team = await isTeamBot(agentId);
+      const written = await database
+        .insert(pluginGrants)
+        .values(
+          refs.map((ref) => ({
+            kind: "mcp" as const,
+            ref,
+            agentId,
+            grantedBy: by,
+            grantedAs: "admin" as const,
+            ...(team ? { tenantId: TEAM_TENANT } : {}),
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ ref: pluginGrants.ref });
+      const given = written.map((row) => row.ref).sort();
+      if (given.length === 0) return [];
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: app,
+        ...(by.startsWith("openbot:")
+          ? { initiator: { kind: "deployment" } as AuditInitiator }
+          : {}),
+        payload: {
+          actor: by,
+          change: "plugin_granted",
+          kind: "mcp",
+          app,
+          refs: given,
+          bot: agentId,
+        },
+      });
+      return given;
+    },
+
+    /**
+     * 收回员工的主人在一个应用上给的（X3，上游 `revokeOwnerGrants`）：这些服务器行上主人做的每一条授予，
+     * 管理员做的一条都不动。答收回了哪些，每一条各写一行轨迹，和 {@link revoke} 一样。
+     */
+    async revokeOwnerGrants(
+      serverIds: string[],
+      agentId: string,
+      by: string,
+    ): Promise<string[]> {
+      if (serverIds.length === 0) return [];
+      const owned = and(
+        eq(pluginGrants.kind, "mcp"),
+        eq(pluginGrants.agentId, agentId),
+        eq(pluginGrants.grantedAs, "owner"),
+      );
+      const refs = (
+        await database
+          .select({ ref: pluginGrants.ref })
+          .from(pluginGrants)
+          .where(owned)
+      )
+        .map((row) => row.ref)
+        .filter((ref) => serverIds.includes(ref.split("/")[0] ?? ""));
+      if (refs.length === 0) return [];
+      const removed = await database
+        .delete(pluginGrants)
+        .where(and(owned, inArray(pluginGrants.ref, refs)))
+        .returning({ ref: pluginGrants.ref });
+      const taken = removed.map((row) => row.ref);
+      for (const ref of taken)
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: grantTargetType("mcp"),
+          targetId: ref,
+          payload: {
+            actor: by,
+            change: "plugin_revoked",
+            kind: "mcp",
+            ref,
+            bot: agentId,
+            grantedAs: "owner",
+          },
+        });
+      return taken;
     },
 
     async revoke(
@@ -7108,7 +7575,11 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /** 应用访问的状态（X2，`./app-access-store`）：员工页与对话卡片读的「这个人能不能用这个应用」。 */
-    ...appAccessMethods({ database, auditStore }),
+    ...appAccessMethods({
+      database,
+      auditStore,
+      ...(options.sharedAdmits ? { sharedAudience: options.sharedAdmits } : {}),
+    }),
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
@@ -7694,12 +8165,12 @@ export function createPluginStore(options: PluginStoreOptions) {
        * an app this deployment has since removed, and the settings page has no row to draw for it.
        */
       const named = await brokeredAppRowsAt(
-        connections.map((row) => `composio://${row.toolkit}`),
+        connections.map((row) => `${brokered.scheme}${row.toolkit}`),
       );
 
       const rows = connections
         .flatMap((row) => {
-          const serverId = named.get(`composio://${row.toolkit}`)?.id;
+          const serverId = named.get(`${brokered.scheme}${row.toolkit}`)?.id;
           return serverId === undefined ? [] : [{ ...row, serverId }];
         })
         // By server id, as the join's own `order by` was, so this read and `connectionsFor` hand the
@@ -7992,6 +8463,10 @@ export function createPluginStore(options: PluginStoreOptions) {
           verified: input.verified,
           verifiedAt,
           probeAction: input.probeAction,
+          // X5：Arcade 的连接记在 Arcade 名下；Composio 用列默认值，写入的语句与以前一样。
+          ...(brokerProvider === "composio"
+            ? {}
+            : { provider: brokerProvider }),
         })
         .onConflictDoUpdate({
           target: [composioConnections.toolkit, composioConnections.userId],
@@ -8292,6 +8767,11 @@ export function createPluginStore(options: PluginStoreOptions) {
         )
         .limit(1);
       const existing = held !== undefined;
+      /*
+       * X5 评审 I1：Arcade 的新连接只经回程验证（`/arcade/verify`，绑定发起人）记下。厂商那边有一个
+       * 这里没有行的授权（取消后才完成、回程被拒的遗留），「确认」不能把它收养成连接，只刷新已有的。
+       */
+      if (brokerProvider === "arcade" && !existing) return { connected: false };
 
       /*
        * THE SCHEME ON THE APP'S ROW, WHICH IS WHAT DECIDES WHETHER THE YES ABOVE IS A CHECK.
@@ -9410,6 +9890,10 @@ export function createPluginStore(options: PluginStoreOptions) {
     /**
      * 写应用的账号模式（只由 `./account-mode` 调用）。切到 Shared 时带上新铸的团队身份，切回 Personal 时
      * 团队账号的连接状态一起清空（CHECK 也这样要求）。
+     *
+     * 两个方向都结束这个应用的每一条共享使用批准（X3，上游 `deleteApprovalsFor`）：批准是关于一个团队账号的，
+     * 切走再切回来是另一个账号，留下的批准会在再切回 Shared 的那一刻把它交回去。按应用地址上的每一行删，
+     * 包括应答行以外的重复行；跨每位员工的主人，所以经 {@link reachEveryPersonOn}，之前先要管理员能力。
      */
     async setAccountModeColumns(
       appId: string,
@@ -9417,6 +9901,30 @@ export function createPluginStore(options: PluginStoreOptions) {
       sharedVendorUserId: string | null,
     ): Promise<void> {
       requireServerWriter();
+      const [app] = await database
+        .select({
+          url: mcpServers.url,
+          tenantId: mcpServers.tenantId,
+          ownerGrants: mcpServers.ownerGrants,
+        })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, appId));
+      /*
+       * 切到 Shared 之前先结束一次：上一次切走时若在改模式与结束批准之间中断，留下的批准在 Personal 下不被
+       * 读，但会在这次「先改模式、后结束」之间的一刻被读到。
+       */
+      if (app && mode === "shared")
+        await endSharedUseAt({
+          appId,
+          url: app.url,
+          team: app.tenantId === TEAM_TENANT,
+          requests: true,
+        });
+      /*
+       * 先改模式，再在应用的排他锁下结束批准与待处理申请：一次写批准要么在锁之前提交、在这里被删掉，要么
+       * 在锁之后开始、读到新的模式而不写（`SharedUseNotSharedError`）。反过来的顺序会留下一个窗口，让切换
+       * 之后才落下的批准在再切回 Shared 时复活。
+       */
       await database
         .update(mcpServers)
         .set({
@@ -9430,6 +9938,97 @@ export function createPluginStore(options: PluginStoreOptions) {
           updatedAt: new Date(),
         })
         .where(eq(mcpServers.id, appId));
+      /*
+       * 「谁可以给员工」回到只有管理员，由管理员在新模式下明确放开：在 Personal 下选的 `any` 说的是「主人
+       * 可以把自己的账号给自己的员工」，带到 Shared 就成了主人可以自己打开团队账号。写 `admin` 而不是 NULL：
+       * Personal 的默认值（NULL）是 `any`，往返一次就会把升级时回填的「只有管理员」变回主人可给。写在应用
+       * 地址上的每一行（与 `setOwnerGrants` 同一范围），每一次切换都进轨迹。
+       */
+      if (app)
+        await database
+          .update(mcpServers)
+          .set({ ownerGrants: "admin", updatedAt: new Date() })
+          .where(eq(mcpServers.url, app.url));
+      if (app && app.ownerGrants !== "admin")
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: "mcp_server",
+          targetId: appId,
+          payload: {
+            change: "owner_grants_changed",
+            server: appId,
+            from: app.ownerGrants,
+            to: "admin",
+            reason: "account_mode_switched",
+          },
+        });
+      if (app)
+        await endSharedUseAt({
+          appId,
+          url: app.url,
+          team: app.tenantId === TEAM_TENANT,
+          requests: true,
+        });
+    },
+
+    /**
+     * 谁可以把这个应用给员工（X3，上游 `setOwnerGrants`）：员工的主人（`any`）、只有管理员（`admin`），或
+     * 按账号的默认值（null）。写在应用地址上的每一行，重复行答得一样；进轨迹。只有持有能力的管理员写（应用
+     * 行是 `team` 标记）。没有这个应用答 null。
+     *
+     * 不再是 `any` 时，主人的授予在这个应用上设下的共享使用受众一并撤回（管理员的批准不动）：它们此刻已经
+     * 不会被读（`approvalFor` 只在规则是 `any` 时读主人的），撤回是为了规则再改回 `any` 时它们不会回来。
+     * 跨每位员工的主人，经 {@link reachEveryPersonOn}。答撤回了哪些员工，好各写一行轨迹。
+     */
+    async setOwnerGrants(input: {
+      serverId: string;
+      ownerGrants: "any" | "admin" | null;
+      by: string;
+    }): Promise<{ withdrawn: string[] } | null> {
+      requireServerWriter();
+      const [row] = await database
+        .select({
+          url: mcpServers.url,
+          tenantId: mcpServers.tenantId,
+          ownerGrants: mcpServers.ownerGrants,
+        })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, input.serverId))
+        .limit(1);
+      if (!row) return null;
+      const updated = await database
+        .update(mcpServers)
+        .set({ ownerGrants: input.ownerGrants, updatedAt: new Date() })
+        .where(eq(mcpServers.url, row.url))
+        .returning({ id: mcpServers.id });
+      if (updated.length === 0)
+        throw new ServerWriteRefusedError(
+          "这次请求不能修改这个应用，谁可以给员工没有改变。",
+        );
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: input.serverId,
+        payload: {
+          actor: input.by,
+          change: "owner_grants_changed",
+          from: row.ownerGrants,
+          to: input.ownerGrants,
+        },
+      });
+      if (input.ownerGrants === "any") return { withdrawn: [] };
+      /*
+       * 规则先提交，再在应用的排他锁下撤回：主人那边写受众的事务拿同一把锁的共享锁并在锁里重读规则，所以
+       * 它要么在这里之前提交、被这里删掉，要么在这里之后读到新规则而不写。
+       */
+      return {
+        withdrawn: await endSharedUseAt({
+          appId: input.serverId,
+          url: row.url,
+          team: row.tenantId === TEAM_TENANT,
+          onlyOwners: true,
+        }),
+      };
     },
 
     /**
@@ -9450,6 +10049,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           `${app?.title ?? input.toolkit} 不是共享账号应用。`,
           null,
         );
+      // X5 评审 I1：Arcade 的团队账号只经回程验证记下；「确认 / 重新检查」只刷新已经连接的。
+      if (brokerProvider === "arcade" && !app.shared.connectedAt)
+        return { connected: false };
       const connected = await broker.isConnected({
         userId: app.shared.vendorUserId,
         toolkit: input.toolkit,
@@ -10078,6 +10680,48 @@ export function createPluginStore(options: PluginStoreOptions) {
         throw new PluginRefusedError(decision.reason, null);
       }
 
+      /*
+       * 员工的主人做的授予（`granted_as = owner`，`/give` 或自助安装）只在主人仍能「给」时有效：人还在、
+       * 管理员没对他关掉 `ownerApps`。调用时判定，主人离开或被关掉能力之后不用先清理授予。管理员做的授予
+       * 不受影响。
+       */
+      const [ownGrant] = await database
+        .select({
+          grantedAs: pluginGrants.grantedAs,
+          grantedBy: pluginGrants.grantedBy,
+        })
+        .from(pluginGrants)
+        .where(
+          and(
+            eq(pluginGrants.kind, "mcp"),
+            eq(pluginGrants.ref, input.ref),
+            eq(pluginGrants.agentId, input.botId),
+          ),
+        )
+        .limit(1);
+      if (ownGrant && (await grantedByOwner(database, input.botId, ownGrant))) {
+        const owner = await ownerTenantOfBot(database, input.botId);
+        if (!owner || !(await ownerStillGives(database, owner))) {
+          await recordAuditEvent(auditStore, {
+            eventType: "mcp.call_rejected",
+            targetType: "mcp_tool",
+            targetId: input.ref,
+            ...(input.initiator ? { initiator: input.initiator } : {}),
+            payload: {
+              actor: auditActor,
+              bot: input.botId,
+              server: serverId,
+              tool: toolName,
+              refusal: "owner_grant_lapsed",
+            },
+          });
+          throw new PluginRefusedError(
+            "这个动作是员工的主人自己给的，主人已经不能再给（已离开，或管理员关掉了这项功能），所以没有调用。请管理员决定要不要给这位员工。",
+            null,
+          );
+        }
+      }
+
       const { row, entry, access } = await requireServer(serverId);
 
       const advertised = await database
@@ -10088,6 +10732,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           destructive: mcpTools.destructive,
           unclassified: mcpTools.unclassified,
           version: mcpTools.version,
+          vendorName: mcpTools.vendorName,
         })
         .from(mcpTools)
         .where(and(eq(mcpTools.serverId, row.id), eq(mcpTools.name, toolName)))
@@ -10170,6 +10815,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         : input.args;
       let pinned: PinnedAccount | null = null;
       let sharedApp = false;
+      /** Shared 应用的应答行：批准是关于应用的事实，按它问，不按授予恰好经过的那一行。 */
+      let sharedAppId = serverId;
       /** 队友用主人的账号时钉到的主人默认账号 id（不带名字）。 */
       let ownersAccountId: string | null = null;
       if (brokeredToolkit !== null) {
@@ -10198,6 +10845,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         sharedApp =
           app?.accountMode === "shared" &&
           schemeKind(app.authScheme) !== "none";
+        if (sharedApp && app) sharedAppId = app.id;
         if (sharedApp) {
           // Shared 应用只有一个团队账号，没有可选的。
           if (names)
@@ -10242,11 +10890,14 @@ export function createPluginStore(options: PluginStoreOptions) {
        * 一个员工被开放给比管理员批准的更多的人，就等于把这个账号交给了他们。每次调用都在这里判：
        * - check-in 只能读本人自己连接的账号，团队账号不行；
        * - 发起者必须说得出是谁在驾驶（`steeringOf`）：部署自身、没有起点的转交、认不出的开始方式都拒绝；
-       * - 批准：与上游一致，没有共享使用批准就拒绝，管理员也不例外。批准表在 X3 并入，在那之前没有任何
-       *   批准，所以通过了上面两条的调用也在这里一律拒绝（评审 C1）。
+       * - 受众：管理员为这位员工在这个应用上批准的（`options.sharedUse`，X3）。没有批准就拒绝，员工的主人
+       *   和管理员也不例外；有批准时按受众（`admits`）判，外部输入驱动的运行还要批准里允许外部输入。
        */
       if (sharedApp) {
-        const refuseShared = async (why: string): Promise<never> => {
+        const refuseShared = async (
+          why: string,
+          refusal = "shared_account_not_approved",
+        ): Promise<never> => {
           await recordAuditEvent(auditStore, {
             eventType: "mcp.call_rejected",
             targetType: "mcp_tool",
@@ -10257,7 +10908,7 @@ export function createPluginStore(options: PluginStoreOptions) {
               bot: input.botId,
               server: serverId,
               tool: toolName,
-              refusal: "shared_account_not_approved",
+              refusal,
               reason: why,
             },
           });
@@ -10274,14 +10925,21 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
         if (steering.kind === "refuse") await refuseShared(steering.why);
         /*
-         * 没有批准就拒绝（评审 C1，与上游 `createSharedUseGate` 一致）：上游先查这个员工对这个应用的共享
-         * 使用批准，没有批准行就拒绝，管理员本人也不例外；有批准才按受众（`admits`）判。批准表与管理员
-         * 批准的流程在 X3 并入，在那之前任何员工都没有批准，所以团队账号对每一次调用都拒绝——包括成员
-         * 自助安装、或给自己的员工授权之后。团队账号的连接、断开与模式切换照常可用。
+         * 没有批准就拒绝（评审 C1，与上游 `createSharedUseGate` 一致）：先查这位员工对这个应用的共享使用
+         * 批准，没有批准行就拒绝，管理员本人也不例外；有批准才按受众（`admits`）判。没接上闸门的部署无从
+         * 回答这个问题，同样拒绝——包括成员自助安装、或给自己的员工授权之后。
          */
-        await refuseShared(
-          "管理员还没有批准这位员工使用它（共享使用批准将在后续版本提供）",
-        );
+        if (!options.sharedUse)
+          await refuseShared("管理员还没有批准这位员工使用它");
+        const verdict = await (options.sharedUse as SharedUseGate)({
+          botId: input.botId,
+          serverId: sharedAppId,
+          title: row.title,
+          actorId: input.actorId,
+          ...(input.initiator ? { initiator: input.initiator } : {}),
+          outside: steering.kind === "actor" && steering.outside,
+        });
+        if (!verdict.allowed) await refuseShared(verdict.why, verdict.refusal);
       }
 
       const args = withoutEmptyOptionals(
@@ -10570,6 +11228,31 @@ export function createPluginStore(options: PluginStoreOptions) {
        * it did.
        */
       try {
+        /*
+         * A server reached as the signed-in person goes out as the person asking and nobody else,
+         * decided on THIS row, the one the token is sent for (X6, re-review N-1).
+         *
+         * The Team Bot rule picked `credentialActorId` from its own read of the server; if an admin
+         * marked the server since, that read may have named the Bot's owner, or the asker without
+         * asking them. So here: anybody but the asker is refused outright, and the asker's consent is
+         * asked again (and a one-time consent spent) before any token is minted.
+         */
+        if (access.credential === "person-entra") {
+          if (
+            input.credentialActorId !== undefined &&
+            input.credentialActorId !== input.actorId
+          ) {
+            throw new PluginRefusedError(
+              `「${row.title}」只以提问人自己的身份访问，不能借用别人的身份，所以没有发出。`,
+              null,
+            );
+          }
+          await options.entraConsent?.({
+            actorId: input.actorId,
+            botId: input.botId,
+            serverId,
+          });
+        }
         const { token, placement, vendorUserId } = await connectionTokenFor(
           row,
           entry,
@@ -10610,7 +11293,8 @@ export function createPluginStore(options: PluginStoreOptions) {
                 customServerPrivateHosts,
               ),
             },
-            toolName,
+            // 厂商执行用的名字（Arcade 的 `Gmail.ListEmails`）；没有时就是本部署记的名字（X5）。
+            advertised[0]?.vendorName ?? toolName,
             vendorArgs,
           );
         const result =

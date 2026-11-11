@@ -10,19 +10,32 @@ import {
   AccountModeRefusedError,
 } from "./account-mode";
 import { reasonWithoutStatement } from "../db/query-failure";
-import { appsPage, appsPageZh, askAdminTo, askAdminToZh } from "../edition";
+import {
+  appsPage,
+  appsPageZh,
+  askAdminTo,
+  askAdminToZh,
+  currentEdition,
+} from "../edition";
 import {
   capabilityFor,
   currentTenant,
   isPersonTenant,
   runAsTenant,
 } from "../tenant/context";
+import { type BrokerProvider, toolkitOfFor } from "./access";
 import {
   adminInputFor,
   mountAppAccessRoutes,
   unavailableSentence,
 } from "./app-access-routes";
 import {
+  clearEndedArcadeSiblings,
+  mountArcadeRoutes,
+  startArcadeAuthorization,
+} from "./arcade-routes";
+import {
+  type ArcadeBroker,
   type BrokerApp,
   type BrokerField,
   BrokerUnconfiguredError,
@@ -36,7 +49,7 @@ import {
   schemeKind,
 } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
-import { toolkitOf, vendorSentence } from "./composio";
+import { vendorSentence } from "./composio";
 import {
   adminConnectOnly,
   adminConnectOnlySentence,
@@ -49,6 +62,19 @@ import {
 } from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
 import {
+  ALWAYS_ON_REFUSAL,
+  alwaysOnHere,
+  personalRevokeRefusalFor,
+} from "./personal-defaults";
+import { approveOwnersSharedUse } from "./owner-grants";
+import { mountSharedUseRoutes, sharedGrantApproval } from "./shared-use-routes";
+import {
+  type SharedAudience,
+  SharedUseFrameError,
+  SharedUseNotSharedError,
+  type SharedUseStore,
+} from "./shared-use-store";
+import {
   authorizationUrlFor,
   type ConnectOrigin,
   challengeFor,
@@ -60,6 +86,7 @@ import {
   redirectUriFor,
   sealConnectState,
 } from "./oauth";
+import { personAccount } from "./shared-accounts";
 import {
   type AppAccessRequestRecord,
   CatalogueEntryUnknownError,
@@ -184,8 +211,9 @@ function brokerRefusal(
  * of the word), because that is the setting an admin sets and naming it is how a person knows what
  * to ask for.
  */
-const NAMES_THE_BROKER = /\bcomposio\b/i;
-const NAMES_THE_BROKER_EVERYWHERE = /\bcomposio\b/gi;
+// X5：Arcade 与 Composio 一样不在成员看到的句子里点名（#1223）。
+const NAMES_THE_BROKER = /\b(composio|arcade)\b/i;
+const NAMES_THE_BROKER_EVERYWHERE = /\b(composio|arcade)\b/gi;
 
 /**
  * A refusal the STORE wrote for the person, with only the broker's name taken out.
@@ -361,7 +389,18 @@ export function createPluginRoutes(
    * trap `connect` documents applies here with one more argument in it — every parameter from that
    * position on is optional, so a misplaced one typechecks and quietly does nothing.
    */
-  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
+  composio?: {
+    broker: ComposioBroker;
+    guides?: KeyGuideSource;
+    /**
+     * 活动的提供商（X5）。不给时是 Composio。Arcade 时 `arcade` 是它的 broker：连接走带发起人绑定的
+     * 授权尝试与回程验证（`./arcade-routes`），而不是 Composio 的确认。
+     */
+    provider?: BrokerProvider;
+    arcade?: ArcadeBroker;
+    /** 共享使用批准（X3，`./shared-use-store`）。没给时共享使用路由不挂，团队账号照样一律拒绝。 */
+    sharedUse?: { store: SharedUseStore; audience: SharedAudience };
+  },
   /**
    * `createAdminScope(...)`: its `adminCapability` is mounted on the grant routes (G01-E P8b) and on
    * every route that writes the deployment's servers, their OAuth clients and their secrets (P10):
@@ -378,6 +417,10 @@ export function createPluginRoutes(
   accountModes?: AccountModeSwitch,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
+  /** broker 应用的 url 说的是哪个应用，按活动提供商的解析器（X5；Composio 时与以前一样）。 */
+  const toolkitOf = (url: string) =>
+    toolkitOfFor(composio?.provider ?? "composio", url);
+  const sharedUse = composio?.sharedUse;
   const adminCapability = adminScope?.adminCapability;
   const signedInWithCapability: MiddlewareHandler<{
     Variables: AppVariables;
@@ -579,6 +622,7 @@ export function createPluginRoutes(
       title?: unknown;
       url?: unknown;
       credentialId?: unknown;
+      entraScope?: unknown;
     } | null;
     if (
       typeof body?.id !== "string" ||
@@ -604,6 +648,23 @@ export function createPluginRoutes(
         400,
       );
     }
+    /*
+     * Marks the server as reached as the signed-in person through Microsoft, with this scope
+     * (上游 #931). Null puts it back on the deployment's credential; absent leaves it as it is.
+     */
+    if (
+      body.entraScope !== undefined &&
+      body.entraScope !== null &&
+      (typeof body.entraScope !== "string" || !body.entraScope.trim())
+    ) {
+      return context.json(
+        {
+          error:
+            "Entra scope 必须是非空字符串；传 null 表示不再以登录人的身份访问这个服务器。",
+        },
+        400,
+      );
+    }
 
     try {
       const server = await store.addCustomServer({
@@ -614,7 +675,14 @@ export function createPluginRoutes(
           typeof body.credentialId === "string"
             ? body.credentialId.trim()
             : undefined,
+        entraScope:
+          typeof body.entraScope === "string"
+            ? body.entraScope.trim()
+            : body.entraScope === null
+              ? null
+              : undefined,
         by: actorEmail(context),
+        actorId: context.var.actor.id,
       });
       return context.json({ server });
     } catch (error) {
@@ -769,6 +837,9 @@ export function createPluginRoutes(
     if (forbidden) return forbidden;
 
     const serverId = context.req.param("id");
+    // 个人版的 Routines 一直开着（见 `./personal-defaults`）；团队版里它和别的应用一样可以关。
+    if (alwaysOnHere(serverId))
+      return context.json({ error: ALWAYS_ON_REFUSAL }, 403);
     try {
       await store.removeServer(serverId, actorEmail(context));
     } catch (error) {
@@ -917,6 +988,15 @@ export function createPluginRoutes(
   routes.put("/composio/clients/:slug", capable, async (context) => {
     const forbidden = requireAdmin(context);
     if (forbidden) return forbidden;
+    if (composio?.arcade) {
+      return context.json(
+        {
+          error:
+            "当前的连接应用提供商是 Arcade。部署自己的 OAuth 客户端只适用于 Composio，Arcade 的客户端在 Arcade 后台配置。",
+        },
+        409,
+      );
+    }
     const toolkit = deploymentClientSlug(context.req.param("slug"));
     if (!toolkit) return context.json({ error: BAD_CLIENT_SLUG }, 400);
     const client = deploymentClientFrom(
@@ -2075,6 +2155,45 @@ export function createPluginRoutes(
        * mailbox for as long as it stays valid — which is why the failure below answers with the
        * vendor's sentence and never with what was being minted when it failed.
        */
+      // X5：Arcade 的连接先在发起人名下认领一次尝试，回程由 `/arcade/verify` 核对并记录。
+      if (composio.arcade) {
+        if (another) {
+          return context.json(
+            {
+              error: `用 Arcade 连接时，一个人在 ${row.title} 上暂时只能连接一个账号。没有建立任何连接。`,
+            },
+            409,
+          );
+        }
+        let returnUrl: string;
+        try {
+          returnUrl = brokerReturnUrl(
+            connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
+          );
+        } catch (error) {
+          const refusal = personRefusal(
+            error,
+            `没能开始连接 ${row.title}。请重试；如果一直这样，请联系管理员。`,
+            { route: "connect.consent", toolkit },
+          );
+          return context.json({ error: refusal.error }, refusal.status);
+        }
+        return startArcadeAuthorization(
+          context,
+          { store, arcade: composio.arcade, appUrl: connect.appUrl },
+          {
+            serverId,
+            account:
+              shared && app?.shared
+                ? { holder: "deployment", vendorUserId: holderId }
+                : personAccount(holderId, null),
+            toolkit,
+            title: row.title,
+            returnUrl,
+          },
+        );
+      }
+
       let redirectUrl: string;
       try {
         ({ redirectUrl } = await composio.broker.authorize({
@@ -2541,14 +2660,27 @@ export function createPluginRoutes(
      * — nothing in the body or the query is looked at at all.
      */
     try {
-      return context.json(
-        await store.disconnectBrokered({
-          toolkit: resolved.toolkit,
+      const disconnected = await store.disconnectBrokered({
+        toolkit: resolved.toolkit,
+        userId: context.var.actor.id,
+        by: context.var.actor.id,
+        reason: "self",
+      });
+      /*
+       * X5：Arcade 按认证提供商存连接，同一提供商下厂商那边也结束了的兄弟应用一并结束本地行。每一次断开
+       * 成功都做，厂商那边本来就没有连接（`vendorRevocationRequested` 为 false）时也做：上一次断开时对账
+       * 没做完（例如问不到认证提供商），再按断开就是补做的机会，不能因为这次没有可撤销的就跳过。
+       */
+      if (composio?.arcade) {
+        const siblings = await clearEndedArcadeSiblings({
+          store,
+          arcade: composio.arcade,
           userId: context.var.actor.id,
-          by: context.var.actor.id,
-          reason: "self",
-        }),
-      );
+          toolkit: resolved.toolkit,
+        });
+        return context.json({ ...disconnected, siblings });
+      }
+      return context.json(disconnected);
     } catch (error) {
       /*
        * REPEATING IT IS THE RECOVERY, AND THE SENTENCE SAYS SO RATHER THAN GUESSING HOW FAR IT GOT.
@@ -2772,6 +2904,13 @@ export function createPluginRoutes(
       return context.json({ error: refusal.error }, refusal.status);
     }
   });
+
+  // X5：Arcade 的回程验证与取消，只在 Arcade 是活动提供商时有作用。
+  mountArcadeRoutes(routes, capable, () =>
+    composio?.arcade
+      ? { store, arcade: composio.arcade, appUrl: connect?.appUrl }
+      : null,
+  );
 
   routes.get("/oauth/callback", async (context) => {
     const failed = connectedAccountsUrlFor(connect?.appUrl, {
@@ -3065,7 +3204,13 @@ export function createPluginRoutes(
         title: body.title.trim(),
         summary: body.summary ?? "",
         instructions: body.instructions.trim(),
-        ownerUserId: body.global ? null : actor.id,
+        /*
+         * 只在有别人时才是所有人的（上游 #1273）：个人版只有一个人，设置 › 技能就是管理 › 技能，也带
+         * `global` 保存；存成谁的都不是，员工的「你的技能」里就没有它。个人版里它归这个人，之前存下的在
+         * 启动时给他（`ensurePersonalSkillsOwned`）。
+         */
+        ownerUserId:
+          body.global && currentEdition() !== "personal" ? null : actor.id,
         ...(tools === undefined ? {} : { tools }),
         by: actorEmail(context),
       });
@@ -3494,6 +3639,15 @@ export function createPluginRoutes(
     }
     const trimmedRef = ref.trim();
     const trimmedAgentId = agentId.trim();
+    // 个人版里个人默认管着的员工持有每个应用、能问每位员工，从一位身上收回会被拒绝；分身和远端员工照常收回
+    // （见 `./personal-defaults`）。
+    const personalRefusal = await personalRevokeRefusalFor(
+      store,
+      kind,
+      trimmedRef,
+      trimmedAgentId,
+    );
+    if (personalRefusal) return context.json({ error: personalRefusal }, 403);
     return asBotOwner(context, trimmedAgentId, async () => {
       const decision = await enablementDecision(
         context,
@@ -3542,7 +3696,7 @@ export function createPluginRoutes(
         text: z.string().trim().min(1).max(2_000),
       })
       .optional(),
-    // M5: 上游在这里收共享应用的使用审批（sharedGrantApproval），留给 X 系列（共享使用/多账号）。
+    // 管理员随这次保存为 Shared 应用记下的共享使用批准（{@link sharedGrantApproval}）。
     approval: z.unknown().optional(),
   });
 
@@ -3557,8 +3711,17 @@ export function createPluginRoutes(
    * approved. Then each is written by the store as the routes write it, with its own row on the trail,
    * and one more row says they were one change, with the sentence it came from.
    *
-   * M5: 上游这里还有主人授权（owner grants）和共享应用的使用审批，留给 X 系列（owner grants、共享使用）；
-   * fork 的主人自助安装（上架）照 `enablementDecision` 走。
+   * A SHARED APP'S AUDIENCE IS DECIDED ONCE, as upstream's `POST /grants` decides it for each grant:
+   * every action here is the same app's, and {@link sharedGrantApproval} depends on the app and the
+   * Bot alone. An admin's save records the approval it sent, or the Bot's exposure now when none was
+   * sent and no admin decided one before; an approval this deployment cannot read refuses the save
+   * before anything is written. An owner's self-service install (a listed app, `enablementDecision`)
+   * sets the owner's audience where the admin lets owners decide ({@link approveOwnersSharedUse}),
+   * as `/give` does. A Bot with no owner has nowhere to record either, and its calls stay refused.
+   *
+   * On the personal edition an action turned off is asked {@link personalRevokeRefusalFor} first, as
+   * `DELETE /grants` asks it (X4): a Bot the personal defaults keep whole holds every action of every
+   * connected app, so turning one off is refused rather than answered and put back on the next run.
    */
   routes.post(
     "/for/:agentId/apps/:app/grants",
@@ -3607,6 +3770,17 @@ export function createPluginRoutes(
           else selfService.set(ref, decision.selfService);
         }
         for (const ref of remove) {
+          // 个人版里个人默认管着的员工每个动作都持有，关掉一个会被拒绝，和 `DELETE /grants` 一样（X4）。
+          const personal = await personalRevokeRefusalFor(
+            store,
+            "mcp",
+            ref,
+            agentId,
+          );
+          if (personal) {
+            problems.push({ ref, error: personal });
+            continue;
+          }
           const decision = await enablementDecision(
             context,
             "mcp",
@@ -3629,10 +3803,11 @@ export function createPluginRoutes(
          * permission checks, so somebody who may not change this Bot learns nothing about the app
          * from the answer. Turning off is not held to it: taking away is always allowed.
          */
+        const server =
+          add.length > 0
+            ? (await store.listServers()).find((row) => row.id === app)
+            : undefined;
         if (add.length > 0) {
-          const server = (await store.listServers()).find(
-            (row) => row.id === app,
-          );
           const offered = new Set(server?.tools.map((tool) => tool.ref) ?? []);
           const unknown = add.filter((ref) => !offered.has(ref));
           if (unknown.length > 0)
@@ -3647,6 +3822,22 @@ export function createPluginRoutes(
               400,
             );
         }
+
+        const asOwner = add.some((ref) => selfService.get(ref) === true);
+        const decided =
+          add.length > 0 && !asOwner && sharedUse
+            ? await sharedGrantApproval(sharedUse.store, {
+                serverId: app,
+                agentId,
+                accountMode: server?.accountMode,
+                sent: parsed.data.approval,
+              })
+            : null;
+        if (decided === "unreadable")
+          return context.json(
+            { error: "这份共享使用批准这个部署读不懂，所以什么都没有改。" },
+            400,
+          );
 
         const by = actorEmail(context);
         try {
@@ -3671,6 +3862,44 @@ export function createPluginRoutes(
           if (error instanceof PluginRefusedError)
             return context.json({ error: error.message }, 403);
           throw error;
+        }
+        try {
+          if (decided?.approval && sharedUse) {
+            await sharedUse.store.setApproval({
+              botId: agentId,
+              serverId: decided.appId,
+              approval: decided.approval,
+              by: context.var.actor.id,
+            });
+            await sharedUse.audience.record({
+              eventType: "shared_use.approved",
+              targetId: decided.appId,
+              actorUserId: context.var.actor.id,
+              payload: {
+                bot: agentId,
+                server: decided.appId,
+                audience: decided.approval.audience,
+                outsideInput: decided.approval.outsideInput,
+              },
+            });
+          }
+          if (asOwner && sharedUse)
+            await approveOwnersSharedUse(sharedUse.audience, sharedUse.store, {
+              botId: agentId,
+              serverId: app,
+              ownerId: context.var.actor.id,
+            });
+        } catch (error) {
+          /*
+           * Nowhere to record it: the Bot has no owner, or the app stopped being Shared in between.
+           * No approval is the closed direction (the gate refuses the team account), and the grants
+           * the person saved stand, as `/give` answers the same race.
+           */
+          if (
+            !(error instanceof SharedUseFrameError) &&
+            !(error instanceof SharedUseNotSharedError)
+          )
+            throw error;
         }
         await store.recordGrantsChanged({
           app,
@@ -4012,15 +4241,24 @@ export function createPluginRoutes(
     }),
   );
 
+  /**
+   * 管理员收件箱里所有人的待处理申请：应用访问申请，以及共享使用申请（X3）。跨租户，所以在 platform 帧
+   * 里读，两种申请是同一次读、同一道门；调用前已确认持有 capability。
+   */
+  const pendingForAdmin = (context: { var: AppVariables }) =>
+    (adminScope as NonNullable<typeof adminScope>).asAdminPlatform(
+      context.var.actor,
+      async () => ({
+        appAccess: await store.pendingAppAccessRequests(),
+        sharedUse: sharedUse ? await sharedUse.store.listRequests() : [],
+      }),
+    );
+
   /** 所有人的 pending 申请，给管理员收件箱。 */
   routes.get("/access-requests", signedInWithCapability, async (context) => {
     const refusal = decisionRefusal(context);
     if (refusal) return context.json({ error: refusal }, 403);
-    const all = await (
-      adminScope as NonNullable<typeof adminScope>
-    ).asAdminPlatform(context.var.actor, () =>
-      store.pendingAppAccessRequests(),
-    );
+    const all = (await pendingForAdmin(context)).appAccess;
     // 上游的形状（X2）：`?app=` 只看一个应用的，`counts` 让插件列表给每个应用标数字而不用再读一次。
     const byApp: Record<string, number> = {};
     for (const request of all)
@@ -4105,6 +4343,60 @@ export function createPluginRoutes(
     });
 
   /**
+   * 授予之前没有保存任何工具时，先以按下的人的身份再问一次应用（上游 #1277）。添加时保存的清单可能是空的：
+   * 当时 vendor 没回答，或者它只对登录了的人列工具。所以批准替管理员做应用页上「刷新」会做的事，而不是叫他
+   * 去刷新。在按下的人自己的帧里问（批准要持有能力的管理员，刷新 `team` 行要的正是这个）。团队版里这只改
+   * 应用的工具行；个人版里刷新经过 `withPersonalDefaults`，列出的全部工具（会改东西的也在内）随即给了每位
+   * 员工，所以个人版里卡片上这一按给出的不只是只读动作，普通写挡在本人的「改动之前先问」后面（个人默认在
+   * 给出第一个工具前把它打开）。问不到只记日志，接下来照旧按「没有工具」处理。
+   *
+   * 答这个应用的工具是不是要随本人登录才来——只在个人版里会是 true：应用跑在本人自己的账号上、靠 OAuth 或
+   * 同意页连接、本人还没连上，还是一个工具都没有。那时批准就是把它打开、什么都不给；本人登录时列出工具，
+   * `withPersonalDefaults` 把全部工具给每位员工，和在连接页上连接一样。团队版里管理员的批准就是授予本身，
+   * 什么都不给的批准仍被拒绝，所以答 false。
+   */
+  const askForToolsFirst = async (
+    context: Context<{ Variables: AppVariables }>,
+    request: AppAccessRequestRecord,
+  ): Promise<boolean> => {
+    if (!request.serverId) return false;
+    const saved = async () =>
+      (await store.listServers()).find(
+        (candidate) => candidate.id === request.serverId,
+      )?.tools.length ?? 0;
+    if ((await saved()) > 0) return false;
+    try {
+      // 只为列出工具：vendor 答 `invalid_client` 时不替换部署共用的 OAuth 客户端，那是应用页上的事。
+      await store.refreshTools(request.serverId, context.var.actor.id, {
+        reRegister: false,
+      });
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          type: "app-access-tools-refresh-failed",
+          request: request.id,
+          app: request.appKey,
+          reason: reasonWithoutStatement(error),
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    }
+    if ((await saved()) > 0 || currentEdition() !== "personal") return false;
+    const mine = await store.inspectApp({
+      app: request.appKey,
+      agentId: request.botId,
+      userId: context.var.actor.id,
+      composioConfigured,
+      directory: appDirectory,
+    });
+    return (
+      mine?.access.account === "personal" &&
+      (mine.access.connect === "oauth" || mine.access.connect === "consent") &&
+      mine.access.connectedAt === null
+    );
+  };
+
+  /**
    * 批准一条申请就是做它要的那件事，然后关单（收件箱的批准与卡片上的一按共用，见 `app-access-routes.ts`）。
    *
    * 先改、后关单（fork 的顺序，fork 测试钉住）：改完发现申请在此期间被撤回或驳回，答一个可区分的 409
@@ -4127,6 +4419,8 @@ export function createPluginRoutes(
     const again = direct ? "再试一次" : "再批准这条申请";
     let granted: string[] = [];
     let enabled = false;
+    /** 个人版里打开了一个要等本人登录才列工具的应用，什么都没给（轨迹上和「授予了 0 个」分开）。 */
+    let opened = false;
 
     if (request.kind === "enable") {
       const inspected = await store.inspectApp({
@@ -4196,6 +4490,7 @@ export function createPluginRoutes(
       }
       await store.addInstallListing("mcp", request.appKey, actorEmail(context));
     } else {
+      const signInFirst = await askForToolsFirst(context, request);
       const outcome = await asBotOwner(context, request.botId, async () => {
         const server = (await store.listServers()).find(
           (candidate) => candidate.id === request.serverId,
@@ -4205,11 +4500,18 @@ export function createPluginRoutes(
             error: `「${title}」已经不是本部署的应用，无法授予。`,
             status: 409 as const,
           };
-        if (server.tools.length === 0)
+        if (server.tools.length === 0) {
+          // 个人版里随本人登录才列工具的应用：批准就是打开它，什么都不给，登录之后每位员工拿到全部工具。
+          if (signInFirst) {
+            opened = true;
+            return { refs: [] as string[] };
+          }
           return {
-            error: `「${title}」还没有列出任何工具。请先在插件页刷新它的工具，再批准这条申请。`,
+            error: `「${title}」还没有可以授予的工具。请在${appsPageZh()}打开它的页面看看原因，然后${again}。`,
             status: 409 as const,
+            reason: "no_tools",
           };
+        }
         const advertised = server.tools.map((tool) => tool.ref);
         const outside = (chosen ?? []).filter(
           (ref) => !advertised.includes(ref),
@@ -4226,7 +4528,7 @@ export function createPluginRoutes(
             .map((tool) => tool.ref);
         if (refs.length === 0)
           return {
-            error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在插件页为这位员工逐个选择可以使用的动作，再处理这条申请。`,
+            error: `「${title}」没有标为只读的动作，在这里批准什么也授予不了。请在${appsPageZh()}为这位员工逐个选择可以使用的动作，再处理这条申请。`,
             status: 409 as const,
           };
         for (const ref of refs) {
@@ -4276,7 +4578,12 @@ export function createPluginRoutes(
         return { refs };
       });
       if ("error" in outcome) {
-        await approvalRefused(context, request, `grant_${outcome.status}`);
+        await approvalRefused(
+          context,
+          request,
+          ("reason" in outcome ? outcome.reason : undefined) ??
+            `grant_${outcome.status}`,
+        );
         return context.json(
           { error: outcome.error, granted: outcome.granted },
           outcome.status,
@@ -4317,6 +4624,7 @@ export function createPluginRoutes(
         kind: decided.kind,
         enabled,
         granted: granted.length,
+        ...(opened ? { opened: true } : {}),
         ...(direct ? { direct: true } : {}),
       },
     });
@@ -4350,6 +4658,17 @@ export function createPluginRoutes(
     },
   );
 
+  if (sharedUse)
+    mountSharedUseRoutes({
+      routes,
+      shared: sharedUse,
+      capable: signedInWithCapability,
+      decisionRefusal,
+      asBotOwner,
+      pendingForAdmin: async (context) =>
+        (await pendingForAdmin(context)).sharedUse,
+    });
+
   mountAppAccessRoutes({
     routes,
     store,
@@ -4361,6 +4680,7 @@ export function createPluginRoutes(
     directory: appDirectory,
     decisionRefusal,
     carryOut: carryOutApproval,
+    ...(sharedUse ? { shared: sharedUse } : {}),
   });
 
   /** 驳回：只关掉这条申请，别的什么也不改。 */
