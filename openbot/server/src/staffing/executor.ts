@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { enterpriseControls } from "../admin/controls";
 import { canManageAgent, canRunAgent } from "../agents/profile-policy";
 import {
+  AgentChangedError,
   AgentNotFoundError,
   AgentNotManageableError,
   type AgentProfileStore,
@@ -29,7 +30,12 @@ import {
   type ChannelStore,
 } from "../channels/routes";
 import type { Database } from "../db/client";
-import { agentProfiles, channelMemberships, channels } from "../db/schema";
+import {
+  agentProfiles,
+  channelMemberships,
+  channels,
+  pluginGrants,
+} from "../db/schema";
 import { nothingToRequest } from "../plugins/app-access";
 import {
   type AppDirectory,
@@ -38,14 +44,16 @@ import {
 } from "../plugins/app-access-store";
 import { MAX_PENDING_APP_ACCESS_REQUESTS } from "../plugins/app-access-tool";
 import {
+  approveOwnersSharedUse,
   ownerAppsAllowed,
   ownerGrantRefusal,
   withdrawOwnersSharedUse,
 } from "../plugins/owner-grants";
 import { personalRevokeRefusalFor } from "../plugins/personal-defaults";
-import type {
-  SharedAudience,
-  SharedUseStore,
+import {
+  type SharedAudience,
+  SharedUseNotSharedError,
+  type SharedUseStore,
 } from "../plugins/shared-use-store";
 import { PluginRefusedError, type PluginStore } from "../plugins/store";
 import type { PortraitStore } from "../portraits/store";
@@ -139,6 +147,7 @@ export type StaffingExecutorDeps = {
     | "fileAppAccessRequest"
     | "recordAppAccessEvent"
     | "revokeOwnerGrants"
+    | "revoke"
   >;
   composioConfigured: boolean;
   directory?: AppDirectory;
@@ -156,9 +165,15 @@ export type StaffingExecutorDeps = {
    * 没装企业控制时和那道门一样放行。
    */
   mayUse?: (actorId: string, capability: BotCapability) => Promise<boolean>;
-  /** 共享使用批准（同 `DELETE /give`）：收回主人的授予时一并撤回它设下的团队账号受众。没给时只收回授予。 */
+  /**
+   * 共享使用批准（同 `POST/DELETE /give`）：主人给出 Shared 应用时设下团队账号受众，收回时一并撤回。
+   * 没给时只授予、只收回，团队账号的调用在有人批准受众之前被闸门拒绝。
+   */
   shared?: {
-    store: Pick<SharedUseStore, "withdrawOwnerApprovals" | "appIdOf">;
+    store: Pick<
+      SharedUseStore,
+      "approveOwnerGrant" | "withdrawOwnerApprovals" | "appIdOf"
+    >;
     audience: Pick<SharedAudience, "record">;
   };
 };
@@ -365,6 +380,11 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     actor: AuthenticatedActor;
     agentActor: AgentActor;
     proposalId: string;
+    /**
+     * 改员工的提议起草时员工的版本。资料的那一次写入在员工的行锁下再比一次，两份基于同一版本的改动
+     * 不会都写进去；重试时没有它（对象正是上一次改的）。
+     */
+    unchangedSince?: Date;
   };
 
   const botTrail = (
@@ -441,11 +461,18 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     if (!checked.ok) return failed(checked.error);
     const refused = await capabilityRefusal(run, checked.value.visibility);
     if (refused) return failed(refused);
-    const updated = await deps.profiles.update(
-      run.agentActor,
-      agentId,
-      checked.value,
-    );
+    let updated: Awaited<ReturnType<typeof deps.profiles.update>>;
+    try {
+      updated = await deps.profiles.update(
+        run.agentActor,
+        agentId,
+        checked.value,
+        run.unchangedSince ? { unchangedSince: run.unchangedSince } : undefined,
+      );
+    } catch (error) {
+      if (error instanceof AgentChangedError) throw new ProposalStaleError();
+      throw error;
+    }
     await botTrail(run, "bot.updated", agentId, {
       name: updated.name,
       visibility: updated.visibility,
@@ -500,6 +527,36 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     );
   }
 
+  /** 员工已经持有的应用动作与各自是谁给的，在本人的帧里读。 */
+  async function heldActions(agentId: string): Promise<Map<string, string>> {
+    const rows = await deps.database
+      .select({ ref: pluginGrants.ref, grantedAs: pluginGrants.grantedAs })
+      .from(pluginGrants)
+      .where(
+        and(eq(pluginGrants.agentId, agentId), eq(pluginGrants.kind, "mcp")),
+      );
+    return new Map(rows.map((row) => [row.ref, row.grantedAs ?? ""]));
+  }
+
+  /** 主人给出 Shared 应用时设下谁可以经这位员工用团队账号（同 `POST /give`）。 */
+  async function approveShared(
+    run: Run,
+    agentId: string,
+    inspected: AppInspection,
+  ) {
+    if (!deps.shared || !inspected.answeringId) return;
+    try {
+      await approveOwnersSharedUse(deps.shared.audience, deps.shared.store, {
+        botId: agentId,
+        serverId: inspected.answeringId,
+        ownerId: run.actor.id,
+      });
+    } catch (error) {
+      // 这之间应用被切走了模式：不设受众（闭合的方向），授予照常。
+      if (!(error instanceof SharedUseNotSharedError)) throw error;
+    }
+  }
+
   /** 应用的动作里这次要给的：草稿点名了就只要点名的，没点名就是全部可给的。 */
   async function toolsToGive(
     inspected: AppInspection,
@@ -545,8 +602,10 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     if (!inspected || !(inspected.vouched || inspected.access.granted))
       return failed(`这个部署没有叫「${entry.app}」的应用。`);
     const name = inspected.access.displayName;
-    if (inspected.access.granted) return done(`员工已经有「${name}」了。`);
+    const key = inspected.access.key;
     const by = run.actor.email;
+    // 持有是按应用算的，持有一个动作不等于持有草稿点名的那个：按动作比，只补还没有的。
+    const held = await heldActions(agentId);
 
     const refusal = await ownerGrantRefusal(
       deps.plugins,
@@ -563,30 +622,42 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       );
       if (refs.length === 0)
         return failed(`「${name}」里没有你可以直接给员工的动作。`);
-      for (const ref of refs)
+      const missing = refs.filter((ref) => !held.has(ref));
+      for (const ref of missing)
         await deps.plugins.grant("mcp", ref, agentId, by, { as: "owner" });
-      await deps.plugins.recordAppAccessEvent({
-        eventType: "app_access.owner_granted",
-        targetId: inspected.access.key,
-        actorUserId: run.actor.id,
-        payload: {
-          app: inspected.access.key,
-          bot: agentId,
-          refs,
-          proposalId: run.proposalId,
-        },
-      });
+      if (missing.length > 0)
+        await deps.plugins.recordAppAccessEvent({
+          eventType: "app_access.owner_granted",
+          targetId: key,
+          actorUserId: run.actor.id,
+          payload: {
+            app: key,
+            bot: agentId,
+            refs: missing,
+            proposalId: run.proposalId,
+          },
+        });
+      if (missing.length > 0 || inspected.access.givenByOwner)
+        await approveShared(run, agentId, inspected);
       // 草稿点名、但不是本人能直接给的动作（会写、会发的），照实说出来，不当作给了。
-      const key = inspected.access.key;
       const left = entry.actions.filter(
         (action) =>
           !refs.some((ref) => ref === action || ref === `${key}/${action}`),
       );
+      const base =
+        missing.length === 0
+          ? `员工已经有「${name}」了`
+          : `已把「${name}」给员工`;
       const given =
         left.length === 0
-          ? `已把「${name}」给员工`
-          : `已把「${name}」给员工（只给了只读动作；${left.join("、")} 这些动作要由管理员单独授予）`;
-      return inspected.access.needsConnect
+          ? base
+          : `${base}（只给了只读动作；${left.join("、")} 这些动作要由管理员单独授予）`;
+      const unconnected =
+        inspected.access.needsConnect ||
+        (inspected.access.granted &&
+          (inspected.access.state === "not_connected" ||
+            inspected.access.state === "reconnect"));
+      return unconnected
         ? {
             outcome: "needs_connection",
             message: `${given}；你连接自己的账号之后它才能用。`,
@@ -609,8 +680,27 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       );
       if (refs.length === 0)
         return failed(`「${name}」没有标为只读的动作，请在插件页逐个选择。`);
-      for (const ref of refs) await deps.plugins.grant("mcp", ref, agentId, by);
-      return done(`已把「${name}」给员工。`);
+      const missing = refs.filter((ref) => !held.has(ref));
+      for (const ref of missing)
+        await deps.plugins.grant("mcp", ref, agentId, by);
+      return done(
+        missing.length === 0
+          ? `员工已经有「${name}」了。`
+          : `已把「${name}」给员工。`,
+      );
+    }
+
+    // 已经持有这个应用时申请不了单个动作：没点名或点名的都有了就是已经有，否则照实说要找管理员。
+    if (inspected.access.granted) {
+      const lacking = entry.actions.filter(
+        (action) =>
+          ![...held.keys()].some(
+            (ref) => ref === action || ref === `${key}/${action}`,
+          ),
+      );
+      return lacking.length === 0
+        ? done(`员工已经有「${name}」了。`)
+        : failed(`「${name}」的 ${lacking.join("、")} 要由管理员单独授予。`);
     }
 
     // 申请只为本人能用的员工提，同浏览器里的申请入口。
@@ -651,8 +741,9 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
   async function takeApp(
     run: Run,
     agentId: string,
-    app: string,
+    entry: { app: string; actions: string[] },
   ): Promise<Outcome> {
+    const app = entry.app;
     const refusal = await personalRevokeRefusalFor(
       deps.plugins,
       "mcp",
@@ -670,6 +761,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       ...(deps.directory ? { directory: deps.directory } : {}),
     });
     if (!inspected) return failed(`这个部署没有叫「${app}」的应用。`);
+    if (entry.actions.length > 0)
+      return takeActions(run, agentId, inspected, entry.actions);
     const ids = [
       ...new Set([
         inspected.access.key,
@@ -704,6 +797,68 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       },
     });
     return done(`已收回「${name}」。`);
+  }
+
+  /**
+   * 只收回点名的动作，而且只收本人给的；管理员给的不动。这个应用上本人给的一个都不剩时，再撤回它设下的
+   * 团队账号受众（同整个应用收回）。
+   */
+  async function takeActions(
+    run: Run,
+    agentId: string,
+    inspected: AppInspection,
+    actions: readonly string[],
+  ): Promise<Outcome> {
+    const key = inspected.access.key;
+    const name = inspected.access.displayName;
+    const held = await heldActions(agentId);
+    const named = [
+      ...new Set(
+        actions.map((action) =>
+          action.startsWith(`${key}/`) ? action : `${key}/${action}`,
+        ),
+      ),
+    ];
+    const mine = named.filter((ref) => held.get(ref) === "owner");
+    const others = named.filter(
+      (ref) => held.has(ref) && held.get(ref) !== "owner",
+    );
+    for (const ref of mine)
+      await deps.plugins.revoke("mcp", ref, agentId, run.actor.email);
+    const ownersLeft = [...held].filter(
+      ([ref, grantedAs]) =>
+        ref.startsWith(`${key}/`) &&
+        grantedAs === "owner" &&
+        !mine.includes(ref),
+    );
+    if (ownersLeft.length === 0 && deps.shared && inspected.answeringId)
+      await withdrawOwnersSharedUse(deps.shared.audience, deps.shared.store, {
+        serverId: inspected.answeringId,
+        botId: agentId,
+        actorId: run.actor.id,
+      });
+    if (mine.length === 0)
+      return failed(
+        others.length > 0
+          ? `「${name}」的这些动作是管理员给的，只有管理员可以收回。`
+          : `「${name}」上没有你给这位员工的这些动作可以收回。`,
+      );
+    await deps.plugins.recordAppAccessEvent({
+      eventType: "app_access.owner_revoked",
+      targetId: key,
+      actorUserId: run.actor.id,
+      payload: {
+        app: key,
+        bot: agentId,
+        refs: mine,
+        proposalId: run.proposalId,
+      },
+    });
+    return done(
+      others.length === 0
+        ? `已收回「${name}」的 ${mine.join("、")}。`
+        : `已收回「${name}」的 ${mine.join("、")}；${others.join("、")} 是管理员给的，没有动。`,
+    );
   }
 
   /** 定时任务发在本人与这位员工的单独对话里；还没有这样的对话就开一个。 */
@@ -848,7 +1003,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       steps.push({
         step: "app_remove",
         target: entry.app,
-        run: () => takeApp(run, agentId, entry.app),
+        run: () => takeApp(run, agentId, entry),
       });
     for (const routine of set.routines ?? [])
       steps.push({
@@ -970,6 +1125,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       try {
         outcome = await step.run();
       } catch (error) {
+        // 内容已变化不是一步的失败：整份提议不执行，交给调用方放回待确认。
+        if (error instanceof ProposalStaleError) throw error;
         outcome = failed(reasonOf(error));
       }
       results.push({
@@ -1186,6 +1343,9 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         actor,
         agentActor: agentActorOf(actor),
         proposalId,
+        ...(claimed.kind === "employee_change" && claimed.baseVersion
+          ? { unchangedSince: new Date(claimed.baseVersion) }
+          : {}),
       };
       let draft: ProposalDraft;
       let created: ResultItem[];
