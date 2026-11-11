@@ -309,9 +309,17 @@ and opening the app's page writes nothing. Known limit: the way out is to revoke
 Arcade's dashboard (the user's connection for that auth provider), then press Connect again.
 Revoking there ends the person's other apps on the same auth provider too.
 
-**与上游不同: one Arcade account per person per app.** Upstream files a person's second account
-under a further id of theirs. Here **Connect another account** answers 409 on an Arcade app, and a
-person has one account at each.
+**A person can hold a second account at an app.** Arcade keeps one account per user id and auth
+provider, so a person's second account at an app (**Connect another account**,
+`POST /servers/:id/connect?another=1`) is filed there under a further id of theirs,
+`<their id>~<suffix>`, with a random suffix minted by the server when they press it. The return leg
+is the same one: only the session that pressed it can finish it. The connection row stays under the
+person's own id and the further account is recorded beside it in `brokered_accounts`; the app's page
+lists both by the address the provider reported. A Bot's call that names one of them runs in that
+account, a call that names none runs in the person's default one, and a name the person does not
+hold is refused before Arcade is asked. Disconnecting one account withdraws that one; disconnecting
+the app, offboarding the person or removing the app withdraws every account they hold there. A
+Shared app has one team account and no second one.
 
 **与上游不同: no Reconnect card, and no Reconnect button.** When Arcade refuses a call for want of
 authorization, the call fails and the Bot is told the action is not allowed on this account; the
@@ -489,29 +497,28 @@ wrong-account case among the causes, because the vendor will not say.
 
 Everything above that is marked, in one place:
 
-1. **One Arcade account per person per app**: **Connect another account** answers 409.
-2. **Approving one action at a time is not merged**, nor the list of what an account has
+1. **Approving one action at a time is not merged**, nor the list of what an account has
    authorized. Connect asks for the whole app, an app whose actions need more than one auth
    provider instance cannot be connected, and least privilege cannot be had through the consent.
-3. **A grant left behind by a cancelled attempt**: a Shared app's team account is revoked at Arcade;
+2. **A grant left behind by a cancelled attempt**: a Shared app's team account is revoked at Arcade;
    a person's own is only recorded in the audit trail (`mcp.cancelled_grant_left_live`).
-4. **Cancelled and no-longer-permitted returns are judged before Arcade is asked to confirm**, so
+3. **Cancelled and no-longer-permitted returns are judged before Arcade is asked to confirm**, so
    those consents never take effect at Arcade.
-5. **A grant Arcade already holds is not adopted.** Connect answers an error when Arcade holds a
+4. **A grant Arcade already holds is not adopted.** Connect answers an error when Arcade holds a
    grant this deployment has no row for; revoke it in Arcade's dashboard, then connect again.
-6. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
+5. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
    person as a generic failure and the address is in the startup warning and the log.
-7. **No Reconnect card or button**: a call Arcade refuses for want of authorization simply fails,
+6. **No Reconnect card or button**: a call Arcade refuses for want of authorization simply fails,
    and connecting again is Disconnect, then Connect.
-8. **Siblings are reconciled after a disconnect, not named before it**, and not when an
+7. **Siblings are reconciled after a disconnect, not named before it**, and not when an
    administrator removes an app.
-9. **An Arcade row is written verified, dated the day of the consent.**
-10. **Nothing warns before an unclassified toolkit is enabled.**
-11. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
+8. **An Arcade row is written verified, dated the day of the consent.**
+9. **Nothing warns before an unclassified toolkit is enabled.**
+10. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
     `/settings/connected-accounts`, rows in `composio_connections` and on `mcp_servers`; the return
     leg's reason is not yet shown as a sentence; Composio's "deployment's own OAuth client" answers
     409 on Arcade.
-12. **None of upstream's live measurements has been repeated by this fork.**
+11. **None of upstream's live measurements has been repeated by this fork.**
 
 ## What is unproven
 

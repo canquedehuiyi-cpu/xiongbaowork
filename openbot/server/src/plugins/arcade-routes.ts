@@ -12,7 +12,7 @@ import {
   brokerSentence,
 } from "./broker";
 import { connectedAccountsUrlFor } from "./oauth";
-import type { AccountRef } from "./shared-accounts";
+import { type AccountRef, filedUnderPerson } from "./shared-accounts";
 import type { PluginStore } from "./store";
 import { withVendorDeadline } from "./vendor-deadline";
 
@@ -43,7 +43,6 @@ import { withVendorDeadline } from "./vendor-deadline";
  *   提供商下的其他应用（fork 还没有上游按认证提供商列出兄弟应用的那一层），所以不撤。
  * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）不在 X5：
  *   「连接」一次要整个应用需要的权限。
- * - 一个人的第二个 Arcade 账号（`?another=1`）不在 X5。
  */
 
 /** 回到「已连接账号」页时带的原因，只是一个词。与上游的名单一致。 */
@@ -464,8 +463,11 @@ export function mountArcadeRoutes(
        */
       if (
         account.holder === "person" &&
-        store.personAccount(account.userId).vendorUserId !==
-          account.vendorUserId
+        // 本人的名字，或者他「再连一个账号」时在这个名字下铸出的另一个 id，都算今天的名字。
+        !filedUnderPerson(
+          account.vendorUserId,
+          store.personAccount(account.userId).vendorUserId,
+        )
       ) {
         console.error(
           JSON.stringify({

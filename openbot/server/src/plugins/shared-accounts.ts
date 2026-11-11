@@ -135,6 +135,22 @@ export function mintDeploymentVendorUserId(
  */
 export const ANOTHER_ACCOUNT_MARK = "~";
 
+/**
+ * 一个人在同一个应用上「再连一个账号」时用的 id（上游 `anotherArcadeAccount`）。
+ *
+ * Arcade 按「用户 id + 认证提供商」只存一个账号，所以第二个 Gmail 记在这个人自己的另一个 id 下：
+ * `<他在厂商那边的名字>~<随机后缀>`。后缀在按下的那一刻由服务端铸出，从不取自请求；它只是让两个账号在
+ * 厂商那边分开，不是秘密——那个 id 能不能用，仍由「这次同意的回程是不是发起人自己的会话」决定。
+ */
+export function anotherArcadeAccount(
+  account: Extract<AccountRef, { holder: "person" }>,
+): Extract<AccountRef, { holder: "person" }> {
+  return {
+    ...account,
+    vendorUserId: `${account.vendorUserId}${ANOTHER_ACCOUNT_MARK}${randomBytes(4).toString("hex")}`,
+  };
+}
+
 /** `vendorUserId` 是不是这个人自己的 broker id，或者他另一个账号的 id。 */
 export function filedUnderPerson(
   vendorUserId: string,

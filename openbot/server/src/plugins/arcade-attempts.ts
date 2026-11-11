@@ -2,12 +2,13 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { type AuditStore, createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import {
+  brokeredAccounts,
   composioConnections,
   mcpServers,
   pendingAuthorizations,
 } from "../db/schema";
 import { type BrokerProvider, toolkitOfFor } from "./access";
-import type { AccountRef } from "./shared-accounts";
+import { type AccountRef, filedUnderPerson } from "./shared-accounts";
 
 /**
  * 进行中的 Arcade 授权（X5，上游 `plugin-store/connections.ts` 的授权尝试部分，按 fork 改写）。
@@ -19,9 +20,9 @@ import type { AccountRef } from "./shared-accounts";
  * 与上游的差异：
  * - 个人连接写进 fork 的 `composio_connections`（`provider = 'arcade'`），团队账号写进应用行的 `shared_*`
  *   列（X1 的账号模型），而不是上游的 `brokered_connections`。
- * - 一个人「再连一个 Arcade 账号」（上游 `<id>~<suffix>`）不在 X5：完成时账号必须是本人自己的 vendor id，
- *   否则不记录。fork 的调用路径按 Composio 的 account id 钉账号，Arcade 的第二个账号是另一个 user id，
- *   这条路还没接上，记下来只会得到一个调用不到的账号。
+ * - 一个人「再连一个 Arcade 账号」（上游 `<id>~<suffix>`）：连接行仍在本人自己的名字下，另一个账号记在
+ *   X1 的账号列表 `brokered_accounts` 里（厂商不给账号 id，所以是空串），调用按那一行的 id 执行。完成时
+ *   比上游多核对一条：账号必须就是这次尝试当初为之发起的那个，不能在完成时换成另一个。
  */
 export type PendingAuthorization = typeof pendingAuthorizations.$inferSelect;
 
@@ -260,15 +261,48 @@ export function createArcadeAttempts(context: {
       scopes: string[];
       authProvider: string;
     }): Promise<{ claimed: boolean }> {
+      /*
+       * 个人的完成只记在这个人自己的名下：他在厂商那边的名字，或者他「再连一个账号」时铸出的另一个 id
+       * （`<名字>~<后缀>`，上游 #1298 的 Arcade 一半）。别的名字一律不记。
+       */
+      const own =
+        input.account.holder === "person"
+          ? vendorNameOf(input.account.userId)
+          : input.account.vendorUserId;
       if (
         input.account.holder === "person" &&
-        input.account.vendorUserId !== vendorNameOf(input.account.userId)
+        !filedUnderPerson(input.account.vendorUserId, own)
       ) {
         throw new Error(
           "An Arcade account filed under a name other than the person's own is not recorded in this deployment.",
         );
       }
+      const further =
+        input.account.holder === "person" && input.account.vendorUserId !== own
+          ? input.account
+          : null;
       return await database.transaction(async (transaction) => {
+        if (input.account.holder === "person") {
+          /*
+           * 而且只记这次尝试当初为之发起的那个账号。尝试行上的 `vendor_user_id` 是按下「连接」时由服务端
+           * 定下的；完成时换一个账号（哪怕也是本人的另一个 id）就是把一次同意记到没有为它同意过的账号上，
+           * 所以在认领之前就拒绝，尝试原样留着。
+           */
+          const started = (await transaction.execute(sql`
+            SELECT vendor_user_id
+              FROM pending_authorizations
+             WHERE actor_id = ${input.actorId}
+               AND auth_id = ${input.authId}
+          `)) as unknown as { vendor_user_id: string }[];
+          if (
+            started[0] &&
+            started[0].vendor_user_id !== input.account.vendorUserId
+          ) {
+            throw new Error(
+              "This consent was started for a different account of the person's, so nothing was recorded.",
+            );
+          }
+        }
         const claimed = await transaction.execute(sql`
           UPDATE pending_authorizations
              SET completed_at = date_trunc('milliseconds', now()),
@@ -302,9 +336,7 @@ export function createArcadeAttempts(context: {
              * 这次同意记在厂商的哪个名字下（上游 #927）。与本人的用户 id 相同时不写（NULL），所以要登录
              * 的部署写的行与以前一样；单用户安装记下它自己的名字，启动时的退役不会把这一行当成共享名下的。
              */
-            ...(input.account.vendorUserId === input.account.userId
-              ? {}
-              : { vendorUserId: input.account.vendorUserId }),
+            ...(own === input.account.userId ? {} : { vendorUserId: own }),
             updatedAt: now,
           };
           await transaction
@@ -318,6 +350,23 @@ export function createArcadeAttempts(context: {
               target: [composioConnections.toolkit, composioConnections.userId],
               set,
             });
+          if (further) {
+            /*
+             * 另一个账号记在账号列表里，连接行仍在本人自己的名字下：应用「连没连」只有一个答案，而这个
+             * id 之后靠这一行被认出来——列账号、按名字挑账号、断开时撤销，都从这里找到它。厂商不给账号
+             * id，所以是空串。
+             */
+            await transaction
+              .insert(brokeredAccounts)
+              .values({
+                provider,
+                app: input.toolkit,
+                userId: further.userId,
+                vendorUserId: further.vendorUserId,
+                accountId: "",
+              })
+              .onConflictDoNothing();
+          }
         } else {
           /*
            * Whether the team account was already connected, read in this transaction and locked
