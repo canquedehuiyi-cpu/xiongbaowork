@@ -167,10 +167,13 @@ export function BeforeAfter({
   label,
   before,
   after,
+  signal = false,
 }: {
   label: string;
   before: string | null;
   after: string;
+  /** 改后的值要醒目（比如公开给全团队）：用信号色写。 */
+  signal?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -183,7 +186,15 @@ export function BeforeAfter({
             <span className="sr-only">改为</span>
           </>
         ) : null}
-        <span className="whitespace-pre-wrap">{after || "（空）"}</span>
+        <span
+          className={
+            signal
+              ? "whitespace-pre-wrap font-bold text-signal"
+              : "whitespace-pre-wrap"
+          }
+        >
+          {after || "（空）"}
+        </span>
       </p>
     </div>
   );
