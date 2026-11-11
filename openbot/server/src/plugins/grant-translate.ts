@@ -36,6 +36,8 @@ import {
   type ModelCompleter,
   ModelNotConfiguredError,
 } from "../routing/model";
+import { capabilityFor } from "../tenant/context";
+import { STALE_ADMIN_REFUSAL } from "./admin-session-gate";
 // M5: fork 没有采用插件拆分，这些在 ./store。
 import {
   APP_CALL_EVENT_TYPES,
@@ -730,6 +732,12 @@ export function createAppGrantDraftRoutes(options: {
   ) => {
     const denied = requireAdmin(context);
     if (denied) return denied;
+    /*
+     * 会话给出的角色不够；要的是这次请求重新读过 `user_roles` 之后拿到的管理员能力（装配处给的
+     * `requireUser` 带着它）。角色已被收回的人在这里被拒绝，描述不会送去部署的模型，轨迹里也不留一行。
+     */
+    if (capabilityFor(context.var.actor.id) !== "admin")
+      return context.json({ error: STALE_ADMIN_REFUSAL }, 403);
     await next();
   };
 

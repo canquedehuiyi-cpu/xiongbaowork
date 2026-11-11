@@ -9,10 +9,13 @@ import {
   type ArcadeBroker,
   type AuthorizationFlow,
   BrokerAccountHeldError,
+  brokerReturnUrl,
   brokerSentence,
+  type GrantState,
+  schemeKind,
 } from "./broker";
-import { connectedAccountsUrlFor } from "./oauth";
-import type { AccountRef } from "./shared-accounts";
+import { type ConnectOrigin, connectedAccountsUrlFor } from "./oauth";
+import { type AccountRef, filedUnderPerson } from "./shared-accounts";
 import type { PluginStore } from "./store";
 import { withVendorDeadline } from "./vendor-deadline";
 
@@ -39,11 +42,10 @@ import { withVendorDeadline } from "./vendor-deadline";
  * - 只剩一种遗留授权：回程进行中尝试被取消（竞争），厂商已经确认、记录时认领不到。
  *   团队账号：在厂商那边撤销。团队身份每个应用、每次切换随机铸出，撤销不会连带别的应用；只有厂商答
  *   「撤了」才算撤回，答 false 或抛错都如实留痕（审计 `mcp.cancelled_grant_left_live`）。
- *   个人账号：只留痕并告诉本人。授权是本人自己的、记在本人 id 下，不算越权；撤销会连带本人同一认证
- *   提供商下的其他应用（fork 还没有上游按认证提供商列出兄弟应用的那一层），所以不撤。
- * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）不在 X5：
- *   「连接」一次要整个应用需要的权限。
- * - 一个人的第二个 Arcade 账号（`?another=1`）不在 X5。
+ *   个人账号：照上游，撤掉它不连带别的东西时才撤（这个应用原本没有连接，本人在同一认证提供商下也没有
+ *   别的应用）；会连带、判断不了或厂商没确认撤销时只留痕并告诉本人。
+ * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）：与整应用的
+ *   「连接」走同一条尝试与回程。团队账号的清单与授权都只给此刻持有管理员能力的人（上游让成员读清单）。
  */
 
 /** 回到「已连接账号」页时带的原因，只是一个词。与上游的名单一致。 */
@@ -115,6 +117,12 @@ export type ArcadeRouteDeps = {
   store: PluginStore;
   arcade: ArcadeBroker;
   appUrl: string | undefined;
+  /**
+   * 这次请求是否持有管理员能力（插件路由的 `decisionRefusal`）：会话里是管理员，而且管理员守卫重新读过
+   * 角色之后给了能力。答 null 表示持有。团队账号的授权清单与逐个动作授权都先问它；没给时只靠 store 自己的
+   * 那道能力检查。
+   */
+  adminRefusal?: (context: { var: AppVariables }) => string | null;
 };
 
 function accountOf(attempt: PendingAuthorization): AccountRef | null {
@@ -145,22 +153,29 @@ export async function startArcadeAuthorization(
     toolkit: string;
     title: string;
     returnUrl: string;
+    /** 逐个动作授权时是那个动作（厂商的名字）；整应用连接不给。 */
+    action?: string;
     held?: () => Promise<Response>;
   },
 ): Promise<Response> {
   const { store, arcade } = deps;
   const actorId = context.var.actor.id;
+  const action = input.action ?? null;
   const claim = await store.claimAuthorizationAttempt({
     actorId,
     serverId: input.serverId,
-    action: null,
+    action,
     account: input.account,
   });
   if (!claim.claimed) {
+    // 说出挡着的是哪一次：整应用的连接，还是某个动作的授权。
+    const standing = claim.live?.action ?? null;
     return context.json(
       {
         error:
-          "你已经有一次连接正在进行。请先完成它，或者等它过期（15 分钟）再开始新的。",
+          standing === null
+            ? "你已经有一次连接正在进行。请先完成它，或者等它过期（15 分钟）再开始新的。"
+            : `「${standing}」的授权正在进行。请先完成它，或者等它过期（15 分钟）再开始新的。`,
       },
       409,
     );
@@ -173,6 +188,7 @@ export async function startArcadeAuthorization(
         account: input.account,
         toolkit: input.toolkit,
         returnUrl: input.returnUrl,
+        ...(action ? { action } : {}),
       }),
     );
   } catch (error) {
@@ -322,11 +338,13 @@ async function stillPermitted(
 }
 
 /**
- * 评审 I1：一个记不下来的授权在厂商那边已经生效时怎么办。
+ * 一个记不下来的授权在厂商那边已经生效时怎么办（回程进行中尝试被取消）。
  *
- * 团队账号：在厂商那边撤销。团队身份是每个应用、每次切换随机铸出的（`mintDeploymentVendorUserId`），
- * 它下面只有这一个应用，撤销不会连带别的应用；不撤，它就会在之后被别人的「确认」收养。撤销失败才落回
- * 留痕。个人：授权是本人自己的，记在本人 id 下；撤销会连带本人同一认证提供商下的其他应用，所以只留痕。
+ * 团队账号还没有连接：在厂商那边撤销。团队身份是每个应用、每次切换随机铸出的
+ * （`mintDeploymentVendorUserId`），它下面只有这一个应用，撤销不会连带别的应用；不撤，它就成了一个
+ * 来历不明的授权。团队账号已经连接着：不撤，只留痕（撤销会结束大家正在用的那条连接）。
+ * 个人：「再连一个账号」铸出的 id 下只有这一次同意，直接撤；本人名字下的，照上游在不连带别的东西时撤，
+ * 否则留痕。撤销没有被厂商确认时都落回留痕。
  */
 async function leftoverGrant(
   deps: ArcadeRouteDeps,
@@ -339,7 +357,35 @@ async function leftoverGrant(
   },
 ): Promise<"withdrawn" | "left-live"> {
   const { store, arcade } = deps;
+  /*
+   * 团队账号原本就连接着（就地重新连接，或在已连接的团队账号上为一个动作授权）：不撤。撤销结束的是团队
+   * 身份在这个认证提供商下的整条连接，也就是大家正在用的那一条，而应用行仍会说「已连接」。这次同意只是
+   * 加在它上面的权限，留着不比没有更危险，所以照上游只留痕。读不到应用行时同样不撤。
+   */
+  let teamAlreadyConnected = false;
   if (input.account.holder === "deployment" && input.toolkit) {
+    const teamToolkit = input.toolkit;
+    const app = await store.appAccount(teamToolkit).catch(() => undefined);
+    /*
+     * 「原本就连着」指的是这次同意所在的那个团队身份连着。同意期间应用被切回个人再切回共享，团队身份
+     * 换了新的：旧身份下这次同意谁也用不到，没有行指向它，照未连接的情况撤掉。
+     */
+    teamAlreadyConnected =
+      app === undefined ||
+      (Boolean(app?.shared?.connectedAt) &&
+        app?.shared?.vendorUserId === input.account.vendorUserId);
+    if (teamAlreadyConnected) {
+      input = {
+        ...input,
+        why: `${input.why}; ${app === undefined ? "the app's team account could not be read" : "the team account was already connected"}`,
+      };
+    }
+  }
+  if (
+    input.account.holder === "deployment" &&
+    input.toolkit &&
+    !teamAlreadyConnected
+  ) {
     const toolkit = input.toolkit;
     const withdrawn = await withVendorDeadline(() =>
       arcade.revoke({ account: input.account, toolkit }),
@@ -370,6 +416,52 @@ async function leftoverGrant(
       },
     );
     if (withdrawn) return "withdrawn";
+  }
+  if (input.account.holder === "person" && input.toolkit) {
+    /*
+     * 个人账号照上游的规则：能判断「撤掉它不连带任何别的东西」时就撤，判断不了或会连带时如实留痕。
+     * Arcade 按认证提供商存连接，撤掉这次的授权就是结束这个人在同一提供商下的连接。所以：这个应用本来
+     * 就有一条连接（这次同意是加在它上面的）不撤；他在同一提供商下还有别的应用、或者有应用问不出提供商
+     * 也不撤；都没有时撤掉，而且只有厂商答「撤了」才算撤回。
+     */
+    const toolkit = input.toolkit;
+    const account = input.account;
+    /*
+     * 「再连一个账号」的同意记在这个人自己的另一个 id 下（`<名字>~<后缀>`），那个 id 是这次按下时才铸
+     * 出来的，下面只有这一次同意：撤掉它不会连带任何别的应用或账号。不撤的话，没有任何一行记得这个 id，
+     * 之后谁也找不到它。
+     */
+    const further =
+      account.vendorUserId !== store.personAccount(account.userId).vendorUserId;
+    let keep: string | null = null;
+    try {
+      if (further) {
+        // 直接撤，见上。
+      } else if (
+        await store.brokeredConnection({ toolkit, userId: account.userId })
+      ) {
+        keep = "the account already held this app's connection";
+      } else {
+        const collateral = await arcadeConnectionSiblings({
+          store,
+          arcade,
+          userId: account.userId,
+          toolkit,
+        });
+        if (collateral.siblings.length > 0 || collateral.unanswered > 0)
+          keep = "other apps share this connection";
+      }
+    } catch {
+      keep = "the apps sharing this connection could not be resolved";
+    }
+    if (keep === null) {
+      const ended = await withVendorDeadline(() =>
+        arcade.revoke({ account, toolkit }),
+      ).catch(() => false);
+      if (ended === true) return "withdrawn";
+      keep = "the vendor did not confirm the withdrawal";
+    }
+    input = { ...input, why: `${input.why}; ${keep}` };
   }
   await store
     .recordCancelledGrantLeftLive({
@@ -456,6 +548,38 @@ export function mountArcadeRoutes(
       const account = accountOf(attempt);
       if (!account) return refusedWith("no-attempt");
       const authId = attempt.authId;
+      /*
+       * 这次同意是在这个人今天的名字下开始的吗（上游 #927 的 `name-changed`）。单用户安装得到自己的名字
+       * 之前开始、之后才完成的同意记在共享名 `dev-local-user` 下：在厂商那边确认它，完成的是共享名下的
+       * 授权；撤销它，结束的是同一把 key 上别的安装正在用的连接。所以在问厂商任何事之前就拒绝，什么也
+       * 不确认、不撤销；那边的流程无人确认，自己过期。尝试清掉，本人可以马上在新名字下重新连接。
+       */
+      if (
+        account.holder === "person" &&
+        // 本人的名字，或者他「再连一个账号」时在这个名字下铸出的另一个 id，都算今天的名字。
+        !filedUnderPerson(
+          account.vendorUserId,
+          store.personAccount(account.userId).vendorUserId,
+        )
+      ) {
+        console.error(
+          JSON.stringify({
+            type: "arcade-attempt-under-retired-name",
+            server: attempt.serverId,
+            action: attempt.action,
+            authorizationId: authId,
+            attemptStartedAt: attempt.createdAt,
+            note: "A person returned from a consent begun under the name this deployment filed them under before it was given its own. Nothing was confirmed or withdrawn at the vendor, because that name may be shared by other deployments; the flow there lapses unconfirmed. The attempt was cleared so the person can connect again under the current name.",
+          }),
+        );
+        await store
+          .discardAuthorizationAttempt({
+            actorId,
+            createdAt: attempt.createdAt,
+          })
+          .catch(() => false);
+        return refusedWith("name-changed");
+      }
       if (live === null) return refusedWith("cancelled");
 
       const permitted = await stillPermitted(context, store, attempt, account);
@@ -565,7 +689,7 @@ export function mountArcadeRoutes(
           .catch(() => null);
         if (completedElsewhere === null) return refusedWith("not-recorded");
         if (!completedElsewhere) {
-          // 尝试在同意期间被取消了，授权却完成了：团队账号撤销，个人留痕（评审 I1）。
+          // 尝试在同意期间被取消了，授权却完成了：能撤的撤，撤了会误伤的留痕（见 `leftoverGrant`）。
           const outcome = await leftoverGrant(current, {
             actorId,
             attempt,
@@ -580,6 +704,13 @@ export function mountArcadeRoutes(
         recorded = true;
       }
 
+      if (attempt.action !== null) {
+        // 逐个动作授权回来时带上那个动作（上游的 `?action=`），页面据此把刚授权的那一行指给人看。
+        return context.redirect(
+          `${connectedAccountsUrlFor(appUrl, { serverId: attempt.serverId })}?action=${encodeURIComponent(attempt.action)}`,
+          303,
+        );
+      }
       return context.redirect(
         connectedAccountsUrlFor(appUrl, { serverId: attempt.serverId }),
         303,
@@ -595,6 +726,232 @@ export function mountArcadeRoutes(
       return refusedWith("not-recorded");
     }
   }
+
+  /**
+   * 这个应用的账号是谁的：个人应用是会话里那个人自己的，Shared 应用是部署的团队身份。只读会话与应用行，
+   * 请求里带的任何用户 id、账号都不看——授权链接铸给谁，就把谁的账号挂上去。
+   *
+   * 团队账号只给此刻仍持有管理员能力的人，读授权清单与铸授权都一样：会话里的角色是登录时定的，所以除了
+   * 角色还要过 `adminRefusal`（重新读过 `user_roles` 之后给的能力）和 store 自己的能力检查。
+   */
+  async function accountFor(
+    context: Context<{ Variables: AppVariables }>,
+    current: ArcadeRouteDeps,
+    serverId: string,
+  ): Promise<
+    | { toolkit: string; title: string; account: AccountRef; refusal?: never }
+    | { refusal: { error: string; status: 400 | 403 | 409 } }
+  > {
+    const { store } = current;
+    const row = await store.serverAddress(serverId);
+    const toolkit = row ? toolkitOfFor("arcade", row.url) : null;
+    if (!row || !toolkit) {
+      return {
+        refusal: { error: "这个应用不是这样连接的。", status: 400 },
+      };
+    }
+    if (schemeKind(row.authScheme) === "none") {
+      return {
+        refusal: {
+          error: `${row.title} 不需要账号，没有什么可授权的。能用它的员工已经可以用了。`,
+          status: 400,
+        },
+      };
+    }
+    const app = await store.appAccount(toolkit);
+    if (app?.mode !== "shared") {
+      /*
+       * 他调用时实际用的那个账号（默认账号；设成了第二个账号就是第二个），授权清单与逐个动作授权都问它：
+       * 否则授权加在名字下的账号上，调用却跑在默认的第二个账号上，两边对不上。
+       */
+      return {
+        toolkit,
+        title: row.title,
+        account: await store.defaultPersonAccount(
+          toolkit,
+          context.var.actor.id,
+        ),
+      };
+    }
+    let writer =
+      context.var.actor.role === "admin" &&
+      (current.adminRefusal?.(context) ?? null) === null;
+    if (writer) {
+      try {
+        store.requireTeamAccountWriter();
+      } catch (error) {
+        if (!isServerWriteRefusal(error)) throw error;
+        writer = false;
+      }
+    }
+    if (!writer) {
+      return {
+        refusal: {
+          error: `${row.title} 用的是一个共享的团队账号，只有管理员能管理它。`,
+          status: 403,
+        },
+      };
+    }
+    if (!app.shared) {
+      return {
+        refusal: {
+          error: `${row.title} 是共享账号应用，却没有团队身份。请把它切回个人账号再切回共享账号。`,
+          status: 409,
+        },
+      };
+    }
+    return {
+      toolkit,
+      title: row.title,
+      account: { holder: "deployment", vendorUserId: app.shared.vendorUserId },
+    };
+  }
+
+  /**
+   * 这个账号在每个动作上现在的授权状态（上游 `GET /servers/:id/grants`）：已授权、要本人同意、要运维先
+   * 配置、读不出来。只读，问的是厂商；账号来自 {@link accountFor}。
+   *
+   * 读不到时答一条「读不出来」，从不答「需要同意」：把读不到说成需要同意，会让人去同意一个也许已经给过
+   * 的权限。厂商与本部署写给运维的句子不给成员看（#1223），带提供商名字的原因换成通用的一句。不逐个动作
+   * 授权的部署（Composio）答空清单。
+   */
+  routes.get("/servers/:id/grants", signedIn, async (context) => {
+    const current = deps();
+    if (!current) return context.json({ actions: [] });
+    const resolved = await accountFor(
+      context,
+      current,
+      context.req.param("id"),
+    );
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    const { toolkit, account } = resolved;
+    const unreadable = "现在读不到这个账号允许了什么。请稍后再试。";
+    let actions: GrantState[];
+    try {
+      actions = await withVendorDeadline(() =>
+        current.arcade.grantsFor({ toolkit, account }),
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "arcade-grants-unread",
+          server: context.req.param("id"),
+          // 只记类名：这条腿上的错误可能带着厂商的回答。
+          error: error instanceof Error ? error.name : typeof error,
+        }),
+      );
+      actions = [{ action: toolkit, state: "unknown", reason: unreadable }];
+    }
+    /*
+     * `needs-operator` 的 `missing` 是部署级密钥的键名（厂商报的，如 `GITHUB_SERVER_URL`），是运维的事，
+     * 只给此刻持有管理员能力的人看；别人看到的状态不变、名单为空：知道「要管理员先配置」就够了。
+     */
+    const admin =
+      context.var.actor.role === "admin" &&
+      (current.adminRefusal?.(context) ?? null) === null;
+    return context.json({
+      actions: actions.map((entry) => {
+        if (entry.state === "unknown" && NAMES_A_BROKER.test(entry.reason))
+          return { ...entry, reason: unreadable };
+        if (entry.state === "needs-operator" && !admin)
+          return { ...entry, missing: [] };
+        return entry;
+      }),
+    });
+  });
+
+  /**
+   * 为一个动作发起同意（上游 `POST /servers/:id/authorize`）。与整应用的「连接」是同一条路：先在发起人
+   * 名下认领一次尝试，再向厂商要链接，回程由 `/arcade/verify` 核对并记录。区别只在要的是这一个动作需要的
+   * 权限——所以能做到「只给读、不给发」，以及动作分属不止一个认证提供商、没法一次连接的应用。
+   *
+   * 动作必须是这个应用公布的那一个，按厂商的拼法、区分大小写；body 里别的字段一概不读。
+   */
+  routes.post("/servers/:id/authorize", signedIn, async (context) => {
+    const serverId = context.req.param("id");
+    const current = deps();
+    if (!current) {
+      return context.json(
+        {
+          error: "这里的应用在应用页面上按「连接」连接一次，不逐个动作授权。",
+        },
+        503,
+      );
+    }
+    const resolved = await accountFor(context, current, serverId);
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    const { account, toolkit, title } = resolved;
+    const body = await context.req.json().catch(() => null);
+    const action =
+      body && typeof body === "object" && "action" in body
+        ? (body as { action: unknown }).action
+        : undefined;
+    if (
+      typeof action !== "string" ||
+      !(await current.store.serverPublishesAction(serverId, action))
+    ) {
+      return context.json({ error: `${title} 没有这个名字的动作。` }, 400);
+    }
+    /*
+     * 动作分属不止一个认证提供商（或读不出属于哪一个）的应用，这里不授权：之后的断开、确认、列账号都要
+     * 先知道连接记在哪个提供商下，对这样的应用厂商的回答是拒绝，授权下来的连接就成了谁也结束不了的。
+     * 与整应用的「连接」对这种应用的拒绝一致，在铸任何东西之前。
+     */
+    const provider = await withVendorDeadline(() =>
+      current.arcade.authProviderOf(toolkit),
+    ).catch(() => null);
+    if (!provider) {
+      return context.json(
+        {
+          error: `${title} 的动作要登录不止一个账号，或者读不出它们登录的是哪一个，这里还不能授权它。没有动你的账号。`,
+        },
+        409,
+      );
+    }
+    if (!current.appUrl) {
+      return context.json(
+        {
+          error:
+            "连接应用还没有配置好：这个部署不知道自己页面的地址。请管理员设置 OPENBOT_APP_URL。",
+        },
+        503,
+      );
+    }
+    const returnTo: ConnectOrigin =
+      context.req.query("returnTo") === "admin" ? "admin" : "settings";
+    let returnUrl: string;
+    try {
+      returnUrl = brokerReturnUrl(
+        connectedAccountsUrlFor(current.appUrl, { serverId }, returnTo),
+      );
+    } catch {
+      return context.json(
+        {
+          error:
+            "没能生成带你回来的地址，所以没有开始授权。请管理员检查 OPENBOT_APP_URL。",
+        },
+        503,
+      );
+    }
+    return startArcadeAuthorization(context, current, {
+      serverId,
+      account,
+      toolkit,
+      title,
+      returnUrl,
+      action,
+    });
+  });
 
   /**
    * 取消这个人在这个应用上进行中的授权。已经完成的不能取消（409，告诉他去断开）。
@@ -728,11 +1085,14 @@ export async function clearEndedArcadeSiblings(input: {
       if (!same) continue;
       const live = await withVendorDeadline(() =>
         arcade.isConnected({
-          account: { holder: "person", userId, vendorUserId: userId },
+          // 这个人在厂商那边的名字（上游 #927）：单用户安装问的是它自己名下的连接，不是共享名下的。
+          account: store.personAccount(userId),
           toolkit: sibling,
         }),
       );
       if (live) continue;
+      // 名字下没了，第二个账号还在：连接与第二个账号都留着，不当成已经结束。
+      if (await store.keepForOtherAccount(sibling, userId)) continue;
       await store.disconnectBrokered({
         toolkit: sibling,
         userId,

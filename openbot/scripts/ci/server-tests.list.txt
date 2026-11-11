@@ -90,6 +90,7 @@ tests/approvals-store.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/apps-page-wording.test.ts
+tests/arcade-account-sweeps.integration.test.ts
 tests/arcade-adapter-authorize.test.ts
 tests/arcade-adapter-connections.test.ts
 tests/arcade-adapter-errors.test.ts
@@ -114,9 +115,13 @@ tests/arcade-errors.test.ts
 tests/arcade-listing.test.ts
 tests/arcade-live.test.ts
 tests/arcade-malformed-listing-engine.test.ts
+tests/arcade-multiple-accounts.integration.test.ts
 tests/arcade-pagination-engine.test.ts
+tests/arcade-per-action.integration.test.ts
 tests/arcade-provider-check.test.ts
+tests/arcade-reconnect-adopt.integration.test.ts
 tests/arcade-revoke-invariant.test.ts
+tests/arcade-single-user-identity.integration.test.ts
 tests/arcade-single-user.test.ts
 tests/arcade-store-call.integration.test.ts
 tests/arcade-team-account.integration.test.ts
@@ -129,6 +134,7 @@ tests/arcade-unreadable-total-engine.test.ts
 tests/arcade-vendor-error-engine.test.ts
 tests/arcade-vendor-read-contract.test.ts
 tests/arcade-verifier-notice.test.ts
+tests/arcade-verifier-repoint.test.ts
 tests/arcade-verify.integration.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
@@ -295,6 +301,8 @@ tests/delivery-router.test.ts
 tests/delivery-routes.test.ts
 tests/delivery-store.integration.test.ts
 tests/delivery-turn.test.ts
+tests/demoted-admin-plugin-gate.integration.test.ts
+tests/demoted-admin-plugin-routes.integration.test.ts
 tests/deployment-frames.test.ts
 tests/deployment-model-metering.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
@@ -562,6 +570,7 @@ tests/provider-oauth-lock-helper.test.ts
 tests/provider-oauth.test.ts
 tests/provider-refusal.test.ts
 tests/provider-selection.test.ts
+tests/provider-stored-rows.integration.test.ts
 tests/provider-tool-schemas.test.ts
 tests/provider-undecided.test.ts
 tests/qoderwake-package.test.ts
@@ -696,6 +705,8 @@ tests/shared-use-routes.integration.test.ts
 tests/shared-use-store.integration.test.ts
 tests/shared-use.test.ts
 tests/shipped-bot-instructions.test.ts
+tests/single-user-identity-store.integration.test.ts
+tests/single-user-identity.integration.test.ts
 tests/single-user.test.ts
 tests/skill-ownership.integration.test.ts
 tests/skill-tenant-slugs.integration.test.ts

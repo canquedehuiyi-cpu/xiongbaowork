@@ -73,12 +73,9 @@ generate its own identity file rather than copy an existing one. You may supply 
 `OPENBOT_INSTALLATION_ID` before first setup; a later value must match the saved one. Setup never
 uses `DEPLOYMENT_ID`, whose packaged default can be shared by multiple clones.
 
-A supplied `COMPOSIO_API_KEY` is left intact. **与上游不同:** upstream's helper also skips
-provisioning when `OPENBOT_BROKER_PROVIDER=arcade` is set, or an Arcade key is set with no explicit
-Composio selection; this fork's reads neither, so on a deployment that uses [Arcade](arcade.md) it
-still provisions a Composio project and writes the key. Set `OPENBOT_BROKER_PROVIDER=arcade` there,
-or the server finds both keys set with no provider named and refuses to start. Learning setup and
-container creation are independent. No parent Composio organization credential is stored in OpenBot; its
+A supplied `COMPOSIO_API_KEY` is left intact. `OPENBOT_BROKER_PROVIDER=arcade`, or an Arcade key
+without an explicit Composio selection, also skips provisioning. Learning setup and container
+creation are independent. No parent Composio organization credential is stored in OpenBot; its
 runtime receives only the provisioned project's key. That key is still deployment-wide: this does
 not create a separate Composio project for each OpenBot organization or person. Enabling an app
 continues to create or reuse that project's app authorization config.

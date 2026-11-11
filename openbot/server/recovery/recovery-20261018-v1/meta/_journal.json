@@ -1261,6 +1261,13 @@
       "when": 1794328076274,
       "tag": "0198_server_row_shapes",
       "breakpoints": true
+    },
+    {
+      "idx": 200,
+      "version": "7",
+      "when": 1794375869182,
+      "tag": "0200_single_user_identity",
+      "breakpoints": true
     }
   ]
 }

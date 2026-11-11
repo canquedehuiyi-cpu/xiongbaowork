@@ -245,7 +245,7 @@ echo "OpenBot"
 echo "======="
 
 # Provision the installation's Composio project with the existing CLI sign-in, independently of
-# Learning. The helper preserves supplied keys. The server reads the resulting .env on
+# Learning. The helper preserves supplied keys and Arcade. The server reads the resulting .env on
 # launch. Bun preserves exported values over .env, including empty strings. A child cannot change
 # this shell's environment, so clear only blank overrides before setup and later server processes.
 #

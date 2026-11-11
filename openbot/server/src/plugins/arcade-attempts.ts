@@ -2,12 +2,13 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { type AuditStore, createAuditStore, recordAuditEvent } from "../audit";
 import type { Database } from "../db/client";
 import {
+  brokeredAccounts,
   composioConnections,
   mcpServers,
   pendingAuthorizations,
 } from "../db/schema";
 import { type BrokerProvider, toolkitOfFor } from "./access";
-import type { AccountRef } from "./shared-accounts";
+import { type AccountRef, filedUnderPerson } from "./shared-accounts";
 
 /**
  * 进行中的 Arcade 授权（X5，上游 `plugin-store/connections.ts` 的授权尝试部分，按 fork 改写）。
@@ -19,9 +20,9 @@ import type { AccountRef } from "./shared-accounts";
  * 与上游的差异：
  * - 个人连接写进 fork 的 `composio_connections`（`provider = 'arcade'`），团队账号写进应用行的 `shared_*`
  *   列（X1 的账号模型），而不是上游的 `brokered_connections`。
- * - 一个人「再连一个 Arcade 账号」（上游 `<id>~<suffix>`）不在 X5：完成时账号必须是本人自己的 vendor id，
- *   否则不记录。fork 的调用路径按 Composio 的 account id 钉账号，Arcade 的第二个账号是另一个 user id，
- *   这条路还没接上，记下来只会得到一个调用不到的账号。
+ * - 一个人「再连一个 Arcade 账号」（上游 `<id>~<suffix>`）：连接行仍在本人自己的名字下，另一个账号记在
+ *   X1 的账号列表 `brokered_accounts` 里（厂商不给账号 id，所以是空串），调用按那一行的 id 执行。完成时
+ *   比上游多核对一条：账号必须就是这次尝试当初为之发起的那个，不能在完成时换成另一个。
  */
 export type PendingAuthorization = typeof pendingAuthorizations.$inferSelect;
 
@@ -47,8 +48,14 @@ export function createArcadeAttempts(context: {
   database: Database;
   auditStore: AuditStore;
   provider: BrokerProvider;
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）；不给时就是本人的用户 id。完成时据此核对：个人的
+   * 完成只能记在这个人今天的名字下。
+   */
+  vendorNameOf?: (userId: string) => string;
 }) {
   const { database, auditStore, provider } = context;
+  const vendorNameOf = context.vendorNameOf ?? ((userId: string) => userId);
 
   /**
    * 按发起人和发起时刻点名一次尝试，比较到毫秒（JS 的 Date 只有毫秒）：用列默认值写入、带微秒的行
@@ -254,15 +261,48 @@ export function createArcadeAttempts(context: {
       scopes: string[];
       authProvider: string;
     }): Promise<{ claimed: boolean }> {
+      /*
+       * 个人的完成只记在这个人自己的名下：他在厂商那边的名字，或者他「再连一个账号」时铸出的另一个 id
+       * （`<名字>~<后缀>`，上游 #1298 的 Arcade 一半）。别的名字一律不记。
+       */
+      const own =
+        input.account.holder === "person"
+          ? vendorNameOf(input.account.userId)
+          : input.account.vendorUserId;
       if (
         input.account.holder === "person" &&
-        input.account.vendorUserId !== input.account.userId
+        !filedUnderPerson(input.account.vendorUserId, own)
       ) {
         throw new Error(
           "An Arcade account filed under a name other than the person's own is not recorded in this deployment.",
         );
       }
+      const further =
+        input.account.holder === "person" && input.account.vendorUserId !== own
+          ? input.account
+          : null;
       return await database.transaction(async (transaction) => {
+        if (input.account.holder === "person") {
+          /*
+           * 而且只记这次尝试当初为之发起的那个账号。尝试行上的 `vendor_user_id` 是按下「连接」时由服务端
+           * 定下的；完成时换一个账号（哪怕也是本人的另一个 id）就是把一次同意记到没有为它同意过的账号上，
+           * 所以在认领之前就拒绝，尝试原样留着。
+           */
+          const started = (await transaction.execute(sql`
+            SELECT vendor_user_id
+              FROM pending_authorizations
+             WHERE actor_id = ${input.actorId}
+               AND auth_id = ${input.authId}
+          `)) as unknown as { vendor_user_id: string }[];
+          if (
+            started[0] &&
+            started[0].vendor_user_id !== input.account.vendorUserId
+          ) {
+            throw new Error(
+              "This consent was started for a different account of the person's, so nothing was recorded.",
+            );
+          }
+        }
         const claimed = await transaction.execute(sql`
           UPDATE pending_authorizations
              SET completed_at = date_trunc('milliseconds', now()),
@@ -287,11 +327,36 @@ export function createArcadeAttempts(context: {
               ),
             );
           reconnected = existing !== undefined;
+          /*
+           * 这个第二个账号原本就记着（它的「重新连接」，比如调用被拒后卡片上的那一按），还是第一次加上。
+           * 重新连接要前移连接日期，卡片据此知道已经做过；第一次加上的不是这条连接的重新连接，不动日期。
+           */
+          const furtherKnown =
+            further !== null &&
+            (
+              await transaction
+                .select({ id: brokeredAccounts.id })
+                .from(brokeredAccounts)
+                .where(
+                  and(
+                    eq(brokeredAccounts.provider, provider),
+                    eq(brokeredAccounts.app, input.toolkit),
+                    eq(brokeredAccounts.userId, further.userId),
+                    eq(brokeredAccounts.vendorUserId, further.vendorUserId),
+                  ),
+                )
+                .limit(1)
+            ).length > 0;
           const set = {
             verified: true,
             verifiedAt: now,
             probeAction: null,
             provider,
+            /*
+             * 这次同意记在厂商的哪个名字下（上游 #927）。与本人的用户 id 相同时不写（NULL），所以要登录
+             * 的部署写的行与以前一样；单用户安装记下它自己的名字，启动时的退役不会把这一行当成共享名下的。
+             */
+            ...(own === input.account.userId ? {} : { vendorUserId: own }),
             updatedAt: now,
           };
           await transaction
@@ -303,8 +368,61 @@ export function createArcadeAttempts(context: {
             })
             .onConflictDoUpdate({
               target: [composioConnections.toolkit, composioConnections.userId],
-              set,
+              /*
+               * 在已有的连接上又同意了一次（重新连接）：连接日期前移，卡片据此知道「重新连接」已经做过，
+               * 不再提示。第一次加上的第二个账号不动这个日期，它不是这条连接的重新连接。
+               */
+              set:
+                further && !furtherKnown ? set : { ...set, connectedAt: now },
             });
+          if (further) {
+            /*
+             * 另一个账号记在账号列表里，连接行仍在本人自己的名字下：应用「连没连」只有一个答案，而这个
+             * id 之后靠这一行被认出来——列账号、按名字挑账号、断开时撤销，都从这里找到它。厂商不给账号
+             * id，所以是空串。
+             */
+            await transaction
+              .insert(brokeredAccounts)
+              .values({
+                provider,
+                app: input.toolkit,
+                userId: further.userId,
+                vendorUserId: further.vendorUserId,
+                accountId: "",
+              })
+              .onConflictDoNothing();
+            /*
+             * 本人名字下原本就连着（`reconnected`）时，把那个账号也记进列表并在没有默认时设为默认。不记
+             * 的话，账号列表还没同步过的人列表里只有第二个账号，不点名的调用（以及队友经 Team Bot 用他
+             * 的账号）就落到第二个账号上。名字下没有连接时不记：那里没有账号可用。
+             */
+            if (reconnected) {
+              await transaction
+                .insert(brokeredAccounts)
+                .values({
+                  provider,
+                  app: input.toolkit,
+                  userId: further.userId,
+                  vendorUserId: own,
+                  accountId: "",
+                })
+                .onConflictDoNothing();
+              await transaction.execute(sql`
+                UPDATE brokered_accounts SET is_default = true
+                 WHERE provider = ${provider}
+                   AND app = ${input.toolkit}
+                   AND user_id = ${further.userId}
+                   AND vendor_user_id = ${own}
+                   AND NOT EXISTS (
+                     SELECT 1 FROM brokered_accounts d
+                      WHERE d.provider = ${provider}
+                        AND d.app = ${input.toolkit}
+                        AND d.user_id = ${further.userId}
+                        AND d.is_default
+                   )
+              `);
+            }
+          }
         } else {
           /*
            * Whether the team account was already connected, read in this transaction and locked
@@ -320,7 +438,11 @@ export function createArcadeAttempts(context: {
           const updated = await transaction
             .update(mcpServers)
             .set({
-              sharedConnectedAt: sql`coalesce(${mcpServers.sharedConnectedAt}, ${now})`,
+              /*
+               * 连接日期前移：团队账号就地重新连接后，卡片据此知道已经重新连接过，不再显示「断开」。连接人
+               * 保留最初连接的那位管理员（这次是谁写在审计里）。
+               */
+              sharedConnectedAt: now,
               sharedConnectedBy: sql`coalesce(${mcpServers.sharedConnectedBy}, ${input.actorId})`,
               sharedVerified: true,
               sharedVerifiedAt: now,
@@ -515,4 +637,29 @@ export async function connectionsHeldBy(
       ),
     );
   return (people?.count ?? 0) + (shared?.count ?? 0);
+}
+
+/**
+ * 这个部署实际持有哪些提供商的连接：个人连接行的 `provider`，加上已连接的团队账号所在应用行的 provenance。
+ *
+ * 给 `storedProvider` 用（上游 #1017 的第三组）：配置没有指明活动的提供商时，由行自己说它们属于谁。
+ * 与 {@link connectionsHeldBy} 数的是同一批行，所以「启用时另一边还有没有连接」和「没有活动的提供商时
+ * 这些行读作谁的」不会是两种数法。跨所有租户读，调用方在平台帧里调用。
+ */
+export async function connectionOwners(
+  database: Database,
+): Promise<BrokerProvider[]> {
+  const people = await database
+    .selectDistinct({ provider: composioConnections.provider })
+    .from(composioConnections);
+  const shared = await database
+    .selectDistinct({ provenance: mcpServers.provenance })
+    .from(mcpServers)
+    .where(sql`${mcpServers.sharedConnectedAt} IS NOT NULL`);
+  const owners = new Set<BrokerProvider>(people.map((row) => row.provider));
+  for (const row of shared) {
+    if (row.provenance === "composio" || row.provenance === "arcade")
+      owners.add(row.provenance);
+  }
+  return [...owners].sort();
 }

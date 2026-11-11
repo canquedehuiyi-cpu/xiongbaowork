@@ -629,8 +629,9 @@ export type McpCallResult = {
   /**
    * 厂商拒绝这个账号执行这个动作（Arcade 要求授权）。只由 Arcade 传输层设置。
    *
-   * X5 还没有接上：store 目前只把它当作一次失败的调用（失败文字给模型、审计 `mcp.call_failed`），
-   * 不出上游的「重新连接」卡片，也不去问 broker 账号是否还在、不结束连接行。
+   * store 据此给本人带「重新连接」的卡片，并去问 broker 这个账号在这个应用上是否还持有什么：什么都不
+   * 持有了才结束连接行，只是这个动作没授权时行留着（见 `store.callTool` 末尾）。这次调用照旧记为
+   * `mcp.call_failed`。
    */
   actionNotAllowed?: true;
 };
