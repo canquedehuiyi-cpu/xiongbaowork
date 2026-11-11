@@ -8,6 +8,20 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **在对话里招员工、改员工、组群聊：小管家起草，本人在卡片上确认后才执行。** 新的内置应用「招聘与组群」
+  （`builtin://staffing`，启动时自动添加，两个版本都有，不连外部主机、不要凭据）给员工六个工具：`list_staff`、
+  `propose_employee`、`propose_employee_change`、`propose_group`、`propose_group_change`、`proposal_status`。
+  起草工具只往新表 `staffing_proposals`（迁移 0201，按工作区隔离）写一份草稿，对话里出现一张卡片；本人在卡片上改、
+  按确认后，才以本人身份依次调用现有的建员工、授予应用（给不了的转成访问申请）、建定时任务、建群与定顺序，并逐项显示
+  结果（✓ / 已转申请 / 需要先连接 / 失败可重试）。只有提出需求的人能确认；同一工作区看得到这段对话的其他人只看到
+  一行摘要。小管家（「我的分身」）默认有这组工具，别的员工要本人按员工打开；从小管家收回后不会再自动加回。防滥用：
+  同一个人在同一段对话里 10 分钟内最多新起草 5 份，每人最多 20 份等待确认，草稿 7 天过期。起草时被剔除的模型、技能、应用、定时
+  任务由小管家在卡片上方的话里说明，卡片不列；应用的状态只在确认后的结果里出现。新接口：`/api/proposals/:id`
+  （`GET`、`PATCH`、`apply`、`discard`、`retry`）与 `POST/DELETE /api/groups/:id/bots`、`PUT /api/groups/:id/order`；
+  新审计事件 `staffing.proposal_*`。前端不再向员工提供 `save_bot`；`bot-creator` 技能的说明在 qoderwake、personal、
+  fintech 三个包里都改为用新工具。说明见 [docs/staffing.md](docs/staffing.md)，CI 新增浏览器端到端「G6 staffing
+  lifecycle (browser, mocked model)」。需要跑迁移 0201，不需要改配置。
+
 - **模型列表的后台刷新改为以部署身份读密钥，不再在日志里记 `TenantContextError`。** 启动时、定时器上、以及厂商
   拒绝某个模型后的提前刷新，都在没有租户帧的地方读部署自己的模型密钥（`credentialSecretRef`），读凭据库被拒，日志里
   每次记一行 `{"type":"model-list-unreadable",…,"reason":"TenantContextError"}`，列表只有在有人打开模型选择或发消息
