@@ -309,7 +309,7 @@ import { offeredMemoryTools } from "./memory/tools";
 import { reportModelAvailability } from "./model-availability-check";
 import { createModelCatalogue } from "./model-catalogue";
 import { installDeepSeekThinkingOff } from "./models/deepseek-thinking";
-import { createModelRoutes } from "./models/routes";
+import { createModelRoutes, createModelShelf } from "./models/routes";
 import {
   createNamedAgentModelResolver,
   modelOf,
@@ -331,6 +331,7 @@ import { createPlatformRoutes } from "./platform/routes";
 import { appAccessTools } from "./plugins/app-access-tool";
 import { showAppAccessTools } from "./plugins/show-app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
+import { useStaffingTools } from "./plugins/builtin-staffing";
 import { useComposioClient } from "./plugins/composio";
 import { createAccountModeSwitch } from "./plugins/account-mode";
 import { useArcadeClient } from "./plugins/arcade";
@@ -4190,6 +4191,29 @@ await startupLifecycle.run(async (startup) => {
       }, 1_000),
     (resource) => resource.stop(),
   );
+
+  /*
+   * 「招聘与组群」：员工替本人起草提议的工具，与 Routines 一样是按模块解析的内置传输，所以依赖在这里交一次。
+   * 它只起草；执行走 `/api/proposals` 与执行器（见下面 `coworker.staffing`），以本人登录的身份。模型名单与员工的模型选择器同一份
+   * （`GET /api/models`），角色模板只读本人的与套件的官方卡片。
+   */
+  useStaffingTools({
+    database,
+    proposals: staffingProposalStore,
+    profiles: agentProfileStore,
+    plugins: pluginStore,
+    composioConfigured: Boolean(composioBroker),
+    ...(composioBroker ? { directory: () => composioBroker.listApps() } : {}),
+    routines: routineStore,
+    groups: groupConversations,
+    catalogue: createModelShelf({ database, quota }),
+    roleTemplates: createRoleTemplateStore({
+      database,
+      profiles: agentProfileStore,
+      official: () => officialTemplatesFrom(tenantPackage.agents),
+    }),
+    auditStore: bootAuditStore,
+  });
 
   /*
    * `@` a coworker inside a 1:1 conversation (spec B2, B3): a card on the board with the coworker named

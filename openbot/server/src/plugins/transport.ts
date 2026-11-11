@@ -2,6 +2,7 @@ import type { OutboundPolicy } from "../net/outbound-guard";
 import * as arcade from "./arcade";
 import * as baiduNetdiskRest from "./baidu-netdisk-rest";
 import * as builtinRoutines from "./builtin-routines";
+import * as builtinStaffing from "./builtin-staffing";
 import type { CredentialPlacement } from "./catalogue";
 import * as composio from "./composio";
 import * as driveRest from "./google-drive-rest";
@@ -148,6 +149,7 @@ export type TransportKind =
   | "google-drive-rest"
   | "baidu-netdisk-rest"
   | "builtin-routines"
+  | "builtin-staffing"
   | "composio"
   | "arcade";
 
@@ -179,6 +181,7 @@ const TRANSPORTS: Record<TransportKind, VendorTransport> = {
   "google-drive-rest": driveRest,
   "baidu-netdisk-rest": baiduNetdiskRest,
   "builtin-routines": builtinRoutines,
+  "builtin-staffing": builtinStaffing,
   composio,
   arcade,
 };

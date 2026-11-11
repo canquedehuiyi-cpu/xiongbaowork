@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { ZodError } from "zod";
+import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
 import { enterpriseControls } from "../admin/controls";
 import { canManageAgent, canRunAgent } from "../agents/profile-policy";
 import {
@@ -107,17 +108,10 @@ export class ProposalRefusedError extends Error {
 }
 
 /**
- * 「招聘与组群」这组工具的名字，授予写成 `staffing/<名字>`。与内置服务在目录里列出的必须是同一组，
- * 否则勾了「也给它招聘与组群能力」的员工会少一个工具。
+ * 「招聘与组群」这组工具的名字，授予写成 `staffing/<名字>`。与内置服务在目录里列出的是同一份常量
+ * （`shared/staffing-proposal.ts`），勾了「也给它招聘与组群能力」的员工不会少一个工具。
  */
-export const STAFFING_TOOL_NAMES = [
-  "list_staff",
-  "propose_employee",
-  "propose_employee_change",
-  "propose_group",
-  "propose_group_change",
-  "proposal_status",
-] as const;
+export { STAFFING_TOOL_NAMES };
 
 export type StaffingExecutorDeps = {
   database: Database;
@@ -264,7 +258,8 @@ const INPUT_REFUSALS: [RegExp, string][] = [
   [/^Pick a model/, "请从模型库里选一个模型。"],
 ];
 
-function inputRefusal(error: string): string {
+/** 起草时也用它（`builtin-staffing.ts`）：同一条检查、同一句中文，模型当场就知道，不等本人确认时才失败。 */
+export function inputRefusal(error: string): string {
   if (hasChinese(error)) return error;
   return (
     INPUT_REFUSALS.find(([pattern]) => pattern.test(error))?.[1] ??
