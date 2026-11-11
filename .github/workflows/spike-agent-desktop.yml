@@ -1,0 +1,264 @@
+# 仅验证用（spike）：agent-desktop 在三个平台上的可行性。验证完关闭，不合入 main。
+name: spike-agent-desktop
+
+on:
+  push:
+    branches: [spike/agent-desktop]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            app: Notepad
+            glob: "agent-desktop-v*-x86_64-pc-windows-msvc.*"
+          - name: macos
+            os: macos-latest
+            app: TextEdit
+            glob: "agent-desktop-v*-aarch64-apple-darwin.*"
+          - name: linux
+            os: ubuntu-latest
+            app: gedit
+            glob: "agent-desktop-v*-x86_64-unknown-linux-gnu.*"
+    defaults:
+      run:
+        shell: bash
+    env:
+      OS_NAME: ${{ matrix.name }}
+      APP_NAME: ${{ matrix.app }}
+      ASSET_GLOB: ${{ matrix.glob }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: 安装 Linux 依赖
+        if: matrix.name == 'linux'
+        continue-on-error: true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb gedit at-spi2-core dbus-x11 libatspi2.0-0 gsettings-desktop-schemas
+
+      - name: 写入测试脚本
+        run: |
+          cat > spike.sh <<'EOS'
+          #!/usr/bin/env bash
+          set +e
+          OUT="$PWD/spike-out"; mkdir -p "$OUT/dl" "$OUT/ex"
+          SUM="$OUT/summary.txt"; : > "$SUM"
+          TEXT='熊宝测试 abc 123'
+          now() { node -e 'console.log(Date.now())'; }
+          tmo() { if command -v timeout >/dev/null 2>&1; then timeout "$@"; else s=$1; shift; perl -e 'alarm shift; exec @ARGV' "$s" "$@"; fi; }
+          note() { echo "$*" | tee -a "$SUM"; }
+          # rt NAME cmd... : 计时执行，输出存 OUT/NAME.out，并记录 RESULT 行
+          rt() {
+            n=$1; shift
+            s=$(now)
+            if [ "$(type -t "$1")" = function ]; then "$@" > "$OUT/$n.out" 2>&1; rc=$?; else tmo 90 "$@" > "$OUT/$n.out" 2>&1; rc=$?; fi
+            e=$(now)
+            note "RESULT step=$n rc=$rc ms=$((e-s))"
+            echo "--- $n 输出（前 60 行）---"; head -c 8000 "$OUT/$n.out" | head -60; echo "--- end ---"
+            return $rc
+          }
+
+          cat > "$OUT/tool.js" <<'EOJ'
+          const fs = require('fs');
+          const [, , mode, file, arg] = process.argv;
+          const raw = fs.readFileSync(file, 'utf8');
+          function parse() {
+            try { return JSON.parse(raw); } catch (e) {}
+            const i = raw.indexOf('{'), k = raw.lastIndexOf('}');
+            if (i >= 0 && k > i) { try { return JSON.parse(raw.slice(i, k + 1)); } catch (e) {} }
+            return null;
+          }
+          const j = parse();
+          const REF = /^@?[A-Za-z0-9]+:e\d+$/;
+          const found = new Map();
+          (function w(o) {
+            if (Array.isArray(o)) { o.forEach(w); return; }
+            if (o && typeof o === 'object') {
+              const rv = Object.values(o).find(v => typeof v === 'string' && REF.test(v));
+              if (rv && !found.has(rv)) found.set(rv, o);
+              for (const [k, v] of Object.entries(o)) {
+                if (REF.test(k) && v && typeof v === 'object' && !found.has(k)) found.set(k, v);
+                w(v);
+              }
+            }
+          })(j);
+          if (found.size === 0) {
+            for (const m of raw.matchAll(/@?[A-Za-z0-9]+:e\d+/g)) if (!found.has(m[0])) found.set(m[0], {});
+          }
+          if (mode === 'count') {
+            console.log(found.size);
+          } else if (mode === 'ref') {
+            const KEYS = /^(role|type|control_type|controltype|kind|class|roledescription|subrole)$/i;
+            let best = null, bs = 0;
+            for (const [ref, o] of found) {
+              const roles = Object.entries(o).filter(([k, v]) => KEYS.test(k) && typeof v === 'string').map(([, v]) => v.toLowerCase());
+              let s = 0;
+              for (const r of roles) {
+                if (/text ?area|textarea|document|^edit$|axtextarea/.test(r)) s = Math.max(s, 3);
+                else if (/text ?field|textfield|text_entry|entry|^text$|text ?box|textbox|axtextfield/.test(r)) s = Math.max(s, 2);
+              }
+              if (s > bs) { bs = s; best = ref; }
+            }
+            console.error('candidates score=' + bs + ' best=' + best);
+            if (best) console.log(best);
+          } else if (mode === 'has') {
+            const hay = raw + '\n' + JSON.stringify(j);
+            console.log(hay.includes(arg) ? 'yes' : 'no');
+          } else if (mode === 'roles') {
+            const c = {};
+            for (const [, o] of found) for (const [k, v] of Object.entries(o)) if (/^(role|type|control_type|kind)$/i.test(k) && typeof v === 'string') c[v] = (c[v] || 0) + 1;
+            console.log(JSON.stringify(c));
+          }
+          EOJ
+          T() { node "$OUT/tool.js" "$@"; }
+
+          note "== 环境 =="; uname -a | tee -a "$SUM"; note "OS_NAME=$OS_NAME APP=$APP_NAME"
+
+          # Linux：虚拟显示器下启动 AT-SPI
+          if [ "$OS_NAME" = linux ]; then
+            export GTK_MODULES=gail:atk-bridge NO_AT_BRIDGE=0 GNOME_ACCESSIBILITY=1
+            gsettings set org.gnome.desktop.interface toolkit-accessibility true 2>&1 | head -3
+            (/usr/libexec/at-spi-bus-launcher --launch-immediately >"$OUT/atspi-bus.log" 2>&1 &)
+            sleep 2
+          fi
+
+          # 1 下载
+          note "== 下载 =="
+          rt download gh release download -R vercel-labs/agent-desktop -p "$ASSET_GLOB" -D "$OUT/dl"
+          ls -l "$OUT/dl" | tee -a "$SUM"
+          for f in "$OUT"/dl/*; do [ -f "$f" ] && { note "ARCHIVE $(basename "$f") bytes=$(wc -c < "$f" | tr -d ' ')"; tar -xf "$f" -C "$OUT/ex" 2>&1 | head -5; }; done
+          BIN=$(find "$OUT/ex" -type f \( -name agent-desktop -o -name agent-desktop.exe \) | head -1)
+          if [ -z "$BIN" ]; then
+            note "下载包里没找到可执行文件，退回 npm 安装"
+            rt npm_install npm install -g agent-desktop
+            BIN=$(command -v agent-desktop)
+          fi
+          note "BIN=$BIN"
+          chmod +x "$BIN" 2>/dev/null
+          note "BINARY_BYTES=$(wc -c < "$BIN" | tr -d ' ')"
+          note "== 解压后的全部文件 =="; find "$OUT/ex" -type f -exec ls -l {} \; | tee -a "$SUM"
+          AD() { tmo 60 "$BIN" "$@"; }
+
+          # 2 帮助与权限
+          rt version AD --version
+          rt help AD --help
+          rt help_snapshot AD snapshot --help
+          rt help_click AD click --help
+          rt help_type AD type --help
+          rt help_mcp AD mcp --help
+          rt status AD status
+          rt permissions AD permissions
+
+          # macOS：尽力尝试授予辅助功能（CI 机器上多半会被 SIP/TCC 拒绝，如实记录）
+          if [ "$OS_NAME" = macos ]; then
+            note "== macOS 辅助功能授权尝试 =="
+            for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+              for c in "$BIN" /bin/bash /usr/bin/osascript /bin/sh /usr/bin/env; do
+                sudo sqlite3 "$db" "INSERT OR REPLACE INTO access (service,client,client_type,auth_value,auth_reason,auth_version) VALUES ('kTCCServiceAccessibility','$c',1,2,4,1);" >>"$OUT/tcc.log" 2>&1
+                echo "tcc db=$db client=$c rc=$?" >> "$OUT/tcc.log"
+              done
+            done
+            head -20 "$OUT/tcc.log" | tee -a "$SUM"
+            rt permissions_after_grant AD permissions
+          fi
+
+          # 3 打开文本编辑器
+          note "== 打开编辑器 =="
+          F="$OUT/spike-input.txt"; : > "$F"
+          case "$OS_NAME" in
+            windows) powershell -NoProfile -Command "Start-Process notepad.exe" ;;
+            macos) open -a TextEdit "$F" ;;
+            linux) (gedit "$F" >"$OUT/gedit.log" 2>&1 &) ;;
+          esac
+          sleep 8
+          rt list_windows AD list-windows
+          rt list_apps AD list-apps
+
+          # 4 快照
+          note "== 快照 =="
+          rt snap1 AD snapshot --app "$APP_NAME" -i
+          note "SNAP1_NODES=$(T count "$OUT/snap1.out")"
+          note "SNAP1_ROLES=$(T roles "$OUT/snap1.out")"
+          rt snap1b AD snapshot --app "$APP_NAME" -i
+          note "SNAP1B_NODES=$(T count "$OUT/snap1b.out")"
+          REF1=$(T ref "$OUT/snap1.out" 2>>"$SUM")
+          note "REF1=$REF1"
+          REF="$REF1"
+
+          # 5 点击输入框
+          note "== 点击 =="
+          if [ -n "$REF" ]; then rt click_input AD click "$REF"; else note "RESULT step=click_input skipped(no ref)"; fi
+
+          # 6 输入（多种写法依次尝试，读回一致即停）
+          a_stdin() { printf '%s' "$TEXT" | tmo 60 "$BIN" type "$REF" --stdin; }
+          b_arg() { tmo 60 "$BIN" type "$REF" "$TEXT"; }
+          c_set() { printf '%s' "$TEXT" | tmo 60 "$BIN" set-value "$REF" --stdin; }
+          d_headed() { printf '%s' "$TEXT" | tmo 60 "$BIN" --headed type "$REF" --stdin; }
+          e_headed_arg() { tmo 60 "$BIN" --headed type "$REF" "$TEXT"; }
+          TYPED=no
+          for label in a_stdin b_arg c_set d_headed e_headed_arg; do
+            [ -z "$REF" ] && break
+            note "== 输入尝试 $label =="
+            rt "type_$label" "$label"
+            sleep 1
+            rt "readback_$label" AD snapshot --app "$APP_NAME" -i
+            note "READBACK_$label has_text=$(T has "$OUT/readback_$label.out" "$TEXT") nodes=$(T count "$OUT/readback_$label.out")"
+            if [ "$(T has "$OUT/readback_$label.out" "$TEXT")" = yes ]; then TYPED=$label; break; fi
+            NEW=$(T ref "$OUT/readback_$label.out" 2>/dev/null); [ -n "$NEW" ] && REF="$NEW"
+          done
+          note "TYPED_VIA=$TYPED"
+
+          # 7 过期编号：用最初快照里的编号（此后已多次快照、内容已变）
+          note "== 过期编号 =="
+          if [ -n "$REF1" ]; then
+            rt stale_click AD click "$REF1"
+            note "STALE_CLICK rc=$? mentions_stale=$(grep -ci 'stale\|ambiguous\|not found\|invalid' "$OUT/stale_click.out")"
+            printf '%s' "stale-write" | tmo 60 "$BIN" type "$REF1" --stdin > "$OUT/stale_type.out" 2>&1; note "STALE_TYPE rc=$? mentions_stale=$(grep -ci 'stale\|ambiguous\|not found\|invalid' "$OUT/stale_type.out")"; head -20 "$OUT/stale_type.out"
+          fi
+          rt bare_ref_click AD click "@e1"
+
+          # 8 MCP 模式
+          note "== MCP =="
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"spike","version":"0"}}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' > "$OUT/mcp.in"
+          mcp_try() { tmo 30 "$BIN" mcp < "$OUT/mcp.in"; }
+          rt mcp_list mcp_try
+          note "MCP_TOOL_COUNT=$(grep -o '"name":"desktop_[a-z_]*"' "$OUT/mcp_list.out" | sort -u | wc -l | tr -d ' ')"
+
+          # 9 收尾
+          case "$OS_NAME" in
+            windows) powershell -NoProfile -Command "Stop-Process -Name notepad -Force -ErrorAction SilentlyContinue" ;;
+            macos) pkill TextEdit ;;
+            linux) pkill gedit ;;
+          esac
+          note "== 完成 =="
+          { echo '## 结果 '"$OS_NAME"; echo '```'; cat "$SUM"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+          EOS
+          head -5 spike.sh
+
+      - name: 运行测试（Linux，虚拟显示器 + 会话总线）
+        if: matrix.name == 'linux'
+        continue-on-error: true
+        run: xvfb-run -a -s "-screen 0 1280x800x24" dbus-run-session -- bash spike.sh
+
+      - name: 运行测试
+        if: matrix.name != 'linux'
+        continue-on-error: true
+        run: bash spike.sh
+
+      - name: 上传结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-agent-desktop-${{ matrix.name }}
+          path: spike-out
+          if-no-files-found: warn
