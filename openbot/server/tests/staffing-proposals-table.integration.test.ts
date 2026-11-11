@@ -85,3 +85,8 @@ describe("staffing_proposals", () => {
     ).rejects.toThrow();
   });
 });
+
+// Last-registered, so it runs after the cleanup above has used the pool.
+afterAll(async () => {
+  await database.$client.close();
+});
