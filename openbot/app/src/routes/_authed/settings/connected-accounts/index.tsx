@@ -33,6 +33,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { linkedAccountsQueryOptions } from "@/lib/identity/queries";
+import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import {
   appKeyOf,
   connectionsQueryOptions,
@@ -91,7 +92,8 @@ export function brokeredAccountsListedOn(
 ): PluginServer[] {
   return servers.filter(
     (server) =>
-      server.provenance === "composio" && server.authScheme !== "NO_AUTH",
+      isBrokeredProvenance(server.provenance) &&
+      server.authScheme !== "NO_AUTH",
   );
 }
 

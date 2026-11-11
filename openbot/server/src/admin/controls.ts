@@ -46,6 +46,7 @@ import type { ComputerProvider } from "../computer/provider";
 import type { Database } from "../db/client";
 import { agentProfiles, agents, mcpServers } from "../db/schema";
 import { boundModelName } from "../models/runtime-resolver";
+import { alwaysOnHere } from "../plugins/personal-defaults";
 import type { ProactiveAdmin } from "../proactive/contracts";
 import { createOtelEventExporter, type EventExporter } from "../telemetry/otel";
 import { scrubCommand } from "../telemetry/scrub";
@@ -319,12 +320,12 @@ export function* enterpriseChecks(
      * So an entry approves the app it names directly, or the app its row instantiates, as the
      * database says (`mcpAppOfRow`) — never by taking the spelling apart.
      *
-     * M3: upstream v1.0.0 also exempts its always-on Routines app here (`isAlwaysOn`, from
-     * `plugins/personal-defaults.ts`), which this fork's plugins do not have; the fork's rule stands.
+     * The always-on app is never held back (upstream's `isAlwaysOn` exemption), and here that is
+     * `alwaysOnHere`: Routines is always on only on the personal edition. On the team edition it is
+     * an app an admin grants and takes away like any other, so the list governs it too.
      */
     const server = context.mcp.server;
-    // M5: 留给 X 系列（personal-defaults：上游的 `isAlwaysOn` 常开应用豁免）。fork 没有常开应用，所以 builtIn 恒为 false。
-    const builtIn = false;
+    const builtIn = alwaysOnHere(server);
     const approved = allowlist.servers.some(
       (entry) => entry === server || snapshot.mcpAppOfRow.get(entry) === server,
     );

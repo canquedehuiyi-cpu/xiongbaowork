@@ -665,6 +665,42 @@ Marking a server this way needs Microsoft sign-in configured. Adding the same se
 `entraScope` keeps the mark; send `"entraScope": null` to reach it on a token again. The server's
 page under Plugins shows the mark and its scope.
 
+**In this fork the scope is bound to the server's address.** A delegated token is only as safe as
+the place it is sent, so an OpenBot admin cannot mark a server with just any scope:
+
+- The deployment registers each company system in `MICROSOFT_OAUTH_OBO_RESOURCES`, as
+  `<resource>=<host>` pairs separated by commas, for example
+  `api://hr-api=hr.example.com,api://payroll=payroll.internal.example.com`. The resource is the
+  scope less its last segment (`api://hr-api/.default` is `api://hr-api`). Unset, no server can be
+  marked. A resource listed twice stops the server at start-up rather than one entry being ignored.
+- A server can be marked with a scope only when the scope's resource is registered and the server's
+  URL is `https:` at exactly the registered host (a subdomain is another host). Each call checks
+  this again before any token is asked for, so withdrawing a registration stops it at once, and a
+  marked row at a plain `http:` address is never sent a token.
+- OpenBot's own API (its client id, `api://<client id>` and anything under it, and the resource of
+  `MICROSOFT_OAUTH_API_SCOPE`) and Microsoft's first-party resources (Microsoft Graph, SharePoint,
+  Exchange, Azure and the rest) are refused, whether as a scope or in the registration, where they
+  stop the server at start-up. A bare permission such as `User.Read` means Graph to Entra and is
+  refused too.
+- `MICROSOFT_OAUTH_ALLOWED_CLIENTS` may not list OpenBot's own client id: tokens OpenBot mints on a
+  person's behalf name it as `azp`, and listed, they could be replayed back into OpenBot.
+
+Three more differences from upstream. A marked server cannot be moved to another address, nor
+marked while moving: to move it, remove it and add it again; the check is repeated under the row
+lock when the change is written, so two admins at once cannot get round it. On a Team Bot someone
+else published, a marked server is the asker's own account: they get the consent card first, and it
+is never reached as the Bot's owner. The consent is asked again, and a one-time consent spent, at
+the moment the token is sent and against the same server row, so a server marked after the Bot
+decided whose account to use is still asked about, and a call is never sent as anybody but the
+person asking. A check-in reads only apps a person connected with their own
+account, so it does not reach a marked server; routines do. What the person is told when it cannot
+work is in Chinese.
+
+The Microsoft refresh token a routine's token is minted from is Better Auth's sign-in record,
+encrypted by Better Auth under `BETTER_AUTH_SECRET`, not a credential in OpenBot's own vault, so it
+follows that secret's rotation rather than `KEY_ENCRYPTION_KEY`'s. Tokens Entra issues on a
+person's behalf are kept in memory only.
+
 **Apps can call OpenBot with an Entra token.** An app that signed somebody in with Entra asks for a
 token to `MICROSOFT_OAUTH_API_SCOPE` and sends it as `Authorization: Bearer <token>` on any API or
 agent request. It is checked against the directory's published keys, its issuer (the directory

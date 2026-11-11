@@ -42,6 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { grantRoster } from "@/lib/agents/grant-roster";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { storeMcpToken } from "@/lib/credentials/mutations";
+import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import {
   type CrewGrantOutcome,
   crewMembers,
@@ -138,7 +139,7 @@ export function connectionKindFor(
   server: PluginServer | undefined,
   auth: CatalogueItem["auth"] | undefined,
 ): CatalogueItem["auth"] | "brokered" {
-  if (server?.provenance === "composio") return "brokered";
+  if (isBrokeredProvenance(server?.provenance)) return "brokered";
   return auth ?? "deployment-bearer";
 }
 

@@ -31,6 +31,19 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   会连接到 Intelligence，并放进你自己的学习空间，由它分析出技能；以前运行时对这个连接一律返回 503，录制哪里都去不了。
   只有录制会送出去，对话线程仍留在本地。没有接入 Intelligence 时行为不变。
 
+- **员工可以用登录人自己的身份调用公司在 Microsoft Entra 后面的系统（上游 #931，OBO）。** 管理员按 URL 添加
+  MCP 服务器时带上 `entraScope`（例如 `api://hr-api/.default`），之后每次调用都用 Entra 代表提问人换来的
+  token，系统看到的是本人、只能看到本人能看的；例行任务用本人保存的 Microsoft 登录换取。被管理员移除的人立刻
+  失效。拿不到 token 时本人会看到一句中文说明（没有 Microsoft 登录、登录过期、管理员没授权等）。需要先配好
+  Microsoft 登录，并由运维在新设置 `MICROSOFT_OAUTH_OBO_RESOURCES` 里登记每个系统和它的主机
+  （`<资源>=<主机>`）：scope 的资源必须登记过、服务器地址必须在登记的主机上，OpenBot 自己的 API 和 Microsoft
+  Graph 等第一方资源一律拒绝；不设置就不能标记任何服务器。设置见 `docs/configuration.md`「Company systems
+  behind Microsoft Entra」。**升级须知：** 迁移 0186 给 `mcp_servers` 加一个可空列 `entra_scope`，无回填。
+  `MICROSOFT_OAUTH_ALLOWED_CLIENTS` 里如果写了 OpenBot 自己的 client id，现在会在启动时报错，请去掉。与上游
+  不同：已标记的服务器不能直接换地址（要先移除再添加）；别人发布的 Team Bot 用到这类服务器时先弹「使用你自己
+  的账号」同意卡；check-in 不读这类服务器。换取 token 用的 Microsoft refresh token 是 Better Auth 的登录记录，
+  由 Better Auth 加密（随 `BETTER_AUTH_SECRET`），不在 fork 凭据库里。
+
 ## 0.2.7
 
 - **用 DeepSeek 时群聊能对话了，审批通过后也能接着做。** DeepSeek 的思考模式要求每次都把之前的思考过程
