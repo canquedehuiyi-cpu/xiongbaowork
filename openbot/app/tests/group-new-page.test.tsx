@@ -96,11 +96,11 @@ const AGENTS = [
   agent("checker", "审稿", "核对事实"),
 ];
 
-function renderPage() {
+function renderPage(agents: AgentProfile[] = AGENTS) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(agentKeys.list(false), AGENTS);
+  queryClient.setQueryData(agentKeys.list(false), agents);
   queryClient.setQueryData(portraitKeys.all, []);
   const rootRoute = createRootRoute({
     component: () => (
@@ -120,8 +120,17 @@ function renderPage() {
     component: () => <p>群聊已打开</p>,
   });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([groupNew, opened]),
-    history: createMemoryHistory({ initialEntries: ["/group/new"] }),
+    routeTree: rootRoute.addChildren([
+      groupNew,
+      opened,
+      // Where the person was before opening 新建群聊.
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/start",
+        component: () => <p>之前的页面</p>,
+      }),
+    ]),
+    history: createMemoryHistory({ initialEntries: ["/start", "/group/new"] }),
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -217,4 +226,74 @@ test("a 群聊 the server refuses stays on the page and says why", async () => {
     expect(view.getByRole("alert").textContent).toBe("你用不了其中一位员工。"),
   );
   expect(router.state.location.pathname).toBe("/group/new");
+});
+
+test("each picked employee's place in the order is read with its name", async () => {
+  const { view } = renderPage();
+  await userEvent.click(await box(view, "写手"));
+  await userEvent.click(await box(view, "审稿"));
+  const describedBy = (name: string) =>
+    box(view, name).then((found) => {
+      const id = found.getAttribute("aria-describedby");
+      return id ? document.getElementById(id)?.textContent : null;
+    });
+  expect(await describedBy("写手")).toBe("第 1 个回答");
+  expect(await describedBy("审稿")).toBe("第 2 个回答");
+  expect(await describedBy("分析师")).toBeNull();
+});
+
+test("opening the new 群聊 replaces this page, so Back does not return to the picker", async () => {
+  respond = async () =>
+    Response.json(
+      {
+        channel: {
+          id: "g-2",
+          name: "写手、审稿",
+          agentIds: ["writer", "checker"],
+          threadId: "t-2",
+          active: true,
+          lastMessageAt: null,
+        },
+      },
+      { status: 201 },
+    );
+  const { view, router } = renderPage();
+  await userEvent.click(await box(view, "写手"));
+  await userEvent.click(await box(view, "审稿"));
+  await userEvent.click(view.getByRole("button", { name: "开始群聊" }));
+  expect(await view.findByText("群聊已打开")).toBeTruthy();
+  router.history.back();
+  await waitFor(() => expect(router.state.location.pathname).toBe("/start"));
+});
+
+test("twenty employees is as many as one 群聊 takes; the rest wait", async () => {
+  const many = Array.from({ length: 21 }, (_, index) =>
+    agent(`bot-${index + 1}`, `员工${index + 1}`),
+  );
+  const { view } = renderPage(many);
+  for (let index = 1; index <= 20; index++) {
+    await userEvent.click(await box(view, `员工${index}`));
+  }
+  expect(view.getByText("已选 20 位，一个群聊最多 20 位")).toBeTruthy();
+  const last = await box(view, "员工21");
+  expect(last.getAttribute("aria-disabled")).toBe("true");
+  await userEvent.click(last);
+  expect(view.getByText("已选 20 位，一个群聊最多 20 位")).toBeTruthy();
+  // A picked one can still be taken out, which frees a place.
+  await userEvent.click(await box(view, "员工1"));
+  expect((await box(view, "员工21")).getAttribute("aria-disabled")).toBeNull();
+});
+
+test("a refusal the server words in English reads as the page's own sentence", async () => {
+  respond = async () =>
+    Response.json({ error: "Couldn't find that Bot." }, { status: 404 });
+  const { view } = renderPage();
+  await userEvent.click(await box(view, "写手"));
+  await userEvent.click(await box(view, "分析师"));
+  await userEvent.click(view.getByRole("button", { name: "开始群聊" }));
+  await waitFor(() =>
+    expect(view.getByRole("alert").textContent).toBe(
+      "群聊没能开始，请再试一次。",
+    ),
+  );
 });

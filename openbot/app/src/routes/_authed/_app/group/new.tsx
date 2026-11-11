@@ -22,6 +22,20 @@ export const Route = createFileRoute("/_authed/_app/group/new")({
   component: RouteComponent,
 });
 
+/** The most employees one 群聊 holds: the server refuses more (`channels/group.ts`, `max(20)`). */
+const MOST_MEMBERS = 20;
+
+/**
+ * What a refusal says on this page. The server's own sentence when it is one a person here can read
+ * (Chinese); its English validation text otherwise would put a JSON dump in front of them, so that
+ * becomes the page's own sentence.
+ */
+function refusalWords(error: Error): string {
+  return /[\u4e00-\u9fff]/.test(error.message)
+    ? error.message
+    : "群聊没能开始，请再试一次。";
+}
+
 function RouteComponent() {
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
@@ -83,6 +97,8 @@ function RouteComponent() {
             <div className="flex flex-col overflow-hidden rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
               {profiles.data.map((profile) => {
                 const checked = chosen.includes(profile.id);
+                // Full: the ones not yet picked wait, so nobody is added past what the server takes.
+                const full = !checked && chosen.length >= MOST_MEMBERS;
                 return (
                   <label
                     className="flex min-h-[48px] cursor-pointer items-center gap-2.5 border-border border-b px-3 py-2 last:border-b-0 hover:bg-foreground/[0.03] has-[[data-checked]]:bg-accent"
@@ -91,7 +107,12 @@ function RouteComponent() {
                   >
                     <Checkbox
                       aria-label={profile.name}
+                      // The place in the answering order, read with the name (the chip says it on screen).
+                      aria-describedby={
+                        checked ? `group-order-${profile.id}` : undefined
+                      }
                       checked={checked}
+                      disabled={full}
                       id={`group-bot-${profile.id}`}
                       onCheckedChange={(next) =>
                         setChosen((current) =>
@@ -113,7 +134,10 @@ function RouteComponent() {
                       ) : null}
                     </span>
                     {checked ? (
-                      <span className="shrink-0 rounded-full border border-signal/30 bg-signal-soft px-2 py-0.5 text-[11px] text-signal-ink">
+                      <span
+                        className="shrink-0 rounded-full border border-signal/30 bg-signal-soft px-2 py-0.5 text-[11px] text-signal-ink"
+                        id={`group-order-${profile.id}`}
+                      >
                         第 {chosen.indexOf(profile.id) + 1} 个回答
                       </span>
                     ) : null}
@@ -127,7 +151,7 @@ function RouteComponent() {
               className="rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
               role="alert"
             >
-              {create.error.message}
+              {refusalWords(create.error)}
             </p>
           ) : null}
           <div className="flex flex-wrap items-center gap-3">
@@ -140,7 +164,9 @@ function RouteComponent() {
             <span className="text-[12px] text-faint" aria-live="polite">
               {chosen.length < 2
                 ? `已选 ${chosen.length} 位，至少还要 ${2 - chosen.length} 位`
-                : `已选 ${chosen.length} 位`}
+                : chosen.length >= MOST_MEMBERS
+                  ? `已选 ${chosen.length} 位，一个群聊最多 ${MOST_MEMBERS} 位`
+                  : `已选 ${chosen.length} 位`}
             </span>
           </div>
         </div>

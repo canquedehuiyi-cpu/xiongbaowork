@@ -56,6 +56,13 @@ import { useConversationFocus } from "./use-conversation-focus";
 const newRowClassName =
   "flex h-[32px] min-w-0 flex-1 items-center gap-[7px] rounded-[8px] pl-[9px] text-[12px] text-foreground/85 outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[15px] [&>svg]:shrink-0 [&>svg]:text-signal";
 
+/*
+ * On a phone the small controls keep their look but take a 44px press: a pseudo-element widens what
+ * a finger can hit, so the row's layout is the desktop one at every width.
+ */
+const TOUCH_TARGET =
+  "relative max-md:before:absolute max-md:before:top-1/2 max-md:before:left-1/2 max-md:before:size-[44px] max-md:before:-translate-x-1/2 max-md:before:-translate-y-1/2 max-md:before:content-['']";
+
 /** One roster row: a 29px rounded-square face 5px in, the name and its line 9px after it. */
 const rowClassName =
   "flex h-[42px] min-w-0 flex-1 items-center gap-[9px] rounded-[9px] px-[5px] outline-none hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring/60";
@@ -85,7 +92,10 @@ function RosterToolbar({
         <Button
           aria-expanded={open}
           aria-label={searchLabel}
-          className="size-[32px] shrink-0 text-muted-foreground"
+          className={cn(
+            "size-[32px] shrink-0 text-muted-foreground",
+            TOUCH_TARGET,
+          )}
           onClick={() => {
             // Closing the field drops what it held, so a hidden filter never narrows the list.
             if (open) onQueryChange("");
@@ -189,6 +199,12 @@ function EmployeeRow({
 }) {
   const queryClient = useQueryClient();
   const resume = useMutation(setBotPausedMutationOptions(queryClient));
+  /*
+   * Why a resume did not take, said under the row it was asked of, as the 员工 page's card says it
+   * (`PausableCard` in bots/bot-roster.tsx): the shared fallback names no employee, and a button
+   * that simply turns clickable again reads as a click that was ignored.
+   */
+  const [problem, setProblem] = useState<string | null>(null);
   const latest = latestDirectChannel(channels, agent.id);
   const line = agent.roleDescription || agent.title;
   const body = (
@@ -224,7 +240,7 @@ function EmployeeRow({
       "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-foreground/[0.06]",
   );
   return (
-    <li className="flex items-center">
+    <li className="flex flex-wrap items-center">
       {/* Its latest 单聊, else a new conversation addressed to it. */}
       {latest ? (
         <Link
@@ -250,15 +266,35 @@ function EmployeeRow({
       {attention?.paused ? (
         <Button
           aria-label={`恢复 ${agent.name}`}
-          className="size-[28px] shrink-0 text-muted-foreground"
+          className={cn(
+            "size-[28px] shrink-0 text-muted-foreground",
+            TOUCH_TARGET,
+          )}
           disabled={resume.isPending}
-          onClick={() => resume.mutate({ agentId: agent.id, paused: false })}
+          onClick={() => {
+            setProblem(null);
+            resume.mutate(
+              { agentId: agent.id, paused: false },
+              {
+                onError: (thrown: Error) =>
+                  setProblem(`没能恢复「${agent.name}」：${thrown.message}`),
+              },
+            );
+          }}
           size="icon"
-          title="已暂停，点一下恢复"
+          title={resume.isPending ? "正在恢复…" : "已暂停，点一下恢复"}
           variant="ghost"
         >
           <IconPlayerPlay className="size-[14px]" />
         </Button>
+      ) : null}
+      {problem ? (
+        <p
+          className="w-full px-[6px] pb-1 text-[12px] text-signal-ink"
+          role="alert"
+        >
+          {problem}
+        </p>
       ) : null}
     </li>
   );
@@ -286,15 +322,11 @@ export function EmployeeList() {
   );
   /*
    * Selected only while a 单聊 with it (or a new conversation addressed to it) is open: a 群聊 is
-   * about everyone in it, so it lights nobody here.
+   * about everyone in it, so it lights nobody here. Read off the address (`/group/$id`), not the
+   * loaded pages, so an older 群聊 that is not among them does not light its first member either.
    */
-  const openGroup = focus.channelId
-    ? channels.data?.find((channel) => channel.id === focus.channelId)
-    : undefined;
   const selectedId =
-    focus.active && !(openGroup && isGroupChannel(openGroup))
-      ? focus.agentId
-      : undefined;
+    focus.active && focus.kind !== "group" ? focus.agentId : undefined;
   return (
     <>
       <RosterToolbar
@@ -486,6 +518,8 @@ export function GroupList({
               {channels.isFetching ? "正在重试…" : "重试"}
             </Button>
           </RosterNote>
+        ) : channels.isPending ? (
+          <RosterNote>正在加载群聊…</RosterNote>
         ) : channels.data && chats.length === 0 ? (
           <RosterNote>
             {searching

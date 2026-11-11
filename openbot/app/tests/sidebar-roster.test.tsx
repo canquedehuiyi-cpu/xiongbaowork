@@ -163,12 +163,15 @@ function renderSidebar(
     nextCursor = null,
     bots = [],
     groups,
+    details = [],
   }: {
     channels?: ChannelSummary[];
     nextCursor?: string | null;
     bots?: unknown[];
     /** The 群组, or undefined for a server that has not answered. */
     groups?: unknown[];
+    /** Channels read on their own (`GET /api/channels/:id`), for one not among the loaded pages. */
+    details?: { id: string; agentIds: string[] }[];
   } = {},
 ) {
   const queryClient = new QueryClient({
@@ -222,6 +225,15 @@ function renderSidebar(
   });
   queryClient.setQueryData(portraitKeys.all, []);
   if (groups) queryClient.setQueryData(wakerGroupKeys.list(), groups);
+  for (const detail of details) {
+    queryClient.setQueryData(channelKeys.detail(detail.id), {
+      ...detail,
+      name: detail.id,
+      threadId: detail.id,
+      active: true,
+      lastMessageAt: null,
+    });
+  }
   queryClient.setQueryData(channelKeys.list(), {
     pages: [{ channels, nextCursor }],
     pageParams: [""],
@@ -487,7 +499,12 @@ test("older 群聊 load when asked, never by scrolling through 单聊 history", 
 test("the list chosen is remembered for the next visit", async () => {
   const first = renderSidebar("/bots", { groups: [] });
   await chooseView(first.view, /^群组/);
-  await first.view.findByRole("list", { name: "群组" }).catch(() => null);
+  // The 群组 view is drawn before the sidebar goes away, so the choice was made, not just clicked.
+  expect(
+    await first.view.findByText(
+      "在员工的「群组」里把几位员工编成一组，它就会出现在这里。",
+    ),
+  ).toBeTruthy();
   cleanup();
   const { view } = renderSidebar("/bots", { groups: [] });
   const switcher = await view.findByRole("group", { name: "侧栏列表" });
@@ -497,4 +514,94 @@ test("the list chosen is remembered for the next visit", async () => {
       .getAttribute("aria-pressed"),
   ).toBe("true");
   expect(view.queryByRole("navigation", { name: "会话" })).toBeNull();
+});
+
+test("a resume that fails says so under the row, by name, with the server's reason", async () => {
+  respond = async (request) =>
+    request.url === "/api/bots/agent-writer/resume"
+      ? Response.json({ error: "这位员工的设备离线。" }, { status: 503 })
+      : Promise.reject(new Error(`Unexpected request ${request.url}`));
+  const { view } = renderSidebar("/bots", {
+    bots: [attention("agent-writer", { paused: true })],
+  });
+  await chooseView(view, /^员工/);
+  const list = await view.findByRole("list", { name: "员工" });
+  await userEvent.click(
+    within(list).getByRole("button", { name: "恢复 写手" }),
+  );
+  const alert = await within(list).findByRole("alert");
+  expect(alert.textContent).toBe("没能恢复「写手」：这位员工的设备离线。");
+  // Still paused, and the button can be pressed again.
+  expect(within(list).getByText("已暂停")).toBeTruthy();
+  expect(
+    within(list).getByRole("button", { name: "恢复 写手" }),
+  ).toHaveProperty("disabled", false);
+});
+
+test("an employee whose conversation is answering, or has an unseen reply, says so on its row", async () => {
+  const { view } = renderSidebar("/bots", {
+    channels: [
+      channel("c-busy", ["agent-analyst"], {
+        busy: true,
+        lastMessageAt: "2026-11-07T01:00:00Z",
+      }),
+      channel("c-unread", ["agent-writer"], {
+        lastMessageAt: "2026-11-07T02:00:00Z",
+        lastMessageAgentId: "agent-writer",
+        lastReadAt: "2026-11-07T00:00:00Z",
+      }),
+    ],
+  });
+  await chooseView(view, /^员工/);
+  const list = await view.findByRole("list", { name: "员工" });
+  const rowOf = (name: RegExp) =>
+    within(list).getByRole("link", { name }).closest("li") as HTMLElement;
+  expect(
+    within(rowOf(/^分析师/)).getByRole("img", { name: "处理中" }),
+  ).toBeTruthy();
+  expect(
+    within(rowOf(/^分析师/)).queryByRole("img", { name: "有未读消息" }),
+  ).toBeNull();
+  expect(
+    within(rowOf(/^写手/)).getByRole("img", { name: "有未读消息" }),
+  ).toBeTruthy();
+  expect(
+    within(rowOf(/^写手/)).queryByRole("img", { name: "处理中" }),
+  ).toBeNull();
+});
+
+test("an open 群聊 lights no employee, even one older than the loaded pages", async () => {
+  const { view } = renderSidebar("/group/c-old-crew", {
+    details: [
+      { id: "c-old-crew", agentIds: ["agent-analyst", "agent-writer"] },
+    ],
+  });
+  await chooseView(view, /^员工/);
+  const list = await view.findByRole("list", { name: "员工" });
+  expect(
+    within(list)
+      .getAllByRole("link")
+      .filter((row) => row.hasAttribute("aria-current")),
+  ).toEqual([]);
+  // Beside the 单聊 it would have been the first member that lit up.
+  cleanup();
+  const single = renderSidebar("/channel/c-analyst-old");
+  await chooseView(single.view, /^员工/);
+  const rows = await single.view.findByRole("list", { name: "员工" });
+  expect(
+    within(rows)
+      .getAllByRole("link")
+      .filter((row) => row.getAttribute("aria-current") === "true")
+      .map(textOf),
+  ).toEqual(["分析师整理周报与指标"]);
+});
+
+test("the switch names each count with what it counts", async () => {
+  const { view } = renderSidebar("/bots", { groups: [] });
+  const switcher = await view.findByRole("group", { name: "侧栏列表" });
+  expect(
+    within(switcher)
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label")),
+  ).toEqual(["会话", "员工，2 位", "群组，0 个"]);
 });
