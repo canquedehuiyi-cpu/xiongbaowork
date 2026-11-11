@@ -106,6 +106,10 @@ jobs:
                 if (/text ?area|textarea|document|^edit$|axtextarea/.test(r)) s = Math.max(s, 3);
                 else if (/text ?field|textfield|text_entry|entry|^text$|text ?box|textbox|axtextfield/.test(r)) s = Math.max(s, 2);
               }
+              const acts = Array.isArray(o.available_actions) ? o.available_actions : [];
+              if (s > 0 && acts.includes('SetValue')) s += 1;
+              if (s > 0 && /search|find|replace|查找|搜索/i.test(String(o.name || ''))) s -= 5;
+              if (s > 0) console.error('cand ' + ref + ' role=' + roles.join('/') + ' name=' + JSON.stringify(o.name || '') + ' actions=' + acts.join(',') + ' score=' + s);
               if (s > bs) { bs = s; best = ref; }
             }
             console.error('candidates score=' + bs + ' best=' + best);
@@ -223,6 +227,22 @@ jobs:
             NEW=$(T ref "$OUT/readback_$label.out" 2>/dev/null); [ -n "$NEW" ] && REF="$NEW"
           done
           note "TYPED_VIA=$TYPED"
+
+          # 补测：清空后用 --headed type（物理输入）写入，再读回
+          if [ -n "$REF" ]; then
+            rt snap_x AD snapshot --app "$APP_NAME" -i
+            REF=$(T ref "$OUT/snap_x.out" 2>>"$SUM")
+            clr() { tmo 60 "$BIN" clear "$REF"; }
+            rt clear_x clr
+            rt snap_x2 AD snapshot --app "$APP_NAME" -i
+            note "CLEARED has_text=$(T has "$OUT/snap_x2.out" "$TEXT")"
+            REF=$(T ref "$OUT/snap_x2.out" 2>/dev/null)
+            rt type_headed_after_clear d_headed
+            sleep 1
+            rt readback_headed AD snapshot --app "$APP_NAME" -i
+            note "HEADED_TYPE_READBACK has_text=$(T has "$OUT/readback_headed.out" "$TEXT")"
+            REF=$(T ref "$OUT/readback_headed.out" 2>/dev/null)
+          fi
 
           # 7 过期编号：用最初快照里的编号（此后已多次快照、内容已变）
           note "== 过期编号 =="
