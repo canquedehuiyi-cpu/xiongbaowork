@@ -268,6 +268,8 @@ tests/computer-target.test.ts
 tests/computer-terminal.test.ts
 tests/config-github-app.test.ts
 tests/config.test.ts
+tests/connection-siblings.integration.test.ts
+tests/connections-upstream-shape.integration.test.ts
 tests/connector-tokens-never-reach-computer.test.ts
 tests/content-governance.test.ts
 tests/continuation-target-local.test.ts
@@ -528,6 +530,7 @@ tests/plugin-store.integration.test.ts
 tests/plugin-tenant-catalogue-row.test.ts
 tests/plugin-user-credential.integration.test.ts
 tests/plugins-mcp-admin.integration.test.ts
+tests/plugins-page-upstream-shape.test.ts
 tests/policy-dry-run.test.ts
 tests/policy-durability.integration.test.ts
 tests/policy-fanout.integration.test.ts
@@ -678,11 +681,13 @@ tests/sandboxed-save-fields.test.ts
 tests/schema.test.ts
 tests/self-host-banner.test.ts
 tests/server-readiness-gates.test.ts
+tests/server-row-upstream-shape.integration.test.ts
 tests/server-side-tools.integration.test.ts
 tests/settings-instructions-routes.test.ts
 tests/setup-checklist-arcade.test.ts
 tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
+tests/shared-approval-with-grant-and-switch.integration.test.ts
 tests/shared-brokered-accounts.integration.test.ts
 tests/shared-computer-run.integration.test.ts
 tests/shared-use-arcade-urls.integration.test.ts
