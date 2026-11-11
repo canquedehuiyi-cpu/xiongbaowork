@@ -1,6 +1,11 @@
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
-import { covers, exposureOf } from "./shared-use";
+import {
+  asSharedUseApproval,
+  covers,
+  exposureOf,
+  type SharedUseApproval,
+} from "./shared-use";
 import {
   type SharedAudience,
   SharedUseFrameError,
@@ -11,6 +16,40 @@ import {
 } from "./shared-use-store";
 
 type RouteContext = Context<{ Variables: AppVariables }>;
+
+/**
+ * 管理员给员工一个应用的动作时，要随授予一起记下的共享使用批准（上游 `sharedGrantApproval`）：谁可以经这位
+ * 员工用 Shared 应用唯一那个团队账号。没有批准，闸门会拒绝这次授予刚放开的每一次调用。
+ *
+ * - 应用不是 Shared（`accountMode` 由调用方从应答行读来，不信授予恰好经过的那一行），或没有共享使用：没什么
+ *   要记，答 `approval: null`。
+ * - 送来了批准：读得懂就记它，读不懂答 `unreadable`，由调用方整次拒绝。
+ * - 没送：管理员之前定的批准是他的决定，这次授予不替他放宽或改写，答 null；没有批准、或只有主人的授予设下
+ *   的受众时，批准员工此刻的开放范围（`exposureOf`），受众随之成为管理员的。
+ *
+ * 在员工主人的帧里调用（路由经 `asBotOwner` 进来），批准行就在那里读。
+ */
+export async function sharedGrantApproval(
+  shared: Pick<SharedUseStore, "appIdOf" | "approvalSource" | "botFacts">,
+  input: {
+    serverId: string;
+    agentId: string;
+    accountMode: string | null | undefined;
+    sent: unknown;
+  },
+): Promise<
+  { appId: string; approval: SharedUseApproval | null } | "unreadable"
+> {
+  const appId = await shared.appIdOf(input.serverId);
+  if (input.accountMode !== "shared") return { appId, approval: null };
+  if (input.sent !== undefined) {
+    const approval = asSharedUseApproval(input.sent);
+    return approval ? { appId, approval } : "unreadable";
+  }
+  if ((await shared.approvalSource(input.agentId, appId)) === "admin")
+    return { appId, approval: null };
+  return { appId, approval: exposureOf(await shared.botFacts(input.agentId)) };
+}
 
 /**
  * 一位员工使用一个 Shared 应用的团队账号，在哪里申请、在哪里回答（上游 `shared-use-routes.ts`，挂在
