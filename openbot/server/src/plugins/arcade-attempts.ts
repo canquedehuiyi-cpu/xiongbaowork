@@ -306,6 +306,17 @@ export function createArcadeAttempts(context: {
               set,
             });
         } else {
+          /*
+           * Whether the team account was already connected, read in this transaction and locked
+           * before the write. Read off the row as it was, not off the write's answer: the write keeps
+           * the first connection's `shared_connected_by` (coalesce), so comparing that with this actor
+           * called the same admin connecting again a first connection.
+           */
+          const [before] = await transaction
+            .select({ connectedAt: mcpServers.sharedConnectedAt })
+            .from(mcpServers)
+            .where(eq(mcpServers.id, input.serverId ?? ""))
+            .for("update");
           const updated = await transaction
             .update(mcpServers)
             .set({
@@ -329,7 +340,7 @@ export function createArcadeAttempts(context: {
               "The app's team account changed while its consent was in progress, so nothing was recorded.",
             );
           }
-          reconnected = updated[0]?.connectedBy !== input.actorId;
+          reconnected = Boolean(before?.connectedAt);
         }
 
         await recordAuditEvent(
