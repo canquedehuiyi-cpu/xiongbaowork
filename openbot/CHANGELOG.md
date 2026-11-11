@@ -135,7 +135,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   动日志会提醒管理员核对。
 
 - **单用户安装（包括个人版）在连接器提供商那边有了自己的名字（上游 #927）。** 以前每台单用户安装的那个人在
-  Composio 那边都叫 `dev-local-user`，几台安装共用一把 `COMPOSIO_API_KEY` 时，一台连接的 Gmail 会被另一台列出
+  Composio（Arcade 也一样）那边都叫 `dev-local-user`，几台安装共用一把 `COMPOSIO_API_KEY` 时，一台连接的 Gmail 会被另一台列出
   和使用，一台断开就把两台的账号都结束了。现在每台安装第一次启动时得到自己的名字（`dev-local-user:` 加一段随
   机串），记在库里，重启和多副本都不变。只换提供商那边的名字：对话、记忆和其他数据仍在原来的人名下。需要登录
   的部署不受影响，每个人仍然记在自己的用户 id 下。
@@ -151,10 +151,17 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   - 两个 key 都配了，就要用 `OPENBOT_BROKER_PROVIDER`（`composio` 或 `arcade`）指明用哪家，否则拒绝启动；指
     明了却没有那家的 key、或写了别的值，也拒绝启动。另一家还持有连接时不能换：启动会被拒绝，要先让原来那家保
     持启用，把它的连接都断开，再换。
-  - 单用户安装（`OPENBOT_SINGLE_USER`，包括个人版）暂不支持 Arcade，配置了会拒绝启动。
+  - 单用户安装（`OPENBOT_SINGLE_USER`，包括个人版）也可以用 Arcade：每台安装在 Arcade 那边有自己的名字（见
+    上一条），并且因为它拥有自己的 Arcade 项目，每次连接之前会把项目的自定义验证地址指向自己，不需要到 Arcade
+    后台手动填。
+  - 一把 key 都没配的部署（key 后来撤掉了），已有的连接仍按它们自己的提供商显示；两家都还持有连接而没有活动
+    的提供商时拒绝启动，并说明手动的处理办法。
+  - `bash scripts/start.sh` 和 `bun run setup:composio` 在选了 Arcade 的部署上不再自动开通 Composio（以前只
+    配 `ARCADE_API_KEY` 用它启动，会被写进一个 Composio key，随后服务端因两个 key 都配了却没指明提供商而拒绝
+    启动）。
   - 连接完成时，Arcade 把浏览器送回本部署的 `/api/plugins/arcade/verify`，只有发起连接的那个人自己的登录会话
-    能完成它。部署不会修改 Arcade 项目的设置：启动日志会打印要在 Arcade 后台填的自定义验证地址，在它指向本部
-    署之前「连接」会拒绝。
+    能完成它。需要登录的部署不会修改 Arcade 项目的设置：启动日志会打印要在 Arcade 后台填的自定义验证地址，在
+    它指向本部署之前「连接」会拒绝。
   - 一个人同一时间只能有一次进行中的连接，15 分钟过期，可以取消。用 Arcade 时，一个人在一个应用上暂时只能连
     一个账号；「部署自己的 OAuth 客户端」只适用于 Composio。断开一个应用时，同一认证提供商下、Arcade 那边也
     已经结束的其他应用会一并断开。

@@ -130,6 +130,7 @@ tests/arcade-unreadable-total-engine.test.ts
 tests/arcade-vendor-error-engine.test.ts
 tests/arcade-vendor-read-contract.test.ts
 tests/arcade-verifier-notice.test.ts
+tests/arcade-verifier-repoint.test.ts
 tests/arcade-verify.integration.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
@@ -560,6 +561,7 @@ tests/provider-oauth-lock-helper.test.ts
 tests/provider-oauth.test.ts
 tests/provider-refusal.test.ts
 tests/provider-selection.test.ts
+tests/provider-stored-rows.integration.test.ts
 tests/provider-tool-schemas.test.ts
 tests/provider-undecided.test.ts
 tests/qoderwake-package.test.ts

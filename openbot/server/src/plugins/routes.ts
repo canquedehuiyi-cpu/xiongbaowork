@@ -417,8 +417,16 @@ export function createPluginRoutes(
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   /** broker 应用的 url 说的是哪个应用，按活动提供商的解析器（X5；Composio 时与以前一样）。 */
+  /*
+   * 没有接上 broker 时按 store 的提供商读（上游 #1017）：store 是按「这个部署的行属于谁」建的，所以撤掉
+   * key 之后留下的 Arcade 行仍用 Arcade 的解析器读，而不是被当成 Composio 的行读丢。
+   */
   const toolkitOf = (url: string) =>
-    toolkitOfFor(composio?.provider ?? "composio", url);
+    toolkitOfFor(
+      // 一个不说自己读哪一家的 store（测试里的替身）按 Composio 读，与以前一样。
+      composio?.provider ?? store.brokerProvider ?? "composio",
+      url,
+    );
   const sharedUse = composio?.sharedUse;
   const adminCapability = adminScope?.adminCapability;
   const signedInWithCapability: MiddlewareHandler<{
