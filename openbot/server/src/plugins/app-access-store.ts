@@ -19,6 +19,7 @@ import {
 } from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { currentTenant } from "../tenant/context";
+import { type BrokerProvider, BROKERED_PROFILE, toolkitOfFor } from "./access";
 import {
   type AppAccess,
   type AppAccessFacts,
@@ -38,7 +39,6 @@ import {
 } from "./app-access";
 import type { BrokerApp, BrokerConnection } from "./broker";
 import { CATALOGUE, type CatalogueEntry, catalogueEntry } from "./catalogue";
-import { toolkitOf } from "./composio";
 import {
   isOwnersGrant,
   ownerAppsAllowed,
@@ -209,8 +209,6 @@ type Host = {
   listForAgent(agentId: string): Promise<{ tools: { ref: string }[] }>;
 };
 
-const COMPOSIO_ID_PREFIX = "composio-";
-
 /**
  * 申请人被拒绝时写的 `app_access.refused` 限多少：任何登录的人都能反复按出拒绝，每次一行
  * 就能把轨迹写满。同一个人、同一位员工、同一个应用、同一个原因在窗口内只记第一次；一个人在窗口内最多
@@ -243,8 +241,20 @@ export function appAccessMethods(context: {
   auditStore: AuditStore;
   /** 共享闸门的只读问法（X3）；store 的选项给，调用方也可以每次覆盖。 */
   sharedAudience?: SharedAudienceCheck;
+  /**
+   * 活动的连接应用提供商（X5）；不给时是 Composio。还没有行的应用按它起名（`composio-<slug>`、
+   * `arcade-<Toolkit>`）、按它的规则校验：开启时铸出的就是这个 id。
+   */
+  provider?: BrokerProvider;
 }) {
   const { database, auditStore } = context;
+  const provider: BrokerProvider = context.provider ?? "composio";
+  const { idPrefix, scheme } = BROKERED_PROFILE[provider];
+  /** 一个应用行说的是哪个 broker 应用，按这一行自己的提供商读（Arcade 保留大小写）；不是 broker 行为 null。 */
+  const toolkitOfRow = (row: { provenance: string; url: string }) =>
+    brokeredProvenance(row.provenance)
+      ? toolkitOfFor(row.provenance as BrokerProvider, row.url)
+      : null;
   /** 窗口内已记过的拒绝（键 → 过期时刻），和每个人窗口内已记的行数。 */
   const refusalsSeen = new Map<string, number>();
   const refusalsByActor = new Map<string, { count: number; until: number }>();
@@ -313,15 +323,11 @@ export function appAccessMethods(context: {
     for (const row of [...rows].sort((a, b) =>
       a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
     )) {
-      const toolkit = brokeredProvenance(row.provenance)
-        ? toolkitOf(row.url)
-        : null;
+      const toolkit = toolkitOfRow(row);
       if (toolkit && !brokeredHead.has(row.url)) brokeredHead.set(row.url, row);
     }
     for (const row of rows) {
-      const toolkit = brokeredProvenance(row.provenance)
-        ? toolkitOf(row.url)
-        : null;
+      const toolkit = toolkitOfRow(row);
       const head = toolkit ? (brokeredHead.get(row.url) ?? row) : row;
       const key = toolkit ? head.id : (row.catalogueKey ?? row.id);
       let app = byKey.get(key);
@@ -332,7 +338,11 @@ export function appAccessMethods(context: {
           key,
           title: entry?.title ?? head.title,
           logo: head.logo,
-          provider: toolkit ? "composio" : entry ? "catalogue" : "custom",
+          provider: toolkit
+            ? (row.provenance as BrokerProvider)
+            : entry
+              ? "catalogue"
+              : "custom",
           present: true,
           answeringId: head.id,
           rowIds: [],
@@ -420,27 +430,26 @@ export function appAccessMethods(context: {
         provider: "catalogue",
         entry,
       });
-    const slug = key.startsWith(COMPOSIO_ID_PREFIX)
-      ? key.slice(COMPOSIO_ID_PREFIX.length)
-      : key;
-    if (toolkitOf(`composio://${slug}`) !== slug) return null;
+    const slug = key.startsWith(idPrefix) ? key.slice(idPrefix.length) : key;
+    // 活动提供商的应用名规则：读得回同一个名字才是它的应用（Composio 的 slug、Arcade 的 toolkit）。
+    if (toolkitOfFor(provider, `${scheme}${slug}`) !== slug) return null;
     const apps = listed === undefined ? await readDirectory(directory) : listed;
     const app = apps?.find((candidate) => candidate.slug === slug);
     if (app)
       return absent({
-        key: `${COMPOSIO_ID_PREFIX}${app.slug}`,
+        key: `${idPrefix}${app.slug}`,
         title: app.name,
         logo: app.logo,
-        provider: "composio",
+        provider,
         toolkit: app.slug,
         listedConnect: connectOfListing(app.connection),
       });
-    // 一个 composio- 键目录不认识：可能是授予比行活得久，照键叫它，但不能拿来申请打开。
-    if (key.startsWith(COMPOSIO_ID_PREFIX))
+    // 一个带提供商前缀的键目录不认识：可能是授予比行活得久，照键叫它，但不能拿来申请打开。
+    if (key.startsWith(idPrefix))
       return absent({
         key,
         title: slug,
-        provider: "composio",
+        provider,
         toolkit: slug,
         vouched: false,
       });
@@ -448,8 +457,9 @@ export function appAccessMethods(context: {
   }
 
   /**
-   * 按调用者给的任何叫法找一个应用：键、行 id、broker 的 slug（带不带 `composio-`）、应用名。名字先找已
-   * 打开的应用（同名时先找这位员工持有的），再找目录条目，最后问 broker 的目录。
+   * 按调用者给的任何叫法找一个应用：键、行 id、broker 的应用名（带不带提供商前缀，不分大小写：Arcade 的
+   * `Gmail` 与 `gmail` 是同一个）、应用的显示名。名字先找已打开的应用（同名时先找这位员工持有的），再找
+   * 目录条目，最后问 broker 的目录。
    */
   async function candidateFor(
     app: string,
@@ -465,10 +475,20 @@ export function appAccessMethods(context: {
     const exact = byName.get(asked);
     if (exact) return exact;
 
-    const slug = lower.startsWith(COMPOSIO_ID_PREFIX)
-      ? lower.slice(COMPOSIO_ID_PREFIX.length)
-      : lower;
-    const bySlug = enabled.find((candidate) => candidate.toolkit === slug);
+    const prefixed = lower.startsWith(idPrefix);
+    const slug = prefixed ? lower.slice(idPrefix.length) : lower;
+    /*
+     * 按 broker 的应用名找已打开的应用，先看活动的提供商：换过提供商的部署会留着另一家的行（已断开的
+     * `composio-gmail`），两家的应用名常常只差大小写。带活动提供商前缀的名字（`arcade-Gmail`）说的就是
+     * 这一家的应用，从不落到另一家的行上——那样会报错，或替人申请到别家的应用，也走不到下面的目录。
+     * 不带前缀的名字找不到这一家的行时，才退到另一家的行，和以前一样。
+     */
+    const named = enabled.filter(
+      (candidate) => candidate.toolkit?.toLowerCase() === slug,
+    );
+    const bySlug =
+      named.find((candidate) => candidate.provider === provider) ??
+      (prefixed ? undefined : named[0]);
     if (bySlug) return bySlug;
 
     const keyed = catalogueEntry(lower);
@@ -485,14 +505,16 @@ export function appAccessMethods(context: {
     if (entry) return absentFor(entry.key, undefined, null);
 
     const listed = await readDirectory(directory);
-    const named = listed?.find(
+    const offered = listed?.find(
       (candidate) =>
-        candidate.slug === slug || candidate.name.toLowerCase() === lower,
+        candidate.slug.toLowerCase() === slug ||
+        candidate.name.toLowerCase() === lower,
     );
-    if (named)
-      return absentFor(`${COMPOSIO_ID_PREFIX}${named.slug}`, undefined, listed);
+    if (offered)
+      return absentFor(`${idPrefix}${offered.slug}`, undefined, listed);
+    // 带前缀的键照原样的大小写问（Arcade 的应用名分大小写），前缀本身不分。
     return absentFor(
-      lower.startsWith(COMPOSIO_ID_PREFIX) ? lower : asked,
+      prefixed ? `${idPrefix}${asked.slice(idPrefix.length)}` : asked,
       undefined,
       listed,
     );
@@ -889,7 +911,7 @@ export function appAccessMethods(context: {
         if (app) apps.set(app.key, app);
         else missing.push(key);
       }
-      const listed = missing.some((key) => key.startsWith(COMPOSIO_ID_PREFIX))
+      const listed = missing.some((key) => key.startsWith(idPrefix))
         ? await readDirectory(input.directory)
         : null;
       for (const key of missing) {

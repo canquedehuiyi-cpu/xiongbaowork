@@ -110,7 +110,11 @@ import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
 import { grantedByOwner, ownerStillGives } from "./owner-grants";
 import { steeringOf } from "./shared-use";
-import { type SharedUseGate, sharedUseAppLockKey } from "./shared-use-store";
+import {
+  canonicalBrokeredUrl,
+  type SharedUseGate,
+  sharedUseAppLockKey,
+} from "./shared-use-store";
 import { appAccessMethods, type SharedAudienceCheck } from "./app-access-store";
 import {
   type BrokeredAccountRecord,
@@ -1936,17 +1940,20 @@ export function createPluginStore(options: PluginStoreOptions) {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtext(${sharedUseAppLockKey(input.url, input.appId)}))`,
         );
-        const toolkit = toolkitOf(input.url);
-        const atApp = toolkit
-          ? (
-              await tx
-                .select({ id: mcpServers.id, url: mcpServers.url })
-                .from(mcpServers)
-                .where(like(mcpServers.url, "composio://%"))
-            )
-              .filter((row) => toolkitOf(row.url) === toolkit)
-              .map((row) => row.id)
-          : [];
+        // 应用地址上的每一行，按地址自己的提供商认（Composio 或 Arcade），见 `canonicalBrokeredUrl`。
+        const canonical = canonicalBrokeredUrl(input.url);
+        const scheme = canonical?.slice(0, canonical.indexOf("://") + 3);
+        const atApp =
+          canonical && scheme
+            ? (
+                await tx
+                  .select({ id: mcpServers.id, url: mcpServers.url })
+                  .from(mcpServers)
+                  .where(like(mcpServers.url, `${scheme}%`))
+              )
+                .filter((row) => canonicalBrokeredUrl(row.url) === canonical)
+                .map((row) => row.id)
+            : [];
         const ids = [...new Set([input.appId, ...atApp])];
         const ended = await tx
           .delete(sharedUseApprovals)
@@ -7578,6 +7585,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     ...appAccessMethods({
       database,
       auditStore,
+      provider: brokerProvider,
       ...(options.sharedAdmits ? { sharedAudience: options.sharedAdmits } : {}),
     }),
 

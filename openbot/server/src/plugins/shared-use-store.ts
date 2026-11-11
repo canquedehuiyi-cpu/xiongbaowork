@@ -23,7 +23,11 @@ import {
   teamBotPublications,
 } from "../db/schema/team-bots";
 import { currentTenant, runAsTenant } from "../tenant/context";
-import { toolkitOf } from "./composio";
+import {
+  BROKER_PROVIDERS,
+  BROKERED_PROFILE,
+  toolkitOfFor,
+} from "./access";
 import { ownerStillGives } from "./owner-grants";
 import {
   type ActorFacts,
@@ -69,11 +73,26 @@ export class SharedUseNotSharedError extends Error {
 }
 
 /**
+ * 一个 broker 应用行的规范地址（`composio://gmail`、`arcade://Gmail`），不是 broker 应用为 null。按地址自己的
+ * scheme 认提供商，再用那个提供商的解析器读应用名（Arcade 保留大小写，见 `./access` 的 `toolkitOfFor`）：
+ * 共享使用记的是应用唯一那个团队账号，部署此刻用哪个提供商不改变一行已有地址说的是哪个应用（X5 合入后，
+ * 原来只认 `composio://`）。
+ */
+export function canonicalBrokeredUrl(url: string | null): string | null {
+  if (!url) return null;
+  for (const provider of BROKER_PROVIDERS) {
+    const app = toolkitOfFor(provider, url);
+    if (app) return `${BROKERED_PROFILE[provider].scheme}${app}`;
+  }
+  return null;
+}
+
+/**
  * 一个应用的共享使用锁的键：写批准拿共享锁，改「谁可以给员工」、切换账号模式拿排他锁。按 broker 应用的
- * 工具包（同一地址上的每一行是同一个应用），读不出时按行 id。
+ * 规范地址（同一地址上的每一行是同一个应用；两个提供商的同名应用不是），读不出时按行 id。
  */
 export function sharedUseAppLockKey(url: string | null, appId: string) {
-  return JSON.stringify(["shared-use-app", (url && toolkitOf(url)) || appId]);
+  return JSON.stringify(["shared-use-app", canonicalBrokeredUrl(url) || appId]);
 }
 
 /** 在指定的人的帧里只读；本来就在那里时不换帧。 */
@@ -130,8 +149,6 @@ export type SharedUseGate = (input: {
 const sameApproval = (left: SharedUseApproval, right: SharedUseApproval) =>
   covers(left, right) && covers(right, left);
 
-const canonicalUrlOf = (toolkit: string) => `composio://${toolkit}`;
-
 export function createSharedUseStore(database: Database) {
   const roles = createRoleRepository(database);
 
@@ -150,12 +167,12 @@ export function createSharedUseStore(database: Database) {
       .where(eq(mcpServers.id, serverId))
       .limit(1);
     const url = row?.url ?? null;
-    const toolkit = url ? toolkitOf(url) : null;
-    if (!toolkit) return { appId: serverId, url, ids: [serverId] };
+    const canonical = canonicalBrokeredUrl(url);
+    if (!canonical) return { appId: serverId, url, ids: [serverId] };
     const siblings = await executor
       .select({ id: mcpServers.id })
       .from(mcpServers)
-      .where(eq(mcpServers.url, canonicalUrlOf(toolkit)))
+      .where(eq(mcpServers.url, canonical))
       .orderBy(asc(mcpServers.id));
     const ids = siblings.map((sibling) => sibling.id);
     if (!ids.includes(serverId)) ids.push(serverId);
@@ -598,13 +615,11 @@ export function createSharedUseStore(database: Database) {
       .select({ id: mcpServers.id, url: mcpServers.url })
       .from(mcpServers)
       .where(inArray(mcpServers.id, serverIds));
-    const toolkitOfRow = (url: string | null) => (url ? toolkitOf(url) : null);
     const canonicalUrls = [
       ...new Set(
         granted
-          .map((row) => toolkitOfRow(row.url))
-          .filter((toolkit): toolkit is string => !!toolkit)
-          .map(canonicalUrlOf),
+          .map((row) => canonicalBrokeredUrl(row.url))
+          .filter((url): url is string => !!url),
       ),
     ];
     const atUrls =
@@ -622,9 +637,9 @@ export function createSharedUseStore(database: Database) {
     const appIds = [
       ...new Set(
         granted.map((row) => {
-          const toolkit = toolkitOfRow(row.url);
-          if (!toolkit) return row.id;
-          return answeringAt.get(canonicalUrlOf(toolkit)) ?? row.id;
+          const canonical = canonicalBrokeredUrl(row.url);
+          if (!canonical) return row.id;
+          return answeringAt.get(canonical) ?? row.id;
         }),
       ),
     ];

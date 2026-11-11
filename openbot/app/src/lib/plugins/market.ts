@@ -1,3 +1,4 @@
+import { isBrokeredProvenance } from "./brokered";
 import {
   appKeyOf,
   type CatalogueItem,
@@ -98,12 +99,13 @@ function card(
   const key = catalogue?.key ?? (server ? appKeyOf(server) : "");
   const category: PluginCategory = catalogue
     ? AUTH_CATEGORY[catalogue.auth]
-    : server?.provenance === "composio"
+    : isBrokeredProvenance(server?.provenance)
       ? "composio"
       : "custom";
   const perPerson = catalogue
     ? catalogue.auth === "user-oauth"
-    : server?.provenance === "composio" && server.authScheme !== "NO_AUTH";
+    : isBrokeredProvenance(server?.provenance) &&
+      server?.authScheme !== "NO_AUTH";
   return {
     key,
     title: server?.title ?? catalogue?.title ?? key,
