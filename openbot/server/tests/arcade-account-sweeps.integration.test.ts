@@ -1149,3 +1149,180 @@ describe("disconnecting an app whose sibling holds a second account of its own",
     expect(await accountIdsOf(who, calendar)).toEqual([second]);
   });
 });
+
+/*
+ * 按名字点账号时，名字对不上、表里又有还没记下地址的行，调用会先问厂商一次再比。这一次只为补上地址：
+ * - 一行一直没有地址（厂商不报邮箱或登录名）时，模型每点错一次名字就多问一次厂商；真实适配器里这是认证
+ *   提供商列表加连接列表的分页请求。所以同一个人、同一个应用、同一批行，在一段时间里只问一次。
+ * - 厂商这一刻没把第二个账号列为「活着」，可能只是暂时过期。在这里删掉那一行，离职、移除应用、切换模式的
+ *   清扫就再也找不到这个账号。删行只留给账号页上的那次同步。
+ */
+describe("naming an account that does not match while a row has no address yet", () => {
+  const asks = person("asks");
+  const lapsed = person("lapsed");
+  beforeAll(() => platform(() => seedPeople(database, [asks, lapsed])));
+  afterAll(() => platform(() => removePeople(database, [asks, lapsed])));
+
+  /** 在 `work` 期间换掉厂商的账号列表，并记下每次问的是哪个 id。 */
+  async function withVendorList<T>(
+    list: (vendorUserId: string) => { identity: string | null }[],
+    work: (asked: string[]) => Promise<T>,
+  ): Promise<T> {
+    const original = arcade.accountsOf;
+    const asked: string[] = [];
+    arcade.accountsOf = async ({ account }) => {
+      asked.push(account.vendorUserId);
+      return list(account.vendorUserId).map((found) => ({
+        accountId: null,
+        identity: found.identity,
+        connectedAt: null,
+      }));
+    };
+    try {
+      return await work(asked);
+    } finally {
+      arcade.accountsOf = original;
+    }
+  }
+
+  test("asks the vendor once, however many times the model names an account that is not there", async () => {
+    const toolkit = toolkitFor("AsksMail");
+    await enable(toolkit);
+    const bot = await botFor(asks, toolkit);
+    const second = await twoAccounts(asks, toolkit);
+
+    await withVendorList(
+      (id) =>
+        id === second
+          ? [{ identity: `${asks}@home.example` }]
+          : [{ identity: null }],
+      async (asked) => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const refusal = await refusalOf(
+            listAs(asks, bot, toolkit, "nobody@else.example"),
+          );
+          expect(refusal).toContain("这不是你的");
+        }
+        expect([...asked].sort()).toEqual([asks, second].sort());
+
+        reached.length = 0;
+        await listAs(asks, bot, toolkit, `${asks}@home.example`);
+        expect(reached).toEqual([second]);
+        expect([...asked].sort()).toEqual([asks, second].sort());
+      },
+    );
+  });
+
+  test("keeps the second account's row when the vendor does not list it at that moment, so it can still be found", async () => {
+    const toolkit = toolkitFor("LapsedMail");
+    await enable(toolkit);
+    const bot = await botFor(lapsed, toolkit);
+    const second = await twoAccounts(lapsed, toolkit);
+
+    await withVendorList(
+      (id) => (id === second ? [] : [{ identity: `${lapsed}@work.example` }]),
+      async (asked) => {
+        const refusal = await refusalOf(
+          listAs(lapsed, bot, toolkit, `${lapsed}@home.example`),
+        );
+        expect(refusal).toContain("这不是你的");
+        expect([...asked].sort()).toEqual([lapsed, second].sort());
+      },
+    );
+    expect(await accountIdsOf(lapsed, toolkit)).toEqual(
+      [lapsed, second].sort(),
+    );
+
+    // 厂商又列出它之后，账号页的同步补上地址，按名字点它就跑在它上面。
+    expect(
+      (await accountsPage(lapsed, toolkit)).map((account) => account.label),
+    ).toContain(`${lapsed}@home.example`);
+    reached.length = 0;
+    await listAs(lapsed, bot, toolkit, `${lapsed}@home.example`);
+    expect(reached).toEqual([second]);
+  });
+});
+
+/*
+ * 调用跑在第二个账号上被拒，而那个账号在厂商那边已经没了、本人名下的还在：卡片若不带这个账号，「重新连接」
+ * 连的是本人名下的那个，它可能早就持有全部权限，于是直接答「已连接」，丢掉的第二个账号只能靠「再连一个账号」
+ * 铸一个新 id 找回。所以卡片照样带上被拒的那一行，行也留着；「重新连接」为同一个 id 铸同意，把它连回来。
+ */
+describe("a call refused on a second account the vendor no longer holds", () => {
+  const who = person("lostsecond");
+  const other = person("lostother");
+  const toolkit = toolkitFor("LostMail");
+  let second = "";
+  let homeRow = "";
+  let bot = "";
+  beforeAll(() => platform(() => seedPeople(database, [who, other])));
+  afterAll(() => platform(() => removePeople(database, [who, other])));
+
+  test("carries that account on the Reconnect card and keeps its row", async () => {
+    await enable(toolkit);
+    bot = await botFor(who, toolkit);
+    second = await twoAccounts(who, toolkit);
+    homeRow =
+      (await accountsPage(who, toolkit)).find(
+        (account) => account.label === `${who}@home.example`,
+      )?.id ?? "";
+    state.connected.delete(`${second}/google`);
+    nextCall = notAllowed();
+
+    const refusal = await refusalOf(
+      listAs(who, bot, toolkit, `${who}@home.example`),
+    );
+
+    const card = readConnectPrompt(refusal ?? "");
+    expect(card?.reason).toBe("reconnect");
+    expect(card?.account).toBe(homeRow);
+    expect(await accountIdsOf(who, toolkit)).toEqual([who, second].sort());
+    expect(await connectionOf(who, toolkit)).toBeDefined();
+  });
+
+  test("Reconnect from that card asks consent for the same account, though the person's own one holds everything", async () => {
+    state.held.add(`${who}/${toolkit}`);
+    const mintedBefore = state.minted.length;
+    try {
+      const pressed = await call(
+        { id: who },
+        `/servers/${app(toolkit)}/connect?account=${homeRow}`,
+        { method: "POST" },
+      );
+      expect(pressed.status).toBe(200);
+      expect(Object.keys((await pressed.json()) as object)).toEqual([
+        "authorizationUrl",
+      ]);
+      expect(state.minted.slice(mintedBefore)).toEqual([
+        { userId: second, toolkit, action: null },
+      ]);
+
+      const attempt = await attemptOf(who);
+      const handle = `lost-${suite}-${state.minted.length}`;
+      consented(state, handle, second, attempt?.authId ?? "");
+      state.connected.add(`${second}/google`);
+      expect(
+        reasonOf(await call({ id: who }, `/arcade/verify?flow_id=${handle}`)),
+      ).toBeNull();
+    } finally {
+      state.held.delete(`${who}/${toolkit}`);
+    }
+
+    reached.length = 0;
+    await listAs(who, bot, toolkit, `${who}@home.example`);
+    expect(reached).toEqual([second]);
+    expect(await accountIdsOf(who, toolkit)).toEqual([who, second].sort());
+  });
+
+  test("the same row pressed by somebody else connected to the app is not found, and nothing is minted", async () => {
+    await connectThrough({ id: other }, toolkit);
+    const mintedBefore = state.minted.length;
+    const pressed = await call(
+      { id: other },
+      `/servers/${app(toolkit)}/connect?account=${homeRow}`,
+      { method: "POST" },
+    );
+    expect(pressed.status).toBe(404);
+    expect(state.minted).toHaveLength(mintedBefore);
+  });
+});

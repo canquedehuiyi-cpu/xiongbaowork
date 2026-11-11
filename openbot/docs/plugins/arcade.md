@@ -37,16 +37,17 @@ Setting it up takes three hands, and none of them can do another's:
 | Whoever deploys  | Sets `OPENBOT_BROKER_PROVIDER`, only where both keys are set | The deployment's environment                                                     |
 | Whoever deploys  | Registers an OAuth app per provider, and sets the verifier   | Arcade's dashboard, below                                                        |
 | An administrator | Enables an app and grants its actions to a Bot               | `/admin/plugins/composio`, then the app's own page, `/admin/plugins/arcade-<Toolkit>` |
-| Each person      | Connects their own account to that app                       | `/settings/connected-accounts`                                                   |
+| Each person      | Connects their own account to that app                       | `/connections`                                                                   |
 
 The key is an environment variable and nothing else, as Composio's is. No administrator can turn
 Arcade on from a page. The Helm chart has a value for Composio's key (`secrets.composioApiKey`) and
 none for Arcade's.
 
-**与上游不同.** Upstream has a directory page of its own for Arcade (`/admin/plugins/arcade`) and
-people connect on `/connections`. This fork has one directory page, `/admin/plugins/composio`
-(浏览应用), which lists whichever broker is active, Arcade's toolkits included, and people connect
-under 已连接账号, `/settings/connected-accounts`. An enabled Arcade app is the row
+**与上游不同.** Upstream has a directory page of its own for Arcade (`/admin/plugins/arcade`).
+This fork has one directory page, `/admin/plugins/composio` (浏览应用), which lists whichever broker
+is active, Arcade's toolkits included. People connect on 连接, `/connections`, as upstream's do; the
+old `/settings/connected-accounts` address redirects there, so a consent begun before the move still
+comes back. An enabled Arcade app is the row
 `arcade-<Toolkit>` at `arcade://<Toolkit>`, with the toolkit's capitals kept: Arcade's names are
 case-sensitive.
 
@@ -107,7 +108,7 @@ Chinese, and name variables, never values:
   ends the old provider's connections is keeping it active (both keys set,
   `OPENBOT_BROKER_PROVIDER` naming the old provider) and using the ordinary ways a connection ends,
   each of which revokes at the vendor and deletes the row: each person disconnects their own under
-  已连接账号, an administrator disconnects a Shared app's team account, or an administrator removes
+  连接, an administrator disconnects a Shared app's team account, or an administrator removes
   an app (which ends every account connected to it). When the old provider holds no connections,
   name the new one and restart.
 - **Holding connections at BOTH providers while nothing is active stops the server at startup.** It
@@ -165,7 +166,7 @@ verifier, and that has to be this deployment's verify route:**
 
 The origin is this API's public origin, `OPENBOT_PUBLIC_URL`, which defaults to `BETTER_AUTH_URL`.
 It is the API's origin, not the browser app's, where the two differ. A browser that arrives there is
-sent on to the app's page under 已连接账号, or to the list with a reason beside it if the consent
+sent on to the app's page under 连接 (`/connections`), or to the list with a reason beside it if the consent
 was refused.
 
 Before every Connect, the deployment reads the project's setting through Arcade's admin API
@@ -266,11 +267,12 @@ cancelled while its return is being processed, after Arcade has confirmed. Then:
   recorded: an `mcp.cancelled_grant_left_live` audit entry, and the person is told
   (`cancelled-left-live`).
 
-A refused return lands on `/settings/connected-accounts?authorized=<reason>`. The reasons this fork
-answers are `no-broker`, `missing-handle`, `no-attempt`, `cancelled`, `not-permitted`,
-`vendor-unavailable`, `not-your-authorization`, `authorization-failed`, `not-finished`,
-`name-changed`, `cancelled-left-live` and `not-recorded`, the same words upstream uses. **The page does not yet turn the word into a sentence**:
-read it off the address. Neither the consent link nor anything Arcade answered is ever put in a
+A refused return lands on `/connections?authorized=<reason>`. The reasons this fork answers are
+`no-broker`, `missing-handle`, `no-attempt`, `cancelled`, `not-permitted`, `vendor-unavailable`,
+`not-your-authorization`, `authorization-failed`, `not-finished`, `name-changed`,
+`cancelled-left-live` and `not-recorded`, the same words upstream uses. The page shows each as a
+sentence (the personal edition has its own words for the ones that would send somebody to an
+administrator). Neither the consent link nor anything Arcade answered is ever put in a
 response, a log line or the audit trail; the link is a bearer credential and a status answer carries
 an access token.
 
@@ -287,7 +289,7 @@ Bot before a call goes out on it). Two things are different and worth reading be
 **Connect works as it does on Composio.** It asks Arcade for one consent covering every scope the
 app's actions publish (the `auth.authorize` call, with the app's own authorization requirement read
 off its listing), and the consent comes back through the verifier above, which records the
-connection and lands the person on the app's page under 已连接账号. That is where it lands
+connection and lands the person on the app's page under 连接. That is where it lands
 whichever page Connect was pressed on. Actions name the same requirement when they name the same
 auth provider instance, its `id` (or the same `provider_id` where none names an `id`): the live
 catalogue publishes one instance with and without its `provider_id` (`SquareupApi`) and two
@@ -348,7 +350,12 @@ is the same one: only the session that pressed it can finish it. The connection 
 person's own id and the further account is recorded beside it in `brokered_accounts`; the app's page
 lists both by the address the provider reported. A Bot's call that names one of them runs in that
 account, a call that names none runs in the person's default one, and a name the person does not
-hold is refused before Arcade is asked. Disconnecting one account withdraws that one; disconnecting
+hold is refused before Arcade is asked. Where a row has no address yet, a name that matches nothing
+first reads Arcade's account list once to fill addresses in. That read adds and fills in rows and
+never forgets one (an account Arcade does not list at that moment may only have lapsed, and the
+sweeps below find accounts by their rows), and it is made at most once in ten minutes for the same
+person, app and rows, so a model that keeps naming the wrong account does not ask Arcade each time.
+Only the accounts page forgets an account Arcade no longer lists. Disconnecting one account withdraws that one; disconnecting
 the app, offboarding the person or removing the app withdraws every account they hold there. A
 Shared app has one team account and no second one.
 
@@ -363,6 +370,11 @@ account, with no Disconnect first, and when the consent comes back the connectio
 forward so the card stops offering it. Where the refused call ran in the person's second account,
 the card names that account (`account`, the row id from the accounts page), and
 `POST /servers/:id/connect?account=<id>` reconnects that account rather than the person's own one.
+It does so also where Arcade answers that the second account holds nothing any more: its row is kept
+rather than forgotten, so Reconnect asks consent for the same id and brings that account back,
+instead of landing on the person's own account (which may hold everything and answer
+`{ "connected": true }`). A row id that is not the person's own on that app answers 404 and mints
+nothing. The accounts page still forgets the row if Arcade stops listing the account.
 A connected Shared app is reconnected in place the same way, by an administrator; its connection
 date moves forward and the administrator who connected it first stays on record.
 
@@ -394,8 +406,9 @@ label is recorded the same way. Where a curated toolkit exists for the app, enab
 **The directory says how much of a toolkit is classified.** Each app in `GET /composio/apps`
 carries `actionCount`, `classifiedCount`, `permissionCount` and `scopedActionCount` (the last three
 `null` where the broker does not report them, as on Composio), so the page can warn before an
-administrator enables a toolkit most of whose actions carry no label. **与上游不同:** the warning
-itself is the web app's and is not drawn yet; the numbers are there for it.
+administrator enables a toolkit most of whose actions carry no label. The directory draws that
+warning on an app none of whose actions is classified, and says how many separate permissions its
+consent spans.
 
 ## Least privilege is not an Arcade property
 
@@ -420,10 +433,9 @@ fixed when the app is registered, and no request can ask for fewer.
 So when somebody asks whether connecting an app "only lets it read", the answer is whatever that
 app's measurement says, not what Arcade says in general. **Connect asks for every scope the app
 publishes**, so least privilege on a provider that has it means approving actions one at a time
-(`POST /servers/:id/authorize`) instead. **与上游不同:** upstream's pre-redirect consent copy names
-the permission being asked for and lists the actions that share it; that screen is the web app's
-and is not in this fork yet, so the grant list (`GET /servers/:id/grants`) is where the scopes of
-each action can be read.
+(`POST /servers/:id/authorize`) instead. Before sending somebody to the consent screen for one
+action, the app's grant list names the permission being asked for and lists the other actions that
+share it, as upstream's does; it never promises that only the named action becomes usable.
 
 ## Scope versus tool grant
 
@@ -502,7 +514,8 @@ with an audit entry naming the app it ended with (`endedWith`).
 
 **A second account is never left behind by a sweep.** Where the person's own account is gone at
 Arcade but a second account still lives, the connection stays (the page reads connected, and a call
-can name the second account), a refused call forgets only the account that is gone, and a
+can name the second account), a call refused on the person's own account forgets only that
+account (one refused on a second account keeps its row, for Reconnect above), and a
 sibling cascade leaves such an app connected. Offboarding, removing an app and switching it to
 Shared also find accounts recorded in `brokered_accounts` whose connection row is already gone.
 Offboarding withdraws all of them. Removing and switching withdraw only the second accounts: the
@@ -534,8 +547,8 @@ consent screen is recorded; a Shared app's team account is recorded the same way
 date is when somebody finished consenting, not the last time anything was checked.
 
 What is asked of Arcade afterwards is only whether the connection is still there, when a page opens
-the app: a no clears the row, a yes changes nothing. This fork has no per-action state to show (see
-above), so nothing here says which actions an account has authorized.
+the app: a no clears the row, a yes changes nothing. Which actions an account has authorized is read
+from Arcade when the app's grant list is opened (`GET /servers/:id/grants`), not from the row's date.
 
 ## A consent coming back for the wrong person
 
@@ -568,14 +581,10 @@ Everything above that is marked, in one place:
 5. **An app whose actions name more than one auth provider instance is neither connected nor
    authorized one action at a time.**
 6. **A Shared app's grant list is read by an administrator only**, as its per-action Authorize is;
-   upstream lets any member read it. The pre-redirect consent copy that names the permission being
-   asked for is the web app's and is not here yet.
-7. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
-   `/settings/connected-accounts`, rows in `composio_connections` and on `mcp_servers`; the return
-   leg's reason is not yet shown as a sentence; Composio's "deployment's own OAuth client" answers
-   409 on Arcade. The server answers what upstream's pages read (the grant list, the siblings a
-   disconnect would end, the classification counts, the Reconnect card's marker), and the pages
-   that draw the action list, the sibling warning and the classification warning are not here yet.
+   upstream lets any member read it.
+7. **Pages and tables**: one directory page (`/admin/plugins/composio`), rows in
+   `composio_connections` and on `mcp_servers`; Composio's "deployment's own OAuth client" answers
+   409 on Arcade.
 8. **None of upstream's live measurements has been repeated by this fork.**
 
 ## What is unproven

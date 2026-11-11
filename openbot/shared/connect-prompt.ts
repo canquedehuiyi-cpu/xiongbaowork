@@ -74,8 +74,10 @@ export type ConnectPrompt = {
    */
   blocked?: boolean;
   /**
-   * 被拒的是这个人在这个应用上的哪一个账号（账号表的行 id），只在那不是他的默认账号时才有。卡片的
-   * 「重新连接」把它带给 `POST /api/plugins/servers/:serverId/connect?account=<id>`，授权的就是这个账号。
+   * 被拒的是这个人在这个应用上的哪一个账号（账号表的行 id），只在被拒的不是他本人名下的那个账号时才有：
+   * 判的是账号记在哪个 id 下，不是哪个是默认，所以第二个账号设成了默认也会带；那个账号在厂商那边已经没了
+   * 也带。卡片的「重新连接」把它带给 `POST /api/plugins/servers/:serverId/connect?account=<id>`，授权的
+   * 就是这个账号。
    */
   account?: string;
 };

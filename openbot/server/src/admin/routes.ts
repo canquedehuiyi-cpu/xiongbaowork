@@ -160,8 +160,13 @@ export function createEnterpriseAdminRoutes(
     });
   });
 
+  /*
+   * Everything below is for administrators. `GET /me` is registered above and answers without calling
+   * `next`, so it never reaches this check, and nothing else is let past it: a path that merely ends in
+   * `/me` (`PUT /settings/me`, `DELETE /network/me`) is a route parameter that happens to read `me`, and
+   * letting it through would open every such write to members.
+   */
   routes.use("*", async (context, next) => {
-    if (new URL(context.req.url).pathname.endsWith("/me")) return next();
     const denied = requireAdmin(context);
     if (denied) return denied;
     return next();
