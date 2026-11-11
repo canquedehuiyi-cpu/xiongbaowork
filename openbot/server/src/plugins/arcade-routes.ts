@@ -338,11 +338,13 @@ async function stillPermitted(
 }
 
 /**
- * 评审 I1：一个记不下来的授权在厂商那边已经生效时怎么办。
+ * 一个记不下来的授权在厂商那边已经生效时怎么办（回程进行中尝试被取消）。
  *
- * 团队账号：在厂商那边撤销。团队身份是每个应用、每次切换随机铸出的（`mintDeploymentVendorUserId`），
- * 它下面只有这一个应用，撤销不会连带别的应用；不撤，它就会在之后被别人的「确认」收养。撤销失败才落回
- * 留痕。个人：授权是本人自己的，记在本人 id 下；撤销会连带本人同一认证提供商下的其他应用，所以只留痕。
+ * 团队账号还没有连接：在厂商那边撤销。团队身份是每个应用、每次切换随机铸出的
+ * （`mintDeploymentVendorUserId`），它下面只有这一个应用，撤销不会连带别的应用；不撤，它就成了一个
+ * 来历不明的授权。团队账号已经连接着：不撤，只留痕（撤销会结束大家正在用的那条连接）。
+ * 个人：「再连一个账号」铸出的 id 下只有这一次同意，直接撤；本人名字下的，照上游在不连带别的东西时撤，
+ * 否则留痕。撤销没有被厂商确认时都落回留痕。
  */
 async function leftoverGrant(
   deps: ArcadeRouteDeps,
@@ -355,7 +357,29 @@ async function leftoverGrant(
   },
 ): Promise<"withdrawn" | "left-live"> {
   const { store, arcade } = deps;
+  /*
+   * 团队账号原本就连接着（就地重新连接，或在已连接的团队账号上为一个动作授权）：不撤。撤销结束的是团队
+   * 身份在这个认证提供商下的整条连接，也就是大家正在用的那一条，而应用行仍会说「已连接」。这次同意只是
+   * 加在它上面的权限，留着不比没有更危险，所以照上游只留痕。读不到应用行时同样不撤。
+   */
+  let teamAlreadyConnected = false;
   if (input.account.holder === "deployment" && input.toolkit) {
+    const teamToolkit = input.toolkit;
+    const app = await store.appAccount(teamToolkit).catch(() => undefined);
+    teamAlreadyConnected =
+      app === undefined || Boolean(app?.shared?.connectedAt);
+    if (teamAlreadyConnected) {
+      input = {
+        ...input,
+        why: `${input.why}; ${app === undefined ? "the app's team account could not be read" : "the team account was already connected"}`,
+      };
+    }
+  }
+  if (
+    input.account.holder === "deployment" &&
+    input.toolkit &&
+    !teamAlreadyConnected
+  ) {
     const toolkit = input.toolkit;
     const withdrawn = await withVendorDeadline(() =>
       arcade.revoke({ account: input.account, toolkit }),
@@ -396,9 +420,20 @@ async function leftoverGrant(
      */
     const toolkit = input.toolkit;
     const account = input.account;
+    /*
+     * 「再连一个账号」的同意记在这个人自己的另一个 id 下（`<名字>~<后缀>`），那个 id 是这次按下时才铸
+     * 出来的，下面只有这一次同意：撤掉它不会连带任何别的应用或账号。不撤的话，没有任何一行记得这个 id，
+     * 之后谁也找不到它。
+     */
+    const further =
+      account.vendorUserId !== store.personAccount(account.userId).vendorUserId;
     let keep: string | null = null;
     try {
-      if (await store.brokeredConnection({ toolkit, userId: account.userId })) {
+      if (further) {
+        // 直接撤，见上。
+      } else if (
+        await store.brokeredConnection({ toolkit, userId: account.userId })
+      ) {
         keep = "the account already held this app's connection";
       } else {
         const collateral = await arcadeConnectionSiblings({
@@ -648,7 +683,7 @@ export function mountArcadeRoutes(
           .catch(() => null);
         if (completedElsewhere === null) return refusedWith("not-recorded");
         if (!completedElsewhere) {
-          // 尝试在同意期间被取消了，授权却完成了：团队账号撤销，个人留痕（评审 I1）。
+          // 尝试在同意期间被取消了，授权却完成了：能撤的撤，撤了会误伤的留痕（见 `leftoverGrant`）。
           const outcome = await leftoverGrant(current, {
             actorId,
             attempt,
@@ -799,12 +834,21 @@ export function mountArcadeRoutes(
       );
       actions = [{ action: toolkit, state: "unknown", reason: unreadable }];
     }
+    /*
+     * `needs-operator` 的 `missing` 是部署级密钥的键名（厂商报的，如 `GITHUB_SERVER_URL`），是运维的事，
+     * 只给此刻持有管理员能力的人看；别人看到的状态不变、名单为空：知道「要管理员先配置」就够了。
+     */
+    const admin =
+      context.var.actor.role === "admin" &&
+      (current.adminRefusal?.(context) ?? null) === null;
     return context.json({
-      actions: actions.map((entry) =>
-        entry.state === "unknown" && NAMES_A_BROKER.test(entry.reason)
-          ? { ...entry, reason: unreadable }
-          : entry,
-      ),
+      actions: actions.map((entry) => {
+        if (entry.state === "unknown" && NAMES_A_BROKER.test(entry.reason))
+          return { ...entry, reason: unreadable };
+        if (entry.state === "needs-operator" && !admin)
+          return { ...entry, missing: [] };
+        return entry;
+      }),
     });
   });
 

@@ -90,6 +90,7 @@ tests/approvals-store.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/apps-page-wording.test.ts
+tests/arcade-account-sweeps.integration.test.ts
 tests/arcade-adapter-authorize.test.ts
 tests/arcade-adapter-connections.test.ts
 tests/arcade-adapter-errors.test.ts

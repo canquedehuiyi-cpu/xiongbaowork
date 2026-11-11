@@ -2100,12 +2100,156 @@ export function createPluginStore(options: PluginStoreOptions) {
     toolkit: string,
     userId: string,
     ids?: string[],
-  ): Promise<void> {
-    if (!broker) return;
+  ): Promise<boolean> {
+    if (!broker) return false;
+    let ended = false;
     for (const vendorUserId of ids ??
       (await accounts.furtherIds({ toolkit, userId }))) {
-      await broker.revoke({ userId: vendorUserId, toolkit });
+      if (await broker.revoke({ userId: vendorUserId, toolkit })) ended = true;
     }
+    return ended;
+  }
+
+  /**
+   * 账号表里记着、连接表里却已经没有的（人, 应用）。
+   *
+   * 一个人名字下的连接可以先没了（他在提供商那边撤了第一个邮箱的授权，或单独断开了它），而他另一个
+   * 账号还在厂商那边有效。连接行一删，按连接表找人的清扫（离职处理、移除应用、切换账号模式）就再也
+   * 找不到那个账号。所以三条清扫路径都把这里答出的也算上。只看这个部署当前的提供商。
+   */
+  async function accountsWithoutConnection(filter: {
+    userId?: string;
+    toolkit?: string;
+  }): Promise<{ userId: string; toolkit: string }[]> {
+    const rows = await database
+      .selectDistinct({
+        userId: brokeredAccounts.userId,
+        toolkit: brokeredAccounts.app,
+      })
+      .from(brokeredAccounts)
+      .where(
+        and(
+          eq(brokeredAccounts.provider, brokerProvider),
+          filter.userId === undefined
+            ? undefined
+            : eq(brokeredAccounts.userId, filter.userId),
+          filter.toolkit === undefined
+            ? undefined
+            : eq(brokeredAccounts.app, filter.toolkit),
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${composioConnections}
+             WHERE ${composioConnections.userId} = ${brokeredAccounts.userId}
+               AND ${composioConnections.toolkit} = ${brokeredAccounts.app}
+          )`,
+        ),
+      );
+    return rows.sort(
+      (left, right) =>
+        left.userId.localeCompare(right.userId) ||
+        left.toolkit.localeCompare(right.toolkit),
+    );
+  }
+
+  /**
+   * 断开、移除、切换之后，结束这个人在同一认证提供商下、厂商也已经结束了的兄弟应用的连接行（上游 #770
+   * 的级联，fork 放在 store 里给不经过断开路由的路径用）。
+   *
+   * Arcade 按「用户 + 认证提供商」存连接：撤掉一个应用的授权，也结束了同一提供商下其他应用的连接。那些
+   * 应用的行留着，页面会一直说「已连接」，调用却全部被拒。只结束「提供商相同、厂商也答没有连接」的，
+   * 各记一条审计（`endedWith`）；问不到的留着，不猜。Composio 的 broker 没有 `authProviderOf`，什么都不做。
+   * `read` 是调用方读写别人的行时要用的帧（移除应用经平台帧），默认就在当前帧里。
+   */
+  async function endSiblingsAfterRevoke(input: {
+    toolkit: string;
+    userId: string;
+    by: string;
+    reason: "mcp_server_removed" | "mode_switched" | "self";
+    read?: <T>(work: () => Promise<T>) => Promise<T>;
+  }): Promise<string[]> {
+    const authProviderOf = broker?.authProviderOf?.bind(broker);
+    if (!broker || !authProviderOf) return [];
+    const read = input.read ?? (<T>(work: () => Promise<T>) => work());
+    const provider = await withVendorDeadline(() =>
+      authProviderOf(input.toolkit),
+    ).catch(() => null);
+    if (!provider) return [];
+    const others = await read(() =>
+      database
+        .select({ toolkit: composioConnections.toolkit })
+        .from(composioConnections)
+        .where(
+          and(
+            eq(composioConnections.userId, input.userId),
+            eq(composioConnections.provider, brokerProvider),
+            ne(composioConnections.toolkit, input.toolkit),
+          ),
+        )
+        .orderBy(asc(composioConnections.toolkit)),
+    );
+    const cleared: string[] = [];
+    for (const other of others) {
+      try {
+        const theirs = await withVendorDeadline(() =>
+          authProviderOf(other.toolkit),
+        );
+        if (!theirs || theirs.toLowerCase() !== provider.toLowerCase())
+          continue;
+        const live = await withVendorDeadline(() =>
+          broker.isConnected({ userId: input.userId, toolkit: other.toolkit }),
+        );
+        if (live) continue;
+        await revokeFurtherAccounts(
+          other.toolkit,
+          input.userId,
+          await read(() =>
+            accounts.furtherIds({
+              toolkit: other.toolkit,
+              userId: input.userId,
+            }),
+          ),
+        );
+        const ended = await read(() =>
+          database
+            .delete(composioConnections)
+            .where(
+              and(
+                eq(composioConnections.toolkit, other.toolkit),
+                eq(composioConnections.userId, input.userId),
+              ),
+            )
+            .returning({ toolkit: composioConnections.toolkit }),
+        );
+        await read(() =>
+          accounts.forget({ toolkit: other.toolkit, userId: input.userId }),
+        );
+        if (ended.length === 0) continue;
+        cleared.push(other.toolkit);
+        await recordAuditEvent(auditStore, {
+          eventType: "mcp.account_disconnected",
+          targetType: "mcp_server",
+          targetId: other.toolkit,
+          payload: {
+            actor: input.by,
+            server: other.toolkit,
+            owner: input.userId,
+            reason: input.reason,
+            vendorRevocationRequested: true,
+            endedWith: input.toolkit,
+          },
+        });
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "arcade-sibling-not-cleared",
+            app: other.toolkit,
+            endedWith: input.toolkit,
+            note: "An app sharing the ended app's auth provider could not be checked or cleared; its row stands until its own page is opened.",
+            error: reasonWithoutStatement(error),
+          }),
+        );
+      }
+    }
+    return cleared;
   }
 
   /*
@@ -5634,13 +5778,20 @@ export function createPluginStore(options: PluginStoreOptions) {
          * are where the people are. Sorted, so two removals of the same app revoke in the same
          * order and write their trail rows in the same order.
          */
-        const people = await reach(() =>
+        const withConnection = await reach(() =>
           database
             .select({ userId: composioConnections.userId })
             .from(composioConnections)
             .where(eq(composioConnections.toolkit, toolkit))
             .orderBy(asc(composioConnections.userId)),
         );
+        // 连接行已经没了、账号表里还记着另一个账号的人也要撤（见 `accountsWithoutConnection`）。
+        const people = [
+          ...withConnection,
+          ...(await reach(() => accountsWithoutConnection({ toolkit }))).map(
+            (held) => ({ userId: held.userId }),
+          ),
+        ];
         /*
          * Shared 应用的团队账号（X1）也是这个应用上的一个账号：应用移除时同样先在 vendor 撤销，记在同一条
          * 审计里，owner 是团队身份。应用行随后删除，团队账号的状态随之消失。
@@ -5698,100 +5849,15 @@ export function createPluginStore(options: PluginStoreOptions) {
          * 的）。只结束「提供商相同、厂商也答没有连接」的；问不到的留着，不猜——那个应用自己的页面下次
          * 打开时会再核对。Composio 的 broker 没有 `authProviderOf`，这一段不做任何事。
          */
-        const authProviderOf = broker?.authProviderOf?.bind(broker);
-        const removedProvider =
-          broker && authProviderOf
-            ? await withVendorDeadline(() => authProviderOf(toolkit)).catch(
-                () => null,
-              )
-            : null;
-        if (broker && authProviderOf && removedProvider) {
-          for (const person of people) {
-            if (vendorRevocationRequested.get(person.userId) !== true) continue;
-            const others = await reach(() =>
-              database
-                .select({ toolkit: composioConnections.toolkit })
-                .from(composioConnections)
-                .where(
-                  and(
-                    eq(composioConnections.userId, person.userId),
-                    eq(composioConnections.provider, brokerProvider),
-                    ne(composioConnections.toolkit, toolkit),
-                  ),
-                )
-                .orderBy(asc(composioConnections.toolkit)),
-            );
-            for (const other of others) {
-              try {
-                const theirs = await withVendorDeadline(() =>
-                  authProviderOf(other.toolkit),
-                );
-                if (
-                  !theirs ||
-                  theirs.toLowerCase() !== removedProvider.toLowerCase()
-                )
-                  continue;
-                const live = await withVendorDeadline(() =>
-                  broker.isConnected({
-                    userId: person.userId,
-                    toolkit: other.toolkit,
-                  }),
-                );
-                if (live) continue;
-                await revokeFurtherAccounts(
-                  other.toolkit,
-                  person.userId,
-                  await reach(() =>
-                    accounts.furtherIds({
-                      toolkit: other.toolkit,
-                      userId: person.userId,
-                    }),
-                  ),
-                );
-                const ended = await reach(() =>
-                  database
-                    .delete(composioConnections)
-                    .where(
-                      and(
-                        eq(composioConnections.toolkit, other.toolkit),
-                        eq(composioConnections.userId, person.userId),
-                      ),
-                    )
-                    .returning({ toolkit: composioConnections.toolkit }),
-                );
-                await reach(() =>
-                  accounts.forget({
-                    toolkit: other.toolkit,
-                    userId: person.userId,
-                  }),
-                );
-                if (ended.length === 0) continue;
-                await recordAuditEvent(auditStore, {
-                  eventType: "mcp.account_disconnected",
-                  targetType: "mcp_server",
-                  targetId: other.toolkit,
-                  payload: {
-                    actor: by,
-                    server: other.toolkit,
-                    owner: person.userId,
-                    reason: "mcp_server_removed",
-                    vendorRevocationRequested: true,
-                    endedWith: toolkit,
-                  },
-                });
-              } catch (error) {
-                console.error(
-                  JSON.stringify({
-                    type: "arcade-sibling-not-cleared",
-                    app: other.toolkit,
-                    removed: toolkit,
-                    note: "An app sharing the removed app's auth provider could not be checked or cleared; its row stands until its own page is opened.",
-                    error: reasonWithoutStatement(error),
-                  }),
-                );
-              }
-            }
-          }
+        for (const person of people) {
+          if (vendorRevocationRequested.get(person.userId) !== true) continue;
+          await endSiblingsAfterRevoke({
+            toolkit,
+            userId: person.userId,
+            by,
+            reason: "mcp_server_removed",
+            read: reach,
+          });
         }
 
         for (const connection of connected) {
@@ -9267,6 +9333,23 @@ export function createPluginStore(options: PluginStoreOptions) {
         toolkit: input.toolkit,
       });
       if (!connected) {
+        /*
+         * 本人名字下没有了，但他还有「另一个账号」（Arcade 每个 id 一个账号）在厂商那边活着：连接行留着，
+         * 应用照样读作已连接，调用可以点名那个账号。删了它，那个账号就成了谁都找不到的授权——离职处理、
+         * 移除应用按连接行找人。问不到的当作还在（抛出去，行不动）。Composio 没有另一个 id，这里什么都不问。
+         */
+        for (const vendorUserId of await accounts.furtherIds({
+          toolkit: input.toolkit,
+          userId: input.userId,
+        })) {
+          if (
+            await broker.isConnected({
+              userId: vendorUserId,
+              toolkit: input.toolkit,
+            })
+          )
+            return { connected: true };
+        }
         // Deleted rather than left alone, because the row is only the vendor's last answer: an
         // account ended in Composio's own dashboard reaches this deployment as the no above and
         // as nothing else, and a row that outlived it would go on saying yes about an account the
@@ -10428,21 +10511,37 @@ export function createPluginStore(options: PluginStoreOptions) {
             .where(eq(mcpServers.id, app.id))
         : [];
       return reachEveryPersonOn(row?.tenantId === TEAM_TENANT, async () => {
-        const people = await database
-          .select({ userId: composioConnections.userId })
-          .from(composioConnections)
-          .where(eq(composioConnections.toolkit, input.toolkit))
-          .orderBy(asc(composioConnections.userId));
+        const people = [
+          ...(await database
+            .select({ userId: composioConnections.userId })
+            .from(composioConnections)
+            .where(eq(composioConnections.toolkit, input.toolkit))
+            .orderBy(asc(composioConnections.userId))),
+          // 连接行没了、账号表里还记着另一个账号的人（见 `accountsWithoutConnection`）。
+          ...(await accountsWithoutConnection({ toolkit: input.toolkit })).map(
+            (held) => ({ userId: held.userId }),
+          ),
+        ];
         const failures: { account: string; error: string }[] = [];
         let revoked = 0;
         for (const person of people) {
           try {
-            await this.disconnectBrokered({
-              toolkit: input.toolkit,
-              userId: person.userId,
-              by: input.by,
-              reason: "mode_switched",
-            });
+            const { vendorRevocationRequested } = await this.disconnectBrokered(
+              {
+                toolkit: input.toolkit,
+                userId: person.userId,
+                by: input.by,
+                reason: "mode_switched",
+              },
+            );
+            // 撤掉的连接还连带了同一认证提供商下的其他应用（Arcade）：那些行一并结束。
+            if (vendorRevocationRequested)
+              await endSiblingsAfterRevoke({
+                toolkit: input.toolkit,
+                userId: person.userId,
+                by: input.by,
+                reason: "mode_switched",
+              });
             revoked += 1;
           } catch (error) {
             failures.push({
@@ -10884,12 +10983,16 @@ export function createPluginStore(options: PluginStoreOptions) {
       // Whether there was an account to end at all, which is what decides if anybody was
       // disconnected. Named apart from the field below because for a key the two differ: something
       // ended, and nothing was asked of the provider.
-      const ended = await broker.revoke({
+      const ownEnded = await broker.revoke({
         userId: input.userId,
         toolkit: input.toolkit,
       });
-      // 这个人在这个应用上的另一个账号也撤掉，在本地的账号行被忘掉之前（见 `revokeFurtherAccounts`）。
-      await revokeFurtherAccounts(input.toolkit, input.userId);
+      /*
+       * 这个人在这个应用上的另一个账号也撤掉，在本地的账号行被忘掉之前（见 `revokeFurtherAccounts`）。
+       * 另一个账号撤掉了也算「撤了」：只剩另一个账号的人断开时，撤销与审计都要如实记下。
+       */
+      const ended =
+        (await revokeFurtherAccounts(input.toolkit, input.userId)) || ownEnded;
 
       const vendorRevocationRequested = fieldScheme ? false : ended;
 
@@ -11162,6 +11265,25 @@ export function createPluginStore(options: PluginStoreOptions) {
        * says which apps did not end. Thrown last rather than first so a refusal on one app cannot
        * cost the record of another — which is the whole of this change.
        */
+      /*
+       * 连接行已经没了、账号表里还记着账号的应用（见 `accountsWithoutConnection`）：他另一个账号也许还在
+       * 厂商那边有效，离职时一样要撤。走普通的断开，撤销、忘掉账号行、记审计都在那里；撤不掉时行留着，
+       * 与上面一样可以重试。
+       */
+      for (const held of await accountsWithoutConnection({ userId })) {
+        try {
+          await this.disconnectBrokered({
+            toolkit: held.toolkit,
+            userId,
+            by,
+            reason: "person_removed",
+          });
+          retired += 1;
+        } catch (error) {
+          refusals.push(error);
+        }
+      }
+
       if (refusals.length > 0) throw refusals[0];
 
       return { retired };
@@ -11985,6 +12107,17 @@ export function createPluginStore(options: PluginStoreOptions) {
       const refusedToolkit =
         access.credential === "brokered" ? access.toolkit : null;
       const holder = input.credentialActorId ?? input.actorId;
+      /*
+       * 队友经 Team Bot 用的是主人的账号：主人账号的状态不告诉队友（「你的账号……」对他不成立），这里也
+       * 不替主人去问、去删——这次调用跑在队友的帧里，本来也动不了主人的行。只说做不了、请主人处理，不给
+       * 卡片：卡片上的「重新连接」会把队友带去连他自己的账号。
+       */
+      if (holder !== input.actorId) {
+        throw new PluginRefusedError(
+          `这位员工用的是它主人的 ${row.title} 账号，那个账号现在不允许这个动作，所以没有做。请员工的主人重新连接 ${row.title}。`,
+          null,
+        );
+      }
       const ownName = vendorNameOf(holder);
       const reachedAs: string = notAllowedAs ?? ownName;
       const gone =
@@ -12012,6 +12145,28 @@ export function createPluginStore(options: PluginStoreOptions) {
             await accounts.settleDefault(refusedToolkit, holder);
           }
           othersRemain = true;
+        } else if (
+          (
+            await accounts.furtherIds({
+              toolkit: refusedToolkit,
+              userId: holder,
+            })
+          ).length > 0
+        ) {
+          /*
+           * 他名字下的那个没了，另一个账号还在（上游 `othersRemain`）：只忘掉名字下的那一行，连接留着，
+           * 另一个账号照样能用；删了连接行，那个账号就成了清扫路径找不到的授权。
+           */
+          const lost = (await accounts.rowsFor(refusedToolkit, holder)).find(
+            (candidate) => candidate.vendorUserId === ownName,
+          );
+          if (lost) {
+            await database
+              .delete(brokeredAccounts)
+              .where(eq(brokeredAccounts.id, lost.id));
+            await accounts.settleDefault(refusedToolkit, holder);
+          }
+          othersRemain = true;
         } else {
           await database
             .delete(composioConnections)
@@ -12030,8 +12185,10 @@ export function createPluginStore(options: PluginStoreOptions) {
           message: sharedApp
             ? `共享的 ${row.title} 账号还不允许这个动作，所以没有做。请管理员重新连接它。`
             : gone
-              ? othersRemain && pinned
-                ? `你的 ${row.title} 账号 ${pinned.label} 已经不再连接，所以没有做。重新连接它，或者换一个账号再问一次。`
+              ? othersRemain
+                ? pinned
+                  ? `你的 ${row.title} 账号 ${pinned.label} 已经不再连接，所以没有做。重新连接它，或者换一个账号再问一次。`
+                  : `你默认的 ${row.title} 账号已经不再连接，所以没有做。重新连接它，或者点名另一个账号再问一次。`
                 : `你的 ${row.title} 账号已经不再连接，所以没有做。重新连接之后再问一次。`
               : `你的 ${row.title} 账号还不允许这个动作，所以没有做。重新连接之后再问一次。`,
           reason: sharedApp ? "shared" : "reconnect",

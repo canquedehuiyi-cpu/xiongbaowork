@@ -151,7 +151,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   `composio_connections` 加可空列 `vendor_user_id`，无回填。**单用户安装升级后第一次启动，之前连接的应用会显示
   为未连接，每个应用要重新连接一次**：旧连接记在共享的名字下，提供商不支持把连接换到另一个名字下，也分不清那
   些账号是哪台安装建的，所以本部署只删掉自己的连接记录（启动日志 `single-user-connections-retired` 列出这些应
-  用），不在提供商那边结束它们。如果这把 key 只有这一台安装在用，可以到 Composio 后台删掉用户 id 为
+  用），不在提供商那边结束它们。这些旧授权在提供商那边仍然有效，同一把 key 上还以共享名字行事的其他安装
+  照样能用它们：如果这把 key 只有这一台安装在用，请到 Composio（或 Arcade）后台删掉用户 id 为
   `dev-local-user` 的连接账号。详见 `docs/configuration.md`。
 
 - **Arcade 可以作为第二家连接器提供商（上游的 Arcade 连接器）。** 设置 `ARCADE_API_KEY` 之后，应用可以改经

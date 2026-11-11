@@ -370,6 +370,37 @@ export function createArcadeAttempts(context: {
                 accountId: "",
               })
               .onConflictDoNothing();
+            /*
+             * 本人名字下原本就连着（`reconnected`）时，把那个账号也记进列表并在没有默认时设为默认。不记
+             * 的话，账号列表还没同步过的人列表里只有第二个账号，不点名的调用（以及队友经 Team Bot 用他
+             * 的账号）就落到第二个账号上。名字下没有连接时不记：那里没有账号可用。
+             */
+            if (reconnected) {
+              await transaction
+                .insert(brokeredAccounts)
+                .values({
+                  provider,
+                  app: input.toolkit,
+                  userId: further.userId,
+                  vendorUserId: own,
+                  accountId: "",
+                })
+                .onConflictDoNothing();
+              await transaction.execute(sql`
+                UPDATE brokered_accounts SET is_default = true
+                 WHERE provider = ${provider}
+                   AND app = ${input.toolkit}
+                   AND user_id = ${further.userId}
+                   AND vendor_user_id = ${own}
+                   AND NOT EXISTS (
+                     SELECT 1 FROM brokered_accounts d
+                      WHERE d.provider = ${provider}
+                        AND d.app = ${input.toolkit}
+                        AND d.user_id = ${further.userId}
+                        AND d.is_default
+                   )
+              `);
+            }
           }
         } else {
           /*

@@ -3092,17 +3092,36 @@ export function createPluginRoutes(
           return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
         }
         // 最后一个账号：整个连接一起断开，走这个应用一直以来的那条路径。
+        /*
+         * 在 Arcade 上断开一个账号也是撤掉那个 id 在一个认证提供商下的整条连接，会连带同一提供商下的其他
+         * 应用；与「断开」路由一样，把厂商那边也结束了的兄弟应用的行一并结束，并在响应里列出来。
+         */
+        const siblingsOf = () =>
+          composio?.arcade
+            ? clearEndedArcadeSiblings({
+                store,
+                arcade: composio.arcade,
+                userId: context.var.actor.id,
+                toolkit: resolved.toolkit,
+              })
+            : Promise.resolve(null);
         if ("only" in ended) {
+          const disconnected = await store.disconnectBrokered({
+            toolkit: resolved.toolkit,
+            userId: context.var.actor.id,
+            by: context.var.actor.id,
+            reason: "self",
+          });
+          const siblings = await siblingsOf();
           return context.json(
-            await store.disconnectBrokered({
-              toolkit: resolved.toolkit,
-              userId: context.var.actor.id,
-              by: context.var.actor.id,
-              reason: "self",
-            }),
+            siblings ? { ...disconnected, siblings } : disconnected,
           );
         }
-        return context.json(ended);
+        // 只断了其中一个账号时，结束了兄弟应用才说出来；平常的响应与以前一样。
+        const siblings = await siblingsOf();
+        return context.json(
+          siblings && siblings.length > 0 ? { ...ended, siblings } : ended,
+        );
       } catch (error) {
         const refusal = personRefusal(
           error,

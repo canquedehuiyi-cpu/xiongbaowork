@@ -248,10 +248,15 @@ first and then decides.
 **与上游不同: what happens to a grant that was left behind.** One way remains: the attempt is
 cancelled while its return is being processed, after Arcade has confirmed. Then:
 
-- **A Shared app's team account is revoked at Arcade.** The team identity is minted at random for
-  each app and each switch to Shared, so revoking it cannot take another app with it. Only Arcade
-  answering that it revoked counts; if it finds nothing or fails, the grant is recorded in the audit
-  trail instead, as below.
+- **A Shared app's team account that was not yet connected is revoked at Arcade.** The team
+  identity is minted at random for each app and each switch to Shared, so revoking it cannot take
+  another app with it. Only Arcade answering that it revoked counts; if it finds nothing or fails,
+  the grant is recorded in the audit trail instead, as below. **One that was already connected** (a
+  reconnection in place, or an action authorized on it) is not revoked: revoking ends the team
+  identity's whole connection, the one everybody's calls run on, while the app would still read as
+  connected. The grant is recorded instead (`cancelled-left-live`), as upstream does.
+- **A person's second-account consent is revoked at Arcade.** The further id was minted for that
+  press and holds nothing else, so revoking it ends nothing else.
 - **A person's own account is revoked where that takes nothing else with it**, as upstream does.
   Revoking ends the person's connection for that auth provider (see
   [Disconnecting one app may end another](#disconnecting-one-app-may-end-another)), so it is done
@@ -297,7 +302,9 @@ then here. Arcade still checks each action itself on every call.
 app. `GET /api/plugins/servers/:id/grants` answers what the account holds for each action
 (`authorized`, `needs-consent` with the scopes it would ask for, `needs-operator` naming a secret
 the deployment has to set first, or `unknown`), and `POST /api/plugins/servers/:id/authorize` with
-`{ "action": "<the action's name at Arcade>" }` starts a consent for that one action. The action has
+`{ "action": "<the action's name at Arcade>" }` starts a consent for that one action. A
+`needs-operator` entry names the deployment secrets it waits for (`missing`) to an administrator
+only; anybody else sees the state with an empty list. The action has
 to be one the app publishes, spelled as Arcade spells it (`Gmail.SendEmail`, case and all). The
 consent comes back through the same verifier, bound to whoever pressed it, records the connection
 and lands on the app's page with `?action=<name>`. `GET /api/plugins` says `authorizesPerAction:
@@ -475,9 +482,16 @@ page can say what a disconnect takes with it. After the disconnect, each of thos
 also reports as not connected has its row here ended too, with its own audit entry, and the
 response lists them (`siblings`). An app Arcade could not be asked about keeps its row
 (`arcade-sibling-not-cleared` in the log); pressing Disconnect again is the retry. **An
-administrator removing an app runs the same reconciliation** for every person whose connection the
-removal revoked: their other apps on that auth provider that Arcade no longer holds are ended, each
+administrator removing an app, or switching it to a Shared account, runs the same reconciliation**
+for every person whose connection that revoked, and so does disconnecting an account on the
+accounts page: their other apps on that auth provider that Arcade no longer holds are ended, each
 with an audit entry naming the app it ended with (`endedWith`).
+
+**A second account is never left behind by a sweep.** Where the person's own account is gone at
+Arcade but a second account still lives, the connection stays (the page reads connected, and a call
+can name the second account), and a refused call forgets only the account that is gone. Offboarding,
+removing an app and switching it to Shared also find accounts recorded in `brokered_accounts` whose
+connection row is already gone, and withdraw them at Arcade.
 
 ## Revoking at Arcade is not revoking at the provider
 
