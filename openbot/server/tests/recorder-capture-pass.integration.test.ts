@@ -1,5 +1,4 @@
 import { describe, expect, spyOn } from "bun:test";
-import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import {
   CopilotKitIntelligence,
@@ -8,7 +7,9 @@ import {
 import type { LearningSettings } from "@openbot/shared/learning";
 import {
   type ExchangeResponse,
+  isAllowedGatewayUrl,
   recorderPaths,
+  type TrajectoryGrant,
 } from "@openbot/shared/recorder-api";
 import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
@@ -35,6 +36,7 @@ import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { skillSnapshot } from "./fixtures/learned-skills";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 /*
  * The capture pass end to end, through the app index.ts builds: the Recorder's routes, the runtime mounted with the
@@ -274,22 +276,31 @@ describe("the capture pass", () => {
   const mine = randomUUID();
 
   /*
-   * M3: the fork's runtime keeps its threads in the local runner and has no Intelligence client
-   * (copilot.ts `trajectoryCapture`: only the gate is applied), so the runtime answers the pass
-   * itself with INTELLIGENCE_RUNTIME_REQUIRED and nothing is joined. Upstream's grant (join token,
-   * realtime topic) waits for the managed Intelligence runtime. What the gate does is unchanged:
-   * the trajectory is bound to the connected browser's person, in their own Learning space.
+   * The fork's runtime keeps its threads in the local runner, whose own handler refuses every pass;
+   * with Intelligence configured OpenBot answers the pass itself (recorder/trajectory-connect.ts), so
+   * upstream's grant is asserted again, joined to the person's own Learning space.
    */
-  const noIntelligenceRuntime = async (answer: Response) => {
-    expect(answer.status).toBe(503);
-    expect(((await answer.json()) as { code: string }).code).toBe(
-      "INTELLIGENCE_RUNTIME_REQUIRED",
-    );
-  };
+  test("a connected browser gets a pass with no Bot named, joined to the person's own Learning space", async () => {
+    const answer = await pass(mine, as(owner));
 
-  test("a connected browser's pass binds the trajectory to its person, with no Bot named", async () => {
-    await noIntelligenceRuntime(await pass(mine, as(owner)));
-    expect(joins).toEqual([]);
+    expect(answer.status).toBe(200);
+    const grant = (await answer.json()) as TrajectoryGrant;
+    expect(grant).toEqual({
+      joinToken: "join-1",
+      realtime: {
+        clientUrl: "ws://127.0.0.1:7103/client",
+        topic: `trajectory:${mine}`,
+      },
+    });
+    // The Recorder's own rule: a gateway it would refuse is a recording kept in the browser and never saved.
+    expect(isAllowedGatewayUrl(grant.realtime.clientUrl, null)).toBe(true);
+    expect(joins).toEqual([
+      {
+        trajectoryId: mine,
+        appUserId: owner,
+        learningContainerIds: [OWNER_SPACE],
+      },
+    ]);
     expect(await bindingOf(mine)).toEqual([{ userId: owner }]);
   });
 
@@ -303,9 +314,15 @@ describe("the capture pass", () => {
     ).toEqual([{ containerId: OWNER_SPACE }]);
   });
 
-  test("a reconnect asks again and keeps the same binding", async () => {
-    await noIntelligenceRuntime(await pass(mine, as(owner)));
-    expect(joins).toEqual([]);
+  test("a reconnect asks for a fresh pass and gets one, joined to the same space", async () => {
+    const answer = await pass(mine, as(owner));
+
+    expect(answer.status).toBe(200);
+    expect(joins.at(-1)).toEqual({
+      trajectoryId: mine,
+      appUserId: owner,
+      learningContainerIds: [OWNER_SPACE],
+    });
     expect(await bindingOf(mine)).toEqual([{ userId: owner }]);
   });
 
@@ -410,10 +427,16 @@ describe("the capture pass", () => {
     });
   });
 
-  test("the other person's own trajectory is bound to them, not to the owner", async () => {
+  test("the other person's own trajectory still gets its pass, into their own space", async () => {
     const theirs = randomUUID();
-    await noIntelligenceRuntime(await pass(theirs, as(stranger)));
-    expect(joins).toEqual([]);
+    const answer = await pass(theirs, as(stranger));
+
+    expect(answer.status).toBe(200);
+    expect(joins.at(-1)).toEqual({
+      trajectoryId: theirs,
+      appUserId: stranger,
+      learningContainerIds: [STRANGER_SPACE],
+    });
     expect(await bindingOf(theirs)).toEqual([{ userId: stranger }]);
   });
 });
