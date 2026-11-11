@@ -25,6 +25,7 @@ import {
   transcriptionConfig,
 } from "./dictation/config";
 import { type Edition, parseEdition } from "./edition";
+import type { BrokerProvider } from "./plugins/access";
 import { type VoiceConfig, voiceConfig } from "./voice/config";
 import { type WebBotAuth, webBotAuthFromEnv } from "./web-bot-auth";
 
@@ -340,6 +341,17 @@ export type DeploymentConfig = {
    * where a key that was revoked last week would have surfaced regardless.
    */
   composioApiKey: string | undefined;
+  /**
+   * 这个部署与 Arcade（第二个连接应用提供商，上游 #770）通信用的 key。与 Composio 的 key 一样可选，
+   * 不在启动时校验。只配它时 Arcade 是活动的 broker；两个都配时由 {@link brokerProvider} 决定。
+   * 没设置时不出现在配置里，部署的行为与以前完全一样。
+   */
+  arcadeApiKey?: string;
+  /**
+   * 运维指明的 broker，来自 `OPENBOT_BROKER_PROVIDER`。这里只读取并校验取值；哪个提供商活动由
+   * `plugins/provider-wiring.ts` 决定。没设置时不出现在配置里。
+   */
+  brokerProvider?: BrokerProvider;
   /** GitHub App user sign-in, so people can link their GitHub account. Both or neither of GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET. */
   githubApp?: GithubAppConfig;
   /**
@@ -570,6 +582,27 @@ function required(environment: Environment, name: string): string {
 
 function optional(environment: Environment, name: string): string | undefined {
   return environment[name]?.trim() || undefined;
+}
+
+/**
+ * `ARCADE_API_KEY` 与 `OPENBOT_BROKER_PROVIDER`，只在设置了时出现在配置里，没设置的部署配置对象与以前一样。
+ * `OPENBOT_BROKER_PROVIDER` 只能是 composio 或 arcade，别的值让服务起不来。
+ */
+function brokerProviderConfig(environment: Environment): {
+  arcadeApiKey?: string;
+  brokerProvider?: BrokerProvider;
+} {
+  const arcadeApiKey = optional(environment, "ARCADE_API_KEY");
+  const raw = optional(environment, "OPENBOT_BROKER_PROVIDER");
+  if (raw !== undefined && raw !== "composio" && raw !== "arcade") {
+    throw new Error(
+      `OPENBOT_BROKER_PROVIDER 只能是 "composio" 或 "arcade"，现在是 "${raw}"。不设置时按配置了哪个 API key 来选。`,
+    );
+  }
+  return {
+    ...(arcadeApiKey ? { arcadeApiKey } : {}),
+    ...(raw ? { brokerProvider: raw } : {}),
+  };
 }
 
 /**
@@ -1765,6 +1798,7 @@ export function loadConfig(
       ? { version: optional(environment, "OPENBOT_BUILD_VERSION") as string }
       : {}),
     composioApiKey: optional(environment, "COMPOSIO_API_KEY"),
+    ...brokerProviderConfig(environment),
     publicUrl,
     appUrl,
     tenantPackageDirectory:

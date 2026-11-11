@@ -87,6 +87,14 @@ tests/approvals-store.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/apps-page-wording.test.ts
+tests/arcade-classify.test.ts
+tests/arcade-config.test.ts
+tests/arcade-errors.test.ts
+tests/arcade-listing.test.ts
+tests/arcade-single-user.test.ts
+tests/arcade-transport-registry.test.ts
+tests/arcade-transport.test.ts
+tests/arcade-verifier-notice.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
 tests/assertion-shape.test.ts
@@ -501,7 +509,9 @@ tests/provider-error-run-error.test.ts
 tests/provider-oauth-lock-helper.test.ts
 tests/provider-oauth.test.ts
 tests/provider-refusal.test.ts
+tests/provider-selection.test.ts
 tests/provider-tool-schemas.test.ts
+tests/provider-undecided.test.ts
 tests/qoderwake-package.test.ts
 tests/question-answer-in-conversation.integration.test.ts
 tests/quota-concurrency.integration.test.ts
