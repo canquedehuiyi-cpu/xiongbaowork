@@ -3607,6 +3607,10 @@ export function createPluginRoutes(
    * before anything is written. An owner's self-service install (a listed app, `enablementDecision`)
    * sets the owner's audience where the admin lets owners decide ({@link approveOwnersSharedUse}),
    * as `/give` does. A Bot with no owner has nowhere to record either, and its calls stay refused.
+   *
+   * On the personal edition an action turned off is asked {@link personalRevokeRefusalFor} first, as
+   * `DELETE /grants` asks it (X4): a Bot the personal defaults keep whole holds every action of every
+   * connected app, so turning one off is refused rather than answered and put back on the next run.
    */
   routes.post(
     "/for/:agentId/apps/:app/grants",
@@ -3655,6 +3659,17 @@ export function createPluginRoutes(
           else selfService.set(ref, decision.selfService);
         }
         for (const ref of remove) {
+          // 个人版里个人默认管着的员工每个动作都持有，关掉一个会被拒绝，和 `DELETE /grants` 一样（X4）。
+          const personal = await personalRevokeRefusalFor(
+            store,
+            "mcp",
+            ref,
+            agentId,
+          );
+          if (personal) {
+            problems.push({ ref, error: personal });
+            continue;
+          }
           const decision = await enablementDecision(
             context,
             "mcp",

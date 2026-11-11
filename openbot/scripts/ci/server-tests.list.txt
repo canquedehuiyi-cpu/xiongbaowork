@@ -277,6 +277,7 @@ tests/email-domain.test.ts
 tests/email-signup.test.ts
 tests/employee-tool-permissions-migration.integration.test.ts
 tests/encrypt-sso-config.test.ts
+tests/enterprise-allowlist-always-on.test.ts
 tests/enterprise-controls.integration.test.ts
 tests/enterprise-controls.test.ts
 tests/enterprise-frames.integration.test.ts
@@ -430,6 +431,7 @@ tests/people-paging.integration.test.ts
 tests/people-routes.test.ts
 tests/persona.test.ts
 tests/personal-activity-report.integration.test.ts
+tests/personal-batch-revoke.integration.test.ts
 tests/personal-defaults-boundaries.integration.test.ts
 tests/personal-defaults-scope.integration.test.ts
 tests/personal-defaults.integration.test.ts
