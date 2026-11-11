@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import { connectAccountMutationOptions } from "@/lib/plugins/mutations";
 import {
   appKeyOf,
@@ -101,7 +102,7 @@ function RouteComponent() {
    * all: the deployment recorded how it is reached when the app was enabled, and that record is the
    * only thing here that knows.
    */
-  const brokered = server?.provenance === "composio";
+  const brokered = isBrokeredProvenance(server?.provenance);
 
   /* Everything the brokered row below reads and does. See `brokered-account-row.tsx`. */
   const brokeredAccount = useBrokeredAccount({
