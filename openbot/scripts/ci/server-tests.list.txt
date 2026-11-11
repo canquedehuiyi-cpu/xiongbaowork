@@ -36,6 +36,9 @@ tests/agent-tool-call-input.test.ts
 tests/app-access-requests.integration.test.ts
 tests/app-access-routes.integration.test.ts
 tests/app-discovery.test.ts
+tests/app-grants-describe.integration.test.ts
+tests/app-grants-rules.test.ts
+tests/approval-account-binding.integration.test.ts
 tests/approval-activity-words.integration.test.ts
 tests/approval-continuation-preparation-transaction.integration.test.ts
 tests/approval-continuation-store.integration.test.ts
@@ -51,6 +54,9 @@ tests/approval-open-transaction.integration.test.ts
 tests/approval-outcomes-for-person.test.ts
 tests/approval-recovery-port.integration.test.ts
 tests/approval-recovery-port.test.ts
+tests/approval-rule-backtest.test.ts
+tests/approval-rule-translate.test.ts
+tests/approval-rules-save.integration.test.ts
 tests/approvals-account.integration.test.ts
 tests/approvals-ask-once.test.ts
 tests/approvals-confirm-receipt.test.ts
@@ -67,6 +73,7 @@ tests/approvals-execute.test.ts
 tests/approvals-frontend.test.ts
 tests/approvals-interactive.integration.test.ts
 tests/approvals-native.test.ts
+tests/approvals-open-by-default.integration.test.ts
 tests/approvals-policy.integration.test.ts
 tests/approvals-policy.test.ts
 tests/approvals-question-board.test.ts
@@ -116,13 +123,16 @@ tests/attachment-routes.test.ts
 tests/attachment-store.test.ts
 tests/attachment-sweeper.test.ts
 tests/audit-approval-outcomes.integration.test.ts
+tests/audit-ask.test.ts
 tests/audit-bot-filter.integration.test.ts
 tests/audit-cursor.integration.test.ts
 tests/audit-cursor.test.ts
 tests/audit-export.test.ts
 tests/audit-initiator.integration.test.ts
 tests/audit-limit.test.ts
+tests/audit-payload-filters.integration.test.ts
 tests/audit-retention.integration.test.ts
+tests/audit-rule-name.integration.test.ts
 tests/audit-words.test.ts
 tests/audit.test.ts
 tests/auth-audit-tenant.integration.test.ts
@@ -152,6 +162,7 @@ tests/bot-lifecycle-audit.test.ts
 tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
+tests/boundaries-replay.integration.test.ts
 tests/brokered-accounts-schema.integration.test.ts
 tests/brokered-multiple-accounts.integration.test.ts
 tests/brokered-relist.integration.test.ts
@@ -243,6 +254,7 @@ tests/content-governance.test.ts
 tests/continuation-target-local.test.ts
 tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts
+tests/conversation-rename.integration.test.ts
 tests/conversation-title.integration.test.ts
 tests/copilot-forwarded-headers.test.ts
 tests/copilot-runtime-frames.integration.test.ts
@@ -378,6 +390,8 @@ tests/learning-scopes.test.ts
 tests/learning-settings.integration.test.ts
 tests/learning-settings.test.ts
 tests/learning-sharing.integration.test.ts
+tests/local-learning-propose.test.ts
+tests/local-learning.integration.test.ts
 tests/local-threads.test.ts
 tests/mastra-roster.test.ts
 tests/mcp-grant-removal.integration.test.ts
@@ -405,11 +419,14 @@ tests/model-choice.integration.test.ts
 tests/model-e2e-reconcile.test.ts
 tests/model-e2e-workflow.test.ts
 tests/model-library-routes.test.ts
+tests/model-picker-every-sign-in.test.ts
 tests/model-probe.test.ts
 tests/model-providers.test.ts
 tests/model-registry.test.ts
 tests/model-token-metering.test.ts
 tests/name-context.test.ts
+tests/network-allowlist-replay.integration.test.ts
+tests/network-allowlist-translate.test.ts
 tests/new-bot-without-managed-bot.integration.test.ts
 tests/oauth-refresh-redirect.test.ts
 tests/offboarding-retirement.integration.test.ts
@@ -425,6 +442,7 @@ tests/own-app-tools-refresh.integration.test.ts
 tests/owner-assembly-audit.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
+tests/parallel-tool-results.test.ts
 tests/passwords-sign-in.test.ts
 tests/passwords-store.integration.test.ts
 tests/people-last-sign-in.integration.test.ts
@@ -481,7 +499,9 @@ tests/plugins-mcp-admin.integration.test.ts
 tests/policy-dry-run.test.ts
 tests/policy-durability.integration.test.ts
 tests/policy-fanout.integration.test.ts
+tests/policy-rule-check.test.ts
 tests/policy-store-tenant.integration.test.ts
+tests/policy-translate.test.ts
 tests/portrait-coworker-access.test.ts
 tests/portrait-image.test.ts
 tests/portraits.test.ts
@@ -530,6 +550,7 @@ tests/recorder-sessions-ended.integration.test.ts
 tests/recorder-sign-out.integration.test.ts
 tests/recorder-single-user.integration.test.ts
 tests/recorder-trajectory-bindings.integration.test.ts
+tests/recorder-trajectory-connect.test.ts
 tests/recorder-trajectory-gate.test.ts
 tests/recovery-ap2-parent-schema-reconcile.test.ts
 tests/recovery-approval-direct-execution-domains.test.ts
@@ -578,6 +599,7 @@ tests/responsibility-triggers.integration.test.ts
 tests/responsibility-triggers.test.ts
 tests/restart-recovery-sweep.integration.test.ts
 tests/restart-recovery-sweep.test.ts
+tests/reviewer-guidance.integration.test.ts
 tests/rls-role.test.ts
 tests/rls-write-scope.test.ts
 tests/role-bible-prompt.test.ts
@@ -588,6 +610,7 @@ tests/role-writer-lifecycle.test.ts
 tests/roles.test.ts
 tests/route-ids-validation.test.ts
 tests/routine-conversation.integration.test.ts
+tests/routine-create-from-page.integration.test.ts
 tests/routine-create.integration.test.ts
 tests/routine-endpoint.test.ts
 tests/routine-routes.test.ts
@@ -606,12 +629,14 @@ tests/routing-model-url.test.ts
 tests/routing-routes.test.ts
 tests/routing-service.test.ts
 tests/run-built-agent-cancellation.test.ts
+tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
 tests/run-model.test.ts
 tests/runner-browser-probe.test.ts
 tests/runner-browser.test.ts
 tests/runner-channel.test.ts
 tests/runner-dispatch.test.ts
+tests/runs-that-finish.test.ts
 tests/runtime-agents.integration.test.ts
 tests/runtime-own-runs.test.ts
 tests/sandboxed-components.integration.test.ts
@@ -627,6 +652,7 @@ tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
 tests/shared-brokered-accounts.integration.test.ts
 tests/shared-computer-run.integration.test.ts
+tests/shipped-bot-instructions.test.ts
 tests/single-user.test.ts
 tests/skill-ownership.integration.test.ts
 tests/skill-tenant-slugs.integration.test.ts
@@ -683,6 +709,7 @@ tests/thread-identity.test.ts
 tests/thread-routes.test.ts
 tests/thread-status.test.ts
 tests/three-tenant-demo.integration.test.ts
+tests/tool-calls-come-back.integration.test.ts
 tests/tool-chooser-sign-in.test.ts
 tests/tool-images.test.ts
 tests/tool-search.test.ts
@@ -726,5 +753,9 @@ tests/wakerflow-versions.integration.test.ts
 tests/wakerflows-store.integration.test.ts
 tests/web-bot-auth.test.ts
 tests/web-research.test.ts
+tests/what-if-boundary-words.test.ts
+tests/what-if.integration.test.ts
+tests/who-can-check.test.ts
+tests/who-can.integration.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts

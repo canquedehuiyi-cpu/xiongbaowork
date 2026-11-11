@@ -23,7 +23,7 @@ import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import type { AgentProfileStore } from "../src/agents/profile-store";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";
-import { initializeDevActorUser } from "../src/auth/dev-actor";
+import { DEV_ACTOR, initializeDevActorUser } from "../src/auth/dev-actor";
 import type { RoleRepository } from "../src/auth/guards";
 import { createStallGuard } from "../src/channels/stall-guard";
 import { loadConfig } from "../src/config";
@@ -47,10 +47,17 @@ const RECORDER_ORIGIN = `chrome-extension://${RECORDER_EXTENSION_ID}`;
 const INSTALL_ID = "e".repeat(32);
 
 /** What the stand-in for Intelligence was asked: its trajectory joins, and the sockets opened on its gateway. */
-const joins: Array<{ trajectoryId: string; appUserId: string }> = [];
+const joins: Array<{
+  trajectoryId: string;
+  appUserId: string;
+  learningContainerIds?: string[];
+}> = [];
 const gatewaySockets: Array<{ path: string; search: string }> = [];
+/** Set to answer the next join as an Intelligence without Trajectories would. */
+let refuseNextJoin = false;
 
 let intelligence: ReturnType<typeof Bun.serve>;
+let intelligencePort: number;
 let openbot: { stop(closeActiveConnections?: boolean): Promise<void> };
 let port: number;
 let token: string;
@@ -58,7 +65,7 @@ const trajectories: string[] = [];
 const guard = createStallGuard({ stallMs: 0 });
 
 beforeAll(async () => {
-  const intelligencePort = await reservePort();
+  intelligencePort = await reservePort();
   intelligence = Bun.serve({
     port: intelligencePort,
     hostname: "127.0.0.1",
@@ -73,6 +80,18 @@ beforeAll(async () => {
       if (url.pathname === "/api/entitlements/runtime")
         return Response.json({ status: "valid" });
       if (url.pathname === "/api/trajectories/join") {
+        if (refuseNextJoin) {
+          refuseNextJoin = false;
+          return Response.json(
+            {
+              error: {
+                code: "TRAJECTORIES_NOT_ENABLED",
+                message: "Trajectories are not enabled for this project.",
+              },
+            },
+            { status: 403 },
+          );
+        }
         const body = (await request.json()) as (typeof joins)[number];
         joins.push(body);
         return Response.json({
@@ -247,16 +266,105 @@ function pass(headers: Record<string, string> = {}) {
   );
 }
 
+describe("the Recorder's capture pass, answered by OpenBot with Intelligence configured", () => {
+  /*
+   * The runtime here keeps its threads in its own runner, and the runtime's handler refuses every
+   * pass on such a runtime (INTELLIGENCE_RUNTIME_REQUIRED). OpenBot answers the pass itself
+   * (recorder/trajectory-connect.ts), and this is that answer end to end: the person's recording joins
+   * their own Learning space, and nothing else does.
+   */
+  test("joins the recording to the person's own Learning space", async () => {
+    const before = joins.length;
+    const answer = await pass();
+
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get("cache-control")).toBe("no-store");
+    // The runtime's CORS answer, though the runtime did not write this response.
+    expect(answer.headers.get("access-control-allow-origin")).toBe(
+      RECORDER_ORIGIN,
+    );
+    const grant = (await answer.json()) as {
+      joinToken: string;
+      realtime: { clientUrl: string; topic: string };
+    };
+    const trajectoryId = trajectories.at(-1);
+    expect(grant.joinToken).toBe(`join-${joins.length}`);
+    expect(grant.realtime.topic).toBe(`trajectory:${trajectoryId}`);
+    expect(joins.length).toBe(before + 1);
+    expect(joins.at(-1)).toEqual({
+      trajectoryId: trajectoryId as string,
+      appUserId: DEV_ACTOR.id,
+      learningContainerIds: [personalLearningContainerId(DEV_ACTOR.id)],
+    });
+  });
+
+  test("a browser that is not connected is refused before Intelligence is asked", async () => {
+    const before = joins.length;
+    const answer = await pass({ authorization: "Bearer not-a-recorder-token" });
+
+    expect(answer.status).toBe(401);
+    expect(joins.length).toBe(before);
+  });
+
+  test("a signed-in page with no Recorder token gets no pass, and Intelligence is not asked", async () => {
+    const before = joins.length;
+    const trajectoryId = randomUUID();
+    trajectories.push(trajectoryId);
+
+    const answer = await fetch(
+      `http://127.0.0.1:${port}${recorderPaths.trajectoryConnect(trajectoryId)}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${port}`,
+        },
+        body: "{}",
+      },
+    );
+
+    expect(answer.status).toBe(401);
+    expect(joins.length).toBe(before);
+  });
+
+  test("another site's page is answered without CORS, so it cannot read the grant", async () => {
+    const answer = await pass({ origin: "https://elsewhere.example" });
+
+    expect(answer.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  test("Intelligence's refusal reaches the Recorder in the runtime's own words", async () => {
+    refuseNextJoin = true;
+    const answer = await pass();
+
+    expect(answer.status).toBe(403);
+    expect(await answer.json()).toEqual({
+      code: "TRAJECTORIES_NOT_ENABLED",
+      message: "Trajectories are not enabled for this project.",
+    });
+  });
+});
+
 describe("the Recorder's capture pass over a port-forward, with no public URL", () => {
   // M3: "names the gateway socket as a whole address on OpenBot" and "that address carries the
   // Recorder's socket through to the gateway" are not kept: they need the Intelligence gateway proxy
-  // (INTELLIGENCE_GATEWAY_PROXY) and a runtime on Intelligence, which the fork does not adopt (its
-  // runtime runs on its own thread runner, so the capture pass answers INTELLIGENCE_RUNTIME_REQUIRED).
+  // (INTELLIGENCE_GATEWAY_PROXY), which the fork does not adopt.
+  /*
+   * With the gateway proxy (upstream) the grant's address was made from the origin the Recorder
+   * reached, so a name this machine does not answer to had to get no grant at all. Without it (here)
+   * the address is the configured gateway's, whatever the request says it is for: the pass is granted,
+   * and the name the request carried appears nowhere in it.
+   */
   test("never makes the address out of a name this machine does not answer to", async () => {
     const answer = await pass({ host: "openbot.attacker.example" });
 
-    expect(answer.status).not.toBe(200);
-    expect(await answer.text()).not.toContain("attacker");
+    const text = await answer.text();
+    expect(text).not.toContain("attacker");
+    expect(answer.status).toBe(200);
+    const grant = JSON.parse(text) as { realtime: { clientUrl: string } };
+    expect(new URL(grant.realtime.clientUrl).host).toBe(
+      `127.0.0.1:${intelligencePort}`,
+    );
   });
 
   // M3: "leaves the page's address a path" is not kept: the page's socket path comes from the
