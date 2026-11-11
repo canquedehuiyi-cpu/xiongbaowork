@@ -1472,7 +1472,7 @@ const requirementName = (value: unknown): string | undefined | null =>
 
 const moreThanOneRequirement = (toolkit: string) =>
   new BrokerRefusalError(
-    `${toolkit} 的动作要登录不止一个账号，没法一次全部连接。请在连接页里逐个授权你要用的动作。`,
+    `${toolkit} 的动作要登录不止一个账号，这里还不能连接它。没有动你的账号。`,
   );
 
 type RequirementNames = Omit<WholeAppRequirement, "oauth2">;
@@ -1498,7 +1498,7 @@ function mergedRequirement(
 
 const unreadableRequirement = (toolkit: string) =>
   new BrokerRefusalError(
-    `OpenBot 读不懂 ${toolkit} 的某个动作需要什么，所以没法一次连接整个 ${toolkit}。没有动你的账号。请在连接页里逐个授权你要用的动作。`,
+    `OpenBot 读不懂 ${toolkit} 的某个动作需要什么，所以这里还不能连接 ${toolkit}。没有动你的账号。`,
   );
 
 /**

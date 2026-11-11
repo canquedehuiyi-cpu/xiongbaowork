@@ -539,34 +539,38 @@ describe("POST /servers/:id/authorize", () => {
     await cancel({ id: EVE }, GMAIL);
   });
 
-  test("an app whose actions sign in to more than one account cannot be connected at once, and is authorized one action at a time", async () => {
-    // adapter 对这样的应用拒绝整应用连接（动作分属两个认证提供商实例），句子指向逐个授权。
-    const sentence = `${GMAIL} 的动作要登录不止一个账号，没法一次全部连接。请在连接页里逐个授权你要用的动作。`;
+  test("an app whose actions sign in to more than one account is neither connected nor authorized one action at a time", async () => {
+    // 动作分属两个认证提供商实例：之后的断开、确认、列账号都要先知道连接在哪个提供商下，厂商对这种应用
+    // 答不出，所以两条路都在铸任何东西之前拒绝。
+    const sentence = `${GMAIL} 的动作要登录不止一个账号，这里还不能连接它。没有动你的账号。`;
     const mintedBefore = state.minted.length;
     const wasAuthorize = arcade.authorize;
+    const wasProvider = arcade.authProviderOf;
     arcade.authorize = async (request) => {
       if (!request.action) throw new BrokerRefusalError(sentence);
       return wasAuthorize(request);
     };
+    arcade.authProviderOf = async () => null;
     try {
       const whole = await call({ id: EVE }, `/servers/${app(GMAIL)}/connect`, {
         method: "POST",
       });
       expect(whole.status).toBe(503);
       expect(((await whole.json()) as { error: string }).error).toBe(sentence);
-      expect(state.minted).toHaveLength(mintedBefore);
 
       const one = await authorize({ id: EVE }, GMAIL, "Gmail.ListEmails");
-      expect(one.status).toBe(200);
-      expect(state.minted.at(-1)).toEqual({
-        userId: EVE,
-        toolkit: GMAIL,
-        action: "Gmail.ListEmails",
-      });
+      expect(one.status).toBe(409);
+      expect(await one.text()).not.toMatch(/arcade/i);
+      expect(state.minted).toHaveLength(mintedBefore);
     } finally {
       arcade.authorize = wasAuthorize;
-      await cancel({ id: EVE }, GMAIL);
+      arcade.authProviderOf = wasProvider;
     }
+    // 只有一个认证提供商时照常可以授权（并取消，留下的尝试与之后的用例期待的一样）。
+    expect(
+      (await authorize({ id: EVE }, GMAIL, "Gmail.ListEmails")).status,
+    ).toBe(200);
+    await cancel({ id: EVE }, GMAIL);
   });
 
   test("an app that needs no account, or is not an Arcade app, has nothing to authorize", async () => {

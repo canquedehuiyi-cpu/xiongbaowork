@@ -1579,6 +1579,8 @@ export function createPluginRoutes(
     context: Context<{ Variables: AppVariables }>,
     toolkit: string,
     title: string,
+    /** 重新连接的是他的第二个账号时，那个账号在厂商那边的 id。 */
+    vendorUserId?: string,
   ): Promise<Response> => {
     let recorded: { connected: boolean };
     try {
@@ -1586,6 +1588,7 @@ export function createPluginRoutes(
         toolkit,
         userId: context.var.actor.id,
         by: context.var.actor.id,
+        ...(vendorUserId ? { vendorUserId } : {}),
       });
     } catch (error) {
       const refusal = personRefusal(
@@ -2382,6 +2385,19 @@ export function createPluginRoutes(
           );
           return context.json({ error: refusal.error }, refusal.status);
         }
+        /*
+         * 卡片上的「重新连接」点名了他的哪一个账号（`?account=<账号表的行 id>`，调用被拒的是他的第二个
+         * 账号时卡片带着它）：授权那个账号，而不是他名字下的。行必须是他自己在这个应用上的；别的一律答
+         * 没有这个账号，什么都不铸。
+         */
+        const named = context.req.query("account");
+        const chosen =
+          !shared && !another && named
+            ? await store.personAccountByRow(toolkit, holderId, named)
+            : null;
+        if (!shared && !another && named && !chosen) {
+          return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
+        }
         return startArcadeAuthorization(
           context,
           { store, arcade: composio.arcade, appUrl: connect.appUrl },
@@ -2397,7 +2413,7 @@ export function createPluginRoutes(
                 ? { holder: "deployment", vendorUserId: holderId }
                 : another
                   ? anotherArcadeAccount(store.personAccount(holderId))
-                  : store.personAccount(holderId),
+                  : (chosen ?? store.personAccount(holderId)),
             toolkit,
             title: row.title,
             returnUrl,
@@ -2414,7 +2430,13 @@ export function createPluginRoutes(
                     })
                 : another
                   ? undefined
-                  : () => adoptHeldAccount(context, toolkit, row.title),
+                  : () =>
+                      adoptHeldAccount(
+                        context,
+                        toolkit,
+                        row.title,
+                        chosen?.vendorUserId,
+                      ),
           },
         );
       }

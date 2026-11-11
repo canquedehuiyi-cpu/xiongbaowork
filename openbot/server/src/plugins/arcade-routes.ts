@@ -760,10 +760,17 @@ export function mountArcadeRoutes(
     }
     const app = await store.appAccount(toolkit);
     if (app?.mode !== "shared") {
+      /*
+       * 他调用时实际用的那个账号（默认账号；设成了第二个账号就是第二个），授权清单与逐个动作授权都问它：
+       * 否则授权加在名字下的账号上，调用却跑在默认的第二个账号上，两边对不上。
+       */
       return {
         toolkit,
         title: row.title,
-        account: store.personAccount(context.var.actor.id),
+        account: await store.defaultPersonAccount(
+          toolkit,
+          context.var.actor.id,
+        ),
       };
     }
     let writer =
@@ -894,6 +901,22 @@ export function mountArcadeRoutes(
       !(await current.store.serverPublishesAction(serverId, action))
     ) {
       return context.json({ error: `${title} 没有这个名字的动作。` }, 400);
+    }
+    /*
+     * 动作分属不止一个认证提供商（或读不出属于哪一个）的应用，这里不授权：之后的断开、确认、列账号都要
+     * 先知道连接记在哪个提供商下，对这样的应用厂商的回答是拒绝，授权下来的连接就成了谁也结束不了的。
+     * 与整应用的「连接」对这种应用的拒绝一致，在铸任何东西之前。
+     */
+    const provider = await withVendorDeadline(() =>
+      current.arcade.authProviderOf(toolkit),
+    ).catch(() => null);
+    if (!provider) {
+      return context.json(
+        {
+          error: `${title} 的动作要登录不止一个账号，或者读不出它们登录的是哪一个，这里还不能授权它。没有动你的账号。`,
+        },
+        409,
+      );
     }
     if (!current.appUrl) {
       return context.json(

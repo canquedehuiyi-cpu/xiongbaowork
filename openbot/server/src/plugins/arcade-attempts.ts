@@ -327,6 +327,26 @@ export function createArcadeAttempts(context: {
               ),
             );
           reconnected = existing !== undefined;
+          /*
+           * 这个第二个账号原本就记着（它的「重新连接」，比如调用被拒后卡片上的那一按），还是第一次加上。
+           * 重新连接要前移连接日期，卡片据此知道已经做过；第一次加上的不是这条连接的重新连接，不动日期。
+           */
+          const furtherKnown =
+            further !== null &&
+            (
+              await transaction
+                .select({ id: brokeredAccounts.id })
+                .from(brokeredAccounts)
+                .where(
+                  and(
+                    eq(brokeredAccounts.provider, provider),
+                    eq(brokeredAccounts.app, input.toolkit),
+                    eq(brokeredAccounts.userId, further.userId),
+                    eq(brokeredAccounts.vendorUserId, further.vendorUserId),
+                  ),
+                )
+                .limit(1)
+            ).length > 0;
           const set = {
             verified: true,
             verifiedAt: now,
@@ -350,9 +370,10 @@ export function createArcadeAttempts(context: {
               target: [composioConnections.toolkit, composioConnections.userId],
               /*
                * 在已有的连接上又同意了一次（重新连接）：连接日期前移，卡片据此知道「重新连接」已经做过，
-               * 不再提示。另一个账号的同意不动这个日期，它不是这条连接的重新连接。
+               * 不再提示。第一次加上的第二个账号不动这个日期，它不是这条连接的重新连接。
                */
-              set: further ? set : { ...set, connectedAt: now },
+              set:
+                further && !furtherKnown ? set : { ...set, connectedAt: now },
             });
           if (further) {
             /*
@@ -417,7 +438,11 @@ export function createArcadeAttempts(context: {
           const updated = await transaction
             .update(mcpServers)
             .set({
-              sharedConnectedAt: sql`coalesce(${mcpServers.sharedConnectedAt}, ${now})`,
+              /*
+               * 连接日期前移：团队账号就地重新连接后，卡片据此知道已经重新连接过，不再显示「断开」。连接人
+               * 保留最初连接的那位管理员（这次是谁写在审计里）。
+               */
+              sharedConnectedAt: now,
               sharedConnectedBy: sql`coalesce(${mcpServers.sharedConnectedBy}, ${input.actorId})`,
               sharedVerified: true,
               sharedVerifiedAt: now,

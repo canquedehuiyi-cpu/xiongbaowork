@@ -308,12 +308,17 @@ only; anybody else sees the state with an empty list. The action has
 to be one the app publishes, spelled as Arcade spells it (`Gmail.SendEmail`, case and all). The
 consent comes back through the same verifier, bound to whoever pressed it, records the connection
 and lands on the app's page with `?action=<name>`. `GET /api/plugins` says `authorizesPerAction:
-true` where these routes are live, which is where Arcade is the wired broker. Two things follow:
+true` where these routes are live, which is where Arcade is the wired broker. Both the list and the
+consent are for the account the person's calls run in: their default account, which is their
+second one if they made it the default. Two things follow:
 
-- An app whose actions name more than one auth provider instance cannot be connected in one
-  consent, and Connect says so. Its actions are authorized one at a time instead.
 - On a provider with per-request scopes, approving actions one at a time is how a person grants
   less than the whole app; see [Least privilege](#least-privilege-is-not-an-arcade-property).
+- **与上游不同:** an app whose actions name more than one auth provider instance, or whose
+  provider cannot be read, is refused by Connect and by Authorize alike, before anything is minted.
+  Upstream authorizes such an app one action at a time; here a connection made that way could not
+  be disconnected, confirmed or listed, because each of those has to know which provider the
+  connection is held under, and Arcade's answer for such an app is a refusal.
 
 A Shared app's team account is read and authorized by an administrator only, and only one who holds
 the admin capability at that moment: a session that says admin after the role was taken away is
@@ -355,8 +360,16 @@ other actions, which is what approving one action at a time leaves, or does not 
 the row stays and those actions go on working. Reconnect is Connect again:
 `POST /servers/:id/connect` over a connection that stands asks for the whole app under the same
 account, with no Disconnect first, and when the consent comes back the connection's date moves
-forward so the card stops offering it. A connected Shared app is reconnected in place the same way,
-by an administrator.
+forward so the card stops offering it. Where the refused call ran in the person's second account,
+the card names that account (`account`, the row id from the accounts page), and
+`POST /servers/:id/connect?account=<id>` reconnects that account rather than the person's own one.
+A connected Shared app is reconnected in place the same way, by an administrator; its connection
+date moves forward and the administrator who connected it first stays on record.
+
+**An app whose every account is gone at Arcade has its account rows forgotten with its connection**,
+and the accounts page of an app the person has no connection on lists nothing. An old row there
+would otherwise offer a Disconnect that ends the person's connection to a different app on the same
+auth provider.
 
 ### Toolkits are curated or they are wrappers, and the difference was measured
 
@@ -552,16 +565,18 @@ Everything above that is marked, in one place:
 3. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
    person as a generic failure and the address is in the startup warning and the log.
 4. **An Arcade row is written verified, dated the day of the consent.**
-5. **A Shared app's grant list is read by an administrator only**, as its per-action Authorize is;
+5. **An app whose actions name more than one auth provider instance is neither connected nor
+   authorized one action at a time.**
+6. **A Shared app's grant list is read by an administrator only**, as its per-action Authorize is;
    upstream lets any member read it. The pre-redirect consent copy that names the permission being
    asked for is the web app's and is not here yet.
-6. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
+7. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
    `/settings/connected-accounts`, rows in `composio_connections` and on `mcp_servers`; the return
    leg's reason is not yet shown as a sentence; Composio's "deployment's own OAuth client" answers
    409 on Arcade. The server answers what upstream's pages read (the grant list, the siblings a
    disconnect would end, the classification counts, the Reconnect card's marker), and the pages
    that draw the action list, the sibling warning and the classification warning are not here yet.
-7. **None of upstream's live measurements has been repeated by this fork.**
+8. **None of upstream's live measurements has been repeated by this fork.**
 
 ## What is unproven
 

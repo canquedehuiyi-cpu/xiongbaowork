@@ -63,6 +63,11 @@ const PEOPLE = [
   "bystander-remove",
   "page",
   "keeps",
+  "named",
+  "chooser",
+  "card",
+  "stale",
+  "routekeeps",
 ].map(person);
 const toolkitFor = (name: string) => `${name}${suite}`;
 const app = (toolkit: string) => `arcade-${toolkit}`;
@@ -855,5 +860,292 @@ describe("a team consent whose team identity was replaced while it was being giv
 
     expect(reason).toBe("cancelled");
     expect(state.revoked).toEqual([`${TEAM}/google`]);
+  });
+});
+
+/** 给这个人建一个员工，并把这个应用的 `ListEmails` 给它；答员工 id。 */
+async function botFor(who: string, toolkit: string) {
+  const bot = `${BOT}-${who}`;
+  await platform(() =>
+    database
+      .insert(agents)
+      .values({
+        id: bot,
+        tenantId: who,
+        name: "Helper",
+        type: "built_in",
+        configuration: {},
+      })
+      .onConflictDoNothing(),
+  );
+  await as(who, () =>
+    store.grant("mcp", `${app(toolkit)}/ListEmails`, bot, who),
+  );
+  return bot;
+}
+const listAs = (who: string, bot: string, toolkit: string, account?: string) =>
+  as(who, () =>
+    store.callTool({
+      ref: `${app(toolkit)}/ListEmails`,
+      args: account ? { account } : {},
+      botId: bot,
+      actorId: who,
+    }),
+  );
+/** 账号页上的账号：行 id 与地址。 */
+const accountsPage = async (who: string, toolkit: string) =>
+  (
+    (await (
+      await call({ id: who }, `/servers/${app(toolkit)}/accounts`)
+    ).json()) as { accounts: { id: string; label: string }[] }
+  ).accounts;
+
+describe("naming an account the accounts page never listed", () => {
+  test("syncs first, so the person's original address and the second one both run in their own account", async () => {
+    const who = person("named");
+    const toolkit = toolkitFor("NamedMail");
+    await enable(toolkit);
+    const bot = await botFor(who, toolkit);
+    const second = await twoAccounts(who, toolkit);
+    reached.length = 0;
+
+    await listAs(who, bot, toolkit, `${who}@work.example`);
+    await listAs(who, bot, toolkit, `${who}@home.example`);
+
+    expect(reached).toEqual([who, second]);
+  });
+});
+
+describe("the account a person's calls run in", () => {
+  test("is the one the grant list reads and the one an action is authorized for, once the second account is the default", async () => {
+    const who = person("chooser");
+    const toolkit = toolkitFor("ChooserMail");
+    await enable(toolkit);
+    const bot = await botFor(who, toolkit);
+    const second = await twoAccounts(who, toolkit);
+    const home = (await accountsPage(who, toolkit)).find(
+      (account) => account.label === `${who}@home.example`,
+    );
+    await call(
+      { id: who },
+      `/servers/${app(toolkit)}/accounts/${home?.id}/default`,
+      {
+        method: "POST",
+      },
+    );
+    reached.length = 0;
+    await listAs(who, bot, toolkit);
+    expect(reached).toEqual([second]);
+
+    state.grantReads.length = 0;
+    await call({ id: who }, `/servers/${app(toolkit)}/grants`);
+    expect(state.grantReads.map((read) => read.vendorUserId)).toEqual([second]);
+
+    const pressed = await call(
+      { id: who },
+      `/servers/${app(toolkit)}/authorize`,
+      {
+        method: "POST",
+        body: JSON.stringify({ action: `${toolkit}.ListEmails` }),
+      },
+    );
+    expect(pressed.status).toBe(200);
+    expect(state.minted.at(-1)).toEqual({
+      userId: second,
+      toolkit,
+      action: `${toolkit}.ListEmails`,
+    });
+    await call({ id: who }, `/servers/${app(toolkit)}/authorize`, {
+      method: "DELETE",
+    });
+  });
+});
+
+describe("a call refused on the person's second account", () => {
+  const who = person("card");
+  const toolkit = toolkitFor("CardMail");
+  let second = "";
+  let homeRow = "";
+
+  test("carries that account on the Reconnect card", async () => {
+    await enable(toolkit);
+    const bot = await botFor(who, toolkit);
+    second = await twoAccounts(who, toolkit);
+    homeRow =
+      (await accountsPage(who, toolkit)).find(
+        (account) => account.label === `${who}@home.example`,
+      )?.id ?? "";
+    nextCall = notAllowed();
+
+    const refusal = await refusalOf(
+      listAs(who, bot, toolkit, `${who}@home.example`),
+    );
+
+    const card = readConnectPrompt(refusal ?? "");
+    expect(card?.reason).toBe("reconnect");
+    expect(card?.account).toBe(homeRow);
+  });
+
+  test("Reconnect for that account asks Arcade about that account, not the person's own one", async () => {
+    // 名字下的那个早就持有全部权限：按卡片的「重新连接」不能因此报成已连接。
+    state.held.add(`${who}/${toolkit}`);
+    const mintedBefore = state.minted.length;
+
+    const pressed = await call(
+      { id: who },
+      `/servers/${app(toolkit)}/connect?account=${homeRow}`,
+      { method: "POST" },
+    );
+
+    expect(pressed.status).toBe(200);
+    expect(Object.keys((await pressed.json()) as object)).toEqual([
+      "authorizationUrl",
+    ]);
+    expect(state.minted.slice(mintedBefore)).toEqual([
+      { userId: second, toolkit, action: null },
+    ]);
+    await call({ id: who }, `/servers/${app(toolkit)}/authorize`, {
+      method: "DELETE",
+    });
+    state.held.delete(`${who}/${toolkit}`);
+  });
+
+  test("where Arcade already holds everything for that account, the reconnection is recorded for it", async () => {
+    state.held.add(`${second}/${toolkit}`);
+    const before = await platform(async () => {
+      const [row] = await database
+        .select({ connectedAt: composioConnections.connectedAt })
+        .from(composioConnections)
+        .where(
+          and(
+            eq(composioConnections.toolkit, toolkit),
+            eq(composioConnections.userId, who),
+          ),
+        );
+      return row?.connectedAt.getTime() ?? 0;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const pressed = await call(
+      { id: who },
+      `/servers/${app(toolkit)}/connect?account=${homeRow}`,
+      { method: "POST" },
+    );
+
+    expect(await pressed.json()).toEqual({ connected: true });
+    const after = await platform(async () => {
+      const [row] = await database
+        .select({ connectedAt: composioConnections.connectedAt })
+        .from(composioConnections)
+        .where(
+          and(
+            eq(composioConnections.toolkit, toolkit),
+            eq(composioConnections.userId, who),
+          ),
+        );
+      return row?.connectedAt.getTime() ?? 0;
+    });
+    expect(after).toBeGreaterThan(before);
+    state.held.delete(`${second}/${toolkit}`);
+  });
+
+  test("an account row that is not the person's is refused before anything is minted", async () => {
+    const mintedBefore = state.minted.length;
+    const pressed = await call(
+      { id: person("named") },
+      `/servers/${app(toolkit)}/connect?account=${homeRow}`,
+      { method: "POST" },
+    );
+    expect([404, 409]).toContain(pressed.status);
+    expect(state.minted).toHaveLength(mintedBefore);
+  });
+});
+
+describe("a team account reconnected in place", () => {
+  test("moves its connection date, so the card stops showing it disconnected, and keeps who connected it first", async () => {
+    const toolkit = toolkitFor("TeamDate");
+    await enable(toolkit, "shared");
+    await connectThrough({ id: ADMIN, admin: true }, toolkit);
+    const first = (await teamConnectedAt(toolkit))?.getTime() ?? 0;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    await connectThrough({ id: ADMIN, admin: true }, toolkit);
+
+    expect((await teamConnectedAt(toolkit))?.getTime() ?? 0).toBeGreaterThan(
+      first,
+    );
+    const [row] = await platform(() =>
+      database
+        .select({ connectedBy: mcpServers.sharedConnectedBy })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, app(toolkit))),
+    );
+    expect(row?.connectedBy).toBe(ADMIN);
+  });
+});
+
+describe("an app whose every account is gone", () => {
+  test("forgets the account rows with the connection, so its accounts page offers nothing to disconnect", async () => {
+    const who = person("stale");
+    const mail = toolkitFor("StaleMail");
+    const calendar = toolkitFor("StaleCalendar");
+    await enable(mail);
+    await enable(calendar);
+    const second = await twoAccounts(who, mail);
+    const rows = await accountsPage(who, mail);
+    expect(rows).toHaveLength(2);
+    state.connected.delete(`${who}/google`);
+    state.connected.delete(`${second}/google`);
+
+    const confirmed = await call(
+      { id: who },
+      `/servers/${app(mail)}/connection/confirm`,
+      { method: "POST" },
+    );
+    expect(await confirmed.json()).toEqual({ connected: false });
+    expect(await accountIdsOf(who, mail)).toEqual([]);
+
+    // 后来她在同一认证提供商下连上了日历；邮件的账号页是空的，旧的行 id 也断不了她的 Google 连接。
+    await connectThrough({ id: who }, calendar);
+    state.revoked.length = 0;
+    expect(await accountsPage(who, mail)).toEqual([]);
+    const pressed = await call(
+      { id: who },
+      `/servers/${app(mail)}/accounts/${rows[0]?.id}`,
+      { method: "DELETE" },
+    );
+    expect(pressed.status).toBe(404);
+    expect(state.revoked).toEqual([]);
+    expect(await connectionOf(who, calendar)).toBeDefined();
+  });
+});
+
+describe("disconnecting an app whose sibling holds a second account of its own", () => {
+  test("leaves that sibling connected, and its second account live", async () => {
+    const who = person("routekeeps");
+    const mail = toolkitFor("RouteMail");
+    const calendar = toolkitFor("RouteCalendar");
+    await enable(mail);
+    await enable(calendar);
+    await connectThrough({ id: who }, mail);
+    await connectThrough({ id: who }, calendar);
+    const second = await connectThrough({ id: who }, calendar, "?another=1");
+    state.revoked.length = 0;
+
+    const response = await call(
+      { id: who },
+      `/servers/${app(mail)}/connection`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    expect(
+      ((await response.json()) as { siblings: string[] }).siblings,
+    ).toEqual([]);
+    expect(state.revoked).toEqual([`${who}/google`]);
+    expect(state.connected.has(`${second}/google`)).toBe(true);
+    expect(await connectionOf(who, calendar)).toBeDefined();
+    expect(await accountIdsOf(who, calendar)).toEqual([second]);
   });
 });

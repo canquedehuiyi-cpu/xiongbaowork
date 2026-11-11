@@ -8794,10 +8794,20 @@ export function createPluginStore(options: PluginStoreOptions) {
       toolkit: string;
       userId: string;
       by: string;
+      /**
+       * 重新连接的是他的第二个账号（卡片上点名的那一个）时，那个账号在厂商那边的 id。它只能补一次重新
+       * 连接：这个应用上本来就要有他的连接行，没有就什么都不写。
+       */
+      vendorUserId?: string;
     }): Promise<{ connected: boolean }> {
       if (!broker) throw new BrokerUnconfiguredError();
+      const further =
+        input.vendorUserId !== undefined &&
+        input.vendorUserId !== vendorNameOf(input.userId)
+          ? input.vendorUserId
+          : null;
       const connected = await broker.isConnected({
-        userId: input.userId,
+        userId: further ?? input.userId,
         toolkit: input.toolkit,
       });
       if (!connected) return { connected: false };
@@ -8805,6 +8815,14 @@ export function createPluginStore(options: PluginStoreOptions) {
         eq(composioConnections.toolkit, input.toolkit),
         eq(composioConnections.userId, input.userId),
       );
+      if (further) {
+        const moved = await database
+          .update(composioConnections)
+          .set({ connectedAt: new Date(), updatedAt: new Date() })
+          .where(mine)
+          .returning({ toolkit: composioConnections.toolkit });
+        return { connected: moved.length > 0 };
+      }
       const [held] = await database
         .select({ toolkit: composioConnections.toolkit })
         .from(composioConnections)
@@ -8849,6 +8867,51 @@ export function createPluginStore(options: PluginStoreOptions) {
       userId: string,
     ): Promise<boolean> {
       return keepForOtherAccount(toolkit, userId);
+    },
+
+    /**
+     * 这个人在这个应用上调用实际会用的账号：账号表里的默认账号（`accounts.pick` 不点名时的那一个），
+     * 表里还没有账号时是他自己的名字。逐个动作授权与授权清单问的必须是这个账号，否则授权加在一个账号上、
+     * 调用跑在另一个账号上。
+     */
+    async defaultPersonAccount(
+      toolkit: string,
+      userId: string,
+    ): Promise<Extract<AccountRef, { holder: "person" }>> {
+      const picked = await accounts.pick({
+        toolkit,
+        title: toolkit,
+        userId,
+        named: undefined,
+      });
+      return {
+        holder: "person",
+        userId,
+        vendorUserId:
+          picked !== null && !("refused" in picked)
+            ? picked.vendorUserId
+            : vendorNameOf(userId),
+      };
+    },
+
+    /**
+     * 账号表里一行（页面与卡片用的 id）是不是这个人在这个应用上的账号；是就答它在厂商那边的 id。别人的
+     * 行、别的应用的行、认不出的 id 都答 null。
+     */
+    async personAccountByRow(
+      toolkit: string,
+      userId: string,
+      rowId: string,
+    ): Promise<Extract<AccountRef, { holder: "person" }> | null> {
+      const own = vendorNameOf(userId);
+      const row = (await accounts.rowsFor(toolkit, userId)).find(
+        (candidate) =>
+          candidate.id === rowId &&
+          filedUnderPerson(candidate.vendorUserId, own),
+      );
+      return row
+        ? { holder: "person", userId, vendorUserId: row.vendorUserId }
+        : null;
     },
 
     /**
@@ -9442,6 +9505,11 @@ export function createPluginStore(options: PluginStoreOptions) {
               eq(composioConnections.userId, input.userId),
             ),
           );
+        /*
+         * 名字下和每个第二个账号都没了：账号行一并忘掉。留着的话，账号页上的旧「本人名字」行按一下「断开」
+         * 会撤掉他在同一认证提供商下后来连上的别的应用。
+         */
+        await accounts.forget({ toolkit: input.toolkit, userId: input.userId });
         return { connected: false };
       }
 
@@ -12313,6 +12381,17 @@ export function createPluginStore(options: PluginStoreOptions) {
               : `你的 ${row.title} 账号还不允许这个动作，所以没有做。重新连接之后再问一次。`,
           reason: sharedApp ? "shared" : "reconnect",
           at: new Date().toISOString(),
+          /*
+           * 被拒的是他的第二个账号、而那个账号还在：卡片带上它（账号表的行 id），「重新连接」授权的就是
+           * 这个账号，而不是他名字下的那个（名字下的那个可能早就有全部权限，会被报成「已连接」）。
+           */
+          ...(!sharedApp &&
+          !gone &&
+          pinned &&
+          notAllowedAs !== null &&
+          notAllowedAs !== ownName
+            ? { account: pinned.id }
+            : {}),
         }),
         null,
       );
