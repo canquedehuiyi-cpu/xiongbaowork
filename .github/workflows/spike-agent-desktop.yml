@@ -43,7 +43,7 @@ jobs:
         continue-on-error: true
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb gedit at-spi2-core dbus-x11 libatspi2.0-0 gsettings-desktop-schemas
+          sudo apt-get install -y xvfb gedit openbox at-spi2-core dbus-x11 libatspi2.0-0 gsettings-desktop-schemas
 
       - name: 写入测试脚本
         run: |
@@ -54,7 +54,7 @@ jobs:
           SUM="$OUT/summary.txt"; : > "$SUM"
           TEXT='熊宝测试 abc 123'
           now() { node -e 'console.log(Date.now())'; }
-          tmo() { if command -v timeout >/dev/null 2>&1; then timeout "$@"; else s=$1; shift; perl -e 'alarm shift; exec @ARGV' "$s" "$@"; fi; }
+          tmo() { if command -v timeout >/dev/null 2>&1; then timeout "$@"; else local t=$1; shift; perl -e 'alarm shift; exec @ARGV' "$t" "$@"; fi; }
           note() { echo "$*" | tee -a "$SUM"; }
           # rt NAME cmd... : 计时执行，输出存 OUT/NAME.out，并记录 RESULT 行
           rt() {
@@ -128,6 +128,7 @@ jobs:
             export GTK_MODULES=gail:atk-bridge NO_AT_BRIDGE=0 GNOME_ACCESSIBILITY=1
             gsettings set org.gnome.desktop.interface toolkit-accessibility true 2>&1 | head -3
             (/usr/libexec/at-spi-bus-launcher --launch-immediately >"$OUT/atspi-bus.log" 2>&1 &)
+            (openbox >"$OUT/openbox.log" 2>&1 &)
             sleep 2
           fi
 
@@ -189,6 +190,12 @@ jobs:
           note "SNAP1_NODES=$(T count "$OUT/snap1.out")"
           note "SNAP1_ROLES=$(T roles "$OUT/snap1.out")"
           rt snap1b AD snapshot --app "$APP_NAME" -i
+          rt snap_full AD snapshot --app "$APP_NAME"
+          note "SNAP_FULL_NODES=$(T count "$OUT/snap_full.out")"
+          rt snap_compact AD snapshot --app "$APP_NAME" --compact
+          note "SNAP_COMPACT_NODES=$(T count "$OUT/snap_compact.out")"
+          rt snap_focused AD snapshot --app "$APP_NAME" --surface focused -i
+          note "SNAP_FOCUSED_NODES=$(T count "$OUT/snap_focused.out")"
           note "SNAP1B_NODES=$(T count "$OUT/snap1b.out")"
           REF1=$(T ref "$OUT/snap1.out" 2>>"$SUM")
           note "REF1=$REF1"
@@ -196,7 +203,7 @@ jobs:
 
           # 5 点击输入框
           note "== 点击 =="
-          if [ -n "$REF" ]; then rt click_input AD click "$REF"; else note "RESULT step=click_input skipped(no ref)"; fi
+          if [ -n "$REF" ]; then rt click_input AD click "$REF"; rt click_input_headed AD --headed click "$REF"; else note "RESULT step=click_input skipped(no ref)"; fi
 
           # 6 输入（多种写法依次尝试，读回一致即停）
           a_stdin() { printf '%s' "$TEXT" | tmo 60 "$BIN" type "$REF" --stdin; }
@@ -225,6 +232,19 @@ jobs:
             printf '%s' "stale-write" | tmo 60 "$BIN" type "$REF1" --stdin > "$OUT/stale_type.out" 2>&1; note "STALE_TYPE rc=$? mentions_stale=$(grep -ci 'stale\|ambiguous\|not found\|invalid' "$OUT/stale_type.out")"; head -20 "$OUT/stale_type.out"
           fi
           rt bare_ref_click AD click "@e1"
+          setv() { printf '%s' "stale-write" | tmo 60 "$BIN" set-value "$1" --stdin; }
+          [ -n "$REF1" ] && rt stale_setvalue_oldsnap setv "$REF1"
+          rt fake_snapshot_ref setv "@s0000000000zz:e1"
+          # 关掉编辑器后，用最新快照的编号操作（元素已不存在）
+          LAST="$REF"
+          case "$OS_NAME" in
+            windows) powershell -NoProfile -Command "Stop-Process -Name notepad -Force -ErrorAction SilentlyContinue" ;;
+            macos) pkill TextEdit ;;
+            linux) pkill gedit ;;
+          esac
+          sleep 3
+          [ -n "$LAST" ] && rt stale_setvalue_after_close setv "$LAST"
+          rt snap_after_close AD snapshot --app "$APP_NAME" -i
 
           # 8 MCP 模式
           note "== MCP =="
