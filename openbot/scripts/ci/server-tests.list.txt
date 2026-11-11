@@ -33,6 +33,7 @@ tests/agent-routes.test.ts
 tests/agent-test-connection-headers.test.ts
 tests/agent-test-connection-managed.test.ts
 tests/agent-tool-call-input.test.ts
+tests/app-access-arcade.integration.test.ts
 tests/app-access-connect-before-tools.integration.test.ts
 tests/app-access-requests.integration.test.ts
 tests/app-access-routes.integration.test.ts

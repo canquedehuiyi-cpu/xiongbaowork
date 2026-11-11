@@ -7585,6 +7585,7 @@ export function createPluginStore(options: PluginStoreOptions) {
     ...appAccessMethods({
       database,
       auditStore,
+      provider: brokerProvider,
       ...(options.sharedAdmits ? { sharedAudience: options.sharedAdmits } : {}),
     }),
 
