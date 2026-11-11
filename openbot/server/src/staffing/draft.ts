@@ -1,6 +1,6 @@
 import type { Persona } from "../agents/profile-types";
 import { PORTRAIT_PRESETS } from "../portraits/store";
-import { nextOccurrence } from "../routines/schedule";
+import { nextOccurrence, ScheduleRefusedError } from "../routines/schedule";
 import type {
   EmployeeChangeDraft,
   EmployeeDraft,
@@ -149,6 +149,24 @@ function appEntries(value: unknown, label: string) {
   });
 }
 
+/**
+ * 调度模块的拒绝原因是英文，而丢弃原因会原样给本人看，所以在这里按拒绝的种类换成中文。
+ * 调度模块没有导出错误种类，只能认它的几句固定提示；认不出的一律用泛称，绝不透出英文。
+ */
+function routineReason(error: unknown): string {
+  if (error instanceof Refusal) return error.message;
+  if (error instanceof ScheduleRefusedError) {
+    if (/15 minutes/i.test(error.message)) {
+      return "定时任务的最短间隔是 15 分钟。";
+    }
+    if (/timezone/i.test(error.message)) return "不认识这个时区。";
+    if (/could not be read/i.test(error.message)) {
+      return "看不懂这个时间设置，需要 5 段的 cron 写法。";
+    }
+  }
+  return "这条定时任务的时间设置不合格。";
+}
+
 /** 一条定时任务不合格只丢这一条并说明原因，不拖垮整份草稿。 */
 function routines(
   value: unknown,
@@ -195,7 +213,7 @@ function routines(
       dropped.push({
         field,
         value: shown,
-        reason: error instanceof Error ? error.message : "定时任务不合格。",
+        reason: routineReason(error),
       });
     }
   }

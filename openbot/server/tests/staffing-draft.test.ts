@@ -110,7 +110,7 @@ describe("employee drafts", () => {
       field: "routines",
       value: "*/5 * * * *",
     });
-    expect(parsed.dropped[0]?.reason.length).toBeGreaterThan(0);
+    expect(parsed.dropped[0]?.reason).toBe("定时任务的最短间隔是 15 分钟。");
     expect((parsed.draft as { routines: unknown[] }).routines).toHaveLength(1);
   });
 
@@ -125,6 +125,22 @@ describe("employee drafts", () => {
       }),
     );
     expect(parsed.ok && parsed.dropped).toHaveLength(2);
+  });
+
+  test("an unknown timezone and an unreadable cron are dropped with Chinese reasons", () => {
+    const parsed = parseDraft(
+      "employee",
+      employee({
+        routines: [
+          { instruction: "a", cron: "0 9 * * *", timezone: "Mars/Base" },
+          { instruction: "a", cron: "0 9 *" },
+        ],
+      }),
+    );
+    expect(parsed.ok && parsed.dropped.map((d) => d.reason)).toEqual([
+      "不认识这个时区。",
+      "看不懂这个时间设置，需要 5 段的 cron 写法。",
+    ]);
   });
 });
 
