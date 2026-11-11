@@ -19,6 +19,9 @@
  * 角色仓库的装配里没有人拿得到能力，这道门就拒绝每一个会话说自己是管理员的请求，是关着的方向。
  *
  * 其余的管理员路径在路由入口自己核对（`plugins/routes.ts` 的 `staleAdminRefusal`），不在这张表里。
+ *
+ * 插件以外也有同样只看会话角色、数据库又拦不住的写路径，它们的路由同样被没接角色仓库的单元装配直接
+ * 调用，所以也用这道门，各自一张表，挂在各自的前缀上（见下面的 `COMPUTER_ADMIN_PATHS` 等）。
  */
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
@@ -27,9 +30,10 @@ import { capabilityFor } from "../tenant/context";
 /** 会话里写着管理员、这次请求却没有拿到管理员能力时答的话。和路由里的那一句相同。 */
 export const STALE_ADMIN_REFUSAL = "你的管理员身份没能确认，没有改变任何东西。";
 
-type Rule = { methods: readonly string[]; path: RegExp };
+/** 一条要核对管理员能力的路径：方法，以及完整的请求路径。 */
+export type AdminPathRule = { methods: readonly string[]; path: RegExp };
 
-const ADMIN_PATHS: readonly Rule[] = [
+const ADMIN_PATHS: readonly AdminPathRule[] = [
   { methods: ["POST", "DELETE"], path: /^\/api\/plugins\/grants$/ },
   { methods: ["POST", "DELETE"], path: /^\/api\/plugins\/listings$/ },
   { methods: ["POST"], path: /^\/api\/plugins\/servers$/ },
@@ -42,11 +46,43 @@ const ADMIN_PATHS: readonly Rule[] = [
 ];
 
 /**
+ * 电脑：改整个部署的边界（store 以 `platform` 写，并通知每一台服务器），以及停止、重置、更新任何人的
+ * 电脑（重置会删掉保存的登录，这一层没有数据库兜底）。路由文件被很多单元装配直接调用，那些装配不带
+ * 角色仓库，所以核对放在这里。末尾的斜杠也算上：多拦一个本来就 404 的路径，只会拒绝会话和角色不一致的
+ * 人。
+ */
+export const COMPUTER_ADMIN_PATHS: readonly AdminPathRule[] = [
+  { methods: ["PUT"], path: /^\/api\/computers\/policy\/?$/ },
+  { methods: ["POST"], path: /^\/api\/computers\/fleet\/?$/ },
+];
+
+/**
+ * 组件：数据函数、对员工的授予和收回、发布、草稿。`components`、`component_functions`、
+ * `component_exclusions` 都没有行安全，`openbot_app` 能增删改；只有发布开关挂了能力，而且对编译进来的
+ * 组件也不看它。按前缀拦，名字和后面跟什么都算，同样只多拒绝会话和角色不一致的人。
+ */
+export const COMPONENT_ADMIN_PATHS: readonly AdminPathRule[] = [
+  {
+    methods: ["POST", "PUT", "DELETE"],
+    path: /^\/api\/components\/[^/]+\/(functions|grants|publication|draft)(\/.*)?$/,
+  },
+];
+
+/**
+ * 换套餐：`subscriptions` 的行安全允许本人租户的行，会话说是管理员就能给自己免费换成高档套餐。路由由
+ * `src/index.ts` 挂在 `createApp` 返回的同一个 app 上，在这道门之后注册，所以门先于它执行。
+ */
+export const QUOTA_ADMIN_PATHS: readonly AdminPathRule[] = [
+  { methods: ["POST"], path: /^\/api\/quota\/plan\/?$/ },
+];
+
+/**
  * `requireAdminUser` 是装配处那一个：先认出是谁，再让 `adminCapability` 重新读角色。不在表里的请求不查
- * 会话，直接放过去。
+ * 会话，直接放过去。`rules` 不给就是插件那张表。
  */
 export function createStaleAdminGate(
   requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }>,
+  rules: readonly AdminPathRule[] = ADMIN_PATHS,
 ): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (context, next) => {
     /*
@@ -57,7 +93,7 @@ export function createStaleAdminGate(
       ...new Set([context.req.path, new URL(context.req.url).pathname]),
     ];
     const method = context.req.method === "HEAD" ? "GET" : context.req.method;
-    const gated = ADMIN_PATHS.some(
+    const gated = rules.some(
       (rule) =>
         rule.methods.includes(method) &&
         paths.some((path) => rule.path.test(path)),

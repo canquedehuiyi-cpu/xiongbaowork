@@ -148,7 +148,13 @@ import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
 import type { BrokerProvider } from "./plugins/access";
 import type { AccountModeSwitch } from "./plugins/account-mode";
-import { createStaleAdminGate } from "./plugins/admin-session-gate";
+import {
+  COMPONENT_ADMIN_PATHS,
+  COMPUTER_ADMIN_PATHS,
+  createStaleAdminGate,
+  QUOTA_ADMIN_PATHS,
+  STALE_ADMIN_REFUSAL,
+} from "./plugins/admin-session-gate";
 import type {
   ArcadeBroker,
   ComposioBroker,
@@ -885,6 +891,18 @@ export function createApp(
     capabilityFor(context.var.actor.id) === "admin"
       ? undefined
       : context.json({ error: "Administrator access required." }, 403);
+  /*
+   * The same question, asked after `requireAdmin` has let the session's admin through (signed in
+   * through `requireAdminUser`, below), on routes whose write the database does not refuse on its
+   * own (the role writer, `sso_providers`) and on reads of the whole deployment. A session that still
+   * says admin after the role was withdrawn holds no capability and is refused before anything is
+   * read or written; members never get this far and keep the route's own answer. Without a role
+   * repository nobody holds the capability, which is the closed direction.
+   */
+  const staleAdminRefusal = (context: Context<{ Variables: AppVariables }>) =>
+    capabilityFor(context.var.actor.id) === "admin"
+      ? undefined
+      : context.json({ error: STALE_ADMIN_REFUSAL }, 403);
   // Enterprise controls: capability switches and the model allowlist in front of the routes they
   // govern, the admin screen's API, and the SCIM verbs the GET/POST auth handler above does not take.
   app.use("/api/*", createEnterpriseGate(requireUser));
@@ -1209,8 +1227,8 @@ export function createApp(
       );
     });
   }
-  app.get("/api/admin/status", requireUser, (context) => {
-    const denied = requireAdmin(context);
+  app.get("/api/admin/status", requireAdminUser, (context) => {
+    const denied = requireAdmin(context) ?? staleAdminRefusal(context);
     return denied ?? context.json({ status: "ok" });
   });
   app.get(
@@ -1334,8 +1352,8 @@ export function createApp(
    * Administrator-only, like every other route in this group. A plain user reading the list would
    * learn every colleague's address and when they last signed in, which is not theirs to have.
    */
-  app.get("/api/admin/people", requireUser, async (context) => {
-    const denied = requireAdmin(context);
+  app.get("/api/admin/people", requireAdminUser, async (context) => {
+    const denied = requireAdmin(context) ?? staleAdminRefusal(context);
     if (denied) {
       return denied;
     }
@@ -1380,72 +1398,81 @@ export function createApp(
     );
   });
 
-  app.post("/api/admin/people/:userId/role", requireUser, async (context) => {
-    const denied = requireAdmin(context);
-    if (denied) {
-      return denied;
-    }
-    if (!peopleStore) {
-      return context.json({ error: "成员管理暂不可用。" }, 503);
-    }
+  /*
+   * The role writer has no row-level security to fall back on, so the capability is checked here: a
+   * session that still says admin after its role was withdrawn would otherwise write itself back as
+   * an administrator in one request, and from then on be one.
+   */
+  app.post(
+    "/api/admin/people/:userId/role",
+    requireAdminUser,
+    async (context) => {
+      const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+      if (denied) {
+        return denied;
+      }
+      if (!peopleStore) {
+        return context.json({ error: "成员管理暂不可用。" }, 503);
+      }
 
-    const body = await context.req.json().catch(() => null);
-    const role = (body as { role?: unknown } | null)?.role;
-    if (role !== "admin" && role !== "user") {
-      return context.json({ error: "角色必须是 admin 或 user。" }, 400);
-    }
+      const body = await context.req.json().catch(() => null);
+      const role = (body as { role?: unknown } | null)?.role;
+      if (role !== "admin" && role !== "user") {
+        return context.json({ error: "角色必须是 admin 或 user。" }, 400);
+      }
 
-    const userId = context.req.param("userId");
-    const person = await peopleStore.find(userId);
-    if (!person) {
-      return context.json({ error: "找不到该成员。" }, 404);
-    }
+      const userId = context.req.param("userId");
+      const person = await peopleStore.find(userId);
+      if (!person) {
+        return context.json({ error: "找不到该成员。" }, 404);
+      }
 
-    /*
-     * The configured floor wins over the screen.
-     *
-     * Somebody named in INITIAL_ADMIN_EMAILS is promoted again at their next sign-in whatever this
-     * route writes, so allowing the demotion would produce a screen that lies until they come back.
-     * Refusing says the real thing: change the deployment's configuration.
-     */
-    if (person.configuredAdmin && role !== "admin") {
-      return context.json(
-        {
-          error:
-            "This deployment names that address in INITIAL_ADMIN_EMAILS, so they stay an administrator. Change the configuration instead.",
-        },
-        409,
-      );
-    }
+      /*
+       * The configured floor wins over the screen.
+       *
+       * Somebody named in INITIAL_ADMIN_EMAILS is promoted again at their next sign-in whatever this
+       * route writes, so allowing the demotion would produce a screen that lies until they come back.
+       * Refusing says the real thing: change the deployment's configuration.
+       */
+      if (person.configuredAdmin && role !== "admin") {
+        return context.json(
+          {
+            error:
+              "This deployment names that address in INITIAL_ADMIN_EMAILS, so they stay an administrator. Change the configuration instead.",
+          },
+          409,
+        );
+      }
 
-    /*
-     * Nobody demotes themselves.
-     *
-     * An administrator who does has just locked themselves out of the screen that would undo it,
-     * and on a deployment with one administrator that is the whole deployment. Somebody else with
-     * the role can do it, which is the check that makes handover possible without making lockout
-     * a slip of the finger.
-     */
-    if (context.var.actor.id === userId && role !== "admin") {
-      return context.json({ error: "不能移除你自己的管理员角色。" }, 409);
-    }
+      /*
+       * Nobody demotes themselves.
+       *
+       * An administrator who does has just locked themselves out of the screen that would undo it,
+       * and on a deployment with one administrator that is the whole deployment. Somebody else with
+       * the role can do it, which is the check that makes handover possible without making lockout
+       * a slip of the finger.
+       */
+      if (context.var.actor.id === userId && role !== "admin") {
+        return context.json({ error: "不能移除你自己的管理员角色。" }, 409);
+      }
 
-    if (person.role !== role) {
-      await peopleStore.setRole(userId, role);
-      await recordPersonEvent(
-        auditStore,
-        context,
-        "person.role_changed",
-        person,
-        {
-          from: person.role,
-          to: role,
-        },
-      );
-    }
+      if (person.role !== role) {
+        await peopleStore.setRole(userId, role);
+        await recordPersonEvent(
+          auditStore,
+          context,
+          "person.role_changed",
+          person,
+          {
+            from: person.role,
+            to: role,
+          },
+        );
+      }
 
-    return context.json({ person: await peopleStore.find(userId) });
-  });
+      return context.json({ person: await peopleStore.find(userId) });
+    },
+  );
 
   app.post(
     "/api/admin/people/:userId/access",
@@ -1540,17 +1567,21 @@ export function createApp(
    * one to open this screen found it empty and registered a provider that was already there. What is
    * registered is a fact about the deployment, so every administrator sees the same list.
    */
-  app.get("/api/admin/identity-providers", requireUser, async (context) => {
-    const denied = requireAdmin(context);
-    if (denied) {
-      return denied;
-    }
-    if (!identityProviders) {
-      return context.json({ error: "身份提供方暂不可用。" }, 503);
-    }
+  app.get(
+    "/api/admin/identity-providers",
+    requireAdminUser,
+    async (context) => {
+      const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+      if (denied) {
+        return denied;
+      }
+      if (!identityProviders) {
+        return context.json({ error: "身份提供方暂不可用。" }, 503);
+      }
 
-    return context.json({ providers: await identityProviders.list() });
-  });
+      return context.json({ providers: await identityProviders.list() });
+    },
+  );
 
   /*
    * Remove one.
@@ -1558,12 +1589,16 @@ export function createApp(
    * Ours rather than Better Auth's `delete-provider`, which refuses unless the person asking is the
    * one who registered it. That leaves a provider nobody can remove as soon as the administrator who
    * set it up has left, which is the same moment somebody most needs to.
+   *
+   * `sso_providers` has no row-level security, so the capability is checked before the row goes: a
+   * session that still says admin after its role was withdrawn must not take the company's sign-in
+   * away.
    */
   app.delete(
     "/api/admin/identity-providers/:providerId",
-    requireUser,
+    requireAdminUser,
     async (context) => {
-      const denied = requireAdmin(context);
+      const denied = requireAdmin(context) ?? staleAdminRefusal(context);
       if (denied) {
         return denied;
       }
@@ -1701,8 +1736,8 @@ export function createApp(
       }
     },
   );
-  app.get("/api/admin/package", requireUser, async (context) => {
-    const denied = requireAdmin(context);
+  app.get("/api/admin/package", requireAdminUser, async (context) => {
+    const denied = requireAdmin(context) ?? staleAdminRefusal(context);
     if (denied) return denied;
     if (!packageStatusReader) {
       return context.json({ error: "租户配置包尚未配置。" }, 503);
@@ -1845,6 +1880,15 @@ export function createApp(
   // together or the routes are not mounted. An ungoverned computer is not a reduced feature. It is
   // the one shape of this feature that must not exist.
   if (computerGateway && computerPolicy) {
+    /*
+     * Changing the deployment's boundary and acting on anybody's computer from the fleet, refused to
+     * a session that still says admin after its role was withdrawn (`COMPUTER_ADMIN_PATHS`). At the
+     * mount rather than in the router, which unit assemblies build without a role repository.
+     */
+    app.use(
+      "/api/computers/*",
+      createStaleAdminGate(requireAdminUser, COMPUTER_ADMIN_PATHS),
+    );
     app.route(
       "/api/computers",
       createComputerRoutes(
@@ -2303,6 +2347,11 @@ export function createApp(
   }
 
   if (componentStore) {
+    // The component tables have no row-level security: see `COMPONENT_ADMIN_PATHS`.
+    app.use(
+      "/api/components/*",
+      createStaleAdminGate(requireAdminUser, COMPONENT_ADMIN_PATHS),
+    );
     app.route(
       "/api/components",
       createComponentRoutes(
@@ -2315,6 +2364,16 @@ export function createApp(
       ),
     );
   }
+
+  /*
+   * The manual plan switch is mounted by `src/index.ts` on this same app, after this returns, so a
+   * gate registered here runs ahead of it. `subscriptions` lets a person write their own workspace's
+   * row, so without it a session that still says admin could move itself onto a paid plan for free.
+   */
+  app.use(
+    "/api/quota/*",
+    createStaleAdminGate(requireAdminUser, QUOTA_ADMIN_PATHS),
+  );
 
   if (pluginStore) {
     /*
