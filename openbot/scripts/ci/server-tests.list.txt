@@ -718,6 +718,7 @@ tests/skill-tools.integration.test.ts
 tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
+tests/staffing-proposals-table.integration.test.ts
 tests/stall-guard.test.ts
 tests/starter-tour-routes.test.ts
 tests/subagent.integration.test.ts
