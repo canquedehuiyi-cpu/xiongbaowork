@@ -279,14 +279,24 @@ test("the primary navigation lists 熊宝's destinations in the order the user c
   const view = renderSidebar();
   const nav = await view.findByRole("navigation", { name: "主导航" });
   const links = [...nav.querySelectorAll("a")];
+  /*
+   * 用户决定找回 #452 去掉的熊宝分组标题：「工作管理」下是任务看板、自主工作、@Waker，「员工资源」下是员工、
+   * 能力、连接（v0.2.7 的两组），所以主导航按组排，六项都在。
+   */
   expect(links.map((link) => [textOf(link), hrefOf(link)])).toEqual([
-    ["员工", "/bots"],
     ["任务看板", "/tasks"],
     ["自主工作", "/autonomous"],
     ["@Waker", "/reachability"],
+    ["员工", "/bots"],
     ["能力", "/capabilities"],
     ["连接", "/connections"],
   ]);
+  const group = (name: string) =>
+    [...within(nav).getByRole("list", { name }).querySelectorAll("a")].map(
+      (link) => textOf(link),
+    );
+  expect(group("工作管理")).toEqual(["任务看板", "自主工作", "@Waker"]);
+  expect(group("员工资源")).toEqual(["员工", "能力", "连接"]);
 });
 
 test("the entry for the open page is marked current", async () => {
@@ -308,13 +318,19 @@ test("更多 holds 组团流程; the old pages are not linked from the sidebar",
       textOf(link),
       hrefOf(link),
     ]),
-  ).toEqual([["组团流程", "/pipelines"]]);
+  ).toEqual([
+    ["组团流程", "/pipelines"],
+    /*
+     * 用户决定找回 #452 去掉的熊宝直达入口：团队 Bot 和审批收件箱回到「更多」，两页也恢复成页面，所以不再在
+     * 下面「只重定向、不该被链接」的清单里。
+     */
+    ["团队 Bot", "/team-bots"],
+    ["审批", "/approvals"],
+  ]);
   // Each of these redirects to its new place now; the sidebar links the new places only.
   for (const href of [
     "/wakers",
     "/resources",
-    "/team-bots",
-    "/approvals",
     "/plans",
     "/agents",
     "/skills",

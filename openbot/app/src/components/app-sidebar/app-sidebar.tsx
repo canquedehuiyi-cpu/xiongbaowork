@@ -1,9 +1,11 @@
 import {
+  IconChecks,
   IconChevronDown,
   IconDots,
   IconLayoutSidebar,
   IconPlus,
   IconSearch,
+  IconUsersGroup,
   IconUsersPlus,
 } from "@tabler/icons-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -44,7 +46,6 @@ import { appConfig } from "@/lib/generated/application-config";
 import {
   isNavigationLink,
   type NavigationLink,
-  navigationOwns,
   useNavigationItems,
 } from "@/lib/navigation";
 import { useMessageListEmphasis } from "@/lib/settings/message-list";
@@ -208,12 +209,57 @@ const navRowClassName =
   "h-[37px] gap-[11px] rounded-[9px] border border-transparent px-[11px] text-[13px] text-muted-foreground hover:bg-foreground/[0.03] hover:text-sidebar-foreground data-[status=active]:border-foreground/[0.06] data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground after:ml-auto after:hidden after:h-[12px] after:w-[4px] after:shrink-0 after:rounded-[3px] after:bg-signal after:content-[''] data-[status=active]:after:block [&_svg]:size-[18px] [&_svg]:text-faint data-[status=active]:[&_svg]:text-sidebar-accent-foreground";
 
 /**
+ * 熊宝 v0.2.7 侧栏「更多」里的两个直达入口，#452 去掉后找回：团队 Bot（同事发布的员工、你共享出去的员工）和
+ * 审批收件箱（管理员还能在那里改团队规则、处理访问申请）。只画在熊宝自己的侧栏里，不进 `lib/navigation.ts`：
+ * 那份清单是各皮肤共用的上游清单，皮肤照旧从员工页和设置里到达同样的内容。
+ */
+type SidebarOnlyLink = {
+  id: "team-bots" | "approvals";
+  label: string;
+  to: "/team-bots" | "/approvals";
+  icon: NavigationLink["icon"];
+  owns?: readonly string[];
+};
+
+const MORE_SIDEBAR_ONLY: readonly SidebarOnlyLink[] = [
+  {
+    id: "team-bots",
+    label: "团队 Bot",
+    to: "/team-bots",
+    icon: IconUsersGroup,
+  },
+  { id: "approvals", label: "审批", to: "/approvals", icon: IconChecks },
+];
+
+/** Whether `pathname` is the entry's page, under it, or one it owns; `navigationOwns` for both kinds. */
+function owns(item: NavigationLink | SidebarOnlyLink, pathname: string) {
+  const under = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
+  return under(item.to) || (item.owns ?? []).some(under);
+}
+
+/*
+ * The primary destinations in v0.2.7's two labelled groups (用户决定找回 #452 去掉的分组标题)：工作管理 is
+ * the work itself, 员工资源 who does it and what they can reach. Each id from `lib/navigation.ts` appears
+ * in exactly one group; one the list adds later lands at the end of 员工资源 rather than disappearing.
+ */
+const WORK_IDS: readonly NavigationLink["id"][] = [
+  "tasks",
+  "autonomous",
+  "reachability",
+];
+
+/** A group label: 11px, faint, aligned with the row's icon, 7px above its first row. */
+const groupLabelClassName =
+  "box-content h-[18px] px-[11px] pb-[4px] text-[11px] text-faint leading-[18px]";
+
+/**
  * One destination from `lib/navigation.ts`. Marked current on its own page, the pages under it, and
  * the pages it owns; the link's own fuzzy match is switched off so the two rules cannot disagree.
  */
-function NavRow({ item }: { item: NavigationLink }) {
+function NavRow({ item }: { item: NavigationLink | SidebarOnlyLink }) {
   const current = useRouterState({
-    select: (state) => navigationOwns(item, state.location.pathname),
+    select: (state) => owns(item, state.location.pathname),
   });
   return (
     <SidebarMenuItem>
@@ -353,7 +399,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
    * A page that lives under 更多 opens the section, so the current place is always marked: folded
    * away, a person on /pipelines would see no entry lit at all.
    */
-  const inMore = more.some((item) => navigationOwns(item, pathname));
+  const work = primary.filter((item) => WORK_IDS.includes(item.id));
+  const resources = primary.filter((item) => !WORK_IDS.includes(item.id));
+  const moreLinks = [...more, ...MORE_SIDEBAR_ONLY];
+  const inMore = moreLinks.some((item) => owns(item, pathname));
   const [moreOpen, setMoreOpen] = useState(() => readMoreOpen() || inMore);
   useEffect(() => {
     if (inMore) setMoreOpen(true);
@@ -466,8 +515,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       )}
       <SidebarFooter className="gap-0 border-sidebar-border border-t px-[15px] pt-[8px] pb-[6px]">
         <nav aria-label="主导航">
-          <SidebarMenu className="gap-[3px]">
-            {primary.map((item) => (
+          <div className={groupLabelClassName} id="sidebar-group-work">
+            工作管理
+          </div>
+          <SidebarMenu
+            aria-labelledby="sidebar-group-work"
+            className="gap-[3px]"
+          >
+            {work.map((item) => (
+              <NavRow item={item} key={item.id} />
+            ))}
+          </SidebarMenu>
+          <div
+            className={cn(groupLabelClassName, "mt-[10px]")}
+            id="sidebar-group-resources"
+          >
+            员工资源
+          </div>
+          <SidebarMenu
+            aria-labelledby="sidebar-group-resources"
+            className="gap-[3px]"
+          >
+            {resources.map((item) => (
               <NavRow item={item} key={item.id} />
             ))}
             {/*
@@ -477,7 +546,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <BrowserNavItem />
           </SidebarMenu>
         </nav>
-        {more.length > 0 ? (
+        {moreLinks.length > 0 ? (
           <SidebarMenu className="mt-[3px] gap-[3px]">
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -495,10 +564,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuItem>
           </SidebarMenu>
         ) : null}
-        {more.length > 0 && moreOpen ? (
+        {moreLinks.length > 0 && moreOpen ? (
           <nav aria-label="更多入口" id="sidebar-more-nav">
             <SidebarMenu className="gap-[3px] pt-[3px]">
-              {more.map((item) => (
+              {moreLinks.map((item) => (
                 <NavRow item={item} key={item.id} />
               ))}
             </SidebarMenu>
