@@ -1,4 +1,4 @@
-import { asText } from "@/lib/plugins/tool-result";
+import { asText, withoutUntrustedEnvelope } from "@/lib/plugins/tool-result";
 import {
   type Proposal,
   type ProposalStatus,
@@ -51,7 +51,14 @@ export function readStaffingCard(
   result: string | undefined,
 ): { card: Card; missingRoles: string[] } | null {
   if (result === undefined || !isStaffingProposalTool(name)) return null;
-  const read = readStaffingProposalAnswer(asText(result));
+  /*
+   * 服务端把每个应用工具的回答（内置的「招聘与组群」也一样）包进「外部内容」的信封再交给模型
+   * （`server/src/plugins/tools.ts` 的 `vendorAnswer`），对话记录里存的就是带信封的那份，标记不在开头。
+   * 先拆信封再读标记；名字已经核对过是那四个起草工具，卡片的内容也只按 id 向服务端读。
+   */
+  const read = readStaffingProposalAnswer(
+    withoutUntrustedEnvelope(asText(result)),
+  );
   if (!read) return null;
   return {
     card: read.card,
