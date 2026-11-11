@@ -10,6 +10,7 @@ import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import type { Database } from "../db/client";
 import { parsePageLimit } from "../paging";
+import { STALE_ADMIN_REFUSAL } from "../plugins/admin-session-gate";
 import { billingPeriod } from "../quota/limits";
 import { capabilityFor } from "../tenant/context";
 import { tokenUsageFor } from "../quota/token-usage";
@@ -47,15 +48,49 @@ export function createPlatformRoutes(
     await next();
   };
 
-  routes.get("/tenants", requireUser, requireAdmin, async (context) => {
-    return context.json({ tenants: await listTenants(database) });
-  });
+  const adminScope = readers?.adminScope;
+  const auditReader = readers?.auditReader;
+  // Re-reads the person's roles and grants the capability for this request (G01-E I10).
+  const adminCapability: MiddlewareHandler<Ctx> =
+    adminScope?.adminCapability ?? ((_context, next) => next());
+  // A role removed since sign-in fails here as a 403, not as a refused platform read.
+  const capabilityMissing = (context: Context<Ctx>) =>
+    capabilityFor(context.var.actor.id) === "admin"
+      ? undefined
+      : context.json({ error: "Operator access required." }, 403);
+  /*
+   * The two levers (and the list they are pulled from) write and read as `platform` (`revoked_access`, `sessions`, `routines`), where row-level
+   * security has nothing to say, so the session's role alone would let a person whose role was
+   * withdrawn since sign-in lock every administrator out, or lift their own suspension. Asked after
+   * `requireAdmin`, so a member keeps that answer; without the admin scope nobody holds the
+   * capability and both levers stay shut.
+   */
+  const staleOperator = (context: Context<Ctx>) =>
+    capabilityFor(context.var.actor.id) === "admin"
+      ? undefined
+      : context.json({ error: STALE_ADMIN_REFUSAL }, 403);
+
+  // Every tenant with its plan and counts, read as `platform`: the same capability as the levers.
+  routes.get(
+    "/tenants",
+    requireUser,
+    requireAdmin,
+    adminCapability,
+    async (context) => {
+      const stale = staleOperator(context);
+      if (stale) return stale;
+      return context.json({ tenants: await listTenants(database) });
+    },
+  );
 
   routes.post(
     "/tenants/:id/suspend",
     requireUser,
     requireAdmin,
+    adminCapability,
     async (context) => {
+      const stale = staleOperator(context);
+      if (stale) return stale;
       const id = context.req.param("id");
       const done = await suspendTenant(database, id, context.var.actor);
       if (!done) return context.json({ error: "No such tenant." }, 404);
@@ -76,7 +111,10 @@ export function createPlatformRoutes(
     "/tenants/:id/restore",
     requireUser,
     requireAdmin,
+    adminCapability,
     async (context) => {
+      const stale = staleOperator(context);
+      if (stale) return stale;
       const id = context.req.param("id");
       const done = await restoreTenant(database, id);
       if (!done) return context.json({ error: "No such tenant." }, 404);
@@ -92,17 +130,6 @@ export function createPlatformRoutes(
       return context.json({ ok: true });
     },
   );
-
-  const adminScope = readers?.adminScope;
-  const auditReader = readers?.auditReader;
-  // Re-reads the person's roles and grants the capability for this request (G01-E I10).
-  const adminCapability: MiddlewareHandler<Ctx> =
-    adminScope?.adminCapability ?? ((_context, next) => next());
-  // A role removed since sign-in fails here as a 403, not as a refused platform read.
-  const capabilityMissing = (context: Context<Ctx>) =>
-    capabilityFor(context.var.actor.id) === "admin"
-      ? undefined
-      : context.json({ error: "Operator access required." }, 403);
 
   /*
    * Model tokens per tenant for one billing period (spec J5), from `model_token_calls`, the source of
