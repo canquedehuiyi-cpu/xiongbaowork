@@ -251,9 +251,10 @@ export type DeploymentConfig = {
    * Whether OpenBot assigns the Intelligence project's `openbot` Learning container as the default
    * when nobody has chosen one (learning/auto-assign.ts). Only with {@link DeploymentConfig.intelligence}:
    * without the optional Intelligence there is no container to assign. On unless OPENBOT_LEARNING_AUTO_ASSIGN is
-   * "false" or "0", and off whenever CPK_INTELLIGENCE_LEARNING_CONTAINER_ID names a container. It
-   * never overrides a saved Admin setting. It creates the container only with a credential that can
-   * (see `learningSetup`), never with the runtime key.
+   * "false" or "0". A container CPK_INTELLIGENCE_LEARNING_CONTAINER_ID names stands it aside once
+   * Intelligence confirms it has that container; one it does not have is ignored, and this assigns
+   * as though nothing was named. It never overrides a saved Admin setting. It creates the container
+   * only with a credential that can (see `learningSetup`), never with the runtime key.
    */
   learningAutoAssign: boolean;
   /**
@@ -486,6 +487,11 @@ export type DeploymentConfig = {
    * like the switch itself.
    */
   modelEndpointsAllowPrivateHosts: boolean;
+  /**
+   * 本地学习（L1）：每人每天从自己的对话里提出技能草案，本人批准后才生效。默认开，
+   * `OPENBOT_LOCAL_LEARNING=off` 整个部署关掉（不扫描、设置页说明未开启）。
+   */
+  localLearning: boolean;
   /**
    * Where a coworker's actions are carried out: this deployment's own container, or a machine the
    * tenant owns. `device` refuses when no machine is reachable rather than running the work here.
@@ -1809,6 +1815,8 @@ export function loadConfig(
       : {}),
     computer: computerConfig(environment),
     modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
+    localLearning:
+      optional(environment, "OPENBOT_LOCAL_LEARNING")?.toLowerCase() !== "off",
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own
      * container, which is what a development machine runs. `device` sends them to the tenant's
@@ -1895,11 +1903,10 @@ function personalEditionRequirements(
 
 /**
  * Same rule as generated interfaces: on unless explicitly "false" or "0". A container named in the
- * environment is a choice, so there is nothing to assign.
+ * environment is a choice only if the Intelligence this server talks to has it, which the server asks
+ * at boot (learning/auto-assign.ts), not here.
  */
 function learningAutoAssignEnabled(environment: Environment): boolean {
-  if (optional(environment, "CPK_INTELLIGENCE_LEARNING_CONTAINER_ID"))
-    return false;
   const value = optional(environment, "OPENBOT_LEARNING_AUTO_ASSIGN");
   return value !== "false" && value !== "0";
 }

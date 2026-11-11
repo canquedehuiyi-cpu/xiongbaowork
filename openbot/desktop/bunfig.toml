@@ -1,0 +1,4 @@
+[test]
+# Bun reads bunfig.toml from the current working directory only, so this applies to `bun test` run
+# from openbot/desktop (CI's desktop jobs). See src/test-preload.ts.
+preload = ["./src/test-preload.ts"]

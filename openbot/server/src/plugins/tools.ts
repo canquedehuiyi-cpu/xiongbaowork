@@ -4,7 +4,9 @@ import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { markUntrusted } from "../untrusted-content";
+// M5: 上游这里还引入了 app-access（应用卡片），留给 X 系列（app-access）。
 import { withAccountArgument } from "./account-argument";
+import { appCallsOfRun, sameArguments } from "./run-calls";
 import type { SelectableSkill } from "./selection";
 import {
   isDeploymentFault,
@@ -228,6 +230,7 @@ export function grantedToolGuidance(
           "Use them for anything about those systems. Do NOT browse to one of their websites instead: your",
           "browser is signed in as nobody, so it sees less than these tools do and will meet a sign-in wall",
           "that connecting an account has already solved.",
+          // M5: 上游这句按 waiting/later/个人版分开说，留给 X 系列（个人版、app-access）；这里保留 fork 原句（tests/browser-search-guidance.test.ts 逐字钉住）。
           "If one of these systems is involved and no tool above covers the part you need, that is a",
           "missing grant and not something to work around. Say so plainly, name the capability you would",
           "need, and say an administrator can grant it on that connector. Do not reach for the browser, do",
@@ -265,6 +268,7 @@ export function grantedToolGuidance(
           "administrator can grant it on that connector. Do NOT browse to its website: that is not the",
           "same thing, your browser is signed in as nobody, and it will meet a sign-in wall that the",
           "connector exists to avoid. Do not ask the person to sign in there either.",
+          // M5: 上游这里换成 show_app_access 卡片和应用显示名，留给 X 系列（app-access）。
         ]
       : []),
   ].join("\n");
@@ -318,6 +322,13 @@ export async function grantedTools(options: {
       ? withAccountArgument(tool.inputSchema, choices.title, choices.choices)
       : tool.inputSchema;
   };
+  /*
+   * This run's app calls, a few at a time, and a read asked twice answered once. One per call of this
+   * function, which is one per run: a run builds its tools afresh (`loadTools` in copilot.ts), so
+   * nothing is cached past the run it was read in. A subagent's tools are built inside its run's
+   * and take that run's calls (`appCallsOfRun`). See `./run-calls`.
+   */
+  const calls = appCallsOfRun();
 
   return granted.tools.map((tool) => ({
     name: tool.toolName,
@@ -325,6 +336,7 @@ export async function grantedTools(options: {
     // An app's tools arrive by the hundred, so past the floor they wait behind `search_tools`
     // (`agents/tool-search.ts`), as upstream offers them.
     searchable: true as const,
+    ...(tool.read ? { reads: true as const } : {}),
     initiator,
     // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 OpenBot 会先问，Bot 不必再问。
     description: tool.destructive
@@ -334,55 +346,67 @@ export async function grantedTools(options: {
       : tool.description,
     parameters: parametersFor(schemaFor(tool)),
     execute: async (args: unknown) => {
-      try {
-        const result = await store.callTool({
-          ref: tool.ref,
-          // The runtime hands through whatever the model produced. Anything that is not an object
-          // is not a set of arguments, and the vendor should be the one to say so.
-          args:
-            args && typeof args === "object" && !Array.isArray(args)
-              ? (args as Record<string, unknown>)
-              : {},
-          botId,
-          actorId,
-          ...(initiator ? { initiator } : {}),
-          ...(credentialActorFor
-            ? { credentialActorId: await credentialActorFor(tool.ref) }
-            : {}),
-        });
-        return vendorAnswer(result);
-      } catch (error) {
-        if (error instanceof HeadlessToolSuspension) throw error;
-        if (
-          error instanceof PluginRefusedError ||
-          error instanceof ApprovalRefusedError
-        ) {
-          return `${REFUSAL_MARKER} ${error.message}`;
+      // The runtime hands through whatever the model produced. Anything that is not an object is
+      // not a set of arguments, and the vendor should be the one to say so.
+      const callArgs =
+        args && typeof args === "object" && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
+      // Only a read is answered again from earlier in the run: a write asked twice is done twice.
+      const key = tool.read ? `${tool.ref} ${sameArguments(callArgs)}` : null;
+      return calls.call(key, async () => {
+        try {
+          const result = await store.callTool({
+            ref: tool.ref,
+            args: callArgs,
+            botId,
+            actorId,
+            ...(initiator ? { initiator } : {}),
+            ...(credentialActorFor
+              ? { credentialActorId: await credentialActorFor(tool.ref) }
+              : {}),
+          });
+          return { text: vendorAnswer(result), reusable: !result.isError };
+        } catch (error) {
+          if (error instanceof HeadlessToolSuspension) throw error;
+          return { text: failedCall(error), reusable: false };
         }
-        /*
-         * A contradiction in this deployment's own tables says nothing to a model.
-         *
-         * CRITERION. Nothing on the `isDeploymentFault` shelf may have its message relayed from
-         * here, whatever it says.
-         *
-         * REASON. The branch below hands `error.message` to the model, which is right for a
-         * vendor's own words — that is somebody else's software explaining itself, and the
-         * diagnosis is worth having. These are not that. `ServerRowAmbiguousError` names two of
-         * our columns and tells the reader to rename a row or correct its provenance: an
-         * instruction only an operator can carry out, arriving in an end user's model context as
-         * the reason their tool failed, from which the model can only invent something to tell
-         * them. The operator who can act on it is served on the admin surface instead, where the
-         * refresh route now answers with the sentence in full.
-         */
-        if (isDeploymentFault(error)) return "That tool could not be called.";
-        // A vendor that failed is not a refusal, and the difference matters to the person reading
-        // the answer: one means "not allowed", the other means "it broke".
-        return error instanceof Error
-          ? `That tool could not be called: ${error.message}`
-          : "That tool could not be called.";
-      }
+      });
     },
   }));
+}
+
+/**
+ * What a Bot is told about a call that did not come back with an answer: a refusal, or a failure.
+ */
+function failedCall(error: unknown): string {
+  if (
+    error instanceof PluginRefusedError ||
+    error instanceof ApprovalRefusedError
+  ) {
+    // M5: 上游在这里给拒绝里的应用卡片署上 Bot（addressedTo），留给 X 系列（app-access）；fork 原样转述拒绝。
+    return `${REFUSAL_MARKER} ${error.message}`;
+  }
+  /*
+   * A contradiction in this deployment's own tables says nothing to a model.
+   *
+   * CRITERION. Nothing on the `isDeploymentFault` shelf may have its message relayed from here,
+   * whatever it says.
+   *
+   * REASON. The branch below hands `error.message` to the model, which is right for a vendor's own
+   * words — that is somebody else's software explaining itself, and the diagnosis is worth having.
+   * These are not that. `ServerRowAmbiguousError` names two of our columns and tells the reader to
+   * rename a row or correct its provenance: an instruction only an operator can carry out, arriving
+   * in an end user's model context as the reason their tool failed, from which the model can only
+   * invent something to tell them. The operator who can act on it is served on the admin surface
+   * instead, where the refresh route now answers with the sentence in full.
+   */
+  if (isDeploymentFault(error)) return "That tool could not be called.";
+  // A vendor that failed is not a refusal, and the difference matters to the person reading the
+  // answer: one means "not allowed", the other means "it broke".
+  return error instanceof Error
+    ? `That tool could not be called: ${error.message}`
+    : "That tool could not be called.";
 }
 
 /**

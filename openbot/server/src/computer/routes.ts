@@ -12,7 +12,7 @@ import {
   ApprovalNeedsConversationError,
   ApprovalRefusedError,
 } from "../approvals/types";
-import type { AuditReader } from "../audit";
+import { type AuditReader, type AuditStore, recordAuditEvent } from "../audit";
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
@@ -49,8 +49,18 @@ import {
   WorkspaceTooLargeError,
 } from "./gateway";
 import type { PageFrameStore } from "./page-frames";
-import { dryRunAgainstHistory, REPLAYABLE_EVENT_TYPES } from "./policy-dry-run";
-import { type PolicyStore, parseActionPolicy } from "./policy-store";
+import { uncheckableRule } from "./policy";
+import {
+  dryRunAgainstHistory,
+  REPLAYABLE_EVENT_TYPES,
+  REPLAYABLE_TARGET_TYPES,
+} from "./policy-dry-run";
+import {
+  type PolicyStore,
+  parseActionPolicy,
+  parsePolicyAuthoring,
+  policyChange,
+} from "./policy-store";
 
 /**
  * The Bot computer's surface, behind the same session guard as every other API route.
@@ -94,6 +104,11 @@ export function createComputerRoutes(
    * `/:botId/browser`. Absent where this OpenBot has no Recorder: nothing about it is mounted.
    */
   botBrowser?: BotBrowser,
+  /**
+   * Where a saved boundary is recorded (`computer.policy_changed`). Optional the way `auditReader`
+   * is: a deployment wired without a trail still saves its boundary, and has nowhere to record it.
+   */
+  auditStore?: AuditStore,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
@@ -994,11 +1009,28 @@ export function createComputerRoutes(
     const denied = requireAdmin(context);
     if (denied) return denied;
 
-    const parsed = parseActionPolicy(
-      await context.req.json().catch(() => null),
-    );
+    const body = (await context.req.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    const parsed = parseActionPolicy(body);
     if (!parsed.ok) {
       return context.json({ error: parsed.error }, 400);
+    }
+    const authoring = parsePolicyAuthoring(body?.authoring);
+    if (!authoring.ok) {
+      return context.json({ error: authoring.error }, 400);
+    }
+    /*
+     * Every rule it adds has to be one the evaluator can run. A deny rule that cannot be evaluated
+     * counts as a match, so a typo saved here would stop every action every Bot takes until somebody
+     * noticed. Refused with the rule and why, and nothing is saved. Rules already in force are not
+     * judged again: see `uncheckableRule`.
+     */
+    const before = policyStore.get();
+    const broken = uncheckableRule(parsed.policy, before);
+    if (broken) {
+      return context.json({ error: broken.error, rule: broken.rule }, 400);
     }
     try {
       await policyStore.set(parsed.policy, context.var.actor.email);
@@ -1016,9 +1048,44 @@ export function createComputerRoutes(
         503,
       );
     }
+    const after = policyStore.get();
+    if (auditStore) {
+      /*
+       * After the save, so the trail never records a boundary that did not take. A save the trail
+       * could not record is said to be one: the rule is in force, and an admin told only "saved"
+       * would believe Audit shows who changed it.
+       */
+      try {
+        await recordAuditEvent(auditStore, {
+          eventType: "computer.policy_changed",
+          targetType: "policy",
+          actorUserId: context.var.actor.id,
+          payload: policyChange(
+            before,
+            after,
+            context.var.actor.email,
+            authoring.authoring,
+          ),
+        });
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type: "policy-change-unrecorded",
+            error: String(error),
+          }),
+        );
+        return context.json(
+          {
+            error:
+              "规则已保存，但审计没能记下这次修改。请再保存一次，好让审计记下来。",
+          },
+          500,
+        );
+      }
+    }
     // Echoed back so a caller can see exactly what is now in force rather than assuming its request
     // was stored verbatim.
-    return context.json({ policy: policyStore.get() });
+    return context.json({ policy: after });
   });
 
   /**
@@ -1090,11 +1157,27 @@ export function createComputerRoutes(
       if (adminScope && capabilityFor(context.var.actor.id) !== "admin") {
         return context.json({ error: "Administrator access required." }, 403);
       }
+      /*
+       * A rule that can't be evaluated is reported, not replayed. Replayed, it would match every
+       * action it met, fail closed, and the preview would show it stopping everything: true of the
+       * broken rule once saved, and nothing like what its author meant. The same check a save makes.
+       * After the capability check, so a demoted admin is refused before anything is read; and a
+       * candidate with no rules has nothing to check, so the policy in force is not asked for.
+       */
+      const broken =
+        parsed.policy.deny.length + parsed.policy.allow.length > 0
+          ? uncheckableRule(parsed.policy, policyStore.get())
+          : null;
+      if (broken) {
+        return context.json({ error: broken.error, rule: broken.rule }, 400);
+      }
+      // Computer actions and app calls, newest first across both: one policy decides both, and a rule
+      // about an app previewed against computer actions alone reports that it changes nothing.
       const recent = () =>
         auditReader.list({
           limit,
           eventType: REPLAYABLE_EVENT_TYPES.join(","),
-          targetType: "computer",
+          targetType: REPLAYABLE_TARGET_TYPES.join(","),
         });
       // The deployment's traffic, not the administrator's own: every judged action is stamped with the
       // person whose Bot took it, so the replay reads the trail as `platform`.

@@ -17,7 +17,12 @@ type Page = Window & {
 let navigated: string[] = [];
 
 beforeAll(() => {
-  GlobalRegistrator.register({ url: "http://127.0.0.1:3010/connections" });
+  GlobalRegistrator.register({
+    url: "http://127.0.0.1:3010/connections",
+    // A link the shim leaves alone opens a new tab in happy-dom, which would really fetch it from
+    // 127.0.0.1:3010, where nothing listens in a test: the tab only takes the address.
+    settings: { navigation: { disableChildPageNavigation: true } },
+  });
 });
 afterAll(async () => {
   await GlobalRegistrator.unregister();
