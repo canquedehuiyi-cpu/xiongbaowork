@@ -529,3 +529,28 @@ export async function connectionsHeldBy(
     );
   return (people?.count ?? 0) + (shared?.count ?? 0);
 }
+
+/**
+ * 这个部署实际持有哪些提供商的连接：个人连接行的 `provider`，加上已连接的团队账号所在应用行的 provenance。
+ *
+ * 给 `storedProvider` 用（上游 #1017 的第三组）：配置没有指明活动的提供商时，由行自己说它们属于谁。
+ * 与 {@link connectionsHeldBy} 数的是同一批行，所以「启用时另一边还有没有连接」和「没有活动的提供商时
+ * 这些行读作谁的」不会是两种数法。跨所有租户读，调用方在平台帧里调用。
+ */
+export async function connectionOwners(
+  database: Database,
+): Promise<BrokerProvider[]> {
+  const people = await database
+    .selectDistinct({ provider: composioConnections.provider })
+    .from(composioConnections);
+  const shared = await database
+    .selectDistinct({ provenance: mcpServers.provenance })
+    .from(mcpServers)
+    .where(sql`${mcpServers.sharedConnectedAt} IS NOT NULL`);
+  const owners = new Set<BrokerProvider>(people.map((row) => row.provider));
+  for (const row of shared) {
+    if (row.provenance === "composio" || row.provenance === "arcade")
+      owners.add(row.provenance);
+  }
+  return [...owners].sort();
+}

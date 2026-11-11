@@ -25,8 +25,9 @@ export type ArcadeClientOptions = {
 /**
  * 这个安装是否拥有它的 broker 项目，也就是能不能改 Arcade 用户验证地址这样的项目级设置。
  *
- * 单用户安装可以：它唯一的人就是它的管理员。要登录的部署把 key 所在的项目当作共享的，项目设置
- * 由管理员手动改，这里只检查。
+ * 单用户安装可以：它在 broker 那边有自己的名字（`ensureSingleUserIdentity` 在第一次带着 broker 启动时
+ * 给每一台一个），它唯一的人就是它的管理员，个人版就是这样的安装。要登录的部署把 key 所在的项目当作
+ * 共享的，项目设置由管理员手动改，这里只检查。
  */
 export function ownsBrokerProject(c: { singleUser?: boolean }): boolean {
   return c.singleUser === true;
@@ -94,17 +95,6 @@ export function selectProviderWiring<
     };
   }
   const provider = decision.provider;
-  if (provider === "arcade" && c.singleUser === true) {
-    /*
-     * X5 评审 I2：上游 #927 给每个单用户安装在厂商那边铸一个自己的名字（`brokered_identities`），
-     * fork 还没有。没有它，每个单用户安装的那个人在 Arcade 都是 `dev-local-user`：几台安装共用一把 key 时
-     * 互相拿到对方的授权，而且每次连接前都会把项目的验证地址改成自己。所以在 #927 并入之前不启用，
-     * 也就不会构造客户端、不会改写验证地址。
-     */
-    throw new Error(
-      "单用户模式（OPENBOT_SINGLE_USER，包括个人版）暂不支持 Arcade：这样的安装在 Arcade 那边还没有自己的名字，几台安装共用一把 ARCADE_API_KEY 时会互相拿到对方的授权，并互相改写项目的验证地址。请改用 Composio（设置 COMPOSIO_API_KEY，去掉 ARCADE_API_KEY 或设 OPENBOT_BROKER_PROVIDER=composio），或者以需要登录的方式部署。",
-    );
-  }
   if (provider === "arcade") {
     const verifierUrl = arcadeVerifierAddress(c.publicUrl);
     const client = create.arcade(

@@ -50,12 +50,11 @@ under 已连接账号, `/settings/connected-accounts`. An enabled Arcade app is 
 `arcade-<Toolkit>` at `arcade://<Toolkit>`, with the toolkit's capitals kept: Arcade's names are
 case-sensitive.
 
-**与上游不同: not on a single-user deployment.** With `OPENBOT_SINGLE_USER=true`, which the personal
-edition requires, a deployment whose active broker is Arcade **refuses to start**. The one person of
-every single-user deployment is `dev-local-user`, and this fork has not merged upstream's
-per-installation name at the broker, so several of them on one `ARCADE_API_KEY` would use each
-other's consents and take turns rewriting the project's verifier. Use Composio there, or deploy with
-sign-in. Everything upstream's page says about a single-user install is therefore left out below.
+**A single-user deployment can use Arcade too**, the personal edition included
+(`OPENBOT_SINGLE_USER=true`). Each such install is filed at Arcade under its own name, not under
+`dev-local-user`, so several of them on one `ARCADE_API_KEY` do not use each other's consents; see
+[Configuration](../configuration.md). It also owns its Arcade project and points the verifier at
+itself; see [The verifier URL](#the-verifier-url).
 
 ### Choosing the provider
 
@@ -69,25 +68,26 @@ vendor's key. With both set, the variable has to say which one is live: both set
 unset stops the server at startup rather than coming up with no broker at all. A key that is empty
 or all whitespace — `ARCADE_API_KEY=` with nothing after it — is no key.
 
-**与上游不同: `scripts/start.sh` and `bun run setup:composio` do not know about Arcade.** Upstream's
-helper skips provisioning when Arcade is selected. This fork's provisions a Composio project
-whenever `COMPOSIO_API_KEY` is empty, and writes the key to `.env`. On a deployment started that
-way, set `OPENBOT_BROKER_PROVIDER=arcade` explicitly: with only `ARCADE_API_KEY` set, the key the
-helper adds makes it "both keys set, variable unset", and the server refuses to start.
+**`scripts/start.sh` and `bun run setup:composio` leave an Arcade deployment alone.** The helper
+provisions a Composio project only where Composio is what the deployment would use: it skips where
+`OPENBOT_BROKER_PROVIDER=arcade` is set, or `ARCADE_API_KEY` is set with no provider named, so
+starting an Arcade deployment that way does not add a Composio key beside Arcade's.
 
-**与上游不同: with no broker active, stored connections are not read as their own provider's.**
-Upstream names the slice it reads from the rows it holds, so an Arcade deployment whose key was
-withdrawn still shows its Arcade connections as Arcade's. This fork does not do that at startup: with
-neither key set no broker is built, nothing can be connected or revoked, and the rows are not
-consulted to decide how they read. Upstream's fourth refusal (rows at both vendors with nothing
-active stops the server) is not wired here either. Keep the key of a provider that still holds
-connections.
+**Connections already made are still read as their own provider's while nothing is active.** A
+deployment whose broker key has been withdrawn afterwards names the provider it reads from the rows
+it actually holds (people's rows in `composio_connections`, and Shared apps whose team account is
+connected), so an Arcade deployment does not have its Arcade connections read as Composio ones,
+shown as absent, and left unrevokable. No broker is live in that state, so nothing can be connected
+or revoked until a key is set again; the server says so once at startup. Holding rows at BOTH
+vendors with nothing active is refused rather than guessed at, which is the activation refusal from
+the other side. (Both keys set with the variable unset does not reach this: that state is refused at
+startup, below.)
 
 Connections are kept where Composio's are: a person's in `composio_connections`, whose `provider`
 column says which broker made the row, and a Shared app's team account on the app's own
 `mcp_servers` row. (Upstream keeps both in `brokered_connections`.)
 
-Three refusals protect the choice, and all are deliberate. The sentences are this fork's, in
+Four refusals protect the choice, and all are deliberate. The sentences are this fork's, in
 Chinese, and name variables, never values:
 
 - **A named provider whose key is not set stops the server at startup.** An operator sees:
@@ -110,6 +110,13 @@ Chinese, and name variables, never values:
   已连接账号, an administrator disconnects a Shared app's team account, or an administrator removes
   an app (which ends every account connected to it). When the old provider holds no connections,
   name the new one and restart.
+- **Holding connections at BOTH providers while nothing is active stops the server at startup.** It
+  is the refusal above seen from the other side: with no provider named there is nothing to read one
+  vendor's rows as, and reading them as the other's is the failure this section exists to prevent.
+  The message names both vendors and says plainly that nothing in the deployment can get past this:
+  with rows at both, activating either provider is refused by the rule above. The only way out is by
+  hand: end one vendor's accounts in that vendor's own dashboard, delete its connection rows, then
+  name the other provider. The refusal at activation exists so that this state is never reached.
 
 ## Setting up the Arcade project
 
@@ -165,25 +172,37 @@ Before every Connect, the deployment reads the project's setting through Arcade'
 (`GET /v1/admin/settings/session_verification`, in [Arcade's OpenAPI](https://api.arcade.dev/v1/swagger)).
 Where it already names this deployment's verify route, with verification not skipped, the consent
 goes ahead. Arcade has one verifier per project and refuses a per-request return address
-(`next_uri`) on a mint, so this setting is the only way a consent finds its way back.
+(`next_uri`) on a mint, so this setting is the only way a consent finds its way back. What happens
+when it names somewhere else depends on whether the install owns its Arcade project.
 
-**This deployment never changes the setting.** It signs people in, so it treats its project as
-shared: rewriting the setting would send another deployment's people here. Set the custom verifier
+**A single-user install owns its project and sets the verifier itself.** It has its own name at
+Arcade (see [Configuration](../configuration.md)), its one person is its admin, and the personal
+edition is one of these. Where the setting names another address, or is set to skip verification,
+it sets it to its own verify address with the custom verifier on (`PUT` on the same path), reads it
+back, and only then mints the consent. It logs `arcade-verifier-pointed` with the address it
+replaced. Nothing needs pasting into Arcade's dashboard, and the install is not tied to
+`localhost:3001` or any other address somebody once typed there. If Arcade refuses the write, or
+reads back something else, Connect is refused before anybody is sent to a consent screen, and the
+log has an `arcade-verifier-not-pointed` line with the address to set by hand. Single-user installs
+sharing a project (several on one key) take turns: whichever started the latest consent is where
+Arcade sends people back, so a consent started in one while another's is still open comes back to
+the later one, which refuses it, and the person presses Connect again.
+
+**A deployment that signs people in treats its project as shared and never changes it.** Rewriting
+the setting there would send another deployment's people here. Set the custom verifier
 in Arcade's dashboard (Auth, Settings) to this deployment's verify address. The server prints which
 address at startup, as a warning, and until the project names it, Connect is refused before anybody
 is sent to a consent screen. The log has an `arcade-verifier-elsewhere` line naming the address it
 wanted and the one it found.
 
-**与上游不同.** Upstream's single-user install owns its project and points the verifier at itself
-before each consent. A single-user install cannot run Arcade here (above), so the only behavior this
-fork has is the read-and-refuse one. And where upstream shows the person _"Arcade would send you
-back somewhere else… Ask an admin to set the custom verifier in Arcade's dashboard to
-`<address>`"_, this fork does not name the broker to a member: the person sees _没能开始连接
-Gmail。请稍后再试；如果一直这样，请联系管理员。_ and the address is in the startup warning and
-the log line.
+**与上游不同.** Where upstream shows the person _"Arcade would send you back somewhere else… Ask an
+admin to set the custom verifier in Arcade's dashboard to `<address>`"_ (or, on a single-user
+install, _"OpenBot couldn't set Arcade to send you back here…"_), this fork does not name the broker
+to a member: the person sees _没能开始连接 Gmail。请稍后再试；如果一直这样，请联系管理员。_ and
+the address is in the startup warning and the log line.
 
-**A setting that cannot be read refuses the Connect too**, with an `arcade-verifier-unread` line in
-the log. The key has to be a project key that can use Arcade's admin API, which every other admin
+**A setting that cannot be read refuses the Connect too**, on either kind of deployment, with an
+`arcade-verifier-unread` line in the log. The key has to be a project key that can use Arcade's admin API, which every other admin
 call here (auth providers, user connections) already needs. A consent minted without the check could
 be spent on a page that does not exist.
 
@@ -197,7 +216,8 @@ that the identity returning is the one the attempt was minted for, records the c
 its `mcp.account_connected` audit entry. What upstream observed by hand (see the top of this page) is
 that Arcade's built-in verifier refuses a consent for any `user_id` that is not a member of the
 Arcade project, and the ids this deployment sends are its own internal ids, not project members, so
-in practice nobody could connect.
+in practice nobody could connect. That is why a single-user install turns the custom verifier on
+rather than only setting the address.
 
 ### What the return leg does, in order
 
@@ -469,38 +489,29 @@ wrong-account case among the causes, because the vendor will not say.
 
 Everything above that is marked, in one place:
 
-1. **Single-user deployments and the personal edition cannot use Arcade**: the server refuses to
-   start. Upstream supports them, each under its own name at Arcade.
-2. **One Arcade account per person per app**: **Connect another account** answers 409.
-3. **Approving one action at a time is not merged**, nor the list of what an account has
+1. **One Arcade account per person per app**: **Connect another account** answers 409.
+2. **Approving one action at a time is not merged**, nor the list of what an account has
    authorized. Connect asks for the whole app, an app whose actions need more than one auth
    provider instance cannot be connected, and least privilege cannot be had through the consent.
-4. **A grant left behind by a cancelled attempt**: a Shared app's team account is revoked at Arcade;
+3. **A grant left behind by a cancelled attempt**: a Shared app's team account is revoked at Arcade;
    a person's own is only recorded in the audit trail (`mcp.cancelled_grant_left_live`).
-5. **Cancelled and no-longer-permitted returns are judged before Arcade is asked to confirm**, so
+4. **Cancelled and no-longer-permitted returns are judged before Arcade is asked to confirm**, so
    those consents never take effect at Arcade.
-6. **A grant Arcade already holds is not adopted.** Connect answers an error when Arcade holds a
+5. **A grant Arcade already holds is not adopted.** Connect answers an error when Arcade holds a
    grant this deployment has no row for; revoke it in Arcade's dashboard, then connect again.
-7. **The deployment never changes the project's verifier.** It only reads it and refuses. Upstream
-   does the same on a deployment that signs people in; the single-user install that rewrites it is
-   not available here.
-8. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
+6. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
    person as a generic failure and the address is in the startup warning and the log.
-9. **No Reconnect card or button**: a call Arcade refuses for want of authorization simply fails,
+7. **No Reconnect card or button**: a call Arcade refuses for want of authorization simply fails,
    and connecting again is Disconnect, then Connect.
-10. **Siblings are reconciled after a disconnect, not named before it**, and not when an
-    administrator removes an app.
-11. **An Arcade row is written verified, dated the day of the consent.**
-12. **Nothing warns before an unclassified toolkit is enabled.**
-13. **With no broker active, stored connections are not read as their own provider's**, and holding
-    rows at both vendors with nothing active does not stop the server.
-14. **`scripts/start.sh` and `bun run setup:composio` provision Composio regardless of Arcade**: set
-    `OPENBOT_BROKER_PROVIDER=arcade` on an Arcade deployment started that way.
-15. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
+8. **Siblings are reconciled after a disconnect, not named before it**, and not when an
+   administrator removes an app.
+9. **An Arcade row is written verified, dated the day of the consent.**
+10. **Nothing warns before an unclassified toolkit is enabled.**
+11. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
     `/settings/connected-accounts`, rows in `composio_connections` and on `mcp_servers`; the return
     leg's reason is not yet shown as a sentence; Composio's "deployment's own OAuth client" answers
     409 on Arcade.
-16. **None of upstream's live measurements has been repeated by this fork.**
+12. **None of upstream's live measurements has been repeated by this fork.**
 
 ## What is unproven
 

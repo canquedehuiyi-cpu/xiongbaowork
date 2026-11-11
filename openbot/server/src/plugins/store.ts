@@ -8498,6 +8498,12 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /**
+     * 这个 store 读写哪一家提供商的行（上游 `store.brokerProvider`）。路由在没有接上 broker 时据此解析
+     * 应用地址，所以 store 与路由对「这些行属于谁」只有一个答案。
+     */
+    brokerProvider,
+
+    /**
      * 一个人自己的账号：本人的用户 id，加上他在厂商那边被记在哪个名字下（上游 #927 的 `personAccount`）。
      *
      * 路由开始一次带回程验证的授权、核对回来的浏览器时用它，所以「这个人今天的名字」只有这一个答案。
