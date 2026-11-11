@@ -1,4 +1,11 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, like } from "drizzle-orm";
 import { STAFFING_TOOL_NAMES } from "../../shared/staffing-proposal";
@@ -118,6 +125,11 @@ async function upgradedPerson(name: string): Promise<string> {
   );
   return userId;
 }
+
+/** 默认授予只在部署里有「招聘与组群」这个应用时做：先走一遍启动那一步，没有就添加（见下面的 `startupStep`）。 */
+beforeAll(async () => {
+  await startupStep();
+});
 
 describe("小管家默认会招人组群", () => {
   test("a new person's avatar can propose employees", async () => {

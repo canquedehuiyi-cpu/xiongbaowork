@@ -724,6 +724,7 @@ tests/sso-required-sessions.integration.test.ts
 tests/staffing-default-grant.integration.test.ts
 tests/staffing-draft.test.ts
 tests/staffing-executor.integration.test.ts
+tests/staffing-gates.integration.test.ts
 tests/staffing-proposals-table.integration.test.ts
 tests/staffing-routes.integration.test.ts
 tests/staffing-settle.integration.test.ts

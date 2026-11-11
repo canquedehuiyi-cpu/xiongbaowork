@@ -3,11 +3,13 @@ import type { Database } from "../db/client";
 import { enterpriseSettings } from "../db/schema/admin";
 import { agents } from "../db/schema/core";
 import { pluginGrants } from "../db/schema/plugins";
+import { currentEdition } from "../edition";
 import { currentTenant } from "../tenant/context";
 import {
   avatarAgentId,
   STAFFING_DEFAULT_BY,
   STAFFING_REFS,
+  staffingDefaultAllowed,
   staffingGivenSetting,
 } from "../tenant/provisioning";
 
@@ -45,12 +47,58 @@ type GrantStore = {
  * 启动时确保部署里有「招聘与组群」这个应用，没有就添加。没有这一行，授予读不到任何工具，调用也找不到服务。
  * 添加应用不授予任何人什么：谁拿到由授予决定。服务器级的事，在调用方的平台帧里做。
  */
-export async function ensureStaffingServer(store: {
-  serverAddress(serverId: string): Promise<unknown>;
-  addServer(input: { key: string; by: string }): Promise<unknown>;
-}): Promise<void> {
-  if (await store.serverAddress(STAFFING_APP)) return;
-  await store.addServer({ key: STAFFING_APP, by: STAFFING_DEFAULT_BY });
+/** 部署记得的事：团队版里是否已经添加过一次「招聘与组群」。 */
+export type StaffingAppMemory = {
+  added(): Promise<boolean>;
+  remember(): Promise<void>;
+};
+
+/** 记着「已经添加过」的那一行设置；部署的，不属于任何人。 */
+export const STAFFING_APP_ADDED_SETTING = "staffing_app_added";
+
+/** 上面的记忆，从数据库来（同 `personalDefaultAppsMemory`）；调用方在平台帧里用它。 */
+export function staffingAppMemory(
+  database: Pick<Database, "select" | "insert">,
+): StaffingAppMemory {
+  return {
+    async added() {
+      const [row] = await database
+        .select({ key: enterpriseSettings.key })
+        .from(enterpriseSettings)
+        .where(eq(enterpriseSettings.key, STAFFING_APP_ADDED_SETTING))
+        .limit(1);
+      return row !== undefined;
+    },
+    async remember() {
+      await database
+        .insert(enterpriseSettings)
+        .values({
+          key: STAFFING_APP_ADDED_SETTING,
+          value: { value: true },
+          updatedBy: STAFFING_DEFAULT_BY,
+        })
+        .onConflictDoNothing();
+    },
+  };
+}
+
+/**
+ * 团队版：只在第一次启动时添加，并记下添加过（只在应用行已经在之后才记，写行之前失败的启动下次再试）。
+ * 之后管理员删掉它就是删掉了，下一次启动不会加回来——应用开不开是管理员的事（同个人版的默认应用
+ * `ensurePersonalDefaultApps`）。个人版没有管理员，它和 Routines 一样一直在。不给记忆的调用方每次都补。
+ */
+export async function ensureStaffingServer(
+  store: {
+    serverAddress(serverId: string): Promise<unknown>;
+    addServer(input: { key: string; by: string }): Promise<unknown>;
+  },
+  memory?: StaffingAppMemory,
+): Promise<void> {
+  const once = memory !== undefined && currentEdition() !== "personal";
+  if (once && (await memory.added())) return;
+  if (!(await store.serverAddress(STAFFING_APP)))
+    await store.addServer({ key: STAFFING_APP, by: STAFFING_DEFAULT_BY });
+  if (once) await memory.remember();
 }
 
 /**
@@ -71,6 +119,8 @@ export type StaffingBackfillDeps = {
   store: GrantStore;
   /** 这一帧里看得见、可以补授的分身：只有这个人自己的那一位。 */
   avatars(): Promise<string[]>;
+  /** 此刻能不能替这个人给（`staffingDefaultAllowed`）；不能时什么都不做、也不记下处理过。 */
+  allowed(): Promise<boolean>;
   /** 这位分身已持有的 `staffing/*` 授予行数，不论谁授予的。 */
   held(avatarId: string): Promise<number>;
   /** 这位分身上被 SEC1 禁用的工具（`approvalService.disabledTools`）。 */
@@ -96,8 +146,12 @@ export async function backfillStaffingForAvatars(
 ): Promise<number> {
   const work = async () => {
     let granted = 0;
-    for (const avatarId of await deps.avatars()) {
-      if (await deps.given(avatarId)) continue;
+    const avatars: string[] = [];
+    for (const avatarId of await deps.avatars())
+      if (!(await deps.given(avatarId))) avatars.push(avatarId);
+    // 还有没处理过的分身时才问：管理员删掉或收归自己时不给，也不记下，放开之后的下一次读取再补。
+    if (avatars.length === 0 || !(await deps.allowed())) return 0;
+    for (const avatarId of avatars) {
       const disabled = await deps.disabled(avatarId);
       const keep =
         (await deps.held(avatarId)) > 0 ||
@@ -120,6 +174,7 @@ export function staffingBackfillDeps(
 ): StaffingBackfillDeps {
   return {
     ...input,
+    allowed: () => staffingDefaultAllowed(database, currentTenant()),
     avatars: async () => {
       const id = avatarAgentId(currentTenant());
       const rows = await database
