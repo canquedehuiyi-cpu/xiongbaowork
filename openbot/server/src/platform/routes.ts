@@ -48,10 +48,6 @@ export function createPlatformRoutes(
     await next();
   };
 
-  routes.get("/tenants", requireUser, requireAdmin, async (context) => {
-    return context.json({ tenants: await listTenants(database) });
-  });
-
   const adminScope = readers?.adminScope;
   const auditReader = readers?.auditReader;
   // Re-reads the person's roles and grants the capability for this request (G01-E I10).
@@ -63,7 +59,7 @@ export function createPlatformRoutes(
       ? undefined
       : context.json({ error: "Operator access required." }, 403);
   /*
-   * The two levers write as `platform` (`revoked_access`, `sessions`, `routines`), where row-level
+   * The two levers (and the list they are pulled from) write and read as `platform` (`revoked_access`, `sessions`, `routines`), where row-level
    * security has nothing to say, so the session's role alone would let a person whose role was
    * withdrawn since sign-in lock every administrator out, or lift their own suspension. Asked after
    * `requireAdmin`, so a member keeps that answer; without the admin scope nobody holds the
@@ -73,6 +69,19 @@ export function createPlatformRoutes(
     capabilityFor(context.var.actor.id) === "admin"
       ? undefined
       : context.json({ error: STALE_ADMIN_REFUSAL }, 403);
+
+  // Every tenant with its plan and counts, read as `platform`: the same capability as the levers.
+  routes.get(
+    "/tenants",
+    requireUser,
+    requireAdmin,
+    adminCapability,
+    async (context) => {
+      const stale = staleOperator(context);
+      if (stale) return stale;
+      return context.json({ tenants: await listTenants(database) });
+    },
+  );
 
   routes.post(
     "/tenants/:id/suspend",

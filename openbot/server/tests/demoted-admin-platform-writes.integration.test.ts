@@ -223,6 +223,35 @@ describe("a role change", () => {
   });
 });
 
+describe("the list of tenants the levers are pulled from", () => {
+  const list = (actor: string) =>
+    app.request("http://openbot.test/api/platform/tenants", {
+      headers: { "x-actor": actor },
+    });
+
+  test("is refused to a demoted session", async () => {
+    expect(await answer(await list(DEMOTED))).toEqual({
+      status: 403,
+      body: { error: STALE },
+    });
+  });
+
+  test("a member still gets the route's own answer", async () => {
+    expect(await answer(await list(MEMBER))).toEqual({
+      status: 403,
+      body: { error: "Operator access required." },
+    });
+  });
+
+  test("an administrator holding the capability still reads it", async () => {
+    const response = await list(ADMIN);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { tenants: { id: string }[] };
+    expect(body.tenants.map((tenant) => tenant.id)).toContain(VICTIM);
+  });
+});
+
 describe("suspending and restoring a tenant", () => {
   test("a demoted session cannot suspend anybody", async () => {
     const before = await trail();

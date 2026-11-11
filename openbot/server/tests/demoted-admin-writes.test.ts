@@ -25,7 +25,8 @@ import { testEnvironment } from "./support/environment";
  * - 改整个部署的电脑边界（`PUT /api/computers/policy`）：以 `platform` 写。
  * - 停止、重置、更新任何人的电脑（`POST /api/computers/fleet`）：没有数据库这一层。
  * - 组件的数据函数、授予、发布、草稿：组件那几张表没有行安全。
- * - 读全员名单、身份提供方、配置包、管理员状态：只读，但读到的是全部署的东西。
+ * - 自动学习的设置（接了 Intelligence 时）：`learning_settings` 没有行安全。
+ * - 读全员名单、身份提供方、配置包、管理员状态、电脑清单和边界、学习设置：只读，但读到的是全部署的东西。
  *
  * 每一条都看三种人：降权的会话答 403「你的管理员身份没能确认，没有改变任何东西。」，store 和电脑都没被
  * 碰到；持有能力的管理员照常成功；成员照旧得到路由原来的答复。
@@ -114,7 +115,10 @@ function build() {
       touched.push("fleet.update");
       return { updated: true };
     },
-    computers: async () => ({ isolation: "per-person", computers: [] }),
+    computers: async () => {
+      touched.push("fleet.list");
+      return { isolation: "per-person", computers: [] };
+    },
   } as unknown as ComputerGateway;
   const policy = createPolicyStore(DEFAULT_ACTION_POLICY);
 
@@ -140,44 +144,57 @@ function build() {
     },
   } as never;
 
-  const app = createApp(
-    loadConfig(testEnvironment()),
-    {
-      handler: () => new Response(null, { status: 204 }),
-      api: {
-        // 会话自己带着角色，和组织身份源给出的会话一样：DEMOTED 的会话说 admin。
-        getSession: async ({ headers }: { headers: Headers }) => {
-          const actor = headers.get("x-actor");
-          if (!actor) return null;
-          return {
-            user: {
-              id: actor,
-              email: `${actor}@example.test`,
-              role: actor === MEMBER ? "user" : "admin",
-            },
-          };
-        },
+  const settings = { enabled: false, defaultTarget: null, agents: {} };
+  const learning = {
+    store: {
+      read: async () => {
+        touched.push("learning.read");
+        return settings;
       },
-    } as never,
-    // 角色仓库说的才是现在：只有 ADMIN 还是管理员。
-    { rolesForUser: async (id) => [id === ADMIN ? "admin" : "user"] },
-    undefined,
-    undefined,
-    packageStatus,
-    undefined,
-    gateway,
-    policy,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    components,
-    undefined,
-    undefined,
-    undefined,
-    people,
-    identityProviders,
-  );
+      write: async (next: unknown) => {
+        touched.push("learning.write");
+        return next;
+      },
+    },
+  };
+
+  /*
+   * `createApp` 的位置参数：1 配置、2 会话、3 角色仓库、6 配置包、8 电脑网关、9 边界、14 组件 store、
+   * 18 成员 store、19 身份提供方、37 自动学习，其余不给。
+   */
+  const args = Array.from({ length: 37 }) as never[];
+  args[0] = loadConfig(testEnvironment()) as never;
+  args[1] = {
+    handler: () => new Response(null, { status: 204 }),
+    api: {
+      // 会话自己带着角色，和组织身份源给出的会话一样：DEMOTED 的会话说 admin。
+      getSession: async ({ headers }: { headers: Headers }) => {
+        const actor = headers.get("x-actor");
+        if (!actor) return null;
+        return {
+          user: {
+            id: actor,
+            email: `${actor}@example.test`,
+            role: actor === MEMBER ? "user" : "admin",
+          },
+        };
+      },
+    },
+  } as never;
+  // 角色仓库说的才是现在：只有 ADMIN 还是管理员。
+  args[2] = {
+    rolesForUser: async (id: string) => [id === ADMIN ? "admin" : "user"],
+  } as never;
+  args[5] = packageStatus as never;
+  args[7] = gateway as never;
+  args[8] = policy as never;
+  args[13] = components as never;
+  args[17] = people as never;
+  args[18] = identityProviders as never;
+  args[36] = learning as never;
+  const app = (
+    createApp as (...given: never[]) => ReturnType<typeof createApp>
+  )(...args);
 
   const request = (
     actor: string,
@@ -232,6 +249,24 @@ const writes: { name: string; call: Call; reaches: string[] }[] = [
       body: { action: "reset", computer: `person:${ADMIN}` },
     },
     reaches: ["fleet.reset"],
+  },
+  {
+    name: "updating a computer on the fleet",
+    call: {
+      method: "POST",
+      path: "/api/computers/fleet",
+      body: { action: "update", computer: `person:${ADMIN}` },
+    },
+    reaches: ["fleet.update"],
+  },
+  {
+    name: "choosing who approves learned skills",
+    call: {
+      method: "PUT",
+      path: "/api/admin/learning/personal-review",
+      body: { personalReview: "people" },
+    },
+    reaches: ["learning.read", "learning.write"],
   },
   {
     name: "giving a component a data function",
@@ -305,6 +340,18 @@ const reads: { name: string; path: string; reaches: string[] }[] = [
     reaches: ["package.active"],
   },
   { name: "the admin status", path: "/api/admin/status", reaches: [] },
+  { name: "the fleet", path: "/api/computers/fleet", reaches: ["fleet.list"] },
+  {
+    name: "the fleet through a Bot's path",
+    path: "/api/computers/some-bot/computers",
+    reaches: ["fleet.list"],
+  },
+  { name: "the computer boundary", path: "/api/computers/policy", reaches: [] },
+  {
+    name: "the learning settings",
+    path: "/api/admin/learning/settings",
+    reaches: ["learning.read"],
+  },
 ];
 
 const send = (

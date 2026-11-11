@@ -152,6 +152,8 @@ import {
   COMPONENT_ADMIN_PATHS,
   COMPUTER_ADMIN_PATHS,
   createStaleAdminGate,
+  ENTERPRISE_ADMIN_PATHS,
+  LEARNING_ADMIN_PATHS,
   QUOTA_ADMIN_PATHS,
   STALE_ADMIN_REFUSAL,
 } from "./plugins/admin-session-gate";
@@ -964,6 +966,16 @@ export function createApp(
       },
     };
   })();
+  /*
+   * Everything under `/api/admin/enterprise` but a person's own `/me`, refused to a session that still
+   * says admin after its role was withdrawn (`ENTERPRISE_ADMIN_PATHS`): the switches, settings and
+   * network policies it writes have no row-level security. Ahead of the three routers below, which
+   * unit assemblies build without a role repository.
+   */
+  app.use(
+    "/api/admin/enterprise/*",
+    createStaleAdminGate(requireAdminUser, ENTERPRISE_ADMIN_PATHS),
+  );
   // Before the enterprise routes it shares a prefix with: describing a network allowlist and
   // replaying one over page visits. The list itself is still saved by `PUT /network` below.
   app.route(
@@ -1201,6 +1213,11 @@ export function createApp(
    * rather than a 404 that reads like a broken deployment.
    */
   if (learning) {
+    // `learning_settings` has no row-level security: see `LEARNING_ADMIN_PATHS`.
+    app.use(
+      "/api/admin/learning/*",
+      createStaleAdminGate(requireAdminUser, LEARNING_ADMIN_PATHS),
+    );
     app.route(
       "/api/admin/learning",
       createLearningRoutes(

@@ -47,13 +47,14 @@ const ADMIN_PATHS: readonly AdminPathRule[] = [
 
 /**
  * 电脑：改整个部署的边界（store 以 `platform` 写，并通知每一台服务器），以及停止、重置、更新任何人的
- * 电脑（重置会删掉保存的登录，这一层没有数据库兜底）。路由文件被很多单元装配直接调用，那些装配不带
- * 角色仓库，所以核对放在这里。末尾的斜杠也算上：多拦一个本来就 404 的路径，只会拒绝会话和角色不一致的
- * 人。
+ * 电脑（重置会删掉保存的登录，这一层没有数据库兜底）；读的是整个部署的边界和电脑清单，也一并核对。
+ * 路由文件被很多单元装配直接调用，那些装配不带角色仓库，所以核对放在这里。末尾的斜杠也算上：多拦一个
+ * 本来就 404 的路径，只会拒绝会话和角色不一致的人。
  */
 export const COMPUTER_ADMIN_PATHS: readonly AdminPathRule[] = [
-  { methods: ["PUT"], path: /^\/api\/computers\/policy\/?$/ },
-  { methods: ["POST"], path: /^\/api\/computers\/fleet\/?$/ },
+  { methods: ["GET", "PUT"], path: /^\/api\/computers\/policy\/?$/ },
+  { methods: ["GET", "POST"], path: /^\/api\/computers\/fleet\/?$/ },
+  { methods: ["GET"], path: /^\/api\/computers\/[^/]+\/computers\/?$/ },
 ];
 
 /**
@@ -65,6 +66,30 @@ export const COMPONENT_ADMIN_PATHS: readonly AdminPathRule[] = [
   {
     methods: ["POST", "PUT", "DELETE"],
     path: /^\/api\/components\/[^/]+\/(functions|grants|publication|draft)(\/.*)?$/,
+  },
+];
+
+/**
+ * 企业管控：能力开关、部署设置、网络策略、终止电脑，以及挂在同一前缀下的能力批量保存、描述和预演、网络
+ * 名单的描述和重放。`capability_settings`、`enterprise_settings`、`network_policies` 都没有行安全，
+ * `openbot_app` 能增删改；路由只做 `requireAdmin`，而它的单元装配大多不带角色仓库。`/me` 是任何登录者
+ * 读自己能用什么，不在这里。整组都管，读也算：读到的是整个部署的设置和各人的用量。
+ */
+export const ENTERPRISE_ADMIN_PATHS: readonly AdminPathRule[] = [
+  {
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    path: /^\/api\/admin\/enterprise(?!\/me\/?$)(\/.*)?$/,
+  },
+];
+
+/**
+ * 自动学习（接了 Intelligence 时）：设置写进 `learning_settings`（没有行安全），审批会发布或驳回别人学到
+ * 的技能，读的是每个人的学习内容。整组只做 `requireAdmin`，所以整组都管。
+ */
+export const LEARNING_ADMIN_PATHS: readonly AdminPathRule[] = [
+  {
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    path: /^\/api\/admin\/learning(\/.*)?$/,
   },
 ];
 
