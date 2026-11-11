@@ -460,10 +460,6 @@ import { createSelfHostBanner } from "./self-host-banner";
 import { createSetupSources, modelKeyOf } from "./setup/checklist";
 import { createComputerCheck } from "./setup/computer-check";
 import {
-  backfillStaffingForAvatars,
-  staffingBackfillDeps,
-} from "./staffing/default-grant";
-import {
   ensureStaffingServer,
   withStaffingDefault,
 } from "./staffing/default-grant";
@@ -1891,18 +1887,6 @@ await startupLifecycle.run(async (startup) => {
     await ensurePersonalLearning(personalDeps, bootAuditStore).catch(
       warnPersonal("没能让每位员工都参与自动学习"),
     );
-    /*
-     * 升级上来的小管家补上「招聘与组群」。仍在那个人自己的帧里，沿用上面各步用的 `personalDeps.asPerson`，
-     * 不开新的出帧门；新开通的分身在开通时就带着这些授予（`tenant/provisioning.ts`）。
-     */
-    await backfillStaffingForAvatars(
-      staffingBackfillDeps(database, {
-        store: pluginStore,
-        disabled: (avatarId) =>
-          approvalService.disabledTools(DEV_ACTOR.id, avatarId),
-        ...(personalDeps.asPerson ? { asPerson: personalDeps.asPerson } : {}),
-      }),
-    ).catch(warnPersonal("没能让小管家默认会招人、组群"));
   }
 
   /*

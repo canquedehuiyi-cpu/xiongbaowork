@@ -29,6 +29,7 @@ import {
   isNotNull,
   isNull,
   like,
+  ne,
   notLike,
   sql,
 } from "drizzle-orm";
@@ -52,6 +53,7 @@ import {
 } from "../db/schema/plugins";
 import { currentEdition } from "../edition";
 import { currentTenant, runAsTenant } from "../tenant/context";
+import { STAFFING_DEFAULT_BY } from "../tenant/provisioning";
 
 type ListedTool = { ref: string };
 
@@ -952,7 +954,13 @@ export async function personalGrantsLeftInTeam(
   const [row] = await database
     .select({ ref: pluginGrants.ref })
     .from(pluginGrants)
-    .where(like(pluginGrants.grantedBy, "openbot:%"))
+    .where(
+      and(
+        like(pluginGrants.grantedBy, "openbot:%"),
+        // 小管家默认的招聘能力两个版本都给，团队版里它是正常的，不是个人版留下的宽授予。
+        ne(pluginGrants.grantedBy, STAFFING_DEFAULT_BY),
+      ),
+    )
     .limit(1);
   return row !== undefined;
 }

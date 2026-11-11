@@ -23,6 +23,7 @@ import {
 import { setEdition } from "../src/edition";
 import {
   personalDefaultsDeps,
+  personalGrantsLeftInTeam,
   personalRevokeRefusal,
   withPersonalDefaults,
 } from "../src/plugins/personal-defaults";
@@ -323,6 +324,32 @@ describe("the grant reaches the avatar's run", () => {
       );
     expect(await toolsOf(store, userId, avatarId)).not.toContain(
       "staffing/propose_employee",
+    );
+  });
+
+  test("in the team edition the avatar's default grant is not reported as a leftover personal grant", async () => {
+    setEdition("team");
+    // 先清掉本文件前面几条留下的默认授予，让「之前」只剩别的测试可能留下的。
+    await asPlatform(() =>
+      database
+        .delete(pluginGrants)
+        .where(inArray(pluginGrants.agentId, people.map(avatarAgentId))),
+    );
+    const leftBefore = await asPlatform(() =>
+      personalGrantsLeftInTeam(database),
+    );
+    const userId = await newcomer("not-leftover");
+    await provisionTenant(
+      database,
+      { id: userId, email: `${userId}@example.test` },
+      { withStaffing: true },
+    );
+    expect(await staffingRows(avatarAgentId(userId))).toHaveLength(
+      STAFFING_TOOL_NAMES.length,
+    );
+    // 别的测试可能在共用的库里留着别的 openbot: 授予，所以比较的是有它之前与之后：它不改变答案。
+    expect(await asPlatform(() => personalGrantsLeftInTeam(database))).toBe(
+      leftBefore,
     );
   });
 
