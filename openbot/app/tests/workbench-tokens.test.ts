@@ -2,15 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 /*
- * The workbench palette, taken from the product's logo (熊宝数字员工 · xiongbao work): a 京剧脸谱
- * red panda in a black hoodie, framed in glowing gold on black. So the primary action is that red,
- * focus rings and highlights are the frame's gold, and the grounds are warm blacks (dark) or a warm
- * paper white (light) rather than neutral grey. Surfaces are iOS-style glass: translucent and
- * blurred over a ground lit by a red and a gold glow.
+ * The workbench palette (docs/design/ios-studio): 熊宝's 京剧脸谱 in black, white and red. Neutral
+ * grounds and graphite cards, white (dark) or black (light) for the primary action and main text, and
+ * red kept as a signal — selection, attention, the brand — never as a fill behind white words.
+ * Surfaces are matte: opaque, with a faint sheen, not frosted glass.
  *
- * The numbers are this product's own; what is pinned here is the shape — red primary, gold ring,
- * warm grounds, glass surfaces — and that every pairing a person has to read still clears WCAG AA,
- * so tuning a shade later cannot quietly make a button or a caption unreadable.
+ * What is pinned is that shape, and that every pairing a person has to read clears WCAG AA, so tuning
+ * a shade later cannot quietly make a button, a caption or a red label unreadable.
  */
 
 const styles = readFileSync(
@@ -71,50 +69,36 @@ describe.each([
   ["light", light],
   ["dark", dark],
 ] as const)("%s theme", (_name, tokens) => {
-  test("the primary action is the logo's red", () => {
-    const primary = parseOklch(tokens.primary);
-    expect(primary.h).toBeGreaterThanOrEqual(15);
-    expect(primary.h).toBeLessThanOrEqual(35);
-    expect(primary.c).toBeGreaterThan(0.15);
-    expect(parseOklch(tokens["sidebar-primary"]).h).toBe(primary.h);
-  });
-
-  test("focus rings and highlights are the frame's gold", () => {
-    for (const name of ["brand-gold", "ring", "sidebar-ring"]) {
-      const gold = parseOklch(tokens[name]);
-      expect(gold.h).toBeGreaterThanOrEqual(60);
-      expect(gold.h).toBeLessThanOrEqual(95);
-      expect(gold.c).toBeGreaterThan(0.08);
-    }
-    expect(
-      contrast(tokens["brand-gold-foreground"], tokens["brand-gold"]),
-    ).toBeGreaterThanOrEqual(4.5);
-    // Gold words (the English product name) still read on the page and the sidebar.
-    expect(
-      contrast(tokens["brand-gold-ink"], tokens.background),
-    ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      contrast(tokens["brand-gold-ink"], tokens.sidebar),
-    ).toBeGreaterThanOrEqual(4.5);
-  });
-
-  test("the grounds are warm, not neutral grey", () => {
-    for (const name of ["background", "card", "sidebar"]) {
-      const ground = parseOklch(tokens[name]);
-      if (ground.c === 0) continue; // pure white is allowed for a light card
-      expect(ground.h).toBeGreaterThanOrEqual(30);
-      expect(ground.h).toBeLessThanOrEqual(95);
-    }
-    expect(parseOklch(tokens.background).c).toBeGreaterThan(0);
-  });
-
-  test("text on the primary action clears AA", () => {
+  test("the primary action is the face's black or white, not a colour", () => {
+    expect(parseOklch(tokens.primary).c).toBeLessThan(0.01);
+    expect(tokens["sidebar-primary"]).toBe(tokens.primary);
     expect(
       contrast(tokens["primary-foreground"], tokens.primary),
-    ).toBeGreaterThanOrEqual(4.5);
+    ).toBeGreaterThanOrEqual(7);
   });
 
-  test("body, card and sidebar text clear AA, and so does secondary text", () => {
+  test("red is the signal: the focus ring, the selection mark, the brand", () => {
+    for (const name of ["signal", "ring", "sidebar-ring"]) {
+      const red = parseOklch(tokens[name]);
+      expect(red.h).toBeGreaterThanOrEqual(15);
+      expect(red.h).toBeLessThanOrEqual(35);
+      expect(red.c).toBeGreaterThan(0.15);
+    }
+    // Red words — a failed task, an alert badge — still read on the page and on a card.
+    for (const ground of ["background", "card"]) {
+      expect(
+        contrast(tokens["signal-ink"], tokens[ground]),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test("the grounds and cards are neutral greys", () => {
+    for (const name of ["background", "card", "popover", "sidebar", "muted"]) {
+      expect(parseOklch(tokens[name]).c).toBeLessThan(0.01);
+    }
+  });
+
+  test("body, card and sidebar text clear AA, and so do secondary and faint text", () => {
     expect(contrast(tokens.foreground, tokens.background)).toBeGreaterThan(7);
     expect(
       contrast(tokens["card-foreground"], tokens.card),
@@ -122,21 +106,23 @@ describe.each([
     expect(
       contrast(tokens["sidebar-foreground"], tokens.sidebar),
     ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      contrast(tokens["muted-foreground"], tokens.background),
-    ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      contrast(tokens["muted-foreground"], tokens.card),
-    ).toBeGreaterThanOrEqual(4.5);
+    for (const text of ["muted-foreground", "faint"]) {
+      for (const ground of ["background", "card", "sidebar"]) {
+        expect(contrast(tokens[text], tokens[ground])).toBeGreaterThanOrEqual(
+          4.5,
+        );
+      }
+    }
   });
 });
 
 describe("dark theme surfaces", () => {
-  test("the sidebar and cards sit one step apart from the page", () => {
+  test("the canvas is the reference's near-black, and cards and sidebar sit a step above it", () => {
     const page = parseOklch(dark.background).l;
-    const sidebar = parseOklch(dark.sidebar).l;
+    expect(page).toBeGreaterThan(0.14);
+    expect(page).toBeLessThan(0.18);
+    expect(parseOklch(dark.sidebar).l).toBeGreaterThan(page);
     const card = parseOklch(dark.card).l;
-    expect(sidebar).toBeGreaterThan(page);
     expect(card).toBeGreaterThan(page);
     expect(card - page).toBeLessThanOrEqual(0.08);
   });
@@ -148,36 +134,33 @@ describe("dark theme surfaces", () => {
   });
 });
 
-describe("glass surfaces", () => {
+describe("matte surfaces", () => {
   const theme = styles.match(/@theme inline\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
 
   test.each(["card", "popover", "sidebar"])(
-    "%s is drawn translucent, mixed with transparent",
+    "%s is drawn opaque, straight from its token",
     (name) => {
-      const declared = theme.match(
-        new RegExp(`--color-${name}:\\s*([^;]+);`),
-      )?.[1];
-      expect(declared).toMatch(
-        new RegExp(
-          `color-mix\\(in oklab, var\\(--${name}\\) \\d+%, transparent\\)`,
-        ),
-      );
+      expect(theme).toContain(`--color-${name}: var(--${name});`);
     },
   );
 
-  test("translucent surfaces blur what is behind them", () => {
-    const rule = styles.match(
-      /\.bg-card,\s*\.bg-popover,\s*\.bg-sidebar\s*\{([^}]*)\}/,
-    )?.[1];
-    expect(rule).toContain("backdrop-filter: blur(");
-    expect(rule).toContain("-webkit-backdrop-filter: blur(");
+  test("nothing frosts what is behind it", () => {
+    /*
+     * Surfaces are matte (docs/design/ios-studio: 哑光材质，不用磨砂玻璃). The one blur left is inside a
+     * Bot's live orb (upstream's `.bot-orb-live .agent-orb::after`), which draws the orb itself and
+     * sits behind no card or panel, so it is taken out before looking.
+     */
+    const surfaces = styles.replace(
+      /\.bot-orb-live \.agent-orb::after \{[^}]*\}/g,
+      "",
+    );
+    expect(surfaces).not.toContain("backdrop-filter: blur(");
   });
 
-  test("the page ground carries the red and gold glows the glass blurs", () => {
+  test("cards carry a faint sheen and the page one soft light, in both themes", () => {
     for (const tokens of [light, dark]) {
+      expect(tokens["card-sheen"]).toContain("linear-gradient(");
       expect(tokens["app-backdrop"]).toContain("radial-gradient(");
-      expect(tokens["app-backdrop"]).toContain("var(--primary)");
-      expect(tokens["app-backdrop"]).toContain("var(--brand-gold)");
     }
   });
 });

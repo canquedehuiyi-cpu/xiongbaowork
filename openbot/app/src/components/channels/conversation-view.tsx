@@ -46,6 +46,7 @@ export function ConversationView({
   stoppable,
   queueWhileBusy = false,
   restoring = false,
+  empty,
   intro,
   starterSuggestions,
   onSubmit,
@@ -116,6 +117,8 @@ export function ConversationView({
   queueWhileBusy?: boolean;
   /** History has been asked for and has not arrived. Drawn as placeholder rows; see `ChatTranscript`. */
   restoring?: boolean;
+  /** Shown in place of an empty transcript; see `ChatTranscript`. */
+  empty?: ReactNode;
   /**
    * The top of the conversation, drawn above the first message and scrolled away with it. Only
    * where Bots are orbs (`useBotLook`); elsewhere the transcript starts at its first message.
@@ -463,6 +466,7 @@ export function ConversationView({
           threadId={threadId}
           busy={busy}
           commandLabels={skillLabels(commands ?? [])}
+          empty={empty}
           {...(orbs && intro ? { intro } : {})}
           messages={messages}
           onRemoveQueued={(id) => {

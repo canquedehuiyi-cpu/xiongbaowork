@@ -45,15 +45,15 @@ import { useConversationFocus } from "./use-conversation-focus";
 type RosterTab = "wakers" | "groups";
 
 /*
- * The 「+ 新建…」 row and the search toggle beside it, as the reference draws them: a faint dashed
- * ghost button filling the row (x 12–196 at 1696px) and a 32px magnifier at its right.
+ * The 「+ 新建…」 row and the search toggle beside it (docs/design/ios-studio): a quiet text row with
+ * a red plus, left-aligned under the switch, and a 32px magnifier at its right.
  */
 const newRowClassName =
-  "flex h-[32px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-foreground/[0.06] border-dashed text-[13px] text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[14px]";
+  "flex h-[32px] min-w-0 flex-1 items-center gap-[7px] rounded-[8px] pl-[9px] text-[12px] text-foreground/85 outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[15px] [&>svg]:text-signal";
 
-/** One 48px roster row: a 32px avatar 6px in from the row, the text 8px after it (x 18 and x 58). */
+/** One roster row: a 29px rounded-square face 5px in, the name and its line 9px after it. */
 const rowClassName =
-  "flex h-[48px] min-w-0 flex-1 items-center gap-[8px] rounded-md px-[6px] outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/60";
+  "flex h-[42px] min-w-0 flex-1 items-center gap-[9px] rounded-[9px] px-[5px] outline-none hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring/60";
 
 function RosterToolbar({
   action,
@@ -187,15 +187,15 @@ function EmployeeRow({
           name={agent.name}
           seed={agent.avatarSeed}
           portrait={{ kind: "coworker", id: agent.id }}
-          size={32}
+          size={29}
         />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold text-[14px] leading-[20px]">
+        <span className="block truncate font-semibold text-[13px] leading-[18px]">
           {agent.name}
         </span>
         {line ? (
-          <span className="block truncate text-[12px] text-muted-foreground leading-[18px]">
+          <span className="block truncate text-[11px] text-faint leading-[16px]">
             {line}
           </span>
         ) : null}
@@ -490,15 +490,14 @@ export function SidebarRoster() {
     },
   ];
   return (
-    <div className="px-[12px] pt-[15px] pb-3">
+    <div className="mx-[15px] mt-[20px] border-sidebar-border border-t pt-[13px] pb-3">
       <SegmentedTabs
-        // Two equal halves, the selected label bold as the reference draws it.
-        className="w-full gap-0 [&>button[aria-selected=true]]:font-semibold [&>button]:flex-1"
+        // Two equal halves of one switch, as the reference draws it.
+        className="w-full [&>button]:flex-1"
         label="员工与群组"
         onValueChange={setTab}
         tabs={tabs}
         value={tab}
-        variant="underline"
       />
       {tab === "wakers" ? (
         <EmployeeList employees={employees} />

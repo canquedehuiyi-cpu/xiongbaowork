@@ -3,15 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { PageRows, PageSection } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
   Item,
@@ -42,6 +35,8 @@ import {
   PROVIDER_NAMES,
   poolChoiceName,
 } from "@/lib/models/queries";
+import { cn } from "@/lib/utils";
+import { CARD_FACE, SectionHead, TabEmpty } from "./resource-kit";
 
 /**
  * 能力与资源 › 模型库: the platform's experience models and the tenant's own library, moved out of the
@@ -55,6 +50,35 @@ export function ModelsTab() {
     </>
   );
 }
+
+/** One zone of the tab: the section head (title, its one verb on the right), a line, the rows. */
+function Zone({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="mt-[22px]">
+      <SectionHead aside={action} className="mb-[4px]" title={title} />
+      <p className="max-w-prose text-pretty text-[13px] text-muted-foreground leading-[1.6]">
+        {description}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+/** A model's row: the workbench card face, name over its line, the verbs on the right. */
+const MODEL_ROW = cn(
+  CARD_FACE,
+  "px-[13px] py-[10px] dark:border-border [&_[data-slot=item-title]]:font-bold [&_[data-slot=item-title]]:text-[13px] [&_[data-slot=item-description]]:text-[12px]",
+);
 
 /**
  * The four states a list of anything has, said once rather than five times. A failed read is an
@@ -80,16 +104,16 @@ function ZoneRows({
 }) {
   if (query.isPending) {
     return (
-      <div className="mt-4 flex flex-col gap-2">
-        <Skeleton className="h-14" />
-        <Skeleton className="h-14 w-2/3" />
+      <div className="mt-[12px] flex flex-col gap-[9px]">
+        <Skeleton className="h-[60px] rounded-[13px]" />
+        <Skeleton className="h-[60px] w-2/3 rounded-[13px]" />
       </div>
     );
   }
   return (
     <>
       {query.error ? (
-        <div className="mt-4">
+        <div className="mt-[12px]">
           <QueryError
             error={query.error}
             label={failure}
@@ -99,7 +123,7 @@ function ZoneRows({
         </div>
       ) : null}
       {query.data === undefined || empty ? null : (
-        <PageRows>{children}</PageRows>
+        <div className="mt-[12px] flex flex-col gap-[9px]">{children}</div>
       )}
     </>
   );
@@ -112,14 +136,7 @@ function ZoneEmpty({
   title: string;
   description: string;
 }) {
-  return (
-    <Empty className="h-[140px] border border-dashed">
-      <EmptyHeader>
-        <EmptyTitle className="text-muted-foreground">{title}</EmptyTitle>
-        <EmptyDescription>{description}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
+  return <TabEmpty description={description} title={title} />;
 }
 
 /**
@@ -142,13 +159,12 @@ function ModelZone() {
   const locked = library.data ? !library.data.customModels : true;
 
   return (
-    <PageSection
+    <Zone
       action={
         <Button
           disabled={locked}
           onClick={() => setConnecting((open) => !open)}
-          size="sm"
-          variant={connecting ? "secondary" : "default"}
+          variant={connecting ? "outline" : "default"}
         >
           <IconPlus />
           接入
@@ -177,7 +193,7 @@ function ModelZone() {
           title="还没有接入任何模型"
         />
       ) : null}
-    </PageSection>
+    </Zone>
   );
 }
 
@@ -192,8 +208,7 @@ function PlatformModelZone() {
   const library = useQuery(modelLibraryQueryOptions());
   const pool = library.data?.pool ?? [];
   return (
-    <PageSection
-      className="mt-[20px]"
+    <Zone
       description="平台提供并托管密钥的共享模型，套餐内可直接给员工使用，不需要你自己的 key。"
       title="平台体验模型"
     >
@@ -203,7 +218,7 @@ function PlatformModelZone() {
         query={library}
       >
         {pool.map((model) => (
-          <Item key={model.id} variant="muted">
+          <Item className={MODEL_ROW} key={model.id} variant="outline">
             <ItemContent>
               <ItemTitle>{poolChoiceName(model)}</ItemTitle>
               <ItemDescription>
@@ -221,7 +236,7 @@ function PlatformModelZone() {
           title="暂无平台体验模型"
         />
       ) : null}
-    </PageSection>
+    </Zone>
   );
 }
 
@@ -252,7 +267,7 @@ function ConnectForm({
 
   return (
     <form
-      className="mb-4 flex flex-col gap-3 rounded-lg border border-border p-4"
+      className={cn(CARD_FACE, "mt-[12px] flex flex-col gap-3 p-[14px]")}
       onSubmit={(event) => {
         event.preventDefault();
         if (locked || !ready) return;
@@ -278,7 +293,7 @@ function ConnectForm({
         </p>
       ) : null}
       <fieldset className="flex flex-col gap-3" disabled={locked}>
-        <legend className="font-medium text-sm">接入一个模型</legend>
+        <legend className="font-bold text-[14px]">接入一个模型</legend>
         <Select
           disabled={locked}
           // The label map, so the closed trigger names the provider rather than its slug.
@@ -377,8 +392,8 @@ function ModelRow({
   const message = failure?.message ?? (failure ? "这件事没能完成。" : null);
 
   return (
-    <Item variant="muted">
-      <ItemContent>
+    <Item className={MODEL_ROW} variant="outline">
+      <ItemContent className="min-w-0">
         <ItemTitle>{modelChoiceName(model)}</ItemTitle>
         <ItemDescription>
           {model.enabled
@@ -399,7 +414,7 @@ function ModelRow({
           ) : null}
         </ItemDescription>
       </ItemContent>
-      <ItemActions>
+      <ItemActions className="flex-wrap justify-end">
         <Button
           disabled={test.isPending}
           onClick={() => test.mutate(model.id)}

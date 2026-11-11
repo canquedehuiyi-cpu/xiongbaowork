@@ -331,10 +331,15 @@ test("the header reads as the reference: subtitle, + 新建自动任务, and no 
   expect(view.queryByRole("tablist", { name: "自主工作视图" })).toBeNull();
 });
 
-test("one panel, four cells: number, bold label, grey caption", async () => {
+/*
+ * docs/design/ios-studio (03-自主工作.png, `.automation-stats`): the panel is titled 自动任务概览 and
+ * named by that heading; each cell keeps number, label and caption in that order (its icon square
+ * sits beside them, outside `[data-metric]`), with the reference's captions.
+ */
+test("one panel, four cells: number, label, caption", async () => {
   const { view } = draw();
   await view.findByText("Alpha deploy hook");
-  const panel = view.getByRole("region", { name: "自主工作概览" });
+  const panel = view.getByRole("region", { name: "自动任务概览" });
   const cells = Array.from(panel.querySelectorAll("[data-metric]"));
   expect(
     cells.map((cell) => [
@@ -343,27 +348,29 @@ test("one panel, four cells: number, bold label, grey caption", async () => {
     ]),
   ).toEqual([
     ["6", "6", "自动任务总数", "全部自动任务"],
-    ["5", "5", "已启用", "当前已启用的自动任务"],
-    ["5", "5", "员工执行", "由员工执行的自动任务"],
-    ["1", "1", "WakerFlow 执行", "由 WakerFlow 执行的自动任务"],
+    ["5", "5", "已启用", "正在生效的自动任务"],
+    ["5", "5", "员工执行", "交由员工执行"],
+    ["1", "1", "WakerFlow 执行", "交由流程执行"],
   ]);
 });
 
-test("the toolbar is search + 执行者 / 触发类型 / 自动任务状态 / 排序, sorted by 最近创建", async () => {
+// docs/design/ios-studio (03-自主工作.png): 「搜索任务名称」, then 执行者 / 触发类型 / 状态 / 排序, each
+// reading 「全部」 when unset.
+test("the toolbar is search + 执行者 / 触发类型 / 状态 / 排序, sorted by 最近创建", async () => {
   const { view } = draw();
   await view.findByText("Alpha deploy hook");
   const search = view.getByLabelText("搜索自动任务") as HTMLInputElement;
-  expect(search.placeholder).toBe("搜索任务名称...");
+  expect(search.placeholder).toBe("搜索任务名称");
 
   const options = (label: string) =>
     Array.from((view.getByLabelText(label) as HTMLSelectElement).options).map(
       (option) => option.textContent,
     );
-  expect(options("执行者")).toEqual(["全部执行者", "员工", "WakerFlow"]);
-  expect(options("触发类型")).toEqual(["全部类型", "定时", "事件", "API"]);
+  expect(options("执行者")).toEqual(["全部", "员工", "WakerFlow"]);
+  expect(options("触发类型")).toEqual(["全部", "定时", "事件", "API"]);
   // 运行中 and 需要关注 left the panel; their counts ride on the status options instead.
-  expect(options("自动任务状态")).toEqual([
-    "全部状态",
+  expect(options("状态")).toEqual([
+    "全部",
     "已启用",
     "已停用",
     "运行中 · 1",
@@ -380,7 +387,8 @@ test("the toolbar is search + 执行者 / 触发类型 / 自动任务状态 / �
   expect(rows.slice(0, 2)).toEqual(["Alpha deploy hook", "Zeta weekly report"]);
 });
 
-test("按员工查看 is a text link at the toolbar's end and round-trips through ?view=agents", async () => {
+// docs/design/ios-studio (03-自主工作.png): an outline button at the 自动任务 heading, still a link.
+test("按员工查看 is a link at the list's heading and round-trips through ?view=agents", async () => {
   const { view, user, router } = draw();
   await view.findByText("Alpha deploy hook");
   const link = view.getByRole("link", { name: "按员工查看" });
@@ -394,8 +402,12 @@ test("按员工查看 is a text link at the toolbar's end and round-trips throug
   expect(await view.findByRole("link", { name: "按员工查看" })).toBeTruthy();
 });
 
-test("with nothing unattended the empty state is text only, with the reference's copy", async () => {
-  const { view } = draw({ overview: [], automations: [] });
+/*
+ * docs/design/ios-studio (03-自主工作.png, `.empty`): the empty list is 熊宝, the title, one line and
+ * an outline 「新建自动任务」 that opens the same creation panel as the header's action.
+ */
+test("with nothing unattended the empty state offers 新建自动任务, which opens the creation panel", async () => {
+  const { view, user } = draw({ overview: [], automations: [] });
   const title = await view.findByText("还没有自动任务");
   const empty = title.closest("[data-empty]") as HTMLElement;
   expect(empty).toBeTruthy();
@@ -404,5 +416,25 @@ test("with nothing unattended the empty state is text only, with the reference's
       "创建自动任务，按定时、事件或 API 自动唤起员工 / WakerFlow。",
     ),
   ).toBeTruthy();
-  expect(empty.querySelector("svg")).toBeNull();
+  expect(view.queryByRole("region", { name: "新建" })).toBeNull();
+  await user.click(within(empty).getByRole("button", { name: "新建自动任务" }));
+  expect(await view.findByRole("region", { name: "新建" })).toBeTruthy();
+});
+
+// The three 触发方式 are the list's own trigger types, in the filter's order.
+test("触发方式 names the three real trigger types, 01 to 03", async () => {
+  const { view } = draw();
+  await view.findByText("Alpha deploy hook");
+  const section = view.getByRole("region", { name: "触发方式" });
+  const items = within(section).getAllByRole("listitem");
+  expect(items.map((item) => item.getAttribute("data-trigger-type"))).toEqual([
+    "schedule",
+    "event",
+    "api",
+  ]);
+  expect(items.map((item) => item.textContent)).toEqual([
+    "定时触发按设定时间执行例行工作01",
+    "事件触发收到指定事件后启动任务02",
+    "API 触发由外部系统请求启动任务03",
+  ]);
 });

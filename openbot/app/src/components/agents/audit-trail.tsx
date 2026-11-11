@@ -2,16 +2,13 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
+  ProfileEmpty,
+  ProfilePanel,
+} from "@/components/bot-profile/profile-kit";
 import {
   Item,
   ItemContent,
   ItemDescription,
-  ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -107,11 +104,11 @@ export function AgentAuditTrail({ agentId }: { agentId: string }) {
     return (
       <div
         aria-label="正在读取审计记录"
-        className="mt-4 grid gap-2"
+        className="mt-[10px] grid gap-[6px]"
         role="status"
       >
-        <Skeleton className="h-12" />
-        <Skeleton className="h-12" />
+        <Skeleton className="h-[48px] rounded-[14px]" />
+        <Skeleton className="h-[48px] rounded-[14px]" />
       </div>
     );
   }
@@ -123,13 +120,15 @@ export function AgentAuditTrail({ agentId }: { agentId: string }) {
     // 503 is the deployment saying it keeps no trail at all, which is not something to retry.
     if (trail.error instanceof RequestError && trail.error.status === 503) {
       return (
-        <p className="mt-4 text-muted-foreground text-sm" role="alert">
-          这个部署没有开启审计记录，所以这里没有流水可看。
-        </p>
+        <ProfileEmpty>
+          <span role="alert">
+            这个部署没有开启审计记录，所以这里没有流水可看。
+          </span>
+        </ProfileEmpty>
       );
     }
     return (
-      <div className="mt-4">
+      <div className="mt-[10px]">
         <QueryError
           error={trail.error}
           label="读不到审计记录"
@@ -145,37 +144,33 @@ export function AgentAuditTrail({ agentId }: { agentId: string }) {
   const ownOnly = pages[0]?.scope === "own";
 
   return (
-    <div className="mt-4">
+    <div className="mt-[10px]">
       {ownOnly ? (
-        <p className="mb-3 text-muted-foreground text-sm" data-scope="own">
+        <p
+          className="mb-[8px] text-[13px] text-muted-foreground"
+          data-scope="own"
+        >
           你不是这位员工的主人，所以这里只列出你自己对它做过的操作。
         </p>
       ) : null}
       {events.length === 0 ? (
-        <Empty className="h-[120px] border border-dashed">
-          <EmptyHeader>
-            <EmptyTitle className="text-muted-foreground">
-              还没有审计记录
-            </EmptyTitle>
-            <EmptyDescription>
-              有人修改、暂停它，或它交接、提问时，这里会留下一条记录。
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <ProfileEmpty className="mt-0">
+          <span className="block font-medium text-foreground/80">
+            还没有审计记录
+          </span>
+          <span className="mt-[2px] block">
+            有人修改、暂停它，或它交接、提问时，这里会留下一条记录。
+          </span>
+        </ProfileEmpty>
       ) : (
-        <ItemGroup>
+        <ProfilePanel className="mt-0">
           {events.map((event) => (
-            <Item
-              data-event-type={event.eventType}
-              key={event.id}
-              size="sm"
-              variant="muted"
-            >
-              <ItemContent>
+            <Item data-event-type={event.eventType} key={event.id} size="sm">
+              <ItemContent className="flex-row flex-wrap items-baseline justify-between gap-x-[12px]">
                 <ItemTitle>
                   {whoOf(event, myId)} · {auditEventLabel(event.eventType)}
                 </ItemTitle>
-                <ItemDescription>
+                <ItemDescription className="font-mono text-[11.5px] tabular-nums">
                   <time dateTime={event.createdAt}>
                     {relativeTime(event.createdAt)}
                   </time>
@@ -183,22 +178,22 @@ export function AgentAuditTrail({ agentId }: { agentId: string }) {
               </ItemContent>
             </Item>
           ))}
-        </ItemGroup>
+        </ProfilePanel>
       )}
       {trail.isRefetchError ? (
-        <p className="mt-2 text-destructive text-sm" role="alert">
+        <p className="mt-[8px] text-[13px] text-destructive" role="alert">
           刷新审计记录失败，上面是上一次读到的：
           {trail.error?.message ?? "请稍后再试。"}
         </p>
       ) : null}
       {trail.isFetchNextPageError ? (
-        <p className="mt-2 text-destructive text-sm" role="alert">
+        <p className="mt-[8px] text-[13px] text-destructive" role="alert">
           更早的记录没读到：{trail.error?.message ?? "请稍后再试。"}
         </p>
       ) : null}
       {trail.hasNextPage ? (
         <Button
-          className="mt-3"
+          className="mt-[10px]"
           disabled={trail.isFetchingNextPage}
           onClick={() => void trail.fetchNextPage()}
           size="sm"

@@ -72,6 +72,10 @@ import type {
 } from "@/lib/wakerflows";
 import type { OpenTarget } from "@/routes/_authed/_app/tasks";
 import type { UserPreferences } from "../../../shared/user-preferences";
+import { EXTRA as ADMIN_EXTRA } from "./extra/admin";
+import { EXTRA as CONVERSATION_EXTRA } from "./extra/conversations";
+import { EXTRA as PEOPLE_EXTRA } from "./extra/people";
+import { EXTRA as WORKFLOW_EXTRA } from "./extra/workflows";
 
 export type Scenario = "data" | "empty";
 export const SCENARIOS: readonly Scenario[] = ["data", "empty"];
@@ -184,6 +188,13 @@ const AGENTS: AgentProfile[] = [
     visibility: "public",
     mine: false,
     canManage: true,
+  }),
+  // The person's own 分身 (`AVATAR_SOURCES.agentId`), as docs/design/ios-studio shows it on the roster.
+  agent({
+    id: "agent-avatar",
+    name: "我的分身",
+    title: "个人分身",
+    roleDescription: "收集、整理和跟进与你有关的工作。",
   }),
 ];
 
@@ -758,6 +769,34 @@ const PLUGINS_PAGE: PluginsPage = {
       auth: "none",
       perInstance: false,
     },
+    // Three more market entries, so the 插件市场 grid fills the 3 × 2 the design draws.
+    {
+      key: "web-search",
+      title: "联网搜索",
+      vendor: "示例供应商",
+      summary: "搜索公开网页并提取来源。",
+      docsUrl: "https://docs.example.com/web-search",
+      auth: "builtin",
+      perInstance: false,
+    },
+    {
+      key: "cloud-drive",
+      title: "云盘文件",
+      vendor: "示例供应商",
+      summary: "读取提问者已授权的云盘文件。",
+      docsUrl: "https://docs.example.com/cloud-drive",
+      auth: "user-oauth",
+      perInstance: false,
+    },
+    {
+      key: "tickets",
+      title: "工单系统",
+      vendor: "示例供应商",
+      summary: "查询与更新客服工单的处理进度。",
+      docsUrl: "https://docs.example.com/tickets",
+      auth: "deployment-bearer",
+      perInstance: false,
+    },
   ],
   servers: PLUGIN_SERVERS,
   skills: SKILLS,
@@ -1318,6 +1357,17 @@ const reachability = (scenario: Scenario): Reachability => ({
             enabled: false,
             optedOutAt: at(90),
           },
+          // A chat whose last delivery failed: the table's 送达失败 state.
+          {
+            id: "binding-03",
+            transport: "slack",
+            channelId: "channel-support",
+            agentId: "agent-support",
+            address: "#售后支持",
+            mentionId: null,
+            enabled: true,
+            optedOutAt: null,
+          },
         ]
       : [],
   devices:
@@ -1342,6 +1392,15 @@ const reachability = (scenario: Scenario): Reachability => ({
             state: "failed",
             error: "号码已退订",
             createdAt: at(91),
+          },
+          {
+            id: "delivery-03",
+            transport: "slack",
+            kind: "reply",
+            state: "failed",
+            error: "机器人已被移出该频道",
+            createdAt: at(60),
+            bindingId: "binding-03",
           },
         ]
       : [],
@@ -1812,6 +1871,14 @@ const notFound = (error: string): FixtureResponse => ({
 const list = <T>(context: Context, items: T[]): T[] =>
   context.data ? items : [];
 
+/** Each area's own additions (tests/parity/extra), consulted after this file's routes. */
+const EXTRA_ROUTES = [
+  ...CONVERSATION_EXTRA,
+  ...PEOPLE_EXTRA,
+  ...WORKFLOW_EXTRA,
+  ...ADMIN_EXTRA,
+] as [method: string, pattern: RegExp, handler: Handler][];
+
 const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   // Identity and deployment
   ["GET", /^\/api\/me$/, () => ok({ user: USER })],
@@ -1914,6 +1981,13 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     (c) =>
       ok({
         portraits: list(c, [
+          {
+            kind: "coworker",
+            id: "agent-avatar",
+            preset: "naughty",
+            imageUrl: null,
+            updatedAt: "2026-11-07T08:00:00.000Z",
+          },
           {
             kind: "coworker",
             id: "agent-support",
@@ -2217,7 +2291,7 @@ export function resolveFixture(
 ): FixtureResponse | undefined {
   const url = new URL(pathnameWithSearch, "http://parity.local");
   const upper = method.toUpperCase();
-  for (const [routeMethod, pattern, handler] of routes) {
+  for (const [routeMethod, pattern, handler] of [...routes, ...EXTRA_ROUTES]) {
     if (routeMethod !== upper) continue;
     const match = url.pathname.match(pattern);
     if (!match) continue;

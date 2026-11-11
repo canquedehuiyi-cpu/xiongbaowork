@@ -1,4 +1,5 @@
 import { createRouter } from "@tanstack/react-router";
+import { RouteError } from "./components/layout/route-error";
 import { parseSearchText } from "./lib/search-text";
 import type { RouterContext } from "./router-context";
 import { routeTree } from "./routeTree.gen";
@@ -6,6 +7,7 @@ import { routeTree } from "./routeTree.gen";
 export const router = createRouter({
   routeTree,
   context: {} as RouterContext,
+  defaultErrorComponent: RouteError,
   /*
    * The router's own search parsing, minus the numbers it cannot render back: see
    * `parseSearchText`. Every route that reads a parameter as text reads it through `searchText`,

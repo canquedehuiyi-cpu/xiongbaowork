@@ -1,0 +1,40 @@
+01 ✓ 侧栏导航到五个核心页面
+   @Waker→/reachability（选中：@Waker）；自主工作→/autonomous（选中：自主工作）；员工管理→/wakers（选中：员工管理）；能力与资源→/resources（选中：能力与资源）；任务看板→/tasks?machineId=&crew=&executor=&group=&status=&q=&period=month&view=list&source=（选中：任务看板）
+02 ✓ 任务看板：指标点选筛选与取消
+   点选后 /tasks?machineId=&crew=&executor=&group=&status=needs_action&q=&period=month&view=list&source=（aria-pressed=true），再点 /tasks?machineId=&crew=&executor=&group=&status=&q=&period=month&view=list&source=
+03 ✓ 任务看板：列表与泳道切换
+   泳道 /tasks?machineId=&crew=&executor=&group=&status=&q=&period=month&view=lanes&source=，回到列表 /tasks?machineId=&crew=&executor=&group=&status=&q=&period=month&view=list&source=
+04 ✓ 任务看板：筛选与清空
+   选 running 后 /tasks?machineId=&crew=&executor=&group=&status=running&q=&period=month&view=list&source=，清空后 /tasks?machineId=&crew=&executor=&group=&status=&q=&period=month&view=list&source=
+05 ✓ 任务看板：需要操作与查收结果页签
+   查收结果 /tasks?machineId=&crew=&executor=&group=&status=&q=&period=month&view=list&source=&attention=review，需要操作 /tasks?machineId=&crew=&executor=&group=&status=&q=&period=month&view=list&source=
+06 ✓ 任务看板：批准一条待批准任务（写入）
+   已点击「批准」
+   写请求：POST /api/approvals/approval-01/decision {"decision":"allow_once"}
+07 ✓ 任务看板：查看任务详情
+   「查看详情」指向 /channel/channel-support，到达 /channel/channel-support
+08 ✓ 员工管理：员工与群组页签、角色模板入口
+   群组 /wakers?tab=groups，员工 /wakers，角色模板到达 /role-templates
+09 ✓ 员工管理：新建员工入口
+   到达 /wakers?new=true，打开的对话框 1 个
+10 ✓ 员工管理：员工详情
+   到达 /wakers/agent-analyst，面包屑「员工管理数据分析员」
+11 ✓ @Waker：接入 IM 聊天弹层开关与焦点回归
+   打开「接入 IM 聊天」，Esc 关闭，焦点回到「接入 IM 聊天」
+12 ✓ @Waker：列表与卡片切换
+   卡片 /reachability?view=cards，列表 /reachability
+13 ✓ 自主工作：新建自动任务表单
+   创建面板已打开，表单控件 8 个
+14 ✓ 自主工作：启停开关（写入）
+   开关原为 true，已点击
+   写请求：PUT /api/automations/automation-03/enabled {"enabled":false}
+15 ✓ 自主工作：触发类型筛选与按员工查看
+   筛选 /autonomous?trigger=schedule，清空后再进按员工 /autonomous?view=agents
+16 ✓ 能力与资源：入口切换与插件详情
+   技能 /resources?tab=skills；插件详情「飞书文档@示例供应商已安装可自助安装读取与编辑飞书云文档、表格。管理员为整个部署保存一份凭据，所有人共用。管理员已上架：…」，Esc 关闭
+17 ✓ 能力与资源：插件分类与我的插件
+   分类 /resources?category=personal，我的插件 /resources?view=mine
+18 ✓ 设置：深浅主题切换
+   dark 类：true → false
+19 ✓ 键盘：Tab 焦点可见与分段控件方向键
+   方向键后焦点在「群组2」，/wakers?tab=groups；焦点样式 焦点环 oklab(0.673 0.188703 0.0800999 / 0.6) 0px 0px 0px 2px

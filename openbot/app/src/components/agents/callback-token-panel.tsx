@@ -69,7 +69,7 @@ export function CallbackTokenPanel({
       </p>
 
       {token ? (
-        <div className="grid gap-2 rounded-lg border border-border bg-card p-3">
+        <div className="grid gap-2 rounded-[12px] border border-border bg-card p-3">
           <p className="font-medium text-sm">现在就复制。之后不会再显示。</p>
           {/*
            * Selectable and wrapped rather than a copy button alone: somebody pasting this into a

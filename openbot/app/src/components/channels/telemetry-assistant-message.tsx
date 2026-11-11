@@ -43,7 +43,8 @@ function ResultMarkdownRenderer(
     settled && props.content.trim().length > 0,
   );
   return (
-    <div ref={ref}>
+    // `data-slot` is the hook a screen frames the answer by (the Bot chat's graphite card).
+    <div data-slot="assistant-answer" ref={ref}>
       <CopilotChatAssistantMessage.MarkdownRenderer {...props} />
     </div>
   );

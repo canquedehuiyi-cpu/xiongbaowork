@@ -29,11 +29,9 @@ import {
   type WakerFlowStepKind,
   wakerFlowsQueryOptions,
 } from "@/lib/wakerflows";
+import { CARD_FACE, SELECT_CLASS } from "./flow-ui";
 
 type Step = WakerFlowStep;
-
-const selectClass =
-  "border-input bg-background rounded-md border px-2 py-1 text-sm";
 
 /** A step id the plan does not use yet, in the server's key shape. */
 function nextStepId(steps: Step[]): string {
@@ -45,7 +43,7 @@ function nextStepId(steps: Step[]): string {
 
 function FieldError({ message }: { message: string | undefined }) {
   return message ? (
-    <p className="text-destructive text-xs" role="alert">
+    <p className="text-[12px] text-signal-ink" role="alert">
       {message}
     </p>
   ) : null;
@@ -75,7 +73,7 @@ function DefaultEditor(props: {
     return (
       <select
         aria-label={label}
-        className={selectClass}
+        className={SELECT_CLASS}
         value={value}
         onChange={(event) => set(event.target.value)}
       >
@@ -203,8 +201,11 @@ export function PlanEditor(props: {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-2" aria-label="流程概况">
+    <div className="flex flex-col gap-[14px]">
+      <section
+        className={`${CARD_FACE} flex flex-col gap-2 p-[14px]`}
+        aria-label="流程概况"
+      >
         <Input
           aria-label="流程名称"
           value={plan.name}
@@ -221,8 +222,11 @@ export function PlanEditor(props: {
         <FieldError message={problems.description} />
       </section>
 
-      <section className="flex flex-col gap-2" aria-label="参与的员工">
-        <h3 className="font-medium text-sm">参与的员工</h3>
+      <section
+        className={`${CARD_FACE} flex flex-col gap-2 p-[14px]`}
+        aria-label="参与的员工"
+      >
+        <h3 className="font-semibold text-[14px]">参与的员工</h3>
         {plan.members.map((member, index) => (
           <div
             className="flex flex-col gap-1"
@@ -232,7 +236,7 @@ export function PlanEditor(props: {
             <div className="flex flex-wrap items-center gap-2">
               <select
                 aria-label={`第 ${index + 1} 位员工`}
-                className={selectClass}
+                className={SELECT_CLASS}
                 value={member.agentId}
                 onChange={(event) =>
                   edit({
@@ -319,8 +323,11 @@ export function PlanEditor(props: {
         </div>
       </section>
 
-      <section className="flex flex-col gap-2" aria-label="流程输入">
-        <h3 className="font-medium text-sm">流程输入</h3>
+      <section
+        className={`${CARD_FACE} flex flex-col gap-2 p-[14px]`}
+        aria-label="流程输入"
+      >
+        <h3 className="font-semibold text-[14px]">流程输入</h3>
         {plan.inputs.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             这个流程运行时不需要额外输入。
@@ -382,7 +389,7 @@ export function PlanEditor(props: {
               </label>
               <select
                 aria-label={`第 ${index + 1} 个输入的类型`}
-                className={selectClass}
+                className={SELECT_CLASS}
                 value={input.type ?? "text"}
                 onChange={(event) => {
                   const type = event.target.value as WakerFlowInputType;
@@ -470,9 +477,12 @@ export function PlanEditor(props: {
         </div>
       </section>
 
-      <section className="flex flex-col gap-3" aria-label="执行步骤">
-        <h3 className="font-medium text-sm">执行步骤</h3>
-        <p className="text-muted-foreground text-xs">
+      <section
+        className={`${CARD_FACE} flex flex-col gap-3 p-[14px]`}
+        aria-label="执行步骤"
+      >
+        <h3 className="font-semibold text-[14px]">执行步骤</h3>
+        <p className="text-[12px] text-muted-foreground">
           点流程图里的节点，在右侧编辑这一步。跳转只能指向后面的步骤或结束流程。
         </p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -520,7 +530,7 @@ export function PlanEditor(props: {
         <div className="flex flex-wrap items-center gap-2">
           <select
             aria-label="新步骤的类型"
-            className={selectClass}
+            className={SELECT_CLASS}
             value={newKind}
             onChange={(event) =>
               setNewKind(event.target.value as WakerFlowStepKind)
@@ -559,10 +569,10 @@ export function PlanEditor(props: {
 
       {conflict ? (
         <div
-          className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive p-3"
+          className="flex flex-wrap items-center gap-3 rounded-[13px] border border-signal/40 bg-signal-soft p-3"
           role="alert"
         >
-          <p className="text-destructive text-sm">
+          <p className="text-[13px] text-signal-ink">
             {WAKERFLOW_CONFLICT_MESSAGE}
           </p>
           <Button size="sm" variant="outline" onClick={props.onReload}>
@@ -571,12 +581,12 @@ export function PlanEditor(props: {
         </div>
       ) : null}
       {failure ? (
-        <p className="text-destructive text-sm" role="alert">
+        <p className="text-[13px] text-signal-ink" role="alert">
           {failure}
         </p>
       ) : null}
       {Object.keys(problems).length > 0 ? (
-        <p className="text-destructive text-sm" role="alert">
+        <p className="text-[13px] text-signal-ink" role="alert">
           计划还有需要修改的地方，改好后再保存。
         </p>
       ) : null}
@@ -618,7 +628,7 @@ function JumpSelect(props: {
   return (
     <select
       aria-label={props.label}
-      className={selectClass}
+      className={SELECT_CLASS}
       value={props.value ?? ""}
       onChange={(event) =>
         props.onChange(
@@ -707,7 +717,7 @@ function StepForm(props: {
   const agentSelect = (agentId: string, onChange: (value: string) => void) => (
     <select
       aria-label={`第 ${n} 步的员工`}
-      className={selectClass}
+      className={SELECT_CLASS}
       value={agentId}
       onChange={(event) => onChange(event.target.value)}
     >
@@ -1062,8 +1072,10 @@ function StepForm(props: {
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: a click marks the step's node; every control inside is reachable by keyboard
     <div
-      className={`flex flex-col gap-2 rounded-lg border p-3 ${
-        props.selected ? "border-ring ring-1 ring-ring" : "border-border"
+      className={`flex flex-col gap-2 rounded-[11px] border bg-background/60 p-3 ${
+        props.selected
+          ? "border-signal/70 ring-1 ring-signal/40"
+          : "border-border"
       }`}
       data-selected={props.selected}
       id={`step-form-${step.id}`}
@@ -1073,7 +1085,7 @@ function StepForm(props: {
         <span className="text-muted-foreground text-sm">第 {n} 步</span>
         <select
           aria-label={`第 ${n} 步的类型`}
-          className={selectClass}
+          className={SELECT_CLASS}
           value={kind}
           onChange={(event) => {
             const next = event.target.value as WakerFlowStepKind;
@@ -1135,7 +1147,7 @@ function NestedFlowFields(props: {
       <div className="flex flex-wrap items-center gap-2">
         <select
           aria-label={`第 ${n} 步的子流程`}
-          className={selectClass}
+          className={SELECT_CLASS}
           value={step.targetFlowId}
           onChange={(event) => {
             const picked = candidates.find(
@@ -1202,7 +1214,7 @@ function NestedFlowFields(props: {
               子流程输入「{input.label}」取自
               <select
                 aria-label={`第 ${n} 步子流程输入 ${input.key}`}
-                className={selectClass}
+                className={SELECT_CLASS}
                 value={step.inputMap[input.key] ?? ""}
                 onChange={(event) => {
                   const { [input.key]: _old, ...rest } = step.inputMap;
@@ -1240,7 +1252,7 @@ function NestedFlowFields(props: {
           输出取子流程的
           <select
             aria-label={`第 ${n} 步取子流程的哪个产出`}
-            className={selectClass}
+            className={SELECT_CLASS}
             value={step.resultKey ?? ""}
             onChange={(event) =>
               onChange({

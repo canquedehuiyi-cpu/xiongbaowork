@@ -1,19 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  PageRows,
-  PageSection,
-  PageShell,
-} from "@/components/layout/page-shell";
+import type { ReactNode } from "react";
+import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
+import { CARD_FACE } from "@/components/resources/resource-kit";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
   Item,
@@ -65,6 +58,35 @@ const STATE_WORDS: Record<PipelineRunStep["state"], string> = {
   aborted: "已结束",
 };
 
+/*
+ * docs/design/ios-studio, for a working page: a 17px section heading, graphite cards on a hairline,
+ * the workbench's 32px controls, and red only for the step that waits on the person or failed.
+ */
+const SELECT_CLASS =
+  "h-[32px] min-w-0 max-w-full rounded-[9px] border border-border bg-muted px-[9px] text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 dark:bg-[oklch(0.196_0.002_286.2)]";
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mt-[28px] first:mt-0">
+      <h2 className="mb-[9px] font-bold text-[17px] leading-[26px] tracking-[-0.02em]">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+/** Rows divided by hairlines inside one card; an `Item`'s own rounding is squared off inside it. */
+function Rows({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={`${CARD_FACE} overflow-hidden [&_[data-slot=item]]:rounded-none [&>*+*]:border-t-border dark:[&>*+*]:border-t-border`}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** A blank step, so the editor's rows have ids the run can be matched against later. */
 function blankStep(agentId: string): StepDraft {
   return {
@@ -110,6 +132,7 @@ function RouteComponent() {
     <PageShell
       description="把群组的工作写成一条流程：谁先做、做什么、然后交给谁。流程跑起来时每一步都会在看板上留下自己的任务卡。"
       title="组团流程"
+      width="workbench"
     >
       {crews.isError ? (
         <QueryError
@@ -128,40 +151,36 @@ function RouteComponent() {
         />
       ) : null}
       {crews.isPending ? (
-        <p className="text-muted-foreground text-sm">正在加载群组…</p>
+        <p className="text-[13px] text-muted-foreground" role="status">
+          正在加载群组…
+        </p>
       ) : null}
       {crews.data === undefined ? null : crews.data.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>还没有群组</EmptyTitle>
-            <EmptyDescription>
-              流程的步骤只能交给群组里的员工。先到「员工管理 ›
-              群组」建一个群组，再来这里排流程。
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <WorkbenchEmpty
+          className="border border-border"
+          description="流程的步骤只能交给群组里的员工。先到「员工管理 › 群组」建一个群组，再来这里排流程。"
+          title="还没有群组"
+        />
       ) : (
         <>
-          <PageSection title="选一个群组">
-            <PageRows>
-              <div className="flex flex-wrap gap-2">
-                {(crews.data ?? []).map((crew) => (
-                  <Button
-                    key={crew.id}
-                    aria-pressed={crew.id === selected}
-                    variant={crew.id === selected ? "default" : "outline"}
-                    onClick={() => {
-                      setCrewId(crew.id);
-                      setEditing(null);
-                      setRunId(null);
-                    }}
-                  >
-                    {crew.name}
-                  </Button>
-                ))}
-              </div>
-            </PageRows>
-          </PageSection>
+          <Section title="选一个群组">
+            <div className="flex flex-wrap gap-[7px]">
+              {(crews.data ?? []).map((crew) => (
+                <Button
+                  key={crew.id}
+                  aria-pressed={crew.id === selected}
+                  variant={crew.id === selected ? "default" : "outline"}
+                  onClick={() => {
+                    setCrewId(crew.id);
+                    setEditing(null);
+                    setRunId(null);
+                  }}
+                >
+                  {crew.name}
+                </Button>
+              ))}
+            </div>
+          </Section>
 
           {selected ? (
             <TemplateEditor
@@ -204,23 +223,29 @@ function RouteComponent() {
             />
           ) : null}
           {templates.data === undefined || !selected ? null : (
-            <PageSection title={`${templates.data?.length ?? 0} 条流程`}>
-              <PageRows>
-                {(templates.data ?? []).map((template) => (
-                  <TemplateRow
-                    key={template.id}
-                    template={template}
-                    names={names}
-                    onEdit={() => setEditing(template)}
-                    onDeleted={() => {
-                      if (editing?.id === template.id) setEditing(null);
-                    }}
-                    onStarted={setRunId}
-                    queryClient={queryClient}
-                  />
-                ))}
-              </PageRows>
-            </PageSection>
+            <Section title={`${templates.data?.length ?? 0} 条流程`}>
+              {templates.data.length === 0 ? (
+                <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
+                  这个群组还没有流程。在上面写下第一条。
+                </p>
+              ) : (
+                <Rows>
+                  {(templates.data ?? []).map((template) => (
+                    <TemplateRow
+                      key={template.id}
+                      template={template}
+                      names={names}
+                      onEdit={() => setEditing(template)}
+                      onDeleted={() => {
+                        if (editing?.id === template.id) setEditing(null);
+                      }}
+                      onStarted={setRunId}
+                      queryClient={queryClient}
+                    />
+                  ))}
+                </Rows>
+              )}
+            </Section>
           )}
 
           {runId ? (
@@ -291,12 +316,12 @@ function TemplateEditor(props: {
   }
 
   return (
-    <PageSection
+    <Section
       title={props.editing ? `编辑流程：${props.editing.name}` : "新建一条流程"}
     >
-      <div className="flex flex-col gap-3">
+      <div className={`${CARD_FACE} flex flex-col gap-3 p-[14px]`}>
         {props.editing ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-[13px] text-muted-foreground">
             改动只影响之后的运行；已经开跑的会按开跑时的步骤跑完。
           </p>
         ) : null}
@@ -307,24 +332,27 @@ function TemplateEditor(props: {
           onChange={(event) => setName(event.target.value)}
         />
         {props.coworkers.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-[13px] text-muted-foreground">
             这个群组里还没有员工。先到「员工管理 › 群组」把人加进来 ——
             流程的步骤只能交给组里的员工。
           </p>
         ) : steps.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-[13px] text-muted-foreground">
             还没有步骤。第一步通常是「谁先做」。
           </p>
         ) : null}
         {steps.map((step, index) => (
-          <div className="flex flex-col gap-2" key={step.id}>
+          <div
+            className="flex flex-col gap-2 rounded-[11px] border border-border bg-background/60 p-[10px]"
+            key={step.id}
+          >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground text-sm">
+              <span className="font-mono text-[11px] text-faint tracking-[0.06em]">
                 第 {index + 1} 步
               </span>
               <select
                 aria-label={`第 ${index + 1} 步的员工`}
-                className="border-input bg-background rounded-md border px-2 py-1 text-sm"
+                className={SELECT_CLASS}
                 value={step.agentId}
                 onChange={(event) =>
                   setSteps(
@@ -396,7 +424,7 @@ function TemplateEditor(props: {
             />
           </div>
         ))}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-[7px]">
           <Button
             variant="outline"
             disabled={!first}
@@ -437,12 +465,12 @@ function TemplateEditor(props: {
           ) : null}
         </div>
         {problem ? (
-          <p className="text-destructive text-sm" role="alert">
+          <p className="text-[13px] text-signal-ink" role="alert">
             {problem}
           </p>
         ) : null}
       </div>
-    </PageSection>
+    </Section>
   );
 }
 
@@ -489,7 +517,10 @@ function TemplateRow(props: {
             .join(" → ")}
         </ItemDescription>
         {refused ? (
-          <div className="text-destructive text-sm" role="alert">
+          <div
+            className="mt-[6px] rounded-[9px] border border-signal/40 bg-signal-soft p-[9px] text-[13px] text-signal-ink"
+            role="alert"
+          >
             <p>
               这次没有派出去：下面这些步骤的员工你还没有使用权。先给他们开通使用权，或把这几步换成你能用的员工，再运行。
             </p>
@@ -502,12 +533,12 @@ function TemplateRow(props: {
             </ul>
           </div>
         ) : problem ? (
-          <p className="text-destructive text-sm" role="alert">
+          <p className="mt-[6px] text-[13px] text-signal-ink" role="alert">
             {problem}
           </p>
         ) : null}
         {confirming ? (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="mt-[6px] flex flex-wrap items-center gap-2 rounded-[9px] border border-signal/40 bg-signal-soft p-[9px] text-[13px]">
             <span>
               {`确定删除「${props.template.name}」？已经开跑的运行会照常跑完，记录也会留着。`}
             </span>
@@ -542,7 +573,7 @@ function TemplateRow(props: {
           </div>
         ) : null}
       </ItemContent>
-      <ItemActions className="flex items-center gap-2">
+      <ItemActions className="flex flex-wrap items-center gap-[7px]">
         <Button variant="outline" size="sm" onClick={props.onEdit}>
           编辑
         </Button>
@@ -556,7 +587,7 @@ function TemplateRow(props: {
         </Button>
         <Input
           aria-label={`交给${props.template.name}的任务`}
-          className="w-48"
+          className="w-full min-w-0 sm:w-48"
           placeholder="这次要做什么"
           value={task}
           onChange={(event) => setTask(event.target.value)}
@@ -613,7 +644,7 @@ function RunPanel(props: {
   const data = run.data;
 
   return (
-    <PageSection title="这次运行">
+    <Section title="这次运行">
       {run.isError ? (
         <QueryError
           label="运行记录加载失败"
@@ -623,13 +654,23 @@ function RunPanel(props: {
         />
       ) : null}
       {run.isPending ? (
-        <p className="text-muted-foreground text-sm">正在问群组跑到哪了…</p>
+        <p className="text-[13px] text-muted-foreground" role="status">
+          正在问群组跑到哪了…
+        </p>
       ) : null}
       {data ? (
         <div className="flex flex-col gap-3">
-          <PageRows>
+          <Rows>
             {data.steps.map((step, index) => (
-              <Item key={step.id}>
+              <Item
+                className={
+                  step.state === "awaiting_action" || step.state === "failed"
+                    ? "bg-signal-soft shadow-[inset_2px_0_0_var(--signal)]"
+                    : undefined
+                }
+                data-state={step.state}
+                key={step.id}
+              >
                 <ItemContent>
                   <ItemTitle>
                     第 {index + 1} 步 ·{" "}
@@ -691,9 +732,10 @@ function RunPanel(props: {
                 </ItemActions>
               </Item>
             ))}
-          </PageRows>
+          </Rows>
           {data.status === "running" || data.status === "awaiting_action" ? (
             <Button
+              className="self-start"
               variant="outline"
               disabled={abort.isPending}
               onClick={() =>
@@ -706,7 +748,7 @@ function RunPanel(props: {
               中止这次运行
             </Button>
           ) : (
-            <p className="text-muted-foreground text-sm">
+            <p className="text-[13px] text-muted-foreground">
               {data.status === "done"
                 ? "跑完了。每一步的卡在任务看板上。"
                 : data.status === "aborted"
@@ -715,12 +757,12 @@ function RunPanel(props: {
             </p>
           )}
           {problem ? (
-            <p className="text-destructive text-sm" role="alert">
+            <p className="text-[13px] text-signal-ink" role="alert">
               {problem}
             </p>
           ) : null}
         </div>
       ) : null}
-    </PageSection>
+    </Section>
   );
 }

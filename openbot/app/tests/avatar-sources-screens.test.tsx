@@ -156,13 +156,18 @@ function drawWakers(queryClient: QueryClient) {
   );
 }
 
-/** The 待配置 chips on the wall, by the card name they sit beside. */
+/**
+ * The 待配置 chips on the wall, by the name of the card they sit on. The chip now sits beside the
+ * card's PROFILE index rather than inside the title row (docs/design/ios-studio 04), so the card is
+ * found from the card itself.
+ */
 async function unconfiguredCards(view: ReturnType<typeof render>) {
   await view.findByText("研究分析师");
   return [...view.container.querySelectorAll("[data-unconfigured=true]")].map(
     (chip) => ({
       text: chip.textContent,
-      card: chip.closest("[data-slot=item-title]")?.firstChild?.textContent,
+      card: chip.closest("[data-testid=waker-card]")?.querySelector("h3")
+        ?.textContent,
     }),
   );
 }

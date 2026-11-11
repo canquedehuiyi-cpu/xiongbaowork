@@ -1,4 +1,4 @@
-import { IconExternalLink } from "@tabler/icons-react";
+import { IconExternalLink, IconUserCircle } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -8,27 +8,28 @@ import {
   PersonaSection,
   useProfileSave,
 } from "@/components/agents/agent-dialog";
-import { PageSection, PageShell } from "@/components/layout/page-shell";
+import {
+  PANEL_FACE,
+  ProfileAlert,
+  ProfileEmpty,
+  ProfilePanel,
+  ProfileSection,
+} from "@/components/bot-profile/profile-kit";
+import { PageShell } from "@/components/layout/page-shell";
 import { RoutinesList } from "@/components/routines/routines-list";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import {
   Item,
   ItemActions,
   ItemContent,
   ItemDescription,
-  ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { wakersBackLink } from "@/components/wakers/wakers-search";
 import { type AgentProfile, agentQueryOptions } from "@/lib/agents/queries";
+import { cn } from "@/lib/utils";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
   knowledgeForAgentQueryOptions,
@@ -77,82 +78,139 @@ function AssemblePage() {
   const profile = agent.data;
   const { save } = useProfileSave(agentId, profile ?? emptyProfile);
 
+  const back = { label: "员工", linkProps: wakersBackLink() };
   if (agent.isPending) {
     return (
-      <PageShell title="装配">
-        <Skeleton className="mt-6 h-16" />
+      <PageShell backButton={back} title="装配" width="workbench">
+        <Skeleton
+          aria-label="正在读取员工"
+          className="h-[92px] rounded-[16px]"
+          role="status"
+        />
       </PageShell>
     );
   }
   if (!profile) {
     return (
-      <PageShell title="装配">
-        <p className="mt-6 text-destructive text-sm" role="alert">
+      <PageShell backButton={back} title="装配" width="workbench">
+        <p
+          className={cn(
+            PANEL_FACE,
+            "max-w-[640px] px-[16px] py-[14px] text-[13px] text-destructive",
+          )}
+          role="alert"
+        >
           你不能装配这位员工。
         </p>
       </PageShell>
     );
   }
 
+  /*
+   * Drawn in the workbench frame (docs/design/ios-studio), in the detail page's card language: the
+   * employee's face and role as a short 「角色档案」 strip, then the zones in two columns on a wide
+   * screen — who it is (model, persona, routines) on the left, what it can reach (skills, tools,
+   * connectors, knowledge) on the right — and one column on anything narrower.
+   */
   return (
     <PageShell
-      backButton={{
-        label: "员工",
-        linkProps: wakersBackLink(),
-      }}
+      action={
+        <Button
+          render={(props) => (
+            <Link
+              params={{ agentId: profile.id }}
+              to="/wakers/$agentId"
+              {...props}
+            />
+          )}
+          variant="outline"
+        >
+          <IconUserCircle />
+          员工详情
+        </Button>
+      }
+      backButton={back}
+      crumb={`装配 · ${profile.name}`}
       description="它用的模型、它的性格、它能碰到什么——一起决定，从下一轮开始生效。"
       title={profile.name}
+      width="workbench"
     >
-      <div className="mt-4 flex items-center gap-3">
-        <AbstractAvatar
-          name={profile.name}
-          seed={profile.avatarSeed}
-          portrait={{ kind: "coworker", id: profile.id }}
-          size={40}
-        />
-        <div className="min-w-0">
-          <p className="truncate font-medium">{profile.title}</p>
-          <p className="line-clamp-2 text-muted-foreground text-sm">
+      <div
+        className={cn(
+          PANEL_FACE,
+          "flex min-w-0 items-center gap-[12px] rounded-[16px] px-[16px] py-[13px]",
+        )}
+      >
+        <span className="inline-flex shrink-0 rounded-[13px] shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_13%,transparent)] [&_svg]:scale-[1.42]">
+          <AbstractAvatar
+            name={profile.name}
+            portrait={{ kind: "coworker", id: profile.id }}
+            seed={profile.avatarSeed}
+            size={44}
+          />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-bold text-[15px] leading-[22px]">
+            {profile.title}
+          </p>
+          <p className="line-clamp-2 text-[13px] text-muted-foreground leading-[1.55]">
             {profile.roleDescription}
           </p>
         </div>
       </div>
 
       {!profile.canManage ? (
-        <p className="mt-4 text-muted-foreground text-sm">
+        <p className="mt-[12px] rounded-[14px] border border-border border-dashed px-[14px] py-[11px] text-[13px] text-muted-foreground">
           这位员工归别人所有，所以这里只能看，要改请到它主人那里。
         </p>
       ) : null}
 
-      <PageSection description="这位员工说话时由哪个模型回答。" title="模型">
-        <ModelItem
-          builtIn={profile.builtIn}
-          canManage={profile.canManage}
-          modelRef={profile.modelRef}
-          onSave={(binding) => save(binding)}
-          platformModelRef={profile.platformModelRef ?? null}
-        />
-      </PageSection>
+      <div className="mt-[28px] grid grid-cols-1 gap-[28px] min-[1180px]:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-[28px]">
+          <ProfileSection
+            description="这位员工说话时由哪个模型回答。"
+            title="模型"
+          >
+            <div className={cn(PANEL_FACE, "mt-[10px] overflow-hidden")}>
+              <ModelItem
+                builtIn={profile.builtIn}
+                canManage={profile.canManage}
+                modelRef={profile.modelRef}
+                onSave={(binding) => save(binding)}
+                platformModelRef={profile.platformModelRef ?? null}
+              />
+            </div>
+          </ProfileSection>
 
-      <PageSection description="它是谁，和它的职责分开维护。" title="人设">
-        <PersonaSection agentId={profile.id} profile={profile} />
-      </PageSection>
+          <ProfileSection
+            description="它是谁，和它的职责分开维护。"
+            title="人设"
+          >
+            <div className={cn(PANEL_FACE, "mt-[10px] px-[14px] py-[12px]")}>
+              <PersonaSection agentId={profile.id} profile={profile} />
+            </div>
+          </ProfileSection>
 
-      <SkillsZone agentId={profile.id} canManage={profile.canManage} />
-      <SelfInstallToolsZone
-        agentId={profile.id}
-        canManage={profile.canManage}
-      />
-      <ConnectorZone agentId={profile.id} />
-      <KnowledgeZone
-        agentId={profile.id}
-        canManage={profile.canManage}
-        mine={profile.mine}
-      />
-
-      <PageSection description="它按计划自己做的事。" title="定时任务">
-        <RoutinesList agentId={profile.id} embedded />
-      </PageSection>
+          <ProfileSection description="它按计划自己做的事。" title="定时任务">
+            <div className="mt-[10px]">
+              <RoutinesList agentId={profile.id} embedded />
+            </div>
+          </ProfileSection>
+        </div>
+        <div className="flex min-w-0 flex-col gap-[28px]">
+          <SkillsZone agentId={profile.id} canManage={profile.canManage} />
+          <SelfInstallToolsZone
+            agentId={profile.id}
+            canManage={profile.canManage}
+          />
+          <ConnectorZone agentId={profile.id} />
+          <KnowledgeZone
+            agentId={profile.id}
+            canManage={profile.canManage}
+            mine={profile.mine}
+          />
+        </div>
+      </div>
     </PageShell>
   );
 }
@@ -267,40 +325,36 @@ function SkillsZone({
     setGrant.mutate({ agentId, granted: checked, kind: "skill", ref: slug });
 
   return (
-    <PageSection
+    <ProfileSection
       description="工作需要时它会遵循的指令。勾选即把技能授予这位员工并记录这次授权；取消勾选即收回。"
       title="技能"
     >
       {page.isPending || granted.isPending ? (
-        <Skeleton className="h-14" />
+        <Skeleton className="mt-[10px] h-[54px] rounded-[14px]" />
       ) : page.error || granted.error ? (
-        <p className="text-destructive text-sm" role="alert">
-          读不到技能列表。
-        </p>
+        <ProfileAlert>读不到技能列表。</ProfileAlert>
       ) : mine.length === 0 && catalogue.length === 0 ? (
-        <Empty className="h-[120px] border border-dashed">
-          <EmptyHeader>
-            <EmptyTitle className="text-muted-foreground">
-              你还没有可以安装的技能
-            </EmptyTitle>
-            <EmptyDescription>
-              技能先在技能页里写好，再在这里授予员工。
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <ProfileEmpty>
+          <span className="block font-medium text-foreground/80">
+            你还没有可以安装的技能
+          </span>
+          <span className="mt-[2px] block">
+            技能先在技能页里写好，再在这里授予员工。
+          </span>
+        </ProfileEmpty>
       ) : (
         <>
           {mine.length > 0 ? (
-            <ItemGroup>
+            <ProfilePanel>
               {mine.map((skill) => (
-                <Item key={skill.slug} variant="muted">
+                <Item key={skill.slug} size="sm">
                   <ItemContent>
                     <ItemTitle>{skill.title}</ItemTitle>
                     <ItemDescription>{skill.summary}</ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <label
-                      className="flex items-center gap-2 text-sm"
+                      className="flex items-center gap-[7px] text-[12.5px] text-muted-foreground"
                       htmlFor={`assemble-skill-${skill.slug}`}
                     >
                       <Checkbox
@@ -316,7 +370,7 @@ function SkillsZone({
                   </ItemActions>
                 </Item>
               ))}
-            </ItemGroup>
+            </ProfilePanel>
           ) : null}
           {catalogue.length > 0 ? (
             <CatalogueSkills
@@ -331,21 +385,21 @@ function SkillsZone({
         </>
       )}
       {unlisted.length > 0 ? (
-        <p className="mt-3 text-muted-foreground text-sm">
+        <p className="mt-[8px] text-[12.5px] text-muted-foreground">
           另有 {unlisted.length} 个部署技能由管理员在插件页里授予。
         </p>
       ) : null}
       {listings.error ? (
-        <p className="mt-2 text-destructive text-sm" role="alert">
+        <p className="mt-[8px] text-[13px] text-destructive" role="alert">
           读不到管理员上架的目录，所以这里暂时只列出你自己的技能。
         </p>
       ) : null}
       {setGrant.error ? (
-        <p className="mt-2 text-destructive text-sm" role="alert">
+        <p className="mt-[8px] text-[13px] text-destructive" role="alert">
           {setGrant.error.message}
         </p>
       ) : null}
-    </PageSection>
+    </ProfileSection>
   );
 }
 
@@ -371,14 +425,14 @@ function CatalogueSkills({
   onToggle: (slug: string, checked: boolean) => void;
 }) {
   return (
-    <div className="mt-4">
-      <h3 className="font-medium text-sm">目录技能</h3>
-      <p className="mb-2 text-muted-foreground text-xs">
+    <div className="mt-[16px]">
+      <h3 className="font-semibold text-[13px] text-foreground/90">目录技能</h3>
+      <p className="mt-[2px] text-[12px] text-muted-foreground">
         管理员上架的部署技能。你可以自己给这位员工装上或卸下，每次都会记录。
       </p>
-      <ItemGroup>
+      <ProfilePanel>
         {skills.map((skill) => (
-          <Item key={skill.slug} variant="muted">
+          <Item key={skill.slug} size="sm">
             <ItemContent>
               <ItemTitle>{skill.title}</ItemTitle>
               <ItemDescription>
@@ -388,7 +442,7 @@ function CatalogueSkills({
               </ItemDescription>
             </ItemContent>
             <ItemActions>
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-[7px] text-[12.5px] text-muted-foreground">
                 <Checkbox
                   aria-label={`安装目录技能 ${skill.title}`}
                   checked={installed.has(skill.slug)}
@@ -408,7 +462,7 @@ function CatalogueSkills({
             </ItemActions>
           </Item>
         ))}
-      </ItemGroup>
+      </ProfilePanel>
     </div>
   );
 }
@@ -476,27 +530,23 @@ function SelfInstallToolsZone({
   const apps = [...listed, ...unlistedWithMine];
 
   return (
-    <PageSection
+    <ProfileSection
       description="管理员上架的应用里的工具。勾选即装到这位员工上并记录；取消勾选即卸下。"
       title="可自助安装的工具"
     >
       {page.isPending || listings.isPending || granted.isPending ? (
-        <Skeleton className="h-14" />
+        <Skeleton className="mt-[10px] h-[54px] rounded-[14px]" />
       ) : page.error || listings.error || granted.error ? (
-        <p className="text-destructive text-sm" role="alert">
-          读不到可自助安装的工具。
-        </p>
+        <ProfileAlert>读不到可自助安装的工具。</ProfileAlert>
       ) : apps.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          管理员还没有上架任何应用。
-        </p>
+        <ProfileEmpty>管理员还没有上架任何应用。</ProfileEmpty>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="mt-[10px] flex flex-col gap-[16px]">
           {apps.map((key) => {
             const server = servers.find((row) => appKeyOf(row) === key);
             if (!server) {
               return (
-                <p className="text-muted-foreground text-sm" key={key}>
+                <p className="text-[13px] text-muted-foreground" key={key}>
                   {key}{" "}
                   已上架，但这个部署还没有添加它，所以暂时没有可安装的工具。
                 </p>
@@ -510,16 +560,18 @@ function SelfInstallToolsZone({
                 );
             return (
               <div key={key}>
-                <h3 className="font-medium text-sm">{server.title}</h3>
+                <h3 className="font-semibold text-[13px] text-foreground/90">
+                  {server.title}
+                </h3>
                 {appListed ? null : (
-                  <p className="mb-2 text-muted-foreground text-xs">
+                  <p className="mt-[2px] text-[12px] text-muted-foreground">
                     已下架：你之前装上的工具仍在，可以在这里卸下，但不能再装新的。
                   </p>
                 )}
                 {appListed &&
                 page.data &&
                 connectsPerPerson(server, page.data) ? (
-                  <p className="mb-2 text-muted-foreground text-xs">
+                  <p className="mt-[2px] text-[12px] text-muted-foreground">
                     这个应用以使用者本人的账号访问：装上之后，还要先在
                     <Link
                       className="mx-1 underline"
@@ -531,19 +583,17 @@ function SelfInstallToolsZone({
                   </p>
                 ) : null}
                 {tools.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    这个应用目前没有提供工具。
-                  </p>
+                  <ProfileEmpty>这个应用目前没有提供工具。</ProfileEmpty>
                 ) : (
-                  <ItemGroup>
+                  <ProfilePanel>
                     {tools.map((tool) => (
-                      <Item key={tool.ref} variant="muted">
+                      <Item key={tool.ref} size="sm">
                         <ItemContent>
                           <ItemTitle>{tool.name}</ItemTitle>
                           <ItemDescription>{tool.description}</ItemDescription>
                         </ItemContent>
                         <ItemActions>
-                          <div className="flex items-center gap-2 text-sm">
+                          <div className="flex items-center gap-[7px] text-[12.5px] text-muted-foreground">
                             <Checkbox
                               aria-label={`安装工具 ${server.title}/${tool.name}`}
                               checked={isHeld(tool)}
@@ -567,7 +617,7 @@ function SelfInstallToolsZone({
                         </ItemActions>
                       </Item>
                     ))}
-                  </ItemGroup>
+                  </ProfilePanel>
                 )}
               </div>
             );
@@ -575,11 +625,11 @@ function SelfInstallToolsZone({
         </div>
       )}
       {setGrant.error ? (
-        <p className="mt-2 text-destructive text-sm" role="alert">
+        <p className="mt-[8px] text-[13px] text-destructive" role="alert">
           {setGrant.error.message}
         </p>
       ) : null}
-    </PageSection>
+    </ProfileSection>
   );
 }
 
@@ -596,7 +646,7 @@ function ConnectorZone({ agentId }: { agentId: string }) {
   const granted = useQuery(agentPluginsQueryOptions(agentId));
   const tools = granted.data?.tools ?? [];
   return (
-    <PageSection
+    <ProfileSection
       action={
         <Button
           render={(props) => <Link {...props} to="/admin/plugins" />}
@@ -611,24 +661,22 @@ function ConnectorZone({ agentId }: { agentId: string }) {
       title="连接器"
     >
       {granted.isPending ? (
-        <Skeleton className="h-14" />
+        <Skeleton className="mt-[10px] h-[54px] rounded-[14px]" />
       ) : tools.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          什么都没授予，所以它只能对话。
-        </p>
+        <ProfileEmpty>什么都没授予，所以它只能对话。</ProfileEmpty>
       ) : (
-        <ItemGroup>
+        <ProfilePanel>
           {tools.map((tool) => (
-            <Item key={tool.ref} variant="muted">
+            <Item key={tool.ref} size="sm">
               <ItemContent>
                 <ItemTitle>{tool.toolName}</ItemTitle>
                 <ItemDescription>{tool.description}</ItemDescription>
               </ItemContent>
             </Item>
           ))}
-        </ItemGroup>
+        </ProfilePanel>
       )}
-    </PageSection>
+    </ProfileSection>
   );
 }
 
@@ -669,7 +717,7 @@ function KnowledgeZone({
   const failed = notebooks.error ?? (mine ? bound.error : null);
 
   return (
-    <PageSection
+    <ProfileSection
       action={
         <Button
           render={(props) => (
@@ -686,20 +734,16 @@ function KnowledgeZone({
       title="知识库"
     >
       {pending ? (
-        <Skeleton className="h-14" />
+        <Skeleton className="mt-[10px] h-[54px] rounded-[14px]" />
       ) : failed ? (
-        <p className="text-destructive text-sm" role="alert">
-          读不到知识库。
-        </p>
+        <ProfileAlert>读不到知识库。</ProfileAlert>
       ) : rows.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          你还没有知识库，先到知识库页里建一个。
-        </p>
+        <ProfileEmpty>你还没有知识库，先到知识库页里建一个。</ProfileEmpty>
       ) : (
-        <ItemGroup>
+        <ProfilePanel>
           {rows.map((notebook) => {
             return (
-              <Item key={notebook.id} variant="muted">
+              <Item key={notebook.id} size="sm">
                 <ItemContent>
                   <ItemTitle>{notebook.title}</ItemTitle>
                 </ItemContent>
@@ -709,7 +753,7 @@ function KnowledgeZone({
                    * label it finds (aria-labelledby beats aria-label), and "可读取" would then
                    * name every box alike. The box is named by its aria-label alone.
                    */}
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-[7px] text-[12.5px] text-muted-foreground">
                     <Checkbox
                       aria-label={`允许读取 ${notebook.title}`}
                       checked={readable.has(notebook.id)}
@@ -733,18 +777,18 @@ function KnowledgeZone({
               </Item>
             );
           })}
-        </ItemGroup>
+        </ProfilePanel>
       )}
       {!mine && rows.length > 0 ? (
-        <p className="mt-3 text-muted-foreground text-sm">
+        <p className="mt-[8px] text-[12.5px] text-muted-foreground">
           知识库只能授权给你自己的员工。
         </p>
       ) : null}
       {setBinding.error ? (
-        <p className="mt-2 text-destructive text-sm" role="alert">
+        <p className="mt-[8px] text-[13px] text-destructive" role="alert">
           {setBinding.error.message}
         </p>
       ) : null}
-    </PageSection>
+    </ProfileSection>
   );
 }

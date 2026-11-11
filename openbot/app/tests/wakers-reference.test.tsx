@@ -29,12 +29,14 @@ import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * 员工管理 against the reference screenshot (docs/acceptance/qoderwake-reference/wakers.png): the
- * subtitle under the title, the boxed 员工 | 群组 pill at the reference's 218×33, a toolbar of a
- * search box and four labelled filters with the count at the far right, and a grid of fixed 330px
- * cards that STARTS with the create card. Each employee card is centred: avatar on top, status and
- * environment at the top right, name with a role tag, one description line, and a 任务数 | 最近运行
- * footer — its actions kept reachable in a row that hover or keyboard focus reveals.
+ * 员工管理 against docs/design/ios-studio/04-员工管理.png (numbers from its theme.css): the
+ * `04 DIGITAL TEAM` eyebrow and the subtitle under the title, 角色模板 beside the primary 新建员工,
+ * the 员工 N | 群组 N pill with the 「N 名员工」 badge at the far right of its row, a toolbar of a
+ * search box and four labelled filters, and a three-column grid of 「角色档案」 cards — a mono
+ * `PROFILE / 01` index, a status badge (「● 在线 · 本地」), a 44px face beside the name and one line
+ * of role, one description line and a 任务数 · 最近运行 footer — with the dashed create card after
+ * the last profile. The person's own 分身 wears the page's one local red. Each card's actions stay
+ * reachable in a row that hover or keyboard focus reveals.
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -183,15 +185,18 @@ const cardOf = (screen: ReturnType<typeof render>, name: string) =>
       (card) => card.querySelector("[data-card-name]")?.textContent === name,
     ) as HTMLElement;
 
-test("the header carries the subtitle, 角色模板 beside the primary 新建员工, and the pill tabs at the reference's size", async () => {
+test("the header carries the eyebrow and subtitle, 角色模板 beside the primary 新建员工, and the pill tabs with their counts", async () => {
   seed();
   const { screen } = draw();
   await screen.findByText("Code Reviewer");
 
   expect(screen.getByRole("heading", { name: "员工管理" })).toBeTruthy();
   expect(
-    screen.getByText("选择员工开始任务，或者新建一个开始工作。"),
+    screen.getByText("选择合适的员工开始任务，或为团队新建一位员工。"),
   ).toBeTruthy();
+  expect(
+    screen.container.querySelector("[data-slot=eyebrow]")?.textContent,
+  ).toBe("04DIGITAL TEAM");
   const header = screen.getByTestId("wakers-header-actions");
   // Real anchors (the shared Button draws them with role="button").
   const links = [...header.querySelectorAll("a")];
@@ -201,16 +206,25 @@ test("the header carries the subtitle, 角色模板 beside the primary 新建员
   ]);
   expect(links[1]?.getAttribute("href")).toBe("/wakers?new=true");
   expect(links[0]?.getAttribute("href")).toBe("/role-templates");
-  // The primary action draws its plus sign as an icon, not as text.
+  // Both draw their glyph as an icon, not as text: layers for 角色模板, a plus for 新建员工.
+  expect(links[0]?.querySelector("svg")).not.toBeNull();
   expect(links[1]?.querySelector("svg")).not.toBeNull();
 
   const tablist = screen.getByRole("tablist", { name: "员工与群组" });
   expect(tablist.getAttribute("data-variant")).toBe("pill");
-  expect(tablist.className).toContain("w-[218px]");
-  expect(tablist.className).toContain("h-[33px]");
+  // 「员工 2」「群组 0」: each side says how many it holds once its read answered.
+  expect(
+    within(tablist)
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent),
+  ).toEqual(["员工2", "群组0"]);
+  // The 「N 名员工」 badge sits on the pill's row, at its far right.
+  expect(screen.getByTestId("waker-count").parentElement).toBe(
+    tablist.parentElement,
+  );
 });
 
-test("the toolbar is a search box, four labelled filters and the count at the far right", async () => {
+test("the toolbar is a search box and four labelled filters, with the count on the pill's row", async () => {
   seed();
   const { screen, router } = draw();
   await screen.findByText("Code Reviewer");
@@ -234,7 +248,7 @@ test("the toolbar is a search box, four labelled filters and the count at the fa
     ["运行状态", "全部"],
     ["角色", "全部角色"],
     ["环境", "全部环境"],
-    ["排序字段", "默认排序"],
+    ["排序", "默认排序"],
   ]);
   expect(screen.getByTestId("waker-count").textContent).toBe("2 名员工");
 
@@ -249,34 +263,44 @@ test("the toolbar is a search box, four labelled filters and the count at the fa
   );
 });
 
-test("the grid is fixed 330px cards, and the create card comes FIRST with its own illustration", async () => {
+test("the grid is three columns (two at 1150px, one at 440px) of numbered profiles, then the create card", async () => {
   seed();
   const { screen } = draw();
   await screen.findByText("Code Reviewer");
 
   const grid = screen.getByTestId("waker-grid");
-  expect(grid.className).toContain("330px");
-  const first = grid.firstElementChild as HTMLElement;
-  expect(first.getAttribute("data-testid")).toBe("waker-create-card");
-  expect(first.getAttribute("href")).toBe("/wakers?new=true");
-  expect(first.textContent).toContain("新建员工");
-  expect(first.querySelector("[data-create-illustration]")).not.toBeNull();
-  // Then the employees, in the roster's order.
+  // theme.css `.staff-grid` and its two breakpoints.
+  expect(grid.className).toContain("min-[1151px]:grid-cols-3");
+  expect(grid.className).toContain("min-[441px]:grid-cols-2");
+  expect(grid.className).toContain("grid-cols-1");
+  // The employees in the roster's order, numbered as drawn.
+  const cards = [...grid.children].slice(0, -1);
   expect(
-    [...grid.children]
-      .slice(1)
-      .map((card) => card.querySelector("[data-card-name]")?.textContent),
+    cards.map((card) => card.querySelector("[data-card-name]")?.textContent),
   ).toEqual(["我的分身", "Code Reviewer"]);
+  expect(
+    cards.map((card) => card.querySelector("[data-card-index]")?.textContent),
+  ).toEqual(["Profile / 01", "Profile / 02"]);
+  // The index is wayfinding, not something a screen reader should read out.
+  expect(
+    cards[0]?.querySelector("[data-card-index]")?.getAttribute("aria-hidden"),
+  ).toBe("true");
+  // Then the dashed create card, laid out as one more profile.
+  const last = grid.lastElementChild as HTMLElement;
+  expect(last.getAttribute("data-testid")).toBe("waker-create-card");
+  expect(last.getAttribute("href")).toBe("/wakers?new=true");
+  expect(last.className).toContain("border-dashed");
+  expect(last.textContent).toContain("新建员工");
 });
 
-test("an employee card is centred: avatar, status + environment, name + role tag, one line, and a 任务数 | 最近运行 footer", async () => {
+test("an employee card is a profile: status · environment badge, 44px face beside name and role, one line, and a 任务数 · 最近运行 footer", async () => {
   seed();
   const { screen } = draw();
   await screen.findByText("Code Reviewer");
 
   const avatar = cardOf(screen, "我的分身");
   const own = within(avatar);
-  expect(own.getByRole("img", { name: "我的分身" }).style.width).toBe("48px");
+  expect(own.getByRole("img", { name: "我的分身" }).style.width).toBe("44px");
   expect(own.getByText("在线").getAttribute("data-status")).toBe("working");
   const env = avatar.querySelector("[data-env-tag]");
   expect(env?.textContent).toBe("本地");
@@ -286,9 +310,22 @@ test("an employee card is centred: avatar, status + environment, name + role tag
   expect(
     own.getByText("选择你的信息来源，为个人分身完成输入配置。"),
   ).toBeTruthy();
+  // The status and the environment share one badge: 「● 在线 · 本地」.
+  expect(env?.parentElement).toBe(
+    own.getByText("在线").parentElement as HTMLElement,
+  );
+  // The person's own 分身 is the card that wears the local red (theme.css `.staff-card.personal`).
+  expect(avatar.hasAttribute("data-personal")).toBe(true);
+  expect(avatar.className).toContain("border-signal/25");
+  // Each footer value is bold after its label, so the fact is read whole.
   const footer = avatar.querySelector("[data-card-footer]") as HTMLElement;
-  expect(within(footer).getByText("任务数 1")).toBeTruthy();
-  expect(within(footer).getByText(/^最近运行 /).textContent).toContain("1小时");
+  expect(footer.querySelector("[data-task-count]")?.textContent).toBe(
+    "任务数 1",
+  );
+  expect(footer.querySelector("[data-task-count] b")?.textContent).toBe("1");
+  expect(footer.querySelector("[data-last-run]")?.textContent).toContain(
+    "1小时",
+  );
 
   const other = within(cardOf(screen, "Code Reviewer"));
   expect(other.getByText("代码评审").hasAttribute("data-role-tag")).toBe(true);
@@ -301,7 +338,14 @@ test("an employee card is centred: avatar, status + environment, name + role tag
     cardOf(screen, "Code Reviewer").querySelector("[data-env-tag]")
       ?.textContent,
   ).toBe("未绑定");
-  expect(other.getByText("任务数 0")).toBeTruthy();
+  expect(
+    cardOf(screen, "Code Reviewer").querySelector("[data-task-count]")
+      ?.textContent,
+  ).toBe("任务数 0");
+  // Everyone else's card is plain graphite.
+  expect(cardOf(screen, "Code Reviewer").hasAttribute("data-personal")).toBe(
+    false,
+  );
 });
 
 test("a card's actions and attention line sit in a row revealed on hover or keyboard focus", async () => {
@@ -336,7 +380,7 @@ test("a card's actions and attention line sit in a row revealed on hover or keyb
   expect(row.contains(document.activeElement)).toBe(true);
 });
 
-test("the groups tab uses the same grid: create card first, then centred group cards with member avatars", async () => {
+test("the groups tab uses the same grid and card: GROUP / 01 profiles with member faces, then the create card", async () => {
   seed({
     crews: [
       {
@@ -353,13 +397,16 @@ test("the groups tab uses the same grid: create card first, then centred group c
   const { screen } = draw("/wakers?tab=groups");
   const card = await screen.findByTestId("crew-card");
   const grid = card.parentElement as HTMLElement;
-  expect(grid.className).toContain("330px");
-  expect(grid.firstElementChild?.getAttribute("data-testid")).toBe(
+  expect(grid.className).toContain("min-[1151px]:grid-cols-3");
+  expect(grid.lastElementChild?.getAttribute("data-testid")).toBe(
     "crew-create-card",
   );
   expect(
-    within(grid.firstElementChild as HTMLElement).getByText("新建群组"),
+    within(grid.lastElementChild as HTMLElement).getByText("新建群组"),
   ).toBeTruthy();
+  expect(card.querySelector("[data-card-index]")?.textContent).toBe(
+    "Group / 01",
+  );
   expect(within(card).getAllByRole("img")).toHaveLength(2);
   expect(within(card).getByText("编程群组")).toBeTruthy();
   expect(
@@ -371,9 +418,10 @@ test("the 员工 / 群组 tabs control a labelled panel; arrows replace history,
   const { screen, router } = draw();
   const tabs = await screen.findByRole("tablist", { name: "员工与群组" });
   const user = userEvent.setup({ document });
-  const coworkers = within(tabs).getByRole("tab", { name: "员工" });
+  // Each tab's name is its word and then its count (「员工 2」), as the design's pill draws it.
+  const coworkers = within(tabs).getByRole("tab", { name: /^员工/ });
   expect(coworkers.getAttribute("aria-controls")).toBe("wakers-wall");
-  expect(screen.getByRole("tabpanel", { name: "员工" })).toBeTruthy();
+  expect(screen.getByRole("tabpanel", { name: /^员工/ })).toBeTruthy();
 
   const before = router.history.length;
   coworkers.focus();
@@ -382,9 +430,23 @@ test("the 员工 / 群组 tabs control a labelled panel; arrows replace history,
     expect(router.state.location.search).toEqual({ tab: "groups" }),
   );
   expect(router.history.length).toBe(before);
-  expect(screen.getByRole("tabpanel", { name: "群组" })).toBeTruthy();
+  expect(screen.getByRole("tabpanel", { name: /^群组/ })).toBeTruthy();
 
-  await user.click(within(tabs).getByRole("tab", { name: "员工" }));
+  await user.click(within(tabs).getByRole("tab", { name: /^员工/ }));
   await waitFor(() => expect(router.state.location.search).toEqual({}));
   expect(router.history.length).toBe(before + 1);
+});
+
+test("an empty roster is the workbench empty state with its own way to create one, not a bare grid", async () => {
+  seed();
+  client.setQueryData(agentKeys.list(false), []);
+  const { screen } = draw();
+  const empty = await screen.findByTestId("wakers-empty");
+  // docs/design/ios-studio `.empty`: the mascot, a bold title, one line, and the action.
+  expect(within(empty).getByText("这里还没有员工")).toBeTruthy();
+  const create = within(empty).getByRole("button", { name: "新建员工" });
+  expect(create.getAttribute("href")).toBe("/wakers?new=true");
+  expect(screen.queryByTestId("waker-grid")).toBeNull();
+  // An answered roster of none is a count of none.
+  expect(screen.getByTestId("waker-count").textContent).toBe("0 名员工");
 });

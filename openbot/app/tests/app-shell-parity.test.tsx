@@ -708,12 +708,8 @@ test("an administrator's menu also offers 管理", async () => {
   ]);
 });
 
-test("the 小管家 floats over the five workbench pages and nowhere else", async () => {
-  const workbench = renderShell("/tasks");
-  const butler = await workbench.view.findByRole("link", { name: "小管家" });
-  expect(hrefOf(butler)).toBe("/bot");
-  expect(within(butler).getByRole("img", { name: "熊宝" })).toBeTruthy();
-  cleanup();
+test("the shell floats no 小管家 over the page: it lives in a workbench page's breadcrumb bar", async () => {
+  // Covered where it is drawn now: tests/page-shell-workbench.test.tsx.
   const chat = renderShell("/channel/c-analyst-new");
   await chat.view.findByRole("navigation", { name: "主导航" });
   expect(chat.view.queryByRole("link", { name: "小管家" })).toBeNull();

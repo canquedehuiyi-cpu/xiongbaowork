@@ -1,6 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { IconList, IconStack2 } from "@tabler/icons-react";
+import {
+  IconActivity,
+  IconArrowsExchange,
+  IconChevronRight,
+  IconCircleCheck,
+  IconClipboardCheck,
+  IconFileText,
+  IconFlag,
+  IconLayoutGrid,
+  IconList,
+  IconMessageCircle,
+  IconRepeat,
+  IconStack2,
+  IconUsersGroup,
+} from "@tabler/icons-react";
 import { type ReactNode, useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { LabeledSelect } from "@/components/layout/labeled-select";
@@ -12,10 +26,13 @@ import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import {
   ApprovalActions,
   type OnBoardAnswer,
+  ROW_ACTION_PRIMARY,
+  ROW_ACTION_SECONDARY,
   useApprovalDecision,
 } from "@/components/tasks/approval-actions";
 import { DispatchToGroup } from "@/components/tasks/dispatch-to-group";
 import {
+  StatusDistribution,
   type WorkRecord,
   WorkRecordBanner,
   WorkRecordStatus,
@@ -25,6 +42,7 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
+import { cn } from "@/lib/utils";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
 /**
@@ -198,7 +216,7 @@ export const workRecordOf = (
 
 /** A pill-shaped choice in the same toolbars (the machine filter), at the same height. */
 const choiceClass = (pressed: boolean) =>
-  `inline-flex h-[32px] items-center rounded-md border px-2.5 text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 ${
+  `inline-flex h-[32px] items-center rounded-[9px] border px-[11px] text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 ${
     pressed
       ? "border-foreground/30 bg-foreground/[0.1] text-foreground"
       : "border-border bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
@@ -585,9 +603,67 @@ export const lanesUnmappable = (tasks: { status: string }[]): boolean =>
   tasks.length > 0 && tasks.every((task) => laneOf(task.status).length === 0);
 
 /**
+ * The 任务状态分布 strip's counts, over the same read as the four metrics (the stat bar's): what is
+ * still open (running, or waiting on a person), what has ended (`ENDED_STATUSES`), and what carries a
+ * status this release has no word for. The parts always add up to the read, so the strip, the
+ * percentage and the numbers above it can never disagree; an empty read is all zeros, which the strip
+ * draws as a bare track rather than dividing by zero.
+ */
+export function statusDistributionOf(tasks: { status: string }[]): {
+  running: number;
+  needsAction: number;
+  ended: number;
+  other: number;
+} {
+  const running = tasks.filter((task) => task.status === "running").length;
+  const needsAction = tasks.filter(
+    (task) => task.status === "needs_action",
+  ).length;
+  const ended = tasks.filter((task) =>
+    ENDED_STATUSES.includes(task.status),
+  ).length;
+  return {
+    running,
+    needsAction,
+    ended,
+    other: tasks.length - running - needsAction - ended,
+  };
+}
+
+/** Each metric's 33px symbol square, top right of its cell (docs/design/ios-studio `.symbol`). */
+const STAT_ICON: Record<string, typeof IconLayoutGrid> = {
+  "": IconLayoutGrid,
+  running: IconActivity,
+  needs_action: IconFlag,
+  ended: IconCircleCheck,
+};
+
+/** The metric row's grid, shared by the counted row and its placeholder so they line up exactly. */
+const STAT_GRID =
+  "grid grid-cols-2 md:grid-cols-[1.22fr_repeat(3,minmax(0,1fr))]";
+
+/** A metric cell's frame: hairlines between the cells, and on a phone a two-by-two grid. */
+const statCellClass = (index: number) =>
+  cn(
+    "relative flex min-h-[87px] min-w-0 flex-col items-start justify-center py-[5px] pr-[46px] text-left",
+    index === 0
+      ? "pl-[1px]"
+      : index === 2
+        ? "pl-[1px] md:pl-[17px]"
+        : "pl-[14px] md:pl-[17px]",
+    index === 1 || index === 3 ? "border-border border-l" : null,
+    index === 2 ? "md:border-border md:border-l" : null,
+    index >= 2 ? "mt-[6px] md:mt-0" : null,
+  );
+
+/**
  * Spec A1/A2: the window's totals, each one a filter. Pressing a number shows those tasks; pressing
  * the pressed one again shows everything. It shares its state with the pills below, so the two can
  * never claim different filters at once.
+ *
+ * Drawn as the telemetry panel's metric row (docs/design/ios-studio/01-任务看板.png): four cells split
+ * by hairlines, the first wider with the larger number, each with its symbol square top right; under
+ * a hairline, the status distribution on the left and the summary (`footer`) on the right.
  */
 export function StatBar({
   tasks,
@@ -598,55 +674,78 @@ export function StatBar({
   tasks: { status: string }[];
   status: string;
   onSelect: (status: string) => void;
-  /** The 工作记录 status line, drawn on the row under the cards beside the counting rule. */
+  /** The 工作记录 summary line, drawn right of the distribution under the cells. */
   footer?: ReactNode;
 }) {
   return (
     <section aria-label="任务统计">
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {boardStats(tasks).map((stat) => {
+      <div className={STAT_GRID}>
+        {boardStats(tasks).map((stat, index) => {
           const pressed = status === stat.key;
+          const Icon = STAT_ICON[stat.key] ?? IconLayoutGrid;
           return (
-            /*
-             * The reference's record card: dark card, the number big over its label, and the card
-             * that is filtering the list outlined in the primary green. 84px tall at 1696×850.
-             */
             <button
               aria-pressed={pressed}
-              className={`flex flex-col items-start rounded-[8px] border bg-card px-4 pt-[15px] pb-[14px] text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 ${
-                pressed
-                  ? "border-primary"
-                  : "border-transparent hover:border-foreground/15"
-              }`}
+              className={cn(
+                statCellClass(index),
+                "rounded-[10px] outline-none transition-colors hover:bg-foreground/[0.025] focus-visible:ring-2 focus-visible:ring-ring/60",
+                index > 0 ? "rounded-l-none" : null,
+              )}
+              data-pressed={pressed || undefined}
               key={stat.key || "all"}
               onClick={() => onSelect(pressed ? "" : stat.key)}
               type="button"
             >
               <span
-                className={`font-semibold text-[28px] leading-[28px] tabular-nums ${
-                  pressed ? "text-primary" : ""
-                }`}
+                aria-hidden="true"
+                className={cn(
+                  "absolute top-[10px] right-[9px] grid size-[33px] place-items-center rounded-[9px] border border-foreground/[0.1] bg-[linear-gradient(145deg,color-mix(in_oklab,var(--foreground)_9%,transparent),color-mix(in_oklab,var(--foreground)_3%,transparent))] md:right-[14px]",
+                  stat.key === "needs_action"
+                    ? "text-signal"
+                    : "text-foreground/80",
+                )}
+              >
+                <Icon className="size-[18px]" stroke={1.7} />
+              </span>
+              <span
+                className={cn(
+                  "font-semibold leading-[1.11] tracking-[-0.06em] tabular-nums",
+                  index === 0
+                    ? "text-[40px] md:text-[48px]"
+                    : "text-[34px] md:text-[39px]",
+                )}
               >
                 {stat.value}
               </span>
               <span
-                className={`mt-[8px] text-[12px] leading-[16px] ${
-                  pressed ? "text-primary" : "text-muted-foreground"
-                }`}
+                className={cn(
+                  "mt-[2px] text-[12px] leading-[16px]",
+                  pressed ? "text-foreground" : "text-foreground/80",
+                )}
               >
                 {STAT_CARD_LABEL[stat.key] ?? stat.label}
               </span>
+              {/* The filtering cell's mark: a short red line under its label, beside aria-pressed. */}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "mt-[6px] h-[2px] w-[18px] rounded-[2px]",
+                  pressed ? "bg-signal" : "bg-transparent",
+                )}
+                data-slot={pressed ? "stat-selected" : undefined}
+              />
             </button>
           );
         })}
       </div>
-      <div className="mt-[11px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        {footer}
-        <p className="text-[12px] text-muted-foreground/70 leading-[18px]">
-          已结束 = 已完成 + 失败 +
-          待查收。四个数按所选周期统计；点一个数就只看这些任务，再点一次取消。
-        </p>
+      <div className="mt-[8px] flex flex-wrap items-end justify-between gap-x-[16px] gap-y-[8px] border-border border-t pt-[9px]">
+        <StatusDistribution {...statusDistributionOf(tasks)} />
+        {footer ? <div className="min-w-0 xl:max-w-[46%]">{footer}</div> : null}
       </div>
+      <p className="mt-[6px] text-[11px] text-faint leading-[16px]">
+        已结束 = 已完成 + 失败 +
+        待查收。四个数按所选周期统计；点一个数就只看这些任务，再点一次取消。
+      </p>
     </section>
   );
 }
@@ -757,53 +856,79 @@ export function cardLinkOf(task: Pick<Task, "open" | "channelRef">): CardLink {
   }
 }
 
+/**
+ * 查看详情 as the row's trailing ›, as the reference ends every task row. Its name stays 查看详情 for
+ * assistive technology and the pointer's tooltip; where the work has nowhere left to open, the row
+ * says so in its meta line instead (对话已不在) and the arrow is left out.
+ */
+const OPEN_LINK_CLASS =
+  "grid size-[26px] shrink-0 place-items-center rounded-[8px] text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60";
+
 function CardOpenLink({ task }: { task: Task }) {
   const link = cardLinkOf(task);
-  if (link === null) return null;
-  if (link === "gone") return <span className="opacity-60">对话已不在</span>;
+  if (link === null || link === "gone") {
+    // Keeps the badges of rows with and without an arrow on one vertical line.
+    return <span aria-hidden="true" className="size-[26px] shrink-0" />;
+  }
+  const arrow = <IconChevronRight aria-hidden="true" className="size-[16px]" />;
+  const common = {
+    "aria-label": "查看详情",
+    className: OPEN_LINK_CLASS,
+    title: "查看详情",
+  };
   if (link.to === "/pipelines") {
     return (
-      <Link
-        to="/pipelines"
-        search={link.search}
-        className="underline opacity-80"
-      >
-        查看详情
+      <Link {...common} to="/pipelines" search={link.search}>
+        {arrow}
       </Link>
     );
   }
   if (link.to === "/wakerflows/$flowId") {
     return (
-      <Link
-        to="/wakerflows/$flowId"
-        params={link.params}
-        className="underline opacity-80"
-      >
-        查看详情
+      <Link {...common} to="/wakerflows/$flowId" params={link.params}>
+        {arrow}
       </Link>
     );
   }
   if (link.to === "/group/$channelId") {
     return (
-      <Link
-        to="/group/$channelId"
-        params={link.params}
-        className="underline opacity-80"
-      >
-        查看详情
+      <Link {...common} to="/group/$channelId" params={link.params}>
+        {arrow}
       </Link>
     );
   }
   return (
-    <Link
-      to="/channel/$channelId"
-      params={link.params}
-      className="underline opacity-80"
-    >
-      查看详情
+    <Link {...common} to="/channel/$channelId" params={link.params}>
+      {arrow}
     </Link>
   );
 }
+
+/** The row's left symbol: how the work started, as the 触发方式 filter names it. */
+const SOURCE_ICON: Record<string, typeof IconMessageCircle> = {
+  chat: IconMessageCircle,
+  routine: IconRepeat,
+  responsibility: IconClipboardCheck,
+  handoff: IconArrowsExchange,
+  group_run: IconUsersGroup,
+};
+
+/** Whether a card is asking a person to act: a question or approval, or a failure not filed away. */
+const asksForAction = (task: { status: string; archivedAt?: string | null }) =>
+  task.status === "needs_action" ||
+  (task.status === "failed" && !task.archivedAt);
+
+/**
+ * The status badge's tone. Red (the soft red ground with the AA red ink, `bg-signal-soft
+ * text-signal-ink`) is kept for what asks a person to act; everything else is a quiet graphite pill.
+ * The words are always there, so no state is told by colour alone.
+ */
+const badgeTone = (task: { status: string; archivedAt?: string | null }) =>
+  asksForAction(task)
+    ? "bg-signal-soft text-signal-ink"
+    : task.status === "running" || task.status === "awaiting_review"
+      ? "bg-foreground/[0.09] text-foreground"
+      : "bg-foreground/[0.05] text-muted-foreground";
 
 function TaskCard({
   task,
@@ -844,12 +969,13 @@ function TaskCard({
         name={executor.name}
         seed={executor.avatarSeed}
         portrait={{ kind: "coworker", id: executor.id }}
-        size={16}
+        size={14}
       />
       {executor.name}
     </>
   ) : null;
   const deliverable = deliverableSummary(task.deliverableRef);
+  const Glyph = SOURCE_ICON[task.source] ?? IconFileText;
 
   return (
     /*
@@ -857,174 +983,175 @@ function TaskCard({
      * keyboard person reaches directly. It is an `li` because that is what the board's structure says
      * it is — an entry in a list that can be picked up — and that is also what keeps the drag handler
      * off a bare static element.
+     *
+     * Drawn as the reference's task row (docs/design/ios-studio `.task-row`): a 33px symbol square,
+     * the title over a grey meta line, then the row's verbs, its status badge and the › into the work.
+     * On a narrow column the right-hand cluster wraps under the text instead of squeezing it.
      */
     <li
       draggable
       onDragStart={(event) => {
         event.dataTransfer.setData("text/plain", task.id);
       }}
-      className="bg-foreground/[0.03] hover:bg-foreground/5 rounded-lg px-3 py-2.5 text-sm"
+      className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px] py-[8px] text-[13px]"
     >
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate">{task.title}</span>
+      {/* A block, not a span: the title stays the row's first span, which is how its readers find it. */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          "grid size-[33px] shrink-0 place-items-center rounded-[9px] border border-foreground/[0.1] bg-[linear-gradient(145deg,color-mix(in_oklab,var(--foreground)_9%,transparent),color-mix(in_oklab,var(--foreground)_3%,transparent))]",
+          asksForAction(task) ? "text-signal" : "text-foreground/75",
+        )}
+      >
+        <Glyph className="size-[17px]" stroke={1.7} />
+      </div>
+      <div className="min-w-0 flex-1 basis-[180px]">
+        <span className="block truncate font-semibold text-[13px] leading-[19px]">
+          {task.title}
+        </span>
+        {/*
+         * Wraps rather than squeezes. In a narrow lane a single line had every chip shrink until a
+         * name broke one character per line; each item keeps its own line and the row takes a
+         * second one. The items are separated by a middle dot drawn in CSS, so a reader hears only
+         * the facts.
+         */}
+        <div className="mt-[2px] flex flex-wrap items-center gap-x-[6px] gap-y-[1px] text-[11px] text-muted-foreground leading-[16px] [&>*+*]:before:mr-[6px] [&>*+*]:before:text-faint [&>*+*]:before:content-['·'] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
+          {executor ? (
+            /*
+             * Spec A3: the executor is a way into that coworker's own page (D5). Only a coworker the
+             * roster knows is a link — an id with no row behind it would open a page that can only
+             * say it found nobody.
+             */
+            <Link
+              className="inline-flex items-center gap-[4px] text-foreground/85 hover:underline"
+              data-executor={executor.id}
+              params={{ agentId: executor.id }}
+              title={executor.id}
+              to="/wakers/$agentId"
+            >
+              {executorFace}
+            </Link>
+          ) : (
+            <span title={task.executorAgentId ?? undefined}>
+              {
+                /*
+                 * No coworker named, so say who it belongs to rather than printing half an id. A
+                 * crew's parent card is the whole group's ask; the steps underneath it name the one
+                 * who does each part. An unknown id still falls back to its prefix, because there a
+                 * coworker row really is missing and the number is the only lead somebody has.
+                 */
+                task.executorAgentId ? task.executorAgentId.slice(0, 8) : "整组"
+              }
+            </span>
+          )}
+          <span data-source={task.source}>
+            {origin.detail
+              ? `${origin.label} · ${origin.detail}`
+              : origin.label}
+          </span>
+          {/*
+           * Which model answered it. The board can hold a developer's task and its reviewer's task in
+           * one lane, and those two are now different models by design — a card that cannot say which
+           * one answered is a card that has to be opened to find out.
+           */}
+          {task.model ? <span>{modelLabel(task.model)}</span> : null}
+          {/*
+           * Which machine, on the card itself (ticket 017/018), and whether that machine is there
+           * right now (spec F4). Work bound to an offline machine waits for it (the device queue), so
+           * 离线 on the card — in the signal ink, and in words — is why such a card is not moving.
+           */}
+          {machine ? (
+            <span
+              className={machine.online === false ? "text-signal-ink" : ""}
+              data-device-online={
+                machine.online === null ? "unknown" : String(machine.online)
+              }
+              title={`设备${presenceWord(machine.online)}`}
+            >
+              {machine.name} · {presenceWord(machine.online)}
+            </span>
+          ) : null}
+          {/*
+           * What there is to 查收 (spec A9): the components it drew and the files it handed over, so
+           * the button beside it is a decision about something named rather than a guess.
+           */}
+          {deliverable ? (
+            <span className="text-foreground/90" data-deliverable>
+              {deliverable}
+            </span>
+          ) : null}
+          <span>{relative(task.updatedAt)}</span>
+          {cardLinkOf(task) === "gone" ? (
+            <span className="text-faint">对话已不在</span>
+          ) : null}
+        </div>
+        {breaker ? (
+          /*
+           * Spec C3: why it failed and what happened next, on the card. The routine is already off
+           * -- the runner only writes this after the switch-off -- so the way back is the page where
+           * it can be switched on again.
+           */
+          <div className="mt-[5px] flex flex-wrap items-center gap-x-[8px] gap-y-[2px] text-[11px] leading-[16px]">
+            <span
+              className="rounded-full bg-signal-soft px-[7px] py-[1px] font-semibold text-signal-ink"
+              data-breaker="circuit_breaker"
+              title={`连续失败 ${breaker.failures} 次`}
+            >
+              已熔断·已自动停用
+            </span>
+            <span className="text-muted-foreground">
+              连续失败 {breaker.failures} 次，{breakerSubject(breaker)}
+            </span>
+            <Link
+              className="text-foreground underline underline-offset-2"
+              search={{ status: "failed" }}
+              to="/autonomous"
+            >
+              去自主工作页处理
+            </Link>
+          </div>
+        ) : null}
+      </div>
+      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-[6px]">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-[6px] text-[12px] empty:hidden">
+          {task.status === "awaiting_review" ? (
+            <button
+              className={ROW_ACTION_PRIMARY}
+              type="button"
+              aria-busy={busy}
+              disabled={busy}
+              onClick={() => onReview(task.id)}
+            >
+              {busy ? "查收中…" : "查收"}
+            </button>
+          ) : task.status === "failed" && !task.archivedAt ? (
+            <button
+              className={ROW_ACTION_SECONDARY}
+              type="button"
+              aria-busy={busy}
+              disabled={busy}
+              onClick={() => onArchive(task.id)}
+            >
+              {busy ? "归档中…" : "归档"}
+            </button>
+          ) : onDecide ? (
+            <ApprovalActions
+              onDecide={onDecide}
+              pending={decidingIds ?? NOTHING_DECIDING}
+              task={task}
+            />
+          ) : null}
+        </div>
         <span
-          className={`rounded px-1.5 text-xs capitalize ${
-            task.status === "needs_action" || task.status === "awaiting_review"
-              ? "bg-amber-500/20 text-amber-500"
-              : task.status === "failed"
-                ? "bg-red-500/20 text-red-500"
-                : task.status === "done"
-                  ? "opacity-50"
-                  : "bg-sky-500/15 text-sky-400"
-          }`}
+          className={cn(
+            "inline-flex items-center whitespace-nowrap rounded-full px-[8px] py-[3px] font-semibold text-[11px] leading-[14px]",
+            badgeTone(task),
+          )}
           data-status={task.status}
         >
           {statusLabelOf(task)}
         </span>
-      </div>
-      {breaker ? (
-        /*
-         * Spec C3: why it failed and what happened next, on the card. The routine is already off --
-         * the runner only writes this after the switch-off -- so the way back is the page where it
-         * can be switched on again.
-         */
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-          <span
-            className="rounded bg-red-500/20 px-1.5 text-red-500"
-            data-breaker="circuit_breaker"
-            title={`连续失败 ${breaker.failures} 次`}
-          >
-            已熔断·已自动停用
-          </span>
-          <span className="opacity-70">
-            连续失败 {breaker.failures} 次，{breakerSubject(breaker)}
-          </span>
-          <Link
-            className="underline opacity-80"
-            search={{ status: "failed" }}
-            to="/autonomous"
-          >
-            去自主工作页处理
-          </Link>
-        </div>
-      ) : null}
-      {/*
-       * Wraps rather than squeezes. In a narrow lane a single line had every chip shrink until a name
-       * broke one character per line; each item keeps its own line and the row takes a second one.
-       */}
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs opacity-60 [&>*]:shrink-0 [&>*]:whitespace-nowrap">
-        {executor ? (
-          /*
-           * Spec A3: the executor is a way into that coworker's own page (D5). Only a coworker the
-           * roster knows is a link — an id with no row behind it would open a page that can only say
-           * it found nobody.
-           */
-          <Link
-            className="flex items-center gap-1 hover:underline"
-            data-executor={executor.id}
-            params={{ agentId: executor.id }}
-            title={executor.id}
-            to="/wakers/$agentId"
-          >
-            {executorFace}
-          </Link>
-        ) : (
-          <span
-            className="flex items-center gap-1"
-            title={task.executorAgentId ?? undefined}
-          >
-            {
-              /*
-               * No coworker named, so say who it belongs to rather than printing half an id. A crew's
-               * parent card is the whole group's ask; the steps underneath it name the one who does
-               * each part. An unknown id still falls back to its prefix, because there a coworker row
-               * really is missing and the number is the only lead somebody has.
-               */
-              task.executorAgentId ? task.executorAgentId.slice(0, 8) : "整组"
-            }
-          </span>
-        )}
-        <span
-          className="rounded bg-foreground/5 px-1.5"
-          data-source={task.source}
-        >
-          {origin.detail ? `${origin.label} · ${origin.detail}` : origin.label}
-        </span>
-        {/*
-         * Which model answered it. The board can hold a developer's task and its reviewer's task in
-         * one lane, and those two are now different models by design — a card that cannot say which
-         * one answered is a card that has to be opened to find out.
-         */}
-        {task.model ? (
-          <span className="rounded bg-foreground/5 px-1.5">
-            {modelLabel(task.model)}
-          </span>
-        ) : null}
-        {/*
-         * Which machine, on the card itself (ticket 017/018): the board can be filtered to one
-         * machine, and a lane that mixes a laptop's task with a desktop's has to say which is which
-         * without making somebody count chips at the top.
-         */}
-        {/*
-         * Spec F4: and whether that machine is there right now. Work bound to an offline machine
-         * waits for it (the device queue), so 离线 on the card is why such a card is not moving.
-         */}
-        {machine ? (
-          <span
-            className={`rounded px-1.5 ${
-              machine.online === false
-                ? "bg-red-500/10 text-red-500"
-                : "bg-foreground/5"
-            }`}
-            data-device-online={
-              machine.online === null ? "unknown" : String(machine.online)
-            }
-            title={`设备${presenceWord(machine.online)}`}
-          >
-            {machine.name} · {presenceWord(machine.online)}
-          </span>
-        ) : null}
-        {/*
-         * What there is to 查收 (spec A9): the components it drew and the files it handed over, so the
-         * button beside it is a decision about something named rather than a guess.
-         */}
-        {deliverable ? (
-          <span
-            className="rounded bg-amber-500/10 px-1.5 text-amber-600 dark:text-amber-400"
-            data-deliverable
-          >
-            {deliverable}
-          </span>
-        ) : null}
-        <span>{relative(task.updatedAt)}</span>
         <CardOpenLink task={task} />
-        {task.status === "awaiting_review" ? (
-          <button
-            className="bg-foreground text-background rounded px-2 py-0.5"
-            type="button"
-            aria-busy={busy}
-            disabled={busy}
-            onClick={() => onReview(task.id)}
-          >
-            {busy ? "查收中…" : "查收"}
-          </button>
-        ) : task.status === "failed" && !task.archivedAt ? (
-          <button
-            className="rounded bg-foreground/10 px-2 py-0.5"
-            type="button"
-            aria-busy={busy}
-            disabled={busy}
-            onClick={() => onArchive(task.id)}
-          >
-            {busy ? "归档中…" : "归档"}
-          </button>
-        ) : onDecide ? (
-          <ApprovalActions
-            onDecide={onDecide}
-            pending={decidingIds ?? NOTHING_DECIDING}
-            task={task}
-          />
-        ) : null}
       </div>
     </li>
   );
@@ -1093,38 +1220,44 @@ export function AttentionRegion({
 
   return (
     /*
-     * The reference draws this area as text tabs with a bar under the chosen one, over a bordered
-     * panel; the tabs ARE its heading, so no separate title sits above them.
+     * docs/design/ios-studio/01-任务看板.png 「待关注」: the heading on the left, the two questions as
+     * a pill switch on the right, and the rows in one rounded panel under them. The region keeps its
+     * name 需要关注 (what the rest of the board and its tests call it); the heading is the reference's.
      */
-    <section aria-label="需要关注" className="mt-[26px]">
-      <SegmentedTabs
-        className="w-fit gap-[20px] [&_[role=tab]]:px-[8px] [&_[role=tab]]:text-[15px]"
-        label="关注分类"
-        onValueChange={setTab}
-        tabs={[
-          {
-            value: "needsYou",
-            label: `需要操作 (${groups.needsYou.length})`,
-          },
-          { value: "review", label: `查收结果 (${groups.review.length})` },
-        ]}
-        value={tab}
-        variant="underline"
-      />
-      <div className="mt-[14px] rounded-[10px] border border-border bg-card">
+    <section aria-label="需要关注" className="mt-[22px]">
+      <div className="flex flex-wrap items-center justify-between gap-[10px]">
+        <h2 className="font-bold text-[17px] leading-[24px] tracking-[-0.02em]">
+          待关注
+        </h2>
+        <SegmentedTabs
+          label="关注分类"
+          onValueChange={setTab}
+          tabs={[
+            {
+              value: "needsYou",
+              label: `需要操作 ${groups.needsYou.length}`,
+            },
+            { value: "review", label: `查收结果 ${groups.review.length}` },
+          ]}
+          value={tab}
+        />
+      </div>
+      <div className="mt-[9px] rounded-[16px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
         {shown.length === 0 ? (
-          <div className="flex min-h-[131px] flex-col items-center justify-center px-6 text-center">
-            <p className="font-semibold text-[14px] leading-[20px]">
-              {tab === "needsYou" ? "暂无需要操作的任务" : "暂无待查收的结果"}
-            </p>
-            <p className="mt-[7px] text-[12px] text-muted-foreground leading-[16px]">
-              {tab === "needsYou"
+          <WorkbenchEmpty
+            className="min-h-[131px] py-[22px]"
+            description={
+              tab === "needsYou"
                 ? "需要你确认、回答或补充信息的任务会显示在这里。"
-                : "员工做完、等你过目的任务会显示在这里。"}
-            </p>
-          </div>
+                : "员工做完、等你过目的任务会显示在这里。"
+            }
+            mood={tab === "needsYou" ? "cool" : "sweet"}
+            title={
+              tab === "needsYou" ? "暂无需要操作的任务" : "暂无待查收的结果"
+            }
+          />
         ) : (
-          <ul className="list-none space-y-1.5 p-2">
+          <ul className="list-none divide-y divide-border px-[11px] py-[2px]">
             {shown.map((task) => (
               // TaskCard is an `li` of its own — the board's cards and these are the same cards.
               <TaskCard
@@ -1466,6 +1599,7 @@ function TasksPage() {
   return (
     <PageShell
       width="workbench"
+      eyebrow="01 WORK RECORD"
       /* Spec I2: hand a crew's flow a task from the board itself. */
       action={<DispatchToGroup />}
       title="任务看板"
@@ -1520,7 +1654,7 @@ function TasksPage() {
           <>
             {(machines.data?.length ?? 0) > 0 ? (
               <LabeledSelect
-                className="max-w-[320px] bg-card [&>span]:text-foreground"
+                className="max-w-[320px]"
                 label="设备"
                 onValueChange={(next) => patch({ machineId: next })}
                 options={machineOptions}
@@ -1528,7 +1662,7 @@ function TasksPage() {
               />
             ) : null}
             <LabeledSelect
-              className="w-[152px] bg-card [&>span]:text-foreground"
+              className="w-[152px]"
               label="数据周期"
               onValueChange={setPeriod}
               options={PERIODS}
@@ -1559,7 +1693,28 @@ function TasksPage() {
               tasks={summary.data}
             />
           ) : (
-            line
+            <>
+              {/*
+               * Nothing counted yet (first read, or a failed one with nothing cached): the metric row
+               * keeps its shape with dashes, so the panel does not jump when the numbers arrive, and
+               * the line under it says which of the two it is.
+               */}
+              <div aria-hidden="true" className={STAT_GRID}>
+                {Object.values(STAT_CARD_LABEL).map((label, index) => (
+                  <div className={statCellClass(index)} key={label}>
+                    <span className="font-semibold text-[34px] text-faint leading-[1.11] md:text-[39px]">
+                      —
+                    </span>
+                    <span className="mt-[2px] text-[12px] text-muted-foreground leading-[16px]">
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-[8px] border-border border-t pt-[9px]">
+                {line}
+              </div>
+            </>
           );
         })()}
       </WorkRecordBanner>
@@ -1583,15 +1738,16 @@ function TasksPage() {
           tasks={list}
         />
       ) : null}
-      <section aria-label="全部任务" className="mt-[33px]">
-        <div className="flex min-h-[32px] flex-wrap items-center gap-3">
-          <h2 className="font-bold text-[16px] leading-[32px]">全部任务</h2>
+      <section aria-label="全部任务" className="mt-[22px]">
+        <div className="flex min-h-[32px] flex-wrap items-center justify-between gap-[10px]">
+          <h2 className="font-bold text-[17px] leading-[24px] tracking-[-0.02em]">
+            全部任务
+          </h2>
           {/*
-           * The reference's icon pill: a dark segment for the chosen view on a lighter track, 32px
-           * tall and 76px wide. The names stay for assistive technology.
+           * The reference's pill switch: each view by its icon and its name, the chosen one on a
+           * raised plate (docs/design/ios-studio `.segment`).
            */}
           <SegmentedTabs
-            className="ml-auto gap-[4px] bg-sidebar-accent p-[4px] [&_[aria-selected=true]]:bg-card! [&_[role=tab]]:h-[24px] [&_[role=tab]]:w-[32px] [&_[role=tab]]:px-0"
             label="视图"
             onValueChange={setView}
             tabs={(["list", "lanes"] as const).map((mode) => ({
@@ -1599,11 +1755,11 @@ function TasksPage() {
               label: (
                 <>
                   {mode === "list" ? (
-                    <IconList aria-hidden="true" className="size-[16px]" />
+                    <IconList aria-hidden="true" className="size-[15px]" />
                   ) : (
-                    <IconStack2 aria-hidden="true" className="size-[16px]" />
+                    <IconStack2 aria-hidden="true" className="size-[15px]" />
                   )}
-                  <span className="sr-only">{VIEW_LABEL[mode]}</span>
+                  {VIEW_LABEL[mode]}
                 </>
               ),
             }))}
@@ -1614,18 +1770,19 @@ function TasksPage() {
          * Spec A4: what was said, who did it — one coworker or a whole crew — how it started, which
          * state it is in, and how far back the list reaches. Each writes one axis of the address
          * (`q`, `executor`/`group`, `source`, `status`, `listPeriod`), so a narrowed board can be
-         * bookmarked and shared. Widths are the reference's at 1696px.
+         * bookmarked and shared. The reference names the list's own window just 周期, which also keeps
+         * it apart from the panel's 数据周期 above.
          */}
-        <div className="mt-[12px] flex flex-wrap items-center gap-2">
+        <div className="mt-[9px] flex flex-wrap items-center gap-[6px]">
           <SearchBox
-            className="w-[258px] bg-card"
+            className="w-full sm:w-[221px]"
             label="搜索任务"
             onValueChange={setSearch}
             placeholder="搜索任务、员工或群组"
             value={search}
           />
           <LabeledSelect
-            className="w-[209px] bg-card"
+            className="max-w-full"
             label="员工 / 群组"
             onValueChange={(next) => patch(whoAddress(next))}
             options={[
@@ -1639,7 +1796,7 @@ function TasksPage() {
             value={who}
           />
           <LabeledSelect
-            className="w-[209px] bg-card"
+            className="max-w-full"
             label="触发方式"
             onValueChange={(next) => patch({ source: triggerOf(next) })}
             options={[
@@ -1652,7 +1809,7 @@ function TasksPage() {
             value={trigger}
           />
           <LabeledSelect
-            className="w-[209px] bg-card"
+            className="max-w-full"
             label="任务状态"
             onValueChange={setStatus}
             options={[
@@ -1669,8 +1826,8 @@ function TasksPage() {
             value={status}
           />
           <LabeledSelect
-            className="w-[209px] bg-card"
-            label="数据周期"
+            className="max-w-full"
+            label="周期"
             onValueChange={setListPeriod}
             options={PERIODS}
             value={listPeriod}
@@ -1692,17 +1849,26 @@ function TasksPage() {
         {/* A read that failed with nothing cached draws no panel: the alert above says why. */}
         {tasks.data === undefined && !tasks.isPending ? null : (
           <div
-            className="mt-[12px] rounded-[10px] border border-border bg-card"
+            className={cn(
+              "mt-[9px]",
+              // The list is one rounded row panel; the lanes are cards of their own.
+              tasks.data === undefined || view === "list"
+                ? "rounded-[16px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]"
+                : null,
+            )}
             data-slot="task-results"
           >
             {tasks.data === undefined ? (
-              <p className="px-4 py-10 text-center text-muted-foreground text-sm">
+              <p
+                aria-live="polite"
+                className="px-4 py-10 text-center text-[13px] text-muted-foreground"
+              >
                 正在加载任务…
               </p>
             ) : view === "list" ? (
               <>
                 {list.length > 0 ? (
-                  <ul className="list-none space-y-1 p-2">
+                  <ul className="list-none divide-y divide-border px-[11px] py-[2px]">
                     {list.map((task) => (
                       <TaskCard
                         key={task.id}
@@ -1725,53 +1891,79 @@ function TasksPage() {
               </>
             ) : (
               <>
-                <div className="grid grid-cols-1 gap-3 p-2 md:grid-cols-3">
-                  {LANES.map((lane) => (
-                    // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
-                    <div
-                      aria-label={`${lane.label}泳道`}
-                      key={lane.key}
-                      role="group"
-                      onDragOver={(event) => {
-                        if (lane.key === "finished") event.preventDefault();
-                      }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        dropLane(
-                          lane.key,
-                          event.dataTransfer.getData("text/plain"),
-                        );
-                      }}
-                      className="bg-foreground/[0.02] rounded-xl p-2"
-                    >
-                      <div className="pb-2 text-xs font-medium uppercase tracking-wide opacity-50">
-                        {lane.label}
-                      </div>
-                      <ul className="list-none space-y-1.5">
-                        {list
-                          .filter((task) => laneOfTask(task).includes(lane.key))
-                          .map((task) => (
-                            <TaskCard
-                              key={task.id}
-                              task={task}
-                              machine={machineLabel(task.deviceId)}
-                              onReview={(id) => runAction(id, "review")}
-                              onArchive={(id) => runAction(id, "archive")}
-                              pendingIds={pendingIds}
-                              onDecide={approval.decide}
-                              decidingIds={approval.pending}
+                {/* The lanes are always drawn: each is a drop target even while it holds nothing. */}
+                <div className="grid grid-cols-1 gap-[11px] md:grid-cols-3">
+                  {LANES.map((lane) => {
+                    const inLane = list.filter((task) =>
+                      laneOfTask(task).includes(lane.key),
+                    );
+                    return (
+                      // biome-ignore lint/a11y/useSemanticElements: the lane column is the drop target for its whole area, including the empty space under its cards — which is the part that has to answer. A form region is not what that is.
+                      <div
+                        aria-label={`${lane.label}泳道`}
+                        key={lane.key}
+                        role="group"
+                        onDragOver={(event) => {
+                          if (lane.key === "finished") event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          dropLane(
+                            lane.key,
+                            event.dataTransfer.getData("text/plain"),
+                          );
+                        }}
+                        className="min-w-0 rounded-[16px] border border-border bg-card px-[11px] pt-[10px] pb-[4px] shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-border border-b pb-[8px]">
+                          <span className="flex items-center gap-[7px] font-semibold text-[13px]">
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "size-[5px] rounded-full",
+                                lane.key === "attention"
+                                  ? "bg-signal"
+                                  : "bg-faint",
+                              )}
                             />
-                          ))}
-                      </ul>
-                    </div>
-                  ))}
+                            {lane.label}
+                          </span>
+                          <span className="rounded-full bg-foreground/[0.06] px-[7px] text-[11px] text-muted-foreground tabular-nums leading-[18px]">
+                            {inLane.length}
+                          </span>
+                        </div>
+                        {inLane.length > 0 ? (
+                          <ul className="list-none divide-y divide-border">
+                            {inLane.map((task) => (
+                              <TaskCard
+                                key={task.id}
+                                task={task}
+                                machine={machineLabel(task.deviceId)}
+                                onReview={(id) => runAction(id, "review")}
+                                onArchive={(id) => runAction(id, "archive")}
+                                pendingIds={pendingIds}
+                                onDecide={approval.decide}
+                                decidingIds={approval.pending}
+                              />
+                            ))}
+                          </ul>
+                        ) : list.length > 0 ? (
+                          <p className="py-[18px] text-center text-[12px] text-faint">
+                            这一列暂时是空的
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
                 {!readFailed && lanesUnmappable(list) ? (
-                  <p className="py-10 text-center text-muted-foreground text-sm">
+                  <p className="mt-[11px] rounded-[16px] border border-border bg-card py-10 text-center text-[13px] text-muted-foreground">
                     当前任务暂无可归入泳道的状态，可切换列表查看。
                   </p>
                 ) : !readFailed && list.length === 0 ? (
-                  emptyList
+                  <div className="mt-[11px] rounded-[16px] border border-border bg-card">
+                    {emptyList}
+                  </div>
                 ) : null}
               </>
             )}

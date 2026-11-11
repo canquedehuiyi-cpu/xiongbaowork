@@ -3,8 +3,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import { Streamdown } from "streamdown";
 import { PageShell } from "@/components/layout/page-shell";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
+import { CARD_FACE, Tag } from "@/components/resources/resource-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { conversationLabel } from "@/lib/channels/label";
@@ -49,8 +52,25 @@ export const Route = createFileRoute("/_authed/_app/responsibilities")({
   component: ResponsibilitiesPage,
   validateSearch: responsibilitiesSearch,
 });
-const fieldClass = "grid gap-1 text-sm";
-const selectClass = "h-9 rounded-md border bg-background px-3 text-sm";
+/*
+ * docs/design/ios-studio, for a working page: graphite cards on a hairline, 13px labels over the
+ * workbench's 32px controls, and red only for what needs the person's attention.
+ */
+const fieldClass = "grid min-w-0 gap-[5px] text-[13px]";
+const selectClass =
+  "h-[32px] min-w-0 w-full rounded-[9px] border border-border bg-muted px-[9px] text-[13px] font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 dark:bg-[oklch(0.196_0.002_286.2)]";
+/** A responsibility's state in words, and the badge tone it takes. */
+const GOAL_STATUS: Record<
+  ResponsibilityRecord["status"],
+  { label: string; tone: "positive" | "muted" }
+> = {
+  active: { label: "进行中", tone: "positive" },
+  paused: { label: "已暂停", tone: "muted" },
+  completed: { label: "已完成", tone: "muted" },
+};
+const statusLabel = (status: string) =>
+  GOAL_STATUS[status as ResponsibilityRecord["status"]]?.label ?? status;
+const SECTION_TITLE = "font-bold text-[17px] leading-[26px] tracking-[-0.02em]";
 async function refresh() {
   await queryClient.invalidateQueries({ queryKey: responsibilityKeys.all });
 }
@@ -66,37 +86,68 @@ function ResponsibilitiesPage() {
     <PageShell
       title="长期职责"
       description="交给员工一个长期目标，跟进它的进展，并决定它什么时候开工。"
+      width="workbench"
     >
-      <div className="grid gap-6">
-        <NewResponsibility />
-        {agent ? (
-          <p className="text-muted-foreground text-sm" role="status">
-            只显示{" "}
-            {bots.data?.find((bot) => bot.id === agent)?.name ?? "这位员工"}{" "}
-            的长期职责 ·{" "}
-            <Link
-              className="underline underline-offset-4"
-              search={{}}
-              to="/responsibilities"
+      {/*
+       * The responsibilities being followed are the page's subject, so they take the wide column;
+       * creating one and the GitHub sources sit beside them on a wide screen and below on a narrow one.
+       */}
+      <div className="grid items-start gap-[22px] xl:grid-cols-[minmax(0,1fr)_400px]">
+        <section
+          aria-labelledby="duties-list"
+          className="grid min-w-0 gap-[9px]"
+        >
+          <div className="flex min-h-[26px] items-center gap-[8px]">
+            <h2 className={SECTION_TITLE} id="duties-list">
+              在跟进的职责
+            </h2>
+            {shown.length ? <Tag>{shown.length} 项</Tag> : null}
+          </div>
+          {agent ? (
+            <p className="text-[13px] text-muted-foreground" role="status">
+              只显示{" "}
+              {bots.data?.find((bot) => bot.id === agent)?.name ?? "这位员工"}{" "}
+              的长期职责 ·{" "}
+              <Link
+                className="text-foreground underline underline-offset-4"
+                search={{}}
+                to="/responsibilities"
+              >
+                看全部
+              </Link>
+            </p>
+          ) : null}
+          {goals.isPending ? (
+            <div
+              aria-label="正在读取长期职责"
+              className="grid gap-[9px]"
+              role="status"
             >
-              看全部
-            </Link>
-          </p>
-        ) : null}
-        {goals.isPending ? (
-          <p>正在读取长期职责…</p>
-        ) : goals.error ? (
-          <p role="alert" className="text-destructive">
-            {goals.error.message}
-          </p>
-        ) : shown.length ? (
-          shown.map((goal) => <GoalCard key={goal.id} goal={goal} />)
-        ) : (
-          <p className="text-muted-foreground">
-            {agent ? "这位员工还没有长期职责。" : "你还没有长期职责。"}
-          </p>
-        )}
-        <GithubSources />
+              <p className="sr-only">正在读取长期职责…</p>
+              <Skeleton className="h-[180px] rounded-[13px]" />
+              <Skeleton className="h-[180px] rounded-[13px]" />
+            </div>
+          ) : goals.error ? (
+            <p
+              role="alert"
+              className="rounded-[13px] border border-signal/40 bg-signal-soft px-4 py-3 text-[13px] text-signal-ink"
+            >
+              {goals.error.message}
+            </p>
+          ) : shown.length ? (
+            shown.map((goal) => <GoalCard key={goal.id} goal={goal} />)
+          ) : (
+            <WorkbenchEmpty
+              className="border border-border"
+              description="在「新建长期职责」里交给员工一个长期目标。"
+              title={agent ? "这位员工还没有长期职责。" : "你还没有长期职责。"}
+            />
+          )}
+        </section>
+        <div className="grid min-w-0 gap-[22px]">
+          <NewResponsibility />
+          <GithubSources />
+        </div>
       </div>
     </PageShell>
   );
@@ -132,7 +183,7 @@ function NewResponsibility() {
   });
   return (
     <form
-      className="grid gap-3 rounded-lg border p-4"
+      className={`${CARD_FACE} grid gap-3 p-[14px]`}
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate({
@@ -145,7 +196,7 @@ function NewResponsibility() {
         });
       }}
     >
-      <h2 className="font-semibold">新建长期职责</h2>
+      <h2 className="font-bold text-[15px] tracking-[-0.01em]">新建长期职责</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={fieldClass}>
           对话
@@ -195,7 +246,7 @@ function NewResponsibility() {
         </Button>
       )}
       {(channels.error || bots.error) && (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-[13px] text-signal-ink">
           {channels.error?.message ?? bots.error?.message}
         </p>
       )}
@@ -272,7 +323,7 @@ function NewResponsibility() {
         )}
       </div>
       {create.error && (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-[13px] text-signal-ink">
           {create.error.message}
         </p>
       )}
@@ -307,12 +358,14 @@ function GoalCard({ goal }: { goal: ResponsibilityRecord }) {
     enabled: showRuns,
   });
   return (
-    <article className="grid gap-3 rounded-lg border p-4">
+    <article className={`${CARD_FACE} grid min-w-0 gap-3 p-[14px]`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">{goal.title}</h2>
-        <span className="rounded bg-muted px-2 py-1 text-xs capitalize">
-          {goal.status}
-        </span>
+        <h3 className="min-w-0 font-bold text-[15px] tracking-[-0.01em]">
+          {goal.title}
+        </h3>
+        <Tag tone={GOAL_STATUS[goal.status]?.tone ?? "muted"}>
+          {statusLabel(goal.status)}
+        </Tag>
       </div>
       {editing ? (
         <form
@@ -367,25 +420,27 @@ function GoalCard({ goal }: { goal: ResponsibilityRecord }) {
         </form>
       ) : (
         <>
-          <p className="whitespace-pre-wrap text-sm">{goal.instruction}</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="whitespace-pre-wrap text-[13px]">{goal.instruction}</p>
+          <p className="text-[13px] text-muted-foreground">
             成功标准： {goal.successCriteria}
           </p>
         </>
       )}
       {goal.progress && (
-        <div className="text-sm">
-          <span className="font-medium">进展：</span>
+        <div className="text-[13px]">
+          <span className="font-semibold text-[12px] text-muted-foreground">
+            进展：
+          </span>
           <RunMarkdown>{goal.progress}</RunMarkdown>
         </div>
       )}
       {goal.lastResult && (
-        <div className="rounded bg-muted p-3 text-sm">
+        <div className="rounded-[11px] border border-border bg-background/60 p-3 text-[13px]">
           <RunMarkdown>{goal.lastResult}</RunMarkdown>
         </div>
       )}
       {goal.subscriptions.length > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="font-mono text-[11.5px] text-faint">
           事件：{" "}
           {goal.subscriptions
             .map(
@@ -395,7 +450,7 @@ function GoalCard({ goal }: { goal: ResponsibilityRecord }) {
             .join(", ")}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-[7px]">
         <Button
           variant="outline"
           size="sm"
@@ -455,26 +510,33 @@ function GoalCard({ goal }: { goal: ResponsibilityRecord }) {
         <Link
           to="/channel/$channelId"
           params={{ channelId: goal.channelId }}
-          className="self-center text-sm underline"
+          className="self-center rounded-[6px] text-[13px] text-muted-foreground underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
         >
           打开对话
         </Link>
       </div>
       {(action.error || edit.error) && (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-[13px] text-signal-ink">
           {action.error?.message ?? edit.error?.message}
         </p>
       )}
       <Triggers goal={goal} />
       {showRuns && (
-        <div className="grid gap-2 border-t pt-3">
+        <div className="grid gap-2 border-border border-t pt-3">
           {runs.isPending ? (
-            <p>正在读取运行记录…</p>
+            <p className="text-[13px] text-muted-foreground" role="status">
+              正在读取运行记录…
+            </p>
           ) : runs.error ? (
-            <p role="alert">{runs.error.message}</p>
+            <p className="text-[13px] text-signal-ink" role="alert">
+              {runs.error.message}
+            </p>
           ) : runs.data?.length ? (
             runs.data.map((run) => (
-              <div key={run.id} className="text-sm">
+              <div
+                key={run.id}
+                className="rounded-[11px] border border-border bg-background/60 p-[10px] text-[13px]"
+              >
                 <p>
                   <span className={runStatusClass(run.status)}>
                     {RUN_LABEL[run.status]}
@@ -491,14 +553,14 @@ function GoalCard({ goal }: { goal: ResponsibilityRecord }) {
                 {run.waiting && (
                   <p>等待 {run.waiting.kind}。请在审批或对话里回复。</p>
                 )}
-                {run.error && (
-                  <p className="text-muted-foreground">{run.error}</p>
-                )}
+                {run.error && <p className="text-signal-ink">{run.error}</p>}
                 {run.replyText && <RunMarkdown>{run.replyText}</RunMarkdown>}
               </div>
             ))
           ) : (
-            <p>还没有运行记录。</p>
+            <p className="text-[13px] text-muted-foreground">
+              还没有运行记录。
+            </p>
           )}
         </div>
       )}
@@ -543,14 +605,16 @@ function GithubSources() {
     onSuccess: refresh,
   });
   return (
-    <section className="grid gap-3 rounded-lg border p-4">
-      <h2 className="font-semibold">GitHub 事件来源</h2>
-      <p className="text-sm text-muted-foreground">
+    <section className={`${CARD_FACE} grid min-w-0 gap-3 p-[14px]`}>
+      <h2 className="font-bold text-[15px] tracking-[-0.01em]">
+        GitHub 事件来源
+      </h2>
+      <p className="text-[13px] text-muted-foreground">
         先登记一个仓库，再到 GitHub 里用下面的地址和同一个密钥添加
         webhook。然后让某项长期职责订阅一个事件，例如 issues.opened。
       </p>
       <form
-        className="grid gap-3 sm:grid-cols-3"
+        className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1"
         onSubmit={(event) => {
           event.preventDefault();
           create.mutate();
@@ -577,12 +641,16 @@ function GithubSources() {
             required
           />
         </label>
-        <Button type="submit" className="self-end" disabled={create.isPending}>
+        <Button
+          type="submit"
+          className="self-end justify-self-start"
+          disabled={create.isPending}
+        >
           连接事件
         </Button>
       </form>
       {(bindings.error || create.error || remove.error) && (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-[13px] text-signal-ink">
           {bindings.error?.message ??
             create.error?.message ??
             remove.error?.message}
@@ -591,11 +659,11 @@ function GithubSources() {
       {bindings.data?.map((binding) => (
         <div
           key={binding.id}
-          className="flex flex-wrap items-center justify-between gap-2 border-t pt-3"
+          className="flex flex-wrap items-center justify-between gap-2 border-border border-t pt-3"
         >
-          <div>
-            <p className="text-sm">{binding.repository}</p>
-            <code className="break-all text-xs">
+          <div className="min-w-0">
+            <p className="font-medium text-[13px]">{binding.repository}</p>
+            <code className="break-all font-mono text-[11.5px] text-muted-foreground">
               {window.location.origin}/api/events/github/{binding.id}
             </code>
           </div>
@@ -622,10 +690,10 @@ const RUN_LABEL: Record<string, string> = {
   skipped: "跳过",
 };
 function runStatusClass(status: string) {
-  return status === "failed"
-    ? "text-destructive"
+  return status === "failed" || status === "waiting"
+    ? "font-semibold text-signal-ink"
     : status === "succeeded"
-      ? "text-emerald-600 dark:text-emerald-500"
+      ? "font-semibold text-foreground"
       : "text-muted-foreground";
 }
 
@@ -725,9 +793,9 @@ function Triggers({ goal }: { goal: ResponsibilityRecord }) {
       queryKey: responsibilityKeys.triggers(goal.id),
     });
   return (
-    <section className="grid gap-2 border-t pt-3">
+    <section className="grid gap-2 border-border border-t pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-medium text-sm">触发方式</h3>
+        <h4 className="font-semibold text-[13px]">触发方式</h4>
         <Button
           size="sm"
           variant="outline"
@@ -738,8 +806,9 @@ function Triggers({ goal }: { goal: ResponsibilityRecord }) {
         </Button>
       </div>
       {goal.status !== "active" && (
-        <p className="text-muted-foreground text-xs">
-          这项长期职责当前是 {goal.status}，触发会被接收，但不会让它运行。
+        <p className="text-[12px] text-muted-foreground">
+          这项长期职责当前{statusLabel(goal.status)}
+          ，触发会被接收，但不会让它运行。
         </p>
       )}
       {adding && (
@@ -757,7 +826,7 @@ function Triggers({ goal }: { goal: ResponsibilityRecord }) {
         />
       )}
       {triggers.error && (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-[13px] text-signal-ink">
           {triggers.error.message}
         </p>
       )}
@@ -823,7 +892,7 @@ function TriggerRow({
   const url = trigger.path ? `${window.location.origin}${trigger.path}` : null;
   const generated = trigger.kind === "webhook" || trigger.kind === "github";
   return (
-    <div className="grid gap-2 rounded-md bg-muted/50 p-3 text-sm">
+    <div className="grid min-w-0 gap-2 rounded-[11px] border border-border bg-background/60 p-[10px] text-[13px]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p>
           <span className="font-medium">{KIND_LABEL[trigger.kind]}</span>{" "}
@@ -831,52 +900,56 @@ function TriggerRow({
             {describeFilter(trigger.config)}
           </span>
           {!trigger.enabled && (
-            <span className="ml-2 rounded bg-background px-1.5 py-0.5 text-xs">
-              已暂停
+            <span className="ml-2 inline-flex align-middle">
+              <Tag>已暂停</Tag>
             </span>
           )}
         </p>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={toggle.isPending}
-          onClick={() => toggle.mutate()}
-        >
-          {trigger.enabled ? "暂停" : "恢复"}
-        </Button>
-        {confirmRemove ? (
-          <span className="flex gap-2">
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate()}
-            >
-              永久移除
-            </Button>
+        <span className="flex flex-wrap items-center gap-[7px]">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={toggle.isPending}
+            onClick={() => toggle.mutate()}
+          >
+            {trigger.enabled ? "暂停" : "恢复"}
+          </Button>
+          {confirmRemove ? (
+            <span className="flex gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+              >
+                永久移除
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfirmRemove(false)}
+              >
+                保留
+              </Button>
+            </span>
+          ) : (
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setConfirmRemove(false)}
+              onClick={() => setConfirmRemove(true)}
             >
-              保留
+              移除
             </Button>
-          </span>
-        ) : (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setConfirmRemove(true)}
-          >
-            移除
-          </Button>
-        )}
+          )}
+        </span>
       </div>
-      <p className="text-muted-foreground text-xs">{KIND_HELP[trigger.kind]}</p>
+      <p className="text-[12px] text-muted-foreground">
+        {KIND_HELP[trigger.kind]}
+      </p>
       {url && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs">POST 到</span>
-          <code className="break-all rounded bg-background px-2 py-1 text-xs">
+          <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
             {url}
           </code>
           <CopyButton value={url} label="复制地址" />
@@ -885,13 +958,13 @@ function TriggerRow({
       {trigger.kind === "email" &&
         (trigger.address ? (
           <div className="flex flex-wrap items-center gap-2">
-            <code className="break-all rounded bg-background px-2 py-1 text-xs">
+            <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
               {trigger.address}
             </code>
             <CopyButton value={trigger.address} label="复制邮箱地址" />
           </div>
         ) : (
-          <p className="text-amber-600 text-xs dark:text-amber-500">
+          <p className="text-[12px] text-signal-ink">
             这个部署没有配置收信（OPENBOT_INBOUND_EMAIL_DOMAIN 和
             OPENBOT_INBOUND_EMAIL_SNS_TOPIC_ARNS），所以这个地址暂时收不到邮件。
           </p>
@@ -901,7 +974,7 @@ function TriggerRow({
           <span className="text-xs">密钥</span>
           {shown ? (
             <>
-              <code className="break-all rounded bg-background px-2 py-1 text-xs">
+              <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
                 {shown}
               </code>
               <CopyButton value={shown} label="复制密钥" />
@@ -933,7 +1006,7 @@ function TriggerRow({
         </div>
       )}
       {trigger.kind === "webhook" && shown && (
-        <code className="break-all rounded bg-background px-2 py-1 text-xs">
+        <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
           Authorization: Bearer {shown}
         </code>
       )}
@@ -949,7 +1022,7 @@ function TriggerRow({
             className={
               trigger.hasSecret
                 ? "text-xs"
-                : "text-amber-600 text-xs dark:text-amber-500"
+                : "font-semibold text-[12px] text-signal-ink"
             }
           >
             {trigger.hasSecret ? "签名密钥已保存" : "等待填写签名密钥"}
@@ -971,7 +1044,7 @@ function TriggerRow({
         </form>
       )}
       {(reveal.error || rotate.error || remove.error || toggle.error) && (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-[12px] text-signal-ink">
           {reveal.error?.message ??
             rotate.error?.message ??
             remove.error?.message ??
@@ -1054,7 +1127,7 @@ function NewTrigger({
   };
   return (
     <form
-      className="grid gap-3 rounded-md border p-3"
+      className="grid gap-3 rounded-[11px] border border-border bg-background/60 p-[10px]"
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();
@@ -1074,7 +1147,7 @@ function NewTrigger({
           ))}
         </select>
       </label>
-      <p className="text-muted-foreground text-xs">{KIND_HELP[kind]}</p>
+      <p className="text-[12px] text-muted-foreground">{KIND_HELP[kind]}</p>
       {kind === "slack" ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className={fieldClass} htmlFor={`${id}-team`}>
@@ -1198,7 +1271,7 @@ function NewTrigger({
         </div>
       )}
       {create.error && (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-[13px] text-signal-ink">
           {create.error.message}
         </p>
       )}

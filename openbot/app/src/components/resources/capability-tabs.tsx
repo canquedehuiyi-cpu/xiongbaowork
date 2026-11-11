@@ -19,14 +19,18 @@ import {
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
 import { useZh } from "@/lib/translations/queries";
+import { cn } from "@/lib/utils";
 import {
+  CARD_FACE,
   CardGrid,
   grantedSentence,
   NoMatch,
   QueryState,
+  ResourceSymbol,
   TabEmpty,
   TabHeader,
   TabSearch,
+  Tag,
 } from "./resource-kit";
 
 /*
@@ -37,7 +41,11 @@ import {
  * reads the same endpoint, is the full skills screen in `components/skills/skills-screen.tsx`.
  */
 
-/** A row of a tab, drawn as a card in the tab's grid. `Item` keeps the slots the tests read. */
+/**
+ * A row of a tab, drawn as a card in the tab's grid — docs/design/ios-studio's card: a hairline
+ * graphite face at a 13px radius, the icon plate and title on the first line, two lines of
+ * description, and the quiet meta along the bottom. `Item` keeps the slots the tests read.
+ */
 export function ResourceCard({
   title,
   description,
@@ -52,19 +60,28 @@ export function ResourceCard({
   actions?: ReactNode;
 }) {
   return (
-    <li className="flex">
+    <li className="flex min-w-0">
       <Item
-        className="h-full flex-nowrap items-start bg-card"
+        className={cn(
+          CARD_FACE,
+          "h-full min-h-[104px] flex-nowrap items-start gap-[8px] px-[11px] py-[10px] dark:border-border",
+        )}
         variant="outline"
       >
         {media ? <ItemMedia>{media}</ItemMedia> : null}
-        <ItemContent className="min-w-0">
-          <ItemTitle>{title}</ItemTitle>
+        <ItemContent className="min-w-0 gap-[4px] self-stretch">
+          <ItemTitle className="flex-wrap font-bold text-[13px] leading-[20px]">
+            {title}
+          </ItemTitle>
           {description ? (
-            <ItemDescription>{description}</ItemDescription>
+            <ItemDescription className="text-[12px] leading-[1.6]">
+              {description}
+            </ItemDescription>
           ) : null}
           {meta ? (
-            <span className="text-[12px] text-muted-foreground">{meta}</span>
+            <span className="mt-auto pt-[6px] text-[11px] text-faint">
+              {meta}
+            </span>
           ) : null}
         </ItemContent>
         {actions ? (
@@ -82,6 +99,13 @@ const textMatch = (query: string, ...fields: (string | null | undefined)[]) => {
 };
 
 export { textMatch };
+
+/** The badge tone for a connector's state: connected is the brighter plate, a gap the red one. */
+function accountTone(state: string): "muted" | "positive" | "warning" {
+  if (state === "你已连接" || state === "已接入") return "positive";
+  if (state === "未连接" || state === "没有凭据") return "warning";
+  return "muted";
+}
 
 /**
  * Whether an app answers as whoever is asking, so a Waker reaches it only once this person connected
@@ -140,7 +164,6 @@ export function ConnectorsTab({
             render={(props) => (
               <Link search={{}} to="/settings/connected-accounts" {...props} />
             )}
-            size="sm"
             variant="outline"
           >
             已连接的账号
@@ -160,20 +183,20 @@ export function ConnectorsTab({
         ) : visible.length === 0 ? (
           <NoMatch onClear={() => onQuery("")} title="没有匹配的连接器" />
         ) : (
-          <CardGrid className="mt-4" label="连接器列表">
+          <CardGrid className="mt-[12px]" label="连接器列表">
             {visible.map((server) => (
               <ResourceCard
                 actions={
-                  <span className="text-[12px] text-muted-foreground">
+                  <Tag tone={accountTone(accountState(server))}>
                     {accountState(server)}
-                  </span>
+                  </Tag>
                 }
                 description={zh(server.summary)}
                 key={server.id}
                 media={
-                  <span className="flex size-[32px] items-center justify-center rounded-md bg-muted">
+                  <ResourceSymbol>
                     <PluginLogo logo={server.logo} />
-                  </span>
+                  </ResourceSymbol>
                 }
                 meta={grantedSentence(
                   new Set(server.tools.flatMap((tool) => tool.grantedTo)).size,
@@ -184,14 +207,17 @@ export function ConnectorsTab({
           </CardGrid>
         )}
       </QueryState>
-      <p className="mt-4 text-[13px] text-muted-foreground">
+      <p className="mt-[14px] text-[12px] text-muted-foreground">
         授予在
-        <Link className="underline" to="/admin/plugins">
+        <Link
+          className="text-foreground underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground"
+          to="/admin/plugins"
+        >
           管理员的插件页
         </Link>
         里管理；你自己的账号在
         <Link
-          className="underline"
+          className="text-foreground underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground"
           search={{}}
           to="/settings/connected-accounts"
         >

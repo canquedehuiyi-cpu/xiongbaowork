@@ -1,16 +1,30 @@
 import {
+  IconActivity,
+  IconBolt,
+  IconCircleCheck,
+  IconGitBranch,
+  IconLayoutGrid,
+  IconPlus,
+  IconRobot,
+  IconUsers,
+} from "@tabler/icons-react";
+import {
   useMutation,
   useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { AutomationRow } from "@/components/automations/automations-section";
+import { TriggerKinds } from "@/components/autonomous/trigger-kinds";
 import {
   describe,
+  IconTile,
+  PANEL,
   RunStrip,
   recentRunsOf,
+  SECTION_TITLE,
   statusWord,
   ToggleSwitch,
   WorkSwitch,
@@ -21,7 +35,8 @@ import {
 } from "@/components/layout/labeled-select";
 import { QueryError } from "@/components/layout/query-error";
 import { SearchBox } from "@/components/layout/search-box";
-import { Button } from "@/components/ui/button";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentListQueryOptions } from "@/lib/agents/queries";
@@ -81,6 +96,10 @@ type Raw =
 /** A row's action, at the reference's control height: 32 CSS px, 13px text. */
 const ROW_ACTION = "h-[32px] px-3 text-[13px]";
 
+/** A status pill (docs/design/ios-studio `.badge`). */
+const BADGE =
+  "inline-flex items-center gap-[5px] whitespace-nowrap rounded-full px-[8px] py-[3px] font-semibold text-[11px]";
+
 const COLUMNS =
   "md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_auto] md:items-center md:gap-4";
 
@@ -96,10 +115,13 @@ export function UnifiedAutomations({
   search,
   onChange,
   onReset,
+  onCreate,
 }: {
   search: AutonomousSearch;
   onChange: (patch: Partial<AutonomousSearch>) => void;
   onReset: () => void;
+  /** Opens the page's 新建自动任务 panel, as the header's primary action does. */
+  onCreate: () => void;
 }) {
   const agents = useQuery(agentListQueryOptions());
   const overview = useQuery(autonomousOverviewQueryOptions(true));
@@ -196,202 +218,284 @@ export function UnifiedAutomations({
   return (
     <>
       <Metrics metrics={metrics} />
-      <Toolbar metrics={metrics} onChange={onChange} search={search} />
 
-      {agents.isError ? (
-        // Rows still draw without names (the id stands in), so this is said beside them.
-        <QueryError
-          error={agents.error}
-          label="员工加载失败"
-          onRetry={() => void agents.refetch()}
-          retrying={agents.isFetching}
-        />
-      ) : null}
-      {overview.isError ? (
-        <QueryError
-          error={overview.error}
-          label="员工的定时任务、长期职责与主动巡检加载失败"
-          onRetry={() => void overview.refetch()}
-          retrying={overview.isFetching}
-        />
-      ) : null}
-      {automations.isError ? (
-        <QueryError
-          error={automations.error}
-          label="自动任务加载失败"
-          onRetry={() => void automations.refetch()}
-          retrying={automations.isFetching}
-        />
-      ) : null}
-      {nothingIsFiring(routines.data?.sweep, routineRecords.length) ? (
-        /*
-         * Carried over from the archived 定时任务 page: the routine rows below look like they will
-         * fire, and without this they would say nothing about a deployment with no runner.
-         */
-        <div
-          className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm"
-          role="alert"
-        >
-          <p className="font-medium text-amber-600 dark:text-amber-500">
-            没有在执行这些定时任务
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            {routines.data?.sweep.lastSweptAt
-              ? `定时任务的执行程序上一次检查是在${relativeTime(routines.data.sweep.lastSweptAt)}。它重新运行之前，这些都不会触发。`
-              : "还没有任何定时任务执行程序报到过，所以这些都不会触发。部署里需要有一个在运行才能执行它们。"}
-          </p>
+      <section aria-labelledby="autonomous-list-title" className="mt-[22px]">
+        <div className="mb-[11px] flex flex-wrap items-center justify-between gap-[10px]">
+          <h2 className={SECTION_TITLE} id="autonomous-list-title">
+            自动任务
+          </h2>
+          {/*
+           * The per-employee view, which the reference shows as an outline button at the section's
+           * end. Still a link: it is a place (`?view=agents`), and back and refresh keep it.
+           */}
+          <Link
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "h-[34px] gap-[7px] px-[11px] text-[12px]",
+            )}
+            search={{ view: "agents" }}
+            to="/autonomous"
+          >
+            <IconUsers
+              aria-hidden="true"
+              className="size-[15px]"
+              stroke={1.6}
+            />
+            按员工查看
+          </Link>
         </div>
-      ) : null}
+        <Toolbar metrics={metrics} onChange={onChange} search={search} />
 
-      {!ready ? (
-        <div className="mt-[16px] flex flex-col gap-2">
-          <Skeleton className="h-[52px]" />
-          <Skeleton className="h-[52px]" />
-        </div>
-      ) : entries.length === 0 ? (
-        overview.isError || automations.isError ? null : (
+        {agents.isError ? (
+          // Rows still draw without names (the id stands in), so this is said beside them.
+          <QueryError
+            error={agents.error}
+            label="员工加载失败"
+            onRetry={() => void agents.refetch()}
+            retrying={agents.isFetching}
+          />
+        ) : null}
+        {overview.isError ? (
+          <QueryError
+            error={overview.error}
+            label="员工的定时任务、长期职责与主动巡检加载失败"
+            onRetry={() => void overview.refetch()}
+            retrying={overview.isFetching}
+          />
+        ) : null}
+        {automations.isError ? (
+          <QueryError
+            error={automations.error}
+            label="自动任务加载失败"
+            onRetry={() => void automations.refetch()}
+            retrying={automations.isFetching}
+          />
+        ) : null}
+        {nothingIsFiring(routines.data?.sweep, routineRecords.length) ? (
           /*
-           * Text only, centred under the toolbar where the reference puts it (its title sits 70px
-           * below the toolbar); the floating mascot is the shell's, not this page's.
+           * Carried over from the archived 定时任务 page: the routine rows below look like they will
+           * fire, and without this they would say nothing about a deployment with no runner.
            */
           <div
-            className="flex flex-col items-center gap-[8px] px-6 pt-[70px] pb-12 text-center"
-            data-empty
+            className="mt-[10px] rounded-[13px] border border-signal/40 bg-signal-soft px-4 py-3 text-sm"
+            role="alert"
           >
-            <p className="font-semibold text-[14px] leading-[20px]">
-              还没有自动任务
+            <p className="font-semibold text-signal-ink">
+              没有在执行这些定时任务
             </p>
-            <p className="text-[12px] text-muted-foreground/80 leading-[18px]">
-              创建自动任务，按定时、事件或 API 自动唤起员工 / WakerFlow。
+            <p className="mt-1 text-muted-foreground">
+              {routines.data?.sweep.lastSweptAt
+                ? `定时任务的执行程序上一次检查是在${relativeTime(routines.data.sweep.lastSweptAt)}。它重新运行之前，这些都不会触发。`
+                : "还没有任何定时任务执行程序报到过，所以这些都不会触发。部署里需要有一个在运行才能执行它们。"}
             </p>
           </div>
-        )
-      ) : shown.length === 0 ? (
-        <div className="mt-6 flex items-center gap-3 text-[14px]">
-          <p className="text-muted-foreground">没有符合条件的自动任务。</p>
-          {filtered ? (
-            <Button
-              className={ROW_ACTION}
-              onClick={onReset}
-              size="sm"
-              variant="outline"
-            >
-              清除筛选
-            </Button>
-          ) : null}
-        </div>
-      ) : (
-        <div className="mt-[16px] overflow-hidden rounded-[8px] border border-border bg-card dark:border-transparent">
+        ) : null}
+
+        {!ready ? (
+          <div className="mt-[10px] flex flex-col gap-2">
+            <Skeleton className="h-[52px] rounded-[13px]" />
+            <Skeleton className="h-[52px] rounded-[13px]" />
+          </div>
+        ) : entries.length === 0 ? (
+          overview.isError || automations.isError ? null : (
+            /*
+             * docs/design/ios-studio `.empty` in a `.glass` plate: 熊宝, the title, one line, and an
+             * outline 新建自动任务 that opens the same panel as the header's action.
+             */
+            <div className={cn(PANEL, "mt-[10px] overflow-hidden")} data-empty>
+              <WorkbenchEmpty
+                // The reference's lightning tile: this list is empty of work, not of people.
+                icon={<IconBolt />}
+                action={
+                  <Button
+                    className="h-[29px] gap-[7px] px-[11px] text-[12px]"
+                    onClick={onCreate}
+                    variant="outline"
+                  >
+                    <IconPlus aria-hidden="true" className="size-[14px]" />
+                    新建自动任务
+                  </Button>
+                }
+                className="rounded-none"
+                description="创建自动任务，按定时、事件或 API 自动唤起员工 / WakerFlow。"
+                mood="cute"
+                title="还没有自动任务"
+              />
+            </div>
+          )
+        ) : shown.length === 0 ? (
           <div
-            aria-hidden="true"
             className={cn(
-              "hidden h-[36px] border-border border-b px-4 text-[12px] text-muted-foreground",
-              COLUMNS,
+              PANEL,
+              "mt-[10px] flex flex-wrap items-center gap-3 px-4 py-[14px] text-[13px]",
             )}
           >
-            <span>名称</span>
-            <span>执行者</span>
-            <span>触发</span>
-            <span>状态</span>
-            <span>运行</span>
-            <span className="text-right">操作</span>
+            <p className="text-muted-foreground">没有符合条件的自动任务。</p>
+            {filtered ? (
+              <Button
+                className={ROW_ACTION}
+                onClick={onReset}
+                size="sm"
+                variant="outline"
+              >
+                清除筛选
+              </Button>
+            ) : null}
           </div>
-          <ul aria-label="自动任务列表" className="divide-y divide-border">
-            {shown.map((entry) => (
-              <EntryRow
-                automation={
-                  entry.source === "automation" ? byId.get(entry.id) : undefined
-                }
-                canManage={
-                  entry.agentId !== null && manageable.has(entry.agentId)
-                }
-                detailError={
-                  entry.source === "automation"
-                    ? (detailErrors.get(entry.id) ?? null)
-                    : null
-                }
-                entry={entry}
-                key={entry.key}
-                onDetail={(open) =>
-                  onChange({ detail: open ? entry.key : undefined })
-                }
-                open={search.detail === entry.key}
-                raw={raw.get(entry.key)}
-                agentName={(id) => names.get(id) ?? id}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
+        ) : (
+          <div className={cn(PANEL, "mt-[10px] overflow-hidden")}>
+            <div
+              aria-hidden="true"
+              className={cn(
+                "hidden h-[36px] border-border border-b px-[15px] text-[11px] text-faint",
+                COLUMNS,
+              )}
+            >
+              <span>名称</span>
+              <span>执行者</span>
+              <span>触发</span>
+              <span>状态</span>
+              <span>运行</span>
+              <span className="text-right">操作</span>
+            </div>
+            <ul aria-label="自动任务列表" className="divide-y divide-border">
+              {shown.map((entry) => (
+                <EntryRow
+                  automation={
+                    entry.source === "automation"
+                      ? byId.get(entry.id)
+                      : undefined
+                  }
+                  canManage={
+                    entry.agentId !== null && manageable.has(entry.agentId)
+                  }
+                  detailError={
+                    entry.source === "automation"
+                      ? (detailErrors.get(entry.id) ?? null)
+                      : null
+                  }
+                  entry={entry}
+                  key={entry.key}
+                  onDetail={(open) =>
+                    onChange({ detail: open ? entry.key : undefined })
+                  }
+                  open={search.detail === entry.key}
+                  raw={raw.get(entry.key)}
+                  agentName={(id) => names.get(id) ?? id}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      <TriggerKinds />
     </>
   );
 }
 
 /**
- * One panel, four numbers, over everything — the filters narrow the list, not the overview. Measured
- * off the reference (docs/acceptance/qoderwake-reference/autonomous.png): a #1a1a1a panel with 8px
- * corners, 20px sides, 23px top and 20px bottom padding (134px tall), 35px under the subtitle,
- * four equal cells split by hairlines, each a 44px number over a bold 13px label and a dimmer
- * 12px caption.
+ * 自动任务概览 (docs/design/ios-studio `.automation-stats`, 03-自主工作.png): one 18px-cornered plate,
+ * a pulse-marked heading, and four equal cells split by hairlines — each a large number over a
+ * label and a one-line caption, with its 33px icon square at the top right. Counts are over
+ * everything; the filters narrow the list, not the overview. Two by two on a narrow screen.
  */
 function Metrics({ metrics }: { metrics: AutonomousMetrics | null }) {
-  const cells = [
-    { label: "自动任务总数", caption: "全部自动任务", value: metrics?.total },
+  const cells: {
+    label: string;
+    caption: string;
+    value: number | undefined;
+    icon: ReactNode;
+  }[] = [
+    {
+      label: "自动任务总数",
+      caption: "全部自动任务",
+      value: metrics?.total,
+      icon: <IconLayoutGrid stroke={1.6} />,
+    },
     {
       label: "已启用",
-      caption: "当前已启用的自动任务",
+      caption: "正在生效的自动任务",
       value: metrics?.enabled,
+      icon: <IconCircleCheck stroke={1.6} />,
     },
     {
       label: "员工执行",
-      caption: "由员工执行的自动任务",
+      caption: "交由员工执行",
       value: metrics?.employee,
+      icon: <IconRobot stroke={1.6} />,
     },
     {
       label: "WakerFlow 执行",
-      caption: "由 WakerFlow 执行的自动任务",
+      caption: "交由流程执行",
       value: metrics?.flow,
+      icon: <IconGitBranch stroke={1.6} />,
     },
   ];
   return (
     <section
-      aria-label="自主工作概览"
-      className="mt-[35px] grid grid-cols-2 gap-y-[16px] rounded-[8px] bg-secondary px-[20px] pt-[23px] pb-[20px] md:grid-cols-4 md:gap-y-0"
+      aria-labelledby="autonomous-overview-title"
+      className={cn(
+        PANEL,
+        "mt-[5px] rounded-[18px] px-[16px] pt-[13px] pb-[13px]",
+      )}
     >
-      {cells.map((cell, index) => (
-        <div
-          className={cn(
-            "flex min-w-0 flex-col",
-            index % 2 === 1 && "border-foreground/5 border-l pl-[20px]",
-            index === 2 && "md:border-foreground/5 md:border-l md:pl-[20px]",
-          )}
-          data-metric
-          data-value={cell.value ?? ""}
-          key={cell.label}
-        >
-          <span className="font-semibold text-[44px] tabular-nums leading-[44px]">
-            {cell.value ?? "—"}
-          </span>
-          <span className="mt-[4px] truncate font-semibold text-[13px] leading-[20px]">
-            {cell.label}
-          </span>
-          <span className="mt-[5px] truncate text-[12px] text-muted-foreground/70 leading-[18px]">
-            {cell.caption}
-          </span>
-        </div>
-      ))}
+      <h2
+        className={cn(SECTION_TITLE, "mb-[9px]")}
+        id="autonomous-overview-title"
+      >
+        <IconActivity
+          aria-hidden="true"
+          className="size-[18px] text-foreground/85"
+          stroke={1.6}
+        />
+        自动任务概览
+      </h2>
+      <div className="grid grid-cols-2 gap-y-[12px] md:grid-cols-4 md:gap-y-0">
+        {cells.map((cell, index) => (
+          <div
+            className={cn(
+              "relative min-h-[87px] min-w-0 py-[5px] pr-[44px]",
+              index === 0 ? "pl-[1px]" : "pl-[13px] md:pl-[17px]",
+              index % 2 === 1 && "border-border border-l",
+              index === 2 &&
+                "pl-[1px] md:border-border md:border-l md:pl-[17px]",
+            )}
+            key={cell.label}
+          >
+            <IconTile className="absolute top-[10px] right-[9px] md:right-[14px]">
+              {cell.icon}
+            </IconTile>
+            <div
+              className="flex min-w-0 flex-col"
+              data-metric
+              data-value={cell.value ?? ""}
+            >
+              <span className="font-semibold text-[39px] tabular-nums leading-[1.11] tracking-[-0.05em]">
+                {cell.value ?? "—"}
+              </span>
+              <span className="truncate text-[12px] text-foreground/90 leading-[18px]">
+                {cell.label}
+              </span>
+              <span className="mt-[2px] truncate text-[11px] text-muted-foreground leading-[16px]">
+                {cell.caption}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
 
 const EXECUTOR_OPTIONS: LabeledSelectOption<"" | ExecutorKind>[] = [
-  { value: "", label: "全部执行者" },
+  { value: "", label: "全部" },
   { value: "employee", label: EXECUTOR_LABEL.employee },
   { value: "flow", label: "WakerFlow" },
 ];
 
 const TRIGGER_OPTIONS: LabeledSelectOption<"" | TriggerType>[] = [
-  { value: "", label: "全部类型" },
+  { value: "", label: "全部" },
   ...(["schedule", "event", "api"] as const).map((value) => ({
     value,
     label: TRIGGER_TYPE_LABEL[value],
@@ -403,9 +507,9 @@ const SORT_OPTIONS: LabeledSelectOption<SortKey>[] = (
 ).map((value) => ({ value, label: SORT_LABEL[value] }));
 
 /**
- * The reference's toolbar: a 256px search, then four 176px labelled filters 8px apart, all 32px
- * tall. 最近创建 is the default sort. The per-employee view, which the reference does not have, is
- * a quiet text link at the end rather than a switch in the header.
+ * The reference's filter row (docs/design/ios-studio `.controls`): a 221px search, then 执行者 /
+ * 触发类型 / 状态 / 排序 as labelled 32px boxes sized to their value, 6px apart, wrapping on a narrow
+ * screen. 最近创建 is the default sort.
  */
 function Toolbar({
   search,
@@ -427,7 +531,7 @@ function Toolbar({
       ? `${STATUS_FILTER_LABEL[value]} · ${count}`
       : STATUS_FILTER_LABEL[value];
   const statusOptions: LabeledSelectOption<"" | StatusFilter>[] = [
-    { value: "", label: "全部状态" },
+    { value: "", label: "全部" },
     { value: "enabled", label: STATUS_FILTER_LABEL.enabled },
     { value: "paused", label: STATUS_FILTER_LABEL.paused },
     { value: "running", label: counted("running", metrics?.running) },
@@ -435,40 +539,36 @@ function Toolbar({
   ];
 
   return (
-    <div className="mt-[36px] flex flex-wrap items-center gap-[8px]">
+    <div className="flex flex-wrap items-center gap-[6px]">
       <SearchBox
-        className="w-[256px]"
+        className="w-full sm:w-[221px]"
         label="搜索自动任务"
         onValueChange={(value) => {
           setText(value);
           onChange({ q: value || undefined });
         }}
-        placeholder="搜索任务名称..."
+        placeholder="搜索任务名称"
         value={text}
       />
       <LabeledSelect
-        className="w-[176px]"
         label="执行者"
         onValueChange={(value) => onChange({ executor: value || undefined })}
         options={EXECUTOR_OPTIONS}
         value={search.executor ?? ""}
       />
       <LabeledSelect
-        className="w-[176px]"
         label="触发类型"
         onValueChange={(value) => onChange({ trigger: value || undefined })}
         options={TRIGGER_OPTIONS}
         value={search.trigger ?? ""}
       />
       <LabeledSelect
-        className="w-[176px]"
-        label="自动任务状态"
+        label="状态"
         onValueChange={(value) => onChange({ status: value || undefined })}
         options={statusOptions}
         value={search.status ?? ""}
       />
       <LabeledSelect
-        className="w-[176px]"
         label="排序"
         onValueChange={(value) =>
           onChange({ sort: value === "created" ? undefined : value })
@@ -476,13 +576,6 @@ function Toolbar({
         options={SORT_OPTIONS}
         value={search.sort ?? "created"}
       />
-      <Link
-        className="ms-auto text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        search={{ view: "agents" }}
-        to="/autonomous"
-      >
-        按员工查看
-      </Link>
     </div>
   );
 }
@@ -515,24 +608,24 @@ function EntryRow({
   return (
     <li
       aria-label={entry.name}
-      className="px-4 py-[10px]"
+      className="px-[15px] py-[11px]"
       data-name={entry.name}
     >
       <div className={cn("flex flex-col gap-2", COLUMNS)}>
         <div className="flex min-w-0 flex-col">
-          <span className="truncate font-medium text-[14px] leading-[20px]">
+          <span className="truncate font-semibold text-[13px] leading-[20px]">
             {entry.name}
           </span>
-          <span className="text-[12px] text-muted-foreground leading-[18px]">
+          <span className="text-[11px] text-muted-foreground leading-[17px]">
             {SOURCE_LABEL[entry.source]}
           </span>
         </div>
-        <span className="truncate text-[14px]">
+        <span className="truncate text-[13px] text-foreground/90">
           {EXECUTOR_LABEL[entry.executor.kind]} · {entry.executor.name}
         </span>
         <ul aria-label="触发" className="flex min-w-0 flex-wrap gap-1">
           {detailError ? (
-            <li className="text-destructive text-xs">
+            <li className="text-signal-ink text-xs">
               触发条件加载失败：{detailError.message}
             </li>
           ) : !entry.triggersKnown ? (
@@ -540,7 +633,7 @@ function EntryRow({
           ) : (
             entry.triggers.map((trigger) => (
               <li
-                className="max-w-full truncate rounded-full border border-border px-2 py-0.5 text-[12px]"
+                className="max-w-full truncate rounded-full bg-foreground/[0.06] px-[8px] py-[3px] text-[11px] text-foreground/85"
                 key={`${trigger.label}-${trigger.detail}`}
                 title={trigger.detail}
               >
@@ -549,22 +642,40 @@ function EntryRow({
             ))
           )}
         </ul>
-        <span
-          className={cn(
-            "text-[14px]",
-            entry.failed
-              ? "text-destructive"
-              : entry.running
-                ? "text-sky-600 dark:text-sky-400"
-                : entry.enabled
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : "text-muted-foreground",
-          )}
-        >
-          {entry.running ? "运行中" : entry.stateLabel}
-          {entry.failed ? " · 需要关注" : ""}
+        {/*
+         * docs/design/ios-studio `.badge`: a quiet pill for the state, brighter while it is live, and
+         * a separate red alert pill when it needs attention. The words carry the state; the dot and
+         * the tint only repeat it.
+         */}
+        <span className="flex min-w-0 flex-wrap items-center gap-[4px]">
+          <span
+            className={cn(
+              BADGE,
+              entry.running || entry.enabled
+                ? "bg-foreground/[0.09] text-foreground"
+                : "bg-foreground/[0.05] text-muted-foreground",
+            )}
+          >
+            {entry.running ? (
+              <span
+                aria-hidden="true"
+                className="size-[5px] shrink-0 rounded-full bg-foreground motion-safe:animate-pulse"
+              />
+            ) : null}
+            {entry.running ? "运行中" : entry.stateLabel}
+          </span>
+          {entry.failed ? (
+            <span className={cn(BADGE, "bg-signal-soft text-signal-ink")}>
+              <span
+                aria-hidden="true"
+                className="size-[5px] shrink-0 rounded-full bg-signal"
+              />
+              <span className="sr-only">·</span>
+              需要关注
+            </span>
+          ) : null}
         </span>
-        <div className="flex flex-col text-[12px] text-muted-foreground">
+        <div className="flex flex-col text-[11px] text-muted-foreground leading-[17px]">
           <span title={entry.nextRunAt ?? undefined}>
             下次 {entry.nextRunAt ? relativeTime(entry.nextRunAt) : "—"}
           </span>
@@ -732,7 +843,7 @@ function RoutineSwitch({
 }
 
 const LINK_ACTION =
-  "inline-flex h-[32px] items-center rounded-md px-3 text-[13px] hover:bg-muted";
+  "inline-flex h-[32px] items-center rounded-[9px] px-3 text-[13px] hover:bg-muted";
 
 /**
  * 编辑, wired to whatever each kind has: an automation is patched here; a responsibility and a
@@ -824,7 +935,7 @@ function EditAutomationForm({
   return (
     <form
       aria-label={`编辑自动任务：${automation.name}`}
-      className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-border p-3 text-sm"
+      className="mt-3 flex flex-wrap items-end gap-2 rounded-[12px] border border-border p-3 text-sm"
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -912,7 +1023,7 @@ function RawDetail({ raw }: { raw: Raw }) {
   if (raw.kind === "routine") return <RoutineDetail routine={raw.row} />;
   if (raw.kind === "responsibility") {
     return (
-      <div className="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
+      <div className="flex flex-col gap-1 rounded-[12px] border border-border p-3 text-sm">
         <p className="text-muted-foreground">
           {statusWord(raw.row.status)} · {describe(raw.row.lastRun)}
         </p>
@@ -928,7 +1039,7 @@ function RawDetail({ raw }: { raw: Raw }) {
   }
   const setting = raw.row;
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-border p-3 text-muted-foreground text-sm">
+    <div className="flex flex-col gap-1 rounded-[12px] border border-border p-3 text-muted-foreground text-sm">
       <p>
         每隔 {setting.intervalMinutes} 分钟 ·{" "}
         {setting.lastRunAt
@@ -959,7 +1070,7 @@ function RoutineDetail({ routine }: { routine: Routine }) {
     setProblem(thrown.message || "操作没有成功，请重试。");
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
+    <div className="flex flex-col gap-2 rounded-[12px] border border-border p-3 text-sm">
       <p className="text-muted-foreground">
         下次 {relativeTime(routine.nextRunAt)} ·{" "}
         {describe(routine.lastRun, true)} ·{" "}

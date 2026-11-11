@@ -41,7 +41,11 @@ function PasswordsPage() {
       description="你在帮员工登录网站时保存的登录信息。员工永远看不到它们，每次使用都需要你确认。"
     >
       <PageSection title="已保存的登录">
-        {logins.isPending ? null : logins.error ? (
+        {logins.isPending ? (
+          <p className="mt-2 text-muted-foreground text-sm" role="status">
+            正在读取已保存的登录…
+          </p>
+        ) : logins.error ? (
           <p className="text-destructive text-sm" role="alert">
             读不到你保存的密码。
           </p>
@@ -74,6 +78,7 @@ function PasswordsPage() {
                   <ItemActions>
                     <Button
                       aria-label={`删除 ${login.origin} 的登录信息`}
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       size="sm"
                       variant="ghost"
                       disabled={remove.isPending}

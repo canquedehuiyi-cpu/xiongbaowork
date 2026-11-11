@@ -44,6 +44,16 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   的账号」同意卡；check-in 不读这类服务器。换取 token 用的 Microsoft refresh token 是 Better Auth 的登录记录，
   由 Better Auth 加密（随 `BETTER_AUTH_SECRET`），不在 fork 凭据库里。
 
+- **The whole web app is redrawn in 熊宝's black, white and red** (docs/design/ios-studio). A near-black
+  canvas with graphite cards and hairlines; white (black on paper) for the primary action and the main
+  text; red only for the selected place, what needs attention, the brand and a few signal lines. The
+  workbench gets a breadcrumb bar with the 熊宝小管家 dock, open headings with an eyebrow, and the five
+  core pages follow the reference: a telemetry panel with a status distribution on 任务看板, the floating
+  chat scene on @Waker, the chip-and-signal art and trigger strip on 自主工作, profile cards (the 分身 in
+  red) on 员工管理, and one continuous entry strip on 能力与资源. Every other route shares the same
+  controls, cards, badges and empty states. Presentation only: routes, queries, permissions and APIs
+  are unchanged. Acceptance notes and screenshots are in docs/design/ios-studio/acceptance.
+
 ## 0.2.7
 
 - **用 DeepSeek 时群聊能对话了，审批通过后也能接着做。** DeepSeek 的思考模式要求每次都把之前的思考过程

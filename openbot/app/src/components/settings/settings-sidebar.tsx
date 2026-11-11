@@ -104,7 +104,7 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
 
 /** The app sidebar's row, at the settings column's 13px. */
 const rowClassName =
-  "flex h-[32px] items-center gap-[10px] rounded-md px-[10px] text-[13px] text-foreground/70 outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground [&>svg]:size-[16px] [&>svg]:shrink-0";
+  "flex h-[37px] items-center gap-[10px] rounded-[9px] border border-transparent px-[11px] text-[13px] text-muted-foreground outline-none hover:bg-foreground/[0.03] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 data-[status=active]:border-foreground/[0.06] data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground after:ml-auto after:hidden after:h-[12px] after:w-[4px] after:shrink-0 after:rounded-[3px] after:bg-signal after:content-[''] data-[status=active]:after:block [&>svg]:size-[16px] [&>svg]:shrink-0";
 
 /**
  * Settings' own column (description (7) of the parity brief): ~245px on the card surface, between
@@ -133,7 +133,7 @@ export function SettingsNav() {
   return (
     <nav
       aria-label="设置导航"
-      className="flex w-[148px] shrink-0 flex-col gap-[4px] overflow-y-auto border-border border-r bg-card px-[8px] py-[8px] md:w-[245px] md:px-[12px]"
+      className="flex w-[148px] shrink-0 flex-col gap-[3px] overflow-y-auto border-border border-r bg-sidebar px-[8px] py-[12px] md:w-[226px] md:px-[15px]"
     >
       <Link
         activeOptions={{ exact: true }}

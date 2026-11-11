@@ -1522,7 +1522,15 @@ export function Composer({
              * A column: the attachment strip across the top, the message box under it, and the
              * controls row at the bottom.
              */
-            "flex flex-col rounded-2xl border border-border bg-card px-3 py-3",
+            /*
+             * A COLUMN, SO THE ATTACHMENT STRIP CAN HAVE THE FULL WIDTH. It used to be one row —
+             * attach button, editor, send — with the strip inside the editor's column, which
+             * started it 42px in from the frame's left edge with nothing under it. The strip is
+             * its own row across the top now, and the three controls keep their row below it.
+             */
+            // Typing is where a person spends their time here, so focus brightens the hairline rather than
+            // drawing the red keyboard ring around the box for the whole conversation.
+            "flex min-h-14 flex-col rounded-[16px] border border-border bg-card px-3 py-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] focus-within:border-foreground/30",
             className,
           )}
           onSubmit={handleFormSubmit}
@@ -1614,7 +1622,8 @@ export function Composer({
       {tooManyStagedNotice}
       <form
         aria-busy={isBusy}
-        className="overflow-hidden rounded-2xl border border-border bg-card"
+        // The same frame as the compact composer: graphite, a hairline that brightens on focus.
+        className="overflow-hidden rounded-[16px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] transition-colors focus-within:border-foreground/30 motion-reduce:transition-none"
         data-slot="composer"
         onSubmit={handleFormSubmit}
       >

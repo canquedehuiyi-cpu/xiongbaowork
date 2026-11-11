@@ -41,11 +41,11 @@ function RouteComponent() {
       title="组件展示"
     >
       {components.isPending ? null : components.error ? (
-        <p className="mt-12 text-destructive text-sm" role="alert">
+        <p className="mt-6 text-destructive text-sm" role="alert">
           读不到组件。
         </p>
       ) : published?.length === 0 ? (
-        <Empty className="mt-12 min-h-[30dvh] border border-dashed">
+        <Empty className="mt-6 min-h-[30dvh] rounded-[14px] border border-dashed">
           <EmptyHeader>
             <EmptyTitle>还没有发布任何组件</EmptyTitle>
             <EmptyDescription className="text-pretty">
@@ -54,14 +54,14 @@ function RouteComponent() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="mt-12 grid w-full grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mt-6 grid w-full grid-cols-1 gap-[11px] sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {published?.map((component) => (
             /*
              * No status dot, unlike the Admin tiles. Everything listed here is published by
              * definition, so a dot saying so would be the same mark on every tile.
              */
             <Link
-              className="flex aspect-square flex-col overflow-hidden rounded-lg border border-border bg-card text-left outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="flex aspect-square flex-col overflow-hidden rounded-[14px] border border-border bg-card text-left shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] outline-none transition-colors hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               data-testid={`gallery-${component.name}`}
               key={component.name}
               params={{ name: component.name }}
@@ -78,7 +78,7 @@ function RouteComponent() {
               </div>
               <div className="relative flex-1">
                 <div className="absolute top-0 left-0 h-full w-full p-3">
-                  <SettingsItemBackground className="h-full w-full rounded-md" />
+                  <SettingsItemBackground className="h-full w-full rounded-[9px]" />
                 </div>
                 <div className="absolute top-0 left-0 z-10 h-full w-full p-3">
                   <ComponentPreview

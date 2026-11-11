@@ -78,7 +78,12 @@ function RouteComponent() {
 
   if (components.error) {
     return (
-      <PageShell backButton={BACK} title="组件展示">
+      <PageShell
+        width="workbench"
+        className="max-w-4xl"
+        backButton={BACK}
+        title="组件展示"
+      >
         <p className="mt-8 text-destructive text-sm" role="alert">
           读不到组件。
         </p>
@@ -97,6 +102,8 @@ function RouteComponent() {
   if (!component) {
     return (
       <PageShell
+        width="workbench"
+        className="max-w-4xl"
         backButton={BACK}
         description="这里没有叫这个名字的组件。"
         title="没有这个组件"
@@ -122,6 +129,8 @@ function RouteComponent() {
 
   return (
     <PageShell
+      width="workbench"
+      className="max-w-4xl"
       backButton={BACK}
       // What it shows, in the person's words; see the gallery's own page for why not the model's.
       description={

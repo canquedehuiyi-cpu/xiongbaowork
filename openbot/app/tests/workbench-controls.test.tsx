@@ -14,7 +14,7 @@ import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 /*
  * The controls every workbench page shares, shaped after the reference screenshots in
  * docs/acceptance/qoderwake-reference/: a 32px filter box that names itself in grey before its value
- * ("运行状态 在线 ▾"), a search box with the magnifier on the right, underline tabs (需要操作 /
+ * ("运行状态 在线 ▾"), a search box with the magnifier at its start, underline tabs (需要操作 /
  * 查收结果, 插件市场 / 我的插件, the sidebar's 员工 / 群组) and an empty state with our own mascot.
  */
 
@@ -57,7 +57,7 @@ test("a labeled select shows its name before its value and reports changes", asy
   expect((select as HTMLSelectElement).value).toBe("online");
 });
 
-test("a search box is a 32px labelled input with the magnifier on the right", async () => {
+test("a search box is a 32px labelled input with the magnifier at its start", async () => {
   function Harness() {
     const [value, setValue] = useState("");
     return (

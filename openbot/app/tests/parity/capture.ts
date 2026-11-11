@@ -3,6 +3,7 @@
  *
  *   bun tests/parity/capture.ts [--base http://127.0.0.1:3910] [--out <dir>]
  *     [--scenario data|empty|all] [--theme dark|light|all] [--only <route substring>]
+ *     [--path <any app path, captured on its own, e.g. /channel/c-1>]
  *     [--viewport 1440x900] [--concurrency 3]
  *
  * Every `/api/**` request is answered from `fixtures.ts`; nothing reaches a backend. For each
@@ -37,6 +38,7 @@ type RouteSpec = {
 
 export const ROUTES: RouteSpec[] = [
   { path: "/tasks", main: true },
+  { path: "/tasks?view=lanes", slug: "tasks-lanes" },
   { path: "/reachability", main: true },
   { path: "/autonomous", main: true },
   { path: "/wakers", main: true },
@@ -56,6 +58,37 @@ export const ROUTES: RouteSpec[] = [
   { path: "/channel/new" },
   // The conversation workspace column beside a new conversation addressed to one employee.
   { path: "/channel/new?agent=agent-analyst", slug: "channel-new-analyst" },
+  /*
+   * The rest of the app, for the site-wide pass of the black/white/red redesign
+   * (docs/design/ios-studio/IMPLEMENTATION.zh-CN.md §全站范围). Captured for review; the fixtures may
+   * not answer every read these pages make, and an unmatched read shows as that page's error state.
+   */
+  { path: "/", slug: "home" },
+  { path: "/onboarding" },
+  { path: "/group/new" },
+  { path: "/assemble/agent-analyst" },
+  { path: "/role-templates" },
+  { path: "/team-bots" },
+  { path: "/pipelines" },
+  { path: "/approvals" },
+  { path: "/responsibilities" },
+  { path: "/plans" },
+  { path: "/platform" },
+  { path: "/wakerflows/new" },
+  { path: "/settings/passwords" },
+  { path: "/settings/connected-accounts" },
+  { path: "/settings/components-gallery" },
+  { path: "/admin", slug: "admin" },
+  { path: "/admin/people" },
+  { path: "/admin/plugins" },
+  { path: "/admin/skills" },
+  { path: "/admin/audit" },
+  { path: "/admin/credentials" },
+  { path: "/admin/computers" },
+  { path: "/admin/enterprise" },
+  { path: "/admin/identity-providers" },
+  { path: "/admin/boundaries" },
+  { path: "/admin/components" },
 ];
 
 export const VIEWPORTS = [
@@ -91,6 +124,8 @@ type Options = {
   scenarios: Scenario[];
   themes: Theme[];
   only: string | undefined;
+  /** One ad-hoc path to capture instead of the route list. */
+  path: string | undefined;
   viewports: { width: number; height: number }[];
   concurrency: number;
 };
@@ -115,6 +150,7 @@ function parseArgs(argv: string[]): Options {
     scenarios: scenario === "all" ? [...SCENARIOS] : [scenario as Scenario],
     themes: theme === "all" ? ["dark", "light"] : [theme as Theme],
     only: value("--only"),
+    path: value("--path"),
     viewports: viewport
       ? [
           {
@@ -240,7 +276,7 @@ function measureInPage(): {
 const isSocketNoise = (text: string) =>
   /WebSocket|ws:\/\/|wss:\/\//i.test(text);
 
-async function newContext(
+export async function newContext(
   browser: Browser,
   options: Options,
   scenario: Scenario,
@@ -508,13 +544,15 @@ function summarise(results: Measurements[], options: Options): string {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const routes = options.only
-    ? ROUTES.filter(
-        (route) =>
-          route.path.includes(options.only ?? "") ||
-          slugOf(route).includes(options.only ?? ""),
-      )
-    : ROUTES;
+  const routes = options.path
+    ? [{ path: options.path }]
+    : options.only
+      ? ROUTES.filter(
+          (route) =>
+            route.path.includes(options.only ?? "") ||
+            slugOf(route).includes(options.only ?? ""),
+        )
+      : ROUTES;
   if (routes.length === 0) throw new Error(`no route matches ${options.only}`);
 
   const jobs: (() => Promise<Measurements>)[] = [];

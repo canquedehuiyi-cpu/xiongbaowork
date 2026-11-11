@@ -1,4 +1,4 @@
-import { IconPlus } from "@tabler/icons-react";
+import { IconPlus, IconStack2 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -21,16 +21,10 @@ import {
   SegmentedTabs,
   tabPanelProps,
 } from "@/components/layout/segmented-tabs";
-import { BearMascot } from "@/components/layout/workbench-empty";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CARD_SURFACE, GRID } from "@/components/wakers/card-chrome";
+import { GRID, ordinal } from "@/components/wakers/card-chrome";
 import {
   type CardStats,
   CoworkerCard,
@@ -135,6 +129,10 @@ const ENV_OPTIONS: readonly LabeledSelectOption<"all" | WakerEnv>[] = [
  * `field-sizing` fall back to the default.
  */
 const FILTER = "[&_select]:field-sizing-content";
+
+/** theme.css `.badge.accent`: the count at the right of the pill row. */
+const COUNT_BADGE =
+  "inline-flex h-[21px] items-center rounded-full bg-foreground/[0.085] px-[8px] font-semibold text-[11px] text-foreground tabular-nums whitespace-nowrap";
 
 const SORT_OPTIONS: readonly LabeledSelectOption<"default" | WakerSort>[] = [
   { value: "default", label: "默认排序" },
@@ -325,21 +323,21 @@ function RouteComponent() {
       action={
         tab === "coworkers" ? (
           <div
-            // Level with the reference's 新建 button, which sits lower than the title's centre.
-            className="relative top-[7px] flex gap-2"
+            className="flex flex-wrap gap-[7px]"
             data-testid="wakers-header-actions"
           >
             {/* Story ROLE1: the role templates new and existing coworkers are made from. */}
             <Button
-              className="h-[32px]"
+              className="h-[34px] px-[11px] text-[13px]"
               render={(props) => <Link to="/role-templates" {...props} />}
-              variant="ghost"
+              variant="outline"
             >
+              <IconStack2 aria-hidden="true" />
               角色模板
             </Button>
             {/* Spec D2: creating a coworker is a dialog over this wall, deep-linked. */}
             <Button
-              className="h-[32px]"
+              className="h-[34px] px-[11px] text-[13px]"
               render={(props) => (
                 <Link search={{ ...wall, new: true }} to="/wakers" {...props} />
               )}
@@ -350,7 +348,7 @@ function RouteComponent() {
           </div>
         ) : (
           <Button
-            className="relative top-[7px] h-[32px]"
+            className="h-[34px] px-[11px] text-[13px]"
             onClick={() => setCreatingCrew(true)}
           >
             <IconPlus aria-hidden="true" />
@@ -358,44 +356,65 @@ function RouteComponent() {
           </Button>
         )
       }
-      description="选择员工开始任务，或者新建一个开始工作。"
+      description="选择合适的员工开始任务，或为团队新建一位员工。"
+      eyebrow="04 DIGITAL TEAM"
       title="员工管理"
       width="workbench"
     >
       {/*
-        Measured off the reference (CSS px at 1696 wide): the pill's top at y=140, the toolbar 24px
-        under it (y=197), the cards 24px under that (y=253). 36px of top padding is what lands the
-        pill at 140 under the shared PageShell header.
+        docs/design/ios-studio `.section-head` + `.controls`: the 员工 | 群组 pill with each side's
+        count and, at the far right, how many are listed; the search and the four filters under it;
+        the profiles 13px under those.
       */}
-      <div className="flex flex-col gap-[24px] pt-[36px] pb-8">
-        <SegmentedTabs
-          // The reference's pill: 218 × 33 CSS px, two equal halves, 4px inset.
-          className="grid h-[33px] w-[218px] grid-cols-2 gap-0 bg-foreground/[0.08] p-[4px] dark:[&>[aria-selected=true]]:bg-foreground/[0.14] [&>[role=tab]]:h-[25px]"
-          label="员工与群组"
-          // A click is a step Back can return to; arrowing across the two is not.
-          onValueChange={(next, change) =>
-            void patch(
-              { tab: next === "groups" ? "groups" : undefined },
-              change.keyboard,
-            )
-          }
-          panelId="wakers-wall"
-          tabs={[
-            { value: "coworkers", label: "员工" },
-            { value: "groups", label: "群组" },
-          ]}
-          value={tab}
-        />
+      <div className="flex flex-col gap-[10px] pb-8">
+        <div className="flex flex-wrap items-center justify-between gap-[10px]">
+          <SegmentedTabs
+            label="员工与群组"
+            // A click is a step Back can return to; arrowing across the two is not.
+            onValueChange={(next, change) =>
+              void patch(
+                { tab: next === "groups" ? "groups" : undefined },
+                change.keyboard,
+              )
+            }
+            panelId="wakers-wall"
+            tabs={[
+              // A count only once its read answered: 「0」 beside a pending roster would be a guess.
+              {
+                value: "coworkers",
+                label: "员工",
+                count: agents.data ? roster.length : undefined,
+              },
+              {
+                value: "groups",
+                label: "群组",
+                count: groups.data ? groups.data.length : undefined,
+              },
+            ]}
+            value={tab}
+          />
+          {/* An unread roster has no count: 「0 名员工」 beside a skeleton or an error would be a wrong answer. */}
+          {tab === "coworkers" && agents.data ? (
+            <span className={COUNT_BADGE} data-testid="waker-count">
+              {narrowed
+                ? `${visible.length} / ${roster.length} 名员工`
+                : `${roster.length} 名员工`}
+            </span>
+          ) : null}
+          {tab === "groups" && groups.data ? (
+            <span className={COUNT_BADGE}>{groups.data.length} 个群组</span>
+          ) : null}
+        </div>
 
         <div
           {...tabPanelProps("wakers-wall", tab)}
-          className="flex flex-col gap-[24px]"
+          className="flex flex-col gap-[13px]"
         >
           {tab === "coworkers" ? (
             <>
-              <div className="flex flex-wrap items-center gap-[8px]">
+              <div className="flex flex-wrap items-center gap-[6px]">
                 <SearchBox
-                  className="w-[220px]"
+                  className="w-[221px] max-w-full"
                   label="搜索名称或角色"
                   onValueChange={(next) => {
                     setQuery(next);
@@ -411,7 +430,7 @@ function RouteComponent() {
                     void patch({ status: next === "all" ? undefined : next })
                   }
                   options={[
-                    // The total is the count at the right; each state carries its own.
+                    // The total is the badge above; each state carries its own.
                     { value: "all", label: "全部" },
                     ...STATUS_ORDER.map((key) => ({
                       value: key,
@@ -449,7 +468,7 @@ function RouteComponent() {
                 />
                 <LabeledSelect
                   className={FILTER}
-                  label="排序字段"
+                  label="排序"
                   onValueChange={(next) =>
                     void patch({ sort: next === "default" ? undefined : next })
                   }
@@ -464,17 +483,6 @@ function RouteComponent() {
                   >
                     清除筛选
                   </Button>
-                ) : null}
-                {/* An unread roster has no count: 「0 名员工」 beside a skeleton or an error would be a wrong answer. */}
-                {agents.data ? (
-                  <span
-                    className="ml-auto text-muted-foreground text-[13px] tabular-nums"
-                    data-testid="waker-count"
-                  >
-                    {narrowed
-                      ? `${visible.length} / ${roster.length} 名员工`
-                      : `${roster.length} 名员工`}
-                  </span>
                 ) : null}
               </div>
 
@@ -522,7 +530,7 @@ function RouteComponent() {
                 onRetry={() => void agents.refetch()}
                 retrying={agents.isFetching}
                 error={agents.error}
-                render={(agent) => {
+                render={(agent, index) => {
                   const crews = (groups.data ?? []).filter((group) =>
                     group.members.some((member) => member.agentId === agent.id),
                   );
@@ -533,6 +541,7 @@ function RouteComponent() {
                       crews={crews}
                       device={deviceLineOf(agent)}
                       editSearch={{ ...wall, agent: agent.id }}
+                      index={ordinal(index)}
                       isAvatar={agent.id === avatarAgentId}
                       key={agent.id}
                       pauseKnown={pausedIds !== null}
@@ -590,7 +599,10 @@ function RouteComponent() {
   );
 }
 
-/** The employee grid with its loading, failed, empty and no-match states, opening with the create card. */
+/**
+ * The employee grid with its loading, failed, empty and no-match states. The profiles come first,
+ * numbered as drawn, and the create card is the cell after the last of them.
+ */
 function CoworkerWall({
   createSearch,
   error,
@@ -612,7 +624,7 @@ function CoworkerWall({
   narrowed: boolean;
   onClear: () => void;
   onRetry: () => void;
-  render: (agent: AgentProfile) => ReactNode;
+  render: (agent: AgentProfile, index: number) => ReactNode;
   retrying: boolean;
   roster: AgentProfile[];
   total: number;
@@ -631,42 +643,65 @@ function CoworkerWall({
     return (
       <div className={GRID}>
         {[0, 1, 2].map((key) => (
-          <Skeleton className="h-[212px]" key={key} />
+          <Skeleton className="h-[177px] rounded-[16px]" key={key} />
         ))}
       </div>
     );
   }
   if (roster.length === 0 && narrowed && total > 0) {
     return (
-      <Empty className="border py-16">
-        <EmptyHeader>
-          <EmptyTitle>没有符合这个筛选条件的员工。</EmptyTitle>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button onClick={onClear} variant="outline">
-            清除筛选
-          </Button>
-        </EmptyContent>
-      </Empty>
+      <div className={EMPTY_FRAME} data-testid="wakers-no-match">
+        <WorkbenchEmpty
+          action={
+            <Button
+              className="h-[29px] text-[12px]"
+              onClick={onClear}
+              variant="outline"
+            >
+              清除筛选
+            </Button>
+          }
+          description="换个关键词，或者清除筛选看全部员工。"
+          mood="cute"
+          title="没有符合这个筛选条件的员工。"
+        />
+      </div>
+    );
+  }
+  if (roster.length === 0) {
+    return (
+      <div className={EMPTY_FRAME} data-testid="wakers-empty">
+        <WorkbenchEmpty
+          action={
+            <Button
+              className="h-[29px] text-[12px]"
+              render={(props) => (
+                <Link search={createSearch} to="/wakers" {...props} />
+              )}
+            >
+              <IconPlus aria-hidden="true" />
+              新建员工
+            </Button>
+          }
+          description="新建一位员工，或者从角色模板开始。"
+          mood="sweet"
+          title="这里还没有员工"
+        />
+      </div>
     );
   }
   return (
     <div className={GRID} data-testid="waker-grid">
-      {/* First, as the reference has it: the way to add one is where the eye starts. */}
-      <CreateCoworkerCard search={createSearch} />
-      {roster.length === 0 ? (
-        // A cell of its own, so the grid starts where it always does.
-        <div
-          className={`${CARD_SURFACE} h-[212px] items-center justify-center gap-3 border-dashed px-6`}
-        >
-          <BearMascot mood="sweet" size={48} />
-          <p className="text-muted-foreground text-sm">这里还没有员工。</p>
-        </div>
-      ) : null}
       {roster.map(render)}
+      {/* After the last profile: one more slot, the way to add one. */}
+      <CreateCoworkerCard search={createSearch} />
     </div>
   );
 }
+
+/** The frame an empty or no-match answer sits in: the wall's card surface, so the page keeps its shape. */
+const EMPTY_FRAME =
+  "rounded-[16px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]";
 
 /** A card plus its own pause/resume write, so one card's failure is said on that card, by name. */
 function PausableCard({

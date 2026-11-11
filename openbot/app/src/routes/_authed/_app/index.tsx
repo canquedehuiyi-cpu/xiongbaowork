@@ -18,6 +18,10 @@ import {
 } from "@/components/channels/composer";
 import { WorkingNow } from "@/components/channels/working-now";
 import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
+import {
+  BearMascot,
+  WorkbenchEmpty,
+} from "@/components/layout/workbench-empty";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -178,14 +182,18 @@ function RouteComponent() {
   return (
     <>
       <SidebarToggleBar />
-      <div className="flex-1 flex flex-col items-center justify-center w-full p-4 mt-8">
-        {/* No product-name label above the greeting: the sidebar already names the product, and a
-            second heading over the first made the page open on a word that says nothing. */}
-        <div className="flex flex-col items-center">
-          <h2 className="text-sm uppercase text-muted-foreground font-medium tracking-tight text-center">
+      {/*
+       * The welcome (docs/design/ios-studio): 熊宝 himself, the product's name as a quiet line, and an
+       * open heading — no card around it, so the composer below is the one thing on the page with a
+       * frame. Scrolls inside the pane on a short window rather than clipping the list under it.
+       */}
+      <div className="flex w-full min-h-0 flex-1 flex-col items-center overflow-y-auto px-[13px] pt-[6vh] pb-10 md:justify-center md:px-6 md:pt-0">
+        <div className="flex flex-col items-center text-center">
+          <BearMascot mood="happy" size={56} />
+          <h2 className="mt-[14px] font-mono text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
             {appConfig.brand.productName}
           </h2>
-          <h1 className="text-2xl font-semibold tracking-tight mt-1.5 text-center">
+          <h1 className="mt-[6px] font-bold text-[28px] leading-[1.15] tracking-tight">
             {homeGreeting(
               user,
               channels.isSuccess && channels.data.length === 0,
@@ -193,7 +201,7 @@ function RouteComponent() {
           </h1>
         </div>
         <div
-          className="mt-8 w-full flex flex-col items-center"
+          className="mt-[26px] w-full flex flex-col items-center"
           onKeyDownCapture={() => {
             typed.current = true;
           }}
@@ -242,13 +250,13 @@ function RouteComponent() {
           {fallback ? (
             // Said out loud: a message that silently reaches somebody you did not choose is the
             // kind of surprise that costs trust the first time it happens.
-            <p className="mt-2 w-full max-w-2xl text-xs text-muted-foreground text-center">
+            <p className="mt-2 w-full max-w-2xl text-[12px] text-faint text-center">
               会自动交给对应的员工。输入 <code>@</code> 可以自己选。
             </p>
           ) : null}
           {error ? (
             <p
-              className="mt-2 w-full max-w-2xl text-sm text-destructive"
+              className="mt-2 w-full max-w-2xl rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
               role="alert"
             >
               {error}
@@ -262,7 +270,7 @@ function RouteComponent() {
             // true when the query has never once returned successfully, so this alert can only
             // ever claim a load failure while that is actually what happened.
             <p
-              className="mt-2 w-full max-w-2xl text-sm text-destructive"
+              className="mt-2 w-full max-w-2xl rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
               role="alert"
             >
               读不到你的员工，所以暂时没有人可以接收这条消息。
@@ -275,11 +283,11 @@ function RouteComponent() {
          * somebody shared another Bot, so the rest are one "All Bots" away. Every state below
          * reserves the same two rows, so the composer above it does not move when the list settles.
          */}
-        <div className="mt-10 w-full max-w-2xl">
+        <div className="mt-[42px] w-full max-w-2xl">
           {loading ? (
             <>
-              <h2 className="font-semibold text-base">发现员工</h2>
-              <Skeleton className="mt-4 h-[140px]" />
+              <h2 className="font-bold text-[15px]">发现员工</h2>
+              <Skeleton className="mt-4 h-[140px] rounded-[14px]" />
             </>
           ) : explore?.length ? (
             // Wins over `failed`: a failed background refetch does not clear TanStack Query's
@@ -289,13 +297,13 @@ function RouteComponent() {
               <div className="flex flex-row items-center justify-between gap-4">
                 <h2
                   id="explore-agents-heading"
-                  className="font-semibold text-base"
+                  className="font-bold text-[15px]"
                 >
                   发现员工
                 </h2>
                 {explore.length > EXPLORE_SHOWN ? (
                   <Link
-                    className="text-muted-foreground text-sm hover:text-foreground"
+                    className="text-[13px] text-muted-foreground hover:text-foreground"
                     to="/wakers"
                   >
                     全部员工
@@ -322,10 +330,13 @@ function RouteComponent() {
             // card there would say the opposite of what a populated composer beside it (still
             // working off that same, successfully loaded `agents`) proves.
             <>
-              <h2 className="font-semibold text-base">发现员工</h2>
-              <Empty className="mt-4 h-[140px] border border-dashed border-destructive">
+              <h2 className="font-bold text-[15px]">发现员工</h2>
+              <Empty
+                className="mt-4 h-[140px] rounded-[14px] border border-signal/30 border-dashed bg-signal-soft"
+                role="alert"
+              >
                 <EmptyHeader>
-                  <EmptyTitle className="text-destructive">
+                  <EmptyTitle className="text-signal-ink text-[14px]">
                     读不到共享给你的员工。
                   </EmptyTitle>
                 </EmptyHeader>
@@ -336,14 +347,13 @@ function RouteComponent() {
             // when it failed but `agents` is defined — a loaded, empty slice either way. Same
             // plain copy for both: an empty roster is a fact, not an error.
             <>
-              <h2 className="font-semibold text-base">发现员工</h2>
-              <Empty className="mt-4 h-[140px] border border-dashed">
-                <EmptyHeader>
-                  <EmptyTitle className="text-muted-foreground">
-                    还没有人把员工共享给你。
-                  </EmptyTitle>
-                </EmptyHeader>
-              </Empty>
+              <h2 className="font-bold text-[15px]">发现员工</h2>
+              <WorkbenchEmpty
+                className="mt-4 h-[140px] min-h-0 rounded-[14px] border border-border border-dashed"
+                description="同事把员工共享给你之后，会出现在这里。"
+                mood="cute"
+                title="还没有人把员工共享给你。"
+              />
             </>
           )}
         </div>

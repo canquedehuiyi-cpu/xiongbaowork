@@ -336,7 +336,9 @@ test("a failed roster on /agents reports the failure, not an empty roster", asyn
 
   // The whole point: a person with agents must never be told they have none because the request
   // that would have proven otherwise never came back.
-  expect(view.queryByText("这里还没有员工。")).toBeNull();
+  // The wall's empty state (docs/design/ios-studio: a WorkbenchEmpty titled 这里还没有员工).
+  expect(view.queryByTestId("wakers-empty")).toBeNull();
+  expect(view.queryByText("这里还没有员工")).toBeNull();
   expect(view.queryByText("没有符合这个筛选条件的员工。")).toBeNull();
   expect(view.queryByTestId("waker-grid")).toBeNull();
   // Nor a count of zero beside the error: an unread roster has no count.
@@ -383,7 +385,9 @@ test("/agents lands on a /wakers wall holding skeletons while the roster is pend
   // A skeleton sitting beside a premature empty or error sentence would be no fix at all: the
   // point is that loading reserves the section's height instead of claiming an answer it doesn't
   // have yet.
-  expect(view.queryByText("这里还没有员工。")).toBeNull();
+  // The wall's empty state (docs/design/ios-studio: a WorkbenchEmpty titled 这里还没有员工).
+  expect(view.queryByTestId("wakers-empty")).toBeNull();
+  expect(view.queryByText("这里还没有员工")).toBeNull();
   expect(view.queryByText("没有符合这个筛选条件的员工。")).toBeNull();
   expect(view.queryByText(/^读不到员工：/)).toBeNull();
   expect(view.queryByTestId("waker-grid")).toBeNull();
@@ -588,7 +592,9 @@ test("with every coworker pinned, the /wakers wall lists them instead of claimin
   expect(
     cardOf(view, "Favourite").querySelector("[data-pinned]")?.textContent,
   ).toBe("已置顶");
-  expect(view.queryByText("这里还没有员工。")).toBeNull();
+  // The wall's empty state (docs/design/ios-studio: a WorkbenchEmpty titled 这里还没有员工).
+  expect(view.queryByTestId("wakers-empty")).toBeNull();
+  expect(view.queryByText("这里还没有员工")).toBeNull();
 });
 
 test("with nothing pinned, the wall /agents lands on has no 已置顶 tag", async () => {

@@ -23,14 +23,14 @@ export function SearchBox({
   return (
     <div
       className={cn(
-        "relative flex h-[32px] min-w-0 items-center rounded-md border border-border focus-within:ring-2 focus-within:ring-ring/60",
+        "relative flex h-[32px] min-w-0 items-center rounded-[9px] border border-border bg-muted focus-within:ring-2 focus-within:ring-ring/60 dark:bg-[oklch(0.196_0.002_286.2)]",
         className,
       )}
       data-slot="search-box"
     >
       <input
         aria-label={label}
-        className="h-full min-w-0 flex-1 bg-transparent pr-8 pl-3 text-[13px] outline-none placeholder:text-muted-foreground/80"
+        className="h-full min-w-0 flex-1 bg-transparent pr-3 pl-[33px] text-[12px] outline-none placeholder:text-muted-foreground"
         onChange={(event) => onValueChange(event.target.value)}
         placeholder={placeholder}
         type="search"
@@ -38,7 +38,7 @@ export function SearchBox({
       />
       <IconSearch
         aria-hidden="true"
-        className="pointer-events-none absolute right-2.5 size-[15px] text-muted-foreground"
+        className="pointer-events-none absolute left-[11px] size-[15px] text-faint"
       />
     </div>
   );

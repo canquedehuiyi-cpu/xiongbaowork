@@ -233,9 +233,13 @@ async function pickStatus(screen: ReturnType<typeof draw>, option: string) {
   );
 }
 
-/** Open the 群组 tab (parity plan F2: the tab is a SegmentedTabs tab, labelled 群组). */
+/**
+ * Open the 群组 tab (parity plan F2: the tab is a SegmentedTabs tab, labelled 群组). Its name starts
+ * with 群组 and ends with the group count once read, as docs/design/ios-studio/04-员工管理.png draws
+ * 「群组 0」.
+ */
 async function openGroupsTab(screen: ReturnType<typeof draw>) {
-  await userEvent.click(await screen.findByRole("tab", { name: "群组" }));
+  await userEvent.click(await screen.findByRole("tab", { name: /^群组/ }));
 }
 
 /** A fetch fake that records every call and answers each read with its own envelope. */
