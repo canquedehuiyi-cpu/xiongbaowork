@@ -547,7 +547,7 @@ describe("OpenMuse is a registered skin with its own frame", () => {
 describe("the frame", () => {
   test("centres OpenBot's default Bot, with what it is waiting on", async () => {
     serve();
-    renderAt("/settings/connected-accounts");
+    renderAt("/connections");
     const centre = await page().findByRole("button", {
       name: /^Muse，待你审阅 · 1 个审批。切换员工$/,
     });
@@ -597,7 +597,7 @@ describe("the frame", () => {
       tabs.getByRole("link", { name: "目标" }).getAttribute("aria-current"),
     ).toBe("page");
     expect(tabs.getByRole("link", { name: "应用" }).getAttribute("href")).toBe(
-      "/settings/connected-accounts",
+      "/connections",
     );
   });
 
@@ -605,12 +605,12 @@ describe("the frame", () => {
     ["/s/activity", "动态"],
     ["/s/ideas", "建议"],
     ["/s/goals", "目标"],
-    ["/settings/connected-accounts", "应用"],
+    ["/connections", "应用"],
     ["/channel/c-muse", "对话"],
     ["/routines", null],
     ["/settings/approvals", null],
     ["/bots/scout/setup", null],
-    ["/resources?tab=sources", null],
+    ["/capabilities/memory", null],
   ])("on %s the current tab is %s", async (path, current) => {
     serve();
     renderAt(path);
@@ -625,7 +625,7 @@ describe("the frame", () => {
 
   test.each([
     ["/s/goals", "column"],
-    ["/settings/connected-accounts", "column"],
+    ["/connections", "column"],
     ["/channel/c-muse", "column"],
     // The Bot's computer open beside the conversation needs OpenBot's own width.
     ["/channel/c-muse?watch=true", "page"],
@@ -716,7 +716,7 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
     "/s/activity",
     "/s/ideas",
     "/s/goals",
-    "/settings/connected-accounts",
+    "/connections",
   ])(
     "%s shows the deployment's name, never OpenMuse, and no capybara",
     async (path) => {
@@ -735,7 +735,7 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
 
   test("the centre Bot is drawn with its own OpenBot avatar", async () => {
     serve();
-    renderAt("/settings/connected-accounts");
+    renderAt("/connections");
     const centre = await page().findByRole("button", { name: /切换员工$/ });
     // AbstractAvatar names the drawing after the Bot, as on its OpenBot page.
     expect(within(centre).getByRole("img", { name: "Muse" })).toBeTruthy();
@@ -768,9 +768,14 @@ describe("every OpenBot surface stays reachable", () => {
     [/^新建群组$/, "/channel/new"],
     [/^首页$/, "/"],
     // OpenBot's own destinations, from the shared navigation list its sidebar draws.
-    [/^员工管理$/, "/wakers"],
-    [/^能力与资源$/, "/resources"],
-    [/^已连接的账号$/, "/settings/connected-accounts"],
+    [/^员工$/, "/bots"],
+    [/^任务看板$/, "/tasks"],
+    [/^自主工作$/, "/autonomous"],
+    [/^@Waker$/, "/reachability"],
+    [/^能力$/, "/capabilities"],
+    [/^连接$/, "/connections"],
+    [/^组团流程$/, "/pipelines"],
+    [/^套餐与用量$/, "/settings/plans"],
     [/^管理$/, "/admin"],
     [/^设置$/, "/settings"],
   ];
@@ -830,7 +835,7 @@ describe("every OpenBot surface stays reachable", () => {
     "/s/activity",
     "/s/ideas",
     "/s/goals",
-    "/settings/connected-accounts",
+    "/connections",
     "/bots/scout/setup",
   ])("Settings is one tap behind the menu on %s", async (path) => {
     serve();
@@ -846,16 +851,16 @@ describe("every OpenBot surface stays reachable", () => {
 
   test("the Bot switcher reaches each Bot's page, the roster and a new Bot", async () => {
     serve();
-    renderAt("/settings/connected-accounts");
+    renderAt("/connections");
     fireEvent.click(await page().findByRole("button", { name: /切换员工$/ }));
     const sheet = within(await page().findByRole("dialog"));
     expect(hrefOf(/^Muse的主页/)).toBe("/bots/picked-harness");
     expect(
       sheet.getByRole("link", { name: /^全部员工/ }).getAttribute("href"),
-    ).toBe("/wakers");
+    ).toBe("/bots");
     expect(
       sheet.getByRole("link", { name: /^新建员工/ }).getAttribute("href"),
-    ).toBe("/wakers?new=true");
+    ).toBe("/bots?new=true");
     // A Bot that is waiting on the person says so; one with only unread messages does not.
     expect(sheet.getByText("需要你 · 1 个审批")).toBeTruthy();
     expect(sheet.getByText("1 条未读")).toBeTruthy();
@@ -980,12 +985,12 @@ describe("the rules the frame runs on", () => {
     expect(tabFor("/s/activity")).toBe("activity");
     expect(tabFor("/s/ideas")).toBe("ideas");
     expect(tabFor("/s/goals")).toBe("goals");
-    expect(tabFor("/settings/connected-accounts")).toBe("apps");
-    expect(tabFor("/settings/connected-accounts/notion")).toBe("apps");
+    expect(tabFor("/connections")).toBe("apps");
+    expect(tabFor("/connections/notion")).toBe("apps");
     expect(tabFor("/routines")).toBeNull();
     expect(tabFor("/settings/approvals")).toBeNull();
     expect(tabFor("/bots/scout/setup")).toBeNull();
-    expect(tabFor("/resources")).toBeNull();
+    expect(tabFor("/capabilities")).toBeNull();
     expect(tabFor("/s/apps")).toBeNull();
   });
 

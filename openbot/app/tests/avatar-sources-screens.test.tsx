@@ -24,8 +24,9 @@ import {
   runningTasksQueryOptions,
   wakerGroupKeys,
 } from "@/lib/waker-groups/queries";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
-import { Route as WakerDetailRoute } from "@/routes/_authed/_app/wakers_.$agentId";
+import { Route as BotDetailRoute } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
+import { seedQuietNeedsYou } from "./quiet-needs-you";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -125,6 +126,7 @@ function wakersClient(sources: AvatarSourceState | "unreadable") {
   queryClient.setQueryData(runningTasksQueryOptions().queryKey, []);
   if (sources !== "unreadable")
     queryClient.setQueryData(avatarSourceKeys.state(), sources);
+  seedQuietNeedsYou(queryClient);
   return queryClient;
 }
 
@@ -138,15 +140,15 @@ function drawWakers(queryClient: QueryClient) {
     } as never);
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: ["/wakers"] }),
+    // M5b：员工墙并进了上游的员工页（`/bots`）。
+    history: createMemoryHistory({ initialEntries: ["/bots"] }),
     routeTree: root.addChildren([
-      WakersRoute.update({
+      BotsRoute.update({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots",
       } as never),
       stub("/bots/$agentId"),
-      stub("/assemble/$agentId"),
-      stub("/wakers/$agentId"),
+      stub("/bots/$agentId/setup"),
     ]),
   });
   return render(
@@ -321,7 +323,10 @@ test("a name over 60 characters is said before it is sent", async () => {
   expect(writes()).toEqual([]);
 });
 
-/** The detail page, for whichever coworker; the other sections' reads are not faked and fail alone. */
+/**
+ * The detail page, for whichever coworker; the other sections' reads are not faked and fail alone.
+ * M5b：员工详情是上游的 `/bots/$agentId`（原 `/wakers/$agentId` 重定向到这里），信息来源在它的首页。
+ */
 function drawDetail(profile: AgentProfile) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -338,18 +343,27 @@ function drawDetail(profile: AgentProfile) {
   const router = createRouter({
     context: {},
     history: createMemoryHistory({
-      initialEntries: [`/wakers/${profile.id}`],
+      initialEntries: [`/bots/${profile.id}`],
     }),
     routeTree: root.addChildren([
-      WakerDetailRoute.update({
+      BotDetailRoute.update({
         getParentRoute: () => root,
-        path: "/wakers/$agentId",
+        path: "/bots/$agentId",
       } as never),
-      stub("/wakers"),
-      stub("/assemble/$agentId"),
+      stub("/bots"),
+      stub("/bots/$agentId/activity"),
+      stub("/bots/$agentId/access"),
+      stub("/bots/$agentId/approvals"),
+      stub("/bots/$agentId/memory"),
+      stub("/bots/$agentId/reach"),
+      stub("/bots/$agentId/responsibilities"),
+      stub("/bots/$agentId/routines"),
+      stub("/bots/$agentId/setup"),
+      stub("/bots/$agentId/sharing"),
+      stub("/channel/new"),
+      stub("/channel/$channelId"),
       stub("/tasks"),
-      stub("/routines"),
-      stub("/responsibilities"),
+      stub("/autonomous"),
     ]),
   });
   return render(
@@ -372,7 +386,8 @@ test("the 分身's detail page has an 信息来源 section, and another coworker
     calls.filter((call) => call.path === "/api/me/avatar/sources").length;
   const before = sourceReads();
   const other = drawDetail(coworker);
-  await other.findByRole("heading", { name: "职责" });
+  // The page has drawn: its title is the coworker's name.
+  await other.findByRole("heading", { level: 1, name: coworker.name });
   await waitFor(() => expect(sourceReads()).toBeGreaterThan(before));
   expect(other.queryByRole("heading", { name: "信息来源" })).toBeNull();
 });

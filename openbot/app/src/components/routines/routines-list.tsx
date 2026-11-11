@@ -2,6 +2,7 @@ import { IconHistory, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { PageSection } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
@@ -27,6 +29,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { relativeTime } from "@/lib/relative-time";
 import {
   deleteRoutineMutationOptions,
@@ -42,6 +45,7 @@ import {
 } from "@/lib/routines/queries";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
+import { NewRoutineButton } from "./new-routine-button";
 
 /**
  * What the last-run cell says, and in what tone.
@@ -226,6 +230,21 @@ export function RoutinesList({
   embedded?: boolean;
 } = {}) {
   const routines = useQuery(routinesQueryOptions());
+  /* Names and faces for the Bot chip, hidden Bots included: a routine outlives hiding its Bot. */
+  const shownBots = useQuery({
+    ...agentListQueryOptions(),
+    enabled: agentId === undefined,
+  });
+  const hiddenBots = useQuery({
+    ...agentListQueryOptions(true),
+    enabled: agentId === undefined,
+  });
+  const bots = new Map(
+    [...(shownBots.data ?? []), ...(hiddenBots.data ?? [])].map((bot) => [
+      bot.id,
+      bot,
+    ]),
+  );
   const setEnabled = useMutation(setRoutineEnabledMutationOptions(queryClient));
   const deleteRoutine = useMutation(deleteRoutineMutationOptions(queryClient));
   const runNow = useMutation(runRoutineNowMutationOptions(queryClient));
@@ -280,15 +299,19 @@ export function RoutinesList({
             </EmptyTitle>
             <EmptyDescription>
               {agentId
-                ? "在频道里跟它说一句——比如“每个工作日早上 9 点，……”——就会出现在这里；也可以在「自主工作」页直接新建。"
-                : "在频道里跟员工说一句——比如“每个工作日早上 9 点，……”——就会出现在这里；也可以在「自主工作」页直接新建。"}
+                ? "点「新建定时任务」设一个，或者在频道里跟它说一句——比如“每个工作日早上 9 点，……”；也可以在「自主工作」页直接新建。"
+                : "点「新建定时任务」设一个，或者在频道里跟员工说一句——比如“每个工作日早上 9 点，……”；也可以在「自主工作」页直接新建。"}
             </EmptyDescription>
           </EmptyHeader>
+          <EmptyContent>
+            <NewRoutineButton agentId={agentId} variant="outline" />
+          </EmptyContent>
         </Empty>
       ) : (
         <div className="flex flex-col gap-2">
           {rows.map((routine) => {
             const lastRun = lastRunLabel(routine.lastRun);
+            const bot = bots.get(routine.agentId);
             return (
               <Item key={routine.id} variant="muted">
                 {/* Paused reads at a glance: the content dims, and a chip below says the word. */}
@@ -318,6 +341,26 @@ export function RoutinesList({
                   {/* A set, so it wraps onto its own line rather than crowding the title. */}
                   <ItemFooter>
                     <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Every Bot's routines are on one page, so each says whose it is. */}
+                      {agentId === undefined ? (
+                        <Link
+                          params={{ agentId: routine.agentId }}
+                          to="/bots/$agentId/routines"
+                        >
+                          <Chip className="text-foreground transition-colors hover:bg-muted">
+                            {bot ? (
+                              <span aria-hidden="true" className="contents">
+                                <AbstractAvatar
+                                  name={bot.name}
+                                  seed={bot.avatarSeed}
+                                  size={14}
+                                />
+                              </span>
+                            ) : null}
+                            {bot?.name ?? "员工"}
+                          </Chip>
+                        </Link>
+                      ) : null}
                       {routine.channel.gone ? (
                         <Chip className="border-destructive/40 text-destructive">
                           这个频道已不在

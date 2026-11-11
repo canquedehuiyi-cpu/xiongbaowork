@@ -8,6 +8,10 @@ import {
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
+import {
+  BreadthNote,
+  CoverageNote,
+} from "@/components/plugins/broker-directory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -224,6 +228,14 @@ function RouteComponent() {
                           用部署专属客户端连接，只能由管理员连接。
                         </ItemDescription>
                       ) : null}
+                      {/*
+                       * 启用之前说清楚的两件事（X8，上游 `broker-directory` 的同一对提示）：这个
+                       * toolkit 有没有给动作分类（`classifiedCount`，没分类的一律按改动对待），以及授权
+                       * 一次会覆盖多宽（`permissionCount`、`scopedActionCount`）。broker 没报这些数
+                       * （Composio，答 null）时都不画。已添加的应用不再画：决定已经做了。
+                       */}
+                      {entry.enabled ? null : <CoverageNote app={entry} />}
+                      {entry.enabled ? null : <BreadthNote app={entry} />}
                     </ItemContent>
                     <ItemActions>
                       {/* The size of the decision, stated before it is made: an app is not one

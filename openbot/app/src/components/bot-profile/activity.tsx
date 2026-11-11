@@ -92,11 +92,11 @@ function linkFor(item: ActivityItem, agentId: string) {
   switch (item.kind) {
     case "approval":
     case "question":
-      return <Link to="/approvals" />;
+      return <Link params={{ agentId }} to="/bots/$agentId" />;
     case "responsibility":
-      return <Link search={{ agent: agentId }} to="/responsibilities" />;
+      return <Link params={{ agentId }} to="/bots/$agentId/responsibilities" />;
     case "routine":
-      return <Link search={{ trigger: "schedule" }} to="/autonomous" />;
+      return <Link params={{ agentId }} to="/bots/$agentId/routines" />;
     default:
       return null;
   }
@@ -211,6 +211,7 @@ function ActivitySection({
 }) {
   return (
     <ProfileSection
+      className="mt-12"
       action={
         items.length > 0 ? (
           <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
@@ -269,7 +270,7 @@ export function BotActivityGlance({ agentId }: { agentId: string }) {
   const upcoming = upcomingOf(activity.data);
   if (activity.isPending || upcoming.length === 0) return null;
   return (
-    <ProfileSection title="动态">
+    <ProfileSection className="mt-12" title="动态">
       <ProfilePanel>
         {upcoming.map(({ item, live }) => (
           <Fragment key={item.id}>
@@ -364,7 +365,7 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
   if (activity.isPending) return null;
   if (activity.error)
     return (
-      <ProfileSection title="动态">
+      <ProfileSection className="mt-12" title="动态">
         <ProfileAlert>读不到这位员工的动态。</ProfileAlert>
       </ProfileSection>
     );
@@ -417,7 +418,7 @@ function BotActionsSection({ agentId }: { agentId: string }) {
   const admin = useQuery(currentUserQueryOptions()).data?.role === "admin";
   if (!admin) return null;
   return (
-    <ProfileSection title="动作">
+    <ProfileSection className="mt-12" title="动作">
       <ProfilePanel>
         <Item
           render={<Link search={{ bot: agentId }} to="/admin/audit" />}

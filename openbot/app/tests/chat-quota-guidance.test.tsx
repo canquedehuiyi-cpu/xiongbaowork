@@ -110,7 +110,8 @@ test("a turn refused for quota opens the guidance dialog: what ran out, the upgr
   );
   expect(view.getByText("Free 套餐：本月任务已用 50/50")).toBeTruthy();
   const upgrade = Array.from(document.querySelectorAll("a")).find(
-    (anchor) => anchor.getAttribute("href") === "/plans",
+    // 服务端仍报 `/plans`（契约不变），链接直接写落点：设置里的套餐页。
+    (anchor) => anchor.getAttribute("href") === "/settings/plans",
   );
   expect(upgrade).toBeTruthy();
   // Closed again before the next test, so nothing of this dialog is left scheduled.
@@ -152,9 +153,7 @@ test("any other run error keeps its own words and opens nothing", () => {
       }),
     ).toBe("模型供应商那边出了错（HTTP 500）。供应商没有说明原因。");
     expect(currentQuotaGuidance()).toBeNull();
-    expect(runErrorReason(undefined)).toBe(
-      "The Bot stopped without saying why.",
-    );
+    expect(runErrorReason(undefined)).toBe("员工停下了，没有说原因。");
   } finally {
     stop();
   }

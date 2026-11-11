@@ -13,6 +13,8 @@ export function toolInWords(
   serverId: string,
   tool: { name: string; description: string },
 ): { label: string; summary: string | null } {
+  const builtin = builtinToolWords(serverId, tool.name);
+  if (builtin) return builtin;
   return {
     label: toolName(serverId, tool.name),
     summary: toolSummary(tool.description),
@@ -25,7 +27,62 @@ export function toolInWords(
  * goal", where a conversation says what was done, "Created a goal").
  */
 export function toolName(serverId: string, name: string): string {
-  return appToolName(serverId, name).label;
+  return (
+    builtinToolWords(serverId, name)?.label ?? appToolName(serverId, name).label
+  );
+}
+
+/*
+ * 熊宝自带的应用（定时任务）的工具，给人看的中文名和一句话说明。它们的英文名和英文说明是写给模型的，
+ * 服务端照旧用；只有画在界面上的这一份换成中文。厂商应用的动作名来自厂商，照原样从名字推出来。
+ */
+const ROUTINES_TOOLS: ReadonlyMap<string, { label: string; summary: string }> =
+  new Map([
+    ["list_routines", { label: "列出定时任务", summary: "看有哪些定时任务。" }],
+    [
+      "create_routine",
+      { label: "新建定时任务", summary: "按时间表安排一项要做的事。" },
+    ],
+    [
+      "update_routine",
+      { label: "修改定时任务", summary: "改一项定时任务的内容或时间。" },
+    ],
+    [
+      "delete_routine",
+      { label: "删除定时任务", summary: "删掉一项定时任务。" },
+    ],
+    [
+      "create_trigger",
+      { label: "新建触发方式", summary: "让某件事发生时开始干活。" },
+    ],
+    [
+      "pause_trigger",
+      { label: "暂停触发方式", summary: "先停下一个触发方式。" },
+    ],
+    [
+      "resume_trigger",
+      { label: "恢复触发方式", summary: "让暂停的触发方式重新生效。" },
+    ],
+    [
+      "delete_trigger",
+      { label: "删除触发方式", summary: "删掉一个触发方式。" },
+    ],
+    ["list_goals", { label: "列出目标", summary: "看有哪些目标。" }],
+    ["create_goal", { label: "新建目标", summary: "定一个要持续推进的目标。" }],
+    ["update_goal", { label: "修改目标", summary: "改一个目标的内容。" }],
+    ["run_goal", { label: "推进目标", summary: "现在就为一个目标干一轮活。" }],
+    ["pause_goal", { label: "暂停目标", summary: "先停下一个目标。" }],
+    ["resume_goal", { label: "恢复目标", summary: "让暂停的目标继续。" }],
+    ["complete_goal", { label: "完成目标", summary: "把一个目标标记为完成。" }],
+  ]);
+
+function builtinToolWords(
+  serverId: string,
+  name: string,
+): { label: string; summary: string } | null {
+  const app = serverId.startsWith("team:") ? serverId.slice(5) : serverId;
+  if (app !== "routines") return null;
+  return ROUTINES_TOOLS.get(name) ?? null;
 }
 
 /**

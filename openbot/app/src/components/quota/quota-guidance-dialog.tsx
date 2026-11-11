@@ -53,19 +53,10 @@ export function QuotaGuidanceDialog() {
               <Button
                 variant="outline"
                 render={
-                  guidance.cleanup.href === "/resources" ? (
-                    // The model library is its own tab of 能力与资源, not the default 插件 tab.
-                    <Link
-                      onClick={dismissQuotaGuidance}
-                      search={{ tab: "models" }}
-                      to="/resources"
-                    />
-                  ) : (
-                    <Link
-                      to={guidance.cleanup.href}
-                      onClick={dismissQuotaGuidance}
-                    />
-                  )
+                  <Link
+                    onClick={dismissQuotaGuidance}
+                    to={guidance.cleanup.href}
+                  />
                 }
               >
                 {guidance.cleanup.label}

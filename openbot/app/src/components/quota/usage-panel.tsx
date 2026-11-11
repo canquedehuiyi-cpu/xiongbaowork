@@ -37,7 +37,7 @@ export function UsagePanel() {
         <span className="font-medium text-xs">{data.plan.name}</span>
         <Link
           className="text-muted-foreground text-xs underline-offset-2 hover:underline"
-          to="/plans"
+          to="/settings/plans"
         >
           套餐与用量
         </Link>

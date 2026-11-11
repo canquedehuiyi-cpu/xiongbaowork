@@ -3,7 +3,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { TenantUsageAndAudit } from "@/routes/_authed/_app/platform";
+import { TenantUsageAndAudit } from "@/components/platform/platform-page";
 import { settleReactWork } from "./settle-react-work";
 
 /**

@@ -1321,6 +1321,24 @@ const ALLOW: Allowed[] = [
     finding: "M3: a fork test, which predates this guard",
   },
   {
+    // M5b: restored from upstream main with its own allow entry (round 2 did not find this).
+    file: "app/tests/bot-setup.test.tsx",
+    shape: "b",
+    context: [
+      '"a built-in coworker can be renamed on a deployment whose own Bot lives on localhost"',
+    ],
+    expression: "expect(updates[0]?.endpoint).toBeUndefined()",
+    finding: "NEW (round 2 did not find this)",
+  },
+  {
+    // M5b: restored from upstream main with its own allow entry (round 2 did not find this).
+    file: "app/tests/connected-account-grants.test.tsx",
+    shape: "e",
+    context: [],
+    expression: "constsiblingReads:string[]=[]",
+    finding: "NEW (round 2 did not find this)",
+  },
+  {
     file: "app/tests/model-test-button.test.ts",
     shape: "c",
     context: [

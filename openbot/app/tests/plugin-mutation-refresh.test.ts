@@ -4,16 +4,21 @@ import { join } from "node:path";
 import {
   type MutationFunctionContext,
   MutationObserver,
+  mutationOptions,
   QueryClient,
 } from "@tanstack/react-query";
+import { authorizeActionMutationOptions } from "../src/lib/plugins/grants";
 import * as pluginMutations from "../src/lib/plugins/mutations";
 import {
+  accountModePreview,
   addCuratedServerMutationOptions,
   addCustomServerMutationOptions,
   brokeredConnectionFieldsMutationOptions,
   confirmBrokeredConnectionMutationOptions,
   connectAccountMutationOptions,
+  connectAnotherAccountMutationOptions,
   connectBrokeredWithFieldsMutationOptions,
+  disconnectBrokeredAccountMutationOptions,
   disconnectBrokeredMutationOptions,
   enableComposioAppMutationOptions,
   recheckBrokeredConnectionMutationOptions,
@@ -25,7 +30,10 @@ import {
   replaceServerTokenMutationOptions,
   saveDeploymentClientMutationOptions,
   saveSkillMutationOptions,
+  setAccountModeMutationOptions,
+  setDefaultBrokeredAccountMutationOptions,
   setListingMutationOptions,
+  setOwnerGrantsMutationOptions,
   setPluginGrantMutationOptions,
 } from "../src/lib/plugins/mutations";
 import { pluginKeys } from "../src/lib/plugins/queries";
@@ -334,6 +342,45 @@ const REFUSALS: {
     factory: recheckBrokeredConnectionMutationOptions,
     variables: "gmail",
   },
+  {
+    /*
+     * X1 #427. The switch revokes accounts at the vendor one by one before it moves the mode, and
+     * answers 409 with the failures when one of them would not go: the mode stands, but the
+     * revocations that did go are gone, so the screen has to be read again.
+     */
+    name: "switching a server's account mode",
+    route: "PUT /api/plugins/servers/:id/account-mode",
+    status: 409,
+    message: "切换没有完成，什么都没有改变。",
+    factory: setAccountModeMutationOptions,
+    variables: { serverId: "linear", mode: "shared" as const },
+  },
+  {
+    // X3: `GET|PUT /servers/:id/owner-grants`, 404 for an app that has not been added.
+    name: "choosing who may give an app to a Bot",
+    route: "PUT /api/plugins/servers/:id/owner-grants",
+    status: 404,
+    message: "这个应用还没有添加。",
+    factory: setOwnerGrantsMutationOptions,
+    variables: { serverId: "linear", ownerGrants: "admin" as const },
+  },
+  {
+    // X1 #425: an account that is not the person's own, or is gone at the vendor, is a 404.
+    name: "making one account the default",
+    route: "POST /api/plugins/servers/:id/accounts/:accountId/default",
+    status: 404,
+    message: "这个账号没有连接。请刷新页面。",
+    factory: setDefaultBrokeredAccountMutationOptions,
+    variables: { serverId: "gmail", accountId: "account-2" },
+  },
+  {
+    name: "disconnecting one of several accounts",
+    route: "DELETE /api/plugins/servers/:id/accounts/:accountId",
+    status: 404,
+    message: "这个账号没有连接。请刷新页面。",
+    factory: disconnectBrokeredAccountMutationOptions,
+    variables: { serverId: "gmail", accountId: "account-2" },
+  },
 ];
 
 for (const refusal of REFUSALS) {
@@ -377,6 +424,8 @@ const NOT_A_MUTATION_FACTORY: Record<string, string> = {
     "The refetch itself — the thing every case above asserts was asked for, not a press.",
   grantPlugin:
     "The bare write, for a caller granting a batch and refreshing once at the end. It carries no refetch on purpose, and the mutation that wraps it is covered above.",
+  accountModePreview:
+    "The account-mode switch asked not to commit (`confirm: false`): it reads what a switch would revoke and writes nothing, so there is nothing to refetch. `setAccountModeMutationOptions`, the real switch, is covered above.",
   saveSkill:
     "The bare save, for a caller that saves as one step of a longer write (approving a skill draft from Settings, Learning, whose own factory refetches on settle). It carries no refetch on purpose, and `saveSkillMutationOptions`, which wraps it, is covered above.",
 };
@@ -394,6 +443,8 @@ const NOT_A_REFUSABLE_WRITE: Record<string, string> = {
     "Asks an app what it wants typed in. `POST /connect` with only `{ guide: true }` writes nothing on either outcome, and the factory takes no QueryClient. Its own test is above.",
   connectAccountMutationOptions:
     "Starts a consent connection and hands back the vendor's URL for the browser to leave for. Nothing on this screen survives that navigation to be refetched, and this factory takes no QueryClient either — it takes which screen to come back to.",
+  connectAnotherAccountMutationOptions:
+    "The same consent start as `connectAccountMutationOptions`, asking for another account (`&another=1`). Same reason: the browser leaves for the vendor, and the factory takes no QueryClient.",
 };
 
 test("every mutation factory `mutations.ts` exports is answered for by this file", () => {
@@ -626,6 +677,48 @@ const ENCODED_REQUESTS: {
     build: setListingMutationOptions,
     variables: { kind: "skill" as const, listed: false, ref: HOSTILE_ID },
   },
+  {
+    name: "previewing an account mode switch",
+    url: `/api/plugins/servers/${ENCODED_ID}/account-mode`,
+    build: () =>
+      mutationOptions({
+        mutationFn: (variables: {
+          serverId: string;
+          mode: "personal" | "shared";
+        }) => accountModePreview(variables.serverId, variables.mode),
+      }),
+    variables: { serverId: HOSTILE_ID, mode: "shared" as const },
+  },
+  {
+    name: "switching a server's account mode",
+    url: `/api/plugins/servers/${ENCODED_ID}/account-mode`,
+    build: setAccountModeMutationOptions,
+    variables: { serverId: HOSTILE_ID, mode: "shared" as const },
+  },
+  {
+    name: "choosing who may give an app to a Bot",
+    url: `/api/plugins/servers/${ENCODED_ID}/owner-grants`,
+    build: setOwnerGrantsMutationOptions,
+    variables: { serverId: HOSTILE_ID, ownerGrants: "any" as const },
+  },
+  {
+    name: "connecting another account",
+    url: `/api/plugins/servers/${ENCODED_ID}/connect?returnTo=settings&another=1`,
+    build: () => connectAnotherAccountMutationOptions(),
+    variables: HOSTILE_ID,
+  },
+  {
+    name: "making one account the default",
+    url: `/api/plugins/servers/${ENCODED_ID}/accounts/${ENCODED_ID}/default`,
+    build: setDefaultBrokeredAccountMutationOptions,
+    variables: { serverId: HOSTILE_ID, accountId: HOSTILE_ID },
+  },
+  {
+    name: "disconnecting one of several accounts",
+    url: `/api/plugins/servers/${ENCODED_ID}/accounts/${ENCODED_ID}`,
+    build: disconnectBrokeredAccountMutationOptions,
+    variables: { serverId: HOSTILE_ID, accountId: HOSTILE_ID },
+  },
 ];
 
 for (const request of ENCODED_REQUESTS) {
@@ -635,6 +728,23 @@ for (const request of ENCODED_REQUESTS) {
     ]);
   });
 }
+
+/*
+ * The Reconnect card naming the further account a refused call ran in（X8-5）. Not a row of the
+ * roster above, which counts one case per URL template: this is the consent start's own template
+ * with the account named. The account row id is server-minted, but it arrives here off a
+ * transcript, so it is encoded like any id.
+ */
+test("reconnecting one named account keeps the id and the account each in one segment", async () => {
+  expect(
+    await requestedBy(() => connectAccountMutationOptions(), {
+      serverId: HOSTILE_ID,
+      account: HOSTILE_ID,
+    }),
+  ).toEqual([
+    `/api/plugins/servers/${ENCODED_ID}/connect?returnTo=settings&account=${ENCODED_ID}`,
+  ]);
+});
 
 test("every id these writes interpolate into a URL goes through encodeURIComponent", () => {
   /*
@@ -671,7 +781,17 @@ test("every id these writes interpolate into a URL goes through encodeURICompone
    * position is somebody's typed id, and there are exactly two ways for one of those to be safe:
    * the call this test is named for, or a new entry here that somebody had to argue for.
    */
-  const closedUnions = ["variables.kind", "returnTo"];
+  /*
+   * Two more that are this module's own text and never a caller's: `desktopConsentQuery()` is the
+   * fixed `&from=desktop` (or nothing) the Desktop test below pins, and the `another` switch is a
+   * boolean choosing between `&another=1` and nothing.
+   */
+  const closedUnions = [
+    "variables.kind",
+    "returnTo",
+    "desktopConsentQuery()",
+    'another ? "&another=1" : ""',
+  ];
 
   const raw = paths.flatMap((path) =>
     [...path.matchAll(/\$\{([^}]*)\}/g)]
@@ -684,4 +804,38 @@ test("every id these writes interpolate into a URL goes through encodeURICompone
   );
 
   expect(raw).toEqual([]);
+});
+
+/**
+ * Started in OpenBot Desktop's window, both consent starts say so (`from=desktop`), so the sign-in
+ * that opens in the person's browser comes back to the page that hands them back to the window
+ * (`/desktop-return`). In a browser they say nothing of the kind.
+ */
+test("the consent starts say when they were pressed in OpenBot Desktop", async () => {
+  const scope = globalThis as unknown as { window?: Record<string, unknown> };
+  const hadWindow = "window" in scope;
+  const window = scope.window ?? {};
+  scope.window = window;
+  window.__TAURI_INTERNALS__ = {
+    invoke: async () => null,
+    transformCallback: () => 0,
+  };
+  try {
+    expect(
+      await requestedBy(() => connectAccountMutationOptions(), "gmail"),
+    ).toEqual([
+      "/api/plugins/servers/gmail/connect?returnTo=settings&from=desktop",
+    ]);
+    expect(
+      await requestedBy(() => authorizeActionMutationOptions(), {
+        serverId: "gmail",
+        action: "GMAIL_SEND_EMAIL",
+      }),
+    ).toEqual([
+      "/api/plugins/servers/gmail/authorize?returnTo=settings&from=desktop",
+    ]);
+  } finally {
+    delete window.__TAURI_INTERNALS__;
+    if (!hadWindow) delete scope.window;
+  }
 });

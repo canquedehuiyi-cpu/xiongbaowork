@@ -130,7 +130,7 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
           <LinkRow
             detail="你的、共享给你的，以及团队的"
             icon={IconBolt}
-            render={<Link onClick={onClose} to="/wakers" />}
+            render={<Link onClick={onClose} to="/bots" />}
             tint="plain"
             title="全部员工"
           />
@@ -138,7 +138,7 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
             detail="描述它要做什么"
             icon={IconPlus}
             render={
-              <Link onClick={onClose} search={{ new: true }} to="/wakers" />
+              <Link onClick={onClose} search={{ new: true }} to="/bots" />
             }
             tint="plain"
             title="新建员工"

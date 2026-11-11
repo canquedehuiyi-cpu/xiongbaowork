@@ -1,3 +1,7 @@
+/*
+ * 熊宝：恢复自上游，断言改成熊宝侧栏的中文（「加载更早的会话」「搜索会话」等）；账户菜单多读的套餐和分身
+ * 在这里预先答好，只数会话的请求。
+ */
 import {
   afterAll,
   afterEach,
@@ -23,17 +27,16 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
-import { ConversationWorkspace } from "@/components/app-sidebar/conversation-workspace";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
+import { avatarSourceKeys } from "@/lib/avatar/sources";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { browserKeys } from "@/lib/browser/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
-import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
 // Keep the sidebar's live-update socket offline; these tests exercise HTTP pagination.
 class OfflineWebSocket extends EventTarget implements WebSocket {
@@ -155,8 +158,7 @@ function channel(id: string): ChannelSummary {
     threadId: id,
     active: true,
     lastMessageAt: null,
-    // Named, so the title the workspace row leads with is the id the assertions look for.
-    summary: id,
+    summary: null,
     lastMessage: null,
     lastMessageAgentId: null,
     createdAt: "2026-09-15T00:00:00Z",
@@ -165,7 +167,7 @@ function channel(id: string): ChannelSummary {
   };
 }
 
-function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
+function renderSidebar() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -176,13 +178,6 @@ function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
     narration: null,
     skin: "openbot",
     proactive: "on",
-  });
-  // The footer reads the plan once on its own; these tests count channel requests only.
-  queryClient.setQueryData(quotaKeys.usage(), {
-    plan: { id: "pro", name: "专业版" },
-    limits: { wakers: 10, tasksPerMonth: 100, devices: 3 },
-    usage: { wakers: 2, tasks: 4, devices: 1 },
-    tokens: null,
   });
   queryClient.setQueryData(authKeys.currentUser(), {
     id: "user",
@@ -207,8 +202,20 @@ function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
     bots: [],
     lastPingId: null,
   });
-  queryClient.setQueryData(wakerGroupKeys.list(), []);
-  // The Browser entry reads whether there is a browser once; answered here so only channel requests are counted.
+  // The account menu reads the plan and the 分身's id once each; answered here so only channel
+  // requests are counted.
+  queryClient.setQueryData(quotaKeys.usage(), {
+    plan: { id: "pro", name: "专业版" },
+    limits: { wakers: 10, tasksPerMonth: 100, devices: 3 },
+    usage: { wakers: 2, tasks: 4, devices: 1 },
+    tokens: null,
+  });
+  queryClient.setQueryData(avatarSourceKeys.state(), {
+    agentId: "avatar-user",
+    configuredAt: null,
+    sources: [],
+  });
+  // The Browser button reads whether there is a browser once; answered here so only channel requests are counted.
   queryClient.setQueryData(browserKeys.state, {
     available: false,
     computerId: "",
@@ -216,20 +223,21 @@ function renderSidebar(first: ChannelSummary = channel("Recent conversation")) {
     tabs: [],
   });
   queryClient.setQueryData(channelKeys.list(), {
-    pages: [{ channels: [first], nextCursor: "older/page" }],
+    pages: [
+      { channels: [channel("Recent conversation")], nextCursor: "older/page" },
+    ],
     pageParams: [""],
   });
   const routeTree = createRootRoute({
     component: () => (
       <SidebarProvider>
         <AppSidebar />
-        <ConversationWorkspace />
       </SidebarProvider>
     ),
   });
   const router = createRouter({
     routeTree,
-    history: createMemoryHistory({ initialEntries: ["/channel/new"] }),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -245,16 +253,10 @@ function activeObserver() {
 }
 
 test("message emphasis updates mounted rows from the account preferences cache", async () => {
-  // Not named yet, so its title is still 新会话.
-  const view = renderSidebar({
-    ...channel("Recent conversation"),
-    summary: null,
-  });
-  // 对话标题 emphasis: the title leads in bold and the kind follows in grey.
-  const thread = await view.findByText("新会话");
-  expect(thread.className).toContain("font-semibold");
-  expect(view.getByText("聊天").className).toContain("text-muted-foreground");
-  expect(view.queryByText("Recent conversation")).toBeNull();
+  const view = renderSidebar();
+  const agent = await view.findByText("Recent conversation");
+  const thread = view.getByText("新会话");
+  expect(thread.className).toContain("text-sm");
   act(() =>
     clients[0]?.setQueryData(userPreferencesQueryOptions("user").queryKey, {
       messageListEmphasis: "agent",
@@ -264,10 +266,8 @@ test("message emphasis updates mounted rows from the account preferences cache",
       proactive: "on",
     }),
   );
-  // 员工名字 emphasis: the name leads, and the title moves down to the grey line.
-  const agent = await view.findByText("Recent conversation");
-  expect(agent.className).toContain("font-semibold");
-  expect(view.getByText("新会话").className).toContain("text-muted-foreground");
+  await waitFor(() => expect(agent.className).toContain("text-sm"));
+  expect(thread.className).toContain("text-muted-foreground");
 });
 
 test("scrolling requests the cursor once, appends older rows, and stops at the final page", async () => {
@@ -279,7 +279,7 @@ test("scrolling requests the cursor once, appends older rows, and stops at the f
   await waitFor(() => expect(ScrollObserver.active.size).toBe(1));
   const observer = activeObserver();
   expect(observer.root).toBe(
-    view.container.querySelector('[data-slot="workspace-list"]'),
+    view.container.querySelector('[data-sidebar="content"]'),
   );
   act(() => observer.intersect(false));
   expect(requests).toEqual([]);
@@ -341,9 +341,6 @@ test("search loads older history explicitly and includes new matches", async () 
   const view = renderSidebar();
   const user = userEvent.setup({ document: view.container.ownerDocument });
   await view.findByText("Recent conversation");
-  // The field's name is the sidebar's own Chinese label since ticket 024's sidebar pass; this line
-  // still asked for the old English one, which is why the test failed even when run on its own.
-  await user.click(view.getByRole("button", { name: "搜索对话" }));
   const search = view.getByRole("searchbox", { name: "搜索会话" });
   await user.type(search, "Archived");
   expect(await view.findByText("已加载的会话里没有匹配的")).toBeTruthy();

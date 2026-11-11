@@ -166,7 +166,12 @@ function draw(entry: string) {
       } as never),
       createRoute({
         getParentRoute: () => root,
-        path: "/resources",
+        path: "/capabilities/wakerflows",
+        component: () => null,
+      } as never),
+      createRoute({
+        getParentRoute: () => root,
+        path: "/capabilities/models",
         component: () => null,
       } as never),
     ]),
@@ -554,11 +559,11 @@ test("planning switched off on the server is a refusal, not a lost answer to cha
   ).toBe("整理周报");
 });
 
-test("the way back from WakerFlow returns to its own tab of 能力与资源, not the first one", async () => {
+test("the way back from WakerFlow returns to its own tab of 能力, not the first one", async () => {
   serve();
   const { view } = draw("/wakerflows");
-  const back = await view.findByText("能力与资源");
+  const back = await view.findByText("能力");
   expect(back.closest("a")?.getAttribute("href")).toBe(
-    "/resources?tab=wakerflows",
+    "/capabilities/wakerflows",
   );
 });

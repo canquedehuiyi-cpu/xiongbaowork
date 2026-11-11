@@ -1,167 +1,115 @@
 import {
   type Icon,
   IconArrowRight,
+  IconCpu,
   IconFolder,
   IconGitBranch,
-  IconLink,
   IconNotebook,
   IconPuzzle,
   IconSparkles,
 } from "@tabler/icons-react";
-import { type KeyboardEvent, useRef } from "react";
+import { Link, useMatchRoute } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { CARD_FACE, ResourceSymbol, SectionHead } from "./resource-kit";
 
 /**
- * The entries of 能力与资源, in the reference product's order, then this fork's own entries.
+ * 能力的页签（M5b：上游的 `/capabilities/*` 结构，熊宝的「资源入口」画法）。
  *
- * The first six are QoderWake's (插件 · 技能 · 连接器 · 知识库 · WakerFlow · 公开项目), each drawn as
- * an entry card with a line saying what it is for; the three after them are what this deployment has
- * and the reference does not: the model library, the components employees answer with, and the
- * synced sources and memory.
+ * 每个页签是自己的地址（`capabilities.<tab>.tsx`），所以页签是链接，不是 `role="tab"`：刷新、后退、
+ * 新标签页打开、分享链接都落在同一页签上。前六个画成「资源入口」的六格面板，各带一句它是做什么的；后三个是
+ * 标题行右侧的小链接。连接器搬去了「连接」页（`/connections`），不在这里。
  */
-export const RESOURCE_TABS = [
+export const CAPABILITY_TABS = [
   {
-    value: "plugins",
+    to: "/capabilities/plugins",
     label: "插件",
     description: "探索与扩展员工能力",
     icon: IconPuzzle,
   },
   {
-    value: "skills",
+    to: "/capabilities/skills",
     label: "技能",
     description: "沉淀可复用的做事方法",
     icon: IconSparkles,
   },
   {
-    value: "connectors",
-    label: "连接器",
-    description: "接入员工要用的外部系统",
-    icon: IconLink,
-  },
-  {
-    value: "knowledge",
+    to: "/capabilities/knowledge",
     label: "知识库",
     description: "为员工准备可查阅的资料",
     icon: IconNotebook,
   },
   {
-    value: "wakerflows",
+    to: "/capabilities/wakerflows",
     label: "WakerFlow",
     description: "把多步工作编排成流程",
     icon: IconGitBranch,
   },
   {
-    value: "projects",
+    to: "/capabilities/projects",
     label: "公开项目",
     description: "员工可在设备上共用的项目",
     icon: IconFolder,
   },
+  {
+    to: "/capabilities/models",
+    label: "模型库",
+    description: "员工用的模型与平台体验模型",
+    icon: IconCpu,
+  },
 ] as const satisfies readonly {
-  value: string;
+  to: string;
   label: string;
   description: string;
   icon: Icon;
 }[];
 
-export const OWN_RESOURCE_TABS = [
-  { value: "models", label: "模型库" },
-  { value: "components", label: "组件" },
-  { value: "sources", label: "信息源与记忆" },
-] as const;
+export const MORE_CAPABILITY_TABS = [
+  { to: "/capabilities/components", label: "组件" },
+  { to: "/capabilities/memory", label: "记忆与信息源" },
+  { to: "/capabilities/roles", label: "角色模板" },
+] as const satisfies readonly { to: string; label: string }[];
 
-export type ResourceTab =
-  | (typeof RESOURCE_TABS)[number]["value"]
-  | (typeof OWN_RESOURCE_TABS)[number]["value"];
+export type CapabilityTab =
+  | (typeof CAPABILITY_TABS)[number]
+  | (typeof MORE_CAPABILITY_TABS)[number];
 
-const ALL: readonly { value: ResourceTab; label: string }[] = [
-  ...RESOURCE_TABS,
-  ...OWN_RESOURCE_TABS,
+export const ALL_CAPABILITY_TABS: readonly CapabilityTab[] = [
+  ...CAPABILITY_TABS,
+  ...MORE_CAPABILITY_TABS,
 ];
 
-export function isResourceTab(value: unknown): value is ResourceTab {
-  return ALL.some((tab) => tab.value === value);
+/**
+ * 当前地址落在哪个页签上。模糊匹配，所以 `/capabilities/skills?edit=x` 这类页签下面的状态仍点亮它；
+ * 不在任何页签上时是 undefined。
+ */
+export function useCurrentCapabilityTab(): CapabilityTab | undefined {
+  const matchRoute = useMatchRoute();
+  return ALL_CAPABILITY_TABS.find((tab) =>
+    matchRoute({ to: tab.to, fuzzy: true }),
+  );
 }
 
-export const resourceTabId = (value: ResourceTab) => `resources-tab-${value}`;
-export const resourcePanelId = (value: ResourceTab) =>
-  `resources-panel-${value}`;
-const descriptionId = (value: ResourceTab) => `resources-tab-${value}-desc`;
-
-const HEADING_ID = "resources-entry-heading";
+const HEADING_ID = "capabilities-entry-heading";
+const tabSlug = (to: string) => to.split("/").pop();
+const labelId = (to: string) => `capabilities-tab-${tabSlug(to)}-label`;
+const descriptionId = (to: string) => `capabilities-tab-${tabSlug(to)}-desc`;
 
 /**
- * 「资源入口」 (docs/design/ios-studio, 05-能力与资源.png): the six entries as ONE continuous panel
- * split into six cells by hairlines — each a 33px icon plate top left, its name in 12px bold under
- * it, and an arrow bottom right. The selected cell is marked by a 2px red line along its bottom
- * edge, a red glyph and a slightly lighter ground; at 790px and under the panel folds to three
- * columns over two rows. This fork's own three entries are the small links on the right of the
- * section's title line (「模型库 · 组件 · 信息源与记忆」), the selected one underlined.
+ * 「资源入口」(docs/design/ios-studio, 05-能力与资源.png)：六个入口是一整块面板，用细线分成六格——左上 33px
+ * 图标底板，下面 13px 粗体名字，右下一个箭头。当前格底边一道 2px 红线、红色图标、底色略亮；790px 及以下折成
+ * 三列两行。熊宝自己的三个入口是分区标题行右侧的小链接（「组件 · 记忆与信息源 · 角色模板」），当前那个加下划线。
  *
- * Both are ONE tablist with `SegmentedTabs`' keyboard model — one stop in the tab order,
- * Left/Right/Home/End across all nine — drawn here rather than through it because a cell is not a
- * text tab and `components/layout` is shared by every page. The links sit in the tablist and are
- * placed on the title's line, so the heading stays outside it (a tablist owns tabs and nothing
- * else). The selected cell's line of description is its `aria-describedby` (read, not drawn), so a
- * tab's name stays the bare label; the arrows are decoration (`aria-hidden`).
+ * 全部是导航链接（`<nav>`），当前页签带 `aria-current="page"`；格子的名字由它的名字那一行给
+ * （`aria-labelledby`），当前格的那句说明是它的 `aria-describedby`（读出来，不画出来），所以链接的名字就是
+ * 页签名本身；箭头是装饰（`aria-hidden`）。
  */
-export function ResourceTabs({
-  value,
-  onValueChange,
-}: {
-  value: ResourceTab;
-  /** `keyboard` is true for arrow/Home/End moves, which should replace history rather than push. */
-  onValueChange: (value: ResourceTab, change: { keyboard: boolean }) => void;
-}) {
-  const refs = useRef(new Map<ResourceTab, HTMLButtonElement>());
-
-  const move = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const last = ALL.length - 1;
-    const next =
-      event.key === "ArrowRight"
-        ? index === last
-          ? 0
-          : index + 1
-        : event.key === "ArrowLeft"
-          ? index === 0
-            ? last
-            : index - 1
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? last
-              : null;
-    if (next === null) return;
-    event.preventDefault();
-    const tab = ALL[next];
-    if (!tab) return;
-    onValueChange(tab.value, { keyboard: true });
-    refs.current.get(tab.value)?.focus();
-  };
-
-  const tabProps = (tab: ResourceTab, index: number) => {
-    const selected = tab === value;
-    return {
-      "aria-controls": resourcePanelId(tab),
-      "aria-selected": selected,
-      id: resourceTabId(tab),
-      onClick: () => onValueChange(tab, { keyboard: false }),
-      onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) =>
-        move(event, index),
-      ref: (node: HTMLButtonElement | null) => {
-        if (node) refs.current.set(tab, node);
-        else refs.current.delete(tab);
-      },
-      role: "tab",
-      tabIndex: selected ? 0 : -1,
-      type: "button",
-    } as const;
-  };
+export function CapabilityTabs() {
+  const current = useCurrentCapabilityTab();
 
   return (
     <section aria-labelledby={HEADING_ID} className="relative mt-[5px]">
       <SectionHead id={HEADING_ID} title="资源入口" />
-      <div aria-label="能力与资源" role="tablist">
+      <nav aria-label="能力">
         <div
           className={cn(
             CARD_FACE,
@@ -169,18 +117,14 @@ export function ResourceTabs({
           )}
           data-slot="resource-entry-cards"
         >
-          {RESOURCE_TABS.map((tab, index) => {
-            const selected = tab.value === value;
+          {CAPABILITY_TABS.map((tab, index) => {
+            const selected = tab === current;
             const Glyph = tab.icon;
-            const labelId = `${resourceTabId(tab.value)}-label`;
             return (
-              <button
-                key={tab.value}
-                {...tabProps(tab.value, index)}
-                aria-describedby={
-                  selected ? descriptionId(tab.value) : undefined
-                }
-                aria-labelledby={labelId}
+              <Link
+                aria-current={selected ? "page" : undefined}
+                aria-describedby={selected ? descriptionId(tab.to) : undefined}
+                aria-labelledby={labelId(tab.to)}
                 className={cn(
                   "relative flex min-h-[86px] min-w-0 flex-col items-start px-[11px] pt-[9px] pb-[11px] text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-inset motion-reduce:transition-none",
                   // Hairlines between cells: one row of six, or three over three at 790px and under.
@@ -194,6 +138,8 @@ export function ResourceTabs({
                     : "hover:bg-foreground/[0.02]",
                 )}
                 data-state={selected ? "active" : "idle"}
+                key={tab.to}
+                to={tab.to}
               >
                 <ResourceSymbol active={selected}>
                   <Glyph stroke={1.6} />
@@ -201,7 +147,7 @@ export function ResourceTabs({
                 <span
                   className="mt-[6px] max-w-full truncate pr-[14px] font-bold text-[13px] text-foreground leading-[18px]"
                   data-slot="entry-label"
-                  id={labelId}
+                  id={labelId(tab.to)}
                 >
                   {tab.label}
                 </span>
@@ -209,7 +155,7 @@ export function ResourceTabs({
                   <span
                     className="sr-only"
                     data-slot="entry-description"
-                    id={descriptionId(tab.value)}
+                    id={descriptionId(tab.to)}
                   >
                     {tab.description}
                   </span>
@@ -224,7 +170,7 @@ export function ResourceTabs({
                   data-state={selected ? "active" : "idle"}
                   stroke={1.8}
                 />
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -233,34 +179,97 @@ export function ResourceTabs({
           className="absolute top-0 right-0 flex h-[26px] max-w-[calc(100%-90px)] items-center justify-end gap-x-[2px] overflow-hidden text-[12px]"
           data-slot="resource-more-tabs"
         >
-          {OWN_RESOURCE_TABS.map((tab, index) => {
-            const selected = tab.value === value;
+          {MORE_CAPABILITY_TABS.map((tab, index) => {
+            const selected = tab === current;
             return (
               <span
                 className="flex min-w-0 items-center gap-x-[2px]"
-                key={tab.value}
+                key={tab.to}
               >
                 {index > 0 ? (
                   <span aria-hidden="true" className="text-faint">
                     ·
                   </span>
                 ) : null}
-                <button
-                  {...tabProps(tab.value, RESOURCE_TABS.length + index)}
+                <Link
+                  aria-current={selected ? "page" : undefined}
                   className={cn(
                     "inline-flex h-[24px] items-center whitespace-nowrap rounded-[7px] px-[4px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 motion-reduce:transition-none",
                     selected
                       ? "font-semibold text-foreground underline decoration-2 decoration-signal underline-offset-[6px]"
                       : "text-muted-foreground hover:text-foreground",
                   )}
+                  to={tab.to}
                 >
                   {tab.label}
-                </button>
+                </Link>
               </span>
             );
           })}
         </div>
-      </div>
+      </nav>
     </section>
   );
+}
+
+/*
+ * ── 旧地址 `/resources?tab=` ──────────────────────────────────────────────────────────────────
+ *
+ * 能力与资源原来是一页九个页签，选中的是 `?tab=`。地址保留成重定向（`routes/_authed/_app/resources.tsx`，
+ * 去向见 `lib/agents/legacy-routes.ts` 的 `legacyResourcesTarget`），这里只留它的地址参数校验：旧链接、
+ * 书签和对话历史里的 `/resources?tab=…` 照样能解析，每个页签自己的参数照带。
+ */
+const LEGACY_RESOURCE_TABS = [
+  "plugins",
+  "skills",
+  "connectors",
+  "knowledge",
+  "wakerflows",
+  "projects",
+  "models",
+  "components",
+  "sources",
+] as const;
+
+export type ResourceTab = (typeof LEGACY_RESOURCE_TABS)[number];
+
+export function isResourceTab(value: unknown): value is ResourceTab {
+  return LEGACY_RESOURCE_TABS.some((tab) => tab === value);
+}
+
+export type ResourcesSearch = {
+  tab?: ResourceTab;
+  view?: "market" | "mine";
+  category?: string;
+  page?: number;
+  q?: string;
+  /** 技能: the authoring panel is open. */
+  new?: true;
+  /** 技能: the slug being edited. */
+  edit?: string;
+};
+
+export function resourcesSearch(
+  search: Record<string, unknown>,
+): ResourcesSearch {
+  const page = Number(search.page);
+  // A numeric slug arrives as a number: the default search parser reads `?edit=42` as JSON.
+  const edit =
+    typeof search.edit === "number" ? String(search.edit) : search.edit;
+  const q = typeof search.q === "number" ? String(search.q) : search.q;
+  return {
+    ...(isResourceTab(search.tab) ? { tab: search.tab } : {}),
+    ...(search.view === "market" || search.view === "mine"
+      ? { view: search.view }
+      : {}),
+    ...(typeof search.category === "string" && search.category
+      ? { category: search.category }
+      : {}),
+    ...(Number.isInteger(page) && page > 1 ? { page } : {}),
+    ...(typeof q === "string" && q ? { q } : {}),
+    ...(search.new === true || search.new === "true"
+      ? { new: true as const }
+      : {}),
+    ...(typeof edit === "string" && edit ? { edit } : {}),
+  };
 }

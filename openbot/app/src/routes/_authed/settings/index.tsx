@@ -6,10 +6,11 @@ import {
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
+import { AiModelSection } from "@/components/settings/ai-connection";
 import { MessageListPreference } from "@/components/settings/message-list-preference";
-import { MyDevices } from "@/components/settings/my-devices";
 import { NameRow } from "@/components/settings/profile";
 import { StandingInstructionsRow } from "@/components/settings/standing-instructions";
+import { UsageDataSection } from "@/components/settings/usage-data";
 import { useTheme } from "@/components/theme-provider";
 import {
   Item,
@@ -56,6 +57,10 @@ function RouteComponent() {
           <StandingInstructionsRow />
         </PageRows>
       </PageSection>
+      {/* 只在熊宝桌面端出现：AI 连接由桌面端持有，并在它自己的窗口里修改。 */}
+      <AiModelSection />
+      {/* 只在熊宝桌面端出现：使用数据由桌面端发送，这个选择也由它保存。 */}
+      <UsageDataSection />
       <PageSection title="外观">
         <PageRows>
           <Item size="sm">
@@ -79,12 +84,7 @@ function RouteComponent() {
         </PageRows>
         <MessageListPreference />
       </PageSection>
-      {/*
-       * The one section here that is not about this account's own settings. A machine is paired once
-       * and then runs unattended, so it belongs with the other things a person configures and then
-       * leaves alone — and pairing needs the person signed in, which is what this screen already is.
-       */}
-      <MyDevices />
+      {/* 我的设备（M5b）搬到了设置里自己的分区 /settings/devices。 */}
       {/*
        * Drawn from the same registry the listeners match against, so this list is what the keys
        * actually do rather than what somebody remembered they did. Read-only on purpose: these

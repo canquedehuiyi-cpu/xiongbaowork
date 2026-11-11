@@ -291,7 +291,7 @@ function TabLink({
     className,
   };
   return tab === "apps" ? (
-    <Link {...shared} to="/settings/connected-accounts">
+    <Link {...shared} to="/connections">
       {children}
     </Link>
   ) : (

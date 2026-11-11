@@ -405,7 +405,7 @@ function GeneralSection({
         <ItemActions>
           <Button
             render={(props) => (
-              <Link {...props} params={{ agentId }} to="/assemble/$agentId" />
+              <Link {...props} params={{ agentId }} to="/bots/$agentId/setup" />
             )}
             size="sm"
           >
@@ -1302,7 +1302,7 @@ function ManageSection({
                 if (!profile.hidden)
                   await navigate({
                     search: wakersReturnSearch(),
-                    to: "/wakers",
+                    to: "/bots",
                   });
               }}
               size="sm"
@@ -1331,9 +1331,10 @@ function ManageSection({
               disabled={duplicateAgent.isPending}
               onClick={async () => {
                 const copy = await duplicateAgent.mutateAsync(agentId);
+                // 打开副本自己的页面（M5b 起员工详情在 `/bots/$agentId`）。
                 await navigate({
-                  search: { ...wakersReturnSearch(), agent: copy.id },
-                  to: "/wakers",
+                  params: { agentId: copy.id },
+                  to: "/bots/$agentId",
                 });
               }}
               size="sm"
@@ -1400,7 +1401,7 @@ function ManageSection({
               disabled={deleteAgent.isPending}
               onClick={async () => {
                 await deleteAgent.mutateAsync(agentId);
-                await navigate({ search: wakersReturnSearch(), to: "/wakers" });
+                await navigate({ search: wakersReturnSearch(), to: "/bots" });
               }}
               size="sm"
               variant="destructive"

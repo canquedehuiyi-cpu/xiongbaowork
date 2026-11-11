@@ -21,7 +21,7 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { AgentRolePanel } from "@/components/roles/role-editor";
-import { RoleTemplatesScreen } from "@/routes/_authed/_app/role-templates";
+import { RoleTemplatesScreen } from "@/components/roles/role-templates-page";
 import {
   type RoleProfile,
   roleProfileToMarkdown,

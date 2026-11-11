@@ -4,7 +4,9 @@
  *
  * Each sentence is what server/src/approvals/policy.ts does:
  * - Deleting, sending, sharing and posting in an app or on a website are safety asks, decided before
- *   any rule or the switch is read, so they ask with the switch off.
+ *   any rule or the switch is read, so they ask with the switch off, and only Allow once is offered
+ *   (this deployment's floor, #398; upstream #1394 opens them to "for a conversation" and "always",
+ *   and that is not taken here).
  * - Payments and credential or security-setting changes are hand-offs, not asks: the person does
  *   them, the Bot never does.
  * - The switch asks before every change that isn't a read, a Bot's own workspace included, unless a

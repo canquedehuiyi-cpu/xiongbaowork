@@ -21,6 +21,13 @@ export type AppAccessRequest = {
   status: "pending" | "approved" | "dismissed" | "cancelled";
   note: string | null;
   createdAt: string;
+  /*
+   * X3（X2 评审 M3）补的三项，服务端给出时才有：员工是不是已发布的 Team Bot、申请人和员工的关系、
+   * 以及 Team Bot 时给管理员看的范围说明（批准写在员工身上，每个能用它的人都会拿到）。
+   */
+  appliesTo?: "team_bot" | "bot";
+  requesterRole?: "owner" | "teammate" | "other";
+  scopeNote?: string | null;
 };
 
 export const accessRequestKeys = {

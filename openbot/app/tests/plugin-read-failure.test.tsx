@@ -20,7 +20,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import { type PluginsPage, pluginKeys } from "@/lib/plugins/queries";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { Route as AdminToolRoute } from "@/routes/_authed/admin/plugins/$key_.tools.$tool";
-import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
+import { Route as ConnectedAccountRoute } from "@/routes/_authed/_app/connections.$key";
 
 /**
  * A connector's own pages, when `GET /api/plugins` fails.
@@ -165,7 +165,7 @@ function renderAdmin(client: QueryClient, at: string) {
   );
 }
 
-/** `/settings/connected-accounts/$key`, at the id its `useParams` reads. */
+/** `/connections/$key`（M5b 从设置搬来）, at the id its `useParams` reads. */
 function renderAccount(client: QueryClient) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
@@ -174,18 +174,18 @@ function renderAccount(client: QueryClient) {
     component: Outlet,
   });
   const settingsRoute = createRoute({
-    path: "/settings",
+    id: "/_app",
     getParentRoute: () => authedRoute,
     component: Outlet,
   });
   const indexRoute = createRoute({
-    path: "/connected-accounts/",
+    path: "/connections/",
     getParentRoute: () => settingsRoute,
     component: () => null,
   });
   const account = (ConnectedAccountRoute as unknown as Updatable).update({
-    id: "/connected-accounts/$key",
-    path: "/connected-accounts/$key",
+    id: "/connections/$key",
+    path: "/connections/$key",
     getParentRoute: () => settingsRoute,
   });
   const tree = rootRoute.addChildren([
@@ -196,7 +196,7 @@ function renderAccount(client: QueryClient) {
   const router = createRouter({
     routeTree: tree,
     history: createMemoryHistory({
-      initialEntries: [`/settings/connected-accounts/${APP_KEY}`],
+      initialEntries: [`/connections/${APP_KEY}`],
     }),
   });
   return render(
@@ -262,5 +262,5 @@ test("a connected account's page says the plugin list failed, not that it is not
   await waitForFailedRead(client);
 
   expect(await view.findByRole("alert")).toBeTruthy();
-  expect(view.queryByText("这不是需要你自己连接的服务。")).toBeNull();
+  expect(view.queryByText("这个应用不需要你自己连接。")).toBeNull();
 });

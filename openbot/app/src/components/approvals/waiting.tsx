@@ -46,6 +46,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
+  type ApprovalDecision,
   type ApprovalInboxData,
   answerPersonQuestionMutationOptions,
   approvalInboxOptions,
@@ -229,19 +230,34 @@ function RequestRow({
             允许一次
           </Button>
           {offersStandingRule(request.action) ? (
-            <Button
-              disabled={decision.isPending}
-              onClick={() =>
-                decision.mutate({
-                  id: request.id,
-                  choice: "allow_always",
-                })
-              }
-              size="sm"
-              variant="outline"
-            >
-              在这里总是允许
-            </Button>
+            <>
+              <Button
+                disabled={decision.isPending}
+                onClick={() =>
+                  decision.mutate({
+                    id: request.id,
+                    choice: "allow_conversation",
+                  })
+                }
+                size="sm"
+                variant="outline"
+              >
+                在这段对话里都允许
+              </Button>
+              <Button
+                disabled={decision.isPending}
+                onClick={() =>
+                  decision.mutate({
+                    id: request.id,
+                    choice: "allow_always",
+                  })
+                }
+                size="sm"
+                variant="outline"
+              >
+                在这里总是允许
+              </Button>
+            </>
           ) : null}
           <Button
             disabled={decision.isPending}
@@ -466,14 +482,15 @@ function AnswerDialog({
 
 /**
  * An action on the board: what it wants to do and where, with Deny and Allow on the right, and
- * Always allow here in the menu. Where it acts and what it would send are always on screen, whole:
+ * 在这段对话里都允许 and 在这里总是允许 in the menu (only where `offersStandingRule` says the server
+ * takes a standing answer: never on this deployment's once-only floors). Where it acts and what it would send are always on screen, whole:
  * nobody allows something they were not shown.
  */
 function RequestBoardRow({ request }: { request: WaitingRequest }) {
   const decision = useMutation(decideApprovalMutationOptions(queryClient));
   const words = approvalWords(request.action);
   const handOff = request.action.policy?.behaviour === "hand_off";
-  const decide = (choice: "allow_once" | "allow_always" | "deny" | "handled") =>
+  const decide = (choice: ApprovalDecision) =>
     decision.mutate({ id: request.id, choice });
   const action = words.action.charAt(0).toUpperCase() + words.action.slice(1);
   return (
@@ -528,6 +545,12 @@ function RequestBoardRow({ request }: { request: WaitingRequest }) {
                   <IconDots />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={decision.isPending}
+                    onClick={() => decide("allow_conversation")}
+                  >
+                    在这段对话里都允许
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={decision.isPending}
                     onClick={() => decide("allow_always")}

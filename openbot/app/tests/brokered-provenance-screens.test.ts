@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { connectsPerPerson as assembleConnectsPerPerson } from "@/components/bot-profile/assemble";
 import { connectsPerPerson as capabilityConnectsPerPerson } from "@/components/resources/capability-tabs";
 import { howItConnects } from "@/components/resources/plugins-tab";
 import { installedCards } from "@/lib/plugins/market";
 import type { PluginServer, PluginsPage } from "@/lib/plugins/queries";
-import { connectsPerPerson as assembleConnectsPerPerson } from "@/routes/_authed/_app/assemble.$agentId";
 
 /*
  * 选用 Arcade 时应用行的 `provenance` 是 "arcade"。插件页的卡片与详情、员工能力页、装配页原来只把

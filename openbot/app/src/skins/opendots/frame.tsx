@@ -165,7 +165,10 @@ function Rail({
   /** Whether the rail carries the Bots badge: at desktop width, where the rail is on screen. */
   showBadge: boolean;
 }) {
-  const navigation = useNavigationItems();
+  // OpenDots draws Routines itself, as its own screen just above, so not a second time from the list.
+  const navigation = useNavigationItems().filter(
+    (item) => item.id !== "routines",
+  );
   return (
     <nav
       aria-label="工作区导航"
@@ -207,9 +210,9 @@ function Rail({
           <IconClockHour3 />
         </Link>
       </RailTip>
-      {/* OpenBot's own destinations, from the one list every frame reads. */}
+      {/* OpenBot's own destinations, from the one list every frame reads; 「更多」's sit with them. */}
       {navigation
-        .filter((item) => item.section === "primary")
+        .filter((item) => item.section !== "account")
         .map((item) => (
           <RailDestination item={item} key={item.id} showBadge={showBadge} />
         ))}

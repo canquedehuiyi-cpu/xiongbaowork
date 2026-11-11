@@ -2,60 +2,50 @@ import { useQuery } from "@tanstack/react-query";
 import { linkOptions } from "@tanstack/react-router";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 
-export type BrokerDirectory = "composio";
+export type BrokerDirectory = "composio" | "arcade";
 
 /**
  * Where the pages that set up what Bots can reach live: under Admin in the team edition. In the
- * personal one, where there is no Admin, each points at this fork's own page for the same thing:
- * apps under 已连接的账号 in Settings, skills on the 技能 tab of 能力与资源. A page this fork has no
- * personal counterpart for (credentials, computers, the audit trail) goes to Settings. Both editions
- * render the same page components, so every link between those pages goes through here rather than
- * naming `/admin`.
+ * personal one, where there is no Admin, apps are part of 连接 (Connections) and the rest is under
+ * 设置（M5b 起与上游一致）。Both render the same page components, so every link between those pages
+ * goes through here rather than naming `/admin`.
  */
 export function managePaths(edition: "team" | "personal") {
   if (edition === "personal") {
     return {
       /** What the list of apps is called where a back button names it. */
-      pluginsLabel: "已连接的账号",
-      plugins: () => linkOptions({ to: "/settings/connected-accounts" }),
+      pluginsLabel: "全部连接",
+      plugins: () => linkOptions({ to: "/connections" }),
       plugin: (key: string) =>
-        linkOptions({
-          to: "/settings/connected-accounts/$key",
-          params: { key },
-        }),
-      // The app's own page for both: there is no page for one tool or one Bot of a connected account.
+        linkOptions({ to: "/connections/$key", params: { key } }),
+      /*
+       * The app's own page for both: every Bot has every tool of a connected app here, so there is
+       * no page for one tool or one Bot. See `personal-defaults.ts` on the server.
+       */
       pluginTool: (key: string, _tool: string) =>
-        linkOptions({
-          to: "/settings/connected-accounts/$key",
-          params: { key },
-        }),
+        linkOptions({ to: "/connections/$key", params: { key } }),
       pluginBot: (key: string, _agentId: string) =>
-        linkOptions({
-          to: "/settings/connected-accounts/$key",
-          params: { key },
-        }),
-      brokerDirectory: (_directory: BrokerDirectory) =>
-        linkOptions({ to: "/settings/connected-accounts" }),
-      skills: () =>
-        linkOptions({ to: "/resources", search: { tab: "skills" } }),
-      newSkill: () =>
-        linkOptions({ to: "/resources", search: { tab: "skills", new: true } }),
+        linkOptions({ to: "/connections/$key", params: { key } }),
+      brokerDirectory: (directory: BrokerDirectory) =>
+        directory === "composio"
+          ? linkOptions({ to: "/connections/browse/composio" })
+          : linkOptions({ to: "/connections/browse/arcade" }),
+      skills: () => linkOptions({ to: "/settings/skills" }),
+      newSkill: () => linkOptions({ to: "/settings/skills/new" }),
       skill: (slug: string) =>
-        linkOptions({
-          to: "/resources",
-          search: { tab: "skills", edit: slug },
-        }),
+        linkOptions({ to: "/settings/skills/$slug", params: { slug } }),
+      // Under Settings, and linked from Connections beside the apps that use them.
       credentialsLabel: "密钥",
-      credentials: () => linkOptions({ to: "/settings" }),
-      newCredential: () => linkOptions({ to: "/settings" }),
-      computers: () => linkOptions({ to: "/settings" }),
+      credentials: () => linkOptions({ to: "/settings/credentials" }),
+      newCredential: () => linkOptions({ to: "/settings/credentials/new" }),
+      computers: () => linkOptions({ to: "/settings/computer" }),
       /*
        * What the trail is called, on its page and wherever another page sends a person to it:
        * 活动 where one person reads what their own Bots did, 审计 under Admin, where an admin reviews
        * everybody's Bots for policy.
        */
       auditLabel: "活动",
-      audit: () => linkOptions({ to: "/settings" }),
+      audit: () => linkOptions({ to: "/settings/activity" }),
       /** What a sentence calls the product itself: its name alone, "本部署" for an admin. */
       deploymentName: "熊宝数字员工",
       /** Which edition these paths are for, for the sentences that differ beyond a name. */
@@ -77,8 +67,10 @@ export function managePaths(edition: "team" | "personal") {
         to: "/admin/plugins/$key/bots/$agentId",
         params: { key, agentId },
       }),
-    brokerDirectory: (_directory: BrokerDirectory) =>
-      linkOptions({ to: "/admin/plugins/composio" }),
+    brokerDirectory: (directory: BrokerDirectory) =>
+      directory === "composio"
+        ? linkOptions({ to: "/admin/plugins/composio" })
+        : linkOptions({ to: "/admin/plugins/arcade" }),
     skills: () => linkOptions({ to: "/admin/skills" }),
     newSkill: () => linkOptions({ to: "/admin/skills/new" }),
     skill: (slug: string) =>
@@ -102,18 +94,37 @@ export function atStart(text: string): string {
 export type ManagePaths = ReturnType<typeof managePaths>;
 
 /**
- * Where an old Admin address goes in the personal edition: an app's page under 已连接的账号, skills on
- * the 技能 tab of 能力与资源, or Settings itself for a page the personal edition does not have.
+ * Where an app's address goes in the personal edition, given what followed `/plugins` in its old
+ * address: the same page under Connections, with the directories under `/connections/browse`.
+ */
+export function personalAppsAddress(rest: string): string {
+  const path = rest.replace(/^\/+|\/+$/g, "");
+  if (path === "composio" || path === "arcade")
+    return `/connections/browse/${path}`;
+  return path ? `/connections/${path}` : "/connections";
+}
+
+/** Each other Admin page the personal edition keeps, and where it is now. */
+const MOVED: readonly (readonly [admin: string, settings: string])[] = [
+  ["/admin/skills", "/settings/skills"],
+  ["/admin/credentials", "/settings/credentials"],
+  ["/admin/computers", "/settings/computer"],
+  ["/admin/audit", "/settings/activity"],
+];
+
+/**
+ * Where an old Admin address goes in the personal edition: an app's page under 连接, the same page
+ * under 设置 with whatever followed it (`/admin/credentials/new` keeps `/new`), or Settings itself
+ * for a page the personal edition does not have.
  */
 export function personalAdminRedirect(pathname: string): string {
-  if (pathname === "/admin/plugins" || pathname.startsWith("/admin/plugins/")) {
-    const key = pathname.slice("/admin/plugins/".length).split("/")[0];
-    return key && key !== "composio"
-      ? `/settings/connected-accounts/${key}`
-      : "/settings/connected-accounts";
+  if (pathname === "/admin/plugins" || pathname.startsWith("/admin/plugins/"))
+    return personalAppsAddress(pathname.slice("/admin/plugins".length));
+  for (const [admin, settings] of MOVED) {
+    if (pathname === admin || pathname.startsWith(`${admin}/`)) {
+      return `${settings}${pathname.slice(admin.length)}`.replace(/\/$/, "");
+    }
   }
-  if (pathname === "/admin/skills" || pathname.startsWith("/admin/skills/"))
-    return "/resources?tab=skills";
   return "/settings";
 }
 

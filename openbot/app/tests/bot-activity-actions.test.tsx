@@ -141,9 +141,13 @@ test("the trail opened for one Bot asks the server for that Bot's rows, and says
     },
   });
   expect(view.container.querySelector("tbody")?.textContent).toContain("a.txt");
+  /*
+   * M5b：管理端审计改用上游的 AuditPage（带提问框），只看某位员工画成「员工」筛选标签，
+   * 不再是单独的「只看」按钮；去掉标签就回到所有员工。
+   */
+  const chip = view.container.querySelector("[data-audit-chip=bot]");
+  expect(chip?.textContent).toContain("员工：Claude Agent SDK");
   expect(
-    view.getByRole("button", {
-      name: "显示所有员工，而不只是 Claude Agent SDK",
-    }).textContent,
-  ).toBe("只看 Claude Agent SDK");
+    view.getByRole("button", { name: "移除 员工：Claude Agent SDK" }),
+  ).toBeTruthy();
 });

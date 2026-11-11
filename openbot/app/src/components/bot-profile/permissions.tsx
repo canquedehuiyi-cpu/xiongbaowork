@@ -90,6 +90,7 @@ export function BotPermissions({ agentId }: { agentId: string }) {
   const busy = mode.isPending || security.isPending;
   return (
     <ProfileSection
+      className="mt-12"
       description={
         data
           ? data.ownedByAnother

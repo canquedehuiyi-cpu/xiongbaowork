@@ -24,8 +24,8 @@ import type {
 } from "@/lib/plugins/queries";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
 import { Route as AdminListRoute } from "@/routes/_authed/admin/plugins/index";
-import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
-import { Route as ConnectedAccountsRoute } from "@/routes/_authed/settings/connected-accounts/index";
+import { Route as ConnectedAccountRoute } from "@/routes/_authed/_app/connections.$key";
+import { Route as ConnectedAccountsRoute } from "@/routes/_authed/_app/connections.index";
 
 /**
  * A curated connector whose row id is not its catalogue key.
@@ -218,7 +218,10 @@ function renderAdmin(at: string) {
   return mount(router);
 }
 
-/** `/settings/connected-accounts/` and its `$key`, at the ids their hooks read. */
+/**
+ * `/connections/` and its `$key` under the `_app` layout, at the ids their hooks read（M5b：已连接的
+ * 账号从设置搬到「连接」，与上游一致）。
+ */
 function renderSettings(at: string) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
@@ -226,24 +229,24 @@ function renderSettings(at: string) {
     getParentRoute: () => rootRoute,
     component: Outlet,
   });
-  const settingsRoute = createRoute({
-    path: "/settings",
+  const appRoute = createRoute({
+    id: "/_app",
     getParentRoute: () => authedRoute,
     component: Outlet,
   });
   const list = (ConnectedAccountsRoute as unknown as Updatable).update({
-    id: "/connected-accounts/",
-    path: "/connected-accounts/",
-    getParentRoute: () => settingsRoute,
+    id: "/connections/",
+    path: "/connections/",
+    getParentRoute: () => appRoute,
   });
   const account = (ConnectedAccountRoute as unknown as Updatable).update({
-    id: "/connected-accounts/$key",
-    path: "/connected-accounts/$key",
-    getParentRoute: () => settingsRoute,
+    id: "/connections/$key",
+    path: "/connections/$key",
+    getParentRoute: () => appRoute,
   });
   const tree = rootRoute.addChildren([
     authedRoute.addChildren([
-      settingsRoute.addChildren([list as never, account as never]),
+      appRoute.addChildren([list as never, account as never]),
     ]),
   ]);
   const router = createRouter({
@@ -285,41 +288,43 @@ test("the admin page opened by row id still finds the catalogue entry", async ()
 });
 
 test("connected accounts lists the connector for a person to connect", async () => {
-  const view = renderSettings("/settings/connected-accounts/");
+  const view = renderSettings("/connections/");
 
-  const row = await view.findByText("百度网盘");
-  expect(row.closest("a")?.getAttribute("href")).toBe(
-    `/settings/connected-accounts/${KEY}`,
-  );
-  const unconnected = view.getByRole("region", { name: "未连接" });
-  expect(within(unconnected).getByText("百度网盘")).toBeTruthy();
+  const tile = await view.findByTestId(`account-${KEY}`);
+  expect(tile.closest("a")?.getAttribute("href")).toBe(`/connections/${KEY}`);
+  // Listed once among your accounts, and not yet connected: the tile says so beside its Connect.
+  // （M5b 起同一页下方还有「员工可用的连接器」一区，也会列出它；这里只数你的账号那一列。）
+  expect(
+    view
+      .getAllByText("百度网盘")
+      .filter((name) => name.closest('[data-testid^="account-"]')),
+  ).toHaveLength(1);
+  expect(within(tile).getByText("未连接")).toBeTruthy();
 });
 
 test("connected accounts reads the person's connection off the row id", async () => {
   connections = [connectionRow];
-  const view = renderSettings("/settings/connected-accounts/");
+  const view = renderSettings("/connections/");
 
-  const connected = await view.findByRole("region", { name: "已连接" });
-  expect(within(connected).getByText("百度网盘")).toBeTruthy();
-  expect(view.queryByRole("region", { name: "未连接" })).toBeNull();
+  const tile = await view.findByTestId(`account-${KEY}`);
+  expect(within(tile).getByText("已连接")).toBeTruthy();
+  expect(within(tile).queryByText("未连接")).toBeNull();
 });
 
 test("the connected-account page finds the enabled connector by catalogue key", async () => {
-  const view = renderSettings(`/settings/connected-accounts/${KEY}`);
+  const view = renderSettings(`/connections/${KEY}`);
 
   expect(
     await view.findByText(
-      "没有员工能以你的身份读取它。连接时会带你到服务商那边授权。",
+      "没有员工能以你的身份使用它。连接时会带你到 pan.baidu.com 那边授权。",
     ),
   ).toBeTruthy();
-  expect(
-    view.queryByText("管理员还没有启用这个连接器，所以暂时没有可以连接的。"),
-  ).toBeNull();
+  expect(view.queryByText("暂时还不能用。管理员要先打开它。")).toBeNull();
 });
 
 test("the connected-account page reads the person's connection off the row id", async () => {
   connections = [connectionRow];
-  const view = renderSettings(`/settings/connected-accounts/${KEY}`);
+  const view = renderSettings(`/connections/${KEY}`);
 
   expect(await view.findByText("basic netdisk")).toBeTruthy();
   expect(view.getByText("访问权限")).toBeTruthy();

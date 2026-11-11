@@ -273,6 +273,9 @@ describe("connecting an Arcade app binds the consent to the person who pressed C
     consented("flow-dana-1", DANA, authId);
     const response = await verify(EVE, "flow-dana-1");
     expect(reasonOf(response)).toBe("no-attempt");
+    expect(response.headers.get("location")).toBe(
+      `${APP_URL}/connections?authorized=no-attempt`,
+    );
     expect(await connectionsOf(EVE)).toEqual([]);
     expect(await connectionsOf(DANA)).toEqual([]);
   });
@@ -333,6 +336,8 @@ describe("connecting an Arcade app binds the consent to the person who pressed C
     expect(done.headers.get("location")).toContain(
       encodeURIComponent(app(GMAIL)),
     );
+    // 回到「连接」页（M5b 从 /settings/connected-accounts 搬过来）。
+    expect(done.headers.get("location")).toStartWith(`${APP_URL}/connections/`);
     expect(await connectionsOf(DANA)).toEqual([
       { toolkit: GMAIL, provider: "arcade" },
     ]);

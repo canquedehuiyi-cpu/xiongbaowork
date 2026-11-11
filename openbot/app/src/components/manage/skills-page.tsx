@@ -54,7 +54,7 @@ export function SkillsPage() {
       variant={size === "lg" ? "default" : "outline"}
     >
       <IconPlus />
-      New skill
+      新建技能
     </Button>
   );
 
@@ -63,27 +63,27 @@ export function SkillsPage() {
       action={newSkill("lg")}
       description={
         personal
-          ? "Write instructions your Bots follow when you pick a skill from the / menu. A skill only uses what a Bot can already do."
-          : "Write instructions a Bot follows when someone picks a skill from the / menu. A skill only uses what a Bot can already do, and you choose which Bots offer it."
+          ? "写下你从 / 菜单里选这个技能时员工照着做的说明。技能只会用到员工本来就能做的事。"
+          : "写下有人从 / 菜单里选这个技能时员工照着做的说明。技能只会用到员工本来就能做的事，由你决定哪些员工提供它。"
       }
-      title="Skills"
+      title="技能"
     >
       {/* One section, so no title: the page title already names it. */}
       <PageSection>
         {/* A read that failed says so; `isPending` goes false on it too, and it is not "none". */}
         {plugins.isPending ? null : !plugins.data ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
-            Couldn't load skills. Reload the page.
+            读不到技能。请刷新页面。
           </p>
         ) : skills.length === 0 ? (
           <PageEmpty
             action={newSkill("sm")}
             icon={IconFileText}
-            title="No skills yet"
+            title="还没有技能"
           >
             {personal
-              ? "Write one. Your Bots offer it as soon as you save."
-              : "Write one, then choose which Bots offer it."}
+              ? "写一个吧。保存后你的员工马上就能提供它。"
+              : "写一个，再选哪些员工提供它。"}
           </PageEmpty>
         ) : (
           <PageRows>

@@ -185,8 +185,8 @@ const routeTree = rootRoute.addChildren([
 ]);
 
 /**
- * A new conversation starts with nobody in To:, so each test picks its Bot. This deployment's To:
- * holds one Bot (a group starts from its own group pages), so `@` offers that one.
+ * A new conversation starts with nobody in To:, so each test picks its Bots. Two or more in To:
+ * make a group (M5b: 熊宝跟上游一样在这里多选开群聊), and `@` offers the ones picked.
  */
 function renderNewConversation(agents: AgentProfile[]) {
   const queryClient = new QueryClient({
@@ -225,12 +225,7 @@ async function addToTo(view: View, name: string) {
   fireEvent.click(
     await view.findByRole("option", { hidden: true, name: new RegExp(name) }),
   );
-  // The field shows the Bot it now holds.
-  await waitFor(() =>
-    expect(
-      (view.getByRole("combobox", { hidden: true }) as HTMLInputElement).value,
-    ).toBe(name),
-  );
+  await view.findByRole("button", { hidden: true, name: `移除 ${name}` });
 }
 
 /** Type `@` in the composer and read the names the menu offers. */
@@ -250,6 +245,112 @@ async function namesOfferedByAt(view: View): Promise<string[]> {
     (option) => option.textContent ?? "",
   );
 }
+
+test("a new conversation with its one Bot picked offers that Bot to @, and sends to it alone", async () => {
+  const view = renderNewConversation([CLAUDE]);
+  await addToTo(view, "Claude Agent SDK");
+
+  const offered = await namesOfferedByAt(view);
+  expect(offered).toEqual([expect.stringContaining("Claude Agent SDK")]);
+
+  const user = userEvent.setup({ document });
+  await user.click(
+    await view.findByRole("option", {
+      hidden: true,
+      name: /Claude Agent SDK/,
+    }),
+  );
+  await user.keyboard("hello{Enter}");
+
+  await waitFor(() =>
+    expect(sent).toContainEqual({
+      method: "POST",
+      path: "/api/channels",
+      body: { agentIds: [CLAUDE.id] },
+    }),
+  );
+  expect(sent.some((write) => write.path.startsWith("/api/groups"))).toBe(
+    false,
+  );
+});
+
+test("@ in a new conversation with two Bots in To: offers both, and the first message goes to the one picked", async () => {
+  const view = renderNewConversation([CLAUDE, ASSISTANT]);
+  await addToTo(view, "Personal Assistant");
+  await addToTo(view, "Claude Agent SDK");
+
+  const offered = await namesOfferedByAt(view);
+  expect(offered).toEqual([
+    expect.stringContaining("Personal Assistant"),
+    expect.stringContaining("Claude Agent SDK"),
+  ]);
+  expect(offered.join()).not.toContain("这个频道里还没有员工");
+
+  const user = userEvent.setup({ document });
+  await user.keyboard("Claude");
+  await user.click(
+    await view.findByRole("option", {
+      hidden: true,
+      name: /Claude Agent SDK/,
+    }),
+  );
+  await user.keyboard("hello{Enter}");
+
+  // The group is made with both Bots, and its first message is addressed to the one picked.
+  await waitFor(() => expect(sent).toHaveLength(2));
+  expect(sent[0]).toEqual({
+    method: "POST",
+    path: "/api/groups",
+    body: { agentIds: [ASSISTANT.id, CLAUDE.id] },
+  });
+  expect(sent[1]?.path).toBe("/api/groups/group-1");
+  expect(sent[1]?.body).toMatchObject({
+    agentId: CLAUDE.id,
+    text: "@Claude Agent SDK hello",
+  });
+  await waitFor(() =>
+    expect(view.router.state.location.pathname).toBe("/group/group-1"),
+  );
+});
+
+test("a first message to a new group with no @ still goes to every Bot", async () => {
+  const view = renderNewConversation([CLAUDE, ASSISTANT]);
+  await addToTo(view, "Personal Assistant");
+  await addToTo(view, "Claude Agent SDK");
+  const editor = await view.findByRole("textbox", {
+    hidden: true,
+    name: "消息",
+  });
+  const user = userEvent.setup({ document });
+  await user.click(editor);
+  await user.keyboard("hello both{Enter}");
+
+  await waitFor(() => expect(sent).toHaveLength(2));
+  expect(sent[1]?.body).toMatchObject({ agentId: null, text: "hello both" });
+});
+
+test("a Bot taken out of To: is no longer offered by @", async () => {
+  const view = renderNewConversation([CLAUDE, ASSISTANT]);
+  await addToTo(view, "Personal Assistant");
+  await addToTo(view, "Claude Agent SDK");
+  fireEvent.click(
+    view.getByRole("button", {
+      hidden: true,
+      name: "移除 Personal Assistant",
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      view.queryByRole("button", {
+        hidden: true,
+        name: "移除 Personal Assistant",
+      }),
+    ).toBeNull(),
+  );
+
+  const offered = await namesOfferedByAt(view);
+  expect(offered).toEqual([expect.stringContaining("Claude Agent SDK")]);
+});
 
 test("a new conversation with its one Bot picked offers that Bot to @, and sends to it alone", async () => {
   const view = renderNewConversation([CLAUDE]);

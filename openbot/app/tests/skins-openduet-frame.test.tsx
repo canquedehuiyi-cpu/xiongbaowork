@@ -351,9 +351,14 @@ describe("the frame reaches every OpenBot surface", () => {
       "/group/g-1",
       "/channel/new",
       "/s/tasks",
-      "/wakers",
-      "/resources",
-      "/settings/connected-accounts",
+      "/bots",
+      "/tasks",
+      "/autonomous",
+      "/reachability",
+      "/capabilities",
+      "/connections",
+      "/pipelines",
+      "/settings/plans",
       "/admin",
       "/settings",
     ])
@@ -377,9 +382,14 @@ describe("the frame reaches every OpenBot surface", () => {
         link.textContent?.replace(/\d+$/, "").trim(),
       );
       const settings = within(menu).getByRole("link", { name: "设置" });
-      expect([...drawn, settings.textContent?.trim()]).toEqual(
-        navigationFor(role).map((item) => item.label),
-      );
+      // 设置 is drawn on its own link after the group, so it is compared last; 熊宝's list puts it
+      // before 管理 for the account menu.
+      expect([...drawn, settings.textContent?.trim()]).toEqual([
+        ...navigationFor(role)
+          .filter((item) => item.id !== "settings")
+          .map((item) => item.label),
+        "设置",
+      ]);
       view.unmount();
     }
   });

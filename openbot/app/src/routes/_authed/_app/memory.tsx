@@ -1,20 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { LEGACY_PAGES } from "@/lib/agents/legacy-routes";
 
 /**
- * `/memory` was archived into 能力与资源 › 信息源与记忆: the screen that was here — the connected
- * apps' sources, what employees remember, and the background research with its suggestions — is
- * that tab now (`components/memory/memory-screen.tsx`).
- *
- * The path stays so bookmarks and older links keep working. It took no search parameters, so there
- * is nothing to carry over. Replace, not push, so Back does not land here again only to be sent
- * forward.
+ * `/memory` 早先并进了能力与资源 › 信息源与记忆，现在是能力 › 记忆（M5b，与上游一致）。没有地址参数可带。
  */
 export const Route = createFileRoute("/_authed/_app/memory")({
   beforeLoad: () => {
-    throw redirect({
-      to: "/resources",
-      search: { tab: "sources" },
-      replace: true,
-    });
+    throw redirect({ to: LEGACY_PAGES["/memory"], replace: true });
   },
 });

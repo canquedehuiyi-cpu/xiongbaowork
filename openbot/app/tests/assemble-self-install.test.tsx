@@ -12,12 +12,15 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
+import { deploymentKeys } from "@/lib/deployment/queries";
 import { modelKeys } from "@/lib/models/queries";
 import { personaKeys } from "@/lib/personas/queries";
 import type { InstallListing, PluginsPage } from "@/lib/plugins/queries";
 import { routineKeys } from "@/lib/routines/queries";
-import { Route as AssembleRoute } from "@/routes/_authed/_app/assemble.$agentId";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+// 装配搬进了员工的「设置」分页（M5b），`/assemble/$agentId` 重定向到那里。
+import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as AssembleRoute } from "@/routes/_authed/_app/bots.$agentId.setup";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -102,6 +105,7 @@ function draw({
   refuse = false,
   teamScoped = false,
   hold = false,
+  personal = false,
 }: {
   profile?: AgentProfile;
   listings?: InstallListing[];
@@ -113,6 +117,8 @@ function draw({
   teamScoped?: boolean;
   /** Keep every grant write open until `release()`, to see what is in flight. */
   hold?: boolean;
+  /** 个人版：服务端对逐位员工收回应用工具答 403（X4），所以这里只看不改。 */
+  personal?: boolean;
 } = {}) {
   const grants = new Set(held);
   const installedByMe = new Set(mine);
@@ -191,6 +197,10 @@ function draw({
   });
   queryClient.setQueryData(agentKeys.detail(agentId), profile);
   queryClient.setQueryData(authKeys.currentUser(), { id: "owner-1" });
+  if (personal)
+    queryClient.setQueryData(deploymentKeys.capabilities(), {
+      edition: "personal",
+    } as never);
   queryClient.setQueryData(modelKeys.library(), { models: [], templates: [] });
   queryClient.setQueryData(personaKeys.list(), []);
   queryClient.setQueryData(routineKeys.list(), {
@@ -247,17 +257,23 @@ function draw({
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: [`/assemble/${agentId}`] }),
+    history: createMemoryHistory({
+      initialEntries: [`/bots/${agentId}/setup`],
+    }),
     routeTree: root.addChildren([
       // `as never`, as in `assemble-install.test.tsx`: the file routes are registered in the
       // generated tree under their real parents, and this only re-addresses them for one render.
-      WakersRoute.update({
+      BotsRoute.update({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots",
+      } as never),
+      BotProfileRoute.update({
+        getParentRoute: () => root,
+        path: "/bots/$agentId",
       } as never),
       AssembleRoute.update({
         getParentRoute: () => root,
-        path: "/assemble/$agentId",
+        path: "/bots/$agentId/setup",
       } as never),
     ]),
   });
@@ -348,7 +364,9 @@ test("a listed app's tools are boxes, with a hint to connect the person's own ac
     view.getByRole("checkbox", { name: TOOL_BOX }).getAttribute("aria-checked"),
   ).toBe("false");
   expect(view.getByText(/这个应用以使用者本人的账号访问/)).toBeTruthy();
-  expect(view.getByRole("link", { name: "已连接的账号" })).toBeTruthy();
+  expect(view.getByRole("link", { name: "连接" }).getAttribute("href")).toBe(
+    "/connections",
+  );
 
   await user.click(view.getByRole("checkbox", { name: TOOL_BOX }));
   await waitFor(() =>
@@ -395,6 +413,25 @@ test("a coworker the viewer cannot manage gets boxes that cannot be ticked", asy
   expect(toolBox.hasAttribute("data-disabled")).toBe(true);
 
   await user.click(skillBox);
+  await user.click(toolBox);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(grantCalls()).toEqual([]);
+});
+
+test("个人版里应用工具的勾选框只读，并说明去「连接」里关掉应用", async () => {
+  const { view, user } = draw({ personal: true, held: ["notion/search"] });
+
+  const toolBox = await view.findByRole("checkbox", { name: TOOL_BOX });
+  expect(toolBox.hasAttribute("data-disabled")).toBe(true);
+  expect(
+    view
+      .getByRole("checkbox", { name: "安装工具 Notion/search" })
+      .hasAttribute("data-disabled"),
+  ).toBe(true);
+  expect(
+    view.getByText(/你连上的每个应用，每位员工都能用，这里只能看/),
+  ).toBeTruthy();
+
   await user.click(toolBox);
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(grantCalls()).toEqual([]);

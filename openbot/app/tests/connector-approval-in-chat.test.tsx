@@ -114,7 +114,8 @@ test("an app's call OpenBot asks about draws its card in the conversation", asyn
         policy: {
           behaviour: "ask",
           source: "safety",
-          reason: "Sending something to other people always asks you first.",
+          reason: "Sending something to other people asks you first.",
+          kind: "sending",
         },
       },
     },
@@ -122,10 +123,46 @@ test("an app's call OpenBot asks about draws its card in the conversation", asyn
   const view = draw();
   const card = within(await view.findByRole("region", { name: "等你批准" }));
   expect(
-    card.getByText("Sending something to other people always asks you first."),
+    card.getByText("Sending something to other people asks you first."),
   ).toBeTruthy();
   expect(card.getByRole("radio", { name: "允许一次" })).toBeTruthy();
   expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
+  expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
+  // 本部署的底线（#398）：对外发送只能「允许一次」，不跟上游 #1394 打开「在这段对话里都允许」。
+  expect(card.queryByRole("radio", { name: "在这段对话里都允许" })).toBeNull();
+});
+
+test("管理员设成每次都问的发送，同样只给「允许一次 / 拒绝」", async () => {
+  inbox = [
+    {
+      id: "approval-2",
+      status: "pending",
+      createdAt: "2026-11-05T10:00:00.000Z",
+      action: {
+        botId: "personal-assistant",
+        toolRef: "arcade-GoogleCalendar/CreateEvent",
+        effect: "write",
+        scope: "arcade-GoogleCalendar",
+        threadId: "thread-1",
+        toolCallId: CALL,
+        args: { summary: "Spec review" },
+        target: {},
+        policy: {
+          behaviour: "ask",
+          source: "safety",
+          reason:
+            "Sending something to other people asks you every time. Your admin set this.",
+          kind: "sending",
+          closed: true,
+        },
+      },
+    },
+  ];
+  const view = draw();
+  const card = within(await view.findByRole("region", { name: "等你批准" }));
+  expect(card.getByRole("radio", { name: "允许一次" })).toBeTruthy();
+  expect(card.getByRole("radio", { name: "拒绝" })).toBeTruthy();
+  expect(card.queryByRole("radio", { name: "在这段对话里都允许" })).toBeNull();
   expect(card.queryByRole("radio", { name: "在这里总是允许" })).toBeNull();
 });
 

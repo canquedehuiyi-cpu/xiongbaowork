@@ -6,6 +6,8 @@ import {
   PageShell,
 } from "@/components/layout/page-shell";
 import { CheckInsSection } from "@/components/settings/check-ins";
+import { NativeDevices, RecentDeliveries } from "@/components/settings/devices";
+import { UpdateRoutingSection } from "@/components/settings/update-routing";
 import {
   Item,
   ItemContent,
@@ -19,18 +21,21 @@ export const Route = createFileRoute("/_authed/settings/notifications")({
 });
 
 /**
- * Whether your employees check in for you, for all of them at once; each employee's own page says
- * how often. Where their updates reach you (chat apps, devices, what was delivered lately) is this
- * fork's reachability page, which upstream's Notifications page split into three sections.
+ * Whether your employees check in for you, and where their updates reach you, for all of them at
+ * once (upstream main's three sections). Each employee's own page says how much. The @Waker overview
+ * across every chat app and device stays in the main navigation; this page links to it.
  */
 function NotificationsPage() {
   return (
     <PageShell
-      description="决定员工要不要替你主动巡检，以及你不在时更新送到哪里。每位员工的巡检频率在它自己的页面上设置。"
+      description="选择你不在时在哪里收到员工的更新，以及员工要不要替你主动巡检。每位员工的更新频率在它自己的页面上设置。"
       title="通知"
     >
       <CheckInsSection />
-      <PageSection title="送到哪里">
+      <UpdateRoutingSection />
+      <NativeDevices />
+      <RecentDeliveries />
+      <PageSection title="@Waker 触达">
         <PageRows>
           <Item
             render={(props) => <Link {...props} to="/reachability" />}
@@ -42,7 +47,7 @@ function NotificationsPage() {
             <ItemContent>
               <ItemTitle>触达方式</ItemTitle>
               <ItemDescription>
-                员工的更新发到哪些聊天应用和设备，以及最近送达了什么。
+                员工的更新发到哪些聊天应用和设备，以及每个渠道最近送达了什么。
               </ItemDescription>
             </ItemContent>
             <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />

@@ -88,7 +88,7 @@ const request = (id: string, toolCallId: string, threadId: string) => ({
     policy: {
       behaviour: "ask",
       source: "safety",
-      reason: "Deleting something always asks you first.",
+      reason: "Deleting something asks you first.",
     },
   },
 });
@@ -160,7 +160,7 @@ test("on a narrow window the Computer sheet shows the approval it covers, and an
     name: "等你批准",
   });
   expect(
-    within(card).getByText("Deleting something always asks you first."),
+    within(card).getByText("Deleting something asks you first."),
   ).toBeTruthy();
   expect(
     within(card)

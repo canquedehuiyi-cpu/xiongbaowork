@@ -25,9 +25,10 @@ import {
 } from "@/components/plugins/brokered-account-row";
 import type { BrokerField, KeyGuide } from "@/lib/plugins/mutations";
 import type { PluginServer, PluginsPage } from "@/lib/plugins/queries";
+import { Route as ConnectedAccountRoute } from "@/routes/_authed/_app/connections.$key";
 import { Route as AdminAppRoute } from "@/routes/_authed/admin/plugins/$key";
-import { Route as ConnectedAccountRoute } from "@/routes/_authed/settings/connected-accounts/$key";
 import { BROKERED_PROBE_OUTCOMES } from "../../server/src/plugins/store";
+import { settleReactWork } from "./settle-react-work";
 
 /**
  * The brokered account row, on both screens that draw it.
@@ -350,6 +351,10 @@ type Server = {
    * longer publishes is a 400 on the whole connection, however tidy the screen looked.
    */
   submitted: Record<string, string>[];
+  /** How many times the vendor was asked about the account (`/connection/confirm`). */
+  confirmsAsked: number;
+  /** What the vendor answers about the account from now on: a consent finished elsewhere. */
+  answer: (confirms: boolean) => void;
 };
 
 /**
@@ -397,6 +402,10 @@ function installDeployment(deployment: Deployment): Server {
       state.refusesFields = refusal;
     },
     submitted: [],
+    confirmsAsked: 0,
+    answer: (confirms) => {
+      state.confirms = confirms;
+    },
   };
 
   global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -456,6 +465,7 @@ function installDeployment(deployment: Deployment): Server {
       });
     }
     if (path.endsWith("/connection/confirm") && method === "POST") {
+      server.confirmsAsked += 1;
       // What the route answers with no key at all: nothing to ask, and no answer invented.
       if (!state.composioConfigured) {
         return new Response(
@@ -725,13 +735,16 @@ afterEach(() => {
 /**
  * The personal screen, at its real id.
  *
- * `routeTree.gen.ts` fixes both halves: id `/connected-accounts/$key` under `/_authed/settings`,
- * path `/connected-accounts/$key`. Decoy pathless/static parents are enough to make the join land
+ * `routeTree.gen.ts` fixes both halves: id `/connections/$key` under `/_authed/_app`, path
+ * `/connections/$key`（M5b：已连接的账号从设置搬到「连接」）. Decoy pathless/static parents are enough to make the join land
  * on the id `useParams({ from: … })` resolves against; the real ancestors check a session and mount
  * the settings shell, neither of which this file is about. The index route is registered only so
  * the Back link has something to build an href from.
  */
-function renderAccountScreen(client: QueryClient) {
+function renderAccountScreen(
+  client: QueryClient,
+  at = `/connections/${APP_KEY}`,
+) {
   const rootRoute = createRootRoute({ component: Outlet });
   const authedRoute = createRoute({
     id: "/_authed",
@@ -739,12 +752,12 @@ function renderAccountScreen(client: QueryClient) {
     component: Outlet,
   });
   const settingsRoute = createRoute({
-    path: "/settings",
+    id: "/_app",
     getParentRoute: () => authedRoute,
     component: Outlet,
   });
   const indexRoute = createRoute({
-    path: "/connected-accounts/",
+    path: "/connections/",
     getParentRoute: () => settingsRoute,
     component: () => null,
   });
@@ -753,8 +766,8 @@ function renderAccountScreen(client: QueryClient) {
       update: (options: unknown) => typeof ConnectedAccountRoute;
     }
   ).update({
-    id: "/connected-accounts/$key",
-    path: "/connected-accounts/$key",
+    id: "/connections/$key",
+    path: "/connections/$key",
     getParentRoute: () => settingsRoute,
   });
   const tree = rootRoute.addChildren([
@@ -763,7 +776,7 @@ function renderAccountScreen(client: QueryClient) {
   const router = createRouter({
     routeTree: tree,
     history: createMemoryHistory({
-      initialEntries: [`/settings/connected-accounts/${APP_KEY}`],
+      initialEntries: [at],
     }),
   });
   return render(
@@ -854,7 +867,11 @@ test("a deployment with no Composio key names the setting and offers neither act
     confirms: true,
   });
 
-  const view = renderAccountScreen(queryClient());
+  /*
+   * 管理员的页面（M5b）：个人的「连接」页按上游改成「还没有设置 / 管理员要先打开」，不再对普通成员说环境变量名
+   * （见 composio-unconfigured-account.test.tsx）；能动手设置的管理员页面仍点名这个设置、两个动作都不给。
+   */
+  const view = renderAdminScreen(queryClient());
 
   expect(await view.findByText(NAMES_THE_SETTING)).toBeTruthy();
   expect(view.queryByText("缺少密钥")).toBeTruthy();
@@ -1109,8 +1126,9 @@ test("a key app nobody has connected keeps the screen's own reassurance", async 
    * thing an administrator reading this row needs to know — that the connector is finished whether
    * or not they ever connect themselves — and left them looking at a step they do not have to take.
    */
+  // 上游把「你自己的文档」改成点名这个应用的账号（Gmail 也曾被说成「文档」）。
   expect(
-    view.getByText(/不连也算配置完成；连上后只会碰到你自己的文档/),
+    view.getByText(/不连也算配置完成；连上后只会碰到你自己的 \S+ 账号/),
   ).toBeTruthy();
 });
 
@@ -1232,6 +1250,44 @@ test("a consent app's Connect leaves for the vendor's own page", async () => {
   }
 });
 
+test("in OpenBot Desktop, the page asks again once the window is back in front", async () => {
+  /*
+   * The window sends the sign-in to the person's browser and this page stays where it is, so it
+   * never arrives here again to confirm on load. The browser hands the person back to the window
+   * when the sign-in is done, and the focus that brings is when the account is asked about.
+   */
+  const server = installDeployment({
+    authScheme: "OAUTH2",
+    composioConfigured: true,
+    confirms: false,
+    recorded: false,
+  });
+  (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
+    invoke: async () => null,
+    transformCallback: () => 0,
+  };
+  const watched = watchNavigation();
+
+  try {
+    const view = renderAccountScreen(queryClient());
+    await userEvent.click(await view.findByRole("button", { name: "连接" }));
+    await waitFor(() => expect(watched.navigations).toEqual([CONSENT_URL]));
+    const before = server.confirmsAsked;
+
+    server.answer(true);
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() => expect(server.confirmsAsked).toBe(before + 1));
+    expect(await view.findByRole("button", { name: "断开" })).toBeTruthy();
+    // Once per sign-in: a later focus asks nothing more.
+    window.dispatchEvent(new Event("focus"));
+    expect(server.confirmsAsked).toBe(before + 1);
+  } finally {
+    watched.restore();
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  }
+});
+
 test("a typed scheme this screen does not know is refused, not navigated to undefined", async () => {
   installDeployment({
     /*
@@ -1339,19 +1395,34 @@ function accountState(overrides: Partial<BrokeredAccount>): BrokeredAccount {
     submittingFields: false,
     verified: false,
     verifiedAt: null,
+    reconnectsInPlace: false,
+    serverId: "gmail",
+    fieldsSubmitted: false,
+    connectAnother: () => {},
+    connectingAnother: false,
+    makeDefault: () => {},
+    disconnectAccount: () => {},
+    changingAccount: null,
     ...overrides,
   };
 }
 
 /** The row with both screens' arguments filled in, so only the account differs between cases. */
 function renderRow(account: BrokeredAccount) {
+  /*
+   * 上游起，这一行在已连接时会读这个人在应用上的账号列表（多账号），所以和上游一样包一层
+   * QueryClientProvider。
+   */
   return render(
-    <BrokeredAccountRow
-      account={account}
-      connectedDescription="A Bot granted its tools reads your Gmail as you."
-      disconnectedDescription="No Bot can read this as you."
-      title="Gmail"
-    />,
+    <QueryClientProvider client={queryClient()}>
+      <BrokeredAccountRow
+        account={account}
+        connectedDescription="A Bot granted its tools reads your Gmail as you."
+        disconnectedDescription="No Bot can read this as you."
+        provider="composio"
+        title="Gmail"
+      />
+    </QueryClientProvider>,
   );
 }
 
@@ -2710,4 +2781,128 @@ test("a re-check that spent nothing leaves the rejection the record still names"
   expect(view.getByText(/这个账号仍然保持连接/)).toBeTruthy();
   // Never the absolution, which is the other app's state and not this one's.
   expect(view.queryByText(/接受时没有对 Gmail 做检查/)).toBeNull();
+});
+
+/**
+ * ADDED IS NOT CONNECTED, ON THE APP'S PAGE TOO. A person who added an app and never signed in read
+ * a row with a Connect button and a sentence, and nothing that said plainly it wasn't connected.
+ */
+test("an added app nobody signed in to says Not connected beside Connect, on both pages", async () => {
+  installDeployment({
+    composioConfigured: true,
+    recorded: false,
+    confirms: false,
+  });
+
+  const person = renderAccountScreen(queryClient());
+  expect(await person.findByRole("button", { name: "连接" })).toBeTruthy();
+  expect(person.getByText("未连接")).toBeTruthy();
+  cleanup();
+
+  const admin = renderAdminScreen(queryClient());
+  expect(await admin.findByRole("button", { name: "连接" })).toBeTruthy();
+  expect(admin.getByText("未连接")).toBeTruthy();
+});
+
+/**
+ * BROWSE APPS SENDS A KEY APP HERE STRAIGHT AFTER ADDING IT (`?connect=true`), and the key form is
+ * what opens: there is no sign-in page to send anybody to.
+ */
+test("arriving to connect a key app opens its key form without a second press", async () => {
+  installDeployment({
+    authScheme: "API_KEY",
+    composioConfigured: true,
+    confirms: false,
+    fields: [PERPLEXITY_KEY],
+    recorded: false,
+  });
+
+  const view = renderAccountScreen(
+    queryClient(),
+    `/connections/${APP_KEY}?connect=true`,
+  );
+
+  expect(await view.findByLabelText("API Key")).toBeTruthy();
+});
+
+/*
+ * 「再连一个账号」 only where the server serves it: `?another=1` is accepted for a sign-in app alone
+ * (`server/src/plugins/routes.ts`), and a key app stays one account a person, so the button there
+ * would open a form whose submit is always refused with 409.
+ */
+test("one more account is offered on a sign-in app and not on a key app, even when the list says it can", async () => {
+  global.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    if (String(input).includes("/accounts"))
+      return Response.json({
+        accounts: [
+          {
+            id: "acc-1",
+            identity: "me@example.com",
+            label: null,
+            isDefault: true,
+            connectedAt: CHECKED_AT,
+          },
+        ],
+        canAddAnother: true,
+      });
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+
+  const consent = renderRow(accountState({ connected: true, kind: "consent" }));
+  expect(
+    await consent.findByRole("button", { name: /再连一个账号/ }),
+  ).toBeTruthy();
+  cleanup();
+
+  const key = renderRow(
+    accountState({
+      connected: true,
+      kind: "fields",
+      verified: true,
+      verifiedAt: CHECKED_AT,
+    }),
+  );
+  await waitFor(() => expect(key.getByText("已连接")).toBeTruthy());
+  await settleReactWork();
+  expect(key.queryByRole("button", { name: /再连一个账号/ })).toBeNull();
+});
+
+/*
+ * The GitHub link callback lands on `/connections/github?linked=…`. Where this deployment also has a
+ * `github` app enabled, the page is the account link because of that `linked`, and the link page
+ * drops it from the address once read: the page must stay the account link, with its notice.
+ */
+test("coming back from linking GitHub stays on the account link, notice and all, though a github app is enabled", async () => {
+  global.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const path = String(input).split("?")[0] ?? "";
+    if (path === "/api/plugins")
+      return Response.json({
+        servers: [
+          {
+            id: "team:github",
+            title: "GitHub",
+            vendor: "GitHub",
+            provenance: "first-party",
+            tools: [{ name: "issues", ref: "github/issues", grantedTo: [] }],
+          },
+        ],
+        skills: [],
+        catalogue: [],
+      });
+    if (path.startsWith("/api/identity"))
+      return Response.json({ accounts: [] });
+    return Response.json({});
+  }) as typeof fetch;
+
+  const view = renderAccountScreen(
+    queryClient(),
+    "/connections/github?linked=failed",
+  );
+
+  expect(
+    await view.findByText("GitHub 账号没能关联，请再试一次。"),
+  ).toBeTruthy();
+  await settleReactWork();
+  await settleReactWork();
+  expect(view.getByText("GitHub 账号没能关联，请再试一次。")).toBeTruthy();
 });

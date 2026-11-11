@@ -935,8 +935,8 @@ export function SourcesStep({
 
 /** The 分身's detail page: list, add and remove, the same rules as the step. */
 export function AvatarSourcesPanel({
-  accountsHref = "/settings/connected-accounts",
-  knowledgeHref = "/resources?tab=knowledge",
+  accountsHref = "/connections",
+  knowledgeHref = "/capabilities/knowledge",
   pairingHref = "/settings",
 }: {
   /** Where 已连接的账号 is, for a person with no connected account yet (S4). */

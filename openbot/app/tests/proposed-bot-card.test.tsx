@@ -80,7 +80,7 @@ function routed(node: ReactNode) {
     }),
     createRoute({
       getParentRoute: () => rootRoute,
-      path: "/wakers",
+      path: "/bots/$agentId",
       component: () => null,
     }),
   ]);
@@ -88,7 +88,7 @@ function routed(node: ReactNode) {
     routeTree,
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
-  // The app's router is registered globally for typing; this one only has to resolve /wakers.
+  // The app's router is registered globally for typing; this one only has to resolve /bots/$agentId.
   return render(<RouterProvider router={router as never} />);
 }
 
@@ -291,7 +291,7 @@ test("a completed card links to the coworker, rebuilt from the answer alone", as
   );
 
   const link = await view.findByText("打开「Renewal Desk」");
-  expect(link.closest("a")?.getAttribute("href")).toBe("/wakers?agent=agent_1");
+  expect(link.closest("a")?.getAttribute("href")).toBe("/bots/agent_1");
 });
 
 /**
@@ -305,6 +305,10 @@ test("the created answer carries an id the card can read back", () => {
 
   expect(wasCreated(answer)).toBe(true);
   expect(createdBotIdIn(answer)).toBe("agent_1");
+  // M5b 之前记下的回答写的是 `/wakers?agent=<id>`，对话记录不会改写，旧卡片照样读得出。
+  expect(
+    createdBotIdIn("Created. Its profile is at /wakers?agent=agent_old."),
+  ).toBe("agent_old");
   // A declined card is not a created one, and carries no coworker to link to.
   expect(wasCreated(botCardAnswer.declined())).toBe(false);
   expect(createdBotIdIn(botCardAnswer.declined())).toBeNull();

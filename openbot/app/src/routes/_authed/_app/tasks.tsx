@@ -67,7 +67,7 @@ export type Trigger = "" | "chat" | "autonomous" | "handoff";
 
 type BoardSearch = {
   machineId: string;
-  /** A roster, comma-joined, as a /wakers link writes it. Sent as `executors=`. */
+  /** A roster, comma-joined, as a group card on /bots?tab=groups writes it. Sent as `executors=`. */
   crew: string;
   /** One coworker chosen in the Waker/Group dropdown, by its whole id (it may contain a comma). */
   executor: string;
@@ -1027,7 +1027,7 @@ function TaskCard({
               data-executor={executor.id}
               params={{ agentId: executor.id }}
               title={executor.id}
-              to="/wakers/$agentId"
+              to="/bots/$agentId"
             >
               {executorFace}
             </Link>
@@ -1390,7 +1390,7 @@ function TasksPage() {
   const wire = boardQuery(address);
   /*
    * Spec A4's two dropdowns read the coworkers and crews this person already has. A choice made here
-   * is one coworker (`executor`) or one crew (`group`); a /wakers link still arrives as a roster
+   * is one coworker (`executor`) or one crew (`group`); a group card on /bots still arrives as a roster
    * (`crew`) and is shown as the filter it is.
    */
   const coworkers = useQuery(agentListQueryOptions());
@@ -1833,7 +1833,7 @@ function TasksPage() {
             value={listPeriod}
           />
           {/*
-           * A crew arrived at from /wakers, shown as the thing it was filtered by and dismissible
+           * A crew arrived at from a group card on /bots, shown as the thing it was filtered by and dismissible
            * without losing the machine alongside it: two axes, each cleared on its own.
            */}
           {crew ? (

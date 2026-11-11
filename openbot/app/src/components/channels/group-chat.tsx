@@ -11,8 +11,6 @@ import {
   WorkbenchEmpty,
 } from "@/components/layout/workbench-empty";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   MessageContent,
   MessageHeader,
@@ -26,12 +24,9 @@ import {
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
-  addGroupMemberMutationOptions,
   type GroupMessage,
-  type GroupPerson,
   groupKeys,
   groupQueryOptions,
-  removeGroupMemberMutationOptions,
   sendGroupMessageMutationOptions,
 } from "@/lib/groups";
 import {
@@ -254,15 +249,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
             onDismiss={() => setStarted(null)}
           />
         ) : null}
-        {/* Who is in the room and the way to add someone, on one line above the composer. */}
-        <div className="flex flex-wrap items-center justify-between gap-x-3 [&>*]:min-w-0">
-          <People
-            channelId={channelId}
-            me={me?.id}
-            people={group.data?.people ?? []}
-          />
-          <AddPerson channelId={channelId} />
-        </div>
+        {/* Who is in the group, and adding someone, moved to the top bar (`GroupPeopleButton`). */}
         {answer.error ? (
           <p className="pb-2 text-sm text-destructive" role="alert">
             {answer.error.message}
@@ -444,7 +431,7 @@ function GroupLine({
             <span className="min-w-0">{message.reason ?? "等你回应。"}</span>{" "}
             <Link
               className="font-medium underline underline-offset-2"
-              to="/approvals"
+              to="/settings/approvals"
             >
               去审批
             </Link>
@@ -490,104 +477,6 @@ function GroupLine({
         )}
       </MessageContent>
     </MessageRow>
-  );
-}
-
-/** Invite another person who has signed in here. They see this whole conversation. */
-function AddPerson({ channelId }: { channelId: string }) {
-  const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const add = useMutation(addGroupMemberMutationOptions(channelId));
-  if (!open)
-    return (
-      <div className="ml-auto flex justify-end pb-2">
-        <Button onClick={() => setOpen(true)} size="sm" variant="ghost">
-          添加成员
-        </Button>
-      </div>
-    );
-  return (
-    <form
-      className="flex w-full items-center gap-2 pb-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        add.mutate(email, {
-          onSuccess: () => {
-            setEmail("");
-            setOpen(false);
-          },
-        });
-      }}
-    >
-      <Input
-        aria-label="对方的邮箱"
-        onChange={(event) => setEmail(event.target.value)}
-        placeholder="对方的邮箱"
-        type="email"
-        value={email}
-      />
-      <Button disabled={!email.trim() || add.isPending} size="sm" type="submit">
-        添加
-      </Button>
-      {add.error ? (
-        <span className="text-sm text-destructive" role="alert">
-          {add.error.message}
-        </span>
-      ) : null}
-    </form>
-  );
-}
-
-/** Who is in the group. The creator can take people out; anyone else can leave. */
-function People({
-  channelId,
-  me,
-  people,
-}: {
-  channelId: string;
-  me: string | undefined;
-  people: GroupPerson[];
-}) {
-  const queryClient = useQueryClient();
-  const remove = useMutation(
-    removeGroupMemberMutationOptions(queryClient, channelId),
-  );
-  const iCreated = people.some(
-    (person) => person.creator && person.userId === me,
-  );
-  if (people.length < 2) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 pb-2 text-xs text-muted-foreground">
-      <span>成员：</span>
-      {people.map((person) => {
-        const self = person.userId === me;
-        const removable = self ? !person.creator : iCreated;
-        return (
-          <span
-            className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5"
-            key={person.userId}
-          >
-            {self ? "你" : (person.name ?? person.email)}
-            {removable ? (
-              <button
-                aria-label={self ? "退出这个群" : `移除 ${person.email}`}
-                className="hover:text-foreground"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(person.userId)}
-                type="button"
-              >
-                {self ? "退出" : "×"}
-              </button>
-            ) : null}
-          </span>
-        );
-      })}
-      {remove.error ? (
-        <span className="text-destructive" role="alert">
-          {remove.error.message}
-        </span>
-      ) : null}
-    </div>
   );
 }
 

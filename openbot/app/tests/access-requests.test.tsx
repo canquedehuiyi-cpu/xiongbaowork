@@ -88,7 +88,7 @@ function serving(options: {
         counts: { total: options.requests.length, byApp },
       });
     }
-    if (url === "/api/plugins/connections")
+    if (url.split("?")[0] === "/api/plugins/connections")
       return Response.json({ connections: [], redirectUri: null });
     if (url === "/api/plugins")
       return Response.json({

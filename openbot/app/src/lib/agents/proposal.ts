@@ -59,7 +59,7 @@ export const botCardAnswer = {
     }
     parts.push(
       "It was granted no connector, no tool and no address. Tell the person that anything it needs to reach is granted on its profile, that it can be talked to now, and that its profile is at",
-      `/wakers?agent=${input.agentId}.`,
+      `/bots/${input.agentId}.`,
     );
     return parts.join(" ");
   },
@@ -90,7 +90,11 @@ export function wasCreated(result: string): boolean {
  * say why.
  */
 export function createdBotIdIn(result: string): string | null {
-  return /agent=([A-Za-z0-9_-]+)/.exec(result)?.[1] ?? null;
+  /*
+   * Both spellings: M5b's `/bots/<id>`, and the `/wakers?agent=<id>` every answer recorded before it
+   * still carries — a transcript is never rewritten, so an old card must keep its link.
+   */
+  return /(?:\/bots\/|agent=)([A-Za-z0-9_-]+)/.exec(result)?.[1] ?? null;
 }
 
 /**
