@@ -10,6 +10,7 @@ import {
   withoutSecrets,
   withoutSecretsDeep,
 } from "./catalogue";
+import { transientFailure } from "./transient";
 
 /**
  * The only place in this deployment that speaks MCP to somebody else's server.
@@ -224,7 +225,15 @@ export type ListedTool = McpTool & {
 };
 
 export class McpServerError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    /**
+     * Whether what failed passes (a timeout, a 429, the server's own 5xx), so a read may be tried
+     * again. Decided from the transport's error before it is flattened into the sentence above, which
+     * keeps only some statuses. See `./transient`.
+     */
+    readonly transient = false,
+  ) {
     super(message);
     this.name = "McpServerError";
   }
@@ -519,6 +528,7 @@ async function withClient<T>(
     // error that quotes the URL it dialled would otherwise quote a key placed in it.
     throw new McpServerError(
       withoutSecrets(vendorFailure(error, dial.secrets), dial.secrets),
+      transientFailure(error),
     );
   } finally {
     await client.close().catch(() => {

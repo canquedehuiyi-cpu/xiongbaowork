@@ -1,7 +1,10 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { PROVENANCE_GUIDANCE } from "../../shared/bot-prompt";
+import {
+  PROVENANCE_GUIDANCE,
+  ROLE_SCOPE_GUIDANCE,
+} from "../../shared/bot-prompt";
 import type { Persona } from "../../shared/persona";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
@@ -135,7 +138,9 @@ describe("the Bible section", () => {
       message.content.indexOf(HEADING),
     );
     expect(message.content.indexOf(HEADING)).toBeLessThan(
-      message.content.indexOf("This standing role applies in every channel."),
+      // M5: upstream #1407 replaced "This standing role applies in every channel." with
+      // ROLE_SCOPE_GUIDANCE, which still closes the role section after the handbook.
+      message.content.indexOf(ROLE_SCOPE_GUIDANCE),
     );
     // And without one, the message is exactly what it was before handbooks existed.
     expect(standingRoleMessage({ ...profile, bible: null })).toEqual(

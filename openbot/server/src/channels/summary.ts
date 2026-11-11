@@ -95,6 +95,8 @@ export async function offerChannelsAwaitingSummary(
       .where(
         and(
           isNull(channels.summary),
+          // A conversation its owner named needs no name from the model. Cleared, it is offered again.
+          isNull(channels.title),
           isNull(channels.deletedAt),
           // Nobody's conversation has nobody to name it for, and must not take a place below.
           notInArray(channels.tenantId, [...NOBODY_TENANTS]),
@@ -369,13 +371,19 @@ async function summariseOne(
           and(
             eq(channels.id, channelId),
             isNull(channels.summary),
+            /*
+             * Renamed while the model worked: the person's name stands, and announcing the summary
+             * would put the model's words on every member's row in its place until they reload.
+             */
+            isNull(channels.title),
             isNull(channels.deletedAt),
           ),
         )
         .returning({ id: channels.id });
       if (applied.length === 0) {
-        // Another writer's title stands, but a conversation deleted while the model worked is gone.
-        // Both settle the queue item; only a surviving conversation counts as named.
+        // Another writer's title stands, and so does a name the person gave it, but a conversation
+        // deleted while the model worked is gone. All settle the queue item; only a surviving
+        // conversation counts as named.
         const [remaining] = await transaction
           .select({ id: channels.id })
           .from(channels)
