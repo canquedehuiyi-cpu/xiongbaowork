@@ -118,6 +118,18 @@ export function personalAdminRedirect(pathname: string): string {
 }
 
 /**
+ * Where an app's address goes in the personal edition, given what followed `/plugins` in its old
+ * address: the same page under Connections, with the directories under `/connections/browse`.
+ * 上游原样（M5b 第 0 步随 `settings/_personal/plugins.$` 一起补上）。
+ */
+export function personalAppsAddress(rest: string): string {
+  const path = rest.replace(/^\/+|\/+$/g, "");
+  if (path === "composio" || path === "arcade")
+    return `/connections/browse/${path}`;
+  return path ? `/connections/${path}` : "/connections";
+}
+
+/**
  * The paths for this deployment. The edition is read once per page load and cached for good, so
  * this is a lookup, not a request; until it answers, the team edition's paths, which are what every
  * deployment from before the switch has.
