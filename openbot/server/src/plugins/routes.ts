@@ -1,5 +1,6 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { z } from "zod";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
@@ -58,14 +59,21 @@ import {
   alwaysOnHere,
   personalRevokeRefusalFor,
 } from "./personal-defaults";
-import { mountSharedUseRoutes } from "./shared-use-routes";
-import type { SharedAudience, SharedUseStore } from "./shared-use-store";
+import { approveOwnersSharedUse } from "./owner-grants";
+import { mountSharedUseRoutes, sharedGrantApproval } from "./shared-use-routes";
+import {
+  type SharedAudience,
+  SharedUseFrameError,
+  SharedUseNotSharedError,
+  type SharedUseStore,
+} from "./shared-use-store";
 import {
   authorizationUrlFor,
   type ConnectOrigin,
   challengeFor,
   connectedAccountsUrlFor,
   createVerifier,
+  desktopReturnUrlFor,
   readConnectState,
   redeemAuthorizationCode,
   redirectUriFor,
@@ -2110,8 +2118,16 @@ export function createPluginRoutes(
            * this deployment cannot tell them anything; the guard moves it to before the link is
            * minted, where the sentence reaches an operator who can set the variable.
            */
+          /*
+           * `?from=desktop` is the press's own: the sign-in was started in OpenBot Desktop's window
+           * and runs in the person's browser, so it comes back to the page that hands them back to
+           * the window ({@link desktopReturnUrlFor}). Anybody can send it, and all it changes is which
+           * of this OpenBot's own pages the browser lands on.
+           */
           returnUrl: brokerReturnUrl(
-            connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
+            context.req.query("from") === "desktop"
+              ? desktopReturnUrlFor(connect.appUrl, serverId)
+              : connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
           ),
         }));
       } catch (error) {
@@ -3558,6 +3574,222 @@ export function createPluginRoutes(
       return context.json({ ok: true });
     });
   });
+
+  const grantRefList = z.array(z.string().trim().min(1).max(300)).max(2_000);
+  const grantChangeInput = z.strictObject({
+    add: grantRefList,
+    remove: grantRefList,
+    authoring: z
+      .strictObject({
+        source: z.literal("english"),
+        text: z.string().trim().min(1).max(2_000),
+      })
+      .optional(),
+    // 管理员随这次保存为 Shared 应用记下的共享使用批准（{@link sharedGrantApproval}）。
+    approval: z.unknown().optional(),
+  });
+
+  /**
+   * Turn several of one app's actions on and off for one Bot as one change: what the Bot's app page
+   * saves once an admin has read a set chosen from their description (upstream #1396).
+   *
+   * EXACTLY THE CHECKS THE TWO ROUTES ABOVE MAKE, asked of every action before any is written. Each
+   * action turned on goes through {@link enablementDecision} as `POST /grants` sends it, and each one
+   * turned off as `DELETE /grants` does, in the Bot owner's frame ({@link asBotOwner}). One refusal
+   * refuses the whole change, with every action's reason, so nobody is left with half of what they
+   * approved. Then each is written by the store as the routes write it, with its own row on the trail,
+   * and one more row says they were one change, with the sentence it came from.
+   *
+   * A SHARED APP'S AUDIENCE IS DECIDED ONCE, as upstream's `POST /grants` decides it for each grant:
+   * every action here is the same app's, and {@link sharedGrantApproval} depends on the app and the
+   * Bot alone. An admin's save records the approval it sent, or the Bot's exposure now when none was
+   * sent and no admin decided one before; an approval this deployment cannot read refuses the save
+   * before anything is written. An owner's self-service install (a listed app, `enablementDecision`)
+   * sets the owner's audience where the admin lets owners decide ({@link approveOwnersSharedUse}),
+   * as `/give` does. A Bot with no owner has nowhere to record either, and its calls stay refused.
+   */
+  routes.post(
+    "/for/:agentId/apps/:app/grants",
+    signedInWithCapability,
+    async (context) => {
+      const agentId = context.req.param("agentId").trim();
+      const app = context.req.param("app").trim();
+      const parsed = grantChangeInput.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!parsed.success)
+        return context.json(
+          {
+            error: "请用 add 和 remove 发送要打开和关闭的操作，各是一组引用。",
+          },
+          400,
+        );
+      const add = [...new Set(parsed.data.add)];
+      const remove = [...new Set(parsed.data.remove)];
+      if (add.length + remove.length === 0)
+        return context.json({ error: "没有要改的。" }, 400);
+      const foreign = [...add, ...remove].find(
+        (ref) => !ref.startsWith(`${app}/`),
+      );
+      if (foreign)
+        return context.json({ error: `${foreign} 不是 ${app} 的操作。` }, 400);
+      if (add.some((ref) => remove.includes(ref)))
+        return context.json(
+          { error: "同一个操作不能在一次修改里既打开又关闭。" },
+          400,
+        );
+
+      return asBotOwner(context, agentId, async () => {
+        const problems: { ref: string; error: string }[] = [];
+        const selfService = new Map<string, boolean>();
+        for (const ref of add) {
+          const decision = await enablementDecision(
+            context,
+            "mcp",
+            ref,
+            agentId,
+            "grant",
+          );
+          if (decision.refusal !== null)
+            problems.push({ ref, error: decision.refusal });
+          else selfService.set(ref, decision.selfService);
+        }
+        for (const ref of remove) {
+          const decision = await enablementDecision(
+            context,
+            "mcp",
+            ref,
+            agentId,
+            "revoke",
+          );
+          if (decision.refusal !== null)
+            problems.push({ ref, error: decision.refusal });
+          else selfService.set(ref, decision.selfService);
+        }
+        if (problems.length > 0)
+          return context.json(
+            { error: problems[0]?.error ?? "", problems },
+            403,
+          );
+        /*
+         * And the check a set chosen from a description was held to, asked again at the save, as a
+         * team rule's is: every action turned on is one the app advertises now. Asked after the
+         * permission checks, so somebody who may not change this Bot learns nothing about the app
+         * from the answer. Turning off is not held to it: taking away is always allowed.
+         */
+        const server =
+          add.length > 0
+            ? (await store.listServers()).find((row) => row.id === app)
+            : undefined;
+        if (add.length > 0) {
+          const offered = new Set(server?.tools.map((tool) => tool.ref) ?? []);
+          const unknown = add.filter((ref) => !offered.has(ref));
+          if (unknown.length > 0)
+            return context.json(
+              {
+                error: `这个应用现在没有这些操作：${unknown.join("、")}。`,
+                problems: unknown.map((ref) => ({
+                  ref,
+                  error: `这个应用现在没有 ${ref} 这个操作。`,
+                })),
+              },
+              400,
+            );
+        }
+
+        const asOwner = add.some((ref) => selfService.get(ref) === true);
+        const decided =
+          add.length > 0 && !asOwner && sharedUse
+            ? await sharedGrantApproval(sharedUse.store, {
+                serverId: app,
+                agentId,
+                accountMode: server?.accountMode,
+                sent: parsed.data.approval,
+              })
+            : null;
+        if (decided === "unreadable")
+          return context.json(
+            { error: "这份共享使用批准这个部署读不懂，所以什么都没有改。" },
+            400,
+          );
+
+        const by = actorEmail(context);
+        try {
+          for (const ref of add)
+            await store.grant(
+              "mcp",
+              ref,
+              agentId,
+              by,
+              selfService.get(ref) ? { selfService: true } : undefined,
+            );
+          for (const ref of remove)
+            await store.revoke(
+              "mcp",
+              ref,
+              agentId,
+              by,
+              selfService.get(ref) ? { selfService: true } : undefined,
+            );
+        } catch (error) {
+          // A shared Bot's grant that is not this person's to write (see `store.grant`).
+          if (error instanceof PluginRefusedError)
+            return context.json({ error: error.message }, 403);
+          throw error;
+        }
+        try {
+          if (decided?.approval && sharedUse) {
+            await sharedUse.store.setApproval({
+              botId: agentId,
+              serverId: decided.appId,
+              approval: decided.approval,
+              by: context.var.actor.id,
+            });
+            await sharedUse.audience.record({
+              eventType: "shared_use.approved",
+              targetId: decided.appId,
+              actorUserId: context.var.actor.id,
+              payload: {
+                bot: agentId,
+                server: decided.appId,
+                audience: decided.approval.audience,
+                outsideInput: decided.approval.outsideInput,
+              },
+            });
+          }
+          if (asOwner && sharedUse)
+            await approveOwnersSharedUse(sharedUse.audience, sharedUse.store, {
+              botId: agentId,
+              serverId: app,
+              ownerId: context.var.actor.id,
+            });
+        } catch (error) {
+          /*
+           * Nowhere to record it: the Bot has no owner, or the app stopped being Shared in between.
+           * No approval is the closed direction (the gate refuses the team account), and the grants
+           * the person saved stand, as `/give` answers the same race.
+           */
+          if (
+            !(error instanceof SharedUseFrameError) &&
+            !(error instanceof SharedUseNotSharedError)
+          )
+            throw error;
+        }
+        await store.recordGrantsChanged({
+          app,
+          agentId,
+          by,
+          actorUserId: context.var.actor.id,
+          added: add,
+          removed: remove,
+          ...(parsed.data.authoring
+            ? { authoring: parsed.data.authoring }
+            : {}),
+        });
+        return context.json({ ok: true, added: add, removed: remove });
+      });
+    },
+  );
 
   /**
    * Spec E3 / D11: what an administrator has listed (上架) for owners to install themselves.

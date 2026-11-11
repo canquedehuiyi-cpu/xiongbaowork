@@ -158,9 +158,12 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/agents/wake-up.ts": { 'runAsTenant("platform"': 2 },
   // The fourth is the signed-out /api/capabilities count of identity providers (deployment rows).
   // The second `asAdminPlatform` is the audit trail's CSV export (upstream #751), read as the list is.
+  // M5: the third and fourth are upstream's admin drafting routes (#1381, #1397–#1399), which
+  // replay a draft over everybody's trail (`adminAuditReader`) and approval requests
+  // (`adminApprovals`), only for an administrator holding the capability.
   "src/app.ts": {
     "adminActAsOwner(": 1,
-    "asAdminPlatform(": 2,
+    "asAdminPlatform(": 4,
     'runAsTenant("platform"': 4,
   },
   // M3: the second is upstream's prune of everybody's check-in ledger and pings (housekeeping).
@@ -214,7 +217,9 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // The three `runAsTenant("platform")` are that translator and, from main, the boot refresh of
   // OpenBot's own apps' saved tools (`refreshOwnListings`) and the broker relist rounds
   // (`relistOutdatedBrokeredApps`), described above.
-  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 18 },
+  // M5: the nineteenth `asPlatform` is `adminRead`, the reads behind upstream's admin drafting
+  // routes (audit questions, what-if, grant decisions), taken only while the capability is held.
+  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 19 },
   // M3: an administrator's review of everybody's skill-sharing requests, behind the admin gate.
   "src/learning/routes.ts": { "asPlatform(": 2 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
@@ -249,6 +254,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // M3: upstream's engine asks as `platform` what is unoffered, whom to ping, what is stale and
   // what is due; each setting then runs in the tenant stamped on its own row.
   "src/proactive/engine.ts": { 'runAsTenant("platform"': 5 },
+  // L1: the local learning sweep asks as `platform` which people have had conversations lately and
+  // claims those due (one conditional upsert on `local_learning_state`, people who still exist only),
+  // and closes runs a dead process left `running`. Each person then learns in their own frame.
+  "src/local-learning/engine.ts": { "asPlatform(": 2 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },
   // M3: the Recorder (upstream): a connect code is spent before anybody is known, so its refusals,
   // the code's owner and every live connection are read as `platform`; the connection itself is made
