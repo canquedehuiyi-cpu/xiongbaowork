@@ -348,7 +348,11 @@ export function createArcadeAttempts(context: {
             })
             .onConflictDoUpdate({
               target: [composioConnections.toolkit, composioConnections.userId],
-              set,
+              /*
+               * 在已有的连接上又同意了一次（重新连接）：连接日期前移，卡片据此知道「重新连接」已经做过，
+               * 不再提示。另一个账号的同意不动这个日期，它不是这条连接的重新连接。
+               */
+              set: further ? set : { ...set, connectedAt: now },
             });
           if (further) {
             /*

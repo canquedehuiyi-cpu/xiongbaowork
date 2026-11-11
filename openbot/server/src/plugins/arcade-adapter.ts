@@ -2263,5 +2263,6 @@ export function asComposioBroker(
     connectWithFields: ({ userId, ...rest }) =>
       arcade.connectWithFields({ account: account(userId), ...rest }),
     revokeAccount: (accountId) => arcade.revokeAccount(accountId),
+    authProviderOf: (toolkit) => arcade.authProviderOf(toolkit),
   };
 }

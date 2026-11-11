@@ -40,6 +40,7 @@ import {
   agentProfiles,
   agents,
   appAccessRequests,
+  brokeredAccounts,
   composioConnections,
   // Aliased: `credentials` is already the injected vault interface in this module, and the table and
   // the interface are two different things to reach for.
@@ -156,6 +157,7 @@ import {
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
+import { connectAppRefusal } from "@openbot/shared/connect-prompt";
 import { withReadRetries } from "./transient";
 import { type TransportKind, transportFor } from "./transport";
 
@@ -1686,7 +1688,12 @@ export type PluginStoreOptions = {
     },
     toolName: string,
     args: Record<string, unknown>,
-  ) => Promise<{ text: string; isError: boolean }>;
+  ) => Promise<{
+    text: string;
+    isError: boolean;
+    /** 厂商以「需要授权」拒绝了这个动作（见 `McpCallResult.actionNotAllowed`）。 */
+    actionNotAllowed?: true;
+  }>;
   /**
    * The resolver the outbound guard asks where a custom server's name points. Defaults to the
    * system resolver. Injected by tests whose vendor hosts are reserved names that never resolve, so
@@ -5683,6 +5690,110 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
         await reach(() => accounts.forgetApp(toolkit));
 
+        /*
+         * 兄弟应用的级联（上游 #770，移除应用时）。Arcade 按「用户 + 认证提供商」存连接：上面撤掉这个
+         * 应用的授权，也就结束了这个人在同一提供商下其他应用的连接（移除 Gmail，Google 日历跟着失效）。
+         * 那些应用的行留着，页面会一直说「已连接」，调用却全部被拒。所以对每个真的被撤销了的人，把同一
+         * 提供商下、厂商也说已经没有连接的应用一并结束，并各记一条审计（`endedWith` 说是随哪个应用结束
+         * 的）。只结束「提供商相同、厂商也答没有连接」的；问不到的留着，不猜——那个应用自己的页面下次
+         * 打开时会再核对。Composio 的 broker 没有 `authProviderOf`，这一段不做任何事。
+         */
+        const authProviderOf = broker?.authProviderOf?.bind(broker);
+        const removedProvider =
+          broker && authProviderOf
+            ? await withVendorDeadline(() => authProviderOf(toolkit)).catch(
+                () => null,
+              )
+            : null;
+        if (broker && authProviderOf && removedProvider) {
+          for (const person of people) {
+            if (vendorRevocationRequested.get(person.userId) !== true) continue;
+            const others = await reach(() =>
+              database
+                .select({ toolkit: composioConnections.toolkit })
+                .from(composioConnections)
+                .where(
+                  and(
+                    eq(composioConnections.userId, person.userId),
+                    eq(composioConnections.provider, brokerProvider),
+                    ne(composioConnections.toolkit, toolkit),
+                  ),
+                )
+                .orderBy(asc(composioConnections.toolkit)),
+            );
+            for (const other of others) {
+              try {
+                const theirs = await withVendorDeadline(() =>
+                  authProviderOf(other.toolkit),
+                );
+                if (
+                  !theirs ||
+                  theirs.toLowerCase() !== removedProvider.toLowerCase()
+                )
+                  continue;
+                const live = await withVendorDeadline(() =>
+                  broker.isConnected({
+                    userId: person.userId,
+                    toolkit: other.toolkit,
+                  }),
+                );
+                if (live) continue;
+                await revokeFurtherAccounts(
+                  other.toolkit,
+                  person.userId,
+                  await reach(() =>
+                    accounts.furtherIds({
+                      toolkit: other.toolkit,
+                      userId: person.userId,
+                    }),
+                  ),
+                );
+                const ended = await reach(() =>
+                  database
+                    .delete(composioConnections)
+                    .where(
+                      and(
+                        eq(composioConnections.toolkit, other.toolkit),
+                        eq(composioConnections.userId, person.userId),
+                      ),
+                    )
+                    .returning({ toolkit: composioConnections.toolkit }),
+                );
+                await reach(() =>
+                  accounts.forget({
+                    toolkit: other.toolkit,
+                    userId: person.userId,
+                  }),
+                );
+                if (ended.length === 0) continue;
+                await recordAuditEvent(auditStore, {
+                  eventType: "mcp.account_disconnected",
+                  targetType: "mcp_server",
+                  targetId: other.toolkit,
+                  payload: {
+                    actor: by,
+                    server: other.toolkit,
+                    owner: person.userId,
+                    reason: "mcp_server_removed",
+                    vendorRevocationRequested: true,
+                    endedWith: toolkit,
+                  },
+                });
+              } catch (error) {
+                console.error(
+                  JSON.stringify({
+                    type: "arcade-sibling-not-cleared",
+                    app: other.toolkit,
+                    removed: toolkit,
+                    note: "An app sharing the removed app's auth provider could not be checked or cleared; its row stands until its own page is opened.",
+                    error: reasonWithoutStatement(error),
+                  }),
+                );
+              }
+            }
+          }
+        }
+
         for (const connection of connected) {
           await recordAuditEvent(auditStore, {
             eventType: "mcp.account_disconnected",
@@ -8531,6 +8642,68 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 应用地址，所以 store 与路由对「这些行属于谁」只有一个答案。
      */
     brokerProvider,
+
+    /**
+     * 记下一个厂商已经持有、而这里还没有行（或要补记一次重新连接）的个人授权——只给「连接」那一按用
+     * （上游 `confirmBrokeredConnection({ pressed: "connect" })`，Arcade）。
+     *
+     * 为什么它不是「确认」的一部分：页面一打开就会跑确认，任何人打开页面都能触发；让它新建连接，就是让
+     * 「厂商说有」绕过回程验证直接变成一条连接。这里只在本人自己按下「连接」、厂商答「你的账号已经允许
+     * 这个应用要的全部权限」时调用：授权记在他自己在厂商那边的名字下，那个名字只有他自己的会话铸得出，
+     * 所以这是他自己同意过的东西，记下来不需要再同意一次。团队账号从不走这里（见连接路由）。
+     *
+     * 厂商此刻说没有连接时什么都不写，答 `{ connected: false }`。已有行时只把连接日期前移：卡片据此知道
+     * 已经重新连接过了。
+     */
+    async recordHeldConnection(input: {
+      toolkit: string;
+      userId: string;
+      by: string;
+    }): Promise<{ connected: boolean }> {
+      if (!broker) throw new BrokerUnconfiguredError();
+      const connected = await broker.isConnected({
+        userId: input.userId,
+        toolkit: input.toolkit,
+      });
+      if (!connected) return { connected: false };
+      const mine = and(
+        eq(composioConnections.toolkit, input.toolkit),
+        eq(composioConnections.userId, input.userId),
+      );
+      const [held] = await database
+        .select({ toolkit: composioConnections.toolkit })
+        .from(composioConnections)
+        .where(mine)
+        .limit(1);
+      await this.recordBrokeredConnection({
+        toolkit: input.toolkit,
+        userId: input.userId,
+        verified: true,
+        probeAction: null,
+      });
+      if (held) {
+        await database
+          .update(composioConnections)
+          .set({ connectedAt: new Date(), updatedAt: new Date() })
+          .where(mine);
+        return { connected: true };
+      }
+      await recordAuditEvent(auditStore, {
+        eventType: "mcp.account_connected",
+        targetType: "mcp_server",
+        targetId: input.toolkit,
+        payload: {
+          actor: input.by,
+          server: input.toolkit,
+          scope: "",
+          reconnected: false,
+          holder: "person",
+          // 没有经过同意页面：厂商已经持有，由本人按「连接」记下。
+          adopted: true,
+        },
+      });
+      return { connected: true };
+    },
 
     /**
      * 这个应用是否公布了一个名字恰好是这样的动作（上游 `serverPublishesAction`）。
@@ -11639,6 +11812,8 @@ export function createPluginStore(options: PluginStoreOptions) {
        * itself failed has not completed the call, and a reader counting successes should not be told
        * it did.
        */
+      /** 厂商以「需要授权」拒绝时，这次调用是以哪个 id 发出的；别的结局都是 null。 */
+      let notAllowedAs: string | null = null;
       try {
         /*
          * A server reached as the signed-in person goes out as the person asking and nobody else,
@@ -11759,7 +11934,9 @@ export function createPluginStore(options: PluginStoreOptions) {
         });
         const answer = { text: result.text, isError: result.isError };
         await approval?.complete(answer);
-        return answer;
+        if (!result.actionNotAllowed) return answer;
+        // 厂商不让这个账号执行这个动作：出了这个 try 再处理，这次调用上面已经记过一次失败。
+        notAllowedAs = runsAs;
       } catch (error) {
         /*
          * Recorded, then rethrown unchanged. The caller's behaviour is unaffected — what changes is
@@ -11795,6 +11972,73 @@ export function createPluginStore(options: PluginStoreOptions) {
         });
         throw error;
       }
+
+      /*
+       * 厂商以「需要授权」拒绝了这次调用（Arcade，上游 #927 的「重新连接」卡片）。两种情况答的是同一句：
+       * 授权在厂商那边整个没了，或者这个账号只授权了应用的其他动作（逐个动作授权留下的正是这样）。两种都
+       * 靠再连接一次补齐，所以都给带「重新连接」的卡片，而不是一句让模型去转述的失败。
+       *
+       * 连接行只在厂商确认「这个账号在这个应用上什么都不持有了」时才结束。只批准了读邮件的人让员工去发
+       * 邮件，被拒的是发，读还要继续能用；问不到（厂商不答、超时）也留着，不猜。团队账号的行这里不动：
+       * 这次调用跑在提问人的帧里，动不了团队的行，卡片请管理员去重新连接。
+       */
+      const refusedToolkit =
+        access.credential === "brokered" ? access.toolkit : null;
+      const holder = input.credentialActorId ?? input.actorId;
+      const ownName = vendorNameOf(holder);
+      const reachedAs: string = notAllowedAs ?? ownName;
+      const gone =
+        broker !== undefined &&
+        refusedToolkit !== null &&
+        !sharedApp &&
+        (await withVendorDeadline(() =>
+          broker.isConnected({
+            // 调用就是以这个 id 发出的；本人的名字按本地 id 去问（broker 那一层换名）。
+            userId: reachedAs === ownName ? holder : reachedAs,
+            toolkit: refusedToolkit,
+          }),
+        ).catch(() => true)) === false;
+      let othersRemain = false;
+      if (gone && refusedToolkit !== null) {
+        if (reachedAs !== ownName) {
+          // 没了的是他的另一个账号：只忘掉那一个，应用的连接还在。
+          const lost = (await accounts.rowsFor(refusedToolkit, holder)).find(
+            (candidate) => candidate.vendorUserId === reachedAs,
+          );
+          if (lost) {
+            await database
+              .delete(brokeredAccounts)
+              .where(eq(brokeredAccounts.id, lost.id));
+            await accounts.settleDefault(refusedToolkit, holder);
+          }
+          othersRemain = true;
+        } else {
+          await database
+            .delete(composioConnections)
+            .where(
+              and(
+                eq(composioConnections.toolkit, refusedToolkit),
+                eq(composioConnections.userId, holder),
+              ),
+            );
+        }
+      }
+      throw new PluginRefusedError(
+        connectAppRefusal({
+          serverId: row.id,
+          title: row.title,
+          message: sharedApp
+            ? `共享的 ${row.title} 账号还不允许这个动作，所以没有做。请管理员重新连接它。`
+            : gone
+              ? othersRemain && pinned
+                ? `你的 ${row.title} 账号 ${pinned.label} 已经不再连接，所以没有做。重新连接它，或者换一个账号再问一次。`
+                : `你的 ${row.title} 账号已经不再连接，所以没有做。重新连接之后再问一次。`
+              : `你的 ${row.title} 账号还不允许这个动作，所以没有做。重新连接之后再问一次。`,
+          reason: sharedApp ? "shared" : "reconnect",
+          at: new Date().toISOString(),
+        }),
+        null,
+      );
     },
   };
 }

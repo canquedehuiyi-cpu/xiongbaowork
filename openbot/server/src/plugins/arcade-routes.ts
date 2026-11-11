@@ -42,8 +42,8 @@ import { withVendorDeadline } from "./vendor-deadline";
  * - 只剩一种遗留授权：回程进行中尝试被取消（竞争），厂商已经确认、记录时认领不到。
  *   团队账号：在厂商那边撤销。团队身份每个应用、每次切换随机铸出，撤销不会连带别的应用；只有厂商答
  *   「撤了」才算撤回，答 false 或抛错都如实留痕（审计 `mcp.cancelled_grant_left_live`）。
- *   个人账号：只留痕并告诉本人。授权是本人自己的、记在本人 id 下，不算越权；撤销会连带本人同一认证
- *   提供商下的其他应用（fork 还没有上游按认证提供商列出兄弟应用的那一层），所以不撤。
+ *   个人账号：照上游，撤掉它不连带别的东西时才撤（这个应用原本没有连接，本人在同一认证提供商下也没有
+ *   别的应用）；会连带、判断不了或厂商没确认撤销时只留痕并告诉本人。
  * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）：与整应用的
  *   「连接」走同一条尝试与回程。团队账号的清单与授权都只给此刻持有管理员能力的人（上游让成员读清单）。
  */
@@ -386,6 +386,41 @@ async function leftoverGrant(
       },
     );
     if (withdrawn) return "withdrawn";
+  }
+  if (input.account.holder === "person" && input.toolkit) {
+    /*
+     * 个人账号照上游的规则：能判断「撤掉它不连带任何别的东西」时就撤，判断不了或会连带时如实留痕。
+     * Arcade 按认证提供商存连接，撤掉这次的授权就是结束这个人在同一提供商下的连接。所以：这个应用本来
+     * 就有一条连接（这次同意是加在它上面的）不撤；他在同一提供商下还有别的应用、或者有应用问不出提供商
+     * 也不撤；都没有时撤掉，而且只有厂商答「撤了」才算撤回。
+     */
+    const toolkit = input.toolkit;
+    const account = input.account;
+    let keep: string | null = null;
+    try {
+      if (await store.brokeredConnection({ toolkit, userId: account.userId })) {
+        keep = "the account already held this app's connection";
+      } else {
+        const collateral = await arcadeConnectionSiblings({
+          store,
+          arcade,
+          userId: account.userId,
+          toolkit,
+        });
+        if (collateral.siblings.length > 0 || collateral.unanswered > 0)
+          keep = "other apps share this connection";
+      }
+    } catch {
+      keep = "the apps sharing this connection could not be resolved";
+    }
+    if (keep === null) {
+      const ended = await withVendorDeadline(() =>
+        arcade.revoke({ account, toolkit }),
+      ).catch(() => false);
+      if (ended === true) return "withdrawn";
+      keep = "the vendor did not confirm the withdrawal";
+    }
+    input = { ...input, why: `${input.why}; ${keep}` };
   }
   await store
     .recordCancelledGrantLeftLive({

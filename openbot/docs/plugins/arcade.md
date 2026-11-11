@@ -252,15 +252,19 @@ cancelled while its return is being processed, after Arcade has confirmed. Then:
   each app and each switch to Shared, so revoking it cannot take another app with it. Only Arcade
   answering that it revoked counts; if it finds nothing or fails, the grant is recorded in the audit
   trail instead, as below.
-- **A person's own account is only recorded**: an `mcp.cancelled_grant_left_live` audit entry, and
-  the person is told (`cancelled-left-live`). It is their own grant under their own id, and
-  revoking it would end their other apps on the same auth provider (see
-  [Disconnecting one app may end another](#disconnecting-one-app-may-end-another)).
+- **A person's own account is revoked where that takes nothing else with it**, as upstream does.
+  Revoking ends the person's connection for that auth provider (see
+  [Disconnecting one app may end another](#disconnecting-one-app-may-end-another)), so it is done
+  only when the app had no connection before this consent and no other app of theirs is on the same
+  auth provider. Where the app was already connected, another app shares the connection, a
+  provider could not be read, or Arcade does not confirm the withdrawal, the grant is left and
+  recorded: an `mcp.cancelled_grant_left_live` audit entry, and the person is told
+  (`cancelled-left-live`).
 
 A refused return lands on `/settings/connected-accounts?authorized=<reason>`. The reasons this fork
 answers are `no-broker`, `missing-handle`, `no-attempt`, `cancelled`, `not-permitted`,
 `vendor-unavailable`, `not-your-authorization`, `authorization-failed`, `not-finished`,
-`cancelled-left-live` and `not-recorded`. **The page does not yet turn the word into a sentence**:
+`name-changed`, `cancelled-left-live` and `not-recorded`, the same words upstream uses. **The page does not yet turn the word into a sentence**:
 read it off the address. Neither the consent link nor anything Arcade answered is ever put in a
 response, a log line or the audit trail; the link is a bearer credential and a status answer carries
 an access token.
@@ -309,14 +313,20 @@ the admin capability at that moment: a session that says admin after the role wa
 refused before Arcade is asked anything. **与上游不同:** upstream lets any member read a Shared
 app's grant list (and refuses only the mint); here both are the administrator's.
 
-**与上游不同: a grant Arcade already holds is not adopted.** Upstream records the connection
-without a consent screen when Arcade already holds everything the app asks for, and records one for
-a grant with no row when the person opens the app. This fork records a new Arcade connection only
-through the return leg above. So **where Arcade holds a grant and this deployment has no row for
-it**, Connect answers an error — _你的账号已经允许 Gmail 需要的全部权限，所以没有打开授权页面。_ —
-and opening the app's page writes nothing. Known limit: the way out is to revoke that grant in
-Arcade's dashboard (the user's connection for that auth provider), then press Connect again.
-Revoking there ends the person's other apps on the same auth provider too.
+**Where Arcade already holds everything the app asks for, Connect records the connection without a
+consent screen**, and answers `{ "connected": true }` instead of a link. That happens only on the
+press itself: the grant is filed under the person's own name at Arcade, which only their own
+session can mint, so it is something they consented to. **与上游不同:** a page that opens the app
+does not record a grant with no row here (upstream does); the confirm a page runs on load only
+refreshes a connection that already exists, because anybody opening a page can trigger it.
+
+**与上游不同: a Shared app's team account is never adopted.** Where Arcade holds a grant under the
+team identity and the app has no team account recorded, nothing here can say who consented to it:
+it may be left from a connect that was cancelled or refused, by somebody who is no longer an
+administrator, with a mailbox of their own. So Connect by an administrator first revokes it at
+Arcade (the team identity is minted per app, so nothing else goes with it) and then starts a new
+consent, which that administrator finishes in their own session. If the grant cannot be revoked,
+Connect is refused and nothing is recorded.
 
 **A person can hold a second account at an app.** Arcade keeps one account per user id and auth
 provider, so a person's second account at an app (**Connect another account**,
@@ -330,10 +340,16 @@ hold is refused before Arcade is asked. Disconnecting one account withdraws that
 the app, offboarding the person or removing the app withdraws every account they hold there. A
 Shared app has one team account and no second one.
 
-**与上游不同: no Reconnect card, and no Reconnect button.** When Arcade refuses a call for want of
-authorization, the call fails and the Bot is told the action is not allowed on this account; the
-row is not cleared and no card is drawn. Connect on an app that already has a row answers 409, so
-connecting again is Disconnect and then Connect.
+**A call Arcade refuses for want of authorization shows the person the Reconnect card.** The
+refusal carries the connect-app marker with `reason: "reconnect"` (`"shared"` for a team account,
+which an administrator reconnects) and the time of the refusal. The connection row is ended only
+where Arcade then answers that the account holds nothing for the app; where it holds the app's
+other actions, which is what approving one action at a time leaves, or does not answer in time,
+the row stays and those actions go on working. Reconnect is Connect again:
+`POST /servers/:id/connect` over a connection that stands asks for the whole app under the same
+account, with no Disconnect first, and when the consent comes back the connection's date moves
+forward so the card stops offering it. A connected Shared app is reconnected in place the same way,
+by an administrator.
 
 ### Toolkits are curated or they are wrappers, and the difference was measured
 
@@ -355,10 +371,11 @@ anything: that marker is what makes a call ask as deleting does (see [Approvals]
 and it stays for the actions Arcade flags, such as `Attio.RemoveFromList`. A Composio action with no
 label is recorded the same way. Where a curated toolkit exists for the app, enable that one.
 
-**与上游不同: nothing warns before an unclassified toolkit is enabled.** Upstream's directory page
-shows how many of a toolkit's actions are classified and warns before the administrator finishes.
-This fork's picker shows neither: the count is computed for Arcade's catalogue and the page does not
-draw it. Look at the app's actions after adding it.
+**The directory says how much of a toolkit is classified.** Each app in `GET /composio/apps`
+carries `actionCount`, `classifiedCount`, `permissionCount` and `scopedActionCount` (the last three
+`null` where the broker does not report them, as on Composio), so the page can warn before an
+administrator enables a toolkit most of whose actions carry no label. **与上游不同:** the warning
+itself is the web app's and is not drawn yet; the numbers are there for it.
 
 ## Least privilege is not an Arcade property
 
@@ -452,13 +469,15 @@ only one of them. **Somebody disconnecting Gmail can end their Calendar**, in pr
 Two _Shared_ apps that both use Google do **not** share a connection, because each Shared app has
 its own randomly minted identity at Arcade — disconnecting one does not touch the other.
 
-**与上游不同: the person is not told beforehand.** Upstream names the apps that would end with the
-connection before somebody confirms a disconnect. This fork reconciles afterwards: once a person's
-disconnect has gone through, each of their other Arcade apps on the same auth provider that Arcade
-now also reports as not connected has its row here ended too, with its own audit entry, and the
-response lists them (`siblings`). The page does not show that list. An app Arcade could not be asked
-about keeps its row (`arcade-sibling-not-cleared` in the log); pressing Disconnect again is the
-retry. An administrator removing an app does not run this reconciliation.
+**The apps that would end are named beforehand.** `GET /servers/:id/connection/siblings` answers
+the person's other apps on the same auth provider, and how many could not be asked about, so the
+page can say what a disconnect takes with it. After the disconnect, each of those that Arcade now
+also reports as not connected has its row here ended too, with its own audit entry, and the
+response lists them (`siblings`). An app Arcade could not be asked about keeps its row
+(`arcade-sibling-not-cleared` in the log); pressing Disconnect again is the retry. **An
+administrator removing an app runs the same reconciliation** for every person whose connection the
+removal revoked: their other apps on that auth provider that Arcade no longer holds are ended, each
+with an audit entry naming the app it ended with (`endedWith`).
 
 ## Revoking at Arcade is not revoking at the provider
 
@@ -507,28 +526,24 @@ wrong-account case among the causes, because the vendor will not say.
 
 Everything above that is marked, in one place:
 
-1. **A grant left behind by a cancelled attempt**: a Shared app's team account is revoked at Arcade;
-   a person's own is only recorded in the audit trail (`mcp.cancelled_grant_left_live`).
+1. **A grant Arcade holds with no connection here is recorded only on the person's own Connect**,
+   never by a page loading; and a Shared app's team account is never adopted: it is revoked and
+   consented to again by the administrator who presses Connect.
 2. **Cancelled and no-longer-permitted returns are judged before Arcade is asked to confirm**, so
    those consents never take effect at Arcade.
-3. **A grant Arcade already holds is not adopted.** Connect answers an error when Arcade holds a
-   grant this deployment has no row for; revoke it in Arcade's dashboard, then connect again.
-4. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
+3. **A member is never shown the broker's name**, so a verifier pointing elsewhere reads to the
    person as a generic failure and the address is in the startup warning and the log.
-5. **No Reconnect card or button**: a call Arcade refuses for want of authorization simply fails,
-   and connecting again is Disconnect, then Connect.
-6. **Siblings are reconciled after a disconnect, not named before it**, and not when an
-   administrator removes an app.
-7. **An Arcade row is written verified, dated the day of the consent.**
-8. **Nothing warns before an unclassified toolkit is enabled.**
-9. **A Shared app's grant list is read by an administrator only**, as its per-action Authorize is;
+4. **An Arcade row is written verified, dated the day of the consent.**
+5. **A Shared app's grant list is read by an administrator only**, as its per-action Authorize is;
    upstream lets any member read it. The pre-redirect consent copy that names the permission being
    asked for is the web app's and is not here yet.
-10. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
-    `/settings/connected-accounts`, rows in `composio_connections` and on `mcp_servers`; the return
-    leg's reason is not yet shown as a sentence; Composio's "deployment's own OAuth client" answers
-    409 on Arcade.
-11. **None of upstream's live measurements has been repeated by this fork.**
+6. **Pages and tables**: one directory page (`/admin/plugins/composio`), connections under
+   `/settings/connected-accounts`, rows in `composio_connections` and on `mcp_servers`; the return
+   leg's reason is not yet shown as a sentence; Composio's "deployment's own OAuth client" answers
+   409 on Arcade. The server answers what upstream's pages read (the grant list, the siblings a
+   disconnect would end, the classification counts, the Reconnect card's marker), and the pages
+   that draw the action list, the sibling warning and the classification warning are not here yet.
+7. **None of upstream's live measurements has been repeated by this fork.**
 
 ## What is unproven
 
