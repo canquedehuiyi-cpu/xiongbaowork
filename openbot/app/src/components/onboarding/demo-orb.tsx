@@ -1,10 +1,10 @@
 import type { AIState } from "@/components/agents/orb/ai-core";
 import AgentOrb from "@/components/agents/orb/agent-orb";
-import { orbPalette } from "@/lib/orb-palette";
+import { orbPalette, XIONGBAO_ORB } from "@/lib/orb-palette";
 
 /**
  * An orb in one of onboarding's pictures: a Bot's, in the palette its seed picks as `BotOrb` draws
- * it, or OpenBot's own mark with no seed.
+ * it, or the product's own mark with no seed, in 熊宝's red, white and graphite.
  *
  * Always the live `AgentOrb`, because a picture shows a Bot listening, working and done, where
  * `BotOrb` only draws idle, working and waiting. Decorative: the picture around it is labelled, so
@@ -30,7 +30,7 @@ export function DemoOrb({
       style={{ height: size, width: size }}
     >
       <AgentOrb
-        colors={seed ? orbPalette(seed) : undefined}
+        colors={seed ? orbPalette(seed) : XIONGBAO_ORB}
         size={`${size}px`}
         state={state}
         still={still}

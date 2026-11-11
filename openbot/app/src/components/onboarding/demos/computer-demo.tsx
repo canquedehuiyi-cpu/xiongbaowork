@@ -21,10 +21,10 @@ export function ComputerDemo() {
       rest={0}
     >
       {({ beat, playing }) => (
-        <div className="relative aspect-5/3 w-full overflow-hidden rounded-xl border border-border">
+        <div className="relative aspect-5/3 w-full overflow-hidden rounded-[14px] border border-border">
           <ComputerPlaceholder className="absolute inset-0 h-full w-full" />
           <DesktopIllustration still={!playing} />
-          <div className="bg-background/80 backdrop-blur absolute bottom-3 left-3 flex items-center gap-2 rounded-full py-1 pr-3 pl-1 ring-1 ring-border shadow-lg">
+          <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-card py-1 pr-3 pl-1 ring-1 ring-border shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]">
             <DemoOrb size={28} state="thinking" still={!playing} />
             <span className="text-xs font-medium text-foreground">
               {beat === 0 ? "正在读网页" : "正在存进文件"}

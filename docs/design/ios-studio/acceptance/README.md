@@ -104,7 +104,7 @@
 | `_authed/_app` | app | `AppShell`：226px 侧栏、导航红条、员工/群组分段、名单、账户区；小管家改入面包屑栏 | 全部 app 截图 | 已实现 |
 | `/sign` | — | 品牌 logo、红线英文眉线、登录/注册分段、卡面、错误红色浅底 | `conversations/sign-*.webp`（以 `/api/me` 返回 401 的专用脚本拍摄） | 已实现 |
 | `/sign-in/$requestId` | prose | 复查无需改 | `conversations/sign-in-signin-crm.webp` | 已复查 |
-| `/onboarding` | — | 熊宝头像、步骤指示、卡面；**重定向**：已完成引导或部署不跟踪引导时回到 `/` | `conversations/onboarding-*.webp`（以需引导的用户拍摄） | 已实现 |
+| `/onboarding` | — | 上游向导框架套黑白红：品牌 logo 与中英文名、`0N ONBOARDING` 眉线、开放式大标题、红色当前步骤标记（步骤菜单、手机进度条、演示圆点）、石墨演示面板、熊宝红白光球；资料来源步骤右侧补熊宝示意图；**重定向**：已完成引导或部署不跟踪引导时回到 `/` | `conversations/onboarding-{welcome,sources,name}-{dark,light}-1440x900.webp`、`…-dark-390x844.webp`（`bun tests/parity/onboarding-shots.ts` 以需引导的用户拍摄） | 已实现 |
 | `/` | app | 欢迎区熊宝 + 开放式标题、共享员工空态 | `routes/home.webp` | 已实现 |
 | `/bot` | app | 页头员工信息、聊天组件中文化、气泡样式 | `routes/bot.webp` | 已实现 |
 | `/channel/new` | app | 收件人行、空对话欢迎 | `routes/channel-new*.webp` | 已实现 |

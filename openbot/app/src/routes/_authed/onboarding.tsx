@@ -18,6 +18,7 @@ import { IntroReel } from "@/components/onboarding/demos/intro-reel";
 import { ModelLibraryGuide } from "@/components/onboarding/model-library-guide";
 import { FINISH_MS, useNameStep } from "@/components/onboarding/name-step";
 import { StepIntro } from "@/components/onboarding/onboarding-frame";
+import { SourcesPicture } from "@/components/onboarding/sources-picture";
 import {
   type OnboardingStep,
   OnboardingWizard,
@@ -160,6 +161,7 @@ function sourcesStep(nextStep: number, onAdvanced: () => void): OnboardingStep {
     // The step list names a step by its heading, and SourcesStep draws its own.
     title: "告诉你的分身，你的资料在哪里",
     intro: () => <SourcesStep nextStep={nextStep} onAdvanced={onAdvanced} />,
+    demo: () => <SourcesPicture />,
     primaryHidden: true,
   };
 }

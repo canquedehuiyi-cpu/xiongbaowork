@@ -44,6 +44,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   的账号」同意卡；check-in 不读这类服务器。换取 token 用的 Microsoft refresh token 是 Better Auth 的登录记录，
   由 Better Auth 加密（随 `BETTER_AUTH_SECRET`），不在 fork 凭据库里。
 
+- **新手引导也换成黑白红。** 顶部是熊宝 logo 与中英文名，每步有编号眉线和开放式大标题，当前步骤用红色标出，演示插图改在石墨面板上，熊宝的光球改为红白配色；「告诉你的分身，你的资料在哪里」一步在右侧补了示意图。步骤、按钮和保存行为不变。
+
 - **The whole web app is redrawn in 熊宝's black, white and red** (docs/design/ios-studio). A near-black
   canvas with graphite cards and hairlines; white (black on paper) for the primary action and the main
   text; red only for the selected place, what needs attention, the brand and a few signal lines. The
