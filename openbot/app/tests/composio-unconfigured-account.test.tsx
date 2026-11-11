@@ -182,14 +182,14 @@ function renderAccount(composioConfigured: boolean) {
 
 test("the app's page says it is not available yet, and names no setting", async () => {
   const view = renderAccount(false);
-  const empty = await view.findByText(/An admin has to turn on Gmail/);
-  expect(empty.parentElement?.textContent).toContain("Not set up yet");
+  const empty = await view.findByText(/管理员要先打开 Gmail/);
+  expect(empty.parentElement?.textContent).toContain("还没有设置");
   expect(view.queryByText(/COMPOSIO_API_KEY/)).toBeNull();
-  expect(view.queryByRole("button", { name: "Connect" })).toBeNull();
+  expect(view.queryByRole("button", { name: "连接" })).toBeNull();
 });
 
 test("with the key set, the app's page offers the account as before", async () => {
   const view = renderAccount(true);
-  expect(await view.findByText("Your account")).toBeTruthy();
-  expect(view.queryByText(/isn't set up yet/)).toBeNull();
+  expect(await view.findByText("你的账号")).toBeTruthy();
+  expect(view.queryByText(/还没有设置/)).toBeNull();
 });

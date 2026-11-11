@@ -394,7 +394,8 @@ export function listedRefs(
  * this row, which are the names `plugin_grants` stores, and only without any from the row id itself.
  */
 export function appKeyOf(server: PluginServer): string {
-  const ref = server.tools[0]?.ref ?? server.withdrawn[0]?.ref;
+  // Optional reads: a partial row (a test fixture, a stale cache) must still name itself.
+  const ref = server.tools?.[0]?.ref ?? server.withdrawn?.[0]?.ref;
   const slash = ref?.indexOf("/") ?? -1;
   if (ref && slash > 0) return ref.slice(0, slash);
   return server.id.startsWith("team:") ? server.id.slice(5) : server.id;

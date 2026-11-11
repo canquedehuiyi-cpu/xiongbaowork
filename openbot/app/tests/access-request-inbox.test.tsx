@@ -137,7 +137,7 @@ test("X 系列：Team Bot 的申请显示批准范围（scopeNote），私人员
       appliesTo: "team_bot",
       requesterRole: "teammate",
       scopeNote: note,
-    } as (typeof pending)[number],
+    } as unknown as (typeof pending)[number],
     {
       ...pending[0],
       id: "r4",
@@ -146,7 +146,7 @@ test("X 系列：Team Bot 的申请显示批准范围（scopeNote），私人员
       appliesTo: "bot",
       requesterRole: "owner",
       scopeNote: null,
-    } as (typeof pending)[number],
+    } as unknown as (typeof pending)[number],
   );
   try {
     const view = draw();

@@ -187,7 +187,8 @@ function CreateAgentWizard({
     useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   const isolationAvailable = capabilities?.isolationAvailable ?? false;
   const { data: mine } = useQuery(myCapabilitiesQueryOptions());
-  const isolationAllowed = mine?.capabilities.isolatedComputers !== false;
+  // Read defensively: an older server answers without `capabilities`, and the wizard must still open.
+  const isolationAllowed = mine?.capabilities?.isolatedComputers !== false;
   /** Shared with the person's own computer unless they tick it. */
   const [isolated, setIsolated] = useState(false);
 

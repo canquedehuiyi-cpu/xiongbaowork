@@ -66,7 +66,7 @@ export const KIND_LABEL: Record<TriggerKind, string> = {
   linear: "Linear",
   sentry: "Sentry",
   pagerduty: "PagerDuty",
-  email: "Email",
+  email: "邮件",
   slack: "Slack",
 };
 const KIND_ICON: Record<TriggerKind, typeof IconWebhook> = {
@@ -80,18 +80,18 @@ const KIND_ICON: Record<TriggerKind, typeof IconWebhook> = {
 };
 const KIND_HELP: Record<TriggerKind, string> = {
   webhook:
-    "POST JSON to this URL with the Authorization header, or with Standard Webhooks signature headers. A 200 means it was received, not that the run finished.",
+    "带上授权请求头（或 Standard Webhooks 签名头）向这个地址 POST JSON。返回 200 表示已接收，不代表已经做完。",
   github:
-    "In the repository's Settings → Webhooks, set the payload URL to this URL, content type application/json, and the secret to the key.",
+    "在仓库的 Settings → Webhooks 里，把 payload URL 设为这个地址，content type 选 application/json，secret 填这个密钥。",
   linear:
-    "In Linear, Settings → API → Webhooks: set the URL, then paste the signing secret Linear shows here.",
+    "在 Linear 的 Settings → API → Webhooks 里填好地址，再把 Linear 显示的签名密钥粘贴到这里。",
   sentry:
-    "In a Sentry internal integration, set the webhook URL, then paste the integration's client secret here.",
+    "在 Sentry 的内部集成里填好 webhook 地址，再把集成的 client secret 粘贴到这里。",
   pagerduty:
-    "In PagerDuty, Integrations → Generic Webhooks (v3): set the URL, then paste the secret shown on creation here.",
-  email: "Send or forward mail to this address to start a run.",
+    "在 PagerDuty 的 Integrations → Generic Webhooks (v3) 里填好地址，再把创建时显示的密钥粘贴到这里。",
+  email: "向这个地址发送或转发邮件，就会开始一次运行。",
   slack:
-    "Starts on Slack events this Bot receives. Messages sent before you added the trigger are ignored.",
+    "由这位员工收到的 Slack 事件触发。添加触发方式之前的消息会被忽略。",
 };
 const VENDOR_SECRET: ReadonlySet<TriggerKind> = new Set([
   "linear",
@@ -99,10 +99,10 @@ const VENDOR_SECRET: ReadonlySet<TriggerKind> = new Set([
   "pagerduty",
 ]);
 const SLACK_MODE = {
-  mention: "The Bot is mentioned",
-  phrase: "A message contains a phrase",
-  reaction: "A reaction is added",
-  message: "Any message",
+  mention: "员工被 @ 到",
+  phrase: "消息里包含某个短语",
+  reaction: "有人加了表情回应",
+  message: "任何消息",
 } as const;
 type SlackMode = keyof typeof SLACK_MODE;
 const list = (value: string) =>
@@ -124,7 +124,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {copied ? "Copied" : label}
+      {copied ? "已复制" : label}
     </Button>
   );
 }
@@ -141,31 +141,31 @@ function Copyable({ children }: { children: string }) {
 function describeFilter(config: TriggerConfig) {
   if (config.kind === "slack") {
     const where = config.channels.length
-      ? `in ${config.channels.join(", ")}`
-      : "in every channel the Bot is in";
+      ? `在 ${config.channels.join("、")} 里`
+      : "在员工所在的每个频道里";
     const what =
       config.mode === "mention"
-        ? "when the Bot is mentioned"
+        ? "员工被 @ 到时"
         : config.mode === "message"
-          ? "on any message"
+          ? "有任何消息时"
           : config.mode === "phrase"
-            ? `on messages containing ${config.phrases.map((phrase) => `"${phrase}"`).join(" or ")}`
-            : `on reactions${config.reactions.length ? ` :${config.reactions.join(": :")}:` : ""}`;
-    return `${what} ${where} (workspace ${config.teamId})`;
+            ? `消息里包含${config.phrases.map((phrase) => `「${phrase}」`).join("或")}时`
+            : `有人加了${config.reactions.length ? ` :${config.reactions.join(": :")}: ` : ""}表情回应时`;
+    return `${where}${what}（工作区 ${config.teamId}）`;
   }
   const parts = [
     config.filter.eventTypes.length
-      ? `events ${config.filter.eventTypes.join(", ")}`
-      : "every event",
+      ? `事件 ${config.filter.eventTypes.join("、")}`
+      : "任何事件",
   ];
   if (config.filter.field)
     parts.push(
-      `where ${config.filter.field.path} = ${config.filter.field.equals}`,
+      `且 ${config.filter.field.path} = ${config.filter.field.equals}`,
     );
   if (config.kind === "github" && config.repository)
-    parts.push(`from ${config.repository}`);
+    parts.push(`来自 ${config.repository}`);
   if (config.kind === "email" && config.allowedSenders.length)
-    parts.push(`from ${config.allowedSenders.join(", ")} (authenticated)`);
+    parts.push(`来自 ${config.allowedSenders.join("、")}（已验证）`);
   return parts.join(" ");
 }
 
@@ -184,7 +184,7 @@ export function Triggers({ goal }: { goal: ResponsibilityRecord }) {
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-medium text-sm">Triggers</h3>
+        <h3 className="font-medium text-sm">触发方式</h3>
         <Button
           size="sm"
           variant="outline"
@@ -192,12 +192,12 @@ export function Triggers({ goal }: { goal: ResponsibilityRecord }) {
           onClick={() => setAdding(true)}
         >
           <IconPlus />
-          Add trigger
+          添加触发
         </Button>
       </div>
       {goal.status !== "active" && (
         <p className="text-muted-foreground text-xs">
-          This goal is {goal.status}. Its triggers won't start it.
+          这项长期职责{goal.status === "paused" ? "已暂停" : "已完成"}，触发方式不会让它开工。
         </p>
       )}
       {triggers.error && (
@@ -207,7 +207,7 @@ export function Triggers({ goal }: { goal: ResponsibilityRecord }) {
       )}
       {triggers.data?.length === 0 && (
         <p className="text-muted-foreground text-xs">
-          No triggers. It runs when you press Run now, or on the events above.
+          没有触发方式。按「立即运行」时，或上面订阅的事件发生时，它才会运行。
         </p>
       )}
       {triggers.data?.length ? (
@@ -296,7 +296,7 @@ function TriggerRow({
         <ItemTitle>{KIND_LABEL[trigger.kind]}</ItemTitle>
         <ItemDescription className="line-clamp-none">
           {describeFilter(trigger.config)}
-          {trigger.enabled ? "" : " · Paused"}
+          {trigger.enabled ? "" : " · 已暂停"}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -308,14 +308,14 @@ function TriggerRow({
               disabled={remove.isPending}
               onClick={() => remove.mutate(trigger)}
             >
-              Remove for good
+              永久移除
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setConfirmRemove(false)}
             >
-              Keep
+              保留
             </Button>
           </>
         ) : (
@@ -325,10 +325,10 @@ function TriggerRow({
               variant="ghost"
               onClick={() => setConfirmRemove(true)}
             >
-              Remove
+              移除
             </Button>
             <Switch
-              aria-label={`Run on this ${KIND_LABEL[trigger.kind]} trigger`}
+              aria-label={`启用这个${KIND_LABEL[trigger.kind]}触发`}
               checked={trigger.enabled}
               disabled={toggle.isPending}
               onCheckedChange={() =>
@@ -344,34 +344,33 @@ function TriggerRow({
         </p>
         {url && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs">POST to</span>
+            <span className="text-xs">POST 到</span>
             <Copyable>{url}</Copyable>
-            <CopyButton value={url} label="Copy URL" />
+            <CopyButton value={url} label="复制地址" />
           </div>
         )}
         {trigger.kind === "email" &&
           (trigger.address ? (
             <div className="flex flex-wrap items-center gap-2">
               <Copyable>{trigger.address}</Copyable>
-              <CopyButton value={trigger.address} label="Copy address" />
+              <CopyButton value={trigger.address} label="复制邮箱地址" />
             </div>
           ) : (
             <p className="text-amber-600 text-xs dark:text-amber-500">
-              Email isn't set up on OpenBot yet, so this address can't receive
-              mail. An admin has to turn it on.
+              熊宝还没设置收信，所以这个地址暂时收不到邮件。需要管理员开启。
             </p>
           ))}
         {generated && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs">Key</span>
+            <span className="text-xs">密钥</span>
             {shown ? (
               <>
                 <Copyable>{shown}</Copyable>
-                <CopyButton value={shown} label="Copy key" />
+                <CopyButton value={shown} label="复制密钥" />
                 {trigger.kind === "webhook" && (
                   <CopyButton
                     value={`Authorization: Bearer ${shown}`}
-                    label="Copy header"
+                    label="复制请求头"
                   />
                 )}
               </>
@@ -384,7 +383,7 @@ function TriggerRow({
                   reveal.mutate(trigger.id, { onSuccess: setSecret })
                 }
               >
-                Show key
+                显示密钥
               </Button>
             )}
             <Button
@@ -393,7 +392,7 @@ function TriggerRow({
               disabled={rotate.isPending}
               onClick={rotateSecret}
             >
-              Replace key
+              轮换密钥
             </Button>
           </div>
         )}
@@ -416,25 +415,25 @@ function TriggerRow({
               }
             >
               {trigger.hasSecret
-                ? "Signing secret saved"
-                : "Waiting for the signing secret"}
+                ? "签名密钥已保存"
+                : "等待填写签名密钥"}
             </span>
             <div className="flex items-center gap-2">
               <Input
-                aria-label="Signing secret"
+                aria-label="签名密钥"
                 type="password"
                 autoComplete="new-password"
                 placeholder={
                   trigger.hasSecret
-                    ? "Paste a new secret to replace it"
-                    : "Paste the signing secret"
+                    ? "粘贴新的密钥以轮换"
+                    : "粘贴签名密钥"
                 }
                 value={pasted}
                 onChange={(event) => setPasted(event.target.value)}
                 required
               />
               <Button size="sm" type="submit" disabled={rotate.isPending}>
-                Save secret
+                保存密钥
               </Button>
             </div>
           </form>
@@ -515,7 +514,7 @@ function NewTriggerDialog({
   // The triggers list and the shared-app requests both refetch from the write itself.
   const create = useMutation(createTriggerMutationOptions(queryClient));
   const placeholder: Record<TriggerKind, string> = {
-    webhook: "deploy.finished (blank: any)",
+    webhook: "deploy.finished（留空表示任意）",
     github: "issues.opened, pull_request",
     linear: "Issue.create, Comment",
     sentry: "issue.created, event_alert.triggered",
@@ -529,9 +528,9 @@ function NewTriggerDialog({
           would otherwise render a nested dialog with no backdrop at all. */}
       <DialogContent overlayClassName="bg-black/20 supports-backdrop-filter:backdrop-blur-sm">
         <DialogHeader>
-          <DialogTitle>Add trigger</DialogTitle>
+          <DialogTitle>添加触发</DialogTitle>
           <DialogDescription>
-            Something outside OpenBot that starts work on this goal.
+            熊宝之外、能让这项长期职责开工的东西。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 overflow-y-auto">
@@ -555,7 +554,7 @@ function NewTriggerDialog({
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor={`${id}-kind`}>Trigger</FieldLabel>
+                <FieldLabel htmlFor={`${id}-kind`}>触发方式</FieldLabel>
                 <Select
                   items={KIND_LABEL}
                   onValueChange={(value) => {
@@ -580,7 +579,7 @@ function NewTriggerDialog({
                 <FieldGroup className="sm:grid sm:grid-cols-2">
                   <Field>
                     <FieldLabel htmlFor={`${id}-team`}>
-                      Slack team ID
+                      Slack 团队 ID
                     </FieldLabel>
                     <Input
                       id={`${id}-team`}
@@ -591,7 +590,7 @@ function NewTriggerDialog({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor={`${id}-mode`}>Fire on</FieldLabel>
+                    <FieldLabel htmlFor={`${id}-mode`}>触发条件</FieldLabel>
                     <Select
                       items={SLACK_MODE}
                       onValueChange={(value) => {
@@ -616,7 +615,7 @@ function NewTriggerDialog({
                   {mode === "phrase" && (
                     <Field>
                       <FieldLabel htmlFor={`${id}-phrases`}>
-                        Phrases (comma separated)
+                        短语（用逗号分隔）
                       </FieldLabel>
                       <Input
                         id={`${id}-phrases`}
@@ -629,7 +628,7 @@ function NewTriggerDialog({
                   {mode === "reaction" && (
                     <Field>
                       <FieldLabel htmlFor={`${id}-reactions`}>
-                        Reactions (blank: any)
+                        表情回应（留空表示任意）
                       </FieldLabel>
                       <Input
                         id={`${id}-reactions`}
@@ -641,7 +640,7 @@ function NewTriggerDialog({
                   )}
                   <Field>
                     <FieldLabel htmlFor={`${id}-channels`}>
-                      Channel IDs (blank: all the Bot is in)
+                      频道 ID（留空表示员工所在的全部频道）
                     </FieldLabel>
                     <Input
                       id={`${id}-channels`}
@@ -654,7 +653,7 @@ function NewTriggerDialog({
               ) : (
                 <FieldGroup className="sm:grid sm:grid-cols-2">
                   <Field className="sm:col-span-2">
-                    <FieldLabel htmlFor={`${id}-types`}>Event types</FieldLabel>
+                    <FieldLabel htmlFor={`${id}-types`}>事件类型</FieldLabel>
                     <Input
                       id={`${id}-types`}
                       placeholder={placeholder[kind]}
@@ -664,7 +663,7 @@ function NewTriggerDialog({
                   </Field>
                   <Field>
                     <FieldLabel htmlFor={`${id}-path`}>
-                      Only when field
+                      仅当字段
                     </FieldLabel>
                     <Input
                       id={`${id}-path`}
@@ -674,7 +673,7 @@ function NewTriggerDialog({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor={`${id}-equals`}>equals</FieldLabel>
+                    <FieldLabel htmlFor={`${id}-equals`}>等于</FieldLabel>
                     <Input
                       id={`${id}-equals`}
                       placeholder="ENG"
@@ -685,7 +684,7 @@ function NewTriggerDialog({
                   {kind === "github" && (
                     <Field className="sm:col-span-2">
                       <FieldLabel htmlFor={`${id}-repo`}>
-                        Repository (optional)
+                        仓库（可选）
                       </FieldLabel>
                       <Input
                         id={`${id}-repo`}
@@ -698,7 +697,7 @@ function NewTriggerDialog({
                   {kind === "email" && (
                     <Field className="sm:col-span-2">
                       <FieldLabel htmlFor={`${id}-senders`}>
-                        Allowed senders (blank: anyone)
+                        允许的发件人（留空表示任何人）
                       </FieldLabel>
                       <Input
                         id={`${id}-senders`}
@@ -711,7 +710,7 @@ function NewTriggerDialog({
                   {VENDOR_SECRET.has(kind) && (
                     <Field className="sm:col-span-2">
                       <FieldLabel htmlFor={`${id}-secret`}>
-                        Signing secret (can be added later)
+                        签名密钥（可以之后再填）
                       </FieldLabel>
                       <Input
                         id={`${id}-secret`}
@@ -735,7 +734,7 @@ function NewTriggerDialog({
         </DialogBody>
         <DialogFooter className="mt-4">
           <Button onClick={onClose} size="sm" type="button" variant="outline">
-            Cancel
+            取消
           </Button>
           <Button
             disabled={create.isPending}
@@ -743,7 +742,7 @@ function NewTriggerDialog({
             size="sm"
             type="submit"
           >
-            {create.isPending ? "Adding…" : `Add ${KIND_LABEL[kind]} trigger`}
+            {create.isPending ? "正在添加…" : `添加${KIND_LABEL[kind]}触发`}
           </Button>
         </DialogFooter>
       </DialogContent>
