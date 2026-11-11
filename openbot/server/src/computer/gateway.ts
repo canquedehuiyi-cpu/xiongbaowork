@@ -1328,15 +1328,13 @@ export function createComputerGateway(
         actorId: actor.id,
         botId: seat.botId,
         toolRef: toolName,
+        // M5: 电脑动作本身用上游的 `approvalEffectOf`/`approvalScopeOf`（#1381/#1402 的重放和 what-if 用同一套），
+        // 本地应用和桌面窗口仍按 fork 的说法。
         effect: app
           ? app.readOnly === true
             ? "read"
             : "write"
-          : ["activate", "type", "write_file", "run_command"].includes(
-                intent ?? "",
-              )
-            ? "write"
-            : "read",
+          : approvalEffectOf(intent),
         /*
          * A local app's tool is its own target, so a rule or an "always allow" names one tool of one
          * app rather than every tool the app has.
@@ -1349,11 +1347,11 @@ export function createComputerGateway(
             : // --- end desktop control ---
               app
               ? `${app.name}/${app.tool}`
-              : filePath
-                ? filePath.split("/").slice(0, -1).join("/") || "workspace"
-                : subject.command
-                  ? "workspace"
-                  : hostOf(pageUrl) || "browser",
+              : approvalScopeOf({
+                  filePath,
+                  command: subject.command,
+                  pageUrl,
+                }),
         ...(app?.description
           ? { display: { description: app.description } }
           : {}),
@@ -3336,6 +3334,36 @@ export function intentOf(
   }
 }
 
+/**
+ * Whether the approval gate is asked about a computer action as a change or a read: pressing, typing,
+ * saving a file and running a command change something; everything else reads.
+ */
+export function approvalEffectOf(
+  intent: PolicyContext["intent"],
+): "read" | "write" {
+  return ["activate", "type", "write_file", "run_command"].includes(
+    intent ?? "",
+  )
+    ? "write"
+    : "read";
+}
+
+/**
+ * Where an approval rule finds a computer action: the folder a file is in, the workspace for a
+ * command, or the page's host.
+ */
+export function approvalScopeOf(subject: {
+  filePath?: string | undefined;
+  command?: string | undefined;
+  pageUrl: string;
+}): string {
+  return subject.filePath
+    ? subject.filePath.split("/").slice(0, -1).join("/") || "workspace"
+    : subject.command
+      ? "workspace"
+      : hostOf(subject.pageUrl) || "browser";
+}
+
 type ActionRow = {
   toolName: string;
   seat: ComputerSeat;
@@ -3479,6 +3507,14 @@ function auditRow(entry: ActionRow): AuditEventInput {
         mode: entry.decision.mode,
         source: entry.decision.source,
         rule: entry.decision.matched,
+        /**
+         * The rule's name from the Boundaries page, where it has one, so the row reads by what the
+         * rule is called. Beside `rule`, never instead of it: the replay and the trail match on the
+         * expression.
+         */
+        ...(entry.decision.ruleName
+          ? { ruleName: entry.decision.ruleName }
+          : {}),
         /** Present so the trail explains a dry-run row that was recorded as refused but still ran. */
         carriedOut: entry.refusal ? false : entry.decision.forward,
       },

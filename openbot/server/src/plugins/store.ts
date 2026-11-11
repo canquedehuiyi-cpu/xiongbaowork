@@ -8,6 +8,7 @@ import {
   currentApprovalContext,
 } from "../approvals/types";
 import {
+  type AuditEvent,
   type AuditInitiator,
   type AuditStore,
   recordAuditEvent,
@@ -129,6 +130,7 @@ import {
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
+import { withReadRetries } from "./transient";
 import { type TransportKind, transportFor } from "./transport";
 
 /**
@@ -359,6 +361,11 @@ export type GrantedPlugins = {
     inputSchema: Record<string, unknown>;
     /** 应用把它标为破坏性（`mcp_tools.destructive`）；提供给模型时描述里会写明。 */
     destructive: boolean;
+    /**
+     * It only reads, by the rule a call to it is gated with (`classifyTool`). Absent reads as a
+     * write, so a store that does not say never has an action offered as a read.
+     */
+    read?: boolean;
   }[];
   skills: {
     slug: string;
@@ -1042,7 +1049,161 @@ export const isUuid = (value: string) =>
  * sentence, or a third initiator kind should exist, and neither is this branch's call to make.
  */
 const DEPLOYMENT_ACTOR = "deployment";
-const UNATTRIBUTED_ACTOR = "unattributed";
+export const UNATTRIBUTED_ACTOR = "unattributed";
+
+/*
+ * How an app's tool call is put to the boundary, live and in replay.
+ *
+ * M5: 上游放在 `plugin-store/call-policy.ts`（#1367、#1402）；fork 没有采用拆分，所以并进这里。
+ *
+ * One place for both because they must agree. `callTool` builds this context to decide a call; the
+ * boundaries backtest (`computer/policy-dry-run.ts`) rebuilds it from the call's audit row to say what
+ * a candidate rule would have decided instead. A field built one way here and another way there makes
+ * the backtest report a rule as reaching calls it would not reach, or as harmless when it is not, and
+ * a person reading the preview has no way to tell.
+ */
+
+/** The facts about one call that the boundary judges, and that the call's audit row keeps. */
+export type AppCallFacts = {
+  /** `<server>/<tool>`, as the Bot named it. */
+  ref: string;
+  botId: string;
+  /** Whose authority the call runs on. Empty when nobody could be attributed. */
+  actorId: string;
+  effect: "read" | "write";
+  initiator?: AuditInitiator;
+};
+
+/**
+ * The same policy the computer actions are judged by, asked about a tool call.
+ *
+ * Every field is present, including the ones a tool call has no use for, and that is load bearing
+ * rather than tidy. This engine treats an expression it cannot evaluate as a match, which is correct
+ * for a browser action on an element the server could not resolve. Applied to a tool call it is a
+ * disaster: the boundary this product ships in `.env.example` denies
+ * `contains(element.name, "submit") || key == "Enter"`, and with `element` and `key` absent that rule
+ * is unevaluable, so it would match, so every deployment using the shipped preset would refuse every
+ * MCP call for a reason mentioning a submit button.
+ *
+ * Neutral values instead. Empty strings match no substring, no key and no extension, so a rule written
+ * about the browser evaluates to false against a tool call, which is the honest answer: a tool call
+ * did not click anything. A rule meant to catch tool calls says so, with `mcp` or with `intent`.
+ */
+export function appCallPolicyContext(call: AppCallFacts): PolicyContext {
+  const [server = "", ...rest] = call.ref.split("/");
+  return {
+    tool: { name: toolNameFor(call.ref) },
+    bot: { id: call.botId },
+    actor: { id: call.actorId },
+    page: { url: "", host: "" },
+    element: { ref: "", role: "", name: "", type: "" },
+    key: "",
+    file: { path: "", name: "", extension: "" },
+    // Empty, like the browser fields above: an MCP call runs no shell command, but a
+    // `deny: contains(command, "rm -rf")` names `command`, and an unbound identifier throws and
+    // fails closed, which would refuse every MCP call once a deployment wrote a rule about its
+    // shell. An empty command matches no such rule.
+    command: "",
+    intent: call.effect === "write" ? "write_tool" : "read_tool",
+    mcp: { server, tool: rest.join("/"), effect: call.effect },
+    /*
+     * The real one, and this is the path where it is not neutral. A routine's turn reaches its tools
+     * through here, carrying the initiator its run assertion was signed with, so this is where
+     * `initiator.kind == "routine"` becomes a rule a deployment can actually write. A chat turn
+     * arrives with none and reads as a person.
+     */
+    initiator: policyInitiator(call.initiator),
+  };
+}
+
+/** The rows `callTool` writes once the boundary has decided a call. */
+export const APP_CALL_EVENT_TYPES = [
+  "mcp.call_succeeded",
+  "mcp.call_failed",
+  "mcp.call_rejected",
+] as const;
+
+/**
+ * The initiator a row was written with, read back from its columns.
+ *
+ * The columns are what `recordAuditEvent` writes the initiator into, for a computer action and an app
+ * call alike, so they are where a replay has to read it. A kind this version does not know, or a kind
+ * that needs an id and has none, reads as absent, and `policyInitiator` turns that into a person.
+ */
+export function initiatorFromColumns(
+  event: Pick<AuditEvent, "initiatorKind" | "initiatorId">,
+): AuditInitiator | undefined {
+  const kind = event.initiatorKind;
+  if (kind === "person" || kind === "deployment") return { kind };
+  if (
+    kind !== "routine" &&
+    kind !== "responsibility" &&
+    kind !== "memory" &&
+    kind !== "handoff"
+  )
+    return undefined;
+  return event.initiatorId ? { kind, id: event.initiatorId } : undefined;
+}
+
+/** One call as its audit row records it: the facts it was judged on, and what the boundary decided. */
+export type RecordedAppCall = AppCallFacts & {
+  /** The boundary's own verdict, which is not always what happened: see `callTool`. */
+  allowed: boolean;
+  /** Shared by every row one call writes. Absent on rows written before it was. */
+  attempt?: string;
+  /**
+   * Whether this is the row the decision is recorded on, rather than a later row about the same call.
+   *
+   * A call the boundary refuses in trial mode writes two rows: the refusal, and then whatever became
+   * of the call it let through. Both carry the refused decision. Only the refusal is the decision.
+   */
+  decisionRow: boolean;
+};
+
+/**
+ * The call an `mcp.call_*` row records, or null when it records no decision by the boundary.
+ *
+ * A call refused before the boundary was asked (a tool this Bot was never given, a check-in reaching
+ * for a write, an account that is not the person's) leaves a row with no `decision` and no `effect`,
+ * and is not the boundary's to replay.
+ */
+export function appCallFromAuditRow(event: AuditEvent): RecordedAppCall | null {
+  if (!(APP_CALL_EVENT_TYPES as readonly string[]).includes(event.eventType))
+    return null;
+  const payload = event.payload ?? {};
+  const decision = payload.decision as { allowed?: unknown } | undefined;
+  const effect = payload.effect;
+  if (typeof decision?.allowed !== "boolean") return null;
+  if (effect !== "read" && effect !== "write") return null;
+  if (typeof payload.bot !== "string") return null;
+
+  const ref =
+    event.targetId?.includes("/") === true
+      ? event.targetId
+      : typeof payload.server === "string" && typeof payload.tool === "string"
+        ? `${payload.server}/${payload.tool}`
+        : null;
+  if (!ref) return null;
+
+  const actor = typeof payload.actor === "string" ? payload.actor : "";
+  const initiator = initiatorFromColumns(event);
+  return {
+    ref,
+    botId: payload.bot,
+    // The row says `unattributed` where the call was decided on an empty actor; see `callTool`.
+    actorId: actor === UNATTRIBUTED_ACTOR ? "" : actor,
+    effect,
+    ...(initiator ? { initiator } : {}),
+    allowed: decision.allowed,
+    ...(typeof payload.attempt === "string"
+      ? { attempt: payload.attempt }
+      : {}),
+    decisionRow:
+      decision.allowed ||
+      (event.eventType === "mcp.call_rejected" &&
+        payload.refusal === undefined),
+  };
+}
 
 /**
  * Whose account this call went out as, for the trail.
@@ -6514,6 +6675,36 @@ export function createPluginStore(options: PluginStoreOptions) {
       });
     },
 
+    /**
+     * One row for a change to a Bot's actions on one app saved together, beside the row each grant
+     * and revoke writes for itself: who saved it, what was turned on and off, and, when the set was
+     * chosen from a description, the sentence. See `plugin.grants_changed`.
+     */
+    async recordGrantsChanged(input: {
+      app: string;
+      agentId: string;
+      by: string;
+      actorUserId: string;
+      added: string[];
+      removed: string[];
+      authoring?: { source: "english"; text: string };
+    }): Promise<void> {
+      await recordAuditEvent(auditStore, {
+        eventType: "plugin.grants_changed",
+        targetType: "mcp_server",
+        targetId: input.app,
+        actorUserId: input.actorUserId,
+        payload: {
+          actor: input.by,
+          app: input.app,
+          bot: input.agentId,
+          added: input.added,
+          removed: input.removed,
+          ...(input.authoring ? { authoring: input.authoring } : {}),
+        },
+      });
+    },
+
     async revoke(
       kind: PluginKind,
       ref: string,
@@ -7030,6 +7221,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 description: mcpTools.description,
                 inputSchema: mcpTools.inputSchema,
                 destructive: mcpTools.destructive,
+                effect: mcpTools.effect,
               })
               .from(mcpTools)
               .innerJoin(mcpServers, eq(mcpServers.id, mcpTools.serverId))
@@ -7047,6 +7239,14 @@ export function createPluginStore(options: PluginStoreOptions) {
             description: row.description,
             inputSchema: row.inputSchema as Record<string, unknown>,
             destructive: row.destructive,
+            // The same answer `callTool` gates the call on, so a read here is a read there.
+            read:
+              classifyTool(
+                catalogueEntry(row.serverKey),
+                row.name,
+                true,
+                row.effect,
+              ) === "read",
           };
         });
 
@@ -10114,47 +10314,21 @@ export function createPluginStore(options: PluginStoreOptions) {
         ? { ...modelArgs, [VERSION_ARG]: advertised[0].version }
         : modelArgs;
 
-      /**
-       * The same policy the computer actions are judged by, asked about a tool call.
-       *
-       * Every field is present, including the ones a tool call has no use for, and that is load
-       * bearing rather than tidy. This engine treats an expression it cannot evaluate as a match,
-       * which is correct for a browser action on an element the server could not resolve. Applied to
-       * a tool call it is a disaster: the boundary this product ships in `.env.example` denies
-       * `contains(element.name, "submit") || key == "Enter"`, and with `element` and `key` absent
-       * that rule is unevaluable, so it would match, so every deployment using the shipped preset
-       * would refuse every MCP call for a reason mentioning a submit button.
-       *
-       * Neutral values instead. Empty strings match no substring, no key and no extension, so a rule
-       * written about the browser evaluates to false against a tool call, which is the honest answer:
-       * a tool call did not click anything. A rule meant to catch tool calls says so, with `mcp` or
-       * with `intent`.
+      /*
+       * Built by the helper the boundaries backtest rebuilds it with from this call's row, so a rule
+       * previewed against past calls decides them as it decides this one. See
+       * {@link appCallPolicyContext}.
        */
-      const context: PolicyContext = {
-        tool: { name: toolNameFor(input.ref) },
-        bot: { id: input.botId },
-        actor: { id: input.actorId },
-        page: { url: "", host: "" },
-        element: { ref: "", role: "", name: "", type: "" },
-        key: "",
-        file: { path: "", name: "", extension: "" },
-        // Empty, like the browser fields above: an MCP call runs no shell command, but a
-        // `deny: contains(command, "rm -rf")` names `command`, and an unbound identifier throws and
-        // fails closed — which would refuse every MCP call once a deployment wrote a rule about its
-        // shell. An empty command matches no such rule.
-        command: "",
-        intent: effect === "write" ? "write_tool" : "read_tool",
-        mcp: { server: serverId, tool: toolName, effect },
-        /*
-         * The real one, and this is the path where it is not neutral. A routine's turn reaches its
-         * tools through here, carrying the initiator its run assertion was signed with, so this is
-         * where `initiator.kind == "routine"` becomes a rule a deployment can actually write. A
-         * chat turn arrives with none and reads as a person.
-         */
-        initiator: policyInitiator(input.initiator),
-      };
-
-      const verdict = evaluateActionPolicy(options.policy(), context);
+      const verdict = evaluateActionPolicy(
+        options.policy(),
+        appCallPolicyContext({
+          ref: input.ref,
+          botId: input.botId,
+          actorId: input.actorId,
+          effect,
+          ...(input.initiator ? { initiator: input.initiator } : {}),
+        }),
+      );
 
       /*
        * The parts of the row that are known before the attempt, held rather than written.
@@ -10169,6 +10343,12 @@ export function createPluginStore(options: PluginStoreOptions) {
         server: serverId,
         tool: toolName,
         effect,
+        /*
+         * One id on every row this call writes, as a computer action's rows share one. A call the
+         * boundary refuses in trial mode is recorded refused and then recorded again with what became
+         * of it, and a reader counting calls, the boundaries backtest among them, counts it once.
+         */
+        attempt: randomUUID(),
         /*
          * Whose credential this call goes out with.
          *
@@ -10188,6 +10368,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           allowed: verdict.allowed,
           mode: verdict.mode,
           rule: verdict.matched,
+          // Its name from the Boundaries page, where it has one, as a computer action's row carries it.
+          ...(verdict.ruleName ? { ruleName: verdict.ruleName } : {}),
           source: verdict.source,
           carriedOut: verdict.forward,
         },
@@ -10341,7 +10523,9 @@ export function createPluginStore(options: PluginStoreOptions) {
            * 哪个账号：只在这个人有不止一个账号时。审批的比较与保存都带着它，所以对一个账号的批准、拒绝或
            * 「这里始终允许」从不回答另一个，卡片也说清是哪个（见 approvals/policy.ts 的 `ruleMatches`）。
            */
-          ...(pinned && pinned.among > 1 ? { account: pinned.label } : {}),
+          ...(pinned && pinned.among > 1
+            ? { account: pinned.label, accountBinding: pinned.binding }
+            : {}),
           continuation: currentApprovalContext(),
           /*
            * The row for the person's own "no": the approval store writes it, once, when they deny.
@@ -10394,34 +10578,45 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
         const vendor =
           injectedVendor ?? transportFor(access.transport).callTool;
-        const result = await vendor(
-          {
-            url: effectiveUrl(row, entry),
-            token,
-            ...(placement ? { placement } : {}),
-            // Shared 应用以团队账号的身份调用；其余进调用所开账号的主人（提问者，或 Team Bot 的主人）。
-            actorId: vendorUserId ?? input.credentialActorId ?? input.actorId,
-            botId: input.botId,
-            ...((pinned?.accountId ?? ownersAccountId)
-              ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }
-              : {}),
-            // The conversation the call was made in: Routines and goals post where they were asked.
-            ...((input.threadId ?? currentApprovalContext()?.threadId)
-              ? {
-                  threadId:
-                    input.threadId ?? currentApprovalContext()?.threadId,
-                }
-              : {}),
-            ...tenantChosenOutbound(
-              entry,
-              access.transport,
-              outboundLookup,
-              customServerPrivateHosts,
-            ),
-          },
-          toolName,
-          vendorArgs,
-        );
+        /*
+         * A READ THAT FAILED FOR A REASON THAT PASSES IS TRIED AGAIN HERE, before the Bot hears of
+         * it, and a write never is: a write that timed out may have landed. Here rather than around
+         * the whole call, so the grant, the policy and the approval above are settled once, and the
+         * trail gets one row for what finally happened. See `./transient`.
+         */
+        const callVendor = () =>
+          vendor(
+            {
+              url: effectiveUrl(row, entry),
+              token,
+              ...(placement ? { placement } : {}),
+              // Shared 应用以团队账号的身份调用；其余进调用所开账号的主人（提问者，或 Team Bot 的主人）。
+              actorId: vendorUserId ?? input.credentialActorId ?? input.actorId,
+              botId: input.botId,
+              ...((pinned?.accountId ?? ownersAccountId)
+                ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }
+                : {}),
+              // The conversation the call was made in: Routines and goals post where they were asked.
+              ...((input.threadId ?? currentApprovalContext()?.threadId)
+                ? {
+                    threadId:
+                      input.threadId ?? currentApprovalContext()?.threadId,
+                  }
+                : {}),
+              ...tenantChosenOutbound(
+                entry,
+                access.transport,
+                outboundLookup,
+                customServerPrivateHosts,
+              ),
+            },
+            toolName,
+            vendorArgs,
+          );
+        const result =
+          effect === "read"
+            ? await withReadRetries(callVendor)
+            : await callVendor();
         await recordAuditEvent(auditStore, {
           eventType: result.isError ? "mcp.call_failed" : "mcp.call_succeeded",
           targetType: "mcp_tool",
