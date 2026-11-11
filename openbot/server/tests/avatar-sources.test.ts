@@ -420,8 +420,14 @@ describe("what the 分身 is told", () => {
       promptOf(builtInAgentConfiguration(avatar, model, "synthetic-model-key")),
     );
     expect(prompt).not.toContain(DECLARED);
-    expect(prompt).toContain(
-      `${avatar.systemPrompt}\n\n${PROVENANCE_GUIDANCE}\n\n`,
+    // M5: upstream #1407 puts the prompt in sections, so the role and the provenance guidance
+    // are no longer joined back to back: the role section holds the description, and the next
+    // thing after it about sources is the provenance section, with no 分身 sources section between.
+    expect(prompt).toContain(`<role>\n${avatar.systemPrompt}\n\n`);
+    expect(prompt).toContain(`<sources>\n${PROVENANCE_GUIDANCE}`);
+    expect(prompt).not.toContain("<avatar_sources>");
+    expect(prompt.indexOf(avatar.systemPrompt)).toBeLessThan(
+      prompt.indexOf(PROVENANCE_GUIDANCE),
     );
     expect(prompt).toContain(UNTRUSTED_GUIDANCE);
   });
@@ -590,7 +596,8 @@ describe("what the 分身 is told", () => {
       ),
     );
     // M3: upstream's prompt opens by naming the Bot; the edited text is what follows it.
-    expect(prompt).toContain(`\n\n${edited}`);
+    // M5: upstream #1407 puts it at the head of the role section.
+    expect(prompt).toContain(`<role>\n${edited}\n\n`);
     expect(prompt).toContain('"label":"周报"');
     await clear(personA);
   });
