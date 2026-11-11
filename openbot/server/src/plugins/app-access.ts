@@ -15,7 +15,7 @@ import { accountFor, brokeredProvenance } from "./shared-accounts";
  * 与上游的差异（都写在报告里）：
  * - 谁的账号用 X1 的 `accountFor`（`shared-accounts.ts`）判定，不另写一份。账号模式没人决定（NULL）的
  *   broker 行，调用会被拒绝，所以这里读作停用（`scheme_unreadable`）而不是猜成个人账号。
- * - fork 只有 Composio 一个 broker（Arcade 在 X5），`AppProvider` 没有 `arcade`。
+ * - broker 应用是 Composio 或 Arcade 的（X5），`AppProvider` 说的是这个应用自己的提供商。
  * - `connect_shared` 不建申请：fork 的申请表只收 enable 与 grant（0153 的 CHECK，fork 测试钉住）。
  * - 主人自己给员工应用（`owner_grantable`、`ownerGrants`）属于 X3；X2 里 `mayGiveOwn` 恒为 false，
  *   `ownerGrants` 列也还不存在，所以只给出按账号的默认值。
@@ -74,7 +74,7 @@ export type AppAccount = "personal" | "shared" | "deployment";
 export type AppConnect = "oauth" | "consent" | "key" | null;
 
 /** 应用从哪来。fork 只有 Composio 一个 broker。 */
-export type AppProvider = "composio" | "catalogue" | "custom";
+export type AppProvider = "composio" | "arcade" | "catalogue" | "custom";
 
 /** 部署这一侧缺什么，任何人都还用不了；见 {@link unavailableReason}。 */
 export type Unavailable =
