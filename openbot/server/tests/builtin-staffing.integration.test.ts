@@ -34,6 +34,7 @@ import {
   users,
 } from "../src/db/schema";
 import { createModelShelf } from "../src/models/routes";
+import { useRoutineTools } from "../src/plugins/builtin-routines";
 import {
   callTool,
   listTools,
@@ -652,6 +653,62 @@ describe("what a draft keeps, and what it hands the executor", () => {
     expect(row?.tenantId).toBe(teammate.id);
     expect(row?.proposedByAgentId).toBe(teamBot);
     expect(await proposalsOf(owner.id)).toEqual([]);
+  });
+
+  test("Routines on a Team Bot still acts as the account the call opens, unchanged", async () => {
+    const owner = await person("routines-owner");
+    const teammate = await person("routines-teammate");
+    const teamBot = await bot(owner, "团队排程员", "public");
+    let askedFor: string | null = null;
+    useRoutineTools({
+      create: async () => {
+        throw new Error("not used");
+      },
+      update: async () => {
+        throw new Error("not used");
+      },
+      remove: async () => {},
+      listFor: async (ownerUserId) => {
+        askedFor = ownerUserId;
+        return [];
+      },
+    });
+    const added = await asPlatform(async () => {
+      const [present] = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.catalogueKey, "routines"))
+        .limit(1);
+      const row =
+        present ?? (await plugins.addServer({ key: "routines", by: "boot" }));
+      await plugins.refreshTools(row.id);
+      return present ? null : row.id;
+    });
+    try {
+      await runAsTenant(owner.id, () =>
+        plugins.grant("mcp", "routines/list_routines", teamBot, owner.id),
+      );
+
+      // 「招聘与组群」改成了说话的人；Routines 的取法不在本任务里，照旧是调用所开账号的主人。
+      const answer = await runAsTenant(teammate.id, () =>
+        plugins.callTool({
+          ref: "routines/list_routines",
+          args: {},
+          botId: teamBot,
+          actorId: teammate.id,
+          credentialActorId: owner.id,
+        }),
+      );
+
+      expect(answer.isError).toBe(false);
+      expect(askedFor).toBe(owner.id);
+    } finally {
+      useRoutineTools(null);
+      if (added)
+        await asPlatform(() =>
+          database.delete(mcpServers).where(eq(mcpServers.id, added)),
+        );
+    }
   });
 
   test("an employee change drafted here applies without being called stale", async () => {
