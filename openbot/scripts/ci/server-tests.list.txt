@@ -308,6 +308,7 @@ tests/headless-tools.test.ts
 tests/health.test.ts
 tests/host-access-broker.test.ts
 tests/host-access-callback-route.test.ts
+tests/host-access-dispatch-audit.test.ts
 tests/host-access-routes.test.ts
 tests/host-access-schema.test.ts
 tests/host-access-tools.test.ts
