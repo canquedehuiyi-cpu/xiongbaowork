@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { ZodError } from "zod";
+import { enterpriseControls } from "../admin/controls";
 import { canManageAgent, canRunAgent } from "../agents/profile-policy";
 import {
   AgentNotFoundError,
@@ -36,8 +37,16 @@ import {
   requestPlanFor,
 } from "../plugins/app-access-store";
 import { MAX_PENDING_APP_ACCESS_REQUESTS } from "../plugins/app-access-tool";
-import { ownerAppsAllowed, ownerGrantRefusal } from "../plugins/owner-grants";
+import {
+  ownerAppsAllowed,
+  ownerGrantRefusal,
+  withdrawOwnersSharedUse,
+} from "../plugins/owner-grants";
 import { personalRevokeRefusalFor } from "../plugins/personal-defaults";
+import type {
+  SharedAudience,
+  SharedUseStore,
+} from "../plugins/shared-use-store";
 import { PluginRefusedError, type PluginStore } from "../plugins/store";
 import type { PortraitStore } from "../portraits/store";
 import type { QuotaService } from "../quota/limits";
@@ -138,7 +147,35 @@ export type StaffingExecutorDeps = {
   > & { store: Pick<GroupStore, "order" | "bots"> };
   portraits: Pick<PortraitStore, "set">;
   auditStore: AuditStore;
+  /**
+   * 管理员对这个人开着的能力（`useBots`、`teamBots`）。`POST/PATCH /api/agents` 的这道门挂在路由上
+   * （`admin/gate.ts`），执行器直接调员工库、走不到那里，所以在这里再问一遍。不给时读部署的企业控制，
+   * 没装企业控制时和那道门一样放行。
+   */
+  mayUse?: (actorId: string, capability: BotCapability) => Promise<boolean>;
+  /** 共享使用批准（同 `DELETE /give`）：收回主人的授予时一并撤回它设下的团队账号受众。没给时只收回授予。 */
+  shared?: {
+    store: Pick<SharedUseStore, "withdrawOwnerApprovals" | "appIdOf">;
+    audience: Pick<SharedAudience, "record">;
+  };
 };
+
+/** 建、改员工要过的两道能力：用员工，以及把员工公开给团队。 */
+export type BotCapability = "useBots" | "teamBots";
+
+const CAPABILITY_REFUSALS: Record<BotCapability, string> = {
+  useBots: "管理员关闭了你「使用员工」的权限，所以没有做。",
+  teamBots: "管理员关闭了你「把员工公开给团队」的权限，所以没有做。",
+};
+
+/** 与 `admin/gate.ts` 同一个来源：企业控制里这个人的能力；没装企业控制的部署不设这道门。 */
+async function enterpriseAllows(
+  actorId: string,
+  capability: BotCapability,
+): Promise<boolean> {
+  const controls = enterpriseControls();
+  return controls ? controls.capabilityFor(actorId, capability) : true;
+}
 
 /** 员工此刻的版本，在调用者的帧里读；看不见或已删除为 null。起草与执行用同一个读法。 */
 export async function currentEmployeeVersion(
@@ -356,6 +393,23 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
   };
 
   /**
+   * 建或改成这个可见范围的员工，本人此刻有没有这个能力；没有时是拒绝的那句话。问不出来按没有（同那道门）。
+   */
+  async function capabilityRefusal(
+    run: Run,
+    visibility: CreateAgentInput["visibility"],
+  ): Promise<string | null> {
+    const needed: BotCapability[] =
+      visibility === "public" ? ["useBots", "teamBots"] : ["useBots"];
+    const mayUse = deps.mayUse ?? enterpriseAllows;
+    for (const capability of needed) {
+      const allowed = await mayUse(run.actor.id, capability).catch(() => false);
+      if (!allowed) return CAPABILITY_REFUSALS[capability];
+    }
+    return null;
+  }
+
+  /**
    * 以员工现在的资料为底，改成草稿里给出的字段，再走编辑员工的那条路径。人设按部分合并；空的指令不发
    * （那条路径要求 1 到 1000 个字符）；手册给了空就是清掉。
    */
@@ -382,6 +436,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       ...(set.model ?? {}),
     });
     if (!checked.ok) return failed(checked.error);
+    const refused = await capabilityRefusal(run, checked.value.visibility);
+    if (refused) return failed(refused);
     const updated = await deps.profiles.update(
       run.agentActor,
       agentId,
@@ -517,12 +573,22 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
           proposalId: run.proposalId,
         },
       });
+      // 草稿点名、但不是本人能直接给的动作（会写、会发的），照实说出来，不当作给了。
+      const key = inspected.access.key;
+      const left = entry.actions.filter(
+        (action) =>
+          !refs.some((ref) => ref === action || ref === `${key}/${action}`),
+      );
+      const given =
+        left.length === 0
+          ? `已把「${name}」给员工`
+          : `已把「${name}」给员工（只给了只读动作；${left.join("、")} 这些动作要由管理员单独授予）`;
       return inspected.access.needsConnect
         ? {
             outcome: "needs_connection",
-            message: `已把「${name}」给员工；你连接自己的账号之后它才能用。`,
+            message: `${given}；你连接自己的账号之后它才能用。`,
           }
-        : done(`已把「${name}」给员工。`);
+        : done(`${given}。`);
     }
 
     if (
@@ -613,6 +679,13 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       agentId,
       run.actor.email,
     );
+    // 主人的授予设下的团队账号受众一起撤回；管理员批准的留着（同 `DELETE /give`）。
+    if (deps.shared && inspected.answeringId)
+      await withdrawOwnersSharedUse(deps.shared.audience, deps.shared.store, {
+        serverId: inspected.answeringId,
+        botId: agentId,
+        actorId: run.actor.id,
+      });
     const name = inspected.access.displayName;
     if (refs.length === 0)
       return failed(`「${name}」上没有你给这位员工的动作可以收回。`);
@@ -882,8 +955,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
   async function runSteps(
     steps: readonly Step[],
     previous: readonly ResultItem[],
-  ): Promise<ResultItem[]> {
-    const results: ResultItem[] = [];
+    results: ResultItem[],
+  ): Promise<void> {
     for (const [index, step] of steps.entries()) {
       const before = previous[index];
       if (before && before.outcome !== "failed") {
@@ -902,7 +975,6 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         ...outcome,
       });
     }
-    return results;
   }
 
   /**
@@ -926,6 +998,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         : {}),
     });
     if (!checked.ok) throw new ProposalRefusedError(checked.error);
+    const refused = await capabilityRefusal(run, checked.value.visibility);
+    if (refused) throw new ProposalRefusedError(refused);
     const template = draft.roleTemplate;
     if (template && (!UUID.test(template.id) || template.version < 1))
       throw new ProposalRefusedError("所选角色模板无效，请重新选择。");
@@ -1006,36 +1080,63 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     proposal: Proposal,
     draft: ProposalDraft,
     previous: readonly ResultItem[],
-  ): Promise<ResultItem[]> {
+    results: ResultItem[],
+  ): Promise<void> {
     switch (proposal.kind) {
       case "employee": {
-        const employee = draft as EmployeeDraft;
-        const created = previous[0] ?? (await createEmployee(run, employee));
-        if (!created.target) throw new ProposalStateError();
-        return [
-          created,
-          ...(await runSteps(
-            employeeSteps(run, created.target, employee),
-            previous.slice(1),
-          )),
-        ];
+        const created = previous[0];
+        if (!created?.target) throw new ProposalStateError();
+        results.push(created);
+        await runSteps(
+          employeeSteps(run, created.target, draft as EmployeeDraft),
+          previous.slice(1),
+          results,
+        );
+        return;
       }
       case "employee_change":
         return runSteps(
           employeeChangeSteps(run, draft as EmployeeChangeDraft),
           previous,
+          results,
         );
       case "group":
         return runSteps(
           groupSteps(run, draft as GroupDraft, previous),
           previous,
+          results,
         );
       case "group_change":
         return runSteps(
           groupChangeSteps(run, draft as GroupChangeDraft),
           previous,
+          results,
         );
     }
+  }
+
+  /**
+   * 做完并落定。每一步自己接住错误，能从这里抛出的是意料之外的（数据库断开之类）；那时提议也不能停在
+   * `applying`：什么都还没做就放回待确认，做了一部分就把已有的结果（含建好的员工）记成部分完成，没走到的
+   * 步骤在重试时补上。
+   */
+  async function settle(
+    run: Run,
+    proposal: Proposal,
+    draft: ProposalDraft,
+    previous: readonly ResultItem[],
+  ): Promise<Proposal> {
+    const results: ResultItem[] = [];
+    try {
+      await carryOut(run, proposal, draft, previous, results);
+    } catch (error) {
+      const kept = [...results, ...previous.slice(results.length)];
+      if (kept.length === 0)
+        await deps.proposals.release(proposal.id, run.actor.id);
+      else await deps.proposals.finish(proposal.id, "partially_applied", kept);
+      throw error;
+    }
+    return finish(run, proposal, results);
   }
 
   async function finish(
@@ -1083,16 +1184,21 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         agentActor: agentActorOf(actor),
         proposalId,
       };
-      let results: ResultItem[];
+      let draft: ProposalDraft;
+      let created: ResultItem[];
       try {
-        const draft = draftOf(claimed);
+        draft = draftOf(claimed);
         await assertFresh(actor, claimed, draft);
-        results = await carryOut(run, claimed, draft, []);
+        // 建员工先做、先记下：之后哪一步出了意外，结果里也有员工 id，重试不会再建一个。
+        created =
+          claimed.kind === "employee"
+            ? [await createEmployee(run, draft as EmployeeDraft)]
+            : [];
       } catch (error) {
         await deps.proposals.release(proposalId, actor.id);
         throw error;
       }
-      return finish(run, claimed, results);
+      return settle(run, claimed, draft, created);
     },
 
     /** 重做上一次失败的项；成了的项和建好的员工、群聊都不再动。不比对版本：对象正是上一次改的。 */
@@ -1108,17 +1214,17 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         agentActor: agentActorOf(actor),
         proposalId,
       };
-      let results: ResultItem[];
+      let draft: ProposalDraft;
       try {
         // 没有上一次的结果就没有可重做的；新员工尤其不能因此再建一个。
         if (previous.length === 0) throw new ProposalStateError();
-        results = await carryOut(run, reopened, draftOf(reopened), previous);
+        draft = draftOf(reopened);
       } catch (error) {
-        // 这里抛出就是什么都没重做成：结果照旧，提议回到可以再试的状态。
+        // 什么都没重做：结果照旧，提议回到可以再试的状态。
         await deps.proposals.finish(proposalId, "partially_applied", previous);
         throw error;
       }
-      return finish(run, reopened, results);
+      return settle(run, reopened, draft, previous);
     },
   };
 }

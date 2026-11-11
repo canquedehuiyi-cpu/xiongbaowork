@@ -47,9 +47,14 @@ import { parseDraft } from "../src/staffing/draft";
 import {
   createStaffingExecutor,
   currentEmployeeVersion,
+  currentGroupVersion,
+  ProposalRefusedError,
   ProposalStaleError,
 } from "../src/staffing/executor";
-import { createStaffingProposalStore } from "../src/staffing/store";
+import {
+  createStaffingProposalStore,
+  ProposalNotFoundError,
+} from "../src/staffing/store";
 import type { ProposalKind } from "../src/staffing/types";
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
@@ -80,7 +85,17 @@ const groups = createGroupConversations({
   store: createGroupStore(database, () => threadIdentity.mint()),
   queue: createWorkQueue(database),
   owner: id("replica"),
-  roster: async () => null,
+  roster: async (ownerUserId, channelId) => {
+    const actor = { id: ownerUserId, role: "user" as const };
+    const channel = await channelStore.get(actor, channelId);
+    if (!channel || channel.agentIds.length < 2) return null;
+    const bots = [];
+    for (const agentId of channel.agentIds) {
+      const profile = await profiles.get(actor, agentId);
+      if (profile) bots.push({ id: agentId, name: profile.name });
+    }
+    return bots;
+  },
   runTurn: async () => ({ replyText: "ok" }),
   caps: { maxDepth: 1, maxPerRun: 2 },
   mayAddress: async () => true,
@@ -107,8 +122,13 @@ const routineStore: RoutineStore = {
   },
 };
 
+/** 管理员对这些人关掉了「把员工公开给团队」；其余的能力都开着。 */
+const teamBotsOff = new Set<string>();
+
 const executor = createStaffingExecutor({
   database,
+  mayUse: async (actorId, capability) =>
+    !(capability === "teamBots" && teamBotsOff.has(actorId)),
   proposals,
   profiles,
   quota: createQuotaService(database),
@@ -770,5 +790,245 @@ describe("applying a staffing proposal as the person", () => {
       "staffing/propose_group",
       "staffing/propose_group_change",
     ]);
+  });
+
+  test("someone else's proposal is refused and nothing changes", async () => {
+    const owner = await person("mine");
+    const stranger = await person("stranger");
+    const proposal = await propose(owner, "employee", employee("别人的员工"));
+
+    const refusal = await runAsTenant(stranger.id, () =>
+      executor.apply(stranger, proposal.id),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(refusal).toBeInstanceOf(ProposalNotFoundError);
+    expect(await ownedBots(owner.id)).toEqual([]);
+    expect(await ownedBots(stranger.id)).toEqual([]);
+    expect((await stored(proposal.id))?.status).toBe("pending");
+  });
+
+  test("a field too long for the create route refuses the proposal and keeps it pending", async () => {
+    const owner = await person("long");
+    // 41 个表情：草稿按字数算是 41，创建员工那条路径按 UTF-16 算是 82，超过 80。
+    const proposal = await propose(
+      owner,
+      "employee",
+      employee("😀".repeat(41)),
+    );
+
+    const refusal = await runAsTenant(owner.id, () =>
+      executor.apply(owner, proposal.id),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(refusal).toBeInstanceOf(ProposalRefusedError);
+    expect((refusal as Error).message).toBe("名字需要 1 到 80 个字符。");
+    expect(await ownedBots(owner.id)).toEqual([]);
+    expect((await stored(proposal.id))?.status).toBe("pending");
+  });
+
+  test("a change merges a partial persona over the current one", async () => {
+    const owner = await person("persona");
+    const actor = { id: owner.id, role: "user" as const };
+    const bot = await runAsTenant(owner.id, () =>
+      profiles.create(actor, {
+        name: "小红",
+        title: "运营",
+        roleDescription: "写文案。",
+        visibility: "private",
+        systemPrompt: "写文案。",
+        persona: { tone: "活泼", principles: "诚实", habits: "早起" },
+      }),
+    );
+    const base = await runAsTenant(owner.id, () =>
+      currentEmployeeVersion(database, bot.id),
+    );
+    const proposal = await propose(
+      owner,
+      "employee_change",
+      { agentId: bot.id, set: { title: "主编", persona: { tone: "沉稳" } } },
+      base,
+    );
+
+    const applied = await runAsTenant(owner.id, () =>
+      executor.apply(owner, proposal.id),
+    );
+
+    expect(applied.status).toBe("applied");
+    const [row] = await asPlatform(() =>
+      database
+        .select({ title: agentProfiles.title, persona: agentProfiles.persona })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, bot.id)),
+    );
+    expect(row).toEqual({
+      title: "主编",
+      persona: { tone: "沉稳", principles: "诚实", habits: "早起" },
+    });
+  });
+
+  test("a group change keeps going after one step is refused", async () => {
+    const owner = await person("group-change");
+    const stranger = await person("group-stranger");
+    const actor = { id: owner.id, role: "user" as const };
+    const make = (who: AuthenticatedActor, name: string) =>
+      runAsTenant(who.id, () =>
+        profiles.create(
+          { id: who.id, role: "user" },
+          {
+            name,
+            title: "员工",
+            roleDescription: "回答问题。",
+            visibility: "private",
+            systemPrompt: "回答问题。",
+          },
+        ),
+      );
+    const first = await make(owner, "甲");
+    const second = await make(owner, "乙");
+    const third = await make(owner, "丙");
+    const foreign = await make(stranger, "外人");
+    const channel = await runAsTenant(owner.id, () =>
+      groups.create(owner.id, { agentIds: [first.id, second.id, third.id] }),
+    );
+    const base = await runAsTenant(owner.id, () =>
+      currentGroupVersion(database, groups.store, owner.id, channel.id),
+    );
+    const proposal = await propose(
+      owner,
+      "group_change",
+      {
+        channelId: channel.id,
+        name: "新群名",
+        add: [foreign.id],
+        remove: [third.id],
+      },
+      base,
+    );
+
+    await runAsTenant(owner.id, () => executor.apply(owner, proposal.id));
+
+    const row = await stored(proposal.id);
+    expect(row?.status).toBe("partially_applied");
+    const items = (row?.result ?? []) as {
+      step: string;
+      outcome: string;
+      message?: string;
+    }[];
+    expect(items.map((item) => [item.step, item.outcome])).toEqual([
+      ["rename", "done"],
+      ["add", "failed"],
+      ["remove", "done"],
+    ]);
+    expect(items[1]?.message).toBe(
+      `你没有权限使用员工 ${foreign.id}，无法加进群里。`,
+    );
+    const [named] = await asPlatform(() =>
+      database
+        .select({ title: channels.title })
+        .from(channels)
+        .where(eq(channels.id, channel.id)),
+    );
+    expect(named?.title).toBe("新群名");
+    const bots = await runAsTenant(owner.id, () =>
+      channelStore.get(actor, channel.id),
+    );
+    expect(bots?.agentIds.slice().sort()).toEqual([first.id, second.id].sort());
+  });
+
+  test("actions the person cannot give are named rather than dropped silently", async () => {
+    const owner = await person("actions");
+    const proposal = await propose(
+      owner,
+      "employee",
+      employee("只读员工", {
+        apps: [{ app: OPEN_APP, actions: ["search", "send"] }],
+      }),
+    );
+
+    await runAsTenant(owner.id, () => executor.apply(owner, proposal.id));
+
+    const botId = await createdBot(proposal.id);
+    expect(await grantsOf(botId)).toEqual([
+      { kind: "mcp", ref: `${OPEN_APP}/search`, grantedAs: "owner" },
+    ]);
+    const row = await stored(proposal.id);
+    const app = (
+      (row?.result ?? []) as {
+        step: string;
+        outcome: string;
+        message?: string;
+      }[]
+    ).find((item) => item.step === "app");
+    expect(app?.outcome).toBe("done");
+    expect(app?.message).toContain("send");
+  });
+
+  test("a person without team bots cannot publish an employee through a proposal", async () => {
+    const owner = await person("no-team");
+    teamBotsOff.add(owner.id);
+    const actor = { id: owner.id, role: "user" as const };
+    const proposal = await propose(
+      owner,
+      "employee",
+      employee("公开员工", { visibility: "public" }),
+    );
+
+    const refusal = await runAsTenant(owner.id, () =>
+      executor.apply(owner, proposal.id),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(refusal).toBeInstanceOf(ProposalRefusedError);
+    expect((refusal as Error).message).toContain("公开");
+    expect(await ownedBots(owner.id)).toEqual([]);
+    expect((await stored(proposal.id))?.status).toBe("pending");
+
+    const bot = await runAsTenant(owner.id, () =>
+      profiles.create(actor, {
+        name: "私有员工",
+        title: "员工",
+        roleDescription: "回答问题。",
+        visibility: "private",
+        systemPrompt: "回答问题。",
+      }),
+    );
+    const base = await runAsTenant(owner.id, () =>
+      currentEmployeeVersion(database, bot.id),
+    );
+    const change = await propose(
+      owner,
+      "employee_change",
+      { agentId: bot.id, set: { visibility: "public" } },
+      base,
+    );
+
+    await runAsTenant(owner.id, () => executor.apply(owner, change.id));
+
+    const changed = await stored(change.id);
+    expect(changed?.status).toBe("partially_applied");
+    const update = (
+      (changed?.result ?? []) as {
+        step: string;
+        outcome: string;
+        message?: string;
+      }[]
+    ).find((item) => item.step === "update");
+    expect(update?.outcome).toBe("failed");
+    expect(update?.message).toContain("公开");
+    const [visible] = await asPlatform(() =>
+      database
+        .select({ visibility: agentProfiles.visibility })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, bot.id)),
+    );
+    expect(visible?.visibility).toBe("private");
   });
 });
