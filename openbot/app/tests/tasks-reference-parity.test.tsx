@@ -25,10 +25,14 @@ import {
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * 任务看板 against the reference screenshot (docs/acceptance/qoderwake-reference/tasks.png): the
- * 工作记录 banner HOLDS the four cards, its own 数据周期 and 设备 filters and the status line; the
- * attention area is underline tabs over a bordered panel; 全部任务 has a 16px bold heading (measured), an icon view
- * switch and a labelled toolbar with a second 数据周期 that narrows only the list (`listPeriod`).
+ * 任务看板 against the black/white/red design (docs/design/ios-studio/01-任务看板.png, theme.css): the
+ * 工作记录 telemetry panel HOLDS the four metrics, its own 数据周期 and 设备 filters, the status
+ * distribution and the summary line; the attention area (待关注) is a pill switch over a rounded row
+ * panel; 全部任务 has a 17px bold heading (`.section-head h2`), a pill view switch with icon and name,
+ * and a labelled toolbar with its own 周期 that narrows only the list (`listPeriod`).
+ *
+ * Updated for the redesign: the behaviour asserted below (what each control writes, what each read
+ * asks for, what each empty state says) is unchanged; only the visual markers follow the new design.
  */
 let registeredHere = false;
 const originalFetch = globalThis.fetch;
@@ -186,7 +190,7 @@ test("the 工作记录 banner holds its title, its period filter, the four cards
     "一个月",
     "全部",
   ]);
-  // The banner is the green record panel the reference draws, not a plain line.
+  // The banner is the telemetry panel the design draws, not a plain line.
   expect(banner.getAttribute("data-slot")).toBe("work-record-banner");
   const cards = within(
     within(banner).getByRole("region", { name: "任务统计" }),
@@ -197,10 +201,17 @@ test("the 工作记录 banner holds its title, its period filter, the four cards
     "需要操作",
     "已结束任务",
   ]);
-  // The selected card is the filtering one, marked by the primary border.
+  // The selected metric is the filtering one, marked by aria-pressed and the design's short red line.
   expect(cards[0]?.getAttribute("aria-pressed")).toBe("true");
-  expect(cards[0]?.className).toContain("border-primary");
-  expect(cards[1]?.className).not.toContain("border-primary");
+  expect(cards[0]?.querySelector("[data-slot=stat-selected]")).not.toBeNull();
+  expect(cards[1]?.getAttribute("aria-pressed")).toBe("false");
+  expect(cards[1]?.querySelector("[data-slot=stat-selected]")).toBeNull();
+  // The 任务状态分布 strip is counted from the same read: an empty window says so, no percentage.
+  const distribution = banner.querySelector(
+    "[data-slot=status-distribution]",
+  ) as HTMLElement;
+  expect(distribution.textContent).toContain("暂无任务");
+  expect(distribution.textContent).not.toContain("%");
   // Nothing running in the window: the status line says the coworkers are resting.
   expect(within(banner).getByText(/员工们正在休息/)).toBeTruthy();
   // No separate scope row is left above the banner.
@@ -246,16 +257,20 @@ test("the machines fold into a 设备 filter in the banner, beside 数据周期"
   expect(within(banner).getByText(/设备 1\/1 在线/)).toBeTruthy();
 });
 
-test("the attention area is underline tabs over a bordered panel with a two-line empty state", async () => {
+test("the attention area is a pill switch over a rounded panel with a two-line empty state", async () => {
   controlFetch([]);
   const { view } = draw("/tasks");
   await ready(view);
   const attention = region(view, "需要关注");
   const tabs = within(attention).getByRole("tablist", { name: "关注分类" });
-  expect(tabs.getAttribute("data-variant")).toBe("underline");
+  expect(tabs.getAttribute("data-variant")).toBe("pill");
+  // The design's heading for the area.
+  expect(
+    within(attention).getByRole("heading", { name: "待关注" }),
+  ).toBeTruthy();
   expect(
     within(tabs)
-      .getByRole("tab", { name: "需要操作 (0)" })
+      .getByRole("tab", { name: "需要操作 0" })
       .getAttribute("aria-selected"),
   ).toBe("true");
   expect(within(attention).getByText("暂无需要操作的任务")).toBeTruthy();
@@ -264,39 +279,40 @@ test("the attention area is underline tabs over a bordered panel with a two-line
       "需要你确认、回答或补充信息的任务会显示在这里。",
     ),
   ).toBeTruthy();
-  fireEvent.click(within(tabs).getByRole("tab", { name: "查收结果 (0)" }));
+  fireEvent.click(within(tabs).getByRole("tab", { name: "查收结果 0" }));
   await settleReactWork();
   await waitFor(() =>
     expect(within(attention).getByText("暂无待查收的结果")).toBeTruthy(),
   );
 });
 
-test("全部任务: 16px heading, icon view switch, labelled toolbar and the empty panel", async () => {
+test("全部任务: 17px heading, icon-and-name view switch, labelled toolbar and the empty panel", async () => {
   controlFetch([]);
   const { view } = draw("/tasks");
   await ready(view);
   const all = region(view, "全部任务");
   const heading = within(all).getByRole("heading", { name: "全部任务" });
-  expect(heading.className).toContain("text-[16px]");
+  expect(heading.className).toContain("text-[17px]");
   const switcher = within(all).getByRole("tablist", { name: "视图" });
   for (const name of ["列表", "泳道"]) {
     const tab = within(switcher).getByRole("tab", { name });
-    // An icon, with the name kept for assistive technology only.
+    // An icon beside the visible name, as the design's pill draws it.
     expect(tab.querySelector("svg")).not.toBeNull();
-    expect(tab.querySelector(".sr-only")?.textContent).toBe(name);
+    expect(tab.textContent).toBe(name);
   }
   const search = within(all).getByRole("searchbox", { name: "搜索任务" });
   expect(search.getAttribute("placeholder")).toBe("搜索任务、员工或群组");
   const labels = [...all.querySelectorAll("[data-slot=labeled-select]")].map(
     (box) => box.querySelector("span")?.textContent,
   );
-  expect(labels).toEqual(["员工 / 群组", "触发方式", "任务状态", "数据周期"]);
+  // The list's own window is named 周期, as the design's toolbar names it.
+  expect(labels).toEqual(["员工 / 群组", "触发方式", "任务状态", "周期"]);
   const selectIn = (label: string) =>
     within(all).getByLabelText(label) as HTMLSelectElement;
   expect(selectIn("员工 / 群组").selectedOptions[0]?.textContent).toBe("全部");
   expect(selectIn("触发方式").selectedOptions[0]?.textContent).toBe("全部");
   expect(selectIn("任务状态").selectedOptions[0]?.textContent).toBe("全部");
-  expect(selectIn("数据周期").selectedOptions[0]?.textContent).toBe("一个月");
+  expect(selectIn("周期").selectedOptions[0]?.textContent).toBe("一个月");
   // The empty list is the mascot's empty state inside the bordered results panel.
   const empty = await within(all).findByText("暂无任务");
   expect(empty.closest("[data-slot=task-results]")).not.toBeNull();
@@ -314,15 +330,13 @@ test("a narrowed empty list says the filter left nothing to show", async () => {
   ).toBeTruthy();
 });
 
-test("the list's own 数据周期 narrows the list alone and survives a reload", async () => {
+test("the list's own 周期 narrows the list alone and survives a reload", async () => {
   const requests: string[] = [];
   controlFetch(requests);
   const { router, view } = draw("/tasks");
   await ready(view);
   const all = region(view, "全部任务");
-  const listPeriod = within(all).getByLabelText(
-    "数据周期",
-  ) as HTMLSelectElement;
+  const listPeriod = within(all).getByLabelText("周期") as HTMLSelectElement;
   const mark = requests.length;
   fireEvent.change(listPeriod, { target: { value: "week" } });
   await settleReactWork();
@@ -350,7 +364,7 @@ test("the list's own 数据周期 narrows the list alone and survives a reload",
   expect(
     (
       within(region(again.view, "全部任务")).getByLabelText(
-        "数据周期",
+        "周期",
       ) as HTMLSelectElement
     ).value,
   ).toBe("week");

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { Tag } from "@/components/resources/resource-kit";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RequestError } from "@/lib/client";
@@ -21,6 +22,7 @@ import {
   type WakerFlowSessionTurn,
   wakerFlowKeys,
 } from "@/lib/wakerflows";
+import { CARD_FACE, SELECT_CLASS } from "./flow-ui";
 
 const STATUS_LABEL: Record<WakerFlowRequestStatus, string> = {
   pending: "生成中",
@@ -218,9 +220,11 @@ export function SessionPanel(props: { flow: WakerFlow }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 text-sm">
+    <div
+      className={`${CARD_FACE} flex flex-col gap-[12px] p-[14px] text-[13px]`}
+    >
       <div className="flex flex-row items-center justify-between gap-2">
-        <h2 className="font-bold text-lg">修改会话</h2>
+        <h2 className="font-bold text-[15px] tracking-[-0.01em]">修改会话</h2>
         <Button
           disabled={busy || sending !== null}
           onClick={startSession}
@@ -231,12 +235,12 @@ export function SessionPanel(props: { flow: WakerFlow }) {
         </Button>
       </div>
       {failure ? (
-        <p className="text-destructive" role="alert">
+        <p className="text-signal-ink" role="alert">
           {failure}
         </p>
       ) : null}
       {sessions.error ? (
-        <p className="text-destructive" role="alert">
+        <p className="text-signal-ink" role="alert">
           {sessions.error.message}
         </p>
       ) : null}
@@ -260,7 +264,7 @@ export function SessionPanel(props: { flow: WakerFlow }) {
                 variant={entry.id === sessionId ? "secondary" : "ghost"}
               >
                 <span className="truncate">{entry.title}</span>
-                <span className="text-muted-foreground text-xs">
+                <span className="shrink-0 text-[11px] text-muted-foreground">
                   {entry.active ? "当前 · " : ""}
                   {entry.turnCount} 轮
                 </span>
@@ -271,9 +275,9 @@ export function SessionPanel(props: { flow: WakerFlow }) {
       )}
 
       {session ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 border-border border-t pt-3">
           <div className="flex flex-row items-center justify-between gap-2">
-            <h3 className="font-medium">{session.title}</h3>
+            <h3 className="min-w-0 truncate font-semibold">{session.title}</h3>
             <Button
               disabled={busy || sending !== null}
               onClick={removeSession}
@@ -311,7 +315,7 @@ export function SessionPanel(props: { flow: WakerFlow }) {
           {models.length > 0 ? (
             <select
               aria-label="规划模型"
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+              className={SELECT_CLASS}
               onChange={(event) => setModelRef(event.target.value)}
               value={chosen}
             >
@@ -348,19 +352,22 @@ function Turn(props: {
   const plan = turn.plan;
   const changes = plan ? planDifferences(current, plan) : [];
   return (
-    <li className="rounded-md bg-muted px-3 py-2">
+    <li className="rounded-[11px] border border-border bg-background/60 px-3 py-[9px]">
       <p className="whitespace-pre-wrap">{turn.prompt}</p>
-      <p className="mt-1 text-muted-foreground text-xs">
+      <p className="mt-1 text-[11.5px] text-muted-foreground">
         {STATUS_LABEL[turn.status]}
         {turn.error ? `：${turn.error}` : ""}
       </p>
       {plan ? (
         <div className="mt-2">
-          <p className="font-medium">与当前计划的差异</p>
+          <p className="font-semibold text-[12px]">与当前计划的差异</p>
           {changes.length === 0 ? (
             <p className="text-muted-foreground">与当前计划相同。</p>
           ) : (
-            <ul aria-label="与当前计划的差异" className="mt-1 list-disc pl-5">
+            <ul
+              aria-label="与当前计划的差异"
+              className="mt-1 list-disc pl-5 text-[12px] text-foreground/90"
+            >
               {changes.map((change) => (
                 <li key={change}>{change}</li>
               ))}
@@ -368,7 +375,7 @@ function Turn(props: {
           )}
           <div className="mt-2">
             {turn.applied ? (
-              <span className="text-muted-foreground text-xs">已应用</span>
+              <Tag tone="positive">已应用</Tag>
             ) : (
               <Button
                 onClick={() => props.onApply(plan)}

@@ -139,17 +139,17 @@ function writeMoreOpen(open: boolean) {
 }
 
 /*
- * One nav row, measured on the reference at 1696px: 32px tall on a 36px pitch, the row box inset
- * 12px from the sidebar's edges, a 16px icon 10px in, the 14px label at x 48, and the open entry on
- * `sidebar-accent` edged in the logo's gold, with everything else muted. Written in px rather than
- * Tailwind's rem steps because this app's root font size is 15px.
+ * One nav row, as docs/design/ios-studio draws it: 37px tall on a 40px pitch, a 9px radius, the
+ * 13px label 11px after an 18px icon, everything quiet grey. The open entry lifts onto a faint white
+ * plate with a hairline, turns white, and carries the one red mark of the sidebar: a 4×12 bar at its
+ * right end. Written in px because this app's root font size is 15px.
  */
 const navRowClassName =
-  "h-[32px] gap-[10px] rounded-md px-[10px] text-[14px] text-sidebar-foreground/55 hover:bg-foreground/5 hover:text-sidebar-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground data-[status=active]:shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand-gold)_40%,transparent)] [&_svg]:size-[16px]";
+  "h-[37px] gap-[11px] rounded-[9px] border border-transparent px-[11px] text-[13px] text-muted-foreground hover:bg-foreground/[0.03] hover:text-sidebar-foreground data-[status=active]:border-foreground/[0.06] data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground after:ml-auto after:hidden after:h-[12px] after:w-[4px] after:shrink-0 after:rounded-[3px] after:bg-signal after:content-[''] data-[status=active]:after:block [&_svg]:size-[18px] [&_svg]:text-faint data-[status=active]:[&_svg]:text-sidebar-accent-foreground";
 
-/** A group label: 12px, dim, 8px in from the row box (x 20), 5px above its first row. */
+/** A group label: 11px, faint, aligned with the row's icon, 7px above its first row. */
 const groupLabelClassName =
-  "mb-[5px] h-[18px] px-[8px] text-[12px] text-sidebar-foreground/45 leading-[18px]";
+  "h-[18px] px-[11px] pb-[7px] text-[11px] text-faint leading-[18px] box-content";
 
 function NavRow({ to, label, icon: Icon, owns = [] }: NavItem) {
   const ownsCurrent = useRouterState({
@@ -185,7 +185,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
       <div className={groupLabelClassName} id={labelId}>
         {label}
       </div>
-      <SidebarMenu className="gap-[4px]">
+      <SidebarMenu className="gap-[3px]">
         {items.map((item) => (
           <NavRow key={item.to} {...item} />
         ))}
@@ -194,22 +194,22 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   );
 }
 
-/** 48px: our logo with the Chinese and English names on the left, the collapse button on the right (x 211–225 on the reference). */
+/** The brand: the 35px logo, the product's name and its English name in spaced mono, and the collapse button. */
 function SidebarBrand() {
   const { toggleSidebar } = useSidebar();
   return (
-    <SidebarHeader className="h-[48px] flex-row items-center justify-between gap-2 py-0 pr-[10px] pl-[16px]">
+    <SidebarHeader className="flex-row items-center justify-between gap-2 pt-[21px] pr-[12px] pb-[24px] pl-[21px]">
       <Link
-        className="flex h-[32px] min-w-0 items-center gap-[8px] rounded-md font-semibold text-[14px] tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        className="flex min-w-0 items-center gap-[11px] rounded-[10px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         to="/"
       >
-        <BrandLogo className="rounded-[6px]" size={26} />
+        <BrandLogo className="rounded-[10px]" size={35} />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate leading-[16px]">
+          <span className="truncate font-bold text-[15px] leading-[19px] tracking-[0.015em]">
             {appConfig.brand.productName}
           </span>
           {appConfig.brand.englishName ? (
-            <span className="truncate font-medium text-[10px] text-brand-gold-ink leading-[12px] tracking-[0.08em]">
+            <span className="mt-[3px] truncate font-mono text-[9px] text-faint uppercase leading-[11px] tracking-[0.13em]">
               {appConfig.brand.englishName}
             </span>
           ) : null}
@@ -260,11 +260,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar {...props}>
       <SidebarBrand />
       <SidebarContent className="scroll-fade-b gap-0">
-        <nav aria-label="主导航" className="px-[12px]">
+        <nav aria-label="主导航" className="px-[15px]">
           {NAV_GROUPS.map((group, index) => (
-            // 17px between one group's last row and the next group's label (label centre y 201).
             <div
-              className={index > 0 ? "mt-[17px]" : undefined}
+              className={index > 0 ? "mt-[18px]" : undefined}
               key={group.label}
             >
               <NavGroup {...group} />
@@ -278,7 +277,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
        * so the workbench groups and the 员工 / 群组 roster sit exactly where the reference has them
        * (the reference has no such row; between the two it pushed the roster down 36px).
        */}
-      <div className="border-sidebar-border border-t px-[12px] pt-[6px]">
+      <div className="border-sidebar-border border-t px-[15px] pt-[6px]">
         <SidebarMenu className="gap-[4px]">
           <SidebarMenuItem>
             <SidebarMenuButton

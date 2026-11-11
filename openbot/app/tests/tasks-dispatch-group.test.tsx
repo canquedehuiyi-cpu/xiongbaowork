@@ -200,7 +200,7 @@ test("派给群组 starts the crew's flow, refreshes the board and links to the 
     ),
   );
   const { router, view } = draw();
-  await view.findByText("任务看板");
+  await view.findByRole("heading", { level: 1, name: "任务看板" });
   await waitFor(() => expect(taskReads(calls)).toBeGreaterThanOrEqual(2));
 
   const { user, dialog, picker } = await openDialog(view);
@@ -258,7 +258,7 @@ test("a 403 from the pre-dispatch check lists the refused step numbers and start
     ),
   );
   const { router, view } = draw();
-  await view.findByText("任务看板");
+  await view.findByRole("heading", { level: 1, name: "任务看板" });
 
   const { user, dialog } = await openDialog(view);
   const box = within(dialog).getByLabelText("任务内容") as HTMLTextAreaElement;
@@ -288,7 +288,7 @@ test("any other refusal shows the server's sentence without a step list", async 
     Response.json({ error: "这里没有这条模板。" }, { status: 404 }),
   );
   const { view } = draw();
-  await view.findByText("任务看板");
+  await view.findByRole("heading", { level: 1, name: "任务看板" });
 
   const { user, dialog } = await openDialog(view);
   await user.type(within(dialog).getByLabelText("任务内容"), "x");

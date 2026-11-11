@@ -1,26 +1,84 @@
-import { IconArrowLeft, IconArrowRight, IconSearch } from "@tabler/icons-react";
+import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { QueryError } from "@/components/layout/query-error";
+import { SearchBox } from "@/components/layout/search-box";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /**
  * The pieces every tab of 能力与资源 is built from, so nine tabs share one header, one grid, one
  * set of states and one pager instead of each drawing its own.
+ *
+ * Drawn to docs/design/ios-studio (05-能力与资源.png, theme.css): graphite cards with a hairline and a
+ * faint top highlight at a 13px radius, 33px icon plates, round badges, and red only where something
+ * is selected or needs attention. Sizes are the reference's CSS px scaled by this app's 15px root
+ * against its 14px one, rounded (11 → 12, 10 → 11).
  */
+
+/** A card's matte face: hairline, graphite, and the faint highlight along its top edge. */
+export const CARD_FACE =
+  "rounded-[13px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]";
+
+/**
+ * The reference's `.symbol`: a 33px plate an icon or logo sits on. `active` turns the glyph red, as
+ * the selected resource entry draws it; the plate itself never changes, so nothing reads by colour
+ * alone.
+ */
+export function ResourceSymbol({
+  children,
+  active = false,
+  className,
+}: {
+  children: ReactNode;
+  active?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex size-[33px] shrink-0 items-center justify-center rounded-[9px] border border-foreground/10 bg-muted shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] dark:bg-[linear-gradient(145deg,oklch(0.27_0.002_286.2),oklch(0.225_0.002_286.2))] [&_svg]:size-[18px]",
+        active ? "text-signal-ink" : "text-foreground/85",
+        className,
+      )}
+      data-slot="resource-symbol"
+    >
+      {children}
+    </span>
+  );
+}
+
+/** A section's first line (`.section-head`): a 17px title on the left, its aside on the right. */
+export function SectionHead({
+  title,
+  id,
+  aside,
+  className,
+}: {
+  title: ReactNode;
+  id?: string;
+  aside?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "mb-[9px] flex min-h-[26px] flex-wrap items-center justify-between gap-[10px]",
+        className,
+      )}
+    >
+      <h2
+        className="font-bold text-[17px] leading-[26px] tracking-[-0.02em]"
+        id={id}
+      >
+        {title}
+      </h2>
+      {aside}
+    </div>
+  );
+}
 
 /** A tab's first row: what it is, its own actions, and its search. */
 export function TabHeader({
@@ -33,11 +91,11 @@ export function TabHeader({
   search?: ReactNode;
 }) {
   return (
-    <div className="mt-[20px] flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <p className="max-w-prose text-pretty text-[13px] text-muted-foreground leading-relaxed">
+    <div className="mt-[22px] flex flex-col gap-[10px] md:flex-row md:items-center md:justify-between">
+      <p className="max-w-prose text-pretty text-[13px] text-muted-foreground leading-[1.6]">
         {description}
       </p>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-[7px]">
         {search}
         {actions}
       </div>
@@ -45,7 +103,7 @@ export function TabHeader({
   );
 }
 
-/** A search box in the toolbar: 32 CSS px, the reference's toolbar control height. */
+/** A search box in the toolbar: the workbench's 32px box, magnifier on the left. */
 export function TabSearch({
   label,
   value,
@@ -58,22 +116,17 @@ export function TabSearch({
   className?: string;
 }) {
   return (
-    <InputGroup className={cn("h-[32px] w-full sm:w-[240px]", className)}>
-      <InputGroupAddon>
-        <IconSearch />
-      </InputGroupAddon>
-      <InputGroupInput
-        aria-label={label}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={label}
-        type="search"
-        value={value}
-      />
-    </InputGroup>
+    <SearchBox
+      className={cn("w-full sm:w-[221px]", className)}
+      label={label}
+      onValueChange={onChange}
+      placeholder={label}
+      value={value}
+    />
   );
 }
 
-/** The grid cards sit in: one column on a phone, up to four on a wide desktop. */
+/** The grid cards sit in: one column on a phone, two, then the reference's three. */
 export function CardGrid({
   children,
   label,
@@ -87,7 +140,7 @@ export function CardGrid({
     <ul
       aria-label={label}
       className={cn(
-        "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4",
+        "grid grid-cols-1 gap-[9px] min-[441px]:grid-cols-2 xl:grid-cols-3",
         className,
       )}
     >
@@ -96,17 +149,17 @@ export function CardGrid({
   );
 }
 
-/** The skeleton a tab shows while its first read is in flight. */
+/** The skeleton a tab shows while its first read is in flight: three card-shaped plates. */
 export function TabSkeleton({ label = "正在加载" }: { label?: string }) {
   return (
     <div
       aria-label={label}
-      className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+      className="mt-[12px] grid grid-cols-1 gap-[9px] min-[441px]:grid-cols-2 xl:grid-cols-3"
       role="status"
     >
-      <Skeleton className="h-[132px]" />
-      <Skeleton className="h-[132px]" />
-      <Skeleton className="h-[132px]" />
+      <Skeleton className="h-[126px] rounded-[13px]" />
+      <Skeleton className="h-[126px] rounded-[13px]" />
+      <Skeleton className="h-[126px] rounded-[13px]" />
     </div>
   );
 }
@@ -139,7 +192,7 @@ export function QueryState({
   return (
     <>
       {query.error ? (
-        <div className="mt-4">
+        <div className="mt-[12px]">
           <QueryError
             error={query.error}
             label={label}
@@ -153,7 +206,10 @@ export function QueryState({
   );
 }
 
-/** A tab with nothing in it yet: a fact and, where there is one, the way to change it. */
+/**
+ * A tab with nothing in it yet: 熊宝, a fact and, where there is one, the way to change it — the
+ * workbench's one empty state, inside the tab's hairline.
+ */
 export function TabEmpty({
   title,
   description,
@@ -164,15 +220,12 @@ export function TabEmpty({
   action?: ReactNode;
 }) {
   return (
-    <Empty className="mt-4 h-[180px] border border-dashed">
-      <EmptyHeader>
-        <EmptyTitle className="text-muted-foreground">{title}</EmptyTitle>
-        {description ? (
-          <EmptyDescription>{description}</EmptyDescription>
-        ) : null}
-      </EmptyHeader>
-      {action ? <EmptyContent>{action}</EmptyContent> : null}
-    </Empty>
+    <WorkbenchEmpty
+      action={action}
+      className="mt-[12px] border border-border"
+      description={description}
+      title={title}
+    />
   );
 }
 
@@ -185,7 +238,7 @@ export function NoMatch({
   onClear?: () => void;
 }) {
   return (
-    <div className="mt-4 flex flex-col items-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center">
+    <div className="mt-[12px] flex min-h-[126px] flex-col items-center justify-center gap-[9px] rounded-[13px] border border-border border-dashed px-4 py-8 text-center">
       <p className="text-[13px] text-muted-foreground">{title}</p>
       {onClear ? (
         <Button onClick={onClear} size="sm" variant="outline">
@@ -196,7 +249,12 @@ export function NoMatch({
   );
 }
 
-/** A small tag beside a title. Not a control, so plain text a screen reader reads in line. */
+/**
+ * A small round badge beside a title or in a card's footer (the reference's `.badge`). Not a
+ * control, so plain text a screen reader reads in line; the words carry the state, the tone only
+ * echoes it: `positive` is the brighter plate (已授权, 已安装), `warning` the red one for something
+ * that needs attention (待授权, 连接异常, 缺少凭据), `muted` the quiet default (未安装).
+ */
 export function Tag({
   children,
   tone = "muted",
@@ -207,13 +265,14 @@ export function Tag({
   return (
     <span
       className={cn(
-        "inline-flex h-[20px] shrink-0 items-center rounded-full border px-2 font-normal text-[12px]",
+        "inline-flex h-[20px] shrink-0 items-center gap-[5px] whitespace-nowrap rounded-full px-[8px] font-semibold text-[11px]",
         tone === "positive"
-          ? "border-primary/30 text-primary"
+          ? "bg-foreground/[0.08] text-foreground"
           : tone === "warning"
-            ? "border-amber-500/30 text-amber-600 dark:text-amber-400"
-            : "border-border text-muted-foreground",
+            ? "bg-signal-soft text-signal-ink"
+            : "bg-foreground/[0.05] text-muted-foreground",
       )}
+      data-tone={tone}
     >
       {children}
     </span>
@@ -251,7 +310,7 @@ export function pageWindow(page: number, pages: number): (number | "gap")[] {
 }
 
 const PAGER_BUTTON =
-  "inline-flex size-[32px] items-center justify-center rounded-md text-[13px] tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex size-[32px] items-center justify-center rounded-[9px] text-[13px] tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-40";
 
 /**
  * The pager under a grid, bottom right: ←, the page numbers with the current one boxed, →. One-based,
@@ -301,7 +360,7 @@ export function Pager({
             className={cn(
               PAGER_BUTTON,
               item === page
-                ? "border border-foreground/25 font-medium text-foreground"
+                ? "border border-border bg-foreground/[0.05] font-semibold text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]"
                 : "text-muted-foreground hover:text-foreground",
             )}
             data-current={item === page ? "true" : undefined}

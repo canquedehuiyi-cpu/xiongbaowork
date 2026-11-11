@@ -35,7 +35,7 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * Parity plan, 自主工作 (`/autonomous-work` in the reference): the header's primary action, the one
- * panel of four metrics, the toolbar's search and 执行者 / 触发类型 / 自动任务状态 / 排序 (mirrored into the
+ * panel of four metrics, the toolbar's search and 执行者 / 触发类型 / 状态 / 排序 (mirrored into the
  * URL), one list over every kind of unattended work, and its switches writing through the existing
  * endpoints. Reads are seeded; what is asserted is what the page computes and what it writes.
  */
@@ -344,8 +344,9 @@ const listed = (view: ReturnType<typeof draw>["view"]) =>
     .filter((item) => item.hasAttribute("data-name"))
     .map((item) => item.getAttribute("data-name"));
 
+// The panel is named by its visible heading, 自动任务概览 (docs/design/ios-studio, 03-自主工作.png).
 const metric = (view: ReturnType<typeof draw>["view"], label: string) =>
-  within(view.getByRole("region", { name: "自主工作概览" }))
+  within(view.getByRole("region", { name: "自动任务概览" }))
     .getByText(label)
     .closest("[data-metric]")
     ?.getAttribute("data-value");
@@ -387,7 +388,8 @@ test("the four metrics are computed from every kind of unattended work", async (
   expect(metric(view, "员工执行")).toBe("5");
   expect(metric(view, "WakerFlow 执行")).toBe("1");
   // 运行中 and 需要关注 left the panel (the reference has neither); the status filter counts them.
-  const status = view.getByLabelText("自动任务状态") as HTMLSelectElement;
+  // The filter reads 「状态」 as the reference labels it (docs/design/ios-studio, 03-自主工作.png).
+  const status = view.getByLabelText("状态") as HTMLSelectElement;
   expect(
     Array.from(status.options).map((option) => option.textContent),
   ).toContain("运行中 · 1");
@@ -455,7 +457,7 @@ test("executor, trigger type and status narrow the list, and each is written int
   fireEvent.change(view.getByLabelText("触发类型"), {
     target: { value: "schedule" },
   });
-  fireEvent.change(view.getByLabelText("自动任务状态"), {
+  fireEvent.change(view.getByLabelText("状态"), {
     target: { value: "paused" },
   });
   await waitFor(() =>

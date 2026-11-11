@@ -26,6 +26,10 @@ import { settleReactWork } from "./settle-react-work";
  * reads top to bottom as 工作记录横幅（数据周期 + 四张统计卡 + 状态行）→ 关注区（需要操作 / 查收结果）→
  * 全部任务（列表/泳道、搜索、员工/群组 · 触发 · 状态 · 数据周期筛选）, and every switch and filter lives
  * in the address. The reference screenshot puts the cards and the period INSIDE the banner. Real route, real router, controlled fetch — the harness tasks-workbench-navigation uses.
+ *
+ * Since the black/white/red redesign (docs/design/ios-studio/01-任务看板.png) the attention tabs read
+ * 「需要操作 N / 查收结果 N」 without brackets and the list's own window is labelled 周期; what each
+ * control does and where it sits is asserted exactly as before.
  */
 let registeredHere = false;
 const originalFetch = globalThis.fetch;
@@ -238,7 +242,8 @@ test("the period control sits in the banner and the list filters in the all-task
     within(all).getByLabelText("员工 / 群组"),
     within(all).getByLabelText("触发方式"),
     within(all).getByLabelText("任务状态"),
-    within(all).getByLabelText("数据周期"),
+    // The list's own window, named 周期 as docs/design/ios-studio/01-任务看板.png names it.
+    within(all).getByLabelText("周期"),
   ];
   for (const control of controls) {
     // The 32px box is the shared control's frame around the native field.
@@ -286,12 +291,10 @@ test("the attention switch is a tablist whose choice survives a reload", async (
   const tabs = within(attention).getByRole("tablist", { name: "关注分类" });
   expect(
     within(tabs)
-      .getByRole("tab", { name: "需要操作 (1)" })
+      .getByRole("tab", { name: "需要操作 1" })
       .getAttribute("aria-selected"),
   ).toBe("true");
-  await userEvent.click(
-    within(tabs).getByRole("tab", { name: "查收结果 (1)" }),
-  );
+  await userEvent.click(within(tabs).getByRole("tab", { name: "查收结果 1" }));
   await settleReactWork();
   expect(router.state.location.href).toInclude("attention=review");
   expect(within(attention).getByText("review card")).toBeTruthy();
@@ -301,7 +304,7 @@ test("the attention switch is a tablist whose choice survives a reload", async (
   const again = draw(href);
   await ready(again.view);
   const reloaded = within(region(again.view, "需要关注")).getByRole("tab", {
-    name: "查收结果 (1)",
+    name: "查收结果 1",
   });
   expect(reloaded.getAttribute("aria-selected")).toBe("true");
 });

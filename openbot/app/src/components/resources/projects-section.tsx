@@ -1,6 +1,7 @@
+import { IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { PageSection } from "@/components/layout/page-shell";
+import { LabeledSelect } from "@/components/layout/labeled-select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,8 @@ import {
   sourceSummary,
   syncProjectMutationOptions,
 } from "@/lib/projects/queries";
+import { cn } from "@/lib/utils";
+import { CARD_FACE, TabEmpty, TabHeader, Tag } from "./resource-kit";
 
 /**
  * 能力与资源 › 项目 (story RES2, spec §5 RES2-3): the projects on one of the person's paired machines.
@@ -59,6 +62,10 @@ const OFFLINE_REASON =
 
 const characters = (value: string) => [...value].length;
 
+/** The form's native selects, drawn as the workbench's 30px dark field. */
+const NATIVE_SELECT =
+  "ml-2 h-[30px] rounded-[9px] border border-border bg-muted px-2 text-[12px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/60 dark:bg-[oklch(0.196_0.002_286.2)]";
+
 export function ProjectsSection() {
   const devices = useQuery(devicesQueryOptions());
   const list = devices.data ?? [];
@@ -67,46 +74,43 @@ export function ProjectsSection() {
   const device = list.find((entry) => entry.id === deviceId);
 
   return (
-    <PageSection
-      description="员工在你的电脑上干活时所在的目录：一个本地目录，或者由设备拉取的 Git 仓库。公开项目这台设备上的所有员工都能选用，员工专属项目只有那位员工能选用。"
-      title="项目"
-    >
+    <>
+      <TabHeader
+        description="员工在你的电脑上干活时所在的目录：一个本地目录，或者由设备拉取的 Git 仓库。公开项目这台设备上的所有员工都能选用，员工专属项目只有那位员工能选用。"
+        search={
+          list.length > 0 ? (
+            // docs/design/ios-studio's toolbar filter: 「设备 名称 ▾」, a native select underneath.
+            <LabeledSelect
+              label="设备"
+              onValueChange={setChosen}
+              options={list.map((entry) => ({
+                value: entry.id,
+                label: `${entry.name}${entry.online ? "" : "（离线）"}`,
+              }))}
+              value={deviceId}
+            />
+          ) : null
+        }
+      />
       {devices.isPending ? (
         <Skeleton
           aria-label="正在读取设备"
-          className="mt-3 h-12"
+          className="mt-[12px] h-[104px] rounded-[13px]"
           role="status"
         />
       ) : devices.isError ? (
-        <p className="mt-3 text-destructive text-sm" role="alert">
+        <p className="mt-[12px] text-destructive text-sm" role="alert">
           读不到设备。
         </p>
       ) : list.length === 0 ? (
-        <p className="mt-3 text-muted-foreground text-sm">
-          还没有配对的设备。项目放在你自己的电脑上，请先在「我的设备」里配对一台电脑。
-        </p>
-      ) : (
-        <>
-          <label className="mt-3 block text-sm">
-            设备
-            <select
-              aria-label="设备"
-              className="ml-2 rounded border p-1"
-              onChange={(event) => setChosen(event.target.value)}
-              value={deviceId}
-            >
-              {list.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                  {entry.online ? "" : "（离线）"}
-                </option>
-              ))}
-            </select>
-          </label>
-          {device ? <DeviceProjects device={device} key={device.id} /> : null}
-        </>
-      )}
-    </PageSection>
+        <TabEmpty
+          description="项目放在你自己的电脑上，请先在「我的设备」里配对一台电脑。"
+          title="还没有配对的设备。"
+        />
+      ) : device ? (
+        <DeviceProjects device={device} key={device.id} />
+      ) : null}
+    </>
   );
 }
 
@@ -122,36 +126,57 @@ function DeviceProjects({ device }: { device: RegisteredDevice }) {
     agents.data?.find((agent) => agent.id === agentId)?.name ?? "一位员工";
 
   return (
-    <div className="mt-4">
+    <div className="mt-[12px]">
       {projects.isPending ? (
-        <Skeleton aria-label="正在读取项目" className="h-12" role="status" />
+        <Skeleton
+          aria-label="正在读取项目"
+          className="h-[104px] rounded-[13px]"
+          role="status"
+        />
       ) : projects.isError ? (
         <p className="text-destructive text-sm" role="alert">
           {projects.error.message}
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-muted-foreground text-sm">这台设备上还没有项目。</p>
+        <p className="flex min-h-[86px] items-center justify-center rounded-[13px] border border-border border-dashed px-4 text-center text-[13px] text-muted-foreground">
+          这台设备上还没有项目。
+        </p>
       ) : (
-        <ItemGroup aria-label="这台设备上的项目" role="list">
+        <ItemGroup
+          aria-label="这台设备上的项目"
+          className="grid grid-cols-1 gap-[9px] lg:grid-cols-2"
+          role="list"
+        >
           {rows.map((project) => (
-            <Item key={project.id} role="listitem" size="sm" variant="muted">
-              <ItemContent>
-                <ItemTitle>
+            <Item
+              className={cn(
+                CARD_FACE,
+                "min-h-[86px] items-start gap-[10px] px-[11px] py-[10px] dark:border-border",
+              )}
+              key={project.id}
+              role="listitem"
+              size="sm"
+              variant="outline"
+            >
+              <ItemContent className="min-w-0">
+                <ItemTitle className="flex-wrap font-bold text-[13px]">
                   {project.name}
-                  <span className="rounded bg-foreground/5 px-1.5 py-0.5 font-normal text-muted-foreground text-xs">
+                  <Tag>
                     {project.scope === "public"
                       ? "公开"
                       : `员工专属 · ${nameOf(project.agentId)}`}
-                  </span>
+                  </Tag>
                 </ItemTitle>
-                <ItemDescription>
+                <ItemDescription className="text-[12px]">
                   {sourceSummary(project.source)}
                 </ItemDescription>
                 {project.description ? (
-                  <ItemDescription>{project.description}</ItemDescription>
+                  <ItemDescription className="text-[12px]">
+                    {project.description}
+                  </ItemDescription>
                 ) : null}
               </ItemContent>
-              <ItemActions>
+              <ItemActions className="shrink-0 flex-wrap justify-end">
                 {project.source.kind === "git" ? (
                   <SyncButton
                     device={device}
@@ -191,12 +216,12 @@ function DeviceProjects({ device }: { device: RegisteredDevice }) {
         />
       ) : (
         <Button
-          className="mt-3"
+          className="mt-[12px]"
           disabled={rows.length >= PROJECT_LIMIT_PER_DEVICE}
           onClick={() => setAdding(true)}
-          size="sm"
           variant="outline"
         >
+          <IconPlus />
           新建项目
         </Button>
       )}
@@ -325,7 +350,7 @@ function NewProjectForm({
   return (
     <form
       aria-label="新建项目"
-      className="mt-4 space-y-3 rounded border p-3"
+      className={cn(CARD_FACE, "mt-[12px] space-y-3 p-[14px] text-[13px]")}
       onSubmit={(event) => {
         event.preventDefault();
         save();
@@ -457,7 +482,7 @@ function NewProjectForm({
               选择分支
               <select
                 aria-label="选择分支"
-                className="ml-2 rounded border p-1"
+                className={NATIVE_SELECT}
                 onChange={(event) => setBranch(event.target.value)}
                 value={branches.data.includes(branch) ? branch : ""}
               >
@@ -524,7 +549,7 @@ function NewProjectForm({
           员工
           <select
             aria-label="员工"
-            className="ml-2 rounded border p-1"
+            className={NATIVE_SELECT}
             onChange={(event) => setAgentId(event.target.value)}
             value={agentId}
           >

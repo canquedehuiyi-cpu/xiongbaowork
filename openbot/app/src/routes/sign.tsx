@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
-import AgentOrb from "@/components/agents/orb/agent-orb";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { ProviderLogo } from "@/components/auth/provider-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -204,10 +204,20 @@ function SignScreen() {
 
   const passwordFields = (
     <div className="flex flex-col gap-2">
-      <div className="flex gap-1">
+      {/*
+       * The pill segmented control every two-way choice in the redesign uses (docs/design/ios-studio):
+       * a sunken track, the chosen half raised. `aria-pressed` says which half is on, since the two
+       * are buttons rather than tabs over separate panels.
+       */}
+      <div className="flex gap-[3px] rounded-[11px] border border-border bg-background/50 p-[3px]">
         {(["sign-in", "sign-up"] as const).map((each) => (
           <Button
-            className="flex-1 tracking-tight"
+            aria-pressed={mode === each}
+            className={
+              mode === each
+                ? "h-[28px] flex-1 rounded-[8px] bg-accent font-medium tracking-tight shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] hover:bg-accent"
+                : "h-[28px] flex-1 rounded-[8px] text-muted-foreground tracking-tight"
+            }
             // Toggling is how a person gets out of a refusal they caused on the other half, so the
             // message goes with the mode rather than lingering over a different form.
             key={each}
@@ -217,7 +227,7 @@ function SignScreen() {
             }}
             size="sm"
             type="button"
-            variant={mode === each ? "secondary" : "ghost"}
+            variant="ghost"
           >
             {each === "sign-in" ? "登录" : "注册"}
           </Button>
@@ -225,6 +235,7 @@ function SignScreen() {
       </div>
       {mode === "sign-up" ? (
         <Input
+          aria-label="你的名字"
           autoComplete="name"
           onChange={(event) => setAccountName(event.target.value)}
           placeholder="你的名字"
@@ -233,6 +244,7 @@ function SignScreen() {
         />
       ) : null}
       <Input
+        aria-label="邮箱"
         autoComplete="email"
         onChange={(event) => setPasswordEmail(event.target.value)}
         placeholder="you@example.com"
@@ -245,18 +257,30 @@ function SignScreen() {
         // a password manager to offer a strong one instead of filling in an old answer.
         autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
         minLength={mode === "sign-up" ? MIN_PASSWORD_LENGTH : undefined}
+        aria-describedby={mode === "sign-up" ? "sign-password-hint" : undefined}
+        aria-label="密码"
         onChange={(event) => setPassword(event.target.value)}
         placeholder="密码"
         required
         type="password"
         value={password}
       />
+      {mode === "sign-up" ? (
+        <p className="px-1 text-[12px] text-faint" id="sign-password-hint">
+          密码至少 {MIN_PASSWORD_LENGTH} 位。
+        </p>
+      ) : null}
+      {/*
+       * White, the redesign's primary action, when the password form is the only way in. Beside a
+       * provider's button it stays outlined like them, for the reason given on those buttons: no
+       * sign-in option may be louder than Google's.
+       */}
       <Button
-        className="h-10 w-full tracking-tight"
+        className="mt-1 h-10 w-full tracking-tight"
         disabled={!passwordReady || submitting}
         size="lg"
         type="submit"
-        variant="outline"
+        variant={providers.length > 0 ? "outline" : "default"}
       >
         {submitting ? "请稍候…" : mode === "sign-up" ? "创建我的账户" : "登录"}
       </Button>
@@ -310,7 +334,7 @@ function SignScreen() {
     <div className="flex flex-col h-dvh w-full items-center justify-center -mt-12">
       <motion.div
         animate="shown"
-        className="flex-1 flex w-full max-w-82 flex-col items-center justify-center p-4"
+        className="flex-1 flex w-full max-w-[380px] flex-col items-center justify-center p-4"
         initial="hidden"
         variants={{
           hidden: {},
@@ -322,17 +346,31 @@ function SignScreen() {
           variants={{ hidden, shown }}
           className="flex items-center justify-center"
         >
-          <AgentOrb size="56px" />
+          {/* The brand, as the workbench sidebar draws it: 熊宝's mask on its gold frame. */}
+          <BrandLogo className="rounded-[14px]" size={56} />
         </motion.div>
+        {appConfig.brand.englishName ? (
+          <motion.p
+            className="mt-6 flex items-center gap-[8px] font-mono text-[10px] text-muted-foreground uppercase tracking-[0.14em]"
+            transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
+            variants={{ hidden, shown }}
+          >
+            <span
+              aria-hidden="true"
+              className="h-[2px] w-[12px] rounded-[2px] bg-signal"
+            />
+            {appConfig.brand.englishName}
+          </motion.p>
+        ) : null}
         <motion.h1
-          className="text-2xl font-medium tracking-tight text-center mt-8"
+          className="mt-3 text-center font-bold text-[28px] leading-[1.15] tracking-[-0.04em]"
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
         >
           登录 {appConfig.brand.productName}
         </motion.h1>
         <motion.div
-          className="mt-8 w-full"
+          className="mt-7 w-full rounded-[18px] border border-border bg-card p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]"
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
         >
@@ -387,6 +425,7 @@ function SignScreen() {
                 </div>
               ) : null}
               <Input
+                aria-label="企业邮箱"
                 autoComplete="email"
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@company.com"
@@ -415,7 +454,10 @@ function SignScreen() {
             </details>
           ) : null}
           {error ? (
-            <p className="mt-3 text-sm text-destructive" role="alert">
+            <p
+              className="mt-3 rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
+              role="alert"
+            >
               {error}
             </p>
           ) : null}

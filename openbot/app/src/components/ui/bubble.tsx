@@ -32,6 +32,17 @@ const bubbleVariants = cva(
           "*:data-[slot=bubble-content]:border-border *:data-[slot=bubble-content]:bg-background [&>[data-slot=bubble-content]:is(button,a):hover]:bg-muted [&>[data-slot=bubble-content]:is(button,a):hover]:text-foreground dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-input/30",
         ghost:
           "border-none *:data-[slot=bubble-content]:rounded-none *:data-[slot=bubble-content]:bg-transparent *:data-[slot=bubble-content]:p-0 [&>[data-slot=bubble-content]:is(button,a):hover]:bg-muted [&>[data-slot=bubble-content]:is(button,a):hover]:text-foreground dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-muted/50",
+        /*
+         * A person's own words in a conversation (docs/design/ios-studio): a pale #e9e9e9 bubble with
+         * dark ink on the dark canvas — the one light surface in the transcript, so "what I said"
+         * is found at a glance — and the light theme's soft grey on paper.
+         */
+        user: "*:data-[slot=bubble-content]:rounded-[16px] *:data-[slot=bubble-content]:bg-secondary *:data-[slot=bubble-content]:px-[14px] *:data-[slot=bubble-content]:py-[9px] *:data-[slot=bubble-content]:text-secondary-foreground dark:*:data-[slot=bubble-content]:bg-[#e9e9e9] dark:*:data-[slot=bubble-content]:text-[#161617]",
+        /*
+         * A coworker's answer: a graphite card with a hairline border and the faint top highlight
+         * every card in the redesign carries. Full width is the caller's choice (`w-full`).
+         */
+        card: "*:data-[slot=bubble-content]:rounded-[14px] *:data-[slot=bubble-content]:border-border *:data-[slot=bubble-content]:bg-card *:data-[slot=bubble-content]:px-[12px] *:data-[slot=bubble-content]:py-[11px] *:data-[slot=bubble-content]:text-card-foreground sm:*:data-[slot=bubble-content]:px-[16px] sm:*:data-[slot=bubble-content]:py-[12px] *:data-[slot=bubble-content]:shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]",
         destructive:
           "*:data-[slot=bubble-content]:bg-destructive/10 *:data-[slot=bubble-content]:text-destructive dark:*:data-[slot=bubble-content]:bg-destructive/20 [&>[data-slot=bubble-content]:is(button,a):hover]:bg-destructive/20 dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-destructive/30",
       },

@@ -40,9 +40,9 @@ export function SegmentedTabs<T extends string>({
   className?: string;
   size?: "default" | "sm";
   /**
-   * `pill` is the boxed switch (员工 / 群组 on 员工管理, 列表 / 泳道); `underline` is the text tab
-   * with a bar under the selected one (需要操作 / 查收结果, 插件市场 / 我的插件, the sidebar's
-   * 员工 / 群组), both as the reference draws them.
+   * `pill` is the boxed switch docs/design/ios-studio uses for every two- or three-way choice (员工 /
+   * 群组, 需要操作 / 查收结果, 插件市场 / 我的插件, 列表 / 泳道); `underline` is a plain text tab with
+   * a bar under the selected one, kept for screens that sit tabs over a long document.
    */
   variant?: "pill" | "underline";
   /**
@@ -83,7 +83,7 @@ export function SegmentedTabs<T extends string>({
       className={cn(
         variant === "underline"
           ? "flex items-end gap-6 border-border border-b"
-          : "inline-flex items-center gap-0.5 rounded-lg bg-foreground/[0.04] p-0.5",
+          : "inline-flex items-center gap-[2px] rounded-[10px] border border-border bg-muted p-[3px] dark:bg-sidebar",
         className,
       )}
       data-variant={variant}
@@ -107,12 +107,13 @@ export function SegmentedTabs<T extends string>({
                       : "border-transparent text-muted-foreground hover:text-foreground",
                   )
                 : cn(
-                    "rounded-md px-3",
+                    // The reference's segment: a 7px-radius plate, raised with a hairline highlight.
+                    "rounded-[7px] px-[11px]",
                     size === "sm"
-                      ? "h-[26px] text-[12px]"
-                      : "h-[28px] text-[13px]",
+                      ? "h-[24px] text-[12px]"
+                      : "h-[26px] text-[12px]",
                     selected
-                      ? "bg-background text-foreground shadow-xs dark:bg-foreground/10"
+                      ? "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.08)] dark:bg-accent dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.07)]"
                       : "text-muted-foreground hover:text-foreground",
                   ),
             )}

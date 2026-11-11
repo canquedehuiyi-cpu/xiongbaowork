@@ -104,7 +104,10 @@ export function RoleEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-1" role="tablist">
+      <div
+        className="inline-flex w-fit max-w-full flex-wrap gap-[2px] rounded-[11px] border border-border bg-background/60 p-[2px]"
+        role="tablist"
+      >
         {TABS.map((item) => (
           <Button
             aria-selected={tab === item.id}
@@ -201,7 +204,7 @@ export function RoleEditor({
         </div>
       )}
 
-      <details className="rounded-md border border-border p-3 text-sm">
+      <details className="rounded-[12px] border border-border p-[12px] text-sm">
         <summary className="cursor-pointer font-medium">
           Markdown 导入与导出
         </summary>
@@ -284,7 +287,7 @@ export function RoleGeneratePanel({
   const chosen = modelRef || choices[0]?.id || "";
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
+    <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
       <span className="font-medium">智能生成</span>
       <Input
         aria-label="一句话描述这个角色"
@@ -300,7 +303,7 @@ export function RoleGeneratePanel({
       ) : (
         <select
           aria-label="生成用的模型"
-          className="h-8 rounded-md border border-input bg-transparent px-2"
+          className="h-[32px] rounded-[9px] border border-input bg-transparent px-[9px] text-[13px]"
           onChange={(event) => setModelRef(event.target.value)}
           value={chosen}
         >
@@ -384,7 +387,10 @@ export function RoleDiff({
   return (
     <ul aria-label="改动" className="flex flex-col gap-2 text-sm">
       {rows.map((row) => (
-        <li className="rounded-md border border-border p-2" key={row.label}>
+        <li
+          className="rounded-[10px] border border-border p-[9px]"
+          key={row.label}
+        >
           <span className="font-medium">{row.label}</span>
           <p className="text-muted-foreground line-through">
             {row.before || "（空）"}
@@ -412,7 +418,7 @@ export function TemplatePicker({
     <label className="flex flex-col gap-1 text-sm" htmlFor="role-template-pick">
       <span className="font-medium">从模板开始</span>
       <select
-        className="h-8 rounded-md border border-input bg-transparent px-2"
+        className="h-[32px] rounded-[9px] border border-input bg-transparent px-[9px] text-[13px]"
         defaultValue=""
         id="role-template-pick"
         onChange={(event) =>
@@ -505,7 +511,7 @@ export function AgentRolePanel({
   return (
     <div className="flex flex-col gap-3">
       {from ? (
-        <div className="flex flex-col gap-1 rounded-md bg-muted p-3 text-sm">
+        <div className="flex flex-col gap-1 rounded-[12px] bg-muted p-[12px] text-sm">
           <span>
             来自模板「{from.name ?? "已删除的模板"}」v{from.version}
             {from.modified ? "，已在模板基础上修改" : ""}
@@ -581,7 +587,7 @@ export function AgentRolePanel({
         >
           <span className="font-medium">套用模板</span>
           <select
-            className="h-8 rounded-md border border-input bg-transparent px-2"
+            className="h-[32px] rounded-[9px] border border-input bg-transparent px-[9px] text-[13px]"
             id="agent-apply-template"
             onChange={(event) =>
               setPending(own.find((t) => t.id === event.target.value) ?? null)
@@ -599,7 +605,7 @@ export function AgentRolePanel({
       ) : null}
 
       {pending ? (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+        <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px]">
           <span className="font-medium text-sm">
             套用「{pending.name}」v{pending.version} 会改动：
           </span>

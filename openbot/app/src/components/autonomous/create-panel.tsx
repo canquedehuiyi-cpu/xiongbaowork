@@ -2,10 +2,12 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AutomationForm } from "@/components/automations/automation-form";
 import { SecretOnce } from "@/components/automations/automations-section";
+import { PANEL } from "@/components/autonomous/work-bits";
 import { SegmentedTabs } from "@/components/layout/segmented-tabs";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import type { CreatedAutomation } from "@/lib/automations/queries";
 import { TRIGGER_TYPE_LABEL, type TriggerType } from "@/lib/autonomous/unified";
+import { cn } from "@/lib/utils";
 
 const TABS = (["schedule", "event", "api"] as const).map((value) => ({
   value,
@@ -32,7 +34,10 @@ export function CreateAutomationPanel({ onClose }: { onClose: () => void }) {
   return (
     <section
       aria-label="新建"
-      className="mt-5 flex flex-col gap-3 rounded-lg border border-border bg-card p-4 dark:border-transparent"
+      className={cn(
+        PANEL,
+        "mt-[5px] mb-[22px] flex flex-col gap-3 rounded-[18px] p-[16px]",
+      )}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -87,7 +92,10 @@ export function CreateAutomationPanel({ onClose }: { onClose: () => void }) {
           </p>
           <div>
             <Link
-              className="inline-flex h-[32px] items-center rounded-md border px-3 text-[13px] hover:bg-muted"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "h-[32px] px-3 text-[13px]",
+              )}
               to="/responsibilities"
             >
               去长期职责新建

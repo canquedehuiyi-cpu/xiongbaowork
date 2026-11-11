@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tag } from "@/components/resources/resource-kit";
 import { RequestError } from "@/lib/client";
 import {
   listWakerFlowVersions,
@@ -9,6 +10,7 @@ import {
   type WakerFlow,
   wakerFlowKeys,
 } from "@/lib/wakerflows";
+import { CARD_FACE } from "./flow-ui";
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("zh-CN", {
@@ -83,8 +85,8 @@ export function VersionList(props: { flow: WakerFlow }) {
 
   const list = versions.data ?? [];
   return (
-    <div className="flex flex-col gap-2 text-sm">
-      <p>当前版本：第 {flow.revision} 版</p>
+    <div className="flex flex-col gap-2 text-[13px]">
+      <p className="font-medium">当前版本：第 {flow.revision} 版</p>
       {restored ? (
         <p className="text-muted-foreground" role="status">
           已恢复第 {restored.from} 版的计划，保存为第 {restored.to} 版。
@@ -92,7 +94,7 @@ export function VersionList(props: { flow: WakerFlow }) {
       ) : null}
       {conflict ? (
         <div
-          className="flex flex-wrap items-center gap-2 text-destructive"
+          className="flex flex-wrap items-center gap-2 text-signal-ink"
           role="alert"
         >
           <span>{WAKERFLOW_CONFLICT_MESSAGE}</span>
@@ -109,37 +111,45 @@ export function VersionList(props: { flow: WakerFlow }) {
         </div>
       ) : null}
       {failure ? (
-        <p className="text-destructive" role="alert">
+        <p className="text-signal-ink" role="alert">
           {failure}
         </p>
       ) : null}
       {versions.isPending ? (
-        <p className="text-muted-foreground">正在加载版本记录…</p>
+        <p className="text-muted-foreground" role="status">
+          正在加载版本记录…
+        </p>
       ) : versions.error ? (
-        <p className="text-destructive" role="alert">
+        <p className="text-signal-ink" role="alert">
           {versions.error.message}
         </p>
       ) : list.length === 0 ? (
         <p className="text-muted-foreground">还没有保存过的版本。</p>
       ) : (
-        <ul aria-label="版本记录" className="flex flex-col gap-2">
+        <ul
+          aria-label="版本记录"
+          className={`${CARD_FACE} flex flex-col divide-y divide-border overflow-hidden`}
+        >
           {list.map((version) => {
             const current = version.revision === flow.revision;
             return (
               <li
-                className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+                className="flex flex-wrap items-center gap-x-[10px] gap-y-2 px-[14px] py-[10px]"
                 key={version.revision}
               >
-                <span className="font-medium">第 {version.revision} 版</span>
-                <span>{version.name}</span>
-                <span className="text-muted-foreground text-xs">
+                <span className="font-semibold tabular-nums">
+                  第 {version.revision} 版
+                </span>
+                <span className="min-w-0 truncate">{version.name}</span>
+                <span className="text-[12px] text-muted-foreground tabular-nums">
                   {version.stepCount} 个步骤 · {when(version.createdAt)}
                 </span>
+                <span className="flex-1" />
                 {current ? (
-                  <span className="text-muted-foreground text-xs">当前</span>
+                  <Tag tone="positive">当前</Tag>
                 ) : confirming === version.revision ? (
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs">
+                    <span className="text-[12px] text-muted-foreground">
                       恢复后会保存为第 {flow.revision + 1}{" "}
                       版，正在进行的运行不受影响。
                     </span>

@@ -13,11 +13,6 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Fragment } from "react";
-import {
-  PageEmpty,
-  PageRows,
-  PageSection,
-} from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -42,6 +37,12 @@ import {
 import { relativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
+import {
+  ProfileAlert,
+  ProfileEmpty,
+  ProfilePanel,
+  ProfileSection,
+} from "./profile-kit";
 
 const ICONS: Record<ActivityKind, typeof IconBell> = {
   routine: IconCalendarRepeat,
@@ -156,9 +157,12 @@ function ActivityRow({
         </ItemTitle>
         <ItemDescription>
           {KIND_LABEL[item.kind]} ·{" "}
-          {item.needsYou
-            ? "等你处理"
-            : (STATUS_LABEL[item.status] ?? item.status)}
+          {item.needsYou ? (
+            // The one word on this page that asks for the person: said, and in the signal red.
+            <span className="font-medium text-signal-ink">等你处理</span>
+          ) : (
+            (STATUS_LABEL[item.status] ?? item.status)
+          )}
           {when ? ` · ${when}` : ""}
           {item.detail ? ` · ${item.detail}` : ""}
         </ItemDescription>
@@ -206,20 +210,29 @@ function ActivitySection({
   title: string;
 }) {
   return (
-    <PageSection title={title}>
+    <ProfileSection
+      action={
+        items.length > 0 ? (
+          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+            {items.length} 项
+          </span>
+        ) : null
+      }
+      title={title}
+    >
       {items.length === 0 ? (
-        <PageEmpty icon={IconHistory}>{empty}</PageEmpty>
+        <ProfileEmpty>{empty}</ProfileEmpty>
       ) : (
-        <PageRows>
+        <ProfilePanel>
           {items.map((item, index) => (
             <Fragment key={item.id}>
               {index > 0 ? <Separator /> : null}
               <ActivityRow agentId={agentId} item={item} live={live} />
             </Fragment>
           ))}
-        </PageRows>
+        </ProfilePanel>
       )}
-    </PageSection>
+    </ProfileSection>
   );
 }
 
@@ -256,8 +269,8 @@ export function BotActivityGlance({ agentId }: { agentId: string }) {
   const upcoming = upcomingOf(activity.data);
   if (activity.isPending || upcoming.length === 0) return null;
   return (
-    <PageSection title="动态">
-      <PageRows>
+    <ProfileSection title="动态">
+      <ProfilePanel>
         {upcoming.map(({ item, live }) => (
           <Fragment key={item.id}>
             <ActivityRow agentId={agentId} item={item} live={live} />
@@ -265,8 +278,8 @@ export function BotActivityGlance({ agentId }: { agentId: string }) {
           </Fragment>
         ))}
         <AllActivityItem activity={activity.data} agentId={agentId} />
-      </PageRows>
-    </PageSection>
+      </ProfilePanel>
+    </ProfileSection>
   );
 }
 
@@ -351,11 +364,9 @@ export function BotActivitySections({ agentId }: { agentId: string }) {
   if (activity.isPending) return null;
   if (activity.error)
     return (
-      <PageSection title="动态">
-        <p className="mt-4 text-destructive text-sm" role="alert">
-          读不到这位员工的动态。
-        </p>
-      </PageSection>
+      <ProfileSection title="动态">
+        <ProfileAlert>读不到这位员工的动态。</ProfileAlert>
+      </ProfileSection>
     );
   return (
     <>
@@ -406,8 +417,8 @@ function BotActionsSection({ agentId }: { agentId: string }) {
   const admin = useQuery(currentUserQueryOptions()).data?.role === "admin";
   if (!admin) return null;
   return (
-    <PageSection title="动作">
-      <PageRows>
+    <ProfileSection title="动作">
+      <ProfilePanel>
         <Item
           render={<Link search={{ bot: agentId }} to="/admin/audit" />}
           size="sm"
@@ -425,7 +436,7 @@ function BotActionsSection({ agentId }: { agentId: string }) {
             <IconChevronRight className="size-4 text-muted-foreground" />
           </ItemActions>
         </Item>
-      </PageRows>
-    </PageSection>
+      </ProfilePanel>
+    </ProfileSection>
   );
 }

@@ -638,7 +638,7 @@ function ModelUsage() {
               <ItemDescription>
                 30 天内 {row.people} 人运行了 {row.runs} 次
                 {row.refused > 0 ? ` · ${row.refused} 次不在白名单内` : ""} ·{" "}
-                {row.source}
+                {MODEL_SOURCES[row.source] ?? row.source}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -652,6 +652,21 @@ function ModelUsage() {
     </PageRows>
   );
 }
+
+/** Where a model name came from, in words; an unlisted value is shown as the server wrote it. */
+const MODEL_SOURCES: Record<string, string> = {
+  configured: "部署配置",
+  observed: "运行中报出",
+  unknown: "来源未知",
+};
+
+/** A recorded command's outcome, in words; an unlisted value is shown as the server wrote it. */
+const ACTION_OUTCOMES: Record<string, string> = {
+  allowed: "已放行",
+  refused: "已拦截",
+  denied: "已拦截",
+  failed: "执行失败",
+};
 
 function RecordedActions() {
   const actions = useQuery(actionRecordsQueryOptions());
@@ -678,7 +693,7 @@ function RecordedActions() {
                 {action.surface === "local"
                   ? "成员自己的电脑"
                   : `员工 ${action.botId ?? "?"}`}{" "}
-                · {action.outcome} ·{" "}
+                · {ACTION_OUTCOMES[action.outcome] ?? action.outcome} ·{" "}
                 {new Date(action.createdAt).toLocaleString("zh-CN")}
               </ItemDescription>
             </ItemContent>

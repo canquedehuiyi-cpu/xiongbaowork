@@ -1,4 +1,4 @@
-import { IconPlus } from "@tabler/icons-react";
+import { IconArrowLeft, IconPlus } from "@tabler/icons-react";
 import {
   type UseQueryResult,
   useInfiniteQuery,
@@ -10,21 +10,22 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useId, useRef, useState } from "react";
 import { AutomationsSection } from "@/components/automations/automations-section";
 import { CreateAutomationPanel } from "@/components/autonomous/create-panel";
+import { SignalArt } from "@/components/autonomous/signal-art";
 import { UnifiedAutomations } from "@/components/autonomous/unified-list";
 import {
   describe,
+  PANEL,
   RunStrip,
   recentRunsOf,
   statusWord,
+  WorkNote,
+  WorkRows,
+  WorkSection,
   WorkSwitch,
 } from "@/components/autonomous/work-bits";
-import {
-  PageRows,
-  PageSection,
-  PageShell,
-} from "@/components/layout/page-shell";
+import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Item,
@@ -49,6 +50,7 @@ import {
 import { channelListQueryOptions } from "@/lib/channels/queries";
 import { RequestError } from "@/lib/client";
 import { relativeTime } from "@/lib/relative-time";
+import { cn } from "@/lib/utils";
 import {
   cronFor,
   type Frequency,
@@ -74,20 +76,24 @@ export const Route = createFileRoute("/_authed/_app/autonomous")({
 
 type View = "list" | "agents";
 
+/** One coworker in the 按员工 picker: a 30px pill, white when chosen. */
+const ROSTER_PILL = "h-[30px] rounded-[8px] px-[12px] text-[12px]";
+
 /**
- * 自主工作 (parity plan): the title with its one primary action, then two views of the same work.
+ * 自主工作 (docs/design/ios-studio, 03-自主工作.png): the open heading — 03 AUTOMATION, the title,
+ * the chip-and-signal art, and the one primary action — then two views of the same work.
  *
- * 任务列表 (the default, as in the reference) is one list over every kind of unattended work with
- * four metrics, search and filters, all mirrored into the URL. 按员工 (`?view=agents`) is the
+ * 任务列表 (the default) is the 自动任务概览 panel of four metrics, the 自动任务 list with its search
+ * and filters, all mirrored into the URL, and the three 触发方式. 按员工 (`?view=agents`) is the
  * earlier per-coworker page, kept whole, because it carries what the list does not: a coworker's
- * routine form with its conversation picker, and the 全部员工 overview grouped by coworker. The
- * reference has no such view, so it is reached from a quiet 「按员工查看」 link at the toolbar's
- * end rather than a switch in the header, and left by 「返回任务列表」.
+ * routine form with its conversation picker, and the 全部员工 overview grouped by coworker. It is
+ * reached from the 「按员工查看」 outline button at the list's heading, and left by 「返回任务列表」.
  */
 function RouteComponent() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
   const view: View = search.view === "agents" ? "agents" : "list";
   /*
    * Only the axes that are set go into the address, so a cleared filter leaves no `?status=`. A
@@ -108,16 +114,23 @@ function RouteComponent() {
       replace: true,
     });
 
+  /*
+   * The list's empty state offers the same panel as the header. It opens above the overview, so the
+   * page is brought back to it rather than leaving the form out of sight.
+   */
+  const createFromList = () => {
+    setCreating(true);
+    requestAnimationFrame(() =>
+      panel.current?.scrollIntoView?.({ block: "start" }),
+    );
+  };
+
   return (
     <PageShell
       action={
         <Button
           aria-expanded={view === "list" && creating}
-          /*
-           * The reference centres its action on the title and subtitle together, not on the title
-           * line alone: the nudge is visual only, so the header's own layout is untouched.
-           */
-          className="h-[32px] sm:translate-y-[15px] gap-[10px] pr-[12px] pl-[13px] text-[13px]"
+          className="h-[34px] gap-[7px] px-[11px] text-[12px]"
           onClick={() => {
             if (view === "agents") {
               update({});
@@ -127,23 +140,28 @@ function RouteComponent() {
             setCreating((open) => !open);
           }}
         >
-          <IconPlus aria-hidden="true" className="size-[14px]" />
+          <IconPlus aria-hidden="true" className="size-[15px]" />
           新建自动任务
         </Button>
       }
+      art={<SignalArt />}
       description="通过定时、事件或 API 自动开工，并由员工或 WakerFlow 响应。"
+      eyebrow="03 AUTOMATION"
       title="自主工作"
       width="workbench"
     >
       {view === "list" ? (
         <>
-          {creating ? (
-            <CreateAutomationPanel onClose={() => setCreating(false)} />
-          ) : null}
+          <div className="scroll-mt-[16px]" ref={panel}>
+            {creating ? (
+              <CreateAutomationPanel onClose={() => setCreating(false)} />
+            ) : null}
+          </div>
           <UnifiedAutomations
             onChange={(patch) =>
               update((current) => ({ ...current, ...patch }))
             }
+            onCreate={createFromList}
             onReset={() => update({})}
             search={search}
           />
@@ -212,16 +230,24 @@ function AgentsView() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-[32px] pb-[12px]">
-        <p className="text-muted-foreground text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-[5px] pb-[14px]">
+        <p className="text-[13px] text-muted-foreground">
           这位员工自己安排的定时任务、长期职责与主动巡检，以及它们上一次的结果。
         </p>
         {/* The filters belong to the list, so going back starts it from a bare address. */}
         <Link
-          className="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          className={cn(
+            buttonVariants({ variant: "outline" }),
+            "h-[34px] gap-[7px] px-[11px] text-[12px]",
+          )}
           search={{}}
           to="/autonomous"
         >
+          <IconArrowLeft
+            aria-hidden="true"
+            className="size-[15px]"
+            stroke={1.6}
+          />
           返回任务列表
         </Link>
       </div>
@@ -233,38 +259,49 @@ function AgentsView() {
           onRetry={() => void agents.refetch()}
         />
       ) : null}
-      {agents.isPending ? <Skeleton className="h-8 w-64" /> : null}
-      {agents.isSuccess && roster.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          还没有可用员工。请先到「员工」创建一位。
-        </p>
+      {agents.isPending ? (
+        <Skeleton className="h-[34px] w-64 rounded-[11px]" />
       ) : null}
-      <div className="flex flex-wrap gap-1 pb-4">
-        {roster.length > 0 ? (
+      {agents.isSuccess && roster.length === 0 ? (
+        <WorkNote>还没有可用员工。请先到「员工」创建一位。</WorkNote>
+      ) : null}
+      {roster.length > 0 ? (
+        /*
+         * Who to look at: a row of pills on one plate (docs/design/ios-studio `.segment`), the chosen
+         * one white. Pressed state is announced, not only drawn.
+         */
+        <div
+          className={cn(
+            PANEL,
+            "flex w-fit max-w-full flex-wrap gap-[3px] rounded-[11px] p-[3px]",
+          )}
+        >
           <Button
             aria-pressed={everyone}
+            className={ROSTER_PILL}
             onClick={() => setEveryone(true)}
             size="sm"
-            variant={everyone ? "default" : "outline"}
+            variant={everyone ? "default" : "ghost"}
           >
             全部员工
           </Button>
-        ) : null}
-        {roster.map((agent) => (
-          <Button
-            aria-pressed={agent.id === agentId}
-            key={agent.id}
-            onClick={() => {
-              setEveryone(false);
-              setPinned(agent.id);
-            }}
-            size="sm"
-            variant={agent.id === agentId ? "default" : "outline"}
-          >
-            {agent.name}
-          </Button>
-        ))}
-      </div>
+          {roster.map((agent) => (
+            <Button
+              aria-pressed={agent.id === agentId}
+              className={ROSTER_PILL}
+              key={agent.id}
+              onClick={() => {
+                setEveryone(false);
+                setPinned(agent.id);
+              }}
+              size="sm"
+              variant={agent.id === agentId ? "default" : "ghost"}
+            >
+              {agent.name}
+            </Button>
+          ))}
+        </div>
+      ) : null}
 
       {everyone ? (
         <Overview
@@ -282,7 +319,9 @@ function AgentsView() {
       ) : null}
       {everyone ? <AutomationsSection /> : null}
 
-      {agentId && summary.isPending ? <Skeleton className="h-24" /> : null}
+      {agentId && summary.isPending ? (
+        <Skeleton className="mt-[22px] h-24 rounded-[14px]" />
+      ) : null}
       {summary.isError ? (
         <QueryError
           label="自主工作加载失败"
@@ -294,7 +333,7 @@ function AgentsView() {
 
       {summary.data && selected ? (
         <>
-          <PageSection
+          <WorkSection
             action={
               <Button
                 aria-expanded={creating}
@@ -318,12 +357,12 @@ function AgentsView() {
               />
             ) : null}
             {summary.data.routines.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
+              <WorkNote>
                 还没有安排任何定时任务。点「新建定时任务」排一个，或者在频道里把要做的事说给{" "}
                 {selected.name}，它会自己建。
-              </p>
+              </WorkNote>
             ) : (
-              <PageRows>
+              <WorkRows>
                 {summary.data.routines.map((routine) => (
                   <Item key={routine.id} size="sm" variant="outline">
                     <ItemContent>
@@ -379,17 +418,17 @@ function AgentsView() {
                     </ItemActions>
                   </Item>
                 ))}
-              </PageRows>
+              </WorkRows>
             )}
-          </PageSection>
+          </WorkSection>
 
-          <PageSection title="长期职责">
+          <WorkSection title="长期职责">
             {summary.data.responsibilities.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
+              <WorkNote>
                 还没有长期职责。职责是这位员工持续盯着的一件事——它由事件触发，而不是由时钟触发。
-              </p>
+              </WorkNote>
             ) : (
-              <PageRows>
+              <WorkRows>
                 {summary.data.responsibilities.map((goal) => (
                   <Item key={goal.id} size="sm" variant="outline">
                     <ItemContent>
@@ -417,17 +456,17 @@ function AgentsView() {
                     </ItemActions>
                   </Item>
                 ))}
-              </PageRows>
+              </WorkRows>
             )}
-          </PageSection>
+          </WorkSection>
 
-          <PageSection title="主动巡检">
+          <WorkSection title="主动巡检">
             {summary.data.proactive.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
+              <WorkNote>
                 还没有主动巡检。这是这位员工不等你开口就自己出声的那些时刻。
-              </p>
+              </WorkNote>
             ) : (
-              <PageRows>
+              <WorkRows>
                 {summary.data.proactive.map((setting) => (
                   <Item key={setting.id} size="sm" variant="outline">
                     <ItemContent>
@@ -466,11 +505,11 @@ function AgentsView() {
                     </ItemActions>
                   </Item>
                 ))}
-              </PageRows>
+              </WorkRows>
             )}
-          </PageSection>
+          </WorkSection>
 
-          <p className="text-muted-foreground pt-4 text-xs">
+          <p className="pt-[14px] text-[12px] text-muted-foreground">
             {summary.data.lastActivityAt
               ? `最近一次无人值守的工作在 ${relativeTime(summary.data.lastActivityAt)}。`
               : "这位员工还没有无人值守地工作过。"}{" "}
@@ -512,18 +551,21 @@ function Overview({
       />
     );
   }
-  if (!query.data) return <Skeleton className="h-24" />;
+  if (!query.data)
+    return <Skeleton className="mt-[22px] h-24 rounded-[14px]" />;
   if (query.data.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
-        还没有哪位员工在无人值守地工作。选一位员工，给它排一条定时任务。
-      </p>
+      <div className="mt-[22px]">
+        <WorkNote>
+          还没有哪位员工在无人值守地工作。选一位员工，给它排一条定时任务。
+        </WorkNote>
+      </div>
     );
   }
   return (
     <>
       {query.data.map((entry) => (
-        <PageSection
+        <WorkSection
           description={
             entry.lastActivityAt
               ? `最近一次无人值守的工作在 ${relativeTime(entry.lastActivityAt)}`
@@ -532,7 +574,7 @@ function Overview({
           key={entry.agentId}
           title={names.get(entry.agentId) ?? entry.agentId.slice(0, 8)}
         >
-          <PageRows>
+          <WorkRows>
             {entry.routines.map((routine) => (
               <Item key={routine.id} size="sm" variant="outline">
                 <ItemContent>
@@ -608,8 +650,8 @@ function Overview({
                 </ItemActions>
               </Item>
             ))}
-          </PageRows>
-        </PageSection>
+          </WorkRows>
+        </WorkSection>
       ))}
     </>
   );
@@ -681,7 +723,7 @@ function NewRoutineForm({
 
   return (
     <form
-      className="mb-4 flex flex-col gap-3 rounded-lg border p-3"
+      className={cn(PANEL, "mb-[10px] flex flex-col gap-3 p-[14px]")}
       onSubmit={(event) => {
         event.preventDefault();
         if (!frequency) return;
@@ -711,7 +753,7 @@ function NewRoutineForm({
         执行员工
         <select
           aria-label="执行员工"
-          className="border-input bg-background rounded-md border px-2 py-1"
+          className="h-[32px] rounded-[9px] border border-border bg-muted px-2 text-[13px]"
           onChange={(event) => {
             setAgentId(event.target.value);
             // A conversation chosen for one coworker means nothing for the next.
@@ -730,7 +772,7 @@ function NewRoutineForm({
         汇报到哪段对话
         <select
           aria-label="汇报到哪段对话"
-          className="border-input bg-background rounded-md border px-2 py-1"
+          className="h-[32px] rounded-[9px] border border-border bg-muted px-2 text-[13px]"
           onChange={(event) => setChannelId(event.target.value)}
           value={channelId}
         >
@@ -760,7 +802,7 @@ function NewRoutineForm({
           频率
           <select
             aria-label="频率"
-            className="border-input bg-background rounded-md border px-2 py-1"
+            className="h-[32px] rounded-[9px] border border-border bg-muted px-2 text-[13px]"
             onChange={(event) => setMode(event.target.value as Mode)}
             value={mode}
           >
@@ -776,7 +818,7 @@ function NewRoutineForm({
             星期
             <select
               aria-label="星期"
-              className="border-input bg-background rounded-md border px-2 py-1"
+              className="h-[32px] rounded-[9px] border border-border bg-muted px-2 text-[13px]"
               onChange={(event) => setWeekday(Number(event.target.value))}
               value={weekday}
             >

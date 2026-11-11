@@ -1,9 +1,4 @@
-import {
-  IconListCheck,
-  IconPlugConnected,
-  IconPlus,
-  IconRobot,
-} from "@tabler/icons-react";
+import { IconLink, IconList, IconPlus, IconRobot } from "@tabler/icons-react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -14,6 +9,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { type ComponentType, useState } from "react";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
+import { ChatStage } from "@/components/reachability/chat-stage";
 import {
   chatRows,
   filterRows,
@@ -30,7 +26,6 @@ import {
   useLinkFlow,
 } from "@/components/reachability/link-conversation-dialog";
 import { RecentDeliveries } from "@/components/reachability/recent-deliveries";
-import { WakerScene } from "@/components/reachability/waker-scene";
 import { Button } from "@/components/ui/button";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { channelListQueryOptions } from "@/lib/channels/queries";
@@ -57,32 +52,30 @@ export const Route = createFileRoute("/_authed/_app/reachability")({
 type Entry = "im" | "accounts" | "auto" | "requests";
 
 /**
- * The hero's headline, three lines, and the page's one h1.
+ * The heading, two lines of large type, and the page's one h1 (docs/design/ios-studio/02-Waker.png).
  *
- * The reference has no page title above its hero: the headline IS the heading. `PageShell` always
- * draws its title as the h1, so the headline is passed as that title and {@link HERO_FRAME}
- * restyles it in place — rather than hiding PageShell's h1 and drawing a second one.
+ * The design's slogan is 「在聊天里，让员工接手工作」; the page keeps its own business wording —
+ * what the page does, in the words it has always used — set as the design sets its headline, and
+ * the slogan's idea goes in the sentence under it.
  */
-const HEADLINE = "@员工\n将员工接入群聊或私聊\n在 IM 中持续承接团队工作";
+const HEADLINE = "将员工接入群聊或私聊，\n在 IM 中持续承接团队工作";
 
 /*
- * The hero, measured against docs/acceptance/qoderwake-reference/reachability.png (1696×850, CSS
- * px): the scene's card spans y 40–320 with its right edge on the column's; the headline is 32px
- * bold on a 36px line, its first line green; the entry buttons sit 42px under it; the text block is
- * centred against the scene. PageShell lays its header out first, the scene second, the rest after,
- * so from 1100px wide the frame becomes a two-column grid with the rest spanning both columns.
- * The selectors reach into PageShell's header (header > div > h1, its title row) because that
- * component is shared and takes no props for this.
+ * The open heading as docs/design/ios-studio/theme.css draws `.hero.waker`: 270px tall, the text
+ * block centred against the chat illustration, the headline a little smaller than the other pages'
+ * (clamp 32–51px) and the four entries in a row under the sentence (`.hero-actions.below`, 18px
+ * down) rather than at the bottom right. The selectors reach into PageShell's header because that
+ * shared component takes no props for this.
  */
 const HERO_FRAME = [
-  "pt-[40px]",
-  "min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,624px)] min-[1100px]:gap-x-[40px]",
-  "[&>header]:self-center",
-  "[&>header>div]:flex-col [&>header>div]:items-start [&>header>div]:justify-start [&>header>div]:gap-[42px]",
-  "[&>header_h1]:whitespace-pre-line [&>header_h1]:font-bold [&>header_h1]:tracking-normal",
-  // A phone keeps each line whole: 26px fits 将员工接入群聊或私聊 in 310px.
-  "[&>header_h1]:text-[26px] [&>header_h1]:leading-[32px] sm:[&>header_h1]:text-[32px] sm:[&>header_h1]:leading-[36px]",
-  "[&>header_h1::first-line]:text-primary",
+  "[&>header]:flex-col [&>header]:items-start [&>header]:justify-center [&>header]:gap-y-[18px]",
+  "md:[&>header]:min-h-[270px]",
+  "[&>header_h1]:whitespace-pre-line",
+  // A phone keeps each line whole: 28px fits 在 IM 中持续承接团队工作 in 364px. Under 1150px the
+  // headline gives the chat card a little more room.
+  "[&>header_h1]:text-[28px] sm:[&>header_h1]:text-[clamp(32px,3.7vw,51px)] min-[1150px]:[&>header_h1]:text-[clamp(32px,4.1vw,51px)]",
+  // The text keeps clear of the chat card where the two would meet (theme.css: 66% under 1150px).
+  "md:[&>header>div:not([data-slot])]:max-w-[66%] min-[1150px]:[&>header>div:not([data-slot])]:max-w-[60%]",
 ].join(" ");
 
 function EntryButton({
@@ -102,15 +95,15 @@ function EntryButton({
 }) {
   return (
     <Button
-      className="h-[32px] gap-1.5 rounded-md px-3 font-medium text-[13px]"
+      className="h-[34px] gap-[7px] px-[11px] text-[12px]"
       onClick={onClick}
       title={title}
       variant={primary ? "default" : "outline"}
     >
-      <Icon className="size-4" />
+      <Icon className="size-[15px]" />
       {label}
       {badge && (
-        <span className="rounded bg-primary-foreground/15 px-1.5 font-normal text-[11px] leading-[18px]">
+        <span className="rounded-[5px] bg-primary-foreground/10 px-1.5 font-medium text-[11px] leading-[18px]">
           {badge}
         </span>
       )}
@@ -164,7 +157,7 @@ function ReachabilityPage() {
   return (
     <PageShell
       action={
-        <div className="flex flex-wrap items-center gap-[9px]">
+        <>
           <EntryButton
             badge={flow.challengeId ? "待输入验证码" : undefined}
             icon={IconPlus}
@@ -178,26 +171,28 @@ function ReachabilityPage() {
             onClick={() => setEntry("accounts")}
           />
           <EntryButton
-            icon={IconPlugConnected}
+            icon={IconLink}
             label="自动接入"
             onClick={() => setEntry("auto")}
             title="未开放：点击查看原因"
           />
           <EntryButton
-            icon={IconListCheck}
+            icon={IconList}
             label="接入申请"
             onClick={() => setEntry("requests")}
             title="未开放：点击查看原因"
           />
-        </div>
+        </>
       }
+      art={<ChatStage />}
       className={HERO_FRAME}
+      description="在聊天里 @员工，让员工接手工作。"
+      eyebrow="02 @WAKER / IM WORKSPACE"
+      crumb="@Waker"
       title={HEADLINE}
       width="workbench"
     >
-      <WakerScene className="mt-8 justify-self-end min-[1100px]:mt-0 min-[1100px]:-mr-[12px]" />
-
-      <div className="mt-[23px] grid grid-cols-[minmax(0,1fr)] gap-10 min-[1100px]:col-span-2">
+      <div className="mt-[5px] grid grid-cols-[minmax(0,1fr)] gap-[22px]">
         {(reach.error || (channels.error && !channels.data) || writeError) && (
           <div className="grid gap-3">
             {reach.error && (
@@ -238,6 +233,7 @@ function ReachabilityPage() {
               removing: remove.isPending || deviceRemove.isPending,
             }}
             loading={reach.isPending}
+            onConnect={() => setEntry("im")}
             onSearch={onSearch}
             rows={rows}
             search={search}

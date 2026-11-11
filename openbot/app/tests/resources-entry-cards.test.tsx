@@ -23,11 +23,12 @@ import { Route as ResourcesRoute } from "@/routes/_authed/_app/resources";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * 能力与资源 against the reference's description (6): six entry cards in one row instead of a text
- * tab row — the selected one with its line of description and a filled round arrow — this fork's
- * own three as a compact secondary row under them, and the 插件 tab as underline tabs over a 210px
- * category rail (search on top) and a five-column card grid paged twenty at a time. Drawn from a
- * fake `fetch` keyed by path, the same harness as `resources-parity.test.tsx`.
+ * 能力与资源 against the reference's description (6) as docs/design/ios-studio (05-能力与资源.png)
+ * draws it: six entries as one continuous panel of cells instead of a text tab row — the selected
+ * one marked, with its line of description read as its description — this fork's own three as the
+ * small links on the 「资源入口」 title line, and the 插件 tab as the pill switch over a category
+ * panel (search on top) and a three-column card grid paged twenty at a time. Drawn from a fake
+ * `fetch` keyed by path, the same harness as `resources-parity.test.tsx`.
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -254,7 +255,7 @@ test("the page is titled 能力与资源 with the reference's subtitle", async (
   expect(view.getByText("释放你的员工潜能，解锁更多可能")).toBeTruthy();
 });
 
-test("six entry cards in one row are the tablist's first tabs; the selected one carries its description and a filled arrow", async () => {
+test("six entry cells in one panel are the tablist's first tabs; the selected one carries its description and is marked", async () => {
   const { view } = draw();
   const tablist = await view.findByRole("tablist", { name: "能力与资源" });
   const row = tablist.querySelector("[data-slot='resource-entry-cards']");
@@ -281,6 +282,9 @@ test("six entry cards in one row are the tablist's first tabs; the selected one 
       .querySelector("[data-slot='entry-arrow']")
       ?.getAttribute("data-state"),
   ).toBe("active");
+  // The selected cell itself is marked (its red bottom line in docs/design/ios-studio), and its
+  // icon plate turns red; the other cells are not.
+  expect(plugins.getAttribute("data-state")).toBe("active");
 
   const skills = within(tablist).getByRole("tab", { name: "技能" });
   expect(skills.getAttribute("aria-selected")).toBe("false");
@@ -290,14 +294,23 @@ test("six entry cards in one row are the tablist's first tabs; the selected one 
       .querySelector("[data-slot='entry-arrow']")
       ?.getAttribute("data-state"),
   ).toBe("idle");
+  expect(skills.getAttribute("data-state")).toBe("idle");
 });
 
-test("this fork's own entries are a compact secondary row under the cards that still drive ?tab=", async () => {
+test("this fork's own entries are the secondary links of the 资源入口 section that still drive ?tab=", async () => {
   const { view, router, user } = draw();
   const tablist = await view.findByRole("tablist", { name: "能力与资源" });
   const more = tablist.querySelector("[data-slot='resource-more-tabs']");
   expect(more).toBeTruthy();
-  expect(more?.textContent).toContain("更多资源");
+  // docs/design/ios-studio puts them on the right of the section's title line, 「资源入口」, with no
+  // caption of their own; the heading names the section the whole tablist sits in.
+  const section = tablist.closest("section");
+  expect(
+    section?.getAttribute("aria-labelledby")
+      ? document.getElementById(section.getAttribute("aria-labelledby") ?? "")
+          ?.textContent
+      : null,
+  ).toBe("资源入口");
   const moreScope = within(more as HTMLElement);
   expect(moreScope.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
     "模型库",
@@ -340,14 +353,15 @@ test("arrow keys move across all nine entries and write ?tab= without stacking h
   expect(router.history.length).toBe(before + 1);
 });
 
-test("插件 has underline tabs, a rail with the search on top and 全部 first, and a heading with the count", async () => {
+test("插件 has the pill switch, a rail with the search on top and 全部 first, and a heading with the count", async () => {
   const { view, router, user } = draw();
   await cardItems(view);
+  // docs/design/ios-studio draws 插件市场 / 我的插件 as the rounded segmented control.
   expect(
     view
       .getByRole("tablist", { name: "插件范围" })
       .getAttribute("data-variant"),
-  ).toBe("underline");
+  ).toBe("pill");
 
   const rail = view.container.querySelector("[data-slot='plugin-rail']");
   expect(rail).toBeTruthy();
@@ -386,7 +400,7 @@ test("插件 has underline tabs, a rail with the search on top and 全部 first,
   expect(view.getByText("2 个插件")).toBeTruthy();
 });
 
-test("a card is icon and name, a three-line description, and @vendor with its status in the footer", async () => {
+test("a card is icon and name, a two-line description, and @vendor with its status in the footer", async () => {
   const { view } = draw();
   const items = await cardItems(view);
   const notion = items.find(
@@ -395,15 +409,16 @@ test("a card is icon and name, a three-line description, and @vendor with its st
       "Notion",
   ) as HTMLElement;
   expect(notion).toBeTruthy();
+  // docs/design/ios-studio's plugin card clamps its description to two lines.
   expect(
     notion.querySelector("[data-slot='plugin-card-summary']")?.className,
-  ).toContain("line-clamp-3");
+  ).toContain("line-clamp-2");
   const footer = notion.querySelector("[data-slot='plugin-card-footer']");
   expect(footer?.textContent).toContain("@Notion");
   expect(footer?.textContent).toContain("待授权");
-  // Five columns once the grid is wide enough.
+  // Three columns once the grid is wide enough, as docs/design/ios-studio lays the market out.
   const list = view.getByRole("list", { name: "插件列表" });
-  expect(list.className).toContain("grid-cols-5");
+  expect(list.className).toContain("grid-cols-3");
 });
 
 test("twenty a page, the pager is ← numbers → with the current page boxed", async () => {

@@ -1,10 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { PageSection, PageShell } from "@/components/layout/page-shell";
+import { PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Flowchart } from "@/components/wakerflow/flowchart";
+import {
+  CARD_FACE,
+  FlowSection,
+  StateBadge,
+} from "@/components/wakerflow/flow-ui";
 import { RunPanel } from "@/components/wakerflow/run-panel";
 import { SessionPanel } from "@/components/wakerflow/session-panel";
 import { ShareDialog } from "@/components/wakerflow/share-dialog";
@@ -166,15 +171,20 @@ export function WakerFlowDetail(props: {
       <PageShell
         backButton={{ label: "WakerFlow", linkProps: { to: "/wakerflows" } }}
         title="WakerFlow"
+        width="workbench"
       >
         {flow.error ? (
-          <p className="mt-8 text-destructive text-sm" role="alert">
+          <p className="text-[13px] text-signal-ink" role="alert">
             {flow.error.message}
           </p>
         ) : (
-          <div className="mt-8 flex flex-col gap-2">
-            <Skeleton className="h-14" />
-            <Skeleton className="h-14 w-2/3" />
+          <div
+            aria-label="正在加载 WakerFlow"
+            className="flex flex-col gap-[9px]"
+            role="status"
+          >
+            <Skeleton className="h-[120px] rounded-[13px]" />
+            <Skeleton className="h-[220px] rounded-[13px]" />
           </div>
         )}
       </PageShell>
@@ -194,7 +204,7 @@ export function WakerFlowDetail(props: {
   return (
     <PageShell
       action={
-        <div className="flex flex-row gap-2">
+        <>
           <Button
             render={(linkProps) => (
               <Link
@@ -227,104 +237,127 @@ export function WakerFlowDetail(props: {
           >
             {confirming ? "确认删除" : "删除"}
           </Button>
-        </div>
+        </>
       }
       backButton={{ label: "WakerFlow", linkProps: { to: "/wakerflows" } }}
-      // WF9: the session panel is a right-hand column on a wide screen, and comes last on a narrow one.
-      className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-x-8 lg:[&>*]:col-start-1 lg:[&>header]:col-span-2"
+      /*
+       * WF9: the session panel is a right-hand column on a wide screen, and comes last on a narrow
+       * one. The page's own blocks stay in the left column; the heading spans both.
+       */
+      className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-x-[22px] lg:[&>*]:col-start-1 lg:[&>header]:col-span-2"
       description={current.description || undefined}
       title={current.name}
-      width="wide"
+      width="workbench"
     >
       <aside
         aria-label="修改会话"
-        className="order-last mt-8 lg:order-none lg:col-start-2! lg:row-start-2 lg:row-span-12 lg:sticky lg:top-4"
+        className="order-last mt-[28px] lg:order-none lg:col-start-2! lg:row-start-2 lg:row-span-12 lg:sticky lg:top-4 lg:mt-0"
       >
         <SessionPanel flow={current} />
       </aside>
       {deleteBlocked ? (
-        <p className="mt-4 text-muted-foreground text-sm" role="status">
+        <p
+          className="mb-[10px] rounded-[11px] border border-border bg-card px-3 py-2 text-[13px] text-muted-foreground"
+          role="status"
+        >
           暂时不能删除：{deleteBlocked}
         </p>
       ) : null}
       {failure ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
+        <p
+          className="mb-[10px] rounded-[11px] border border-signal/40 bg-signal-soft px-3 py-2 text-[13px] text-signal-ink"
+          role="alert"
+        >
           {failure}
         </p>
       ) : null}
 
-      <PageSection
+      <FlowSection
+        aside={
+          <StateBadge
+            label={current.status === "ready" ? "可运行" : "草稿"}
+            state={current.status}
+          />
+        }
+        className="mt-0"
         description={
           current.status === "ready" ? "已保存，可以运行。" : "草稿，尚未保存。"
         }
         title="计划"
       >
         {plan ? (
-          <div className="mt-3 flex flex-col gap-4 text-sm">
-            <div>
-              <h3 className="font-medium">员工</h3>
-              <ul className="mt-1 flex flex-col gap-1">
-                {plan.members.map((member) => (
-                  <li key={member.agentId}>
-                    {memberName(member.agentId)} · {member.role}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-medium">输入</h3>
-              {plan.inputs.length === 0 ? (
-                <p className="mt-1 text-muted-foreground">不需要输入。</p>
-              ) : (
-                <ul className="mt-1 flex flex-col gap-1">
-                  {plan.inputs.map((input) => (
-                    <li key={input.key}>
-                      {input.label}（{input.key}）
-                      {input.required ? " · 必填" : " · 选填"}
+          <div className="flex flex-col gap-[9px] text-[13px]">
+            <div className="grid grid-cols-1 gap-[9px] md:grid-cols-2">
+              <div className={`${CARD_FACE} p-[14px]`}>
+                <h3 className="font-semibold text-[12px] text-muted-foreground">
+                  员工
+                </h3>
+                <ul className="mt-[7px] flex flex-col gap-[5px]">
+                  {plan.members.map((member) => (
+                    <li key={member.agentId}>
+                      {memberName(member.agentId)} · {member.role}
                     </li>
                   ))}
                 </ul>
-              )}
+              </div>
+              <div className={`${CARD_FACE} p-[14px]`}>
+                <h3 className="font-semibold text-[12px] text-muted-foreground">
+                  输入
+                </h3>
+                {plan.inputs.length === 0 ? (
+                  <p className="mt-[7px] text-muted-foreground">不需要输入。</p>
+                ) : (
+                  <ul className="mt-[7px] flex flex-col gap-[5px]">
+                    {plan.inputs.map((input) => (
+                      <li key={input.key}>
+                        {input.label}（{input.key}）
+                        {input.required ? " · 必填" : " · 选填"}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
-            <div>
-              <h3 className="font-medium">步骤</h3>
-              <div className="mt-2">
-                <PlanFlowchart memberName={memberName} plan={plan} />
+            <div className={`${CARD_FACE} p-[14px]`}>
+              <h3 className="font-semibold text-[12px] text-muted-foreground">
+                步骤
+              </h3>
+              {/* A long plan scrolls sideways inside its card rather than widening a phone's page. */}
+              <div className="mt-[10px] overflow-x-auto">
+                <div className="min-w-[320px]">
+                  <PlanFlowchart memberName={memberName} plan={plan} />
+                </div>
               </div>
             </div>
           </div>
         ) : (
-          <p className="mt-3 text-muted-foreground text-sm">
+          <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
             还没有计划。点「编辑」用一句话生成一份。
           </p>
         )}
-      </PageSection>
+      </FlowSection>
 
-      <PageSection
+      <FlowSection
         description="每次保存都会留下一个版本；恢复旧版本会另存为新版本。"
         title="版本"
       >
-        <div className="mt-3">
-          <VersionList flow={current} />
-        </div>
-      </PageSection>
+        <VersionList flow={current} />
+      </FlowSection>
 
-      <PageSection title="运行">
-        <div className="mt-3">
-          {runnable && plan ? (
-            <RunPanel
-              flow={{ ...current, plan }}
-              {...(props.pollIntervalMs === undefined
-                ? {}
-                : { pollIntervalMs: props.pollIntervalMs })}
-            />
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              保存计划后才能运行。
-            </p>
-          )}
-        </div>
-      </PageSection>
+      <FlowSection title="运行">
+        {runnable && plan ? (
+          <RunPanel
+            flow={{ ...current, plan }}
+            {...(props.pollIntervalMs === undefined
+              ? {}
+              : { pollIntervalMs: props.pollIntervalMs })}
+          />
+        ) : (
+          <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
+            保存计划后才能运行。
+          </p>
+        )}
+      </FlowSection>
     </PageShell>
   );
 }
@@ -367,7 +400,7 @@ function PlanFlowchart(props: {
         return (
           <span className="flex flex-wrap items-center gap-2">
             <Link
-              className="underline"
+              className="text-foreground underline underline-offset-2"
               params={{ flowId: step.targetFlowId }}
               to="/wakerflows/$flowId"
             >
@@ -375,7 +408,7 @@ function PlanFlowchart(props: {
               {step.targetRevision} 版）
             </Link>
             {child && child.revision > step.targetRevision ? (
-              <span className="text-amber-700 dark:text-amber-400">
+              <span className="text-signal-ink">
                 子流程有新版本（第 {child.revision} 版），编辑后可更新
               </span>
             ) : null}

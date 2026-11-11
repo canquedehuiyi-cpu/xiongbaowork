@@ -176,7 +176,8 @@ export function PageRows({
      */
     <div
       className={cn(
-        "mt-4 overflow-hidden rounded-lg border border-border bg-card dark:border-transparent",
+        // docs/design/ios-studio: a graphite card with a hairline border and a faint top highlight.
+        "mt-4 overflow-hidden rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]",
         "[&_[data-slot=item]]:rounded-none [&_[data-slot=item]]:min-h-14",
         // Dividers stop 16px short of each edge, lined up with the rows' text, as Linear draws them.
         // Any depth: a screen may wrap each row and its divider, as Admin does to stagger them in.
@@ -209,7 +210,7 @@ export function PageCard({
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-card p-4 dark:border-transparent",
+        "rounded-[14px] border border-border bg-card p-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]",
         className,
       )}
     >
@@ -244,7 +245,7 @@ export function PageEmpty({
 }) {
   return (
     // `isolate` gives the pattern its own stacking context, so it sits behind the text, not on it.
-    <Empty className="relative isolate mt-4 overflow-hidden rounded-lg border border-border">
+    <Empty className="relative isolate mt-4 overflow-hidden rounded-[14px] border border-border">
       {/* The pattern is decoration: see `.empty-pattern` in styles.css and its tokens in theme.css. */}
       <div aria-hidden className="empty-pattern" />
       <EmptyHeader>

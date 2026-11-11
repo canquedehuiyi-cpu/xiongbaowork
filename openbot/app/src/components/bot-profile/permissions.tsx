@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { PageSection } from "@/components/layout/page-shell";
+import { IconLock } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   BEHAVIOUR_LABELS,
@@ -16,6 +17,8 @@ import {
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
+import { cn } from "@/lib/utils";
+import { ProfileAlert, ProfilePanel, ProfileSection } from "./profile-kit";
 
 /**
  * The tools every Bot has on its own computer, and on its owner's computer through host access,
@@ -86,47 +89,51 @@ export function BotPermissions({ agentId }: { agentId: string }) {
   const editable = data?.editable === true;
   const busy = mode.isPending || security.isPending;
   return (
-    <PageSection title="权限">
-      <div className="mt-4 space-y-6">
-        {error ? (
-          <p className="text-destructive text-sm" role="alert">
-            {error.message}
-          </p>
-        ) : null}
-        {data ? (
-          <>
-            <p className="text-muted-foreground text-sm">
-              {data.ownedByAnother
-                ? "这些是员工所有者设定的权限，你使用这位员工时同样适用，只有所有者可以修改。"
-                : "你在这里的设定是员工所有者设定：其他人使用这位员工时同样适用。修改密码、安全设置和付款永远交给本人。"}
+    <ProfileSection
+      description={
+        data
+          ? data.ownedByAnother
+            ? "这些是员工所有者设定的权限，你使用这位员工时同样适用，只有所有者可以修改。"
+            : "你在这里的设定是员工所有者设定：其他人使用这位员工时同样适用。修改密码、安全设置和付款永远交给本人。"
+          : undefined
+      }
+      title="权限"
+    >
+      {error ? <ProfileAlert>{error.message}</ProfileAlert> : null}
+      {data ? (
+        <div className="mt-[10px] flex flex-col gap-[18px]">
+          {me?.role === "admin" ? (
+            <p className="text-[13px]">
+              <Link
+                className="text-foreground underline decoration-foreground/30 underline-offset-[3px] hover:decoration-foreground"
+                to="/admin/enterprise"
+              >
+                企业模式：前往企业管控
+              </Link>
             </p>
-            {me?.role === "admin" ? (
-              <p className="text-sm">
-                <Link className="underline" to="/admin/enterprise">
-                  企业模式：前往企业管控
-                </Link>
-              </p>
-            ) : null}
-            <ToolModes
-              busy={busy}
-              data={data}
-              editable={editable}
-              onChange={(toolRef, next) =>
-                mode.mutate({ toolRef, mode: next })
-              }
-              tools={tools}
-            />
-            <div className="space-y-3">
-              <h3 className="font-medium">危险命令与敏感文件</h3>
+          ) : null}
+          <ToolModes
+            busy={busy}
+            data={data}
+            editable={editable}
+            onChange={(toolRef, next) => mode.mutate({ toolRef, mode: next })}
+            tools={tools}
+          />
+          <div>
+            <h3 className={SUBHEAD}>危险命令与敏感文件</h3>
+            <ProfilePanel>
               <label
-                className="flex items-center justify-between gap-4 rounded-lg border p-4"
+                className={cn(ROW, "cursor-pointer")}
                 htmlFor={`${agentId}-dangerous`}
               >
-                <span>
-                  <span className="block font-medium" id={`${agentId}-dangerous-title`}>
+                <span className="min-w-0">
+                  <span
+                    className="block font-medium text-[13.5px]"
+                    id={`${agentId}-dangerous-title`}
+                  >
                     危险命令需审批
                   </span>
-                  <span className="text-muted-foreground text-sm">
+                  <span className="text-[12.5px] text-muted-foreground">
                     {data.enforceDangerousCommands
                       ? "团队已强制开启危险命令审批，这里关闭也仍需审批。"
                       : "删除大量文件、提权、强制推送这类命令，运行前先问。"}
@@ -146,14 +153,17 @@ export function BotPermissions({ agentId }: { agentId: string }) {
                 />
               </label>
               <label
-                className="flex items-center justify-between gap-4 rounded-lg border p-4"
+                className={cn(ROW, "cursor-pointer")}
                 htmlFor={`${agentId}-sensitive`}
               >
-                <span>
-                  <span className="block font-medium" id={`${agentId}-sensitive-title`}>
+                <span className="min-w-0">
+                  <span
+                    className="block font-medium text-[13.5px]"
+                    id={`${agentId}-sensitive-title`}
+                  >
                     敏感文件需审批
                   </span>
-                  <span className="text-muted-foreground text-sm">
+                  <span className="text-[12.5px] text-muted-foreground">
                     读写下面这些文件之前先问。
                   </span>
                 </span>
@@ -167,16 +177,16 @@ export function BotPermissions({ agentId }: { agentId: string }) {
                   }
                 />
               </label>
-              <ul className="space-y-2" aria-label="敏感文件路径">
+              <ul
+                aria-label="敏感文件路径"
+                className="divide-y divide-border empty:hidden"
+              >
                 {data.defaultSensitivePaths.map((path) => {
                   const off = data.security.disabledDefaultPaths.includes(path);
                   return (
-                    <li
-                      className="flex items-center justify-between gap-4 rounded-md border px-3 py-2 text-sm"
-                      key={path}
-                    >
-                      <span>
-                        <code>{path}</code>
+                    <li className={cn(ROW, "py-[8px] pl-[28px]")} key={path}>
+                      <span className="min-w-0 break-all text-[13px]">
+                        <code className="font-mono text-[12px]">{path}</code>
                         <span className="ml-2 text-muted-foreground">
                           默认{off ? "（已停用）" : ""}
                         </span>
@@ -194,16 +204,16 @@ export function BotPermissions({ agentId }: { agentId: string }) {
                               : [...data.security.disabledDefaultPaths, path],
                           })
                         }
+                        size="sm"
                       />
                     </li>
                   );
                 })}
                 {data.security.extraSensitivePaths.map((path) => (
-                  <li
-                    className="flex items-center justify-between gap-4 rounded-md border px-3 py-2 text-sm"
-                    key={path}
-                  >
-                    <code>{path}</code>
+                  <li className={cn(ROW, "py-[8px] pl-[28px]")} key={path}>
+                    <code className="min-w-0 break-all font-mono text-[12px]">
+                      {path}
+                    </code>
                     {editable ? (
                       <Button
                         disabled={busy}
@@ -226,7 +236,7 @@ export function BotPermissions({ agentId }: { agentId: string }) {
               </ul>
               {editable ? (
                 <form
-                  className="flex gap-2"
+                  className={cn(ROW, "justify-start gap-[7px]")}
                   onSubmit={(event) => {
                     event.preventDefault();
                     const path = newPath.trim();
@@ -240,25 +250,35 @@ export function BotPermissions({ agentId }: { agentId: string }) {
                     setNewPath("");
                   }}
                 >
-                  <input
+                  <Input
                     aria-label="添加敏感路径"
-                    className="h-9 flex-1 rounded-md border bg-background px-2 text-sm"
+                    className="h-[32px] min-w-0 flex-1 font-mono text-[12px]"
                     onChange={(event) => setNewPath(event.target.value)}
                     placeholder="例如 config/prod/** 或 *.p12"
                     value={newPath}
                   />
-                  <Button disabled={busy || !newPath.trim()} type="submit">
+                  <Button
+                    disabled={busy || !newPath.trim()}
+                    size="sm"
+                    type="submit"
+                  >
                     添加
                   </Button>
                 </form>
               ) : null}
-            </div>
-          </>
-        ) : null}
-      </div>
-    </PageSection>
+            </ProfilePanel>
+          </div>
+        </div>
+      ) : null}
+    </ProfileSection>
   );
 }
+
+/** A row in a permissions panel: what it is on the left, its control on the right. */
+const ROW = "flex items-center justify-between gap-[12px] px-[14px] py-[11px]";
+
+/** A group's small heading inside the 权限 section. */
+const SUBHEAD = "font-semibold text-[13px] text-foreground/90";
 
 function ToolModes({
   tools,
@@ -274,61 +294,82 @@ function ToolModes({
   onChange: (toolRef: string, mode: EmployeeToolMode | "default") => void;
 }) {
   return (
-    <div className="space-y-2">
-      <h3 className="font-medium">工具</h3>
-      {data.teamRules.map((rule) => (
-        <div
-          className="flex items-center justify-between gap-4 rounded-lg border p-3 text-sm"
-          key={rule.id}
-        >
-          <span>
-            <code>{rule.toolRef}</code>
-            <span className="ml-2 text-muted-foreground">管理员设定</span>
-          </span>
-          <span>
-            {BEHAVIOUR_LABELS[rule.behaviour] ?? rule.behaviour}（已锁定）
-          </span>
-        </div>
-      ))}
-      {tools.map((tool) => {
-        const saved = data.modes.find((entry) => entry.toolRef === tool.ref);
-        const current = saved ? MODE_OF_BEHAVIOUR[saved.behaviour] : undefined;
-        return (
-          <div
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-            key={tool.ref}
-          >
-            <span className="text-sm">
-              {tool.label}
-              <span className="ml-2 text-muted-foreground">{tool.ref}</span>
-              {saved && data.ownedByAnother ? (
-                <span className="ml-2 text-muted-foreground">员工所有者设定</span>
-              ) : null}
+    <div>
+      <h3 className={SUBHEAD}>工具</h3>
+      <ProfilePanel>
+        {data.teamRules.map((rule) => (
+          <div className={cn(ROW, "text-[13px]")} key={rule.id}>
+            <span className="min-w-0 break-all">
+              <code className="font-mono text-[12px]">{rule.toolRef}</code>
+              <span className="ml-2 text-muted-foreground">管理员设定</span>
             </span>
-            <div
-              aria-label={`「${tool.label}」的权限`}
-              className="flex gap-1"
-              role="radiogroup"
-            >
-              {MODES.map((choice) => (
-                <Button
-                  aria-checked={current === choice}
-                  disabled={!editable || busy}
-                  key={choice}
-                  onClick={() =>
-                    onChange(tool.ref, current === choice ? "default" : choice)
-                  }
-                  role="radio"
-                  size="sm"
-                  variant={current === choice ? "default" : "outline"}
-                >
-                  {TOOL_MODE_LABELS[choice]}
-                </Button>
-              ))}
-            </div>
+            <span className="inline-flex shrink-0 items-center gap-[5px] text-muted-foreground">
+              <IconLock aria-hidden="true" className="size-[13px]" />
+              <span>
+                {BEHAVIOUR_LABELS[rule.behaviour] ?? rule.behaviour}（已锁定）
+              </span>
+            </span>
           </div>
-        );
-      })}
+        ))}
+        {tools.map((tool) => {
+          const saved = data.modes.find((entry) => entry.toolRef === tool.ref);
+          const current = saved
+            ? MODE_OF_BEHAVIOUR[saved.behaviour]
+            : undefined;
+          return (
+            <div
+              className={cn(ROW, "flex-wrap gap-y-[7px] py-[9px]")}
+              key={tool.ref}
+            >
+              <span className="min-w-0 text-[13px]">
+                <span className="font-medium">{tool.label}</span>
+                <span className="ml-2 break-all font-mono text-[11px] text-muted-foreground">
+                  {tool.ref}
+                </span>
+                {saved && data.ownedByAnother ? (
+                  <span className="ml-2 text-muted-foreground">
+                    员工所有者设定
+                  </span>
+                ) : null}
+              </span>
+              {/*
+               * The three modes as one segmented control (theme.css `.segmented`): the chosen one
+               * filled white, the others quiet; choosing the chosen one again goes back to the
+               * default, as before.
+               */}
+              <div
+                aria-label={`「${tool.label}」的权限`}
+                className="inline-flex shrink-0 gap-[2px] rounded-[10px] border border-border bg-background/60 p-[2px]"
+                role="radiogroup"
+              >
+                {MODES.map((choice) => (
+                  <Button
+                    aria-checked={current === choice}
+                    className={cn(
+                      "h-[26px] rounded-[8px] px-[10px] text-[12px]",
+                      current === choice ? null : "text-muted-foreground",
+                    )}
+                    disabled={!editable || busy}
+                    key={choice}
+                    onClick={() =>
+                      onChange(
+                        tool.ref,
+                        current === choice ? "default" : choice,
+                      )
+                    }
+                    role="radio"
+                    size="sm"
+                    type="button"
+                    variant={current === choice ? "default" : "ghost"}
+                  >
+                    {TOOL_MODE_LABELS[choice]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </ProfilePanel>
     </div>
   );
 }

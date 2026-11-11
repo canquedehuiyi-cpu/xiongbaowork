@@ -139,6 +139,15 @@ const GROUPS: {
   },
 ];
 
+/*
+ * The same row language as the app sidebar (docs/design/ios-studio): 37px rows, quiet grey, and the
+ * open page on a faint plate with a hairline and a red 4×12 bar at its right end.
+ */
+const ADMIN_ROW =
+  "h-[37px] rounded-[9px] border border-transparent px-[11px] text-[13px] text-muted-foreground hover:bg-foreground/[0.03] hover:text-sidebar-foreground";
+const ADMIN_ACTIVE =
+  "border-foreground/[0.06] bg-sidebar-accent font-medium text-sidebar-accent-foreground after:ml-auto after:h-[12px] after:w-[4px] after:shrink-0 after:rounded-[3px] after:bg-signal after:content-['']";
+
 export function AdminSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
@@ -176,11 +185,12 @@ export function AdminSidebar({
                * would otherwise light up on all of them.
                */}
               <SidebarMenuButton
+                className={ADMIN_ROW}
                 render={(props) => (
                   <Link
                     {...adminLinkOptions}
                     activeOptions={{ exact: true }}
-                    activeProps={{ className: "bg-foreground/5" }}
+                    activeProps={{ className: ADMIN_ACTIVE }}
                     {...props}
                   >
                     概览
@@ -197,10 +207,11 @@ export function AdminSidebar({
               {group.items.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
+                    className={ADMIN_ROW}
                     render={(props) => (
                       <Link
                         {...item.linkOptions}
-                        activeProps={{ className: "bg-foreground/5" }}
+                        activeProps={{ className: ADMIN_ACTIVE }}
                         {...props}
                       >
                         <item.icon className="mr-2 h-4 w-4" />

@@ -91,7 +91,7 @@ function ModelNotice({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+    <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
       <p className="text-muted-foreground">
         分身每次回答时，会把这些信息来源的名称和说明一起发送给你所用的模型服务。这里只登记文字说明，不会读取或上传任何文件。
       </p>
@@ -181,10 +181,13 @@ function SavedSources({
     );
   }
   return (
-    <ul aria-label="已登记的信息来源" className="flex flex-col gap-2">
+    <ul
+      aria-label="已登记的信息来源"
+      className="flex flex-col divide-y divide-border overflow-hidden rounded-[12px] border border-border bg-background/40"
+    >
       {sources.map((source) => (
         <li
-          className="flex items-start justify-between gap-3 rounded-lg bg-card p-3"
+          className="flex items-start justify-between gap-3 px-[12px] py-[10px]"
           key={source.id}
         >
           <div className="flex min-w-0 flex-col">
@@ -432,7 +435,7 @@ function FolderPicker({
   }
   if (devices.data.length === 0) {
     return (
-      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+      <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
         <p className="font-medium">还没有配对的设备</p>
         <p className="text-muted-foreground">
           本地文件夹放在你自己的电脑上。先在电脑上安装熊宝数字员工设备端，并在「设置
@@ -471,7 +474,7 @@ function FolderPicker({
           const already = taken.has(entry.ref);
           return (
             <label
-              className="flex items-center gap-2 rounded-lg bg-card p-2 text-sm"
+              className="flex items-center gap-2 rounded-[10px] border border-border bg-background/40 p-[8px] text-sm"
               htmlFor={id}
               key={`${entry.deviceId}/${entry.ref}`}
             >
@@ -513,7 +516,7 @@ function FolderPicker({
           value={editor.folderNote}
         />
       </div>
-      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+      <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
         <p className="text-muted-foreground">
           分身只能读取这个文件夹，不能修改、删除或在里面运行命令。它需要时会读取其中的文件，读到的内容会发送给你所用的模型服务；读取
           .env、密钥这类可能含有机密的文件前，会先征求你的同意。服务器只记录文件夹的名称，不记录它在电脑上的位置。
@@ -563,7 +566,7 @@ function PickedFooter({
           value={editor.pickedNote}
         />
       </div>
-      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+      <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
         <p className="text-muted-foreground">{notice}</p>
         <label
           className="flex items-center gap-2"
@@ -618,7 +621,7 @@ function NotebookPicker({
   }
   if (notebooks.data.length === 0) {
     return (
-      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+      <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
         <p className="font-medium">还没有知识库</p>
         <p className="text-muted-foreground">
           先在「知识库」里新建一个知识库，把资料粘贴进去，再回到这里交给分身。你可以先保存其他信息来源。
@@ -644,7 +647,7 @@ function NotebookPicker({
           const already = taken.has(notebook.id);
           return (
             <label
-              className="flex items-center gap-2 rounded-lg bg-card p-2 text-sm"
+              className="flex items-center gap-2 rounded-[10px] border border-border bg-background/40 p-[8px] text-sm"
               htmlFor={id}
               key={notebook.id}
             >
@@ -711,7 +714,7 @@ function ConnectorPicker({
   }
   if (connectors.data.length === 0) {
     return (
-      <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+      <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
         <p className="font-medium">还没有已连接的账号</p>
         <p className="text-muted-foreground">
           连接器用你自己的账号读取资料，例如云盘。先在「设置 ›
@@ -737,7 +740,7 @@ function ConnectorPicker({
           const id = `${idPrefix}-connector-${connector.serverId}`;
           return (
             <label
-              className="flex items-start gap-2 rounded-lg bg-card p-2 text-sm"
+              className="flex items-start gap-2 rounded-[10px] border border-border bg-background/40 p-[8px] text-sm"
               htmlFor={id}
               key={connector.serverId}
             >

@@ -1,10 +1,16 @@
-import { IconInfoCircle, IconLayoutGrid, IconList } from "@tabler/icons-react";
+import {
+  IconInfoCircle,
+  IconLayoutGrid,
+  IconLink,
+  IconList,
+  IconPlus,
+} from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { LabeledSelect } from "@/components/layout/labeled-select";
 import { SearchBox } from "@/components/layout/search-box";
 import { SegmentedTabs } from "@/components/layout/segmented-tabs";
-import { BearMascot } from "@/components/layout/workbench-empty";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSearchDraft } from "@/lib/use-search-draft";
@@ -19,10 +25,14 @@ import {
   TYPE_LABELS,
 } from "./chats";
 
+/*
+ * docs/design/ios-studio: white is the working state, red only what needs attention. The label beside
+ * the dot always says which, so the colour is never the only signal.
+ */
 const STATUS_TONE: Record<ChatStatus, string> = {
-  connected: "bg-primary",
-  failed: "bg-destructive",
-  optedOut: "bg-muted-foreground",
+  connected: "bg-foreground",
+  failed: "bg-signal",
+  optedOut: "bg-faint",
 };
 
 function StatusBadge({ row }: { row: ChatRow }) {
@@ -34,7 +44,7 @@ function StatusBadge({ row }: { row: ChatRow }) {
       />
       <span
         className={cn(
-          row.status === "failed" && "text-destructive",
+          row.status === "failed" && "text-signal-ink",
           row.status === "optedOut" && "text-muted-foreground",
         )}
       >
@@ -94,42 +104,31 @@ function RowActions({ row, actions }: { row: ChatRow; actions: ChatActions }) {
 }
 
 /**
- * The table's columns, at the reference's proportions (its 1376px-wide table, measured from
- * docs/acceptance/qoderwake-reference/reachability.png); the 41px checkbox column comes first.
+ * The table's columns, as docs/design/ios-studio/02-Waker.png heads them (theme.css `.table-head`:
+ * 1.4fr 1fr 1fr 1fr .85fr .85fr, the actions last). The design has no selection column — this page
+ * has no bulk action to select rows for — and no 启用 column: a connection has no pause switch, and
+ * a disconnected chat is no longer listed, so every row would have read 已启用.
  */
 const COLUMNS: { label: string; width?: string; info?: string }[] = [
-  { label: "聊天", width: "18.7%" },
-  { label: "IM 连接", width: "12.5%" },
-  { label: "执行目标", width: "18.6%" },
-  { label: "工作目录", width: "8.7%" },
+  { label: "聊天", width: "19%" },
+  { label: "IM 连接", width: "15%" },
+  { label: "执行目标", width: "14%" },
+  { label: "工作目录", width: "11%" },
   {
     label: "模型",
-    width: "8.7%",
+    width: "13%",
     info: "员工在这段聊天里回复时使用的模型，与员工自己的设置一致。",
   },
-  { label: "聊天状态", width: "11.6%" },
-  { label: "启用", width: "5.9%" },
-  // Takes what is left (≈170px at the reference width): both row actions, at xs, on one line.
+  { label: "聊天状态", width: "11%" },
+  // Takes what is left: both row actions, at xs, on one line.
   { label: "操作" },
 ];
 
-const cellClass = "px-4 align-middle";
+const cellClass = "px-[15px] align-middle";
 
-/**
- * The reference's selection checkbox, drawn as its dim square but disabled: this page has no bulk
- * action to select rows for, so a box that ticked would promise one.
- */
-function SelectBox({ label }: { label: string }) {
-  return (
-    <input
-      aria-label={label}
-      className="block size-4 cursor-not-allowed appearance-none rounded-[4px] border border-input bg-transparent"
-      disabled
-      title="暂无批量操作"
-      type="checkbox"
-    />
-  );
-}
+/** theme.css `.chat-table.glass`: the graphite panel the table and its empty states sit in. */
+const PANEL =
+  "overflow-hidden rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]";
 
 function ChatTable({
   rows,
@@ -142,122 +141,83 @@ function ChatTable({
   body?: ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-[8px] border bg-card dark:border-transparent">
-      <table
-        aria-label="已接入聊天"
-        className="w-full min-w-[1100px] table-fixed text-[13px]"
-      >
-        <colgroup>
-          <col className="w-[41px]" />
-          {COLUMNS.map((column) => (
-            <col
-              key={column.label}
-              style={column.width ? { width: column.width } : undefined}
-            />
-          ))}
-        </colgroup>
-        <thead className="bg-muted text-left text-[13px] text-foreground/85">
-          <tr className="h-[39px]">
-            <th className="pl-4 align-middle font-normal">
-              <SelectBox label="全选（暂无批量操作）" />
-            </th>
+    <div className={PANEL}>
+      <div className="overflow-x-auto">
+        <table
+          aria-label="已接入聊天"
+          className="w-full min-w-[880px] table-fixed text-[13px]"
+        >
+          <colgroup>
             {COLUMNS.map((column) => (
-              <th className={cn(cellClass, "font-medium")} key={column.label}>
-                <span className="inline-flex items-center gap-1">
-                  {column.label}
-                  {column.info && (
-                    <span className="inline-flex" title={column.info}>
-                      <IconInfoCircle
-                        aria-hidden
-                        className="size-[13px] text-muted-foreground"
-                      />
-                    </span>
-                  )}
-                </span>
-              </th>
+              <col
+                key={column.label}
+                style={column.width ? { width: column.width } : undefined}
+              />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {body ? (
-            <tr>
-              <td className="p-0" colSpan={COLUMNS.length + 1}>
-                {body}
-              </td>
+          </colgroup>
+          <thead className="text-left text-[11px] text-muted-foreground">
+            <tr className="h-[38px] border-border border-b">
+              {COLUMNS.map((column) => (
+                <th className={cn(cellClass, "font-medium")} key={column.label}>
+                  <span className="inline-flex items-center gap-1">
+                    {column.label}
+                    {column.info && (
+                      <span className="inline-flex" title={column.info}>
+                        <IconInfoCircle
+                          aria-hidden
+                          className="size-[12px] text-faint"
+                        />
+                      </span>
+                    )}
+                  </span>
+                </th>
+              ))}
             </tr>
-          ) : (
-            rows.map((row) => (
-              <tr className="h-[52px] border-t" key={row.id}>
-                <td className="pl-4 align-middle">
-                  <SelectBox
-                    label={`选择「${row.conversation}」（暂无批量操作）`}
-                  />
-                </td>
-                <td className={cn(cellClass, "truncate")}>
-                  {row.conversation}
-                </td>
-                <td className={cellClass}>
-                  <ChatTypeCell row={row} />
-                </td>
-                <td className={cn(cellClass, "truncate")}>{row.agentName}</td>
-                {/* No connection record carries a working directory yet. */}
-                <td
-                  className={cn(cellClass, "text-muted-foreground")}
-                  title="接入记录里没有工作目录"
-                >
-                  —
-                </td>
-                <td className={cn(cellClass, "truncate text-muted-foreground")}>
-                  {row.modelName}
-                </td>
-                <td className={cellClass}>
-                  <StatusBadge row={row} />
-                </td>
-                {/*
-                 * A fact, not a switch: the server can disconnect a chat but has no way to pause
-                 * one, and a disconnected chat is no longer listed — so every row here is enabled.
-                 */}
-                <td
-                  className={cn(cellClass, "text-muted-foreground")}
-                  title="接入没有暂停开关；不再需要时用「断开连接」"
-                >
-                  已启用
-                </td>
-                <td className={cellClass}>
-                  <RowActions actions={actions} row={row} />
+          </thead>
+          <tbody>
+            {body ? (
+              <tr>
+                <td className="p-0" colSpan={COLUMNS.length}>
+                  {body}
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/**
- * What the list says when it has no rows: centred in the table body with the mascot under the
- * words, at the reference's 259px body height.
- */
-function BodyMessage({
-  title,
-  description,
-  action,
-  mascot,
-}: {
-  title: string;
-  description: string;
-  action?: ReactNode;
-  mascot?: boolean;
-}) {
-  return (
-    <div className="flex min-h-[259px] flex-col items-center px-6 pt-[110px] pb-[5px] text-center">
-      <p className="font-medium text-[14px] leading-[20px]">{title}</p>
-      <p className="mt-[4px] text-pretty text-[12px] text-muted-foreground leading-[18px]">
-        {description}
-      </p>
-      {action ? <div className="mt-3">{action}</div> : null}
-      {mascot ? <BearMascot className="mt-[38px]" mood="naughty" /> : null}
+            ) : (
+              rows.map((row) => (
+                <tr
+                  className="h-[52px] border-border border-t first:border-t-0 hover:bg-foreground/[0.025]"
+                  key={row.id}
+                >
+                  <td className={cn(cellClass, "truncate font-medium")}>
+                    {row.conversation}
+                  </td>
+                  <td className={cellClass}>
+                    <ChatTypeCell row={row} />
+                  </td>
+                  <td className={cn(cellClass, "truncate")}>{row.agentName}</td>
+                  {/* No connection record carries a working directory yet. */}
+                  <td
+                    className={cn(cellClass, "text-faint")}
+                    title="接入记录里没有工作目录"
+                  >
+                    —
+                  </td>
+                  <td
+                    className={cn(cellClass, "truncate text-muted-foreground")}
+                  >
+                    {row.modelName}
+                  </td>
+                  <td className={cellClass}>
+                    <StatusBadge row={row} />
+                  </td>
+                  <td className={cellClass}>
+                    <RowActions actions={actions} row={row} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -281,11 +241,12 @@ function ChatCards({
   return (
     <ul
       aria-label="已接入聊天"
-      className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]"
+      className="grid gap-[11px] [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]"
     >
       {rows.map((row) => (
         <li
-          className="grid gap-3 rounded-lg border bg-card p-4 text-[13px]"
+          // theme.css `.staff-card`-like plate: graphite, a hairline, 16px corners.
+          className="grid gap-3 rounded-[16px] border border-border bg-card px-[14px] py-[12px] text-[13px] shadow-[inset_0_1px_0_rgb(255_255_255/0.03)]"
           key={row.id}
         >
           <div className="flex items-start justify-between gap-2">
@@ -315,6 +276,7 @@ export function ConnectedChats({
   onSearch,
   loading,
   actions,
+  onConnect,
 }: {
   /** Every connected chat, before narrowing: decides empty versus no match, and the model list. */
   rows: ChatRow[];
@@ -323,6 +285,8 @@ export function ConnectedChats({
   onSearch: (next: Partial<ReachabilitySearch>) => void;
   loading: boolean;
   actions: ChatActions;
+  /** Opens the 接入 IM 聊天 flow, offered again from the empty list. */
+  onConnect: () => void;
 }) {
   const [query, setQuery] = useSearchDraft(search.q ?? "");
   const models = new Map<string, string>();
@@ -336,22 +300,34 @@ export function ConnectedChats({
   const cards = search.view === "cards";
 
   const body = loading ? (
-    <div aria-busy="true" className="grid gap-2 p-4" role="status">
+    <div aria-busy="true" className="grid gap-2 p-[15px]" role="status">
       <span className="sr-only">正在读取已接入聊天…</span>
       <Skeleton className="h-[40px] w-full" />
       <Skeleton className="h-[40px] w-full" />
       <Skeleton className="h-[40px] w-full" />
     </div>
   ) : rows.length === 0 ? (
-    <BodyMessage
+    <WorkbenchEmpty
+      action={
+        <Button
+          className="h-[29px] text-[12px]"
+          onClick={onConnect}
+          variant="outline"
+        >
+          <IconPlus aria-hidden className="size-[15px]" />
+          接入 IM 聊天
+        </Button>
+      }
+      className="min-h-[211px] rounded-none [&>p]:max-w-[560px]"
       description="点击「接入 IM 聊天」，选择机器人或账号、具体群聊或私聊，以及负责响应的员工。"
-      mascot
+      mood="naughty"
       title="还没有接入 IM 聊天"
     />
   ) : visible.length === 0 ? (
-    <BodyMessage
+    <WorkbenchEmpty
       action={
         <Button
+          className="h-[29px] text-[12px]"
           variant="outline"
           onClick={() =>
             onSearch({
@@ -365,22 +341,24 @@ export function ConnectedChats({
           清除筛选
         </Button>
       }
+      className="min-h-[211px] rounded-none [&>p]:max-w-[560px]"
       description="换个关键词，或清除筛选再看全部。"
+      mood="cute"
       title="没有符合条件的聊天"
     />
   ) : null;
 
   return (
     <section aria-labelledby="connected-chats" className="flex flex-col">
-      <div className="flex h-[32px] items-center justify-between gap-3">
+      <div className="mb-[9px] flex flex-wrap items-center justify-between gap-[10px]">
         <h2
-          className="font-semibold text-[16px] leading-[24px]"
+          className="flex items-center gap-[7px] font-semibold text-[17px] leading-[24px] tracking-[-0.02em]"
           id="connected-chats"
         >
+          <IconLink aria-hidden className="size-[18px] text-foreground/85" />
           已接入的聊天
         </h2>
         <SegmentedTabs
-          className="bg-sidebar-accent p-[3px] [&>[aria-selected=true]]:!bg-card [&>button]:px-[9px]"
           label="视图"
           onValueChange={(value) =>
             onSearch({ view: value === "cards" ? "cards" : undefined })
@@ -392,7 +370,7 @@ export function ConnectedChats({
               label: (
                 <>
                   <IconList aria-hidden className="size-[15px]" />
-                  <span className="sr-only">表格</span>
+                  列表
                 </>
               ),
             },
@@ -401,7 +379,7 @@ export function ConnectedChats({
               label: (
                 <>
                   <IconLayoutGrid aria-hidden className="size-[15px]" />
-                  <span className="sr-only">卡片</span>
+                  卡片
                 </>
               ),
             },
@@ -409,9 +387,9 @@ export function ConnectedChats({
           value={cards ? "cards" : "table"}
         />
       </div>
-      <div className="mt-[12px] flex flex-wrap items-center gap-[10px]">
+      <div className="flex flex-wrap items-center gap-[6px]">
         <SearchBox
-          className="w-full bg-card sm:w-[218px]"
+          className="w-full sm:w-[221px]"
           label="搜索已接入聊天"
           onValueChange={(q) => {
             setQuery(q);
@@ -421,7 +399,6 @@ export function ConnectedChats({
           value={query}
         />
         <LabeledSelect
-          className="min-w-[190px] bg-card"
           label="聊天类型"
           onValueChange={(type) =>
             onSearch({ type: (type || undefined) as ChatType | undefined })
@@ -436,7 +413,7 @@ export function ConnectedChats({
           value={search.type ?? ALL}
         />
         <LabeledSelect
-          className="min-w-[158px] bg-card"
+          className="max-w-full"
           label="模型"
           onValueChange={(model) => onSearch({ model: model || undefined })}
           options={[
@@ -446,7 +423,6 @@ export function ConnectedChats({
           value={search.model ?? ALL}
         />
         <LabeledSelect
-          className="min-w-[132px] bg-card"
           label="状态"
           onValueChange={(status) =>
             onSearch({
@@ -463,12 +439,10 @@ export function ConnectedChats({
           value={search.status ?? ALL}
         />
       </div>
-      <div className="mt-[13px]">
+      <div className="mt-[10px]">
         {cards ? (
           body ? (
-            <div className="rounded-[8px] border bg-card dark:border-transparent">
-              {body}
-            </div>
+            <div className={PANEL}>{body}</div>
           ) : (
             <ChatCards actions={actions} rows={visible} />
           )

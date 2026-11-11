@@ -3,6 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { StatusBadge } from "@/components/admin/admin-kit";
 import {
   PageEmpty,
   PageRows,
@@ -90,7 +91,7 @@ function CredentialsPage() {
   return (
     <PageShell
       action={
-        <Button onClick={() => setAdding(true)} size="sm" variant="ghost">
+        <Button onClick={() => setAdding(true)} size="sm" variant="outline">
           <IconPlus />
           添加凭据
         </Button>
@@ -307,22 +308,33 @@ function CredentialsPage() {
                   <ItemContent>
                     <ItemTitle>{credential.provider}</ItemTitle>
                     <ItemDescription>
-                      {credential.kind} · {credential.keyId} ·{" "}
-                      {credential.revokedAt ? "revoked" : "active"}
+                      {credential.kind === "model" ? "模型" : "连接器"} ·{" "}
+                      <span className="font-mono text-[12px]">
+                        {credential.keyId}
+                      </span>
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
-                    <Button
-                      disabled={
-                        Boolean(credential.revokedAt) ||
-                        revokeCredential.isPending
-                      }
-                      onClick={() => revokeCredential.mutate(credential.id)}
-                      size="sm"
-                      variant="outline"
+                    {/* The state in words, so a revoked key reads as revoked without colour. */}
+                    <StatusBadge
+                      tone={credential.revokedAt ? "muted" : "positive"}
                     >
-                      吊销
-                    </Button>
+                      {credential.revokedAt ? "已吊销" : "在用"}
+                    </StatusBadge>
+                    {/* A revoked key has nothing left to revoke; its badge says so. */}
+                    {credential.revokedAt ? null : (
+                      <Button
+                        disabled={
+                          Boolean(credential.revokedAt) ||
+                          revokeCredential.isPending
+                        }
+                        onClick={() => revokeCredential.mutate(credential.id)}
+                        size="sm"
+                        variant="destructive"
+                      >
+                        吊销
+                      </Button>
+                    )}
                   </ItemActions>
                 </Item>
                 {index !== (credentials.data?.length ?? 0) - 1 && <Separator />}

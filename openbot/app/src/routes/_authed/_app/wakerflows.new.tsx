@@ -1,10 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { PageSection, PageShell } from "@/components/layout/page-shell";
+import { PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CARD_FACE,
+  FlowSection,
+  SELECT_CLASS,
+} from "@/components/wakerflow/flow-ui";
 import { PlanEditor } from "@/components/wakerflow/plan-editor";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
@@ -394,168 +399,198 @@ function WakerFlowWorkbench({
     <PageShell
       backButton={{ label: "WakerFlow", linkProps: { to: "/wakerflows" } }}
       description="用一句话说出你想要的流程，选一个模型和参与的员工，生成一份可以修改、保存后执行的计划。"
+      // The bar reads 「‹ WakerFlow › 新建」: the Back link already names the list.
+      crumb={initialFlowId ? "编辑" : "新建"}
       title={initialFlowId ? "编辑 WakerFlow" : "新建 WakerFlow"}
+      width="workbench"
     >
       {initialFlowId && existing.isPending ? (
-        <Skeleton className="mt-8 h-24" />
+        <Skeleton
+          aria-label="正在加载 WakerFlow"
+          className="mb-[12px] h-[96px] rounded-[13px]"
+          role="status"
+        />
       ) : null}
       {existing.error ? (
-        <p className="mt-8 text-destructive text-sm" role="alert">
+        <p
+          className="mb-[12px] rounded-[13px] border border-signal/40 bg-signal-soft px-4 py-3 text-[13px] text-signal-ink"
+          role="alert"
+        >
           {existing.error.message}
         </p>
       ) : null}
 
-      <PageSection title="描述流程">
-        <div className="mt-3 flex flex-col gap-3">
-          <Textarea
-            aria-label="描述你想要的流程"
-            maxLength={4000}
-            placeholder="例如：每周五汇总本周进展、风险和下周计划，生成一份工作周报"
-            value={idea}
-            onChange={(event) => {
-              setIdea(event.target.value);
-              if (!event.target.value.trim()) setScenario(null);
-            }}
-          />
-          <fieldset className="flex flex-wrap gap-2">
-            <legend className="sr-only">场景建议</legend>
-            {WAKERFLOW_SUGGESTIONS.map((suggestion) => (
-              <Button
-                aria-pressed={scenario === suggestion}
-                key={suggestion}
-                size="sm"
-                variant={scenario === suggestion ? "secondary" : "outline"}
-                onClick={() => {
-                  setIdea(suggestion);
-                  setScenario(suggestion);
-                }}
-              >
-                {suggestion}
-              </Button>
-            ))}
-          </fieldset>
-        </div>
-      </PageSection>
-
-      <PageSection title="规划模型">
-        <div className="mt-3 flex flex-col gap-2">
-          {choices.isPending ? <Skeleton className="h-8 w-64" /> : null}
-          {modelProblem ? (
-            <p className="text-muted-foreground text-sm" role="status">
-              {modelProblem}{" "}
-              {!choices.error ? (
-                <Link
-                  className="underline"
-                  search={{ tab: "models" }}
-                  to="/resources"
+      {/*
+       * The three things a plan is generated from, in one card at a reading width: what the flow is,
+       * which model writes it, and who carries it out. The verb sits at the card's foot.
+       */}
+      <div
+        className={`${CARD_FACE} flex max-w-[880px] flex-col divide-y divide-border`}
+      >
+        <section className="p-[16px]">
+          <h2 className="font-bold text-[15px] tracking-[-0.01em]">描述流程</h2>
+          <div className="mt-[10px] flex flex-col gap-[10px]">
+            <Textarea
+              aria-label="描述你想要的流程"
+              maxLength={4000}
+              placeholder="例如：每周五汇总本周进展、风险和下周计划，生成一份工作周报"
+              value={idea}
+              onChange={(event) => {
+                setIdea(event.target.value);
+                if (!event.target.value.trim()) setScenario(null);
+              }}
+            />
+            <fieldset className="flex flex-wrap gap-[7px]">
+              <legend className="sr-only">场景建议</legend>
+              {WAKERFLOW_SUGGESTIONS.map((suggestion) => (
+                <Button
+                  aria-pressed={scenario === suggestion}
+                  className="h-auto min-h-7 whitespace-normal py-1 text-left aria-pressed:border-signal/70 aria-pressed:bg-signal-soft"
+                  key={suggestion}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setIdea(suggestion);
+                    setScenario(suggestion);
+                  }}
                 >
-                  去接入模型
-                </Link>
-              ) : null}
-            </p>
-          ) : null}
-          {models.length > 0 ? (
-            <select
-              aria-label="规划模型"
-              className="w-72 rounded-md border border-input bg-background px-2 py-1 text-sm"
-              value={chosen}
-              onChange={(event) => setModelRef(event.target.value)}
-            >
-              <option value="">选择模型</option>
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.label}
-                </option>
+                  {suggestion}
+                </Button>
               ))}
-            </select>
-          ) : null}
-        </div>
-      </PageSection>
+            </fieldset>
+          </div>
+        </section>
 
-      <PageSection title="参与的员工">
-        <div className="mt-3 flex flex-wrap gap-3">
-          {agents.isPending ? <Skeleton className="h-8 w-64" /> : null}
-          {agents.error ? (
-            <p className="text-destructive text-sm" role="alert">
-              员工列表没能加载。
+        <section className="p-[16px]">
+          <h2 className="font-bold text-[15px] tracking-[-0.01em]">规划模型</h2>
+          <div className="mt-[10px] flex flex-col gap-2">
+            {choices.isPending ? (
+              <Skeleton className="h-[32px] w-full max-w-[288px] rounded-[9px]" />
+            ) : null}
+            {modelProblem ? (
+              <p className="text-[13px] text-muted-foreground" role="status">
+                {modelProblem}{" "}
+                {!choices.error ? (
+                  <Link
+                    className="text-foreground underline underline-offset-2"
+                    search={{ tab: "models" }}
+                    to="/resources"
+                  >
+                    去接入模型
+                  </Link>
+                ) : null}
+              </p>
+            ) : null}
+            {models.length > 0 ? (
+              <select
+                aria-label="规划模型"
+                className={`${SELECT_CLASS} w-full max-w-[288px]`}
+                value={chosen}
+                onChange={(event) => setModelRef(event.target.value)}
+              >
+                <option value="">选择模型</option>
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="p-[16px]">
+          <h2 className="font-bold text-[15px] tracking-[-0.01em]">
+            参与的员工
+          </h2>
+          <div className="mt-[10px] flex flex-wrap gap-[7px]">
+            {agents.isPending ? (
+              <Skeleton className="h-[32px] w-full max-w-[288px] rounded-[9px]" />
+            ) : null}
+            {agents.error ? (
+              <p className="text-[13px] text-signal-ink" role="alert">
+                员工列表没能加载。
+              </p>
+            ) : null}
+            {!agents.isPending && !agents.error && roster.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">
+                你还没有可用的员工，先创建一位员工再来生成流程。
+              </p>
+            ) : null}
+            {roster.map((agent) => (
+              <label
+                className="flex h-[32px] cursor-pointer items-center gap-[7px] rounded-[9px] border border-border bg-foreground/[0.035] px-[11px] text-[13px] has-checked:border-signal/70 has-checked:bg-signal-soft has-focus-visible:ring-2 has-focus-visible:ring-ring/60"
+                key={agent.id}
+              >
+                <input
+                  checked={picked.includes(agent.id)}
+                  className="accent-signal"
+                  type="checkbox"
+                  onChange={(event) =>
+                    setPicked((current) =>
+                      event.target.checked
+                        ? [...current, agent.id]
+                        : current.filter((id) => id !== agent.id),
+                    )
+                  }
+                />
+                {agent.name}
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <div className="flex flex-col gap-[8px] p-[16px]">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button disabled={!ready} onClick={() => void generate()}>
+              {generating ? "正在生成…" : editor ? "重新生成计划" : "生成计划"}
+            </Button>
+            {generating ? (
+              <Button
+                disabled={!cancellable}
+                variant="outline"
+                onClick={() => void cancel()}
+              >
+                取消生成
+              </Button>
+            ) : null}
+          </div>
+          {error ? (
+            <p className="text-[13px] text-signal-ink" role="alert">
+              {error}
             </p>
           ) : null}
-          {!agents.isPending && !agents.error && roster.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              你还没有可用的员工，先创建一位员工再来生成流程。
+          {notice ? (
+            <p className="text-[13px] text-muted-foreground" role="status">
+              {notice}
             </p>
           ) : null}
-          {roster.map((agent) => (
-            <label className="flex items-center gap-1 text-sm" key={agent.id}>
-              <input
-                checked={picked.includes(agent.id)}
-                type="checkbox"
-                onChange={(event) =>
-                  setPicked((current) =>
-                    event.target.checked
-                      ? [...current, agent.id]
-                      : current.filter((id) => id !== agent.id),
-                  )
-                }
-              />
-              {agent.name}
-            </label>
-          ))}
         </div>
-      </PageSection>
-
-      <div className="mt-8 flex flex-wrap items-center gap-3">
-        <Button disabled={!ready} onClick={() => void generate()}>
-          {generating ? "正在生成…" : editor ? "重新生成计划" : "生成计划"}
-        </Button>
-        {generating ? (
-          <Button
-            disabled={!cancellable}
-            variant="outline"
-            onClick={() => void cancel()}
-          >
-            取消生成
-          </Button>
-        ) : null}
       </div>
-      {error ? (
-        <p className="mt-3 text-destructive text-sm" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {notice ? (
-        <p className="mt-3 text-muted-foreground text-sm" role="status">
-          {notice}
-        </p>
-      ) : null}
 
       {editor && flowId ? (
-        <PageSection title="编辑计划">
-          <div className="mt-3">
-            <PlanEditor
-              coworkers={roster.map((agent) => ({
-                id: agent.id,
-                name: agent.name,
-              }))}
-              flowId={flowId}
-              key={editor.version}
-              onReload={() => void reload()}
-              onSaved={(flow) => {
-                setEditor((previous) =>
-                  previous
-                    ? { ...previous, revision: flow.revision }
-                    : previous,
-                );
-                queryClient.setQueryData(wakerFlowKeys.detail(flow.id), flow);
-                void queryClient.invalidateQueries({
-                  queryKey: wakerFlowKeys.list(),
-                });
-              }}
-              plan={editor.plan}
-              revision={editor.revision}
-            />
-          </div>
-        </PageSection>
+        <FlowSection title="编辑计划">
+          <PlanEditor
+            coworkers={roster.map((agent) => ({
+              id: agent.id,
+              name: agent.name,
+            }))}
+            flowId={flowId}
+            key={editor.version}
+            onReload={() => void reload()}
+            onSaved={(flow) => {
+              setEditor((previous) =>
+                previous ? { ...previous, revision: flow.revision } : previous,
+              );
+              queryClient.setQueryData(wakerFlowKeys.detail(flow.id), flow);
+              void queryClient.invalidateQueries({
+                queryKey: wakerFlowKeys.list(),
+              });
+            }}
+            plan={editor.plan}
+            revision={editor.revision}
+          />
+        </FlowSection>
       ) : null}
     </PageShell>
   );

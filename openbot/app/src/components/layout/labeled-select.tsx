@@ -28,7 +28,7 @@ export function LabeledSelect<T extends string>({
   return (
     <label
       className={cn(
-        "relative inline-flex h-[32px] min-w-0 items-center gap-2 rounded-md border border-border bg-transparent pr-7 pl-3 text-[13px] focus-within:ring-2 focus-within:ring-ring/60",
+        "relative inline-flex h-[32px] min-w-0 items-center gap-2 rounded-[9px] border border-border bg-muted pr-7 pl-[11px] text-[12px] focus-within:ring-2 focus-within:ring-ring/60 dark:bg-[oklch(0.196_0.002_286.2)]",
         disabled && "opacity-50",
         className,
       )}
@@ -50,7 +50,7 @@ export function LabeledSelect<T extends string>({
       </select>
       <IconChevronDown
         aria-hidden="true"
-        className="pointer-events-none absolute right-2 size-[14px] text-muted-foreground"
+        className="pointer-events-none absolute right-[9px] size-[14px] text-faint"
       />
     </label>
   );

@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RequestError } from "@/lib/client";
 import { newId } from "@/lib/new-id";
 import { FlowInputFields } from "./flow-input-fields";
+import { CARD_FACE, StateBadge } from "./flow-ui";
 import { Flowchart } from "./flowchart";
 import { RunTimeline } from "./run-timeline";
 import {
@@ -176,15 +177,15 @@ export function RunPanel(props: {
   const list = runs.data ?? [];
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-[22px]">
       <form
         aria-label="运行这个 WakerFlow"
-        className="flex flex-col gap-3"
+        className={`${CARD_FACE} flex flex-col gap-3 p-[14px]`}
         noValidate
         onSubmit={submit}
       >
         {plan.inputs.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-[13px] text-muted-foreground">
             这个流程不需要输入，可以直接运行。
           </p>
         ) : (
@@ -213,18 +214,22 @@ export function RunPanel(props: {
         </div>
       </form>
 
-      <section aria-label="运行记录" className="flex flex-col gap-2">
-        <h3 className="font-semibold text-base">运行记录</h3>
+      <section aria-label="运行记录" className="flex flex-col gap-[9px]">
+        <h3 className="font-bold text-[15px] tracking-[-0.01em]">运行记录</h3>
         {runs.isPending ? (
-          <p className="text-muted-foreground text-sm">正在加载运行记录…</p>
+          <p className="text-[13px] text-muted-foreground" role="status">
+            正在加载运行记录…
+          </p>
         ) : runs.error ? (
           <p className="text-destructive text-sm" role="alert">
             {runs.error.message}
           </p>
         ) : list.length === 0 ? (
-          <p className="text-muted-foreground text-sm">还没有运行记录。</p>
+          <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
+            还没有运行记录。
+          </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-[9px]">
             {list.map((run) => (
               <RunRow
                 ended={ended[run.id] ?? null}
@@ -266,26 +271,30 @@ function RunRow(props: {
   const status = ended?.status ?? run.status;
   const created = new Date(run.createdAt);
   return (
-    <li className="rounded-md border px-3 py-2">
-      <div className="flex flex-row items-center justify-between gap-3">
+    <li
+      className={`${CARD_FACE} px-[14px] py-[10px] ${
+        props.open ? "border-foreground/20" : ""
+      }`}
+    >
+      <div className="flex flex-row flex-wrap items-center justify-between gap-3">
         <button
           aria-expanded={props.open}
-          className="text-left text-sm"
+          className="flex min-w-0 items-center gap-[10px] rounded-[7px] text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
           onClick={props.onToggle}
           type="button"
         >
-          <span className="font-medium">
+          <span className="font-medium tabular-nums">
             {Number.isNaN(created.getTime())
               ? "运行"
               : created.toLocaleString("zh-CN")}
           </span>
-          <span className="ml-2 text-muted-foreground" data-run-status={run.id}>
-            {runStatusLabel(status)}
+          <span data-run-status={run.id}>
+            <StateBadge label={runStatusLabel(status)} state={status} />
           </span>
         </button>
         {run.parentTaskId ? (
           <Link
-            className="text-sm underline opacity-80"
+            className="text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
             search={{ q: flow.name, period: "all" }}
             to="/tasks"
           >
@@ -379,14 +388,19 @@ function RunDetail(props: {
         {detail.error.message}
       </p>
     ) : (
-      <p className="mt-2 text-muted-foreground text-sm">正在加载这次运行…</p>
+      <p className="mt-2 text-[13px] text-muted-foreground" role="status">
+        正在加载这次运行…
+      </p>
     );
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-3">
+    <div className="mt-3 flex flex-col gap-3 border-border border-t pt-3">
       <div className="flex flex-row items-center gap-3">
-        <span className="text-sm" data-testid="run-detail-status">
+        <span
+          className="text-[13px] text-muted-foreground"
+          data-testid="run-detail-status"
+        >
           {runStatusLabel(run.status)}
         </span>
         <Button
@@ -421,30 +435,36 @@ function RunDetail(props: {
           run.steps.find((step) => step.id === node.id)?.instruction ?? node.id
         }
       />
-      <ol className="flex flex-col gap-2">
+      <ol className="flex flex-col gap-[7px]">
         {run.steps.map((step, index) => (
-          <li className="rounded-md bg-muted px-3 py-2 text-sm" key={step.id}>
-            <div className="flex flex-row justify-between gap-3">
-              <span className="font-medium">
+          <li
+            className="rounded-[11px] border border-border bg-background/60 px-3 py-[9px] text-[13px]"
+            key={step.id}
+          >
+            <div className="flex flex-row items-start justify-between gap-3">
+              <span className="min-w-0 font-medium">
                 第 {index + 1} 步 · {step.instruction}
               </span>
-              <span className="shrink-0 text-muted-foreground">
-                {step.state === "skipped" && step.skipReason === "branch"
-                  ? "分支未选中"
-                  : (STEP_STATE[step.state] ?? step.state)}
-              </span>
+              <StateBadge
+                label={
+                  step.state === "skipped" && step.skipReason === "branch"
+                    ? "分支未选中"
+                    : (STEP_STATE[step.state] ?? step.state)
+                }
+                state={step.state}
+              />
             </div>
             {step.output ? (
-              <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs">
+              <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-[12px] text-foreground/90">
                 {step.outputKey ? `${step.outputKey}：` : ""}
                 {step.output}
               </pre>
             ) : null}
             {step.error ? (
-              <p className="mt-2 text-destructive text-xs">{step.error}</p>
+              <p className="mt-2 text-[12px] text-signal-ink">{step.error}</p>
             ) : null}
             {step.branch ? (
-              <p className="mt-2 text-muted-foreground text-xs">
+              <p className="mt-2 text-[12px] text-muted-foreground">
                 走了「{step.branch.label}」分支
               </p>
             ) : null}
@@ -572,7 +592,7 @@ function StepQuestion(props: {
 
   const field = `answer-${confirmationId}`;
   return (
-    <div className="mt-2 flex flex-col gap-2 rounded-md border bg-background p-2 text-xs">
+    <div className="mt-2 flex flex-col gap-2 rounded-[11px] border border-signal/40 bg-signal-soft p-[10px] text-[12px]">
       <p className="font-medium">这一步在问你：{confirmation.question}</p>
       <label className="sr-only" htmlFor={field}>
         你的回答
@@ -660,7 +680,7 @@ function RetryFromFailure(props: {
     <div className="flex flex-col gap-2 text-sm">
       {confirming ? (
         <div
-          className="flex flex-col gap-2 rounded-md border p-2"
+          className="flex flex-col gap-2 rounded-[11px] border border-signal/40 bg-signal-soft p-[10px]"
           role="alertdialog"
           aria-label="确认从失败步骤重试"
         >
@@ -668,7 +688,7 @@ function RetryFromFailure(props: {
             将从第 {from + 1} 步「{step.instruction}」重新执行，前面已完成的
             {from} 步不会再执行，使用的是这次运行时的流程定义。
           </p>
-          <p className="text-destructive text-xs">
+          <p className="text-[12px] text-signal-ink">
             注意：失败的那一步会重新执行一次。它失败之前如果已经发出消息或写入文件，这些操作可能会再发生一次。
           </p>
           {failure ? (

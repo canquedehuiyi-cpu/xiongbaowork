@@ -94,6 +94,7 @@ function ResourcesPage() {
     <PageShell
       width="workbench"
       description="释放你的员工潜能，解锁更多可能"
+      eyebrow="05 RESOURCE CENTER"
       title="能力与资源"
     >
       <ResourceTabs

@@ -33,6 +33,12 @@ import {
  * under the same per-id gate and rollback as a decision.
  */
 
+/** The board row's small action buttons (查收, 归档, 批准, 拒绝, 回答): 26px, the reference's compact verbs. */
+export const ROW_ACTION_PRIMARY =
+  "inline-flex h-[26px] shrink-0 items-center rounded-[8px] bg-foreground px-[10px] font-semibold text-[12px] text-background outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-60";
+export const ROW_ACTION_SECONDARY =
+  "inline-flex h-[26px] shrink-0 items-center rounded-[8px] border border-border bg-foreground/[0.05] px-[10px] font-medium text-[12px] text-foreground outline-none transition-colors hover:bg-foreground/[0.09] focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-60";
+
 /** What a card can be answered with: an approval decision, or a written answer to a question. */
 export type BoardAnswer = ApprovalDecision | "answer";
 
@@ -234,7 +240,7 @@ function QuestionAnswer({
   return (
     <form
       aria-label="回答问题"
-      className="flex min-w-0 items-center gap-1"
+      className="flex min-w-0 max-w-full flex-wrap items-center gap-[6px]"
       onSubmit={(event) => {
         event.preventDefault();
         if (busy || empty) return;
@@ -242,12 +248,15 @@ function QuestionAnswer({
         setDraft("");
       }}
     >
-      <span className="max-w-48 truncate" title={question}>
+      <span
+        className="min-w-0 max-w-48 truncate text-muted-foreground"
+        title={question}
+      >
         问：{question}
       </span>
       <input
         aria-label="你的回答"
-        className="min-w-0 rounded border border-foreground/20 bg-background px-1.5 py-0.5"
+        className="h-[26px] w-[160px] min-w-0 rounded-[8px] border border-border bg-background px-[8px] text-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         disabled={busy}
         maxLength={6000}
         onChange={(event) => setDraft(event.target.value)}
@@ -256,7 +265,7 @@ function QuestionAnswer({
       />
       <button
         aria-busy={busy}
-        className="bg-foreground text-background rounded px-2 py-0.5"
+        className={ROW_ACTION_PRIMARY}
         disabled={busy || empty}
         type="submit"
       >
@@ -349,9 +358,7 @@ export function ApprovalActions({
         <button
           aria-busy={busy}
           className={
-            decision === "deny"
-              ? "rounded bg-foreground/10 px-2 py-0.5"
-              : "bg-foreground text-background rounded px-2 py-0.5"
+            decision === "deny" ? ROW_ACTION_SECONDARY : ROW_ACTION_PRIMARY
           }
           disabled={busy}
           key={decision}

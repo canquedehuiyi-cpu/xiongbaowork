@@ -79,7 +79,7 @@ function DialogContent({
            * laptop must not push its own submit button off the bottom of the screen, which is exactly
            * where somebody looks for it.
            */
-          "-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex max-h-[85svh] w-[calc(100%-2rem)] max-w-lg flex-col gap-4 rounded-xl border border-border bg-popover p-5 text-sm text-popover-foreground shadow-lg transition duration-150 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0",
+          "-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex max-h-[85svh] w-[calc(100%-2rem)] max-w-lg flex-col gap-4 rounded-[16px] border border-border bg-popover p-5 text-sm text-popover-foreground shadow-[0_24px_60px_rgb(0_0_0/0.35),inset_0_1px_0_rgb(255_255_255/0.05)] transition duration-150 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0",
           className,
         )}
         {...props}

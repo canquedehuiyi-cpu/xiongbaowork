@@ -1,4 +1,4 @@
-import { IconExternalLink } from "@tabler/icons-react";
+import { IconExternalLink, IconSettings } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -38,10 +38,13 @@ import {
 import { useZh } from "@/lib/translations/queries";
 import { cn } from "@/lib/utils";
 import {
+  CARD_FACE,
   grantedSentence,
   NoMatch,
   Pager,
   QueryState,
+  ResourceSymbol,
+  SectionHead,
   TabEmpty,
   Tag,
 } from "./resource-kit";
@@ -56,9 +59,11 @@ export type PluginsSearch = {
 };
 
 /**
- * 能力与资源 › 插件 (parity plan F4, reference description 6): underline tabs 插件市场 / 我的插件, a
- * 210px rail with the search over the categories, and on the right the category's heading with its
- * count, a card grid five across at full width paged twenty at a time, and a details sheet per card.
+ * 能力与资源 › 插件 (parity plan F4; drawn to docs/design/ios-studio, 05-能力与资源.png): the pill
+ * switch 插件市场 / 我的插件 with 管理插件 on its right, then a 155px category panel (the search on
+ * top, each category's count right-aligned, the selected one marked by a red edge) beside the
+ * category's heading with its count badge and a three-column card grid paged twenty at a time, and a
+ * details sheet per card.
  *
  * Reads `/api/plugins` with the listings and this person's connections beside it; each of those two
  * only takes away the detail it adds. Installing is an administrator's write that needs a token or a
@@ -104,27 +109,36 @@ export function PluginsTab({
 
   return (
     <>
-      <SegmentedTabs
-        className="mt-[24px]"
-        label="插件范围"
-        onValueChange={(value) =>
-          onSearch({ view: value, category: undefined, page: undefined })
-        }
-        tabs={[
-          {
-            value: "market",
-            label: "插件市场",
-            ...(plugins.data ? { count: market.length } : {}),
-          },
-          {
-            value: "mine",
-            label: "我的插件",
-            ...(plugins.data ? { count: mine.length } : {}),
-          },
-        ]}
-        value={view}
-        variant="underline"
-      />
+      <div className="mt-[22px] mb-[9px] flex flex-wrap items-center justify-between gap-[10px]">
+        <SegmentedTabs
+          label="插件范围"
+          onValueChange={(value) =>
+            onSearch({ view: value, category: undefined, page: undefined })
+          }
+          tabs={[
+            {
+              value: "market",
+              label: "插件市场",
+              ...(plugins.data ? { count: market.length } : {}),
+            },
+            {
+              value: "mine",
+              label: "我的插件",
+              ...(plugins.data ? { count: mine.length } : {}),
+            },
+          ]}
+          value={view}
+        />
+        {isAdmin ? (
+          <Button
+            render={(props) => <Link to="/admin/plugins" {...props} />}
+            variant="outline"
+          >
+            <IconSettings />
+            管理插件
+          </Button>
+        ) : null}
+      </div>
       <QueryState label="读不到插件" query={plugins}>
         {scoped.length === 0 ? (
           view === "market" ? (
@@ -143,12 +157,16 @@ export function PluginsTab({
             />
           )
         ) : (
-          <div className="mt-[20px] flex flex-col gap-[24px] md:flex-row md:items-start">
+          <div className="grid grid-cols-1 gap-[12px] min-[791px]:grid-cols-[155px_minmax(0,1fr)]">
             <div
-              className="flex shrink-0 flex-col gap-[12px] md:w-[210px]"
+              className={cn(
+                CARD_FACE,
+                "flex flex-col gap-[6px] self-start px-[7px] py-[9px]",
+              )}
               data-slot="plugin-rail"
             >
               <SearchBox
+                className="h-[31px] w-full"
                 label="搜索插件"
                 onValueChange={(value) => {
                   setText(value);
@@ -168,28 +186,16 @@ export function PluginsTab({
                 value={category}
               />
             </div>
-            <div className="@container min-w-0 flex-1">
-              <div className="flex min-h-[32px] items-center gap-[8px]">
-                <h2 className="font-semibold text-[16px] leading-[24px]">
-                  {category
+            <div className="@container min-w-0">
+              <SectionHead
+                aside={<Tag>{shown.length} 个插件</Tag>}
+                title={
+                  category
                     ? (PLUGIN_CATEGORIES.find((row) => row.id === category)
                         ?.label ?? "全部分类")
-                    : "全部分类"}
-                </h2>
-                <span className="text-[13px] text-muted-foreground tabular-nums">
-                  {shown.length} 个插件
-                </span>
-                {isAdmin ? (
-                  <Button
-                    className="ml-auto"
-                    render={(props) => <Link to="/admin/plugins" {...props} />}
-                    size="sm"
-                    variant="outline"
-                  >
-                    管理插件
-                  </Button>
-                ) : null}
-              </div>
+                    : "全部分类"
+                }
+              />
               {shown.length === 0 ? (
                 <NoMatch
                   onClear={() => {
@@ -206,7 +212,7 @@ export function PluginsTab({
                 <>
                   <ul
                     aria-label="插件列表"
-                    className="mt-[12px] grid grid-cols-1 gap-[12px] @min-[400px]:grid-cols-2 @min-[620px]:grid-cols-3 @min-[840px]:grid-cols-4 @min-[1060px]:grid-cols-5"
+                    className="grid grid-cols-1 gap-[9px] @min-[400px]:grid-cols-2 @min-[600px]:grid-cols-3"
                   >
                     {paged.map((card) => (
                       <PluginCardView
@@ -265,7 +271,8 @@ function CategorySidebar({
   return (
     <nav
       aria-label="插件分类"
-      className="flex flex-row flex-wrap gap-[2px] md:flex-col"
+      // A column in the panel; a wrapping row of chips at 790px and under, as the reference folds it.
+      className="flex flex-row flex-wrap gap-[4px] min-[791px]:flex-col min-[791px]:gap-[2px]"
     >
       {rows.map((row) => {
         const selected = row.id === value;
@@ -273,17 +280,23 @@ function CategorySidebar({
           <button
             aria-pressed={selected}
             className={cn(
-              "flex h-[32px] items-center justify-between gap-3 rounded-md px-3 text-left text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60",
+              "flex min-h-[30px] items-center justify-between gap-[8px] rounded-[7px] px-[8px] py-[6px] text-left text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 motion-reduce:transition-none",
+              // The selected row: a 2px red edge on the left and a slightly lighter ground.
               selected
-                ? "bg-sidebar-accent font-medium text-foreground"
-                : "text-foreground/85 hover:bg-sidebar-accent/50 hover:text-foreground",
+                ? "bg-foreground/[0.047] font-medium text-foreground shadow-[inset_2px_0_0_var(--signal)]"
+                : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground",
             )}
             key={row.id ?? "all"}
             onClick={() => onChange(row.id)}
             type="button"
           >
             <span>{row.label}</span>
-            <span className="text-[12px] text-muted-foreground tabular-nums">
+            <span
+              className={cn(
+                "tabular-nums",
+                selected ? "text-foreground/90" : "text-faint",
+              )}
+            >
               {row.count}
             </span>
           </button>
@@ -395,22 +408,25 @@ function PluginCardView({
   const titleId = `plugin-card-${card.key}-${card.server?.id ?? "entry"}`;
   return (
     /*
-     * The reference's card: icon and name, three lines of description, and a footer of 「@vendor」
-     * with the install count. There is no install count here (nothing records one), so the footer's
-     * right is where this plugin stands for the person looking. The whole card opens the details;
-     * the one action it offers rises in its corner on hover or focus (always, on a touch screen),
-     * and is in the details too.
+     * docs/design/ios-studio's card (13px radius): a 33px icon plate and the name, two lines of
+     * description, and a footer of 「@vendor」 with a badge for where this plugin stands for the
+     * person looking (未安装 / 已授权 / …; the words carry it, the badge's tone only echoes it).
+     * The whole card opens the details; the one action it offers rises in its corner on hover or
+     * focus (always, on a touch screen), and is in the details too.
      */
     <li
       aria-labelledby={titleId}
-      className="group relative flex min-h-[156px] flex-col gap-[10px] rounded-lg border border-border bg-card p-[16px] transition-colors hover:border-foreground/15"
+      className={cn(
+        CARD_FACE,
+        "group relative flex min-h-[126px] min-w-0 flex-col px-[11px] py-[10px] transition-colors hover:border-foreground/15 motion-reduce:transition-none",
+      )}
     >
-      <div className="flex min-w-0 items-center gap-[10px]">
-        <span className="flex size-[28px] shrink-0 items-center justify-center rounded-md bg-muted">
+      <div className="flex min-w-0 items-center gap-[8px]">
+        <ResourceSymbol>
           <PluginLogo logo={card.logo} />
-        </span>
+        </ResourceSymbol>
         <span
-          className="min-w-0 truncate font-semibold text-[14px] leading-[20px]"
+          className="min-w-0 truncate font-bold text-[13px] leading-[20px]"
           data-slot="plugin-card-title"
           id={titleId}
         >
@@ -418,13 +434,13 @@ function PluginCardView({
         </span>
       </div>
       <p
-        className="line-clamp-3 min-h-[60px] text-[13px] text-muted-foreground leading-[20px]"
+        className="mt-[6px] mb-[8px] line-clamp-2 text-[12px] text-muted-foreground leading-[1.6]"
         data-slot="plugin-card-summary"
       >
         {zh(card.summary) || "这个插件没有提供说明。"}
       </p>
       <div
-        className="mt-auto flex min-w-0 items-center gap-[6px] text-[12px] text-muted-foreground"
+        className="mt-auto flex min-w-0 items-center gap-[5px] text-[11px] text-faint"
         data-slot="plugin-card-footer"
       >
         <span className="min-w-0 flex-1 truncate">
@@ -434,13 +450,13 @@ function PluginCardView({
         <Tag tone={statusTone(status)}>{status.label}</Tag>
       </div>
       <button
-        className="absolute inset-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        className="absolute inset-0 rounded-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         onClick={onOpen}
         type="button"
       >
         <span className="sr-only">详情：{zh(card.title)}</span>
       </button>
-      <div className="absolute top-[12px] right-[12px] z-10 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+      <div className="absolute top-[10px] right-[11px] z-10 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
         <PluginAction card={card} isAdmin={isAdmin} status={status} />
       </div>
     </li>
@@ -489,25 +505,34 @@ function PluginDetails({
       <SheetContent className="w-full overflow-y-auto sm:max-w-md">
         {card && status ? (
           <>
-            <SheetHeader className="pr-12">
-              <div className="flex items-center gap-3">
-                <span className="flex size-[40px] shrink-0 items-center justify-center rounded-md bg-muted">
+            <SheetHeader className="gap-[12px] border-border border-b pr-12 pb-[14px]">
+              <div className="flex min-w-0 items-center gap-[10px]">
+                <ResourceSymbol className="size-[40px] rounded-[11px]">
                   <PluginLogo logo={card.logo} />
-                </span>
-                <div className="flex min-w-0 flex-col">
-                  <SheetTitle>{zh(card.title)}</SheetTitle>
-                  <SheetDescription>{card.vendor}</SheetDescription>
+                </ResourceSymbol>
+                <div className="flex min-w-0 flex-col gap-[2px]">
+                  <SheetTitle className="truncate font-bold text-[17px] tracking-[-0.02em]">
+                    {zh(card.title)}
+                  </SheetTitle>
+                  <SheetDescription className="truncate text-[12px] text-faint">
+                    {card.vendor ? `@${card.vendor}` : null}
+                  </SheetDescription>
                 </div>
               </div>
-            </SheetHeader>
-            <div className="flex flex-col gap-4 px-4 pb-4 text-[13px]">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-[6px]">
                 <Tag tone={statusTone(status)}>{status.label}</Tag>
                 {card.listed ? <Tag>可自助安装</Tag> : null}
               </div>
+            </SheetHeader>
+            <div className="flex flex-col gap-[14px] px-4 pt-[14px] pb-4 text-[13px] leading-[1.6]">
               {card.summary ? <p>{zh(card.summary)}</p> : null}
               {card.server?.lastError ? (
-                <p className="text-destructive">{card.server.lastError}</p>
+                <p
+                  className="rounded-[9px] bg-signal-soft px-[10px] py-[7px] text-signal-ink"
+                  role="note"
+                >
+                  {card.server.lastError}
+                </p>
               ) : null}
               <p className="text-muted-foreground">{how}</p>
               {card.listed ? (
@@ -516,10 +541,10 @@ function PluginDetails({
                 </p>
               ) : null}
               {card.server ? (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium">工具</h3>
-                    <span className="text-muted-foreground">
+                <div className="flex flex-col gap-[8px]">
+                  <div className="flex items-center justify-between gap-[10px]">
+                    <h3 className="font-bold text-[14px]">工具</h3>
+                    <span className="text-[12px] text-muted-foreground">
                       {grantedSentence(grantedWakers(card.server))}
                     </span>
                   </div>
@@ -528,14 +553,21 @@ function PluginDetails({
                       它目前没有提供任何工具。
                     </p>
                   ) : (
-                    <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+                    <ul
+                      className={cn(
+                        CARD_FACE,
+                        "flex flex-col divide-y divide-border",
+                      )}
+                    >
                       {card.server.tools.map((tool) => (
                         <li
-                          className="flex flex-col gap-0.5 px-3 py-2"
+                          className="flex flex-col gap-[2px] px-[11px] py-[8px]"
                           key={tool.ref}
                         >
-                          <span className="flex items-center gap-2 font-mono text-[12px]">
-                            <span>{tool.name}</span>
+                          <span className="flex items-center gap-[8px] font-mono text-[12px]">
+                            <span className="min-w-0 truncate">
+                              {tool.name}
+                            </span>
                             <Tag>
                               {tool.effect === "read" ? "只读" : "会修改"}
                             </Tag>
@@ -555,7 +587,7 @@ function PluginDetails({
                   还没有添加到这个部署，添加之后才能看到它提供的工具。
                 </p>
               )}
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-[7px] border-border border-t pt-[14px]">
                 <PluginAction card={card} isAdmin={isAdmin} status={status} />
                 {card.docsUrl ? (
                   <Button
