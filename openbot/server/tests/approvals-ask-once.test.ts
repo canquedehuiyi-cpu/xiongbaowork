@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   APPROVAL_GUIDANCE,
   APPROVAL_GUIDANCE_APPS,
+  ASKING_GUIDANCE,
   approvalGuidance,
+  BROUGHT_BOT_ASKING_GUIDANCE,
   DESTRUCTIVE_TOOL_NOTE,
 } from "@openbot/shared/bot-prompt";
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
@@ -95,7 +97,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     }
   });
 
-  test("a remote Bot is not told so: its own tools don't go through OpenBot's gate", () => {
+  test("a remote Bot is told so only for what OpenBot gives it: its own tools don't go through OpenBot's gate", () => {
     const role = standingRoleMessage({
       id: "risk",
       name: "Risk",
@@ -104,6 +106,16 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     });
     expect(role.content).not.toContain(approvalGuidance({ apps: false }));
     expect(role.content).not.toContain(APPROVAL_GUIDANCE_APPS);
+    expect(role.content).not.toContain(ASKING_GUIDANCE);
+    expect(role.content).toContain(BROUGHT_BOT_ASKING_GUIDANCE);
+    const said = BROUGHT_BOT_ASKING_GUIDANCE.replace(/\s+/g, " ");
+    expect(said).toContain(
+      "When you use the apps and tools OpenBot gives you, OpenBot asks the person itself before you delete",
+    );
+    // Its own tools are not covered, so it still asks before one of them does something final.
+    expect(said).toContain(
+      "Tools of your own that OpenBot did not give you are not covered: ask before one of those does something that cannot be undone.",
+    );
   });
 
   // Each button the guidance names, as a Bot presses it: the policy must ask about every one.

@@ -36,7 +36,11 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
-import { conversationName, ROSTER_ORDER } from "../channels/routes";
+import {
+  conversationCalled,
+  conversationName,
+  ROSTER_ORDER,
+} from "../channels/routes";
 import { oneLine } from "../channels/text";
 import type { Database } from "../db/client";
 import {
@@ -101,7 +105,8 @@ export const MAX_RUN_ERROR = 400;
  */
 const FAILURE_SCAN_LIMIT = 20;
 
-const NO_SHARED_CHANNEL =
+/** Exported so the page's create can say it to a person rather than to a model. */
+export const NO_SHARED_CHANNEL =
   "I can only post into a conversation you and I are both in.";
 const NO_CHANNEL_AT_ALL =
   "We have no conversation for me to post into. Start one and ask again.";
@@ -660,7 +665,7 @@ export function createRoutineStore(database: Database): RoutineStore {
     return await handle
       .select({
         id: channels.id,
-        summary: channels.summary,
+        summary: conversationCalled,
         opening: channels.opening,
         lastMessage: channels.lastMessage,
       })
@@ -964,7 +969,7 @@ export function createRoutineStore(database: Database): RoutineStore {
         .select({
           routine: routines,
           channelName: conversationName,
-          channelSummary: channels.summary,
+          channelSummary: conversationCalled,
           channelOpening: channels.opening,
           channelLastMessage: channels.lastMessage,
           channelDeletedAt: channels.deletedAt,
