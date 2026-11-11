@@ -1254,6 +1254,13 @@
       "when": 1794328075274,
       "tag": "0197_owner_app_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 198,
+      "version": "7",
+      "when": 1794328076274,
+      "tag": "0198_server_row_shapes",
+      "breakpoints": true
     }
   ]
 }

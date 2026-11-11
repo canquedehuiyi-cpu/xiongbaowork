@@ -311,9 +311,8 @@ export type ServerRecord = {
    */
   sharedVendorConnected?: boolean;
   /**
-   * 上一次列出时因为名字不能交给模型而略过的动作（上游的 `skippedTools`）。fork 里恒为空数组：上游把
-   * 这些名字记在 `mcp_servers.skipped_tools`（它的迁移 0059），fork 没有这一列，刷新时略过的名字不落库，
-   * 所以没有可报的。给出空数组而不是不给，是让照上游写的页面读 `.length` 时不落空。
+   * 上一次存下清单时因为名字不能交给模型而略过的动作，照厂商的拼法（上游的 `skippedTools`，
+   * `mcp_servers.skipped_tools`）。是提醒，不是失败；没有略过时是空数组。
    */
   skippedTools?: string[];
   /**
@@ -322,13 +321,16 @@ export type ServerRecord = {
    */
   ownerGrants?: "any" | "admin";
   /**
-   * 管理员明确选的那个值，没有（或说不准是不是管理员选的）为 null（上游的 `ownerGrantsChosen`）。
+   * 管理员明确选的那个值，没有管理员选过为 null（上游的 `ownerGrantsChosen`）。
    *
-   * 只有 `any` 会被报出来。`mcp_servers.owner_grants` 里的 `any` 只有管理员的 PUT 能写，所以它一定是
-   * 管理员选的。`admin` 有三个来源：管理员的 PUT、升级时的回填（迁移 0197 把已有应用都写成 `admin`）、
-   * 切换账号模式（每次切换都写回 `admin`），列里分不出是哪一个，也没有别的列记着是谁写的。把它报成
-   * 「管理员选过」，对每一个升级前就有的应用都是假话，所以不报；生效的值照样在 `ownerGrants` 里。
-   * `GET /servers/:id/owner-grants` 的 `chosen` 仍是列的原值，两处在 `admin` 上因此不同。
+   * `mcp_servers.owner_grants` 里的 `admin` 有三个来源：管理员的 PUT、升级时的回填（迁移 0197 把已有应用
+   * 都写成 `admin`）、切换账号模式（每次切换都写回 `admin`）。只有管理员的 PUT 在
+   * `owner_grants_chosen_at` 上留下记号（迁移 0198），所以有记号的 `admin` 才报成选过；回填的、切换写回的
+   * 报 null，把它们报成「管理员选过」对每一个升级前就有的应用都是假话。`any` 只有管理员的 PUT 能写，有
+   * 没有记号都是选过（0198 之前放开的应用没有记号）。生效的值照样在 `ownerGrants` 里。
+   *
+   * `GET /servers/:id/owner-grants` 的 `chosen` 仍是 `owner_grants` 列的原值，所以回填的、切换写回的
+   * `admin` 在那里是 `admin`、在这里是 null。
    */
   ownerGrantsChosen?: "any" | "admin" | null;
   tools: ToolRecord[];
@@ -847,7 +849,24 @@ export function storableTools(
    */
   entry: CatalogueEntry | null = null,
 ) {
+  return storableListing(serverId, listed, serverTenant, entry).rows;
+}
+
+/**
+ * {@link storableTools} 的那些行，加上因为名字不能交给模型而略过的动作（上游 `storableTools` 的
+ * `{ rows, skipped }`）。刷新用这一个，好把略过的名字说出来；只要行的调用方照旧用上面那个。
+ *
+ * 准则：没有一行的名字是模型用不了的；因此略过的每个名字都在 `skipped` 里，各一次，照厂商列出的拼法——
+ * 调用方能说出哪些动作没有记下，而不是留给人自己发现少了什么。
+ */
+export function storableListing(
+  serverId: string,
+  listed: ListedTool[],
+  serverTenant?: string,
+  entry: CatalogueEntry | null = null,
+) {
   const stamp = serverTenant ? { tenantId: serverTenant } : {};
+  const skipped = new Set<string>();
   const byName = new Map<
     string,
     {
@@ -866,14 +885,23 @@ export function storableTools(
 
   for (const tool of listed) {
     const name = tool.name.replaceAll(NUL, "");
-    if (byName.has(name)) continue;
     /*
-     * X5：厂商名与本部署的名字不同的动作（Arcade），本部署的名字必须是模型工具名能用的字符。认不出的
-     * 名字（第二个点、别的字符）不猜着修，只把这一个动作排除，其余照常记录。只看带 `vendorName` 的，
-     * 其他传输层的清单与以前一样。
+     * 记下的名字必须是模型工具名能用的字符，在每一种传输层的清单进库之前的这一处把关（上游同一处）。
+     *
+     * 模型的工具名只能是 `^[a-zA-Z0-9_-]+$`，而 `name` 会被 {@link toolNameFor} 拼进去。带点的名字存下来，
+     * 拒绝要到很久以后、在完全不相干的地方才出现：模型请求返回 400，说的是 `tools[47]`，不提是哪个应用、
+     * 哪个动作、哪一次刷新记下的，读到它的人无从下手。MCP 规范允许工具名里有点，所以按 URL 添加的服务器
+     * 也会遇到，不只是厂商名与本部署名字不同的 Arcade。
+     *
+     * 略过并说出来，不整份拒绝，也不猜着修：一个名字只花掉它自己这一个动作，其余照常记录；名字回到
+     * 调用方手里，由它说在应用自己的页面上。
      */
+    if (!OFFERABLE_TOOL_NAME.test(name)) {
+      skipped.add(name);
+      continue;
+    }
+    if (byName.has(name)) continue;
     const vendorName = tool.vendorName?.replaceAll(NUL, "");
-    if (vendorName !== undefined && !OFFERABLE_TOOL_NAME.test(name)) continue;
     /*
      * vendor 只字未提的工具，只在 catalogue 名单没有覆盖它时记为 unclassified。MCP 的沉默不记
      * effect，条目在就由名单整体决定（名单外按读），所以条目在就算覆盖；broker 的沉默记成了
@@ -922,7 +950,7 @@ export function storableTools(
     });
   }
 
-  return [...byName.values()];
+  return { rows: [...byName.values()], skipped: [...skipped] };
 }
 
 export function isDeploymentFault(error: unknown): error is Error {
@@ -6014,8 +6042,14 @@ export function createPluginStore(options: PluginStoreOptions) {
        * never travel cannot reach the column even from a line that should never produce one.
        */
       let storable: ReturnType<typeof storableTools>;
+      let skipped: string[];
       try {
-        storable = storableTools(rowId, listed, row.tenantId, entry);
+        ({ rows: storable, skipped } = storableListing(
+          rowId,
+          listed,
+          row.tenantId,
+          entry,
+        ));
       } catch (error) {
         const reason =
           error instanceof Error ? withoutStatement(error) : String(error);
@@ -6036,6 +6070,60 @@ export function createPluginStore(options: PluginStoreOptions) {
             .where(eq(mcpServers.id, rowId)),
         );
         return { tools: 0 };
+      }
+
+      /*
+       * 因为名字被略过的动作，说在按了刷新的人会读到的地方（上游同一段）。
+       *
+       * 准则：被略过的名字记在 `skippedTools`，应用的页面把它画成提醒；同时记一行带服务器 id 的日志。它只
+       * 花掉它自己：清单里别的动作照常记下。
+       *
+       * 不进 `lastError`。那一列是失败，插件列表会因为它把一行标红；一次把别的动作都存下了的刷新没有
+       * 失败，而一个一直列出带点名字的服务器会在每一次刷新后都显示成坏的，永远如此。句子还是会拼出来，
+       * 给下面那一种情况用：什么都没存下，那次刷新确实什么都没学到，要当失败说。
+       */
+      const skippedSentence =
+        skipped.length > 0
+          ? `这个应用列出了 ${skipped.length} 个不能交给模型的动作，已略过：${skipped.map((name) => `"${name}"`).join("、")}。工具名只能用字母、数字、下划线和连字符。`
+          : null;
+      if (skipped.length > 0) {
+        console.warn(
+          JSON.stringify({
+            type: "mcp-tools-unofferable-names-skipped",
+            serverId: rowId,
+            names: skipped,
+          }),
+        );
+      }
+
+      /*
+       * 一份什么都没剩下的清单，就是换了条路来的空答案，照空答案那样保留已有的（见上面对空清单的把关）。
+       * 用什么都没有去替换，正是那道把关要防的删除，只不过这次是经由一个把每个动作都改了名的厂商来的。
+       */
+      if (storable.length === 0 && skippedSentence !== null) {
+        const held = await write(() =>
+          database
+            .select({ name: mcpTools.name })
+            .from(mcpTools)
+            .where(eq(mcpTools.serverId, rowId)),
+        );
+        if (held.length > 0) {
+          await write(async () =>
+            database
+              .update(mcpServers)
+              .set({
+                lastError:
+                  `没有列出别的动作，所以这个应用已经记下的 ${held.length} 个动作保留着，没有删除。${skippedSentence}`.slice(
+                    0,
+                    400,
+                  ),
+                skippedTools: skipped,
+                updatedAt: new Date(),
+              })
+              .where(eq(mcpServers.id, rowId)),
+          );
+          return { tools: held.length };
+        }
       }
 
       /*
@@ -6099,7 +6187,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           .update(mcpServers)
           .set({
             toolsRefreshedAt: new Date(),
+            // 清空：清单存下了。它略过的名字是提醒，见上面。
             lastError: null,
+            skippedTools: skipped.length > 0 ? skipped : null,
             // 按这一版的清单读法存下的；见 `relistOutdatedBrokeredApps`。
             listingRevision: LISTING_REVISION,
             updatedAt: new Date(),
@@ -6483,10 +6573,9 @@ export function createPluginStore(options: PluginStoreOptions) {
             appOf(row.url) !== null &&
             brokeredApps.get(row.url)?.accountMode === "shared" &&
             Boolean(brokeredApps.get(row.url)?.sharedConnectedAt),
-          skippedTools: [],
+          skippedTools: row.skippedTools ?? [],
           ownerGrants: ownerGrants.get(row.id)?.ownerGrants ?? "admin",
-          ownerGrantsChosen:
-            ownerGrants.get(row.id)?.chosen === "any" ? "any" : null,
+          ownerGrantsChosen: ownerGrants.get(row.id)?.adminChose ?? null,
           ...(appOf(row.url) !== null
             ? {
                 sharedOnly: adminConnectOnly(
@@ -10154,7 +10243,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (app)
         await database
           .update(mcpServers)
-          .set({ ownerGrants: "admin", updatedAt: new Date() })
+          // 这个 `admin` 是切换写回的，不是谁选的：选过的记号一并清掉。
+          .set({
+            ownerGrants: "admin",
+            ownerGrantsChosenAt: null,
+            updatedAt: new Date(),
+          })
           .where(eq(mcpServers.url, app.url));
       if (app && app.ownerGrants !== "admin")
         await recordAuditEvent(auditStore, {
@@ -10205,7 +10299,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       if (!row) return null;
       const updated = await database
         .update(mcpServers)
-        .set({ ownerGrants: input.ownerGrants, updatedAt: new Date() })
+        // 管理员选了一个值就留下选过的记号；回到默认值时没有选择可记，清掉。
+        .set({
+          ownerGrants: input.ownerGrants,
+          ownerGrantsChosenAt: input.ownerGrants === null ? null : new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(mcpServers.url, row.url))
         .returning({ id: mcpServers.id });
       if (updated.length === 0)
