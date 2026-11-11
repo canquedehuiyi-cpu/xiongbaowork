@@ -201,6 +201,20 @@ export const mcpServers = pgTable(
      * NULL 用按账号的默认值，见 `plugins/app-access.ts` 的 `ownerGrantsOf`。只有管理员写。
      */
     ownerGrants: text("owner_grants").$type<"any" | "admin">(),
+    /**
+     * 管理员明确选 {@link ownerGrants} 的时刻（迁移 0198）；NULL 是没有管理员选过。只有管理员的 PUT 写它，
+     * 回到默认值时清空。升级回填的、切换账号模式写回的 `admin` 不写它，所以读的人分得出那个 `admin` 是不是
+     * 管理员选的。
+     */
+    ownerGrantsChosenAt: timestamp("owner_grants_chosen_at", {
+      withTimezone: true,
+    }),
+    /**
+     * 上一次存下清单时，因为名字不能交给模型而略过的动作，照厂商的拼法（迁移 0198，上游 0059）。是对一次
+     * 成功刷新的提醒，不是失败，所以不是 `lastError`：一个一直列出带点名字的服务器否则会在插件列表上永远
+     * 显示成坏的。NULL 和空数组都是没有。
+     */
+    skippedTools: text("skipped_tools").array(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
