@@ -213,15 +213,7 @@ export function ConnectorsTab({
         >
           管理员的插件页
         </Link>
-        里管理；你自己的账号在
-        <Link
-          className="text-foreground underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground"
-          search={{}}
-          to="/connections"
-        >
-          连接
-        </Link>
-        页上连接。
+        里管理；你自己的账号在本页上方的列表里连接。
       </p>
     </>
   );

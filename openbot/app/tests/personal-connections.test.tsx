@@ -16,7 +16,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { authKeys } from "@/lib/auth/queries";
 import { identityKeys } from "@/lib/identity/queries";
 import {
@@ -216,4 +216,29 @@ test("an app under Connected accounts is only your account", async () => {
   // Nothing turns the app itself on or off from here: that is an admin's.
   expect(view.queryByRole("switch")).toBeNull();
   expect(view.queryByText("已打开")).toBeNull();
+});
+
+test("连接页有「员工可用的连接器」一区，能按名字搜索", async () => {
+  servers = [server("notion"), server("google-drive")];
+  const { view } = draw();
+  const heading = await view.findByRole("heading", {
+    level: 2,
+    name: "员工可用的连接器",
+  });
+  const section = heading.closest("section");
+  if (!section) throw new Error("员工可用的连接器 不在自己的区里");
+  const connectors = within(section);
+  const list = within(
+    await connectors.findByRole("list", { name: "连接器列表" }),
+  );
+  expect(list.getByText("Notion")).toBeTruthy();
+  expect(list.getByText("Google Drive")).toBeTruthy();
+
+  fireEvent.change(connectors.getByRole("textbox", { name: "搜索连接器" }), {
+    target: { value: "drive" },
+  });
+  await connectors.findByText("Google Drive");
+  expect(list.queryByText("Notion")).toBeNull();
+  // 上面「你自己的账号」那一列不受这个搜索影响。
+  expect(view.getByTestId("account-notion")).toBeTruthy();
 });

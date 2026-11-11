@@ -20,6 +20,7 @@ import {
 } from "@/components/layout/page-shell";
 import { RowMark } from "@/components/layout/row-mark";
 import { AppInitial, PluginLogo } from "@/components/plugins/plugin-logo";
+import { ConnectorsTab } from "@/components/resources/capability-tabs";
 import { providerIcon } from "@/components/settings/linked-accounts";
 import {
   linkedNotice,
@@ -289,6 +290,7 @@ function RouteComponent() {
     });
   }, [outcome, authorized, linked, navigate]);
   const [search, setSearch] = React.useState("");
+  const [connectorQuery, setConnectorQuery] = React.useState("");
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());
 
@@ -564,6 +566,16 @@ function RouteComponent() {
           </p>
         ) : null}
       </PageSection>
+      {/*
+       * 员工可用的连接器（熊宝）：原来是「能力与资源」的一个页签，用户定了放在「连接」。上面是你自己的账号，这里是
+       * 部署里有哪些连接器、授予了几位员工——授予是管理员的事。个人版只有一个人、所有应用都在上面的列表里添加和连接，
+       * 所以只在团队版画这一区。搜索词只在本页里记着，不进地址：`?connected=` 这些回程参数读一次就清掉，混进去容易互相覆盖。
+       */}
+      {personal ? null : (
+        <PageSection title="员工可用的连接器">
+          <ConnectorsTab onQuery={setConnectorQuery} query={connectorQuery} />
+        </PageSection>
+      )}
       {/*
        * The rest of what a Bot signs in with. Saved logins and keys live under Settings; these rows
        * are a way in from beside the apps that use them, in the personal edition.
