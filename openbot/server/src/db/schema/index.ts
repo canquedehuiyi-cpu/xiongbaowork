@@ -5,6 +5,7 @@ export * from "./agent-security-settings";
 export * from "./app-access-requests";
 export * from "./approval-conversation-grants";
 export * from "./approvals";
+export * from "./brokered-accounts";
 export * from "./components";
 export * from "./computer";
 export * from "./core";
