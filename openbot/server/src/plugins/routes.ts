@@ -2666,8 +2666,12 @@ export function createPluginRoutes(
         by: context.var.actor.id,
         reason: "self",
       });
-      // X5：Arcade 按认证提供商存连接，同一提供商下厂商那边也结束了的兄弟应用一并结束本地行。
-      if (composio?.arcade && disconnected.vendorRevocationRequested) {
+      /*
+       * X5：Arcade 按认证提供商存连接，同一提供商下厂商那边也结束了的兄弟应用一并结束本地行。每一次断开
+       * 成功都做，厂商那边本来就没有连接（`vendorRevocationRequested` 为 false）时也做：上一次断开时对账
+       * 没做完（例如问不到认证提供商），再按断开就是补做的机会，不能因为这次没有可撤销的就跳过。
+       */
+      if (composio?.arcade) {
         const siblings = await clearEndedArcadeSiblings({
           store,
           arcade: composio.arcade,
