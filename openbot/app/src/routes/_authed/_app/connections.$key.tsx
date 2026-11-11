@@ -97,7 +97,7 @@ export function landedActionFrom(action: string | undefined): string | null {
 
 /** What the landing says about the action somebody has just come back from authorizing. */
 export function landedActionNotice(action: string): string {
-  return `You just authorized ${action}.`;
+  return `你刚刚授权了「${action}」。`;
 }
 
 /**
@@ -221,7 +221,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
      * A full page navigation, not a fetch. The consent screen is the vendor's own and has to be shown
      * to you in your own browser; there is deliberately nothing here that could complete it for you.
      */
-    onSuccess: (start) => {
+    onSuccess: (authorizationUrl) => {
       /*
        * A 200 with no url on it is not a url to follow. Every press that reaches here is on a
        * `user-oauth` catalogue entry, whose half of that route always mints one or refuses — so
@@ -229,16 +229,12 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
        * is the only honest thing left. Assigning it navigated to a page called `undefined` on this
        * deployment's own origin. See `connectAccountMutationOptions`.
        *
-       * `{ connected: true }` is a brokered app's answer and never this half's, so it is the same
-       * not-understood answer here.
+       * fork 的 `connectAccountMutationOptions` 只回授权链接或 null（fork 服务端不回上游的
+       * `{ connected: true }`），所以这里直接读链接。
        */
-      const authorizationUrl =
-        start !== null && "authorizationUrl" in start
-          ? start.authorizationUrl
-          : null;
       if (authorizationUrl === null) {
         setNotice(
-          "Couldn't start connecting, so nothing was connected. Try again, or ask an admin if it keeps happening.",
+          "部署的回应里没有授权链接，所以没法带你过去，也没有连接任何东西。请重试；如果一直这样，请告诉管理员。",
         );
         return;
       }
@@ -348,11 +344,11 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
    * whole of its state defaulted to "you have never connected this".
    */
   if (plugins.isPending || connections.isPending) {
-    return <PageShell title="Account">{null}</PageShell>;
+    return <PageShell title="账号">{null}</PageShell>;
   }
 
   const back = {
-    label: "Connections",
+    label: "连接",
     linkProps: { to: "/connections" as const },
   };
 
@@ -376,8 +372,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
     return (
       <PageShell backButton={back} title={server?.title ?? key}>
         <p className="mt-12 text-destructive text-sm" role="alert">
-          Couldn't load this connection. Reload the page, or ask an admin if it
-          keeps happening.
+          读不到这个连接，所以这里什么都不显示，免得显示错的。请刷新页面；如果一直这样，请告诉管理员。
         </p>
       </PageShell>
     );
@@ -392,8 +387,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
     return (
       <PageShell backButton={back} title={key}>
         <p className="mt-12 text-destructive text-sm" role="alert">
-          Couldn't load this app. Reload the page, or ask an admin if it keeps
-          happening.
+          读不到这个应用。请刷新页面；如果一直这样，请告诉管理员。
         </p>
       </PageShell>
     );
@@ -409,8 +403,8 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
   if (server?.provenance === "composio" && !plugins.data.composioConfigured) {
     return (
       <PageShell backButton={back} title={server.title}>
-        <PageEmpty icon={IconPlugOff} title="Not set up yet">
-          An admin has to turn on {server.title} before anyone can connect it.
+        <PageEmpty icon={IconPlugOff} title="还没有设置">
+          管理员要先打开 {server.title}，大家才能连接它。
         </PageEmpty>
       </PageShell>
     );
@@ -450,9 +444,9 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
           <PageRows className="mt-0">
             <Item size="sm">
               <ItemContent>
-                <ItemTitle>Team account</ItemTitle>
+                <ItemTitle>团队账号</ItemTitle>
                 <ItemDescription>
-                  Shared by your organisation. Bots act as the team account.
+                  由组织共用。员工以团队账号的身份行事。
                 </ItemDescription>
               </ItemContent>
             </Item>
@@ -491,12 +485,11 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
     return (
       <PageShell
         backButton={back}
-        description="You don't connect this app yourself."
+        description="这个应用不需要你自己连接。"
         title={server.title}
       >
-        <PageEmpty icon={IconUsers} title="Shared account only">
-          An admin connects {server.title} once as a shared account and gives it
-          to Bots.
+        <PageEmpty icon={IconUsers} title="只能作为团队账号">
+          管理员把 {server.title} 作为团队账号连接一次，再把它给员工。
         </PageEmpty>
       </PageShell>
     );
@@ -505,18 +498,18 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
   if (brokered && server) {
     /* Bound once because the row below is told it twice — once inside the whole disconnected
        sentence and once on its own — and two copies of it would drift. */
-    const reassurance = "No Bot can use this as you.";
+    const reassurance = "没有员工能以你的身份使用它。";
     /* Where the next step is. Connect asks for the whole app on every broker. Where the broker also
        approves one action at a time, the action list underneath is the other way in, and the
        sentence names both. */
     const trip = perActionGrants
-      ? `Connecting takes you to ${server.title} to approve access. You can also authorize only the actions you want below.`
-      : `Connecting takes you to ${server.title} to approve access.`;
+      ? `连接时会带你到 ${server.title} 那边授权。你也可以在下面只授权你想要的动作。`
+      : `连接时会带你到 ${server.title} 那边授权。`;
 
     return (
       <PageShell
         backButton={back}
-        description="Bots use this as you, and see only what you can see."
+        description="员工以你的身份使用它，只能看到你能看到的东西。"
         title={server.title}
       >
         {notice ? (
@@ -546,7 +539,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
               /* Said beside the button rather than after it: disconnecting ends the account at
                  Composio, so what it undoes is not the row here but the grant on your own mailbox,
                  and connecting again is a fresh consent. */
-              connectedDescription={`Bots you allow use your ${server.title} as you. Disconnecting removes their access everywhere.`}
+              connectedDescription={`你允许的员工会以你的身份使用你的 ${server.title}。断开会在所有地方收回它们的访问。`}
               disconnectedDescription={`${reassurance} ${trip}`}
               /* What is true either way. The trip to Composio is not — an app whose key somebody
                  types never leaves this page — but which Bots can read this person's mail is the
@@ -581,16 +574,16 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
     return (
       <PageShell
         backButton={back}
-        description="You don't connect this app yourself."
+        description="这个应用不需要你自己连接。"
         title={entry?.title ?? key}
       >
         <PageEmpty
           icon={entry ? IconUsers : IconAppsOff}
-          title={entry ? "Shared account" : "App not found"}
+          title={entry ? "团队账号" : "找不到这个应用"}
         >
           {entry
-            ? "Bots use one shared account for this app, the same for everybody."
-            : "OpenBot has no app by that name."}
+            ? "员工用这个应用的一个团队账号，所有人都一样。"
+            : "熊宝没有叫这个名字的应用。"}
         </PageEmpty>
       </PageShell>
     );
@@ -615,13 +608,13 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
             <ItemContent>
               {/* Not "Connect your account": the row is also the connected state, and a title has to
                   read for both. */}
-              <ItemTitle>Your account</ItemTitle>
+              <ItemTitle>你的账号</ItemTitle>
               <ItemDescription>
                 {!enabled
-                  ? "Not available yet. An admin has to turn this on first."
+                  ? "暂时还不能用。管理员要先打开它。"
                   : connection
-                    ? "Bots you allow use this as you, and see only what you can see."
-                    : `No Bot can use this as you. Connecting takes you to ${entry.vendor} to approve access.`}
+                    ? "你允许的员工会以你的身份使用它，只能看到你能看到的东西。"
+                    : `没有员工能以你的身份使用它。连接时会带你到 ${entry.vendor} 那边授权。`}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -640,7 +633,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
                           aria-hidden="true"
                           className="size-1.5 rounded-full bg-emerald-500"
                         />
-                        Connected
+                        已连接
                         <IconChevronDown />
                       </Button>
                     }
@@ -663,13 +656,13 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
                          * had not, which is the one outcome worse than not offering it.
                          */
                         setNotice(
-                          `You can't disconnect here yet. To stop access now, remove OpenBot in your ${entry.vendor} account's third-party access settings.`,
+                          `断开功能还没有做好。在那之前，请到你的 ${entry.vendor} 账号的第三方访问设置里撤销熊宝的授权——这样会立刻停止访问。`,
                         )
                       }
                       className="whitespace-nowrap"
                       variant="destructive"
                     >
-                      Disconnect your {entry.title} account
+                      断开你的 {entry.title} 账号
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -690,7 +683,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
                     type="button"
                     variant="outline"
                   >
-                    Connect
+                    连接
                     <IconArrowUpRight />
                   </Button>
                 </>
@@ -702,26 +695,26 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
 
       {connection ? (
         <PageSection
-          description={`Review the permissions recorded by ${entry.vendor}. They may include fewer permissions than OpenBot requested.`}
-          title="Access"
+          description={`以 ${entry.vendor} 记录的权限为准。它们可能比熊宝申请的少。`}
+          title="访问权限"
         >
           <PageRows>
             <Item size="sm">
               <ItemContent>
-                <ItemTitle>Allowed</ItemTitle>
+                <ItemTitle>已授予</ItemTitle>
                 <ItemDescription className="line-clamp-none">
-                  {connection.scope || `${entry.vendor} didn't say.`}
+                  {connection.scope || `${entry.vendor} 没有列出任何权限范围。`}
                 </ItemDescription>
               </ItemContent>
             </Item>
             <Separator />
             <Item size="sm">
               <ItemContent>
-                <ItemTitle>Connected</ItemTitle>
+                <ItemTitle>已连接</ItemTitle>
               </ItemContent>
               <ItemActions>
                 <span className="text-muted-foreground text-xs">
-                  {new Date(connection.connectedAt).toLocaleString()}
+                  {new Date(connection.connectedAt).toLocaleString("zh-CN")}
                 </span>
               </ItemActions>
             </Item>

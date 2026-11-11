@@ -27,6 +27,11 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useManagePaths } from "@/lib/manage-paths";
 import {
+  type DirectoryAppState,
+  directoryAppState,
+  directoryConnect,
+} from "@/lib/plugins/directory-state";
+import {
   consentBreadth,
   coverageWarning,
   keyNeededLine,
@@ -42,11 +47,6 @@ import {
   type PluginsProvider,
   providerVocabulary,
 } from "@/lib/plugins/provider-vocabulary";
-import {
-  type DirectoryAppState,
-  directoryAppState,
-  directoryConnect,
-} from "@/lib/plugins/directory-state";
 import {
   type ComposioApp,
   composioAppsQueryOptions,
@@ -260,7 +260,7 @@ export function BrokerDirectory({ provider }: { provider: PluginsProvider }) {
     >
       <PageSection
         description={directoryDescriptions(paths.edition).search}
-        title="Apps"
+        title="应用"
       >
         {enableError || tabError ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
@@ -269,10 +269,10 @@ export function BrokerDirectory({ provider }: { provider: PluginsProvider }) {
         ) : null}
 
         <Input
-          aria-label="Search apps"
+          aria-label="搜索应用"
           className="mt-4"
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by app name"
+          placeholder="按应用名搜索"
           value={search}
         />
 
@@ -282,7 +282,7 @@ export function BrokerDirectory({ provider }: { provider: PluginsProvider }) {
          * nothing on it. They assert nothing, so no sentence claims anything mid-fetch.
          */}
         {apps.isPending ? (
-          <div aria-busy="true" aria-label="Loading apps" role="status">
+          <div aria-busy="true" aria-label="正在加载应用" role="status">
             <PageRows>
               {LOADING_ROWS.map((key, index) => (
                 <React.Fragment key={key}>
@@ -313,19 +313,19 @@ export function BrokerDirectory({ provider }: { provider: PluginsProvider }) {
         ) : listed.length === 0 ? (
           <PageEmpty
             icon={query ? IconSearch : IconPlug}
-            title={query ? "No matches" : "No apps"}
+            title={query ? "没有匹配的应用" : "没有应用"}
           >
             {query
-              ? `No app matches "${query}".`
-              : "No apps to show yet. Reload the page to try again."}
+              ? `没有匹配“${query}”的应用。`
+              : "还没有可以显示的应用。请刷新页面再试一次。"}
           </PageEmpty>
         ) : (
           <>
             {/* How many there are, before the list: with no search, this is the whole directory. */}
             <p className="mt-4 text-muted-foreground text-xs">
               {query
-                ? `${listed.length.toLocaleString()} ${listed.length === 1 ? "match" : "matches"}`
-                : `${listed.length.toLocaleString()} apps. Search by name to narrow them.`}
+                ? `${listed.length.toLocaleString("zh-CN")} 个匹配`
+                : `共 ${listed.length.toLocaleString("zh-CN")} 个应用。按名字搜索可以缩小范围。`}
             </p>
             <PageRows className="mt-2">
               {listed.map((entry, index) => {
@@ -363,7 +363,7 @@ export function BrokerDirectory({ provider }: { provider: PluginsProvider }) {
                         {/* The size of the decision, stated before it is made: an app is not one
                           tool, and "167 actions" is what says so. */}
                         <span className="text-muted-foreground text-xs">
-                          {entry.actionCount} actions
+                          {entry.actionCount} 个动作
                         </span>
                         {/*
                          * An app this deployment already has says where it stands rather than
@@ -378,7 +378,7 @@ export function BrokerDirectory({ provider }: { provider: PluginsProvider }) {
                             size="sm"
                             variant="outline"
                           >
-                            {isAdding ? "Adding…" : "Add"}
+                            {isAdding ? "正在添加…" : "添加"}
                           </Button>
                         ) : (
                           <DirectoryRowState
@@ -488,7 +488,7 @@ function DirectoryRowState({
 }) {
   if (state.kind === "loading") return null;
   if (state.kind === "added")
-    return <span className="text-muted-foreground text-xs">Added</span>;
+    return <span className="text-muted-foreground text-xs">已添加</span>;
   if (state.kind === "connected")
     return (
       <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -497,7 +497,7 @@ function DirectoryRowState({
           aria-hidden="true"
           className="size-1.5 rounded-full bg-emerald-500"
         />
-        Connected
+        已连接
       </span>
     );
   return (
@@ -506,30 +506,26 @@ function DirectoryRowState({
         className="text-muted-foreground text-xs"
         data-testid="directory-not-connected"
       >
-        {personal ? "Not connected" : "Added, not connected"}
+        {personal ? "未连接" : "已添加，未连接"}
       </span>
       {connectLink ? (
         <Button
           render={<Link {...connectLink} />}
-          aria-label={`Connect ${name}`}
+          aria-label={`连接 ${name}`}
           size="sm"
           variant="outline"
         >
-          Connect
+          连接
         </Button>
       ) : (
         <Button
-          aria-label={opening || waiting ? undefined : `Connect ${name}`}
+          aria-label={opening || waiting ? undefined : `连接 ${name}`}
           disabled={opening}
           onClick={onConnect}
           size="sm"
           variant="outline"
         >
-          {waiting
-            ? `Waiting for ${name}…`
-            : opening
-              ? "Opening sign-in…"
-              : "Connect"}
+          {waiting ? `正在等 ${name}…` : opening ? "正在打开登录页…" : "连接"}
         </Button>
       )}
     </>
@@ -541,22 +537,22 @@ function SignInNote({ name, tab }: { name: string; tab: ConnectInNewTab }) {
   if (tab.blockedUrl)
     return (
       <p className="text-xs" role="status">
-        This browser blocked the tab.{" "}
+        这个浏览器拦下了新标签页。
         <a
           className="underline underline-offset-2"
           href={tab.blockedUrl}
           rel="noreferrer"
           target="_blank"
         >
-          Open {name}'s sign-in
+          打开 {name} 的登录页
         </a>
-        .
+        。
       </p>
     );
   if (tab.waiting)
     return (
       <p className="text-muted-foreground text-xs" role="status">
-        Finish signing in to {name} in the tab that opened.
+        请在刚打开的标签页里完成 {name} 的登录。
       </p>
     );
   return null;

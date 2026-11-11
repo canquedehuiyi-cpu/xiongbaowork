@@ -9,13 +9,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { useState } from "react";
+import { ASK_FIRST_TITLE } from "@/components/approvals/ask-first-copy";
 import {
   PageEmpty,
   PageRows,
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
-import { ASK_FIRST_TITLE } from "@/components/approvals/ask-first-copy";
 import { AccessRequestsSection } from "@/components/plugins/access-requests";
 import { AccountModeDialog } from "@/components/plugins/account-mode-dialog";
 import {
@@ -77,12 +77,12 @@ import {
   pluginsPageQueryOptions,
   pluginsProvider,
 } from "@/lib/plugins/queries";
-import { toolsListError } from "@/lib/plugins/tools-error";
 import {
   botSharedAppsQueryOptions,
   describeApproval,
 } from "@/lib/plugins/shared-use";
 import { toolInWords, toolName } from "@/lib/plugins/tool-words";
+import { toolsListError } from "@/lib/plugins/tools-error";
 
 /**
  * One vendor: what it needs from this deployment, and which Bots hold its tools.
@@ -116,9 +116,9 @@ function toggled(
  * score, and the two answers worth recognising without reading are none of it and all of it.
  */
 function heldSummary(held: number, total: number): string {
-  if (held === 0) return "No tools";
-  if (held === total) return total === 1 ? "1 tool" : "Every tool";
-  return `${held} of ${total} tools`;
+  if (held === 0) return "没有工具";
+  if (held === total) return total === 1 ? "1 个工具" : "全部工具";
+  return `${held} / ${total} 个工具`;
 }
 
 /**
@@ -142,7 +142,7 @@ function BotApprovalText({
   if (!app) return null;
   return (
     <span className="text-muted-foreground text-xs">
-      {app.approval ? describeApproval(app.approval) : "Not approved"}
+      {app.approval ? describeApproval(app.approval) : "未批准"}
     </span>
   );
 }
@@ -232,10 +232,10 @@ function ConnectionStateUnreadable() {
   return (
     <Item size="sm">
       <ItemContent>
-        <ItemTitle>Your account</ItemTitle>
+        <ItemTitle>你的账号</ItemTitle>
         <ItemDescription role="alert">
-          Couldn't load whether you've connected an account here. Reload the
-          page, or check {paths.deploymentName}'s logs if it keeps happening.
+          读不到你是否在这里连接过账号，所以这里什么都不显示，免得显示错的。请刷新页面；如果一直这样，请查看
+          {paths.deploymentName}的日志。
         </ItemDescription>
       </ItemContent>
     </Item>
@@ -382,23 +382,19 @@ export function PluginPage({
      * shown to this person in their own browser; there is deliberately nothing here that could
      * complete it for them, and nothing about being an administrator changes that.
      */
-    onSuccess: (start) => {
+    onSuccess: (authorizationUrl) => {
       /*
        * A 200 with no url on it is not a url to follow. This press is on a `user-oauth` catalogue
        * entry, whose half of that route always mints one or refuses, so this is the server having
        * answered something this page does not understand. Assigning it navigated to a page called
        * `undefined` on this deployment's own origin. See `connectAccountMutationOptions`.
        *
-       * `{ connected: true }` is a brokered app's answer and never this half's, so it is the same
-       * not-understood answer here.
+       * fork 的 `connectAccountMutationOptions` 只回授权链接或 null（fork 服务端不回上游的
+       * `{ connected: true }`），所以这里直接读链接。
        */
-      const authorizationUrl =
-        start !== null && "authorizationUrl" in start
-          ? start.authorizationUrl
-          : null;
       if (authorizationUrl === null) {
         setError(
-          "OpenBot got no consent link back, so nothing was connected. Try again, or check this connector's setup if it keeps happening.",
+          "部署的回应里没有授权链接，所以没法带你过去，也没有连接任何东西。请重试；如果一直这样，请检查这个连接器的配置。",
         );
         return;
       }
@@ -444,7 +440,7 @@ export function PluginPage({
      disconnected sentence and once on its own — and two copies of it would drift. */
   /* It names this app's own account. It said "your documents" on every app, Gmail included,
      because it was written for Google Drive. */
-  const reassurance = `Setup is complete without it, and it reaches only your own ${title} account.`;
+  const reassurance = `不连也算配置完成；连上后只会碰到你自己的 ${title} 账号。`;
 
   /*
    * A SHARED APP'S ROW IS THE TEAM ACCOUNT, NOT THIS ADMINISTRATOR'S.
@@ -593,7 +589,7 @@ export function PluginPage({
    * connected this". The personal screen had the identical gap; see its own note.
    */
   if (plugins.isPending || connections.isPending) {
-    return <PageShell title="Plugin">{null}</PageShell>;
+    return <PageShell title="插件">{null}</PageShell>;
   }
   /*
    * Gated on the plugin list having ARRIVED, the guard the per-Bot grant screen already keeps
@@ -611,8 +607,8 @@ export function PluginPage({
       >
         <p className="mt-12 text-destructive text-sm" role="alert">
           {personal
-            ? "Couldn't load your apps. Reload the page."
-            : "Couldn't load plugins. Reload the page."}
+            ? "读不到你的应用。请刷新页面。"
+            : "读不到插件。请刷新页面。"}
         </p>
       </PageShell>
     );
@@ -623,16 +619,16 @@ export function PluginPage({
         backButton={{ label: paths.pluginsLabel, linkProps: paths.plugins() }}
         description={
           personal
-            ? "There is no app with that name."
-            : "There is no plugin with that name, here or in the catalogue."
+            ? "没有叫这个名字的应用。"
+            : "这个部署没有叫这个名字的插件，目录里也没有。"
         }
-        title={personal ? "Not an app" : "Not a plugin"}
+        title={personal ? "不是应用" : "不是插件"}
       >
         <PageEmpty
           icon={IconPuzzle}
-          title={personal ? "App not found" : "Plugin not found"}
+          title={personal ? "找不到这个应用" : "找不到这个插件"}
         >
-          Nothing to configure.
+          没有可配置的。
         </PageEmpty>
       </PageShell>
     );
@@ -680,53 +676,48 @@ export function PluginPage({
           {alwaysOn ? (
             <Item size="sm">
               <ItemContent>
-                <ItemTitle>Always on</ItemTitle>
+                <ItemTitle>一直开着</ItemTitle>
                 <ItemDescription>
-                  Every Bot can use it to schedule its own work.
+                  每位员工都能用它来安排自己的工作。
                 </ItemDescription>
               </ItemContent>
             </Item>
           ) : personal && !server ? (
             <Item size="sm">
               <ItemContent>
-                <ItemTitle>Add {title}</ItemTitle>
+                <ItemTitle>添加 {title}</ItemTitle>
                 <ItemDescription>
-                  Connect it to give your Bots its tools. Bots can read with it
-                  right away, and ask you before they change anything.
+                  连接它，你的员工就能用它的工具。员工可以马上用它读取，改动任何东西之前会先问你。
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
                 <Button
-                  aria-label={`Connect ${title}`}
+                  aria-label={`连接 ${title}`}
                   disabled={addCurated.isPending || connectSelf.isPending}
                   onClick={() => void connectNew()}
                   size="sm"
                   type="button"
                 >
-                  Connect
+                  连接
                 </Button>
               </ItemActions>
             </Item>
           ) : (
             <Item size="sm">
               <ItemContent>
-                <ItemTitle>
-                  {personal ? "Turned on" : "Enable for this deployment"}
-                </ItemTitle>
+                <ItemTitle>{personal ? "已打开" : "为这个部署启用"}</ItemTitle>
                 <ItemDescription>
                   {personal
-                    ? "Your Bots can use its tools. Turning this off removes it and every Bot's access to its tools."
+                    ? "你的员工能用它的工具。关掉会移除它，以及每位员工对它工具的访问。"
                     : server
-                      ? "Bots can be given its tools. Turning this off removes it and every Bot's access to its tools."
-                      : "No Bot can reach this vendor. Turn it on to set it up and give Bots its tools."}
+                      ? "可以把它的工具授予员工。关掉会移除它，以及它所有工具上的授权。"
+                      : "没有员工能连到这个服务商。打开后才能配置它并授予它的工具。"}
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
                 <Switch
                   aria-label={
-                    personal
-                      ? `Turn ${title} on or off`
-                      : `Enable ${title} for this deployment`
+                    personal ? `打开或关掉 ${title}` : `为这个部署启用 ${title}`
                   }
                   checked={server !== undefined}
                   onCheckedChange={(next) => {
@@ -753,15 +744,15 @@ export function PluginPage({
               <Separator />
               <Item size="sm">
                 <ItemContent>
-                  <ItemTitle>Whose account</ItemTitle>
+                  <ItemTitle>用谁的账号</ItemTitle>
                   <ItemDescription>
                     {server.accountMode === "shared"
                       ? server.sharedOnly
-                        ? "One shared account for everyone. It signs in with this deployment's own client, so it can't be made personal."
-                        : "One shared account for everyone."
+                        ? "所有人共用一个团队账号。它用这个部署自己的应用凭据登录，所以不能改成个人账号。"
+                        : "所有人共用一个团队账号。"
                       : server.sharedOnly
-                        ? "It signs in with this deployment's own client, so only a shared account can connect it."
-                        : "Each person connects their own."}
+                        ? "它用这个部署自己的应用凭据登录，所以只能作为团队账号连接。"
+                        : "每个人连接自己的账号。"}
                   </ItemDescription>
                 </ItemContent>
                 {/*
@@ -784,8 +775,8 @@ export function PluginPage({
                       variant="outline"
                     >
                       {server.accountMode === "shared"
-                        ? "Make personal"
-                        : "Make shared"}
+                        ? "改成个人账号"
+                        : "改成团队账号"}
                     </Button>
                   </ItemActions>
                 )}
@@ -806,18 +797,18 @@ export function PluginPage({
               <Separator />
               <Item size="sm">
                 <ItemContent>
-                  <ItemTitle>Bot owners can give it to their Bots</ItemTitle>
+                  <ItemTitle>员工的主人可以把它给自己的员工</ItemTitle>
                   <ItemDescription>
                     {server.ownerGrants !== "any"
-                      ? "Only an admin can give it to a Bot."
+                      ? "只有管理员能把它给员工。"
                       : shared
-                        ? "Bot owners who give it to their Bots let those Bots use the team account."
-                        : "People can let Bots they own use it, on the account of whoever is asking."}
+                        ? "主人把它给自己的员工后，这些员工就会用团队账号。"
+                        : "每个人可以让自己的员工用它，用的是提问者本人的账号。"}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <Switch
-                    aria-label={`Let Bot owners give ${title} to their Bots`}
+                    aria-label={`让员工的主人可以把 ${title} 给自己的员工`}
                     checked={server.ownerGrants === "any"}
                     disabled={ownerGrants.isPending}
                     onCheckedChange={(next) => {
@@ -857,20 +848,20 @@ export function PluginPage({
             /* The personal edition has one person, so each sentence speaks to them and names nobody else. */
             auth === "user-oauth"
               ? personal
-                ? `Connect your ${title} account through OpenBot. OpenBot registers an OAuth client, and your Bots see only what you can see.`
-                : "This vendor answers as whoever is asking. The deployment registers an OAuth client, and each person connects their own account. A Bot only sees what that person can see."
+                ? `通过熊宝连接你的 ${title} 账号。熊宝登记一个 OAuth 客户端，你的员工只看得到你能看到的东西。`
+                : "这个服务商按提问者的身份回应。部署登记一个 OAuth 客户端，每个人连接自己的账号，所以员工只能看到那个人能看到的东西。"
               : auth === "builtin"
-                ? `Built into ${paths.deploymentName}. There is no vendor to reach and no credential to keep. ${personal ? "A call runs as you." : "A call runs as whoever asked."}`
+                ? `内置在${paths.deploymentName}里。没有要连的服务商，也没有要保管的凭据——${personal ? "调用以你的身份运行。" : "调用以提问者的身份运行。"}`
                 : auth === "brokered"
                   ? /* The row below says how, at length. This says whose account it is, which is the part that decides what an admin has to do here — which is nothing. */
                     brokeredConnectionDescription(provider, brokeredApp)
                   : auth === "person-entra"
-                    ? "This server answers as whoever is asking. Each call carries a token Microsoft Entra issues for that person, so a Bot only sees what they can see."
+                    ? "这个服务器按提问者的身份回应。每次调用都带着 Microsoft Entra 为这个人签发的令牌，所以员工只能看到这个人能看到的东西。"
                     : personal
-                      ? `What OpenBot sends to ${title}. Your Bots all use it.`
-                      : `What ${paths.deploymentName} sends to the vendor. One credential for everybody.`
+                      ? `熊宝向 ${title} 出示的凭据。你的员工都用它。`
+                      : `${paths.deploymentName}向服务商出示的凭据。一份凭据，所有人共用。`
           }
-          title="Connection"
+          title="连接"
         >
           {/*
            * Rows that DO something, and nothing else — with two admitted exceptions. The layout
@@ -903,16 +894,14 @@ export function PluginPage({
                */
               <Item size="sm">
                 <ItemContent>
-                  <ItemTitle>Connection</ItemTitle>
+                  <ItemTitle>连接</ItemTitle>
                   <ItemDescription>
-                    Nothing to set up. These tools run inside{" "}
-                    {paths.deploymentName}, on its own data.
+                    没有可配置的。这些工具在{paths.deploymentName}
+                    内部运行，使用它已有的数据。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
-                  <span className="text-muted-foreground text-xs">
-                    Built in
-                  </span>
+                  <span className="text-muted-foreground text-xs">内置</span>
                 </ItemActions>
               </Item>
             ) : null}
@@ -925,7 +914,7 @@ export function PluginPage({
                */
               <Item size="sm">
                 <ItemContent>
-                  <ItemTitle>How this is reached</ItemTitle>
+                  <ItemTitle>如何连接</ItemTitle>
                   <ItemDescription>
                     {
                       brokeredReach(
@@ -953,10 +942,10 @@ export function PluginPage({
                */
               <Item size="sm">
                 <ItemContent>
-                  <ItemTitle>How this is reached</ItemTitle>
+                  <ItemTitle>如何连接</ItemTitle>
                   <ItemDescription>
-                    As the person asking, through their Microsoft sign-in. There
-                    is no token to paste.
+                    以提问者本人的身份，通过他的 Microsoft
+                    登录访问。不需要粘贴令牌。
                   </ItemDescription>
                   <code className="mt-1 block break-all font-mono text-muted-foreground text-xs">
                     {server?.entraScope}
@@ -978,14 +967,14 @@ export function PluginPage({
                 size="sm"
               >
                 <ItemContent>
-                  <ItemTitle>Access token</ItemTitle>
+                  <ItemTitle>访问令牌</ItemTitle>
                   <ItemDescription>
-                    Sent with every call to this vendor.
+                    每次调用这个服务商时都会发送。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <span className="text-muted-foreground text-xs">
-                    {server?.hasCredential ? "Saved" : "Not set"}
+                    {server?.hasCredential ? "已保存" : "未设置"}
                   </span>
                   <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
                 </ItemActions>
@@ -1002,13 +991,13 @@ export function PluginPage({
                 <ItemContent>
                   <ItemTitle>OAuth client</ItemTitle>
                   <ItemDescription>
-                    {atStart(paths.deploymentName)} registers itself with the
-                    vendor on first connect. There is nothing to paste.
+                    首次连接时{atStart(paths.deploymentName)}
+                    会自动向服务商登记，不需要粘贴任何东西。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <span className="text-muted-foreground text-xs">
-                    Self-registered
+                    自动登记
                   </span>
                 </ItemActions>
               </Item>
@@ -1024,13 +1013,13 @@ export function PluginPage({
                 <ItemContent>
                   <ItemTitle>OAuth client</ItemTitle>
                   <ItemDescription>
-                    Identifies {paths.deploymentName} to the vendor. On its own,
-                    it can't reach anyone's documents.
+                    向服务商标识{paths.deploymentName}
+                    。它本身碰不到任何人的文档。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <span className="text-muted-foreground text-xs">
-                    {server?.hasCredential ? "Registered" : "Not registered"}
+                    {server?.hasCredential ? "已登记" : "未登记"}
                   </span>
                   <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
                 </ItemActions>
@@ -1079,9 +1068,9 @@ export function PluginPage({
                    */
                   <Item size="sm">
                     <ItemContent>
-                      <ItemTitle>Team account</ItemTitle>
+                      <ItemTitle>团队账号</ItemTitle>
                       <ItemDescription>
-                        {`${title} connects only as one shared account. Make it shared above, then connect the team account here and give it to Bots.`}
+                        {`${title} 只能作为一个团队账号连接。先在上面改成团队账号，再在这里连接团队账号并把它给员工。`}
                       </ItemDescription>
                     </ItemContent>
                   </Item>
@@ -1089,10 +1078,10 @@ export function PluginPage({
                   <BrokeredAccountRow
                     account={brokeredAccount}
                     edition={paths.edition}
-                    connectedDescription={`Connected${sharedConnection?.displayName ? ` as ${sharedConnection.displayName}` : ""}${sharedConnection?.connectedBy ? ` by ${sharedConnection.connectedBy}` : ""}. Every Bot with these tools acts as this account.`}
-                    disconnectedDescription="No team account is connected. Bots with these tools are refused."
-                    heading="Team account"
-                    notice="Sign in as the team account, not your own."
+                    connectedDescription={`已连接${sharedConnection?.displayName ? `，账号是 ${sharedConnection.displayName}` : ""}${sharedConnection?.connectedBy ? `，由 ${sharedConnection.connectedBy} 连接` : ""}。拿到这些工具的每位员工都以这个账号行事。`}
+                    disconnectedDescription="还没有连接团队账号。拿到这些工具的员工调用时会被拒绝。"
+                    heading="团队账号"
+                    notice="请用团队账号登录，不要用你自己的账号。"
                     provider={provider}
                     title={title}
                   />
@@ -1106,15 +1095,15 @@ export function PluginPage({
                        every tool in the personal edition, as the OAuth row below says. */
                     connectedDescription={
                       personal
-                        ? `Connected. Your Bots use your ${title} as you. ${brokeredDisconnectNote(provider)}`
-                        : `Connected. A Bot with these tools uses your ${title} as you. ${brokeredDisconnectNote(provider)}`
+                        ? `已连接。你的员工以你的身份使用你的 ${title}。${brokeredDisconnectNote(provider)}`
+                        : `已连接。被授予这些工具的员工会以你的身份使用你的 ${title}。${brokeredDisconnectNote(provider)}`
                     }
                     /* One person: connecting is what lets their Bots use it, as the OAuth row
                        below says, and there is no setup it could be beside. */
                     disconnectedDescription={
                       personal
-                        ? `Connect your ${title} account so your Bots can use it.`
-                        : `Connect your own account to try this connector. ${reassurance}`
+                        ? `连接你的 ${title} 账号，你的员工就能用它。`
+                        : `连接你自己的账号来试用这个连接器。${reassurance}`
                     }
                     /* The half of the line above that is true whichever way this app connects.
                        An app whose key somebody types gets a different first sentence from the
@@ -1139,15 +1128,15 @@ export function PluginPage({
                 ) : (
                   <Item size="sm">
                     <ItemContent>
-                      <ItemTitle>Your account</ItemTitle>
+                      <ItemTitle>你的账号</ItemTitle>
                       <ItemDescription>
                         {personal
                           ? youConnected
-                            ? `Connected. Your Bots use your ${title} as you.`
-                            : `Connect your ${title} account so your Bots can use it.`
+                            ? `已连接。你的员工以你的身份使用你的 ${title}。`
+                            : `连接你的 ${title} 账号，你的员工就能用它。`
                           : youConnected
-                            ? `Connected. A Bot with these tools uses your ${title} as you. Everybody else connects their own.`
-                            : `Connect your own account to try this connector. ${reassurance}`}
+                            ? `已连接。被授予这些工具的员工会以你的身份使用你的 ${title}。其他人各自连接自己的账号。`
+                            : `连接你自己的账号来试用这个连接器。${reassurance}`}
                       </ItemDescription>
                     </ItemContent>
                     <ItemActions>
@@ -1159,7 +1148,7 @@ export function PluginPage({
                             className="size-1.5 rounded-full bg-emerald-500"
                           />
                           <span className="text-muted-foreground text-xs">
-                            Connected
+                            已连接
                           </span>
                         </>
                       ) : (
@@ -1176,7 +1165,7 @@ export function PluginPage({
                             type="button"
                             variant="outline"
                           >
-                            Connect
+                            连接
                             <IconArrowUpRight />
                           </Button>
                         </>
@@ -1200,15 +1189,14 @@ export function PluginPage({
                   size="sm"
                 >
                   <ItemContent>
-                    <ItemTitle>Instance host</ItemTitle>
+                    <ItemTitle>实例地址</ItemTitle>
                     <ItemDescription>
-                      This vendor gives every customer their own hostname. It is
-                      checked against the vendor's pattern before it is saved.
+                      这个服务商给每个客户单独的主机名，保存前会按它的格式校验。
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <span className="text-muted-foreground text-xs">
-                      {server?.url ?? "Not set"}
+                      {server?.url ?? "未设置"}
                     </span>
                     <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
                   </ItemActions>
@@ -1227,14 +1215,12 @@ export function PluginPage({
                 >
                   <ItemContent>
                     <ItemTitle>
-                      {auth === "builtin"
-                        ? "Documentation"
-                        : "Vendor documentation"}
+                      {auth === "builtin" ? "文档" : "服务商文档"}
                     </ItemTitle>
                     <ItemDescription>
                       {auth === "builtin"
-                        ? "What these tools offer, from the people who maintain them."
-                        : "What this server offers, from the people who maintain it."}
+                        ? "这些工具能做什么，来自维护者的说明。"
+                        : "这个服务器能做什么，来自维护者的说明。"}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -1249,21 +1235,19 @@ export function PluginPage({
             <div className="mt-3 p-3">
               {server?.dynamicClient ? (
                 <p className="text-muted-foreground text-sm">
-                  {personal ? "OpenBot" : "The deployment"} registers its
-                  redirect URI itself. There is nothing to add at the vendor.
+                  {personal ? "熊宝" : "部署"}
+                  会自己登记回调地址，所以不需要在服务商那边添加什么。
                 </p>
               ) : (
                 <p className="text-muted-foreground text-sm">
-                  Add this to the client's authorised redirect URIs at the
-                  vendor, exactly as written. One wrong character fails there,
-                  with an error that doesn't mention OpenBot.
+                  把这个地址原样加到服务商那边客户端的授权回调地址里。错一个字符都会失败，而且那边的报错不会提到熊宝。
                 </p>
               )}
               {!plugins.data?.redirectUri ? (
                 <p className="mt-3 text-destructive text-sm" role="alert">
-                  {atStart(paths.deploymentName)} has no public URL, so{" "}
-                  {personal ? "you can't" : "nobody can"} finish connecting. Set
-                  OPENBOT_PUBLIC_URL.
+                  {atStart(paths.deploymentName)}没有公网地址，所以
+                  {personal ? "你" : "谁都"}完成不了连接。请设置
+                  OPENBOT_PUBLIC_URL。
                 </p>
               ) : server?.dynamicClient ? null : (
                 /* Selectable and monospaced: it is copied by hand into somebody else's console. */
@@ -1292,7 +1276,7 @@ export function PluginPage({
                 type="button"
                 variant="ghost"
               >
-                Refresh tools
+                刷新工具
               </Button>
               {/*
                * Outline where refresh is ghost: granting is the thing an administrator came to
@@ -1311,7 +1295,7 @@ export function PluginPage({
                   type="button"
                   variant="outline"
                 >
-                  Grant tools…
+                  授予工具…
                 </Button>
               ) : null}
             </div>
@@ -1319,19 +1303,19 @@ export function PluginPage({
           description={
             personal
               ? // The setting by the name Settings > Approvals gives it, so a person can find it there.
-                `Every Bot can use these. While ${ASK_FIRST_TITLE} is on, a Bot asks you before it uses one that makes changes.`
-              : "A Bot only sees the tools it has been given. Each call is checked when it happens, so removing access applies from the next call."
+                `每位员工都能用这些。「${ASK_FIRST_TITLE}」打开时，员工用会改动东西的工具之前会先问你。`
+              : "员工只有拿到某个工具才会知道它的存在。每次调用发生时都会重新判定，所以撤销授权会从下一次调用开始生效。"
           }
-          title="Tools"
+          title="工具"
         >
           <SkippedToolsNotice
             names={server.skippedTools ?? []}
             serverId={personal ? key : undefined}
           />
           {server.tools.length === 0 ? (
-            <PageEmpty icon={IconTool} title="No tools listed">
+            <PageEmpty icon={IconTool} title="没有列出工具">
               {toolsListError(server.lastError, { title, personal }) ??
-                "Refresh tools to check again."}
+                "刷新工具，再问一次服务商。"}
             </PageEmpty>
           ) : (
             <PageRows>
@@ -1384,7 +1368,7 @@ export function PluginPage({
                             : "text-muted-foreground text-xs"
                         }
                       >
-                        {tool.effect === "write" ? "changes things" : "reads"}
+                        {tool.effect === "write" ? "会改动" : "只读"}
                       </span>
                       {personal ? null : (
                         <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
@@ -1408,7 +1392,7 @@ export function PluginPage({
            */}
           {!personal && server.tools.length > 0 && bots.length > 0 ? (
             <>
-              <p className="mt-8 font-medium text-sm">By Bot</p>
+              <p className="mt-8 font-medium text-sm">按员工</p>
               <PageRows>
                 {bots.map((bot, index) => (
                   <React.Fragment key={bot.id}>
@@ -1421,8 +1405,8 @@ export function PluginPage({
                         <ItemTitle>{bot.name}</ItemTitle>
                         <ItemDescription>
                           {bot.hidden
-                            ? "Hidden from your roster. Turn this app's actions on or off one at a time."
-                            : "Turn this app's actions on or off one at a time."}
+                            ? "已从你的员工列表隐藏。这个应用提供的每个动作，逐个开关。"
+                            : "这个应用提供的每个动作，逐个开关。"}
                         </ItemDescription>
                       </ItemContent>
                       <ItemActions>
@@ -1463,8 +1447,8 @@ export function PluginPage({
        */}
       {!personal && server && server.withdrawn.length > 0 ? (
         <PageSection
-          description="This vendor no longer lists these. No Bot sees them, and none can call them. The access is still saved, and comes back if the vendor lists the tool again. To remove it, use the Bot's own page."
-          title="Given but no longer listed"
+          description="服务商已不再列出这些，所以没有员工会知道它们，模型也调用不了。授权仍有记录，服务商重新列出后这些工具会再次提供。如果不想这样，请到员工自己的页面撤销。"
+          title="已授权但未提供"
         >
           <PageRows>
             {server.withdrawn.map((held, index) => (
@@ -1475,9 +1459,8 @@ export function PluginPage({
                       {held.name}
                     </ItemTitle>
                     <ItemDescription>
-                      Not listed by {title}
-                      {server.toolsRefreshedAt ? ` as of the last refresh` : ""}
-                      .
+                      {server.toolsRefreshedAt ? "上次刷新时" : ""}
+                      {title} 没有列出它。
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -1501,17 +1484,17 @@ export function PluginPage({
           <DialogHeader>
             <DialogTitle>
               {dialog === "client"
-                ? `OAuth client for ${title}`
+                ? `${title} 的 OAuth 客户端`
                 : dialog === "instance"
-                  ? `Instance host for ${title}`
-                  : `Access token for ${title}`}
+                  ? `${title} 的实例地址`
+                  : `${title} 的访问令牌`}
             </DialogTitle>
             <DialogDescription>
               {dialog === "client"
-                ? `From the vendor's console. The secret is saved in ${paths.deploymentName}'s vault and never shown again.`
+                ? `来自服务商的控制台。密钥保存在${paths.deploymentName}的保险库里，永远不会再显示。`
                 : dialog === "instance"
-                  ? "Your own hostname with this vendor. It is checked against the vendor's pattern before it is saved."
-                  : `Saved in ${paths.deploymentName}'s vault and never shown again.`}
+                  ? "你在这个服务商那里的主机名。保存前会按他们的格式校验。"
+                  : `保存在${paths.deploymentName}的保险库里，永远不会再显示。`}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -1519,7 +1502,7 @@ export function PluginPage({
               {dialog === "client" ? (
                 <>
                   <Field>
-                    <FieldLabel htmlFor="client-id">Client ID</FieldLabel>
+                    <FieldLabel htmlFor="client-id">客户端 ID</FieldLabel>
                     <Input
                       id="client-id"
                       onChange={(event) =>
@@ -1532,9 +1515,7 @@ export function PluginPage({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="client-secret">
-                      Client secret
-                    </FieldLabel>
+                    <FieldLabel htmlFor="client-secret">客户端密钥</FieldLabel>
                     <Input
                       id="client-secret"
                       onChange={(event) =>
@@ -1550,7 +1531,7 @@ export function PluginPage({
                 </>
               ) : dialog === "instance" ? (
                 <Field>
-                  <FieldLabel htmlFor="instance-host">Instance host</FieldLabel>
+                  <FieldLabel htmlFor="instance-host">实例地址</FieldLabel>
                   <Input
                     id="instance-host"
                     onChange={(event) => setInstanceHost(event.target.value)}
@@ -1560,7 +1541,7 @@ export function PluginPage({
                 </Field>
               ) : (
                 <Field>
-                  <FieldLabel htmlFor="access-token">Access token</FieldLabel>
+                  <FieldLabel htmlFor="access-token">访问令牌</FieldLabel>
                   <Input
                     id="access-token"
                     onChange={(event) => setToken(event.target.value)}
@@ -1573,7 +1554,7 @@ export function PluginPage({
           </DialogBody>
           <DialogFooter className="mt-4">
             <Button onClick={() => setDialog(null)} size="sm" variant="ghost">
-              Cancel
+              取消
             </Button>
             <Button
               onClick={() => {
@@ -1588,7 +1569,7 @@ export function PluginPage({
               }}
               size="sm"
             >
-              Save
+              保存
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1606,11 +1587,10 @@ export function PluginPage({
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Grant tools</DialogTitle>
+              <DialogTitle>授予工具</DialogTitle>
               <DialogDescription>
-                Each grant is its own row in {paths.auditLabel}. Tools that
-                change things are still checked against the boundaries on every
-                call.
+                每次授权都会在{paths.auditLabel}
+                里单独留一条；授予的写入类工具每次调用时仍要经过边界规则检查。
               </DialogDescription>
             </DialogHeader>
             <DialogBody className="mt-4 space-y-5">
@@ -1627,7 +1607,7 @@ export function PluginPage({
                */}
               <fieldset aria-labelledby="grant-to-heading" className="min-w-0">
                 <p className="mb-2 font-medium text-sm" id="grant-to-heading">
-                  To
+                  授予给
                 </p>
                 <div className="space-y-2">
                   {bots.map((bot) => (
@@ -1662,7 +1642,7 @@ export function PluginPage({
                         className="font-medium text-sm"
                         id="grant-reads-heading"
                       >
-                        Reads
+                        只读
                       </p>
                       <Button
                         onClick={() =>
@@ -1676,7 +1656,7 @@ export function PluginPage({
                         type="button"
                         variant="ghost"
                       >
-                        Select all
+                        全选
                       </Button>
                     </div>
                     <div className="space-y-2">
@@ -1712,7 +1692,7 @@ export function PluginPage({
                         className="font-medium text-amber-600 text-sm dark:text-amber-500"
                         id="grant-writes-heading"
                       >
-                        Changes things
+                        会改动
                       </p>
                       <Button
                         onClick={() =>
@@ -1726,7 +1706,7 @@ export function PluginPage({
                         type="button"
                         variant="ghost"
                       >
-                        Select all
+                        全选
                       </Button>
                     </div>
                     <div className="space-y-2">
@@ -1758,19 +1738,15 @@ export function PluginPage({
               {/* What is about to happen, in one sentence, before it does. */}
               {selectedRefs.size > 0 && chosenNames.length > 0 ? (
                 <p className="flex-1 text-muted-foreground text-xs">
-                  {`Grant ${selectedRefs.size} ${
-                    selectedRefs.size === 1 ? "tool" : "tools"
-                  } to ${chosenNames.join(", ")}.${
+                  {`把 ${selectedRefs.size} 个工具${
                     chosenWrites > 0
-                      ? ` ${chosenWrites} ${
-                          chosenWrites === 1 ? "changes" : "change"
-                        } things.`
+                      ? `（其中 ${chosenWrites} 个会改动东西）`
                       : ""
-                  }`}
+                  }授予 ${chosenNames.join("、")}。`}
                 </p>
               ) : null}
               <Button onClick={() => setDialog(null)} size="sm" variant="ghost">
-                Cancel
+                取消
               </Button>
               <Button
                 disabled={
@@ -1783,8 +1759,8 @@ export function PluginPage({
               >
                 {/* The one in flight, not the ones finished: a count that starts at zero of twelve reads as nothing happening. */}
                 {granting
-                  ? `Granting ${Math.min(granting.done + 1, granting.total)} of ${granting.total}…`
-                  : "Grant"}
+                  ? `正在授予第 ${Math.min(granting.done + 1, granting.total)} 个，共 ${granting.total} 个…`
+                  : "授予"}
               </Button>
             </DialogFooter>
           </DialogContent>

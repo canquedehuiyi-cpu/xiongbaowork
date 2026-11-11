@@ -86,7 +86,8 @@ const VOCABULARY: Record<PluginsProvider, ProviderVocabulary> = {
   composio: {
     directoryLabel: "浏览应用",
     envVar: "COMPOSIO_API_KEY",
-    directoryDescription: "几百个应用，以提问者的身份连接。每个人连接自己的账号。",
+    directoryDescription:
+      "几百个应用，以提问者的身份连接。每个人连接自己的账号。",
   },
   arcade: {
     directoryLabel: "浏览应用",

@@ -133,61 +133,58 @@ export const Route = createFileRoute("/_authed/_app/connections/")({
  * than by a list of names to keep out.
  */
 export const AUTHORIZATION_NOTICES: ReadonlyMap<string, string> = new Map([
-  [
-    "no-broker",
-    "Connecting apps isn't set up yet, so nothing was recorded. Ask an admin to set it up.",
-  ],
+  ["no-broker", "连接应用还没有设置好，所以什么都没有记下。请联系管理员设置。"],
   [
     "not-supported",
-    "Apps here connect once, with Connect on the app's page. They aren't authorized one action at a time.",
+    "这里的应用在它自己的页面上按「连接」一次连好，不按单个动作授权。",
   ],
   [
     "missing-handle",
-    "That link doesn't say which authorization it finishes, so nothing was done. Start again from the app's page.",
+    "这个链接没有说明要完成哪一次授权，所以什么都没有做。请从应用的页面重新开始。",
   ],
   [
     "no-attempt",
-    "There's no authorization in progress for you to finish. It may have expired, or started in another session. Start again from the app's page.",
+    "没有正在进行、等你完成的授权。它可能已经过期，或者是在另一个会话里开始的。请从应用的页面重新开始。",
   ],
   [
     "vendor-unavailable",
-    "The app didn't answer when OpenBot tried to finish that authorization, so nothing was recorded. Try the link again in a moment.",
+    "熊宝去完成这次授权时应用没有回应，所以什么都没有记下。请稍后再打开这个链接试一次。",
   ],
   [
     "not-your-authorization",
-    "That link doesn't match the authorization you have in progress, so nothing was recorded. Finish it in the tab you started it in, or start again from the app's page.",
+    "这个链接和你正在进行的授权对不上，所以什么都没有记下。请在开始授权的那个标签页里完成它，或者从应用的页面重新开始。",
   ],
   [
     "not-finished",
-    "That authorization hasn't finished yet, so nothing was recorded. Finish it at the app, then open the link again.",
+    "这次授权还没有完成，所以什么都没有记下。请先在应用那边完成，再打开这个链接。",
   ],
   [
     "authorization-failed",
-    "The app didn't complete that authorization, so nothing was recorded. Start again from the app's page.",
+    "应用没有完成这次授权，所以什么都没有记下。请从应用的页面重新开始。",
   ],
   [
     "context-changed",
-    "That app's account changed while the authorization was open, so nothing was recorded. Access given to the old account was removed. Start again from the app's page.",
+    "授权进行期间这个应用的账号变了，所以什么都没有记下，给旧账号的访问已经撤销。请从应用的页面重新开始。",
   ],
   [
     "name-changed",
-    "That authorization was started before an update changed how OpenBot signs you in to the app, so nothing was recorded. Press Connect on the app's page to start again.",
+    "这次授权开始之后，熊宝登录这个应用的方式因为更新变了，所以什么都没有记下。请在应用的页面按「连接」重新开始。",
   ],
   [
     "not-permitted",
-    "You can't connect that app's account anymore, so nothing was recorded. Your access or the app's setup changed while the authorization was open. Ask an admin if you expected to finish it.",
+    "你已经不能再连接这个应用的账号，所以什么都没有记下：授权进行期间你的权限或应用的设置变了。如果你本来应该能完成它，请联系管理员。",
   ],
   [
     "cancelled",
-    "That authorization was cancelled while it was being finished, so nothing was recorded. The access it gave was removed.",
+    "这次授权在完成过程中被取消了，所以什么都没有记下，它给出的访问已经撤销。",
   ],
   [
     "cancelled-left-live",
-    "That authorization was cancelled while it was being finished, so nothing was recorded. The access it gave couldn't be removed, so the app may still allow the action you cancelled. To remove it, disconnect the app from its page, then connect again and authorize only what you want.",
+    "这次授权在完成过程中被取消了，所以什么都没有记下；但它给出的访问没能撤销，应用可能仍然允许你取消的那个动作。要撤销它，请在应用的页面断开，再重新连接并只授权你想要的。",
   ],
   [
     "not-recorded",
-    "Couldn't record that authorization, so nothing was saved. Start again from the app's page, or ask an admin if it keeps happening.",
+    "没能记下这次授权，所以什么都没有保存。请从应用的页面重新开始；如果一直这样，请联系管理员。",
   ],
 ]);
 
@@ -200,15 +197,15 @@ export const PERSONAL_AUTHORIZATION_NOTICES: ReadonlyMap<string, string> =
   new Map([
     [
       "no-broker",
-      "Connecting apps isn't set up yet, so nothing was recorded. Set it up in Settings under Setup.",
+      "连接应用还没有设置好，所以什么都没有记下。请到「设置」里的「部署设置」完成设置。",
     ],
     [
       "not-permitted",
-      "You can't connect that app's account anymore, so nothing was recorded. The app's setup changed while the authorization was open. Start again from the app's page.",
+      "你已经不能再连接这个应用的账号，所以什么都没有记下：授权进行期间应用的设置变了。请从应用的页面重新开始。",
     ],
     [
       "not-recorded",
-      "Couldn't record that authorization, so nothing was saved. Start again from the app's page, or check OpenBot's logs if it keeps happening.",
+      "没能记下这次授权，所以什么都没有保存。请从应用的页面重新开始；如果一直这样，请查看熊宝的日志。",
     ],
   ]);
 
@@ -408,10 +405,10 @@ function RouteComponent() {
       className="@container"
       description={
         personal
-          ? "Add apps and connect your accounts so your Bots can use them."
-          : "Connect your accounts so Bots can use apps on your behalf."
+          ? "添加应用并连接你的账号，你的员工就能用它们。"
+          : "连接你的账号，让员工可以代你使用应用。"
       }
-      title="Connections"
+      title="连接"
     >
       {/*
        * For `?connected=` only the failure is worth saying. A success needs no sentence: the row it
@@ -420,7 +417,7 @@ function RouteComponent() {
        */}
       {arrival.outcome === "failed" ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
-          Couldn't connect that account. Nothing was saved. Try again.
+          这个账号没能连接，什么都没有保存——请重试。
         </p>
       ) : null}
       {notice ? (
@@ -462,12 +459,11 @@ function RouteComponent() {
          */}
         {loading ? null : plugins.error || connections.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
-            Couldn't load your connections. Reload the page, or ask an admin if
-            it keeps happening.
+            读不到你的连接，所以这里什么都不列，免得列出错的。请刷新页面；如果一直这样，请联系管理员。
           </p>
         ) : rows.length === 0 ? (
-          <PageEmpty icon={IconPlug} title="No apps yet">
-            Apps show up here once an admin turns them on.
+          <PageEmpty icon={IconPlug} title="还没有应用">
+            管理员打开应用之后，它们会出现在这里。
           </PageEmpty>
         ) : (
           <>
@@ -477,19 +473,19 @@ function RouteComponent() {
                   <IconSearch aria-hidden="true" className="size-4" />
                 </InputGroupAddon>
                 <InputGroupInput
-                  aria-label="Search connections"
-                  placeholder="Search connections"
+                  aria-label="搜索连接"
+                  placeholder="搜索连接"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </InputGroup>
               <p className="shrink-0 text-xs text-muted-foreground">
-                {inUse} in use · {rows.length} in all
+                已在用 {inUse} 个 · 共 {rows.length} 个
               </p>
             </div>
             {matching.length === 0 ? (
               <p className="mt-4 text-sm text-muted-foreground" role="status">
-                Nothing matches “{search.trim()}”.
+                没有匹配“{search.trim()}”的连接。
               </p>
             ) : (
               /*
@@ -546,16 +542,14 @@ function RouteComponent() {
                 type="button"
                 variant="ghost"
               >
-                Show {needingSetup === 1 ? "1 app" : `${needingSetup} apps`}{" "}
-                that need setup
+                显示 {needingSetup} 个需要先设置的应用
               </Button>
             ) : null}
           </>
         )}
         {links.error || providers.error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
-            Couldn't load GitHub and Slack, so they aren't listed. Reload the
-            page.
+            读不到 GitHub 和 Slack，所以没有列出它们。请刷新页面。
           </p>
         ) : null}
       </PageSection>
@@ -564,16 +558,16 @@ function RouteComponent() {
        * are a way in from beside the apps that use them, in the personal edition.
        */}
       {personal ? (
-        <PageSection title="Sign-ins and keys">
+        <PageSection title="登录信息和密钥">
           <PageRows>
             <Item render={<Link to="/settings/passwords" />} size="sm">
               <ItemMedia variant="icon">
                 <IconLock />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Saved logins</ItemTitle>
+                <ItemTitle>保存的登录</ItemTitle>
                 <ItemDescription>
-                  Website logins you saved when signing a Bot in.
+                  帮员工登录网站时你保存下来的登录信息。
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -586,9 +580,9 @@ function RouteComponent() {
                 <IconKey />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>Keys</ItemTitle>
+                <ItemTitle>密钥</ItemTitle>
                 <ItemDescription>
-                  API keys and tokens your apps and models use.
+                  你的应用和模型用到的 API 密钥和令牌。
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -665,7 +659,7 @@ function ConnectionMark({
 }
 
 /** Where a tile stands, or the word for what pressing it does. */
-const ACTION_LABEL = { connect: "Connect", add: "Add", setup: "Set up" };
+const ACTION_LABEL = { connect: "连接", add: "添加", setup: "设置" };
 
 function ConnectionStateLabel({
   row,
@@ -682,21 +676,21 @@ function ConnectionStateLabel({
           aria-hidden="true"
           className="size-3.5 text-emerald-600 dark:text-emerald-400"
         />
-        {row.noAccount ? "On" : "Connected"}
+        {row.noAccount ? "已打开" : "已连接"}
       </span>
     );
   }
   if (state === "team") {
-    return <span className="text-xs text-muted-foreground">Team account</span>;
+    return <span className="text-xs text-muted-foreground">团队账号</span>;
   }
   const pill = (
     <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
       {pending
         ? row.action === "add"
-          ? "Adding…"
-          : "Connecting…"
+          ? "正在添加…"
+          : "正在连接…"
         : state === "needs_reconnect"
-          ? "Reconnect"
+          ? "重新连接"
           : ACTION_LABEL[row.action ?? "connect"]}
     </span>
   );
@@ -708,7 +702,7 @@ function ConnectionStateLabel({
           className="text-xs text-muted-foreground"
           data-testid="tile-not-connected"
         >
-          Not connected
+          未连接
         </span>
         {pill}
       </span>

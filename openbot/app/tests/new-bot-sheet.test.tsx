@@ -216,9 +216,7 @@ test("unavailable hosting still permits the custom path", async () => {
   const { view, user } = await opened();
   await settle();
   expect(view.queryByRole("button", { name: /^Run here/ })).toBeNull();
-  expect(
-    view.queryByRole("button", { name: /^连接自定义智能体/ }),
-  ).toBeNull();
+  expect(view.queryByRole("button", { name: /^连接自定义智能体/ })).toBeNull();
   expect(
     view.getByRole("button", { name: "继续" }).hasAttribute("disabled"),
   ).toBe(true);
@@ -323,12 +321,10 @@ test("preserves every entry across back navigation and hosting switches", async 
   );
   await user.type(view.getByLabelText(/^指令/), "Review carefully");
   await user.click(view.getByRole("button", { name: /公开/ }));
-  expect(
-    (view.getByLabelText(/^指令/) as HTMLTextAreaElement).value,
-  ).toBe("Review carefully");
-  await user.click(
-    view.getByRole("button", { name: /^连接自定义智能体/ }),
+  expect((view.getByLabelText(/^指令/) as HTMLTextAreaElement).value).toBe(
+    "Review carefully",
   );
+  await user.click(view.getByRole("button", { name: /^连接自定义智能体/ }));
   await user.click(view.getByRole("button", { name: /LangChain/ }));
   expect((view.getByLabelText("智能体地址") as HTMLInputElement).value).toBe(
     "https://agent.example.com/ag-ui",
@@ -398,7 +394,9 @@ async function isolatedTooltip(
   view: Awaited<ReturnType<typeof named>>["view"],
   user: Awaited<ReturnType<typeof named>>["user"],
 ) {
-  await user.hover(view.getByRole("button", { name: "「独立运行」是什么意思" }));
+  await user.hover(
+    view.getByRole("button", { name: "「独立运行」是什么意思" }),
+  );
   return (await view.findByText(new RegExp(ISOLATED_EXPLAINED.slice(0, 30))))
     .textContent;
 }
@@ -410,7 +408,9 @@ test("Isolated is offered with what it means, and a public Bot is told who share
   expect(isolated.hasAttribute("data-disabled")).toBe(false);
   expect(await isolatedTooltip(view, user)).toBe(ISOLATED_EXPLAINED);
 
-  await user.unhover(view.getByRole("button", { name: "「独立运行」是什么意思" }));
+  await user.unhover(
+    view.getByRole("button", { name: "「独立运行」是什么意思" }),
+  );
   await user.click(view.getByRole("button", { name: /公开/ }));
   expect(await isolatedTooltip(view, user)).toBe(
     `${ISOLATED_EXPLAINED}${ISOLATED_PUBLIC}`,
@@ -427,9 +427,7 @@ test("a ticked Isolated is sent with the Bot, and an unticked one says no", asyn
   cleanup();
   creates = [];
   const again = await named("Plain");
-  await again.user.click(
-    again.view.getByRole("button", { name: "创建员工" }),
-  );
+  await again.user.click(again.view.getByRole("button", { name: "创建员工" }));
   expect(await again.view.findByText("Plain准备好了")).toBeTruthy();
   expect(creates[0]).toMatchObject({ name: "Plain", isolated: false });
 });
@@ -457,18 +455,12 @@ test("somebody an admin has not allowed sees Isolated disabled, and why", async 
 test("custom-agent selection validates the name before advancing", async () => {
   const { view, user } = await opened();
   await user.type(view.getByLabelText("名称"), "   ");
-  await user.click(
-    view.getByRole("button", { name: /^连接自定义智能体/ }),
-  );
-  expect((await view.findByRole("alert")).textContent).toBe(
-    "名字为必填项。",
-  );
+  await user.click(view.getByRole("button", { name: /^连接自定义智能体/ }));
+  expect((await view.findByRole("alert")).textContent).toBe("名字为必填项。");
   expect(document.activeElement).toBe(view.getByLabelText("名称"));
   expect(view.queryByRole("button", { name: /LangChain/ })).toBeNull();
   await user.type(view.getByLabelText("名称"), "My Bot");
-  await user.click(
-    view.getByRole("button", { name: /^连接自定义智能体/ }),
-  );
+  await user.click(view.getByRole("button", { name: /^连接自定义智能体/ }));
   expect(await view.findByRole("button", { name: /LangChain/ })).toBeTruthy();
 });
 
@@ -559,9 +551,7 @@ test("personal: the sheet lists every app that is turned on, with nothing to unt
     // （提示文字来自 `RoutinesAppHint`，那个文件还是英文、不归本组；它中文化后把这里改成整句断言。）
     expect.stringMatching(/^Routines./),
   ]);
-  expect(within(list).getByRole("link").getAttribute("href")).toBe(
-    "/routines",
-  );
+  expect(within(list).getByRole("link").getAttribute("href")).toBe("/routines");
   expect(
     view.getByText("你在「连接」里打开的每个应用，所有员工都能用。"),
   ).toBeTruthy();
@@ -576,9 +566,7 @@ test("team: the sheet offers only the apps the person can give, ticked", async (
   expect(routines.getAttribute("aria-checked")).toBe("true");
   expect(view.queryByText("Gmail")).toBeNull();
   expect(view.queryByText("Parallel Search")).toBeNull();
-  expect(
-    view.getByText("它总是用提问者本人的账号。"),
-  ).toBeTruthy();
+  expect(view.getByText("它总是用提问者本人的账号。")).toBeTruthy();
   expect(requested).not.toContain("/api/plugins");
 });
 

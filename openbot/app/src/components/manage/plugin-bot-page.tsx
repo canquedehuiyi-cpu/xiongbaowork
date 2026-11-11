@@ -14,12 +14,12 @@ import {
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
+import { DescribeGrants } from "@/components/manage/describe-grants";
 import {
   SharedApprovalFields,
   sharedSectionSentence,
 } from "@/components/plugins/shared-approval-fields";
 import { SkippedToolsNotice } from "@/components/plugins/skipped-tools-notice";
-import { DescribeGrants } from "@/components/manage/describe-grants";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,12 +51,12 @@ import {
   type PluginTool,
   pluginsPageQueryOptions,
 } from "@/lib/plugins/queries";
-import { toolsListError } from "@/lib/plugins/tools-error";
 import {
   botSharedAppsQueryOptions,
   type SharedUseApproval,
   sharedUseKeys,
 } from "@/lib/plugins/shared-use";
+import { toolsListError } from "@/lib/plugins/tools-error";
 
 /**
  * One Bot and one app: every action the app offers, and which of them this Bot holds.
@@ -198,7 +198,7 @@ export function PluginBotPage({
 
   /* Nothing rather than a placeholder, so no sentence asserts anything while a fetch is open. */
   if (plugins.isPending || agents.isPending || hiddenAgents.isPending) {
-    return <PageShell title="Bot">{null}</PageShell>;
+    return <PageShell title="员工">{null}</PageShell>;
   }
 
   /*
@@ -213,11 +213,11 @@ export function PluginBotPage({
     return (
       <PageShell
         backButton={{ label: paths.pluginsLabel, linkProps: paths.plugins() }}
-        description="No app with that name is turned on."
+        description="没有打开叫这个名字的应用。"
         title={appTitle}
       >
-        <PageEmpty icon={IconPlugOff} title="This app is off">
-          Nothing to give a Bot here.
+        <PageEmpty icon={IconPlugOff} title="这个应用没有打开">
+          这里没有可以给员工的东西。
         </PageEmpty>
       </PageShell>
     );
@@ -234,10 +234,10 @@ export function PluginBotPage({
     return (
       <PageShell
         backButton={{ label: paths.pluginsLabel, linkProps: paths.plugins() }}
-        title="Plugins"
+        title="插件"
       >
         <p className="mt-12 text-destructive text-sm" role="alert">
-          Couldn't load plugins. Reload the page.
+          读不到插件。请刷新页面。
         </p>
       </PageShell>
     );
@@ -259,11 +259,11 @@ export function PluginBotPage({
     return (
       <PageShell
         backButton={back}
-        description="There is no Bot with that name."
-        title="Not a Bot"
+        description="没有叫这个名字的员工。"
+        title="不是员工"
       >
-        <PageEmpty icon={IconBolt} title="Bot not found">
-          It may have been deleted after you opened this page.
+        <PageEmpty icon={IconBolt} title="找不到这位员工">
+          它可能在你打开这个页面之后被删除了。
         </PageEmpty>
       </PageShell>
     );
@@ -349,7 +349,7 @@ export function PluginBotPage({
             <ItemContent>
               <ItemTitle className="font-mono text-xs">{tool.name}</ItemTitle>
               <ItemDescription>
-                {tool.description || "This action has no description."}
+                {tool.description || "这个动作没有附带说明。"}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -364,9 +364,7 @@ export function PluginBotPage({
                * say about this row is that what it changes does not come back.
                */}
               {tool.destructive ? (
-                <span className="text-destructive text-xs">
-                  destroys things
-                </span>
+                <span className="text-destructive text-xs">会造成破坏</span>
               ) : null}
               {/*
                * Binary and immediate, which is what a Switch is for: it takes effect when switched
@@ -376,10 +374,10 @@ export function PluginBotPage({
                */}
               {alwaysOn ? (
                 // Refused one Bot at a time by the server: Routines is every Bot's.
-                <span className="text-muted-foreground text-xs">Always on</span>
+                <span className="text-muted-foreground text-xs">一直开着</span>
               ) : (
                 <Switch
-                  aria-label={`Let ${botName} call ${tool.name}`}
+                  aria-label={`允许 ${botName} 调用 ${tool.name}`}
                   checked={held(tool)}
                   disabled={
                     granting !== null ||
@@ -428,8 +426,8 @@ export function PluginBotPage({
   return (
     <PageShell
       backButton={back}
-      description={`Which ${appTitle} actions ${botName} can call. Turning one off applies from the next call.`}
-      title={`${botName} and ${appTitle}`}
+      description={`${botName} 可以调用 ${appTitle} 的哪些动作。关掉一个会从下一次调用开始生效。`}
+      title={`${botName} 与 ${appTitle}`}
     >
       {error ? (
         <p className="mt-4 text-destructive text-sm" role="alert">
@@ -440,11 +438,11 @@ export function PluginBotPage({
       <SkippedToolsNotice names={server.skippedTools ?? []} />
 
       {server.tools.length === 0 ? (
-        <PageEmpty icon={IconTool} title="No actions listed">
+        <PageEmpty icon={IconTool} title="没有列出任何动作">
           {toolsListError(server.lastError, {
             title: server.title,
             personal: false,
-          }) ?? "Refresh its tools to check again."}
+          }) ?? "刷新它的工具再看一次。"}
         </PageEmpty>
       ) : (
         <>
@@ -471,10 +469,10 @@ export function PluginBotPage({
           )}
 
           <Input
-            aria-label={`Search ${appTitle} actions`}
+            aria-label={`搜索 ${appTitle} 的动作`}
             className="mt-6"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by action name"
+            placeholder="按动作名搜索"
             value={search}
           />
 
@@ -489,9 +487,7 @@ export function PluginBotPage({
           {ungranted.length > 0 ? (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <p className="text-muted-foreground text-xs">
-                {`This Bot would then have ${wouldHold} ${
-                  wouldHold === 1 ? "tool" : "tools"
-                } from this app.`}
+                {`这样这位员工将拿到这个应用的 ${wouldHold} 个工具。`}
               </p>
               <Button
                 disabled={granting !== null}
@@ -502,8 +498,8 @@ export function PluginBotPage({
               >
                 {/* The one in flight, not the ones finished: a count starting at zero of forty reads as nothing happening. */}
                 {granting
-                  ? `Granting ${Math.min(granting.done + 1, granting.total)} of ${granting.total}…`
-                  : "Turn on every read-only action"}
+                  ? `正在授予第 ${Math.min(granting.done + 1, granting.total)} 个，共 ${granting.total} 个…`
+                  : "打开所有只读动作"}
               </Button>
             </div>
           ) : null}
@@ -511,18 +507,18 @@ export function PluginBotPage({
           <PageSection
             description={
               sharedSectionSentence("read", shared) ??
-              "These only read. Boundaries about writes don't apply to them."
+              "这些只读。针对写入的边界规则对它们不生效。"
             }
-            title="Reads"
+            title="只读"
           >
             {reads.length === 0 ? (
               <PageEmpty
                 icon={needle ? IconSearch : IconListDetails}
-                title={needle ? "No matches" : "No read-only actions"}
+                title={needle ? "没有匹配的动作" : "没有只读动作"}
               >
                 {needle
-                  ? `Nothing that only reads matches "${search.trim()}".`
-                  : `${appTitle} has no read-only actions.`}
+                  ? `没有匹配「${search.trim()}」的只读动作。`
+                  : `${appTitle} 没有只读动作。`}
               </PageEmpty>
             ) : (
               rows(reads)
@@ -532,18 +528,18 @@ export function PluginBotPage({
           <PageSection
             description={
               sharedSectionSentence("write", shared) ??
-              "These change something at the vendor. Boundaries about writes apply to them."
+              "这些会在服务商那边改动东西。针对写入的边界规则对它们有效，命中时每次调用都会被拒绝。"
             }
-            title="Changes things"
+            title="会改动"
           >
             {writes.length === 0 ? (
               <PageEmpty
                 icon={needle ? IconSearch : IconListDetails}
-                title={needle ? "No matches" : "No actions that change things"}
+                title={needle ? "没有匹配的动作" : "没有会改动东西的动作"}
               >
                 {needle
-                  ? `Nothing that changes things matches "${search.trim()}".`
-                  : `${appTitle} has no actions that change things.`}
+                  ? `没有匹配「${search.trim()}」的改动类动作。`
+                  : `${appTitle} 没有会改动东西的动作。`}
               </PageEmpty>
             ) : (
               rows(writes)
@@ -564,7 +560,7 @@ export function PluginBotPage({
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  Let {botName} use the shared {appTitle} account?
+                  让 {botName} 使用共享的 {appTitle} 账号？
                 </DialogTitle>
               </DialogHeader>
               <DialogBody className="mt-4">
@@ -586,14 +582,14 @@ export function PluginBotPage({
                   size="sm"
                   variant="outline"
                 >
-                  Cancel
+                  取消
                 </Button>
                 <Button
                   disabled={grantingShared}
                   onClick={() => void confirmSharedGrant()}
                   size="sm"
                 >
-                  {grantingShared ? "Allowing…" : "Allow"}
+                  {grantingShared ? "正在允许…" : "允许"}
                 </Button>
               </DialogFooter>
             </DialogContent>

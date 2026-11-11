@@ -1272,9 +1272,7 @@ test("in OpenBot Desktop, the page asks again once the window is back in front",
     window.dispatchEvent(new Event("focus"));
 
     await waitFor(() => expect(server.confirmsAsked).toBe(before + 1));
-    expect(
-      await view.findByRole("button", { name: "断开" }),
-    ).toBeTruthy();
+    expect(await view.findByRole("button", { name: "断开" })).toBeTruthy();
     // Once per sign-in: a later focus asks nothing more.
     window.dispatchEvent(new Event("focus"));
     expect(server.confirmsAsked).toBe(before + 1);
