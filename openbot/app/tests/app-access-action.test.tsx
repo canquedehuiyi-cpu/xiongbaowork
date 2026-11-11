@@ -120,7 +120,7 @@ function mounted(
   });
   const settings = createRoute({
     getParentRoute: () => root,
-    path: "/settings/connected-accounts/$key",
+    path: "/connections/$key",
     component: () => null,
   });
   const admin = createRoute({
@@ -231,7 +231,7 @@ test("an app connected with a typed key goes to its page in Settings, where the 
   // Drawn as a button (`Button` over a `Link`), and an anchor underneath with the address.
   const link = (await view.findByText("连接")).closest("a");
   expect(link?.getAttribute("href")).toBe(
-    "/settings/connected-accounts/composio-gmail",
+    "/connections/composio-gmail",
   );
 });
 
@@ -243,7 +243,7 @@ test("a brokered app to reconnect goes to its page in Settings", async () => {
   const composio = mounted(appAccess({ state: "reconnect" }));
   const toComposio = (await composio.view.findByText("重新连接")).closest("a");
   expect(toComposio?.getAttribute("href")).toBe(
-    "/settings/connected-accounts/composio-gmail",
+    "/connections/composio-gmail",
   );
   expect(composio.opened).toEqual([]);
 });

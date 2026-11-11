@@ -340,7 +340,7 @@ function OwnerGiveAction({
         render={
           <Link
             params={{ key: access.key }}
-            to="/settings/connected-accounts/$key"
+            to="/connections/$key"
           />
         }
         aria-label={`连接 ${name}`}
@@ -472,7 +472,7 @@ function PersonalConnectAction({
         render={
           <Link
             params={{ key: access.key }}
-            to="/settings/connected-accounts/$key"
+            to="/connections/$key"
           />
         }
         aria-label={`设置 ${name}`}
@@ -591,7 +591,7 @@ function ConnectAction({
         render={
           <Link
             params={{ key: access.key }}
-            to="/settings/connected-accounts/$key"
+            to="/connections/$key"
           />
         }
         aria-label={`${label} ${access.displayName}`}

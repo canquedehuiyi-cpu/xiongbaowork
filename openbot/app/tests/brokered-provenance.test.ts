@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { brokeredAccountsListedOn } from "@/components/settings/connected-accounts-page";
+import { brokeredAccountsListedOn } from "@/lib/plugins/listed";
 import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import type { PluginServer } from "@/lib/plugins/queries";
-import { connectionKindFor } from "@/routes/_authed/admin/plugins/$key";
+import { connectionKindFor } from "@/components/manage/plugin-page";
 
 /*
  * 选用 Arcade 之后，新启用的应用行 `provenance` 是 "arcade"（服务端 `BROKERED_PROFILE`，X5）。前端判断「这是不是
