@@ -97,6 +97,11 @@ export function createAccountBook(context: {
   auditStore: AuditStore;
   /** 活动的提供商（X5）；不给时是 Composio，与以前一样。 */
   provider?: BrokerProvider;
+  /**
+   * 一个人的账号在厂商那边记在哪个名字下（上游 #927）；不给时就是本人的用户 id。缓存的行记这个名字，
+   * 所以单用户安装换了名字之后，旧名字下的行在下一次同步时被当作厂商不再列出的账号删掉。
+   */
+  vendorNameOf?: (userId: string) => string;
 }) {
   const { database, broker, auditStore } = context;
   const PROVIDER: BrokerProvider = context.provider ?? "composio";
@@ -143,7 +148,7 @@ export function createAccountBook(context: {
     const held = await rowsFor(toolkit, userId);
     const listed = (await broker.accountsOf({ userId, toolkit })).map(
       (found) => ({
-        vendorUserId: userId,
+        vendorUserId: context.vendorNameOf?.(userId) ?? userId,
         accountId: found.accountId ?? "",
         identity: found.identity,
         connectedAt: found.connectedAt ? new Date(found.connectedAt) : null,

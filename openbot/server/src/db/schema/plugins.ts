@@ -498,6 +498,12 @@ export const composioConnections = pgTable(
       .$type<"composio" | "arcade">()
       .notNull()
       .default("composio"),
+    /**
+     * 这条连接在厂商那边记在哪个名字下（迁移 0200，上游 #927）。NULL 表示就是 `userId` 本身：这之前的
+     * 每一行、以及要登录的部署今后的每一行都是。只有单用户安装的那个人写入别的值（`brokered_identities`
+     * 里的那个名字）；启动时据此把仍记在共享名字下的行退役（`plugins/single-user-identity.ts`）。
+     */
+    vendorUserId: text("vendor_user_id"),
     updatedAt: updatedAt(),
   },
   (table) => [
@@ -855,5 +861,34 @@ export const pendingAuthorizations = pgTable(
       sql`${table.tenantId} = ${table.actorId}`,
     ),
     index("pending_authorizations_server_idx").on(table.serverId),
+  ],
+);
+
+/**
+ * 一个人在一个连接应用提供商那边被记在哪个名字下（迁移 0200，上游 0074，#927）。
+ *
+ * 只有单用户安装的那一个人（`dev-local-user`）有行，由 `ensureSingleUserIdentity` 在启动时写一次、永不
+ * 替换，所以每次重启、每个副本都是同一个名字。行落在那个人自己的租户里（`tenant_id = user_id`），
+ * 行安全与四条 tenant_isolation 策略在迁移里。
+ */
+export const brokeredIdentities = pgTable(
+  "brokered_identities",
+  {
+    tenantId: tenantId(),
+    provider: text("provider").$type<"composio" | "arcade">().notNull(),
+    userId: text("user_id").notNull(),
+    vendorUserId: text("vendor_user_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.provider, table.userId] }),
+    check(
+      "brokered_identities_provider_check",
+      sql`${table.provider} IN ('composio', 'arcade')`,
+    ),
+    check(
+      "brokered_identities_tenant_is_user_check",
+      sql`${table.tenantId} = ${table.userId}`,
+    ),
   ],
 );

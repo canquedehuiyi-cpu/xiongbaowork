@@ -86,7 +86,6 @@ import {
   redirectUriFor,
   sealConnectState,
 } from "./oauth";
-import { personAccount } from "./shared-accounts";
 import {
   type AppAccessRequestRecord,
   CatalogueEntryUnknownError,
@@ -2186,7 +2185,7 @@ export function createPluginRoutes(
             account:
               shared && app?.shared
                 ? { holder: "deployment", vendorUserId: holderId }
-                : personAccount(holderId, null),
+                : store.personAccount(holderId),
             toolkit,
             title: row.title,
             returnUrl,

@@ -456,6 +456,35 @@ export function mountArcadeRoutes(
       const account = accountOf(attempt);
       if (!account) return refusedWith("no-attempt");
       const authId = attempt.authId;
+      /*
+       * 这次同意是在这个人今天的名字下开始的吗（上游 #927 的 `name-changed`）。单用户安装得到自己的名字
+       * 之前开始、之后才完成的同意记在共享名 `dev-local-user` 下：在厂商那边确认它，完成的是共享名下的
+       * 授权；撤销它，结束的是同一把 key 上别的安装正在用的连接。所以在问厂商任何事之前就拒绝，什么也
+       * 不确认、不撤销；那边的流程无人确认，自己过期。尝试清掉，本人可以马上在新名字下重新连接。
+       */
+      if (
+        account.holder === "person" &&
+        store.personAccount(account.userId).vendorUserId !==
+          account.vendorUserId
+      ) {
+        console.error(
+          JSON.stringify({
+            type: "arcade-attempt-under-retired-name",
+            server: attempt.serverId,
+            action: attempt.action,
+            authorizationId: authId,
+            attemptStartedAt: attempt.createdAt,
+            note: "A person returned from a consent begun under the name this deployment filed them under before it was given its own. Nothing was confirmed or withdrawn at the vendor, because that name may be shared by other deployments; the flow there lapses unconfirmed. The attempt was cleared so the person can connect again under the current name.",
+          }),
+        );
+        await store
+          .discardAuthorizationAttempt({
+            actorId,
+            createdAt: attempt.createdAt,
+          })
+          .catch(() => false);
+        return refusedWith("name-changed");
+      }
       if (live === null) return refusedWith("cancelled");
 
       const permitted = await stillPermitted(context, store, attempt, account);
@@ -668,7 +697,8 @@ export async function clearEndedArcadeSiblings(input: {
       if (!same) continue;
       const live = await withVendorDeadline(() =>
         arcade.isConnected({
-          account: { holder: "person", userId, vendorUserId: userId },
+          // 这个人在厂商那边的名字（上游 #927）：单用户安装问的是它自己名下的连接，不是共享名下的。
+          account: store.personAccount(userId),
           toolkit: sibling,
         }),
       );
