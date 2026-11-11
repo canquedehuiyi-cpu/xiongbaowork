@@ -655,6 +655,7 @@ tests/self-host-banner.test.ts
 tests/server-readiness-gates.test.ts
 tests/server-side-tools.integration.test.ts
 tests/settings-instructions-routes.test.ts
+tests/setup-checklist-arcade.test.ts
 tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
 tests/shared-brokered-accounts.integration.test.ts

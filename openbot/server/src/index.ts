@@ -4677,7 +4677,10 @@ await startupLifecycle.run(async (startup) => {
           ...(config.computer?.token ? { token: config.computer.token } : {}),
           ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
         }),
-        apps: { configured: Boolean(composio || arcade) },
+        apps: {
+          configured: Boolean(composio || arcade),
+          provider: brokerWiring.provider ?? config.brokerProvider ?? "composio",
+        },
         chat: Boolean(deliveryProviders.slack),
       }),
     },
