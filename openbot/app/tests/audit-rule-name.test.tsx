@@ -139,7 +139,7 @@ async function renderAuditRow(row: Record<string, unknown>) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("Decision");
+  await view.findByText("结果");
   return within(view.container.querySelector("tbody") as HTMLElement);
 }
 
@@ -150,8 +150,8 @@ test("the social media rule is as long as one written from a sentence", () => {
 test("a refusal by a named rule says the name, and clamps the rule to two lines", async () => {
   const row = await renderAuditRow(refusal({ rule: SOCIAL, ruleName: NAME }));
 
-  expect(row.getByText("Blocked")).not.toBeNull();
-  expect(row.getByText(`Stopped by: ${NAME}`)).not.toBeNull();
+  expect(row.getByText("已拦截")).not.toBeNull();
+  expect(row.getByText(`拦下它的规则：${NAME}`)).not.toBeNull();
 
   const expression = row.getByText(SOCIAL);
   expect(expression.className).toContain("line-clamp-2");
@@ -159,12 +159,12 @@ test("a refusal by a named rule says the name, and clamps the rule to two lines"
   expect(expression.className).toContain("text-muted-foreground");
 
   // The rest is a press away, and the press can be undone.
-  const more = row.getByRole("button", { name: "Show full rule" });
+  const more = row.getByRole("button", { name: "显示完整规则" });
   expect(more.getAttribute("aria-expanded")).toBe("false");
   expect(more.getAttribute("aria-controls")).toBe(expression.id);
   await userEvent.click(more);
   expect(row.getByText(SOCIAL).className).not.toContain("line-clamp-2");
-  const less = row.getByRole("button", { name: "Show less" });
+  const less = row.getByRole("button", { name: "收起" });
   expect(less.getAttribute("aria-expanded")).toBe("true");
   await userEvent.click(less);
   expect(row.getByText(SOCIAL).className).toContain("line-clamp-2");
@@ -173,19 +173,19 @@ test("a refusal by a named rule says the name, and clamps the rule to two lines"
 test("a row written before rules had names still renders, with the clamped rule alone", async () => {
   const row = await renderAuditRow(refusal({ rule: SOCIAL }));
 
-  expect(row.getByText("Blocked")).not.toBeNull();
-  expect(row.queryByText(/^Stopped by:/)).toBeNull();
+  expect(row.getByText("已拦截")).not.toBeNull();
+  expect(row.queryByText(/^拦下它的规则：/)).toBeNull();
   expect(row.getByText(SOCIAL).className).toContain("line-clamp-2");
-  expect(row.getByRole("button", { name: "Show full rule" })).not.toBeNull();
+  expect(row.getByRole("button", { name: "显示完整规则" })).not.toBeNull();
 });
 
 test("a rule short enough to fit has nothing more to show", async () => {
   const rule = 'intent == "navigate" && page.host == "x.com"';
   const row = await renderAuditRow(refusal({ rule, ruleName: "Stay off X" }));
 
-  expect(row.getByText("Stopped by: Stay off X")).not.toBeNull();
+  expect(row.getByText("拦下它的规则：Stay off X")).not.toBeNull();
   expect(row.getByText(rule)).not.toBeNull();
-  expect(row.queryByRole("button", { name: "Show full rule" })).toBeNull();
+  expect(row.queryByRole("button", { name: "显示完整规则" })).toBeNull();
 });
 
 test("a trial-mode refusal went ahead, so the rule would have stopped it", async () => {
@@ -198,6 +198,6 @@ test("a trial-mode refusal went ahead, so the rule would have stopped it", async
     }),
   );
 
-  expect(row.getByText(`Would be stopped by: ${NAME}`)).not.toBeNull();
-  expect(row.getByText("dry-run: recorded, not enforced")).not.toBeNull();
+  expect(row.getByText(`本会拦下它的规则：${NAME}`)).not.toBeNull();
+  expect(row.getByText("演练模式：只记录，不拦截")).not.toBeNull();
 });

@@ -1,7 +1,10 @@
 /*
- * One employee, one detail page (user decision: 合并成一个详情页). /wakers/$agentId holds what the
- * old /bots/$agentId profile had — the 对你 controls, the activity feed, tool permissions and where
- * updates go — next to its own sections, and /bots/$agentId redirects there.
+ * M5b：员工详情改成上游的结构——`/bots/$agentId` 是员工自己的页面（角色档案、需要你、对你、动态一瞥、
+ * 这位员工的设置、管理），原 `/wakers/$agentId` 一页放下的其余各段拆进 `/bots/$agentId/*` 分页。这里钉住的是
+ * 原来那一页的每一段在新结构里都有落点，以及它们的行为没变。
+ *
+ * (Before M5b: one employee, one detail page — user decision 合并成一个详情页 — that /bots/$agentId
+ * redirected to.)
  *
  * M4 brought upstream v1.0.0's Bot page onto it: what the employee waits on the person for (需要你),
  * a glance at its activity with the full lists one row away on /bots/$agentId/activity, the tasks
@@ -42,9 +45,12 @@ import type {
 import type { ResponsibilityRecord } from "@/lib/responsibilities";
 import type { RoutineRecord } from "@/lib/routines/queries";
 import type { BotTask } from "@/lib/tasks/queries";
-import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId";
+import { Route as AccessRoute } from "@/routes/_authed/_app/bots.$agentId.access";
 import { Route as BotActivityRoute } from "@/routes/_authed/_app/bots.$agentId.activity";
-import { Route as WakerDetailRoute } from "@/routes/_authed/_app/wakers_.$agentId";
+import { Route as ApprovalsRoute } from "@/routes/_authed/_app/bots.$agentId.approvals";
+import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as MemoryRoute } from "@/routes/_authed/_app/bots.$agentId.memory";
+import { Route as SetupRoute } from "@/routes/_authed/_app/bots.$agentId.setup";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -338,7 +344,7 @@ function serve(answers: Answers) {
 
 let currentRouter: { state: { location: { pathname: string } } } | null = null;
 
-function draw(answers: Answers, path = `/wakers/${agentId}`) {
+function draw(answers: Answers, path = `/bots/${agentId}`) {
   serve(answers);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -351,38 +357,28 @@ function draw(answers: Answers, path = `/wakers/${agentId}`) {
       path,
       component: () => null,
     } as never);
+  const mount = (route: { update: (options: never) => unknown }, path: string) =>
+    route.update({ getParentRoute: () => root, path } as never) as never;
   const router = createRouter({
-    context: {},
+    // The memory page asks the deployment whether it offers memory before it loads.
+    context: { queryClient },
     history: createMemoryHistory({ initialEntries: [path] }),
     routeTree: root.addChildren([
-      WakerDetailRoute.update({
-        getParentRoute: () => root,
-        path: "/wakers/$agentId",
-      } as never),
-      // The page's links need their addresses to resolve; the screens behind them are not under test.
-      // The archived profile keeps its activity page under it, as the app's route tree does.
-      (
-        BotProfileRoute.update({
-          getParentRoute: () => root,
-          path: "/bots/$agentId",
-        } as never) as unknown as {
-          addChildren: (children: unknown[]) => unknown;
-        }
-      ).addChildren([
-        BotActivityRoute.update({
-          getParentRoute: () => BotProfileRoute,
-          path: "activity",
-        } as never),
-      ]) as never,
-      stub("/wakers"),
+      mount(BotProfileRoute, "/bots/$agentId"),
+      mount(BotActivityRoute, "/bots/$agentId/activity"),
+      mount(AccessRoute, "/bots/$agentId/access"),
+      mount(ApprovalsRoute, "/bots/$agentId/approvals"),
+      mount(MemoryRoute, "/bots/$agentId/memory"),
+      mount(SetupRoute, "/bots/$agentId/setup"),
+      // The pages' links need their addresses to resolve; the screens behind them are not under test.
+      stub("/bots"),
+      stub("/bots/$agentId/responsibilities"),
+      stub("/bots/$agentId/routines"),
+      stub("/bots/$agentId/reach"),
+      stub("/bots/$agentId/sharing"),
       stub("/channel/new"),
-      stub("/assemble/$agentId"),
       stub("/tasks"),
-      stub("/routines"),
-      stub("/responsibilities"),
-      stub("/resources"),
-      stub("/approvals"),
-      stub("/autonomous"),
+      stub("/capabilities/memory"),
       stub("/channel/$channelId"),
     ]),
   });
@@ -402,50 +398,47 @@ function headings(screen: ReturnType<typeof draw>): string[] {
     .map((node) => node.textContent?.trim() ?? "");
 }
 
-describe("the merged employee detail page", () => {
-  test("carries the old profile's sections beside its own", async () => {
+describe("the employee's own page and its pages", () => {
+  test("every section of the old detail page has a place in the new pages", async () => {
+    const where: [string, string[]][] = [
+      ["", ["对你", "动态", "这位员工的设置", "管理"]],
+      ["/activity", ["看板上的进行中任务", "最近审计"]],
+      ["/approvals", ["审批规则", "权限"]],
+      ["/access", ["它能用什么"]],
+      ["/setup", ["运行方式", "模型", "人设", "知识库"]],
+      ["/memory", ["记忆来源", "主动巡检"]],
+    ];
+    for (const [page, titles] of where) {
+      const screen = draw(fullAnswers(), `/bots/${agentId}${page}`);
+      await waitFor(() => {
+        const shown = headings(screen);
+        for (const title of titles) expect(shown).toContain(title);
+      });
+      // One place each, so no section appears twice on a page.
+      const shown = headings(screen);
+      expect(new Set(shown).size).toBe(shown.length);
+      cleanup();
+    }
     const screen = draw(fullAnswers());
     await screen.findByText("替你追问供应商报价");
-    const titles = headings(screen);
-    for (const title of [
-      "对你",
-      "动态",
-      "权限",
-      "消息发到哪里",
-      "职责",
-      "看板上的进行中任务",
-      "技能授权",
-      "运行方式",
-      "记忆来源",
-      "主动巡检",
-      "最近审计",
-    ]) {
-      expect(titles).toContain(title);
-    }
-    // The full lists moved to the activity page; this page only glances at what is under way.
+    // The full lists are on the activity page; the employee's own page only glances at what is
+    // under way.
     for (const title of ["进行中", "已排期"]) {
-      expect(titles).not.toContain(title);
+      expect(headings(screen)).not.toContain(title);
     }
-    // One page, so no section appears twice.
-    expect(new Set(titles).size).toBe(titles.length);
     expect(
       screen.getByRole("link", { name: /发消息|和它说话|进对话/ }),
     ).toBeTruthy();
   });
 
-  test("/bots/$agentId redirects to the merged page", async () => {
+  test("/bots/$agentId is the employee's own page, not a redirect", async () => {
     const screen = draw(fullAnswers(), `/bots/${agentId}`);
     expect(
       await screen.findByRole("heading", { level: 1, name: profile.name }),
     ).toBeTruthy();
     await screen.findByText("替你追问供应商报价");
-    await waitFor(() =>
-      expect(currentRouter?.state.location.pathname).toBe(`/wakers/${agentId}`),
-    );
-    // The merged page, not the archived one: its board section is there too.
-    expect(
-      screen.getByRole("heading", { level: 2, name: "看板上的进行中任务" }),
-    ).toBeTruthy();
+    expect(currentRouter?.state.location.pathname).toBe(`/bots/${agentId}`);
+    expect(screen.getByTestId("profile-card")).toBeTruthy();
   });
 
   test("「需要你」列出这位员工在等你的事，「本周完成」收着这周标完成的任务", async () => {
@@ -532,13 +525,17 @@ describe("the merged employee detail page", () => {
     answers.capabilities = ok({
       capabilities: { builtInAvailable: true, isolationAvailable: true },
     });
-    const screen = draw(answers);
-    const runtime = (
+    const screen = draw(answers, `/bots/${agentId}/setup`);
+    const connection = (
       await screen.findByRole("heading", { level: 2, name: "运行方式" })
     ).closest("section") as HTMLElement;
-    expect(within(runtime).getByTestId("coworker-framework").textContent).toBe(
-      "熊宝内置",
-    );
+    expect(
+      within(connection).getByTestId("coworker-framework").textContent,
+    ).toBe("熊宝内置");
+    // Upstream's Setup keeps 独立运行 with 身份, beside 可见性.
+    const runtime = (
+      screen.getByRole("heading", { level: 2, name: "身份" })
+    ).closest("section") as HTMLElement;
     const toggle = await waitFor(() => {
       const found = within(runtime).getByRole("switch", { name: "独立运行" });
       expect(found.hasAttribute("data-disabled")).toBe(false);
@@ -564,9 +561,9 @@ describe("the merged employee detail page", () => {
   });
 
   test("部署给不了独立电脑时，开关不可用并说明原因", async () => {
-    const screen = draw(fullAnswers());
+    const screen = draw(fullAnswers(), `/bots/${agentId}/setup`);
     const runtime = (
-      await screen.findByRole("heading", { level: 2, name: "运行方式" })
+      await screen.findByRole("heading", { level: 2, name: "身份" })
     ).closest("section") as HTMLElement;
     expect(
       await within(runtime).findByText("这个熊宝没法给员工分配独立的电脑。"),
@@ -583,9 +580,9 @@ describe("the merged employee detail page", () => {
     answers.agent = ok({
       agent: { ...profile, instructions: "先问清楚再动手。" },
     });
-    const screen = draw(answers);
+    const screen = draw(answers, `/bots/${agentId}/setup`);
     const runtime = (
-      await screen.findByRole("heading", { level: 2, name: "运行方式" })
+      await screen.findByRole("heading", { level: 2, name: "身份" })
     ).closest("section") as HTMLElement;
     fireEvent.click(within(runtime).getByText("先问清楚再动手。"));
     const dialog = await screen.findByRole("dialog");
@@ -599,34 +596,34 @@ describe("the merged employee detail page", () => {
     );
     cleanup();
 
-    const plain = draw(fullAnswers());
+    const plain = draw(fullAnswers(), `/bots/${agentId}/setup`);
     const plainRuntime = (
-      await plain.findByRole("heading", { level: 2, name: "运行方式" })
+      await plain.findByRole("heading", { level: 2, name: "身份" })
     ).closest("section") as HTMLElement;
     expect(within(plainRuntime).queryByText("指令")).toBeNull();
   });
 
   test("记忆来源和主动巡检只读这位员工的，并指向你自己记住的内容", async () => {
-    const screen = draw(fullAnswers());
+    const screen = draw(fullAnswers(), `/bots/${agentId}/memory`);
     const sources = (
       await screen.findByRole("heading", { level: 2, name: "记忆来源" })
     ).closest("section") as HTMLElement;
     expect(await within(sources).findByText("还没有来源")).toBeTruthy();
     expect(
       screen
-        .getByRole("link", { name: "能力与资源 › 信息源与记忆" })
+        .getByRole("link", { name: "能力 › 记忆与信息源" })
         .getAttribute("href"),
-    ).toBe("/resources?tab=sources");
+    ).toBe("/capabilities/memory");
     expect(
       await screen.findByRole("heading", { level: 2, name: "主动巡检" }),
     ).toBeTruthy();
   });
 
-  test("职责区链到按这位员工筛选的长期职责页", async () => {
+  test("「长期职责」一行打开这位员工自己的长期职责页", async () => {
     const screen = draw(fullAnswers());
-    const link = await screen.findByRole("link", { name: "去长期职责页管理" });
-    expect(link.getAttribute("href")).toBe(
-      `/responsibilities?agent=${agentId}`,
+    const row = (await screen.findByText("长期职责")).closest("a");
+    expect(row?.getAttribute("href")).toBe(
+      `/bots/${agentId}/responsibilities`,
     );
   });
 });

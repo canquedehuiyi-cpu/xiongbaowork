@@ -10,6 +10,7 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
+import { RequestError } from "@/lib/client";
 import { consentCopy } from "@/lib/plugins/enablement-notes";
 import {
   authorizeActionMutationOptions,
@@ -66,7 +67,7 @@ export function GrantList({
     onSuccess: (authorizationUrl) => {
       if (authorizationUrl === null) {
         setNotice(
-          "OpenBot answered without a consent link, so nothing was authorized. Try again, or ask an admin if it keeps happening.",
+          "熊宝的回应里没有授权链接，所以什么都没有授权。请重试；如果一直这样，请联系管理员。",
         );
         return;
       }
@@ -75,18 +76,26 @@ export function GrantList({
   });
 
   if (grants.isPending) return null;
+  /*
+   * A DEPLOYMENT WITHOUT THE ROUTE DRAWS NOTHING（M5b）。Per-action authorization arrives with the
+   * plugin session's X8; until then `/servers/:id/grants` answers 404, and a list that can only say
+   * "couldn't read" about a feature that is not there would be a failure nobody can fix.
+   */
+  if (grants.error instanceof RequestError && grants.error.status === 404) {
+    return null;
+  }
   if (grants.error) {
     return (
-      <PageSection title="Actions">
+      <PageSection title="动作">
         <p className="text-destructive text-sm" role="alert">
-          Couldn't read what this account allows right now.{" "}
+          现在读不到这个账号允许做什么。{" "}
           <Button
             onClick={() => grants.refetch()}
             size="sm"
             type="button"
             variant="outline"
           >
-            Retry
+            重试
           </Button>
         </p>
       </PageSection>
@@ -97,11 +106,11 @@ export function GrantList({
   if (couldNotRead(all, appNames)) {
     const [only] = all;
     return (
-      <PageSection title="Actions">
+      <PageSection title="动作">
         {/* Not an action: the entry's label is the toolkit's own name, which a person must not
             see in their grant list as if it were one. */}
         <p data-could-not-read="" role="status" className="text-sm">
-          Couldn't read what this account allows right now.
+          现在读不到这个账号允许做什么。
           {only?.state === "unknown" ? ` ${only.reason}` : null}{" "}
           <Button
             onClick={() => grants.refetch()}
@@ -109,7 +118,7 @@ export function GrantList({
             type="button"
             variant="outline"
           >
-            Retry
+            重试
           </Button>
         </p>
       </PageSection>
@@ -141,8 +150,8 @@ export function GrantList({
 
   return (
     <PageSection
-      description="Grouped by the permission each action asks for. This matches what the consent screen shows."
-      title="Actions"
+      description="按每个动作要的权限分组，和授权页面上显示的一致。"
+      title="动作"
     >
       {notice ? (
         <p className="text-destructive text-sm" role="alert">
@@ -150,9 +159,9 @@ export function GrantList({
         </p>
       ) : null}
       <Input
-        aria-label="Search actions"
+        aria-label="搜索动作"
         onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search actions"
+        placeholder="搜索动作"
         type="search"
         value={search}
       />
@@ -165,10 +174,10 @@ export function GrantList({
         >
           <p className="mb-1 text-muted-foreground text-xs">
             {group.kind === "whole-app"
-              ? "Everything in this app, approved together"
+              ? "这个应用里的所有动作，一起授权"
               : group.kind === "none"
-                ? "Asks for no permission of its own"
-                : `Needs ${group.scopes.join(", ")}`}
+                ? "不需要单独的权限"
+                : `需要 ${group.scopes.join(", ")}`}
           </p>
           <PageRows>
             {group.grants.map((grant) => (
@@ -196,7 +205,7 @@ export function GrantList({
                       type="button"
                       variant="outline"
                     >
-                      Authorize
+                      授权
                     </Button>
                   ) : null}
                   {grant.state === "unknown" ? (
@@ -206,7 +215,7 @@ export function GrantList({
                       type="button"
                       variant="outline"
                     >
-                      Retry
+                      重试
                     </Button>
                   ) : null}
                 </ItemActions>
@@ -217,13 +226,12 @@ export function GrantList({
       ))}
       {hidden > 0 ? (
         <p className="text-muted-foreground text-sm">
-          {hidden} more {hidden === 1 ? "action" : "actions"} not yet
-          authorized. Search to find {hidden === 1 ? "it" : "one"}.
+          还有 {hidden} 个动作没有授权，搜索可以找到。
         </p>
       ) : null}
       {term.length > 0 && groups.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No action matches that search.
+          没有匹配的动作。
         </p>
       ) : null}
       {choosing !== null ? (
@@ -258,14 +266,14 @@ function ConsentNotice({
 }) {
   return (
     <fieldset
-      aria-label={`Before you authorize ${action}`}
+      aria-label={`授权「${action}」之前`}
       className="m-0 flex min-w-0 flex-col gap-2 rounded-lg border p-3"
       data-consent-copy=""
     >
       <p className="text-sm">{sentence}</p>
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel} size="sm" type="button" variant="ghost">
-          Cancel
+          取消
         </Button>
         <Button
           disabled={busy}
@@ -274,7 +282,7 @@ function ConsentNotice({
           type="button"
           variant="outline"
         >
-          Continue to consent
+          继续去授权
         </Button>
       </div>
     </fieldset>
@@ -286,17 +294,17 @@ function describe(grant: GrantState, canAuthorize: boolean): string {
     case "authorized":
       // Nobody authorized an action that needs no authorization, so the row does not say they did.
       return grant.authorization === "not-required"
-        ? "Needs no authorization."
-        : "Authorized.";
+        ? "不需要授权。"
+        : "已授权。";
     case "needs-consent":
       return canAuthorize
-        ? "Not authorized yet."
-        : "Not authorized yet. An admin can authorize it.";
+        ? "还没有授权。"
+        : "还没有授权。管理员可以授权它。";
     case "needs-operator":
       return grant.missing.length > 0
-        ? `Missing ${grant.missing.join(", ")}. An admin has to set it. Authorizing can't fix it.`
-        : "A setting is missing. An admin has to set it. Authorizing can't fix it.";
+        ? `缺少 ${grant.missing.join(", ")}，需要管理员设置。授权解决不了。`
+        : "缺少一项设置，需要管理员设置。授权解决不了。";
     case "unknown":
-      return `Couldn't read this one right now. ${grant.reason}`;
+      return `现在读不到这一项。${grant.reason}`;
   }
 }

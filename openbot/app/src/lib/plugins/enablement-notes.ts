@@ -29,7 +29,7 @@ export function coverageWarning(
 ): string | null {
   if (app.classifiedCount === null) return null;
   if (app.actionCount > 0 && app.classifiedCount === 0) {
-    return "This provider hasn't said which of its actions only read, so each one is treated as a change. Bots ask before using it wherever changes need approval, and check-ins can't use it.";
+    return "这个服务商没有说明哪些动作只读，所以每个动作都当作会改动。凡是改动要审批的地方，员工用它之前都会先问；巡检用不了它。";
   }
   return null;
 }
@@ -65,17 +65,15 @@ export function consentBreadth(
   if (actionCount <= 0) return null;
   if (permissionCount === 0) {
     return actionCount === 1
-      ? "This app has a single action, and approving it approves the app."
-      : `Approving any action in this app approves all ${actionCount} of them.`;
+      ? "这个应用只有一个动作，授权它就是授权整个应用。"
+      : `授权这个应用里的任何一个动作，就会把全部 ${actionCount} 个动作一起授权。`;
   }
-  const permissions = `${permissionCount} separate ${permissionCount === 1 ? "permission" : "permissions"}`;
-  const actions = `${actionCount} ${actionCount === 1 ? "action" : "actions"}`;
-  const base = `This app uses ${permissions} across ${actions}.`;
+  const base = `这个应用的 ${actionCount} 个动作用到 ${permissionCount} 项不同的权限。`;
   const unscoped = actionCount - scopedActionCount;
   if (unscoped <= 0) return base;
   return unscoped === 1
-    ? `${base} A further 1 requests no permission of its own and becomes callable with any approval here.`
-    : `${base} A further ${unscoped} request no permission of their own and become callable with any approval here.`;
+    ? `${base}另有 1 个动作不需要单独的权限，这里授权了任何一项它就能调用。`
+    : `${base}另有 ${unscoped} 个动作不需要单独的权限，这里授权了任何一项它们就能调用。`;
 }
 
 /**
@@ -129,7 +127,7 @@ export function needsKey(app: Pick<ComposioApp, "connection">): boolean {
 export function keyNeededLine(
   app: Pick<ComposioApp, "connection" | "name">,
 ): string | null {
-  return needsKey(app) ? `Needs a key from ${app.name}` : null;
+  return needsKey(app) ? `需要 ${app.name} 的密钥` : null;
 }
 
 /**
@@ -172,7 +170,7 @@ export function consentCopy(
   const asked = actions.find((action) => action.name === requested);
   const scopes = asked ? [...new Set(asked.scopes)].sort() : [];
   const grants =
-    "Which Bots may call an action is still set separately, and approving does not change it.";
+    "哪些员工可以调用某个动作仍然单独设置，授权不会改变它。";
   if (!actions.some((action) => action.scopes.length > 0)) {
     const all = actions.length;
     return {
@@ -180,15 +178,15 @@ export function consentCopy(
       alsoEnables: [],
       sentence:
         all === 1
-          ? `This app cannot separate permissions; approving this approves its single action. ${grants}`
-          : `This app cannot separate permissions; approving this approves all ${all}. ${grants}`,
+          ? `这个应用分不开权限；授权这个就是授权它唯一的动作。${grants}`
+          : `这个应用分不开权限；授权这个就会把全部 ${all} 个动作一起授权。${grants}`,
     };
   }
   if (scopes.length === 0) {
     return {
       scopes,
       alsoEnables: [],
-      sentence: `${requested} requests no permission of its own; approving connects the account. ${grants}`,
+      sentence: `「${requested}」不需要单独的权限；授权会连上这个账号。${grants}`,
     };
   }
   const alsoEnables = actions
@@ -199,14 +197,14 @@ export function consentCopy(
     )
     .map((action) => action.name)
     .sort();
-  const permission = `${scopes.length === 1 ? "the permission" : "the permissions"} ${scopes.join(", ")}`;
+  const permission = `权限 ${scopes.join(", ")}`;
   const tail =
     alsoEnables.length === 0
-      ? "No other action requires it."
-      : `It also enables ${alsoEnables.length === 1 ? "this other action" : `these ${alsoEnables.length} other actions`} requiring it: ${alsoEnables.join(", ")}.`;
+      ? "没有别的动作需要它。"
+      : `它也会让需要同样权限的${alsoEnables.length === 1 ? "另一个动作" : `另外 ${alsoEnables.length} 个动作`}可以调用：${alsoEnables.join(", ")}。`;
   return {
     scopes,
     alsoEnables,
-    sentence: `Approving ${requested} asks the provider for ${permission}. ${tail} ${grants}`,
+    sentence: `授权「${requested}」会向服务商申请${permission}。${tail}${grants}`,
   };
 }

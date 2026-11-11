@@ -82,16 +82,16 @@ function renderGeneral() {
 
 test("Share usage data says what is sent and when a change applies, and links what OpenBot sends", async () => {
   const view = renderGeneral();
-  await view.findByRole("heading", { name: "Privacy" });
-  const toggle = view.getByRole("switch", { name: "Share usage data" });
+  await view.findByRole("heading", { name: "隐私" });
+  const toggle = view.getByRole("switch", { name: "共享使用数据" });
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   expect(
     view.getByText(
-      /It never sends your conversations, files or keys\. Changes apply the next time OpenBot starts\./,
+      /它从不发送你的对话、文件或密钥。改动在熊宝下次启动时生效。/,
     ),
   ).toBeTruthy();
   expect(
-    view.getByRole("link", { name: "What OpenBot sends" }).getAttribute("href"),
+    view.getByRole("link", { name: "熊宝会发送什么" }).getAttribute("href"),
   ).toBe(
     "https://github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
   );
@@ -99,7 +99,7 @@ test("Share usage data says what is sent and when a change applies, and links wh
 
 test("turning it off asks the desktop app to write the opt-out, and the switch shows it", async () => {
   const view = renderGeneral();
-  const toggle = await view.findByRole("switch", { name: "Share usage data" });
+  const toggle = await view.findByRole("switch", { name: "共享使用数据" });
   await userEvent.click(toggle);
   await waitFor(() =>
     expect(calls).toContainEqual({
@@ -110,12 +110,12 @@ test("turning it off asks the desktop app to write the opt-out, and the switch s
   await waitFor(() =>
     expect(
       view
-        .getByRole("switch", { name: "Share usage data" })
+        .getByRole("switch", { name: "共享使用数据" })
         .getAttribute("aria-checked"),
     ).toBe("false"),
   );
   // And on again.
-  await userEvent.click(view.getByRole("switch", { name: "Share usage data" }));
+  await userEvent.click(view.getByRole("switch", { name: "共享使用数据" }));
   await waitFor(() =>
     expect(calls).toContainEqual({
       command: "plugin:openbot-desktop|set_usage_data",
@@ -127,18 +127,18 @@ test("turning it off asks the desktop app to write the opt-out, and the switch s
 test("an opt-out set where the app was launched shows off and cannot be switched on", async () => {
   usageData = { shared: false, offByEnvironment: true };
   const view = renderGeneral();
-  const toggle = await view.findByRole("switch", { name: "Share usage data" });
+  const toggle = await view.findByRole("switch", { name: "共享使用数据" });
   expect(toggle.getAttribute("aria-checked")).toBe("false");
   expect(
     toggle.hasAttribute("disabled") ||
       toggle.getAttribute("aria-disabled") === "true",
   ).toBe(true);
-  expect(view.getByText(/Turned off on this computer/)).toBeTruthy();
+  expect(view.getByText(/已在这台电脑上关闭/)).toBeTruthy();
 });
 
 test("a desktop app without the command draws no Privacy section", async () => {
   const view = renderGeneral();
-  await view.findByRole("heading", { name: "Privacy" });
+  await view.findByRole("heading", { name: "隐私" });
   cleanup();
   queryClient.clear();
   (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
@@ -148,7 +148,7 @@ test("a desktop app without the command draws no Privacy section", async () => {
     transformCallback: () => 0,
   };
   const older = renderGeneral();
-  await older.findByRole("heading", { name: "About you" });
+  await older.findByRole("heading", { name: "关于你" });
   await settleReactWork();
-  expect(older.queryByRole("heading", { name: "Privacy" })).toBeNull();
+  expect(older.queryByRole("heading", { name: "隐私" })).toBeNull();
 });

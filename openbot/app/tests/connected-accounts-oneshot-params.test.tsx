@@ -11,7 +11,7 @@ import {
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { identityKeys } from "@/lib/identity/queries";
 import { pluginKeys } from "@/lib/plugins/queries";
-import { Route } from "@/routes/_authed/settings/connected-accounts/index";
+import { Route } from "@/routes/_authed/_app/connections.index";
 
 /**
  * EVERY ONE-SHOT PARAMETER THIS SCREEN CONSUMES IS DROPPED FROM THE URL, NOT JUST `?linked=`.
@@ -23,8 +23,8 @@ import { Route } from "@/routes/_authed/settings/connected-accounts/index";
  * account could not be connected about an attempt they have since finished. `?linked=` was stripped
  * and `?connected=` was not.
  *
- * 熊宝中文版的已连接账号页在 /settings/connected-accounts（上游搬去的 /connections 不收）；
- * 上游的 `?authorized=`（代管应用的逐次授权核验）服务端没有，这里也不测。
+ * M5b 起熊宝的已连接账号页和上游一样在 /connections（/settings/connected-accounts 留作重定向）；
+ * Arcade 回程验证（X5）的 `?authorized=<原因>` 也落在这里，同样读一次就从地址里去掉。
  *
  * THE NOTICE STILL HAS TO BE DRAWN, which is the other half of the claim and the reason the strip
  * cannot be a bare navigate on mount: the screen reads each value once into state, draws the
@@ -32,7 +32,7 @@ import { Route } from "@/routes/_authed/settings/connected-accounts/index";
  * satisfied by a screen that says nothing at all.
  */
 
-const PATH = "/settings/connected-accounts";
+const PATH = "/connections";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
@@ -115,4 +115,22 @@ test("an arrival with no one-shot parameter is left exactly as it came", async (
   const { router } = renderScreen("");
   await waitFor(() => expect(searchOf(router)).toEqual({}));
   expect(router.state.location.href).toBe(PATH);
+});
+
+/**
+ * The Arcade verifier's own channel（X5）: a reason code, drawn as this build's Chinese sentence and
+ * then dropped. The sentence never travels in the URL; an unknown code draws nothing.
+ */
+test("?authorized= is said in Chinese once and then dropped from the URL", async () => {
+  const { view, router } = renderScreen("?authorized=no-attempt");
+  await view.findByText(/没有正在进行、等你完成的授权/);
+  await waitFor(() => expect(searchOf(router)).toEqual({}));
+  expect(view.queryByText(/没有正在进行、等你完成的授权/)).not.toBeNull();
+  expect(router.state.location.href).toBe(PATH);
+});
+
+test("an ?authorized= code this build does not know draws nothing", async () => {
+  const { view, router } = renderScreen("?authorized=toString");
+  await waitFor(() => expect(searchOf(router)).toEqual({}));
+  expect(view.container.textContent ?? "").not.toMatch(/授权|function/);
 });

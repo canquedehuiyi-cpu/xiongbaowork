@@ -1,7 +1,12 @@
-import { IconBolt, IconChevronRight, IconPlus, IconShare } from "@tabler/icons-react";
+import {
+  IconBolt,
+  IconChevronRight,
+  IconPlus,
+  IconShare,
+} from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { type ComponentProps, Fragment, type ReactNode, useState } from "react";
+import { type ComponentProps, Fragment, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   attentionSummary,
@@ -138,7 +143,8 @@ export function BotRoster({
   const yours = shown(groups.yours);
   const shared = shown(groups.shared);
   const hidden = shown(facts.hidden.data ?? []);
-  const yoursPinned = groups.yours.length === 0 && groups.pinned.some((agent) => agent.mine);
+  const yoursPinned =
+    groups.yours.length === 0 && groups.pinned.some((agent) => agent.mine);
 
   if (
     narrowed &&
@@ -177,7 +183,11 @@ export function BotRoster({
     return view === "list" ? (
       <RosterRows agents={agentsIn} facts={facts} />
     ) : (
-      <div className={cn(GRID, "mt-4")} data-section={section} data-testid="waker-grid">
+      <div
+        className={cn(GRID, "mt-4")}
+        data-section={section}
+        data-testid="waker-grid"
+      >
         {agentsIn.map((agent, index) => (
           <PausableCard
             agent={agent}
@@ -362,14 +372,20 @@ function RosterRows({
  * check-in items and tasks included, so a Bot whose items are listed under 需要你 still says so
  * wherever it sits.
  */
-function RosterRow({ agent, facts }: { agent: AgentProfile; facts: RosterFacts }) {
+function RosterRow({
+  agent,
+  facts,
+}: {
+  agent: AgentProfile;
+  facts: RosterFacts;
+}) {
   const state = facts.attentionById.get(agent.id);
   const status = facts.statusOf(agent);
   const stats = facts.statsOf(agent);
   const isAvatar = agent.id === facts.avatarAgentId;
   const waiting = state ? waitingOnYou(state) : 0;
   const asks = state ? attentionSummary(state) : "";
-  const facts_: ReactNode[] = [
+  const line: string[] = [
     STATUS_WORD[status],
     facts.deviceLineOf(agent) ? "本地" : "未绑定",
     `任务数 ${stats ? `${stats.truncated ? "≥" : ""}${stats.stats.count}` : "—"}`,
@@ -394,13 +410,18 @@ function RosterRow({ agent, facts }: { agent: AgentProfile; facts: RosterFacts }
           {agent.name}
           {isAvatar ? <span className={CARD_TAG}>个人分身</span> : null}
           {agent.id === facts.unconfiguredAvatar ? (
-            <span className={cn(CARD_TAG, "border-signal/45 border-dashed text-signal-ink")}>
+            <span
+              className={cn(
+                CARD_TAG,
+                "border-signal/45 border-dashed text-signal-ink",
+              )}
+            >
               待配置
             </span>
           ) : null}
         </ItemTitle>
         <ItemDescription>
-          <span data-status={status}>{facts_.join(" · ")}</span>
+          <span data-status={status}>{line.join(" · ")}</span>
           {asks ? (
             <>
               {" · "}

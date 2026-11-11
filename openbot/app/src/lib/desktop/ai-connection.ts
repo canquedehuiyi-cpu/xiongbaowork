@@ -29,51 +29,51 @@ function signedIn(
     case "claude-plan":
       return {
         provider: "Anthropic",
-        signIn: "Claude plan",
-        said: "Signed in with your Claude plan.",
+        signIn: "Claude 套餐",
+        said: "已用你的 Claude 套餐登录。",
       };
     case "chat-gpt-plan":
       return {
         provider: "OpenAI",
-        signIn: "ChatGPT plan",
-        said: "Signed in with your ChatGPT plan.",
+        signIn: "ChatGPT 套餐",
+        said: "已用你的 ChatGPT 套餐登录。",
       };
     case "anthropic-api-key":
       return {
         provider: "Anthropic",
-        signIn: "API key",
-        said: "Uses your Anthropic API key.",
+        signIn: "API 密钥",
+        said: "使用你的 Anthropic API 密钥。",
       };
     case "open-ai-api-key":
       return {
         provider: "OpenAI",
-        signIn: "API key",
-        said: "Uses your OpenAI API key.",
+        signIn: "API 密钥",
+        said: "使用你的 OpenAI API 密钥。",
       };
     case "google-oauth":
       return {
         provider: "Google Gemini",
-        signIn: "Google account",
-        said: "Signed in with your Google account.",
+        signIn: "Google 账号",
+        said: "已用你的 Google 账号登录。",
       };
     case "xai-oauth":
       return {
         provider: "xAI",
-        signIn: "xAI account",
-        said: "Signed in with your xAI account.",
+        signIn: "xAI 账号",
+        said: "已用你的 xAI 账号登录。",
       };
     case "compatible-endpoint": {
       const preset = host ? PRESET_HOSTS[host] : undefined;
       if (preset)
         return {
           provider: preset,
-          signIn: "API key",
-          said: `Uses your ${preset} API key.`,
+          signIn: "API 密钥",
+          said: `使用你的 ${preset} API 密钥。`,
         };
       return {
-        provider: "OpenAI-compatible",
-        signIn: host ?? "Your own address",
-        said: host ? `Connected to ${host}.` : "Connected to your own address.",
+        provider: "OpenAI 兼容接口",
+        signIn: host ?? "你自己的地址",
+        said: host ? `已连接到 ${host}。` : "已连接到你自己的地址。",
       };
     }
   }
@@ -89,20 +89,20 @@ export function describeAiConnection(
     connection.endpointHost,
   );
   const details: AiConnectionDetail[] = [
-    { label: "Provider", value: provider },
+    { label: "提供方", value: provider },
     {
       label:
-        connection.kind === "compatible-endpoint" && signIn !== "API key"
-          ? "Address"
-          : "Sign-in",
+        connection.kind === "compatible-endpoint" && signIn !== "API 密钥"
+          ? "地址"
+          : "登录方式",
       value: signIn,
     },
   ];
   if (connection.model)
-    details.push({ label: "Model", value: connection.model });
+    details.push({ label: "模型", value: connection.model });
   return {
     provider,
-    summary: connection.model ? `${said} Model: ${connection.model}` : said,
+    summary: connection.model ? `${said}模型：${connection.model}` : said,
     details,
   };
 }

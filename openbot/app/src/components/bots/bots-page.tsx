@@ -36,10 +36,7 @@ import {
 } from "@/components/ui/item";
 import { STATUS_WORD } from "@/components/wakers/coworker-card";
 import { CreateCrewDialog, CrewTab } from "@/components/wakers/crews";
-import {
-  STATUS_ORDER,
-  useRosterFacts,
-} from "@/components/wakers/roster-facts";
+import { STATUS_ORDER, useRosterFacts } from "@/components/wakers/roster-facts";
 import {
   isNarrowed,
   parseWakersSearch,
@@ -447,7 +444,9 @@ function WhatYourBotsKnow() {
           </ItemMedia>
           <ItemContent>
             <ItemTitle>技能</ItemTitle>
-            <ItemDescription>你写的、或者员工自己学会的分步说明。</ItemDescription>
+            <ItemDescription>
+              你写的、或者员工自己学会的分步说明。
+            </ItemDescription>
           </ItemContent>
           <ItemActions>
             <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />

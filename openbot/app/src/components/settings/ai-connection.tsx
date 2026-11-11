@@ -42,8 +42,8 @@ export function AiModelSection() {
   if (desktopShell() === null || !connection.data) return null;
   return (
     <PageSection
-      description="Choose the AI provider your Bots use and how OpenBot signs in to it."
-      title="AI model"
+      description="选择员工用哪家 AI 提供方，以及熊宝怎样登录它。"
+      title="AI 模型"
     >
       <PageRows>
         <AiConnectionRow connection={connection.data} />
@@ -68,9 +68,9 @@ function AiConnectionRow({ connection }: { connection: DesktopAiConnection }) {
           <IconSparkles />
         </ItemMedia>
         <ItemContent>
-          <ItemTitle>{described?.provider ?? "Not chosen yet"}</ItemTitle>
+          <ItemTitle>{described?.provider ?? "还没有选择"}</ItemTitle>
           <ItemDescription>
-            {described?.summary ?? "Choose the AI your Bots use."}
+            {described?.summary ?? "选择员工使用的 AI。"}
           </ItemDescription>
         </ItemContent>
         <ItemActions>
@@ -80,11 +80,11 @@ function AiConnectionRow({ connection }: { connection: DesktopAiConnection }) {
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>AI connection</DialogTitle>
+            <DialogTitle>AI 连接</DialogTitle>
             <DialogDescription>
               {described
-                ? `Your Bots use ${described.provider}. Your key or sign-in stays on this computer.`
-                : "Your Bots don't have an AI provider yet."}
+                ? `你的员工使用 ${described.provider}。你的密钥或登录信息只保存在这台电脑上。`
+                : "你的员工还没有 AI 提供方。"}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4 flex flex-col gap-3 text-sm">
@@ -112,25 +112,24 @@ function AiConnectionRow({ connection }: { connection: DesktopAiConnection }) {
               </ItemGroup>
             )}
             <p className="text-muted-foreground">
-              To change it, OpenBot stops and the setup window opens. OpenBot
-              starts again with the connection you choose there.
+              要更换的话，熊宝会先停下并打开设置窗口，按你在那里选的连接重新启动。
             </p>
             {change.error ? (
               <p className="text-destructive" role="alert">
-                Couldn't open the setup window. Try again.
+                没能打开设置窗口，请再试一次。
               </p>
             ) : null}
           </DialogBody>
           <DialogFooter className="mt-4">
             <Button onClick={() => setOpen(false)} size="sm" variant="ghost">
-              Cancel
+              取消
             </Button>
             <Button
               disabled={stopping}
               onClick={() => change.mutate()}
               size="sm"
             >
-              {stopping ? "Stopping OpenBot…" : "Change AI connection"}
+              {stopping ? "正在停止熊宝…" : "更换 AI 连接"}
             </Button>
           </DialogFooter>
         </DialogContent>

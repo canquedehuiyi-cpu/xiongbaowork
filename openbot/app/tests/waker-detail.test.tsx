@@ -26,12 +26,20 @@ import type {
 } from "@/lib/bot-lifecycle/queries";
 import type { ResponsibilityRecord } from "@/lib/responsibilities";
 import type { RoutineRecord } from "@/lib/routines/queries";
-import { Route as WakerDetailRoute } from "@/routes/_authed/_app/wakers_.$agentId";
+import { Route as AccessRoute } from "@/routes/_authed/_app/bots.$agentId.access";
+import { Route as ActivityRoute } from "@/routes/_authed/_app/bots.$agentId.activity";
+import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as ResponsibilitiesRoute } from "@/routes/_authed/_app/bots.$agentId.responsibilities";
+import { Route as RoutinesRoute } from "@/routes/_authed/_app/bots.$agentId.routines";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * Story D5 at the screen a person reaches from a coworker's card: its duties, its running tasks,
+ * Story D5 at the screens a person reaches from a coworker's card: its duties, its running tasks,
  * its skill grants and its recent audit trail, each read from the endpoint that already serves it.
+ *
+ * M5b split the one detail page (`/wakers/$agentId`) into upstream's `/bots/$agentId/*` pages: the
+ * running tasks and the audit trail are on 动态 (`/activity`), the duties on 长期职责, the routines
+ * on 定时任务, the grants on 技能与应用 (`/access`), and the model on the employee's own page.
  *
  * The network is faked at `fetch`, not seeded into the cache, because half of what is worth asserting
  * is what the page asks for: the board narrowed to this executor and to `running`, and the audit
@@ -238,7 +246,9 @@ function serve(answers: Answers) {
   }) as typeof fetch;
 }
 
-function draw(answers: Answers) {
+type Page = "" | "activity" | "access" | "responsibilities" | "routines";
+
+function draw(answers: Answers, page: Page = "activity") {
   serve(answers);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -251,20 +261,25 @@ function draw(answers: Answers) {
       path,
       component: () => null,
     } as never);
+  const mount = (route: { update: (options: never) => unknown }, path: string) =>
+    route.update({ getParentRoute: () => root, path } as never) as never;
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: [`/wakers/${agentId}`] }),
+    history: createMemoryHistory({
+      initialEntries: [`/bots/${agentId}${page ? `/${page}` : ""}`],
+    }),
     routeTree: root.addChildren([
-      WakerDetailRoute.update({
-        getParentRoute: () => root,
-        path: "/wakers/$agentId",
-      } as never),
-      // The page's links need their addresses to resolve; the screens behind them are not under test.
-      stub("/wakers"),
-      stub("/assemble/$agentId"),
+      mount(BotProfileRoute, "/bots/$agentId"),
+      mount(ActivityRoute, "/bots/$agentId/activity"),
+      mount(AccessRoute, "/bots/$agentId/access"),
+      mount(ResponsibilitiesRoute, "/bots/$agentId/responsibilities"),
+      mount(RoutinesRoute, "/bots/$agentId/routines"),
+      // The pages' links need their addresses to resolve; the screens behind them are not under test.
+      stub("/bots"),
+      stub("/bots/$agentId/setup"),
       stub("/tasks"),
-      stub("/routines"),
-      stub("/responsibilities"),
+      stub("/admin/audit"),
+      stub("/channel/$channelId"),
     ]),
   });
   return render(
@@ -282,39 +297,11 @@ function section(screen: ReturnType<typeof draw>, title: string) {
   return within(element);
 }
 
-test("the detail page shows duties, running tasks, skill grants and the audit trail of this coworker", async () => {
+test("动态 shows this coworker's running tasks and its audit trail", async () => {
   const screen = draw(fullAnswers());
 
-  await waitFor(() =>
-    expect(screen.getByRole("heading", { name: "职责" })).toBeTruthy(),
-  );
-
-  // 职责: the role, this coworker's duties only, and its routines only.
-  const duties = section(screen, "职责");
-  expect(duties.getByText("负责数据库迁移和接口。")).toBeTruthy();
-  await waitFor(() => expect(duties.getByText("盯住慢查询")).toBeTruthy());
-  expect(duties.queryByText("别人的职责")).toBeNull();
-  await waitFor(() =>
-    expect(duties.getByText("每天早上汇总迁移进度")).toBeTruthy(),
-  );
-  expect(duties.queryByText("别人的定时任务")).toBeNull();
-  // Read-only: the routine is shown, but nothing on this page runs, pauses or deletes it; that is
-  // the assembly page's, which the section links to.
-  const routines = within(screen.getByTestId("routine-summary"));
-  expect(routines.getByText("已启用")).toBeTruthy();
-  expect(routines.queryByRole("button")).toBeNull();
-  expect(routines.queryByRole("switch")).toBeNull();
-  expect(routines.queryByRole("checkbox")).toBeNull();
-  expect(routines.queryByText("立即运行")).toBeNull();
-  expect(
-    routines
-      .getByText("去装配页管理定时任务")
-      .closest("a")
-      ?.getAttribute("href"),
-  ).toBe(`/assemble/${agentId}`);
-
   // 进行中任务: the board, asked for this executor and for running work only.
-  const running = section(screen, "看板上的进行中任务");
+  const running = await waitFor(() => section(screen, "看板上的进行中任务"));
   await waitFor(() =>
     expect(running.getByText("给 orders 表加索引")).toBeTruthy(),
   );
@@ -335,15 +322,6 @@ test("the detail page shows duties, running tasks, skill grants and the audit tr
   expect(board.searchParams.get("period")).toBe("all");
   expect(running.getByText(/^对话 · 更新于/)).toBeTruthy();
 
-  // 技能授权: read-only — names what it holds, offers no box to tick, and points at the assembly page.
-  const grants = section(screen, "技能授权");
-  await waitFor(() => expect(grants.getByText("仔细评审")).toBeTruthy());
-  expect(grants.getByText("create_issue")).toBeTruthy();
-  expect(grants.queryByRole("checkbox")).toBeNull();
-  expect(
-    grants.getByText("去装配页修改").closest("a")?.getAttribute("href"),
-  ).toBe(`/assemble/${agentId}`);
-
   // 最近审计: read from the per-agent trail, the person's own row said as 你, a routine's by its kind.
   const audit = section(screen, "最近审计");
   await waitFor(() =>
@@ -358,6 +336,29 @@ test("the detail page shows duties, running tasks, skill grants and the audit tr
       "cursor",
     ),
   ).toBe(false);
+});
+
+test("its duties are on 长期职责, and only its own", async () => {
+  const screen = draw(fullAnswers(), "responsibilities");
+  await waitFor(() => expect(screen.getByText("盯住慢查询")).toBeTruthy());
+  expect(screen.queryByText("别人的职责")).toBeNull();
+});
+
+test("its routines are on 定时任务, and only its own", async () => {
+  const screen = draw(fullAnswers(), "routines");
+  await waitFor(() =>
+    expect(screen.getByText("每天早上汇总迁移进度")).toBeTruthy(),
+  );
+  expect(screen.queryByText("别人的定时任务")).toBeNull();
+});
+
+test("what it holds is on 技能与应用, by name", async () => {
+  const screen = draw(fullAnswers(), "access");
+  const held = await waitFor(() => section(screen, "它能用什么"));
+  await waitFor(() => expect(held.getByText("仔细评审")).toBeTruthy());
+  // A skill is said as a skill, never offered as a box to tick here.
+  expect(held.getByText("技能")).toBeTruthy();
+  expect(held.queryByRole("checkbox")).toBeNull();
 });
 
 test("the audit trail pages on the server's cursor, and an unknown event type is shown as itself", async () => {
@@ -401,7 +402,6 @@ test("the audit trail pages on the server's cursor, and an unknown event type is
 
 test("each section has its own empty state", async () => {
   const answers = fullAnswers();
-  answers.agent = ok({ agent: { ...profile, roleDescription: "" } });
   answers.duties = ok({ responsibilities: [duty("d2", "agent-2", "别人的")] });
   answers.routines = ok({
     routines: [],
@@ -413,25 +413,22 @@ test("each section has its own empty state", async () => {
   const screen = draw(answers);
 
   await waitFor(() =>
-    expect(screen.getByText("它还没有长期职责。")).toBeTruthy(),
-  );
-  expect(screen.getByText("还没写角色描述。")).toBeTruthy();
-  await waitFor(() =>
-    expect(screen.getByText("这位员工还没有定时任务")).toBeTruthy(),
-  );
-  await waitFor(() =>
     expect(screen.getByText("它现在没有进行中的任务。")).toBeTruthy(),
   );
-  await waitFor(() =>
-    expect(screen.getByText("还没有授予任何技能或工具")).toBeTruthy(),
-  );
   await waitFor(() => expect(screen.getByText("还没有审计记录")).toBeTruthy());
+  cleanup();
+
+  const duties = draw(answers, "responsibilities");
+  await waitFor(() => expect(duties.getByText("还没有长期职责")).toBeTruthy());
+  cleanup();
+
+  const held = draw(answers, "access");
+  await waitFor(() => expect(held.getByText("还没有应用")).toBeTruthy());
 });
 
 test("a section whose read fails says so on its own, and the other sections still render", async () => {
   const answers = fullAnswers();
   answers.tasks = fail(500, "看板坏了");
-  answers.plugins = fail(500, "插件读不到");
   answers.audit = { "": fail(500, "审计坏了") };
   const screen = draw(answers);
 
@@ -444,31 +441,32 @@ test("a section whose read fails says so on its own, and the other sections stil
   expect(running.queryByText("它现在没有进行中的任务。")).toBeNull();
   await waitFor(() =>
     expect(
-      section(screen, "技能授权").getByText("读不到技能授权：插件读不到"),
-    ).toBeTruthy(),
-  );
-  await waitFor(() =>
-    expect(
       section(screen, "最近审计").getByText("读不到审计记录：审计坏了"),
     ).toBeTruthy(),
   );
-  // The section that did answer is untouched by the others failing.
+  cleanup();
+
+  // What it holds failing to load is said on its own page, not as holding nothing.
+  answers.plugins = fail(500, "插件读不到");
+  const held = draw(answers, "access");
   await waitFor(() =>
-    expect(section(screen, "职责").getByText("盯住慢查询")).toBeTruthy(),
+    expect(
+      held.getByText("读不到这位员工能用什么，请刷新页面。"),
+    ).toBeTruthy(),
   );
+  expect(held.queryByText("还没有应用")).toBeNull();
 });
 
-test("a duties read that fails is said in the duties section, and a trail the deployment does not keep is not offered a retry", async () => {
+test("a duties read that fails is said on 长期职责, and a trail the deployment does not keep is not offered a retry", async () => {
   const answers = fullAnswers();
   answers.duties = fail(500, "职责坏了");
   answers.audit = { "": fail(503, "Audit logging is not configured.") };
-  const screen = draw(answers);
+  const duties = draw(answers, "responsibilities");
+  await waitFor(() => expect(duties.getByText(/职责坏了/)).toBeTruthy());
+  expect(duties.queryByText("还没有长期职责")).toBeNull();
+  cleanup();
 
-  await waitFor(() =>
-    expect(
-      section(screen, "职责").getByText("读不到长期职责：职责坏了"),
-    ).toBeTruthy(),
-  );
+  const screen = draw(answers);
   const audit = await waitFor(() => {
     const found = section(screen, "最近审计");
     expect(found.getByText(/这个部署没有开启审计记录/)).toBeTruthy();
@@ -484,11 +482,12 @@ test("each section shows its own loading state while its read is outstanding", a
   const screen = draw(answers);
 
   await waitFor(() =>
-    expect(section(screen, "技能授权").getByText("仔细评审")).toBeTruthy(),
+    expect(
+      section(screen, "看板上的进行中任务").getByLabelText(
+        "正在读取进行中任务",
+      ),
+    ).toBeTruthy(),
   );
-  expect(
-    section(screen, "看板上的进行中任务").getByLabelText("正在读取进行中任务"),
-  ).toBeTruthy();
   expect(
     section(screen, "最近审计").getByLabelText("正在读取审计记录"),
   ).toBeTruthy();
@@ -497,7 +496,7 @@ test("each section shows its own loading state while its read is outstanding", a
 test("a coworker the person cannot reach is said as not found, not as an empty page", async () => {
   const answers = fullAnswers();
   answers.agent = fail(404, "Agent not found.");
-  const screen = draw(answers);
+  const screen = draw(answers, "");
 
   await waitFor(() =>
     expect(
@@ -541,7 +540,7 @@ describe("the coworker's model (H4)", () => {
     const answers = fullAnswers();
     answers.agent = ok({ agent: { ...profile, ...agent } });
     answers.models = library;
-    const screen = draw(answers);
+    const screen = draw(answers, "");
     await waitFor(() =>
       expect(screen.getByTestId("coworker-model").textContent).not.toContain(
         "正在读取",

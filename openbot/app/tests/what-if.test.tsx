@@ -136,13 +136,13 @@ test("a question becomes chips, and Check shows every control in order with the 
   const user = userEvent.setup({ document });
 
   // Nothing set yet: the action says what to choose, and Check waits.
-  await view.findByText("Choose a Bot.");
+  await view.findByText("选一位员工。");
   expect(
-    (view.getByRole("button", { name: "Check" }) as HTMLButtonElement).disabled,
+    (view.getByRole("button", { name: "检查" }) as HTMLButtonElement).disabled,
   ).toBe(true);
 
-  await user.type(view.getByLabelText("Ask what would happen"), QUESTION);
-  await user.click(view.getByRole("button", { name: "Ask" }));
+  await user.type(view.getByLabelText("问问会发生什么"), QUESTION);
+  await user.click(view.getByRole("button", { name: "提问" }));
 
   await waitFor(() =>
     expect(
@@ -150,21 +150,21 @@ test("a question becomes chips, and Check shows every control in order with the 
         (chip) => chip.textContent,
       ),
     ).toEqual([
-      "Bot:Sales",
-      "Runs as:Sam Lee",
-      "Started by:A routine",
-      "Uses:An app",
-      "App:Gmail",
-      "Tool:Send email",
-      "Effect:Changes something",
+      "员工：Sales",
+      "以谁的身份：Sam Lee",
+      "发起方：定时任务",
+      "用的是：一个应用",
+      "应用：Gmail",
+      "工具：Send email",
+      "影响：会改动东西",
     ]),
   );
   expect(asked.find((call) => call.path.endsWith("/ask"))?.body).toEqual({
     question: QUESTION,
   });
 
-  await user.click(view.getByRole("button", { name: "Check" }));
-  await view.findByText("What happens");
+  await user.click(view.getByRole("button", { name: "检查" }));
+  await view.findByText("会发生什么");
   // The confirmed action is what is checked, with the question it came from.
   expect(asked.find((call) => call.path.endsWith("/check"))?.body).toEqual({
     action: answers.checked.action,
@@ -182,16 +182,16 @@ test("a question becomes chips, and Check shows every control in order with the 
   ]);
   const boundaries = rows[3] as HTMLElement;
   expect(boundaries.getAttribute("data-decides")).toBe("true");
-  expect(within(boundaries).getByText("Refuses")).toBeTruthy();
+  expect(within(boundaries).getByText("拒绝")).toBeTruthy();
   expect(boundaries.textContent).toContain(
-    "Rule: No email when nobody is watching",
+    "规则：No email when nobody is watching",
   );
   // The safety floor would ask, but a refused action never reaches it.
   expect(rows[4]?.getAttribute("data-unreached")).toBe("true");
-  expect(rows[4]?.textContent).toContain("Not reached");
+  expect(rows[4]?.textContent).toContain("走不到这一步");
   expect(
     view.container.querySelector("[data-what-if-headline]")?.textContent,
-  ).toContain("Refused");
+  ).toContain("会被拒绝");
 
   // Changing a chip makes the answer stale, so it goes.
   await user.click(
@@ -202,7 +202,7 @@ test("a question becomes chips, and Check shows every control in order with the 
     ).getByRole("button"),
   );
   await user.click(
-    await view.findByRole("menuitemradio", { name: "A person chatting" }),
+    await view.findByRole("menuitemradio", { name: "有人在对话里" }),
   );
   await waitFor(() =>
     expect(view.container.querySelector("[data-layer]")).toBeNull(),
@@ -225,11 +225,11 @@ test("an Audit row a control decided carries Why?, which explains it from the ro
   );
   const user = userEvent.setup({ document });
 
-  const why = await view.findByRole("button", { name: "Why?" });
+  const why = await view.findByRole("button", { name: "为什么？" });
   await user.click(why);
 
   const dialog = await view.findByRole("dialog");
-  await within(dialog).findByText("Why did this happen?");
+  await within(dialog).findByText("为什么会这样？");
   await waitFor(() =>
     expect(dialog.querySelector("[data-why-recorded]")?.textContent).toContain(
       'Refused by the boundary "No email when nobody is watching".',
@@ -242,7 +242,7 @@ test("an Audit row a control decided carries Why?, which explains it from the ro
   ).toBe("true");
   // The same answer then and now, so nothing says a setting changed.
   expect(dialog.textContent).not.toContain(
-    "Today's settings decide this differently",
+    "按今天的设置，结果会不一样",
   );
   expect(
     asked.some(
@@ -274,6 +274,6 @@ test("a row no control decides has no Why?", async () => {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  await view.findByText("1 event");
-  expect(view.queryByRole("button", { name: "Why?" })).toBeNull();
+  await view.findByText("1 条事件");
+  expect(view.queryByRole("button", { name: "为什么？" })).toBeNull();
 });

@@ -295,7 +295,7 @@ function IsolatedRow({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const available = capabilities?.isolationAvailable ?? false;
-  const allowed = mine?.capabilities.isolatedComputers !== false;
+  const allowed = mine?.capabilities?.isolatedComputers !== false;
   const isPublic = agent.visibility === "public";
   // A Bot that comes with OpenBot belongs to nobody, and the switch is a person's.
   const editable =

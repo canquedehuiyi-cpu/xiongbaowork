@@ -59,10 +59,10 @@ test("the generated toolkit AirtableApi (0/2 classified) renders the warning on 
   const airtable = fromFixture("AirtableApi");
   expect([airtable.classifiedCount, airtable.actionCount]).toEqual([0, 2]);
   // A change, which asks where changes ask: never "destructive", which Arcade didn't say.
-  expect(coverageWarning(airtable)).toMatch(/treated as a change/);
-  expect(coverageWarning(airtable)).not.toMatch(/destructive/);
+  expect(coverageWarning(airtable)).toMatch(/当作会改动/);
+  expect(coverageWarning(airtable)).not.toMatch(/破坏|删除/);
   expect(renderToStaticMarkup(<CoverageNote app={airtable} />)).toContain(
-    "approval",
+    "先问",
   );
   // Phrased as what it feels like, never as a percentage.
   expect(coverageWarning(airtable)).not.toMatch(/%|\d/);

@@ -198,7 +198,10 @@ export function useRosterFacts() {
    * 排序 within one section. Absent: the section's own order (the roster's, with the 分身 first under
    * 你的). `sort` is stable, so equal ones keep their order.
    */
-  const order = (list: readonly AgentProfile[], sort: WakerSort | undefined) => {
+  const order = (
+    list: readonly AgentProfile[],
+    sort: WakerSort | undefined,
+  ) => {
     const lastRunMs = (agent: AgentProfile) => {
       const at = stats?.byAgent.get(agent.id)?.lastRunAt;
       return at ? new Date(at).getTime() : Number.NEGATIVE_INFINITY;

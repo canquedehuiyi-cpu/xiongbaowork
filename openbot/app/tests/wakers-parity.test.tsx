@@ -12,6 +12,7 @@ import {
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
+import { avatarSourceKeys } from "@/lib/avatar/sources";
 import {
   type BotAttention,
   botLifecycleKeys,
@@ -589,4 +590,119 @@ test("the detail page's back link returns to the same filtered roster", async ()
       }) as HTMLInputElement
     ).value,
   ).toBe("评审");
+});
+
+/* M5b：上游名单里新加的东西 ------------------------------------------------------------------------- */
+
+test("卡片 / 列表 is one segmented choice written to ?view=list; a row keeps status, environment and counts", async () => {
+  seed();
+  const { screen, router } = draw();
+  await waitFor(() =>
+    expect(screen.getByText("Backend Engineer")).toBeTruthy(),
+  );
+  const views = screen.getByRole("tablist", { name: "显示方式" });
+  expect(
+    within(views)
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent),
+  ).toEqual(["卡片", "列表"]);
+
+  const user = userEvent.setup({ document });
+  await user.click(within(views).getByRole("tab", { name: "列表" }));
+  await waitFor(() =>
+    expect(router.state.location.search).toEqual({ view: "list" }),
+  );
+  expect(screen.queryAllByTestId("waker-card")).toHaveLength(0);
+  const rows = screen.getAllByTestId("waker-row");
+  expect(rows.map((row) => row.getAttribute("href"))).toEqual([
+    "/bots/agent-1",
+    "/bots/agent-2",
+    "/bots/agent-3",
+  ]);
+  // The same facts the card carries, in one line.
+  expect(rows[0]?.textContent).toContain("在线 · 本地 · 任务数 1 · 最近运行");
+  expect(rows[1]?.textContent).toContain("暂停 · 未绑定 · 任务数 3");
+  // The toolbar narrows the rows the same way.
+  await pick(screen, "运行状态", "暂停 (1)");
+  await waitFor(() =>
+    expect(
+      screen.getAllByTestId("waker-row").map((row) => row.textContent),
+    ).toEqual([expect.stringContaining("Code Reviewer")]),
+  );
+  expect(router.state.location.search).toEqual({
+    view: "list",
+    status: "paused",
+  });
+});
+
+test("the person's 分身 leads 你的员工, pinned or not, wearing 个人分身", async () => {
+  seed({
+    agents: [
+      base,
+      { ...base, id: "avatar-1", name: "我的分身", pinned: true },
+      reviewer,
+    ],
+  });
+  client.setQueryData(avatarSourceKeys.state(), {
+    agentId: "avatar-1",
+    configuredAt: "2026-11-01T00:00:00.000Z",
+    sources: [],
+  });
+  const { screen } = draw();
+  await waitFor(() => expect(screen.getByText("我的分身")).toBeTruthy());
+  expect(sectionNames(screen, "yours")).toEqual([
+    "我的分身",
+    "Backend Engineer",
+  ]);
+  // Not under 已置顶: the 分身 is the person, not one more coworker to arrange.
+  expect(screen.queryByRole("heading", { name: "已置顶" })).toBeNull();
+  const card = screen
+    .getAllByTestId("waker-card")
+    .find((node) => node.textContent?.includes("我的分身")) as HTMLElement;
+  expect(within(card).getByText("个人分身")).toBeTruthy();
+});
+
+test("a coworker shared with the person sits under 共享给你的, copies its link, and an assigned one says so", async () => {
+  seed({ agents: [base, { ...reviewer, assignedToMe: true }, analyst] });
+  const { screen } = draw();
+  await waitFor(() => expect(screen.getByText("Atlas Analyst")).toBeTruthy());
+  // What the archived 团队 Bot page said about every shared conversation.
+  expect(screen.getByText(/你和它的每段对话只属于你/)).toBeTruthy();
+  expect(sectionNames(screen, "shared")).toEqual(["Atlas Analyst"]);
+  // An administrator assigned it: pinned, and tagged as such.
+  expect(sectionNames(screen, "pinned")).toEqual(["Code Reviewer"]);
+  const assigned = screen
+    .getAllByTestId("waker-card")
+    .find((node) => node.textContent?.includes("Code Reviewer")) as HTMLElement;
+  expect(assigned.querySelector("[data-assigned]")?.textContent).toBe(
+    "已分配给你",
+  );
+  // Shared ones copy the link a teammate opens to start their own chat; your own do not.
+  expect(
+    screen.getByRole("button", { name: "复制 Atlas Analyst 的链接" }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "复制 Backend Engineer 的链接" }),
+  ).toBeNull();
+});
+
+test("a group card opens its board and 组团流程", async () => {
+  seed({
+    crews: [
+      {
+        id: "crew-1",
+        name: "编程群组",
+        description: null,
+        members: [{ agentId: "agent-1", position: 0 }],
+      },
+    ],
+  });
+  const { screen } = draw("/bots?tab=groups");
+  const card = await screen.findByTestId("crew-card");
+  expect(
+    within(card).getByRole("link", { name: "组团流程" }).getAttribute("href"),
+  ).toBe("/pipelines");
+  expect(
+    within(card).getByRole("link", { name: "在看板上看" }).getAttribute("href"),
+  ).toBe("/tasks?crew=agent-1");
 });

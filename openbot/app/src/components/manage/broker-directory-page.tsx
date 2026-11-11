@@ -35,7 +35,7 @@ export function BrokerDirectoryPage({ provider }: { provider: Broker }) {
   if (plugins.isError) {
     return (
       <p className="m-4 text-destructive text-sm" role="alert">
-        Couldn't load the plugin settings. Reload the page.
+        读不到插件设置。请刷新页面。
       </p>
     );
   }

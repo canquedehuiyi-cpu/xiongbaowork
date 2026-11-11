@@ -10,14 +10,14 @@ import type { AgentProfile } from "./queries";
  * now lives. The rest split on `mine`, never on `canManage`, which is true for an administrator on
  * everybody's Bots.
  *
- * 熊宝：个人分身（`avatarId`，`GET /api/me/avatar/sources` 的 `agentId`）固定是「你的」第一位，置顶与否都
+ * 熊宝：个人分身（`avatarId`，`GET /api/me/avatar/sources` 的 `agentId`）固定是「你的员工」第一位，置顶与否都
  * 不挪走它——它是这个人自己，不是又一位可以排来排去的员工。它在等这个人时照样进「需要你」。
  */
 export function groupRoster(
   agents: readonly AgentProfile[],
   /** How many things this Bot has waiting on the person. */
   waiting: (agentId: string) => number = () => 0,
-  /** 这个人的个人分身，固定在「你的」第一行。 */
+  /** 这个人的个人分身，固定在「你的员工」第一行。 */
   avatarId?: string | null,
 ): {
   needsYou: AgentProfile[];

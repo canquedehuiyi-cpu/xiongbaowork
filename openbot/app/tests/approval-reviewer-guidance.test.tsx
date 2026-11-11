@@ -210,37 +210,37 @@ function open() {
 }
 
 const saveButton = (view: ReturnType<typeof render>) =>
-  view.getByRole("button", { name: "Save guidance" }) as HTMLButtonElement;
+  view.getByRole("button", { name: "保存指引" }) as HTMLButtonElement;
 
 test("guidance is checked, tested on recent decisions after saying how many model calls that makes, and saved by Save", async () => {
   const { view, router, user } = open();
-  await user.type(await view.findByLabelText("Guidance"), DEALS);
+  await user.type(await view.findByLabelText("指引"), DEALS);
   // Built-in safety wins, and the screen says so before anything is written.
-  expect(view.getByText(/Built-in safety always comes first/)).toBeTruthy();
+  expect(view.getByText(/内置的安全规则永远优先/)).toBeTruthy();
   expect(saveButton(view).disabled).toBe(true);
 
-  await user.click(view.getByRole("button", { name: "Check guidance" }));
+  await user.click(view.getByRole("button", { name: "检查指引" }));
   expect(await view.findByText(READING.explanation)).toBeTruthy();
   expect(
-    view.getByText("Reads as guidance. Built-in safety still comes first."),
+    view.getByText("读起来是指引。内置的安全规则仍然优先。"),
   ).toBeTruthy();
 
   // How many model calls a test makes, before it makes any.
   expect(
     view.getByText(
-      "Replays the reviewer with this guidance over the last 5 requests your people decided. That's 5 model calls, one for each.",
+      "用这段指引，把审核在同事最近处理过的 5 个请求上重放一遍。每个请求调用一次模型，共 5 次。",
     ),
   ).toBeTruthy();
   expect(sent.filter((call) => call.path.endsWith("/backtest"))).toHaveLength(
     0,
   );
-  await user.click(view.getByRole("button", { name: "Test on 5 requests" }));
+  await user.click(view.getByRole("button", { name: "在 5 个请求上测试" }));
   expect(
-    await view.findByText("Agreed with your people on 2 of 5."),
+    await view.findByText("5 个里有 2 个和你的同事判断一致。"),
   ).toBeTruthy();
   // The results sit outside the field: inside it, the rows' horizontal separators balanced the field's
   // descriptions into half-width lines.
-  const described = view.getByText(/^Replays the reviewer with this guidance/);
+  const described = view.getByText(/^用这段指引，把审核/);
   expect(
     described
       .closest("[data-slot=field]")
@@ -248,19 +248,19 @@ test("guidance is checked, tested on recent decisions after saying how many mode
   ).toBeNull();
   expect(
     view.getByText(
-      "Would have let through 1 your people denied, and asked about 2 they allowed.",
+      "会放行 1 个同事拒绝过的请求，会再问 2 个同事允许过的请求。",
     ),
   ).toBeTruthy();
   expect(
     view.getByText(
-      /1 had no words from a person, so the reviewer judged it on the action alone\. 1 more was decided by built-in safety\. Guidance doesn't change that\./,
+      /其中 1 个没有人说过话，审核只能看动作本身来判断。另有 1 个由内置安全规则决定，指引改变不了。/,
     ),
   ).toBeTruthy();
   // What it would have let through that a person denied, with the reviewer's own reason.
-  expect(view.getAllByText("Would let it run")).toHaveLength(2);
+  expect(view.getAllByText("会放行")).toHaveLength(2);
   expect(
     view.getByText(
-      "A person denied it. The reviewer: “This exactly renames the requested Q3 planning page to the specified title.”",
+      "有人拒绝了。审核说：「This exactly renames the requested Q3 planning page to the specified title.」",
     ),
   ).toBeTruthy();
   expect(sent.find((call) => call.path.endsWith("/backtest"))?.body).toEqual({
@@ -283,28 +283,28 @@ test("guidance is checked, tested on recent decisions after saying how many mode
 
 test("words that try to switch safety off are refused, and an edit after a check has to be checked again", async () => {
   const { view, user } = open();
-  const field = await view.findByLabelText("Guidance");
+  const field = await view.findByLabelText("指引");
   await user.type(field, WEAKENS);
-  await user.click(view.getByRole("button", { name: "Check guidance" }));
+  await user.click(view.getByRole("button", { name: "检查指引" }));
   expect(
     await view.findByText(
-      `OpenBot won't save this. ${(REFUSED.check as { error: string }).error}`,
+      `熊宝不会保存这段指引。 ${(REFUSED.check as { error: string }).error}`,
     ),
   ).toBeTruthy();
   expect(view.getByText(REFUSED.explanation)).toBeTruthy();
   expect(saveButton(view).disabled).toBe(true);
   // Not guidance, so there is nothing to test on recent decisions.
-  expect(view.queryByText("On recent decisions")).toBeNull();
+  expect(view.queryByText("拿最近的决定试一试")).toBeNull();
 
   await user.clear(field);
   await user.type(field, DEALS);
   expect(
     view.getByText(
-      "You've changed the guidance since it was checked. Check it again before you save.",
+      "检查之后你改过这段指引。保存前再检查一次。",
     ),
   ).toBeTruthy();
   expect(saveButton(view).disabled).toBe(true);
-  await user.click(view.getByRole("button", { name: "Check guidance" }));
+  await user.click(view.getByRole("button", { name: "检查指引" }));
   await waitFor(() => expect(saveButton(view).disabled).toBe(false));
 });
 
@@ -328,12 +328,12 @@ test("a guidance save reads on Audit as what was saved and how it was read, and 
     },
   };
   expect(auditEventWords("approval.guidance_changed")).toBe(
-    "Change guidance for auto-review",
+    "修改自动审核的指引",
   );
-  expect(decisionText(saveRow)).toBe("Guidance saved");
+  expect(decisionText(saveRow)).toBe("指引已保存");
   expect(decisionDetails(saveRow)).toEqual([
-    `Guidance: “${DEALS}”`,
-    `Read as: ${READING.summary}`,
+    `指引：「${DEALS}」`,
+    `理解为：${READING.summary}`,
   ]);
   const removal: AuditEvent = {
     ...saveRow,
@@ -345,6 +345,6 @@ test("a guidance save reads on Audit as what was saved and how it was read, and 
       after: null,
     },
   };
-  expect(decisionText(removal)).toBe("Guidance removed");
-  expect(decisionDetails(removal)).toEqual([`Removed: “${DEALS}”`]);
+  expect(decisionText(removal)).toBe("指引已删除");
+  expect(decisionDetails(removal)).toEqual([`删除了：「${DEALS}」`]);
 });

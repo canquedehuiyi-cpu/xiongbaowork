@@ -161,8 +161,23 @@ const TYPE_GROUPS: { label: string; types: readonly string[] }[] = [
   },
 ];
 
-/** One event type in words: the same words the reading is given (`auditTypeWords`). */
-const typeWords = auditTypeWords;
+/*
+ * The kinds of row an admin filters for most often, in the words the page's views use (电脑操作,
+ * 应用调用), then how they ended. The shared `auditTypeWords` says these in English, because it is also
+ * what the model reads the filters back in; every other type it says with the Chinese event words.
+ */
+const TYPE_WORDS: Record<string, string> = {
+  "computer.action_allowed": "电脑操作，已放行",
+  "computer.action_refused": "电脑操作，已拦截",
+  "computer.action_failed": "电脑操作，失败",
+  "computer.action_stopped": "电脑操作，已停止",
+  "mcp.call_succeeded": "应用调用，已完成",
+  "mcp.call_rejected": "应用调用，已拦截",
+  "mcp.call_failed": "应用调用，失败",
+};
+
+/** One event type in words: a kind of row as the views name it, else the row's own event words. */
+const typeWords = (type: string) => TYPE_WORDS[type] ?? auditTypeWords(type);
 
 /*
  * The shared words (`AUDIT_INTENT_WORDS`, `AUDIT_EFFECT_WORDS`) are also what the model reads the

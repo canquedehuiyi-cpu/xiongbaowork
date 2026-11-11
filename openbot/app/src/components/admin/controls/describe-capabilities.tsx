@@ -45,10 +45,10 @@ import { cn } from "@/lib/utils";
 
 /** Who a switch is for, as the Permissions page and its overrides name them. */
 function scopeWords(change: CapabilityChange): string {
-  if (change.scopeKind === "organization") return "Everybody";
+  if (change.scopeKind === "organization") return "所有人";
   if (change.scopeKind === "role")
-    return change.scopeId === "admin" ? "Admins" : "Members";
-  return `Group: ${change.scopeId}`;
+    return change.scopeId === "admin" ? "管理员" : "成员";
+  return `用户组：${change.scopeId}`;
 }
 
 const SCOPE_ICONS = {
@@ -63,10 +63,10 @@ function settingWords(change: CapabilityChange): {
   className: string;
 } {
   if (change.allowed === null)
-    return { text: "Inherit", className: "text-muted-foreground" };
-  if (!change.allowed) return { text: "Off", className: "text-destructive" };
+    return { text: "改回继承", className: "text-muted-foreground" };
+  if (!change.allowed) return { text: "关闭", className: "text-destructive" };
   return {
-    text: change.scopeKind === "group" ? "Grant" : "On",
+    text: change.scopeKind === "group" ? "授予" : "打开",
     className: "text-emerald-600 dark:text-emerald-400",
   };
 }
@@ -89,9 +89,9 @@ export function ChangeRows({
 }) {
   return (
     <Field>
-      <FieldLabel>Changes</FieldLabel>
+      <FieldLabel>改动</FieldLabel>
       <FieldDescription>
-        Each change sets one switch. Remove any you don't want before you save.
+        每条改动设置一个开关。保存前可以删掉不想要的。
       </FieldDescription>
       <PageRows>
         {changes.map((change, index) => {
@@ -124,7 +124,7 @@ export function ChangeRows({
                     {setting.text}
                   </span>
                   <Button
-                    aria-label={`Remove change ${row}`}
+                    aria-label={`删掉改动 ${row}`}
                     onClick={() => onRemove(index)}
                     size="icon-sm"
                     type="button"
@@ -145,16 +145,16 @@ export function ChangeRows({
 
 /** Why a person has a permission or not, after "Now" or "After this,". */
 function answerWords(answer: CapabilityAnswer): string {
-  const state = answer.allowed ? "on" : "off";
+  const state = answer.allowed ? "打开" : "关闭";
   switch (answer.decidedBy) {
     case "default":
-      return `${state} by default`;
+      return `默认${state}`;
     case "organization":
-      return `${state} for everybody`;
+      return `对所有人${state}`;
     case "role":
-      return `${state} for ${answer.scopeId === "admin" ? "admins" : "members"}`;
+      return `对${answer.scopeId === "admin" ? "管理员" : "成员"}${state}`;
     case "group":
-      return `on through ${answer.scopeId}`;
+      return `通过 ${answer.scopeId} 打开`;
   }
 }
 
@@ -165,37 +165,26 @@ const gains = (capability: PreviewCapability) =>
 
 function verdictOf(person: PreviewPerson): { text: string; className: string } {
   if (person.capabilities.some(loses))
-    return { text: "Loses access", className: "text-destructive" };
+    return { text: "失去权限", className: "text-destructive" };
   if (person.capabilities.some(gains))
     return {
-      text: "Gains access",
+      text: "获得权限",
       className: "text-emerald-600 dark:text-emerald-400",
     };
-  return { text: "Keeps access", className: "text-muted-foreground" };
+  return { text: "保留权限", className: "text-muted-foreground" };
 }
-
-const plural = (count: number, one: string, many: string) =>
-  `${count} ${count === 1 ? one : many}`;
 
 /** The preview in one sentence: "3 people lose access and 4 people keep it through a different switch." */
 export function previewHeadline(counts: CapabilityPreview["counts"]): string {
   const parts = [
-    counts.losing > 0
-      ? `${plural(counts.losing, "person loses", "people lose")} access`
-      : null,
-    counts.gaining > 0
-      ? `${plural(counts.gaining, "person gains", "people gain")} access`
-      : null,
+    counts.losing > 0 ? `${counts.losing} 人失去权限` : null,
+    counts.gaining > 0 ? `${counts.gaining} 人获得权限` : null,
     counts.keeping > 0
-      ? `${plural(counts.keeping, "person keeps", "people keep")} it through a different switch`
+      ? `${counts.keeping} 人通过另一个开关保留权限`
       : null,
   ].filter((part): part is string => part !== null);
-  if (parts.length === 0) return "Nobody's access changes.";
-  const sentence =
-    parts.length > 1
-      ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`
-      : (parts[0] as string);
-  return `${sentence}.`;
+  if (parts.length === 0) return "没有人的权限会变。";
+  return `${parts.join("，")}。`;
 }
 
 /** What a person's recent use of a permission they lose comes to, in one line. */
@@ -206,28 +195,28 @@ function activityWords(
 ): string | null {
   if (!loses(capability)) return null;
   if (unmapped.has(capability.capability))
-    return "OpenBot doesn't record its use.";
+    return "熊宝不记录它的使用情况。";
   const activity = capability.activity;
   if (!activity) return null;
-  if (activity.count === 0) return `Not used in the last ${days} days.`;
-  return `${activity.count}${activity.more ? " or more" : ""} in the last ${days} days: ${activity.what}.`;
+  if (activity.count === 0) return `最近 ${days} 天没用过。`;
+  return `最近 ${days} 天 ${activity.count}${activity.more ? " 次以上" : " 次"}：${activity.what}。`;
 }
 
 /** Where a past action acted, for the mark beside it. */
 function mediaOf(event: AuditEvent): ReplayRow["media"] {
   if (event.targetType === "host_access")
-    return { icon: <IconFolder />, label: "Folder on their own computer" };
+    return { icon: <IconFolder />, label: "他们自己电脑上的文件夹" };
   if (event.eventType.startsWith("computer."))
-    return { icon: <IconDeviceDesktop />, label: "Computer action" };
+    return { icon: <IconDeviceDesktop />, label: "电脑操作" };
   if (event.eventType.startsWith("password."))
-    return { icon: <IconKey />, label: "Login" };
+    return { icon: <IconKey />, label: "登录" };
   if (event.eventType.startsWith("delivery."))
-    return { icon: <IconMessage />, label: "Messaging app" };
+    return { icon: <IconMessage />, label: "聊天应用" };
   if (event.eventType.startsWith("bot."))
-    return { icon: <IconRobot />, label: "Bot" };
+    return { icon: <IconRobot />, label: "员工" };
   if (event.eventType.startsWith("approval."))
-    return { icon: <IconChecklist />, label: "Approval rule" };
-  return { icon: <IconPlug />, label: "App call" };
+    return { icon: <IconChecklist />, label: "审批规则" };
+  return { icon: <IconPlug />, label: "应用调用" };
 }
 
 /**
@@ -244,7 +233,7 @@ export function PermissionsPreview({
   if (preview.error)
     return (
       <Field>
-        <FieldLabel>Who it changes</FieldLabel>
+        <FieldLabel>会影响谁</FieldLabel>
         <p className="text-destructive text-sm" role="alert">
           {preview.error.message}
         </p>
@@ -264,8 +253,8 @@ export function PermissionsPreview({
             id: `${person.id}:${event.id}`,
             event,
             media: mediaOf(event),
-            verdict: "Would be blocked",
-            note: `${nameOf(person)}, ${capability.title}`,
+            verdict: "会被拦下",
+            note: `${nameOf(person)}，${capability.title}`,
           }))
         : [],
     ),
@@ -285,14 +274,13 @@ export function PermissionsPreview({
   return (
     <>
       <Field aria-labelledby="permissions-preview" aria-live="polite">
-        <FieldLabel id="permissions-preview">Who it changes</FieldLabel>
+        <FieldLabel id="permissions-preview">会影响谁</FieldLabel>
         <div>
           <p className="font-medium text-sm">{previewHeadline(data.counts)}</p>
           <FieldDescription className="mt-1">
-            Worked out for all {plural(data.counts.people, "person", "people")}{" "}
-            with the rule OpenBot enforces.
+            按熊宝实际执行的规则，为全部 {data.counts.people} 个人逐一算过。
             {data.counts.unchanged > 0
-              ? ` ${plural(data.counts.unchanged, "person isn't", "people aren't")} affected.`
+              ? `其中 ${data.counts.unchanged} 人不受影响。`
               : ""}
           </FieldDescription>
         </div>
@@ -317,10 +305,10 @@ export function PermissionsPreview({
                     <ItemContent className="min-w-0">
                       <ItemTitle>{nameOf(person)}</ItemTitle>
                       <ItemDescription className="line-clamp-none">
-                        {person.role === "admin" ? "Admin" : "Member"}
+                        {person.role === "admin" ? "管理员" : "成员"}
                         {person.groups.length > 0
-                          ? ` in ${person.groups.join(", ")}`
-                          : ", in no group"}
+                          ? `，属于 ${person.groups.join("、")}`
+                          : "，不属于任何用户组"}
                       </ItemDescription>
                       {person.capabilities
                         .filter(
@@ -345,10 +333,10 @@ export function PermissionsPreview({
                             >
                               <p>
                                 <span className="font-medium">
-                                  {capability.title}.
-                                </span>{" "}
-                                Now {answerWords(capability.before)}. After
-                                this, {answerWords(capability.after)}.
+                                  {capability.title}。
+                                </span>
+                                现在{answerWords(capability.before)}，改动后
+                                {answerWords(capability.after)}。
                               </p>
                               {activity ? (
                                 <p className="text-muted-foreground text-xs">
@@ -375,25 +363,24 @@ export function PermissionsPreview({
         ) : null}
         {listed > data.people.length ? (
           <p className="text-muted-foreground text-xs">
-            Showing the first {data.people.length} of {listed}.
+            共 {listed} 人，只显示前 {data.people.length} 人。
           </p>
         ) : null}
         {data.activity.unmapped.length > 0 ? (
           <FieldDescription>
-            OpenBot doesn't record use of{" "}
-            {data.activity.unmapped.map((entry) => entry.title).join(", ")}, so
-            recent use isn't shown for it.
+            熊宝不记录
+            {data.activity.unmapped.map((entry) => entry.title).join("、")}
+            的使用情况，所以这里不显示它最近的使用。
           </FieldDescription>
         ) : null}
       </Field>
       {used.length > 0 ? (
         <Field aria-labelledby="permissions-used">
           <FieldLabel id="permissions-used">
-            Used in the last {data.activity.days} days
+            最近 {data.activity.days} 天用过的
           </FieldLabel>
           <FieldDescription>
-            The newest actions people took with what they would lose, from
-            Audit.
+            从审计里取出的、大家最近用将要失去的权限做过的动作。
           </FieldDescription>
           <ReplayRows rows={used} total={usedTotal} />
         </Field>

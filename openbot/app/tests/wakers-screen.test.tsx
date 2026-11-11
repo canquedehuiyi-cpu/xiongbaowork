@@ -336,10 +336,7 @@ test("each card shows its avatar, its role, and links to its assembly and detail
   const assemble = screen
     .getAllByText("装配")
     .map((node) => node.closest("a")?.getAttribute("href"));
-  expect(assemble).toEqual([
-    "/bots/agent-1/setup",
-    "/bots/agent-2/setup",
-  ]);
+  expect(assemble).toEqual(["/bots/agent-1/setup", "/bots/agent-2/setup"]);
 
   // Spec D5: the card (its name) opens the coworker's detail page, not the roster's editor dialog.
   const open = ["Backend Engineer", "Code Reviewer"].map((name) =>

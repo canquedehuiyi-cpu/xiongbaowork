@@ -324,7 +324,7 @@ function chipTone(empty: boolean | undefined) {
 function ChipText({ title, value }: { title: string; value: string }) {
   return (
     <>
-      <span className="text-muted-foreground">{title}:</span>
+      <span className="text-muted-foreground">{title}：</span>
       <span className="max-w-48 truncate">{value}</span>
     </>
   );

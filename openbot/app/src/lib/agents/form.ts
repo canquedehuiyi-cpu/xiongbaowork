@@ -47,7 +47,7 @@ export const agentFormSchema = z.object({
     .trim()
     .refine(
       (value) => value === "" || /^https?:\/\/\S+$/.test(value),
-      "Enter a web address starting with http:// or https://.",
+      "请填写以 http:// 或 https:// 开头的网址。",
     ),
   /**
    * A key the agent sits behind. WRITE-ONLY: it is never sent back from the server, so this field is
@@ -72,8 +72,9 @@ export const agentFormSchema = z.object({
     .regex(AVATAR_SEED_PATTERN, "头像种子只能是 1 到 64 个字母、数字或 _ - : .")
     .optional(),
   /**
-   * A computer of its own. Optional because only the New Bot sheet and the Setup row ask it: every
-   * other form leaves it out, and the server reads absent as "leave it as it is".
+   * A computer of its own. Optional because only the new-coworker wizard (熊宝向导，并入了上游 New Bot
+   * sheet 的开关), the New Bot sheet and the Setup row ask it: every other form leaves it out, and the
+   * server reads absent as "leave it as it is".
    */
   isolated: z.boolean().optional(),
   /**

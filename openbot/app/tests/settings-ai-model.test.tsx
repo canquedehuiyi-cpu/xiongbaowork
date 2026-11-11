@@ -78,20 +78,20 @@ function renderGeneral() {
 }
 
 async function aiModelRow(view: ReturnType<typeof renderGeneral>) {
-  await view.findByRole("heading", { name: "AI model" });
-  return view.getByRole("button", { name: /Signed in|Uses your|Connected/ });
+  await view.findByRole("heading", { name: "AI 模型" });
+  return view.getByRole("button", { name: /已用你的|使用你的|已连接到/ });
 }
 
 test("a Claude plan shows as Anthropic, signed in with the Claude plan", async () => {
   const view = renderGeneral();
   const row = await aiModelRow(view);
-  expect(row.textContent).toBe("AnthropicSigned in with your Claude plan.");
+  expect(row.textContent).toBe("Anthropic已用你的 Claude 套餐登录。");
   await userEvent.click(row);
   const dialog = await view.findByRole("dialog");
-  expect(within(dialog).getByText("Claude plan")).toBeTruthy();
+  expect(within(dialog).getByText("Claude 套餐")).toBeTruthy();
   expect(
     within(dialog).getByText(
-      "Your Bots use Anthropic. Your key or sign-in stays on this computer.",
+      "你的员工使用 Anthropic。你的密钥或登录信息只保存在这台电脑上。",
     ),
   ).toBeTruthy();
 });
@@ -100,10 +100,10 @@ test("an OpenAI API key shows as OpenAI with an API key, never the key", async (
   connection = { kind: "open-ai-api-key", model: null, endpointHost: null };
   const view = renderGeneral();
   const row = await aiModelRow(view);
-  expect(row.textContent).toBe("OpenAIUses your OpenAI API key.");
+  expect(row.textContent).toBe("OpenAI使用你的 OpenAI API 密钥。");
   await userEvent.click(row);
   const dialog = await view.findByRole("dialog");
-  expect(within(dialog).getByText("API key")).toBeTruthy();
+  expect(within(dialog).getByText("API 密钥")).toBeTruthy();
   expect(dialog.textContent).not.toMatch(/sk-/);
 });
 
@@ -116,7 +116,7 @@ test("a provider's own address shows by name, with the model named in setup", as
   const view = renderGeneral();
   const row = await aiModelRow(view);
   expect(row.textContent).toBe(
-    "Google GeminiUses your Google Gemini API key. Model: gemini-3.8-flash",
+    "Google Gemini使用你的 Google Gemini API 密钥。模型：gemini-3.8-flash",
   );
 });
 
@@ -125,7 +125,7 @@ test("Change asks the desktop app to change the AI connection", async () => {
   await userEvent.click(await aiModelRow(view));
   const dialog = await view.findByRole("dialog");
   await userEvent.click(
-    within(dialog).getByRole("button", { name: "Change AI connection" }),
+    within(dialog).getByRole("button", { name: "更换 AI 连接" }),
   );
   await waitFor(() =>
     expect(calls).toContain("plugin:openbot-desktop|change_ai_connection"),
@@ -134,7 +134,7 @@ test("Change asks the desktop app to change the AI connection", async () => {
   expect(
     (
       within(dialog).getByRole("button", {
-        name: "Stopping OpenBot…",
+        name: "正在停止熊宝…",
       }) as HTMLButtonElement
     ).disabled,
   ).toBe(true);
@@ -143,8 +143,8 @@ test("Change asks the desktop app to change the AI connection", async () => {
 test("outside the desktop app there is no AI model section", async () => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   const view = renderGeneral();
-  await view.findByRole("heading", { name: "About you" });
+  await view.findByRole("heading", { name: "关于你" });
   await settleReactWork();
-  expect(view.queryByRole("heading", { name: "AI model" })).toBeNull();
+  expect(view.queryByRole("heading", { name: "AI 模型" })).toBeNull();
   expect(calls).toEqual([]);
 });

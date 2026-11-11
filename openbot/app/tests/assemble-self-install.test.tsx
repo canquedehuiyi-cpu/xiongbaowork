@@ -16,8 +16,10 @@ import { modelKeys } from "@/lib/models/queries";
 import { personaKeys } from "@/lib/personas/queries";
 import type { InstallListing, PluginsPage } from "@/lib/plugins/queries";
 import { routineKeys } from "@/lib/routines/queries";
-import { Route as AssembleRoute } from "@/routes/_authed/_app/assemble.$agentId";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+// 装配搬进了员工的「设置」分页（M5b），`/assemble/$agentId` 重定向到那里。
+import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as AssembleRoute } from "@/routes/_authed/_app/bots.$agentId.setup";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -247,17 +249,21 @@ function draw({
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: [`/assemble/${agentId}`] }),
+    history: createMemoryHistory({ initialEntries: [`/bots/${agentId}/setup`] }),
     routeTree: root.addChildren([
       // `as never`, as in `assemble-install.test.tsx`: the file routes are registered in the
       // generated tree under their real parents, and this only re-addresses them for one render.
-      WakersRoute.update({
+      BotsRoute.update({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots",
+      } as never),
+      BotProfileRoute.update({
+        getParentRoute: () => root,
+        path: "/bots/$agentId",
       } as never),
       AssembleRoute.update({
         getParentRoute: () => root,
-        path: "/assemble/$agentId",
+        path: "/bots/$agentId/setup",
       } as never),
     ]),
   });
@@ -348,7 +354,9 @@ test("a listed app's tools are boxes, with a hint to connect the person's own ac
     view.getByRole("checkbox", { name: TOOL_BOX }).getAttribute("aria-checked"),
   ).toBe("false");
   expect(view.getByText(/这个应用以使用者本人的账号访问/)).toBeTruthy();
-  expect(view.getByRole("link", { name: "已连接的账号" })).toBeTruthy();
+  expect(
+    view.getByRole("link", { name: "连接" }).getAttribute("href"),
+  ).toBe("/connections");
 
   await user.click(view.getByRole("checkbox", { name: TOOL_BOX }));
   await waitFor(() =>

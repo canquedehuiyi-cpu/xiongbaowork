@@ -188,8 +188,8 @@ function open() {
 
 async function describeRules(view: ReturnType<typeof render>, text: string) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  await user.type(await view.findByLabelText("Describe the rules"), text);
-  await user.click(view.getByRole("button", { name: "Write rules" }));
+  await user.type(await view.findByLabelText("描述这些规则"), text);
+  await user.click(view.getByRole("button", { name: "写成规则" }));
 }
 
 const TEXT =
@@ -204,23 +204,23 @@ test("a description fills the rules, shows their reading and check, replays them
   ).toBeTruthy();
   expect(
     view.getByText(
-      "Checks. Every rule matches tools and Bots this OpenBot has.",
+      "通过检查。每条规则都对得上这个部署里的工具和员工。",
     ),
   ).toBeTruthy();
   // The rows, as fields that stay editable.
-  expect((view.getByLabelText("Tool or app") as HTMLInputElement).value).toBe(
+  expect((view.getByLabelText("工具或应用") as HTMLInputElement).value).toBe(
     "composio-salesforce/SALESFORCE_UPDATE_OPPORTUNITY*",
   );
   // Replayed as soon as they rest, and the asks a person denied are counted.
   expect(
     await view.findByText(
-      "Would have changed 4 decisions: removes 4 asks, of which 1 a person had denied; adds 0 asks.",
+      "会改变 4 个决定：少问 4 次，其中 1 次有人拒绝过；多问 0 次。",
     ),
   ).toBeTruthy();
-  expect(view.getByText("A person denied it.")).toBeTruthy();
+  expect(view.getByText("有人拒绝了。")).toBeTruthy();
   expect(sent.filter((call) => call.path.endsWith("/batch"))).toHaveLength(0);
 
-  const save = view.getByRole("button", { name: "Save rules" });
+  const save = view.getByRole("button", { name: "保存规则" });
   await waitFor(() => expect((save as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(save);
   await waitFor(() =>
@@ -239,16 +239,16 @@ test("an edit after the rules were written is called out, checked as it stands, 
   const { view } = open();
   await describeRules(view, TEXT);
   await view.findByText(OPPORTUNITIES.explanation as string);
-  expect(view.queryByText(/You've changed the rules/)).toBeNull();
+  expect(view.queryByText(/写好之后你改过这些规则/)).toBeNull();
 
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  const tool = view.getByLabelText("Tool or app") as HTMLInputElement;
+  const tool = view.getByLabelText("工具或应用") as HTMLInputElement;
   await user.clear(tool);
   await user.type(tool, "mcp/salesforce/*");
 
   expect(
     view.getByText(
-      "You've changed the rules since they were written. The check and the reading above are for the written rules, not your edit.",
+      "写好之后你改过这些规则。上面的检查和解读说的是写出来的规则，不是你改过的版本。",
     ),
   ).toBeTruthy();
   // The live check says what is wrong with the edit, under the field.
@@ -258,7 +258,7 @@ test("an edit after the rules were written is called out, checked as it stands, 
     ),
   ).toBeTruthy();
   expect(
-    (view.getByRole("button", { name: "Save rules" }) as HTMLButtonElement)
+    (view.getByRole("button", { name: "保存规则" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
 
@@ -267,7 +267,7 @@ test("an edit after the rules were written is called out, checked as it stands, 
   await user.type(tool, "composio-salesforce/SALESFORCE_UPDATE_OPPORTUNITY");
   await waitFor(() =>
     expect(
-      (view.getByRole("button", { name: "Save rules" }) as HTMLButtonElement)
+      (view.getByRole("button", { name: "保存规则" }) as HTMLButtonElement)
         .disabled,
     ).toBe(false),
   );
@@ -275,7 +275,7 @@ test("an edit after the rules were written is called out, checked as it stands, 
 
 test("the headline counts what changed and never what a safety requirement decided", () => {
   expect(backtestHeadline(REPORT)).toBe(
-    "Would have changed 4 decisions: removes 4 asks, of which 1 a person had denied; adds 0 asks.",
+    "会改变 4 个决定：少问 4 次，其中 1 次有人拒绝过；多问 0 次。",
   );
   const none = {
     ...REPORT,
@@ -285,8 +285,8 @@ test("the headline counts what changed and never what a safety requirement decid
     matched: 2,
     fixed: 2,
   };
-  expect(backtestHeadline(none)).toBe("Would have changed no decisions.");
+  expect(backtestHeadline(none)).toBe("不会改变任何决定。");
   expect(replayWords(none, true)).toBe(
-    "Replayed over the last 22 actions OpenBot checked. These rules are about 2 of them. 2 were decided by a safety requirement, auto-review or a task, which rules don't change. Actions that ran with nothing to check aren't recorded, so a new ask can reach further than this shows.",
+    "用熊宝最近检查过的 22 个动作重放了一遍。这些规则涉及其中 2 个。其中 2 个由安全要求、自动审核或任务决定，规则改变不了。没经过检查就执行的动作不会被记录，所以新的「先问」可能比这里显示的管得更多。",
   );
 });

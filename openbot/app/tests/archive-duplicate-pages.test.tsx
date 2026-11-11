@@ -231,7 +231,9 @@ test("/agents?new=true lands on /bots?new=true with the create dialog open over 
     await within(document.body).findByRole("dialog", { name: "新建员工" }),
   ).toBeTruthy();
   // The roster is behind it (inert while the modal is open), not a blank page holding a dialog.
-  expect(screen.getByRole("heading", { hidden: true, name: "员工" })).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { hidden: true, name: "员工" }),
+  ).toBeTruthy();
   expect(cardOf(screen, "Backend Engineer")).toBeTruthy();
 });
 
@@ -301,6 +303,53 @@ test("on /bots the header's 新建员工 and the create card open the create dia
   // The wizard's own 取消 on its first step closes it and drops the parameter.
   await user.click(within(dialog).getByRole("button", { name: "取消" }));
   await waitFor(() => expect(router.state.location.search).toEqual({}));
+});
+
+test("a coworker made in the wizard opens on its own page, and Back returns to the roster", async () => {
+  const { screen, router, user } = draw("/bots");
+  await screen.findByText("Backend Engineer");
+  const answer = globalThis.fetch;
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    if (String(input) === "/api/agents" && init?.method === "POST")
+      return Response.json(
+        { agent: { ...base, id: "agent-new", name: "报销专员" } },
+        { status: 201 },
+      );
+    if (String(input) === "/api/agents/capabilities")
+      return Response.json({ capabilities: { builtInAvailable: true } });
+    return answer(input, init);
+  }) as typeof fetch;
+
+  await user.click(
+    within(screen.getByTestId("wakers-header-actions"))
+      .getByText("新建员工")
+      .closest("a") as HTMLElement,
+  );
+  const dialog = await within(document.body).findByRole("dialog", {
+    name: "新建员工",
+  });
+  await user.type(within(dialog).getByLabelText("名字"), "报销专员");
+  await user.type(within(dialog).getByLabelText("头衔"), "财务运营");
+  await user.type(within(dialog).getByLabelText("角色"), "审核票据。");
+  await user.click(within(dialog).getByRole("button", { name: "下一步" }));
+  await within(dialog).findByText("第 2 步，共 3 步");
+  await user.click(within(dialog).getByRole("button", { name: "下一步" }));
+  await within(dialog).findByText("第 3 步，共 3 步");
+  await user.click(
+    dialog.ownerDocument.querySelector('input[value="builtin"]') as HTMLElement,
+  );
+  await user.click(within(dialog).getByRole("button", { name: "创建员工" }));
+
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/bots/agent-new"),
+  );
+  // The `?new` entry was replaced, so Back lands on the roster rather than an empty wizard.
+  router.history.back();
+  await waitFor(() => expect(router.state.location.pathname).toBe("/bots"));
+  expect(router.state.location.search).toEqual({});
 });
 
 test("each card's 编辑 opens that employee's edit dialog on /bots, keeping the roster's filters", async () => {

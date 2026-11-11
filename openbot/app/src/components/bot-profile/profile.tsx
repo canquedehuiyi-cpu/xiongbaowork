@@ -1,4 +1,9 @@
-import { IconBell, IconMessage, IconPlayerPause } from "@tabler/icons-react";
+import {
+  IconBell,
+  IconChevronRight,
+  IconMessage,
+  IconPlayerPause,
+} from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type * as React from "react";
@@ -31,7 +36,11 @@ import { queryClient } from "@/query-client";
 import { BotActivityGlance, BotActivityRow } from "./activity";
 import { BotPausedBanner } from "./pause-banner";
 import { ProfileAlert, ProfilePanel, ProfileSection } from "./profile-kit";
-import { AvatarSourcesSection, ProfileCard } from "./waker-detail-sections";
+import {
+  AvatarSourcesSection,
+  DoneThisWeek,
+  ProfileCard,
+} from "./waker-detail-sections";
 
 const NOTIFY_LABEL: Record<BotNotify, string> = {
   all: "全部",
@@ -48,7 +57,7 @@ const selectClass =
  * 分身的信息来源（只在你自己的分身上）、「对你」、它正在做的事，再加上调用方给的「这位员工的设置」和「管理」两段。
  *
  * 熊宝在上游之上保留了自己的部分：角色档案卡（状态、模型、个人分身标记，`ProfileCard`）、`BotControls`
- * 的暂停开关（上游叫 Active），以及分身的信息来源。「本周完成」和看板上的进行中任务在「动态」分页里。
+ * 的暂停开关（上游叫 Active），以及分身的信息来源。看板上的进行中任务和最近审计在「动态」分页里。
  */
 export function BotProfile({
   agent,
@@ -75,6 +84,7 @@ export function BotProfile({
       <AvatarSourcesSection profile={agent} />
       <BotControls agent={agent} />
       <BotActivityGlance agentId={agent.id} />
+      <DoneThisWeek agentId={agent.id} />
       {settings}
       {manage}
     </>
@@ -195,6 +205,9 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
                 <ItemTitle>给 {agent.name} 发消息</ItemTitle>
                 <ItemDescription>开始一段对话。</ItemDescription>
               </ItemContent>
+              <ItemActions>
+                <IconChevronRight className="size-4 text-muted-foreground" />
+              </ItemActions>
             </Item>
 <BotActivityRow agentId={agent.id} />
           </ProfilePanel>

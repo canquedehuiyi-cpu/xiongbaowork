@@ -157,18 +157,18 @@ test("the Arcade directory renders the coverage warning and the breadth line on 
 
   // Not pending, not a redirect: the screen itself.
   expect(view.queryByText("the plugins index")).toBeNull();
-  expect(view.getByText("Browse apps")).toBeTruthy();
+  expect(view.getByText("浏览应用")).toBeTruthy();
 
   await waitFor(() => {
     expect(row.textContent).toContain(
-      "This provider hasn't said which of its actions only read, so each one is treated as a change. Bots ask before using it wherever changes need approval, and check-ins can't use it.",
+      "这个服务商没有说明哪些动作只读，所以每个动作都当作会改动。凡是改动要审批的地方，员工用它之前都会先问；巡检用不了它。",
     );
   });
   expect(row.textContent).toContain(
-    "This app uses 1 separate permission across 2 actions. A further 1 requests no permission of its own and becomes callable with any approval here.",
+    "这个应用的 2 个动作用到 1 项不同的权限。另有 1 个动作不需要单独的权限，这里授权了任何一项它就能调用。",
   );
   // Arcade signs a person in to its apps and never asks them for a key, so no row says one.
-  expect(row.textContent).not.toContain("Needs a key");
+  expect(row.textContent).not.toContain("的密钥");
 });
 
 test("the Arcade directory redirects on a Composio deployment", async () => {
@@ -178,7 +178,7 @@ test("the Arcade directory redirects on a Composio deployment", async () => {
   await waitFor(() => {
     expect(view.getByText("the plugins index")).toBeTruthy();
   });
-  expect(view.queryByLabelText("Search apps")).toBeNull();
+  expect(view.queryByLabelText("搜索应用")).toBeNull();
 });
 
 test("the Arcade directory draws nothing until the page names a provider", async () => {
@@ -195,7 +195,7 @@ test("the Arcade directory draws nothing until the page names a provider", async
   }) as unknown as typeof fetch;
 
   const view = renderDirectory();
-  expect(view.queryByLabelText("Search apps")).toBeNull();
+  expect(view.queryByLabelText("搜索应用")).toBeNull();
   expect(view.queryByText("the plugins index")).toBeNull();
   expect(view.queryByRole("alert")).toBeNull();
   release();

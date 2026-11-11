@@ -13,8 +13,10 @@ import userEvent from "@testing-library/user-event";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { pluginKeys } from "@/lib/plugins/queries";
-import { Route as AssembleRoute } from "@/routes/_authed/_app/assemble.$agentId";
-import { Route as WakersRoute } from "@/routes/_authed/_app/wakers";
+// 装配搬进了员工的「设置」分页（M5b），`/assemble/$agentId` 重定向到那里。
+import { Route as BotProfileRoute } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as AssembleRoute } from "@/routes/_authed/_app/bots.$agentId.setup";
+import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
 
 /**
  * Ticket 015 acceptance, at the screen where it is decided: installing a skill on one coworker is a
@@ -113,18 +115,22 @@ function draw(grantedSlugs: string[]) {
   const root = createRootRoute({ component: () => <Outlet /> });
   const router = createRouter({
     context: {},
-    history: createMemoryHistory({ initialEntries: [`/assemble/${agentId}`] }),
+    history: createMemoryHistory({ initialEntries: [`/bots/${agentId}/setup`] }),
     routeTree: root.addChildren([
       // `as never` on the parent: TanStack's own file route is already registered in the generated
       // tree with its real parent, and this only needs it answering to a different address for the
       // duration of one render. `agent-roster-error.test.tsx` casts the same way for the same reason.
-      WakersRoute.update({
+      BotsRoute.update({
         getParentRoute: () => root,
-        path: "/wakers",
+        path: "/bots",
+      } as never),
+      BotProfileRoute.update({
+        getParentRoute: () => root,
+        path: "/bots/$agentId",
       } as never),
       AssembleRoute.update({
         getParentRoute: () => root,
-        path: "/assemble/$agentId",
+        path: "/bots/$agentId/setup",
       } as never),
     ]),
   });

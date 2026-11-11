@@ -59,7 +59,7 @@ test("Apollo (no permissions, one action) says the app is the action", () => {
   const apollo = fromFixture("Apollo");
   expect([apollo.permissionCount, apollo.actionCount]).toEqual([0, 1]);
   expect(consentBreadth(apollo)).toBe(
-    "This app has a single action, and approving it approves the app.",
+    "这个应用只有一个动作，授权它就是授权整个应用。",
   );
 });
 
@@ -68,7 +68,7 @@ test("the plural wholly-unscoped case says all N of them", () => {
     consentBreadth(
       app({ actionCount: 43, permissionCount: 0, scopedActionCount: 0 }),
     ),
-  ).toBe("Approving any action in this app approves all 43 of them.");
+  ).toBe("授权这个应用里的任何一个动作，就会把全部 43 个动作一起授权。");
 });
 
 test("Asana and Attio are fully scoped: one permission across one action", () => {
@@ -80,7 +80,7 @@ test("Asana and Attio are fully scoped: one permission across one action", () =>
       toolkit.actionCount,
     ]).toEqual([1, 1, 1]);
     expect(consentBreadth(toolkit)).toBe(
-      "This app uses 1 separate permission across 1 action.",
+      "这个应用的 1 个动作用到 1 项不同的权限。",
     );
   }
 });
@@ -90,7 +90,7 @@ test("more than one permission, fully scoped", () => {
     consentBreadth(
       app({ actionCount: 30, permissionCount: 4, scopedActionCount: 30 }),
     ),
-  ).toBe("This app uses 4 separate permissions across 30 actions.");
+  ).toBe("这个应用的 30 个动作用到 4 项不同的权限。");
 });
 
 test("AirtableApi is the mixed shape: names the further K that need no permission", () => {
@@ -101,7 +101,7 @@ test("AirtableApi is the mixed shape: names the further K that need no permissio
     airtable.actionCount,
   ]).toEqual([1, 1, 2]);
   expect(consentBreadth(airtable)).toBe(
-    "This app uses 1 separate permission across 2 actions. A further 1 requests no permission of its own and becomes callable with any approval here.",
+    "这个应用的 2 个动作用到 1 项不同的权限。另有 1 个动作不需要单独的权限，这里授权了任何一项它就能调用。",
   );
 });
 
@@ -111,7 +111,7 @@ test("the mixed shape with several further actions", () => {
       app({ actionCount: 10, permissionCount: 2, scopedActionCount: 6 }),
     ),
   ).toBe(
-    "This app uses 2 separate permissions across 10 actions. A further 4 request no permission of their own and become callable with any approval here.",
+    "这个应用的 10 个动作用到 2 项不同的权限。另有 4 个动作不需要单独的权限，这里授权了任何一项它们就能调用。",
   );
 });
 
@@ -131,7 +131,7 @@ test("it renders on the enablement step, before enabling", () => {
     />,
   );
   expect(html).toContain('data-testid="breadth-note"');
-  expect(html).toContain("1 separate permission across 2 actions");
+  expect(html).toContain("2 个动作用到 1 项不同的权限");
 });
 
 test("no copy promises confinement", () => {

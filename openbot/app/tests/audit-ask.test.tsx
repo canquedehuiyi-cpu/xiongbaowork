@@ -136,19 +136,19 @@ function renderAsk(answers: unknown[]) {
 
 async function askQuestion(view: ReturnType<typeof render>, question: string) {
   const user = userEvent.setup({ document });
-  const input = await view.findByLabelText("Ask about the audit trail");
+  const input = await view.findByLabelText("问问审计记录");
   await user.clear(input);
   await user.type(input, question);
-  await user.click(view.getByRole("button", { name: "Ask" }));
+  await user.click(view.getByRole("button", { name: "提问" }));
 }
 
 test("an answer becomes chips over the rows the server returns for them, read back in a line", async () => {
   const { view, listed, asked } = renderAsk([ANSWERED]);
-  await view.findByText("2 events");
+  await view.findByText("2 条事件");
 
   await askQuestion(view, "Show me every Gmail write by a routine last week");
 
-  await view.findByText("1 event");
+  await view.findByText("1 条事件");
   expect(asked[0]).toMatchObject({
     question: "Show me every Gmail write by a routine last week",
   });
@@ -157,11 +157,11 @@ test("an answer becomes chips over the rows the server returns for them, read ba
     (chip) => chip.textContent,
   );
   expect(chips).toEqual([
-    "Started by: A routine",
-    "App: Gmail",
-    "Effect: Changes something",
-    expect.stringMatching(/^After: /),
-    expect.stringMatching(/^Before: /),
+    "发起方：定时任务",
+    "应用：Gmail",
+    "影响：会改动东西",
+    expect.stringMatching(/^晚于：/),
+    expect.stringMatching(/^早于：/),
   ]);
   const last = listed.at(-1) as URL;
   expect(last.searchParams.get("app")).toBe("gmail");
@@ -175,32 +175,32 @@ test("an answer becomes chips over the rows the server returns for them, read ba
    * while new rows load, so asking emptied it and lost the answer's place. It stays.
    */
   expect(
-    (view.getByLabelText("Ask about the audit trail") as HTMLInputElement)
+    (view.getByLabelText("问问审计记录") as HTMLInputElement)
       .value,
   ).toBe("Show me every Gmail write by a routine last week");
 
   // A chip taken off is asked of the server again, and the reading says it no longer describes them.
-  fireEvent.click(view.getByRole("button", { name: "Remove App: Gmail" }));
-  await view.findByText("2 events");
+  fireEvent.click(view.getByRole("button", { name: "移除 应用：Gmail" }));
+  await view.findByText("2 条事件");
   expect(listed.at(-1)?.searchParams.get("app")).toBeNull();
   expect(listed.at(-1)?.searchParams.get("effect")).toBe("write");
   expect(view.container.textContent).toContain(
-    "You've changed the filters since.",
+    "之后你改过筛选。",
   );
 });
 
 test("a question the trail can't answer says why and clears the chips, so no earlier filters pose as its rows", async () => {
   const { view } = renderAsk([ANSWERED, UNANSWERABLE]);
-  await view.findByText("2 events");
+  await view.findByText("2 条事件");
   await askQuestion(view, "Show me every Gmail write by a routine last week");
-  await view.findByText("1 event");
+  await view.findByText("1 条事件");
 
   await askQuestion(
     view,
     "What did the Inbox triage Bot write in the emails it sent yesterday?",
   );
 
-  await view.findByText(/The trail can't answer this\./);
+  await view.findByText(/审计记录回答不了这个问题。/);
   expect(view.container.textContent).toContain(UNANSWERABLE.unanswered);
   await waitFor(() =>
     expect(view.container.querySelectorAll("[data-audit-chip]")).toHaveLength(
@@ -208,7 +208,7 @@ test("a question the trail can't answer says why and clears the chips, so no ear
     ),
   );
   // Every event again, the unfiltered trail it was before the first question, with no reading over it.
-  await view.findByText("2 events");
+  await view.findByText("2 条事件");
   expect(view.container.querySelector("[data-audit-reading]")).toBeNull();
 });
 
@@ -245,12 +245,12 @@ test("chips narrow a saved view, and two sets with nothing in common ask for a v
  */
 test("Admin's Audit page has one control for each filter, in the toolbar beside the search", async () => {
   const { view } = renderAsk([]);
-  await view.findByText("2 events");
+  await view.findByText("2 条事件");
   const user = userEvent.setup({ document });
-  await user.click(view.getByRole("button", { name: "Add filter" }));
-  await view.findByRole("menuitem", { name: "Bot" });
+  await user.click(view.getByRole("button", { name: "添加筛选" }));
+  await view.findByRole("menuitem", { name: "员工" });
 
-  for (const name of ["Outcome", "Bot", "Started by"]) {
+  for (const name of ["结果", "员工", "发起方"]) {
     const controls = [
       ...view.queryAllByRole("button", { name }),
       ...view.queryAllByRole("menuitem", { name }),
@@ -258,9 +258,9 @@ test("Admin's Audit page has one control for each filter, in the toolbar beside 
     expect([name, controls.length]).toEqual([name, 1]);
   }
   // Add filter sits in the toolbar's row, with the search and the count.
-  const search = view.getByLabelText("Search events");
+  const search = view.getByLabelText("搜索事件");
   const row = search.closest(".flex-wrap") as HTMLElement;
-  expect(row.textContent).toContain("Add filter");
+  expect(row.textContent).toContain("添加筛选");
   expect(row.querySelector("[data-audit-count]")).not.toBeNull();
 });
 
@@ -309,10 +309,10 @@ test("a type chip names its rows in the words of the Audit page's views", () => 
     nameFor: () => "",
   };
   const chip = chipText("eventType", filters, names);
-  expect(chip).toBe("Type: Computer actions, blocked");
-  expect(chip).not.toContain("Use the computer");
+  expect(chip).toBe("类型：电脑操作，已拦截");
+  expect(chip).not.toContain("使用电脑");
   expect(chip).not.toMatch(/\bBot\b/);
   expect(chipText("rule", filters, names)).toBe(
-    "Rule: Bots may not visit social media sites",
+    "规则：Bots may not visit social media sites",
   );
 });

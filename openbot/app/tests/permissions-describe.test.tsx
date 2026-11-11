@@ -210,8 +210,8 @@ function open() {
 
 async function describeChange(view: ReturnType<typeof render>) {
   const user = userEvent.setup({ document: view.container.ownerDocument });
-  await user.type(await view.findByLabelText("Describe the change"), TEXT);
-  await user.click(view.getByRole("button", { name: "Write changes" }));
+  await user.type(await view.findByLabelText("描述这次改动"), TEXT);
+  await user.click(view.getByRole("button", { name: "写成改动" }));
 }
 
 test("a description lands as switches with their reading, shows who loses and keeps access and what they used, and Save writes them with the sentence", async () => {
@@ -221,49 +221,49 @@ test("a description lands as switches with their reading, shows who loses and ke
   expect(await view.findByText(reading.explanation)).toBeTruthy();
   expect(
     view.getByText(
-      "Checks. Every change names a permission, role or group this OpenBot has.",
+      "通过检查。每条改动都对得上这个部署里的权限、角色或用户组。",
     ),
   ).toBeTruthy();
   // The switches, in the Permissions page's own words: off for everybody, granted to the other groups.
   expect(view.getAllByText("Local computer access")).toHaveLength(4);
-  expect(view.getByText("Everybody")).toBeTruthy();
-  expect(view.getByText("Off")).toBeTruthy();
-  expect(view.getByText("Group: Field Sales (EMEA)")).toBeTruthy();
-  expect(view.getAllByText("Grant")).toHaveLength(3);
+  expect(view.getByText("所有人")).toBeTruthy();
+  expect(view.getByText("关闭")).toBeTruthy();
+  expect(view.getByText("用户组：Field Sales (EMEA)")).toBeTruthy();
+  expect(view.getAllByText("授予")).toHaveLength(3);
 
   // Who it changes, as the server worked it out for every person.
   expect(
     await view.findByText(
-      "3 people lose access and 4 people keep it through a different switch.",
+      "3 人失去权限，4 人通过另一个开关保留权限。",
     ),
   ).toBeTruthy();
   expect(view.getByText("Cam Contractor")).toBeTruthy();
-  expect(view.getByText("Member in Contractors")).toBeTruthy();
-  expect(view.getByText("Admin, in no group")).toBeTruthy();
-  expect(view.getAllByText("Loses access")).toHaveLength(3);
-  expect(view.getAllByText("Keeps access")).toHaveLength(4);
+  expect(view.getByText("成员，属于 Contractors")).toBeTruthy();
+  expect(view.getByText("管理员，不属于任何用户组")).toBeTruthy();
+  expect(view.getAllByText("失去权限")).toHaveLength(3);
+  expect(view.getAllByText("保留权限")).toHaveLength(4);
   expect(
-    view.getAllByText("Now on by default. After this, off for everybody.", {
+    view.getAllByText("现在默认打开，改动后对所有人关闭。", {
       exact: false,
     }),
   ).toHaveLength(3);
   // The contractor who is also an engineer keeps it, through Engineering, as the engineer does.
   expect(
     view.getAllByText(
-      "Now on by default. After this, on through Engineering.",
+      "现在默认打开，改动后通过 Engineering 打开。",
       { exact: false },
     ),
   ).toHaveLength(2);
   // What Cam used, counted and listed in Audit's own words, and nobody else used any.
   expect(
-    view.getByText("1 in the last 30 days: actions on their own computer."),
+    view.getByText("最近 30 天 1 次：actions on their own computer。"),
   ).toBeTruthy();
-  expect(view.getAllByText("Not used in the last 30 days.")).toHaveLength(2);
-  expect(view.getByText("Would be blocked")).toBeTruthy();
-  expect(view.getByText("Cam Contractor, Local computer access")).toBeTruthy();
+  expect(view.getAllByText("最近 30 天没用过。")).toHaveLength(2);
+  expect(view.getByText("会被拦下")).toBeTruthy();
+  expect(view.getByText("Cam Contractor，Local computer access")).toBeTruthy();
   expect(sent.filter((call) => call.path.endsWith("/batch"))).toHaveLength(0);
 
-  const save = view.getByRole("button", { name: "Save changes" });
+  const save = view.getByRole("button", { name: "保存改动" });
   await waitFor(() => expect((save as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(save);
   await waitFor(() =>
@@ -307,21 +307,21 @@ test("removing a change is called out and shows who the rest would change", asyn
   const { view } = open();
   await describeChange(view);
   await view.findByText(
-    "3 people lose access and 4 people keep it through a different switch.",
+    "3 人失去权限，4 人通过另一个开关保留权限。",
   );
-  expect(view.queryByText(/You've removed a change/)).toBeNull();
+  expect(view.queryByText(/写好之后你删掉过一条改动/)).toBeNull();
 
   // Without Sales's grant, Sam loses it too.
-  fireEvent.click(view.getByRole("button", { name: "Remove change 4" }));
+  fireEvent.click(view.getByRole("button", { name: "删掉改动 4" }));
 
   expect(
     view.getByText(
-      "You've removed a change since they were written. The check and the reading above are for the written changes, not your edit.",
+      "写好之后你删掉过一条改动。上面的检查和解读说的是写出来的改动，不是你改过的版本。",
     ),
   ).toBeTruthy();
   expect(
     await view.findByText(
-      "4 people lose access and 3 people keep it through a different switch.",
+      "4 人失去权限，3 人通过另一个开关保留权限。",
     ),
   ).toBeTruthy();
   expect(
@@ -354,14 +354,14 @@ test("each saved switch reads on Audit as which permission, for whom, and what i
     scopeId: "Sales",
     allowed: true,
   });
-  expect(subjectText(everybody)).toBe("Local computer access · Everybody");
-  expect(decisionText(everybody)).toBe("Turned off");
-  expect(subjectText(sales)).toBe("Local computer access · Group: Sales");
-  expect(decisionText(sales)).toBe("Granted");
+  expect(subjectText(everybody)).toBe("Local computer access · 所有人");
+  expect(decisionText(everybody)).toBe("已关闭");
+  expect(subjectText(sales)).toBe("Local computer access · 用户组：Sales");
+  expect(decisionText(sales)).toBe("已授予");
   // A row from before the title was kept names the permission by its key.
   expect(
     subjectText(row({ scopeKind: "role", scopeId: "admin", allowed: true })),
-  ).toBe("localComputer · Admins");
+  ).toBe("localComputer · 管理员");
 });
 
 test("the headline names only what changes", () => {
@@ -373,7 +373,7 @@ test("the headline names only what changes", () => {
       keeping: 0,
       unchanged: 6,
     }),
-  ).toBe("1 person loses access.");
+  ).toBe("1 人失去权限。");
   expect(
     previewHeadline({
       people: 7,
@@ -382,9 +382,7 @@ test("the headline names only what changes", () => {
       keeping: 1,
       unchanged: 4,
     }),
-  ).toBe(
-    "2 people gain access and 1 person keeps it through a different switch.",
-  );
+  ).toBe("2 人获得权限，1 人通过另一个开关保留权限。");
   expect(
     previewHeadline({
       people: 7,
@@ -393,5 +391,5 @@ test("the headline names only what changes", () => {
       keeping: 0,
       unchanged: 7,
     }),
-  ).toBe("Nobody's access changes.");
+  ).toBe("没有人的权限会变。");
 });

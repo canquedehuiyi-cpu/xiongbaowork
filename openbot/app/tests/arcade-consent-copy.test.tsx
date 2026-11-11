@@ -49,7 +49,7 @@ test("scoped: names the permission and lists the actions grouped on that scope",
   expect(copy.scopes).toEqual(["gmail.readonly"]);
   expect(copy.alsoEnables).toEqual(["Gmail.GetThread", "Gmail.ListThreads"]);
   expect(copy.sentence).toContain("gmail.readonly");
-  expect(copy.sentence).toContain("also enables");
+  expect(copy.sentence).toContain("也会让需要同样权限的");
   expect(copy.sentence).toContain("Gmail.GetThread, Gmail.ListThreads");
   expect(copy.sentence).not.toContain("Gmail.SendEmail");
   // The list follows the data: change a scope and the list changes with it.
@@ -66,7 +66,7 @@ test("scoped, from the fixture: a lone scope set lists no sibling", () => {
   const copy = consentCopy(asana[0]!.name, asana);
   expect(copy.scopes).toEqual(["default"]);
   expect(copy.alsoEnables).toEqual([]);
-  expect(copy.sentence).toContain("No other action requires it.");
+  expect(copy.sentence).toContain("没有别的动作需要它。");
 });
 
 test("unscoped: all-or-nothing, with the count derived", () => {
@@ -74,16 +74,16 @@ test("unscoped: all-or-nothing, with the count derived", () => {
   expect(fromFixture("Apollo")).toEqual([]);
   expect(
     consentCopy("Github.Only", [{ name: "Github.Only", scopes: [] }]).sentence,
-  ).toContain("approving this approves its single action");
+  ).toContain("授权这个就是授权它唯一的动作");
   const forty3 = Array.from({ length: 43 }, (_, i) => ({
     name: `Github.Action${i}`,
     scopes: [],
   }));
   expect(consentCopy("Github.Action0", forty3).sentence).toContain(
-    "This app cannot separate permissions; approving this approves all 43.",
+    "这个应用分不开权限；授权这个就会把全部 43 个动作一起授权。",
   );
   expect(consentCopy("Github.Action0", forty3.slice(0, 7)).sentence).toContain(
-    "approves all 7.",
+    "全部 7 个动作一起授权。",
   );
 });
 
@@ -92,7 +92,7 @@ test("an unscoped action in a scoped app is not worded as a permission", () => {
   const bare = airtable.find((a) => a.scopes.length === 0)!;
   const copy = consentCopy(bare.name, airtable);
   expect(copy.scopes).toEqual([]);
-  expect(copy.sentence).toContain("requests no permission of its own");
+  expect(copy.sentence).toContain("不需要单独的权限");
 });
 
 test("no copy promises confinement", () => {
@@ -165,7 +165,7 @@ test("N counts what an approval covers, and no action that needs no authorizatio
         Array.from({ length: covered }, (_, i) => `Tk.Covered${i}`).sort(),
       );
       expect(consentCopy("Tk.Covered0", actions).sentence).toContain(
-        `approving this approves all ${expected}.`,
+        `授权这个就会把全部 ${expected} 个动作一起授权。`,
       );
     }
   }
