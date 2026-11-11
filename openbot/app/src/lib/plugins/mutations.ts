@@ -562,19 +562,28 @@ export function registerOAuthClientMutationOptions(queryClient: QueryClient) {
  * assignment to `window.location.href` typechecks, and the compiler has been told the same lie in
  * a second place. `null` is the one absent-value this inference cannot quietly discard, which is
  * what makes the branch below it obligatory rather than advisory.
+ *
+ * AND A THIRD ANSWER, WHICH IS NOT A URL AND NOT A FORM: `{ connected: true }`. A brokered app
+ * whose account the vendor already holds in full is recorded by the route on the spot (X8: Arcade
+ * holding every scope the app asks for), so the press ends connected with no page to visit.
+ * Unwrapping only the url read that answer as `null`, and every caller drew `null` as "this app
+ * takes a key" or as a failure, over an account that had just been recorded as connected. It is
+ * its own member of {@link ConnectStart} so a caller has to say what it draws for it.
+ *
+ * `account` IS A RECONNECT OF ONE OF THE PERSON'S FURTHER ACCOUNTS (X8-5): the Reconnect card names
+ * the account row a refused call ran in, and `?account=<id>` asks the route to reconnect that one in
+ * place rather than the person's own one. Absent, the route reconnects (or connects) their own.
  */
 export function connectAccountMutationOptions(
   returnTo: "settings" | "admin" = "settings",
 ) {
   return mutationOptions({
-    mutationFn: async (serverId: string): Promise<string | null> => {
-      const authorizationUrl = await client<string | undefined>(
-        `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${desktopConsentQuery()}`,
-        "authorizationUrl",
-        { method: "POST", fallback: "这个账号没能连接。" },
-      );
-      return authorizationUrl ?? null;
-    },
+    mutationFn: (
+      variables: string | { serverId: string; account?: string },
+    ): Promise<ConnectStart> =>
+      typeof variables === "string"
+        ? startConnect(variables, returnTo, false)
+        : startConnect(variables.serverId, returnTo, false, variables.account),
   });
 }
 
@@ -596,12 +605,18 @@ async function startConnect(
   serverId: string,
   returnTo: "settings" | "admin",
   another: boolean,
+  account?: string,
 ): Promise<ConnectStart> {
   const fallback = "这个账号没能连接。";
-  const response = await client(
-    `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${another ? "&another=1" : ""}${desktopConsentQuery()}`,
-    { method: "POST", fallback },
-  );
+  /*
+   * 指名一个账号（`?account=<id>`，X8-5）是就地重新连接那一个账号，和「再连一个账号」互斥：两条地址
+   * 分开写，各自只插这个模块自己的固定文字和编码过的 id。
+   */
+  const path =
+    account && !another
+      ? `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}&account=${encodeURIComponent(account)}${desktopConsentQuery()}`
+      : `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${another ? "&another=1" : ""}${desktopConsentQuery()}`;
+  const response = await client(path, { method: "POST", fallback });
   // Read as `client` reads an envelope: a body that is not an object is a failed request.
   const body = (await response.json().catch(() => null)) as unknown;
   if (!body || typeof body !== "object" || Array.isArray(body)) {

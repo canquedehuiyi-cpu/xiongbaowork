@@ -73,6 +73,11 @@ export type ConnectPrompt = {
    * Absent on a `show_app_access` answer from before it was written, which offers nothing.
    */
   blocked?: boolean;
+  /**
+   * 被拒的是这个人在这个应用上的哪一个账号（账号表的行 id），只在那不是他的默认账号时才有。卡片的
+   * 「重新连接」把它带给 `POST /api/plugins/servers/:serverId/connect?account=<id>`，授权的就是这个账号。
+   */
+  account?: string;
 };
 
 /**
@@ -91,7 +96,8 @@ export const SHOW_APP_ACCESS_TOOL = "show_app_access";
  * the MODEL is told, and because a transcript that cannot parse the marker still reads correctly.
  */
 export function connectAppRefusal(prompt: ConnectPrompt): string {
-  const { serverId, title, message, agentId, reason, at, blocked } = prompt;
+  const { serverId, title, message, agentId, reason, at, blocked, account } =
+    prompt;
   return `${CONNECT_APP_MARKER}${JSON.stringify({
     serverId,
     title,
@@ -99,6 +105,7 @@ export function connectAppRefusal(prompt: ConnectPrompt): string {
     ...(reason ? { reason } : {}),
     ...(at ? { at } : {}),
     ...(blocked !== undefined ? { blocked } : {}),
+    ...(account ? { account } : {}),
   })} ${message}`;
 }
 
@@ -133,14 +140,16 @@ export function readConnectPrompt(
   try {
     const parsed: unknown = JSON.parse(rest.slice(0, end + 1));
     if (!parsed || typeof parsed !== "object") return null;
-    const { serverId, title, agentId, reason, at, blocked } = parsed as {
-      serverId?: unknown;
-      title?: unknown;
-      agentId?: unknown;
-      reason?: unknown;
-      at?: unknown;
-      blocked?: unknown;
-    };
+    const { serverId, title, agentId, reason, at, blocked, account } =
+      parsed as {
+        serverId?: unknown;
+        title?: unknown;
+        agentId?: unknown;
+        reason?: unknown;
+        at?: unknown;
+        blocked?: unknown;
+        account?: unknown;
+      };
     if (typeof serverId !== "string" || typeof title !== "string") return null;
     if (!serverId || !title) return null;
     /*
@@ -160,6 +169,7 @@ export function readConnectPrompt(
         ? { at }
         : {}),
       ...(typeof blocked === "boolean" ? { blocked } : {}),
+      ...(typeof account === "string" && account ? { account } : {}),
     };
   } catch {
     return null;

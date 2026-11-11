@@ -55,8 +55,15 @@ import { storeMcpToken } from "@/lib/credentials/mutations";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { atStart, useManagePaths } from "@/lib/manage-paths";
 import {
+  type CrewGrantOutcome,
+  crewMembers,
+  crewSummary,
+  grantToMembers,
+} from "@/lib/plugins/crew-grant";
+import {
   addCuratedServerMutationOptions,
   connectAccountMutationOptions,
+  invalidatePlugins,
   refreshPluginServerMutationOptions,
   registerOAuthClientMutationOptions,
   removePluginServerMutationOptions,
@@ -69,12 +76,6 @@ import {
   brokeredProvenance,
   brokeredReach,
 } from "@/lib/plugins/provider-vocabulary";
-import {
-  type CrewGrantOutcome,
-  crewMembers,
-  crewSummary,
-  grantToMembers,
-} from "@/lib/plugins/crew-grant";
 import {
   appKeyOf,
   type CatalogueItem,
@@ -465,16 +466,23 @@ export function PluginPage({
      * shown to this person in their own browser; there is deliberately nothing here that could
      * complete it for them, and nothing about being an administrator changes that.
      */
-    onSuccess: (authorizationUrl) => {
+    onSuccess: (start) => {
+      /*
+       * `{ connected: true }`（X8）：厂商已经持有这个应用要的全部权限，路由在这次按下时就记下了连接，
+       * 没有页面要去。不报错、不跳转，重读插件查询，这一页从记下的那一行画出「已连接」。上游把它当成
+       * 这一半看不懂的回答报错；熊宝照实画已连接（服务端这一半本不回它，回了也是真的连上了）。
+       */
+      if (start !== null && "connected" in start) {
+        void invalidatePlugins(queryClient);
+        return;
+      }
       /*
        * A 200 with no url on it is not a url to follow. This press is on a `user-oauth` catalogue
        * entry, whose half of that route always mints one or refuses, so this is the server having
        * answered something this page does not understand. Assigning it navigated to a page called
        * `undefined` on this deployment's own origin. See `connectAccountMutationOptions`.
-       *
-       * fork 的 `connectAccountMutationOptions` 只回授权链接或 null（fork 服务端不回上游的
-       * `{ connected: true }`），所以这里直接读链接。
        */
+      const authorizationUrl = start?.authorizationUrl ?? null;
       if (authorizationUrl === null) {
         setError(
           "部署的回应里没有授权链接，所以没法带你过去，也没有连接任何东西。请重试；如果一直这样，请检查这个连接器的配置。",

@@ -143,9 +143,15 @@ function disabledSentence(
 export function AppAccessAction({
   agentId,
   access,
+  account,
 }: {
   agentId: string;
   access: AppAccess;
+  /**
+   * 被拒的那个账号（连接卡片标记里的 `account`，账号表行 id），只在拒绝落在这个人的第二个账号上时有。
+   * 「重新连接」把它带给 `POST /servers/:id/connect?account=<id>`，就地重新连接的就是那个账号（X8-5）。
+   */
+  account?: string;
 }) {
   /*
    * WHO IS LOOKING decides only which button is drawn, never what is allowed: the server answers
@@ -175,7 +181,13 @@ export function AppAccessAction({
   if (access.state === "reconnect" && access.accountHolder === "owner")
     return null;
   if (access.state === "not_connected" || access.state === "reconnect")
-    return <ConnectAction access={access} tab={tab} />;
+    return (
+      <ConnectAction
+        access={access}
+        account={access.state === "reconnect" ? account : undefined}
+        tab={tab}
+      />
+    );
   // Theirs to give, admin or not: an owner's grant keeps every call on the asker's own account.
   if (access.state === "owner_grantable")
     return <OwnerGiveAction access={access} agentId={agentId} tab={tab} />;
@@ -534,9 +546,12 @@ function PersonalConnectAction({
 /** The person's own account: connect it, or reconnect it. */
 function ConnectAction({
   access,
+  account,
   tab,
 }: {
   access: AppAccess;
+  /** The further account to reconnect in place, as the refusal named it. See `AppAccessAction`. */
+  account?: string | undefined;
   tab: ConnectInNewTab;
 }) {
   const label = access.state === "reconnect" ? "重新连接" : "连接";
@@ -569,11 +584,14 @@ function ConnectAction({
    * A FORM, OR A CONNECTION THAT ALREADY HAS A ROW, IS SETTINGS' JOB. A typed key has nowhere to be
    * typed but the app's page, and a Composio app whose row still stands — a refused key, an account
    * the vendor lost — is refused by the connect route until it is disconnected there. Only this
-   * deployment's own OAuth flow takes a fresh consent over a withdrawn one.
+   * deployment's own OAuth flow takes a fresh consent over a withdrawn one — and Arcade's (X8-5):
+   * Connect over a connection that stands asks for the whole app again under the same account, with
+   * no Disconnect first, so its Reconnect opens the consent here, naming the refused account.
    */
+  const inPlace = access.connect === "oauth" || access.provider === "arcade";
   const viaSettings =
     access.connect === "key" ||
-    (access.state === "reconnect" && access.connect !== "oauth") ||
+    (access.state === "reconnect" && !inPlace) ||
     tab.needsKey;
   if (viaSettings)
     return (
@@ -620,7 +638,7 @@ function ConnectAction({
         disabled={tab.pending}
         onClick={() => {
           stopWaiting();
-          tab.open(access.key);
+          tab.open(access.key, undefined, account);
         }}
         size="sm"
         variant="outline"

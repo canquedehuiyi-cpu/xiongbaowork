@@ -282,7 +282,8 @@ export type PluginsPage = {
    * Whether this deployment's broker authorizes ONE ACTION AT A TIME (Arcade's per-action grant
    * list). A declared capability, read with a presence test and never a vendor name.
    *
-   * 上游必有；**熊宝服务端的 `GET /api/plugins` 不下发**（逐个动作授权不在 X5），所以是可选的，缺省读作 false。
+   * 上游必有；熊宝服务端 X8-4 起下发（Arcade 是活动 broker 时为 true）。更早的服务端不下发，所以仍是可选的，
+   * 缺省读作 false。
    */
   authorizesPerAction?: boolean;
   /**

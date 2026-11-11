@@ -57,10 +57,13 @@ export function useConnectApp() {
         await navigate({ to: "/connections/$key", params: { key } });
         return;
       }
-      /* fork 的 `connectAccountMutationOptions` 只回授权链接或 null（字段式连接没有链接）。 */
-      const authorizationUrl = await connect.mutateAsync(server.id);
-      if (authorizationUrl) {
-        window.location.href = authorizationUrl;
+      /*
+       * 授权链接就去；`{ connected: true }`（X8，厂商已经持有全部权限，路由当场记下了连接）和 null
+       * （字段式连接，没有链接）都没有页面要去，落到下面重读连接状态。
+       */
+      const start = await connect.mutateAsync(server.id);
+      if (start && "authorizationUrl" in start) {
+        window.location.href = start.authorizationUrl;
         return;
       }
       await queryClient.invalidateQueries({

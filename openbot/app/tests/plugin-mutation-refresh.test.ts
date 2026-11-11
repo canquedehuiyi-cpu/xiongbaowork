@@ -729,6 +729,23 @@ for (const request of ENCODED_REQUESTS) {
   });
 }
 
+/*
+ * The Reconnect card naming the further account a refused call ran in（X8-5）. Not a row of the
+ * roster above, which counts one case per URL template: this is the consent start's own template
+ * with the account named. The account row id is server-minted, but it arrives here off a
+ * transcript, so it is encoded like any id.
+ */
+test("reconnecting one named account keeps the id and the account each in one segment", async () => {
+  expect(
+    await requestedBy(() => connectAccountMutationOptions(), {
+      serverId: HOSTILE_ID,
+      account: HOSTILE_ID,
+    }),
+  ).toEqual([
+    `/api/plugins/servers/${ENCODED_ID}/connect?returnTo=settings&account=${ENCODED_ID}`,
+  ]);
+});
+
 test("every id these writes interpolate into a URL goes through encodeURIComponent", () => {
   /*
    * THE LEVER, AND WHY THE ROSTER ABOVE IS NOT ENOUGH ON ITS OWN. A case list covers the writes

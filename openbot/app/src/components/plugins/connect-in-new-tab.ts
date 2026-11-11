@@ -114,26 +114,33 @@ export function useConnectInNewTab() {
    * the app on before it can be connected (the personal edition's chat card). The tab is claimed
    * before it, on the click, for the reason above; if it fails, the tab goes and `first`'s caller
    * shows why.
+   *
+   * `account` reconnects one of the person's further accounts in place (X8-5): the Reconnect card
+   * carries the account row a refused call ran in, and the route takes it as `?account=<id>`.
    */
-  const open = (serverId: string, first?: () => Promise<unknown>) => {
+  const open = (
+    serverId: string,
+    first?: () => Promise<unknown>,
+    account?: string,
+  ) => {
     if (first) {
-      openAfter(() => first().then(() => serverId));
+      openAfter(() => first().then(() => serverId), account);
       return;
     }
     const tab = claimTab();
     handle.current = tab;
-    void ask(serverId, tab);
+    void ask(serverId, tab, account);
   };
 
   /**
    * The same, for a press whose `first` is what names the app: adding an app from Browse apps
    * answers the id of the row it made, and that row is what the sign-in is for.
    */
-  const openAfter = (first: () => Promise<string>) => {
+  const openAfter = (first: () => Promise<string>, account?: string) => {
     const tab = claimTab();
     handle.current = tab;
     first().then(
-      (serverId) => void ask(serverId, tab),
+      (serverId) => void ask(serverId, tab, account),
       () => {
         tab?.close();
         handle.current = null;
@@ -147,13 +154,31 @@ export function useConnectInNewTab() {
    * this for another before the url arrives — so the tab was left blank. The promise settles
    * whoever is still mounted; the error is still read from `connect` for whoever is.
    */
-  const ask = async (serverId: string, tab: Window | null) => {
-    let authorizationUrl: string | null;
+  const ask = async (
+    serverId: string,
+    tab: Window | null,
+    account?: string,
+  ) => {
+    let start: Awaited<ReturnType<typeof connect.mutateAsync>>;
     try {
-      authorizationUrl = await connect.mutateAsync(serverId);
+      start = await connect.mutateAsync(
+        account ? { serverId, account } : serverId,
+      );
     } catch {
       tab?.close();
       handle.current = null;
+      return;
+    }
+    /*
+     * ALREADY CONNECTED: the vendor already held everything this app asks for, and the route
+     * recorded the connection on this press (`{ connected: true }`, X8). There is no page to visit,
+     * so the claimed tab goes, and every query is refetched once, as the card does on its own
+     * connected edge. Whoever drew the button reads the new row there. Not a key app: no form.
+     */
+    if (start !== null && "connected" in start) {
+      tab?.close();
+      handle.current = null;
+      void queryClient.invalidateQueries();
       return;
     }
     /*
@@ -161,12 +186,13 @@ export function useConnectInNewTab() {
      * route answers `{ fields }` and the mutation unwraps nothing. Saying so, with the page
      * that has the form, beats a button that silently does nothing.
      */
-    if (authorizationUrl === null) {
+    if (start === null) {
       tab?.close();
       handle.current = null;
       setNeedsKey(true);
       return;
     }
+    const { authorizationUrl } = start;
     setWaiting(true);
     if (tab) tab.location.replace(authorizationUrl);
     // The tab was blocked. The url is still good, so offer it as something to click.

@@ -5,7 +5,7 @@ import {
   IconPlugOff,
   IconUsers,
 } from "@tabler/icons-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { IdentityConnectionPage } from "@/components/connections/identity-connection-page";
@@ -42,7 +42,10 @@ import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { useManagePaths } from "@/lib/manage-paths";
-import { connectAccountMutationOptions } from "@/lib/plugins/mutations";
+import {
+  connectAccountMutationOptions,
+  invalidatePlugins,
+} from "@/lib/plugins/mutations";
 import {
   brokeredProvenance,
   disconnectSiblingsNotice,
@@ -252,6 +255,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
   const plugins = useQuery(pluginsPageQueryOptions());
   const connections = useQuery(connectionsQueryOptions());
   const [notice, setNotice] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const connect = useMutation({
     ...connectAccountMutationOptions(),
@@ -260,17 +264,24 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
      * A full page navigation, not a fetch. The consent screen is the vendor's own and has to be shown
      * to you in your own browser; there is deliberately nothing here that could complete it for you.
      */
-    onSuccess: (authorizationUrl) => {
+    onSuccess: (start) => {
+      /*
+       * `{ connected: true }`（X8）：厂商已经持有这个应用要的全部权限，路由在这次按下时就记下了连接，
+       * 没有页面要去。不报错、不跳转，重读插件查询，这一页从记下的那一行画出「已连接」。上游把它当成
+       * 这一半看不懂的回答报错；熊宝照实画已连接。
+       */
+      if (start !== null && "connected" in start) {
+        void invalidatePlugins(queryClient);
+        return;
+      }
       /*
        * A 200 with no url on it is not a url to follow. Every press that reaches here is on a
        * `user-oauth` catalogue entry, whose half of that route always mints one or refuses — so
        * this is the server having answered something this page does not understand, and saying so
        * is the only honest thing left. Assigning it navigated to a page called `undefined` on this
        * deployment's own origin. See `connectAccountMutationOptions`.
-       *
-       * fork 的 `connectAccountMutationOptions` 只回授权链接或 null（fork 服务端不回上游的
-       * `{ connected: true }`），所以这里直接读链接。
        */
+      const authorizationUrl = start?.authorizationUrl ?? null;
       if (authorizationUrl === null) {
         setNotice(
           "部署的回应里没有授权链接，所以没法带你过去，也没有连接任何东西。请重试；如果一直这样，请告诉管理员。",

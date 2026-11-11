@@ -330,8 +330,8 @@ export function useBrokeredAccount(input: {
   /**
    * See {@link BrokeredAccount.reconnectsInPlace}. The server's computed capability, passed in.
    *
-   * 可选、缺省为 false：fork 服务端的 `GET /api/plugins` 目前不下发 `authorizesPerAction`
-   * （上游由它算出这个值），fork 现有页面也没有传它；按 Composio 的行为（不在原账号上重连）处理。
+   * 可选、缺省为 false：调用方从 `GET /api/plugins` 的 `authorizesPerAction` 算出它（X8-4 起熊宝服务端
+   * 在 Arcade 是活动 broker 时下发 true）；没有传的读作 Composio 的行为（不在原账号上重连）。
    */
   reconnectsInPlace?: boolean;
   /** Which screen the vendor's callback puts somebody down on. */
@@ -464,9 +464,19 @@ export function useBrokeredAccount(input: {
      * shown to this person in their own browser; there is deliberately nothing here that could
      * complete it for them, and nothing about being an administrator changes that.
      */
-    onSuccess: (authorizationUrl) => {
+    onSuccess: (start) => {
       forgetConfirmation();
       forgetRecheck();
+      /*
+       * ALREADY CONNECTED, AND NOTHING TO LEAVE FOR. The vendor already held everything this app
+       * asks for, so the route recorded the connection on this press (`{ connected: true }`, X8).
+       * The held answers were just dropped, so the row falls back to the recorded one, and the
+       * refetch is what brings that row in. NOT the key-app branch below: nothing was refused.
+       */
+      if (start !== null && "connected" in start) {
+        void invalidatePlugins(queryClient);
+        return;
+      }
       /*
        * NO URL IS AN ANSWER, NOT A URL TO FOLLOW.
        *
@@ -483,14 +493,14 @@ export function useBrokeredAccount(input: {
        * would leave nobody any reason to correct it — and the sentence names the one act that ends
        * the state, which is a reload against a deployment whose app has caught up.
        */
-      if (authorizationUrl === null) {
+      if (start === null) {
         report(
           "这个应用用你持有的密钥连接，而不是通过授权页面，所以没有页面可以带你过去，也没有连接任何东西。请刷新页面后再按一次“连接”。",
         );
         return;
       }
       confirmOnReturn();
-      window.location.href = authorizationUrl;
+      window.location.href = start.authorizationUrl;
     },
   });
 

@@ -222,7 +222,11 @@ function LiveAppAccessCard({
       </div>
       {access && access.state !== "ready" ? (
         <div className="flex justify-end">
-          <AppAccessAction access={access} agentId={agentId} />
+          <AppAccessAction
+            access={access}
+            account={prompt.account}
+            agentId={agentId}
+          />
         </div>
       ) : offer ? (
         <div className="flex justify-end">
