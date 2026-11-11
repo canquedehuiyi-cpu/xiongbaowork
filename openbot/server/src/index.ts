@@ -199,6 +199,7 @@ import { createSnapshotStore } from "./computer/snapshot-store";
 import { loadConfig } from "./config";
 import {
   chooseOpenAIApi,
+  deploymentModel,
   type LoadCurrentProject,
   mountCopilotRuntime,
   normalizeModelBaseUrls,
@@ -292,6 +293,7 @@ import {
   createLearningSharingStore,
   createOpenSkillIndex,
 } from "./learning/sharing";
+import { createLocalLearningEngine } from "./local-learning/engine";
 import { createMemoryDefaults } from "./memory/defaults";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createIntelligenceMemory } from "./memory/intelligence";
@@ -3487,6 +3489,51 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
   /*
+   * 本地学习（L1，local-learning/engine.ts）：每人每天读自己最近的对话，用那位员工的模型提出技能
+   * 草案，等本人在设置「学习」里审。对话不出库；模型调用经 `resolveAgentModel` 计到这个人名下，
+   * 本月任务额度用完就跳过。多副本时同一个人只有一个副本认领（带条件的 upsert）。
+   * `OPENBOT_LOCAL_LEARNING=off` 时不建、不扫。
+   */
+  const localLearningEngine = config.localLearning
+    ? createLocalLearningEngine({
+        database,
+        quota,
+        modelFor: async (agentId) => {
+          try {
+            const key = await resolveRuntimeModelApiKey();
+            return await resolveAgentModel(
+              agentId,
+              key ? deploymentModel(runtimeModel, key) : undefined,
+            );
+          } catch {
+            return null;
+          }
+        },
+        skillsFor: async (agentId) =>
+          (await pluginStore.listForAgent(agentId)).skills.map(
+            (skill) => skill.title,
+          ),
+      })
+    : undefined;
+  if (localLearningEngine)
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            await localLearningEngine.sweep();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "local-learning-sweep-error",
+                error: error instanceof Error ? error.name : "UnknownError",
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 30 * 60_000),
+      (resource) => resource.stop(),
+    );
+  /*
    * Automations (D06 AUT1/AUT3/AUT4, C2/C3): a person's standing "run this Waker when..." rules.
    *
    * One loop, both halves of `automations/sweep.ts`: due triggers become work items in their owner's
@@ -4388,6 +4435,7 @@ await startupLifecycle.run(async (startup) => {
       },
       memory: { store: personalMemoryStore, ingestion: memoryIngestion },
       proactive: { store: proactiveStore, engine: proactiveEngine },
+      localLearning: { database, engine: localLearningEngine },
       // Upstream's started work, at `/api/bot-tasks` (`/api/tasks` is the board, mounted below).
       tasks: { store: taskStore, runner: taskRunner },
       responsibilities: {

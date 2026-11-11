@@ -344,6 +344,8 @@ tests/learning-scopes.test.ts
 tests/learning-settings.integration.test.ts
 tests/learning-settings.test.ts
 tests/learning-sharing.integration.test.ts
+tests/local-learning-propose.test.ts
+tests/local-learning.integration.test.ts
 tests/local-threads.test.ts
 tests/mastra-roster.test.ts
 tests/mcp-grant-removal.integration.test.ts
@@ -494,6 +496,7 @@ tests/recorder-sessions-ended.integration.test.ts
 tests/recorder-sign-out.integration.test.ts
 tests/recorder-single-user.integration.test.ts
 tests/recorder-trajectory-bindings.integration.test.ts
+tests/recorder-trajectory-connect.test.ts
 tests/recorder-trajectory-gate.test.ts
 tests/recovery-ap2-parent-schema-reconcile.test.ts
 tests/recovery-approval-direct-execution-domains.test.ts

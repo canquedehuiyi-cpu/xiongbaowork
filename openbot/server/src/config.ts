@@ -487,6 +487,11 @@ export type DeploymentConfig = {
    */
   modelEndpointsAllowPrivateHosts: boolean;
   /**
+   * 本地学习（L1）：每人每天从自己的对话里提出技能草案，本人批准后才生效。默认开，
+   * `OPENBOT_LOCAL_LEARNING=off` 整个部署关掉（不扫描、设置页说明未开启）。
+   */
+  localLearning: boolean;
+  /**
    * Where a coworker's actions are carried out: this deployment's own container, or a machine the
    * tenant owns. `device` refuses when no machine is reachable rather than running the work here.
    */
@@ -1809,6 +1814,8 @@ export function loadConfig(
       : {}),
     computer: computerConfig(environment),
     modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
+    localLearning:
+      optional(environment, "OPENBOT_LOCAL_LEARNING")?.toLowerCase() !== "off",
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own
      * container, which is what a development machine runs. `device` sends them to the tenant's

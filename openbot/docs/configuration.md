@@ -472,6 +472,12 @@ membership and limits connection attempts. OpenBot does not record call audio; p
 policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc) and
 [Grok Voice](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech).
 
+## 本地学习（熊宝）
+
+| Variable                 | Meaning |
+| ------------------------ | ------- |
+| `OPENBOT_LOCAL_LEARNING` | 默认开。每人每天从自己最近的对话里提出技能草案，本人在设置「学习」里批准后才交给员工；对话不出库，提草案用的是那位员工自己的模型、计入这个人的用量，本月任务额度用完时跳过。设为 `off` 整个部署关掉。每个人也可以在设置「学习」里自己关掉。 |
+
 ## Authentication
 
 | Variable                     | Meaning                                                                                |
