@@ -5,7 +5,10 @@ import { AnimatePresence } from "motion/react";
 import { type ReactNode, useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { SearchBox } from "@/components/layout/search-box";
-import { SegmentedTabs } from "@/components/layout/segmented-tabs";
+import {
+  SegmentedTabs,
+  tabPanelProps,
+} from "@/components/layout/segmented-tabs";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -13,7 +16,12 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  type AgentProfile,
+  agentListQueryOptions,
+  agentQueryOptions,
+} from "@/lib/agents/queries";
 import { automationListQueryOptions } from "@/lib/automations/queries";
 import { autonomousQueryOptions } from "@/lib/autonomous/queries";
 import { type EntrySource, SOURCE_LABEL } from "@/lib/autonomous/unified";
@@ -32,6 +40,9 @@ const MAX_ANIMATED_ROWS = 60;
 
 type WorkspaceTab = "chats" | "automations";
 
+/** The panel the 「对话任务 / 自动任务」 tabs switch, so each tab names it and it is labelled by the open one. */
+const WORKSPACE_PANEL_ID = "conversation-workspace-panel";
+
 const WORKSPACE_TABS = [
   { value: "chats", label: "对话任务" },
   { value: "automations", label: "自动任务" },
@@ -49,17 +60,28 @@ const ACTIVE_ROW =
 const newLinkClassName =
   "flex h-[24px] shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[13px]";
 
+/**
+ * The count above a list. 「共N个任务」 only when N is the whole of it: with older pages still unloaded
+ * the number is just what is on screen, and it grows as pages load, so it says 「已加载N个」 instead.
+ */
 function CountRow({
   count,
+  complete = true,
   children,
 }: {
   count: number | null;
+  /** Whether `count` is every row there is, not only the pages loaded so far. */
+  complete?: boolean;
   children?: ReactNode;
 }) {
   return (
     <div className="flex h-[28px] items-center justify-between gap-1 px-[12px]">
       <span className="text-[12px] text-muted-foreground">
-        {count === null ? "正在统计…" : `共${count}个任务`}
+        {count === null
+          ? "正在统计…"
+          : complete
+            ? `共${count}个任务`
+            : `已加载${count}个`}
       </span>
       <span className="flex items-center gap-0.5">{children}</span>
     </div>
@@ -117,6 +139,16 @@ function ConversationList({
    */
   const emptySoFar = !searching && own !== undefined && own.length === 0;
   /*
+   * One employee's share of the loaded pages is a filter too: two of its conversations leave the
+   * sentinel in view, and paging on sight would then load every page of everybody's history looking
+   * for a third. With the list narrowed to this employee, older pages load when asked, as a search's
+   * do; the button stays.
+   */
+  const narrowed =
+    agentId !== undefined &&
+    own !== undefined &&
+    own.length < (channels.data?.length ?? 0);
+  /*
    * FILTERING DOES NOT ANIMATE. Rows exit and relayout on every keystroke otherwise, which is a
    * list thrashing under somebody who is still typing. Order animation is for a channel that was
    * just spoken in, which is occasional; this is not.
@@ -126,7 +158,10 @@ function ConversationList({
 
   return (
     <>
-      <CountRow count={own === undefined ? null : own.length}>
+      <CountRow
+        complete={!channels.hasNextPage}
+        count={own === undefined ? null : own.length}
+      >
         <Button
           aria-expanded={searchOpen}
           aria-label="搜索对话"
@@ -247,7 +282,7 @@ function ConversationList({
         <ChannelPagination
           query={channels}
           scrollRoot={scrollRoot}
-          searching={searching || emptySoFar}
+          searching={searching || emptySoFar || narrowed}
         />
       </div>
     </>
@@ -420,32 +455,69 @@ export function ConversationWorkspace() {
   const focus = useConversationFocus();
   const agents = useQuery(agentListQueryOptions());
   const [tab, setTab] = useState<WorkspaceTab>("chats");
-  if (!focus.active) return null;
-  const agentId = focus.agentId;
-  const agent = agentId
+  const agentId = focus.active ? focus.agentId : undefined;
+  const listed = agentId
     ? agents.data?.find((candidate) => candidate.id === agentId)
     : undefined;
+  /*
+   * An employee the roster does not list (switched out of it, or shared through a link) is still the
+   * one this conversation is with: its own record names it, rather than the column calling it 「员工」.
+   */
+  const detail = useQuery({
+    ...agentQueryOptions(agentId ?? ""),
+    enabled: agentId !== undefined && agents.data !== undefined && !listed,
+    retry: false,
+  });
+  if (!focus.active) return null;
+  const agent =
+    listed ?? (detail.data?.id === agentId ? detail.data : undefined);
+  const columnClass =
+    "hidden w-[240px] shrink-0 flex-col border-border border-r bg-card md:flex";
+  /*
+   * Whose column this is is not known yet: drawn as a placeholder of the same width, so the chat does
+   * not jump, and not as 「全部对话」 — that list would flash and then be swapped for one employee's.
+   */
+  if (focus.resolving) {
+    return (
+      <aside aria-busy="true" aria-label="正在读取对话" className={columnClass}>
+        <div className="flex h-[56px] shrink-0 items-center gap-[8px] px-[12px]">
+          <Skeleton className="size-[32px] rounded-full" />
+          <Skeleton className="h-[14px] flex-1" />
+        </div>
+      </aside>
+    );
+  }
   const name = agentId ? (agent?.name ?? "员工") : "全部对话";
   return (
     <aside
       aria-label={agentId ? `${name}的对话` : "全部对话"}
-      className="hidden w-[240px] shrink-0 flex-col border-border border-r bg-card md:flex"
+      className={columnClass}
     >
       <WorkspaceHeader agent={agent} agentId={agentId} name={name} />
       {agentId ? (
-        <div className="px-[12px] pb-2">
-          <SegmentedTabs
-            className="flex w-full [&>button]:flex-1"
-            label="任务类型"
-            onValueChange={setTab}
-            size="sm"
-            tabs={WORKSPACE_TABS}
-            value={tab}
-          />
-        </div>
-      ) : null}
-      {agentId && tab === "automations" ? (
-        <AutomationList agentId={agentId} />
+        <>
+          <div className="px-[12px] pb-2">
+            <SegmentedTabs
+              className="flex w-full [&>button]:flex-1"
+              label="任务类型"
+              onValueChange={setTab}
+              panelId={WORKSPACE_PANEL_ID}
+              size="sm"
+              tabs={WORKSPACE_TABS}
+              value={tab}
+            />
+          </div>
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            {...tabPanelProps(WORKSPACE_PANEL_ID, tab)}
+          >
+            {tab === "automations" ? (
+              <AutomationList agentId={agentId} />
+            ) : (
+              <ConversationList agentId={agentId} agentName={name} />
+            )}
+          </div>
+        </>
       ) : (
         <ConversationList agentId={agentId} agentName={name} />
       )}
