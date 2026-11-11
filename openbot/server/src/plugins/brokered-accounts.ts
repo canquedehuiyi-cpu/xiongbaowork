@@ -89,6 +89,15 @@ function recordsOf(rows: Row[]): BrokeredAccountRecord[] {
   }));
 }
 
+/**
+ * 按名字点账号、名字对不上时补地址的那一次同步，同一个人、同一个应用、同一批行在这段时间里只做一次。
+ * 一行一直没有地址时（厂商不报邮箱或登录名），模型每点错一次名字都会再问一次厂商；真实适配器里那是认证
+ * 提供商列表加连接列表的分页请求。表里多出一行（刚完成的另一个账号）时不等，那正是要补地址的时候。
+ */
+const FILL_IN_INTERVAL_MS = 10 * 60 * 1000;
+/** 节流记录的上限：超过时先丢掉过期的，仍超过就整个清空（最坏只是多问一次厂商）。 */
+const FILL_IN_MEMORY = 1000;
+
 /** 两次同步撞上唯一索引，后一次可以忽略。 */
 const isUniqueViolation = (error: unknown): boolean => {
   const code =
@@ -160,16 +169,78 @@ export function createAccountBook(context: {
   };
 
   /**
+   * 一个默认账号在厂商那边没了、而这个人还有别的账号时，把默认交给厂商说还活着的那个，这一行本身留着。
+   * 不点名的调用因此落到还在的账号上（与上游「忘掉没了的账号」一样），而不是每一次都被拒；留着的行让卡片
+   * 仍能把同一个账号连回来。连回来之后它不自动恢复默认，本人可以在账号页上再设回去。
+   *
+   * 只交给 `isLive` 答「活着」的账号：失效的行为了重连都留着，剩下的行里也可能有同样失效的；交给最早的
+   * 那一行，A、B 两个都失效时默认会在它们之间来回换，永远到不了还活着的 C。本人名下的账号先问（上游回落
+   * 到的就是它），其余按列出的顺序。一个都没答「活着」时（都失效，或厂商答不上）默认不动：换到另一个
+   * 可能失效的行不比留着更好，调用照样被拒、照样出卡片。
+   */
+  const passOverDefault = async (
+    toolkit: string,
+    userId: string,
+    rowId: string,
+    isLive: (vendorUserId: string) => Promise<boolean>,
+  ) => {
+    const own = nameOf(userId);
+    const rows = ordered(await rowsFor(toolkit, userId)).filter((row) =>
+      filedUnderPerson(row.vendorUserId, own),
+    );
+    const lost = rows.find((row) => row.id === rowId);
+    if (!lost?.isDefault) return;
+    const candidates = rows
+      .filter((row) => row.vendorUserId !== lost.vendorUserId)
+      .sort(
+        (left, right) =>
+          Number(right.vendorUserId === own) -
+          Number(left.vendorUserId === own),
+      );
+    const answers = new Map<string, boolean>();
+    let next: Row | undefined;
+    for (const candidate of candidates) {
+      if (!answers.has(candidate.vendorUserId))
+        answers.set(
+          candidate.vendorUserId,
+          await isLive(candidate.vendorUserId).catch(() => false),
+        );
+      if (answers.get(candidate.vendorUserId)) {
+        next = candidate;
+        break;
+      }
+    }
+    if (!next) return;
+    await database
+      .update(brokeredAccounts)
+      .set({ isDefault: false })
+      .where(eq(brokeredAccounts.id, rowId));
+    try {
+      await database
+        .update(brokeredAccounts)
+        .set({ isDefault: true })
+        .where(eq(brokeredAccounts.id, next.id));
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  };
+
+  /**
    * 按 vendor 现在列出的，重建一个人在一个应用上的账号，并答出来。
    *
    * vendor 不再列出的账号在这里删掉，列出而这里没有的加上，所以一行从来不是账号存在的唯一证据。默认账号在
    * 它的账号还在时保留。不能逐个列账号的 broker 按表里现有的答。
+   *
+   * `prune: false` 只加上与补地址、不删行：按名字点账号时为补地址的那一次用它。厂商这一刻没把第二个账号
+   * 列为「活着」可能只是暂时过期；那时删掉它的行，离职、移除应用、切换模式的清扫就再也找不到这个账号。
+   * 删行只留给账号页上的同步。
    */
   async function sync(input: {
     toolkit: string;
     userId: string;
+    prune?: boolean;
   }): Promise<BrokeredAccountRecord[]> {
-    const { toolkit, userId } = input;
+    const { toolkit, userId, prune = true } = input;
     if (!broker?.accountsOf) return recordsOf(await rowsFor(toolkit, userId));
 
     const held = await rowsFor(toolkit, userId);
@@ -220,7 +291,7 @@ export function createAccountBook(context: {
     const key = (row: { vendorUserId: string; accountId: string }) =>
       `${row.vendorUserId}\u0000${row.accountId}`;
     const keep = new Set(listed.map(key));
-    const gone = held.filter((row) => !keep.has(key(row)));
+    const gone = prune ? held.filter((row) => !keep.has(key(row))) : [];
     if (gone.length > 0) {
       await database.delete(brokeredAccounts).where(
         inArray(
@@ -256,6 +327,29 @@ export function createAccountBook(context: {
     await settleDefault(toolkit, userId);
     return recordsOf(await rowsFor(toolkit, userId));
   }
+
+  /** 每个人、每个应用上一次为补地址问厂商的时间，和那时表里有哪些行；见 {@link FILL_IN_INTERVAL_MS}。 */
+  const filledIn = new Map<string, { at: number; rows: Set<string> }>();
+  const fillInDue = (toolkit: string, userId: string, rows: Row[]) => {
+    const last = filledIn.get(`${toolkit}\u0000${userId}`);
+    return (
+      !last ||
+      Date.now() - last.at >= FILL_IN_INTERVAL_MS ||
+      rows.some((row) => !last.rows.has(row.id))
+    );
+  };
+  const filledInNow = (toolkit: string, userId: string, rows: Row[]) => {
+    if (filledIn.size >= FILL_IN_MEMORY) {
+      const now = Date.now();
+      for (const [key, last] of filledIn)
+        if (now - last.at >= FILL_IN_INTERVAL_MS) filledIn.delete(key);
+      if (filledIn.size >= FILL_IN_MEMORY) filledIn.clear();
+    }
+    filledIn.set(`${toolkit}\u0000${userId}`, {
+      at: Date.now(),
+      rows: new Set(rows.map((row) => row.id)),
+    });
+  };
 
   /**
    * 一次调用进的账号：从调用所开账号的主人的账号里挑；他在这里一个账号都没记下时（账号被列出之前建立的
@@ -313,14 +407,23 @@ export function createAccountBook(context: {
      *
      * 表里有还没记下名字的行时也一样（第二个账号刚完成、本人那一行是随它补记的，厂商的地址都还没同步）：
      * 否则按原来的邮箱点名会被拒，因为那一行只有 id、没有地址。
+     *
+     * 这一次只补地址、不删行，而且有节流（见 {@link FILL_IN_INTERVAL_MS}）：它是模型一次点错名字就能
+     * 触发的，不能每次都去问厂商，也不能因为厂商这一刻没列出第二个账号就忘掉它。
      */
     if (
       !found.row &&
       wanted !== null &&
-      (rows.length === 0 || rows.some((row) => row.identity === null))
+      (rows.length === 0 || rows.some((row) => row.identity === null)) &&
+      fillInDue(toolkit, userId, rows)
     ) {
-      await sync({ toolkit, userId }).catch(() => []);
+      // 只在厂商答上来之后才记「问过了」：一次超时不该让接下来十分钟里点名一个真实的账号都被拒。
+      const answered = await sync({ toolkit, userId, prune: false }).then(
+        () => true,
+        () => false,
+      );
       rows = await mine();
+      if (answered) filledInNow(toolkit, userId, rows);
       found = find();
     }
     if (found.row && found.match) return pinned(found.row, found.match.label);
@@ -406,6 +509,7 @@ export function createAccountBook(context: {
     sync,
     pick,
     settleDefault,
+    passOverDefault,
     ownersDefault,
     furtherIds,
 

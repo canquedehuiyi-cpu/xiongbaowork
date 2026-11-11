@@ -12322,16 +12322,32 @@ export function createPluginStore(options: PluginStoreOptions) {
       let othersRemain = false;
       if (gone && refusedToolkit !== null) {
         if (reachedAs !== ownName) {
-          // 没了的是他的另一个账号：只忘掉那一个，应用的连接还在。
+          /*
+           * 没了的是他的另一个账号：应用的连接还在，这一行也留着。卡片带着这一行，「重新连接」为同一个
+           * id 铸同意把它连回来；忘掉这一行，卡片就只能连他名字下的那个（它可能早就持有全部权限，直接答
+           * 「已连接」），丢掉的账号只能靠「再连一个账号」换一个新 id 找回。账号页的同步在厂商不再列出它
+           * 时仍会删掉它。
+           *
+           * 它若是默认账号，默认交给剩下账号里厂商说还活着的那个（与上游一致）：否则不点名的调用每一次都
+           * 跑进这个没了的账号、每一次都被拒。逐个问的正是上面判「没了」的同一个问题；答不上的当作不活着，
+           * 一个都不活时默认不动（见 `passOverDefault`）。点名它仍得到带着这一行的卡片。
+           */
           const lost = (await accounts.rowsFor(refusedToolkit, holder)).find(
             (candidate) => candidate.vendorUserId === reachedAs,
           );
-          if (lost) {
-            await database
-              .delete(brokeredAccounts)
-              .where(eq(brokeredAccounts.id, lost.id));
-            await accounts.settleDefault(refusedToolkit, holder);
-          }
+          if (lost && broker)
+            await accounts.passOverDefault(
+              refusedToolkit,
+              holder,
+              lost.id,
+              (vendorUserId) =>
+                withVendorDeadline(() =>
+                  broker.isConnected({
+                    userId: vendorUserId === ownName ? holder : vendorUserId,
+                    toolkit: refusedToolkit,
+                  }),
+                ),
+            );
           othersRemain = true;
         } else if (
           (
@@ -12382,11 +12398,11 @@ export function createPluginStore(options: PluginStoreOptions) {
           reason: sharedApp ? "shared" : "reconnect",
           at: new Date().toISOString(),
           /*
-           * 被拒的是他的第二个账号、而那个账号还在：卡片带上它（账号表的行 id），「重新连接」授权的就是
-           * 这个账号，而不是他名字下的那个（名字下的那个可能早就有全部权限，会被报成「已连接」）。
+           * 被拒的是他的第二个账号：卡片带上它（账号表的行 id），「重新连接」授权的就是这个账号，而不是他
+           * 名字下的那个（名字下的那个可能早就有全部权限，会被报成「已连接」）。那个账号在厂商那边已经没了
+           * 也一样带：它的行在上面留着，重新连接把它连回来。
            */
           ...(!sharedApp &&
-          !gone &&
           pinned &&
           notAllowedAs !== null &&
           notAllowedAs !== ownName

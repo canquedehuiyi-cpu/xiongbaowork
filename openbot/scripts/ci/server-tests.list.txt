@@ -336,6 +336,7 @@ tests/enterprise-controls.integration.test.ts
 tests/enterprise-controls.test.ts
 tests/enterprise-frames.integration.test.ts
 tests/enterprise-list-query-validation.test.ts
+tests/enterprise-me-exemption.test.ts
 tests/entra-access.test.ts
 tests/entra-held-tokens.test.ts
 tests/entra-obo-config.test.ts
