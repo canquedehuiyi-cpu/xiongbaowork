@@ -11,6 +11,8 @@ import { conversationRoute } from "./roster";
 export type ConversationFocus = {
   /** Whether the open screen is a conversation at all (`/channel/*`, `/group/$channelId`). */
   active: boolean;
+  /** Which conversation screen is open: a new one, a 单聊 (`/channel/$id`) or a 群聊 (`/group/$id`). */
+  kind?: "new" | "channel" | "group";
   /** The open conversation, when there is one. */
   channelId?: string;
   /**
@@ -53,9 +55,10 @@ export function useConversationFocus(): ConversationFocus {
   if (route.kind === "new") {
     return {
       active: true,
+      kind: "new",
       agentId: searchAgent ?? defaultAgentId(agents.data),
     };
   }
   const agentIds = listed?.agentIds ?? detail.data?.agentIds;
-  return { active: true, channelId, agentId: agentIds?.[0] };
+  return { active: true, kind: route.kind, channelId, agentId: agentIds?.[0] };
 }
