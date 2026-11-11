@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
+import { ownerTenantOfBot } from "../agents/bot-owner";
 import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
 import {
   ApprovalAlreadyAnsweredError,
@@ -49,6 +50,7 @@ import {
   pluginGrants,
   skills,
   skillTools,
+  teamBotPublications,
   userRoles,
   users,
 } from "../db/schema";
@@ -60,8 +62,9 @@ import {
   type InstallListingKind,
   pluginInstallListings,
 } from "../db/schema/plugin-install-listings";
+import { sharedUseApprovals, sharedUseRequests } from "../db/schema/shared-use";
 import { SYSTEM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
-import { appsPage, appsPageZh } from "../edition";
+import { appsPage, appsPageZh, currentEdition } from "../edition";
 import type { OutboundLookup, OutboundPolicy } from "../net/outbound-guard";
 import { isProactiveInitiator } from "../proactive/initiator";
 import type { CheckPrivateShare } from "../proactive/private-share";
@@ -105,8 +108,10 @@ import {
 } from "./catalogue";
 import { accountArgumentFor } from "./account-argument";
 import { type AccountMode, accountFor } from "./shared-accounts";
+import { grantedByOwner, ownerStillGives } from "./owner-grants";
 import { steeringOf } from "./shared-use";
-import { appAccessMethods } from "./app-access-store";
+import { type SharedUseGate, sharedUseAppLockKey } from "./shared-use-store";
+import { appAccessMethods, type SharedAudienceCheck } from "./app-access-store";
 import {
   type BrokeredAccountRecord,
   createAccountBook,
@@ -1039,7 +1044,34 @@ export type AppAccessRequestRecord = {
   requestedBy: string;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  /**
+   * 批准作用在哪（X3，X2 评审 M3）：`team_bot` 是已发布的 Team Bot——授予写在员工身上，批准后每一个能用
+   * 这位员工的人都拿到它，不只是申请人；`bot` 是其余的员工。行为不变（上游的设计），只是说清楚。
+   */
+  appliesTo: "team_bot" | "bot";
+  /**
+   * 申请人和这位员工的关系：员工的主人（`owner`）、Team Bot 的队友（`teammate`，不是主人、用的是别人发布
+   * 的员工），或其余（`other`，例如没有主人的公开员工）。读不到员工资料时按 `other`。
+   */
+  requesterRole: "owner" | "teammate" | "other";
+  /** 给管理员看的中文提示；`appliesTo` 为 `team_bot` 时说明批准对整个 Team Bot 生效，其余为 null。 */
+  scopeNote: string | null;
 };
+
+/** {@link AppAccessRequestRecord.scopeNote} 的句子。 */
+export function appAccessScopeNote(
+  appliesTo: "team_bot" | "bot",
+  requesterRole: "owner" | "teammate" | "other",
+): string | null {
+  if (appliesTo !== "team_bot") return null;
+  const who =
+    requesterRole === "owner"
+      ? "申请人是这位员工的主人。"
+      : requesterRole === "teammate"
+        ? "申请人是使用这位员工的队友，不是它的主人。"
+        : "";
+  return `批准将对整个 Team Bot 生效：授予写在员工身上，每一个能用这位员工的人都会拿到它，不只是申请人。${who}`;
+}
 
 /** 路由和工具传进来的申请 id 是任意文字；不是 uuid 的在查询之前就答"没有"，不让 Postgres 报类型错误。 */
 export const isUuid = (value: string) =>
@@ -1652,6 +1684,16 @@ export type PluginStoreOptions = {
    * （`./shared-use`）。没给时，由职责开始的运行一律按外部输入处理，团队账号不接受——闭合的方向。
    */
   responsibilitySources?: (responsibilityId: string) => Promise<string[]>;
+  /**
+   * 共享使用闸门（X3，`./shared-use-store`）：员工对这个 Shared 应用的批准是否放这次运行进团队账号。没给时
+   * 团队账号对每一次调用都拒绝（X1 评审 C1），闭合的方向。
+   */
+  sharedUse?: SharedUseGate;
+  /**
+   * 同一个闸门的只读问法（`SharedAudience.admitsPerson`）：应用卡片与工具说一个 Shared 应用对这个人是否
+   * 可用时问它。没给时读作没批准。
+   */
+  sharedAdmits?: SharedAudienceCheck;
 };
 
 /**
@@ -1876,6 +1918,60 @@ export function createPluginStore(options: PluginStoreOptions) {
     team: boolean,
     work: () => Promise<T>,
   ): Promise<T> => (team ? runAsTenant("platform", work) : work());
+  /**
+   * 结束一个应用（地址上的每一行）的共享使用批准，跨每位员工的主人（经 {@link reachEveryPersonOn}，调用方
+   * 先过 `requireServerWriter`）。在应用的排他锁下（`sharedUseAppLockKey`，写批准拿它的共享锁）。`onlyOwners`
+   * 只结束主人的授予设下的受众；`requests` 同时把待处理的申请作废——它们是按旧的账号算的。答被结束批准的
+   * 员工。
+   */
+  const endSharedUseAt = (input: {
+    appId: string;
+    url: string;
+    team: boolean;
+    onlyOwners?: boolean;
+    requests?: boolean;
+  }): Promise<string[]> =>
+    reachEveryPersonOn(input.team, () =>
+      database.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${sharedUseAppLockKey(input.url, input.appId)}))`,
+        );
+        const toolkit = toolkitOf(input.url);
+        const atApp = toolkit
+          ? (
+              await tx
+                .select({ id: mcpServers.id, url: mcpServers.url })
+                .from(mcpServers)
+                .where(like(mcpServers.url, "composio://%"))
+            )
+              .filter((row) => toolkitOf(row.url) === toolkit)
+              .map((row) => row.id)
+          : [];
+        const ids = [...new Set([input.appId, ...atApp])];
+        const ended = await tx
+          .delete(sharedUseApprovals)
+          .where(
+            and(
+              inArray(sharedUseApprovals.serverId, ids),
+              ...(input.onlyOwners
+                ? [eq(sharedUseApprovals.approvedAs, "owner")]
+                : []),
+            ),
+          )
+          .returning({ botId: sharedUseApprovals.agentId });
+        if (input.requests)
+          await tx
+            .update(sharedUseRequests)
+            .set({ status: "superseded", decidedAt: new Date() })
+            .where(
+              and(
+                inArray(sharedUseRequests.serverId, ids),
+                eq(sharedUseRequests.status, "pending"),
+              ),
+            );
+        return [...new Set(ended.map((row) => row.botId))];
+      }),
+    );
   /**
    * 写团队账号状态时一行都没写到：调用方没有写这个团队应用行的权限（行级安全静默过滤）。报错而不是
    * 答成功（评审 I1），否则页面会说一件没发生的事。
@@ -3862,43 +3958,68 @@ export function createPluginStore(options: PluginStoreOptions) {
         decidedBy: appAccessRequests.decidedBy,
         decidedAt: appAccessRequests.decidedAt,
         createdAt: appAccessRequests.createdAt,
+        botOwner: agentProfiles.ownerUserId,
+        published: teamBotPublications.agentId,
       })
       .from(appAccessRequests)
       .leftJoin(mcpServers, eq(mcpServers.id, appAccessRequests.serverId))
       .leftJoin(agents, eq(agents.id, appAccessRequests.botId))
       .leftJoin(users, eq(users.id, appAccessRequests.requesterUserId))
+      .leftJoin(
+        agentProfiles,
+        eq(agentProfiles.agentId, appAccessRequests.botId),
+      )
+      .leftJoin(
+        teamBotPublications,
+        and(
+          eq(teamBotPublications.agentId, appAccessRequests.botId),
+          eq(teamBotPublications.tenantId, TEAM_TENANT),
+        ),
+      )
       .where(where)
       .orderBy(
         sql`${appAccessRequests.createdAt} desc`,
         asc(appAccessRequests.id),
       );
-    return rows.map((row) => ({
-      id: row.id,
-      tenantId: row.tenantId,
-      serverId: row.serverId ?? "",
-      appKey: row.catalogueKey ?? row.serverId ?? row.requestAppKey ?? "",
-      appTitle:
-        row.appTitle ??
-        row.requestAppTitle ??
-        row.serverId ??
-        row.requestAppKey ??
-        "",
-      botId: row.botId,
-      botName: row.botName,
-      requesterUserId: row.requesterUserId,
-      requesterName: row.requesterName,
-      requesterEmail: row.requesterEmail,
-      kind: row.kind as AppAccessRequestKind,
-      status: row.status as AppAccessRequestStatus,
-      note: row.note,
-      decidedBy: row.decidedBy,
-      decidedAt: iso(row.decidedAt),
-      createdAt: iso(row.createdAt) ?? "",
-      agentId: row.botId,
-      requestedBy: row.requesterUserId,
-      resolvedAt: iso(row.decidedAt),
-      resolvedBy: row.decidedBy,
-    }));
+    return rows.map((row) => {
+      const appliesTo = row.published !== null ? "team_bot" : "bot";
+      const requesterRole =
+        row.botOwner !== null && row.botOwner === row.requesterUserId
+          ? "owner"
+          : appliesTo === "team_bot"
+            ? "teammate"
+            : "other";
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        serverId: row.serverId ?? "",
+        appKey: row.catalogueKey ?? row.serverId ?? row.requestAppKey ?? "",
+        appTitle:
+          row.appTitle ??
+          row.requestAppTitle ??
+          row.serverId ??
+          row.requestAppKey ??
+          "",
+        botId: row.botId,
+        botName: row.botName,
+        requesterUserId: row.requesterUserId,
+        requesterName: row.requesterName,
+        requesterEmail: row.requesterEmail,
+        kind: row.kind as AppAccessRequestKind,
+        status: row.status as AppAccessRequestStatus,
+        note: row.note,
+        decidedBy: row.decidedBy,
+        decidedAt: iso(row.decidedAt),
+        createdAt: iso(row.createdAt) ?? "",
+        agentId: row.botId,
+        requestedBy: row.requesterUserId,
+        resolvedAt: iso(row.decidedAt),
+        resolvedBy: row.decidedBy,
+        appliesTo,
+        requesterRole,
+        scopeNote: appAccessScopeNote(appliesTo, requesterRole),
+      } satisfies AppAccessRequestRecord;
+    });
   }
 
   /** 把一条仍是 pending 的申请关掉，只关一次；没关上（不存在、看不见、已处理）答 null。 */
@@ -6591,6 +6712,16 @@ export function createPluginStore(options: PluginStoreOptions) {
       return null;
     },
 
+    /** 员工的类型（`built_in` / `remote_ag_ui` / `remote_mastra`）；这一帧看不见或不存在时为 undefined。 */
+    async agentType(agentId: string): Promise<string | undefined> {
+      const [row] = await database
+        .select({ type: agents.type })
+        .from(agents)
+        .where(eq(agents.id, agentId))
+        .limit(1);
+      return row?.type;
+    },
+
     async agentOwner(agentId: string): Promise<string | null | undefined> {
       const [row] = await database
         .select({ ownerUserId: agentProfiles.ownerUserId })
@@ -6777,8 +6908,36 @@ export function createPluginStore(options: PluginStoreOptions) {
      * configured while no hop ever happened.
      *
      * The join keeps a grant held by a Bot that no longer exists from counting.
+     *
+     * 个人版里是其余每一位没删除的员工，授予与否都一样（上游 personal-defaults 同一处）：只有一个人，每位员工
+     * 都是他的，没有谁需要被挡在另一位员工外面，也没有别人来授予。读的是这一帧行安全看得见的员工，所以
+     * 别人租户里的员工永远不在里面。团队版照旧只认授予。
      */
     async botsReachableFrom(agentId: string): Promise<string[]> {
+      /*
+       * 「每位员工」和个人默认是同一个范围：内置的普通员工，不含分身和远端员工（`./personal-defaults` 的
+       * `coveredByPersonalDefaults`）。范围外的员工照团队版只认授予，所以从它身上收回的另一位员工真的够不着了；
+       * 也不会被自动交到分身或外部端点手上。
+       */
+      if (
+        currentEdition() === "personal" &&
+        (await this.agentType(agentId)) === "built_in" &&
+        !agentId.startsWith("avatar-")
+      ) {
+        const everyOther = await database
+          .select({ id: agents.id })
+          .from(agents)
+          .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+          .where(
+            and(
+              ne(agents.id, agentId),
+              isNull(agentProfiles.deletedAt),
+              eq(agents.type, "built_in"),
+              sql`${agents.id} NOT LIKE 'avatar-%'`,
+            ),
+          );
+        return everyOther.map((row) => row.id);
+      }
       const rows = await database
         .select({ ref: pluginGrants.ref })
         .from(pluginGrants)
@@ -6798,8 +6957,23 @@ export function createPluginStore(options: PluginStoreOptions) {
        * Spec E3: an owner installed a listed entry on their own Waker, with no administrator in the
        * loop. Recorded in the trail so a reader can tell that grant from one an administrator made.
        */
-      options?: { selfService?: boolean },
+      options?: {
+        selfService?: boolean;
+        /**
+         * 谁做的这条授予（X3，`plugin_grants.granted_as`）：默认管理员；`owner` 是员工的主人把自己的应用
+         * 给自己的员工（`./owner-grants`）。主人的授予从不覆盖管理员的：同一个动作已经有授予时什么都不写，
+         * 也不进轨迹（那一条是管理员的，或主人自己之前的）。管理员在主人的那一条上再授予，就成了管理员的。
+         */
+        as?: "admin" | "owner";
+      },
     ): Promise<void> {
+      /*
+       * 主人自助安装（D08）也是主人做的授予：新写的行记为 `owner`，在 Team Bot 上用提问人自己的账号。已有的行
+       * 不改谁做的——管理员的仍是管理员的，主人的标记也不会被一次自助安装改回管理员；`grantedBy` 照旧更新
+       * （它决定这是不是主人自己装的、能不能自己卸下）。
+       */
+      const selfService = options?.selfService === true;
+      const grantedAs = selfService ? "owner" : (options?.as ?? "admin");
       /*
        * A team Bot's grant is stamped `team` (G01-E P8b/P10): that is the stamp `listForAgent` reads
        * for it, in its owner's frame, a teammate's and `platform`. Stamped with the writer's frame
@@ -6809,18 +6983,28 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       const team = await isTeamBot(agentId);
       try {
-        await database
-          .insert(pluginGrants)
-          .values({
-            kind,
-            ref,
-            agentId,
-            grantedBy: by,
-            ...(team ? { tenantId: TEAM_TENANT } : {}),
-          })
-          .onConflictDoUpdate({
+        const insert = database.insert(pluginGrants).values({
+          kind,
+          ref,
+          agentId,
+          grantedBy: by,
+          grantedAs,
+          ...(team ? { tenantId: TEAM_TENANT } : {}),
+        });
+        if (selfService)
+          await insert.onConflictDoUpdate({
             target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
             set: { grantedBy: by, updatedAt: new Date() },
+          });
+        else if (grantedAs === "owner") {
+          const written = await insert
+            .onConflictDoNothing()
+            .returning({ ref: pluginGrants.ref });
+          if (written.length === 0) return;
+        } else
+          await insert.onConflictDoUpdate({
+            target: [pluginGrants.kind, pluginGrants.ref, pluginGrants.agentId],
+            set: { grantedBy: by, grantedAs: "admin", updatedAt: new Date() },
           });
       } catch (error) {
         if (refusedByRowSecurity(error)) {
@@ -6839,13 +7023,20 @@ export function createPluginStore(options: PluginStoreOptions) {
         eventType: "configuration.changed",
         targetType: grantTargetType(kind),
         targetId: ref,
+        // OpenBot 自己替人做的授予（`openbot:` 开头，见 `./personal-defaults`）记为部署发起，不读成有人按了按钮。
+        ...(by.startsWith("openbot:")
+          ? { initiator: { kind: "deployment" } as AuditInitiator }
+          : {}),
         payload: {
           actor: by,
           change: "plugin_granted",
           kind,
           ref,
           bot: agentId,
-          selfService: options?.selfService === true,
+          selfService,
+          ...(grantedAs === "owner" && !selfService
+            ? { grantedAs: "owner" }
+            : {}),
         },
       });
     },
@@ -6878,6 +7069,107 @@ export function createPluginStore(options: PluginStoreOptions) {
           ...(input.authoring ? { authoring: input.authoring } : {}),
         },
       });
+    },
+
+    /**
+     * 一次给员工同一个应用的几个动作，轨迹上只写一行：目标是应用，payload 里列出 `refs`（上游 #1315）。
+     *
+     * 给 OpenBot 自己替人做的授予用（个人版里每个应用的全部动作，见 `./personal-defaults`）：逐个调用
+     * {@link grant} 时，一次升级给三位员工各加七个动作，Activity 上就是二十一行「有人改了设置」。`by` 是
+     * OpenBot 自己的名字（`openbot:` 开头）时，这一行记为部署发起。
+     *
+     * 只写还没有的：同一个动作已有授予（管理员的、主人的或平台的）时一行都不动，所以主人的授予不会被改成
+     * 管理员的，平台的 `system` 行也不会被这一帧碰到。Team Bot 的授予照 {@link grant} 记成 `team`。
+     *
+     * @returns 真正写下的 refs
+     */
+    async grantTools(
+      app: string,
+      refs: string[],
+      agentId: string,
+      by: string,
+    ): Promise<string[]> {
+      if (refs.length === 0) return [];
+      const team = await isTeamBot(agentId);
+      const written = await database
+        .insert(pluginGrants)
+        .values(
+          refs.map((ref) => ({
+            kind: "mcp" as const,
+            ref,
+            agentId,
+            grantedBy: by,
+            grantedAs: "admin" as const,
+            ...(team ? { tenantId: TEAM_TENANT } : {}),
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ ref: pluginGrants.ref });
+      const given = written.map((row) => row.ref).sort();
+      if (given.length === 0) return [];
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: app,
+        ...(by.startsWith("openbot:")
+          ? { initiator: { kind: "deployment" } as AuditInitiator }
+          : {}),
+        payload: {
+          actor: by,
+          change: "plugin_granted",
+          kind: "mcp",
+          app,
+          refs: given,
+          bot: agentId,
+        },
+      });
+      return given;
+    },
+
+    /**
+     * 收回员工的主人在一个应用上给的（X3，上游 `revokeOwnerGrants`）：这些服务器行上主人做的每一条授予，
+     * 管理员做的一条都不动。答收回了哪些，每一条各写一行轨迹，和 {@link revoke} 一样。
+     */
+    async revokeOwnerGrants(
+      serverIds: string[],
+      agentId: string,
+      by: string,
+    ): Promise<string[]> {
+      if (serverIds.length === 0) return [];
+      const owned = and(
+        eq(pluginGrants.kind, "mcp"),
+        eq(pluginGrants.agentId, agentId),
+        eq(pluginGrants.grantedAs, "owner"),
+      );
+      const refs = (
+        await database
+          .select({ ref: pluginGrants.ref })
+          .from(pluginGrants)
+          .where(owned)
+      )
+        .map((row) => row.ref)
+        .filter((ref) => serverIds.includes(ref.split("/")[0] ?? ""));
+      if (refs.length === 0) return [];
+      const removed = await database
+        .delete(pluginGrants)
+        .where(and(owned, inArray(pluginGrants.ref, refs)))
+        .returning({ ref: pluginGrants.ref });
+      const taken = removed.map((row) => row.ref);
+      for (const ref of taken)
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: grantTargetType("mcp"),
+          targetId: ref,
+          payload: {
+            actor: by,
+            change: "plugin_revoked",
+            kind: "mcp",
+            ref,
+            bot: agentId,
+            grantedAs: "owner",
+          },
+        });
+      return taken;
     },
 
     async revoke(
@@ -7283,7 +7575,11 @@ export function createPluginStore(options: PluginStoreOptions) {
     },
 
     /** 应用访问的状态（X2，`./app-access-store`）：员工页与对话卡片读的「这个人能不能用这个应用」。 */
-    ...appAccessMethods({ database, auditStore }),
+    ...appAccessMethods({
+      database,
+      auditStore,
+      ...(options.sharedAdmits ? { sharedAudience: options.sharedAdmits } : {}),
+    }),
 
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
@@ -9594,6 +9890,10 @@ export function createPluginStore(options: PluginStoreOptions) {
     /**
      * 写应用的账号模式（只由 `./account-mode` 调用）。切到 Shared 时带上新铸的团队身份，切回 Personal 时
      * 团队账号的连接状态一起清空（CHECK 也这样要求）。
+     *
+     * 两个方向都结束这个应用的每一条共享使用批准（X3，上游 `deleteApprovalsFor`）：批准是关于一个团队账号的，
+     * 切走再切回来是另一个账号，留下的批准会在再切回 Shared 的那一刻把它交回去。按应用地址上的每一行删，
+     * 包括应答行以外的重复行；跨每位员工的主人，所以经 {@link reachEveryPersonOn}，之前先要管理员能力。
      */
     async setAccountModeColumns(
       appId: string,
@@ -9601,6 +9901,30 @@ export function createPluginStore(options: PluginStoreOptions) {
       sharedVendorUserId: string | null,
     ): Promise<void> {
       requireServerWriter();
+      const [app] = await database
+        .select({
+          url: mcpServers.url,
+          tenantId: mcpServers.tenantId,
+          ownerGrants: mcpServers.ownerGrants,
+        })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, appId));
+      /*
+       * 切到 Shared 之前先结束一次：上一次切走时若在改模式与结束批准之间中断，留下的批准在 Personal 下不被
+       * 读，但会在这次「先改模式、后结束」之间的一刻被读到。
+       */
+      if (app && mode === "shared")
+        await endSharedUseAt({
+          appId,
+          url: app.url,
+          team: app.tenantId === TEAM_TENANT,
+          requests: true,
+        });
+      /*
+       * 先改模式，再在应用的排他锁下结束批准与待处理申请：一次写批准要么在锁之前提交、在这里被删掉，要么
+       * 在锁之后开始、读到新的模式而不写（`SharedUseNotSharedError`）。反过来的顺序会留下一个窗口，让切换
+       * 之后才落下的批准在再切回 Shared 时复活。
+       */
       await database
         .update(mcpServers)
         .set({
@@ -9614,6 +9938,97 @@ export function createPluginStore(options: PluginStoreOptions) {
           updatedAt: new Date(),
         })
         .where(eq(mcpServers.id, appId));
+      /*
+       * 「谁可以给员工」回到只有管理员，由管理员在新模式下明确放开：在 Personal 下选的 `any` 说的是「主人
+       * 可以把自己的账号给自己的员工」，带到 Shared 就成了主人可以自己打开团队账号。写 `admin` 而不是 NULL：
+       * Personal 的默认值（NULL）是 `any`，往返一次就会把升级时回填的「只有管理员」变回主人可给。写在应用
+       * 地址上的每一行（与 `setOwnerGrants` 同一范围），每一次切换都进轨迹。
+       */
+      if (app)
+        await database
+          .update(mcpServers)
+          .set({ ownerGrants: "admin", updatedAt: new Date() })
+          .where(eq(mcpServers.url, app.url));
+      if (app && app.ownerGrants !== "admin")
+        await recordAuditEvent(auditStore, {
+          eventType: "configuration.changed",
+          targetType: "mcp_server",
+          targetId: appId,
+          payload: {
+            change: "owner_grants_changed",
+            server: appId,
+            from: app.ownerGrants,
+            to: "admin",
+            reason: "account_mode_switched",
+          },
+        });
+      if (app)
+        await endSharedUseAt({
+          appId,
+          url: app.url,
+          team: app.tenantId === TEAM_TENANT,
+          requests: true,
+        });
+    },
+
+    /**
+     * 谁可以把这个应用给员工（X3，上游 `setOwnerGrants`）：员工的主人（`any`）、只有管理员（`admin`），或
+     * 按账号的默认值（null）。写在应用地址上的每一行，重复行答得一样；进轨迹。只有持有能力的管理员写（应用
+     * 行是 `team` 标记）。没有这个应用答 null。
+     *
+     * 不再是 `any` 时，主人的授予在这个应用上设下的共享使用受众一并撤回（管理员的批准不动）：它们此刻已经
+     * 不会被读（`approvalFor` 只在规则是 `any` 时读主人的），撤回是为了规则再改回 `any` 时它们不会回来。
+     * 跨每位员工的主人，经 {@link reachEveryPersonOn}。答撤回了哪些员工，好各写一行轨迹。
+     */
+    async setOwnerGrants(input: {
+      serverId: string;
+      ownerGrants: "any" | "admin" | null;
+      by: string;
+    }): Promise<{ withdrawn: string[] } | null> {
+      requireServerWriter();
+      const [row] = await database
+        .select({
+          url: mcpServers.url,
+          tenantId: mcpServers.tenantId,
+          ownerGrants: mcpServers.ownerGrants,
+        })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, input.serverId))
+        .limit(1);
+      if (!row) return null;
+      const updated = await database
+        .update(mcpServers)
+        .set({ ownerGrants: input.ownerGrants, updatedAt: new Date() })
+        .where(eq(mcpServers.url, row.url))
+        .returning({ id: mcpServers.id });
+      if (updated.length === 0)
+        throw new ServerWriteRefusedError(
+          "这次请求不能修改这个应用，谁可以给员工没有改变。",
+        );
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: input.serverId,
+        payload: {
+          actor: input.by,
+          change: "owner_grants_changed",
+          from: row.ownerGrants,
+          to: input.ownerGrants,
+        },
+      });
+      if (input.ownerGrants === "any") return { withdrawn: [] };
+      /*
+       * 规则先提交，再在应用的排他锁下撤回：主人那边写受众的事务拿同一把锁的共享锁并在锁里重读规则，所以
+       * 它要么在这里之前提交、被这里删掉，要么在这里之后读到新规则而不写。
+       */
+      return {
+        withdrawn: await endSharedUseAt({
+          appId: input.serverId,
+          url: row.url,
+          team: row.tenantId === TEAM_TENANT,
+          onlyOwners: true,
+        }),
+      };
     },
 
     /**
@@ -10265,6 +10680,48 @@ export function createPluginStore(options: PluginStoreOptions) {
         throw new PluginRefusedError(decision.reason, null);
       }
 
+      /*
+       * 员工的主人做的授予（`granted_as = owner`，`/give` 或自助安装）只在主人仍能「给」时有效：人还在、
+       * 管理员没对他关掉 `ownerApps`。调用时判定，主人离开或被关掉能力之后不用先清理授予。管理员做的授予
+       * 不受影响。
+       */
+      const [ownGrant] = await database
+        .select({
+          grantedAs: pluginGrants.grantedAs,
+          grantedBy: pluginGrants.grantedBy,
+        })
+        .from(pluginGrants)
+        .where(
+          and(
+            eq(pluginGrants.kind, "mcp"),
+            eq(pluginGrants.ref, input.ref),
+            eq(pluginGrants.agentId, input.botId),
+          ),
+        )
+        .limit(1);
+      if (ownGrant && (await grantedByOwner(database, input.botId, ownGrant))) {
+        const owner = await ownerTenantOfBot(database, input.botId);
+        if (!owner || !(await ownerStillGives(database, owner))) {
+          await recordAuditEvent(auditStore, {
+            eventType: "mcp.call_rejected",
+            targetType: "mcp_tool",
+            targetId: input.ref,
+            ...(input.initiator ? { initiator: input.initiator } : {}),
+            payload: {
+              actor: auditActor,
+              bot: input.botId,
+              server: serverId,
+              tool: toolName,
+              refusal: "owner_grant_lapsed",
+            },
+          });
+          throw new PluginRefusedError(
+            "这个动作是员工的主人自己给的，主人已经不能再给（已离开，或管理员关掉了这项功能），所以没有调用。请管理员决定要不要给这位员工。",
+            null,
+          );
+        }
+      }
+
       const { row, entry, access } = await requireServer(serverId);
 
       const advertised = await database
@@ -10358,6 +10815,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         : input.args;
       let pinned: PinnedAccount | null = null;
       let sharedApp = false;
+      /** Shared 应用的应答行：批准是关于应用的事实，按它问，不按授予恰好经过的那一行。 */
+      let sharedAppId = serverId;
       /** 队友用主人的账号时钉到的主人默认账号 id（不带名字）。 */
       let ownersAccountId: string | null = null;
       if (brokeredToolkit !== null) {
@@ -10386,6 +10845,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         sharedApp =
           app?.accountMode === "shared" &&
           schemeKind(app.authScheme) !== "none";
+        if (sharedApp && app) sharedAppId = app.id;
         if (sharedApp) {
           // Shared 应用只有一个团队账号，没有可选的。
           if (names)
@@ -10430,11 +10890,14 @@ export function createPluginStore(options: PluginStoreOptions) {
        * 一个员工被开放给比管理员批准的更多的人，就等于把这个账号交给了他们。每次调用都在这里判：
        * - check-in 只能读本人自己连接的账号，团队账号不行；
        * - 发起者必须说得出是谁在驾驶（`steeringOf`）：部署自身、没有起点的转交、认不出的开始方式都拒绝；
-       * - 批准：与上游一致，没有共享使用批准就拒绝，管理员也不例外。批准表在 X3 并入，在那之前没有任何
-       *   批准，所以通过了上面两条的调用也在这里一律拒绝（评审 C1）。
+       * - 受众：管理员为这位员工在这个应用上批准的（`options.sharedUse`，X3）。没有批准就拒绝，员工的主人
+       *   和管理员也不例外；有批准时按受众（`admits`）判，外部输入驱动的运行还要批准里允许外部输入。
        */
       if (sharedApp) {
-        const refuseShared = async (why: string): Promise<never> => {
+        const refuseShared = async (
+          why: string,
+          refusal = "shared_account_not_approved",
+        ): Promise<never> => {
           await recordAuditEvent(auditStore, {
             eventType: "mcp.call_rejected",
             targetType: "mcp_tool",
@@ -10445,7 +10908,7 @@ export function createPluginStore(options: PluginStoreOptions) {
               bot: input.botId,
               server: serverId,
               tool: toolName,
-              refusal: "shared_account_not_approved",
+              refusal,
               reason: why,
             },
           });
@@ -10462,14 +10925,21 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
         if (steering.kind === "refuse") await refuseShared(steering.why);
         /*
-         * 没有批准就拒绝（评审 C1，与上游 `createSharedUseGate` 一致）：上游先查这个员工对这个应用的共享
-         * 使用批准，没有批准行就拒绝，管理员本人也不例外；有批准才按受众（`admits`）判。批准表与管理员
-         * 批准的流程在 X3 并入，在那之前任何员工都没有批准，所以团队账号对每一次调用都拒绝——包括成员
-         * 自助安装、或给自己的员工授权之后。团队账号的连接、断开与模式切换照常可用。
+         * 没有批准就拒绝（评审 C1，与上游 `createSharedUseGate` 一致）：先查这位员工对这个应用的共享使用
+         * 批准，没有批准行就拒绝，管理员本人也不例外；有批准才按受众（`admits`）判。没接上闸门的部署无从
+         * 回答这个问题，同样拒绝——包括成员自助安装、或给自己的员工授权之后。
          */
-        await refuseShared(
-          "管理员还没有批准这位员工使用它（共享使用批准将在后续版本提供）",
-        );
+        if (!options.sharedUse)
+          await refuseShared("管理员还没有批准这位员工使用它");
+        const verdict = await (options.sharedUse as SharedUseGate)({
+          botId: input.botId,
+          serverId: sharedAppId,
+          title: row.title,
+          actorId: input.actorId,
+          ...(input.initiator ? { initiator: input.initiator } : {}),
+          outside: steering.kind === "actor" && steering.outside,
+        });
+        if (!verdict.allowed) await refuseShared(verdict.why, verdict.refusal);
       }
 
       const args = withoutEmptyOptionals(

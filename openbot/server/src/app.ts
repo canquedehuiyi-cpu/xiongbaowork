@@ -154,6 +154,10 @@ import type {
   KeyGuideSource,
 } from "./plugins/broker";
 import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
+import type {
+  SharedAudience,
+  SharedUseStore,
+} from "./plugins/shared-use-store";
 import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
@@ -466,6 +470,8 @@ export function createApp(
     accountModes?: AccountModeSwitch;
     provider?: BrokerProvider;
     arcade?: ArcadeBroker;
+    /** 共享使用批准（X3，`plugins/shared-use-store.ts`）。 */
+    sharedUse?: { store: SharedUseStore; audience: SharedAudience };
   },
   /** Native model OAuth stays server-side; callers hold only a separate local bearer. */
   modelProviderProxy?: ModelProviderProxy,

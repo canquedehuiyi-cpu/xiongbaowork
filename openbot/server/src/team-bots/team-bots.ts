@@ -36,7 +36,7 @@ import type { AgentActor } from "../agents/profile-types";
 import type { Database } from "../db/client";
 import { agents, users } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
-import { mcpServers } from "../db/schema/plugins";
+import { mcpServers, pluginGrants } from "../db/schema/plugins";
 import {
   teamBotAssignments,
   teamBotAudience,
@@ -45,6 +45,7 @@ import {
   teamBotPublications,
 } from "../db/schema/team-bots";
 import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
+import { grantedByOwner } from "../plugins/owner-grants";
 import { PluginRefusedError } from "../plugins/store";
 import { capabilityFor, currentTenant } from "../tenant/context";
 import {
@@ -230,6 +231,30 @@ export function createTeamBots(options: {
   }
 
   /**
+   * Whether this action is on the Bot only because its owner gave it one of their own apps
+   * (`plugin_grants.granted_as = owner`, X3), or a grant from before the column whose granter is the
+   * Bot's owner (`grantedByOwner`, failing closed). A grant an administrator made is not. Read in the
+   * asker's frame, which sees a Team Bot's `team` grants.
+   */
+  async function givenByOwner(botId: string, ref: string): Promise<boolean> {
+    const [grant] = await database
+      .select({
+        grantedAs: pluginGrants.grantedAs,
+        grantedBy: pluginGrants.grantedBy,
+      })
+      .from(pluginGrants)
+      .where(
+        and(
+          eq(pluginGrants.kind, "mcp"),
+          eq(pluginGrants.ref, ref),
+          eq(pluginGrants.agentId, botId),
+        ),
+      )
+      .limit(1);
+    return grant ? grantedByOwner(database, botId, grant) : false;
+  }
+
+  /**
    * The Bot as its owner, for owner-only acts; administrators may unpublish and assign.
    *
    * Read in the frame the caller runs in: the owner's own, or, for an administrator, the one the
@@ -300,8 +325,13 @@ export function createTeamBots(options: {
      * the owner connected it. The asker's own account only with a standing or one-time consent;
      * without one the call is refused with the card's marker, and nothing is sent.
      *
-     * M3: upstream also leaves the owner's account out for an action the owner granted the Bot
-     * themselves (owner app grants, `plugin_grants.granted_as`); that is not adopted here.
+     * NEVER THE OWNER'S FOR A GRANT THE OWNER MADE (X3, upstream owner app grants). Where the owner
+     * gave the Bot this action of one of their own apps (`plugin_grants.granted_as = owner`), the
+     * owner's connection is not asked about: the call goes on as though the owner had none, which is
+     * the asker's own account — with their consent, or refused to connect. An owner giving their Bot
+     * their Gmail decided about their own mailbox for their own use; publishing the Bot afterwards
+     * must not turn that into every teammate's access to it. Only an administrator's grant can put a
+     * Team Bot on its owner's account.
      */
     credentialActorFor(actorId: string, botId: string) {
       return async (ref: string): Promise<string> => {
@@ -319,7 +349,11 @@ export function createTeamBots(options: {
           await consentOrCard(actorId, botId, serverId, { spend: false });
           return actorId;
         }
-        if ((await connectedServers(owner)).has(serverId)) return owner;
+        if (
+          !(await givenByOwner(botId, ref)) &&
+          (await connectedServers(owner)).has(serverId)
+        )
+          return owner;
         if (!(await connectedServers(actorId)).has(serverId)) return actorId;
         await consentOrCard(actorId, botId, serverId, { spend: true });
         return actorId;
@@ -366,6 +400,7 @@ export function createTeamBots(options: {
         const serverId = ref.split("/")[0] ?? "";
         if (
           !(await reachedOnOwnSignIn(serverId)) &&
+          !(await givenByOwner(botId, ref)) &&
           (await connectedServers(owner)).has(serverId)
         )
           return false;

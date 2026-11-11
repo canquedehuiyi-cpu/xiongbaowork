@@ -171,7 +171,7 @@ export async function openStoredApprovalInTransaction(
 export function createApprovalStore(
   database: Database,
   board?: TaskProjector,
-): ApprovalStore {
+): ApprovalStore & { policy: ApprovalPolicyStore } {
   const owned = (owner: string, id: string) =>
     and(eq(approvalRequests.ownerUserId, owner), eq(approvalRequests.id, id));
   const ruleScope = (action: ApprovalAction) =>
