@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { mintRunAssertion } from "../src/agents/callback-token";
 import { createAgentProfileStore } from "../src/agents/profile-store";
+import { createApp } from "../src/app";
 import { createAuditStore } from "../src/audit";
 import {
   type AppVariables,
@@ -17,6 +18,7 @@ import {
 } from "../src/channels/group";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
+import { loadConfig } from "../src/config";
 import type {
   CredentialSecretReader,
   CredentialStore,
@@ -36,20 +38,25 @@ import {
 import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { createPluginStore } from "../src/plugins/store";
 import { createPortraitStore } from "../src/portraits/store";
-import { createQuotaService } from "../src/quota/limits";
+import { createQuotaService, QuotaExceeded } from "../src/quota/limits";
 import { createRoutineStore } from "../src/routines/store";
 import { parseDraft } from "../src/staffing/draft";
-import { createStaffingExecutor } from "../src/staffing/executor";
+import {
+  createStaffingExecutor,
+  ProposalRefusedError,
+  ProposalStaleError,
+} from "../src/staffing/executor";
 import {
   createOwnerNameReader,
   createProposalRoutes,
   createThreadVisibility,
 } from "../src/staffing/routes";
 import { createStaffingProposalStore } from "../src/staffing/store";
-import type { ProposalKind } from "../src/staffing/types";
-import { runAsTenant } from "../src/tenant/context";
+import type { Proposal, ProposalKind } from "../src/staffing/types";
+import { capabilityFor, runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { testEnvironment } from "./support/environment";
 
 /**
  * 提议的 HTTP 接口：谁能看、谁能动、过期怎么答、机器凭证进不进得来、每一步写了什么轨迹。
@@ -206,6 +213,37 @@ async function propose(
   );
 }
 
+/** 共享群：频道与每个人的成员行都盖 team 戳；主人的线程映射落在主人自己的租户里。返回主人的线程 id。 */
+async function sharedGroup(
+  owner: AuthenticatedActor,
+  members: AuthenticatedActor[],
+) {
+  const channelId = id(`chan-${randomUUID().slice(0, 6)}`);
+  const threadId = id(`thread-${randomUUID().slice(0, 6)}`);
+  channelIds.push(channelId);
+  await asPlatform(async () => {
+    await database.insert(channels).values({
+      id: channelId,
+      tenantId: TEAM_TENANT,
+      name: "小组",
+      description: "",
+    });
+    await database.insert(channelMemberships).values(
+      members.map((member) => ({
+        channelId,
+        userId: member.id,
+        tenantId: TEAM_TENANT,
+      })),
+    );
+  });
+  await runAsTenant(owner.id, () =>
+    database
+      .insert(intelligenceChannelMappings)
+      .values({ channelId, userId: owner.id, threadId }),
+  );
+  return threadId;
+}
+
 const trailOf = (proposalId: string) =>
   asPlatform(() =>
     database
@@ -263,10 +301,14 @@ describe("staffing proposal routes", () => {
     const owner = await person("owner");
     const colleague = await person("colleague");
     const stranger = await person("stranger");
-    const proposal = await propose(owner);
-    // 同一租户里的另一个人（跑在主人的帧里）：读得到、不能动。
+    const bystander = await person("bystander");
+    const threadId = await sharedGroup(owner, [owner, colleague]);
+    const proposal = await propose(owner, { threadId });
+    // 同一租户里的另一个人（跑在主人的帧里）：在群里的看得到、不能动（403）；不在群里的和读不到一样（404）。
     const sameTenant = appFor((actor) =>
-      actor.id === colleague.id ? owner.id : actor.id,
+      actor.id === colleague.id || actor.id === bystander.id
+        ? owner.id
+        : actor.id,
     );
     const attempts = [
       ["PATCH", "", { draft: employee("改名") }],
@@ -281,6 +323,14 @@ describe("staffing proposal routes", () => {
         { method, body },
       );
       expect(response.status).toBe(403);
+    }
+    for (const [method, suffix, body] of attempts) {
+      const response = await sameTenant.call(
+        bystander,
+        `/api/proposals/${proposal.id}${suffix}`,
+        { method, body },
+      );
+      expect(response.status).toBe(404);
     }
     // 别的租户：行安全让这份提议根本读不到。
     const elsewhere = appFor();
@@ -299,7 +349,11 @@ describe("staffing proposal routes", () => {
           .select({ id: agentProfiles.agentId })
           .from(agentProfiles)
           .where(
-            inArray(agentProfiles.ownerUserId, [colleague.id, stranger.id]),
+            inArray(agentProfiles.ownerUserId, [
+              colleague.id,
+              bystander.id,
+              stranger.id,
+            ]),
           ),
       ),
     ).toEqual([]);
@@ -337,30 +391,7 @@ describe("staffing proposal routes", () => {
     const owner = await person("owner");
     const member = await person("member");
     const outsider = await person("outsider");
-    const channelId = id(`chan-${randomUUID().slice(0, 6)}`);
-    const threadId = id(`thread-${randomUUID().slice(0, 6)}`);
-    channelIds.push(channelId);
-    // 共享群：频道与每个人的成员行都盖 team 戳；主人的线程映射落在主人自己的租户里。
-    await asPlatform(async () => {
-      await database.insert(channels).values({
-        id: channelId,
-        tenantId: TEAM_TENANT,
-        name: "小组",
-        description: "",
-      });
-      await database.insert(channelMemberships).values(
-        [owner.id, member.id].map((userId) => ({
-          channelId,
-          userId,
-          tenantId: TEAM_TENANT,
-        })),
-      );
-    });
-    await runAsTenant(owner.id, () =>
-      database
-        .insert(intelligenceChannelMappings)
-        .values({ channelId, userId: owner.id, threadId }),
-    );
+    const threadId = await sharedGroup(owner, [owner, member]);
     const proposal = await propose(owner, { threadId });
     const sameTenant = appFor(() => owner.id);
 
@@ -395,24 +426,26 @@ describe("staffing proposal routes", () => {
         .where(eq(staffingProposals.id, proposal.id)),
     );
     const mine = appFor();
-    for (const path of ["apply"]) {
-      const first = await mine.call(
+    for (const attempt of [1, 2]) {
+      const response = await mine.call(
         owner,
-        `/api/proposals/${proposal.id}/${path}`,
-        {
-          method: "POST",
-        },
+        `/api/proposals/${proposal.id}/apply`,
+        { method: "POST" },
       );
-      expect(first.status).toBe(410);
-      const second = await mine.call(
-        owner,
-        `/api/proposals/${proposal.id}/${path}`,
-        {
-          method: "POST",
-        },
-      );
-      expect(second.status).toBe(410);
+      expect(`${attempt}:${response.status}`).toBe(`${attempt}:410`);
     }
+    // 改草稿、作废答 409：这两件事对一份已过期的提议是「状态不允许」，只有确认才说「已过期」。
+    const edit = await mine.call(owner, `/api/proposals/${proposal.id}`, {
+      method: "PATCH",
+      body: { draft: employee("改名") },
+    });
+    expect(edit.status).toBe(409);
+    const discard = await mine.call(
+      owner,
+      `/api/proposals/${proposal.id}/discard`,
+      { method: "POST" },
+    );
+    expect(discard.status).toBe(409);
     expect(await statusOf(proposal.id)).toBe("expired");
     const trail = await trailOf(proposal.id);
     expect(trail.map((event) => event.eventType)).toEqual([
@@ -492,5 +525,145 @@ describe("staffing proposal routes", () => {
           .where(and(eq(agentProfiles.ownerUserId, owner.id))),
       ),
     ).toEqual([{ name: "小黄" }]);
+  });
+
+  describe("error mapping", () => {
+    const failing = (error: Error) =>
+      createProposalRoutes(
+        proposals,
+        {
+          apply: async () => {
+            throw error;
+          },
+          retry: async () => {
+            throw error;
+          },
+        } as unknown as Parameters<typeof createProposalRoutes>[1],
+        async (context, next) => {
+          context.set("actor", ownerActor);
+          await runAsTenant(ownerActor.id, () => next());
+        },
+        async () => false,
+      );
+    let ownerActor: AuthenticatedActor;
+    const post = async (error: Error) => {
+      ownerActor = await person("owner");
+      const proposal = await propose(ownerActor);
+      const response = await failing(error).request(
+        `http://test/${proposal.id}/apply`,
+        { method: "POST" },
+      );
+      return { status: response.status, body: await response.json() };
+    };
+
+    test("a stale draft answers 409 with the redraft sentence", async () => {
+      expect(await post(new ProposalStaleError())).toEqual({
+        status: 409,
+        body: { error: "内容已变化，请让小管家重新起草。" },
+      });
+    });
+
+    test("a full plan answers 402 with the quota body", async () => {
+      const error = new QuotaExceeded("wakers", 2, 2, "free");
+      expect(await post(error)).toEqual({ status: 402, body: error.body });
+    });
+
+    test("a capability refusal answers 403 and a draft refusal 400", async () => {
+      expect(
+        await post(new ProposalRefusedError("管理员没有开放这项能力。", true)),
+      ).toEqual({ status: 403, body: { error: "管理员没有开放这项能力。" } });
+      expect(
+        await post(new ProposalRefusedError("名字需要 1 到 80 个字符。")),
+      ).toEqual({ status: 400, body: { error: "名字需要 1 到 80 个字符。" } });
+    });
+
+    test("an edit the draft check rejects answers 400 and changes nothing", async () => {
+      const owner = await person("owner");
+      const proposal = await propose(owner);
+      const response = await appFor().call(
+        owner,
+        `/api/proposals/${proposal.id}`,
+        { method: "PATCH", body: { draft: { name: "", title: "x" } } },
+      );
+      expect(response.status).toBe(400);
+      const read = await runAsTenant(owner.id, () =>
+        proposals.get(proposal.id),
+      );
+      expect(read?.draft).toEqual(proposal.draft);
+    });
+  });
+
+  test("createApp mounts the routes with the admin capability in effect", async () => {
+    const seen: { who: string; capability: string }[] = [];
+    const person = (who: string): Proposal => ({
+      id: "p1",
+      ownerId: who,
+      proposedByAgentId: "a",
+      threadId: null,
+      kind: "employee",
+      draft: employee("小蓝") as unknown as Proposal["draft"],
+      baseVersion: null,
+      status: "applied",
+      result: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 1000),
+    });
+    const users = new Map([
+      ["admin-user", { id: "admin-user", role: "admin" }],
+      ["plain-user", { id: "plain-user", role: "user" }],
+    ]);
+    const args: never[] = Array.from({ length: 34 }) as never[];
+    args[0] = loadConfig(testEnvironment()) as never;
+    args[1] = {
+      handler: () => new Response(null, { status: 204 }),
+      api: {
+        getSession: async ({ headers }: { headers: Headers }) => {
+          const found = users.get(headers.get("x-session") ?? "");
+          return found
+            ? {
+                user: {
+                  id: found.id,
+                  email: `${found.id}@example.test`,
+                  role: found.role,
+                  name: found.id,
+                  image: null,
+                },
+              }
+            : null;
+        },
+      },
+    } as never;
+    args[2] = {
+      rolesForUser: async (userId: string) => [users.get(userId)?.role],
+    } as never;
+    args[33] = {
+      staffing: {
+        store: {
+          expireIfLapsed: async () => false,
+          get: async (proposalId: string) => person(proposalId),
+        },
+        executor: {
+          apply: async (actor: { id: string }) => {
+            seen.push({ who: actor.id, capability: capabilityFor(actor.id) });
+            return person(actor.id);
+          },
+        },
+        canSeeThread: async () => false,
+      },
+    } as never;
+    const app = createApp(...args);
+    const apply = (session: string | null, as: string) =>
+      app.request(`http://test/api/proposals/${as}/apply`, {
+        method: "POST",
+        headers: session ? { "x-session": session } : {},
+      });
+    expect((await apply("admin-user", "admin-user")).status).toBe(200);
+    expect((await apply("plain-user", "plain-user")).status).toBe(200);
+    expect(seen).toEqual([
+      { who: "admin-user", capability: "admin" },
+      { who: "plain-user", capability: "" },
+    ]);
+    expect((await apply(null, "admin-user")).status).toBe(401);
   });
 });

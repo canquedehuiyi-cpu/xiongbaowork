@@ -2247,21 +2247,15 @@ export function createApp(
     /*
      * Signed in, and for an administrator the request-scoped capability: the executor decides what it may
      * grant by `capabilityFor(actor.id)`, which is only "admin" inside `adminCapability`'s frame. Without
-     * it a real administrator would be treated as a member here. Only `requireUser` otherwise, so a run's
-     * machine credential gets 401.
+     * it a real administrator would be treated as a member here (`requireAdminUser`: `requireUser`, then the
+     * capability). A run's machine credential is no session, so it gets 401.
      */
-    const signedInWithCapability: MiddlewareHandler<{
-      Variables: AppVariables;
-    }> = (context, next) =>
-      requireUser(context, async () => {
-        await adminCapability(context, next);
-      });
     app.route(
       "/api/proposals",
       createProposalRoutes(
         coworker.staffing.store,
         coworker.staffing.executor,
-        signedInWithCapability,
+        requireAdminUser,
         coworker.staffing.canSeeThread,
         { auditStore, ownerName: coworker.staffing.ownerName },
       ),

@@ -165,15 +165,21 @@ export function createProposalRoutes(
     throw error;
   };
 
-  /** 动手的接口共用：只有主人能动；同一帧里别的人是 403，读不到的是 404。 */
+  /**
+   * 动手的接口共用：只有主人能动。同一帧里的别人：看得到这个会话的是 403，看不到的和读不到的一样是 404
+   * （与 GET 同一条界线，不让人借 403 探出别人会话里有没有提议）。
+   */
   const owned = async (actor: Actor, id: string) => {
     const proposal = await load(actor, id);
     if (!proposal) return { response: NOT_FOUND, status: 404 as const };
-    if (proposal.ownerId !== actor.id)
+    if (proposal.ownerId !== actor.id) {
+      if (!proposal.threadId || !(await canSeeThread(actor, proposal.threadId)))
+        return { response: NOT_FOUND, status: 404 as const };
       return {
         response: { error: "只有提议的主人可以这样做。" },
         status: 403 as const,
       };
+    }
     return { proposal };
   };
 

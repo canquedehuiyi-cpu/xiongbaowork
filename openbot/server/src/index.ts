@@ -383,12 +383,6 @@ import {
 import { coworkerFaceAccess } from "./portraits/coworker-access";
 import { createPortraitRoutes } from "./portraits/routes";
 import { createPortraitStore } from "./portraits/store";
-import { createStaffingExecutor } from "./staffing/executor";
-import {
-  createOwnerNameReader,
-  createThreadVisibility,
-} from "./staffing/routes";
-import { createStaffingProposalStore } from "./staffing/store";
 import { createProactiveEngine } from "./proactive/engine";
 import { checkInOfferTools } from "./proactive/offer-tool";
 import {
@@ -464,6 +458,12 @@ import {
 import { createSelfHostBanner } from "./self-host-banner";
 import { createSetupSources, modelKeyOf } from "./setup/checklist";
 import { createComputerCheck } from "./setup/computer-check";
+import { createStaffingExecutor } from "./staffing/executor";
+import {
+  createOwnerNameReader,
+  createThreadVisibility,
+} from "./staffing/routes";
+import { createStaffingProposalStore } from "./staffing/store";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
