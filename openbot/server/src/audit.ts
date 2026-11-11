@@ -858,6 +858,13 @@ export const auditEventTypes = [
    * approved, `skillSlug`. Never the skill's text.
    */
   "learning.local_candidate_reviewed",
+  /*
+   * A person confirmed a staffing proposal (or retried its failed steps) and it ran as them. Target the
+   * proposal; payload `proposalId`, `kind` and each step's `step`, `target` and `outcome`. `applied`
+   * when every step did what it could, `partially_applied` when one failed and may be retried.
+   */
+  "staffing.proposal_applied",
+  "staffing.proposal_partially_applied",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

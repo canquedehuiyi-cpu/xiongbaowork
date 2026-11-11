@@ -1,0 +1,1126 @@
+import { and, eq, isNull } from "drizzle-orm";
+import { ZodError } from "zod";
+import { canManageAgent, canRunAgent } from "../agents/profile-policy";
+import {
+  AgentNotFoundError,
+  AgentNotManageableError,
+  type AgentProfileStore,
+  ModelBindingNotApplicableError,
+  ModelNotInLibraryError,
+  ProtectedAgentError,
+} from "../agents/profile-store";
+import type {
+  AgentActor,
+  CreateAgentInput,
+  Persona,
+} from "../agents/profile-types";
+import { parseAgentInput } from "../agents/routes";
+import { type AuditStore, recordAuditEvent } from "../audit";
+import type { AuthenticatedActor } from "../auth/guards";
+import {
+  type GroupConversations,
+  GroupNotFoundError,
+  type GroupStore,
+} from "../channels/group";
+import {
+  ChannelNotFoundError,
+  ChannelNotOwnerError,
+  type ChannelStore,
+} from "../channels/routes";
+import type { Database } from "../db/client";
+import { agentProfiles, channelMemberships, channels } from "../db/schema";
+import { nothingToRequest } from "../plugins/app-access";
+import {
+  type AppDirectory,
+  type AppInspection,
+  requestPlanFor,
+} from "../plugins/app-access-store";
+import { MAX_PENDING_APP_ACCESS_REQUESTS } from "../plugins/app-access-tool";
+import { ownerAppsAllowed, ownerGrantRefusal } from "../plugins/owner-grants";
+import { personalRevokeRefusalFor } from "../plugins/personal-defaults";
+import { PluginRefusedError, type PluginStore } from "../plugins/store";
+import type { PortraitStore } from "../portraits/store";
+import type { QuotaService } from "../quota/limits";
+import { ScheduleRefusedError } from "../routines/schedule";
+import {
+  RoutineLimitError,
+  RoutineNotFoundError,
+  RoutineRefusedError,
+  type RoutineStore,
+} from "../routines/store";
+import { capabilityFor } from "../tenant/context";
+import { parseDraft } from "./draft";
+import type { StaffingProposalStore } from "./store";
+import { ProposalNotFoundError, ProposalStateError } from "./store";
+import type {
+  EmployeeChangeDraft,
+  EmployeeDraft,
+  GroupChangeDraft,
+  GroupDraft,
+  PortraitPreset,
+  Proposal,
+  ProposalDraft,
+  ResultItem,
+  RoutineDraft,
+} from "./types";
+import { versionOfEmployee, versionOfGroup } from "./version";
+
+/**
+ * 把本人确认过的提议变成真的员工与群聊。
+ *
+ * 以本人的身份、在请求自己的帧里做，每一步都走现有的服务与它们自己的检查（名额、模型库、自助授予、主人能给
+ * 的应用、定时任务上限、群聊只限发起人），这里不另写一份规则，也不开新的帧：本人做不到的，经提议也做不到。
+ *
+ * 管理员按此刻的能力算（`capabilityFor`，由 `user_roles` 现读），不按会话里写的角色：角色被收回、会话还写着
+ * admin 的人，在这里和成员一样，管理员专属的授予转成访问申请。
+ *
+ * 每一步各自成败、写进结果，失败不拦后面的步骤，已经建好的不回滚；只有建员工这一步例外：它失败时什么都没
+ * 建，提议放回待确认并把错误交给路由（名额满是 402）。
+ */
+
+/** 内容在起草之后被改过：什么都不做，提议放回待确认，请小管家重新起草。 */
+export class ProposalStaleError extends Error {
+  constructor() {
+    super("内容已变化，请让小管家重新起草。");
+    this.name = "ProposalStaleError";
+  }
+}
+
+/** 草稿过不了创建员工那条路径的检查：什么都没建，提议放回待确认，本人改了草稿再确认。 */
+export class ProposalRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProposalRefusedError";
+  }
+}
+
+/**
+ * 「招聘与组群」这组工具的名字，授予写成 `staffing/<名字>`。与内置服务在目录里列出的必须是同一组，
+ * 否则勾了「也给它招聘与组群能力」的员工会少一个工具。
+ */
+export const STAFFING_TOOL_NAMES = [
+  "list_staff",
+  "propose_employee",
+  "propose_employee_change",
+  "propose_group",
+  "propose_group_change",
+  "proposal_status",
+] as const;
+
+export type StaffingExecutorDeps = {
+  database: Database;
+  proposals: StaffingProposalStore;
+  profiles: Pick<AgentProfileStore, "create" | "update" | "get">;
+  /** 不数名额的部署（个人机器上）不给。 */
+  quota?: Pick<QuotaService, "assertCapacityWithin">;
+  plugins: Pick<
+    PluginStore,
+    | "grant"
+    | "skillOwner"
+    | "isInstallListed"
+    | "agentOwner"
+    | "agentIsRegistered"
+    | "agentType"
+    | "inspectApp"
+    | "listForAgent"
+    | "listServers"
+    | "fileAppAccessRequest"
+    | "recordAppAccessEvent"
+    | "revokeOwnerGrants"
+  >;
+  composioConfigured: boolean;
+  directory?: AppDirectory;
+  routines: Pick<RoutineStore, "create" | "remove" | "listFor">;
+  channels: Pick<ChannelStore, "direct" | "rename">;
+  groups: Pick<
+    GroupConversations,
+    "create" | "addBots" | "removeBots" | "reorder"
+  > & { store: Pick<GroupStore, "order" | "bots"> };
+  portraits: Pick<PortraitStore, "set">;
+  auditStore: AuditStore;
+};
+
+/** 员工此刻的版本，在调用者的帧里读；看不见或已删除为 null。起草与执行用同一个读法。 */
+export async function currentEmployeeVersion(
+  database: Database,
+  agentId: string,
+): Promise<string | null> {
+  const [row] = await database
+    .select({ updatedAt: agentProfiles.updatedAt })
+    .from(agentProfiles)
+    .where(
+      and(eq(agentProfiles.agentId, agentId), isNull(agentProfiles.deletedAt)),
+    )
+    .limit(1);
+  return row ? versionOfEmployee(row) : null;
+}
+
+/**
+ * 群聊此刻的版本：本人取的名字（没取过就是建群时的名字）和员工的回答顺序；本人不在群里或群已删除为 null。
+ * 顺序只算还在群里的员工：被移出的员工在别的成员名下留下的线程行不算。
+ */
+export async function currentGroupVersion(
+  database: Database,
+  store: Pick<GroupStore, "order" | "bots">,
+  ownerUserId: string,
+  channelId: string,
+): Promise<string | null> {
+  const [row] = await database
+    .select({ title: channels.title, name: channels.name })
+    .from(channels)
+    .innerJoin(
+      channelMemberships,
+      and(
+        eq(channelMemberships.channelId, channels.id),
+        eq(channelMemberships.userId, ownerUserId),
+      ),
+    )
+    .where(and(eq(channels.id, channelId), isNull(channels.deletedAt)))
+    .limit(1);
+  if (!row) return null;
+  const current = new Set(await store.bots(channelId));
+  const order = (await store.order(channelId)).filter((id) => current.has(id));
+  return versionOfGroup({ name: row.title ?? row.name, order });
+}
+
+type Outcome = Omit<ResultItem, "step">;
+type Step = { step: string; target?: string; run: () => Promise<Outcome> };
+
+const done = (message: string, target?: string): Outcome => ({
+  outcome: "done",
+  message,
+  ...(target === undefined ? {} : { target }),
+});
+const failed = (message: string): Outcome => ({ outcome: "failed", message });
+
+const SUCCEEDED: ReadonlySet<ResultItem["outcome"]> = new Set([
+  "done",
+  "requested",
+  "needs_connection",
+]);
+
+/** 开发模式的本人不是 `users` 里的一行，轨迹的外键会拒绝它（同 `agents/routes.ts`）。 */
+const DEV_ACTOR_EMAIL = "dev@openbot.local";
+
+const hasChinese = (text: string) => /\p{Script=Han}/u.test(text);
+
+/**
+ * 创建员工那条路径的拒绝原因是写给表单的英文；结果是给本人看的，所以按拒绝的字段换成中文。认不出的用泛称，
+ * 不透出英文。
+ */
+const INPUT_REFUSALS: [RegExp, string][] = [
+  [/^Name must/, "名字需要 1 到 80 个字符。"],
+  [/^Title must/, "头衔不能超过 120 个字符。"],
+  [/^What it does must/, "职责描述需要 1 到 1000 个字符。"],
+  [/^Instructions must/, "工作指令需要 1 到 1000 个字符。"],
+  [
+    /^Avatar seed must/,
+    "头像种子只能是 1 到 64 个字母、数字或 _ - : . 这几个符号。",
+  ],
+  [
+    /^The (tone|principles|habits) line/,
+    "人设的每一部分不能超过 2000 个字符。",
+  ],
+  [/^Pick a model/, "请从模型库里选一个模型。"],
+];
+
+function inputRefusal(error: string): string {
+  if (hasChinese(error)) return error;
+  return (
+    INPUT_REFUSALS.find(([pattern]) => pattern.test(error))?.[1] ??
+    "员工资料有一项不符合要求，请改一下草稿再确认。"
+  );
+}
+
+/** 一步失败时给本人看的原因：已经是中文的原样给，其余按错误的种类换成中文，认不出的用泛称并记日志。 */
+function reasonOf(error: unknown): string {
+  if (error instanceof RoutineLimitError)
+    return "启用中的定时任务已经有 20 条，这一条没有建。";
+  if (error instanceof RoutineNotFoundError) return "没有找到这个定时任务。";
+  if (error instanceof ScheduleRefusedError)
+    return "这条定时任务的时间设置不合格。";
+  if (error instanceof RoutineRefusedError)
+    return hasChinese(error.message) ? error.message : "这条定时任务没有建成。";
+  if (error instanceof ModelNotInLibraryError)
+    return "模型库里没有这个模型，或者它已经停用。";
+  if (error instanceof ModelBindingNotApplicableError)
+    return "这位员工在别的服务器上运行，模型要在那边选。";
+  if (error instanceof AgentNotFoundError) return "找不到这位员工。";
+  if (
+    error instanceof AgentNotManageableError ||
+    error instanceof ProtectedAgentError
+  )
+    return "你不能修改这位员工。";
+  if (error instanceof ChannelNotOwnerError)
+    return "只有发起这个群聊的人才能改名。";
+  if (
+    error instanceof ChannelNotFoundError ||
+    error instanceof GroupNotFoundError
+  )
+    return "找不到这个群聊。";
+  if (error instanceof ZodError) return "员工名单不合格。";
+  if (error instanceof PluginRefusedError)
+    return hasChinese(error.message)
+      ? error.message
+      : "这项授予不由你在这里决定。";
+  if (error instanceof Error && hasChinese(error.message)) return error.message;
+  console.error(
+    JSON.stringify({
+      type: "staffing-step-failed",
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  );
+  return "这一步没有做成，可以稍后重试。";
+}
+
+/** 草稿里缺的人设部分沿用员工现在的：更新会整份覆盖人设，空着的部分就会被清掉。 */
+function mergedPersona(current: Persona | null, given: Persona): Persona {
+  return {
+    tone: given.tone || current?.tone || "",
+    principles: given.principles || current?.principles || "",
+    habits: given.habits || current?.habits || "",
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function createStaffingExecutor(deps: StaffingExecutorDeps) {
+  /**
+   * 本人此刻的样子：会话写着管理员、这次请求也确实持有管理员能力的，才是管理员。员工库的读取过滤与技能的
+   * 管理员规则都按它判断。
+   */
+  const agentActorOf = (actor: AuthenticatedActor): AgentActor => ({
+    id: actor.id,
+    role:
+      actor.role === "admin" && capabilityFor(actor.id) === "admin"
+        ? "admin"
+        : "user",
+  });
+
+  const audit = async (
+    actor: AuthenticatedActor,
+    event: Omit<Parameters<typeof recordAuditEvent>[1], "actorUserId">,
+  ) => {
+    try {
+      await recordAuditEvent(deps.auditStore, {
+        ...event,
+        ...(actor.email === DEV_ACTOR_EMAIL ? {} : { actorUserId: actor.id }),
+      });
+    } catch (error) {
+      // 改动已经做了；轨迹一时写不进不是说它没做的理由（同 `agents/routes.ts` 的 `record`）。
+      console.error(
+        JSON.stringify({
+          type: "staffing-audit-write-failed",
+          eventType: event.eventType,
+          error: String(error),
+        }),
+      );
+    }
+  };
+
+  /**
+   * 一次执行要用到的东西：本人、此刻的身份，与提议 id（每一行轨迹都带上它）。
+   */
+  type Run = {
+    actor: AuthenticatedActor;
+    agentActor: AgentActor;
+    proposalId: string;
+  };
+
+  const botTrail = (
+    run: Run,
+    eventType: "bot.created" | "bot.updated",
+    agentId: string,
+    payload: Record<string, unknown>,
+  ) =>
+    audit(run.actor, {
+      eventType,
+      targetType: "agent",
+      targetId: agentId,
+      payload: {
+        bot: agentId,
+        actor: run.actor.email,
+        ...payload,
+        proposalId: run.proposalId,
+      },
+    });
+
+  /** 过一遍创建 / 编辑员工的路由用的同一个检查；过不了就是中文的原因。 */
+  const checkedInput = (
+    raw: Record<string, unknown>,
+  ): { ok: true; value: CreateAgentInput } | { ok: false; error: string } => {
+    const parsed = parseAgentInput(raw);
+    return parsed.ok
+      ? parsed
+      : { ok: false, error: inputRefusal(parsed.error) };
+  };
+
+  /**
+   * 以员工现在的资料为底，改成草稿里给出的字段，再走编辑员工的那条路径。人设按部分合并；空的指令不发
+   * （那条路径要求 1 到 1000 个字符）；手册给了空就是清掉。
+   */
+  async function updateFrom(
+    run: Run,
+    agentId: string,
+    set: EmployeeChangeDraft["set"],
+  ): Promise<Outcome> {
+    const current = await deps.profiles.get(run.agentActor, agentId);
+    if (!current) return failed("找不到这位员工。");
+    const checked = checkedInput({
+      name: set.name ?? current.name,
+      title: set.title ?? current.title,
+      roleDescription: set.roleDescription ?? current.roleDescription,
+      visibility: set.visibility ?? current.visibility,
+      ...(set.instructions ? { instructions: set.instructions } : {}),
+      ...(set.persona
+        ? { persona: mergedPersona(current.persona, set.persona) }
+        : {}),
+      ...(set.bible === undefined ? {} : { bible: set.bible || null }),
+      ...(set.avatar && "seed" in set.avatar
+        ? { avatarSeed: set.avatar.seed }
+        : {}),
+      ...(set.model ?? {}),
+    });
+    if (!checked.ok) return failed(checked.error);
+    const updated = await deps.profiles.update(
+      run.agentActor,
+      agentId,
+      checked.value,
+    );
+    await botTrail(run, "bot.updated", agentId, {
+      name: updated.name,
+      visibility: updated.visibility,
+    });
+    return done(`已更新员工「${updated.name}」。`);
+  }
+
+  async function setPortrait(
+    run: Run,
+    agentId: string,
+    preset: PortraitPreset,
+  ): Promise<Outcome> {
+    const profile = await deps.profiles.get(run.agentActor, agentId);
+    if (!profile || !canManageAgent(run.agentActor, profile))
+      return failed("你不能修改这位员工的头像。");
+    await deps.portraits.set("coworker", agentId, { preset }, run.actor.id);
+    return done("已换好头像。");
+  }
+
+  /**
+   * 技能按现有的授予规则：管理员（此刻持有能力）可以装任何技能；其余的人只能装在自己的员工上，装自己写的，
+   * 或管理员上架了的部署技能（自助安装，记成主人的）。
+   */
+  async function giveSkill(
+    run: Run,
+    agentId: string,
+    slug: string,
+  ): Promise<Outcome> {
+    const owner = await deps.plugins.skillOwner(slug);
+    if (owner === undefined) return failed(`没有叫「${slug}」的技能。`);
+    const by = run.actor.email;
+    if (run.agentActor.role === "admin") {
+      await deps.plugins.grant("skill", slug, agentId, by);
+      return done(`已装上技能「${slug}」。`);
+    }
+    if ((await deps.plugins.agentOwner(agentId)) !== run.actor.id)
+      return failed("只能给你自己的员工装技能。");
+    if (owner === run.actor.id) {
+      await deps.plugins.grant("skill", slug, agentId, by);
+      return done(`已装上技能「${slug}」。`);
+    }
+    if (owner === null && (await deps.plugins.isInstallListed("skill", slug))) {
+      await deps.plugins.grant("skill", slug, agentId, by, {
+        selfService: true,
+      });
+      return done(`已装上技能「${slug}」。`);
+    }
+    return failed(
+      owner === null
+        ? `「${slug}」是部署的技能，由管理员决定给哪些员工。`
+        : `「${slug}」是别人的技能。`,
+    );
+  }
+
+  /** 应用的动作里这次要给的：草稿点名了就只要点名的，没点名就是全部可给的。 */
+  async function toolsToGive(
+    inspected: AppInspection,
+    actions: readonly string[],
+    giveable: (tool: { effect: string; destructive: boolean }) => boolean,
+  ): Promise<string[]> {
+    const server = (await deps.plugins.listServers()).find(
+      (candidate) => candidate.id === inspected.answeringId,
+    );
+    const key = inspected.access.key;
+    return (server?.tools ?? [])
+      .filter(giveable)
+      .map((tool) => tool.ref)
+      .filter(
+        (ref) =>
+          actions.length === 0 ||
+          actions.some(
+            (action) => ref === action || ref === `${key}/${action}`,
+          ),
+      );
+  }
+
+  /**
+   * 一个应用，与员工页上的「给」、管理员的授予、访问申请是同一套判断：
+   * - 本人自己能给的（`ownerGrantRefusal` 为 null）：照「给」的做法给只读、非破坏性的动作（内置应用给全部），
+   *   标成主人的授予；跑在本人账号上、本人还没连接的，记「需要先连接」。
+   * - 此刻持有能力的管理员，在自己的员工上：照管理员的授予给。
+   * - 其余：向管理员提申请，类型由服务端按状态定，记「已申请」。
+   */
+  async function giveApp(
+    run: Run,
+    agentId: string,
+    entry: { app: string; actions: string[] },
+  ): Promise<Outcome> {
+    const inspected = await deps.plugins.inspectApp({
+      app: entry.app,
+      agentId,
+      userId: run.actor.id,
+      composioConfigured: deps.composioConfigured,
+      ...(deps.directory ? { directory: deps.directory } : {}),
+      ownerView: true,
+    });
+    if (!inspected || !(inspected.vouched || inspected.access.granted))
+      return failed(`这个部署没有叫「${entry.app}」的应用。`);
+    const name = inspected.access.displayName;
+    if (inspected.access.granted) return done(`员工已经有「${name}」了。`);
+    const by = run.actor.email;
+
+    const refusal = await ownerGrantRefusal(
+      deps.plugins,
+      run.actor.id,
+      agentId,
+      inspected,
+    );
+    if (refusal === null) {
+      const builtin = inspected.entry?.auth.kind === "builtin";
+      const refs = await toolsToGive(
+        inspected,
+        entry.actions,
+        (tool) => builtin || (tool.effect === "read" && !tool.destructive),
+      );
+      if (refs.length === 0)
+        return failed(`「${name}」里没有你可以直接给员工的动作。`);
+      for (const ref of refs)
+        await deps.plugins.grant("mcp", ref, agentId, by, { as: "owner" });
+      await deps.plugins.recordAppAccessEvent({
+        eventType: "app_access.owner_granted",
+        targetId: inspected.access.key,
+        actorUserId: run.actor.id,
+        payload: {
+          app: inspected.access.key,
+          bot: agentId,
+          refs,
+          proposalId: run.proposalId,
+        },
+      });
+      return inspected.access.needsConnect
+        ? {
+            outcome: "needs_connection",
+            message: `已把「${name}」给员工；你连接自己的账号之后它才能用。`,
+          }
+        : done(`已把「${name}」给员工。`);
+    }
+
+    if (
+      run.agentActor.role === "admin" &&
+      inspected.unavailable === null &&
+      inspected.answeringId !== null &&
+      (await deps.plugins.agentOwner(agentId)) === run.actor.id
+    ) {
+      const refs = await toolsToGive(
+        inspected,
+        entry.actions,
+        (tool) =>
+          entry.actions.length > 0 ||
+          (tool.effect === "read" && !tool.destructive),
+      );
+      if (refs.length === 0)
+        return failed(`「${name}」没有标为只读的动作，请在插件页逐个选择。`);
+      for (const ref of refs) await deps.plugins.grant("mcp", ref, agentId, by);
+      return done(`已把「${name}」给员工。`);
+    }
+
+    // 申请只为本人能用的员工提，同浏览器里的申请入口。
+    const bot = await deps.profiles.get(run.agentActor, agentId);
+    if (!bot || !canRunAgent(run.agentActor, bot))
+      return failed("找不到这位员工。");
+    const plan = requestPlanFor(inspected);
+    if (plan.refused === "no_such_app")
+      return failed(`这个部署没有叫「${entry.app}」的应用。`);
+    if (plan.refused === "own_app")
+      return failed(
+        `「${name}」是你自己添加的应用，请在插件页自己把它装到这位员工上。`,
+      );
+    if (plan.refused !== undefined)
+      return failed(nothingToRequest(plan.access));
+    const filed = await deps.plugins.fileAppAccessRequest({
+      serverId: plan.serverId,
+      ...(plan.serverId === null
+        ? { appKey: plan.access.key, appTitle: plan.access.displayName }
+        : {}),
+      botId: agentId,
+      requesterUserId: run.actor.id,
+      kind: plan.kind,
+      note: null,
+      maxPending: MAX_PENDING_APP_ACCESS_REQUESTS,
+    });
+    if (filed.outcome === "limited")
+      return failed(
+        `你已经有 ${MAX_PENDING_APP_ACCESS_REQUESTS} 条申请在等管理员处理，「${name}」这次没有申请。`,
+      );
+    return {
+      outcome: "requested",
+      message: `「${name}」要管理员批准，已替你提了申请。`,
+    };
+  }
+
+  /** 收回本人在一个应用上给员工的（同员工页的「收回」）；管理员做的授予不动。 */
+  async function takeApp(
+    run: Run,
+    agentId: string,
+    app: string,
+  ): Promise<Outcome> {
+    const refusal = await personalRevokeRefusalFor(
+      deps.plugins,
+      "mcp",
+      app,
+      agentId,
+    );
+    if (refusal) return failed(refusal);
+    if ((await deps.plugins.agentOwner(agentId)) !== run.actor.id)
+      return failed("只能改你自己的员工的应用。");
+    const inspected = await deps.plugins.inspectApp({
+      app,
+      agentId,
+      userId: run.actor.id,
+      composioConfigured: deps.composioConfigured,
+      ...(deps.directory ? { directory: deps.directory } : {}),
+    });
+    if (!inspected) return failed(`这个部署没有叫「${app}」的应用。`);
+    const ids = [
+      ...new Set([
+        inspected.access.key,
+        ...inspected.rowIds,
+        ...(inspected.answeringId ? [inspected.answeringId] : []),
+      ]),
+    ];
+    const refs = await deps.plugins.revokeOwnerGrants(
+      ids,
+      agentId,
+      run.actor.email,
+    );
+    const name = inspected.access.displayName;
+    if (refs.length === 0)
+      return failed(`「${name}」上没有你给这位员工的动作可以收回。`);
+    await deps.plugins.recordAppAccessEvent({
+      eventType: "app_access.owner_revoked",
+      targetId: inspected.access.key,
+      actorUserId: run.actor.id,
+      payload: {
+        app: inspected.access.key,
+        bot: agentId,
+        refs,
+        proposalId: run.proposalId,
+      },
+    });
+    return done(`已收回「${name}」。`);
+  }
+
+  /** 定时任务发在本人与这位员工的单独对话里；还没有这样的对话就开一个。 */
+  async function addRoutine(
+    run: Run,
+    agentId: string,
+    routine: RoutineDraft,
+  ): Promise<Outcome> {
+    const channel = await deps.channels.direct(run.agentActor, agentId);
+    await deps.routines.create({
+      ownerUserId: run.actor.id,
+      agentId,
+      channelId: channel.id,
+      instruction: routine.instruction,
+      ...(routine.title ? { title: routine.title } : {}),
+      cron: routine.cron,
+      ...(routine.timezone ? { timezone: routine.timezone } : {}),
+    });
+    return done(`已建好定时任务「${routine.title ?? routine.cron}」。`);
+  }
+
+  async function removeRoutine(
+    run: Run,
+    agentId: string,
+    routineId: string,
+  ): Promise<Outcome> {
+    const mine = await deps.routines.listFor(run.actor.id);
+    if (!mine.some((row) => row.id === routineId && row.agentId === agentId))
+      return failed("这位员工没有这个定时任务。");
+    await deps.routines.remove(run.actor.id, routineId);
+    return done("已删除定时任务。");
+  }
+
+  /** 本人能给的「招聘与组群」；管理员对这个人关掉了「把自己的应用给自己的员工」时不给。 */
+  async function giveStaffingTools(
+    run: Run,
+    agentId: string,
+  ): Promise<Outcome> {
+    if (!(await ownerAppsAllowed(run.actor.id)))
+      return failed("管理员关闭了「把自己的应用给自己的员工」，所以没有做。");
+    for (const tool of STAFFING_TOOL_NAMES)
+      await deps.plugins.grant(
+        "mcp",
+        `staffing/${tool}`,
+        agentId,
+        run.actor.email,
+        {
+          as: "owner",
+        },
+      );
+    return done("已给它招聘与组群的能力。");
+  }
+
+  /** 建好员工之后的各步，顺序固定：重试按位置对上上一次的结果。 */
+  function employeeSteps(
+    run: Run,
+    agentId: string,
+    draft: EmployeeDraft,
+  ): Step[] {
+    const steps: Step[] = [];
+    if (draft.model) {
+      const model = draft.model;
+      steps.push({
+        step: "model",
+        target: "modelRef" in model ? model.modelRef : model.platformModelRef,
+        run: () => updateFrom(run, agentId, { model }),
+      });
+    }
+    if (draft.avatar && "preset" in draft.avatar) {
+      const preset = draft.avatar.preset;
+      steps.push({
+        step: "avatar",
+        target: preset,
+        run: () => setPortrait(run, agentId, preset),
+      });
+    }
+    steps.push(...grantSteps(run, agentId, draft.skills, draft.apps));
+    for (const routine of draft.routines)
+      steps.push({
+        step: "routine",
+        target: routine.title ?? routine.cron,
+        run: () => addRoutine(run, agentId, routine),
+      });
+    if (draft.staffingTools)
+      steps.push({
+        step: "staffing_tools",
+        run: () => giveStaffingTools(run, agentId),
+      });
+    return steps;
+  }
+
+  function grantSteps(
+    run: Run,
+    agentId: string,
+    skillList: readonly string[] = [],
+    appList: readonly { app: string; actions: string[] }[] = [],
+  ): Step[] {
+    return [
+      ...skillList.map((slug) => ({
+        step: "skill",
+        target: slug,
+        run: () => giveSkill(run, agentId, slug),
+      })),
+      ...appList.map((entry) => ({
+        step: "app",
+        target: entry.app,
+        run: () => giveApp(run, agentId, entry),
+      })),
+    ];
+  }
+
+  function employeeChangeSteps(run: Run, draft: EmployeeChangeDraft): Step[] {
+    const { agentId, set } = draft;
+    const steps: Step[] = [];
+    const profileFields: (keyof EmployeeChangeDraft["set"])[] = [
+      "name",
+      "title",
+      "roleDescription",
+      "visibility",
+      "instructions",
+      "persona",
+      "bible",
+      "model",
+    ];
+    const seed = set.avatar && "seed" in set.avatar;
+    if (seed || profileFields.some((field) => set[field] !== undefined))
+      steps.push({
+        step: "update",
+        target: agentId,
+        run: () => updateFrom(run, agentId, set),
+      });
+    if (set.avatar && "preset" in set.avatar) {
+      const preset = set.avatar.preset;
+      steps.push({
+        step: "avatar",
+        target: preset,
+        run: () => setPortrait(run, agentId, preset),
+      });
+    }
+    steps.push(...grantSteps(run, agentId, set.skills, set.apps));
+    for (const entry of draft.appsRemove)
+      steps.push({
+        step: "app_remove",
+        target: entry.app,
+        run: () => takeApp(run, agentId, entry.app),
+      });
+    for (const routine of set.routines ?? [])
+      steps.push({
+        step: "routine",
+        target: routine.title ?? routine.cron,
+        run: () => addRoutine(run, agentId, routine),
+      });
+    for (const routineId of draft.routinesRemove)
+      steps.push({
+        step: "routine_remove",
+        target: routineId,
+        run: () => removeRoutine(run, agentId, routineId),
+      });
+    return steps;
+  }
+
+  /**
+   * 建群前先看每位成员本人此刻还能不能用：起草之后改成私有或被删掉的，点名说出来，不建一个缺人的群。
+   * 员工已经看不见时读不到它的名字，只能用 id 点名。
+   */
+  function groupSteps(
+    run: Run,
+    draft: GroupDraft,
+    previous: readonly ResultItem[],
+  ): Step[] {
+    const made = previous[0];
+    let channelId =
+      made && made.outcome !== "failed" ? (made.target ?? null) : null;
+    return [
+      {
+        step: "group",
+        run: async () => {
+          const gone: string[] = [];
+          for (const member of draft.members) {
+            const profile = await deps.profiles.get(run.agentActor, member);
+            if (!profile || !canRunAgent(run.agentActor, profile))
+              gone.push(member);
+          }
+          if (gone.length > 0)
+            return failed(
+              `员工 ${gone.join("、")} 已经不能用了（可能改成了私有或被删除），群聊没有建。`,
+            );
+          const channel = await deps.groups.create(run.actor.id, {
+            agentIds: draft.members,
+          });
+          channelId = channel.id;
+          return done("已建好群聊。", channel.id);
+        },
+      },
+      {
+        step: "rename",
+        target: draft.name,
+        run: async () => {
+          if (!channelId) return failed("群聊没有建成，所以没有改名。");
+          await deps.channels.rename(run.agentActor, channelId, draft.name);
+          return done(`群聊已命名为「${draft.name}」。`);
+        },
+      },
+    ];
+  }
+
+  function groupChangeSteps(run: Run, draft: GroupChangeDraft): Step[] {
+    const { channelId } = draft;
+    const steps: Step[] = [];
+    const name = draft.name;
+    if (name !== undefined)
+      steps.push({
+        step: "rename",
+        target: name,
+        run: async () => {
+          await deps.channels.rename(run.agentActor, channelId, name);
+          return done(`群聊已改名为「${name}」。`);
+        },
+      });
+    if (draft.add.length > 0)
+      steps.push({
+        step: "add",
+        target: draft.add.join(","),
+        run: async () => {
+          await deps.groups.addBots(run.actor.id, channelId, draft.add);
+          return done("已把员工加进群里。");
+        },
+      });
+    if (draft.remove.length > 0)
+      steps.push({
+        step: "remove",
+        target: draft.remove.join(","),
+        run: async () => {
+          await deps.groups.removeBots(run.actor.id, channelId, draft.remove);
+          return done("已把员工移出群聊。");
+        },
+      });
+    const order = draft.order;
+    if (order !== undefined)
+      steps.push({
+        step: "reorder",
+        target: order.join(","),
+        run: async () => {
+          await deps.groups.reorder(run.actor.id, channelId, order);
+          return done("已调整员工的回答顺序。");
+        },
+      });
+    return steps;
+  }
+
+  /** 逐步做；上一次已经成了的步骤原样留着，只重做失败的。 */
+  async function runSteps(
+    steps: readonly Step[],
+    previous: readonly ResultItem[],
+  ): Promise<ResultItem[]> {
+    const results: ResultItem[] = [];
+    for (const [index, step] of steps.entries()) {
+      const before = previous[index];
+      if (before && before.outcome !== "failed") {
+        results.push(before);
+        continue;
+      }
+      let outcome: Outcome;
+      try {
+        outcome = await step.run();
+      } catch (error) {
+        outcome = failed(reasonOf(error));
+      }
+      results.push({
+        step: step.step,
+        ...(step.target === undefined ? {} : { target: step.target }),
+        ...outcome,
+      });
+    }
+    return results;
+  }
+
+  /**
+   * 建员工：创建员工那条路径的检查、名额（与写入同一个事务里数）、角色模板。失败时什么都没建，由调用方
+   * 放回待确认。
+   */
+  async function createEmployee(
+    run: Run,
+    draft: EmployeeDraft,
+  ): Promise<ResultItem> {
+    const checked = checkedInput({
+      name: draft.name,
+      title: draft.title,
+      roleDescription: draft.roleDescription,
+      visibility: draft.visibility,
+      ...(draft.instructions ? { instructions: draft.instructions } : {}),
+      ...(draft.persona ? { persona: draft.persona } : {}),
+      ...(draft.bible ? { bible: draft.bible } : {}),
+      ...(draft.avatar && "seed" in draft.avatar
+        ? { avatarSeed: draft.avatar.seed }
+        : {}),
+    });
+    if (!checked.ok) throw new ProposalRefusedError(checked.error);
+    const template = draft.roleTemplate;
+    if (template && (!UUID.test(template.id) || template.version < 1))
+      throw new ProposalRefusedError("所选角色模板无效，请重新选择。");
+    const quota = deps.quota;
+    const input = checked.value;
+    const agent = await deps.profiles.create(
+      run.agentActor,
+      {
+        ...input,
+        // 没有地址的员工就在这里跑，跑的就是职责描述（同 `POST /api/agents`）。
+        systemPrompt: input.roleDescription,
+        ...(template ? { roleTemplate: template } : {}),
+      },
+      quota
+        ? (transaction) =>
+            quota.assertCapacityWithin(transaction, run.actor.id, "wakers")
+        : undefined,
+    );
+    await botTrail(run, "bot.created", agent.id, {
+      name: input.name,
+      visibility: input.visibility,
+      hasKey: false,
+    });
+    return {
+      step: "create",
+      target: agent.id,
+      outcome: "done",
+      message: `已建好员工「${agent.name}」。`,
+    };
+  }
+
+  /** 草稿按这一行自己的种类重新校验一遍：种类与草稿的形状不受类型约束。 */
+  function draftOf(proposal: Proposal): ProposalDraft {
+    const parsed = parseDraft(proposal.kind, proposal.draft);
+    if (!parsed.ok) throw new ProposalRefusedError(parsed.error);
+    return parsed.draft;
+  }
+
+  async function ownProposal(actor: AuthenticatedActor, proposalId: string) {
+    const proposal = await deps.proposals.get(proposalId);
+    // 别人的提议与不存在的一个样，不让人借答复探出别人有没有提议。
+    if (!proposal || proposal.ownerId !== actor.id)
+      throw new ProposalNotFoundError();
+    return proposal;
+  }
+
+  /** 起草之后对象被改过就不执行：版本对不上，或者对象已经看不见了。 */
+  async function assertFresh(
+    actor: AuthenticatedActor,
+    proposal: Proposal,
+    draft: ProposalDraft,
+  ) {
+    if (proposal.kind === "employee_change") {
+      const { agentId } = draft as EmployeeChangeDraft;
+      const now = await currentEmployeeVersion(deps.database, agentId);
+      if (now === null || now !== proposal.baseVersion)
+        throw new ProposalStaleError();
+    }
+    if (proposal.kind === "group_change") {
+      const { channelId } = draft as GroupChangeDraft;
+      const now = await currentGroupVersion(
+        deps.database,
+        deps.groups.store,
+        actor.id,
+        channelId,
+      );
+      if (now === null || now !== proposal.baseVersion)
+        throw new ProposalStaleError();
+    }
+  }
+
+  /**
+   * 做一遍提议。`previous` 是上一次的结果：重试时按位置对上，已成的留着，只重做失败的。新员工的第一项是
+   * 建员工本身；重试时从它取员工 id，不再建第二个。
+   */
+  async function carryOut(
+    run: Run,
+    proposal: Proposal,
+    draft: ProposalDraft,
+    previous: readonly ResultItem[],
+  ): Promise<ResultItem[]> {
+    switch (proposal.kind) {
+      case "employee": {
+        const employee = draft as EmployeeDraft;
+        const created = previous[0] ?? (await createEmployee(run, employee));
+        if (!created.target) throw new ProposalStateError();
+        return [
+          created,
+          ...(await runSteps(
+            employeeSteps(run, created.target, employee),
+            previous.slice(1),
+          )),
+        ];
+      }
+      case "employee_change":
+        return runSteps(
+          employeeChangeSteps(run, draft as EmployeeChangeDraft),
+          previous,
+        );
+      case "group":
+        return runSteps(
+          groupSteps(run, draft as GroupDraft, previous),
+          previous,
+        );
+      case "group_change":
+        return runSteps(
+          groupChangeSteps(run, draft as GroupChangeDraft),
+          previous,
+        );
+    }
+  }
+
+  async function finish(
+    run: Run,
+    proposal: Proposal,
+    results: ResultItem[],
+  ): Promise<Proposal> {
+    const status = results.every((item) => SUCCEEDED.has(item.outcome))
+      ? "applied"
+      : "partially_applied";
+    const finished = await deps.proposals.finish(proposal.id, status, results);
+    await audit(run.actor, {
+      eventType:
+        status === "applied"
+          ? "staffing.proposal_applied"
+          : "staffing.proposal_partially_applied",
+      targetType: "staffing_proposal",
+      targetId: proposal.id,
+      payload: {
+        proposalId: proposal.id,
+        kind: proposal.kind,
+        steps: results.map(({ step, target, outcome }) => ({
+          step,
+          ...(target === undefined ? {} : { target }),
+          outcome,
+        })),
+      },
+    });
+    return finished;
+  }
+
+  return {
+    /**
+     * 确认执行。先原子地认领（连点两次只做一次，过期的答过期），再校验草稿、比对版本；这两样不过，或建员工
+     * 失败（名额满等），什么都没改，提议放回待确认，错误交给路由。
+     */
+    async apply(
+      actor: AuthenticatedActor,
+      proposalId: string,
+    ): Promise<Proposal> {
+      await ownProposal(actor, proposalId);
+      const claimed = await deps.proposals.claim(proposalId, actor.id);
+      const run: Run = {
+        actor,
+        agentActor: agentActorOf(actor),
+        proposalId,
+      };
+      let results: ResultItem[];
+      try {
+        const draft = draftOf(claimed);
+        await assertFresh(actor, claimed, draft);
+        results = await carryOut(run, claimed, draft, []);
+      } catch (error) {
+        await deps.proposals.release(proposalId, actor.id);
+        throw error;
+      }
+      return finish(run, claimed, results);
+    },
+
+    /** 重做上一次失败的项；成了的项和建好的员工、群聊都不再动。不比对版本：对象正是上一次改的。 */
+    async retry(
+      actor: AuthenticatedActor,
+      proposalId: string,
+    ): Promise<Proposal> {
+      await ownProposal(actor, proposalId);
+      const reopened = await deps.proposals.reopenFailed(proposalId, actor.id);
+      const previous = reopened.result ?? [];
+      const run: Run = {
+        actor,
+        agentActor: agentActorOf(actor),
+        proposalId,
+      };
+      let results: ResultItem[];
+      try {
+        // 没有上一次的结果就没有可重做的；新员工尤其不能因此再建一个。
+        if (previous.length === 0) throw new ProposalStateError();
+        results = await carryOut(run, reopened, draftOf(reopened), previous);
+      } catch (error) {
+        // 这里抛出就是什么都没重做成：结果照旧，提议回到可以再试的状态。
+        await deps.proposals.finish(proposalId, "partially_applied", previous);
+        throw error;
+      }
+      return finish(run, reopened, results);
+    },
+  };
+}
+
+export type StaffingExecutor = ReturnType<typeof createStaffingExecutor>;

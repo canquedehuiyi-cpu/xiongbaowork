@@ -224,6 +224,8 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "learning.sharing_requested": "申请共享学到的技能",
   "learning.sharing_decided": "答复共享学到的技能的申请",
   "learning.local_candidate_reviewed": "审核从对话中学到的技能草案",
+  "staffing.proposal_applied": "执行招聘提议",
+  "staffing.proposal_partially_applied": "部分执行招聘提议",
 };
 
 /**
