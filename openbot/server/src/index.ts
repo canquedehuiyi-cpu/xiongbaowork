@@ -337,6 +337,7 @@ import {
   brokerWithAccounts,
   createComposioClient,
 } from "./plugins/composio-adapter";
+import { openBotResources } from "./plugins/entra-access";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
 import { startBrokeredRelist } from "./plugins/relist";
@@ -1056,8 +1057,8 @@ await startupLifecycle.run(async (startup) => {
         vouches: (token: string) => entraService.vouches(token),
       }
     : undefined;
-  // M3: upstream also hands `entra` to the plugin store, for MCP servers an admin marked as reached
-  // as the signed-in person (on-behalf-of). The fork's plugin store does not take it yet.
+  // The plugin store takes `entra` too, for MCP servers an admin marked as reached as the signed-in
+  // person (on-behalf-of, X6): see `createPluginStore` below.
   const auth: AuthService | undefined =
     organizationAuth ??
     (betterAuth && entra ? withEntraBearer(betterAuth, entra) : betterAuth);
@@ -1597,6 +1598,32 @@ await startupLifecycle.run(async (startup) => {
      * attempted.
      */
     broker: composioBroker,
+    /*
+     * Entra on-behalf-of, for a server an admin marked as reached as the signed-in person (上游
+     * #931). The framed door above: the person's sign-in and the tokens minted from it are identity
+     * rows read as `platform`, while the call that asks runs in the person's own frame. With it go
+     * the resources the deployment registered (MICROSOFT_OAUTH_OBO_RESOURCES) and OpenBot's own API,
+     * so a scope is only ever minted for a registered resource and sent to its host (X6, I-2).
+     */
+    ...(entra && config.auth?.microsoft
+      ? {
+          entra: {
+            tokenFor: entra.tokenFor,
+            resources: config.auth.microsoft.oboResources ?? [],
+            own: openBotResources(
+              config.auth.microsoft.clientId,
+              config.auth.microsoft.apiScope,
+            ),
+          },
+        }
+      : {}),
+    /*
+     * The asker's consent for a call on their own Microsoft sign-in through somebody else's Team
+     * Bot, asked against the row the token is sent for (X6, re-review N-1). `teamBots` is built
+     * further down; this is only called once requests run.
+     */
+    entraConsent: ({ actorId, botId, serverId }) =>
+      teamBots.ownSignInConsent(actorId, botId, serverId),
   });
   /*
    * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号

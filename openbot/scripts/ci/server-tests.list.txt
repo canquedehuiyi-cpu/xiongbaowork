@@ -307,7 +307,10 @@ tests/enterprise-controls.integration.test.ts
 tests/enterprise-controls.test.ts
 tests/enterprise-frames.integration.test.ts
 tests/enterprise-list-query-validation.test.ts
+tests/entra-access.test.ts
 tests/entra-held-tokens.test.ts
+tests/entra-obo-config.test.ts
+tests/entra-obo-servers.integration.test.ts
 tests/entra-obo.integration.test.ts
 tests/entra-profile.test.ts
 tests/github-oauth-signup.test.ts
@@ -682,6 +685,7 @@ tests/tasks-projector.test.ts
 tests/tasks-routes-filters.integration.test.ts
 tests/tasks-state.test.ts
 tests/tasks.integration.test.ts
+tests/team-bot-entra-consent.integration.test.ts
 tests/team-bot-move.integration.test.ts
 tests/team-bot-owner.integration.test.ts
 tests/team-bot-visibility-parity.integration.test.ts

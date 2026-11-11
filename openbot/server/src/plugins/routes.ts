@@ -579,6 +579,7 @@ export function createPluginRoutes(
       title?: unknown;
       url?: unknown;
       credentialId?: unknown;
+      entraScope?: unknown;
     } | null;
     if (
       typeof body?.id !== "string" ||
@@ -604,6 +605,23 @@ export function createPluginRoutes(
         400,
       );
     }
+    /*
+     * Marks the server as reached as the signed-in person through Microsoft, with this scope
+     * (上游 #931). Null puts it back on the deployment's credential; absent leaves it as it is.
+     */
+    if (
+      body.entraScope !== undefined &&
+      body.entraScope !== null &&
+      (typeof body.entraScope !== "string" || !body.entraScope.trim())
+    ) {
+      return context.json(
+        {
+          error:
+            "Entra scope 必须是非空字符串；传 null 表示不再以登录人的身份访问这个服务器。",
+        },
+        400,
+      );
+    }
 
     try {
       const server = await store.addCustomServer({
@@ -614,7 +632,14 @@ export function createPluginRoutes(
           typeof body.credentialId === "string"
             ? body.credentialId.trim()
             : undefined,
+        entraScope:
+          typeof body.entraScope === "string"
+            ? body.entraScope.trim()
+            : body.entraScope === null
+              ? null
+              : undefined,
         by: actorEmail(context),
+        actorId: context.var.actor.id,
       });
       return context.json({ server });
     } catch (error) {

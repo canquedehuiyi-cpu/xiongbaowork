@@ -26,6 +26,11 @@ import {
 } from "./dictation/config";
 import { type Edition, parseEdition } from "./edition";
 import type { BrokerProvider } from "./plugins/access";
+import {
+  type OboResource,
+  openBotResources,
+  parseOboResources,
+} from "./plugins/entra-access";
 import { type VoiceConfig, voiceConfig } from "./voice/config";
 import { type WebBotAuth, webBotAuthFromEnv } from "./web-bot-auth";
 
@@ -94,6 +99,14 @@ export type MicrosoftAuthConfig = OAuthClient & {
   tenantId: string;
   apiScope: string;
   allowedClients: string[];
+  /**
+   * The company systems a server may be reached on as the signed-in person, each bound to the one
+   * host its tokens may go to, from MICROSOFT_OAUTH_OBO_RESOURCES (`<resource>=<host>`, X6). Absent
+   * when unset, and then no server can be marked: an OpenBot admin does not decide alone which
+   * resource everybody's delegated token is minted for and where it is sent. OpenBot's own API and
+   * Microsoft's first-party resources are refused here at start-up. See `plugins/entra-access.ts`.
+   */
+  oboResources?: OboResource[];
 };
 
 export type GithubAppConfig = {
@@ -1198,13 +1211,19 @@ function microsoftAuth(
 ): MicrosoftAuthConfig | undefined {
   const client = oauthClient(environment, "MICROSOFT");
   if (!client) return undefined;
+  const apiScope =
+    optional(environment, "MICROSOFT_OAUTH_API_SCOPE") ??
+    `api://${client.clientId}/.default`;
+  const oboResources = parseOboResources(
+    commaSeparated(environment, "MICROSOFT_OAUTH_OBO_RESOURCES"),
+    openBotResources(client.clientId, apiScope),
+  );
   return {
     ...client,
     tenantId: optional(environment, "MICROSOFT_OAUTH_TENANT_ID") ?? "common",
-    apiScope:
-      optional(environment, "MICROSOFT_OAUTH_API_SCOPE") ??
-      `api://${client.clientId}/.default`,
-    allowedClients: allowedEntraClients(environment),
+    apiScope,
+    allowedClients: allowedEntraClients(environment, client.clientId),
+    ...(oboResources.length > 0 ? { oboResources } : {}),
   };
 }
 
@@ -1219,7 +1238,10 @@ const ENTRA_CLIENT_ID =
  * app's `api://` URI or its name, which no token's `azp` will ever equal: every app would then be
  * refused at the door with nothing said about why.
  */
-function allowedEntraClients(environment: Environment): string[] {
+function allowedEntraClients(
+  environment: Environment,
+  ownClientId: string,
+): string[] {
   const named = commaSeparated(environment, "MICROSOFT_OAUTH_ALLOWED_CLIENTS");
   const wrong = named.find(
     (client) => !ENTRA_CLIENT_ID.test(client.toLowerCase()),
@@ -1227,6 +1249,20 @@ function allowedEntraClients(environment: Environment): string[] {
   if (wrong !== undefined) {
     throw new Error(
       `MICROSOFT_OAUTH_ALLOWED_CLIENTS names \`${wrong}\`, which is not an application (client) id. Give each app's client id, a GUID from its app registration, separated by commas.`,
+    );
+  }
+  /*
+   * Never OpenBot itself (X6, review I-2). A token OpenBot mints on somebody's behalf names OpenBot
+   * as `azp`; listed here, any server that ever received one could call back into OpenBot as that
+   * person. OpenBot's own browser signs in with a session, so it never needs to be listed.
+   */
+  if (
+    named.some(
+      (client) => client.toLowerCase() === ownClientId.trim().toLowerCase(),
+    )
+  ) {
+    throw new Error(
+      "MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有 OpenBot 自己的 client id（MICROSOFT_OAUTH_CLIENT_ID）。OpenBot 代表某人换出来的 token 也带这个 azp，列进来就能被拿去冒充本人调用 OpenBot。请去掉它：OpenBot 自己的网页用会话登录，不需要列。",
     );
   }
   return named.map((client) => client.toLowerCase());

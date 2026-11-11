@@ -127,6 +127,12 @@ import {
   deploymentClientSlug,
   toolkitOfDeploymentClientKey,
 } from "./deployment-clients";
+import {
+  decideEntraScope,
+  type EntraOnBehalf,
+  entraTokenFor,
+  MOVED_WHILE_ADDING,
+} from "./entra-access";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
 import { shareTargetOf } from "./share-target";
@@ -259,6 +265,11 @@ export type ServerRecord = {
    * and never from the app's name. The connect route and the store refuse whatever a screen draws.
    */
   adminConnectOnly: boolean;
+  /**
+   * The Entra scope a server added by URL is reached with as the signed-in person, or null where it
+   * is reached on the deployment's own credential. See `mcpServers.entraScope`. 上游 #931。
+   */
+  entraScope?: string | null;
   /**
    * 上游 #950 的 `sharedOnly`：这个应用只能作为共享的团队账号连接（部署自己的 S2S 客户端）。与
    * `adminConnectOnly` 同一个判断；fork 在 Personal 模式下仍允许管理员以自己的名义连接（既有行为），切到
@@ -1594,6 +1605,26 @@ export type PluginStoreOptions = {
   /** Where the vendor sends people back; needed to (re)register a dynamic client. */
   redirectUri?: string;
   /**
+   * Tokens Entra issues for a person on their behalf, for a server an admin marked as reached as
+   * the signed-in person (`auth/entra.ts`, 上游 #931). Absent on a deployment with no Microsoft
+   * sign-in, where such a server cannot be added and a call to one already stored is refused.
+   * Carries the resources the deployment registered for it (`MICROSOFT_OAUTH_OBO_RESOURCES`) and
+   * OpenBot's own API, which no scope may name; see `plugins/entra-access.ts`.
+   */
+  entra?: EntraOnBehalf;
+  /**
+   * The asker's consent before a call goes out on their own Microsoft sign-in through a Team Bot
+   * someone else published (`teamBots.ownSignInConsent`, X6). Asked here, against the row the token
+   * is sent for, so a server marked after the Team Bot rule looked at it is still asked about.
+   * Throws the consent card; absent, nothing is asked beyond the rule below that a marked server is
+   * never reached as anybody but the asker.
+   */
+  entraConsent?: (input: {
+    actorId: string;
+    botId: string;
+    serverId: string;
+  }) => Promise<void>;
+  /**
    * 一个职责的触发来源（`manual`、`schedule`、渠道……），给共享账号闸门判断这次运行是否由外部输入驱动
    * （`./shared-use`）。没给时，由职责开始的运行一律按外部输入处理，团队账号不接受——闭合的方向。
    */
@@ -1800,6 +1831,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   // No default, unlike the seams above: there is no real implementation in this tree to fall back
   // to, and a deployment with no Composio key is supposed to have no broker. See `./broker`.
   const broker = options.broker;
+  const entraTokens = options.entra;
   /**
    * 一个 `team` 服务器上每个人的行，而不只是这个帧看得到的（G01-E P21、I5）——`removeServer` 的那道门，
    * 提出来让账号模式切换（X1）共用同一个入口：切到 Shared 前要结束每个人在这个团队应用上的个人账号，
@@ -2177,6 +2209,14 @@ export function createPluginStore(options: PluginStoreOptions) {
       credentialId: string | null;
       /** `team` for a server an administrator added: its secret is then read through the broker. */
       tenantId: string;
+      /** Where the call goes; a `person-entra` token is only sent to the host its scope is bound to. */
+      url: string;
+      /**
+       * The Entra scope a `person-entra` server is reached with; see `mcpServers.entraScope`.
+       * REQUIRED, and checked below (review M-2): a reading that leaves the column out must not
+       * resolve a marked server as one on the deployment's credential and spend that credential.
+       */
+      entraScope: string | null;
       /*
        * NO `authScheme` HERE, DELIBERATELY. The scheme that decides whether a brokered call needs a
        * connection row is the APP'S, read through `brokeredAppScheme` below — and this row's own
@@ -2382,6 +2422,36 @@ export function createPluginStore(options: PluginStoreOptions) {
       }
 
       return {};
+    }
+
+    /*
+     * A server reached as the signed-in person through Microsoft (上游 #931): a token Entra issues
+     * for the person asking, from their own Microsoft sign-in, for this server's scope. Never the
+     * deployment's credential, for the reason the `person-oauth` branch below gives. Held in memory
+     * by `auth/entra.ts` until shortly before it expires, never written down here.
+     */
+    /*
+     * Fail closed on a row read without the column (review M-2). `accessFor` answers
+     * `deployment-token` for a custom row with no `entraScope`, which is right for a row that has
+     * none and wrong for one whose reader forgot to select it: the deployment's credential would go
+     * out for a server marked to be reached as the person. Every row here comes from a full
+     * `select()`, so the key is always present; a row without it is ours to fix, never a call.
+     */
+    if (!entry && (row as { entraScope?: unknown }).entraScope === undefined) {
+      throw new PluginInvariantError(
+        `${row.id} was read without its entra_scope column, so how it is reached cannot be told.`,
+      );
+    }
+
+    if (access.credential === "person-entra") {
+      return {
+        token: await entraTokenFor(
+          entraTokens,
+          row,
+          actorId,
+          (sentence) => new PluginRefusedError(sentence, null),
+        ),
+      };
     }
 
     if (access.credential !== "person-oauth") {
@@ -4029,7 +4099,18 @@ export function createPluginStore(options: PluginStoreOptions) {
       title: string;
       url: string;
       credentialId?: string;
+      /**
+       * The Entra scope to reach this server with as the signed-in person (上游 #931), for example
+       * `api://hr-api/.default`. Null puts it back on `credentialId`. Absent keeps whatever the
+       * server already has, as `credentialId` does. See `decideEntraScope`.
+       */
+      entraScope?: string | null;
       by: string;
+      /**
+       * Who is adding it, by id. A server reached as the signed-in person is asked what it offers
+       * as the admin adding it, since there is no deployment credential to ask with.
+       */
+      actorId?: string;
     }): Promise<ServerRecord> {
       requireServerWriter();
       const refusal = customUrlRefusal(input.url);
@@ -4154,6 +4235,8 @@ export function createPluginStore(options: PluginStoreOptions) {
           provenance: mcpServers.provenance,
           // The third of what `accessFor` resolves a row with. See there.
           authScheme: mcpServers.authScheme,
+          // Kept when the caller names none; see `decideEntraScope`.
+          entraScope: mcpServers.entraScope,
         })
         .from(mcpServers)
         .where(eq(mcpServers.id, input.id));
@@ -4167,6 +4250,19 @@ export function createPluginStore(options: PluginStoreOptions) {
        * survivable. See {@link requireNotBrokered}.
        */
       requireNotBrokered(input.id, existing);
+
+      // How it is reached once this write lands, or why it may not be (上游 #931).
+      const entra = decideEntraScope(
+        input,
+        existing,
+        entraTokens
+          ? {
+              resources: entraTokens.resources ?? [],
+              own: entraTokens.own ?? [],
+            }
+          : undefined,
+      );
+      if ("refusal" in entra) throw new CustomServerRefusedError(entra.refusal);
 
       if (
         existing &&
@@ -4189,7 +4285,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         );
       }
 
-      await database
+      const written = await database
         .insert(mcpServers)
         .values({
           id: input.id,
@@ -4200,6 +4296,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           url: input.url,
           provenance: "custom",
           credentialId: credentialId ?? null,
+          entraScope: entra.scope ?? null,
           addedBy: input.by,
         })
         .onConflictDoUpdate({
@@ -4239,10 +4336,33 @@ export function createPluginStore(options: PluginStoreOptions) {
              * this endpoint does, and nothing asks it to.
              */
             ...(credentialId ? { credentialId } : {}),
+            // Kept when the caller names none, for the reason `decideEntraScope` gives.
+            ...(entra.named !== undefined ? { entraScope: entra.named } : {}),
             addedBy: input.by,
             updatedAt: new Date(),
           },
-        });
+          /*
+           * THE ADDRESS RULES AGAIN, UNDER THE ROW LOCK (review M-1).
+           *
+           * Both rules above — a credential is spent at the address it was given to, and a marked
+           * server is not moved — were read off `existing` before this write, so two requests at
+           * once could each pass and land a marked server at the other's address. The conflict
+           * update is taken against the row as it stands now, locked: it lands only where the
+           * address is unchanged, or where neither the row nor this write carries a credential or a
+           * mark. Otherwise nothing is written and the add is refused below.
+           */
+          setWhere: or(
+            eq(mcpServers.url, sql`excluded.url`),
+            and(
+              isNull(mcpServers.entraScope),
+              isNull(mcpServers.credentialId),
+              entra.scope || credentialId ? sql`false` : sql`true`,
+            ),
+          ),
+        })
+        .returning({ id: mcpServers.id });
+      if (written.length === 0)
+        throw new CustomServerRefusedError(MOVED_WHILE_ADDING);
 
       await recordAuditEvent(auditStore, {
         eventType: "configuration.changed",
@@ -4256,10 +4376,17 @@ export function createPluginStore(options: PluginStoreOptions) {
           // Named in the trail, because "who added a server nobody reviewed" is a question somebody
           // will ask and the answer should not require reading the catalogue of a past build.
           provenance: "custom",
+          ...(entra.scope
+            ? { reachedAs: "person", entraScope: entra.scope }
+            : {}),
         },
       });
 
-      await this.refreshTools(input.id);
+      // A marked server is asked what it offers as the admin adding it, on their own Entra token.
+      await this.refreshTools(
+        input.id,
+        entra.scope ? (input.actorId ?? "") : undefined,
+      );
       const added = (await this.listServers()).find(
         (server) => server.id === input.id,
       );
@@ -6131,6 +6258,7 @@ export function createPluginStore(options: PluginStoreOptions) {
           adminConnectOnly:
             toolkitOf(row.url) !== null &&
             adminConnectOnly(brokeredApps.get(row.url)?.authScheme ?? null),
+          entraScope: row.entraScope,
           ...(toolkitOf(row.url) !== null
             ? {
                 sharedOnly: adminConnectOnly(
@@ -10570,6 +10698,31 @@ export function createPluginStore(options: PluginStoreOptions) {
        * it did.
        */
       try {
+        /*
+         * A server reached as the signed-in person goes out as the person asking and nobody else,
+         * decided on THIS row, the one the token is sent for (X6, re-review N-1).
+         *
+         * The Team Bot rule picked `credentialActorId` from its own read of the server; if an admin
+         * marked the server since, that read may have named the Bot's owner, or the asker without
+         * asking them. So here: anybody but the asker is refused outright, and the asker's consent is
+         * asked again (and a one-time consent spent) before any token is minted.
+         */
+        if (access.credential === "person-entra") {
+          if (
+            input.credentialActorId !== undefined &&
+            input.credentialActorId !== input.actorId
+          ) {
+            throw new PluginRefusedError(
+              `「${row.title}」只以提问人自己的身份访问，不能借用别人的身份，所以没有发出。`,
+              null,
+            );
+          }
+          await options.entraConsent?.({
+            actorId: input.actorId,
+            botId: input.botId,
+            serverId,
+          });
+        }
         const { token, placement, vendorUserId } = await connectionTokenFor(
           row,
           entry,

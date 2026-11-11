@@ -120,6 +120,14 @@ export const mcpServers = pgTable(
      * over evidence nobody had.
      */
     authScheme: text("auth_scheme"),
+    /**
+     * The Microsoft Entra scope a server added by URL is reached with as the signed-in person, for
+     * example `api://hr-api/.default`. Set, each call goes out with a token Entra issues for that
+     * person through the on-behalf-of exchange (`auth/entra.ts`); null, the server is reached on the
+     * one credential the deployment holds for it, as every server added by URL always was.
+     * 上游 #931，fork 迁移 0186。
+     */
+    entraScope: text("entra_scope"),
     /** What the deployment last heard back from it. `null` until the first successful listing. */
     toolsRefreshedAt: timestamp("tools_refreshed_at", { withTimezone: true }),
     /** The last failure, kept so the Plugins page can say why a server has no tools. */

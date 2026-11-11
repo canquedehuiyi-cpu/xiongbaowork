@@ -1221,6 +1221,13 @@
       "breakpoints": true
     },
     {
+      "idx": 186,
+      "version": "7",
+      "when": 1794320400721,
+      "tag": "0186_entra_scope",
+      "breakpoints": true
+    },
+    {
       "idx": 187,
       "version": "7",
       "when": 1794323193638,
