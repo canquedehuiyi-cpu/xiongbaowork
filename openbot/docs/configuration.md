@@ -174,6 +174,8 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `COMPOSIO_API_KEY`   | provisioned during desktop sign-in or local setup when no broker is configured | One project key for the whole deployment. Desktop sign-in saves a provisioned key in native protected storage and supplies it on Start/restart. A key in `.env` or the environment always wins and is never moved. `start.sh` / `bun run setup:composio` uses the existing CLI login; supplied keys are preserved. Direct server/container launches still need the prepared key. See [Composio](plugins/composio.md). |
 | `COMPOSIO_<SLUG>_CLIENT_ID`, `COMPOSIO_<SLUG>_CLIENT_SECRET` | unset | This deployment's own OAuth client for one Composio app that connects with a server-to-server grant (`S2S_OAUTH2`), such as `COMPOSIO_SHOPIFY_CLIENT_ID`. Both or neither. Set, the app can be enabled and connected as one shared account; unset, it stays hidden. Read only when the app is enabled; see [rotating the client](#rotating-a-composio-apps-own-client). See [Composio](plugins/composio.md#the-56-that-are-not-offered). |
 | `OPENBOT_INSTALLATION_ID` | a fresh private UUID in `.env.openbot-installation-id` | Stable Composio provisioning identity, persisted before a request. Optional explicit UUID for first setup; later values must match the saved file. Retain it for retries and restarts, and generate a fresh identity for a new installation. It never falls back to `DEPLOYMENT_ID`. |
+| `ARCADE_API_KEY`     | unset                              | The Arcade project key, for a deployment that brokers apps through Arcade instead of Composio. Not for a single-user deployment (`OPENBOT_SINGLE_USER`, the personal edition included): there the server refuses to start. See [Arcade](plugins/arcade.md). |
+| `OPENBOT_BROKER_PROVIDER` | unset (chosen by which key is set) | `composio` or `arcade`: which broker is live when both `COMPOSIO_API_KEY` and `ARCADE_API_KEY` are set. Any other value refuses to start, and so does naming a provider whose key is unset, or setting both keys with this unset. `start.sh` / `bun run setup:composio` provisions a Composio key whatever this says, so set it to `arcade` on an Arcade deployment started that way. See [Choosing the provider](plugins/arcade.md#choosing-the-provider). |
 
 **`OPENBOT_GENERATIVE_UI`** enables generated interfaces by default: streamed HTML/CSS/JavaScript
 in a sandboxed iframe, and A2UI 1.0 interfaces built from CopilotKit's standard catalog (every
@@ -546,6 +548,14 @@ container images set `OPENBOT_IN_CONTAINER=true`, because there every caller arr
 container engine; set it yourself only for a container of your own that runs this server. Routes
 that containers and services call back on (Bots' tool calls, the model proxy, the routines worker)
 prove themselves with their own secrets and are not affected.
+
+**与上游不同: not in this fork.** The paragraphs below, up to `SIGNIN_ALLOWED_EMAIL_DOMAINS`, are
+upstream's and describe a per-installation name at the broker (the `brokered_identities` table)
+that this fork has not merged. Here the one person of a single-user deployment is filed at
+Composio as `dev-local-user`, so single-user deployments sharing one `COMPOSIO_API_KEY` share one
+set of connections, and nothing is retired at start. For the same reason a single-user deployment
+whose broker is Arcade refuses to start, so upstream's `ARCADE_API_KEY` half of this passage is left
+out; see [Arcade](plugins/arcade.md).
 
 **A single-user deployment has its own identity at Composio.** Composio keeps accounts apart
 by a user id OpenBot sends, and the one person of every single-user deployment is `dev-local-user`,

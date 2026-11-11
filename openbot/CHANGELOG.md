@@ -171,7 +171,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   空列 `vendor_name`，`composio_connections` 加 `provider`（默认 `composio`），`brokered_accounts` 的提供商
   约束放宽到 `arcade`；都无回填，已有的连接都记为 Composio。新设置 `ARCADE_API_KEY`、
   `OPENBOT_BROKER_PROVIDER`，都不设时没有变化；用 Arcade 时还需要 `OPENBOT_PUBLIC_URL`（没有时用
-  `BETTER_AUTH_URL`），验证地址由它得出。
+  `BETTER_AUTH_URL`），验证地址由它得出。怎么设置、要在 Arcade 后台做什么、和上游有哪些不同，见
+  `docs/plugins/arcade.md`。
 
 - **The whole web app is redrawn in 熊宝's black, white and red** (docs/design/ios-studio). A near-black
   canvas with graphite cards and hairlines; white (black on paper) for the primary action and the main

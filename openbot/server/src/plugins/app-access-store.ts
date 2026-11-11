@@ -375,6 +375,23 @@ export function appAccessMethods(context: {
     return { byKey, byName };
   }
 
+  /** 一个应用的「谁可以给员工」：现在生效的，与列里存的（没存为 null）。 */
+  function ownerGrantsSettingOf(app: AppCandidate): {
+    ownerGrants: OwnerGrants;
+    chosen: OwnerGrants | null;
+  } {
+    return {
+      ownerGrants: ownerGrantsOf({
+        provider: app.provider,
+        authScheme: app.authScheme,
+        accountMode: app.accountMode,
+        catalogueAuth: app.entry?.auth ?? null,
+        ownerGrants: app.ownerGrants,
+      }),
+      chosen: app.ownerGrants,
+    };
+  }
+
   function absent(input: {
     key: string;
     title: string;
@@ -965,17 +982,21 @@ export function appAccessMethods(context: {
       chosen: OwnerGrants | null;
     } | null> {
       const app = group(await allRows()).byName.get(serverId);
-      if (!app) return null;
-      return {
-        ownerGrants: ownerGrantsOf({
-          provider: app.provider,
-          authScheme: app.authScheme,
-          accountMode: app.accountMode,
-          catalogueAuth: app.entry?.auth ?? null,
-          ownerGrants: app.ownerGrants,
-        }),
-        chosen: app.ownerGrants,
-      };
+      return app ? ownerGrantsSettingOf(app) : null;
+    },
+
+    /**
+     * 同一个答案，一次读出这个帧里看得见的每一行的（服务器列表在每一行上带着它，上游的 `ownerGrants`）。
+     * 和 {@link ownerGrantsSetting} 走同一次归组、同一个函数，所以列表里的一行和按 id 问的那条路由不会答得
+     * 不一样；键是行 id。
+     */
+    async ownerGrantsSettings(): Promise<
+      Map<string, { ownerGrants: OwnerGrants; chosen: OwnerGrants | null }>
+    > {
+      const { byName } = group(await allRows());
+      return new Map(
+        [...byName].map(([name, app]) => [name, ownerGrantsSettingOf(app)]),
+      );
     },
 
     /**

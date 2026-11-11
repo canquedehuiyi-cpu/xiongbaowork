@@ -36,9 +36,10 @@ export class AccountModeRefusedError extends Error {
  * 原模式；已经撤销成功的账号的行照常删掉，因为声称一个 vendor 已不再持有的账号，是另一种说谎。
  *
  * 与上游的差异：
- * - 上游切到 Shared 时为管理员在预览里看过的员工写「共享使用批准」；那张表在 X3 并入。在那之前没有任何
- *   批准，共享闸门对每一次调用都拒绝（与上游「没有批准就拒绝」一致，评审 C1），所以这里不写批准、预览里
- *   也没有员工列表。
+ * - 上游切到 Shared 时在这里为管理员在预览里看过的员工写「共享使用批准」。fork 的批准记在员工主人名下，
+ *   要进每位主人的帧才写得进去，那道门在路由上（`asBotOwner`），所以这里不写批准、预览里也没有员工
+ *   列表：两样都由 `PUT /servers/:id/account-mode` 在切换完成之后加上（`./routes` 的 `sharedBotsOf` 与
+ *   `recordSwitchApprovals`）。没有批准时共享闸门对每一次调用都拒绝（与上游「没有批准就拒绝」一致）。
  * - 应用的「写之前先问」团队规则照上游写（`botId: *`、`toolRef: <app>/*`、`effect: write`、`ask`）。
  * - 撤销其他人的连接要跨租户：走 store 里 `removeServer` 的同一道门（`reachEveryPersonOn`），之前先要
  *   管理员能力（`requireServerWriter`）；应用行与团队规则在管理员自己的帧里写。
@@ -136,14 +137,31 @@ export function createAccountModeSwitch(deps: {
     return 1;
   }
 
-  async function switchMode(input: {
+  type SwitchInput = {
     serverId: string;
     mode: AccountMode;
     by: string;
     confirm: boolean;
-  }): Promise<AccountModeResult> {
+  };
+
+  /** 切换，答案不带别的（原有的形状）。 */
+  async function switchMode(input: SwitchInput): Promise<AccountModeResult> {
+    return (await switchModeTelling(input)).result;
+  }
+
+  /**
+   * 切换，并说明这一次有没有真的把模式改掉。`switched` 只在模式确实从另一个改成了这一个时为真；应用本来
+   * 就是这个模式（只补齐它依靠的东西）、只是预览、撤销失败，都是 false。
+   *
+   * 路由要它来决定随切换送来的批准是照写还是只补缺。这件事只有切换自己知道：调用方在切换之前另读一次
+   * 模式，读到的可能已经被另一位管理员的切换改掉了。
+   */
+  async function switchModeTelling(
+    input: SwitchInput,
+  ): Promise<{ result: AccountModeResult; switched: boolean }> {
     const planned = await preview(input.serverId, input.mode);
-    if (!input.confirm) return { changed: false, preview: planned };
+    if (!input.confirm)
+      return { result: { changed: false, preview: planned }, switched: false };
 
     {
       const { toolkit, app } = await resolve(input.serverId);
@@ -160,7 +178,7 @@ export function createAccountModeSwitch(deps: {
         } else {
           await forgetRule(app.appId, input.by);
         }
-        return { changed: true, revoked: 0 };
+        return { result: { changed: true, revoked: 0 }, switched: false };
       }
 
       /*
@@ -201,7 +219,8 @@ export function createAccountModeSwitch(deps: {
           });
         }
       }
-      if (failures.length > 0) return { changed: false, failures };
+      if (failures.length > 0)
+        return { result: { changed: false, failures }, switched: false };
 
       /*
        * 按顺序写，所以步骤之间失败也是安全的方向。Shared：先有「写之前先问」规则，再让模式说 shared，
@@ -220,7 +239,7 @@ export function createAccountModeSwitch(deps: {
         await forgetRule(app.appId, input.by);
       }
       await audit(app.appId, input, revoked);
-      return { changed: true, revoked };
+      return { result: { changed: true, revoked }, switched: true };
     }
   }
 
@@ -245,7 +264,7 @@ export function createAccountModeSwitch(deps: {
     });
   }
 
-  return { preview, switchMode, forgetRule };
+  return { preview, switchMode, switchModeTelling, forgetRule };
 }
 
 export type AccountModeSwitch = ReturnType<typeof createAccountModeSwitch>;
