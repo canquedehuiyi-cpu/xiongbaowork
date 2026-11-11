@@ -13,50 +13,46 @@ import type {
 } from "@/lib/reviewer-guidance/queries";
 import { mediaOf } from "./describe-rules";
 
-const plural = (count: number, one: string, many = `${one}s`) =>
-  `${count} ${count === 1 ? one : many}`;
-
-/** "Agreed with your people on 18 of 22." */
+/** 「22 个里有 18 个和你的同事判断一致。」 */
 export function agreementHeadline(report: GuidanceBacktest): string {
-  if (report.reviewed === 0)
-    return "The reviewer couldn't answer for any of them.";
-  return `Agreed with your people on ${report.agreed} of ${report.reviewed}.`;
+  if (report.reviewed === 0) return "审核一个也没能给出判断。";
+  return `${report.reviewed} 个里有 ${report.agreed} 个和你的同事判断一致。`;
 }
 
 /** The two ways it disagreed, kept apart: letting through what was denied costs more than asking. */
 export function disagreementLine(report: GuidanceBacktest): string {
-  return `Would have let through ${report.letThroughDenied} your people denied, and asked about ${report.askedAllowed} they allowed.`;
+  return `会放行 ${report.letThroughDenied} 个同事拒绝过的请求，会再问 ${report.askedAllowed} 个同事允许过的请求。`;
 }
 
 /** What was replayed and what the reviewer had to go on. */
 export function replayedWords(report: GuidanceBacktest): string {
   return [
-    `Replayed over the last ${plural(report.sample, "request")} your people decided. The reviewer reads each one as it would live: the person's words in that conversation, and the action.`,
+    `用同事最近处理过的 ${report.sample} 个请求重放了一遍。审核像实际运行时一样读每一个：那段对话里那个人说的话，以及这个动作。`,
     report.withoutRequest > 0
-      ? `${report.withoutRequest} had no words from a person, so the reviewer judged ${report.withoutRequest === 1 ? "it" : "them"} on the action alone.`
+      ? `其中 ${report.withoutRequest} 个没有人说过话，审核只能看动作本身来判断。`
       : null,
     report.skippedSafety > 0
-      ? `${report.skippedSafety} more ${report.skippedSafety === 1 ? "was" : "were"} decided by built-in safety. Guidance doesn't change ${report.skippedSafety === 1 ? "that" : "those"}.`
+      ? `另有 ${report.skippedSafety} 个由内置安全规则决定，指引改变不了。`
       : null,
     report.unreviewed > 0
-      ? `The reviewer couldn't answer for ${report.unreviewed}.`
+      ? `有 ${report.unreviewed} 个审核没能给出判断。`
       : null,
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("");
 }
 
 const ANSWERS: Record<GuidanceBacktestRow["person"], string> = {
-  allow_once: "A person allowed it once.",
-  allow_always: "A person always allowed it.",
-  deny: "A person denied it.",
+  allow_once: "有人允许了一次。",
+  allow_always: "有人选了总是允许。",
+  deny: "有人拒绝了。",
 };
 
 const WOULD: Record<GuidanceBacktestRow["would"], string> = {
-  proceed: "Would let it run",
-  ask: "Would ask",
-  hand_off: "Would hand off",
-  unreviewed: "No answer",
+  proceed: "会放行",
+  ask: "会先问",
+  hand_off: "会交给本人",
+  unreviewed: "没有判断",
 };
 
 const COLOURS: Record<GuidanceBacktestRow["outcome"], string> = {
@@ -94,7 +90,7 @@ function replayRowOf(row: GuidanceBacktestRow): ReplayRow {
     media: mediaOf(row.toolRef),
     verdict: WOULD[row.would],
     verdictClassName: COLOURS[row.outcome],
-    note: `${ANSWERS[row.person]} ${row.reason ? `The reviewer: “${row.reason}”` : ""}`.trim(),
+    note: `${ANSWERS[row.person]}${row.reason ? `审核说：「${row.reason}」` : ""}`,
   };
 }
 
@@ -124,18 +120,16 @@ export function GuidanceBacktestField({
   return (
     <div aria-live="polite" className="flex flex-col gap-3">
       <Field aria-labelledby="guidance-backtest">
-        <FieldLabel id="guidance-backtest">On recent decisions</FieldLabel>
+        <FieldLabel id="guidance-backtest">拿最近的决定试一试</FieldLabel>
         {preview.calls === 0 ? (
           <FieldDescription>
-            No requests your people decided yet. You can test guidance once
-            they've answered some.
+            同事还没有处理过请求。等他们回答过一些，就可以测试指引了。
           </FieldDescription>
         ) : (
           <>
             <FieldDescription>
-              Replays the reviewer with this guidance over the last{" "}
-              {plural(preview.calls, "request")} your people decided. That's{" "}
-              {plural(preview.calls, "model call")}, one for each.
+              用这段指引，把审核在同事最近处理过的 {preview.calls}{" "}
+              个请求上重放一遍。每个请求调用一次模型，共 {preview.calls} 次。
             </FieldDescription>
             <div>
               <Button
@@ -146,8 +140,8 @@ export function GuidanceBacktestField({
                 variant="outline"
               >
                 {run.isPending
-                  ? "Testing…"
-                  : `Test on ${plural(preview.calls, "request")}`}
+                  ? "正在测试…"
+                  : `在 ${preview.calls} 个请求上测试`}
               </Button>
             </div>
           </>
@@ -159,8 +153,7 @@ export function GuidanceBacktestField({
         ) : null}
         {stale && !run.isPending ? (
           <p className="text-amber-600 text-sm dark:text-amber-500">
-            You've changed the guidance since it was tested. Test it again to
-            see what your edit changes.
+            测试之后你改过这段指引。再测一次，看看你的修改会带来什么变化。
           </p>
         ) : null}
       </Field>
