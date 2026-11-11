@@ -148,6 +148,7 @@ import { createProfileRoutes, type ProfileStore } from "./people/profile";
 import { MAX_PAGE, type PeopleStore } from "./people/store";
 import type { BrokerProvider } from "./plugins/access";
 import type { AccountModeSwitch } from "./plugins/account-mode";
+import { createStaleAdminGate } from "./plugins/admin-session-gate";
 import type {
   ArcadeBroker,
   ComposioBroker,
@@ -2316,6 +2317,11 @@ export function createApp(
   }
 
   if (pluginStore) {
+    /*
+     * 会话里还写着管理员、角色已被收回的人，在插件的管理员写路径上先被这道门拒绝（见
+     * `plugins/admin-session-gate.ts`）。挂在路由前面，成员和不在那张表里的请求原样通过。
+     */
+    app.use("/api/plugins/*", createStaleAdminGate(requireAdminUser));
     // Describing what one Bot may do in one app, and replaying it. The save is the grants route's own.
     app.route(
       "/api/plugins",

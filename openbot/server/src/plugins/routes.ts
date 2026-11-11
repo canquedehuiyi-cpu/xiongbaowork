@@ -545,8 +545,9 @@ export function createPluginRoutes(
         ...(server.sharedAccount && decisionRefusal(context) !== null
           ? { sharedAccount: { ...server.sharedAccount, connectedBy: null } }
           : {}),
+        // 和连接路由同一个判断：持有能力的管理员。会话里还写着 admin、角色已被收回的人按成员答。
         canConnect:
-          context.var.actor.role === "admin" ||
+          decisionRefusal(context) === null ||
           (!server.adminConnectOnly && server.accountMode !== "shared"),
       })),
       // Scoped: the deployment's skills plus this person's own. An administrator sees them all.
@@ -617,6 +618,9 @@ export function createPluginRoutes(
       });
       return context.json({ server });
     } catch (error) {
+      // 这次请求没有管理员能力：store 在动手之前就拒绝了。是「谁在问」的拒绝，所以答 403。
+      if (isServerWriteRefusal(error))
+        return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
       // A refused credential is the administrator's mistake to correct, so it comes back as a
       // refusal with its reason rather than as a 500 the way an unmapped throw would.
       if (
@@ -726,6 +730,9 @@ export function createPluginRoutes(
       });
       return context.json({ server });
     } catch (error) {
+      // 这次请求没有管理员能力：store 在动手之前就拒绝了。是「谁在问」的拒绝，所以答 403。
+      if (isServerWriteRefusal(error))
+        return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
       if (
         error instanceof CustomServerRefusedError ||
         error instanceof CatalogueEntryUnknownError
@@ -768,6 +775,9 @@ export function createPluginRoutes(
       });
       return context.json({ server });
     } catch (error) {
+      // 这次请求没有管理员能力：store 在动手之前就拒绝了。是「谁在问」的拒绝，所以答 403。
+      if (isServerWriteRefusal(error))
+        return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
       if (
         error instanceof CatalogueEntryUnknownError ||
         error instanceof CustomServerRefusedError
@@ -826,6 +836,9 @@ export function createPluginRoutes(
       });
       return context.json({ ok: true });
     } catch (error) {
+      // 这次请求没有管理员能力：store 在动手之前就拒绝了。是「谁在问」的拒绝，所以答 403。
+      if (isServerWriteRefusal(error))
+        return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
       if (
         error instanceof CatalogueEntryUnknownError ||
         error instanceof CustomServerRefusedError
@@ -883,6 +896,9 @@ export function createPluginRoutes(
     try {
       await store.removeServer(serverId, actorEmail(context));
     } catch (error) {
+      // 这次请求没有管理员能力：store 在动手之前就拒绝了。是「谁在问」的拒绝，所以答 403。
+      if (isServerWriteRefusal(error))
+        return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
       if (isDeploymentFault(error)) {
         return context.json({ error: deploymentFaultSentence(error) }, 409);
       }
@@ -941,6 +957,9 @@ export function createPluginRoutes(
         server: servers.find((server) => server.id === context.req.param("id")),
       });
     } catch (error) {
+      // 这次请求没有管理员能力：store 在动手之前就拒绝了。是「谁在问」的拒绝，所以答 403。
+      if (isServerWriteRefusal(error))
+        return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
       if (error instanceof CatalogueEntryUnknownError) {
         return context.json({ error: error.message }, 404);
       }
@@ -1332,6 +1351,9 @@ export function createPluginRoutes(
       });
       return context.json({ server }, 201);
     } catch (error) {
+      // 这次请求没有管理员能力：store 在动手之前就拒绝了。是「谁在问」的拒绝，所以答 403。
+      if (isServerWriteRefusal(error))
+        return context.json({ error: CAPABILITY_UNCONFIRMED }, 403);
       // The same mapping the add routes above make, for the same reason: a refusal an
       // administrator can correct comes back as itself rather than as a 500.
       if (
@@ -1790,7 +1812,8 @@ export function createPluginRoutes(
       if (
         !shared &&
         adminConnectOnly(authScheme) &&
-        context.var.actor.role !== "admin"
+        // 会话给出的角色不够；要的是这次请求重新读过 `user_roles` 之后拿到的管理员能力。
+        decisionRefusal(context) !== null
       ) {
         return context.json(
           { error: adminConnectOnlySentence(row.title) },
@@ -3192,7 +3215,7 @@ export function createPluginRoutes(
   };
 
   routes.get("/servers/:id/account-mode", capable, async (context) => {
-    const forbidden = requireAdmin(context);
+    const forbidden = requireAdmin(context) ?? staleAdminRefusal(context);
     if (forbidden) return forbidden;
     if (!accountModes)
       return context.json({ error: "这个部署没有启用账号模式切换。" }, 503);
@@ -3213,7 +3236,7 @@ export function createPluginRoutes(
     }
   });
   routes.put("/servers/:id/account-mode", capable, async (context) => {
-    const forbidden = requireAdmin(context);
+    const forbidden = requireAdmin(context) ?? staleAdminRefusal(context);
     if (forbidden) return forbidden;
     if (!accountModes)
       return context.json({ error: "这个部署没有启用账号模式切换。" }, 503);
@@ -4187,6 +4210,9 @@ export function createPluginRoutes(
     "/for/:agentId/apps/:app/grants",
     signedInWithCapability,
     async (context) => {
+      // 授予写在请求者自己的帧里，行安全拦不住角色已被收回的人给自己的员工授予，所以在入口问。
+      const stale = staleAdminRefusal(context);
+      if (stale) return stale;
       const agentId = context.req.param("agentId").trim();
       const app = context.req.param("app").trim();
       const parsed = grantChangeInput.safeParse(
@@ -4662,6 +4688,19 @@ export function createPluginRoutes(
     capabilityFor(currentTenant()) === "admin"
       ? null
       : "只有拥有插件管理权限的管理员可以处理访问申请。";
+
+  /**
+   * 会话里写着管理员、这次请求却没有拿到管理员能力的人，在管理员的写路径上得到的答复：403 和
+   * {@link CAPABILITY_UNCONFIRMED}。会话给出的角色和 `user_roles` 可以不一致：角色已被收回，会话还说是
+   * admin。只看会话角色的路径会让这个人继续做管理员的事。判断和 {@link decisionRefusal} 是同一个，只是
+   * 不管成员：成员返回 undefined，各路由原有的判断照旧答他。
+   *
+   * 在路由入口、请求自己的帧里问，因为能力是在管理员自己的帧里持有的，进了员工主人的帧就读不到。
+   */
+  const staleAdminRefusal = (context: Context<{ Variables: AppVariables }>) =>
+    context.var.actor?.role === "admin" && decisionRefusal(context) !== null
+      ? context.json({ error: CAPABILITY_UNCONFIRMED }, 403)
+      : undefined;
 
   /** 管理员读一条申请，跨租户，所以在 platform 帧里读；调用前已确认持有 capability。 */
   const requestForAdmin = (context: { var: AppVariables }, id: string) =>

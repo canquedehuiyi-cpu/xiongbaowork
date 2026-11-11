@@ -295,6 +295,8 @@ tests/delivery-router.test.ts
 tests/delivery-routes.test.ts
 tests/delivery-store.integration.test.ts
 tests/delivery-turn.test.ts
+tests/demoted-admin-plugin-gate.integration.test.ts
+tests/demoted-admin-plugin-routes.integration.test.ts
 tests/deployment-frames.test.ts
 tests/deployment-model-metering.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
