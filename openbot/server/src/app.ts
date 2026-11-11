@@ -149,6 +149,7 @@ import { MAX_PAGE, type PeopleStore } from "./people/store";
 // M5: 留给 X 系列（共享账号/多账号：上游的 `BrokerProvider`、`AccountModeSwitch` 类型导入）
 import type { ComposioBroker, KeyGuideSource } from "./plugins/broker";
 import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
+import type { AccountModeSwitch } from "./plugins/account-mode";
 import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
@@ -454,7 +455,12 @@ export function createApp(
    * no app directory to offer, rather than one that lists apps nobody can connect.
    */
   // M3: upstream also passes a broker `provider` (Arcade); the fork's plugins keep Composio alone.
-  composio?: { broker: ComposioBroker; guides?: KeyGuideSource },
+  composio?: {
+    broker: ComposioBroker;
+    guides?: KeyGuideSource;
+    /** 应用账号模式的切换（X1，`plugins/account-mode.ts`）。 */
+    accountModes?: AccountModeSwitch;
+  },
   /** Native model OAuth stays server-side; callers hold only a separate local bearer. */
   modelProviderProxy?: ModelProviderProxy,
   userPreferences?: UserPreferencesStore,
@@ -2352,6 +2358,7 @@ export function createApp(
          * owner's frame (G01-E P8b, P10).
          */
         adminScope,
+        composio?.accountModes,
       ),
     );
   }

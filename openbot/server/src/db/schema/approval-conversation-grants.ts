@@ -40,7 +40,7 @@ export const approvalConversationGrants = pgTable(
     toolRef: text("tool_ref").notNull(),
     effect: text("effect").notNull(),
     scope: text("scope").notNull(),
-    /** M5: 留给 X 系列（多账号）。本部署的审批不分账号，总是 null。 */
+    /** 卡片点名的账号的稳定绑定（`accountBindingOf`）；不点名账号的动作为 null。 */
     account: text("account"),
     kind: text("kind").$type<ActionKind>(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),

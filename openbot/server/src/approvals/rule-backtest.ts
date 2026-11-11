@@ -33,6 +33,7 @@
 import type { AuditEvent } from "../audit";
 import { strictestRule } from "./policy";
 import {
+  accountBindingOf,
   type ApprovalPolicyOutcome,
   type ApprovalRecord,
   type ApprovalRuleInput,
@@ -216,7 +217,8 @@ function fromRequest(request: ApprovalRecord): Recorded {
     toolRef: action.toolRef,
     effect: action.effect,
     scope: action.scope,
-    // M5: 留给 X 系列（多账号）：请求按账号回放。
+    // 哪个账号（X1，上游 #1298），按绑定：回放时规则按它比，见 `ruleMatches`。
+    ...(accountBindingOf(action) ? { account: accountBindingOf(action) } : {}),
     subject: targetSubject(action.target),
     // A request opened by older code carries no verdict: it asked because the person's switch did.
     outcome: action.policy
@@ -308,7 +310,9 @@ export function recordedActions(
           source: policy.source,
           ...(policy.review ? { review: policy.review } : {}),
         };
-      // M5: 留给 X 系列（多账号）：按账号匹配。
+      // The account the request was for: the trail's verdict row does not keep it (X1, upstream #1298).
+      const account = accountBindingOf(request.action);
+      if (account) match.account = account;
       // The request names the action's target in full; the row only what the trail keeps.
       match.subject = {
         ...targetSubject(request.action.target),
@@ -370,7 +374,7 @@ export function backtestApprovalRules(
         effect: action.effect,
         scope: action.scope,
         args: null,
-        // M5: 留给 X 系列（多账号）：请求按账号回放。
+        ...(action.account ? { accountBinding: action.account } : {}),
       },
       team,
       [],

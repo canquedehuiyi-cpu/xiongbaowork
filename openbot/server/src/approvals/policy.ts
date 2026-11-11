@@ -4,6 +4,7 @@ import { desktopFloor } from "./desktop-policy";
 import {
   type ActionKind,
   type ActionKindPolicy,
+  accountBindingOf,
   type ApprovalCandidate,
   type ApprovalConversationGrant,
   type ApprovalPolicyOutcome,
@@ -107,7 +108,8 @@ export function ruleMatches(
   layer: RuleLayer = "personal_rule",
 ) {
   const ruleAccount = rule.account?.trim().toLowerCase() || null;
-  const callAccount = candidate.account?.trim().toLowerCase() || null;
+  // 规则存的是账号的稳定绑定（`accountBindingOf`），所以按绑定比，不按会随位置变的名字。
+  const callAccount = accountBindingOf(candidate)?.trim().toLowerCase() || null;
   if (ruleAccount !== null && ruleAccount !== callAccount) return false;
   if (
     ruleAccount === null &&
@@ -134,15 +136,26 @@ function grantRule(grant: ApprovalConversationGrant): AnyRule {
     scope: grant.scope,
     behaviour: "allow",
     kind: grant.kind,
+    account: grant.account,
   };
 }
+
+/** 两个账号绑定是否是同一个账号：不分大小写、去掉首尾空白，都没有也算相同。 */
+const sameAccount = (
+  left: string | null | undefined,
+  right: string | null | undefined,
+) =>
+  (left?.trim().toLowerCase() || null) ===
+  (right?.trim().toLowerCase() || null);
 
 /**
  * The person's "Allow for this conversation" answer that covers this action, if any: the same Bot,
  * tool, target, and the same kind. Exact values, never globs: it was given on one card. The caller
  * passes only the answers of this conversation (`conversationGrants` on the store).
  *
- * M5: 留给 X 系列（多账号）：上游还要求账号相同；本部署的审批不分账号。
+ * And the same account (X1, upstream #1298): an answer given on a card for one of the person's
+ * accounts never covers a call into another, and one given on a call that named no account never
+ * covers a call that names one. Compared by the account's stable binding (`accountBindingOf`).
  */
 export function conversationGrant(
   candidate: ApprovalCandidate,
@@ -155,6 +168,7 @@ export function conversationGrant(
       grant.toolRef === candidate.toolRef &&
       grant.effect === candidate.effect &&
       grant.scope === candidate.scope &&
+      sameAccount(grant.account, accountBindingOf(candidate)) &&
       reachesKind(grantRule(grant), kind),
   );
 }

@@ -254,7 +254,21 @@ export type ApprovalCandidate = {
    * 批准、拒绝或保存的规则回答。
    */
   account?: string;
+  /**
+   * 同一个账号的稳定绑定：vendor 报的地址，没报时是账号那一行的 id（`row:<id>`）。`account` 是给人和
+   * 模型看的名字，没有地址的账号按位置叫「账号 2」，断开前面一个后会变成「账号 1」；保存的规则与「在这段
+   * 对话里都允许」绑定的是它，所以不会漂到另一个账号上。没给时用 `account`（见 {@link accountBindingOf}）。
+   */
+  accountBinding?: string;
 };
+
+/** 一个动作的账号按什么绑定：稳定绑定，没有时是它的名字；不点名账号时为 undefined。 */
+export function accountBindingOf(candidate: {
+  account?: string;
+  accountBinding?: string;
+}): string | undefined {
+  return candidate.accountBinding || candidate.account || undefined;
+}
 
 export type ApprovalAction = ApprovalCandidate & {
   runId: string;
@@ -320,7 +334,7 @@ export type ApprovalConversationGrant = {
   toolRef: string;
   effect: string;
   scope: string;
-  /** M5: 留给 X 系列（多账号）。本部署的审批不分账号，总是 null。 */
+  /** 卡片点名的账号的稳定绑定（{@link accountBindingOf}）；不点名账号的动作为 null。 */
   account: string | null;
   kind: ActionKind | null;
   createdAt: Date;

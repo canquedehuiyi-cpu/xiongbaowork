@@ -38,6 +38,7 @@ tests/app-access-routes.integration.test.ts
 tests/app-discovery.test.ts
 tests/app-grants-describe.integration.test.ts
 tests/app-grants-rules.test.ts
+tests/approval-account-binding.integration.test.ts
 tests/approval-activity-words.integration.test.ts
 tests/approval-continuation-preparation-transaction.integration.test.ts
 tests/approval-continuation-store.integration.test.ts
@@ -618,6 +619,7 @@ tests/server-side-tools.integration.test.ts
 tests/settings-instructions-routes.test.ts
 tests/setup-checklist.test.ts
 tests/shared-accounts.test.ts
+tests/shared-brokered-accounts.integration.test.ts
 tests/shared-computer-run.integration.test.ts
 tests/shipped-bot-instructions.test.ts
 tests/single-user.test.ts

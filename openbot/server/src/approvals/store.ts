@@ -21,17 +21,18 @@ import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import { currentEdition } from "../edition";
 import type { TaskProjector } from "../tasks/projector";
-import { ruleAccount } from "./rule-account";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import {
+  ruleAccount,
   ruleColumns,
-  saveRuleKind,
+  saveRuleExtras,
   saveTeamActionKinds,
   saveTeamReviewerGuidance,
   teamReviewerGuidance,
   teamSettingsColumns,
 } from "./extra-columns";
 import {
+  accountBindingOf,
   type ApprovalAction,
   ApprovalNotFoundError,
   type ApprovalPolicyStore,
@@ -107,12 +108,6 @@ type StoredApprovalTransaction = Parameters<
   Parameters<Database["transaction"]>[0]
 >[0];
 
-/** 读一条规则时连同它针对的账号一起读（迁移 0181，见 `./rule-account`）。 */
-const rulesWithAccount = {
-  ...ruleColumns,
-  account: ruleAccount,
-};
-
 const ruleScope = (action: ApprovalAction) =>
   and(
     eq(approvalRules.ownerUserId, action.actorId),
@@ -120,9 +115,9 @@ const ruleScope = (action: ApprovalAction) =>
     eq(approvalRules.toolRef, action.toolRef),
     eq(approvalRules.effect, action.effect),
     eq(approvalRules.scope, action.scope),
-    // 一个邮箱保存的规则从不回答另一个邮箱；不点名账号的调用只由不点名账号的规则回答（上游 #1298）。
-    action.account
-      ? sql`${ruleAccount} = ${action.account}`
+    // 一个账号保存的规则从不回答另一个账号；不点名账号的调用只由不点名账号的规则回答（上游 #1298）。
+    accountBindingOf(action)
+      ? sql`${ruleAccount} = ${accountBindingOf(action)}`
       : sql`${ruleAccount} is null`,
     eq(approvalRules.behaviour, "allow"),
     isNull(approvalRules.revokedAt),
@@ -186,8 +181,8 @@ export function createApprovalStore(
       eq(approvalRules.toolRef, action.toolRef),
       eq(approvalRules.effect, action.effect),
       eq(approvalRules.scope, action.scope),
-      action.account
-        ? sql`${ruleAccount} = ${action.account}`
+      accountBindingOf(action)
+        ? sql`${ruleAccount} = ${accountBindingOf(action)}`
         : sql`${ruleAccount} is null`,
       eq(approvalRules.behaviour, "allow"),
       isNull(approvalRules.revokedAt),
@@ -311,13 +306,11 @@ export function createApprovalStore(
             effect: request.action.effect,
             scope: request.action.scope,
           });
-          // `kind` 不在冻结的 approvals.ts 里，同一事务里补写（approvals/extra-columns.ts）。
-          await saveRuleKind(tx, ruleId, kind);
-          // 卡片点名的账号（迁移 0181），同一事务里写上，见 `./rule-account`。
-          if (request.action.account)
-            await tx.execute(
-              sql`update "approval_rules" set "account" = ${request.action.account} where "id" = ${ruleId}`,
-            );
+          // `kind` 与卡片点名的账号不在冻结的 approvals.ts 里，同一事务里补写（approvals/extra-columns.ts）。
+          await saveRuleExtras(tx, ruleId, {
+            kind,
+            account: accountBindingOf(request.action) ?? null,
+          });
         }
         if (decision === "allow_conversation")
           await tx.insert(approvalConversationGrants).values({
@@ -329,8 +322,8 @@ export function createApprovalStore(
             toolRef: request.action.toolRef,
             effect: request.action.effect,
             scope: request.action.scope,
-            // M5: 留给 X 系列（多账号）：本部署的审批不分账号。
-            account: null,
+            // 卡片点名的账号：这段对话里的「都允许」只回答同一个账号（`conversationGrant`）。
+            account: accountBindingOf(request.action) ?? null,
             kind,
           });
         const [updated] = await tx
@@ -458,7 +451,7 @@ export function createApprovalStore(
     },
     async rules(owner) {
       return database
-        .select(rulesWithAccount)
+        .select(ruleColumns)
         .from(approvalRules)
         .where(
           and(
@@ -569,7 +562,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
   };
   const liveRules = (owner: string) =>
     database
-      .select(rulesWithAccount)
+      .select(ruleColumns)
       .from(approvalRules)
       .where(
         and(
