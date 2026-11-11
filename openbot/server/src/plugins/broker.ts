@@ -1,5 +1,6 @@
 import type { BrokerProvider } from "./access";
 import type { DeploymentClient } from "./deployment-clients";
+import type { AccountRef } from "./shared-accounts";
 
 /**
  * What openbot needs of Composio the BROKER, as against Composio the transport.
@@ -332,6 +333,13 @@ export type BrokerApp = {
    * made the choice this field exists to inform.
    */
   actionCount: number;
+  /**
+   * Arcade 的目录（上游 #770）多给三个数：厂商标了做什么的动作数、不同权限组数、要权限的动作数。
+   * Composio 的目录不给，所以是可选的；没有时页面照旧只显示 `actionCount`。
+   */
+  classifiedCount?: number | null;
+  permissionCount?: number | null;
+  scopedActionCount?: number | null;
   /** How somebody would connect to it. See {@link BrokerConnection}. */
   connection: BrokerConnection;
 };
@@ -869,3 +877,99 @@ export function assertActivatable(
     `不能启用 ${self}：还有 ${otherProviderRows} 个连接属于 ${other}。请让 ${other} 保持启用（保留它的 API key，并设 OPENBOT_BROKER_PROVIDER=${other.toLowerCase()}），先结束这些连接：每个人在自己的「已连接账号」里断开，管理员断开共享应用的团队账号，或者移除应用（会结束连到它的所有账号）。没有一键结束全部的操作。直接改环境变量换提供商会留下谁也撤销不了的账号。`,
   );
 }
+
+/**
+ * 厂商已经为这个人、这个应用持有一个账号，而本部署没有对应的行（上游 #770）。连接路由据此去确认并
+ * 记下那个账号，而不是给人一个指向不存在的「断开」按钮的拒绝。
+ */
+export class BrokerAccountHeldError extends BrokerRefusalError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "BrokerAccountHeldError";
+  }
+}
+
+/**
+ * 一个账号在一个应用上逐个动作持有什么（上游 #770），本部署自己的词汇，不是厂商的行。
+ * `held` 是有人同意过的授权，`not-required` 是厂商根本不要授权；两者都能调用。
+ */
+export type GrantState =
+  | {
+      action: string;
+      state: "authorized";
+      scopes: string[];
+      authorization: "held" | "not-required";
+    }
+  | { action: string; state: "needs-consent"; scopes: string[] }
+  | { action: string; state: "needs-operator"; missing: string[] }
+  | { action: string; state: "unknown"; reason: string };
+
+/**
+ * 一个提供商运行、另一个不运行的「可关联、可轮询」授权流程（Arcade）。
+ *
+ * `status` 只收窄到三个字段：厂商的状态回答里带着它签发的访问令牌和这个人的完整资料。
+ * `confirmReturn` 把从厂商页面回来的人与他离开时的那次授权对上；不是他的就答 `{ mismatch: true }`，
+ * 不抛错，好让回程路由能安静地拒绝，又不和厂商故障混在一起。
+ */
+export type AuthorizationFlow = {
+  status(
+    id: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<{ status: string; userId: string | null; scopes: string[] }>;
+  confirmReturn(
+    q: { handle: string; vendorUserId: string },
+    options?: { signal?: AbortSignal },
+  ): Promise<{ authorizationId: string } | { mismatch: true }>;
+};
+
+/**
+ * Arcade 的 broker（上游的 `ConnectedAppBroker` 形状）：每个方法拿 X1 的 {@link AccountRef}，
+ * 只向厂商发送 `vendorUserId`。fork 的 store 和路由用的是 {@link ComposioBroker} 的形状
+ * （`userId` 就是 vendor 的用户 id），由 `arcade-adapter.ts` 的 `asComposioBroker` 桥接。
+ *
+ * `authorize` 必须答出 mint 的 id（非空）：回程路由用它核对授权完成的回调是不是这次发起的。
+ */
+export type ArcadeBroker = {
+  grantIsLocal: boolean;
+  authorizations: AuthorizationFlow;
+  grantsFor(q: { toolkit: string; account: AccountRef }): Promise<GrantState[]>;
+  authProviderOf(toolkit: string): Promise<string | null>;
+  listApps(): Promise<BrokerApp[]>;
+  ensureAuthConfig(config: {
+    toolkit: string;
+    name: string;
+    connection: BrokerConnection;
+  }): Promise<AuthConfigOutcome>;
+  deleteAuthConfig(toolkit: string): Promise<void>;
+  authorize(request: {
+    account: AccountRef;
+    toolkit: string;
+    returnUrl: string;
+    action?: string;
+    another?: boolean;
+  }): Promise<{ redirectUrl: string; authorizationId: string | null }>;
+  accountsOf(request: {
+    account: AccountRef;
+    toolkit: string;
+  }): Promise<BrokerAccount[]>;
+  isConnected(request: {
+    account: AccountRef;
+    toolkit: string;
+  }): Promise<boolean>;
+  revoke(request: { account: AccountRef; toolkit: string }): Promise<boolean>;
+  connectionFields(request: {
+    toolkit: string;
+    authScheme: FieldScheme;
+  }): Promise<BrokerField[]>;
+  connectWithFields(request: {
+    account: AccountRef;
+    toolkit: string;
+    authScheme: FieldScheme;
+    values: Record<string, string>;
+  }): Promise<{ accountId: string }>;
+  revokeAccount(accountId: string): Promise<void>;
+  accountName(request: {
+    account: AccountRef;
+    toolkit: string;
+  }): Promise<string | null>;
+};
