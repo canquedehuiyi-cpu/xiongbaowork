@@ -189,8 +189,8 @@ const NAMED: ReadonlyArray<readonly [string, string, string]> = [
     "Retrieve owner by ID or user ID",
   ],
   // OpenBot's own Routines, as a command like every other app's tool.
-  ["routines", "complete_goal", "Complete goal"],
-  ["routines", "create_goal", "Create goal"],
+  ["routines", "complete_goal", "完成目标"],
+  ["routines", "create_goal", "新建目标"],
 ];
 
 test("an app's tool is named as a person would name it in a list", () => {

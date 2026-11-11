@@ -112,7 +112,26 @@ export function AccountModeDialog({
           </Button>
           <Button
             disabled={!preview.data || change.isPending}
-            onClick={() => change.mutate({ serverId, mode: target })}
+            onClick={() =>
+              change.mutate({
+                serverId,
+                mode: target,
+                /*
+                 * 熊宝要多做的一步（X7）：切到团队账号时，服务端不会自己给员工记共享使用批准，所以把预览里
+                 * 每位员工现在的使用范围原样作为批准送回；不送，切换后这些员工对团队账号的调用会被拒绝。
+                 */
+                ...(target === "shared" && preview.data?.bots.length
+                  ? {
+                      approvals: Object.fromEntries(
+                        preview.data.bots.map((bot) => [
+                          bot.botId,
+                          bot.exposure,
+                        ]),
+                      ),
+                    }
+                  : {}),
+              })
+            }
             size="sm"
             variant="destructive"
           >

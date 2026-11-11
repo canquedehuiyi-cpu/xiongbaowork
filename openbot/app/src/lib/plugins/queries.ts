@@ -556,7 +556,12 @@ export function connectionsQueryOptions() {
   return queryOptions({
     queryKey: pluginKeys.connections(),
     queryFn: async (): Promise<PluginConnections> => {
-      const response = await client("/api/plugins/connections", {
+      /*
+       * `?shared=1` asks for the team-account rows too (X7, `holder: "deployment"`); the person's own
+       * rows carry no holder and are read as theirs by `personalConnections`. A server from before
+       * X7 ignores the parameter and answers the person's rows alone.
+       */
+      const response = await client("/api/plugins/connections?shared=1", {
         fallback: "读不到你已连接的账号。",
       });
       return response.json();

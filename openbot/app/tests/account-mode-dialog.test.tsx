@@ -95,12 +95,24 @@ describe("switching an app to Shared", () => {
     expect(sent).toEqual([{ body: { mode: "shared", confirm: false } }]);
   });
 
-  test("confirming sends the switch once", async () => {
+  /*
+   * 熊宝（X7）：服务端切换时不自己记共享使用批准，所以确认时把预览里每位员工的使用范围作为 `approvals`
+   * 送回；上游前端不送。
+   */
+  test("confirming sends the switch once, with each listed Bot's approval", async () => {
     const view = draw();
     await userEvent.click(
       await view.findByRole("button", { name: "把 Linear 改成团队账号" }),
     );
-    expect(sent.at(-1)).toEqual({ body: { mode: "shared", confirm: true } });
+    expect(sent.at(-1)).toEqual({
+      body: {
+        mode: "shared",
+        confirm: true,
+        approvals: {
+          triage: { audience: "team", outsideInput: true, members: [] },
+        },
+      },
+    });
   });
 
   test("a vendor that refuses a revoke is shown in the dialog, which stays open", async () => {

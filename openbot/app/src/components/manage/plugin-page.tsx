@@ -23,6 +23,7 @@ import {
   NotConnected,
   useBrokeredAccount,
 } from "@/components/plugins/brokered-account-row";
+import { SharedApprovalFields } from "@/components/plugins/shared-approval-fields";
 import { SkippedToolsNotice } from "@/components/plugins/skipped-tools-notice";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -87,6 +88,7 @@ import {
 import {
   botSharedAppsQueryOptions,
   describeApproval,
+  type SharedUseApproval,
 } from "@/lib/plugins/shared-use";
 import { toolInWords, toolName } from "@/lib/plugins/tool-words";
 import { toolsListError } from "@/lib/plugins/tools-error";
@@ -365,6 +367,16 @@ export function PluginPage({
    * Who the last grant batch could not reach, each with the server's reason. A crew is several
    * people, and "2 refused" does not say which two, so the dialog names them.
    */
+  /*
+   * On a Shared app, who may use the team account through each Bot granted here. Sent with every
+   * grant, because the server records no shared-use approval on its own（X7）and a Bot granted the
+   * team account's actions without one is refused on every call.
+   */
+  const [sharedApproval, setSharedApproval] = useState<SharedUseApproval>({
+    audience: "team",
+    outsideInput: false,
+    members: [],
+  });
   const [refusals, setRefusals] = useState<{
     text: string;
     members: { agentId: string; line: string }[];
@@ -677,6 +689,7 @@ export function PluginPage({
       refs,
       agentIds,
       onProgress: (done, total) => setGranting({ done, total }),
+      ...(server?.accountMode === "shared" ? { approval: sharedApproval } : {}),
     }).catch((thrown: unknown) => {
       setError(thrown instanceof Error ? thrown.message : String(thrown));
       return null;
@@ -1753,6 +1766,12 @@ export function PluginPage({
                * one thing a fieldset brings that a div did not: a min-content floor that a long
                * tool name would push the dialog out to.
                */}
+              {shared ? (
+                <SharedApprovalFields
+                  onChange={setSharedApproval}
+                  value={sharedApproval}
+                />
+              ) : null}
               <fieldset aria-labelledby="grant-to-heading" className="min-w-0">
                 <p className="mb-2 font-medium text-sm" id="grant-to-heading">
                   授予给
