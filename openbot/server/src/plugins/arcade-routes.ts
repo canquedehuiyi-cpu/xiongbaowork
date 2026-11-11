@@ -9,9 +9,12 @@ import {
   type ArcadeBroker,
   type AuthorizationFlow,
   BrokerAccountHeldError,
+  brokerReturnUrl,
   brokerSentence,
+  type GrantState,
+  schemeKind,
 } from "./broker";
-import { connectedAccountsUrlFor } from "./oauth";
+import { type ConnectOrigin, connectedAccountsUrlFor } from "./oauth";
 import { type AccountRef, filedUnderPerson } from "./shared-accounts";
 import type { PluginStore } from "./store";
 import { withVendorDeadline } from "./vendor-deadline";
@@ -41,8 +44,8 @@ import { withVendorDeadline } from "./vendor-deadline";
  *   「撤了」才算撤回，答 false 或抛错都如实留痕（审计 `mcp.cancelled_grant_left_live`）。
  *   个人账号：只留痕并告诉本人。授权是本人自己的、记在本人 id 下，不算越权；撤销会连带本人同一认证
  *   提供商下的其他应用（fork 还没有上游按认证提供商列出兄弟应用的那一层），所以不撤。
- * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）不在 X5：
- *   「连接」一次要整个应用需要的权限。
+ * - 单个动作的授权（`POST /servers/:id/authorize`）与授权清单（`GET /servers/:id/grants`）：与整应用的
+ *   「连接」走同一条尝试与回程。团队账号的清单与授权都只给此刻持有管理员能力的人（上游让成员读清单）。
  */
 
 /** 回到「已连接账号」页时带的原因，只是一个词。与上游的名单一致。 */
@@ -114,6 +117,12 @@ export type ArcadeRouteDeps = {
   store: PluginStore;
   arcade: ArcadeBroker;
   appUrl: string | undefined;
+  /**
+   * 这次请求是否持有管理员能力（插件路由的 `decisionRefusal`）：会话里是管理员，而且管理员守卫重新读过
+   * 角色之后给了能力。答 null 表示持有。团队账号的授权清单与逐个动作授权都先问它；没给时只靠 store 自己的
+   * 那道能力检查。
+   */
+  adminRefusal?: (context: { var: AppVariables }) => string | null;
 };
 
 function accountOf(attempt: PendingAuthorization): AccountRef | null {
@@ -144,22 +153,29 @@ export async function startArcadeAuthorization(
     toolkit: string;
     title: string;
     returnUrl: string;
+    /** 逐个动作授权时是那个动作（厂商的名字）；整应用连接不给。 */
+    action?: string;
     held?: () => Promise<Response>;
   },
 ): Promise<Response> {
   const { store, arcade } = deps;
   const actorId = context.var.actor.id;
+  const action = input.action ?? null;
   const claim = await store.claimAuthorizationAttempt({
     actorId,
     serverId: input.serverId,
-    action: null,
+    action,
     account: input.account,
   });
   if (!claim.claimed) {
+    // 说出挡着的是哪一次：整应用的连接，还是某个动作的授权。
+    const standing = claim.live?.action ?? null;
     return context.json(
       {
         error:
-          "你已经有一次连接正在进行。请先完成它，或者等它过期（15 分钟）再开始新的。",
+          standing === null
+            ? "你已经有一次连接正在进行。请先完成它，或者等它过期（15 分钟）再开始新的。"
+            : `「${standing}」的授权正在进行。请先完成它，或者等它过期（15 分钟）再开始新的。`,
       },
       409,
     );
@@ -172,6 +188,7 @@ export async function startArcadeAuthorization(
         account: input.account,
         toolkit: input.toolkit,
         returnUrl: input.returnUrl,
+        ...(action ? { action } : {}),
       }),
     );
   } catch (error) {
@@ -611,6 +628,13 @@ export function mountArcadeRoutes(
         recorded = true;
       }
 
+      if (attempt.action !== null) {
+        // 逐个动作授权回来时带上那个动作（上游的 `?action=`），页面据此把刚授权的那一行指给人看。
+        return context.redirect(
+          `${connectedAccountsUrlFor(appUrl, { serverId: attempt.serverId })}?action=${encodeURIComponent(attempt.action)}`,
+          303,
+        );
+      }
       return context.redirect(
         connectedAccountsUrlFor(appUrl, { serverId: attempt.serverId }),
         303,
@@ -626,6 +650,200 @@ export function mountArcadeRoutes(
       return refusedWith("not-recorded");
     }
   }
+
+  /**
+   * 这个应用的账号是谁的：个人应用是会话里那个人自己的，Shared 应用是部署的团队身份。只读会话与应用行，
+   * 请求里带的任何用户 id、账号都不看——授权链接铸给谁，就把谁的账号挂上去。
+   *
+   * 团队账号只给此刻仍持有管理员能力的人，读授权清单与铸授权都一样：会话里的角色是登录时定的，所以除了
+   * 角色还要过 `adminRefusal`（重新读过 `user_roles` 之后给的能力）和 store 自己的能力检查。
+   */
+  async function accountFor(
+    context: Context<{ Variables: AppVariables }>,
+    current: ArcadeRouteDeps,
+    serverId: string,
+  ): Promise<
+    | { toolkit: string; title: string; account: AccountRef; refusal?: never }
+    | { refusal: { error: string; status: 400 | 403 | 409 } }
+  > {
+    const { store } = current;
+    const row = await store.serverAddress(serverId);
+    const toolkit = row ? toolkitOfFor("arcade", row.url) : null;
+    if (!row || !toolkit) {
+      return {
+        refusal: { error: "这个应用不是这样连接的。", status: 400 },
+      };
+    }
+    if (schemeKind(row.authScheme) === "none") {
+      return {
+        refusal: {
+          error: `${row.title} 不需要账号，没有什么可授权的。能用它的员工已经可以用了。`,
+          status: 400,
+        },
+      };
+    }
+    const app = await store.appAccount(toolkit);
+    if (app?.mode !== "shared") {
+      return {
+        toolkit,
+        title: row.title,
+        account: store.personAccount(context.var.actor.id),
+      };
+    }
+    let writer =
+      context.var.actor.role === "admin" &&
+      (current.adminRefusal?.(context) ?? null) === null;
+    if (writer) {
+      try {
+        store.requireTeamAccountWriter();
+      } catch (error) {
+        if (!isServerWriteRefusal(error)) throw error;
+        writer = false;
+      }
+    }
+    if (!writer) {
+      return {
+        refusal: {
+          error: `${row.title} 用的是一个共享的团队账号，只有管理员能管理它。`,
+          status: 403,
+        },
+      };
+    }
+    if (!app.shared) {
+      return {
+        refusal: {
+          error: `${row.title} 是共享账号应用，却没有团队身份。请把它切回个人账号再切回共享账号。`,
+          status: 409,
+        },
+      };
+    }
+    return {
+      toolkit,
+      title: row.title,
+      account: { holder: "deployment", vendorUserId: app.shared.vendorUserId },
+    };
+  }
+
+  /**
+   * 这个账号在每个动作上现在的授权状态（上游 `GET /servers/:id/grants`）：已授权、要本人同意、要运维先
+   * 配置、读不出来。只读，问的是厂商；账号来自 {@link accountFor}。
+   *
+   * 读不到时答一条「读不出来」，从不答「需要同意」：把读不到说成需要同意，会让人去同意一个也许已经给过
+   * 的权限。厂商与本部署写给运维的句子不给成员看（#1223），带提供商名字的原因换成通用的一句。不逐个动作
+   * 授权的部署（Composio）答空清单。
+   */
+  routes.get("/servers/:id/grants", signedIn, async (context) => {
+    const current = deps();
+    if (!current) return context.json({ actions: [] });
+    const resolved = await accountFor(
+      context,
+      current,
+      context.req.param("id"),
+    );
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    const { toolkit, account } = resolved;
+    const unreadable = "现在读不到这个账号允许了什么。请稍后再试。";
+    let actions: GrantState[];
+    try {
+      actions = await withVendorDeadline(() =>
+        current.arcade.grantsFor({ toolkit, account }),
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "arcade-grants-unread",
+          server: context.req.param("id"),
+          // 只记类名：这条腿上的错误可能带着厂商的回答。
+          error: error instanceof Error ? error.name : typeof error,
+        }),
+      );
+      actions = [{ action: toolkit, state: "unknown", reason: unreadable }];
+    }
+    return context.json({
+      actions: actions.map((entry) =>
+        entry.state === "unknown" && NAMES_A_BROKER.test(entry.reason)
+          ? { ...entry, reason: unreadable }
+          : entry,
+      ),
+    });
+  });
+
+  /**
+   * 为一个动作发起同意（上游 `POST /servers/:id/authorize`）。与整应用的「连接」是同一条路：先在发起人
+   * 名下认领一次尝试，再向厂商要链接，回程由 `/arcade/verify` 核对并记录。区别只在要的是这一个动作需要的
+   * 权限——所以能做到「只给读、不给发」，以及动作分属不止一个认证提供商、没法一次连接的应用。
+   *
+   * 动作必须是这个应用公布的那一个，按厂商的拼法、区分大小写；body 里别的字段一概不读。
+   */
+  routes.post("/servers/:id/authorize", signedIn, async (context) => {
+    const serverId = context.req.param("id");
+    const current = deps();
+    if (!current) {
+      return context.json(
+        {
+          error: "这里的应用在应用页面上按「连接」连接一次，不逐个动作授权。",
+        },
+        503,
+      );
+    }
+    const resolved = await accountFor(context, current, serverId);
+    if (resolved.refusal) {
+      return context.json(
+        { error: resolved.refusal.error },
+        resolved.refusal.status,
+      );
+    }
+    const { account, toolkit, title } = resolved;
+    const body = await context.req.json().catch(() => null);
+    const action =
+      body && typeof body === "object" && "action" in body
+        ? (body as { action: unknown }).action
+        : undefined;
+    if (
+      typeof action !== "string" ||
+      !(await current.store.serverPublishesAction(serverId, action))
+    ) {
+      return context.json({ error: `${title} 没有这个名字的动作。` }, 400);
+    }
+    if (!current.appUrl) {
+      return context.json(
+        {
+          error:
+            "连接应用还没有配置好：这个部署不知道自己页面的地址。请管理员设置 OPENBOT_APP_URL。",
+        },
+        503,
+      );
+    }
+    const returnTo: ConnectOrigin =
+      context.req.query("returnTo") === "admin" ? "admin" : "settings";
+    let returnUrl: string;
+    try {
+      returnUrl = brokerReturnUrl(
+        connectedAccountsUrlFor(current.appUrl, { serverId }, returnTo),
+      );
+    } catch {
+      return context.json(
+        {
+          error:
+            "没能生成带你回来的地址，所以没有开始授权。请管理员检查 OPENBOT_APP_URL。",
+        },
+        503,
+      );
+    }
+    return startArcadeAuthorization(context, current, {
+      serverId,
+      account,
+      toolkit,
+      title,
+      returnUrl,
+      action,
+    });
+  });
 
   /**
    * 取消这个人在这个应用上进行中的授权。已经完成的不能取消（409，告诉他去断开）。

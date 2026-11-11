@@ -8533,6 +8533,28 @@ export function createPluginStore(options: PluginStoreOptions) {
     brokerProvider,
 
     /**
+     * 这个应用是否公布了一个名字恰好是这样的动作（上游 `serverPublishesAction`）。
+     *
+     * 按厂商的名字问（`vendor_name`，没有时就是 `name`），而且区分大小写：逐个动作授权从头到尾说的都是
+     * 厂商的拼法——授权清单列的是 Arcade 报的名字，「授权」按钮把它送回来，尝试行记下它，厂商也只认这个
+     * 拼法。`Gmail.SendEmail` 不是 `gmail.sendemail`，也不是本部署自己的标识 `SendEmail`。只读这一个应用
+     * 的工具行，不列出全部服务器。
+     */
+    async serverPublishesAction(
+      serverId: string,
+      action: string,
+    ): Promise<boolean> {
+      if (!serverId || !action) return false;
+      const published = sql<string>`coalesce(${mcpTools.vendorName}, ${mcpTools.name})`;
+      const [row] = await database
+        .select({ name: published })
+        .from(mcpTools)
+        .where(and(eq(mcpTools.serverId, serverId), eq(published, action)))
+        .limit(1);
+      return row !== undefined;
+    },
+
+    /**
      * 一个人自己的账号：本人的用户 id，加上他在厂商那边被记在哪个名字下（上游 #927 的 `personAccount`）。
      *
      * 路由开始一次带回程验证的授权、核对回来的浏览器时用它，所以「这个人今天的名字」只有这一个答案。
