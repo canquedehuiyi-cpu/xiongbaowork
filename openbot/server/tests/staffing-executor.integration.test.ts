@@ -35,6 +35,11 @@ import {
   subscriptions,
   users,
 } from "../src/db/schema";
+import { sharedUseApprovals } from "../src/db/schema/shared-use";
+import {
+  createSharedAudience,
+  createSharedUseStore,
+} from "../src/plugins/shared-use-store";
 import { createPluginStore } from "../src/plugins/store";
 import { createPortraitStore } from "../src/portraits/store";
 import { createQuotaService, QuotaExceeded } from "../src/quota/limits";
@@ -1030,5 +1035,255 @@ describe("applying a staffing proposal as the person", () => {
         .where(eq(agentProfiles.agentId, bot.id)),
     );
     expect(visible?.visibility).toBe("private");
+  });
+});
+
+describe("apps and versions an employee change touches", () => {
+  const sharedStore = createSharedUseStore(database);
+  const withShared = createStaffingExecutor({
+    database,
+    proposals,
+    profiles,
+    quota: createQuotaService(database),
+    plugins,
+    composioConfigured: true,
+    routines: routineStore,
+    channels: channelStore,
+    groups,
+    portraits: createPortraitStore(database),
+    auditStore,
+    shared: {
+      store: sharedStore,
+      audience: createSharedAudience(database, sharedStore, auditStore),
+    },
+  });
+  const READS = id("reads");
+  const SHARED_APP = id("shared");
+
+  beforeAll(async () => {
+    await asPlatform(async () => {
+      await database.insert(mcpServers).values([
+        {
+          id: READS,
+          tenantId: "team",
+          title: "只读应用",
+          vendor: "test",
+          url: "https://example.invalid/reads",
+          provenance: "custom",
+          ownerGrants: "any",
+        },
+        {
+          id: SHARED_APP,
+          tenantId: "team",
+          title: "团队邮箱",
+          vendor: "Composio",
+          url: `composio://${SHARED_APP}`,
+          provenance: "composio",
+          authScheme: "OAUTH2",
+          ownerGrants: "any",
+          accountMode: "shared",
+          sharedVendorUserId: `openbot-deployment:${suite}:S`,
+          sharedConnectedAt: new Date(),
+          sharedConnectedBy: ADMIN,
+          sharedVerified: true,
+        },
+      ]);
+      await database.insert(mcpTools).values([
+        {
+          tenantId: "team",
+          serverId: READS,
+          name: "search",
+          description: "搜索。",
+          effect: "read",
+        },
+        {
+          tenantId: "team",
+          serverId: READS,
+          name: "list",
+          description: "列出。",
+          effect: "read",
+        },
+        {
+          tenantId: "team",
+          serverId: SHARED_APP,
+          name: "LIST",
+          description: "列出。",
+          effect: "read",
+        },
+      ]);
+    });
+  });
+
+  afterAll(async () => {
+    await asPlatform(async () => {
+      await database
+        .delete(sharedUseApprovals)
+        .where(inArray(sharedUseApprovals.serverId, [SHARED_APP]));
+      await database
+        .delete(pluginGrants)
+        .where(
+          sql`${pluginGrants.ref} like ${`${READS}/%`} or ${pluginGrants.ref} like ${`${SHARED_APP}/%`}`,
+        );
+      await database
+        .delete(mcpServers)
+        .where(inArray(mcpServers.id, [READS, SHARED_APP]));
+    });
+  });
+
+  /** 本人自己的私有员工，带上已经给了的应用动作。 */
+  async function botWith(owner: AuthenticatedActor, refs: string[] = []) {
+    const bot = await runAsTenant(owner.id, () =>
+      profiles.create(
+        { id: owner.id, role: "user" },
+        {
+          name: "小红",
+          title: "运营",
+          roleDescription: "写文案。",
+          visibility: "private",
+          systemPrompt: "写文案。",
+        },
+      ),
+    );
+    await runAsTenant(owner.id, async () => {
+      for (const ref of refs)
+        await plugins.grant("mcp", ref, bot.id, owner.email, { as: "owner" });
+    });
+    const base = await runAsTenant(owner.id, () =>
+      currentEmployeeVersion(database, bot.id),
+    );
+    return { bot, base };
+  }
+
+  test("a shared app the person may give gets its audience approval with the grant", async () => {
+    const owner = await person("shared");
+    const proposal = await propose(
+      owner,
+      "employee",
+      employee("邮箱助理", { apps: [{ app: SHARED_APP, actions: [] }] }),
+    );
+
+    await runAsTenant(owner.id, () => withShared.apply(owner, proposal.id));
+
+    const botId = await createdBot(proposal.id);
+    expect(await grantsOf(botId)).toEqual([
+      { kind: "mcp", ref: `${SHARED_APP}/LIST`, grantedAs: "owner" },
+    ]);
+    const approvals = await asPlatform(() =>
+      database
+        .select({ serverId: sharedUseApprovals.serverId })
+        .from(sharedUseApprovals)
+        .where(eq(sharedUseApprovals.agentId, botId)),
+    );
+    expect(approvals).toEqual([{ serverId: SHARED_APP }]);
+  });
+
+  test("two changes drafted on one version cannot both apply", async () => {
+    const owner = await person("race");
+    const { bot, base } = await botWith(owner);
+    const first = await propose(
+      owner,
+      "employee_change",
+      {
+        agentId: bot.id,
+        set: { title: "甲方头衔", roleDescription: "甲方职责。" },
+      },
+      base,
+    );
+    const second = await propose(
+      owner,
+      "employee_change",
+      {
+        agentId: bot.id,
+        set: { title: "乙方头衔", roleDescription: "乙方职责。" },
+      },
+      base,
+    );
+
+    const outcomes = await Promise.all(
+      [first, second].map((proposal) =>
+        runAsTenant(owner.id, () => withShared.apply(owner, proposal.id)).then(
+          (applied) => applied.status,
+          (error: unknown) => error,
+        ),
+      ),
+    );
+
+    expect(outcomes.filter((outcome) => outcome === "applied")).toHaveLength(1);
+    const stale = outcomes.filter(
+      (outcome) => outcome instanceof ProposalStaleError,
+    );
+    expect(stale).toHaveLength(1);
+    const winner = outcomes[0] === "applied" ? "甲方" : "乙方";
+    const [row] = await asPlatform(() =>
+      database
+        .select({
+          title: agentProfiles.title,
+          roleDescription: agentProfiles.roleDescription,
+        })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, bot.id)),
+    );
+    expect(row).toEqual({
+      title: `${winner}头衔`,
+      roleDescription: `${winner}职责。`,
+    });
+    const statuses = [
+      (await stored(first.id))?.status,
+      (await stored(second.id))?.status,
+    ].sort();
+    expect(statuses).toEqual(["applied", "pending"]);
+  });
+
+  test("a change adds the missing action of an app the employee partly holds", async () => {
+    const owner = await person("partial");
+    const { bot, base } = await botWith(owner, [`${READS}/search`]);
+    const proposal = await propose(
+      owner,
+      "employee_change",
+      { agentId: bot.id, set: { apps: [{ app: READS, actions: ["list"] }] } },
+      base,
+    );
+
+    const applied = await runAsTenant(owner.id, () =>
+      withShared.apply(owner, proposal.id),
+    );
+
+    expect(applied.status).toBe("applied");
+    expect(await grantsOf(bot.id)).toEqual([
+      { kind: "mcp", ref: `${READS}/list`, grantedAs: "owner" },
+      { kind: "mcp", ref: `${READS}/search`, grantedAs: "owner" },
+    ]);
+  });
+
+  test("removing named actions of an app keeps the others", async () => {
+    const owner = await person("remove");
+    const { bot, base } = await botWith(owner, [
+      `${READS}/search`,
+      `${READS}/list`,
+    ]);
+    const some = await propose(
+      owner,
+      "employee_change",
+      { agentId: bot.id, appsRemove: [{ app: READS, actions: ["list"] }] },
+      base,
+    );
+
+    await runAsTenant(owner.id, () => withShared.apply(owner, some.id));
+
+    expect((await stored(some.id))?.status).toBe("applied");
+    expect(await grantsOf(bot.id)).toEqual([
+      { kind: "mcp", ref: `${READS}/search`, grantedAs: "owner" },
+    ]);
+
+    const all = await propose(
+      owner,
+      "employee_change",
+      { agentId: bot.id, appsRemove: [{ app: READS, actions: [] }] },
+      base,
+    );
+    await runAsTenant(owner.id, () => withShared.apply(owner, all.id));
+
+    expect((await stored(all.id))?.status).toBe("applied");
+    expect(await grantsOf(bot.id)).toEqual([]);
   });
 });
