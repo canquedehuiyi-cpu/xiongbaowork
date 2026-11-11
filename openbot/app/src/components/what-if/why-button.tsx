@@ -13,8 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { explainAuditEvent, type WhatIfExplained } from "@/lib/what-if/check";
 import { cn } from "@/lib/utils";
+import { explainAuditEvent, type WhatIfExplained } from "@/lib/what-if/check";
 import { OUTCOMES, WhatIfResultView } from "./what-if-result";
 
 /** Whether "Why did this happen?" can answer for a row: one OpenBot's controls decided. */

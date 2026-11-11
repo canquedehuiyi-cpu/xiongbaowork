@@ -52,10 +52,7 @@ export function ConversationAllowances({ threadId }: { threadId: string }) {
   );
   if (grants.length === 0) return null;
   return (
-    <section
-      aria-label="这段对话里已允许"
-      className="flex flex-col gap-1 pb-2"
-    >
+    <section aria-label="这段对话里已允许" className="flex flex-col gap-1 pb-2">
       {grants.map((grant) => {
         const action = allowedWords(grant);
         return (

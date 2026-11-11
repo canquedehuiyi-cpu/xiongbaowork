@@ -306,9 +306,7 @@ function RuleEditor({ policy, rule }: { policy: ActionPolicy; rule: string }) {
               value={draft}
             />
             {duplicate ? (
-              <p className="text-destructive text-sm">
-                这条规则已经在了。
-              </p>
+              <p className="text-destructive text-sm">这条规则已经在了。</p>
             ) : null}
             {written ? <RuleReading rule={draft} written={written} /> : null}
           </Field>

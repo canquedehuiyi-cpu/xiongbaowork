@@ -7,7 +7,7 @@ import {
 } from "@/lib/plugins/shared-use";
 import { appGrantKeys } from "./queries";
 
-const FALLBACK = "Couldn't change that Bot.";
+const FALLBACK = "这位员工的设置没能修改。";
 
 /** Where a saved set came from: the sentence the model chose it from. */
 export type AppGrantAuthoring = { source: "english"; text: string };

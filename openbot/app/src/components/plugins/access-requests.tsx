@@ -99,6 +99,12 @@ export function askedFor(request: AppAccessRequest): string {
   }
 }
 
+/** 申请人和员工的关系（X3 的 `requesterRole`）；`other` 不加说明。 */
+const REQUESTER_ROLE: Record<"owner" | "teammate", string> = {
+  owner: "（员工的主人）",
+  teammate: "（使用这位员工的队友）",
+};
+
 function AccessRequestRow({ request }: { request: AppAccessRequest }) {
   // One pair per row, so a refusal is drawn under the request it is about and nowhere else.
   const approve = useMutation(
@@ -109,7 +115,16 @@ function AccessRequestRow({ request }: { request: AppAccessRequest }) {
   );
   const busy = approve.isPending || dismiss.isPending;
   const error = approve.error ?? dismiss.error;
-  const who = request.requesterName ?? request.requesterEmail ?? "有人";
+  /*
+   * Who asked, and how they stand to the Bot — said here only where the scope note does not already
+   * say it, because that note ends with the same fact.
+   */
+  const role =
+    !request.scopeNote &&
+    (request.requesterRole === "owner" || request.requesterRole === "teammate")
+      ? REQUESTER_ROLE[request.requesterRole]
+      : "";
+  const who = `${request.requesterName ?? request.requesterEmail ?? "有人"}${role}`;
   return (
     <Item data-request={request.id} size="sm">
       <ItemMedia variant="icon">
@@ -124,6 +139,14 @@ function AccessRequestRow({ request }: { request: AppAccessRequest }) {
             : ""}
           。<GrantNote request={request} />
         </ItemDescription>
+        {request.scopeNote ? (
+          <p
+            className="text-amber-700 text-sm dark:text-amber-400"
+            data-scope-note=""
+          >
+            {request.scopeNote}
+          </p>
+        ) : null}
       </ItemContent>
       <ItemActions>
         <Button

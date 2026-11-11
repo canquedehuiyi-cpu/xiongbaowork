@@ -1,3 +1,4 @@
+import { humanise } from "@openbot/shared/tool-name";
 import {
   WHAT_IF_INITIATORS,
   WHAT_IF_INTENTS,
@@ -6,7 +7,6 @@ import {
   type WhatIfIntent,
   type WhatIfVocabulary,
 } from "@openbot/shared/what-if";
-import { humanise } from "@openbot/shared/tool-name";
 import { IconChevronDown } from "@tabler/icons-react";
 import { type ReactNode, useId, useState } from "react";
 import { Button } from "@/components/ui/button";

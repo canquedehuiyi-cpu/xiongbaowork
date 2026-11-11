@@ -78,6 +78,7 @@ import {
   appKeyOf,
   type CatalogueItem,
   connectionsQueryOptions,
+  ownerGrantsQueryOptions,
   type PluginServer,
   personalConnections,
   pluginsPageQueryOptions,
@@ -391,6 +392,18 @@ export function PluginPage({
     ...setOwnerGrantsMutationOptions(queryClient),
     ...report,
   });
+  /*
+   * WHO MAY GIVE IT, OFF THE LISTING WHEN IT SAYS AND OFF ITS OWN ROUTE WHEN IT DOES NOT. The listing
+   * carries `ownerGrants` once the plugin session's X7 lands; until then the X3 route answers the
+   * same question, so the switch never draws "off" over an app whose owners can in fact give it.
+   */
+  const ownerGrantsRead = useQuery({
+    ...ownerGrantsQueryOptions(rowId),
+    enabled:
+      server !== undefined && server.ownerGrants === undefined && !personal,
+  });
+  const whoGives: "any" | "admin" =
+    server?.ownerGrants ?? ownerGrantsRead.data?.ownerGrants ?? "admin";
   const navigate = useNavigate();
   const remove = useMutation({
     ...removePluginServerMutationOptions(queryClient),
@@ -906,7 +919,7 @@ export function PluginPage({
                 <ItemContent>
                   <ItemTitle>员工的主人可以把它给自己的员工</ItemTitle>
                   <ItemDescription>
-                    {server.ownerGrants !== "any"
+                    {whoGives !== "any"
                       ? "只有管理员能把它给员工。"
                       : shared
                         ? "主人把它给自己的员工后，这些员工就会用团队账号。"
@@ -916,8 +929,12 @@ export function PluginPage({
                 <ItemActions>
                   <Switch
                     aria-label={`让员工的主人可以把 ${title} 给自己的员工`}
-                    checked={server.ownerGrants === "any"}
-                    disabled={ownerGrants.isPending}
+                    checked={whoGives === "any"}
+                    disabled={
+                      ownerGrants.isPending ||
+                      (server.ownerGrants === undefined &&
+                        !ownerGrantsRead.data)
+                    }
                     onCheckedChange={(next) => {
                       setError(null);
                       ownerGrants.mutate({

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ruleLabel, RULE_TEMPLATES } from "@/lib/boundaries/rules";
+import { RULE_TEMPLATES, ruleLabel } from "@/lib/boundaries/rules";
 import {
   checkPolicyRule,
   evaluateActionPolicy,

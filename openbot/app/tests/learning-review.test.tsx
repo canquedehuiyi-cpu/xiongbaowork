@@ -505,12 +505,8 @@ test("Waiting for your review shows only once a skill is waiting, not while Lear
     sources: [source([proposal("p1", "refund-order", "add")], null)],
   };
   await queryClient.invalidateQueries({ queryKey: ["learning", "review"] });
-  expect(
-    await view.findByRole("heading", { name: "等你审核" }),
-  ).toBeTruthy();
-  expect(
-    view.getByText("批准一项技能，就会把它发布给你的员工。"),
-  ).toBeTruthy();
+  expect(await view.findByRole("heading", { name: "等你审核" })).toBeTruthy();
+  expect(view.getByText("批准一项技能，就会把它发布给你的员工。")).toBeTruthy();
   expect(view.getByText("Refund order")).toBeTruthy();
   expect(view.queryByRole("heading", { name: "新技能" })).toBeNull();
 });

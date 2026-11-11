@@ -270,9 +270,7 @@ export function WhatIfResultView({
       </PageRows>
       <div className="mt-3 flex flex-col gap-1.5 text-muted-foreground text-xs">
         {result.notApplicable.length > 0 ? (
-          <p>
-            对这类动作不适用：{result.notApplicable.join("、")}。
-          </p>
+          <p>对这类动作不适用：{result.notApplicable.join("、")}。</p>
         ) : null}
         {result.notChecked.length > 0 ? (
           <div>

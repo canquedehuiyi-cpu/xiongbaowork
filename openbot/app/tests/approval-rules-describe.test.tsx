@@ -203,9 +203,7 @@ test("a description fills the rules, shows their reading and check, replays them
     await view.findByText(OPPORTUNITIES.explanation as string),
   ).toBeTruthy();
   expect(
-    view.getByText(
-      "通过检查。每条规则都对得上这个部署里的工具和员工。",
-    ),
+    view.getByText("通过检查。每条规则都对得上这个部署里的工具和员工。"),
   ).toBeTruthy();
   // The rows, as fields that stay editable.
   expect((view.getByLabelText("工具或应用") as HTMLInputElement).value).toBe(

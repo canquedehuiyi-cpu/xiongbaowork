@@ -201,32 +201,34 @@ export function SettingsNav() {
         <IconArrowLeft />
         返回
       </Link>
-      {settingsSidebarItems(capabilities?.edition ?? "team").filter(
-        (option) =>
-          (!option.setup || canSetUp) &&
-          (!option.desktopOnly || desktopShell() !== null),
-      ).map((option) => (
-        <Link
-          {...option.linkOptions}
-          activeOptions={{ exact: option.exact ?? false }}
-          className={rowClassName}
-          key={option.title}
-        >
-          <option.icon />
-          {option.title}
-          {option.setup && toFix > 0 ? (
-            <>
-              <span className="sr-only">，{toFix} 项待设置</span>
-              <span
-                aria-hidden="true"
-                className="ml-auto rounded-full bg-foreground/10 px-1.5 text-[11px] tabular-nums"
-              >
-                {toFix}
-              </span>
-            </>
-          ) : null}
-        </Link>
-      ))}
+      {settingsSidebarItems(capabilities?.edition ?? "team")
+        .filter(
+          (option) =>
+            (!option.setup || canSetUp) &&
+            (!option.desktopOnly || desktopShell() !== null),
+        )
+        .map((option) => (
+          <Link
+            {...option.linkOptions}
+            activeOptions={{ exact: option.exact ?? false }}
+            className={rowClassName}
+            key={option.title}
+          >
+            <option.icon />
+            {option.title}
+            {option.setup && toFix > 0 ? (
+              <>
+                <span className="sr-only">，{toFix} 项待设置</span>
+                <span
+                  aria-hidden="true"
+                  className="ml-auto rounded-full bg-foreground/10 px-1.5 text-[11px] tabular-nums"
+                >
+                  {toFix}
+                </span>
+              </>
+            ) : null}
+          </Link>
+        ))}
     </nav>
   );
 }

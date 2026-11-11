@@ -174,19 +174,16 @@ test("an answer becomes chips over the rows the server returns for them, read ba
    * FOUND ON THE REAL PAGE: the question box lived in the table's toolbar, which is drawn again
    * while new rows load, so asking emptied it and lost the answer's place. It stays.
    */
-  expect(
-    (view.getByLabelText("问问审计记录") as HTMLInputElement)
-      .value,
-  ).toBe("Show me every Gmail write by a routine last week");
+  expect((view.getByLabelText("问问审计记录") as HTMLInputElement).value).toBe(
+    "Show me every Gmail write by a routine last week",
+  );
 
   // A chip taken off is asked of the server again, and the reading says it no longer describes them.
   fireEvent.click(view.getByRole("button", { name: "移除 应用：Gmail" }));
   await view.findByText("2 条事件");
   expect(listed.at(-1)?.searchParams.get("app")).toBeNull();
   expect(listed.at(-1)?.searchParams.get("effect")).toBe("write");
-  expect(view.container.textContent).toContain(
-    "之后你改过筛选。",
-  );
+  expect(view.container.textContent).toContain("之后你改过筛选。");
 });
 
 test("a question the trail can't answer says why and clears the chips, so no earlier filters pose as its rows", async () => {

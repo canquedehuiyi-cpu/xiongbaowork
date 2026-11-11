@@ -179,9 +179,7 @@ export function previewHeadline(counts: CapabilityPreview["counts"]): string {
   const parts = [
     counts.losing > 0 ? `${counts.losing} 人失去权限` : null,
     counts.gaining > 0 ? `${counts.gaining} 人获得权限` : null,
-    counts.keeping > 0
-      ? `${counts.keeping} 人通过另一个开关保留权限`
-      : null,
+    counts.keeping > 0 ? `${counts.keeping} 人通过另一个开关保留权限` : null,
   ].filter((part): part is string => part !== null);
   if (parts.length === 0) return "没有人的权限会变。";
   return `${parts.join("，")}。`;
@@ -194,8 +192,7 @@ function activityWords(
   days: number,
 ): string | null {
   if (!loses(capability)) return null;
-  if (unmapped.has(capability.capability))
-    return "熊宝不记录它的使用情况。";
+  if (unmapped.has(capability.capability)) return "熊宝不记录它的使用情况。";
   const activity = capability.activity;
   if (!activity) return null;
   if (activity.count === 0) return `最近 ${days} 天没用过。`;

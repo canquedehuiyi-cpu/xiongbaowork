@@ -265,7 +265,9 @@ test("asks about the app on the Bot that refused, not on another", async () => {
   const asked = serving(appAccess({ state: "not_connected" }));
   mount(<AppAccessCard prompt={prompt()} />);
   await waitFor(() =>
-    expect(asked).toContain("/api/plugins/for/expenses/apps/composio-gmail"),
+    expect(asked).toContain(
+      "/api/plugins/for/expenses/apps/composio-gmail?view=owner",
+    ),
   );
 });
 
@@ -397,7 +399,9 @@ test("an older refusal that names no Bot asks about the Bot the surface declared
   );
   const drawn = await card(view);
   expect(drawn.getAttribute("data-state")).toBe("not_connected");
-  expect(asked).toContain("/api/plugins/for/travel/apps/composio-gmail");
+  expect(asked).toContain(
+    "/api/plugins/for/travel/apps/composio-gmail?view=owner",
+  );
 });
 
 test("with no Bot to ask about at all, it is the Connect card it always was", async () => {

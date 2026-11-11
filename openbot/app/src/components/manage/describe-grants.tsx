@@ -55,13 +55,13 @@ type WrittenGrants = AppGrantTranslation & { text: string };
 /** How many rows a list shows before it offers the rest. */
 const SHOWN = 6;
 
-const plural = (count: number, one: string, many = `${one}s`) =>
-  `${count} ${count === 1 ? one : many}`;
+/** A count with its measure word, the way the Chinese copy says one: 「3 个动作」「2 次」. */
+const plural = (count: number, unit: string) => `${count} ${unit}`;
 
 /** What an action does, in the words the page's own sections use. */
 function kindOf(action: Pick<ChangedAction, "effect" | "destructive">) {
-  if (action.destructive) return "Destroys things";
-  return action.effect === "read" ? "Only reads" : "Changes things";
+  if (action.destructive) return "会删除或破坏";
+  return action.effect === "read" ? "只读" : "会改动";
 }
 
 /**
@@ -74,13 +74,13 @@ export function changeHeadline(changes: {
 }): string {
   const { added, removed } = changes;
   if (added.length === 0 && removed.length === 0)
-    return "This is what the Bot has now. There's nothing to save.";
+    return "这就是员工现在有的，没有要保存的。";
   const parts = [
-    removed.length > 0 ? `turns off ${plural(removed.length, "action")}` : null,
-    added.length > 0 ? `turns on ${plural(added.length, "action")}` : null,
+    removed.length > 0 ? `关掉 ${plural(removed.length, "个动作")}` : null,
+    added.length > 0 ? `打开 ${plural(added.length, "个动作")}` : null,
   ].filter(Boolean);
-  const sentence = parts.join(" and ");
-  return `Saving ${sentence}.`;
+  const sentence = parts.join("，");
+  return `保存会${sentence}。`;
 }
 
 /**
@@ -90,31 +90,27 @@ export function changeHeadline(changes: {
 export function replayHeadline(report: AppGrantReplay): string {
   const parts = [
     report.removedUsed.length > 0
-      ? `turns off ${plural(report.removedUsed.length, "action")} it used`
+      ? `关掉它用过的 ${plural(report.removedUsed.length, "个动作")}`
       : null,
     report.refusedGiven.length > 0
-      ? `turns on ${plural(report.refusedGiven.length, "action")} it was refused`
+      ? `打开它曾被拒绝的 ${plural(report.refusedGiven.length, "个动作")}`
       : null,
     report.addedUnusedWrites.length > 0
-      ? `turns on ${plural(report.addedUnusedWrites.length, "write")} it has never used`
+      ? `打开它从没用过的 ${plural(report.addedUnusedWrites.length, "个写入动作")}`
       : null,
   ].filter(Boolean) as string[];
   if (parts.length === 0)
-    return "Turns off nothing it used, and turns on no write it hasn't used.";
-  const sentence =
-    parts.length > 1
-      ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`
-      : (parts[0] as string);
-  return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+    return "不会关掉它用过的动作，也不会打开它没用过的写入动作。";
+  return `${parts.join("，")}。`;
 }
 
 /** What was replayed, under the headline. */
 export function replayWords(report: AppGrantReplay, appTitle: string): string {
   return [
-    "Replayed over its last ",
-    report.runs > 0 ? `${plural(report.runs, "run")} and ` : "",
-    `${plural(report.calls, "call")} to ${appTitle}`,
-    report.since ? `, the oldest ${relativeTime(report.since)}.` : ".",
+    "按它最近",
+    report.runs > 0 ? ` ${plural(report.runs, "次运行")}、` : " ",
+    `${plural(report.calls, "次")}调用 ${appTitle} 重放`,
+    report.since ? `，最早的一次在${relativeTime(report.since)}。` : "。",
   ].join("");
 }
 
@@ -173,7 +169,7 @@ function ActionRows<T extends ChangedAction>({
             type="button"
             variant="ghost"
           >
-            {open ? "Show fewer" : `Show all ${actions.length}`}
+            {open ? "收起" : `显示全部 ${actions.length} 个`}
           </Button>
         </div>
       ) : null}
@@ -249,7 +245,7 @@ export function DescribeGrants({
           setAsking(false);
           setWritten(null);
           setSaved(
-            `Saved. ${botName} now has the ${plural(written.grants.length, "action")} you described.`,
+            `已保存。${botName}现在有你描述的 ${plural(written.grants.length, "个动作")}。`,
           );
         },
       },
@@ -289,7 +285,7 @@ export function DescribeGrants({
               size="sm"
               type="button"
             >
-              {save.isPending ? "Saving…" : "Save changes"}
+              {save.isPending ? "正在保存…" : "保存改动"}
             </Button>
           </>
         ) : undefined
@@ -297,11 +293,11 @@ export function DescribeGrants({
     >
       <FieldGroup>
         <DescribeField
-          action="Choose actions"
-          description={`Say in a sentence what ${botName} may do in ${appTitle}, and your model picks the actions. A second reading that never sees your words says what they allow.`}
+          action="选出动作"
+          description={`用一句话说 ${botName} 可以在 ${appTitle} 里做什么，你的模型会挑出对应的动作；另一次看不到你原话的解读再说明它们允许什么。`}
           id="app-grants-english"
-          label={`Describe what ${botName} can do`}
-          placeholder="Reads everything and writes drafts, but never sends or deletes"
+          label={`描述 ${botName} 能做什么`}
+          placeholder="什么都能读，能写草稿，但从不发送、从不删除"
           write={async (described) => {
             const translation = await translateAppGrants({
               agentId,
@@ -324,9 +320,9 @@ export function DescribeGrants({
             check={written.check}
             edited={null}
             explanation={written.explanation}
-            failed="These actions don't check, so OpenBot won't save them."
-            heading={`What this lets ${botName} do`}
-            passed={`Checks. Every action is one ${appTitle} offers.`}
+            failed="这些动作没通过核对，所以熊宝不会保存它们。"
+            heading={`这会让 ${botName} 能做什么`}
+            passed={`核对通过：每个动作都是 ${appTitle} 提供的。`}
             warning={written.warning}
           />
         ) : null}
@@ -337,14 +333,14 @@ export function DescribeGrants({
         ) : null}
         {checked && changes ? (
           <Field aria-labelledby="app-grants-changes" aria-live="polite">
-            <FieldLabel id="app-grants-changes">What changes</FieldLabel>
+            <FieldLabel id="app-grants-changes">会改变什么</FieldLabel>
             <FieldDescription>{changeHeadline(changes)}</FieldDescription>
             {changes.removed.length > 0 ? (
               <ActionRows
                 actions={changes.removed}
                 icon={<IconCircleMinus />}
                 note={kindOf}
-                verdict="Turns off"
+                verdict="关掉"
                 verdictClassName={TURNS_OFF}
               />
             ) : null}
@@ -353,7 +349,7 @@ export function DescribeGrants({
                 actions={changes.added}
                 icon={<IconCirclePlus />}
                 note={kindOf}
-                verdict="Turns on"
+                verdict="打开"
                 verdictClassName={TURNS_ON}
               />
             ) : null}
@@ -380,7 +376,7 @@ export function DescribeGrants({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Let {botName} use the shared {appTitle} account?
+              让 {botName} 使用 {appTitle} 的团队账号？
             </DialogTitle>
           </DialogHeader>
           <DialogBody className="mt-4">
@@ -397,14 +393,14 @@ export function DescribeGrants({
               size="sm"
               variant="outline"
             >
-              Cancel
+              取消
             </Button>
             <Button
               disabled={save.isPending}
               onClick={() => commit(approval)}
               size="sm"
             >
-              {save.isPending ? "Saving…" : "Allow and save"}
+              {save.isPending ? "正在保存…" : "允许并保存"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -426,20 +422,19 @@ function RecentUse({
   return (
     <Field aria-labelledby="app-grants-replay" aria-live="polite">
       <FieldLabel id="app-grants-replay">
-        On {botName}'s recent activity
+        按 {botName} 最近的活动
       </FieldLabel>
       {report === null ? (
         <FieldDescription>
-          OpenBot keeps no activity it can read here, so there's nothing to test
-          against.
+          熊宝这里没有可以读的活动记录，所以没有东西可以拿来对照。
         </FieldDescription>
       ) : report.calls === 0 ? (
         <FieldDescription>
           {report.runs > 0
-            ? `${botName} hasn't used ${appTitle} in its last ${plural(report.runs, "run")}, so there's nothing to test against.`
-            : `${botName} hasn't used ${appTitle} yet, so there's nothing to test against.`}
+            ? `${botName} 最近 ${plural(report.runs, "次运行")}都没用过 ${appTitle}，所以没有东西可以拿来对照。`
+            : `${botName} 还没用过 ${appTitle}，所以没有东西可以拿来对照。`}
           {report.addedUnusedWrites.length > 0
-            ? ` This turns on ${plural(report.addedUnusedWrites.length, "write")} it has never used.`
+            ? `这会打开它从没用过的 ${plural(report.addedUnusedWrites.length, "个写入动作")}。`
             : ""}
         </FieldDescription>
       ) : (
@@ -455,9 +450,9 @@ function RecentUse({
               actions={report.removedUsed}
               icon={<IconHistory />}
               note={(action) =>
-                `Called ${plural(action.calls, "time")}, last ${relativeTime(action.lastCalled)}.`
+                `调用过 ${plural(action.calls, "次")}，最近一次在${relativeTime(action.lastCalled)}。`
               }
-              verdict="Turns off"
+              verdict="关掉"
               verdictClassName={TURNS_OFF}
             />
           ) : null}
@@ -466,9 +461,9 @@ function RecentUse({
               actions={report.refusedGiven}
               icon={<IconHistory />}
               note={(action) =>
-                `Refused ${plural(action.calls, "time")} because it didn't have it, last ${relativeTime(action.lastCalled)}.`
+                `因为没有这个动作被拒绝了 ${plural(action.calls, "次")}，最近一次在${relativeTime(action.lastCalled)}。`
               }
-              verdict="Turns on"
+              verdict="打开"
               verdictClassName={TURNS_ON}
             />
           ) : null}
@@ -476,14 +471,14 @@ function RecentUse({
       )}
       {report && report.calls > 0 && report.addedUnusedWrites.length > 0 ? (
         <FieldDescription>
-          {`Writes it has never used: ${report.addedUnusedWrites
+          {`它从没用过的写入动作：${report.addedUnusedWrites
             .slice(0, 5)
             .map((action) => action.name)
-            .join(", ")}${
+            .join("、")}${
             report.addedUnusedWrites.length > 5
-              ? ` and ${report.addedUnusedWrites.length - 5} more`
+              ? ` 等，另有 ${report.addedUnusedWrites.length - 5} 个`
               : ""
-          }.`}
+          }。`}
         </FieldDescription>
       ) : null}
     </Field>

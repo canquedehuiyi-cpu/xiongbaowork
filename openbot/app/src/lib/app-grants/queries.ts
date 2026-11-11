@@ -65,7 +65,7 @@ export function appGrantsReplayQueryOptions(
           {
             method: "POST",
             body: { grants },
-            fallback: "Couldn't test these actions against recent activity.",
+            fallback: "没能拿最近的活动对照这些动作。",
           },
         )
       ).json(),

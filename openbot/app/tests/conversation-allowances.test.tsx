@@ -96,9 +96,7 @@ test("a conversation shows what it allows, and Turn off turns it off", async () 
   );
   await waitFor(() => expect(revoked).toEqual(["grant-1"]));
   await waitFor(() =>
-    expect(
-      view.queryByRole("region", { name: "这段对话里已允许" }),
-    ).toBeNull(),
+    expect(view.queryByRole("region", { name: "这段对话里已允许" })).toBeNull(),
   );
 });
 
@@ -109,9 +107,7 @@ test("another conversation's answer isn't shown here", async () => {
   await waitFor(() =>
     expect(queryClient.getQueryData(["approvals"])).toBeTruthy(),
   );
-  expect(
-    view.queryByRole("region", { name: "这段对话里已允许" }),
-  ).toBeNull();
+  expect(view.queryByRole("region", { name: "这段对话里已允许" })).toBeNull();
 });
 
 test("a step on a website says the kind it allows there, not every click", async () => {

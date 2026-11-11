@@ -1,5 +1,5 @@
-import { IconLock } from "@tabler/icons-react";
 import { ruleTitle } from "@openbot/shared/tool-name";
+import { IconLock } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CARD_FACE, Tag } from "@/components/resources/resource-kit";

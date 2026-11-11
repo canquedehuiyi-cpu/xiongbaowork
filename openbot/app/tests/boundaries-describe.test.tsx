@@ -209,14 +209,10 @@ test("a description fills the rule, shows its reading and compile result, replay
   expect((view.getByLabelText("规则") as HTMLTextAreaElement).value).toBe(
     SOCIAL.rule,
   );
-  expect(
-    view.getByText("能编译。熊宝可以在每个动作上检查它。"),
-  ).toBeTruthy();
+  expect(view.getByText("能编译。熊宝可以在每个动作上检查它。")).toBeTruthy();
   // Replayed as soon as it rests in the field, on its own.
   expect(
-    await view.findByText(
-      "最近记录的 3 个动作里，这条规则会拦下 1 个。",
-    ),
+    await view.findByText("最近记录的 3 个动作里，这条规则会拦下 1 个。"),
   ).toBeTruthy();
   expect(replayed).toEqual([
     { mode: "enforce", deny: [SOCIAL.rule], allow: ["true"] },
@@ -325,9 +321,7 @@ test("a rule that never compiled is shown with the error and can't be added as w
     "Block any URL with a query string longer than 200 characters",
   );
 
-  expect(
-    await view.findByText(/编译不通过，熊宝不会保存它/),
-  ).toBeTruthy();
+  expect(await view.findByText(/编译不通过，熊宝不会保存它/)).toBeTruthy();
   expect(view.queryByText("这条规则做什么")).toBeNull();
   expect(
     (view.getByRole("button", { name: "添加规则" }) as HTMLButtonElement)
@@ -399,9 +393,7 @@ test("on a rule's own page, a description rewrites it in place, keeps its name, 
   await describeRule(view, "Bots may not visit social media sites");
   await view.findByText(SOCIAL.explanation as string);
   expect(
-    await view.findByText(
-      "最近记录的 3 个动作里，这条规则会拦下 1 个。",
-    ),
+    await view.findByText("最近记录的 3 个动作里，这条规则会拦下 1 个。"),
   ).toBeTruthy();
   // The page's own "Recently stopped" first (the policy without this rule), then the new version
   // on its own, as Add rule replays a new rule.

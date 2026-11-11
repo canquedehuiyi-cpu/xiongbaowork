@@ -272,9 +272,7 @@ test("a rule about an app is tested as it is written, and lists the app calls it
   // Nobody presses anything: the answer arrives under the rule.
   expect(view.queryByRole("button", { name: /test/i })).toBeNull();
   expect(
-    await view.findByText(
-      "最近记录的 9 个动作里，这条规则会拦下 2 个。",
-    ),
+    await view.findByText("最近记录的 9 个动作里，这条规则会拦下 2 个。"),
   ).toBeTruthy();
   // Once, when the rule rested, and the rule on its own: the rule in force stops what it stops
   // whether or not this one is added, so what it would have stopped is no part of this answer.

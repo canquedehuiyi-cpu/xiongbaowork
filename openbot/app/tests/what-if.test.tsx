@@ -241,9 +241,7 @@ test("an Audit row a control decided carries Why?, which explains it from the ro
       ?.getAttribute("data-decides"),
   ).toBe("true");
   // The same answer then and now, so nothing says a setting changed.
-  expect(dialog.textContent).not.toContain(
-    "按今天的设置，结果会不一样",
-  );
+  expect(dialog.textContent).not.toContain("按今天的设置，结果会不一样");
   expect(
     asked.some(
       (call) => call.path === `/api/admin/what-if/explain/${answers.event.id}`,

@@ -233,9 +233,7 @@ test("a description lands as switches with their reading, shows who loses and ke
 
   // Who it changes, as the server worked it out for every person.
   expect(
-    await view.findByText(
-      "3 人失去权限，4 人通过另一个开关保留权限。",
-    ),
+    await view.findByText("3 人失去权限，4 人通过另一个开关保留权限。"),
   ).toBeTruthy();
   expect(view.getByText("Cam Contractor")).toBeTruthy();
   expect(view.getByText("成员，属于 Contractors")).toBeTruthy();
@@ -249,10 +247,9 @@ test("a description lands as switches with their reading, shows who loses and ke
   ).toHaveLength(3);
   // The contractor who is also an engineer keeps it, through Engineering, as the engineer does.
   expect(
-    view.getAllByText(
-      "现在默认打开，改动后通过 Engineering 打开。",
-      { exact: false },
-    ),
+    view.getAllByText("现在默认打开，改动后通过 Engineering 打开。", {
+      exact: false,
+    }),
   ).toHaveLength(2);
   // What Cam used, counted and listed in Audit's own words, and nobody else used any.
   expect(
@@ -306,9 +303,7 @@ test("a description lands as switches with their reading, shows who loses and ke
 test("removing a change is called out and shows who the rest would change", async () => {
   const { view } = open();
   await describeChange(view);
-  await view.findByText(
-    "3 人失去权限，4 人通过另一个开关保留权限。",
-  );
+  await view.findByText("3 人失去权限，4 人通过另一个开关保留权限。");
   expect(view.queryByText(/写好之后你删掉过一条改动/)).toBeNull();
 
   // Without Sales's grant, Sam loses it too.
@@ -320,9 +315,7 @@ test("removing a change is called out and shows who the rest would change", asyn
     ),
   ).toBeTruthy();
   expect(
-    await view.findByText(
-      "4 人失去权限，3 人通过另一个开关保留权限。",
-    ),
+    await view.findByText("4 人失去权限，3 人通过另一个开关保留权限。"),
   ).toBeTruthy();
   expect(
     sent.filter((call) => call.path.endsWith("/preview")).at(-1)?.body.changes,

@@ -221,9 +221,7 @@ test("guidance is checked, tested on recent decisions after saying how many mode
 
   await user.click(view.getByRole("button", { name: "检查指引" }));
   expect(await view.findByText(READING.explanation)).toBeTruthy();
-  expect(
-    view.getByText("读起来是指引。内置的安全规则仍然优先。"),
-  ).toBeTruthy();
+  expect(view.getByText("读起来是指引。内置的安全规则仍然优先。")).toBeTruthy();
 
   // How many model calls a test makes, before it makes any.
   expect(
@@ -299,9 +297,7 @@ test("words that try to switch safety off are refused, and an edit after a check
   await user.clear(field);
   await user.type(field, DEALS);
   expect(
-    view.getByText(
-      "检查之后你改过这段指引。保存前再检查一次。",
-    ),
+    view.getByText("检查之后你改过这段指引。保存前再检查一次。"),
   ).toBeTruthy();
   expect(saveButton(view).disabled).toBe(true);
   await user.click(view.getByRole("button", { name: "检查指引" }));

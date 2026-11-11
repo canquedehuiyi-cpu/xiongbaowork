@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { explainable, WhyButton } from "@/components/what-if/why-button";
 import { useBotNames } from "@/lib/agents/bot-names";
+import type { AuditAnswer, AuditFilterLabels } from "@/lib/audit/ask";
 import {
   CALLS_RECORDED_AS_CHANGES,
   COMPUTER_ACTION_EVENT_TYPES,
@@ -38,7 +39,6 @@ import {
   oneRowPerAction,
   REFUSED_EVENT_TYPES,
 } from "@/lib/audit/outcome";
-import type { AuditAnswer, AuditFilterLabels } from "@/lib/audit/ask";
 import {
   auditEventsQueryOptions,
   auditExportUrl,
@@ -256,9 +256,7 @@ export function AuditPage({
       URL.revokeObjectURL(url);
     } catch (error) {
       setExportError(
-        error instanceof Error
-          ? error.message
-          : "导出审计记录失败",
+        error instanceof Error ? error.message : "导出审计记录失败",
       );
     } finally {
       setExporting(false);
@@ -327,9 +325,7 @@ export function AuditPage({
                       size="sm"
                       variant="outline"
                     >
-                      {events.isFetchingNextPage
-                        ? "正在加载…"
-                        : "更早的记录"}
+                      {events.isFetchingNextPage ? "正在加载…" : "更早的记录"}
                     </Button>
                   </div>
                 ) : null
