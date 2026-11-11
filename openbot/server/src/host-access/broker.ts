@@ -351,7 +351,17 @@ export function createHostAccessBroker(
         ...(input.writable === true ? { writable: true } : {}),
         ...(commandPolicy ? { commandPolicy } : {}),
       });
-      const [result] = await Promise.all([queued, dispatched]);
+      /*
+       * Both settle before the call is answered, a refusal included: the row written as the action
+       * went to the desktop is then on the trail before the one that ends it, and never still in
+       * flight when somebody reads Activity. `Promise.all` answered a desktop refusal at once and
+       * left that row to land whenever it did. The desktop's answer wins over a trail that could
+       * not be written; a completed action whose row could not be written fails, as before.
+       */
+      const [outcome, written] = await Promise.allSettled([queued, dispatched]);
+      if (outcome.status === "rejected") throw outcome.reason;
+      if (written.status === "rejected") throw written.reason;
+      const result = outcome.value;
       await approval?.complete(result);
       return result;
     },
