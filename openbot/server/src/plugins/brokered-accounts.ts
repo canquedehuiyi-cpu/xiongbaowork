@@ -152,14 +152,40 @@ export function createAccountBook(context: {
     if (!broker?.accountsOf) return recordsOf(await rowsFor(toolkit, userId));
 
     const held = await rowsFor(toolkit, userId);
-    const listed = (await broker.accountsOf({ userId, toolkit })).map(
-      (found) => ({
-        vendorUserId: nameOf(userId),
-        accountId: found.accountId ?? "",
-        identity: found.identity,
-        connectedAt: found.connectedAt ? new Date(found.connectedAt) : null,
-      }),
-    );
+    /*
+     * 这个人在厂商那边的每一个 id：他自己的名字，加上表里已经记下的「另一个账号」的 id（上游 #1298 的
+     * Arcade 一半）。Composio 把一个人的所有账号记在同一个 id 下，这里就只有一个；Arcade 每个 id 一个
+     * 账号，所以逐个 id 去问。另一个 id 只在它的同意经回程完成时写进表里，这里从不凭空生出一个。
+     */
+    const own = nameOf(userId);
+    const filedUnder = [
+      ...new Set([
+        own,
+        ...held
+          .map((row) => row.vendorUserId)
+          .filter((id) => filedUnderPerson(id, own)),
+      ]),
+    ];
+    const listed: {
+      vendorUserId: string;
+      accountId: string;
+      identity: string | null;
+      connectedAt: Date | null;
+    }[] = [];
+    for (const vendorUserId of filedUnder) {
+      // 本人自己的名字按本地 id 去问（broker 那一层换名）；另一个 id 已经是厂商那边的 id，原样去问。
+      for (const found of await broker.accountsOf({
+        userId: vendorUserId === own ? userId : vendorUserId,
+        toolkit,
+      })) {
+        listed.push({
+          vendorUserId,
+          accountId: found.accountId ?? "",
+          identity: found.identity,
+          connectedAt: found.connectedAt ? new Date(found.connectedAt) : null,
+        });
+      }
+    }
 
     const key = (row: { vendorUserId: string; accountId: string }) =>
       `${row.vendorUserId}\u0000${row.accountId}`;
@@ -282,7 +308,7 @@ export function createAccountBook(context: {
   async function ownersDefault(input: {
     toolkit: string;
     userId: string;
-  }): Promise<{ accountId: string | null } | null> {
+  }): Promise<{ accountId: string | null; vendorUserId: string } | null> {
     if (!isPersonTenant(input.userId)) return null;
     const rows = await runAsTenant(input.userId, () =>
       database
@@ -312,7 +338,29 @@ export function createAccountBook(context: {
     );
     const chosen = mine.find((row) => row.isDefault) ?? mine[0];
     if (!chosen) return null;
-    return { accountId: chosen.accountId === "" ? null : chosen.accountId };
+    return {
+      accountId: chosen.accountId === "" ? null : chosen.accountId,
+      // 这个账号在厂商那边记在哪个 id 下：Arcade 的另一个账号没有账号 id，只能靠它钉住。
+      vendorUserId: chosen.vendorUserId,
+    };
+  }
+
+  /**
+   * 这个人在一个应用上「另一个账号」的 id（不含他自己的名字）。断开整个应用、离职处理、移除应用时用：
+   * Arcade 每个 id 一个账号，只撤本人名字下的那个会把其余的留在厂商那边，这里再也够不着。
+   */
+  async function furtherIds(input: {
+    toolkit: string;
+    userId: string;
+  }): Promise<string[]> {
+    const own = nameOf(input.userId);
+    return [
+      ...new Set(
+        (await rowsFor(input.toolkit, input.userId))
+          .map((row) => row.vendorUserId)
+          .filter((id) => id !== own && filedUnderPerson(id, own)),
+      ),
+    ];
   }
 
   return {
@@ -321,6 +369,7 @@ export function createAccountBook(context: {
     pick,
     settleDefault,
     ownersDefault,
+    furtherIds,
 
     /**
      * Bot 的工具所在的每个服务器上，这个人持有账号的 broker 个人应用：标题和他的账号。这是
@@ -439,11 +488,19 @@ export function createAccountBook(context: {
 
       /*
        * 只断这一个，绝不清扫。`revoke` 会结束一个人在该应用上的所有账号；这里结束的是他点了「断开」的
-       * 那一个。Composio 按账号 id 指名它。没有 id 的账号在 Composio 不会出现（`accountsOf` 不列），
-       * 所以这里总有 id。
+       * 那一个。Composio 按账号 id 指名它。没有 id 的账号在 Composio 不会出现（`accountsOf` 不列）；
+       * Arcade 每个 id 只有一个账号、不给账号 id，所以按这一行自己的 id 撤这个应用的授权——那个 id 是
+       * 这个人名下的，上面已经筛过，撤的也只是这一个账号。
        */
-      if (row.accountId === "") return null;
-      await broker.revokeAccount(row.accountId);
+      if (row.accountId !== "") await broker.revokeAccount(row.accountId);
+      else
+        await broker.revoke({
+          userId:
+            row.vendorUserId === nameOf(input.userId)
+              ? input.userId
+              : row.vendorUserId,
+          toolkit: input.toolkit,
+        });
 
       await database
         .delete(brokeredAccounts)

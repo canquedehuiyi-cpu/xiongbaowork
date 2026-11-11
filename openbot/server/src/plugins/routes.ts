@@ -107,6 +107,7 @@ import {
   type PluginStore,
   type ServerAddress,
 } from "./store";
+import { anotherArcadeAccount } from "./shared-accounts";
 
 /**
  * Whether the person a consent was started for still has access to this deployment.
@@ -2233,14 +2234,6 @@ export function createPluginRoutes(
        */
       // X5：Arcade 的连接先在发起人名下认领一次尝试，回程由 `/arcade/verify` 核对并记录。
       if (composio.arcade) {
-        if (another) {
-          return context.json(
-            {
-              error: `用 Arcade 连接时，一个人在 ${row.title} 上暂时只能连接一个账号。没有建立任何连接。`,
-            },
-            409,
-          );
-        }
         let returnUrl: string;
         try {
           returnUrl = brokerReturnUrl(
@@ -2259,10 +2252,17 @@ export function createPluginRoutes(
           { store, arcade: composio.arcade, appUrl: connect.appUrl },
           {
             serverId,
+            /*
+             * 谁的账号只来自会话与应用行。「再连一个账号」（`?another=1`，上面已经确认本人有一条现成的
+             * 连接）记在本人自己的另一个 id 下：Arcade 按「用户 id + 认证提供商」只存一个账号。那个 id 在
+             * 这里铸出，请求里带什么都不读。
+             */
             account:
               shared && app?.shared
                 ? { holder: "deployment", vendorUserId: holderId }
-                : store.personAccount(holderId),
+                : another
+                  ? anotherArcadeAccount(store.personAccount(holderId))
+                  : store.personAccount(holderId),
             toolkit,
             title: row.title,
             returnUrl,

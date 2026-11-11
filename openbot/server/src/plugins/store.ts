@@ -111,7 +111,7 @@ import {
   type AccountMode,
   type AccountRef,
   accountFor,
-  personAccount,
+  filedUnderPerson,
 } from "./shared-accounts";
 import { underOwnName, type VendorNameOf } from "./single-user-identity";
 import { withVendorDeadline } from "./vendor-deadline";
@@ -2053,6 +2053,25 @@ export function createPluginStore(options: PluginStoreOptions) {
     provider: brokerProvider,
     vendorNameOf,
   });
+  /**
+   * 结束这个人在一个应用上「另一个账号」在厂商那边的授权（上游 #1298 的 Arcade 一半）。
+   *
+   * Arcade 每个 id 一个账号，一个人的第二个账号记在他自己的另一个 id 下。断开整个应用、离职处理、移除
+   * 应用时只撤他名字下的那一个，其余的会留在厂商那边继续有效，而本地再没有行能找到它们。所以三条路径
+   * 在撤完本人的之后都经过这里，而且在本地的账号行被忘掉之前：撤销抛错时行还在，重试还能找到它们。
+   * Composio 的账号都在同一个 id 下，这里没有东西可撤。
+   */
+  async function revokeFurtherAccounts(
+    toolkit: string,
+    userId: string,
+    ids?: string[],
+  ): Promise<void> {
+    if (!broker) return;
+    for (const vendorUserId of ids ??
+      (await accounts.furtherIds({ toolkit, userId }))) {
+      await broker.revoke({ userId: vendorUserId, toolkit });
+    }
+  }
 
   /*
    * One exchange at a time per (server, person). A rotating vendor invalidates the refresh
@@ -5617,6 +5636,16 @@ export function createPluginStore(options: PluginStoreOptions) {
               ? await broker.revoke({ userId: connection.userId, toolkit })
               : false,
           );
+          // 每个人在这个应用上的另一个账号也一并撤掉；团队身份没有另一个账号。
+          if (connection.userId !== teamIdentity) {
+            await revokeFurtherAccounts(
+              toolkit,
+              connection.userId,
+              await reach(() =>
+                accounts.furtherIds({ toolkit, userId: connection.userId }),
+              ),
+            );
+          }
         }
 
         await reach(() =>
@@ -8420,9 +8449,8 @@ export function createPluginStore(options: PluginStoreOptions) {
      * 路由开始一次带回程验证的授权、核对回来的浏览器时用它，所以「这个人今天的名字」只有这一个答案。
      * 对登录进来的人两个值相同；单用户安装的那个人是这台安装自己的名字。
      */
-    personAccount(userId: string): AccountRef {
-      const name = vendorNameOf(userId);
-      return personAccount(userId, name === userId ? null : name);
+    personAccount(userId: string): Extract<AccountRef, { holder: "person" }> {
+      return { holder: "person", userId, vendorUserId: vendorNameOf(userId) };
     },
 
     /**
@@ -10566,6 +10594,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         userId: input.userId,
         toolkit: input.toolkit,
       });
+      // 这个人在这个应用上的另一个账号也撤掉，在本地的账号行被忘掉之前（见 `revokeFurtherAccounts`）。
+      await revokeFurtherAccounts(input.toolkit, input.userId);
 
       const vendorRevocationRequested = fieldScheme ? false : ended;
 
@@ -10760,12 +10790,12 @@ export function createPluginStore(options: PluginStoreOptions) {
       const refusals: unknown[] = [];
       for (const connection of brokered) {
         try {
-          withdrawn.push({
-            toolkit: connection.toolkit,
-            requested: broker
-              ? await broker.revoke({ userId, toolkit: connection.toolkit })
-              : false,
-          });
+          const requested = broker
+            ? await broker.revoke({ userId, toolkit: connection.toolkit })
+            : false;
+          // 这个人在这个应用上的另一个账号也撤掉；撤不掉时与上面一样，这一条连接留着。
+          await revokeFurtherAccounts(connection.toolkit, userId);
+          withdrawn.push({ toolkit: connection.toolkit, requested });
         } catch (error) {
           /*
            * Held, and the row deliberately left standing.
@@ -11079,6 +11109,8 @@ export function createPluginStore(options: PluginStoreOptions) {
       let sharedAppId = serverId;
       /** 队友用主人的账号时钉到的主人默认账号 id（不带名字）。 */
       let ownersAccountId: string | null = null;
+      /** 那个默认账号在厂商那边记在哪个 id 下：Arcade 的另一个账号没有账号 id，调用靠这个 id 进对账号。 */
+      let ownersVendorId: string | null = null;
       if (brokeredToolkit !== null) {
         const opensAs = input.credentialActorId ?? input.actorId;
         const names =
@@ -11124,13 +11156,12 @@ export function createPluginStore(options: PluginStoreOptions) {
            * 所以不进队友的审批卡与审计（评审 M5）。
            */
           if (opensAs !== input.actorId) {
-            ownersAccountId =
-              (
-                await accounts.ownersDefault({
-                  toolkit: brokeredToolkit,
-                  userId: opensAs,
-                })
-              )?.accountId ?? null;
+            const ownersDefault = await accounts.ownersDefault({
+              toolkit: brokeredToolkit,
+              userId: opensAs,
+            });
+            ownersAccountId = ownersDefault?.accountId ?? null;
+            ownersVendorId = ownersDefault?.vendorUserId ?? null;
           } else {
             const picked = await accounts.pick({
               toolkit: brokeredToolkit,
@@ -11519,6 +11550,25 @@ export function createPluginStore(options: PluginStoreOptions) {
           input.credentialActorId ?? input.actorId,
           access,
         );
+        /*
+         * 这次调用以厂商那边的哪个 id 执行。钉了账号时是那个账号所在的 id：Composio 把一个人的账号都记在
+         * 同一个 id 下（就是他的名字），Arcade 的另一个账号记在他自己的另一个 id 下（`<名字>~<后缀>`）。
+         * 那个 id 来自账号表里他自己的行，这里再核对一次它确实在这个人的名字下——不在就拒绝，绝不以别人
+         * 的 id 发出调用。没钉账号时与以前一样：团队账号的身份，或这个人的名字。
+         */
+        const opensAsPerson = input.credentialActorId ?? input.actorId;
+        const pinnedVendorId = pinned?.vendorUserId ?? ownersVendorId;
+        if (
+          pinnedVendorId !== null &&
+          pinnedVendorId !== undefined &&
+          !filedUnderPerson(pinnedVendorId, vendorNameOf(opensAsPerson))
+        ) {
+          throw new PluginRefusedError(
+            `这个 ${row.title} 账号不是你的，所以什么都没做。`,
+            null,
+          );
+        }
+        const runsAs = pinnedVendorId ?? vendorUserId ?? opensAsPerson;
         const vendor =
           injectedVendor ?? transportFor(access.transport).callTool;
         /*
@@ -11534,7 +11584,7 @@ export function createPluginStore(options: PluginStoreOptions) {
               token,
               ...(placement ? { placement } : {}),
               // Shared 应用以团队账号的身份调用；其余进调用所开账号的主人（提问者，或 Team Bot 的主人）。
-              actorId: vendorUserId ?? input.credentialActorId ?? input.actorId,
+              actorId: runsAs,
               botId: input.botId,
               ...((pinned?.accountId ?? ownersAccountId)
                 ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }
