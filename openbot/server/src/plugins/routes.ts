@@ -2396,7 +2396,17 @@ export function createPluginRoutes(
             ? await store.personAccountByRow(toolkit, holderId, named)
             : null;
         if (!shared && !another && named && !chosen) {
-          return context.json({ error: "这个账号没有连接。请刷新页面。" }, 404);
+          /*
+           * 卡片带来的这一行可能已经被账号页的同步删掉（厂商不再列出那个账号）。单独重新连接它已无从
+           * 说起，所以句子说出还能走的路：在应用的页面上「再连一个账号」把它连回来。
+           */
+          return context.json(
+            {
+              error:
+                "这个账号已经不在你的账号列表里，没法单独重新连接它，所以什么都没做。请在应用的页面上用「再连一个账号」把它连回来。",
+            },
+            404,
+          );
         }
         return startArcadeAuthorization(
           context,

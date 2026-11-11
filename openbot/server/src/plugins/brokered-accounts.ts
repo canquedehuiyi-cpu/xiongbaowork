@@ -169,6 +169,34 @@ export function createAccountBook(context: {
   };
 
   /**
+   * 一个默认账号在厂商那边没了、而这个人还有别的账号时，把默认交给剩下的账号里最早的那个，这一行本身留着。
+   * 不点名的调用因此落到还在的账号上（与上游「忘掉没了的账号」一样），而不是每一次都被拒；留着的行让卡片
+   * 仍能把同一个账号连回来。连回来之后它不自动恢复默认，本人可以在账号页上再设回去。
+   */
+  const passOverDefault = async (
+    toolkit: string,
+    userId: string,
+    rowId: string,
+  ) => {
+    const rows = ordered(await rowsFor(toolkit, userId));
+    const lost = rows.find((row) => row.id === rowId);
+    const next = rows.find((row) => row.id !== rowId);
+    if (!lost?.isDefault || !next) return;
+    await database
+      .update(brokeredAccounts)
+      .set({ isDefault: false })
+      .where(eq(brokeredAccounts.id, rowId));
+    try {
+      await database
+        .update(brokeredAccounts)
+        .set({ isDefault: true })
+        .where(eq(brokeredAccounts.id, next.id));
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  };
+
+  /**
    * 按 vendor 现在列出的，重建一个人在一个应用上的账号，并答出来。
    *
    * vendor 不再列出的账号在这里删掉，列出而这里没有的加上，所以一行从来不是账号存在的唯一证据。默认账号在
@@ -360,9 +388,13 @@ export function createAccountBook(context: {
       (rows.length === 0 || rows.some((row) => row.identity === null)) &&
       fillInDue(toolkit, userId, rows)
     ) {
-      await sync({ toolkit, userId, prune: false }).catch(() => []);
+      // 只在厂商答上来之后才记「问过了」：一次超时不该让接下来十分钟里点名一个真实的账号都被拒。
+      const answered = await sync({ toolkit, userId, prune: false }).then(
+        () => true,
+        () => false,
+      );
       rows = await mine();
-      filledInNow(toolkit, userId, rows);
+      if (answered) filledInNow(toolkit, userId, rows);
       found = find();
     }
     if (found.row && found.match) return pinned(found.row, found.match.label);
@@ -448,6 +480,7 @@ export function createAccountBook(context: {
     sync,
     pick,
     settleDefault,
+    passOverDefault,
     ownersDefault,
     furtherIds,
 

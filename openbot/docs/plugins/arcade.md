@@ -355,6 +355,7 @@ first reads Arcade's account list once to fill addresses in. That read adds and 
 never forgets one (an account Arcade does not list at that moment may only have lapsed, and the
 sweeps below find accounts by their rows), and it is made at most once in ten minutes for the same
 person, app and rows, so a model that keeps naming the wrong account does not ask Arcade each time.
+A read Arcade did not answer does not count, so the next name asks again.
 Only the accounts page forgets an account Arcade no longer lists. Disconnecting one account withdraws that one; disconnecting
 the app, offboarding the person or removing the app withdraws every account they hold there. A
 Shared app has one team account and no second one.
@@ -373,8 +374,12 @@ the card names that account (`account`, the row id from the accounts page), and
 It does so also where Arcade answers that the second account holds nothing any more: its row is kept
 rather than forgotten, so Reconnect asks consent for the same id and brings that account back,
 instead of landing on the person's own account (which may hold everything and answer
-`{ "connected": true }`). A row id that is not the person's own on that app answers 404 and mints
-nothing. The accounts page still forgets the row if Arcade stops listing the account.
+`{ "connected": true }`). If that account was the default, the default passes to the earliest of
+the accounts that remain, as upstream does, so a call naming no account runs there; a call naming the
+lost account still gets the card that reconnects it, and a reconnected account does not take the
+default back by itself. A row id that is not the person's own on that app answers 404 and mints
+nothing. The accounts page still forgets the row if Arcade stops listing the account; Reconnect
+from a card whose row is gone answers 404 with a sentence pointing to **Connect another account**.
 A connected Shared app is reconnected in place the same way, by an administrator; its connection
 date moves forward and the administrator who connected it first stays on record.
 

@@ -12327,7 +12327,15 @@ export function createPluginStore(options: PluginStoreOptions) {
            * id 铸同意把它连回来；忘掉这一行，卡片就只能连他名字下的那个（它可能早就持有全部权限，直接答
            * 「已连接」），丢掉的账号只能靠「再连一个账号」换一个新 id 找回。账号页的同步在厂商不再列出它
            * 时仍会删掉它。
+           *
+           * 它若是默认账号，默认交给剩下的账号（与上游一致）：否则不点名的调用每一次都跑进这个没了的
+           * 账号、每一次都被拒。点名它仍得到带着这一行的卡片。
            */
+          const lost = (await accounts.rowsFor(refusedToolkit, holder)).find(
+            (candidate) => candidate.vendorUserId === reachedAs,
+          );
+          if (lost)
+            await accounts.passOverDefault(refusedToolkit, holder, lost.id);
           othersRemain = true;
         } else if (
           (
