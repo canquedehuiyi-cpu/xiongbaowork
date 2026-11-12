@@ -12,7 +12,6 @@
  * binding -- runs as the tenant the database stamped on that row, which may only agree with its
  * owner. A row stamped as nobody's is treated as no binding at all.
  */
-
 import { randomUUID } from "node:crypto";
 import { approvalPhrase } from "@openbot/shared/tool-name";
 import type { DrawnComponent } from "@openbot/toolkit/run-turn";

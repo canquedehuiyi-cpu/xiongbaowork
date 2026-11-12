@@ -504,6 +504,47 @@ describe("tenant YAML validation", () => {
     });
   });
 
+  test("an empty or null short name is refused, not taken as no short name", () => {
+    const withBrand = (brand: string) => () =>
+      validateTenantPackage({
+        brand,
+        agents: "agents: []",
+        channels: "channels: []",
+        model:
+          "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+        knowledge: "sources: []",
+        themeCss: "",
+      });
+    expect(
+      withBrand(
+        'tenant: { id: openbot, product_name: 熊宝数字员工, short_name: "" }',
+      ),
+    ).toThrow("tenant.short_name must be a non-empty string");
+    expect(
+      withBrand(
+        "tenant:\n  id: openbot\n  product_name: 熊宝数字员工\n  short_name:\n",
+      ),
+    ).toThrow("tenant.short_name must be a non-empty string");
+  });
+
+  test("a package without a short name sends the browser none", () => {
+    const tenantPackage = validateTenantPackage({
+      brand: "tenant: { id: openbot, product_name: 熊宝数字员工 }",
+      agents: "agents: []",
+      channels: "channels: []",
+      model:
+        "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+      knowledge: "sources: []",
+      themeCss: "",
+    });
+    expect(tenantPackage.shortName).toBeUndefined();
+    const configuration = createApplicationConfiguration(tenantPackage);
+    expect("shortName" in configuration.brand).toBe(false);
+    expect(configuration).toEqual({
+      brand: { tenantId: "openbot", productName: "熊宝数字员工" },
+    });
+  });
+
   test("loads the mounted fintech package without a theme file", async () => {
     const tenantPackage = await loadTenantPackage(
       fileURLToPath(new URL("../../examples/fintech", import.meta.url)),

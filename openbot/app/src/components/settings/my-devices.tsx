@@ -57,7 +57,7 @@ export function MyDevices() {
         {pairing ? (
           <div className="grid gap-2 rounded-lg border border-border bg-card p-3">
             <p className="font-medium text-sm">
-              在那台电脑的「{productName()}
+              在那台电脑的「{productName()}{" "}
               设备端」里填写下面两项，然后点「配对」。
             </p>
             {/*

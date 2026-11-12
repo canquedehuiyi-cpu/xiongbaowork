@@ -404,13 +404,12 @@ describe("the rules do not hide names", () => {
  * the rule with it. Only app/src and server/src are held to it: the Recorder extension and the Tauri
  * config cannot call the brand exit and keep their own constants by ruling.
  */
+// A package without a short name is called by its full name (brand.ts shortName), which is already here.
 const CURRENT_NAMES = [
   ...new Set(
-    [
-      tenant.product_name,
-      tenant.english_name,
-      tenant.short_name ?? "熊宝",
-    ].filter((name): name is string => Boolean(name)),
+    [tenant.product_name, tenant.english_name, tenant.short_name].filter(
+      (name): name is string => Boolean(name),
+    ),
   ),
 ];
 // Case-insensitive so "xiongbao work" in a sentence counts as the English name too.
@@ -425,24 +424,34 @@ const NAME_EXEMPT_PATHS: { test: (path: string) => boolean; reason: string }[] =
     },
   ];
 
-function nameFindings(): Finding[] {
-  const files = [
-    ...walk(join(REPO, "app/src")),
-    ...walk(join(REPO, "server/src")),
-  ]
-    .map((file) => relative(REPO, file))
-    .filter((path) => !NAME_EXEMPT_PATHS.some((exempt) => exempt.test(path)));
+// Takes sources rather than reading the tree, so a fixture goes through the same exemptions,
+// comment handling and match as the real scan.
+function nameFindingsIn(
+  sources: Iterable<{ path: string; source: () => string }>,
+): Finding[] {
   const found: Finding[] = [];
-  for (const file of files) {
+  for (const { path, source } of sources) {
+    if (NAME_EXEMPT_PATHS.some((exempt) => exempt.test(path))) continue;
     for (const { line, number } of codeLines(
-      readFileSync(join(REPO, file), "utf8"),
-      /\.(ts|tsx|js|mjs|cjs|jsx)$/.test(file),
+      source(),
+      /\.(ts|tsx|js|mjs|cjs|jsx)$/.test(path),
     )) {
       if (CURRENT_NAME.test(line))
-        found.push({ file, number, line: line.trim() });
+        found.push({ file: path, number, line: line.trim() });
     }
   }
   return found;
+}
+
+function nameFindings(): Finding[] {
+  return nameFindingsIn(
+    [...walk(join(REPO, "app/src")), ...walk(join(REPO, "server/src"))].map(
+      (file) => ({
+        path: relative(REPO, file),
+        source: () => readFileSync(file, "utf8"),
+      }),
+    ),
+  );
 }
 
 const NAME_ALLOWLIST: AllowEntry[] = JSON.parse(
@@ -452,11 +461,33 @@ const NAME_ALLOWLIST: AllowEntry[] = JSON.parse(
   ),
 );
 
+const unexplainedNames = (found: Finding[]) =>
+  found
+    .filter(
+      (f) =>
+        !NAME_ALLOWLIST.some(
+          (entry) => entry.file === f.file && f.line.includes(entry.text),
+        ),
+    )
+    .map((f) => `${f.file}:${f.number}: ${f.line}`);
+
 describe("the current product name comes from the brand exit", () => {
   const all = nameFindings();
+  const fixture = (path: string, source: string) =>
+    unexplainedNames(nameFindingsIn([{ path, source: () => source }]));
 
-  test("the package names are what the rule looks for", () => {
-    expect(CURRENT_NAMES).toEqual(["熊宝数字员工", "XiongBao Work", "熊宝"]);
+  test("the rule looks for every name the package declares", () => {
+    // Read again here, so this checks what CURRENT_NAMES was built from rather than restating it.
+    const declared = (
+      parse(
+        readFileSync(join(REPO, "examples/xiongbao/brand.yaml"), "utf8"),
+      ) as { tenant: Record<string, unknown> }
+    ).tenant;
+    for (const key of ["product_name", "english_name", "short_name"]) {
+      expect(typeof declared[key]).toBe("string");
+      expect(CURRENT_NAMES).toContain(declared[key] as string);
+    }
+    expect(CURRENT_NAMES).toHaveLength(3);
   });
 
   test("every allowlist entry's text itself carries a current name, so it names the hit", () => {
@@ -477,15 +508,7 @@ describe("the current product name comes from the brand exit", () => {
   });
 
   test("no literal product name in app/src or server/src outside the brand exits and the allowlist", () => {
-    const unexplained = all
-      .filter(
-        (f) =>
-          !NAME_ALLOWLIST.some(
-            (entry) => entry.file === f.file && f.line.includes(entry.text),
-          ),
-      )
-      .map((f) => `${f.file}:${f.number}: ${f.line}`);
-    expect(unexplained).toEqual([]);
+    expect(unexplainedNames(all)).toEqual([]);
   });
 
   test("every allowlist entry still matches a finding, so the list only shrinks", () => {
@@ -497,17 +520,35 @@ describe("the current product name comes from the brand exit", () => {
   });
 
   test("a JSX text node naming the product is reported", () => {
-    const source = "<p>欢迎使用熊宝</p>";
-    expect(codeLines(source).length).toBe(1);
-    expect(CURRENT_NAME.test(source)).toBe(true);
+    const line = `    <p>欢迎使用${tenant.short_name}</p>`;
+    expect(
+      fixture(
+        "app/src/components/welcome.tsx",
+        `export const Welcome = () => (\n${line}\n);\n`,
+      ),
+    ).toEqual([`app/src/components/welcome.tsx:2: ${line.trim()}`]);
   });
 
   test("the English name is reported whatever its case", () => {
-    expect(CURRENT_NAME.test('title: "Welcome to xiongbao work",')).toBe(true);
+    const line = `  title: "Welcome to ${tenant.english_name?.toLowerCase()}",`;
+    expect(
+      fixture("server/src/welcome.ts", `export const copy = {\n${line}\n};\n`),
+    ).toEqual([`server/src/welcome.ts:2: ${line.trim()}`]);
   });
 
-  test("a call to the brand exit is not reported", () => {
-    expect(CURRENT_NAME.test("<p>欢迎使用{shortName()}</p>")).toBe(false);
+  test("a call to the brand exit, a comment and the exit itself are not reported", () => {
+    expect(
+      fixture(
+        "app/src/components/welcome.tsx",
+        `// 欢迎使用${tenant.short_name}\nexport const W = () => <p>欢迎使用{shortName()}</p>;\n`,
+      ),
+    ).toEqual([]);
+    expect(
+      fixture(
+        "app/src/lib/brand.ts",
+        `const DEFAULT_ENGLISH_NAME = "${tenant.english_name}";\n`,
+      ),
+    ).toEqual([]);
   });
 });
 
