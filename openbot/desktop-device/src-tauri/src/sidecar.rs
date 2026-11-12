@@ -422,6 +422,48 @@ pub fn agent_desktop_path() -> io::Result<PathBuf> {
     Ok(dir.join(format!("{AGENT_DESKTOP}{}", std::env::consts::EXE_SUFFIX)))
 }
 
+/// The runner's stdin, where the device answers its desktop control channel (`--desktop-control
+/// stdio`, `runner/src/desktop/control.ts`): one JSON object per line. Shared between the launcher,
+/// which plugs in each new runner's stdin, and the app, which writes; a write after the runner has
+/// gone fails instead of reaching the next one.
+#[derive(Clone, Default)]
+pub struct ControlPipe(Arc<Mutex<Option<Box<dyn Write + Send>>>>);
+
+impl ControlPipe {
+    pub fn connect(&self, pipe: impl Write + Send + 'static) {
+        *self.0.lock().unwrap() = Some(Box::new(pipe));
+    }
+
+    pub fn disconnect(&self) {
+        *self.0.lock().unwrap() = None;
+    }
+
+    #[cfg(test)]
+    pub fn is_connected(&self) -> bool {
+        self.0.lock().unwrap().is_some()
+    }
+
+    /// Write `line` and a newline, and flush. A line holding a newline of its own is refused: the
+    /// runner would read it as two.
+    pub fn send(&self, line: &str) -> io::Result<()> {
+        if line.contains(['\n', '\r']) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "a control line is one line",
+            ));
+        }
+        let mut pipe = self.0.lock().unwrap();
+        let pipe = pipe
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotConnected, "no runner is running"))?;
+        let mut bytes = Vec::with_capacity(line.len() + 1);
+        bytes.extend_from_slice(line.as_bytes());
+        bytes.push(b'\n');
+        pipe.write_all(&bytes)?;
+        pipe.flush()
+    }
+}
+
 /// Starts the compiled runner, writes its output to a log, and hands each line to the supervisor.
 pub struct RunnerLauncher {
     pub program: PathBuf,
@@ -433,12 +475,21 @@ pub struct RunnerLauncher {
     /// The agent-desktop binary, passed as `--desktop-helper`. None: the runner looks next to itself.
     pub desktop_helper: Option<PathBuf>,
     pub log: PathBuf,
+    /// The runner's stdin, for the desktop control channel; plugged in again at every launch.
+    pub control: ControlPipe,
 }
 
 /// Log files bigger than this are started again rather than appended to.
 const LOG_LIMIT: u64 = 5 * 1024 * 1024;
 
 impl RunnerLauncher {
+    /// One line to the running runner's stdin (see [`ControlPipe::send`]). The app writes through
+    /// its own clone of `control`, because the launcher itself moves into the supervisor.
+    #[allow(dead_code)]
+    pub fn send_control(&self, line: &str) -> io::Result<()> {
+        self.control.send(line)
+    }
+
     pub fn command(&mut self, pairing: bool) -> Command {
         let code = if pairing { self.pair_code.take() } else { None };
         let mut command = Command::new(&self.program);
@@ -450,8 +501,10 @@ impl RunnerLauncher {
                 self.browser.as_deref(),
                 self.desktop_helper.as_deref(),
             ))
+            // The device app's end of the desktop control channel: its banner and stop key.
+            .args(["--desktop-control", "stdio"])
             .current_dir(&self.data_dir)
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         command
@@ -479,6 +532,8 @@ impl Launcher for RunnerLauncher {
     fn launch(&mut self, pairing: bool, output: Output) -> io::Result<Self::Child> {
         // Before the first start. The runner makes it private (0700) when it is asked for by flag.
         std::fs::create_dir_all(&self.data_dir)?;
+        // The last runner's stdin is not this one's: nothing is written to it from here on.
+        self.control.disconnect();
         stop_legacy_runners();
         let log = Arc::new(Mutex::new(self.open_log()?));
         let mut tree = crate::process_tree::spawn(self.command(pairing))?;
@@ -491,6 +546,10 @@ impl Launcher for RunnerLauncher {
             );
         }
         let child = tree.child_mut();
+        match child.stdin.take() {
+            Some(stdin) => self.control.connect(stdin),
+            None => self.control.disconnect(),
+        }
         if let Some(stdout) = child.stdout.take() {
             forward(stdout, Arc::clone(&log), output.clone(), false);
         }
@@ -693,6 +752,7 @@ mod tests {
             browser: None,
             desktop_helper: None,
             log: PathBuf::from("/data/runner.log"),
+            control: ControlPipe::default(),
         };
         let first = launcher.command(true);
         assert_eq!(first.get_current_dir(), Some(Path::new("/data/runner")));
@@ -725,6 +785,7 @@ mod tests {
             browser: None,
             desktop_helper: Some(helper.clone()),
             log: PathBuf::from("/data/runner.log"),
+            control: ControlPipe::default(),
         };
         let command = launcher.command(false);
         let launched: Vec<String> = command
@@ -734,6 +795,88 @@ mod tests {
         assert!(launched
             .windows(2)
             .any(|w| w == ["--desktop-helper", &*helper.to_string_lossy()]));
+    }
+
+    #[test]
+    fn the_runner_gets_a_piped_stdin_and_the_control_flag() {
+        let dir = crate::process_tree::tests::scratch("control-pipe");
+        let mut launcher = RunnerLauncher {
+            // Any program that starts: this test binary, which refuses the runner's arguments and
+            // exits. Its stdin is what is checked.
+            program: std::env::current_exe().unwrap(),
+            data_dir: dir.join("runner"),
+            settings: settings(),
+            pair_code: None,
+            browser: None,
+            desktop_helper: None,
+            log: dir.join("runner.log"),
+            control: ControlPipe::default(),
+        };
+        for pairing in [true, false] {
+            let args: Vec<String> = launcher
+                .command(pairing)
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect();
+            assert!(
+                args.windows(2).any(|w| w == ["--desktop-control", "stdio"]),
+                "{args:?}"
+            );
+        }
+        let app_side = launcher.control.clone();
+        assert!(!app_side.is_connected());
+        assert_eq!(
+            launcher.send_control("{}").unwrap_err().kind(),
+            io::ErrorKind::NotConnected
+        );
+        let output = crate::supervise::tests::output();
+        let mut tree = launcher.launch(false, output).unwrap();
+        assert!(
+            app_side.is_connected(),
+            "the runner's stdin is a pipe the app can write to"
+        );
+        assert!(
+            tree.child_mut().stdin.is_none(),
+            "kept by the pipe, not the child"
+        );
+        tree.kill_tree(std::time::Duration::ZERO);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[derive(Clone, Default)]
+    struct Sink(Arc<Mutex<Vec<u8>>>);
+    impl Write for Sink {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn control_lines_go_to_the_runner_one_per_line() {
+        let pipe = ControlPipe::default();
+        assert_eq!(
+            pipe.send("{}").unwrap_err().kind(),
+            io::ErrorKind::NotConnected
+        );
+        let sink = Sink::default();
+        pipe.connect(sink.clone());
+        pipe.send(r#"{"control":"stop","reason":"button"}"#)
+            .unwrap();
+        pipe.send(r#"{"control":"headed-ack","seq":2}"#).unwrap();
+        assert_eq!(
+            pipe.send("{}\n{}").unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            String::from_utf8(sink.0.lock().unwrap().clone()).unwrap(),
+            "{\"control\":\"stop\",\"reason\":\"button\"}\n{\"control\":\"headed-ack\",\"seq\":2}\n"
+        );
+        pipe.disconnect();
+        assert!(pipe.send("{}").is_err());
     }
 
     #[test]
