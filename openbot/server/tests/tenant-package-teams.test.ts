@@ -17,6 +17,7 @@ import {
   validateTenantPackage,
 } from "../src/tenant-package";
 import type { PackageTeam } from "../src/tenant-package-capabilities";
+import { teamChannels, teamLeadPrompts } from "../src/tenant-package-capabilities";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -72,9 +73,18 @@ const packageWith = (
   formerTenantIds: [],
   productName: "专家团同步测试",
   stylesheet: null,
-  agents,
+  /*
+   * A loaded package, not a raw declaration: the loader folds teams into the
+   * channel list (`teamChannels`) and into the lead's prompt (`teamLeadPrompts`)
+   * before handing the package to the sync (see `loadTenantPackage`, which
+   * returns exactly this shape). The sync trusts a loaded package and re-folds
+   * nothing, so a fixture that declares `teams` without the fold materializes
+   * no channel and no manifest — CI run 43328257829 failed its three team
+   * assertions on exactly that gap, not on any product fault.
+   */
+  agents: teamLeadPrompts(agents, teams),
   omittedAgentIds: [],
-  channels: [],
+  channels: [...teamChannels(teams)],
   model: {
     provider: "openai",
     credentialSecretRef: "TEAMS_TEST_KEY",

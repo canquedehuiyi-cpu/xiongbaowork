@@ -248,12 +248,10 @@ describe("connectors in a tenant package", () => {
         agentId: grantBot,
         tenantId: SYSTEM_TENANT,
       });
-      await database.insert(skillTools).values({
-        skillId: `pkg-skill-${suite}`,
-        tenantId: SYSTEM_TENANT,
-        ref: `${declared.id}/search`,
-        declaredBy: null,
-      });
+      // The skill row must exist before the tool declarations that reference it:
+      // `skill_tools.skill_id` is a real foreign key, so this order is the only one
+      // that loads. CI (run 43328257829) failed here with
+      // `skill_tools_skill_id_skills_id_fk` when the declaration was written first.
       await database.insert(skillTable).values({
         id: `pkg-skill-${suite}`,
         tenantId: SYSTEM_TENANT,
@@ -263,6 +261,12 @@ describe("connectors in a tenant package", () => {
         summary: "为悬空 ref 清理而设。",
         instructions: "无关。",
         origin: "catalogue",
+      });
+      await database.insert(skillTools).values({
+        skillId: `pkg-skill-${suite}`,
+        tenantId: SYSTEM_TENANT,
+        ref: `${declared.id}/search`,
+        declaredBy: null,
       });
     });
 

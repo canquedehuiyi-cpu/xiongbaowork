@@ -17,6 +17,7 @@ import {
   synchronizeTenantPackage,
 } from "../src/tenant-package";
 import type { SkillAssetFile } from "../src/tenant-package-capabilities";
+import { skillAssetManifest } from "../src/tenant-package-capabilities";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -148,10 +149,14 @@ describe("skill attachments in a tenant package", () => {
     expect(row?.instructions).toContain("skills/read_skill_asset");
     expect(row?.instructions).toContain("references/step-1.md");
     expect(row?.instructions).toContain("references/step-2.md");
-    // And the manifest sits at the end, not the middle.
-    expect(row?.instructions.trimEnd().endsWith("references/step-2.md")).toBe(
-      true,
-    );
+    // And the manifest sits at the end, not the middle: the whole machine-generated
+    // block is the last thing in the instructions. The manifest's own lines end with
+    // `（大小，类型）`, so the assertion anchors on the manifest itself rather than on a
+    // bare path that never terminates a line (CI run 43328257829: endsWith(path) was
+    // false by construction, not by any product fault).
+    expect(
+      row?.instructions.trimEnd().endsWith(skillAssetManifest(files())),
+    ).toBe(true);
 
     const rows = await assetPaths(skillSlug);
     expect(rows.map(({ path }) => path).sort()).toEqual([
