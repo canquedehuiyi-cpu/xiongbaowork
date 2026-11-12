@@ -296,7 +296,7 @@ async function sharePermission(
     return `${input.refused}: ${verdict.message}`;
   const initiator = continuation?.initiator;
   if (initiator && initiator.kind !== "person") throw verdict.suspension;
-  return `${input.refused} yet: ${verdict.message} Tell the person you are waiting for their permission on your page in OpenBot.`;
+  return `${input.refused} yet: ${verdict.message} Tell the person you are waiting for their permission on your page in the app.`;
 }
 
 /** Re-exported so callers of this module do not need to know where it is declared. */

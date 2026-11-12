@@ -303,7 +303,7 @@ describe("the personal edition without OpenBot Desktop", () => {
     expect(tools.map((tool) => tool.name)).toEqual(["host_list_folders"]);
     const text = await tools[0]?.execute({});
     expect(text).toBe(
-      `${REFUSAL_MARKER} This Bot has no folders it can read right now. Folder access ends when you stop OpenBot. To give it a folder, use Choose folder in Settings → Computer.`,
+      `${REFUSAL_MARKER} This Bot has no folders it can read right now. Folder access ends when you stop the app. To give it a folder, use Choose folder in Settings → Computer.`,
     );
     expect(text).not.toMatch(/administrator|host|grant/i);
   });

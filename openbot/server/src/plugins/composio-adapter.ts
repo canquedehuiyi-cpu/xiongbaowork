@@ -3125,7 +3125,7 @@ export function buildComposioClient(
       if (withheld.length > 0) {
         const named = withheld.join(", ");
         throw new Error(
-          `${call.slug} was not run, because it included ${named}, which is a file. OpenBot can't pass a file to this action, so any value there could only have been made up, and the action is offered without ${named} for that reason. Try again without ${named}.`,
+          `${call.slug} was not run, because it included ${named}, which is a file. The system can't pass a file to this action, so any value there could only have been made up, and the action is offered without ${named} for that reason. Try again without ${named}.`,
         );
       }
 

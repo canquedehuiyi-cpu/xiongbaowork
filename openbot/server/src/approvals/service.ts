@@ -632,7 +632,7 @@ export function createApprovalService(
       const handOff = request.action.policy?.behaviour === "hand_off";
       throw new HeadlessToolSuspension(
         handOff
-          ? `This needs you: ${request.action.policy?.reason} Do it yourself, then mark it done on the Bot's page in OpenBot.`
+          ? `This needs you: ${request.action.policy?.reason} Do it yourself, then mark it done on the Bot's page in the app.`
           : "This action is waiting for your approval.",
         {
           kind: "approval",
