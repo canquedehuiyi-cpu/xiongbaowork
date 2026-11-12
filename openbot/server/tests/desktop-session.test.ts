@@ -280,6 +280,8 @@ function harness(
   options: {
     owner?: string;
     status?: (call: number) => Record<string, unknown>;
+    /** Awaited before the device's status answer comes back: a reply still on its way. */
+    statusWait?: (call: number) => Promise<void>;
     start?: () => void;
     /** Awaited before an ask is approved: the owner taking their time. */
     approve?: () => Promise<void>;
@@ -312,7 +314,11 @@ function harness(
     if (options.postError) throw options.postError;
     if (path === "/desktop/session_status") {
       statusCalls += 1;
-      return (options.status?.(statusCalls) ?? {
+      const call = statusCalls;
+      // The device answers now; the answer reaches the server later.
+      const answer = options.status?.(call);
+      await options.statusWait?.(call);
+      return (answer ?? {
         writable: true,
         platform: "macos",
       }) as T;
@@ -387,7 +393,7 @@ function harness(
       if (fail) throw fail;
       return { done: true };
     };
-  const click = (fail?: Error) =>
+  const click = (fail?: Error, signal?: AbortSignal) =>
     gate.run(
       "computer_desktop_click",
       "bot",
@@ -402,6 +408,7 @@ function harness(
           process: "notepad",
           control: { type: "Button", name: "确定" },
         },
+        ...(signal ? { signal } : {}),
       },
       send(fail),
     );
@@ -694,6 +701,85 @@ describe("desktop write gate", () => {
     expect(h.cards).toHaveLength(2);
     expect(starts).toBe(2);
     expect(h.sent).toHaveLength(1);
+  });
+
+  test("a no-session answer that arrives after another write opened the session asks the device again", async () => {
+    const replies: (() => void)[] = [];
+    const h = harness({
+      // The device holds no session until the first write starts one.
+      status: () => {
+        const started = h.posts.find(
+          (p) => p.path === "/desktop/session_start",
+        );
+        return started
+          ? {
+              writable: true,
+              platform: "macos",
+              session: { token: String(started.payload.token) },
+            }
+          : { writable: true, platform: "macos" };
+      },
+      statusWait: (call) =>
+        call <= 2
+          ? new Promise<void>((resolve) => {
+              replies[call] = resolve;
+            })
+          : Promise.resolve(),
+    });
+    const first = h.click();
+    const second = h.click();
+    // Both ask the device before there is a session; both answers are still on their way.
+    for (let i = 0; i < 50 && replies.length < 3; i++) await Promise.resolve();
+    expect(replies[1]).toBeDefined();
+    expect(replies[2]).toBeDefined();
+    replies[1]?.();
+    expect(await first).toEqual({ done: true });
+    // The second answer ("no session") was given before the first write opened its session.
+    replies[2]?.();
+    expect(await second).toEqual({ done: true });
+    expect(h.cards).toHaveLength(1);
+    const starts = h.posts.filter((p) => p.path === "/desktop/session_start");
+    expect(starts).toHaveLength(1);
+    const token = String(starts[0]?.payload.token);
+    expect(h.sent).toEqual([
+      { session: token, approved: true },
+      { session: token, approved: false },
+    ]);
+    expect(h.sessions.get(desktopSessionKey(MACHINE, "bot", OWNER))).toBe(
+      token,
+    );
+    expect(h.leaks()).not.toMatch(HEX64);
+  });
+
+  test("a write waiting on another write's session can be cancelled; that session still opens", async () => {
+    let release: () => void = () => undefined;
+    const approval = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = harness({ approve: () => approval });
+    const first = h.click();
+    const controller = new AbortController();
+    const second = h
+      .click(undefined, controller.signal)
+      .catch((e: unknown) => e);
+    // The first is at the owner's card; the second waits for its session.
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(h.cards).toHaveLength(1);
+    const cancelled = new Error("cancelled");
+    controller.abort(cancelled);
+    // The second gives up at once, while the owner has not answered yet.
+    expect(
+      await Promise.race([second, Bun.sleep(200).then(() => "still waiting")]),
+    ).toBe(cancelled);
+    expect(h.sent).toHaveLength(0);
+    release();
+    expect(await first).toEqual({ done: true });
+    expect(h.cards).toHaveLength(1);
+    const starts = h.posts.filter((p) => p.path === "/desktop/session_start");
+    expect(starts).toHaveLength(1);
+    expect(h.sent).toEqual([
+      { session: String(starts[0]?.payload.token), approved: true },
+    ]);
   });
 
   test("an old runner is a refusal, not a failure of the action", async () => {

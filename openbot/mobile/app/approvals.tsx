@@ -20,6 +20,8 @@ const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
   "outbound_send",
   "share_access",
   "publish_post",
+  "desktop_session",
+  "desktop_action",
 ]);
 export default function ApprovalsScreen() {
   const { requestId } = useLocalSearchParams<{ requestId?: string }>();
