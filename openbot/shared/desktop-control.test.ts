@@ -52,12 +52,36 @@ describe("desktop-control protocol", () => {
 
   test("the two read actions and the three session actions exist, nothing else", () => {
     expect([...DESKTOP_ACTIONS].sort()).toEqual([
+      "desktop.click",
+      "desktop.focus",
+      "desktop.key",
       "desktop.session_end",
       "desktop.session_start",
       "desktop.session_status",
       "desktop.snapshot",
+      "desktop.type",
       "desktop.windows",
     ]);
+  });
+
+  test("DESKTOP_ACTIONS is exactly the nine actions: two reads, three session actions, four writes", () => {
+    expect([...DESKTOP_ACTIONS]).toEqual([
+      "desktop.windows",
+      "desktop.snapshot",
+      "desktop.session_start",
+      "desktop.session_status",
+      "desktop.session_end",
+      "desktop.click",
+      "desktop.type",
+      "desktop.key",
+      "desktop.focus",
+    ]);
+  });
+
+  test("outcome_unknown carries the spec's copy", () => {
+    expect(desktopMessage("outcome_unknown")).toBe(
+      "不确定这一步是否已经生效，请先重新读取窗口确认。",
+    );
   });
 
   test("the limits are the plan's numbers", () => {
