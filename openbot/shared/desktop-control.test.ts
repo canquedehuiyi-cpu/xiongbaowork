@@ -10,6 +10,8 @@ import {
   DESKTOP_TEXT_ROLES,
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
+  type DesktopWritePayload,
+  type DesktopWriteRequest,
   desktopActionWordsOf,
   desktopActivationKey,
   desktopMessage,
@@ -526,11 +528,50 @@ describe("desktop-control protocol", () => {
       "a\nb",
       " notepad",
       "a".repeat(65),
+      "notepad -x",
+      "notepad --arg",
+      "a - b",
+      "a\t-x",
     ])
       expect({ app, ok: DESKTOP_APP_NAME.test(app) }).toEqual({
         app,
         ok: false,
       });
+  });
+
+  test("a desktop write's payload is typed by its action", () => {
+    const common = {
+      session: "t",
+      botId: "b",
+      actorId: "a",
+      approved: false,
+      actionWords: [],
+    };
+    const click: DesktopWritePayload<"desktop.click"> = { ...common, ref: "r" };
+    const read: DesktopWriteRequest = {
+      action: "desktop.clipboard_read",
+      payload: { ...common, approved: true },
+    };
+    const unapproved: DesktopWriteRequest = {
+      action: "desktop.clipboard_read",
+      // @ts-expect-error a clipboard read is sent only once approved
+      payload: common,
+    };
+    // @ts-expect-error a click names its control
+    const noRef: DesktopWritePayload<"desktop.click"> = common;
+    const noRefRequest: DesktopWriteRequest = {
+      action: "desktop.click",
+      // @ts-expect-error a click names its control, whatever else could carry no target
+      payload: common,
+    };
+    const noApp: DesktopWriteRequest = {
+      action: "desktop.launch",
+      // @ts-expect-error a launch names its app
+      payload: { ...common, text: "x" },
+    };
+    expect([click, read, unapproved, noRef, noRefRequest, noApp]).toHaveLength(
+      6,
+    );
   });
 
   test("the text roles a desktop type may write into", () => {

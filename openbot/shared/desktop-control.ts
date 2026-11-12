@@ -46,10 +46,12 @@ export const DESKTOP_WRITE_ACTIONS: ReadonlySet<string> = new Set([
 
 /**
  * An app `desktop.launch` may start: a name, never a path or a flag. It starts with a letter or a
- * digit (so not `-x`, `.`, `..` or `/`), and holds no slash, backslash, colon or control character.
+ * digit (so not `-x`, `.`, `..` or `/`), holds no slash, backslash, colon or control character, and
+ * no space is followed by `-` (so not `notepad -x`, which reads like a flag even as one argument).
  * On Windows agent-desktop itself only finds programs in System32 or the Windows directory.
  */
-export const DESKTOP_APP_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._()-]{0,63}$/u;
+export const DESKTOP_APP_NAME =
+  /^[\p{L}\p{N}](?:[\p{L}\p{N}._()-]| (?!-)){0,63}$/u;
 
 /**
  * What every desktop write carries. `session` is the token the server minted; `approved` says the
@@ -65,21 +67,27 @@ export type DesktopWriteCommon = {
   actionWords: string[];
   approvedTitle?: string;
 };
-/**
- * One write's payload: click `{ ref }`, type `{ ref, text, mode }`, key `{ windowId, keys }`, focus
- * `{ windowId }`, launch `{ app }`, clipboard_read `{}` (and `approved: true`, always), clipboard_write
- * `{ text }`.
- */
-export type DesktopWritePayload = DesktopWriteCommon &
-  (
-    | { ref: string }
-    | { ref: string; text: string; mode: "replace" | "append" }
-    | { windowId: string; keys: string }
-    | { windowId: string }
-    | { app: string }
-    | Record<never, never>
-    | { text: string }
-  );
+/** What each desktop write carries besides `DesktopWriteCommon`, by action. */
+export type DesktopWriteTargets = {
+  "desktop.click": { ref: string };
+  "desktop.type": { ref: string; text: string; mode: "replace" | "append" };
+  "desktop.key": { windowId: string; keys: string };
+  "desktop.focus": { windowId: string };
+  "desktop.launch": { app: string };
+  /** Nothing more, but `approved: true`, always. */
+  "desktop.clipboard_read": { approved: true };
+  "desktop.clipboard_write": { text: string };
+};
+export type DesktopWriteAction = keyof DesktopWriteTargets;
+
+/** One write's payload, for its action: a click without `ref` does not type-check. */
+export type DesktopWritePayload<A extends DesktopWriteAction> =
+  DesktopWriteCommon & DesktopWriteTargets[A];
+
+/** A desktop write as sent: the action and its own payload, told apart by `action`. */
+export type DesktopWriteRequest = {
+  [A in DesktopWriteAction]: { action: A; payload: DesktopWritePayload<A> };
+}[DesktopWriteAction];
 
 /** `desktop.wait`'s payload, a read: no session. `allowSensitive` as for a snapshot. */
 export type DesktopWaitPayload = {
@@ -630,6 +638,12 @@ export type DesktopElement = {
 };
 
 export type DesktopImage = { base64: string; width: number; height: number };
+
+/**
+ * What a replayed `desktop.clipboard_read` answers: the action journal keeps only the length of
+ * what was read (plan: clipboard contents are recorded by length only), never the text.
+ */
+export const DESKTOP_CLIPBOARD_NOT_KEPT = "剪贴板内容不会被保存，请重新读取。";
 
 /** What replaces a screenshot the approval store did not keep. */
 export const DESKTOP_IMAGE_NOT_KEPT = "截图未保存，请重新读取窗口。";

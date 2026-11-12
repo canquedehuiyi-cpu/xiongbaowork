@@ -1,8 +1,10 @@
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DESKTOP_CLIPBOARD_NOT_KEPT,
   DESKTOP_LIMITS,
   type DesktopPlatform,
   desktopMessage,
@@ -21,6 +23,7 @@ import {
 import { createDesktopHost } from "../src/desktop/host";
 import { createDesktopSessions } from "../src/desktop/session";
 import { createRunnerExecutor } from "../src/execute";
+import { createActionJournal } from "../src/journal";
 
 /* The four desktop writes on agent-desktop (plan docs/plans/2026-11-12-desktop-write.md, Task 21):
    the real CLI layer and reader over the fake binary, a real session over an in-memory channel whose
@@ -1529,6 +1532,16 @@ describe("desktop writes: launch and the clipboard (Task 24)", () => {
       ["launch", "notepad"],
     ]);
 
+    // A name with a space is one argument; a flag after a space is no name at all.
+    expect(
+      output(await t.write("desktop.launch", { app: "Microsoft Edge" })),
+    ).toMatchObject({ app: "Microsoft Edge" });
+    expect(t.log().at(-1)).toEqual(["launch", "Microsoft Edge"]);
+    const ran = t.log().length;
+    for (const app of ["notepad -x", "notepad --arg", "a - b"])
+      expect(await t.write("desktop.launch", { app })).toEqual(fail(BAD_APP));
+    expect(t.log()).toHaveLength(ran);
+
     // Linux is read only: launch never reaches the binary there either.
     const linux = setup("linux");
     await linux.start();
@@ -1795,5 +1808,61 @@ describe("desktop writes: review fixes 3", () => {
     }
     // Never tried again, headed or not.
     expect(t.writes().filter((args) => args.includes("--headed"))).toEqual([]);
+  });
+});
+
+describe("desktop writes: review fixes 4", () => {
+  test("a clipboard read is journaled as its length only; a replay says it was not kept", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ad-write-journal-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    const file = join(dir, "actions.sqlite");
+    const journal = createActionJournal(file);
+    cleanup.push(() => journal.close());
+    const secret = "验证码 123456 😀";
+    const action = {
+      action: "desktop.clipboard_read",
+      payload: { session: TOKEN, actorId: ACTOR, approved: true },
+    };
+    const live = await journal.execute("scope", "k1", action, async () => ({
+      ok: true,
+      output: { text: secret, truncated: false, durationMs: 4 },
+    }));
+    // The live answer carries the text.
+    expect(live).toEqual({
+      ok: true,
+      output: { text: secret, truncated: false, durationMs: 4 },
+    });
+
+    const database = new Database(file, { readonly: true });
+    const rows = database
+      .query<{ outcome: string }, []>("SELECT outcome FROM actions")
+      .all()
+      .map((row) => row.outcome);
+    database.close();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toContain("验证码");
+    expect(rows[0]).not.toContain("123456");
+    expect(JSON.parse(rows[0] ?? "{}")).toEqual({
+      ok: true,
+      output: { chars: [...secret].length, truncated: false },
+    });
+
+    // A replay cannot give the text back, and says so rather than pass off an empty clipboard.
+    const replay = await journal.execute("scope", "k1", action, async () => {
+      throw new Error("a replay must not run again");
+    });
+    expect(replay).toEqual({ ok: false, error: DESKTOP_CLIPBOARD_NOT_KEPT });
+    expect(DESKTOP_CLIPBOARD_NOT_KEPT).toBe(
+      "剪贴板内容不会被保存，请重新读取。",
+    );
+
+    // A failed read holds no text and replays as it was.
+    const failed = { ok: false as const, error: desktopMessage("failed") };
+    await journal.execute("scope", "k2", action, async () => failed);
+    expect(
+      await journal.execute("scope", "k2", action, async () => {
+        throw new Error("a replay must not run again");
+      }),
+    ).toEqual(failed);
   });
 });
