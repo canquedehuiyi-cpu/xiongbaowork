@@ -12,6 +12,8 @@
  * bought — kept here, on disk, in a file this process creates for itself. There is no password to
  * enter, no login to keep alive, and nothing a screenshot could give away.
  */
+// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+import "../../shared/apply-env-aliases";
 import { existsSync, mkdirSync } from "node:fs";
 import { hostname, platform } from "node:os";
 import { join, resolve, sep } from "node:path";

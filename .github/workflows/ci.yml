@@ -327,6 +327,9 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: docker build -f Dockerfile -t openbot:trackb .
+      # The s6 oneshot that copies XIONGBAO_* onto OPENBOT_* runs on the host: it only reads and writes files.
+      - name: env-aliases oneshot
+        run: sh docker/tests/env-aliases.test.sh
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)
         run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
