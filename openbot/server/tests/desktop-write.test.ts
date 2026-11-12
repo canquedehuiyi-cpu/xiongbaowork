@@ -10,7 +10,10 @@ import {
 import { desktopActionReason } from "../src/approvals/desktop-policy";
 import { decideAction, refusedOutright } from "../src/approvals/policy";
 import { oneRowPerAction } from "../../shared/activity-rows";
-import { isApprovedExecution } from "../src/approvals/service";
+import {
+  isApprovalRecheck,
+  isApprovedExecution,
+} from "../src/approvals/service";
 import { computerActionIdentity } from "../src/computer/action-identity";
 import {
   type ApprovalCandidate,
@@ -1001,6 +1004,83 @@ describe("the approved resend through the runner's journal", () => {
       );
       expect(asked.length).toBeGreaterThan(1);
       expect(asked.filter((sent) => sent.key !== undefined)).toEqual([]);
+    });
+  });
+
+  test("the device asks, the run waits for the owner, and the approved run is carried out under the approved key", async () => {
+    await runAsTenant(OWNER, async () => {
+      const fixture = approvalFixture();
+      const needs = desktopMessage("needs_approval", "控件名含「发送」");
+      let carriedOut = 0;
+      let permitAll = false;
+      const h = harness({
+        session: true,
+        journal: true,
+        /*
+         * The policy lets a plain click in a session through; only the device's own reason asks
+         * (the approval service), and so do the approval's re-check and its run, as they do there.
+         */
+        gate: async (candidate) => {
+          if (permitAll) return { complete: async () => undefined };
+          return !candidate.subject?.desktopWrite?.deviceReason &&
+            !isApprovalRecheck() &&
+            !isApprovedExecution(candidate)
+            ? undefined
+            : fixture.service.gate(candidate);
+        },
+        write: (_path, payload) => {
+          if (payload.approved !== true) throw new DeviceActionError(needs);
+          carriedOut += 1;
+          return {
+            physical: false,
+            durationMs: 3,
+            delivery: "verified",
+            window: {
+              windowId: NOTEPAD.windowId,
+              title: NOTEPAD.title,
+              process: "notepad",
+            },
+            note: "n",
+          };
+        },
+      });
+      await h.read();
+      const args = { ref: "abc123-1:1" };
+      const context = {
+        ...CONTINUATION(args),
+        toolName: "computer_desktop_click",
+      };
+      const click = () =>
+        withApprovalContext(context, () =>
+          computerActionIdentity.run("call-11", () =>
+            h.gateway.clickDesktop("bot", ACTOR, args),
+          ),
+        );
+      // Sent unapproved, the device asks; asked with its reason, the run waits for the owner.
+      await expect(click()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      expect(carriedOut).toBe(0);
+      // Approved and carried out by the server: the whole tool runs again.
+      await h.read();
+      const answered = await approveAndResume(fixture, click);
+      expect(answered.result).toEqual({ content: expect.any(String) });
+      expect(carriedOut).toBe(1);
+      const first = JSON.stringify(["bot", "/desktop/click", "call-11"]);
+      const approvedKey = JSON.stringify([
+        "bot",
+        "/desktop/click",
+        "call-11:approved",
+      ]);
+      const sent = h.keys.filter((post) => post.path === "/desktop/click");
+      expect(sent.map((post) => post.key)).toEqual([first, approvedKey]);
+      // The approved write again (a replay): the journal answers it; the device does nothing more.
+      await h.read();
+      permitAll = true;
+      const replayed = await click();
+      expect(replayed.ok).toBe(true);
+      expect(carriedOut).toBe(1);
+      expect(
+        h.keys.filter((post) => post.path === "/desktop/click").at(-1)?.key,
+      ).toBe(approvedKey);
     });
   });
 
