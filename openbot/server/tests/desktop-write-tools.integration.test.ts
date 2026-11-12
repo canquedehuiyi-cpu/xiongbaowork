@@ -1244,6 +1244,68 @@ test("the clipboard, a launch and a wait on the device: the read asked every tim
   ]);
 }, 40_000);
 
+test("查看桌面 disabled takes the wait with it; set to ask, the wait asks", async () => {
+  const disabled = await pairedDevice();
+  await runAsTenant(disabled.tenant, () =>
+    disabled.service.createRule(disabled.tenant, {
+      botId: disabled.botId,
+      toolRef: "computer_desktop_snapshot",
+      effect: "*",
+      scope: "*",
+      behaviour: "deny",
+    }),
+  );
+  const offered = names(await disabled.toolsFor());
+  expect(offered).not.toContain("computer_desktop_snapshot");
+  expect(offered).not.toContain("computer_desktop_wait");
+  expect(offered).toContain("computer_desktop_windows");
+  const { botId, actor, gateway } = disabled;
+  await expect(
+    runAsTenant(disabled.tenant, () =>
+      gateway.waitDesktop(botId, actor, {
+        windowId: "a0123456789abcdef",
+        name: "OK",
+        timeoutSec: 2,
+      }),
+    ),
+  ).rejects.toThrow(TOOL_DISABLED);
+  expect(disabled.sent("desktop.windows")).toHaveLength(0);
+  expect(disabled.sent("desktop.wait")).toHaveLength(0);
+  expect(disabled.adLog()).toEqual([]);
+
+  const asks = await pairedDevice();
+  await runAsTenant(asks.tenant, () =>
+    asks.service.createRule(asks.tenant, {
+      botId: asks.botId,
+      toolRef: "computer_desktop_snapshot",
+      effect: "*",
+      scope: "*",
+      behaviour: "ask",
+    }),
+  );
+  const listed = (await asks.call("computer_desktop_windows", {})) as {
+    windows: { windowId: string }[];
+  };
+  const windowId = listed.windows[0]?.windowId as string;
+  const toolCallId = randomUUID();
+  await expect(
+    asks.call(
+      "computer_desktop_wait",
+      { windowId, name: "OK", timeoutSec: 2 },
+      toolCallId,
+    ),
+  ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+  const card = (await asks.requests()).find(
+    (request) => request.action.toolCallId === toolCallId,
+  );
+  expect(card?.action.toolRef).toBe("computer_desktop_wait");
+  expect(card?.action.policy).toMatchObject({
+    behaviour: "ask",
+    source: "personal_rule",
+  });
+  expect(asks.sent("desktop.wait")).toHaveLength(0);
+}, 30_000);
+
 afterAll(async () => {
   for (const cleanup of cleanups) await cleanup().catch(() => undefined);
   for (const tenant of tenants) {

@@ -10,6 +10,8 @@ import {
 import { z } from "zod";
 import {
   DESKTOP_SESSION_TOOL,
+  DESKTOP_SNAPSHOT_TOOL,
+  DESKTOP_WAIT_TOOL,
   DESKTOP_WRITE_TOOLS,
 } from "../approvals/desktop-policy";
 import { currentApprovalContext } from "../approvals/types";
@@ -94,10 +96,13 @@ export function createHeadlessComputerTools(options: {
   if (!disabled) return tools;
   // Operating the desktop disabled takes every desktop write tool with it.
   const noDesktopWrites = disabled(DESKTOP_SESSION_TOOL);
+  // Looking at the desktop disabled takes the wait with it: a wait reads the window as a snapshot.
+  const noDesktopReads = disabled(DESKTOP_SNAPSHOT_TOOL);
   return tools.filter(
     (tool) =>
       !disabled(tool.definition.name) &&
-      !(noDesktopWrites && DESKTOP_WRITE_TOOLS.has(tool.definition.name)),
+      !(noDesktopWrites && DESKTOP_WRITE_TOOLS.has(tool.definition.name)) &&
+      !(noDesktopReads && tool.definition.name === DESKTOP_WAIT_TOOL),
   );
 }
 

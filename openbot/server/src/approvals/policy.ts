@@ -5,6 +5,8 @@ import {
   activeDesktopSession,
   type DesktopFloor,
   DESKTOP_SESSION_TOOL,
+  DESKTOP_SNAPSHOT_TOOL,
+  DESKTOP_WAIT_TOOL,
   desktopFloors,
   desktopOnceOnly,
 } from "./desktop-policy";
@@ -1860,15 +1862,17 @@ export async function decideAction(input: {
    * workspace that switched personal rules off switches both off (upstream #1394). A conversation
    * answer only ever allows, so it is not one of the rules that tighten.
    */
-  const matched = strictestRule(
-    candidate,
-    input.team,
-    layers.personal,
-    layers.owner,
-    {
-      conversation: input.customRulesEnabled ? (input.conversation ?? []) : [],
-    },
-  );
+  // --- desktop control (sub-project 2): a wait is also weighed as the snapshot it reads ---
+  const matched = governedAs(candidate)
+    .map((governed) =>
+      strictestRule(governed, input.team, layers.personal, layers.owner, {
+        conversation: input.customRulesEnabled
+          ? (input.conversation ?? [])
+          : [],
+      }),
+    )
+    .reduce(stricterMatch, undefined);
+  // --- end desktop control ---
   const refused = refusedOutright(input);
   if (refused) return refused;
   const runnerCommand = isRunnerCommand(candidate);
@@ -2051,6 +2055,31 @@ export function closedKind(
   return undefined;
 }
 
+// --- desktop control (sub-project 2) ---
+/**
+ * The candidates whose rules govern this one: a desktop wait (plan Task 25) reads the window as a
+ * snapshot does, so 查看桌面's rules govern it too, and the stricter of the two answers. Every other
+ * action is governed by its own rules alone.
+ */
+function governedAs(candidate: ApprovalCandidate): ApprovalCandidate[] {
+  return candidate.toolRef === DESKTOP_WAIT_TOOL
+    ? [candidate, { ...candidate, toolRef: DESKTOP_SNAPSHOT_TOOL }]
+    : [candidate];
+}
+
+/** The stricter of two matched rules; a tie keeps the first. */
+function stricterMatch(
+  best: ReturnType<typeof strictestRule>,
+  next: ReturnType<typeof strictestRule>,
+): ReturnType<typeof strictestRule> {
+  if (!next) return best;
+  if (!best) return next;
+  return rankOf(next.rule.behaviour) > rankOf(best.rule.behaviour)
+    ? next
+    : best;
+}
+// --- end desktop control ---
+
 /** The team's cap of `ask` for a command on a paired computer, as a floor. */
 const HOST_COMMAND_CAP_ASK = {
   source: "host_command_cap",
@@ -2117,10 +2146,10 @@ export function refusedOutright(input: {
     customRulesEnabled: input.customRulesEnabled,
   });
   // A desktop write is also governed by the permissions row for operating the desktop at all:
-  // disabling that row disables every desktop write.
+  // disabling that row disables every desktop write. A wait is governed by 查看桌面 too.
   const asked = input.candidate.subject?.desktopWrite
     ? [input.candidate, { ...input.candidate, toolRef: DESKTOP_SESSION_TOOL }]
-    : [input.candidate];
+    : governedAs(input.candidate);
   for (const candidate of asked) {
     const matched = strictestRule(
       candidate,

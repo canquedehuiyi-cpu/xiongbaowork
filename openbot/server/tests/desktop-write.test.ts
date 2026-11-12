@@ -19,6 +19,7 @@ import {
   decideAction,
   HOST_COMMANDS_NEVER,
   refusedOutright,
+  TOOL_DISABLED,
 } from "../src/approvals/policy";
 import {
   isApprovalRecheck,
@@ -30,6 +31,7 @@ import {
   type ApprovalPolicyOutcome,
   type ApprovalRecord,
   ApprovalRefusedError,
+  type ApprovalRule,
   type ApprovalStore,
   type ApprovalSubject,
   approvalAction,
@@ -42,6 +44,7 @@ import {
   ComputerUnavailableError,
 } from "../src/computer/client";
 import {
+  DESKTOP_BACKSTOP_MS,
   DESKTOP_OWNER_ONLY,
   DESKTOP_WAIT_TARGET,
   desktopOwnersMachine,
@@ -1946,10 +1949,17 @@ describe("waiting, launching and the clipboard (Task 25)", () => {
     // Outside content, as a snapshot is; its controls are the ones a write names next.
     expect(result.untrusted).toContain("untrusted data");
     expect(result.elements).toEqual(waited(BANK).elements);
-    // Given the whole wait, a command's budget and room for the window list and the queue.
+    // Given the whole wait, a command's budget each for the window list and the snapshot, room for
+    // the queue, and never less than a snapshot's own backstop (round 1 of review).
     expect(
       h.timeouts.find((sent) => sent.path === "/desktop/wait")?.timeoutMs,
-    ).toBe(5_000 + DESKTOP_LIMITS.adCommandTimeoutMs + 10_000);
+    ).toBe(
+      Math.max(
+        5_000 + 2 * DESKTOP_LIMITS.adCommandTimeoutMs + 10_000,
+        DESKTOP_BACKSTOP_MS,
+      ),
+    );
+    expect(DESKTOP_BACKSTOP_MS).toBe(90_000);
     // A plain title: no card, and the device is not told it may read a sensitive one.
     await h.gateway.waitDesktop("bot", ACTOR, {
       windowId: NOTEPAD.windowId,
@@ -2078,5 +2088,147 @@ describe("waiting, launching and the clipboard (Task 25)", () => {
       action: "clipboard_write",
       textLength: 3_001,
     });
+  });
+});
+
+describe("round 1 of review (Task 25)", () => {
+  const rule = (
+    behaviour: ApprovalRule["behaviour"],
+    toolRef: string,
+  ): ApprovalRule => ({
+    id: `rule-${behaviour}-${toolRef}`,
+    ownerUserId: OWNER,
+    botId: "*",
+    toolRef,
+    effect: "*",
+    scope: "*",
+    behaviour,
+    revokedAt: null,
+    createdAt: new Date(),
+  });
+  const waitCandidate: ApprovalCandidate = {
+    actorId: OWNER,
+    botId: "bot",
+    toolRef: "computer_desktop_wait",
+    effect: "read",
+    scope: "desktop/notepad",
+    args: {},
+    subject: { runner: true, desktop: { title: NOTEPAD.title } },
+  };
+  const decide = (candidate: ApprovalCandidate, personal: ApprovalRule[]) =>
+    decideAction({
+      team: [],
+      personal,
+      customRulesEnabled: true,
+      autoReview: false,
+      askBeforeChanges: true,
+      candidate,
+    });
+
+  test("the snapshot's rules govern the wait too, the stricter of the two; other tools are untouched", async () => {
+    // Disabled: the wait is refused outright.
+    expect(
+      refusedOutright({
+        candidate: waitCandidate,
+        team: [],
+        personal: [rule("deny", "computer_desktop_snapshot")],
+        customRulesEnabled: true,
+      }),
+    ).toMatchObject({ behaviour: "deny", reason: TOOL_DISABLED });
+    expect(
+      await decide(waitCandidate, [rule("deny", "computer_desktop_snapshot")]),
+    ).toMatchObject({ behaviour: "deny" });
+    // Ask: the wait asks too, and the stricter rule wins either way round.
+    expect(
+      await decide(waitCandidate, [rule("ask", "computer_desktop_snapshot")]),
+    ).toMatchObject({ behaviour: "ask", source: "personal_rule" });
+    expect(
+      await decide(waitCandidate, [
+        rule("allow", "computer_desktop_wait"),
+        rule("ask", "computer_desktop_snapshot"),
+      ]),
+    ).toMatchObject({ behaviour: "ask" });
+    expect(
+      await decide(waitCandidate, [
+        rule("allow", "computer_desktop_snapshot"),
+        rule("ask", "computer_desktop_wait"),
+      ]),
+    ).toMatchObject({ behaviour: "ask" });
+    // With no rule, a plain window is read unasked.
+    expect(await decide(waitCandidate, [])).toMatchObject({
+      behaviour: "allow",
+    });
+    // A snapshot rule reaches no other tool: not the window list, not the browser's own read.
+    for (const toolRef of ["computer_desktop_windows", "computer_snapshot"]) {
+      const other = { ...waitCandidate, toolRef, scope: "desktop" };
+      expect(
+        refusedOutright({
+          candidate: other,
+          team: [],
+          personal: [rule("deny", "computer_desktop_snapshot")],
+          customRulesEnabled: true,
+        }),
+      ).toBeUndefined();
+      expect(
+        await decide(other, [rule("ask", "computer_desktop_snapshot")]),
+      ).toMatchObject({ behaviour: "allow" });
+    }
+  });
+
+  test("the gateway asks about the wait as a snapshot too: disabled there, it is refused before any frame", async () => {
+    const h = harness({
+      refusal: (candidate) =>
+        candidate.toolRef === "computer_desktop_snapshot"
+          ? TOOL_DISABLED
+          : undefined,
+    });
+    const error = await h.gateway
+      .waitDesktop("bot", ACTOR, {
+        windowId: NOTEPAD.windowId,
+        name: "登录",
+        timeoutSec: 5,
+      })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ActionRefusedError);
+    expect((error as Error).message).toBe(TOOL_DISABLED);
+    expect(h.posts).toHaveLength(0);
+    expect(h.early.map((candidate) => candidate.toolRef)).toEqual([
+      "computer_desktop_snapshot",
+    ]);
+    // Not disabled: both are asked, the snapshot first.
+    const g = harness({ write: () => ({}) });
+    await g.gateway.waitDesktop("bot", ACTOR, {
+      windowId: NOTEPAD.windowId,
+      name: "登录",
+      timeoutSec: 5,
+    });
+    expect(g.early.map((candidate) => candidate.toolRef)).toEqual([
+      "computer_desktop_snapshot",
+      "computer_desktop_wait",
+    ]);
+  });
+
+  test("with no approval policy, reading the clipboard is still asked on the server", async () => {
+    const fixture = approvalFixture();
+    const h = harness({
+      session: true,
+      gate: (candidate) => fixture.service.gate(candidate),
+      write: () => ({ text: "x", truncated: false, durationMs: 1 }),
+    });
+    const context = {
+      ...CONTINUATION({}),
+      toolName: "computer_desktop_clipboard_read",
+    };
+    await expect(
+      runAsTenant(OWNER, () =>
+        withApprovalContext(context, () =>
+          h.gateway.readDesktopClipboard("bot", ACTOR),
+        ),
+      ),
+    ).rejects.toBeInstanceOf(HeadlessToolSuspension);
+    expect(h.paths()).not.toContain("/desktop/clipboard_read");
+    expect(fixture.rows.get("approval")?.action.toolRef).toBe(
+      "computer_desktop_clipboard_read",
+    );
   });
 });

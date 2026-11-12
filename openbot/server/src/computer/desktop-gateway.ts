@@ -8,6 +8,10 @@ import {
   desktopMessage,
   sensitiveWord,
 } from "../../../shared/desktop-control";
+import {
+  DESKTOP_SNAPSHOT_TOOL,
+  DESKTOP_WAIT_TOOL,
+} from "../approvals/desktop-policy";
 import { currentApprovalContext } from "../approvals/types";
 import { runnerAddress } from "../devices/channel";
 import { withUntrustedNotice } from "../untrusted-content";
@@ -72,11 +76,15 @@ export const DESKTOP_WAIT_SECONDS = desktopMessage(
   `等待时间要在 1～${DESKTOP_LIMITS.waitMaxSec} 秒之间`,
 );
 /**
- * How long the server gives one wait: the whole wait, then a command's budget for the snapshot that
- * ends it, and 10 s more for the window list the device reads first and its command queue.
+ * How long the server gives one wait: the whole wait, a command's budget each for the window list
+ * the device reads first and the snapshot that ends the wait, and 10 s more for its command queue;
+ * never less than a snapshot's own backstop.
  */
 export function desktopWaitBudgetMs(timeoutSec: number): number {
-  return timeoutSec * 1000 + DESKTOP_LIMITS.adCommandTimeoutMs + 10_000;
+  return Math.max(
+    timeoutSec * 1000 + 2 * DESKTOP_LIMITS.adCommandTimeoutMs + 10_000,
+    DESKTOP_BACKSTOP_MS,
+  );
 }
 /** A control type to wait for: a role such as `button`, never a colon (the device's own rule). */
 const WAIT_TYPE = /^[A-Za-z][A-Za-z0-9_ -]{0,59}$/;
@@ -253,17 +261,25 @@ export function createDesktopMethods(deps: {
     if (typeof windowId !== "string" || !DESKTOP_WINDOW_ID.test(windowId))
       return refuse(desktopMessage("no_window"));
     if (read.refusal !== undefined) return refuse(read.refusal);
-    // Refused outright (a disabled tool): before the machine is asked anything, the list included.
-    const refused = await deps.approvalRefusal?.({
-      actorId: actor.id,
-      botId,
-      toolRef: toolName,
-      effect: "read",
-      scope: "desktop",
-      args: currentApprovalContext()?.args ?? input,
-      subject: { runner: true },
-    });
-    if (refused) return refuse(refused);
+    /*
+     * Refused outright (a disabled tool): before the machine is asked anything, the list included.
+     * A wait reads the window as a snapshot does, so 查看桌面 disabled refuses it too: asked as the
+     * snapshot first, then as itself (as a write is asked as 操作桌面, then as itself).
+     */
+    for (const toolRef of toolName === DESKTOP_WAIT_TOOL
+      ? [DESKTOP_SNAPSHOT_TOOL, toolName]
+      : [toolName]) {
+      const refused = await deps.approvalRefusal?.({
+        actorId: actor.id,
+        botId,
+        toolRef,
+        effect: "read",
+        scope: "desktop",
+        args: currentApprovalContext()?.args ?? input,
+        subject: { runner: true },
+      });
+      if (refused) return refuse(refused);
+    }
     const key = desktopCacheKey(machine, botId);
     let window = deps.windows.find(key, windowId);
     if (!window) {

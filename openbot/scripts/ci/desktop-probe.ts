@@ -771,7 +771,7 @@ async function waitForFocus(
 }
 
 /**
- * macOS: a new document (cmd+n in the editor, which must be in front), cmd+s in it, then one
+ * macOS: the editor brought to the front, a new document (cmd+n in it), cmd+s in that, then one
  * `desktop.wait` for the save dialog's Save button. Each step is sent once; the first that fails ends
  * the check, with everything that came back.
  */
@@ -783,11 +783,16 @@ async function saveDialogCheck(
   const before = await run("desktop.windows", {});
   const editor = windowsOf(before).find((w) => w.windowId === windowId);
   const known = new Set(windowsOf(before).map((w) => w.windowId));
-  const created = editor
+  const focused = editor
+    ? await write("desktop.focus", { windowId })
+    : undefined;
+  const front =
+    focused?.ok === true && (await waitForFocus(run, windowId, true));
+  const created = front
     ? await write("desktop.key", { windowId, keys: "cmd+n" })
     : undefined;
   if (!editor || created?.ok !== true)
-    return { passed: false, seen: { editor, created, before } };
+    return { passed: false, seen: { editor, focused, front, created, before } };
   // The new document's window: one of the editor's that was not there before.
   const deadline = Date.now() + WINDOW_WAIT_MS;
   let untitled: DesktopWindow | undefined;
@@ -987,14 +992,6 @@ async function writeChecks(
       ? await write("desktop.key", { windowId, keys: "cmd+s" })
       : undefined;
 
-    /*
-     * Waiting (Task 25): cmd+s in a new, never saved document opens the save dialog, which has a
-     * Save button the document alone does not. One cmd+n, one cmd+s and one wait, none sent again.
-     */
-    const dialog = started.ok
-      ? await saveDialogCheck(run, write, windowId)
-      : { passed: false, seen: { started } };
-    assert(dialog.passed, DESKTOP_PROBE_WRITE_CHECKS.waited, dialog.seen);
     // Through Launch Services, not an Apple event: no Automation permission to ask for.
     const finder = spawnSync("open", ["-a", "Finder"], {
       stdio: "ignore",
@@ -1013,6 +1010,17 @@ async function writeChecks(
       DESKTOP_PROBE_WRITE_CHECKS.foreground,
       { focused, inFront, saved, finder: finder.status, behindNow, behind },
     );
+
+    /*
+     * Waiting (Task 25), after the foreground check, so that only Finder put the editor behind there:
+     * the editor brought to the front again, then cmd+s in a new, never saved document opens the save
+     * dialog, which has a Save button the document alone does not. One focus, one cmd+n, one cmd+s
+     * and one wait, none sent again.
+     */
+    const dialog = started.ok
+      ? await saveDialogCheck(run, write, windowId)
+      : { passed: false, seen: { started } };
+    assert(dialog.passed, DESKTOP_PROBE_WRITE_CHECKS.waited, dialog.seen);
   } finally {
     await run("desktop.session_end", { token });
   }

@@ -15,7 +15,11 @@ import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { desktopActionWordsOf } from "../../../shared/desktop-control";
 import { PERSON_INITIATOR } from "../audit";
 import { currentTenant } from "../tenant/context";
-import { DESKTOP_SESSION_TOOL, desktopFloor } from "./desktop-policy";
+import {
+  DESKTOP_SESSION_TOOL,
+  desktopActionFloor,
+  desktopFloor,
+} from "./desktop-policy";
 import {
   ApprovalFreshError,
   createApprovalFreshCoordinator,
@@ -632,9 +636,14 @@ export function createApprovalService(
         if (outcome.behaviour === "deny")
           throw new ApprovalRefusedError(outcome.reason);
       } else if (
-        // No policy to raise the desktop floor: a sensitive (or unconfirmed) window is still asked.
+        // No policy to raise the desktop floor: a sensitive (or unconfirmed) window is still asked,
+        // and so is a desktop write that reads (the clipboard), which asks every time.
         candidate.effect === "read"
-          ? !desktopFloor(candidate)
+          ? !desktopFloor(candidate) &&
+            !(
+              candidate.subject?.desktopWrite &&
+              desktopActionFloor(candidate, desktopActionWordsOf(undefined))
+            )
           : trustedRead || !(await store.enabled(candidate.actorId))
       )
         return;
