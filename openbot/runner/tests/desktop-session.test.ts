@@ -21,6 +21,7 @@ import {
 } from "../src/desktop/control";
 import { DesktopHelperError } from "../src/desktop/host";
 import { createDesktopSessions } from "../src/desktop/session";
+import { createRunnerExecutor } from "../src/execute";
 import {
   desktopControlFor,
   heartbeatFrame,
@@ -169,12 +170,15 @@ function refused(code: DesktopErrorCode) {
 
 const roots = { reported: () => [] };
 
+/** The coworker as the transport names it; the executor passes it beside the payload. */
+const BOT = { botId: "bot-1" };
+
 describe("desktop sessions (runner)", () => {
   test("status is writable only on macOS (or Windows on agent-desktop) with a control channel", async () => {
     const status = async (
       actions: ReturnType<typeof createDesktopActions>,
     ): Promise<Out> =>
-      actions("desktop.session_status", { botId: "bot-1", actorId: "u-1" });
+      actions("desktop.session_status", { actorId: "u-1" }, undefined, BOT);
 
     const linux = createDesktopActions({
       platform: "linux",
@@ -281,11 +285,12 @@ describe("desktop sessions (runner)", () => {
       [noChannel, "no_control_channel"],
     ] as const) {
       expect(
-        await actions("desktop.session_start", {
-          token: TOKEN,
-          botId: "bot-1",
-          actorId: "u-1",
-        }),
+        await actions(
+          "desktop.session_start",
+          { token: TOKEN, actorId: "u-1" },
+          undefined,
+          BOT,
+        ),
       ).toEqual(refused(code));
     }
   });
@@ -433,18 +438,21 @@ describe("desktop sessions (runner)", () => {
       cli: fakeCli(() => "granted"),
       control: mac.control,
     });
-    const started = await actions("desktop.session_start", {
-      token: TOKEN,
-      botId: "bot-1",
-      actorId: "u-1",
-    });
+    const started = await actions(
+      "desktop.session_start",
+      { token: TOKEN, actorId: "u-1" },
+      undefined,
+      BOT,
+    );
     expect(started).toEqual({ ok: true, output: { started: true } });
     // The token goes back to the server over the socket, never to stdout.
     expect(
-      await actions("desktop.session_status", {
-        botId: "bot-1",
-        actorId: "u-1",
-      }),
+      await actions(
+        "desktop.session_status",
+        { actorId: "u-1" },
+        undefined,
+        BOT,
+      ),
     ).toEqual({
       ok: true,
       output: { writable: true, platform: "macos", session: { token: TOKEN } },
@@ -467,11 +475,12 @@ describe("desktop sessions (runner)", () => {
     for (const token of [TOKEN.toUpperCase(), "ab", 7, undefined])
       expect(
         (
-          await actions("desktop.session_start", {
-            token,
-            botId: "bot-1",
-            actorId: "u-1",
-          })
+          await actions(
+            "desktop.session_start",
+            { token, actorId: "u-1" },
+            undefined,
+            BOT,
+          )
         ).ok,
       ).toBe(false);
     expect(mac.out).toHaveLength(before);
@@ -585,11 +594,12 @@ describe("desktop sessions (runner)", () => {
         reader: fakeReader(),
         cli,
       });
-      const outcome = await actions("desktop.session_start", {
-        token: TOKEN,
-        botId: "bot-1",
-        actorId: "u-1",
-      });
+      const outcome = await actions(
+        "desktop.session_start",
+        { token: TOKEN, actorId: "u-1" },
+        undefined,
+        BOT,
+      );
       expect(outcome).toEqual(refused("no_control_channel"));
       expect(cli.calls).toEqual([]);
     }
@@ -609,11 +619,7 @@ describe("the device confirms its guard before a session is writable (ruling C5)
       sessions,
     });
     const start = (token = TOKEN, signal?: AbortSignal) =>
-      actions(
-        "desktop.session_start",
-        { token, botId: "bot-1", actorId: "u-1" },
-        signal,
-      );
+      actions("desktop.session_start", { token, actorId: "u-1" }, signal, BOT);
     return { ...far, sessions, actions, start };
   }
 
@@ -839,13 +845,25 @@ describe("the control channel's plumbing", () => {
       });
       const file = join(dir, "actions.sqlite");
       const journal = createActionJournal(file);
+      const execute = createRunnerExecutor(
+        join(dir, "workspace"),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { desktop: actions },
+      );
+      // As the transport sends it: the server's tenant and coworker beside the caller's fields.
       const run = (
         key: string,
         action: string,
         payload: Record<string, unknown>,
       ) =>
-        journal.execute("scope", key, { action, payload }, (a) =>
-          actions(a.action, a.payload as Record<string, unknown>),
+        journal.execute(
+          "scope",
+          key,
+          { action, payload: { tenantId: "t-1", ...payload } },
+          execute,
         );
       expect(
         (
@@ -888,6 +906,90 @@ describe("the control channel's plumbing", () => {
         }),
       ).toEqual({ ok: true, output: { writable: true, platform: "macos" } });
       journal.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("through the executor a session is the transport's coworker's, never one named in the payload", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "desktop-session-executor-"));
+    try {
+      const far = device();
+      const actions = createDesktopActions({
+        platform: "darwin",
+        engine: "agent-desktop",
+        reader: fakeReader(),
+        cli: fakeCli(() => "granted"),
+        control: far.control,
+      });
+      const execute = createRunnerExecutor(
+        join(dir, "workspace"),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { desktop: actions },
+      );
+      const missing = {
+        ok: false as const,
+        error: desktopMessage("failed", "缺少员工或使用者"),
+      };
+      // No coworker from the transport: refused, before anything reaches the device.
+      expect(
+        await execute({
+          action: "desktop.session_start",
+          payload: { tenantId: "t-1", token: TOKEN, actorId: "u-1" },
+        }),
+      ).toEqual(missing);
+      expect(far.out).toEqual([]);
+
+      expect(
+        await execute({
+          action: "desktop.session_start",
+          payload: {
+            tenantId: "t-1",
+            botId: "bot-1",
+            token: TOKEN,
+            actorId: "u-1",
+          },
+        }),
+      ).toEqual({ ok: true, output: { started: true } });
+      expect(
+        await execute({
+          action: "desktop.session_status",
+          payload: { tenantId: "t-1", botId: "bot-1", actorId: "u-1" },
+        }),
+      ).toEqual({
+        ok: true,
+        output: {
+          writable: true,
+          platform: "macos",
+          session: { token: TOKEN },
+        },
+      });
+      // Another coworker on the same device does not see it.
+      expect(
+        await execute({
+          action: "desktop.session_status",
+          payload: { tenantId: "t-1", botId: "bot-2", actorId: "u-1" },
+        }),
+      ).toEqual({ ok: true, output: { writable: true, platform: "macos" } });
+
+      // Called directly, a botId in the payload with no transport context selects nothing.
+      expect(
+        await actions("desktop.session_status", {
+          botId: "bot-1",
+          actorId: "u-1",
+        }),
+      ).toEqual({ ok: true, output: { writable: true, platform: "macos" } });
+      expect(
+        await actions("desktop.session_start", {
+          token: OTHER,
+          botId: "bot-1",
+          actorId: "u-1",
+        }),
+      ).toEqual(missing);
+      await execute.closeDesktop();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

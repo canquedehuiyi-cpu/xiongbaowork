@@ -54,7 +54,15 @@ export type DesktopActions = ((
   action: string,
   body: Record<string, unknown>,
   signal?: AbortSignal,
+  context?: DesktopContext,
 ) => Promise<ActionOutcome>) & { close(): Promise<void> };
+
+/**
+ * What the transport, not the caller, says about an action: the coworker it runs for. The executor
+ * strips `botId` from the caller's payload and hands the server's own here; a session is chosen by
+ * this alone, never by a `botId` someone put in the payload.
+ */
+export type DesktopContext = { botId?: string };
 
 type Host = ReturnType<typeof createDesktopHost>;
 
@@ -340,13 +348,15 @@ export function createDesktopActions(
     action: string,
     body: Record<string, unknown>,
     signal?: AbortSignal,
+    context?: DesktopContext,
   ): Promise<ActionOutcome> {
     const text = (value: unknown) => (typeof value === "string" ? value : "");
     if (action === "desktop.session_end") {
       sessions.end(text(body.token));
       return { ok: true, output: { ended: true } };
     }
-    const botId = text(body.botId);
+    // The transport's coworker only; `body.botId` is the caller's and is never read.
+    const botId = text(context?.botId);
     const actorId = text(body.actorId);
     if (action === "desktop.session_status") {
       const state = await writability(desktopPlatform, signal);
@@ -504,6 +514,7 @@ export function createDesktopActions(
     action: string,
     body: Record<string, unknown>,
     signal?: AbortSignal,
+    context?: DesktopContext,
   ): Promise<ActionOutcome> => {
     if (!desktopPlatform) return fail(desktopMessage("unsupported_platform"));
     if (engine === "legacy" && platform !== "win32")
@@ -512,7 +523,7 @@ export function createDesktopActions(
       return fail(desktopMessage("unsupported"));
     if (SESSION_ACTIONS.has(action)) {
       try {
-        return await sessionAct(desktopPlatform, action, body, signal);
+        return await sessionAct(desktopPlatform, action, body, signal, context);
       } catch (error) {
         return readFailure(error);
       }
