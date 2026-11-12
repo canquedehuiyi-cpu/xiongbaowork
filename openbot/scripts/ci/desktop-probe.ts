@@ -779,6 +779,14 @@ async function writeChecks(
   if (!windowId) return;
   const token = randomBytes(32).toString("hex");
   const started = await run("desktop.session_start", { token, ...PROBE_WHO });
+  // No session, no write: say why at once (the token is never printed, only what came back).
+  if (!started.ok)
+    console.log(
+      JSON.stringify({
+        sessionStart: "the desktop session did not start; no write was sent",
+        seen: started,
+      }),
+    );
   const write = (action: string, body: Record<string, unknown>) =>
     run(action, {
       session: token,

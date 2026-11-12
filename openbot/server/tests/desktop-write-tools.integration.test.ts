@@ -591,23 +591,66 @@ test("the owner's run gets the four write tools; a teammate's and a catalogue Bo
     "replace",
   );
 
-  // Text over 9 000 UTF-8 bytes never leaves the tool: 3 000 Chinese characters do, one more does not.
-  const typeTool = owners.find(
-    (tool) => tool.definition.name === "computer_desktop_type",
-  );
-  if (!typeTool) throw new Error("No type tool.");
-  const tooLong = await typeTool
-    .execute(
-      {
-        ref: "abcdef-1:1",
-        text: "字".repeat(DESKTOP_LIMITS.textMaxBytes / 3 + 1),
-      },
-      { toolCallId: randomUUID(), signal: new AbortController().signal },
-    )
-    .catch((error: unknown) => error);
-  expect(tooLong).toBeInstanceOf(Error);
-  expect((tooLong as Error).name).toBe("ZodError");
+  // Arguments the schema refuses never leave the tool: the parse fails before the gateway is asked.
+  const refusedBySchema = async (
+    name: string,
+    args: Record<string, unknown>,
+  ) => {
+    const tool = owners.find((candidate) => candidate.definition.name === name);
+    if (!tool) throw new Error(`No tool ${name}.`);
+    const error = await tool
+      .execute(args, {
+        toolCallId: randomUUID(),
+        signal: new AbortController().signal,
+      })
+      .then(
+        () => new Error(`${name} accepted ${JSON.stringify(args)}`),
+        (thrown: unknown) => thrown,
+      );
+    expect(error).toBeInstanceOf(Error);
+    expect({ name, args, error: (error as Error).name }).toEqual({
+      name,
+      args,
+      error: "ZodError",
+    });
+  };
+  const ref = "abcdef-1:1";
+  const windowId = "a0123456789abcdef";
+  // Over 9 000 UTF-8 bytes: 3 000 Chinese characters are allowed, one more is not.
+  await refusedBySchema("computer_desktop_type", {
+    ref,
+    text: "字".repeat(DESKTOP_LIMITS.textMaxBytes / 3 + 1),
+  });
+  await refusedBySchema("computer_desktop_type", { ref, text: "" });
+  await refusedBySchema("computer_desktop_type", {
+    ref,
+    text: "x",
+    mode: "overwrite",
+  });
+  for (const bad of ["", "abc-1:1", "abcdef-0:1", "ABCDEF-1:1", "abcdef-1"]) {
+    await refusedBySchema("computer_desktop_click", { ref: bad });
+    await refusedBySchema("computer_desktop_type", { ref: bad, text: "x" });
+  }
+  for (const bad of ["", "w0-1", "a0123", "a0123456789ABCDEF", "notepad"]) {
+    await refusedBySchema("computer_desktop_focus", { windowId: bad });
+    await refusedBySchema("computer_desktop_key", {
+      windowId: bad,
+      keys: "cmd+s",
+    });
+  }
+  for (const bad of [
+    "",
+    "cmd+",
+    "ctrl+alt+shift+cmd+s",
+    "cmd s",
+    "hyper+s",
+    "ctrl+enter+s",
+  ])
+    await refusedBySchema("computer_desktop_key", { windowId, keys: bad });
+  // Unknown fields too: every write tool's object is strict.
+  await refusedBySchema("computer_desktop_click", { ref, approved: true });
   expect(device.sent("desktop.session_status")).toHaveLength(0);
+  expect(device.adLog()).toEqual([]);
 
   const teammate = {
     id: `${device.tenant}-teammate`,
