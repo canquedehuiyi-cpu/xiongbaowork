@@ -95,8 +95,13 @@ async function revokeSkillGrant(agentId: string) {
   });
 }
 
+// `callTool` 的处理器沿调用方的租户帧读库（运行时由服务分发层建帧）；测试里没有分发层，
+// 必须自己进帧，否则 client 的代理在任何语句构建前就抛 TenantContextError。与上面种子
+// 同帧（system 分区行所有读者都可见），测的是逐调用授权闸门，不是租户隔离。
 const call = (botId: string, toolName: string, args: unknown) =>
-  callTool({ url: "builtin://skills", botId }, toolName, args);
+  runAsTenant(SYSTEM_TENANT, () =>
+    callTool({ url: "builtin://skills", botId }, toolName, args),
+  );
 
 // The skill and its files exist for the whole suite; each test builds only the grants it needs.
 await inCatalogue(async () => {
