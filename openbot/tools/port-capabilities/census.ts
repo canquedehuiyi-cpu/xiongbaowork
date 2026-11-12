@@ -70,15 +70,21 @@ export class CensusError extends Error {
 /**
  * WorkBuddy's `auth_mode` → openbot's credential model.
  *
- * `server-side` is `none` because the *server* holds the credential: nothing is injected into the
- * employee. `token` and `oneid-token` are both the deployment holding one token for everyone, which is
- * what openbot calls `deployment-bearer` — the single name this repo keeps for that concept. Anything
- * else, including a row whose `auth_mode` holds a transport name (`mcp`), is `unknown` and must not be
- * guessed. Absent means no credential injection is declared, which is `none`.
+ * `server-side` maps to `deployment-bearer`, and its verdict is **degraded**, not full. The earlier
+ * reading — "the server holds the credential, so the client injects nothing" — was wrong and cost a
+ * reproducible measurement: three such connectors called bare with MCP `initialize` and no credentials
+ * all answered 401 (`tdx-connector` "Missing Bearer authorization", `ezr-crm` "missing Bearer access
+ * token", `fazhi-law` "Illegal authorization"). The real semantics is that the *platform* holds the
+ * credential and injects a Bearer into every request on the caller's behalf. openbot can carry that, but
+ * only by hosting a credential of its own, which is a deployment decision — hence `deployment-bearer`
+ * with a degraded verdict (`platform-held-credential`). `token` and `oneid-token` are the deployment
+ * holding one token for everyone, the same openbot name. Anything else, including a row whose
+ * `auth_mode` holds a transport name (`mcp`), is `unknown` and must not be guessed. Absent means no
+ * credential injection is declared, which is `none`.
  */
 export const AUTH_MODE_MAP: Readonly<Record<string, CensusAuth>> = {
   "(absent)": "none",
-  "server-side": "none",
+  "server-side": "deployment-bearer",
   token: "deployment-bearer",
   "oneid-token": "deployment-bearer",
   oauth: "user-oauth",
@@ -160,11 +166,20 @@ export function mapAuthMode(raw: string): CensusAuth {
  *
  * The rule is the same one the auditor applies to instruction bodies: what runs on the employee, not what
  * exists on the author's machine. A remote MCP server with a known credential model is `full`; a remote
- * server whose credential model is not mapped is `degraded`, because the transport works and only the
- * authorisation needs a human decision; a stdio server or a CLI wrapper is `blocked`, because openbot has
- * no local runtime to start it in.
+ * `server-side` connector is `degraded` — the transport works, but the credential is held by the platform
+ * and injected per request (measured: bare `initialize` answers 401 on all three such connectors), so
+ * openbot has to host its own Bearer before the connector is actually callable; a remote server whose
+ * credential model is not mapped is `degraded` for the same "needs a human decision" reason; a stdio
+ * server or a CLI wrapper is `blocked`, because openbot has no local runtime to start it in.
+ *
+ * `rawAuthMode` is the value before {@link AUTH_MODE_MAP}, needed because `server-side` and `token` map
+ * to the same openbot model but only the former degrades the verdict.
  */
-export function judgeConnector(transport: CensusTransport, auth: CensusAuth): { verdict: RunnableLevel; reason: string } {
+export function judgeConnector(
+  transport: CensusTransport,
+  auth: CensusAuth,
+  rawAuthMode: string = "(absent)",
+): { verdict: RunnableLevel; reason: string } {
   switch (transport) {
     case "missing":
       return { verdict: "blocked", reason: "目录里没有 mcp.json 也没有 cli.json，无 server 规格可移植" };
@@ -175,6 +190,13 @@ export function judgeConnector(transport: CensusTransport, auth: CensusAuth): { 
     case "mcp-url":
       if (auth === "unknown") {
         return { verdict: "degraded", reason: "远端 server 可直连，但 auth_mode 无法映射到 openbot 的三种凭据模型，需人工定夺" };
+      }
+      if (rawAuthMode === "server-side") {
+        return {
+          verdict: "degraded",
+          reason:
+            "远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用",
+        };
       }
       return { verdict: "full", reason: `远端 server + 凭据模型 ${auth}，openbot 可直接托管` };
     default:
@@ -227,7 +249,7 @@ function readCatalogue(sourceRoot: string): Catalogue {
     const shipped = readShippedSpec(marketplaceRoot, id);
     const raw = typeof entry.auth_mode === "string" && entry.auth_mode !== "" ? entry.auth_mode : "(absent)";
     const mapped = mapAuthMode(raw);
-    const { verdict, reason } = judgeConnector(shipped.transport, mapped);
+    const { verdict, reason } = judgeConnector(shipped.transport, mapped, raw);
     rows.push({
       id,
       directory: shipped.file === "" ? `${CONNECTOR_DIR}/${id}（缺规格文件）` : `${CONNECTOR_DIR}/${id}/${shipped.file}`,

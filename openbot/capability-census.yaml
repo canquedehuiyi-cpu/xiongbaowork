@@ -11,19 +11,19 @@ counts:
     cli: 44
     missing: 0
   by_auth_mode:
-    none: 222
+    none: 210
     user-oauth: 5
-    deployment-bearer: 70
+    deployment-bearer: 82
     unknown: 1
   by_verdict:
-    full: 238
-    degraded: 1
+    full: 226
+    degraded: 13
     blocked: 59
 cross_table:
   - transport: mcp-url
-    none: 168
+    none: 156
     user-oauth: 5
-    deployment-bearer: 65
+    deployment-bearer: 77
     unknown: 1
     total: 239
   - transport: mcp-command
@@ -178,9 +178,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: baijimu-enterprise-ai
     directory: connectors/baijimu-enterprise-ai/cli.json
     transport: cli
@@ -466,9 +466,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: dramabuddy
     directory: connectors/dramabuddy/mcp.json
     transport: mcp-url
@@ -594,9 +594,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: fadada-richee
     directory: connectors/fadada-richee/mcp.json
     transport: mcp-url
@@ -626,9 +626,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: fbs-connector
     directory: connectors/fbs-connector/mcp.json
     transport: mcp-url
@@ -746,9 +746,9 @@ rows:
     transport: mcp-url
     declared_type: (absent)
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: gongxie-erp
     directory: connectors/gongxie-erp/mcp.json
     transport: mcp-url
@@ -802,9 +802,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: hanyi-fonts
     directory: connectors/hanyi-fonts/mcp.json
     transport: mcp-url
@@ -850,9 +850,9 @@ rows:
     transport: mcp-url
     declared_type: (absent)
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: ihr-cli
     directory: connectors/ihr-cli/cli.json
     transport: cli
@@ -930,9 +930,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: jiucuodashi
     directory: connectors/jiucuodashi/mcp.json
     transport: mcp-url
@@ -978,9 +978,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: kingbot-xiaodie
     directory: connectors/kingbot-xiaodie/mcp.json
     transport: mcp-url
@@ -1010,9 +1010,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: kuka-service
     directory: connectors/kuka-service/mcp.json
     transport: mcp-url
@@ -1778,9 +1778,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: teacher-assistant
     directory: connectors/teacher-assistant/mcp.json
     transport: mcp-url
@@ -2250,9 +2250,9 @@ rows:
     transport: mcp-url
     declared_type: mcp
     auth_mode_raw: server-side
-    auth_mode_mapped: none
-    verdict: full
-    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+    auth_mode_mapped: deployment-bearer
+    verdict: degraded
+    reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: xuanpian-schedule
     directory: connectors/xuanpian-schedule/mcp.json
     transport: mcp-url

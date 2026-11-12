@@ -133,11 +133,22 @@ describe("auth_mode mapping", () => {
   });
 
   test("a value nobody has mapped is unknown, not guessed", () => {
-    expect(mapAuthMode("server-side")).toBe("none");
     expect(mapAuthMode("oauth")).toBe("user-oauth");
     expect(mapAuthMode("(absent)")).toBe("none");
     expect(mapAuthMode("mcp")).toBe("unknown");
     expect(mapAuthMode("something-new")).toBe("unknown");
+  });
+
+  test("server-side 映射为 deployment-bearer，verdict 判 degraded（platform-held-credential）", () => {
+    // 反向反证：第一条断言在映射被改回 "none"（"凭据在服务端、客户端无需注入"的旧读法）时立即变红。
+    // 该读法已被实测推翻：tdx-connector / ezr-crm / fazhi-law 三个 server-side 连接器不带凭据直接调
+    // MCP initialize，全部 401。server-side 的真实语义是平台代持凭据并逐请求注入 Bearer。
+    expect(AUTH_MODE_MAP).toHaveProperty("server-side", "deployment-bearer");
+    expect(mapAuthMode("server-side")).toBe("deployment-bearer");
+    const serverSide = row("remote-server-side");
+    expect(serverSide.auth_mode_raw).toBe("server-side");
+    expect(serverSide.verdict).toBe("degraded");
+    expect(serverSide.reason).toContain("platform-held-credential");
   });
 });
 
@@ -169,7 +180,6 @@ describe("verdict", () => {
   test("a remote server with a mapped credential model is full", () => {
     expect(row("remote-open").verdict).toBe("full");
     expect(row("remote-token").verdict).toBe("full");
-    expect(row("remote-server-side").verdict).toBe("full");
     expect(row("remote-bare").auth_mode_mapped).toBe("none");
     expect(row("remote-bare").verdict).toBe("full");
   });
