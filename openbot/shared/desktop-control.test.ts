@@ -320,7 +320,7 @@ describe("desktop-control protocol", () => {
       ["win+enter", "submit"],
       ["meta+space", "system"],
       ["ctrl+shift+esc", "system"],
-    ])
+    ] as const)
       expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
         keys,
         kind,

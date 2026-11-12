@@ -88,6 +88,7 @@ tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-saved-call.test.ts
 tests/approvals-store.integration.test.ts
+tests/approvals-team-desktop-words.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/apps-page-wording.test.ts

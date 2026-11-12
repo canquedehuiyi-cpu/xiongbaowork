@@ -1275,6 +1275,13 @@
       "when": 1794424963000,
       "tag": "0201_staffing_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 202,
+      "version": "7",
+      "when": 1794481942929,
+      "tag": "0202_desktop_action_words",
+      "breakpoints": true
     }
   ]
 }

@@ -1045,6 +1045,81 @@ test("the browser probe also runs on windows-latest, headed, and must print BROW
     expect(step["continue-on-error"]).toBeUndefined();
 });
 
+// Desktop control phase 2 (Task 10): the runner's desktop read actions through the real, pinned
+// agent-desktop on all three hosted runners. A runner without accessibility or an AT-SPI bus fails
+// the probe; it is never skipped.
+test("the desktop probe runs on three platforms, fetches the pinned binary and must print DESKTOP_PROBE_PASS", () => {
+  const job = ci.jobs["desktop-probe"];
+  expect(job).toBeDefined();
+  expect(job["continue-on-error"]).toBeUndefined();
+  expect(job["runs-on"]).toBe(expression("matrix.os"));
+  expect(job.strategy["fail-fast"]).toBe(false);
+  expect(job.strategy.matrix.include.map((entry) => entry.os).sort()).toEqual([
+    "macos-latest",
+    "ubuntu-latest",
+    "windows-latest",
+  ]);
+  const steps = job.steps;
+  for (const s of steps) expect(s["continue-on-error"]).toBeUndefined();
+  expect(
+    steps
+      .filter((s) => String(s.uses ?? "").startsWith("oven-sh/setup-bun@"))
+      .map((s) => String(s.with["bun-version"])),
+  ).toEqual(["1.4.4"]);
+  const runs = steps.map((s) => String(s.run ?? ""));
+  expect(runs.some((r) => r.includes("bun install --frozen-lockfile"))).toBe(
+    true,
+  );
+  const fetchAt = runs.findIndex((r) =>
+    r.includes("desktop-device/scripts/fetch-agent-desktop.ts"),
+  );
+  expect(fetchAt).toBeGreaterThan(-1);
+  expect(runs[fetchAt]).toContain("--out");
+  const probes = steps.flatMap((s, at) =>
+    String(s.run ?? "").includes("scripts/ci/desktop-probe.ts") ? [at] : [],
+  );
+  const probeOn = (os) => {
+    const found = probes
+      .map((at) => steps[at])
+      .filter((s) => s.if === `runner.os == '${os}'`);
+    expect(found.length, `one probe step for ${os}`).toBe(1);
+    return found[0];
+  };
+  expect(probes.length).toBe(3);
+  for (const at of probes) {
+    expect(at, "the probe runs after the fetch").toBeGreaterThan(fetchAt);
+    const run = steps[at].run;
+    expect(run).toContain("--helper");
+    expect(run).toContain("DESKTOP_PROBE_PASS");
+    expect(run).toContain('"passed":false');
+  }
+  const linux = probeOn("Linux");
+  expect(linux.run).toContain("xvfb-run");
+  expect(linux.run).toContain("dbus-run-session");
+  const windows = probeOn("Windows");
+  expect(windows.env?.OPENBOT_DESKTOP_ENGINE).toBe("agent-desktop");
+  expect(windows.shell).toBe("pwsh");
+  probeOn("macOS");
+  const install = steps.find((s) =>
+    String(s.run ?? "").includes("apt-get install"),
+  );
+  expect(install?.if).toBe("runner.os == 'Linux'");
+  for (const name of [
+    "xvfb",
+    "gedit",
+    "openbox",
+    "at-spi2-core",
+    "dbus-x11",
+    "libatspi2.0-0",
+  ])
+    expect(install.run.split(/\s+/)).toContain(name);
+  const upload = steps.find((s) =>
+    String(s.uses ?? "").startsWith("actions/upload-artifact@"),
+  );
+  expect(upload?.if).toBe("always()");
+  expect(upload.with.name).toBe(`desktop-probe-${expression("matrix.os")}-log`);
+});
+
 // Bun 1.3.14 cannot drive playwright-core on Windows (launch over the pipe and connectOverCDP both
 // time out; Bun 1.4.4 does both), so the device jobs moved to 1.4.4 first. Since upstream v1.0.0
 // (M3) the server image itself runs Bun 1.4 (`oven/bun:1.4.3` in the Dockerfile) and the code needs

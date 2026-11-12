@@ -397,6 +397,12 @@ export type ApprovalTeamSettings = {
   enforceDangerousCommands: boolean;
   /** The kinds the admin closed. A kind not named is `open`. */
   actionKinds: Partial<Record<ActionKind, ActionKindPolicy>>;
+  /**
+   * The words that make clicking a control on a paired computer ask every time, normalised by the
+   * store. Null, or absent where there is no team (the personal edition), is the default list
+   * (`desktopActionWordsOf` in shared/desktop-control.ts).
+   */
+  desktopActionWords?: string[] | null;
 };
 /** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
 export type EmployeeToolMode = "direct" | "ask" | "disabled";
