@@ -7,9 +7,14 @@
  * Then the writes (Task 23), through the runner's own session actions and the control channel, whose
  * device end the probe plays itself (it answers that the banner is up and the mouse check paused). On
  * macOS only: Chinese typed into TextEdit and read back, a write voiding the window's refs, and a key
- * that needs the window in front. Each write is sent once and never again: a write that failed is
- * reported as it came back, not retried, so nothing is typed twice. Linux and the legacy Windows engine
- * must refuse a write in their own words.
+ * that needs the window in front; and (Task 25) text put on the clipboard and read back exactly, and
+ * `desktop.wait` seeing TextEdit's save dialog after cmd+s in a new document. Each write is sent once
+ * and never again: a write that failed is reported as it came back, not retried, so nothing is typed
+ * twice. Linux and the legacy Windows engine must refuse a write in their own words.
+ *
+ * On macOS agent-desktop finds its clipboard helper next to itself by its installed name, so the
+ * probe copies the fetched pair (named with the target triple) into `<dir>/bin` under the names the
+ * app installs them with, and drives that copy.
  *
  *   bun scripts/ci/desktop-probe.ts <fresh empty dir> --helper <agent-desktop binary>
  *
@@ -24,6 +29,8 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -31,7 +38,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve, win32 } from "node:path";
+import { basename, dirname, join, resolve, win32 } from "node:path";
 import {
   createDesktopActions,
   desktopEngineFor,
@@ -76,11 +83,16 @@ export const DESKTOP_PROBE_CHECKS = {
   state: "the state directory is private, untraced and wiped on close",
 } as const;
 
-/** The write checks' labels (Task 23). macOS runs the first three; Linux and Windows the last. */
+/**
+ * The write checks' labels (Tasks 23 and 25). macOS runs all but the read-only one; Linux and
+ * Windows only that one.
+ */
 export const DESKTOP_PROBE_WRITE_CHECKS = {
   typed: "macOS: typing Chinese reads back",
   staleAfterWrite: "a write makes the window's refs stale",
   foreground: "a key needs the window in front",
+  clipboard: "macOS: text put on the clipboard reads back exactly",
+  waited: "macOS: wait sees TextEdit's save dialog after cmd+s",
   readOnly:
     "a write is refused in defined words where the desktop is read-only",
 } as const;
@@ -91,7 +103,13 @@ export function probeChecksFor(platform: DesktopPlatform): string[] {
   return [
     ...Object.values(DESKTOP_PROBE_CHECKS),
     ...(platform === "macos"
-      ? [writes.typed, writes.staleAfterWrite, writes.foreground]
+      ? [
+          writes.typed,
+          writes.staleAfterWrite,
+          writes.foreground,
+          writes.clipboard,
+          writes.waited,
+        ]
       : [writes.readOnly]),
   ];
 }
@@ -99,6 +117,12 @@ export function probeChecksFor(platform: DesktopPlatform): string[] {
 const TEXT = "熊宝员工-桌面探针";
 /** What the macOS write check types over the editor's text. */
 const WRITE_TEXT = "熊宝员工 写入 abc 123";
+/** What the macOS clipboard check puts on the clipboard and reads back. */
+const CLIPBOARD_TEXT = "熊宝员工 剪贴板 ✓ abc 123";
+/** The save dialog's button, which only the dialog has (macos-latest runs in English). */
+const SAVE_BUTTON = { type: "button", name: "Save" } as const;
+/** How long the save dialog may take to show up, in seconds. */
+const SAVE_DIALOG_WAIT_SEC = 15;
 /** The coworker and person the probe's desktop session is for. */
 const PROBE_WHO = {
   botId: "desktop-probe-bot",
@@ -164,6 +188,36 @@ export function probeControl(): { control: ControlChannel; close(): void } {
       poke();
     },
   };
+}
+
+/**
+ * macOS: the fetched CLI and its clipboard helper (`agent-desktop-<triple>`,
+ * `agent-desktop-macos-helper-<triple>`), copied into `<root>/bin` as `agent-desktop` and
+ * `agent-desktop-macos-helper`, the names the app installs them with: agent-desktop finds the helper
+ * next to itself by that name. Returns the CLI to drive; the one given when there is no helper beside
+ * it (the clipboard check then fails and says so).
+ */
+export function stageMacBinaries(helper: string, root: string): string {
+  const triple = /^agent-desktop-(.+)$/.exec(basename(helper))?.[1];
+  const clipboard = triple
+    ? join(dirname(helper), `agent-desktop-macos-helper-${triple}`)
+    : undefined;
+  if (!clipboard || !existsSync(clipboard)) {
+    console.log(
+      JSON.stringify({ stage: "no clipboard helper beside the CLI", helper }),
+    );
+    return helper;
+  }
+  const bin = join(root, "bin");
+  mkdirSync(bin, { recursive: true, mode: 0o755 });
+  const cli = join(bin, "agent-desktop");
+  const helperCopy = join(bin, "agent-desktop-macos-helper");
+  copyFileSync(helper, cli);
+  copyFileSync(clipboard, helperCopy);
+  // No group or other write: the helper is refused otherwise.
+  chmodSync(cli, 0o755);
+  chmodSync(helperCopy, 0o755);
+  return cli;
 }
 
 /** agent-desktop's state directory for a probe workspace; the executor and the probe agree on it. */
@@ -717,6 +771,72 @@ async function waitForFocus(
 }
 
 /**
+ * macOS: the editor brought to the front, a new document (cmd+n in it), cmd+s in that, then one
+ * `desktop.wait` for the save dialog's Save button. Each step is sent once; the first that fails ends
+ * the check, with everything that came back.
+ */
+async function saveDialogCheck(
+  run: Run,
+  write: (action: string, body: Record<string, unknown>) => Promise<Result>,
+  windowId: string,
+): Promise<{ passed: boolean; seen: unknown }> {
+  const before = await run("desktop.windows", {});
+  const editor = windowsOf(before).find((w) => w.windowId === windowId);
+  const known = new Set(windowsOf(before).map((w) => w.windowId));
+  const focused = editor
+    ? await write("desktop.focus", { windowId })
+    : undefined;
+  const front =
+    focused?.ok === true && (await waitForFocus(run, windowId, true));
+  const created = front
+    ? await write("desktop.key", { windowId, keys: "cmd+n" })
+    : undefined;
+  if (!editor || created?.ok !== true)
+    return { passed: false, seen: { editor, focused, front, created, before } };
+  // The new document's window: one of the editor's that was not there before.
+  const deadline = Date.now() + WINDOW_WAIT_MS;
+  let untitled: DesktopWindow | undefined;
+  for (;;) {
+    const listed = await run("desktop.windows", {});
+    untitled = windowsOf(listed).find(
+      (w) => !known.has(w.windowId) && w.process === editor.process,
+    );
+    if (untitled || !listed.ok || Date.now() > deadline) break;
+    await Bun.sleep(250);
+  }
+  if (!untitled) return { passed: false, seen: { created, untitled } };
+  const inFront = await waitForFocus(run, untitled.windowId, true);
+  const pressed = inFront
+    ? await write("desktop.key", {
+        windowId: untitled.windowId,
+        keys: "cmd+s",
+      })
+    : undefined;
+  const waited =
+    pressed?.ok === true
+      ? await run("desktop.wait", {
+          windowId: untitled.windowId,
+          ...SAVE_BUTTON,
+          timeoutSec: SAVE_DIALOG_WAIT_SEC,
+        })
+      : undefined;
+  const seen = waited?.ok ? (waited.output as DesktopSnapshot) : undefined;
+  const button = seen?.elements.find(
+    (element) =>
+      element.type === SAVE_BUTTON.type && element.name === SAVE_BUTTON.name,
+  );
+  return {
+    passed: button !== undefined,
+    seen: {
+      untitled,
+      inFront,
+      pressed,
+      waited: seen ? brief(seen) : waited,
+    },
+  };
+}
+
+/**
  * The write checks (Task 23). Linux, and Windows on the legacy engine, refuse every write before
  * anything runs. macOS writes to the editor through a session the probe opens with the runner's own
  * `desktop.session_start`. EVERY WRITE IS SENT ONCE: one that failed is reported as it came back and
@@ -842,6 +962,26 @@ async function writeChecks(
       { typed: typed?.ok, again },
     );
 
+    // The clipboard (Task 25): put on it once, read back once (approved, as the server always sends
+    // it), and the very same text.
+    const put = started.ok
+      ? await write("desktop.clipboard_write", { text: CLIPBOARD_TEXT })
+      : undefined;
+    const got =
+      put?.ok === true
+        ? await write("desktop.clipboard_read", { approved: true })
+        : undefined;
+    const held = got?.ok
+      ? (got.output as { text?: unknown; truncated?: unknown })
+      : undefined;
+    assert(
+      put?.ok === true &&
+        held?.text === CLIPBOARD_TEXT &&
+        held?.truncated === false,
+      DESKTOP_PROBE_WRITE_CHECKS.clipboard,
+      { put, got },
+    );
+
     // A key: pressed with the editor in front; refused, never pressed, once Finder is in front.
     const focused = started.ok
       ? await write("desktop.focus", { windowId })
@@ -851,6 +991,7 @@ async function writeChecks(
     const saved = inFront
       ? await write("desktop.key", { windowId, keys: "cmd+s" })
       : undefined;
+
     // Through Launch Services, not an Apple event: no Automation permission to ask for.
     const finder = spawnSync("open", ["-a", "Finder"], {
       stdio: "ignore",
@@ -869,6 +1010,17 @@ async function writeChecks(
       DESKTOP_PROBE_WRITE_CHECKS.foreground,
       { focused, inFront, saved, finder: finder.status, behindNow, behind },
     );
+
+    /*
+     * Waiting (Task 25), after the foreground check, so that only Finder put the editor behind there:
+     * the editor brought to the front again, then cmd+s in a new, never saved document opens the save
+     * dialog, which has a Save button the document alone does not. One focus, one cmd+n, one cmd+s
+     * and one wait, none sent again.
+     */
+    const dialog = started.ok
+      ? await saveDialogCheck(run, write, windowId)
+      : { passed: false, seen: { started } };
+    assert(dialog.passed, DESKTOP_PROBE_WRITE_CHECKS.waited, dialog.seen);
   } finally {
     await run("desktop.session_end", { token });
   }
@@ -894,11 +1046,13 @@ if (import.meta.main) {
       "This probe drives agent-desktop; on Windows set OPENBOT_DESKTOP_ENGINE=agent-desktop.",
     );
   const root = resolve(rootArg);
-  const helper = resolve(helperArg);
-  if (!existsSync(helper)) throw new Error(`No agent-desktop at ${helper}.`);
+  const fetched = resolve(helperArg);
+  if (!existsSync(fetched)) throw new Error(`No agent-desktop at ${fetched}.`);
   if (existsSync(root) && readdirSync(root).length > 0)
     throw new Error("Use a fresh, empty directory for each run.");
   mkdirSync(root, { recursive: true });
+  const helper =
+    platform === "macos" ? stageMacBinaries(fetched, root) : fetched;
 
   const probe = probeControl();
   const execute = createRunnerExecutor(

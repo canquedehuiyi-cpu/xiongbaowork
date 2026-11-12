@@ -109,6 +109,9 @@ import {
   createDesktopStoppedHandler,
   createDesktopWriteGate,
   createDesktopWriteMethods,
+  type DesktopClipboardReadResult,
+  type DesktopClipboardWriteResult,
+  type DesktopLaunchResult,
   type DesktopWriteGovern,
   type DesktopWriteResult,
   type DesktopWriteRow,
@@ -668,6 +671,38 @@ export interface ComputerGateway {
     input: { windowId: string },
     signal?: AbortSignal,
   ): Promise<DesktopWriteResult>;
+  /** Wait in a window for a control to show up, then read it: a read, under the snapshot's rules. */
+  waitDesktop(
+    botId: string,
+    actor: ActionActor,
+    input: {
+      windowId: string;
+      name?: string;
+      type?: string;
+      timeoutSec: number;
+    },
+    signal?: AbortSignal,
+  ): Promise<{ untrusted: string } & DesktopSnapshot>;
+  /** Start a program by its name (never a path or a flag), inside the owner's desktop session. */
+  launchDesktopApp(
+    botId: string,
+    actor: ActionActor,
+    input: { app: string },
+    signal?: AbortSignal,
+  ): Promise<DesktopLaunchResult>;
+  /** Read the clipboard: asked every time; outside content; the row has its length only. */
+  readDesktopClipboard(
+    botId: string,
+    actor: ActionActor,
+    signal?: AbortSignal,
+  ): Promise<{ untrusted: string } & DesktopClipboardReadResult>;
+  /** Put text on the clipboard; the row has its length only, the card shows the text. */
+  writeDesktopClipboard(
+    botId: string,
+    actor: ActionActor,
+    input: { text: string },
+    signal?: AbortSignal,
+  ): Promise<DesktopClipboardWriteResult>;
   /**
    * A runner's heartbeat says the owner stopped a desktop session on that machine: this replica
    * forgets it and records the stop. Wired to the runner socket (`runnerMessage`'s `onDesktopStopped`).
@@ -1678,6 +1713,7 @@ export function createComputerGateway(
       const answer = (result && typeof result === "object" ? result : {}) as {
         physical?: unknown;
         delivery?: unknown;
+        text?: unknown;
       };
       const attemptRow = auditRow({ ...subjectOf, attempt });
       try {
@@ -1692,6 +1728,11 @@ export function createComputerGateway(
               ...(answer.delivery === "verified" ||
               answer.delivery === "unverified"
                 ? { delivery: answer.delivery }
+                : {}),
+              // What the clipboard held, by its length only (Task 25).
+              ...(subject.desktopWrite.row.action === "clipboard_read" &&
+              typeof answer.text === "string"
+                ? { textLength: answer.text.length }
                 : {}),
               durationMs: Math.max(0, now() - started),
             },
@@ -3536,6 +3577,7 @@ const LIVE_DESKTOP_QUESTIONS: ReadonlySet<string> = new Set([
   "/desktop/session_status",
   "/desktop/windows",
   "/desktop/snapshot",
+  "/desktop/wait",
 ]);
 
 export function intentOf(
@@ -3587,6 +3629,17 @@ export function intentOf(
     case "computer_desktop_type":
     case "computer_desktop_key":
     case "computer_desktop_focus":
+      return "write";
+    /*
+     * Waiting for a control and reading the clipboard change nothing either (reading the clipboard
+     * is asked about every time all the same, by its own floor); starting a program and putting text
+     * on the clipboard do.
+     */
+    case "computer_desktop_wait":
+    case "computer_desktop_clipboard_read":
+      return "read";
+    case "computer_desktop_launch":
+    case "computer_desktop_clipboard_write":
       return "write";
     // --- end desktop control ---
     default:
