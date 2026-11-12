@@ -4,10 +4,11 @@ import {
   IconLayoutSidebar,
   IconPlus,
   IconSearch,
+  IconUsersPlus,
 } from "@tabler/icons-react";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { Link, useParams, useRouterState } from "@tanstack/react-router";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { AnimatePresence } from "motion/react";
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { BotsNavBadge } from "@/components/bot-profile/attention";
@@ -36,33 +37,24 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { untitledLine } from "@/lib/channels/label";
-import {
-  type ChannelSummary,
-  channelListQueryOptions,
-} from "@/lib/channels/queries";
+import { agentListQueryOptions } from "@/lib/agents/queries";
+import { channelListQueryOptions } from "@/lib/channels/queries";
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
 import { appConfig } from "@/lib/generated/application-config";
-import { EASE_OUT, ENTRANCE_SECONDS } from "@/lib/motion";
 import {
   isNavigationLink,
   type NavigationLink,
   navigationOwns,
   useNavigationItems,
 } from "@/lib/navigation";
-import {
-  type MessageListEmphasis,
-  useMessageListEmphasis,
-} from "@/lib/settings/message-list";
-import { Channel } from "./channel";
+import { useMessageListEmphasis } from "@/lib/settings/message-list";
+import { cn } from "@/lib/utils";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelPagination } from "./channel-pagination";
-import {
-  conversationStamp,
-  isUnread,
-  matchingChannels,
-  pinnedFirst,
-} from "./roster";
+import { ChannelRow } from "./channel-row";
+import { listedEmployees, matchingChannels, pinnedFirst } from "./roster";
 import { SidebarAccount } from "./sidebar-account";
+import { EmployeeList, GroupList } from "./sidebar-roster";
 
 /*
  * The roster helpers live in roster.ts; re-exported here because the channel screen, the skins and
@@ -104,6 +96,106 @@ function writeMoreOpen(open: boolean) {
   } catch {
     // A browser that refuses storage still gets a working disclosure; it just will not remember.
   }
+}
+
+/**
+ * Which list the sidebar shows: upstream's 会话 (every conversation, newest first), or 熊宝 v0.2.7's
+ * 员工 / 群组 roster, where a 单聊 is reached from its employee and the 群聊 sit with the 群组.
+ * 会话 is the default; the choice is remembered per browser.
+ */
+export type SidebarView = "chats" | "wakers" | "groups";
+
+const VIEW_STORAGE_KEY = "openbot-sidebar-view";
+
+function readView(): SidebarView {
+  try {
+    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return stored === "wakers" || stored === "groups" ? stored : "chats";
+  } catch {
+    return "chats";
+  }
+}
+
+function writeView(view: SidebarView) {
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // A browser that refuses storage still switches; it just opens on 会话 next time.
+  }
+}
+
+/**
+ * The 「会话 · 员工 · 群组」 switch, drawn as the boxed switch the v0.2.7 roster had.
+ *
+ * Toggle buttons (`aria-pressed`) in a labelled group rather than a tab list: what changes is the
+ * content of one list, and the shell keeps its tab lists for page sections (see
+ * app-shell-parity.test.tsx, which holds the sidebar free of them).
+ *
+ * The counts are read from the cache only, never fetched for the label: the 员工 and 群组 lists ask
+ * for them when they open, and the sidebar costs no request for a list nobody opened.
+ */
+function ViewSwitch({
+  value,
+  onChange,
+}: {
+  value: SidebarView;
+  onChange: (view: SidebarView) => void;
+}) {
+  const agents = useQuery({ ...agentListQueryOptions(), enabled: false });
+  const groups = useQuery({ ...wakerGroupsQueryOptions(), enabled: false });
+  const views: {
+    value: SidebarView;
+    label: string;
+    count?: number;
+    /** What the count counts, for a screen reader: 「员工，6 位」. */
+    unit?: string;
+  }[] = [
+    { value: "chats", label: "会话" },
+    {
+      value: "wakers",
+      label: "员工",
+      count: agents.data ? listedEmployees(agents.data).length : undefined,
+      unit: "位",
+    },
+    { value: "groups", label: "群组", count: groups.data?.length, unit: "个" },
+  ];
+  return (
+    <fieldset
+      aria-label="侧栏列表"
+      className="m-0 flex w-full min-w-0 items-center gap-0.5 rounded-[10px] border-0 bg-foreground/[0.04] p-0.5"
+    >
+      {views.map((view) => {
+        const selected = view.value === value;
+        return (
+          <button
+            aria-label={
+              view.count === undefined
+                ? view.label
+                : `${view.label}，${view.count} ${view.unit}`
+            }
+            aria-pressed={selected}
+            className={cn(
+              // On a phone the 28px plate takes a 44px press: the pseudo-element reaches 8px above and below.
+              "relative inline-flex h-[28px] flex-1 items-center justify-center gap-1 rounded-[8px] px-2 font-medium text-[13px] whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 max-md:before:absolute max-md:before:inset-x-0 max-md:before:-inset-y-[8px] max-md:before:content-['']",
+              selected
+                ? "bg-background text-foreground shadow-xs dark:bg-foreground/10"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            key={view.value}
+            onClick={() => onChange(view.value)}
+            type="button"
+          >
+            {view.label}
+            {view.count === undefined ? null : (
+              <span className="text-[11px] text-faint tabular-nums">
+                {view.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </fieldset>
+  );
 }
 
 /*
@@ -149,7 +241,7 @@ function NavRow({ item }: { item: NavigationLink }) {
 
 /**
  * The top of the sidebar: the 35px logo and the product's name (its English name under it in spaced
- * mono), the button that hides the sidebar, and 「新对话」 under them.
+ * mono), the button that hides the sidebar, and 「新对话」 and 「新建群聊」 under them.
  */
 function SidebarBrand() {
   const { toggleSidebar } = useSidebar();
@@ -183,84 +275,49 @@ function SidebarBrand() {
           <IconLayoutSidebar className="size-[16px]" />
         </Button>
       </div>
-      <Button
-        className="h-[34px] w-full justify-start gap-[8px] rounded-[9px] px-[11px] text-[13px]"
-        render={(props) => (
-          <Link
-            {...props}
-            activeProps={{ className: "bg-sidebar-accent" }}
-            to="/channel/new"
-          />
-        )}
-        variant="outline"
-      >
-        <IconPlus className="size-[16px]" />
-        新对话
-      </Button>
+      {/*
+       * 「新建群聊」 beside 「新对话」, where a person looks to start something: after #452 a 群聊
+       * could only be started by picking two employees in 新对话's 发给, and nobody found that.
+       */}
+      <div className="flex gap-[6px]">
+        <Button
+          className="h-[34px] min-w-0 flex-1 justify-start gap-[8px] rounded-[9px] px-[11px] text-[13px]"
+          render={(props) => (
+            <Link
+              {...props}
+              activeProps={{ className: "bg-sidebar-accent" }}
+              to="/channel/new"
+            />
+          )}
+          variant="outline"
+        >
+          <IconPlus className="size-[16px]" />
+          新对话
+        </Button>
+        <Button
+          className="h-[34px] min-w-0 flex-1 justify-start gap-[8px] rounded-[9px] px-[11px] text-[13px]"
+          render={(props) => (
+            <Link
+              {...props}
+              activeProps={{ className: "bg-sidebar-accent" }}
+              to="/group/new"
+            />
+          )}
+          variant="outline"
+        >
+          <IconUsersPlus className="size-[16px]" />
+          新建群聊
+        </Button>
+      </div>
     </SidebarHeader>
   );
 }
 
 /**
- * A roster row that can animate.
- *
- * Two movements only: a channel that did not exist fades in, and a channel that was just spoken in
- * moves to the top. Nothing else animates, a roster that reacts to being read is a roster that
- * moves under the cursor.
- */
-function ChannelRow({
-  channel,
-  animateOrder,
-  emphasis,
-}: {
-  channel: ChannelSummary;
-  animateOrder: boolean;
-  emphasis: MessageListEmphasis;
-}) {
-  const shouldReduceMotion = useReducedMotion();
-  // Whether this row is unread, as a boolean, for the same reason `Channel` computes `isOpen`
-  // that way: navigating re-renders the rows whose answer changed, not the whole roster.
-  const unread = useParams({
-    strict: false,
-    select: (params) =>
-      isUnread(channel, (params as { channelId?: string }).channelId),
-  });
-  return (
-    <motion.div
-      animate={{ opacity: 1, transform: "translateY(0px)" }}
-      initial={{
-        opacity: 0,
-        transform: shouldReduceMotion ? "none" : "translateY(-8px)",
-      }}
-      exit={{ opacity: 0 }}
-      layout={animateOrder && !shouldReduceMotion ? "position" : false}
-      transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
-    >
-      <Channel
-        emphasis={emphasis}
-        channelId={channel.id}
-        participantIds={channel.agentIds}
-        name={channel.name}
-        summary={channel.summary ?? undefined}
-        untitled={untitledLine(channel)}
-        lastMessageAt={
-          channel.lastMessageAt
-            ? conversationStamp(channel.lastMessageAt)
-            : undefined
-        }
-        pinned={channel.pinned}
-        canRename={channel.canRename ?? false}
-        unread={unread}
-        // A turn running, or work the conversation waits on between turns: a hop, a routine.
-        busy={(channel.busy ?? false) || (channel.work?.length ?? 0) > 0}
-      />
-    </motion.div>
-  );
-}
-
-/**
- * The app's sidebar, in upstream's shape: the brand and 「新对话」 at the top, a search over every
- * conversation, the conversations themselves (a 群聊 is a row like any other, its faces stacked),
+ * The app's sidebar, in upstream's shape with 熊宝's roster back in it: the brand, 「新对话」 and
+ * 「新建群聊」 at the top, then the 「会话 · 员工 · 群组」 switch over one list — 会话 is upstream's
+ * search over every conversation and the conversations themselves (a 群聊 is a row like any other,
+ * its faces stacked); 员工 and 群组 are v0.2.7's roster, 单聊 by employee and 群聊 with the 群组 —
  * and at the foot the destinations from `lib/navigation.ts`, 「更多」, and the account menu.
  */
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -268,6 +325,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const channels = useInfiniteQuery(channelListQueryOptions());
   // One socket for the app, opened where the roster is kept live.
   useChannelEvents();
+  const [view, setView] = useState<SidebarView>(readView);
+  const chooseView = (next: SidebarView) => {
+    setView(next);
+    writeView(next);
+  };
   const [search, setSearch] = useState("");
   const scrollRoot = useRef<HTMLDivElement>(null);
   const searching = search.trim().length > 0;
@@ -307,77 +369,101 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar {...props}>
       <SidebarBrand />
       <div className="px-[15px] pb-[8px]">
-        <InputGroup className="h-[34px] rounded-[9px] bg-background text-[13px]">
-          <InputGroupInput
-            aria-label="搜索会话"
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索会话…"
-            type="search"
-            value={search}
-          />
-          <InputGroupAddon>
-            <IconSearch />
-          </InputGroupAddon>
-        </InputGroup>
+        <ViewSwitch onChange={chooseView} value={view} />
       </div>
-      <SidebarContent className="scroll-fade-b gap-0" ref={scrollRoot}>
-        <nav aria-label="会话" className="flex flex-col gap-px px-[8px] pb-2">
-          {/*
-           * TWO DIFFERENT NOTHINGS, AND SAYING THE WRONG ONE IS ALARMING. A list nobody has used yet
-           * needs telling how to start. A list that simply does not match what is in the box has to
-           * say so and quote it back — told "no conversations yet" while holding a typo, a person
-           * reads their conversations as gone.
-           */}
-          {searching && visibleChannels.length === 0 ? (
-            <Empty className="my-2 min-h-[30dvh] border border-dashed">
-              <EmptyHeader>
-                <EmptyTitle>
-                  {channels.hasNextPage
-                    ? "已加载的会话里没有匹配的"
-                    : "没有匹配的会话"}
-                </EmptyTitle>
-                <EmptyDescription className="text-pretty">
-                  {channels.hasNextPage
-                    ? "加载更早的会话，再多搜一些。"
-                    : `没有哪段会话的名字或最近一条消息里有「${search.trim()}」。`}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : null}
-          {!searching && channels.data?.length === 0 ? (
-            <Empty className="my-2 min-h-[30dvh] border border-dashed">
-              <EmptyHeader>
-                <EmptyTitle>还没有会话</EmptyTitle>
-                <EmptyDescription className="text-pretty">
-                  和员工开始一段对话，它就会出现在这里。
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : null}
-          {/*
-           * Keyed by the filter: typing swaps the list outright instead of fading rows out under
-           * somebody who is still typing (熊宝的做法，上游这里仍会淡出)。
-           */}
-          <AnimatePresence
-            initial={false}
-            key={searching ? `search:${search.trim()}` : "all"}
-          >
-            {visibleChannels.map((channel) => (
-              <ChannelRow
-                animateOrder={animateOrder}
-                channel={channel}
-                emphasis={emphasis}
-                key={channel.id}
+      {view === "wakers" ? (
+        <SidebarContent
+          className="scroll-fade-b gap-0 px-[10px] pb-2"
+          ref={scrollRoot}
+        >
+          <EmployeeList />
+        </SidebarContent>
+      ) : view === "groups" ? (
+        <SidebarContent
+          className="scroll-fade-b gap-0 px-[10px] pb-2"
+          ref={scrollRoot}
+        >
+          <GroupList scrollRoot={scrollRoot} />
+        </SidebarContent>
+      ) : (
+        <>
+          <div className="px-[15px] pb-[8px]">
+            <InputGroup className="h-[34px] rounded-[9px] bg-background text-[13px]">
+              <InputGroupInput
+                aria-label="搜索会话"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="搜索会话…"
+                type="search"
+                value={search}
               />
-            ))}
-          </AnimatePresence>
-          <ChannelPagination
-            query={channels}
-            scrollRoot={scrollRoot}
-            searching={searching}
-          />
-        </nav>
-      </SidebarContent>
+              <InputGroupAddon>
+                <IconSearch />
+              </InputGroupAddon>
+            </InputGroup>
+          </div>
+          <SidebarContent className="scroll-fade-b gap-0" ref={scrollRoot}>
+            <nav
+              aria-label="会话"
+              className="flex flex-col gap-px px-[8px] pb-2"
+            >
+              {/*
+               * TWO DIFFERENT NOTHINGS, AND SAYING THE WRONG ONE IS ALARMING. A list nobody has used yet
+               * needs telling how to start. A list that simply does not match what is in the box has to
+               * say so and quote it back — told "no conversations yet" while holding a typo, a person
+               * reads their conversations as gone.
+               */}
+              {searching && visibleChannels.length === 0 ? (
+                <Empty className="my-2 min-h-[30dvh] border border-dashed">
+                  <EmptyHeader>
+                    <EmptyTitle>
+                      {channels.hasNextPage
+                        ? "已加载的会话里没有匹配的"
+                        : "没有匹配的会话"}
+                    </EmptyTitle>
+                    <EmptyDescription className="text-pretty">
+                      {channels.hasNextPage
+                        ? "加载更早的会话，再多搜一些。"
+                        : `没有哪段会话的名字或最近一条消息里有「${search.trim()}」。`}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : null}
+              {!searching && channels.data?.length === 0 ? (
+                <Empty className="my-2 min-h-[30dvh] border border-dashed">
+                  <EmptyHeader>
+                    <EmptyTitle>还没有会话</EmptyTitle>
+                    <EmptyDescription className="text-pretty">
+                      和员工开始一段对话，它就会出现在这里。
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : null}
+              {/*
+               * Keyed by the filter: typing swaps the list outright instead of fading rows out under
+               * somebody who is still typing (熊宝的做法，上游这里仍会淡出)。
+               */}
+              <AnimatePresence
+                initial={false}
+                key={searching ? `search:${search.trim()}` : "all"}
+              >
+                {visibleChannels.map((channel) => (
+                  <ChannelRow
+                    animateOrder={animateOrder}
+                    channel={channel}
+                    emphasis={emphasis}
+                    key={channel.id}
+                  />
+                ))}
+              </AnimatePresence>
+              <ChannelPagination
+                query={channels}
+                scrollRoot={scrollRoot}
+                searching={searching}
+              />
+            </nav>
+          </SidebarContent>
+        </>
+      )}
       <SidebarFooter className="gap-0 border-sidebar-border border-t px-[15px] pt-[8px] pb-[6px]">
         <nav aria-label="主导航">
           <SidebarMenu className="gap-[3px]">
