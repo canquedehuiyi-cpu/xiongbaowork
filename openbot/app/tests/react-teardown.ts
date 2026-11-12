@@ -34,6 +34,15 @@ import { dirname, join } from "node:path";
  *
  * Done for each copy of React a root `bun test` reaches: the app's, which the extension and shared
  * resolve as well, and the desktop app's own, which its lockfile pins.
+ *
+ * NOR DOES WHAT A FILE CACHED IN THE APP'S OWN QUERY CLIENT. Screens read through `@/query-client`
+ * as well as the client a test draws them in (the signed-in person, deployment capabilities, a
+ * computer's state), and that client is one object for the whole process. About forty files left
+ * something in it, often a signed-in person answered by a fetch stand-in with no person in it, and
+ * the next file to read it got that person, kept as fresh for a minute: onboarding stayed on
+ * Saving…, the starter suggestions never drew, a voice widget threw on a person with no email, each
+ * only when such a file happened to run first. So once a file's screens are down, the client is
+ * emptied too, if any file loaded it at all.
  */
 
 /** More scheduler slices than any teardown needs. Past this, something keeps scheduling itself. */
@@ -58,6 +67,10 @@ const flushes: (() => void)[] = [];
 const testingLibraries: string[] = [];
 const schedulers = new Set<string>();
 const registrators = new Set<string>();
+/** The app's `@/query-client`, by path: emptied only once a file loaded it. */
+const sharedQueryClient = realpathSync(
+  join(import.meta.dir, "../src/query-client.ts"),
+);
 
 for (const [project, required] of [
   ["..", true],
@@ -118,6 +131,11 @@ function settleReact(): void {
     loaded?.cleanup?.();
   }
   for (const flush of flushes) flush();
+  // After the screens are down, so nothing is left observing what is dropped.
+  const queries = require.cache[sharedQueryClient]?.exports as
+    | { queryClient?: { clear(): void } }
+    | undefined;
+  queries?.queryClient?.clear();
 }
 
 /**

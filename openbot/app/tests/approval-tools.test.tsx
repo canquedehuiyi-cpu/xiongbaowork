@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 import * as ReactCoreV2 from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -321,6 +329,21 @@ function LookTools() {
   return null;
 }
 
+/*
+ * Each test mounts its tools afresh, and a fresh mount is a fresh registration: the SDK keeps the
+ * handler from a mount's first render, not from the first render of the whole file. Kept across
+ * tests, `registered` handed every test the handler of whichever test happened to render first,
+ * with that test's query client, so the card was invalidated on a client nobody was watching and
+ * the stops of earlier tests were counted again. Under `bun test --randomize` that depended on the
+ * order the tests ran in.
+ */
+beforeEach(() => {
+  registered.length = 0;
+  stopped.length = 0;
+  direct.length = 0;
+  looked.length = 0;
+});
+
 /**
  * One client for every look: the SDK keeps the handler from the first render, and the client with
  * it, as the app's one client is kept.
@@ -413,8 +436,6 @@ const threadAnswers =
       : rest();
 
 test("a look a rule asks about goes again through the gate, with its conversation", async () => {
-  looked.length = 0;
-  stopped.length = 0;
   lookOutcome = failedComputerCall(409, {
     error: "This action needs your approval.",
     needsConversation: true,
@@ -438,7 +459,6 @@ test("a look a rule asks about goes again through the gate, with its conversatio
 });
 
 test("a look nothing asks about goes straight to the computer and nowhere else", async () => {
-  looked.length = 0;
   lookOutcome = { ok: true, title: "Example Domain" };
   const { result, paths } = await navigateWith(
     threadAnswers(false, async () => {
@@ -453,8 +473,6 @@ test("a look nothing asks about goes straight to the computer and nowhere else",
 
 test("in a task's own conversation, opened with no conversation list loaded, a look goes to the gate first", async () => {
   // A task opened by a link: the app holds no conversation list, so only the server can say.
-  looked.length = 0;
-  stopped.length = 0;
   lookOutcome = { ok: true, title: "Example Domain" };
   const { result, paths } = await navigateWith(
     threadAnswers(true, async () =>
@@ -474,7 +492,6 @@ test("in a task's own conversation, opened with no conversation list loaded, a l
 });
 
 test("a look whose conversation couldn't be checked goes through the gate, where the server decides", async () => {
-  looked.length = 0;
   lookOutcome = { ok: true, title: "Example Domain" };
   const { result, paths } = await navigateWith(async (path) =>
     path === "/api/approvals/threads/thread"
@@ -490,7 +507,6 @@ test("a look whose conversation couldn't be checked goes through the gate, where
 });
 
 test("in a task's own conversation, a look with no conversation to ask in is not taken at all", async () => {
-  looked.length = 0;
   lookOutcome = { ok: true, title: "Example Domain" };
   const { result, paths } = await navigateWith(
     threadAnswers(true, async () => {

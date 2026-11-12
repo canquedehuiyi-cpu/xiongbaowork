@@ -32,7 +32,11 @@ let approveAnswer: { status: number; body: unknown } = {
 const sent: { path: string; method: string }[] = [];
 const requested: string[] = [];
 
-const pending = [
+/**
+ * 每个测试开始时的待处理申请。测试会改动 `pending`（驳回后删掉、清空成「没有待处理」），
+ * 所以每次都从这份原样复制一份，测试之间互不影响，也不依赖执行顺序。
+ */
+const initialPending = [
   {
     id: "r1",
     appKey: "notion",
@@ -62,8 +66,10 @@ const pending = [
     createdAt: new Date().toISOString(),
   },
 ];
+let pending = initialPending.map((request) => ({ ...request }));
 
 beforeEach(() => {
+  pending = initialPending.map((request) => ({ ...request }));
   sent.length = 0;
   requested.length = 0;
   role = "admin";
