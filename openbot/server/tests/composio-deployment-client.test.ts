@@ -179,7 +179,7 @@ describe("enabling a server-to-server app", () => {
         options: {
           type: "use_custom_auth",
           authScheme: "S2S_OAUTH2",
-          name: "Shopify (OpenBot)",
+          name: "Shopify (XiongBao Work)",
           credentials: CLIENT,
         },
       },
@@ -223,7 +223,7 @@ describe("enabling a server-to-server app", () => {
       {
         type: "use_custom_auth",
         authScheme: "API_KEY",
-        name: "Firecrawl (OpenBot)",
+        name: "Firecrawl (XiongBao Work)",
         credentials: {},
       },
     ]);

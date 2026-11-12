@@ -187,6 +187,7 @@ tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
 tests/boundaries-replay.integration.test.ts
 tests/brand-server-copy.test.ts
+tests/brand-third-party.test.ts
 tests/brand.test.ts
 tests/brokered-accounts-schema.integration.test.ts
 tests/brokered-multiple-accounts.integration.test.ts

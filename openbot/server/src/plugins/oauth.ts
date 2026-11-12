@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { seal, unseal } from "../auth/signed-value";
+import { englishName } from "../brand";
 import type { CatalogueAuth } from "./catalogue";
 
 /**
@@ -511,7 +512,7 @@ export async function registerDynamicClient(input: {
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
         token_endpoint_auth_method: "none",
-        client_name: "OpenBot",
+        client_name: englishName(),
       }),
       // The registration endpoint is pinned in the catalogue, so a redirect is somebody else deciding
       // where this deployment introduces itself. Left as the response, which is not `ok`.

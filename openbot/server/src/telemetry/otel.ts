@@ -160,7 +160,7 @@ export function createOtelEventExporter(
   });
   const provider = new LoggerProvider({
     resource: resourceFromAttributes({
-      "service.name": env.OTEL_SERVICE_NAME?.trim() || "openbot",
+      "service.name": env.OTEL_SERVICE_NAME?.trim() || "xiongbao",
     }),
     processors: [new BatchLogRecordProcessor({ exporter })],
   });

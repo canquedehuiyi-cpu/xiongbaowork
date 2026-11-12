@@ -158,7 +158,7 @@ describe("a Bot that runs on OpenBot", () => {
     };
     await run(agent, runtime, catalogueFor(runtime));
     const sent = wire.join("\n");
-    expect(sent).toContain(framework("OpenBot"));
+    expect(sent).toContain(framework("XiongBao Work"));
     expect(sent).toContain(model("GPT-6.1 Terra"));
   });
 });

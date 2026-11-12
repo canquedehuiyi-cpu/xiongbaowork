@@ -520,7 +520,7 @@ async function withClient<T>(
     requestInit: dial.requestInit,
     ...(dial.fetch ? { fetch: dial.fetch } : {}),
   });
-  const client = new Client({ name: "openbot", version: "1.0.0" });
+  const client = new Client({ name: "xiongbao", version: "1.0.0" });
 
   try {
     await connectWithinDeadline(client, transport);

@@ -2605,7 +2605,7 @@ describe("bundled personal starter", () => {
     );
     // It runs here, so it says it runs on OpenBot itself.
     expect(await profiles.get(actor, "personal-assistant")).toMatchObject({
-      title: "Everyday life. Powered by OpenBot.",
+      title: "Everyday life. Powered by XiongBao Work.",
     });
     await synchronizeTenantPackage(
       database,

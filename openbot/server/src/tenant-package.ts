@@ -2,11 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  HARNESSES,
-  type Harness,
-  OPENBOT_HARNESS_NAME,
-} from "@openbot/shared/harnesses";
+import { HARNESSES, type Harness } from "@openbot/shared/harnesses";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import {
   and,
@@ -20,6 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { parse } from "yaml";
+import { englishName } from "./brand";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
 import {
@@ -1064,7 +1061,7 @@ function personalStarterSeed(
       ? harness
         ? harness.name
         : null
-      : OPENBOT_HARNESS_NAME;
+      : englishName();
     const title = harnessName
       ? `Everyday life. Powered by ${harnessName}.`
       : "Everyday life.";
@@ -1351,7 +1348,8 @@ export async function synchronizeTenantPackage(
                   isNull(agentProfiles.ownerUserId),
                 ),
               );
-            const title = profile && attributionFollowing(profile.title, selected);
+            const title =
+              profile && attributionFollowing(profile.title, selected);
             if (profile && title !== profile.title) {
               await transaction
                 .update(agentProfiles)
@@ -2232,7 +2230,6 @@ export async function synchronizeTenantPackage(
 
   return synced.deploymentPackage;
 }
-
 
 /**
  * What this deployment calls itself when `DEPLOYMENT_ID` is unset: the package's tenant id, unless

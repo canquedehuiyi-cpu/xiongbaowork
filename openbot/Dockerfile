@@ -397,6 +397,9 @@ ENV OPENBOT_BUILD_VERSION=${OPENBOT_BUILD_VERSION} \
 # server/src/config.ts.
 ENV OPENBOT_IN_CONTAINER=true
 ENV NODE_ENV=production
+# The CopilotKit runtime reports usage to its vendor unless this is set; the server also swaps its
+# capture scope for a silent one, so this covers any process that reads the variable directly.
+ENV COPILOTKIT_TELEMETRY_DISABLED=1
 ENV PORT=3001
 EXPOSE 3001
 

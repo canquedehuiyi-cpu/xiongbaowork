@@ -1,4 +1,5 @@
 import { Composio } from "@composio/core";
+import { englishName } from "../brand";
 import { appsPageZh, askAdminToZh, itsAppPage } from "../edition";
 import { displayName } from "./app-names";
 import {
@@ -205,7 +206,7 @@ type VendorToolkitDetail = {
  * `name` IS THE ONLY PROVENANCE THERE IS. Composio publishes no field saying which client created a
  * config, and the listing is scoped to the project rather than to this deployment, so a config an
  * operator made by hand in the dashboard comes back beside the ones made here and is otherwise
- * identical. The name is the one field this deployment chooses, which is why {@link CONFIG_SUFFIX}
+ * identical. The name is the one field this deployment chooses, which is why {@link configSuffix}
  * is written into it and why every decision below reads it.
  *
  * `status` because a DISABLED config is still a config: it answers the listing, it satisfies the
@@ -2401,7 +2402,17 @@ export type ComposioVendor = {
  * and the two are otherwise indistinguishable. The name is the only field this deployment gets to
  * choose, so it is where the provenance goes.
  */
-const CONFIG_SUFFIX = "(OpenBot)";
+/**
+ * The suffix written into configs created before the product was renamed. Lookup is by NAME (see
+ * above), so a deployment that already holds "Linear (OpenBot)" must keep finding it, or enabling the
+ * app again would create the second config this provenance exists to prevent.
+ */
+const LEGACY_CONFIG_SUFFIX = "(OpenBot)";
+
+/** What new configs are named with: read per call so a package's English name takes effect. */
+function configSuffix(): string {
+  return `(${englishName()})`;
+}
 
 /**
  * How many different unrecognised statuses one refusal names before it stops naming them.
@@ -2440,7 +2451,8 @@ const STATUSES_NAMED = 5;
  * sentence instead, upstream of every caller.
  */
 function madeHere(config: CheckedAuthConfig): boolean {
-  return config.name.trimEnd().endsWith(CONFIG_SUFFIX);
+  const name = config.name.trimEnd();
+  return name.endsWith(configSuffix()) || name.endsWith(LEGACY_CONFIG_SUFFIX);
 }
 
 /**
@@ -2753,7 +2765,7 @@ export function buildComposioClient(
   ): Promise<{
     /** Every readable row, ours and anybody else's alike, deduplicated and in one order. */
     held: CheckedAuthConfig[];
-    /** The subset of `held` carrying {@link CONFIG_SUFFIX}, which is what this deployment claims. */
+    /** The subset of `held` carrying {@link configSuffix}, which is what this deployment claims. */
     ours: CheckedAuthConfig[];
     /** One refusal per row that could be sorted into neither, which is never nothing. */
     unreadable: BrokerRefusalError[];
@@ -3284,7 +3296,7 @@ export function buildComposioClient(
        * Composio. What is true of every condition here is the half that is said now: the app is not
        * enabled, and what is at Composio is not something this call can report.
        */
-      const configName = `${name} ${CONFIG_SUFFIX}`;
+      const configName = `${name} ${configSuffix()}`;
 
       /*
        * EXCEPT A SERVER-TO-SERVER GRANT, WHOSE CREDENTIAL IS THE DEPLOYMENT'S AND NOT A PERSON'S
@@ -3372,7 +3384,7 @@ export function buildComposioClient(
        */
       if (textOf(created?.id) === null) {
         throw new BrokerRefusalError(
-          `Composio answered the creation of an authorization config for ${toolkit} with ${sent(created?.id)} where the new config's id belongs, so this deployment cannot show that the config it just asked for exists and the app is not enabled. The request went out and Composio replied to it, so one may well be standing there: enabling ${toolkit} again finds it rather than making a second, because a config whose name ends with ${CONFIG_SUFFIX} is one this deployment claims. ${VENDOR_SHAPE_REMEDY}`,
+          `Composio answered the creation of an authorization config for ${toolkit} with ${sent(created?.id)} where the new config's id belongs, so this deployment cannot show that the config it just asked for exists and the app is not enabled. The request went out and Composio replied to it, so one may well be standing there: enabling ${toolkit} again finds it rather than making a second, because a config whose name ends with ${configSuffix()} is one this deployment claims. ${VENDOR_SHAPE_REMEDY}`,
         );
       }
 
@@ -3464,7 +3476,7 @@ export function buildComposioClient(
             ? ` Composio also described ${unreadable.length} more of its ${toolkit} authorization configs with no id or no name, so one of those may be this deployment's own under an answer it could not read: until those are read in Composio's own dashboard too, neither reading settles what is standing and the removal does not go through on the strength of the one above alone.`
             : "";
         throw new BrokerRefusalError(
-          `Removing ${toolkit} found none of this deployment's own authorization configs at Composio, and Composio holds ${held.length} for ${toolkit} whose name does not carry ${CONFIG_SUFFIX} — so nothing was deleted and the app has not been withdrawn, rather than a config this deployment cannot show is its own being deleted along with every account connected against it. Nothing here can tell one of ours, renamed in Composio's dashboard, from an operator's own work. If it is this deployment's, the grants made against it are still live, and renaming it to end with ${CONFIG_SUFFIX} lets removing the app again withdraw them. If it is an operator's, only taking it out of that dashboard leaves this app with nothing standing, after which the removal goes through.${alsoUnreadable}`,
+          `Removing ${toolkit} found none of this deployment's own authorization configs at Composio, and Composio holds ${held.length} for ${toolkit} whose name does not carry ${configSuffix()} — so nothing was deleted and the app has not been withdrawn, rather than a config this deployment cannot show is its own being deleted along with every account connected against it. Nothing here can tell one of ours, renamed in Composio's dashboard, from an operator's own work. If it is this deployment's, the grants made against it are still live, and renaming it to end with ${configSuffix()} lets removing the app again withdraw them. If it is an operator's, only taking it out of that dashboard leaves this app with nothing standing, after which the removal goes through.${alsoUnreadable}`,
           unreadable.length > 0
             ? { cause: everyRefusal(unreadable) }
             : undefined,
@@ -3947,7 +3959,7 @@ export function buildComposioClient(
             ? ` Composio also described ${unreadable.length} of its ${toolkit} authorization configs in a way this deployment cannot read, so any grant of theirs on one of those is outside the question either reading settles, and renaming the config above is not on its own enough to end everything they hold: reading those rows in Composio's own dashboard is what says whether anything is left.`
             : "";
         throw new BrokerRefusalError(
-          `Disconnecting ${toolkit} found none of this deployment's own authorization configs at Composio, and Composio holds ${held.length} for ${toolkit} whose name does not carry ${CONFIG_SUFFIX} — so nothing was withdrawn and this person's access has not ended, rather than their connection being forgotten here while their grant stands. Nothing here can tell one of ours, renamed in Composio's dashboard, from an operator's own work. If it is this deployment's, this person's grants on it are live, and renaming it to end with ${CONFIG_SUFFIX} lets disconnecting again withdraw them. If it is an operator's, this deployment granted nothing through it and only that dashboard can end what it holds.${alsoUnreadable}`,
+          `Disconnecting ${toolkit} found none of this deployment's own authorization configs at Composio, and Composio holds ${held.length} for ${toolkit} whose name does not carry ${configSuffix()} — so nothing was withdrawn and this person's access has not ended, rather than their connection being forgotten here while their grant stands. Nothing here can tell one of ours, renamed in Composio's dashboard, from an operator's own work. If it is this deployment's, this person's grants on it are live, and renaming it to end with ${configSuffix()} lets disconnecting again withdraw them. If it is an operator's, this deployment granted nothing through it and only that dashboard can end what it holds.${alsoUnreadable}`,
           unreadable.length > 0
             ? { cause: everyRefusal(unreadable) }
             : undefined,

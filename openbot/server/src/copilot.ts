@@ -1,4 +1,3 @@
-import { englishName, productName } from "./brand";
 import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/client";
 import { type AbstractAgent, HttpAgent } from "@ag-ui/client";
 import type {
@@ -56,7 +55,7 @@ import {
   CoworkerUnavailableError,
 } from "./agents/agent-resolver";
 import { attributeBotAnswers } from "./agents/bot-answers";
-import { frameworkOf } from "./agents/framework";
+import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
 import { takesModelChoice } from "./agents/harness-model";
 import {
@@ -90,6 +89,7 @@ import {
   watchDecisionWaits,
 } from "./approvals/decision-waits";
 import type { AuditInitiator } from "./audit";
+import { englishName, productName } from "./brand";
 import {
   attachmentIdsIn,
   newInlineBudget,
@@ -148,6 +148,7 @@ import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
+import { silentRuntimeTelemetry } from "./telemetry/runtime-telemetry";
 import {
   isPersonTenant,
   runAsTenant,
@@ -324,7 +325,7 @@ export function identityGuidance(
     `You are ${name}, a Bot in ${englishName()}.`,
     ...(subtitle ? [/[.!?]$/.test(subtitle) ? subtitle : `${subtitle}.`] : []),
     selfAddressGuidance(name),
-    ...(framework ? [frameworkGuidance(framework)] : []),
+    ...(framework ? [frameworkGuidance(frameworkLabel(framework))] : []),
   ].join(" ");
 }
 
@@ -370,7 +371,7 @@ export function standingRoleMessage(
         "identity",
         [
           `You are ${profile.name}, ${title}${titleEnd} ${selfAddressGuidance(profile.name)}`,
-          ...(framework ? [frameworkGuidance(framework)] : []),
+          ...(framework ? [frameworkGuidance(frameworkLabel(framework))] : []),
         ].join(" "),
       ),
       ...promptSection(
@@ -3808,6 +3809,8 @@ export function mountCopilotRuntime(
    * turn and not.
    */
   const sharedRuntimeOptions = {
+    // No usage reports to the runtime vendor; see `silentRuntimeTelemetry`.
+    ɵtelemetry: silentRuntimeTelemetry,
     // identifyUser is NOT optional in practice. Threads and memory are scoped to the user it
     // returns, so omitting it puts every person in the deployment in the same thread space and one
     // person's conversations become another's.
@@ -3817,7 +3820,9 @@ export function mountCopilotRuntime(
     telemetryProperties: {
       app_id: "openbot",
       ...options.productTelemetry?.deploymentProperties(),
-      ...(config.accessibility ? { accessibility_title: accessibilityTitle() } : {}),
+      ...(config.accessibility
+        ? { accessibility_title: accessibilityTitle() }
+        : {}),
       ...desktopTelemetryProperties(),
     },
     /*

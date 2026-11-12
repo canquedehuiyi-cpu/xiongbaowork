@@ -1,8 +1,4 @@
-import {
-  OPENBOT_HARNESS_NAME,
-  summaryFor,
-  WEB_HARNESSES,
-} from "@openbot/shared/harnesses";
+import { summaryFor, WEB_HARNESSES } from "@openbot/shared/harnesses";
 import {
   IconCheck,
   IconInfoCircle,
@@ -70,6 +66,7 @@ import { isComposing } from "@/lib/composing";
 import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { myCapabilitiesQueryOptions } from "@/lib/enterprise/queries";
+import { appConfig } from "@/lib/generated/application-config";
 import {
   type PluginsPage,
   pluginKeys,
@@ -143,13 +140,15 @@ function frameworkName(runtime: Runtime): string {
   return harness ? harness.name : "AG-UI agent";
 }
 
+const PRODUCT = appConfig.brand.englishName ?? "XiongBao Work";
+
 /**
  * The subtitle under a new Bot's name: what runs it. OpenBot itself for a Bot that runs here, the
  * framework for one picked from the list. Nothing for an agent somebody already runs, since OpenBot
  * cannot know what is behind its address.
  */
 function poweredBy(runtime: Runtime): string {
-  if (runtime.kind === "builtin") return `由 ${OPENBOT_HARNESS_NAME} 驱动`;
+  if (runtime.kind === "builtin") return `由 ${PRODUCT} 驱动`;
   if (runtime.harness === "byo-url") return "";
   const framework = WEB_HARNESSES.find(
     (harness) => harness.id === runtime.harness,

@@ -87,7 +87,7 @@ const api = createOtelEventExporter({ OTEL_EXPORTER_OTLP_ENDPOINT: " https://col
   OTEL_EXPORTER_OTLP_HEADERS: "x-fixture=fallback" });
 assert.equal(state.exporters[0].config.url, "https://collector.invalid/v1/logs");
 assert.deepEqual(state.exporters[0].config.headers, { "x-fixture": "fallback" });
-assert.equal(state.providers[0].resource.attributes["service.name"], "openbot");
+assert.equal(state.providers[0].resource.attributes["service.name"], "xiongbao");
 await api.shutdown();
 `));
 
