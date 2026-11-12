@@ -98,7 +98,7 @@ function Face({
   const [videoFailed, setVideoFailed] = useState(false);
   // A failed video stays failed only for that URL: a replacement upload retries playback.
   useEffect(() => {
-    setVideoFailed(false);
+    if (videoUrl) setVideoFailed(false);
   }, [videoUrl]);
   const prefersReducedMotion = usePrefersReducedMotion();
   const motionClass = motion ? AVATAR_MOTION_CLASS[motion] : undefined;
