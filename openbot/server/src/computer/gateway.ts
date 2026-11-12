@@ -361,6 +361,12 @@ export type ComputerGatewayOptions = {
    * empty or blank: the default list.
    */
   desktopActionWords?: () => Promise<readonly string[] | null | undefined>;
+  /**
+   * The approval store keeps one request per tool call (`approval_requests_action_idx`), as
+   * production's does: a desktop write the device asks about again after an approval is not asked
+   * again in the same call (final review, round 3).
+   */
+  desktopOneApprovalPerCall?: boolean;
   // --- end desktop control ---
   /** The clock a device's cached tool list is aged by. Tests hand in their own. */
   now?: () => number;
@@ -2288,6 +2294,10 @@ export function createComputerGateway(
           (await options.desktopActionWords?.()) ?? undefined,
         ),
       post: desktopPost,
+      ...(options.desktopOneApprovalPerCall
+        ? { oneApprovalPerCall: true }
+        : {}),
+      now,
     }),
     desktopStopped: createDesktopStoppedHandler({
       sessions: desktopSessions,

@@ -59,13 +59,17 @@ import {
 import { createDesktopControlCache } from "../src/computer/desktop-state";
 import { desktopTools } from "../src/computer/desktop-tools";
 import {
+  createDesktopReasonMemory,
   createDesktopWriteGate,
   DESKTOP_APPROVED_AGAIN,
   DESKTOP_BAD_APP,
+  DESKTOP_REASONS_KEPT,
+  DESKTOP_REASONS_TTL_MS,
   DESKTOP_SESSION_UNAPPROVED,
   DESKTOP_STOPPED_REASON,
   DESKTOP_TEXT_TOO_LONG,
   type DesktopWriteGovern,
+  desktopCallAgain,
 } from "../src/computer/desktop-write";
 import {
   ActionRefusedError,
@@ -183,6 +187,8 @@ function harness(
      * different payload is refused as it is there.
      */
     journal?: boolean;
+    /** The approval store keeps one request per tool call, as production's does (round 3). */
+    onePerCall?: boolean;
   } = {},
 ) {
   const posts: Posted[] = [];
@@ -294,6 +300,7 @@ function harness(
     policy: () => PERMISSIVE,
     transport,
     ...(options.now ? { now: options.now } : {}),
+    ...(options.onePerCall ? { desktopOneApprovalPerCall: true } : {}),
     resolveDevice: async () =>
       options.owner === undefined
         ? MACHINE
@@ -2834,8 +2841,9 @@ describe("the final review, round 2", () => {
       await expect(click()).rejects.toBeInstanceOf(HeadlessToolSuspension);
       await h.read(WECHAT.windowId);
       const first = await answer(fixture, "approval-1", true, click);
-      // The second card cannot be opened in the same call: refused, and nothing carried out.
-      expect(first.result?.error).toBe("The approved action has changed.");
+      // The second card cannot be opened in the same call: refused, and nothing carried out. Round
+      // 3: told in Chinese, with the model asked to call again (the store's English never reaches it).
+      expect(first.result?.error).toBe(desktopCallAgain(reason));
       expect(carriedOut()).toBe(0);
       expect(fixture.rows.size).toBe(1);
       expect(clickKeys(h)).toEqual([
@@ -2888,6 +2896,364 @@ describe("the final review, round 2", () => {
       expect(h.writesPosted().at(-1)?.payload).toMatchObject({
         approvedReason: SELF_DEVICE,
       });
+    });
+  });
+});
+
+/*
+ * The final review, round 3: production keeps one approval request per tool call, so what the device
+ * found after an approval is kept here (this replica, ten minutes) and named on the next call's first
+ * card, under that card's own approval.
+ */
+describe("the final review, round 3", () => {
+  const REASON = `控件名含「删除」：「发送${"x".repeat(60)}删除」`;
+  const CALL_AGAIN = `设备发现了确认卡上没写的情况：${REASON}。请再调用一次，下一张确认卡会写明，由主人重新确认。`;
+  const OWN = "在窗口「微信」里点击「发送」：控件名含「发送」，需要你批准。";
+  const SAID = `设备端上次核对时发现了确认卡上没写的情况：${REASON}。`;
+
+  /**
+   * The approval store as production keeps it: one request per person, run and tool call, and the
+   * same action (approval_requests_action_idx); with a policy, so a card keeps the reason it gave.
+   */
+  function production() {
+    const rows = new Map<string, ApprovalRecord>();
+    let next = 0;
+    const store = {
+      enabled: async () => true,
+      setEnabled: async () => {},
+      open: async (value: ApprovalRecord["action"]) => {
+        const prior = [...rows.values()].find(
+          (row) =>
+            row.action.runId === value.runId &&
+            row.action.toolCallId === value.toolCallId,
+        );
+        if (prior) {
+          if (prior.action.actionDigest !== value.actionDigest)
+            throw new ApprovalRefusedError("The approved action has changed.");
+          return structuredClone(prior);
+        }
+        next += 1;
+        const row = {
+          id: `approval-${next}`,
+          ownerUserId: value.actorId,
+          action: structuredClone(value),
+          status: "pending",
+          decision: null,
+          result: null,
+          createdAt: new Date(0),
+          decidedAt: null,
+          consumedAt: null,
+          completedAt: null,
+        } as unknown as ApprovalRecord;
+        rows.set(row.id, row);
+        return structuredClone(row);
+      },
+      get: async (_owner: string, id: string) =>
+        structuredClone(rows.get(id) as ApprovalRecord),
+      list: async () => [...rows.values()],
+      decide: async (_owner: string, id: string) =>
+        structuredClone(rows.get(id) as ApprovalRecord),
+      consume: async (_owner: string, id: string, digest: string) => {
+        const row = rows.get(id) as ApprovalRecord;
+        if (row.action.actionDigest !== digest || row.status !== "approved")
+          return false;
+        row.status = "consumed";
+        return true;
+      },
+      saveResult: async (
+        _owner: string,
+        id: string,
+        result: ApprovalRecord["result"],
+      ) => {
+        const row = rows.get(id) as ApprovalRecord;
+        if (row.result) return false;
+        row.result = structuredClone(result);
+        return true;
+      },
+      finish: async (_owner: string, id: string) => {
+        (rows.get(id) as ApprovalRecord).status = "completed";
+      },
+      rules: async () => [],
+      revoke: async () => {},
+      policy: {
+        preferences: async () => ({ enabled: true, autoReview: false }),
+        teamSettings: async () => ({ customRulesEnabled: true }),
+        teamRules: async () => [],
+        recordDecision: async () => {},
+        findEquivalent: async () => undefined,
+        conversationGrants: async () => [],
+        withdrawPending: async () => [],
+      },
+    } as unknown as ApprovalStore;
+    const service = createApprovalFixtureService(store);
+    approvalFixtureModel(store);
+    return { rows, service };
+  }
+
+  async function answer(
+    fixture: ReturnType<typeof production>,
+    id: string,
+    approve: boolean,
+    tool: () => Promise<unknown>,
+  ) {
+    const row = fixture.rows.get(id) as ApprovalRecord;
+    expect(row.status).toBe("pending");
+    row.status = approve ? "approved" : "denied";
+    (row as { decision: string }).decision = approve ? "allow_once" : "deny";
+    await fixture.service.resume(OWNER, id, {
+      validate: (action: ApprovalRecord["action"]) =>
+        fixture.service.validateReentry(action, tool),
+      execute: () => tool(),
+      continue: async () => {},
+    } as never);
+    return fixture.rows.get(id) as ApprovalRecord;
+  }
+
+  /** A device that asks with REASON until it is sent the owner's approval of it, as the runner does. */
+  function scenario(
+    options: { onePerCall?: boolean; now?: () => number } = {},
+  ) {
+    const fixture = production();
+    let carriedOut = 0;
+    const h = harness({
+      session: true,
+      journal: true,
+      onePerCall: options.onePerCall !== false,
+      ...(options.now ? { now: options.now } : {}),
+      gate: (candidate) => fixture.service.gate(candidate),
+      write: (_path, payload) => {
+        const approved = payload.approvedReason;
+        const seen = Array.isArray(approved) ? approved : [approved];
+        if (!seen.includes(REASON))
+          throw new DeviceActionError(needsOf(REASON));
+        carriedOut += 1;
+        return {
+          physical: false,
+          durationMs: 3,
+          delivery: "verified",
+          window: {
+            windowId: WECHAT.windowId,
+            title: WECHAT.title,
+            process: "wechat",
+          },
+          note: "n",
+        };
+      },
+    });
+    const click =
+      (call: string, ref = "abc123-2:0") =>
+      () =>
+        withApprovalContext(
+          {
+            ...CONTINUATION({ ref }),
+            toolCallId: call,
+            toolName: "computer_desktop_click",
+          },
+          () =>
+            computerActionIdentity.run(call, () =>
+              h.gateway.clickDesktop("bot", ACTOR, { ref }),
+            ),
+        );
+    const reasonOf = (id: string) =>
+      (fixture.rows.get(id) as ApprovalRecord).action.policy?.reason;
+    /** The reason on the card a tool call opened. */
+    const reasonOfCall = (call: string) =>
+      [...fixture.rows.values()].find((row) => row.action.toolCallId === call)
+        ?.action.policy?.reason;
+    return {
+      fixture,
+      h,
+      click,
+      reasonOf,
+      reasonOfCall,
+      carriedOut: () => carriedOut,
+    };
+  }
+
+  /** The first call: asked about 发送, approved, and the device still asks. */
+  async function firstCall(t: ReturnType<typeof scenario>) {
+    await t.h.read(WECHAT.windowId);
+    await expect(t.click("call-1")()).rejects.toBeInstanceOf(
+      HeadlessToolSuspension,
+    );
+    expect(t.reasonOf("approval-1")).toBe(OWN);
+    await t.h.read(WECHAT.windowId);
+    return answer(t.fixture, "approval-1", true, t.click("call-1"));
+  }
+
+  test("(a) approved, then the device asks: the call ends in Chinese, telling the model to call again, and nothing is carried out", async () => {
+    await runAsTenant(OWNER, async () => {
+      const t = scenario();
+      const first = await firstCall(t);
+      expect(first.result).toEqual({ content: CALL_AGAIN, error: CALL_AGAIN });
+      expect(t.carriedOut()).toBe(0);
+      // No second request was tried in this call.
+      expect(t.fixture.rows.size).toBe(1);
+    });
+  });
+
+  test("(b, e) called again: the first card names what the device found; approved, carried out once, and the reason is used up", async () => {
+    await runAsTenant(OWNER, async () => {
+      const t = scenario();
+      await firstCall(t);
+      await t.h.read(WECHAT.windowId);
+      // A new tool call, the same write (the snapshot read again: another ref, the same control).
+      await expect(t.click("call-2", "abc123-2:0")()).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      expect(t.reasonOf("approval-2")).toBe(`${OWN}${SAID}`);
+      // Its own card: the same action identity a card without the reason would have had.
+      expect(
+        (t.fixture.rows.get("approval-2") as ApprovalRecord).action.target,
+      ).not.toHaveProperty("reasked");
+      await t.h.read(WECHAT.windowId);
+      const done = await answer(
+        t.fixture,
+        "approval-2",
+        true,
+        t.click("call-2"),
+      );
+      expect(done.result).toEqual({ content: expect.any(String) });
+      expect(t.carriedOut()).toBe(1);
+      expect(t.h.writesPosted().at(-1)?.payload).toMatchObject({
+        approved: true,
+        approvedReason: REASON,
+        approvedControlName: "发送",
+        approvedTitle: "微信",
+        approvedProcess: "wechat",
+      });
+      expect(
+        t.h.keys.filter((sent) => sent.path === "/desktop/click").at(-1)?.key,
+      ).toBe(JSON.stringify(["bot", "/desktop/click", "call-2:approved"]));
+
+      // (e) Used once: the next call's card says only its own reason.
+      await t.h.read(WECHAT.windowId);
+      await expect(t.click("call-3")()).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      expect(t.reasonOf("approval-3")).toBe(OWN);
+    });
+  });
+
+  test("(c) called again and declined: nothing is carried out", async () => {
+    await runAsTenant(OWNER, async () => {
+      const t = scenario();
+      await firstCall(t);
+      await t.h.read(WECHAT.windowId);
+      await expect(t.click("call-2")()).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      const sent = t.h.writesPosted().length;
+      const declined = await answer(
+        t.fixture,
+        "approval-2",
+        false,
+        t.click("call-2"),
+      );
+      expect(declined.result?.error).toBeDefined();
+      expect(t.carriedOut()).toBe(0);
+      expect(t.h.writesPosted()).toHaveLength(sent);
+    });
+  });
+
+  test("(d) after ten minutes, or for another control or window, the old reason is not on the card", async () => {
+    await runAsTenant(OWNER, async () => {
+      let clock = 1_000_000;
+      const t = scenario({ now: () => clock });
+      await firstCall(t);
+      // Another control in the same window: 归档 (in a session, not asked about at all).
+      await t.h.read(WECHAT.windowId);
+      await t
+        .click("call-2", "abc123-2:1")()
+        .catch(() => undefined);
+      // Another window: notepad's 确定.
+      await t.h.read(NOTEPAD.windowId);
+      await t
+        .click("call-3", "abc123-1:1")()
+        .catch(() => undefined);
+      for (const candidate of t.h.gated.slice(-2)) {
+        const write = candidate.subject?.desktopWrite;
+        expect(write).toBeDefined();
+        expect(Object.keys(write ?? {})).not.toContain("rememberedReasons");
+      }
+      // Ten minutes on, the same write: its own reason only.
+      clock += DESKTOP_REASONS_TTL_MS + 1;
+      await t.h.read(WECHAT.windowId);
+      await expect(t.click("call-4")()).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      expect(t.reasonOfCall("call-4")).toBe(OWN);
+    });
+  });
+
+  test("(f) unapproved, the device asks, and the card asked in this call names it: that card's own run sends it, carried out once", async () => {
+    await runAsTenant(OWNER, async () => {
+      const t = scenario();
+      await t.h.read(NOTEPAD.windowId);
+      // In a session 确定 is not asked about by the server; the device asks.
+      await expect(t.click("call-1", "abc123-1:1")()).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      expect(t.reasonOfCall("call-1")).toBe(
+        `设备端核对后认为这一步需要你批准：${REASON}。`,
+      );
+      expect(t.carriedOut()).toBe(0);
+      // Another call for the same write meanwhile: what the waiting card said is not put on its card.
+      await t.h.read(NOTEPAD.windowId);
+      const before = t.h.gated.length;
+      await t
+        .click("call-2", "abc123-1:1")()
+        .catch(() => undefined);
+      // Its first candidate: the write as the server sees it, before the device is asked.
+      const other = t.h.gated[before];
+      expect(other?.subject?.desktopWrite?.action).toBe("click");
+      expect(Object.keys(other?.subject?.desktopWrite ?? {})).not.toContain(
+        "rememberedReasons",
+      );
+      // The first card approved and run: sent with the reason it named, carried out once.
+      await t.h.read(NOTEPAD.windowId);
+      const done = await answer(
+        t.fixture,
+        [...t.fixture.rows.values()].find(
+          (row) => row.action.toolCallId === "call-1",
+        )?.id as string,
+        true,
+        t.click("call-1", "abc123-1:1"),
+      );
+      expect(done.result).toEqual({ content: expect.any(String) });
+      expect(t.carriedOut()).toBe(1);
+    });
+  });
+
+  test("the reasons kept are this replica's, ten minutes each, at most DESKTOP_REASONS_KEPT, the oldest dropped first", () => {
+    let clock = 0;
+    const memory = createDesktopReasonMemory({ now: () => clock, max: 2 });
+    memory.remember("a", ["1"]);
+    memory.remember("b", ["2"]);
+    memory.remember("c", ["3"], "call-9");
+    expect(memory.recall("a")).toBeUndefined();
+    expect(memory.recall("b")).toEqual({ reasons: ["2"] });
+    expect(memory.recall("c")).toEqual({ reasons: ["3"], call: "call-9" });
+    clock = DESKTOP_REASONS_TTL_MS + 1;
+    expect(memory.recall("c")).toBeUndefined();
+    expect(DESKTOP_REASONS_TTL_MS).toBe(600_000);
+    expect(DESKTOP_REASONS_KEPT).toBe(500);
+  });
+
+  test("without the one-request switch, the store's refusal of a second request is taken the same way", async () => {
+    await runAsTenant(OWNER, async () => {
+      const t = scenario({ onePerCall: false });
+      const first = await firstCall(t);
+      // A second request was tried, refused by the store: told as above, in Chinese.
+      expect(first.result).toEqual({ content: CALL_AGAIN, error: CALL_AGAIN });
+      expect(t.carriedOut()).toBe(0);
+      expect(t.fixture.rows.size).toBe(1);
+      // And kept for the next call all the same.
+      await t.h.read(WECHAT.windowId);
+      await expect(t.click("call-2")()).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      expect(t.reasonOf("approval-2")).toBe(`${OWN}${SAID}`);
     });
   });
 });

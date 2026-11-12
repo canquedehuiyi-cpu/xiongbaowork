@@ -17,6 +17,7 @@ import {
 import { approvedActionUnderway } from "../approvals/service";
 import {
   type ApprovalCandidate,
+  ApprovalRefusedError,
   type ApprovalSubject,
   currentApprovalContext,
   type DesktopWriteAction,
@@ -762,6 +763,82 @@ function boundControl(
   return { windowId: window.windowId, type: control.type, name: control.name };
 }
 
+/*
+ * WHAT THE DEVICE FOUND, KEPT FOR THE NEXT CALL (final review, round 3). In production one tool call
+ * has one approval request (`approval_requests_action_idx`), so a card asked again after an approval
+ * cannot open in the same call. The device's reason is kept here instead, in this replica only, for
+ * a while: the model is told to call again, and the next call's first card names what the device
+ * found, under that card's own approval. Used once: a write that goes through forgets it.
+ */
+export const DESKTOP_REASONS_TTL_MS = 600_000;
+export const DESKTOP_REASONS_KEPT = 500;
+/** At most this many reasons kept for one write: one more each time the device still asks. */
+const REASONS_PER_WRITE = 3;
+
+/**
+ * What is kept for one write: the reasons, and for those kept while a card asked in this very call
+ * waits (`call`), that call: those are only for that card's own run, never put on another card.
+ */
+export type DesktopReasonEntry = { reasons: string[]; call?: string };
+export type DesktopReasonMemory = {
+  recall(key: string): DesktopReasonEntry | undefined;
+  remember(key: string, reasons: string[], call?: string): void;
+  forget(key: string): void;
+};
+
+export function createDesktopReasonMemory(
+  options: { now?: () => number; ttlMs?: number; max?: number } = {},
+): DesktopReasonMemory {
+  const now = options.now ?? Date.now;
+  const ttl = options.ttlMs ?? DESKTOP_REASONS_TTL_MS;
+  const max = options.max ?? DESKTOP_REASONS_KEPT;
+  const kept = new Map<
+    string,
+    { reasons: string[]; call?: string; at: number }
+  >();
+  return {
+    recall(key) {
+      const entry = kept.get(key);
+      if (!entry) return undefined;
+      if (now() - entry.at > ttl) {
+        kept.delete(key);
+        return undefined;
+      }
+      return {
+        reasons: [...entry.reasons],
+        ...(entry.call !== undefined ? { call: entry.call } : {}),
+      };
+    },
+    remember(key, reasons, call) {
+      kept.delete(key);
+      kept.set(key, {
+        reasons: [...reasons],
+        ...(call !== undefined ? { call } : {}),
+        at: now(),
+      });
+      // The oldest first: a Map keeps the order things were put in.
+      while (kept.size > max) {
+        const oldest = kept.keys().next().value as string;
+        kept.delete(oldest);
+      }
+    },
+    forget(key) {
+      kept.delete(key);
+    },
+  };
+}
+
+/** What the model is told when the device found something the card did not say (round 3). */
+export function desktopCallAgain(reason: string): string {
+  return `设备发现了确认卡上没写的情况：${reason.replace(/[。.\s]+$/u, "")}。请再调用一次，下一张确认卡会写明，由主人重新确认。`;
+}
+
+/**
+ * The approval store's own words when a tool call that has a request already asks for another
+ * (server/src/approvals/store.ts, `openStoredApprovalInTransaction`): only that, as it is.
+ */
+export const APPROVAL_ACTION_CHANGED = "The approved action has changed.";
+
 /**
  * The device's reason when this call is the re-check or the run of a card asked again after an
  * approval (`reasked` in its target, I1 round 2) for this same tool, action and target; else
@@ -792,7 +869,19 @@ export function createDesktopWriteMethods(deps: {
   /** The team's action words, or the default (`desktopActionWordsOf` is applied again here). */
   actionWords: () => Promise<readonly string[]>;
   post: DesktopPost;
+  /**
+   * The approval store keeps one request per tool call (production's does): a card asked again
+   * after an approval is never tried in the same call, and the device's reason is kept for the next
+   * one (round 3). Without it the card is tried, and the store refusing it is taken the same way.
+   */
+  oneApprovalPerCall?: boolean;
+  /** What the device found, kept for the next call; one per replica by default. */
+  reasons?: DesktopReasonMemory;
+  now?: () => number;
 }) {
+  const reasons =
+    deps.reasons ??
+    createDesktopReasonMemory(deps.now ? { now: deps.now } : {});
   /** The window from the list this server holds, or from the machine's list asked for once more. */
   async function windowOf(
     machine: { tenantId: string; deviceId: string },
@@ -903,8 +992,75 @@ export function createDesktopWriteMethods(deps: {
         ...(plan.keys !== undefined ? { keys: plan.keys } : {}),
         ...more,
       };
+      // What the device found when this same write last went through approved (round 3).
+      memoryKey = JSON.stringify([
+        owner.tenantId,
+        owner.deviceId,
+        plan.botId,
+        plan.actor.id,
+        windowId ?? "",
+        facts.title ?? "",
+        facts.control?.name ?? facts.keys ?? facts.process ?? "",
+        plan.action,
+      ]);
+      const entry = reasons.recall(memoryKey);
+      remembered = entry && entry.call === undefined ? entry.reasons : [];
+      waiting = entry?.call !== undefined ? entry.reasons : [];
+      if (remembered.length > 0)
+        facts = { ...facts, rememberedReasons: remembered };
       return { subject: facts, ...(windowId ? { windowId } : {}) };
     };
+    /** This write's key in `reasons`, once its facts are known. */
+    let memoryKey: string | undefined;
+    /** What `reasons` held for it then, for its card (an earlier call's). */
+    let remembered: string[] = [];
+    /** And what was kept for the card asked in one call, waiting for that card's run. */
+    let waiting: string[] = [];
+    /** The device's reason for this write kept for the next call, with whatever was kept before. */
+    const keep = (reason: string) => {
+      if (!memoryKey) return;
+      const all = [
+        ...remembered,
+        ...waiting,
+        ...(reasons.recall(memoryKey)?.reasons ?? []),
+        reason,
+      ];
+      reasons.remember(
+        memoryKey,
+        all
+          .filter((item, index) => all.indexOf(item) === index)
+          .slice(-REASONS_PER_WRITE),
+      );
+    };
+    /**
+     * The device's reason on a card asked in this call that waits for the owner: kept for that
+     * card's own run (`resume`), which reads it only if the card said it. Never over what is kept
+     * for the next call.
+     */
+    const keepForThisCall = (reason: string) => {
+      if (!memoryKey) return;
+      const entry = reasons.recall(memoryKey);
+      if (entry && entry.call === undefined) return;
+      reasons.remember(
+        memoryKey,
+        [reason],
+        computerActionIdentity.getStore() ?? "",
+      );
+    };
+    /** Whether the card this write is carried out on (its approval's run) said each of `list`. */
+    const cardSaid = (list: string[]) => {
+      const said = approvedActionUnderway()?.reason ?? "";
+      return list.every((reason) =>
+        said.includes(reason.replace(/[。.\s]+$/u, "")),
+      );
+    };
+    /**
+     * Whether the owner saw the kept reasons on the card this write was approved on: a card answered
+     * in this run was made from these very facts; one carried out by its approval's run (`resume`)
+     * says so in its own words (the card's reason), or the reasons are not sent.
+     */
+    const rememberedSeen = () =>
+      !approvedActionUnderway() || cardSaid(remembered);
     /** Whether the last write sent had been approved; undefined until one is sent. */
     let approvedSent: boolean | undefined;
     /** The device's reason the owner approved, once asked again with it (I1). */
@@ -954,10 +1110,27 @@ export function createDesktopWriteMethods(deps: {
                     : null,
                 }
               : {}),
-            // The device's own reason, when the owner approved it (I1).
-            ...(approved && approvedReason !== undefined
-              ? { approvedReason }
-              : {}),
+            /*
+             * The device's own reasons the owner approved (I1): asked again in this call, and those
+             * kept from an earlier call and named on this card (round 3). One as a string, as before.
+             */
+            ...(() => {
+              if (!approved) return {};
+              const seen = [
+                ...(approvedReason !== undefined ? [approvedReason] : []),
+                ...(remembered.length > 0 && rememberedSeen()
+                  ? remembered
+                  : []),
+                // Kept while this call's card waited: only in that card's run, as the card said.
+                ...(waiting.length > 0 &&
+                approvedActionUnderway() &&
+                cardSaid(waiting)
+                  ? waiting
+                  : []),
+              ].filter((item, index, all) => all.indexOf(item) === index);
+              if (seen.length === 0) return {};
+              return { approvedReason: seen.length === 1 ? seen[0] : seen };
+            })(),
             /*
              * Approved, the process the card showed, or null when it showed none (round 2,
              * Important-2): the device asks again in the product's own window or a terminal the
@@ -972,9 +1145,12 @@ export function createDesktopWriteMethods(deps: {
           DESKTOP_BACKSTOP_MS,
           runnerAddress(machine as { tenantId: string; deviceId: string }),
         );
-      return approved && identity !== undefined
+      const sent = await (approved && identity !== undefined
         ? computerActionIdentity.run(`${identity}${approvedSuffix}`, write)
-        : write();
+        : write());
+      // Gone through: whatever was kept for it is used up (round 3).
+      if (memoryKey) reasons.forget(memoryKey);
+      return sent;
     };
     /*
      * A write with no window and no control is known in full before the machine is: its refusal
@@ -1041,6 +1217,8 @@ export function createDesktopWriteMethods(deps: {
       } else output = await run(resolve);
     } catch (error) {
       const reason = deviceAsks(error);
+      // Approved, and the device still asks: what it found is kept for the next call (round 3).
+      if (reason !== undefined && approvedSent === true) keep(reason);
       // Never sent, not the device asking, or asked again already: its answer as it is.
       if (
         reason === undefined ||
@@ -1049,6 +1227,14 @@ export function createDesktopWriteMethods(deps: {
         reasked !== undefined
       )
         throw failed(error);
+      // One request per call: a second card cannot open here. The next call's first card says it.
+      if (approvedSent && deps.oneApprovalPerCall)
+        throw new ActionRefusedError(
+          desktopCallAgain(reason),
+          DESKTOP_UNAVAILABLE_RULE,
+        );
+      // Not approved yet: the card asked now may be carried out by its own run, which reads it here.
+      if (!approvedSent) keepForThisCall(reason);
       /*
        * Asked once more with the device's reason, approved or not before (I1: an approval is for
        * what the card showed). Sent again approved, with that reason: under the approved key, or,
@@ -1065,6 +1251,18 @@ export function createDesktopWriteMethods(deps: {
       try {
         output = await run(asked);
       } catch (again) {
+        // The store would not open a second request for this call: as above.
+        if (
+          approvedSent &&
+          again instanceof ApprovalRefusedError &&
+          again.message === APPROVAL_ACTION_CHANGED
+        )
+          throw new ActionRefusedError(
+            desktopCallAgain(reason),
+            DESKTOP_UNAVAILABLE_RULE,
+          );
+        const still = deviceAsks(again);
+        if (still !== undefined) keep(still);
         throw failed(again);
       }
     }

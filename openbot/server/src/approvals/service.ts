@@ -142,11 +142,16 @@ export type ApprovedActionBinding = {
   toolRef: string;
   args: unknown;
   target: unknown;
+  /** The reason the card gave, as the person read it before approving (not part of the action). */
+  reason?: string;
 };
 const bindingOf = (action: ApprovalAction): ApprovedActionBinding => ({
   toolRef: action.toolRef,
   args: action.args,
   target: action.target,
+  ...(typeof action.policy?.reason === "string"
+    ? { reason: action.policy.reason }
+    : {}),
 });
 const executionAuthority = new AsyncLocalStorage<{
   approvalId: string;
@@ -1242,7 +1247,13 @@ export function createApprovalService(
                     approvalId: id,
                     digest: approved.actionDigest,
                     owner: ownerUserId,
-                    bound: bindingOf(approved),
+                    // The card's reason is the request's own: the re-check's action has none.
+                    bound: bindingOf({
+                      ...approved,
+                      ...(request.action.policy
+                        ? { policy: request.action.policy }
+                        : {}),
+                    }),
                   },
                   () => dependencies.execute(approved),
                 ),

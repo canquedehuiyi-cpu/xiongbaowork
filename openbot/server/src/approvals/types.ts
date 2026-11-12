@@ -237,6 +237,11 @@ export type ApprovalSubject = {
      * （设备理由进 target），不会被第一张卡的批准或其续跑放行。只在这种再问时出现。
      */
     reask?: true;
+    /**
+     * 上一次同一个写动作批准后设备端仍然发现的情况（终审第 3 轮）：本副本短期记住，并进这次的第一张卡；
+     * 只在 subject 里，不进摘要，这张卡按它自己的正常审批身份走。
+     */
+    rememberedReasons?: string[];
   };
   // --- end desktop control ---
 };

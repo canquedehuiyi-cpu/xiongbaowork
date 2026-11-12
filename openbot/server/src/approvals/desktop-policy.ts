@@ -179,8 +179,29 @@ function selfWindow(title: string, process: string | undefined): boolean {
   );
 }
 
-/** Why this desktop write asks on its own (design decision 13), or nothing when it does not. */
+/** What the device found the last time this write went through approved (final review, round 3). */
+export function desktopRememberedReason(reasons: readonly string[]): string {
+  return `设备端上次核对时发现了确认卡上没写的情况：${reasons
+    .map((reason) => reason.replace(/[。.\s]+$/u, ""))
+    .join("；")}。`;
+}
+
+/**
+ * Why this desktop write asks on its own (design decision 13), or nothing when it does not. With
+ * what the device found the last time it went through approved (`rememberedReasons`, round 3), that
+ * comes after, and the write asks for it alone too.
+ */
 export function desktopActionReason(
+  candidate: ApprovalCandidate,
+  words: readonly string[],
+): string | undefined {
+  const own = ownActionReason(candidate, words);
+  const remembered = candidate.subject?.desktopWrite?.rememberedReasons;
+  if (!Array.isArray(remembered) || remembered.length === 0) return own;
+  return `${own ?? ""}${desktopRememberedReason(remembered)}`;
+}
+
+function ownActionReason(
   candidate: ApprovalCandidate,
   words: readonly string[],
 ): string | undefined {
