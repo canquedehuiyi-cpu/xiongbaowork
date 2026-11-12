@@ -765,6 +765,12 @@ test("nothing is published until a fresh Ubuntu and a fresh Windows machine chec
   expect(windowsPhase("install")).toContain("-ArgumentList '/S'");
   expect(step("clean-windows", "app").run).toContain("-Phase app");
   expect(windowsPhase("app")).toContain("Get-Process -Name xiongbao-runner");
+  // The runner it watches is the supervised one, picked by the --server only that run is given, not
+  // a one-shot command of the window's that happened to be up first.
+  expect(windowsPhase("app")).toContain(
+    "Where-Object { $_.CommandLine -like '* --server *' }",
+  );
+  expect(windowsPhase("app")).not.toContain("-notlike '*--list-roots*'");
   expect(step("clean-windows", "uninstall").run).toContain("-Phase uninstall");
   expect(windowsPhase("uninstall")).toContain("uninstall.exe");
   expect(windowsPhase("uninstall")).toContain("-ArgumentList '/S'");

@@ -221,9 +221,14 @@ function Invoke-App {
     $app = Start-Process -FilePath (Join-Path $InstallDir 'xiongbao-device.exe') -PassThru
     $child = $null
     foreach ($second in 1..60) {
-        # The supervised runner, not a one-shot --list-roots the window may ask for (roots.rs).
+        # The supervised runner, not one of the one-shot commands the window runs as it opens
+        # (--list-roots, --list-apps, --discover-apps: roots.rs, apps.rs), which exit within a second
+        # or two. Only the supervised run is given --server (sidecar.rs runner_args); the one-shots
+        # never are. Naming them instead went stale when the window gained the apps sections, and
+        # the first start now lists legacy runners before spawning (stop_legacy_runners), so the
+        # one-shots can be up before the supervised runner is.
         $child = Get-CimInstance Win32_Process -Filter "Name = 'xiongbao-runner.exe' AND ParentProcessId = $($app.Id)" |
-            Where-Object { $_.CommandLine -notlike '*--list-roots*' } | Select-Object -First 1
+            Where-Object { $_.CommandLine -like '* --server *' } | Select-Object -First 1
         if ($child) { break }
         if ($app.HasExited) { throw "The app exited $($app.ExitCode) before starting the runner." }
         Start-Sleep -Seconds 1
