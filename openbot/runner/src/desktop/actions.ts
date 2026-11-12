@@ -23,12 +23,14 @@ import {
   readFailure,
 } from "./ad-read";
 import { type AgentDesktopCli, createAgentDesktopCli } from "./agent-desktop";
+import { type ControlChannel, NO_CONTROL } from "./control";
 import {
   createDesktopHost,
   DesktopHelperError,
   defaultHelperSpec,
 } from "./host";
 import { scrub } from "./scrub";
+import { createDesktopSessions, type DesktopSessions } from "./session";
 
 /**
  * `desktop.windows` and `desktop.snapshot` (docs/specs/2026-11-07-desktop-control.md, Phase 1: read
@@ -42,6 +44,11 @@ import { scrub } from "./scrub";
  *
  * NO OUTCOME IS EVER `outcomeUnknown`. Listing windows, reading a tree and taking a picture change
  * nothing on the machine, so a call that timed out or was stopped must not pause the device.
+ *
+ * THE SESSION ACTIONS (Task 13). `desktop.session_status` says whether this device could be written
+ * to now and, for that bot and person, which session is current; `desktop.session_start` takes the
+ * server's token and waits for the device app's guard (`session.ts`); `desktop.session_end` ends
+ * it. They change nothing on the screen either, so they are never `outcomeUnknown`.
  */
 export type DesktopActions = ((
   action: string,
@@ -75,6 +82,32 @@ type HelperTree = {
 type HelperShot = { base64: string; width: number; height: number };
 
 const fail = (error: string): ActionOutcome => ({ ok: false, error });
+
+const SESSION_ACTIONS: ReadonlySet<string> = new Set([
+  "desktop.session_start",
+  "desktop.session_status",
+  "desktop.session_end",
+]);
+
+/** A session token as the server mints it: `randomBytes(32)` in hex. */
+const SESSION_TOKEN = /^[0-9a-f]{64}$/;
+
+/** How long a macOS accessibility answer is trusted. */
+const PERMISSION_CACHE_MS = 10_000;
+
+/** `permissions` answers `{ accessibility: { state } }`; `status` nests the same under `permissions`. */
+function accessibilityState(data: unknown): string | undefined {
+  const node = (value: unknown) =>
+    typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  const root = node(data);
+  const accessibility =
+    node(root?.accessibility) ?? node(node(root?.permissions)?.accessibility);
+  return typeof accessibility?.state === "string"
+    ? accessibility.state
+    : undefined;
+}
 
 function clip(value: unknown, max: number): string {
   const text = typeof value === "string" ? value : "";
@@ -192,6 +225,13 @@ export function createDesktopActions(
     helper?: string;
     /** agent-desktop's private state directory, wiped on close even if nothing ever ran. */
     stateDir?: string;
+    /** The agent-desktop CLI; a test hook. Built from `helper` and `stateDir` when absent. */
+    cli?: AgentDesktopCli;
+    /** The device app's channel; `NO_CONTROL` when the runner was not started by it. */
+    control?: ControlChannel;
+    /** The device's desktop session; built on `control` when absent. */
+    sessions?: DesktopSessions;
+    now?: () => number;
   } = {},
 ): DesktopActions {
   const platform = opts.platform ?? process.platform;
@@ -203,31 +243,137 @@ export function createDesktopActions(
       : undefined) ||
       "legacy");
 
+  const control = opts.control ?? NO_CONTROL;
+  const sessions = opts.sessions ?? createDesktopSessions({ control });
+  const now = opts.now ?? Date.now;
+
   // agent-desktop: built on first use, like the host below.
   let cli: AgentDesktopCli | undefined;
   let reader: AgentDesktopReader | undefined = opts.reader;
-  const adReader = (desktopPlatform: DesktopPlatform): AgentDesktopReader => {
-    if (reader) return reader;
+  const adCli = (): AgentDesktopCli => {
+    if (opts.cli) return opts.cli;
+    if (cli) return cli;
     if (!opts.helper || !opts.stateDir)
       throw new DesktopHelperError(
         "start_failed",
         desktopMessage("start_failed", "没有找到 agent-desktop"),
         false,
       );
-    const built = createAgentDesktopCli({
+    cli = createAgentDesktopCli({
       binary: opts.helper,
       stateDir: opts.stateDir,
       platform,
       // The wiped state held the refs: every window's are void.
       onIdleWipe: () => reader?.invalidate(),
     });
-    cli = built;
+    return cli;
+  };
+  const adReader = (desktopPlatform: DesktopPlatform): AgentDesktopReader => {
+    if (reader) return reader;
     reader = createAgentDesktopReader({
-      cli: built,
+      cli: adCli(),
       platform: desktopPlatform,
     });
     return reader;
   };
+
+  /** The device app is told, so it can bring its permission card up. */
+  const permissionNeeded = (error: unknown) => {
+    if (error instanceof DesktopHelperError && error.code === "mac_permission")
+      control.emit({ event: "permission-needed" });
+  };
+
+  // macOS accessibility, as `permissions` last answered, for `PERMISSION_CACHE_MS`.
+  let accessibility: { granted: boolean; at: number } | undefined;
+  async function macGranted(signal?: AbortSignal): Promise<boolean> {
+    if (accessibility && now() - accessibility.at < PERMISSION_CACHE_MS)
+      return accessibility.granted;
+    const data = await adCli().run(
+      ["permissions"],
+      signal ? { signal } : undefined,
+    );
+    accessibility = {
+      granted: accessibilityState(data) === "granted",
+      at: now(),
+    };
+    return accessibility.granted;
+  }
+
+  /** Whether this device could be written to now; the reason in the owner's words when not. */
+  async function writability(
+    desktopPlatform: DesktopPlatform,
+    signal?: AbortSignal,
+  ): Promise<{ writable: true } | { writable: false; reason: string }> {
+    const no = (code: DesktopErrorCode) => ({
+      writable: false as const,
+      reason: desktopMessage(code),
+    });
+    if (desktopPlatform === "linux") return no("read_only_linux");
+    if (desktopPlatform === "windows" && engine === "legacy")
+      return no("read_only_windows");
+    if (!control.available) return no("no_control_channel");
+    if (desktopPlatform === "macos") {
+      let granted: boolean;
+      try {
+        granted = await macGranted(signal);
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") throw error;
+        permissionNeeded(error);
+        return {
+          writable: false,
+          reason:
+            error instanceof DesktopHelperError
+              ? scrub(error.message)
+              : desktopMessage("failed"),
+        };
+      }
+      if (!granted) {
+        control.emit({ event: "permission-needed" });
+        return no("mac_permission");
+      }
+    }
+    return { writable: true };
+  }
+
+  async function sessionAct(
+    desktopPlatform: DesktopPlatform,
+    action: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<ActionOutcome> {
+    const text = (value: unknown) => (typeof value === "string" ? value : "");
+    if (action === "desktop.session_end") {
+      sessions.end(text(body.token));
+      return { ok: true, output: { ended: true } };
+    }
+    const botId = text(body.botId);
+    const actorId = text(body.actorId);
+    if (action === "desktop.session_status") {
+      const state = await writability(desktopPlatform, signal);
+      const session = state.writable
+        ? sessions.status(botId, actorId)
+        : undefined;
+      return {
+        ok: true,
+        output: {
+          ...state,
+          platform: desktopPlatform,
+          ...(session ? { session } : {}),
+        },
+      };
+    }
+    // desktop.session_start
+    const token = body.token;
+    if (typeof token !== "string" || !SESSION_TOKEN.test(token))
+      return fail(desktopMessage("failed", "会话令牌无效"));
+    if (botId === "" || actorId === "")
+      return fail(desktopMessage("failed", "缺少员工或使用者"));
+    const state = await writability(desktopPlatform, signal);
+    if (!state.writable) return fail(state.reason);
+    if (!(await sessions.start({ token, botId, actorId })))
+      return fail(desktopMessage("guard_unready"));
+    return { ok: true, output: { started: true } };
+  }
 
   async function adAct(
     desktopPlatform: DesktopPlatform,
@@ -252,6 +398,7 @@ export function createDesktopActions(
       );
       return { ok: true, output };
     } catch (error) {
+      permissionNeeded(error);
       // Already the Chinese copy: never through `describe` again.
       return readFailure(error);
     }
@@ -360,6 +507,13 @@ export function createDesktopActions(
       return fail(desktopMessage("not_windows"));
     if (!DESKTOP_ACTIONS.has(action))
       return fail(desktopMessage("unsupported"));
+    if (SESSION_ACTIONS.has(action)) {
+      try {
+        return await sessionAct(desktopPlatform, action, body, signal);
+      } catch (error) {
+        return readFailure(error);
+      }
+    }
     if (engine === "agent-desktop")
       return adAct(desktopPlatform, action, body, signal);
     try {
