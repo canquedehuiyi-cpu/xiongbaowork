@@ -467,7 +467,7 @@ describe("a ping", () => {
       expect(push).toMatchObject({
         title: "2 things need you",
         body: "Inbox Bot: Reply to Dana about Friday\nCalendar Bot: Move the standup",
-        data: { kind: "attention", url: "openbotmobile://needs-you" },
+        data: { kind: "attention", url: "xiongbao://needs-you" },
       });
     // The phone opens its Needs you list on a tap.
     expect(notificationDestination(pushSends[0]?.data)).toEqual({
@@ -508,7 +508,7 @@ describe("a ping", () => {
       data: {
         kind: "reply",
         channelId: inboxChannel,
-        url: `openbotmobile://conversation?channelId=${inboxChannel}`,
+        url: `xiongbao://conversation?channelId=${inboxChannel}`,
       },
     });
   });

@@ -33,7 +33,7 @@ export default function BotsScreen() {
         </Pressable>
       ))}
       {bots.data?.agents.length === 0 && (
-        <Text>No Bots yet. Create one in OpenBot on your computer.</Text>
+        <Text>No Bots yet. Create one in 熊宝 on your computer.</Text>
       )}
     </Screen>
   );

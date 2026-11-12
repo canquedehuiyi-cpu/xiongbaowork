@@ -155,10 +155,6 @@ const EXEMPT_PATHS: { test: (path: string) => boolean; reason: string }[] = [
     reason: "tests and their fixtures",
   },
   { test: (p) => p === "server/src/brand.ts", reason: "the brand exit itself" },
-  {
-    test: (p) => p.startsWith("mobile/"),
-    reason: "TEMPORARY until Task 12 rebrands the mobile app",
-  },
 ];
 
 function* walk(dir: string): Generator<string> {

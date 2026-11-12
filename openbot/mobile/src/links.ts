@@ -1,6 +1,6 @@
 /**
  * Where a tap on a notification goes, read from the link the server put in it. Only known screens,
- * and only an `openbotmobile:` link with nothing in it that could point anywhere else. A ping opens
+ * and only an `xiongbao:` link with nothing in it that could point anywhere else. A ping opens
  * the person's Needs you list, and needs no conversation to name.
  */
 export function notificationDestination(value: unknown):
@@ -24,7 +24,7 @@ export function notificationDestination(value: unknown):
     return null;
   }
   if (
-    url.protocol !== "openbotmobile:" ||
+    url.protocol !== "xiongbao:" ||
     url.username ||
     url.password ||
     url.hash ||

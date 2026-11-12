@@ -742,12 +742,7 @@
   {
     "file": "server/src/auth/index.ts",
     "text": "\"openbotmobile://\"",
-    "reason": "persisted-identifier: URL scheme the mobile app registers (mobile/ rebrand is Task 12)"
-  },
-  {
-    "file": "server/src/delivery/push.ts",
-    "text": "openbotmobile://",
-    "reason": "persisted-identifier: deep-link scheme the mobile app registers (mobile/ rebrand is Task 12)"
+    "reason": "persisted-identifier: legacy mobile URL scheme the server still accepts for sign-in return (dual-accept with xiongbao://)"
   },
   {
     "file": "server/src/learning/ensure-container.ts",

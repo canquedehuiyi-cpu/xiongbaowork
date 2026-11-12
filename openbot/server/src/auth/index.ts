@@ -39,8 +39,8 @@ export const LINK_REFUSAL_MESSAGE =
   "该邮箱已有一个未验证的密码账号，不能直接用第三方登录接管。请用密码登录，或联系管理员处理。";
 
 /** What a person sees when SSO is required and they tried another way in. */
-/** The native app's custom scheme (mobile/app.config.ts). */
-const NATIVE_APP_ORIGIN = "openbotmobile://";
+/** The native app's custom scheme (mobile/app.config.ts), plus the pre-rename one still accepted for sign-in return. */
+const NATIVE_APP_ORIGINS = ["xiongbao://", "openbotmobile://"];
 
 export const SSO_REQUIRED_MESSAGE =
   "This deployment requires signing in through your company's identity provider. Enter your work email to continue.";
@@ -474,7 +474,7 @@ export function createAuth(
     secret: authConfig.secret,
     trustedOrigins: [
       ...authConfig.trustedOrigins,
-      ...(nativeApp ? [NATIVE_APP_ORIGIN] : []),
+      ...(nativeApp ? NATIVE_APP_ORIGINS : []),
     ],
     /*
      * Wrapped, so a company's client secret is ciphertext in the column.
