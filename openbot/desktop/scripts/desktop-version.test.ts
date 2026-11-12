@@ -84,6 +84,28 @@ function firstCommit(root: string) {
   return git(root, "rev-parse", "HEAD");
 }
 
+/**
+ * Writes each text as a `type` object in one git process, whatever their number, and returns the
+ * objects' hashes in order.
+ */
+function writeObjects(root: string, type: string, texts: string[]) {
+  const files = mkdtempSync(join(tmpdir(), "openbot-desktop-version-"));
+  directories.push(files);
+  const paths = texts.map((text, index) => {
+    const path = join(files, String(index));
+    writeFileSync(path, text);
+    return path;
+  });
+  const result = Bun.spawnSync(
+    ["git", "-C", root, "hash-object", "-w", "-t", type, "--stdin-paths"],
+    { stdin: Buffer.from(`${paths.join("\n")}\n`) },
+  );
+  expect(result.exitCode).toBe(0);
+  const hashes = result.stdout.toString().trim().split(/\r?\n/);
+  expect(hashes).toHaveLength(texts.length);
+  return hashes;
+}
+
 afterEach(() => {
   for (const directory of directories.splice(0))
     rmSync(directory, { recursive: true, force: true });
@@ -334,24 +356,32 @@ test("the comparison these tests use is semver precedence", () => {
  */
 test("a later internal build orders after an earlier one whatever their hashes", () => {
   const f = fixture();
-  const earlier = firstCommit(f.root);
+  /*
+   * The earlier commit is the one whose hash sorts last of a batch of root commits, and the later
+   * one, its child, the one whose hash sorts first of a batch of children, as 4400ba02 did d298debe.
+   * Each batch is written by one git process. Searching commit by commit until a child sorted
+   * before its parent took a number of git processes with no upper bound, and on Windows, where
+   * each is slow, sometimes more than bun test's 5 seconds. The commits' text is fixed, dates
+   * included, so their hashes, and the commits chosen, are the same on every run.
+   */
+  git(f.root, "init", "--quiet");
+  const [tree] = writeObjects(f.root, "tree", [""]);
+  const batch = 32;
+  const signature = "Version test <version@example.invalid> 1700000000 +0000";
+  const commit = (parent: string | undefined, message: string) =>
+    `tree ${tree}\n${parent ? `parent ${parent}\n` : ""}author ${signature}\ncommitter ${signature}\n\n${message}\n`;
+  const ascending = (hashes: string[]) =>
+    [...hashes].sort((a, b) => (a.slice(0, 12) < b.slice(0, 12) ? -1 : 1));
+  const roots = Array.from({ length: batch }, (_, i) => commit(undefined, `fixture ${i}`));
+  const earlier = ascending(writeObjects(f.root, "commit", roots)).at(-1)!;
+  git(f.root, "update-ref", "HEAD", earlier);
   expect(f.run("internal").code).toBe(0);
   const first = JSON.parse(f.read("desktop/build-version.json")).version;
-  // The next commit, chosen so its hash sorts before the earlier one's, as 4400ba02 did d298debe.
-  const tree = git(f.root, "rev-parse", "HEAD^{tree}");
-  let later = "";
-  for (let attempt = 0; !later; attempt += 1) {
-    const sha = git(
-      f.root,
-      "commit-tree",
-      tree,
-      "-p",
-      earlier,
-      "-m",
-      `next ${attempt}`,
-    );
-    if (sha.slice(0, 12) < earlier.slice(0, 12)) later = sha;
-  }
+  const children = Array.from({ length: batch }, (_, i) => commit(earlier, `next ${i}`));
+  const later = ascending(writeObjects(f.root, "commit", children))[0];
+  // The commits are fixed, so this holds on every run; for an arbitrary text, every child's hash
+  // would sort after every root's 1 time in C(64, 32), about 5e-19.
+  expect(later.slice(0, 12) < earlier.slice(0, 12)).toBe(true);
   git(f.root, "update-ref", "HEAD", later);
   expect(f.run("internal").code).toBe(0);
   const second = JSON.parse(f.read("desktop/build-version.json")).version;
