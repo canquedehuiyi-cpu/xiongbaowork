@@ -6,17 +6,27 @@ import type { ActionOutcome, RunnerAction } from "./execute";
 
 /**
  * What the journal keeps of a result. A desktop screenshot is large and sensitive and is never
- * needed to answer a replay, so its bytes are dropped (its size stays); everything else is kept.
+ * needed to answer a replay, so its bytes are dropped (its size stays). A desktop session (the
+ * `session` of `desktop.session_status`, which carries the session token) is dropped whole: the
+ * token lives only in memory (plan docs/plans/2026-11-12-desktop-write.md, design decision 5), and a
+ * replayed status without a session makes the server ask the device again or ask the owner again,
+ * never skip a question. Everything else is kept.
  */
 function journaled(action: string, outcome: ActionOutcome): ActionOutcome {
   if (!action.startsWith("desktop.") || !outcome.ok) return outcome;
   const output = outcome.output;
   if (typeof output !== "object" || output === null) return outcome;
-  const image = (output as { image?: unknown }).image;
-  if (typeof image !== "object" || image === null || !("base64" in image))
-    return outcome;
-  const { base64: _bytes, ...rest } = image as Record<string, unknown>;
-  return { ok: true, output: { ...output, image: rest } };
+  let kept = output as Record<string, unknown>;
+  if ("session" in kept) {
+    const { session: _session, ...rest } = kept;
+    kept = rest;
+  }
+  const image = kept.image;
+  if (typeof image === "object" && image !== null && "base64" in image) {
+    const { base64: _bytes, ...rest } = image as Record<string, unknown>;
+    kept = { ...kept, image: rest };
+  }
+  return kept === output ? outcome : { ok: true, output: kept };
 }
 
 /** The claim is flushed before touching the machine. Restarting never replays an unfinished claim. */

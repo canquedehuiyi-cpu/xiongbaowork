@@ -838,9 +838,28 @@ export function heartbeatFrame(
   });
 }
 
+/**
+ * Sends one heartbeat. The desktop stop it carries is handed back when the send throws, so the next
+ * beat on the next connection still reports it; the throw goes on to the caller.
+ */
+export function sendHeartbeat(
+  send: (frame: string) => void,
+  roots: Pick<RootRegistry, "reported">,
+  apps: Pick<ReturnType<typeof createAppRegistry>, "reported"> | undefined,
+  sessions: Pick<DesktopSessions, "takeStopped" | "returnStopped">,
+): void {
+  const stopped = sessions.takeStopped();
+  try {
+    send(heartbeatFrame(roots, apps, stopped));
+  } catch (error) {
+    if (stopped) sessions.returnStopped(stopped);
+    throw error;
+  }
+}
+
 /** The desktop session's part in the heartbeat: what to report, and a beat sent at once on a stop. */
 type DesktopBeat = {
-  sessions: Pick<DesktopSessions, "takeStopped">;
+  sessions: Pick<DesktopSessions, "takeStopped" | "returnStopped">;
   /** Set while a connection is up. */
   now?: () => void;
 };
@@ -903,8 +922,11 @@ function connect(
       console.log(`runner: connected as ${deviceId}`);
       const sendBeat = () => {
         try {
-          socket.send(
-            heartbeatFrame(roots, apps, desktop.sessions.takeStopped()),
+          sendHeartbeat(
+            (frame) => socket.send(frame),
+            roots,
+            apps,
+            desktop.sessions,
           );
         } catch {
           stop();

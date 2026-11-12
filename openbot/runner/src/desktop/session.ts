@@ -22,13 +22,17 @@ import { type ControlChannel, sessionLabel } from "./control";
 export type DesktopSessions = {
   /**
    * 已有会话就先以 "replaced" 结束。Says `session-started` and waits for the device's guard: true once
-   * it is up, false (the session already ended) when it does not come up or this one was replaced.
+   * it is up, false (the session already ended) when it does not come up, this one was replaced, or
+   * `signal` (the action's own) was aborted while it waited.
    */
-  start(input: {
-    token: string;
-    botId: string;
-    actorId: string;
-  }): Promise<boolean>;
+  start(
+    input: {
+      token: string;
+      botId: string;
+      actorId: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<boolean>;
   status(botId: string, actorId: string): { token: string } | undefined;
   /** ok 时续期闲置时间。 */
   check(
@@ -40,9 +44,16 @@ export type DesktopSessions = {
   /** 当前会话期间的中止信号：叫停时中止，让在途动作立即停下。 */
   readonly signal: AbortSignal | undefined;
   /** 最近一次叫停，等下一次心跳带走后清除。 */
-  takeStopped():
-    | { botId: string; actorId: string; reason: string; at: number }
-    | undefined;
+  takeStopped(): StopRecord | undefined;
+  /** A heartbeat that took the record but could not be sent hands it back; a newer stop wins. */
+  returnStopped(record: StopRecord): void;
+};
+
+export type StopRecord = {
+  botId: string;
+  actorId: string;
+  reason: string;
+  at: number;
 };
 
 type EndReason = "stopped" | "expired" | "ended" | "replaced";
@@ -73,9 +84,7 @@ export function createDesktopSessions(opts: {
   let current: Session | undefined;
   /** The last session that was stopped or expired, so a late write learns why. */
   let lastEnded: { token: string; reason: "stopped" | "expired" } | undefined;
-  let stopped:
-    | { botId: string; actorId: string; reason: string; at: number }
-    | undefined;
+  let stopped: StopRecord | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const finish = (session: Session, reason: EndReason) => {
@@ -135,7 +144,8 @@ export function createDesktopSessions(opts: {
   });
 
   return {
-    async start(input) {
+    async start(input, signal) {
+      if (signal?.aborted) return false;
       if (current) finish(current, "replaced");
       const at = now();
       let cancel: () => void = () => {};
@@ -156,7 +166,14 @@ export function createDesktopSessions(opts: {
       const label = sessionLabel(input.token);
       const answered = control.waitReady(label);
       control.emit({ event: "session-started", label });
-      const outcome = await Promise.race([answered, cancelled]);
+      const onAbort = () => finish(session, "ended");
+      signal?.addEventListener("abort", onAbort, { once: true });
+      let outcome: Awaited<typeof answered> | "cancelled";
+      try {
+        outcome = await Promise.race([answered, cancelled]);
+      } finally {
+        signal?.removeEventListener("abort", onAbort);
+      }
       if (current !== session) return false;
       if (outcome !== "ready") {
         finish(session, "ended");
@@ -201,6 +218,9 @@ export function createDesktopSessions(opts: {
       const taken = stopped;
       stopped = undefined;
       return taken;
+    },
+    returnStopped(record) {
+      stopped ??= record;
     },
   };
 }

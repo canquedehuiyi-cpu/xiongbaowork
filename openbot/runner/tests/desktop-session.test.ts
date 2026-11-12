@@ -1,5 +1,9 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   DESKTOP_LIMITS,
   type DesktopErrorCode,
@@ -9,13 +13,21 @@ import { createDesktopActions } from "../src/desktop/actions";
 import type { AgentDesktopReader } from "../src/desktop/ad-read";
 import type { AgentDesktopCli } from "../src/desktop/agent-desktop";
 import {
+  CONTROL_LINE_MAX_BYTES,
   CONTROL_LINE_PREFIX,
   createControlChannel,
+  linesOf,
   NO_CONTROL,
 } from "../src/desktop/control";
 import { DesktopHelperError } from "../src/desktop/host";
 import { createDesktopSessions } from "../src/desktop/session";
-import { desktopControlFor, heartbeatFrame, parseArgs } from "../src/index";
+import {
+  desktopControlFor,
+  heartbeatFrame,
+  parseArgs,
+  sendHeartbeat,
+} from "../src/index";
+import { createActionJournal } from "../src/journal";
 
 /* The device-authoritative desktop session and the control channel to the device app (plan
    docs/plans/2026-11-12-desktop-write.md, Task 13, with the readiness handshake of ruling C5). The
@@ -466,7 +478,8 @@ describe("desktop sessions (runner)", () => {
   });
 
   test("headed waits for the ack; without one in 1 s nothing runs and the error is headed_unconfirmed", async () => {
-    const quiet = device({ ack: false });
+    // The real wait is DESKTOP_LIMITS.headedAckMs (1 s); the test hook shortens it.
+    const quiet = device({ ack: false, ackMs: 100 });
     let ran = 0;
     const started = Date.now();
     const error = await quiet.control
@@ -484,7 +497,7 @@ describe("desktop sessions (runner)", () => {
       "设备端没有确认暂停『动鼠标即停』，为安全起见没有执行这一步。",
     );
     expect(ran).toBe(0);
-    expect(waited).toBeGreaterThanOrEqual(DESKTOP_LIMITS.headedAckMs - 50);
+    expect(waited).toBeGreaterThanOrEqual(90);
     expect(DESKTOP_LIMITS.headedAckMs).toBe(1_000);
     // The device is still told the pause is over.
     expect(quiet.events()).toEqual([
@@ -521,6 +534,25 @@ describe("desktop sessions (runner)", () => {
     await expect(channel.headed(async () => 1)).rejects.toThrow(
       desktopMessage("headed_unconfirmed"),
     );
+
+    // A write that throws on headed-begin runs nothing and announces no end of a pause never begun.
+    const broken: string[] = [];
+    const brokenChannel = createControlChannel({
+      lines: lineQueue().lines,
+      write: (line) => {
+        if (line.includes("headed-begin")) throw new Error("stdout gone");
+        broken.push(line);
+      },
+      ackMs: 100,
+    });
+    let brokenRan = false;
+    await expect(
+      brokenChannel.headed(async () => {
+        brokenRan = true;
+      }),
+    ).rejects.toThrow("stdout gone");
+    expect(brokenRan).toBe(false);
+    expect(broken).toEqual([]);
 
     await expect(NO_CONTROL.headed(async () => 1)).rejects.toThrow(
       desktopMessage("no_control_channel"),
@@ -576,12 +608,12 @@ describe("the device confirms its guard before a session is writable (ruling C5)
       control: far.control,
       sessions,
     });
-    const start = () =>
-      actions("desktop.session_start", {
-        token: TOKEN,
-        botId: "bot-1",
-        actorId: "u-1",
-      });
+    const start = (token = TOKEN, signal?: AbortSignal) =>
+      actions(
+        "desktop.session_start",
+        { token, botId: "bot-1", actorId: "u-1" },
+        signal,
+      );
     return { ...far, sessions, actions, start };
   }
 
@@ -595,7 +627,11 @@ describe("the device confirms its guard before a session is writable (ruling C5)
   });
 
   test("no session-ready in 2 s: guard_unready, the session is ended, and it checks none", async () => {
-    const { start, sessions, events, control } = mac({ ready: "none" });
+    // The real wait is DESKTOP_LIMITS.sessionReadyMs (2 s); the test hook shortens it.
+    const { start, sessions, events, control } = mac({
+      ready: "none",
+      readyMs: 100,
+    });
     const pending = start();
     await tick();
     // Not writable while the device has not confirmed.
@@ -603,9 +639,7 @@ describe("the device confirms its guard before a session is writable (ruling C5)
     expect(sessions.status("bot-1", "u-1")).toBeUndefined();
     const began = Date.now();
     const outcome = await pending;
-    expect(Date.now() - began).toBeGreaterThan(
-      DESKTOP_LIMITS.sessionReadyMs - 200,
-    );
+    expect(Date.now() - began).toBeGreaterThan(50);
     expect(DESKTOP_LIMITS.sessionReadyMs).toBe(2_000);
     expect(outcome).toEqual({
       ok: false,
@@ -644,5 +678,218 @@ describe("the device confirms its guard before a session is writable (ruling C5)
       event: "session-ended",
       reason: "ended",
     });
+  });
+
+  test("a second start while the first waits for the device replaces it: the first is guard_unready", async () => {
+    const { start, sessions, events, queue } = mac({
+      ready: "none",
+      readyMs: 1_000,
+    });
+    const first = start(TOKEN);
+    await tick();
+    const second = start(OTHER);
+    await tick();
+    queue.push(
+      JSON.stringify({ control: "session-ready", label: labelOf(OTHER) }),
+    );
+    const began = Date.now();
+    expect(await first).toEqual(refused("guard_unready"));
+    expect(await second).toEqual({ ok: true, output: { started: true } });
+    // The first was not left to time out.
+    expect(Date.now() - began).toBeLessThan(500);
+    expect(sessions.check(TOKEN, "bot-1", "u-1")).toBe("none");
+    expect(sessions.check(OTHER, "bot-1", "u-1")).toBe("ok");
+    expect(events()).toEqual([
+      { event: "session-started", label: labelOf(TOKEN) },
+      { event: "session-ended", reason: "replaced" },
+      { event: "session-started", label: labelOf(OTHER) },
+    ]);
+  });
+
+  test("a session-ready after the timeout is ignored", async () => {
+    const { start, sessions, events, queue } = mac({
+      ready: "none",
+      readyMs: 50,
+    });
+    expect(await start()).toEqual(refused("guard_unready"));
+    queue.push(
+      JSON.stringify({ control: "session-ready", label: labelOf(TOKEN) }),
+    );
+    await tick();
+    expect(sessions.check(TOKEN, "bot-1", "u-1")).toBe("none");
+    expect(sessions.status("bot-1", "u-1")).toBeUndefined();
+    expect(events()).toHaveLength(2);
+  });
+
+  test("an abort while waiting for the device ends that session and is not outcomeUnknown", async () => {
+    const { start, sessions, events } = mac({ ready: "none", readyMs: 1_000 });
+    const controller = new AbortController();
+    const pending = start(TOKEN, controller.signal);
+    await tick();
+    controller.abort();
+    expect(await pending).toEqual({ ok: false, error: "已在设备上停止。" });
+    expect(sessions.check(TOKEN, "bot-1", "u-1")).toBe("none");
+    expect(events()).toEqual([
+      { event: "session-started", label: labelOf(TOKEN) },
+      { event: "session-ended", reason: "ended" },
+    ]);
+    // Already aborted: nothing starts.
+    expect(await start(OTHER, controller.signal)).toEqual({
+      ok: false,
+      error: "已在设备上停止。",
+    });
+    expect(events()).toHaveLength(2);
+  });
+
+  test('stdin closing stops the session as "closed" and the channel is gone', async () => {
+    const { start, sessions, events, queue, control } = mac({ ready: "ready" });
+    expect(await start()).toEqual({ ok: true, output: { started: true } });
+    const signal = sessions.signal;
+    queue.close();
+    await tick();
+    expect(control.available).toBe(false);
+    expect(signal?.aborted).toBe(true);
+    expect(sessions.check(TOKEN, "bot-1", "u-1")).toBe("stopped");
+    expect(events().at(-1)).toEqual({
+      event: "session-ended",
+      reason: "stopped",
+    });
+    expect(sessions.takeStopped()).toEqual({
+      botId: "bot-1",
+      actorId: "u-1",
+      reason: "closed",
+      at: expect.any(Number),
+    });
+    // With no channel nothing new can start.
+    expect(await start(OTHER)).toEqual(refused("no_control_channel"));
+  });
+});
+
+describe("the control channel's plumbing", () => {
+  async function collect(chunks: Array<Uint8Array | string>, max?: number) {
+    async function* source() {
+      for (const chunk of chunks) yield chunk;
+    }
+    const lines: string[] = [];
+    for await (const line of linesOf(source(), max)) lines.push(line);
+    return lines;
+  }
+
+  test("stdin splits into lines on \\n, across chunks and inside a character, and drops an oversized line", async () => {
+    const bytes = new TextEncoder().encode("中文\r\nb\n");
+    // "中" is three bytes: split it between chunks.
+    expect(
+      await collect([
+        bytes.slice(0, 1),
+        bytes.slice(1, 4),
+        bytes.slice(4),
+        "tail",
+      ]),
+    ).toEqual(["中文", "b", "tail"]);
+    expect(CONTROL_LINE_MAX_BYTES).toBe(64 * 1024);
+    const big = "x".repeat(CONTROL_LINE_MAX_BYTES + 1);
+    const fits = "y".repeat(CONTROL_LINE_MAX_BYTES);
+    expect(
+      await collect([
+        `a\n${big.slice(0, 40_000)}`,
+        `${big.slice(40_000)}\nb\n${fits}\n`,
+      ]),
+    ).toEqual(["a", "b", fits]);
+    // An oversized last line with no newline is dropped too.
+    expect(await collect(["ok\n", "z".repeat(20)], 10)).toEqual(["ok"]);
+  });
+
+  test("a heartbeat that cannot be sent hands its desktop stop back for the next one", async () => {
+    const { control, queue } = device();
+    const sessions = createDesktopSessions({ control });
+    await sessions.start({ token: TOKEN, botId: "bot-1", actorId: "u-1" });
+    queue.push(JSON.stringify({ control: "stop", reason: "button" }));
+    await tick();
+    expect(() =>
+      sendHeartbeat(
+        () => {
+          throw new Error("socket gone");
+        },
+        roots,
+        undefined,
+        sessions,
+      ),
+    ).toThrow("socket gone");
+    const frames: string[] = [];
+    sendHeartbeat((frame) => frames.push(frame), roots, undefined, sessions);
+    sendHeartbeat((frame) => frames.push(frame), roots, undefined, sessions);
+    expect(JSON.parse(frames[0] as string).desktopStopped).toMatchObject({
+      botId: "bot-1",
+      actorId: "u-1",
+      reason: "button",
+    });
+    expect(JSON.parse(frames[1] as string).desktopStopped).toBeUndefined();
+  });
+
+  test("the action journal never stores a session token", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "desktop-session-journal-"));
+    try {
+      const far = device();
+      const actions = createDesktopActions({
+        platform: "darwin",
+        engine: "agent-desktop",
+        reader: fakeReader(),
+        cli: fakeCli(() => "granted"),
+        control: far.control,
+      });
+      const file = join(dir, "actions.sqlite");
+      const journal = createActionJournal(file);
+      const run = (
+        key: string,
+        action: string,
+        payload: Record<string, unknown>,
+      ) =>
+        journal.execute("scope", key, { action, payload }, (a) =>
+          actions(a.action, a.payload as Record<string, unknown>),
+        );
+      expect(
+        (
+          await run("k1", "desktop.session_start", {
+            token: TOKEN,
+            botId: "bot-1",
+            actorId: "u-1",
+          })
+        ).ok,
+      ).toBe(true);
+      const live = await run("k2", "desktop.session_status", {
+        botId: "bot-1",
+        actorId: "u-1",
+      });
+      // The live answer carries the token to the server.
+      expect(live).toEqual({
+        ok: true,
+        output: {
+          writable: true,
+          platform: "macos",
+          session: { token: TOKEN },
+        },
+      });
+      // The stored row does not: a replay has no session, so the server asks again.
+      const database = new Database(file, { readonly: true });
+      const rows = database
+        .query<{ outcome: string }, []>("SELECT outcome FROM actions")
+        .all()
+        .map((row) => row.outcome);
+      database.close();
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row).not.toContain(TOKEN);
+        expect(row).not.toMatch(/[0-9a-f]{64}/);
+      }
+      expect(
+        await run("k2", "desktop.session_status", {
+          botId: "bot-1",
+          actorId: "u-1",
+        }),
+      ).toEqual({ ok: true, output: { writable: true, platform: "macos" } });
+      journal.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

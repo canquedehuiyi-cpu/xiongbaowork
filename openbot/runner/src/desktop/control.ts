@@ -110,26 +110,60 @@ export function parseControlInput(line: string): ControlInput | undefined {
   }
 }
 
-/** UTF-8 chunks (the runner's stdin) as lines split on `\n`, a trailing `\r` dropped. */
+/** The longest line the device may send; a longer one is dropped whole and parsing carries on. */
+export const CONTROL_LINE_MAX_BYTES = 64 * 1024;
+
+/**
+ * UTF-8 chunks (the runner's stdin) as lines split on `\n`, a trailing `\r` dropped. Works on bytes:
+ * a `\n` byte never sits inside a multi-byte character, so each line is decoded whole. Each chunk is
+ * scanned once; a line longer than `maxBytes` is skipped up to its newline.
+ */
 export async function* linesOf(
   chunks: AsyncIterable<Uint8Array | string>,
+  maxBytes: number = CONTROL_LINE_MAX_BYTES,
 ): AsyncIterable<string> {
   const decoder = new TextDecoder();
-  let buffered = "";
+  const encoder = new TextEncoder();
+  let parts: Uint8Array[] = [];
+  let size = 0;
+  let oversized = false;
+  /** The line collected so far, or nothing when it was too long; either way the buffer empties. */
+  const take = (): string | undefined => {
+    const line = oversized
+      ? undefined
+      : decoder.decode(Buffer.concat(parts, size)).replace(/\r$/, "");
+    parts = [];
+    size = 0;
+    oversized = false;
+    return line;
+  };
   for await (const chunk of chunks) {
-    buffered +=
-      typeof chunk === "string"
-        ? chunk
-        : decoder.decode(chunk, { stream: true });
-    let newline = buffered.indexOf("\n");
-    while (newline !== -1) {
-      yield buffered.slice(0, newline).replace(/\r$/, "");
-      buffered = buffered.slice(newline + 1);
-      newline = buffered.indexOf("\n");
+    const bytes = typeof chunk === "string" ? encoder.encode(chunk) : chunk;
+    let start = 0;
+    for (;;) {
+      const newline = bytes.indexOf(0x0a, start);
+      const end = newline === -1 ? bytes.length : newline;
+      if (!oversized && end > start) {
+        if (size + (end - start) > maxBytes) {
+          oversized = true;
+          parts = [];
+          size = 0;
+        } else {
+          // A copy: the stream may reuse the chunk's memory.
+          parts.push(bytes.slice(start, end));
+          size += end - start;
+        }
+      }
+      if (newline === -1) break;
+      const line = take();
+      if (line !== undefined) yield line;
+      start = newline + 1;
     }
   }
-  buffered += decoder.decode();
-  if (buffered !== "") yield buffered;
+  if (size > 0 || oversized) {
+    const line = take();
+    if (line !== undefined && line !== "") yield line;
+  }
 }
 
 function refusal(code: "headed_unconfirmed" | "no_control_channel") {
@@ -225,19 +259,21 @@ export function createControlChannel(opts: {
       seq += 1;
       const mine = seq;
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const acked = new Promise<boolean>((resolve) => {
-        acks.set(mine, () => resolve(true));
-        timer = setTimeout(() => resolve(false), ackMs);
-      });
-      emit({ event: "headed-begin", seq: mine });
+      let begun = false;
       try {
-        const ok = await acked;
-        clearTimeout(timer);
-        acks.delete(mine);
-        if (!ok) throw refusal("headed_unconfirmed");
+        const acked = new Promise<boolean>((resolve) => {
+          acks.set(mine, () => resolve(true));
+          timer = setTimeout(() => resolve(false), ackMs);
+        });
+        emit({ event: "headed-begin", seq: mine });
+        begun = true;
+        if (!(await acked)) throw refusal("headed_unconfirmed");
         return await run();
       } finally {
-        emit({ event: "headed-end", seq: mine });
+        clearTimeout(timer);
+        acks.delete(mine);
+        // Only a pause that was announced is ended.
+        if (begun) emit({ event: "headed-end", seq: mine });
       }
     },
   };

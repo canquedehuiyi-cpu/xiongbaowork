@@ -370,8 +370,11 @@ export function createDesktopActions(
       return fail(desktopMessage("failed", "缺少员工或使用者"));
     const state = await writability(desktopPlatform, signal);
     if (!state.writable) return fail(state.reason);
-    if (!(await sessions.start({ token, botId, actorId })))
-      return fail(desktopMessage("guard_unready"));
+    if (!(await sessions.start({ token, botId, actorId }, signal)))
+      // Stopped while waiting for the device: the session is already ended either way.
+      return fail(
+        signal?.aborted ? "已在设备上停止。" : desktopMessage("guard_unready"),
+      );
     return { ok: true, output: { started: true } };
   }
 
