@@ -345,11 +345,11 @@ export function createAgentDesktopWriter(opts: {
       if (keys?.kind === "close") return needs(`按 ${keysText} 会关闭程序`);
       // Tab to a button and Space presses it: as good as an unasked click (round 1).
       if (action === "desktop.key" && desktopActivationKey(keysText))
-        return needs("这个按键可能会按下当前选中的按钮，需要你先确认。");
+        return needs("这个按键可能会按下当前选中的按钮，需要你先确认");
       if (action === "desktop.type") {
         const role = target.control?.type ?? "";
         if (!DESKTOP_TEXT_ROLES.has(role))
-          return needs("目标不是输入框，需要你先确认。");
+          return needs("目标不是输入框，需要你先确认");
         // FACTS (b) and round 1: a textarea, or a textfield inside a scrollarea, is multi-line.
         const multiline =
           role === "textarea" ||

@@ -1095,7 +1095,7 @@ describe("desktop writes: round 1", () => {
     const asked = fail(
       desktopMessage(
         "needs_approval",
-        "这个按键可能会按下当前选中的按钮，需要你先确认。",
+        "这个按键可能会按下当前选中的按钮，需要你先确认",
       ),
     );
     expect(await key("space")).toEqual(asked);
@@ -1186,7 +1186,7 @@ describe("desktop writes: round 1", () => {
         mode: "replace",
       }),
     ).toEqual(
-      fail(desktopMessage("needs_approval", "目标不是输入框，需要你先确认。")),
+      fail(desktopMessage("needs_approval", "目标不是输入框，需要你先确认")),
     );
     const newline = fail(
       desktopMessage("needs_approval", "往单行输入框里输入带换行的文字"),
