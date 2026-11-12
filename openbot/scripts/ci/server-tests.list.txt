@@ -778,6 +778,7 @@ tests/tenant-package-agent-files.test.ts
 tests/tenant-package-avatar-channel.test.ts
 tests/tenant-package-brand-fields.test.ts
 tests/tenant-package-channel-membership.test.ts
+tests/tenant-package-connectors.test.ts
 tests/tenant-package-duplicates.test.ts
 tests/tenant-package-legacy-path.test.ts
 tests/tenant-package-personal.test.ts

@@ -36,10 +36,16 @@ import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { runAsTenant } from "./tenant/context";
 import { avatarAgentId, packageChannelId } from "./tenant/provisioning";
 import {
+  clearDanglingConnectorRefs,
+  connectorConflicts,
   loadSkillAssetFiles,
+  type PackageConnector,
+  type PackageVault,
+  parseConnectors,
   parseSkillAssetPaths,
   type SkillAssetFile,
   skillInstructions,
+  synchronizePackageConnectors,
   writeSkillAssets,
 } from "./tenant-package-capabilities";
 import { resolveTenantPackageDirectory } from "./tenant-package-path";
@@ -144,6 +150,11 @@ type PackageFiles = {
    * package had until now.
    */
   skills?: string;
+  /**
+   * Optional, like `skills.yaml`: `connectors.yaml`, the connectors the package declares. Absent is a
+   * package that declares none, which is every package written before this contract shipped.
+   */
+  connectors?: string;
   /**
    * A coworker per file, from `agents/` beside `agents.yaml`, in the order they should be read.
    *
@@ -304,6 +315,11 @@ export type TenantPackage = {
   }[];
   /** What `skills.yaml` ships, or empty for a package that has none. */
   skills: TenantSkill[];
+  /**
+   * What `connectors.yaml` declares (4a-A1), or empty for a package that declares none. The sync
+   * writes `mcp_servers` rows for these — never grants — and takes back only its own on a redeploy.
+   */
+  connectors?: PackageConnector[];
   /**
    * The files those skills ship, read off disk at load, keyed by slug (`assets:` in `skills.yaml`).
    *
@@ -667,6 +683,10 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
   const skillsYaml = files.skills?.trim()
     ? yaml(files.skills, "skills.yaml")
     : {};
+  // Absent is a package with no connectors of its own, not a malformed one (same rule as skills).
+  const connectorsYaml = files.connectors?.trim()
+    ? yaml(files.connectors, "connectors.yaml")
+    : {};
   const tenant = asRecord(brand.tenant, "brand.tenant");
   const skin =
     brand.skin === undefined ? undefined : asRecord(brand.skin, "brand.skin");
@@ -835,6 +855,7 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     },
     knowledgeSources: sources,
     skills: packageSkills,
+    connectors: parseConnectors(connectorsYaml),
     themeCss: files.themeCss,
   };
 }
@@ -965,6 +986,12 @@ export async function loadTenantPackage(
       if (error.code === "ENOENT") return "";
       throw error;
     });
+  const connectors = await readFile(join(sourcePath, "connectors.yaml"), "utf8")
+    .then((file) => expandEnvironment(file, "connectors.yaml"))
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "";
+      throw error;
+    });
   const agentFiles = await readAgentFiles(sourcePath);
   const tenantPackage = validateTenantPackage({
     brand,
@@ -973,6 +1000,7 @@ export async function loadTenantPackage(
     model,
     knowledge,
     skills,
+    connectors,
     agentFiles,
     themeCss,
   });
@@ -999,6 +1027,7 @@ export async function loadTenantPackage(
         [
           ...contents,
           skills,
+          connectors,
           ...agentFiles.map((file) => `${file.filename}\n${file.contents}`),
           ...Object.entries(skillAssets).flatMap(([slug, files]) =>
             files.map((file) => `${slug}/${file.path}\n${file.content}`),
@@ -1161,7 +1190,26 @@ export async function synchronizeTenantPackage(
   tenantPackage: LoadedTenantPackage,
   /** Who to put inside every channel this package declares. See the note where it is written. */
   memberUserIds: readonly string[] = [],
+  /** The vault, needed only when the package declares a connector whose credential is set. */
+  vault?: PackageVault,
 ) {
+  /*
+   * A package connector may not fight a row somebody added by hand (4a-A1). Refused HERE, before the
+   * transaction, in the platform frame — the only frame that can see an administrator's own stamped
+   * rows — so the deployment refuses to load with the id and a way out in the sentence, rather than
+   * coming up half-synchronised or silently skipping the connector. See `connectorConflicts`.
+   */
+  const conflicts = await runAsTenant("platform", () =>
+    connectorConflicts(database, tenantPackage.connectors ?? []),
+  );
+  if (conflicts.length > 0) {
+    const named = conflicts
+      .map(({ id, addedBy }) => `"${id}" (added by ${addedBy ?? "unknown"})`)
+      .join(", ");
+    throw new Error(
+      `Tenant package declares connector(s) ${named}, which already exist as servers this package did not add. Remove the connector from connectors.yaml, or delete the existing server on the Plugins page, before this deployment can start.`,
+    );
+  }
   /*
    * THE CATALOGUE IS WRITTEN IN THE SYSTEM PARTITION, IN THIS FUNCTION'S OWN SCOPE.
    *
@@ -2058,10 +2106,22 @@ export async function synchronizeTenantPackage(
           );
         }
 
+        /*
+         * The connectors the package declares (4a-A1), written in this transaction like every other
+         * catalogue row. Server rows only — never a grant — and what the package stopped declaring
+         * comes back, with the plain-text refs cleared after the commit (see below).
+         */
+        const recycledConnectorIds = await synchronizePackageConnectors(
+          transaction,
+          tenantPackage.connectors ?? [],
+          vault,
+        );
+
         return {
           deploymentPackage,
           members,
           formerPackageIds,
+          recycledConnectorIds,
           // What to write this boot, and everything the package declares (which a person's copies
           // are kept against): the personal starter's channel is declared but seeded only once.
           channels,
@@ -2075,6 +2135,18 @@ export async function synchronizeTenantPackage(
         };
       }),
   );
+
+  /*
+   * A connector the package stopped declaring leaves its plain-text refs behind (4a-A1): grants and
+   * skill-tool declarations are text, so the server row's delete cascades nothing, and they are
+   * stamped with whichever frame granted them. Cleared in the platform frame, after the commit —
+   * the same reason the per-person writes below run there.
+   */
+  if (synced.recycledConnectorIds.length > 0) {
+    await runAsTenant("platform", () =>
+      clearDanglingConnectorRefs(database, synced.recycledConnectorIds),
+    );
+  }
 
   /*
    * The person's half of the channel, written in the person's own scope.

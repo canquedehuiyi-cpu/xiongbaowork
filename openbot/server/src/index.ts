@@ -1004,6 +1004,14 @@ await startupLifecycle.run(async (startup) => {
        * provisioned instead -- see ticket 004 -- so nothing is claimed here on their behalf.
        */
       config.singleUser ? [DEV_ACTOR.id] : [],
+      /*
+       * 连接器（connectors.yaml）声明了 credential_env 且环境里确实有值时，值从这里进保险库
+       * （kind "mcp"，keyId `mcp-<id>`，与插件页同一把钥匙）；没有声明或没设值时用不到它。
+       */
+      {
+        encryptionKey: config.keyEncryptionKey,
+        credentials: credentialStore,
+      },
     ),
   );
   /*
