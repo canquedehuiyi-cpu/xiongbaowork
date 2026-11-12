@@ -18,20 +18,25 @@
 
 mod apps;
 mod autostart;
+mod desktop_guard;
+mod desktop_permissions;
 mod process_tree;
 mod roots;
 mod sidecar;
 mod supervise;
 
+use desktop_guard::{DesktopEvent, Effects, Guard, GuardAction, HotkeyError};
 use serde::Serialize;
-use sidecar::{RunnerLauncher, Settings};
+use sidecar::{ControlPipe, RunnerLauncher, Settings};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 use supervise::{Observer, Policy, State, Supervisor};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, Wry};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Wry};
+use tauri_plugin_global_shortcut::GlobalShortcut;
 
 const PRODUCT: &str = "熊宝数字员工 设备端";
 const BROWSER_MISSING: &str = "未检测到 Chrome 或 Edge，浏览器相关任务无法执行";
@@ -42,6 +47,11 @@ struct Paths {
     /// The runner's `--data-dir`.
     data_dir: PathBuf,
     log: PathBuf,
+    /// agent-desktop's home for the 「桌面操作」 card's probe: private, emptied before each probe,
+    /// and not the runner's `agent-desktop-state`.
+    probe: PathBuf,
+    /// Left by `restart_app` so the restarted app shows its window even if it was started at login.
+    show_once: PathBuf,
 }
 
 struct Device {
@@ -56,6 +66,15 @@ struct Device {
     autostart_item: Mutex<Option<CheckMenuItem<Wry>>>,
     quitting: AtomicBool,
     stopped: AtomicBool,
+    /// When the window was last brought up for a `permission-needed`.
+    desktop_raised: Mutex<Option<Instant>>,
+    /// The desktop session's guard. Never locked on the main thread: carrying its actions out waits
+    /// for the main thread (window and menu calls), so a main-thread caller would deadlock.
+    guard: Mutex<Guard>,
+    /// The running runner's stdin, for the control channel's answers.
+    control: ControlPipe,
+    /// The tray's 「停止桌面操作」, enabled while the banner is up.
+    stop_desktop_item: Mutex<Option<MenuItem<Wry>>>,
 }
 
 impl Device {
@@ -72,6 +91,15 @@ impl Observer for Tray {
         let device = self.0.state::<Device>();
         *device.state.lock().unwrap() = state.clone();
         show_state(&self.0, state);
+        // A new runner has no session: no banner, no stop key.
+        if desktop_guard::runner_gone(state) {
+            guard_do(&self.0, Guard::reset);
+        }
+    }
+
+    fn desktop(&self, event: DesktopEvent) {
+        let cursor = cursor(&self.0);
+        guard_do(&self.0, |guard| guard.on_event(&event, cursor));
     }
 
     fn paired(&self) {
@@ -93,11 +121,266 @@ impl Observer for Tray {
             Err(error) => eprintln!("[device] could not turn on start at login: {error}"),
         }
     }
+
+    fn desktop_permission(&self) {
+        let Some(window) = self.0.get_webview_window("main") else {
+            return;
+        };
+        let visible =
+            window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
+        let device = self.0.state::<Device>();
+        let mut raised = device.desktop_raised.lock().unwrap();
+        let now = Instant::now();
+        match desktop_permissions::react(visible, *raised, now) {
+            desktop_permissions::Reaction::Scroll => scroll_to_desktop(&self.0),
+            desktop_permissions::Reaction::Raise => {
+                *raised = Some(now);
+                show_window(&self.0);
+                scroll_to_desktop(&self.0);
+            }
+            desktop_permissions::Reaction::Nothing => {}
+        }
+    }
 }
+
+// --- desktop session guard (sub-project 2, write phase) ---
+
+/// Decide with the guard, then carry the decision out, under its lock so the runner's lines, the
+/// mouse check and the tray are handled one at a time. Not on the main thread (see `Device::guard`).
+fn guard_do(app: &AppHandle, decide: impl FnOnce(&mut Guard) -> Vec<GuardAction>) {
+    let device = app.state::<Device>();
+    // A panic elsewhere while it was held leaves the guard's state as it was; carrying on with it
+    // beats taking the runner's output thread down too.
+    let mut guard = device
+        .guard
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let actions = decide(&mut guard);
+    desktop_guard::apply(&mut guard, actions, &mut Shell(app));
+}
+
+fn cursor(app: &AppHandle) -> Option<(f64, f64)> {
+    app.cursor_position()
+        .ok()
+        .map(|position| (position.x, position.y))
+}
+
+/// The guard's actions on the banner window, the stop key and the runner's stdin.
+struct Shell<'a>(&'a AppHandle);
+
+impl Shell<'_> {
+    fn banner(&self) -> Result<tauri::WebviewWindow, String> {
+        self.0
+            .get_webview_window(desktop_guard::BANNER_LABEL)
+            .ok_or_else(|| "没有提示条窗口".to_string())
+    }
+
+    /// The banner's words: its title for screen readers, and the page's 「正在移动鼠标」.
+    fn say(&self, window: &tauri::WebviewWindow, headed: bool) -> Result<(), String> {
+        let _ = window.set_title(&desktop_guard::banner_title(headed));
+        self.0
+            .emit_to(
+                desktop_guard::BANNER_LABEL,
+                desktop_guard::BANNER_EVENT,
+                desktop_guard::BannerView { headed },
+            )
+            .map_err(|error| error.to_string())
+    }
+}
+
+impl Effects for Shell<'_> {
+    fn show_banner(&mut self, headed: bool) -> Result<(), String> {
+        let window = self.banner()?;
+        if let Ok(Some(monitor)) = window.primary_monitor() {
+            let area = monitor.work_area();
+            let (x, y) = desktop_guard::banner_origin(
+                (area.position.x, area.position.y),
+                area.size.width,
+                monitor.scale_factor(),
+            );
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+        }
+        // Shown, never focused: whatever the person is typing into keeps the keyboard.
+        window.show().map_err(|error| error.to_string())?;
+        window
+            .set_ignore_cursor_events(true)
+            .map_err(|error| error.to_string())?;
+        self.say(&window, headed)?;
+        if !window.is_visible().map_err(|error| error.to_string())? {
+            return Err("提示条窗口没有显示".into());
+        }
+        set_stop_desktop_item(self.0, true);
+        Ok(())
+    }
+
+    fn update_banner(&mut self, headed: bool) -> Result<(), String> {
+        let window = self.banner()?;
+        self.say(&window, headed)
+    }
+
+    fn hide_banner(&mut self) {
+        if let Some(window) = self.0.get_webview_window(desktop_guard::BANNER_LABEL) {
+            let _ = window.hide();
+        }
+        set_stop_desktop_item(self.0, false);
+    }
+
+    fn register_hotkey(&mut self) -> Result<(), HotkeyError> {
+        register_stop_key(self.0)
+    }
+
+    fn unregister_hotkey(&mut self) {
+        unregister_stop_key(self.0)
+    }
+
+    fn notice(&mut self, text: &'static str) {
+        eprintln!("[device] {text}");
+        let device = self.0.state::<Device>();
+        let state = device.state.lock().unwrap().label();
+        if let Some(item) = menu_item(&device.status_item) {
+            let _ = item.set_text(format!("状态：{state} · {text}"));
+        }
+        if let Some(tray) = self.0.tray_by_id("device") {
+            let _ = tray.set_tooltip(Some(format!("{PRODUCT} · {text}")));
+        }
+    }
+
+    fn clear_notice(&mut self) {
+        let state = self.0.state::<Device>().state.lock().unwrap().clone();
+        show_state(self.0, &state);
+    }
+
+    fn send(&mut self, line: &str) -> std::io::Result<()> {
+        self.0.state::<Device>().control.send(line)
+    }
+}
+
+/// The stop key, Ctrl+Alt+Esc (⌃⌥⎋ on a Mac): the one place it is registered, for a session only.
+/// The plugin does the registering on the main thread and this waits for the answer (ruling C5:
+/// no `session-ready` without the key). That is safe here: the guard's lock, which the caller holds,
+/// is never taken on the main thread. Linux has no plugin (see `main`), so no key and no session.
+/// Always asks the system, never the plugin's list: an unregistering still queued on the main
+/// thread (see below) runs first there, so only the system's answer says the key is up.
+fn register_stop_key(app: &AppHandle) -> Result<(), HotkeyError> {
+    let Some(shortcuts) = app.try_state::<GlobalShortcut<Wry>>() else {
+        return Err(HotkeyError::Unsupported);
+    };
+    shortcuts
+        .register(desktop_guard::stop_shortcut())
+        .map_err(|error| match error {
+            // The system's refusal: only some of these mean another program holds the key.
+            tauri_plugin_global_shortcut::Error::GlobalHotkey(message) => {
+                desktop_guard::hotkey_refusal(message)
+            }
+            // The event loop is gone or never answered: nothing to tell the person.
+            other => HotkeyError::Failed(other.to_string()),
+        })
+}
+
+/// Must be harmless when the key is not registered: a failed or replaced session unregisters too.
+/// Handed to the main thread without waiting, so a session that ends never waits on it; a later
+/// registration is queued behind it there, so it cannot be undone by it.
+fn unregister_stop_key(app: &AppHandle) {
+    let Some(shortcuts) = app.try_state::<GlobalShortcut<Wry>>() else {
+        return;
+    };
+    if !shortcuts.is_registered(desktop_guard::stop_shortcut()) {
+        return;
+    }
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let shortcuts = handle.state::<GlobalShortcut<Wry>>();
+        if let Err(error) = shortcuts.unregister(desktop_guard::stop_shortcut()) {
+            eprintln!("[device] could not unregister the stop key: {error}");
+        }
+    });
+}
+
+/// The stop key's plugin. Its handler runs on the main thread, where the guard is never locked, so
+/// the stop goes through a thread of its own, as the tray's button does.
+fn stop_key_plugin() -> tauri::plugin::TauriPlugin<Wry> {
+    use tauri_plugin_global_shortcut::ShortcutState;
+    tauri_plugin_global_shortcut::Builder::new()
+        .with_handler(|app, shortcut, event| {
+            if event.state == ShortcutState::Pressed && *shortcut == desktop_guard::stop_shortcut()
+            {
+                let app = app.clone();
+                std::thread::spawn(move || guard_do(&app, |guard| guard.on_stop("hotkey")));
+            }
+        })
+        .build()
+}
+
+fn set_stop_desktop_item(app: &AppHandle, enabled: bool) {
+    if let Some(item) = menu_item(&app.state::<Device>().stop_desktop_item) {
+        let _ = item.set_enabled(enabled);
+    }
+}
+
+/// A tray menu item, cloned out of its slot so the slot's lock is not held while the item changes:
+/// off the main thread, changing it waits for the main thread, which takes these locks too (`quit`,
+/// `restart_app`, the tray's menu).
+fn menu_item<T: Clone>(slot: &Mutex<Option<T>>) -> Option<T> {
+    slot.lock().unwrap().clone()
+}
+
+/// The banner, made at start-up and kept hidden until a session (see `desktop_guard::BANNER_WINDOW`).
+fn create_banner(app: &AppHandle) -> tauri::Result<()> {
+    let config = &desktop_guard::BANNER_WINDOW;
+    WebviewWindowBuilder::new(app, config.label, WebviewUrl::App(config.page.into()))
+        .title(desktop_guard::banner_title(false))
+        .inner_size(config.width, config.height)
+        .always_on_top(config.always_on_top)
+        .decorations(config.decorations)
+        .skip_taskbar(config.skip_taskbar)
+        .focused(config.focused)
+        .focusable(config.focusable)
+        .resizable(config.resizable)
+        .visible_on_all_workspaces(config.visible_on_all_workspaces)
+        .visible(config.visible)
+        .build()?;
+    Ok(())
+}
+
+/// The mouse check: every `POLL_MS`, while a session is on and no `--headed` step is under way, the
+/// cursor is compared with where it started; a move stops the session, and so does a cursor that
+/// keeps failing to be read. Until this thread has told the guard it runs, no session is ready, and
+/// once it leaves its loop (a panic) no session is again. Not on Linux, which has no write actions.
+fn watch_the_mouse(app: &AppHandle) {
+    /// Dropped only when the loop is left: the guard then stops counting on the check.
+    struct Ended(AppHandle);
+    impl Drop for Ended {
+        fn drop(&mut self) {
+            guard_do(&self.0, Guard::mouse_check_ended);
+        }
+    }
+    let app = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("desktop-mouse".into())
+        .spawn(move || {
+            guard_do(&app, |guard| {
+                guard.mouse_check_started();
+                Vec::new()
+            });
+            let _ended = Ended(app.clone());
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(desktop_guard::POLL_MS));
+                guard_do(&app, |guard| guard.poll(|| cursor(&app)));
+            }
+        });
+    // The guard was never told the check runs, so every session gets `session-failed`.
+    if let Err(error) = spawned {
+        eprintln!(
+            "[device] could not start the mouse check; no desktop session can start: {error}"
+        );
+    }
+}
+
+// --- end desktop session guard ---
 
 fn show_state(app: &AppHandle, state: &State) {
     let label = state.label();
-    if let Some(item) = app.state::<Device>().status_item.lock().unwrap().as_ref() {
+    if let Some(item) = menu_item(&app.state::<Device>().status_item) {
         let _ = item.set_text(format!("状态：{label}"));
     }
     if let Some(tray) = app.tray_by_id("device") {
@@ -106,13 +389,7 @@ fn show_state(app: &AppHandle, state: &State) {
 }
 
 fn set_autostart_check(app: &AppHandle, on: bool) {
-    if let Some(item) = app
-        .state::<Device>()
-        .autostart_item
-        .lock()
-        .unwrap()
-        .as_ref()
-    {
+    if let Some(item) = menu_item(&app.state::<Device>().autostart_item) {
         let _ = item.set_checked(on);
     }
 }
@@ -132,6 +409,7 @@ fn start(app: &AppHandle, settings: Settings, pair_code: Option<String>) -> Resu
         browser: device.browser.clone(),
         desktop_helper: sidecar::agent_desktop_path().ok(),
         log: device.paths.log.clone(),
+        control: device.control.clone(),
     };
     let supervisor = Supervisor::start(
         launcher,
@@ -166,7 +444,7 @@ fn quit(app: &AppHandle) {
     if device.quitting.swap(true, Ordering::SeqCst) {
         return;
     }
-    if let Some(item) = device.status_item.lock().unwrap().as_ref() {
+    if let Some(item) = menu_item(&device.status_item) {
         let _ = item.set_text("状态：正在退出…");
     }
     let app = app.clone();
@@ -325,6 +603,111 @@ async fn enable_candidate(app: AppHandle, candidate: String) -> Result<serde_jso
 }
 // --- end app discovery ---
 
+/// The notices bundled as resources (tauri.bundle.conf.json) that the 「关于」 section may show.
+const BUNDLED_NOTICES: [&str; 6] = [
+    "LICENSE",
+    "NOTICE",
+    "THIRD-PARTY-NOTICES.md",
+    "licenses/agent-desktop/LICENSE",
+    "licenses/agent-desktop/THIRD-PARTY.md",
+    "licenses/agent-desktop/COPYRIGHT",
+];
+
+/// `name` if it is one of the bundled notices, exactly. Anything else is refused, never resolved.
+fn bundled_notice(name: &str) -> Result<&'static str, String> {
+    BUNDLED_NOTICES
+        .into_iter()
+        .find(|notice| *notice == name)
+        .ok_or_else(|| "没有这份许可文件。".to_string())
+}
+
+/// One of the bundled notices, for the 「关于」 section.
+#[tauri::command]
+fn read_bundled_text(app: AppHandle, name: String) -> Result<String, String> {
+    let name = bundled_notice(&name)?;
+    let mut path = app
+        .path()
+        .resource_dir()
+        .map_err(|error| error.to_string())?;
+    path.extend(name.split('/'));
+    std::fs::read_to_string(&path).map_err(|error| format!("无法读取 {name}：{error}"))
+}
+
+/// Whether this computer lets the app read and operate windows, as the bundled agent-desktop says.
+/// The helper is given up to five seconds, on a blocking thread of its own.
+#[tauri::command]
+async fn desktop_permissions(
+    app: AppHandle,
+) -> Result<desktop_permissions::DesktopPermissionView, String> {
+    let home = app.state::<Device>().paths.probe.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let platform = std::env::consts::OS;
+        let reply = match desktop_permissions::command_for(platform) {
+            Some(command) => {
+                let program = sidecar::agent_desktop_path().map_err(|error| error.to_string())?;
+                desktop_permissions::run(&program, &[command], &home, desktop_permissions::TIMEOUT)?
+            }
+            None => String::new(),
+        };
+        desktop_permissions::view_for(platform, &reply)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Open System Settings at the pane for `kind` (`accessibility` or `screen`). macOS only.
+#[tauri::command]
+fn open_desktop_settings(kind: String) -> Result<(), String> {
+    let url = desktop_permissions::settings_url(&kind).ok_or("没有这个设置项。")?;
+    if !cfg!(target_os = "macos") {
+        return Err("只有 macOS 需要在系统设置里开启。".into());
+    }
+    std::process::Command::new("/usr/bin/open")
+        .arg(url)
+        .status()
+        .map_err(|error| error.to_string())
+        .and_then(|status| {
+            if status.success() {
+                Ok(())
+            } else {
+                Err("无法打开系统设置。".into())
+            }
+        })
+}
+
+/// Start this app again, for a grant macOS applies only to a new process. The runner's tree is
+/// stopped first, as on Quit, so the new copy does not find a second runner using the same token.
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    let device = app.state::<Device>();
+    if device.quitting.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(item) = menu_item(&device.status_item) {
+        let _ = item.set_text("状态：正在重新打开…");
+    }
+    // The new process gets this one's arguments, `--autostart` included: this note makes it show
+    // its window all the same.
+    if let Err(error) = desktop_permissions::mark_show_once(&device.paths.show_once) {
+        eprintln!("[device] could not leave the show-window note: {error}");
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        stop(&app);
+        app.state::<Device>().stopped.store(true, Ordering::SeqCst);
+        // From a thread other than the main one, this asks the event loop to exit and restarts on
+        // its Exit, which `run` below lets through because the runner is already stopped.
+        app.restart();
+    });
+}
+
+/// Refresh the 「桌面操作」 card and scroll to it, without showing or focusing the window.
+fn scroll_to_desktop(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.eval("window.showDesktop && window.showDesktop()");
+    }
+}
+
 /// The window, opened at its folder section, for the tray's 「添加本地文件夹…」.
 fn show_folders(app: &AppHandle) {
     show_window(app);
@@ -337,6 +720,11 @@ fn chose(app: &AppHandle, id: &str) {
     match id {
         "open" => show_window(app),
         "folders" => show_folders(app),
+        // Off the main thread: the guard is never locked there.
+        "stop-desktop" => {
+            let app = app.clone();
+            std::thread::spawn(move || guard_do(&app, |guard| guard.on_stop("button")));
+        }
         "restart" => {
             let app = app.clone();
             std::thread::spawn(move || {
@@ -365,6 +753,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
     let browser = MenuItem::with_id(app, "browser", BROWSER_MISSING, false, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "打开设备端窗口", true, None::<&str>)?;
     let folders = MenuItem::with_id(app, "folders", "添加本地文件夹…", true, None::<&str>)?;
+    let stop_desktop = MenuItem::with_id(app, "stop-desktop", "停止桌面操作", false, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
         "autostart",
@@ -383,6 +772,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
             &[
                 &status,
                 &browser,
+                &stop_desktop,
                 &separator,
                 &open,
                 &folders,
@@ -397,6 +787,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
             app,
             &[
                 &status,
+                &stop_desktop,
                 &separator,
                 &open,
                 &folders,
@@ -416,6 +807,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
     let device = app.state::<Device>();
     *device.status_item.lock().unwrap() = Some(status);
     *device.autostart_item.lock().unwrap() = Some(autostart);
+    *device.stop_desktop_item.lock().unwrap() = Some(stop_desktop);
     Ok(())
 }
 
@@ -456,11 +848,18 @@ fn route_signals_to_quit(app: &AppHandle) {
 
 fn main() {
     let autostarted = std::env::args().any(|arg| arg == autostart::AUTOSTART_ARG);
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Two copies would run two runners with one device token. A second launch shows the window.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_window(app);
-        }))
+        }));
+    // The stop key, registered only during a desktop session. Not on Linux (no session there).
+    let builder = if cfg!(target_os = "linux") {
+        builder
+    } else {
+        builder.plugin(stop_key_plugin())
+    };
+    builder
         .invoke_handler(tauri::generate_handler![
             status,
             pair,
@@ -475,8 +874,12 @@ fn main() {
             set_app_enabled,
             // --- app discovery (sub-project 3) ---
             discover_apps,
-            enable_candidate
+            enable_candidate,
             // --- end app discovery ---
+            desktop_permissions,
+            open_desktop_settings,
+            restart_app,
+            read_bundled_text
         ])
         // Closing the window hides it; the app lives in the tray and Quit is there.
         .on_window_event(|window, event| {
@@ -501,6 +904,8 @@ fn main() {
                     settings: data.join("device.json"),
                     data_dir: data.join("runner"),
                     log,
+                    probe: data.join("agent-desktop-probe"),
+                    show_once: data.join("show-window-once"),
                 },
                 browser,
                 supervisor: Mutex::new(None),
@@ -510,6 +915,10 @@ fn main() {
                 autostart_item: Mutex::new(None),
                 quitting: AtomicBool::new(false),
                 stopped: AtomicBool::new(false),
+                desktop_raised: Mutex::new(None),
+                guard: Mutex::new(Guard::new()),
+                control: ControlPipe::default(),
+                stop_desktop_item: Mutex::new(None),
             });
             let handle = app.handle().clone();
             #[cfg(unix)]
@@ -517,6 +926,15 @@ fn main() {
             let identifier = app.config().identifier.clone();
             let device = app.state::<Device>();
             build_tray(&handle, device.browser.is_none(), &identifier)?;
+            // Without a banner no session can start (`show_banner` fails, the runner is told
+            // `session-failed`), so this is not fatal to the rest of the app.
+            if let Err(error) = create_banner(&handle) {
+                eprintln!("[device] could not make the desktop banner: {error}");
+            }
+            // No mouse check on Linux: no session can be ready there (no write actions either).
+            if !cfg!(target_os = "linux") {
+                watch_the_mouse(&handle);
+            }
 
             match device.settings() {
                 Some(settings) => {
@@ -524,7 +942,9 @@ fn main() {
                         *device.state.lock().unwrap() = State::Failed { message: error };
                     }
                     show_state(&handle, &device.state.lock().unwrap().clone());
-                    if !autostarted {
+                    // Restarted from the 「桌面操作」 card: shown even when it was started at login.
+                    let show_once = desktop_permissions::take_show_once(&device.paths.show_once);
+                    if !autostarted || show_once {
                         show_window(&handle);
                     }
                 }
@@ -551,6 +971,39 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_the_bundled_notices_can_be_read() {
+        for name in super::BUNDLED_NOTICES {
+            assert_eq!(super::bundled_notice(name), Ok(name));
+        }
+        for name in [
+            "../device.json",
+            "/etc/passwd",
+            "licenses/agent-desktop/../../x",
+            "licenses/agent-desktop/../../LICENSE",
+            "./LICENSE",
+            "LICENSE ",
+            "license",
+            "licenses\\agent-desktop\\LICENSE",
+            "C:\\Windows\\win.ini",
+            "",
+        ] {
+            assert!(super::bundled_notice(name).is_err(), "{name}");
+        }
+        // Each one is a resource the bundle really ships.
+        let bundle: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.bundle.conf.json")).unwrap();
+        let shipped: Vec<&str> = bundle["bundle"]["resources"]
+            .as_object()
+            .unwrap()
+            .values()
+            .filter_map(|target| target.as_str())
+            .collect();
+        for name in super::BUNDLED_NOTICES {
+            assert!(shipped.contains(&name), "{name} is not bundled");
+        }
+    }
+
     #[test]
     fn the_identifier_is_ours_and_the_name_is_the_product_s() {
         let config: serde_json::Value =

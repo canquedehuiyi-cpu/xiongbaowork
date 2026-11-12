@@ -15,6 +15,7 @@
 //! The loop is written against [`Launcher`] and [`Running`] so the tests can drive it with fake
 //! children that crash on cue; [`crate::sidecar`] is the real launcher.
 
+use crate::desktop_guard::{parse_desktop_line, DesktopEvent};
 use serde::Serialize;
 use std::io;
 use std::sync::{Arc, Condvar, Mutex};
@@ -153,12 +154,30 @@ pub enum Signal {
     Paired,
     Connected,
     ConnectionLost,
+    /// A desktop action needs a macOS grant this app does not have yet.
+    DesktopPermission,
+    /// The desktop session's other news, for its guard (`desktop_guard`). Not a connection state.
+    Desktop(DesktopEvent),
 }
 
-/// The runner's own log lines, from `runner/src/index.ts`.
+/// Everything a line means: what [`classify`] reads, else one of the desktop session's events.
+pub fn signal(line: &str) -> Option<Signal> {
+    classify(line).or_else(|| parse_desktop_line(line).map(Signal::Desktop))
+}
+
+/// The runner's own log lines, from `runner/src/index.ts`, as connection states, and its
+/// control-channel line `permission-needed` (`runner/src/desktop/control.ts`, read by
+/// [`parse_desktop_line`]). The control channel's other events are for the desktop session's guard
+/// ([`signal`]); none of them is a connection state.
 pub fn classify(line: &str) -> Option<Signal> {
     let line = line.trim();
-    if line.starts_with("runner: paired as ") {
+    if line.starts_with(crate::desktop_guard::CONTROL_LINE_PREFIX) {
+        matches!(
+            parse_desktop_line(line),
+            Some(DesktopEvent::PermissionNeeded)
+        )
+        .then_some(Signal::DesktopPermission)
+    } else if line.starts_with("runner: paired as ") {
         Some(Signal::Paired)
     } else if line.starts_with("runner: connected as ") {
         Some(Signal::Connected)
@@ -193,6 +212,10 @@ pub trait Observer: Send + Sync {
     fn changed(&self, state: &State);
     /// The runner said it paired. Called once, before the state becomes `Online`.
     fn paired(&self) {}
+    /// The runner said a desktop action needs a permission: the card that grants it is shown.
+    fn desktop_permission(&self) {}
+    /// The runner said something about its desktop session (any event but `permission-needed`).
+    fn desktop(&self, _event: DesktopEvent) {}
 }
 
 pub trait Running: Send {
@@ -231,6 +254,10 @@ struct Shared {
     inner: Mutex<Inner>,
     wake: Condvar,
     observer: Box<dyn Observer>,
+    /// The run whose desktop events still count. Moved on as soon as a run ends, before the state
+    /// that resets the guard, so a line the ended runner left in its pipe cannot bring a banner
+    /// back. A lock of its own, held while an event is delivered: never taken on the main thread.
+    current_run: Mutex<u64>,
 }
 
 impl Shared {
@@ -245,6 +272,25 @@ impl Shared {
 
     fn stopping(&self) -> bool {
         self.inner.lock().unwrap().stop
+    }
+
+    /// The run that just ended is over: its late desktop lines are dropped.
+    fn end_run(&self) {
+        *self
+            .current_run
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
+    }
+
+    fn output(self: &Arc<Self>) -> Output {
+        let run = *self
+            .current_run
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Output {
+            shared: Arc::clone(self),
+            run,
+        }
     }
 
     /// Sleep for `duration` unless asked to stop first. True when asked to stop.
@@ -262,30 +308,44 @@ impl Shared {
     }
 }
 
-/// Where a child's output goes: each line is handed over as it is read.
+/// Where a child's output goes: each line is handed over as it is read. Tied to one run.
 #[derive(Clone)]
-pub struct Output(Arc<Shared>);
+pub struct Output {
+    shared: Arc<Shared>,
+    run: u64,
+}
 
 impl Output {
     pub fn stdout(&self, line: &str) {
-        match classify(line) {
+        match signal(line) {
             Some(Signal::Paired) => {
                 let first = {
-                    let mut inner = self.0.inner.lock().unwrap();
+                    let mut inner = self.shared.inner.lock().unwrap();
                     !std::mem::replace(&mut inner.paired, true)
                 };
                 if first {
-                    self.0.observer.paired();
+                    self.shared.observer.paired();
                 }
             }
-            Some(Signal::Connected) => self.0.set(State::Online),
-            Some(Signal::ConnectionLost) => self.0.set(State::Offline),
+            Some(Signal::Connected) => self.shared.set(State::Online),
+            Some(Signal::ConnectionLost) => self.shared.set(State::Offline),
+            Some(Signal::DesktopPermission) => self.shared.observer.desktop_permission(),
+            Some(Signal::Desktop(event)) => {
+                let current = self
+                    .shared
+                    .current_run
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if *current == self.run {
+                    self.shared.observer.desktop(event);
+                }
+            }
             None => {}
         }
     }
 
     pub fn stderr(&self, line: &str) {
-        let mut inner = self.0.inner.lock().unwrap();
+        let mut inner = self.shared.inner.lock().unwrap();
         if inner.stderr.len() == STDERR_LINES {
             inner.stderr.remove(0);
         }
@@ -317,6 +377,7 @@ impl Supervisor {
             }),
             wake: Condvar::new(),
             observer,
+            current_run: Mutex::new(0),
         });
         let running = Arc::clone(&shared);
         let thread = std::thread::Builder::new()
@@ -365,9 +426,10 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
         });
         shared.inner.lock().unwrap().stderr.clear();
         let started = Instant::now();
-        let mut child = match launcher.launch(pairing, Output(Arc::clone(&shared))) {
+        let mut child = match launcher.launch(pairing, shared.output()) {
             Ok(child) => child,
             Err(error) => {
+                shared.end_run();
                 shared.set(State::Failed {
                     message: format!("无法启动设备端服务：{error}"),
                 });
@@ -378,6 +440,7 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
         let exit = loop {
             if shared.stopping() {
                 child.kill_tree(policy.grace);
+                shared.end_run();
                 shared.set(State::Stopped);
                 return;
             }
@@ -393,6 +456,7 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
         };
         // Whatever the runner left running is not left running.
         child.kill_tree(Duration::ZERO);
+        shared.end_run();
         let said = reason(&shared.inner.lock().unwrap().stderr);
 
         if pairing {
@@ -440,9 +504,25 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::collections::VecDeque;
+
+    /// An `Output` that leads nowhere, for a launcher started outside a supervisor.
+    pub(crate) fn output() -> Output {
+        Arc::new(Shared {
+            inner: Mutex::new(Inner {
+                state: State::Stopped,
+                stop: false,
+                paired: false,
+                stderr: Vec::new(),
+            }),
+            wake: Condvar::new(),
+            observer: Box::new(Quiet),
+            current_run: Mutex::new(0),
+        })
+        .output()
+    }
 
     fn quick() -> Policy {
         Policy {
@@ -530,6 +610,61 @@ mod tests {
     }
 
     #[test]
+    fn a_permission_line_is_classified() {
+        assert_eq!(
+            classify(r#"runner: desktop {"event":"permission-needed"}"#),
+            Some(Signal::DesktopPermission)
+        );
+        assert_eq!(
+            classify("  runner: desktop {\"event\": \"permission-needed\"}\r"),
+            Some(Signal::DesktopPermission)
+        );
+    }
+
+    #[test]
+    fn other_desktop_lines_are_not_mistaken_for_a_state() {
+        // The control channel's other events are for later; none of them is a connection state.
+        for line in [
+            r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#,
+            r#"runner: desktop {"event":"session-ended","reason":"stopped"}"#,
+            r#"runner: desktop {"event":"headed-begin","seq":1}"#,
+            r#"runner: desktop {"event":"headed-end","seq":1}"#,
+            r#"runner: desktop {"event":"connected as d"}"#,
+            r#"runner: desktop {"event":"permission-needed""#,
+            r#"runner: desktop ["permission-needed"]"#,
+            "runner: desktop permission-needed",
+            "runner: desktop ",
+        ] {
+            assert_eq!(classify(line), None, "{line}");
+        }
+    }
+
+    #[test]
+    fn desktop_lines_are_signals_for_the_guard() {
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#),
+            Some(Signal::Desktop(DesktopEvent::SessionStarted {
+                label: "0123abcd".into()
+            }))
+        );
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"headed-end","seq":4}"#),
+            Some(Signal::Desktop(DesktopEvent::HeadedEnd { seq: 4 }))
+        );
+        // The permission line keeps its own signal, and the states read as before.
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"permission-needed"}"#),
+            Some(Signal::DesktopPermission)
+        );
+        assert_eq!(signal("runner: connected as d"), Some(Signal::Connected));
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"connected as d"}"#),
+            None
+        );
+        assert_eq!(signal("runner: closing any open browser"), None);
+    }
+
+    #[test]
     fn the_reason_is_bun_s_error_line_or_the_last_line() {
         let bun = [
             "283 |     throw new Error(".to_string(),
@@ -577,6 +712,10 @@ mod tests {
         killed: Vec<Duration>,
         states: Vec<State>,
         paired: u32,
+        permission: u32,
+        desktop: Vec<DesktopEvent>,
+        /// Each launch's output, so a test can speak for a runner after it has ended.
+        outputs: Vec<Output>,
     }
 
     struct FakeChild {
@@ -614,6 +753,7 @@ mod tests {
                 .unwrap()
                 .launches
                 .push((Instant::now(), pairing));
+            self.record.lock().unwrap().outputs.push(output.clone());
             let script = self.scripts.pop_front().unwrap_or_else(online);
             for line in &script.stderr {
                 output.stderr(line);
@@ -640,6 +780,12 @@ mod tests {
         }
         fn paired(&self) {
             self.0.lock().unwrap().paired += 1;
+        }
+        fn desktop_permission(&self) {
+            self.0.lock().unwrap().permission += 1;
+        }
+        fn desktop(&self, event: DesktopEvent) {
+            self.0.lock().unwrap().desktop.push(event);
         }
     }
 
@@ -839,6 +985,90 @@ mod tests {
                 State::Offline,
                 State::Stopped
             ]
+        );
+    }
+
+    #[test]
+    fn a_permission_line_brings_the_card_up_and_leaves_the_state_alone() {
+        let asking = Script {
+            stdout: vec![
+                "runner: connected as d",
+                r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#,
+                r#"runner: desktop {"event":"permission-needed"}"#,
+            ],
+            stderr: vec![],
+            exit: None,
+        };
+        let (mut supervisor, record) = supervise(vec![asking], quick(), false);
+        until(&supervisor, |s| *s == State::Online);
+        supervisor.stop();
+        let record = record.lock().unwrap();
+        assert_eq!(record.permission, 1);
+        assert_eq!(
+            record.states,
+            vec![State::Starting, State::Online, State::Stopped]
+        );
+    }
+
+    #[test]
+    fn the_session_s_lines_reach_the_observer_in_order_and_leave_the_state_alone() {
+        let session = Script {
+            stdout: vec![
+                "runner: connected as d",
+                r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#,
+                r#"runner: desktop {"event":"headed-begin","seq":1}"#,
+                r#"runner: desktop {"event":"permission-needed"}"#,
+                r#"runner: desktop {"event":"headed-end","seq":1}"#,
+                r#"runner: desktop {"event":"session-ended","reason":"stopped"}"#,
+            ],
+            stderr: vec![],
+            exit: None,
+        };
+        let (mut supervisor, record) = supervise(vec![session], quick(), false);
+        until(&supervisor, |s| *s == State::Online);
+        supervisor.stop();
+        let record = record.lock().unwrap();
+        assert_eq!(
+            record.desktop,
+            vec![
+                DesktopEvent::SessionStarted {
+                    label: "0123abcd".into()
+                },
+                DesktopEvent::HeadedBegin { seq: 1 },
+                DesktopEvent::HeadedEnd { seq: 1 },
+                DesktopEvent::SessionEnded {
+                    reason: "stopped".into()
+                },
+            ]
+        );
+        assert_eq!(record.permission, 1);
+        assert_eq!(
+            record.states,
+            vec![State::Starting, State::Online, State::Stopped]
+        );
+    }
+
+    #[test]
+    fn a_runner_s_late_desktop_lines_are_dropped_once_it_has_ended() {
+        let (mut supervisor, record) = supervise(vec![crash(), online()], quick(), false);
+        until(&supervisor, |s| *s == State::Online);
+        let (old, new) = {
+            let record = record.lock().unwrap();
+            (record.outputs[0].clone(), record.outputs[1].clone())
+        };
+        let line = r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#;
+        // The crashed runner's pipe still held a line: the guard has been reset since, and a
+        // banner for it would never be taken down.
+        old.stdout(line);
+        assert_eq!(record.lock().unwrap().desktop, vec![]);
+        new.stdout(line);
+        assert_eq!(record.lock().unwrap().desktop.len(), 1);
+        supervisor.stop();
+        new.stdout(line);
+        assert_eq!(
+            record.lock().unwrap().desktop.len(),
+            1,
+            "a stopped runner is over too"
         );
     }
 
