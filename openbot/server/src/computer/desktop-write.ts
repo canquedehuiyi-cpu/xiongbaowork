@@ -179,6 +179,13 @@ export function createDesktopWriteGate(deps: {
    * was refused; the waiter then goes on as if it were first.
    */
   const opening = new Map<string, Promise<string | undefined>>();
+  /*
+   * How many sessions this replica has opened, per key. A device's "no session" answer that left the
+   * device before an opening here finished is out of date by the time it arrives (the opening may
+   * already be done and gone from `opening`): when the count moved while the question was on its way,
+   * the device is asked again rather than a second session opened over the first.
+   */
+  const opened = new Map<string, number>();
 
   return {
     async run<T>(
@@ -235,16 +242,26 @@ export function createDesktopWriteGate(deps: {
 
       // 3. Whether the device can be written to now, and which session it holds.
       const address = runnerAddress(machine);
+      const key = desktopSessionKey(machine, botId, actor.id);
       let status: DesktopSessionStatus;
       try {
-        status = await post<DesktopSessionStatus>(
-          botId,
-          "/desktop/session_status",
-          { botId, actorId: actor.id },
-          signal,
-          DESKTOP_BACKSTOP_MS,
-          address,
-        );
+        for (;;) {
+          const before = opened.get(key) ?? 0;
+          status = await post<DesktopSessionStatus>(
+            botId,
+            "/desktop/session_status",
+            { botId, actorId: actor.id },
+            signal,
+            DESKTOP_BACKSTOP_MS,
+            address,
+          );
+          if (
+            status?.writable !== true ||
+            status.session?.token ||
+            (opened.get(key) ?? 0) === before
+          )
+            break;
+        }
       } catch (error) {
         if (signal?.aborted) throw error;
         // One refusal row, and the caller still gets the machine's own answer (offline, too old).
@@ -264,7 +281,6 @@ export function createDesktopWriteGate(deps: {
             : desktopMessage("failed"),
         );
 
-      const key = desktopSessionKey(machine, botId, actor.id);
       const reported = status.session?.token;
       let current =
         typeof reported === "string" && DESKTOP_SESSION_TOKEN.test(reported)
@@ -280,15 +296,15 @@ export function createDesktopWriteGate(deps: {
         pending && !current;
         pending = current ? undefined : opening.get(key)
       ) {
-        current = await pending;
-        signal?.throwIfAborted();
+        // Given up on its own, the waiter leaves: the opening it waited for goes on for the others.
+        current = await untilAborted(pending, signal);
       }
       // Still none: this write opens it, and any write for the same key from now on waits for it.
-      let opened: (token: string | undefined) => void = () => undefined;
+      let settle: (token: string | undefined) => void = () => undefined;
       const mine = current
         ? undefined
         : new Promise<string | undefined>((resolve) => {
-            opened = resolve;
+            settle = resolve;
           });
       if (mine) opening.set(key, mine);
       const session = current;
@@ -342,7 +358,8 @@ export function createDesktopWriteGate(deps: {
                 );
               }
               deps.sessions.set(key, minted);
-              opened(minted);
+              opened.set(key, (opened.get(key) ?? 0) + 1);
+              settle(minted);
               token = minted;
             }
             // 6. The write itself.
@@ -357,11 +374,34 @@ export function createDesktopWriteGate(deps: {
         );
       } finally {
         // Refused, failed or done: whoever waits goes on (with the token, if the session opened).
-        opened(undefined);
+        settle(undefined);
         if (mine && opening.get(key) === mine) opening.delete(key);
       }
     },
   };
+}
+
+/** `pending`, or the caller's abort first. Giving up never settles or cancels `pending` itself. */
+function untilAborted<T>(
+  pending: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (!signal) return pending;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    pending.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
 }
 
 /**

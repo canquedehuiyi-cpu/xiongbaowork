@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { offersStandingRule } from "../../shared/standing-rule";
 import {
   DESKTOP_WINDOW_UNKNOWN,
   desktopFloor,
@@ -210,5 +211,15 @@ describe("desktop floor without a policy store", () => {
     );
     expect(permit).toBeUndefined();
     expect(opened).toHaveLength(0);
+  });
+});
+
+describe("desktop floors offer no standing answer", () => {
+  test("opening a session and a sensitive desktop write are answered once only", () => {
+    for (const source of ["desktop_session", "desktop_action"]) {
+      expect(offersStandingRule({ policy: { source, behaviour: "ask" } })).toBe(
+        false,
+      );
+    }
   });
 });
