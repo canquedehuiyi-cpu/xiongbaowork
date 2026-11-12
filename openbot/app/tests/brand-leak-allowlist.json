@@ -830,7 +830,7 @@
     "reason": "persisted-identifier: message type in the Recorder page protocol"
   },
   {
-    "file": "server/src/tenant-package.ts",
+    "file": "server/src/tenant-package-path.ts",
     "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
     "reason": "persisted-identifier: the pre-rename tenant package directory name, matched only to redirect old TENANT_PACKAGE_DIR values"
   }

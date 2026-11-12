@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
+import { resolveTenantPackageDirectory } from "./tenant-package-path";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESSES, type Harness } from "@openbot/shared/harnesses";
@@ -894,29 +894,10 @@ async function readAgentFiles(sourcePath: string): Promise<PackageAgentFile[]> {
   );
 }
 
-const LEGACY_DIRECTORY = "qoderwake";
-
-/**
- * The package directory was renamed to examples/xiongbao. An explicit TENANT_PACKAGE_DIR written
- * before the rename would otherwise stop the boot, so a missing legacy path falls back to its sibling.
- * Every caller (server boot, scripts/generate-app-config.ts) goes through loadTenantPackage.
- */
-function resolveLegacyPackagePath(sourcePath: string): string {
-  const trimmed = sourcePath.replace(/[\\/]+$/, "");
-  const legacy = new RegExp(`examples[\\\\/]${LEGACY_DIRECTORY}$`);
-  if (!legacy.test(trimmed) || existsSync(trimmed)) return sourcePath;
-  const renamed = `${trimmed.slice(0, -LEGACY_DIRECTORY.length)}xiongbao`;
-  if (!existsSync(renamed)) return sourcePath;
-  console.warn(
-    `TENANT_PACKAGE_DIR ${sourcePath} no longer exists; using ${renamed}. Update TENANT_PACKAGE_DIR.`,
-  );
-  return renamed;
-}
-
 export async function loadTenantPackage(
   requestedPath: string,
 ): Promise<LoadedTenantPackage> {
-  const sourcePath = resolveLegacyPackagePath(requestedPath);
+  const sourcePath = resolveTenantPackageDirectory(requestedPath);
   const filenames = [
     "brand.yaml",
     "agents.yaml",

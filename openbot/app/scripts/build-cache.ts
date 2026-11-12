@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
+import { resolveTenantPackageDirectory } from "../../server/src/tenant-package-path";
 
 const MANIFEST_VERSION = 1;
 const MANIFEST_NAME = ".openbot-build-cache.json";
@@ -123,7 +124,7 @@ async function collectFiles(
 export function tenantPackageDir(rootDir: string, env: BuildCacheEnv): string {
   const configured = env.TENANT_PACKAGE_DIR;
   if (!configured) return join(rootDir, "examples", "xiongbao");
-  return resolve(rootDir, "server", configured);
+  return resolveTenantPackageDirectory(resolve(rootDir, "server", configured));
 }
 
 function viteEnvironment(env: BuildCacheEnv): Record<string, string> {

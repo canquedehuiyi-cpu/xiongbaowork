@@ -127,6 +127,22 @@ describe("production build cache", () => {
     });
   });
 
+  test("an old TENANT_PACKAGE_DIR spelling still hashes the renamed package", async () => {
+    // Without the redirect the missing directory hashes as empty and a brand edit would reuse a stale SPA.
+    const env = { TENANT_PACKAGE_DIR: "../examples/qoderwake" };
+    await withProject(async (paths) => {
+      const brand = join(paths.rootDir, "examples/xiongbao/brand.yaml");
+      await mkdir(join(paths.rootDir, "examples/xiongbao"), { recursive: true });
+      await writeFile(brand, "name: A\n");
+      expect(tenantPackageDir(paths.rootDir, env)).toBe(
+        join(paths.rootDir, "examples/xiongbao"),
+      );
+      await writeBuildCacheManifest(paths, env);
+      await writeFile(brand, "name: B\n");
+      expect(await isReusableBuild(paths, env)).toBe(false);
+    });
+  });
+
   test("rejects a build when Vite-exposed environment changes", async () => {
     await withProject(async (paths) => {
       await writeBuildCacheManifest(paths, { VITE_PUBLIC_NAME: "OpenBot" });
