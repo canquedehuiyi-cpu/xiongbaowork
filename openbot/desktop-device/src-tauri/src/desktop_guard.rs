@@ -47,10 +47,12 @@ pub fn stop_shortcut() -> Shortcut {
 }
 
 /// Why the stop key did not register.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum HotkeyError {
     /// The system refused it: another program holds Ctrl+Alt+Esc. The person is told in the tray.
     Taken(String),
+    /// Anything else (the system failed otherwise, the event loop is gone): only logged.
+    Failed(String),
     /// This system has no stop key (Linux, where nothing physical runs).
     Unsupported,
 }
@@ -58,9 +60,27 @@ pub enum HotkeyError {
 impl std::fmt::Display for HotkeyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HotkeyError::Taken(error) => write!(f, "{error}"),
+            HotkeyError::Taken(error) | HotkeyError::Failed(error) => write!(f, "{error}"),
             HotkeyError::Unsupported => write!(f, "this system has no stop key"),
         }
+    }
+}
+
+/// How global-hotkey 0.8 words the two refusals that mean the key is held: `AlreadyRegistered`
+/// (Windows' ERROR_HOTKEY_ALREADY_REGISTERED, or macOS's eventHotKeyExistsErr) and
+/// `FailedToRegister`. The plugin passes its errors on only as their text.
+pub const HOTKEY_TAKEN_PREFIXES: [&str; 2] =
+    ["HotKey already registered: ", "Unable to register hotkey: "];
+
+/// The global-hotkey error the plugin reported, as `message`: taken, or some other failure.
+pub fn hotkey_refusal(message: String) -> HotkeyError {
+    if HOTKEY_TAKEN_PREFIXES
+        .iter()
+        .any(|prefix| message.starts_with(prefix))
+    {
+        HotkeyError::Taken(message)
+    } else {
+        HotkeyError::Failed(message)
     }
 }
 
@@ -178,8 +198,11 @@ pub struct Guard {
     stopped: bool,
     /// Cursor reads that failed in a row during this session.
     cursor_failures: u32,
-    /// The mouse check's thread is running. The only field kept across sessions.
+    /// The mouse check's thread is running. Kept across sessions.
     mouse_check: bool,
+    /// The tray says the stop key is taken, until a later session registers it. Kept across
+    /// sessions.
+    taken_notice: bool,
 }
 
 impl Guard {
@@ -203,6 +226,7 @@ impl Guard {
                     setting_up: Some(label.clone()),
                     baseline: cursor,
                     mouse_check: self.mouse_check,
+                    taken_notice: self.taken_notice,
                     ..Guard::default()
                 };
                 let mut actions = Vec::new();
@@ -357,6 +381,7 @@ impl Guard {
     pub fn reset(&mut self) -> Vec<GuardAction> {
         *self = Guard {
             mouse_check: self.mouse_check,
+            taken_notice: self.taken_notice,
             ..Guard::default()
         };
         vec![GuardAction::HideBanner, GuardAction::UnregisterHotkey]
@@ -385,14 +410,16 @@ pub trait Effects {
     fn unregister_hotkey(&mut self);
     /// Tell the person, in the tray.
     fn notice(&mut self, text: &'static str);
+    /// The tray shows the state again instead of the notice.
+    fn clear_notice(&mut self);
     /// One line to the runner's stdin.
     fn send(&mut self, line: &str) -> std::io::Result<()>;
 }
 
 /// Carry `actions` out, in order. Once the banner or the stop key fails, nothing more is brought up
 /// or promised in this batch (no later banner, key, ack or ready); hiding, unregistering and stops
-/// still go through; a stop key another program holds is also said in the tray. A session being set
-/// up then gets its answer from [`Guard::on_setup`] (which
+/// still go through; a stop key another program holds is also said in the tray, until a later one
+/// registers. A session being set up then gets its answer from [`Guard::on_setup`] (which
 /// also needs [`Guard::mouse_ready`]), and those actions are carried out too. A stop the runner
 /// could not be told is left unsaid in the guard, to be said again; other lines that fail are logged.
 pub fn apply(guard: &mut Guard, actions: Vec<GuardAction>, effects: &mut dyn Effects) {
@@ -416,14 +443,23 @@ pub fn apply(guard: &mut Guard, actions: Vec<GuardAction>, effects: &mut dyn Eff
             }
             GuardAction::RegisterHotkey => {
                 if failed.is_none() {
-                    if let Err(error) = effects.register_hotkey() {
-                        eprintln!(
-                            "[device] the stop key {STOP_SHORTCUT} was not registered: {error}"
-                        );
-                        if matches!(error, HotkeyError::Taken(_)) {
-                            effects.notice(HOTKEY_TAKEN_NOTICE);
+                    match effects.register_hotkey() {
+                        Ok(()) => {
+                            if guard.taken_notice {
+                                guard.taken_notice = false;
+                                effects.clear_notice();
+                            }
                         }
-                        failed = Some(HOTKEY_FAILED);
+                        Err(error) => {
+                            eprintln!(
+                                "[device] the stop key {STOP_SHORTCUT} was not registered: {error}"
+                            );
+                            if matches!(error, HotkeyError::Taken(_)) {
+                                guard.taken_notice = true;
+                                effects.notice(HOTKEY_TAKEN_NOTICE);
+                            }
+                            failed = Some(HOTKEY_FAILED);
+                        }
                     }
                 }
             }
@@ -929,12 +965,16 @@ mod tests {
         hotkey_fails: bool,
         /// This system has no stop key.
         hotkey_unsupported: bool,
+        /// The stop key failed otherwise (the event loop is gone).
+        hotkey_broken: bool,
         /// How many of the next writes to the runner fail.
         send_fails: u32,
         done: Vec<String>,
         sent: Vec<String>,
         /// What the tray told the person.
         notices: Vec<String>,
+        /// How often the tray went back to showing the state.
+        cleared: u32,
     }
 
     impl Effects for Record {
@@ -962,6 +1002,9 @@ mod tests {
             if self.hotkey_unsupported {
                 return Err(HotkeyError::Unsupported);
             }
+            if self.hotkey_broken {
+                return Err(HotkeyError::Failed("event loop closed".into()));
+            }
             self.done.push("register".into());
             Ok(())
         }
@@ -970,6 +1013,9 @@ mod tests {
         }
         fn notice(&mut self, text: &'static str) {
             self.notices.push(text.into());
+        }
+        fn clear_notice(&mut self) {
+            self.cleared += 1;
         }
         fn send(&mut self, line: &str) -> std::io::Result<()> {
             if self.send_fails > 0 {
@@ -1257,6 +1303,71 @@ mod tests {
             vec![r#"{"control":"session-failed","label":"0123abcd","reason":"停止键没能注册"}"#]
         );
         assert_eq!(effects.notices, Vec::<String>::new());
+    }
+
+    #[test]
+    fn only_a_refusal_of_the_key_is_taken() {
+        let taken = [
+            "HotKey already registered: HotKey { mods: Modifiers(CONTROL | ALT), key: Escape, id: 1 }",
+            "Unable to register hotkey: OSStatus -9878",
+        ];
+        for message in taken {
+            assert_eq!(
+                hotkey_refusal(message.into()),
+                HotkeyError::Taken(message.into())
+            );
+        }
+        for message in [
+            "Access is denied. (os error 5)",
+            "failed to receive message",
+            "Failed to unregister hotkey: HotKey { .. }",
+            "",
+        ] {
+            assert_eq!(
+                hotkey_refusal(message.into()),
+                HotkeyError::Failed(message.into())
+            );
+        }
+    }
+
+    #[test]
+    fn a_stop_key_that_fails_otherwise_fails_the_session_without_saying_taken() {
+        let mut effects = Record {
+            hotkey_broken: true,
+            ..Record::default()
+        };
+        let guard = start(&mut effects);
+        assert_eq!(
+            effects.sent,
+            vec![r#"{"control":"session-failed","label":"0123abcd","reason":"停止键没能注册"}"#]
+        );
+        assert_eq!(effects.notices, Vec::<String>::new());
+        assert!(!guard.is_polling());
+    }
+
+    #[test]
+    fn the_tray_goes_back_to_the_state_only_after_the_key_was_taken() {
+        let mut effects = Record::default();
+        let mut guard = start(&mut effects);
+        assert_eq!(effects.cleared, 0, "nothing to take back");
+
+        // Taken: said once, then the next session that registers takes it back, once.
+        let end = guard.on_event(&ended(), None);
+        apply(&mut guard, end, &mut effects);
+        effects.hotkey_fails = true;
+        let actions = guard.on_event(&started("89abcdef"), Some((0.0, 0.0)));
+        apply(&mut guard, actions, &mut effects);
+        assert_eq!(effects.notices, vec![HOTKEY_TAKEN_NOTICE]);
+        assert_eq!(effects.cleared, 0);
+        effects.hotkey_fails = false;
+        for label in ["01234567", "76543210"] {
+            let actions = guard.on_event(&started(label), Some((0.0, 0.0)));
+            apply(&mut guard, actions, &mut effects);
+            let end = guard.on_event(&ended(), None);
+            apply(&mut guard, end, &mut effects);
+        }
+        assert_eq!(effects.cleared, 1);
+        assert_eq!(effects.notices, vec![HOTKEY_TAKEN_NOTICE]);
     }
 
     #[test]

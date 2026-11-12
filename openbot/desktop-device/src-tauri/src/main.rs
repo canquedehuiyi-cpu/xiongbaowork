@@ -226,11 +226,7 @@ impl Effects for Shell<'_> {
     }
 
     fn register_hotkey(&mut self) -> Result<(), HotkeyError> {
-        register_stop_key(self.0)?;
-        // A stop key that was taken last time is not any more.
-        let state = self.0.state::<Device>().state.lock().unwrap().clone();
-        show_state(self.0, &state);
-        Ok(())
+        register_stop_key(self.0)
     }
 
     fn unregister_hotkey(&mut self) {
@@ -241,12 +237,17 @@ impl Effects for Shell<'_> {
         eprintln!("[device] {text}");
         let device = self.0.state::<Device>();
         let state = device.state.lock().unwrap().label();
-        if let Some(item) = device.status_item.lock().unwrap().as_ref() {
+        if let Some(item) = menu_item(&device.status_item) {
             let _ = item.set_text(format!("状态：{state} · {text}"));
         }
         if let Some(tray) = self.0.tray_by_id("device") {
             let _ = tray.set_tooltip(Some(format!("{PRODUCT} · {text}")));
         }
+    }
+
+    fn clear_notice(&mut self) {
+        let state = self.0.state::<Device>().state.lock().unwrap().clone();
+        show_state(self.0, &state);
     }
 
     fn send(&mut self, line: &str) -> std::io::Result<()> {
@@ -266,7 +267,14 @@ fn register_stop_key(app: &AppHandle) -> Result<(), HotkeyError> {
     };
     shortcuts
         .register(desktop_guard::stop_shortcut())
-        .map_err(|error| HotkeyError::Taken(error.to_string()))
+        .map_err(|error| match error {
+            // The system's refusal: only some of these mean another program holds the key.
+            tauri_plugin_global_shortcut::Error::GlobalHotkey(message) => {
+                desktop_guard::hotkey_refusal(message)
+            }
+            // The event loop is gone or never answered: nothing to tell the person.
+            other => HotkeyError::Failed(other.to_string()),
+        })
 }
 
 /// Must be harmless when the key is not registered: a failed or replaced session unregisters too.
@@ -304,15 +312,16 @@ fn stop_key_plugin() -> tauri::plugin::TauriPlugin<Wry> {
 }
 
 fn set_stop_desktop_item(app: &AppHandle, enabled: bool) {
-    if let Some(item) = app
-        .state::<Device>()
-        .stop_desktop_item
-        .lock()
-        .unwrap()
-        .as_ref()
-    {
+    if let Some(item) = menu_item(&app.state::<Device>().stop_desktop_item) {
         let _ = item.set_enabled(enabled);
     }
+}
+
+/// A tray menu item, cloned out of its slot so the slot's lock is not held while the item changes:
+/// off the main thread, changing it waits for the main thread, which takes these locks too (`quit`,
+/// `restart_app`, the tray's menu).
+fn menu_item<T: Clone>(slot: &Mutex<Option<T>>) -> Option<T> {
+    slot.lock().unwrap().clone()
 }
 
 /// The banner, made at start-up and kept hidden until a session (see `desktop_guard::BANNER_WINDOW`).
@@ -371,7 +380,7 @@ fn watch_the_mouse(app: &AppHandle) {
 
 fn show_state(app: &AppHandle, state: &State) {
     let label = state.label();
-    if let Some(item) = app.state::<Device>().status_item.lock().unwrap().as_ref() {
+    if let Some(item) = menu_item(&app.state::<Device>().status_item) {
         let _ = item.set_text(format!("状态：{label}"));
     }
     if let Some(tray) = app.tray_by_id("device") {
@@ -380,13 +389,7 @@ fn show_state(app: &AppHandle, state: &State) {
 }
 
 fn set_autostart_check(app: &AppHandle, on: bool) {
-    if let Some(item) = app
-        .state::<Device>()
-        .autostart_item
-        .lock()
-        .unwrap()
-        .as_ref()
-    {
+    if let Some(item) = menu_item(&app.state::<Device>().autostart_item) {
         let _ = item.set_checked(on);
     }
 }
@@ -441,7 +444,7 @@ fn quit(app: &AppHandle) {
     if device.quitting.swap(true, Ordering::SeqCst) {
         return;
     }
-    if let Some(item) = device.status_item.lock().unwrap().as_ref() {
+    if let Some(item) = menu_item(&device.status_item) {
         let _ = item.set_text("状态：正在退出…");
     }
     let app = app.clone();
@@ -680,7 +683,7 @@ fn restart_app(app: AppHandle) {
     if device.quitting.swap(true, Ordering::SeqCst) {
         return;
     }
-    if let Some(item) = device.status_item.lock().unwrap().as_ref() {
+    if let Some(item) = menu_item(&device.status_item) {
         let _ = item.set_text("状态：正在重新打开…");
     }
     // The new process gets this one's arguments, `--autostart` included: this note makes it show
