@@ -8,6 +8,10 @@ import {
   HeadlessToolSuspension,
 } from "@openbot/toolkit/headless-tools";
 import { z } from "zod";
+import {
+  DESKTOP_SESSION_TOOL,
+  DESKTOP_WRITE_TOOLS,
+} from "../approvals/desktop-policy";
 import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { ComputerSeat } from "./computer-key";
@@ -87,9 +91,14 @@ export function createHeadlessComputerTools(options: {
 }): HeadlessTool[] {
   const tools = headlessComputerTools(options);
   const { disabled } = options;
-  return disabled
-    ? tools.filter((tool) => !disabled(tool.definition.name))
-    : tools;
+  if (!disabled) return tools;
+  // Operating the desktop disabled takes every desktop write tool with it.
+  const noDesktopWrites = disabled(DESKTOP_SESSION_TOOL);
+  return tools.filter(
+    (tool) =>
+      !disabled(tool.definition.name) &&
+      !(noDesktopWrites && DESKTOP_WRITE_TOOLS.has(tool.definition.name)),
+  );
 }
 
 function headlessComputerTools(options: {

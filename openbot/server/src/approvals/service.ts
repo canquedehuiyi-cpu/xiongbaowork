@@ -14,7 +14,7 @@ import {
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { PERSON_INITIATOR } from "../audit";
 import { currentTenant } from "../tenant/context";
-import { desktopFloor } from "./desktop-policy";
+import { DESKTOP_SESSION_TOOL, desktopFloor } from "./desktop-policy";
 import {
   ApprovalFreshError,
   createApprovalFreshCoordinator,
@@ -959,6 +959,10 @@ export function createApprovalService(
       if (employee.ownerUserId !== ownerUserId)
         throw new ApprovalRefusedError(
           "Only this Bot's owner can change what it may do.",
+        );
+      if (mode === "direct" && toolRef === DESKTOP_SESSION_TOOL)
+        throw new ApprovalRefusedError(
+          "操作桌面每次开始前都要你批准，不能设为直接。",
         );
       if (
         mode === "direct" &&

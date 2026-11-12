@@ -43,6 +43,25 @@ export function desktopFloor(
  * refuses every write at the gateway, before the device is asked anything.
  */
 export const DESKTOP_SESSION_TOOL = "computer_desktop_session";
+
+/**
+ * The tools that write to the desktop: one per `DesktopWriteAction`, named `computer_desktop_<action>`.
+ * With the session row disabled none of them is offered to the model (headless tools) and every one
+ * is refused outright (`refusedOutright`).
+ */
+export const DESKTOP_WRITE_TOOLS: ReadonlySet<string> = new Set(
+  (
+    [
+      "click",
+      "type",
+      "key",
+      "focus",
+      "launch",
+      "clipboard_read",
+      "clipboard_write",
+    ] satisfies DesktopWriteAction[]
+  ).map((action) => `computer_desktop_${action}`),
+);
 export const DESKTOP_SESSION_REASON =
   "员工要开始操作你的电脑（最长 60 分钟，15 分钟没有操作自动结束），必要时会移动你的鼠标。屏幕顶部会显示提示条，按 Ctrl+Alt+Esc（Mac 上 ⌃⌥⎋）或移动鼠标即可停止。";
 

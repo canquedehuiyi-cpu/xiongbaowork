@@ -77,6 +77,8 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   app_enable: "启用本机应用",
   // --- desktop control (sub-project 2) ---
   desktop_window: "敏感窗口",
+  desktop_session: "桌面会话",
+  desktop_action: "桌面操作",
   // --- end desktop control ---
   destructive_tool: "删除类操作",
   outbound_send: "对外发送",

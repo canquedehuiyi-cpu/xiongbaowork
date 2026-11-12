@@ -4,6 +4,7 @@ import { desktopActionWordsOf } from "../../../shared/desktop-control";
 import {
   activeDesktopSession,
   type DesktopFloor,
+  DESKTOP_SESSION_TOOL,
   desktopFloors,
   desktopOnceOnly,
 } from "./desktop-policy";
@@ -2115,19 +2116,26 @@ export function refusedOutright(input: {
     ...(input.owner ? { owner: input.owner } : {}),
     customRulesEnabled: input.customRulesEnabled,
   });
-  const matched = strictestRule(
-    input.candidate,
-    input.team,
-    layers.personal,
-    layers.owner,
-  );
-  if (matched && rankOf(matched.rule.behaviour) >= RANK.deny)
-    return {
-      behaviour: "deny",
-      source: matched.layer,
-      ruleId: matched.rule.id,
-      reason: TOOL_DISABLED,
-    };
+  // A desktop write is also governed by the permissions row for operating the desktop at all:
+  // disabling that row disables every desktop write.
+  const asked = input.candidate.subject?.desktopWrite
+    ? [input.candidate, { ...input.candidate, toolRef: DESKTOP_SESSION_TOOL }]
+    : [input.candidate];
+  for (const candidate of asked) {
+    const matched = strictestRule(
+      candidate,
+      input.team,
+      layers.personal,
+      layers.owner,
+    );
+    if (matched && rankOf(matched.rule.behaviour) >= RANK.deny)
+      return {
+        behaviour: "deny",
+        source: matched.layer,
+        ruleId: matched.rule.id,
+        reason: TOOL_DISABLED,
+      };
+  }
   if (
     (isRunnerCommand(input.candidate) || isRunnerAppListing(input.candidate)) &&
     input.hostCommandsCap === "never"
