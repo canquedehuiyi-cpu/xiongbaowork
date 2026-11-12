@@ -110,10 +110,11 @@ EOP
     powershell -NoProfile -Command "Start-Process powershell -ArgumentList '-NoProfile','-STA','-File','$(cygpath -w "$OUT/form.ps1")'"
     WIN_RE='XB Sample Form' ;;
   macos)
-    (osascript -e 'display dialog "XB password" default answer "secret123" with hidden answer with title "XB Password Dialog"' >/dev/null 2>&1 &)
-    sleep 3
+    swiftc -o "$OUT/xbform" .github/spike/form.swift 2>&1 | tail -5
+    ("$OUT/xbform" >"$OUT/xbform.log" 2>&1 &)
+    sleep 5
     printf 'hello\n' > "$OUT/sample.txt"; open -a TextEdit "$OUT/sample.txt"
-    WIN_RE='^osascript$' ;;
+    WIN_RE='XB Sample Form' ;;
   linux)
     (zenity --password --title "XB Password Dialog" >/dev/null 2>&1 &)
     (zenity --entry --title "XB Entry Dialog" --text "single" >/dev/null 2>&1 &)
@@ -192,7 +193,7 @@ for f in $(find "$AGENT_DESKTOP_HOME" -type f | head -5); do echo "--- $f"; head
 note "== (i) 关窗之后用旧编号写 =="
 case "$P" in
   windows) powershell -NoProfile -Command "Get-Process powershell | Where-Object { \$_.MainWindowTitle -eq 'XB Sample Form' } | Stop-Process -Force" ;;
-  macos) pkill TextEdit; pkill osascript ;;
+  macos) pkill TextEdit; pkill xbform ;;
   linux) pkill gedit; pkill zenity ;;
 esac
 sleep 3
