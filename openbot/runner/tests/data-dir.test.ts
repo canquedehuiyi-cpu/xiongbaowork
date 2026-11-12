@@ -235,3 +235,70 @@ test("start-up wipes agent-desktop's state directory without any desktop action,
     "runner: could not clear the desktop state directory",
   );
 });
+
+test("M7: an unknown engine is the default engine, said once on stderr, when there is someone to tell", () => {
+  const told: string[] = [];
+  const tell = (line: string) => told.push(line);
+  for (const [argv, env] of [
+    [["--desktop-engine", "uia"], {}],
+    [["--desktop-engine", "agent_desktop"], {}],
+    [["--desktop-engine"], {}],
+    [[], { OPENBOT_DESKTOP_ENGINE: "Agent-Desktop" }],
+  ] as const) {
+    const result = parseArgs([...SERVER, ...argv], { ...env }, "/launch", tell);
+    if (typeof result === "string") throw new Error(result);
+    // As if it were not set: never taken for agent-desktop.
+    expect(result.desktop.engine).toBeUndefined();
+    expect(result.desktop.stateDir).toBe("/launch/agent-desktop-state");
+  }
+  expect(told).toHaveLength(4);
+  expect(told[0]).toBe(
+    "runner: 桌面引擎「uia」不认识（只能是 legacy 或 agent-desktop），按未设置处理。",
+  );
+  expect(told[2]).toBe(
+    "runner: 桌面引擎「」不认识（只能是 legacy 或 agent-desktop），按未设置处理。",
+  );
+  // A known engine says nothing.
+  const quiet: string[] = [];
+  const known = parseArgs(
+    [...SERVER, "--desktop-engine", "agent-desktop"],
+    {},
+    "/launch",
+    (line) => quiet.push(line),
+  );
+  if (typeof known === "string") throw new Error(known);
+  expect(known.desktop.engine).toBe("agent-desktop");
+  expect(quiet).toEqual([]);
+});
+
+test("M7: main starts with an unknown engine and says so on stderr", async () => {
+  const dataDir = join(root, "engine");
+  const asked: string[] = [];
+  const said: string[] = [];
+  const error = console.error;
+  console.error = (...args: unknown[]) => {
+    said.push(args.map(String).join(" "));
+  };
+  try {
+    // Past the arguments: it asks for its token (none here), so it did not stop at the engine.
+    expect(
+      await main(
+        [...SERVER, "--data-dir", dataDir, "--desktop-engine", "agent_desktop"],
+        (stateFile) => {
+          asked.push(stateFile);
+          return {
+            location: "test keychain",
+            load: async () => null,
+            save: async () => {},
+          };
+        },
+      ),
+    ).toBe(2);
+  } finally {
+    console.error = error;
+  }
+  expect(asked).toEqual([join(dataDir, "runner-state.json")]);
+  expect(said[0]).toBe(
+    "runner: 桌面引擎「agent_desktop」不认识（只能是 legacy 或 agent-desktop），按未设置处理。",
+  );
+});
