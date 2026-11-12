@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { DEFAULT_SKIN, SKIN_IDS, type SkinId } from "./types";
 import { readMigrated } from "@/lib/storage-migrate";
+import { DEFAULT_SKIN, SKIN_IDS, type SkinId } from "./types";
 
 /*
  * The skin is saved on the person's account (`skin` in their preferences), so it follows them to
@@ -43,6 +43,8 @@ export function clearCachedSkin(
   effects: Pick<SkinEffects, "removeStoredValue" | "setRootSkin">,
 ) {
   effects.removeStoredValue(SKIN_STORAGE_KEY);
+  // A legacy key left behind would hand the previous person's skin to the next one on a shared machine.
+  effects.removeStoredValue(LEGACY_SKIN_STORAGE_KEY);
   effects.setRootSkin(null);
 }
 

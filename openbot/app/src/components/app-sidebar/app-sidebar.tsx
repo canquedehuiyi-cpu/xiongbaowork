@@ -49,6 +49,7 @@ import {
   useNavigationItems,
 } from "@/lib/navigation";
 import { useMessageListEmphasis } from "@/lib/settings/message-list";
+import { readMigrated } from "@/lib/storage-migrate";
 import { cn } from "@/lib/utils";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelPagination } from "./channel-pagination";
@@ -56,7 +57,6 @@ import { ChannelRow } from "./channel-row";
 import { listedEmployees, matchingChannels, pinnedFirst } from "./roster";
 import { SidebarAccount } from "./sidebar-account";
 import { EmployeeList, GroupList } from "./sidebar-roster";
-import { readMigrated } from "@/lib/storage-migrate";
 
 /*
  * The roster helpers live in roster.ts; re-exported here because the channel screen, the skins and

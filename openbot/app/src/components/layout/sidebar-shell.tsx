@@ -12,15 +12,15 @@ import {
 } from "@/components/ui/sidebar";
 import {
   applySidebarOpen,
-  parseStoredSidebarOpen,
-  parseStoredSidebarWidth,
   LEGACY_SIDEBAR_STORAGE_KEY,
   LEGACY_SIDEBAR_WIDTH_STORAGE_PREFIX,
+  parseStoredSidebarOpen,
+  parseStoredSidebarWidth,
   SIDEBAR_STORAGE_KEY,
   SIDEBAR_WIDTH_STORAGE_PREFIX,
 } from "@/lib/sidebar";
-import { cn } from "@/lib/utils";
 import { readMigrated } from "@/lib/storage-migrate";
+import { cn } from "@/lib/utils";
 
 /**
  * The sidebar's gutters: the header, content and footer already sit 8px in from the edge; every

@@ -5,13 +5,13 @@ import {
   useEffect,
   useState,
 } from "react";
+import { readMigrated } from "@/lib/storage-migrate";
 import {
   applyDarkTheme,
-  parseStoredDarkTheme,
   LEGACY_THEME_STORAGE_KEY,
+  parseStoredDarkTheme,
   THEME_STORAGE_KEY,
 } from "@/lib/theme";
-import { readMigrated } from "@/lib/storage-migrate";
 
 type ThemeContextValue = {
   dark: boolean;
