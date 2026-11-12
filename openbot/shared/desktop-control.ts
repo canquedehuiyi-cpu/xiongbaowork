@@ -38,7 +38,37 @@ export const DESKTOP_LIMITS = {
   snapshotsKept: 16,
   /** Time budget for one tree walk inside the helper; past it the walk stops and is `truncated`. */
   walkBudgetMs: 12_000,
+  /** One agent-desktop command, from spawn to its envelope. */
+  adCommandTimeoutMs: 20_000,
+  /** One agent-desktop `snapshot`. */
+  adSnapshotTimeoutMs: 10_000,
+  /** agent-desktop's state directory is wiped after this long without a command. */
+  adIdleWipeMs: 600_000,
+  /** Window ids the runner keeps a mapping for; the oldest is dropped beyond this. */
+  windowIdsKept: 200,
 } as const;
+
+/** The agent-desktop release the runner is built against; any other version is refused. */
+export const AGENT_DESKTOP_VERSION = "1.2.0";
+
+export type DesktopEngine = "legacy" | "agent-desktop";
+export type DesktopPlatform = "windows" | "macos" | "linux";
+
+/** The desktop platform for a Node `process.platform`, or nothing for a system with no desktop engine. */
+export function desktopPlatformOf(
+  nodePlatform: string,
+): DesktopPlatform | undefined {
+  switch (nodePlatform) {
+    case "win32":
+      return "windows";
+    case "darwin":
+      return "macos";
+    case "linux":
+      return "linux";
+    default:
+      return undefined;
+  }
+}
 
 export type DesktopErrorCode =
   | "not_windows"
@@ -50,6 +80,12 @@ export type DesktopErrorCode =
   | "session0"
   | "sensitive"
   | "unsupported"
+  | "unsupported_platform"
+  | "mac_permission"
+  | "linux_bus"
+  | "policy_denied"
+  | "ambiguous"
+  | "not_actionable"
   | "failed";
 
 /** The Chinese text for a desktop failure. `detail` is the stderr tail, seconds, word or details. */
@@ -76,6 +112,18 @@ export function desktopMessage(
       return `这个窗口的标题刚刚变成含「${detail || "敏感词"}」，需要先获得批准才能读取。请重新列出窗口后再试。`;
     case "unsupported":
       return "设备端目前只能列出和读取窗口，不能执行这个桌面动作。";
+    case "unsupported_platform":
+      return "这台设备的系统不支持桌面操作。";
+    case "mac_permission":
+      return "这台 Mac 还没有允许设备端操作界面，请在设备端的『桌面操作』里开启。";
+    case "linux_bus":
+      return "这台 Linux 电脑没有开启无障碍总线（AT-SPI），看不到窗口。请在系统设置里打开辅助功能后重新登录。";
+    case "policy_denied":
+      return "这个控件不支持直接操作，请换一种方式（例如用快捷键）。";
+    case "ambiguous":
+      return "这个控件没有可识别的名字，无法确定要操作哪一个。";
+    case "not_actionable":
+      return "这个控件不能直接操作，请换一个控件或用快捷键。";
     case "failed":
       return detail ? `桌面操作没有成功：${detail}` : "桌面操作没有成功。";
   }
@@ -110,10 +158,19 @@ export function sensitiveWord(
 export const DESKTOP_REF = /^[0-9a-f]{6}-[1-9]\d{0,8}:\d{1,4}$/;
 
 /**
- * A window id: `w<window handle in decimal>-<process id>`. The handle is signed: a 64-bit process
- * sign-extends a window handle, so one with its top bit set reads as negative (`w-2147483000-77`).
+ * A window id: the phase-1 `w<window handle in decimal>-<process id>` or the agent-desktop engine's
+ * `a<16 hex>`. The handle is signed: a 64-bit process sign-extends a window handle, so one with its
+ * top bit set reads as negative (`w-2147483000-77`).
  */
-export const DESKTOP_WINDOW_ID = /^w-?[1-9]\d{0,19}-[1-9]\d{0,9}$/;
+export const DESKTOP_WINDOW_ID =
+  /^(?:w-?[1-9]\d{0,19}-[1-9]\d{0,9}|a[0-9a-f]{16})$/;
+
+/** The phase-1 form alone; `parseWindowId` splits only this one. */
+const LEGACY_WINDOW_ID = /^w-?[1-9]\d{0,19}-[1-9]\d{0,9}$/;
+
+export function isAgentWindowId(id: string): boolean {
+  return typeof id === "string" && /^a[0-9a-f]{16}$/.test(id);
+}
 
 export function windowIdOf(hwnd: string, pid: number): string {
   return `w${hwnd}-${pid}`;
@@ -122,7 +179,7 @@ export function windowIdOf(hwnd: string, pid: number): string {
 export function parseWindowId(
   id: unknown,
 ): { hwnd: string; pid: number } | undefined {
-  if (typeof id !== "string" || !DESKTOP_WINDOW_ID.test(id)) return undefined;
+  if (typeof id !== "string" || !LEGACY_WINDOW_ID.test(id)) return undefined;
   // The process id never has a sign, so the last dash is the separator.
   const dash = id.lastIndexOf("-");
   return { hwnd: id.slice(1, dash), pid: Number(id.slice(dash + 1)) };
@@ -134,6 +191,9 @@ export type DesktopWindow = {
   process: string;
   focused: boolean;
   minimized: boolean;
+  /** The display it is on, as an index into list-displays (0 is the primary); agent-desktop engine only. */
+  display?: number;
+  bounds?: { x: number; y: number; width: number; height: number };
 };
 
 export type DesktopElement = {
@@ -145,6 +205,8 @@ export type DesktopElement = {
   disabled?: true;
   /** A password box: its value is never read. */
   password?: true;
+  /** A single-line text box (as opposed to a multi-line one). */
+  singleLine?: true;
 };
 
 export type DesktopImage = { base64: string; width: number; height: number };

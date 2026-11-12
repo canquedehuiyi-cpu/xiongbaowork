@@ -6,6 +6,8 @@ import {
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
   desktopMessage,
+  desktopPlatformOf,
+  isAgentWindowId,
   parseWindowId,
   sensitiveWord,
   windowIdOf,
@@ -63,6 +65,10 @@ describe("desktop-control protocol", () => {
       windowsMax: 50,
       snapshotsKept: 16,
       walkBudgetMs: 12_000,
+      adCommandTimeoutMs: 20_000,
+      adSnapshotTimeoutMs: 10_000,
+      adIdleWipeMs: 600_000,
+      windowIdsKept: 200,
     });
   });
 
@@ -124,5 +130,47 @@ describe("desktop-control protocol", () => {
       "w+12-7",
     ])
       expect(parseWindowId(junk)).toBeUndefined();
+  });
+
+  test("new codes carry the spec's copy", () => {
+    expect(desktopMessage("unsupported_platform")).toBe(
+      "这台设备的系统不支持桌面操作。",
+    );
+    expect(desktopMessage("mac_permission")).toBe(
+      "这台 Mac 还没有允许设备端操作界面，请在设备端的『桌面操作』里开启。",
+    );
+    expect(desktopMessage("linux_bus")).toBe(
+      "这台 Linux 电脑没有开启无障碍总线（AT-SPI），看不到窗口。请在系统设置里打开辅助功能后重新登录。",
+    );
+    expect(desktopMessage("policy_denied")).toBe(
+      "这个控件不支持直接操作，请换一种方式（例如用快捷键）。",
+    );
+    expect(desktopMessage("ambiguous")).toBe(
+      "这个控件没有可识别的名字，无法确定要操作哪一个。",
+    );
+    expect(desktopMessage("not_actionable")).toBe(
+      "这个控件不能直接操作，请换一个控件或用快捷键。",
+    );
+  });
+
+  test("window ids: the legacy and the agent-desktop forms both pass, junk does not", () => {
+    expect(DESKTOP_WINDOW_ID.test("a0123456789abcdef")).toBe(true);
+    expect(isAgentWindowId("a0123456789abcdef")).toBe(true);
+    expect(isAgentWindowId("w132456-77")).toBe(false);
+    expect(DESKTOP_WINDOW_ID.test("w132456-77")).toBe(true);
+    for (const junk of ["a0123456789abcde", "A0123456789ABCDEF", "w0-1"]) {
+      expect(DESKTOP_WINDOW_ID.test(junk)).toBe(false);
+      expect(isAgentWindowId(junk)).toBe(false);
+    }
+    // An agent id is not a legacy `w<hwnd>-<pid>`.
+    expect(parseWindowId("a0123456789abcdef")).toBeUndefined();
+  });
+
+  test("desktopPlatformOf maps win32, darwin, linux and nothing else", () => {
+    expect(desktopPlatformOf("win32")).toBe("windows");
+    expect(desktopPlatformOf("darwin")).toBe("macos");
+    expect(desktopPlatformOf("linux")).toBe("linux");
+    for (const other of ["freebsd", "aix", "", "Windows"])
+      expect(desktopPlatformOf(other)).toBeUndefined();
   });
 });
