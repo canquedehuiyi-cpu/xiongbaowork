@@ -1,5 +1,6 @@
 import {
   classifyDesktopKeys,
+  DESKTOP_APP_NAME,
   DESKTOP_LIMITS,
   DESKTOP_REF,
   DESKTOP_TEXT_ROLES,
@@ -24,6 +25,7 @@ import {
   runnerAddress,
 } from "../devices/channel";
 import type { DesktopStoppedInfo } from "../devices/socket";
+import { withUntrustedNotice } from "../untrusted-content";
 import { computerActionIdentity } from "./action-identity";
 import {
   DESKTOP_BACKSTOP_MS,
@@ -183,6 +185,12 @@ export type DesktopWriteInput = {
         tenantId: string;
         deviceId: string;
       }) => Promise<DesktopWriteResolved>);
+  /**
+   * What is known of a write worked out only once the machine is (`subject` a function) before it
+   * is: for the row and the candidate of a refusal before that (a write with no window, by its
+   * program). The subject worked out later replaces it.
+   */
+  known?: DesktopWriteFacts;
   /** Typed text, by its length: for the row. */
   textLength?: number;
   signal?: AbortSignal;
@@ -359,11 +367,8 @@ export function createDesktopWriteGate(deps: {
       const { signal } = input;
       const given =
         typeof input.subject === "function" ? undefined : input.subject;
-      let row = rowOf(
-        given ?? { action: input.action },
-        input.windowId,
-        input.textLength,
-      );
+      const early = given ?? input.known ?? { action: input.action };
+      let row = rowOf(early, input.windowId, input.textLength);
       const refuse = (refusal: string) =>
         refuseOn(machine, toolName, botId, actor, refusal, row, signal);
 
@@ -387,10 +392,7 @@ export function createDesktopWriteGate(deps: {
           args,
           subject: {
             runner: true,
-            desktopWrite: {
-              ...(given ?? { action: input.action }),
-              session: "none",
-            },
+            desktopWrite: { ...early, session: "none" },
           },
         };
         const refused = await deps.approvalRefusal?.(asked);
@@ -619,7 +621,10 @@ export function createDesktopStoppedHandler(deps: {
 }
 
 /*
- * THE FOUR WRITES (plan Task 22): click, type, key and focus, each through the gate above.
+ * THE FOUR WRITES (plan Task 22): click, type, key and focus, each through the gate above. Three more
+ * with no window (plan Task 25): launch a program by its name, read the clipboard (asked every time,
+ * by its own floor; what it held is outside content, and its row has its length only), and put text
+ * on the clipboard (its row has the length, the card the text).
  *
  * What each is about comes from this server, never from the model: the window's title and process
  * from the window list (asked for once more when this replica has none), the control from the
@@ -641,6 +646,14 @@ export function createDesktopStoppedHandler(deps: {
 export const DESKTOP_APPROVED_RESEND = ":approved";
 /** The model's text is longer than a desktop write may type. */
 export const DESKTOP_TEXT_TOO_LONG = `文字太长，最多 ${DESKTOP_LIMITS.textMaxBytes} 字节。`;
+/** A program to launch named by a path, a flag or anything else that is not a name (the device's words). */
+export const DESKTOP_BAD_APP = desktopMessage(
+  "failed",
+  "应用名只能是应用的名字，不能带路径或参数",
+);
+/** What a launch tells the model, when the device did not say. */
+const DESKTOP_LAUNCH_NOTE =
+  "The app may have opened a new window: list the windows to find it.";
 /** What a done write tells the model, when the device did not say. */
 const DESKTOP_WRITE_NOTE =
   "The window may have changed: read it again before the next step.";
@@ -659,6 +672,22 @@ export type DesktopWriteResult = {
   control?: { type: string; name: string };
   note: string;
 };
+
+/** A launch that went through: the program was asked to start. */
+export type DesktopLaunchResult = {
+  ok: true;
+  app: string;
+  delivery?: "verified" | "unverified";
+  note: string;
+};
+/** What the clipboard held, cut to `clipboardReadMaxChars` characters by the device. */
+export type DesktopClipboardReadResult = {
+  ok: true;
+  text: string;
+  truncated: boolean;
+};
+/** Text put on the clipboard: how many UTF-8 bytes, never the text. */
+export type DesktopClipboardWriteResult = { ok: true; bytes: number };
 
 /** The device's reason when it answered that this step needs approval first, else undefined. */
 function deviceAsks(error: unknown): string | undefined {
@@ -775,7 +804,7 @@ export function createDesktopWriteMethods(deps: {
   }
 
   /** One write, through the gate; asked again once only when the device asks and we had not. */
-  async function carry(plan: {
+  async function carry<R = DesktopWriteResult>(plan: {
     toolName: string;
     action: DesktopWriteAction;
     botId: string;
@@ -791,7 +820,9 @@ export function createDesktopWriteMethods(deps: {
       control: DesktopControlEntry | undefined,
     ) => Partial<DesktopWriteFacts> | { refusal: string };
     payload: Record<string, unknown>;
-  }): Promise<DesktopWriteResult> {
+    /** What a write with no window returns, from the device's answer (default: a window's write). */
+    result?: (output: unknown) => R;
+  }): Promise<R> {
     let machine: { tenantId: string; deviceId: string } | undefined;
     let facts: DesktopWriteFacts | undefined;
     let windowId = plan.windowId;
@@ -875,6 +906,18 @@ export function createDesktopWriteMethods(deps: {
           )
         : write();
     };
+    /*
+     * A write with no window and no control is known in full before the machine is: its refusal
+     * before then (the team's cap, a disabled tool) names it too, a launch by its program.
+     */
+    const windowless =
+      plan.windowId === undefined && plan.ref === undefined
+        ? plan.facts?.(undefined)
+        : undefined;
+    const known: DesktopWriteFacts | undefined =
+      windowless && !("refusal" in windowless)
+        ? { action: plan.action, ...windowless }
+        : undefined;
     const run = (subject: DesktopWriteInput["subject"]) =>
       deps.gate.run(
         plan.toolName,
@@ -882,6 +925,7 @@ export function createDesktopWriteMethods(deps: {
         plan.actor,
         {
           action: plan.action,
+          ...(known ? { known } : {}),
           ...(windowId ? { windowId } : {}),
           ...(plan.ref !== undefined ? { ref: plan.ref } : {}),
           subject,
@@ -921,9 +965,13 @@ export function createDesktopWriteMethods(deps: {
         throw failed(again);
       }
     }
+    if (plan.result) {
+      forget(windowId);
+      return plan.result(output);
+    }
     const result = resultOf(output, facts, windowId);
     forget(windowId, result.window.windowId);
-    return result;
+    return result as R;
   }
 
   /** A refusal before the gate: the owner check, then one row. */
@@ -1107,6 +1155,133 @@ export function createDesktopWriteMethods(deps: {
         signal,
         windowId,
         payload: { windowId },
+      });
+    },
+
+    /**
+     * Start a program by its name. Only a name (`DESKTOP_APP_NAME`: no path, no flag) is ever sent,
+     * checked here before anything is asked or sent and again on the device. The program is the
+     * write's `process`: on the card, the row and the scope (`desktop/<app>`). A write like any
+     * other: in a session, and under the team's cap on commands.
+     */
+    async launchDesktopApp(
+      botId: string,
+      actor: ActionActor,
+      input: { app: string },
+      signal?: AbortSignal,
+    ): Promise<DesktopLaunchResult> {
+      const toolName = "computer_desktop_launch";
+      const app = input?.app;
+      if (typeof app !== "string" || !DESKTOP_APP_NAME.test(app))
+        return refuse(
+          toolName,
+          botId,
+          actor,
+          DESKTOP_BAD_APP,
+          { action: "launch" },
+          signal,
+        );
+      return carry({
+        toolName,
+        action: "launch",
+        botId,
+        actor,
+        signal,
+        facts: () => ({ process: app }),
+        payload: { app },
+        result: (output): DesktopLaunchResult => {
+          const answer = isRecord(output) ? output : {};
+          return {
+            ok: true,
+            app,
+            ...(answer.delivery === "verified" ||
+            answer.delivery === "unverified"
+              ? { delivery: answer.delivery }
+              : {}),
+            note:
+              typeof answer.note === "string"
+                ? answer.note
+                : DESKTOP_LAUNCH_NOTE,
+          };
+        },
+      });
+    },
+
+    /**
+     * Read the clipboard. Asked every time, in a session or not (`desktopActionFloor`), so it is
+     * always sent approved, under the approved key. What it held is outside content: marked as
+     * untrusted for the model, and on the row by its length only (gateway.ts).
+     */
+    async readDesktopClipboard(
+      botId: string,
+      actor: ActionActor,
+      signal?: AbortSignal,
+    ): Promise<{ untrusted: string } & DesktopClipboardReadResult> {
+      return carry({
+        toolName: "computer_desktop_clipboard_read",
+        action: "clipboard_read",
+        botId,
+        actor,
+        signal,
+        payload: {},
+        result: (output) => {
+          const answer = isRecord(output) ? output : {};
+          return withUntrustedNotice(
+            {
+              ok: true as const,
+              text: typeof answer.text === "string" ? answer.text : "",
+              truncated: answer.truncated === true,
+            },
+            "desktop clipboard",
+            ["text"],
+          );
+        },
+      });
+    },
+
+    /**
+     * Put text on the clipboard: at most `textMaxBytes` of UTF-8, refused here before anything is
+     * asked or sent. The text goes to the device and, in the call's arguments, on the card; the row
+     * has its length.
+     */
+    async writeDesktopClipboard(
+      botId: string,
+      actor: ActionActor,
+      input: { text: string },
+      signal?: AbortSignal,
+    ): Promise<DesktopClipboardWriteResult> {
+      const toolName = "computer_desktop_clipboard_write";
+      const text = input?.text;
+      const row = {
+        action: "clipboard_write" as const,
+        ...(typeof text === "string" ? { textLength: text.length } : {}),
+      };
+      const refusal =
+        typeof text !== "string"
+          ? desktopMessage("failed", "没有要写入剪贴板的文字")
+          : Buffer.byteLength(text, "utf8") > DESKTOP_LIMITS.textMaxBytes
+            ? DESKTOP_TEXT_TOO_LONG
+            : undefined;
+      if (refusal !== undefined)
+        return refuse(toolName, botId, actor, refusal, row, signal);
+      return carry({
+        toolName,
+        action: "clipboard_write",
+        botId,
+        actor,
+        signal,
+        textLength: text.length,
+        payload: { text },
+        result: (output): DesktopClipboardWriteResult => {
+          const answer = isRecord(output) ? output : {};
+          return {
+            ok: true,
+            bytes:
+              typeof answer.bytes === "number"
+                ? answer.bytes
+                : Buffer.byteLength(text, "utf8"),
+          };
+        },
       });
     },
   };

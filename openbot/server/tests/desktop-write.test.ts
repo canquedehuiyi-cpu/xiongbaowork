@@ -1,20 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { oneRowPerAction } from "../../shared/activity-rows";
 import {
   DEFAULT_DESKTOP_ACTION_WORDS,
+  DESKTOP_LIMITS,
   type DesktopElement,
   type DesktopSnapshot,
   type DesktopWindow,
   desktopMessage,
 } from "../../shared/desktop-control";
-import { desktopActionReason } from "../src/approvals/desktop-policy";
-import { decideAction, refusedOutright } from "../src/approvals/policy";
-import { oneRowPerAction } from "../../shared/activity-rows";
+import {
+  DESKTOP_CLIPBOARD_READ_REASON,
+  DESKTOP_SESSION_REASON,
+  desktopActionReason,
+  desktopWindowReason,
+} from "../src/approvals/desktop-policy";
+import {
+  decideAction,
+  HOST_COMMANDS_NEVER,
+  refusedOutright,
+} from "../src/approvals/policy";
 import {
   isApprovalRecheck,
   isApprovedExecution,
 } from "../src/approvals/service";
-import { computerActionIdentity } from "../src/computer/action-identity";
 import {
   type ApprovalCandidate,
   type ApprovalContinuation,
@@ -27,22 +36,26 @@ import {
   withApprovalContext,
 } from "../src/approvals/types";
 import type { AuditEventInput, AuditStore } from "../src/audit";
+import { computerActionIdentity } from "../src/computer/action-identity";
 import {
   type ComputerTransport,
   ComputerUnavailableError,
 } from "../src/computer/client";
 import {
   DESKTOP_OWNER_ONLY,
-  NO_DESKTOP,
+  DESKTOP_WAIT_TARGET,
   desktopOwnersMachine,
+  NO_DESKTOP,
 } from "../src/computer/desktop-gateway";
 import {
   createDesktopSessionCache,
   desktopSessionKey,
 } from "../src/computer/desktop-session";
 import { createDesktopControlCache } from "../src/computer/desktop-state";
+import { desktopTools } from "../src/computer/desktop-tools";
 import {
   createDesktopWriteGate,
+  DESKTOP_BAD_APP,
   DESKTOP_SESSION_UNAPPROVED,
   DESKTOP_STOPPED_REASON,
   DESKTOP_TEXT_TOO_LONG,
@@ -58,6 +71,7 @@ import { DeviceActionError, runnerAddress } from "../src/devices/channel";
 import { createDeviceComputerProvider } from "../src/devices/selection";
 import { runnerMessageOptions } from "../src/http-server";
 import { runAsTenant } from "../src/tenant/context";
+import { withUntrustedNotice } from "../src/untrusted-content";
 import {
   approvalFixtureModel,
   createApprovalFixtureService,
@@ -179,6 +193,7 @@ function harness(
   let token: string | undefined = options.session ? "ab".repeat(32) : undefined;
   let writes = 0;
   const keys: { path: string; key: string | undefined }[] = [];
+  const timeouts: { path: string; timeoutMs: number | undefined }[] = [];
   const journal = new Map<
     string,
     { fingerprint: string; outcome: Promise<unknown> }
@@ -190,12 +205,13 @@ function harness(
       path: string,
       payload: unknown,
       _caller?: AbortSignal,
-      _timeoutMs?: number,
+      timeoutMs?: number,
       key?: string,
     ): Promise<T> {
       expect(address).toBe(runnerAddress(MACHINE));
       expect(botId).toBe("bot");
       keys.push({ path, key });
+      timeouts.push({ path, timeoutMs });
       if (!options.journal || !key) return device<T>(path, payload);
       const fingerprint = JSON.stringify([path, payload]);
       const row = journal.get(key);
@@ -324,6 +340,8 @@ function harness(
     token: () => token,
     /** The dispatch key each post carried (undefined: none, a fresh one per frame). */
     keys,
+    /** How long the gateway gave each post. */
+    timeouts,
     /** The device's session replaced by another (stopped, then opened again for another write). */
     renewSession: () => {
       token = "ef".repeat(32);
@@ -1654,5 +1672,411 @@ describe("the controls a read showed", () => {
     // Five minutes on, nothing is known.
     clock = 300_001;
     expect(controls.control(key, "abc123-2:0")).toBeUndefined();
+  });
+});
+
+describe("waiting, launching and the clipboard (Task 25)", () => {
+  const BANK: DesktopWindow = {
+    windowId: "a1111111111111111",
+    title: "招商银行 - 网上银行",
+    process: "bank",
+    focused: false,
+    minimized: false,
+  };
+  /** What the device answers a wait: the window's snapshot, as `/desktop/snapshot` does. */
+  const waited = (window: DesktopWindow): DesktopSnapshot => ({
+    snapshotId: "abc123-7",
+    window,
+    truncated: false,
+    elements: [{ ref: "abc123-7:0", type: "button", name: "登录", depth: 0 }],
+  });
+  /** The tools as the headless middleware builds them, parsing their arguments first. */
+  const toolsOver = (h: ReturnType<typeof harness>) =>
+    desktopTools(
+      (name, _description, schema, execute) =>
+        ({
+          definition: { name },
+          execute: async (args: unknown) =>
+            execute(schema.parse(args), {
+              toolCallId: "call-t",
+              signal: new AbortController().signal,
+            }),
+        }) as never,
+      { gateway: h.gateway, botId: "bot", actor: ACTOR },
+    );
+  const toolOf = (h: ReturnType<typeof harness>, name: string) => {
+    const tool = toolsOver(h).find(
+      (candidate) => candidate.definition.name === name,
+    );
+    if (!tool) throw new Error(`No tool ${name}.`);
+    return tool;
+  };
+
+  test("reading the clipboard asks every time, even in a session, and the row has only its length", async () => {
+    const secret = "验证码 314159 SECRET-CLIP";
+    const h = harness({
+      session: true,
+      write: (path) => {
+        expect(path).toBe("/desktop/clipboard_read");
+        return { text: secret, truncated: false, durationMs: 4 };
+      },
+    });
+    expect(intentOf("computer_desktop_clipboard_read", undefined)).toBe("read");
+    for (const call of ["call-a", "call-b"]) {
+      const result = await computerActionIdentity.run(call, () =>
+        h.gateway.readDesktopClipboard("bot", ACTOR),
+      );
+      // Outside content: marked as untrusted data before the model reads it.
+      expect(result).toEqual(
+        withUntrustedNotice(
+          { ok: true, text: secret, truncated: false },
+          "desktop clipboard",
+          ["text"],
+        ),
+      );
+    }
+    // Asked both times, inside the session, with the clipboard's own reason only.
+    expect(h.cards).toHaveLength(2);
+    for (const card of h.cards) {
+      expect(card.candidate.toolRef).toBe("computer_desktop_clipboard_read");
+      expect(card.candidate.subject?.desktopWrite).toEqual({
+        session: "active",
+        action: "clipboard_read",
+      });
+      expect(card.outcome).toEqual({
+        behaviour: "ask",
+        source: "desktop_action",
+        reason: DESKTOP_CLIPBOARD_READ_REASON,
+      });
+    }
+    // Sent approved, under the approved key, never under the call's own.
+    const reads = h.posts.filter(
+      (post) => post.path === "/desktop/clipboard_read",
+    );
+    expect(reads).toHaveLength(2);
+    expect(reads[0]?.payload).toEqual({
+      session: h.token(),
+      botId: "bot",
+      actorId: OWNER,
+      approved: true,
+      actionWords: [...DEFAULT_DESKTOP_ACTION_WORDS],
+      approvedTitle: "",
+    });
+    expect(
+      h.keys
+        .filter((sent) => sent.path === "/desktop/clipboard_read")
+        .map((sent) => sent.key),
+    ).toEqual([
+      JSON.stringify(["bot", "/desktop/clipboard_read", "call-a:approved"]),
+      JSON.stringify(["bot", "/desktop/clipboard_read", "call-b:approved"]),
+    ]);
+    // The trail: what was read by its length, never the text.
+    expect(JSON.stringify(h.rows)).not.toContain("SECRET-CLIP");
+    expect(JSON.stringify(h.rows)).not.toContain("314159");
+    const done = h.rows.filter(
+      (row) => row.eventType === "computer.desktop_write_done",
+    );
+    expect(done).toHaveLength(2);
+    expect(done[0]?.payload).toMatchObject({
+      action: "computer_desktop_clipboard_read",
+      desktop: { action: "clipboard_read", textLength: secret.length },
+    });
+    // With no session, one card opens the session and reads: both sentences, the session's first.
+    const g = harness({
+      write: () => ({ text: "x", truncated: false, durationMs: 1 }),
+    });
+    await g.gateway.readDesktopClipboard("bot", ACTOR);
+    expect(g.cards).toHaveLength(1);
+    expect(g.cards[0]?.outcome).toEqual({
+      behaviour: "ask",
+      source: "desktop_action",
+      reason: `${DESKTOP_SESSION_REASON}${DESKTOP_CLIPBOARD_READ_REASON}`,
+    });
+    expect(g.paths().slice(-3)).toEqual([
+      "/desktop/session_status",
+      "/desktop/session_start",
+      "/desktop/clipboard_read",
+    ]);
+  });
+
+  test("launch is governed by the team cap like a command", async () => {
+    expect(intentOf("computer_desktop_launch", undefined)).toBe("write");
+    const never = (candidate: ApprovalCandidate) =>
+      refusedOutright({
+        candidate,
+        team: [],
+        personal: [],
+        customRulesEnabled: true,
+        hostCommandsCap: "never",
+      })?.reason;
+    // The same refusal a command on the owner's machine gets.
+    const command = never({
+      actorId: OWNER,
+      botId: "bot",
+      toolRef: "computer_run_command",
+      effect: "write",
+      scope: "ls",
+      args: { command: "ls" },
+      subject: { runner: true, command: "ls" },
+    });
+    expect(command).toBe(HOST_COMMANDS_NEVER);
+    const h = harness({ session: true, refusal: never });
+    const error = await h.gateway
+      .launchDesktopApp("bot", ACTOR, { app: "TextEdit" })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ActionRefusedError);
+    expect((error as Error).message).toBe(command as string);
+    // Refused before the device was asked anything, and no card.
+    expect(h.posts).toHaveLength(0);
+    expect(h.cards).toHaveLength(0);
+    expect(h.early.length).toBeGreaterThan(0);
+    for (const candidate of h.early)
+      expect(candidate.subject?.desktopWrite).toEqual({
+        action: "launch",
+        process: "TextEdit",
+        session: "none",
+      });
+    expect(h.rows.at(-1)?.eventType).toBe("computer.action_refused");
+    expect(h.payloads().at(-1)?.desktop).toMatchObject({
+      action: "launch",
+      process: "TextEdit",
+    });
+
+    // The cap of ask: asked inside the session too, as a command would be.
+    const capped: Card[] = [];
+    const ask = harness({
+      session: true,
+      write: () => ({ app: "TextEdit", durationMs: 9, delivery: "verified" }),
+      gate: async (candidate) => {
+        const outcome = await decideAction({
+          team: [],
+          personal: [],
+          customRulesEnabled: true,
+          autoReview: false,
+          askBeforeChanges: true,
+          hostCommandsCap: "ask",
+          candidate,
+        });
+        if (outcome.behaviour === "allow") return undefined;
+        capped.push({ candidate, outcome });
+        return { complete: async () => undefined };
+      },
+    });
+    const launched = await ask.gateway.launchDesktopApp("bot", ACTOR, {
+      app: "TextEdit",
+    });
+    expect(capped).toHaveLength(1);
+    expect(capped[0]?.outcome.source).toBe("host_command_cap");
+    expect(capped[0]?.candidate.scope).toBe("desktop/TextEdit");
+    expect(launched).toMatchObject({
+      ok: true,
+      app: "TextEdit",
+      delivery: "verified",
+    });
+    // Without a cap, launching in the session is not asked about.
+    const free = harness({
+      session: true,
+      write: () => ({ app: "TextEdit", durationMs: 9, delivery: "verified" }),
+    });
+    await free.gateway.launchDesktopApp("bot", ACTOR, { app: "TextEdit" });
+    expect(free.cards).toHaveLength(0);
+    expect(free.posts.at(-1)).toEqual({
+      path: "/desktop/launch",
+      payload: {
+        session: free.token(),
+        botId: "bot",
+        actorId: OWNER,
+        approved: false,
+        actionWords: [...DEFAULT_DESKTOP_ACTION_WORDS],
+        approvedTitle: "",
+        app: "TextEdit",
+      },
+    });
+    // A path or a flag is never sent: refused on the server, before any frame.
+    for (const app of ["/bin/sh", "-x", "TextEdit -x", "../a", "C:\\x.exe"]) {
+      const bad = harness({ session: true });
+      await expect(
+        bad.gateway.launchDesktopApp("bot", ACTOR, { app }),
+      ).rejects.toThrow(DESKTOP_BAD_APP);
+      expect(bad.posts).toHaveLength(0);
+      expect(bad.gated).toHaveLength(0);
+    }
+  });
+
+  test("wait on a window titled 银行 asks like a snapshot", async () => {
+    const h = harness({
+      windows: [NOTEPAD, WECHAT, BANK],
+      write: (path, payload) => {
+        expect(path).toBe("/desktop/wait");
+        return waited(
+          [NOTEPAD, BANK].find((w) => w.windowId === payload.windowId) ??
+            NOTEPAD,
+        );
+      },
+    });
+    expect(intentOf("computer_desktop_wait", undefined)).toBe("read");
+    const result = await h.gateway.waitDesktop("bot", ACTOR, {
+      windowId: BANK.windowId,
+      name: "登录",
+      timeoutSec: 5,
+    });
+    expect(h.cards).toHaveLength(1);
+    expect(h.cards[0]?.candidate.toolRef).toBe("computer_desktop_wait");
+    expect(h.cards[0]?.candidate.subject?.desktop).toEqual({
+      title: BANK.title,
+      sensitiveWord: "银行",
+    });
+    expect(h.cards[0]?.outcome).toEqual({
+      behaviour: "ask",
+      source: "desktop_window",
+      reason: desktopWindowReason(BANK.title, "银行"),
+    });
+    // The same card a snapshot of that window gets.
+    await h.gateway.snapshotDesktop("bot", ACTOR, { windowId: BANK.windowId });
+    expect(h.cards).toHaveLength(2);
+    expect(h.cards[1]?.outcome).toEqual(h.cards[0]?.outcome as never);
+    // Only an approved wait tells the device it may read the sensitive window.
+    const waits = h.posts.filter((post) => post.path === "/desktop/wait");
+    expect(waits[0]?.payload).toEqual({
+      windowId: BANK.windowId,
+      name: "登录",
+      timeoutSec: 5,
+      allowSensitive: true,
+    });
+    // Outside content, as a snapshot is; its controls are the ones a write names next.
+    expect(result.untrusted).toContain("untrusted data");
+    expect(result.elements).toEqual(waited(BANK).elements);
+    // Given the whole wait, a command's budget and room for the window list and the queue.
+    expect(
+      h.timeouts.find((sent) => sent.path === "/desktop/wait")?.timeoutMs,
+    ).toBe(5_000 + DESKTOP_LIMITS.adCommandTimeoutMs + 10_000);
+    // A plain title: no card, and the device is not told it may read a sensitive one.
+    await h.gateway.waitDesktop("bot", ACTOR, {
+      windowId: NOTEPAD.windowId,
+      type: "button",
+      timeoutSec: 30,
+    });
+    expect(h.cards).toHaveLength(2);
+    expect(
+      h.posts.filter((post) => post.path === "/desktop/wait").at(-1)?.payload,
+    ).toEqual({
+      windowId: NOTEPAD.windowId,
+      type: "button",
+      timeoutSec: 30,
+      allowSensitive: false,
+    });
+    const row = h
+      .payloads()
+      .filter((payload) => payload.action === "computer_desktop_wait")
+      .at(-1);
+    expect(row?.desktop).toEqual({
+      windowId: NOTEPAD.windowId,
+      title: NOTEPAD.title,
+      process: "notepad",
+      screenshot: false,
+    });
+    // The control the wait showed is known to the writes: a click on it is no unknown control.
+    const s = harness({
+      session: true,
+      write: (path) =>
+        path === "/desktop/wait" ? waited(NOTEPAD) : { physical: false },
+    });
+    await s.gateway.waitDesktop("bot", ACTOR, {
+      windowId: NOTEPAD.windowId,
+      name: "登录",
+      timeoutSec: 1,
+    });
+    await s.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-7:0" });
+    expect(s.cards).toHaveLength(0);
+    expect(s.posts.at(-1)?.payload).toMatchObject({ ref: "abc123-7:0" });
+  });
+
+  test("wait needs a name or a type", async () => {
+    const h = harness();
+    const wait = toolOf(h, "computer_desktop_wait");
+    const windowId = NOTEPAD.windowId;
+    for (const args of [
+      { windowId, timeoutSec: 5 },
+      { windowId, name: "x", timeoutSec: 0 },
+      { windowId, name: "x", timeoutSec: 31 },
+      { windowId, name: "x", timeoutSec: 1.5 },
+      { windowId, name: "x".repeat(121), timeoutSec: 5 },
+      { windowId, type: "x".repeat(61), timeoutSec: 5 },
+      { windowId: "notepad", name: "x", timeoutSec: 5 },
+      { windowId, name: "x", timeoutSec: 5, allowSensitive: true },
+    ]) {
+      const error = await wait.execute(args, {} as never).then(
+        () => new Error(`accepted ${JSON.stringify(args)}`),
+        (thrown: unknown) => thrown,
+      );
+      expect({ args, error: (error as Error).name }).toEqual({
+        args,
+        error: "ZodError",
+      });
+    }
+    expect(h.posts).toHaveLength(0);
+    // Called past the schema, the gateway refuses it before the device is asked anything.
+    const error = await h.gateway
+      .waitDesktop("bot", ACTOR, { windowId, timeoutSec: 5 })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ActionRefusedError);
+    expect((error as Error).message).toBe(DESKTOP_WAIT_TARGET);
+    expect(h.posts).toHaveLength(0);
+    expect(h.rows.at(-1)?.eventType).toBe("computer.action_refused");
+    // A name alone, or a type alone, is enough.
+    const g = harness({ write: () => waited(NOTEPAD) });
+    const byName = toolOf(g, "computer_desktop_wait");
+    await byName.execute(
+      { windowId, name: "登录", timeoutSec: 1 },
+      {} as never,
+    );
+    await byName.execute(
+      { windowId, type: "button", timeoutSec: 30 },
+      {} as never,
+    );
+    expect(g.paths().filter((path) => path === "/desktop/wait")).toHaveLength(
+      2,
+    );
+  });
+
+  test("writing the clipboard shows the text on the card and keeps only its length", async () => {
+    const text = "复制的内容 SECRET-PASTE";
+    const h = harness({ write: () => ({ bytes: 30, durationMs: 2 }) });
+    const args = { text };
+    const result = await withApprovalContext(
+      { ...CONTINUATION(args), toolName: "computer_desktop_clipboard_write" },
+      () => h.gateway.writeDesktopClipboard("bot", ACTOR, args),
+    );
+    expect(result).toEqual({ ok: true, bytes: 30 });
+    expect(intentOf("computer_desktop_clipboard_write", undefined)).toBe(
+      "write",
+    );
+    // One card, the session's; it carries the text in the call's own arguments.
+    expect(h.cards).toHaveLength(1);
+    expect(h.cards[0]?.candidate.args).toEqual(args);
+    expect(h.cards[0]?.outcome.source).toBe("desktop_session");
+    expect(h.posts.at(-1)).toMatchObject({
+      path: "/desktop/clipboard_write",
+      payload: { approved: true, text },
+    });
+    expect(JSON.stringify(h.rows)).not.toContain("SECRET-PASTE");
+    const done = h.rows.find(
+      (row) => row.eventType === "computer.desktop_write_done",
+    );
+    expect(done?.payload).toMatchObject({
+      desktop: { action: "clipboard_write", textLength: text.length },
+    });
+    // Over 9 000 bytes: refused before any frame, with the length on the row.
+    const g = harness({ session: true });
+    await expect(
+      g.gateway.writeDesktopClipboard("bot", ACTOR, {
+        text: "中".repeat(3_001),
+      }),
+    ).rejects.toThrow(DESKTOP_TEXT_TOO_LONG);
+    expect(g.posts).toHaveLength(0);
+    expect(g.payloads().at(-1)?.desktop).toMatchObject({
+      action: "clipboard_write",
+      textLength: 3_001,
+    });
   });
 });
