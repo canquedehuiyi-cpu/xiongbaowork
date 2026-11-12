@@ -14,6 +14,8 @@ import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -205,26 +207,41 @@ export async function fetchAgentDesktop(opts: {
       }
     }
 
-    // Everything checked: stage every file next to its destination as <name>.tmp, then rename them
-    // all. A failure removes the .tmp files and leaves files already in outDir untouched.
+    // Everything checked: stage every file next to its destination as <name>.tmp, then move them in.
+    // A destination that exists must be a regular file; each replaced file is kept as <name>.bak
+    // until every rename has succeeded, so a failure on any file restores what outDir held before.
     mkdirSync(outDir, { recursive: true });
     const staged: { tmp: string; to: string }[] = [];
+    const moved: { to: string; bak?: string }[] = [];
     try {
       for (const { entry, file } of sidecarFiles(triple)) {
         if (!target.entries.some((e) => e.name === entry)) {
           throw new Error(`${target.archive} does not carry ${entry}`);
         }
         const to = join(outDir, file);
+        if (existsSync(to) && !lstatSync(to).isFile()) {
+          throw new Error(`${to} exists and is not a regular file`);
+        }
         const tmp = `${to}.tmp`;
         staged.push({ tmp, to });
         copyFileSync(join(extracted, entry), tmp);
         chmodSync(tmp, 0o755);
       }
-      for (const { tmp, to } of staged) renameSync(tmp, to);
+      for (const { tmp, to } of staged) {
+        const bak = existsSync(to) ? `${to}.bak` : undefined;
+        if (bak) renameSync(to, bak);
+        moved.push({ to, bak });
+        renameSync(tmp, to);
+      }
     } catch (error) {
+      for (const { to, bak } of moved.reverse()) {
+        rmSync(to, { force: true });
+        if (bak) renameSync(bak, to);
+      }
       for (const { tmp } of staged) rmSync(tmp, { force: true });
       throw error;
     }
+    for (const { bak } of moved) if (bak) rmSync(bak, { force: true });
     return staged.map((s) => s.to);
   } finally {
     rmSync(work, { recursive: true, force: true });

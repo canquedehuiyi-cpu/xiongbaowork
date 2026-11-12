@@ -341,3 +341,36 @@ test("macOS installs the CLI and its helper", async () => {
   ).toBe("mac helper");
   expect(readdirSync(outDir).length).toBe(2);
 });
+
+test("a failure on the macOS helper leaves the CLI already in outDir as it was", async () => {
+  const triple = "aarch64-apple-darwin";
+  const files = {
+    "agent-desktop": "mac cli",
+    "agent-desktop-macos-helper": "mac helper",
+  };
+  const { bytes, lock } = build(files);
+  const source = lock.targets[TRIPLE];
+  if (!source) throw new Error("no target");
+  lock.targets = {
+    [triple]: {
+      archive: `agent-desktop-v1.2.0-${triple}.tar.gz`,
+      archiveSha256: source.archiveSha256,
+      entries: Object.entries(files).map(([name, body]) => ({
+        name,
+        sha256: sha(body),
+      })),
+    },
+  };
+  const outDir = join(scratch(), "out");
+  mkdirSync(outDir);
+  const cli = `agent-desktop-${triple}`;
+  const helper = `agent-desktop-macos-helper-${triple}`;
+  writeFileSync(join(outDir, cli), "old cli");
+  // A directory where the helper must go: the second file cannot be installed.
+  mkdirSync(join(outDir, helper));
+  await expect(
+    fetchAgentDesktop({ triple, lock, outDir, download: async () => bytes }),
+  ).rejects.toThrow(helper);
+  expect(readFileSync(join(outDir, cli), "utf8")).toBe("old cli");
+  expect(readdirSync(outDir).sort()).toEqual([cli, helper].sort());
+});
