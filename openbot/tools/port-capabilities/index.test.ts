@@ -8,8 +8,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
 import { verifyOutDir } from "./index";
+import { auditRulesSha256 } from "./mapping";
 
 const root = mkdtempSync(join(tmpdir(), "port-capabilities-verify-"));
 const CHECKSUM = "ab".repeat(32);
@@ -76,9 +76,10 @@ describe("verifyOutDir 的空类别语义", () => {
       "skills.yaml": SKILLS_ONLY,
       "teams.yaml": EMPTY_TEAMS,
       "connectors.yaml": EMPTY_CONNECTORS,
-      "capability-manifest.yaml": `${SKILL_MANIFEST_ROW}`,
+      // P2 契约：capability-manifest.yaml 首行与 tool-ref-audit.md 头部都要带 §6.4.1 stamp（fail-closed）。
+      "capability-manifest.yaml": `# audit_rules_sha256: ${auditRulesSha256()}\n${SKILL_MANIFEST_ROW}`,
       "slug-conflicts.md": "",
-      "tool-ref-audit.md": "",
+      "tool-ref-audit.md": `audit_rules_sha256: ${auditRulesSha256()}\n`,
     });
     expect(verifyOutDir(dir)).toEqual([]);
   });
@@ -86,7 +87,9 @@ describe("verifyOutDir 的空类别语义", () => {
   test("三类条目全空是问题，且问题说明指向『全空』而不是『某一类为空』", () => {
     const dir = writeOutDir(allEmptyFiles());
     const problems = verifyOutDir(dir);
-    expect(problems.some((problem) => problem.detail.includes("全空"))).toBe(true);
+    expect(problems.some((problem) => problem.detail.includes("全空"))).toBe(
+      true,
+    );
   });
 });
 
