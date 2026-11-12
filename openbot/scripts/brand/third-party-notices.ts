@@ -97,12 +97,22 @@ export function collectThirdPartyNotices(options: {
     const located = locate(name, searchDirs);
     if (!located) return; // optional or platform-specific dependency that is not installed
     const dir = realpathSync(located);
-    // Workspace packages link to source outside node_modules; they are this product, not third party.
-    if (!dir.split(sep).includes("node_modules")) return;
     if (visited.has(dir)) return;
     visited.add(dir);
     const manifest = readManifest(dir);
     if (!manifest) return;
+
+    // Workspace packages (@openbot/shared, @openbot/toolkit) link to source outside node_modules: they are this
+    // product, so they are not listed, but what they depend on ships with it and is.
+    if (!dir.split(sep).includes("node_modules")) {
+      const own = {
+        ...manifest.dependencies,
+        ...manifest.optionalDependencies,
+      };
+      for (const child of Object.keys(own))
+        visit(child, [join(dir, "node_modules"), ...options.roots]);
+      return;
+    }
 
     const version = manifest.version ?? "0.0.0";
     const key = `${name}@${version}`;
@@ -153,11 +163,16 @@ export function renderNoticesText(notices: ThirdPartyNotice[]): string {
   ].join("\n");
 }
 
-function main() {
-  const projectRoot = resolve(import.meta.dir, "../..");
+/**
+ * The packages whose production dependencies ship: the web app, the server, the device runner, and the agent computer,
+ * which is not a root workspace and keeps its own node_modules beside its own lockfile.
+ */
+const SHIPPED_PACKAGES = ["app", "server", "runner", "agent-computer"];
+
+export function collectProductNotices(projectRoot: string): ThirdPartyNotice[] {
   const rootModules = join(projectRoot, "node_modules");
   const merged = new Map<string, ThirdPartyNotice>();
-  for (const workspace of ["app", "server", "runner"]) {
+  for (const workspace of SHIPPED_PACKAGES) {
     const manifest = readManifest(join(projectRoot, workspace));
     const notices = collectThirdPartyNotices({
       roots: [join(projectRoot, workspace, "node_modules"), rootModules],
@@ -167,11 +182,16 @@ function main() {
       merged.set(`${notice.name}@${notice.version}`, notice);
     }
   }
-  const notices = [...merged.values()].sort(
+  return [...merged.values()].sort(
     (a, b) =>
       (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) ||
       (a.version < b.version ? -1 : a.version > b.version ? 1 : 0),
   );
+}
+
+function main() {
+  const projectRoot = resolve(import.meta.dir, "../..");
+  const notices = collectProductNotices(projectRoot);
   const jsonPath = join(
     projectRoot,
     "app/src/lib/generated/third-party-notices.json",

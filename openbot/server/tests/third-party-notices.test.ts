@@ -1,8 +1,15 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  collectProductNotices,
   collectThirdPartyNotices,
   renderNoticesText,
 } from "../../scripts/brand/third-party-notices";
@@ -115,5 +122,75 @@ describe("third-party notices", () => {
     ]);
     expect(text).toContain("alpha@0.1.0 (UNKNOWN)");
     expect(text).toContain("zeta@2.0.0 (ISC)\nISC TEXT");
+  });
+
+  test("follows a workspace package's dependencies without listing the workspace itself", () => {
+    const root = join(temp, "d");
+    // @openbot/shared and @openbot/toolkit are linked into node_modules from source outside it.
+    for (const [dir, manifest] of [
+      ["shared", { name: "@openbot/shared", dependencies: { zod: "^4" } }],
+      [
+        "toolkit",
+        {
+          name: "@openbot/toolkit",
+          dependencies: { "@openbot/shared": "workspace:*", rxjs: "7" },
+        },
+      ],
+    ] as const) {
+      mkdirSync(join(root, dir), { recursive: true });
+      writeFileSync(join(root, dir, "package.json"), JSON.stringify(manifest));
+      mkdirSync(join(root, "node_modules", "@openbot"), { recursive: true });
+      symlinkSync(
+        join(root, dir),
+        join(root, "node_modules", "@openbot", dir),
+        "dir",
+      );
+    }
+    // Bun's isolated install puts a workspace's own dependency beside its source.
+    install(join(root, "shared"), "zod", { version: "4.4.3", license: "MIT" });
+    install(root, "rxjs", { version: "7.8.1", license: "Apache-2.0" });
+
+    const notices = collectThirdPartyNotices({
+      roots: [join(root, "node_modules")],
+      dependencies: ["@openbot/toolkit"],
+    });
+
+    expect(notices.map((n) => `${n.name}@${n.version}:${n.license}`)).toEqual([
+      "rxjs@7.8.1:Apache-2.0",
+      "zod@4.4.3:MIT",
+    ]);
+  });
+
+  test("the product's notices cover the agent computer's own installed dependencies", () => {
+    const project = join(temp, "e");
+    const shipped = {
+      app: "app-dep",
+      server: "server-dep",
+      runner: "runner-dep",
+      "agent-computer": "agent-computer-dep",
+    };
+    for (const [workspace, dependency] of Object.entries(shipped)) {
+      mkdirSync(join(project, workspace), { recursive: true });
+      writeFileSync(
+        join(project, workspace, "package.json"),
+        JSON.stringify({ dependencies: { [dependency]: "1" } }),
+      );
+    }
+    for (const dependency of ["app-dep", "server-dep", "runner-dep"])
+      install(project, dependency, { version: "1.0.0", license: "MIT" });
+    // Not a root workspace: installed from its own lockfile into its own node_modules.
+    install(join(project, "agent-computer"), "agent-computer-dep", {
+      version: "1.0.0",
+      license: "BSD-2-Clause",
+    });
+
+    expect(
+      collectProductNotices(project).map((n) => `${n.name}:${n.license}`),
+    ).toEqual([
+      "agent-computer-dep:BSD-2-Clause",
+      "app-dep:MIT",
+      "runner-dep:MIT",
+      "server-dep:MIT",
+    ]);
   });
 });
