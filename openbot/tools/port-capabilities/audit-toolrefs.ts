@@ -172,13 +172,20 @@ function maskPlaceholders(text: string): string {
   return text.replace(ANGLE_PLACEHOLDER, (placeholder) => "x".repeat(placeholder.length));
 }
 
-/** Collect every match of a pattern, cloned with `g` so a shared constant cannot carry `lastIndex`. */
+/** Collect every match of a pattern, cloned with `g` so a shared constant cannot carry `lastIndex`.
+ *
+ * No reporting cap here, on purpose: this function feeds the *judgement*, and a verdict may only be
+ * computed from every match. A body whose first 20 references name shipped connectors and whose 21st
+ * names one that does not ship must still be judged degraded/blocked — the old `found.length < 20`
+ * stop silently hid exactly that 21st reference. Truncation for display happens at the report layer
+ * (`emit-package.ts` shows the best citation per rule plus a total), never in the rule evaluation.
+ */
 function matchAll(text: string, source: RegExp): RegExpExecArray[] {
   const flags = source.flags.includes("g") ? source.flags : `${source.flags}g`;
   const pattern = new RegExp(source.source, flags);
   const found: RegExpExecArray[] = [];
   let match = pattern.exec(text);
-  while (match !== null && found.length < 20) {
+  while (match !== null) {
     found.push(match);
     if (match.index === pattern.lastIndex) {
       pattern.lastIndex += 1;

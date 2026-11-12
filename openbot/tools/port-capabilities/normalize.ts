@@ -428,20 +428,51 @@ function buildProvenance(input: {
 }
 
 /**
- * Fingerprint an expert package from its metadata and every agent document.
+ * Fingerprint the *agent identity* of a package: `plugin.json` plus every agent document.
  *
- * Checksums are taken over normalised text, and the agent documents are included because two builds of
- * the same package can share `name` + `version` while differing in the personas they carry — the pair of
- * things a human would compare before calling them duplicates.
+ * Checksums are taken over normalised text. This is what decides whether two downloads are the same
+ * expert — the pair of things a human would compare before calling them duplicates.
  */
-export function packageFingerprint(pkg: RawExpertPackage): string {
+function agentIdentityFingerprint(pkg: RawExpertPackage): string {
   const parts = [pkg.pluginJson.text, ...[...pkg.agents].sort((a, b) => a.id.localeCompare(b.id)).map((a) => a.file.text)];
   return sha256Hex(parts.join("\u0000"));
+}
+
+/**
+ * Fingerprint a whole expert package: agent identity **plus every bundled skill**.
+ *
+ * The skills are in because two builds of the same package can share `plugin.json` and agent documents
+ * while carrying different `SKILL.md` contents — the capability payload itself. A fingerprint that
+ * ignored them would discard the differing instructions as "a duplicate download" before the
+ * skill-level comparison ever saw them, silently losing content while reporting the copies identical.
+ * Skill paths and contents enter the digest so differing payloads keep the two downloads apart.
+ */
+export function packageFingerprint(pkg: RawExpertPackage): string {
+  // `dirName` is the skill's path *inside the package* — the part plugin.json declares. The full
+  // relative path would pin the fingerprint to the download directory, and two copies of the same
+  // package installed under `engineering-workflow-skills` and `ex_eqoqYRT1NIwb` would never match.
+  const skillParts = [...pkg.skills]
+    .sort((a, b) => a.dirName.localeCompare(b.dirName))
+    .map((skill) => `${skill.dirName}\u0000${skill.skillMd.text}`);
+  return sha256Hex([agentIdentityFingerprint(pkg), ...skillParts].join("\u0000"));
 }
 
 /** Prefer a readable directory name over an opaque download id when both hold the same package. */
 function readabilityRank(dirName: string): number {
   return /^ex_[A-Za-z0-9]{6,}$/.test(dirName) ? 1 : 0;
+}
+
+/**
+ * The slug the package's agent (or team) will answer to, derived the same way {@link normalizePackage}
+ * derives it. Used to report a collapsed twin download against the identity it merges into.
+ */
+function packageIdentitySlug(pkg: RawExpertPackage): string {
+  const plugin = pkg.plugin;
+  if (isTeamPackage(plugin)) {
+    return kebab(asString(plugin.name) ?? pkg.dirName) || pkg.dirName;
+  }
+  const agentId = asString(plugin.agentName) ?? asString(plugin.name) ?? pkg.dirName;
+  return kebab(agentId) || kebab(pkg.dirName) || agentId;
 }
 
 /** One skill as read, before slug resolution. */
@@ -542,11 +573,34 @@ function skillTitle(candidate: SkillCandidate): string {
   return displayName ?? declaredName ?? splitDirectoryName(candidate.raw.dirName).base;
 }
 
-/** Summary for a skill: `description_zh` first, English second, one line, at most 120 characters. */
+/** First meaningful prose line of a `SKILL.md` body, ignoring markdown furniture. */
+function bodyHeadline(body: string): string {
+  for (const line of body.split(/\r?\n/)) {
+    const cleaned = line.replace(/^[#\s>*`|-]+/, "").trim();
+    if (cleaned !== "") {
+      return cleaned;
+    }
+  }
+  return "";
+}
+
+/**
+ * Summary for a skill: `description_zh` first, English second, one line, at most 120 characters.
+ *
+ * When the front matter declares neither, the first line of the body stands in: server-side
+ * `parseTenantSkills` requires a non-empty `summary`, so an empty one would let `--verify` accept a
+ * fragment the tenant package then refuses to load. Loading availability wins over a loud refusal, so
+ * the summary is derived rather than the row rejected. A skill whose body is empty already fails
+ * earlier with `SourceLayoutError`, so the derived fallback has real text to draw from.
+ */
 function skillSummary(candidate: SkillCandidate): string {
   const descriptionZh = asString(candidate.data.description_zh);
   const description = localizedText(candidate.data.description);
-  return oneLine(descriptionZh ?? description ?? "");
+  const declared = oneLine(descriptionZh ?? description ?? "");
+  if (declared !== "") {
+    return declared;
+  }
+  return oneLine(bodyHeadline(candidate.body));
 }
 
 /** Version declared in front matter, if any. */
@@ -785,6 +839,7 @@ function normalizeSkills(
   packages: RawExpertPackage[],
   userSkills: RawSkill[],
   droppedPackageSkills: Map<string, RawSkill[]>,
+  twinPackages: RawExpertPackage[] = [],
 ): {
   skills: NormalizedSkill[];
   conflicts: SlugConflict[];
@@ -797,6 +852,13 @@ function normalizeSkills(
     candidates.push(toCandidate(raw, order++));
   }
   for (const pkg of packages) {
+    for (const raw of pkg.skills) {
+      candidates.push(toCandidate(raw, order++));
+    }
+  }
+  // Twin downloads (same plugin.json + agents, differing SKILL.md) compete on skill content like any
+  // other candidate; their order keeps the whole candidate list deterministic.
+  for (const pkg of twinPackages) {
     for (const raw of pkg.skills) {
       candidates.push(toCandidate(raw, order++));
     }
@@ -854,7 +916,7 @@ function normalizeSkills(
   const { assignments, conflicts } = resolveSlugs(survivors);
 
   const licenseByPackage = new Map<string, string | undefined>();
-  for (const pkg of packages) {
+  for (const pkg of [...packages, ...twinPackages]) {
     licenseByPackage.set(pkg.dirName, pkg.plugin.license);
   }
 
@@ -1007,6 +1069,13 @@ function normalizePackage(
     title: localizedText(member.profession) ?? "",
     role: asString(member.role) ?? (member.id === leadId ? "lead" : "member"),
   }));
+  // Persona documents are keyed by the ORIGINAL member id (`agents/<id>.md` names the file), while the
+  // output uses the normalized id. A source id like `Demo_Lead` normalizes to `demo-lead`, so a lookup
+  // by the normalized value silently misses the document and the persona degrades to metadata. Keep the
+  // original id for every document/provenance lookup; the normalized id is output-only.
+  const originalIdOfMember = new Map(
+    members.map((member) => [kebab(member.id) || member.id, member.id] as const),
+  );
   const normalizedLeadId = kebab(leadId) || leadId;
   const teamDescription =
     asString(plugin.description) ?? localizedText(plugin.displayDescription) ?? `${teamName}（WorkBuddy 专家团）`;
@@ -1018,8 +1087,9 @@ function normalizePackage(
     const roleDescription = isLead
       ? `${teamName}的负责人，负责调度与交付。专业方向：${member.title}。`
       : `${teamName}成员。专业方向：${member.title}。团队角色：${member.role}。`;
-    const prompt = promptFor(member.id, member.name, member.title, roleDescription);
-    const doc = agentDocById.get(member.id);
+    const originalId = originalIdOfMember.get(member.id) ?? member.id;
+    const prompt = promptFor(originalId, member.name, member.title, roleDescription);
+    const doc = agentDocById.get(originalId);
     return {
       id: member.id,
       name: member.name,
@@ -1177,7 +1247,7 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
     for (const duplicate of sorted.slice(1)) {
       items.push({
         origin: duplicate.pluginJson.relativePath,
-        reason: `与 ${survivor.dirName} 同名同版本且内容一致（按 plugin.json + agents/*.md 的 sha256 去重）`,
+        reason: `与 ${survivor.dirName} 同名同版本且内容一致（按 plugin.json + agents/*.md + skills 的 sha256 去重）`,
       });
       droppedPackageSkills.set(duplicate.dirName, duplicate.skills);
     }
@@ -1187,14 +1257,63 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
   }
   keptPackages.sort((a, b) => a.dirName.localeCompare(b.dirName));
 
-  // Step 2: skills, including slug conflict resolution.
-  const skillResult = normalizeSkills(keptPackages, snapshot.userSkills, droppedPackageSkills);
+  // Step 1b: identical agent identity, differing skill payloads.
+  //
+  // Two downloads of the same package whose `plugin.json` and agent documents match but whose
+  // `SKILL.md` contents differ are one expert carrying two versions of its skills. Emitting both
+  // would clash on the agent id (a primary key in openbot); dropping one wholesale would lose the
+  // differing instructions. So one copy produces the agent, and every copy's skills — twin copies
+  // included — go into the skill-level content comparison, which is the layer that can actually
+  // tell same-content from different-content.
+  const byAgentIdentity = new Map<string, RawExpertPackage[]>();
+  for (const pkg of keptPackages) {
+    const identity = agentIdentityFingerprint(pkg);
+    const group = byAgentIdentity.get(identity);
+    if (group) {
+      group.push(pkg);
+    } else {
+      byAgentIdentity.set(identity, [pkg]);
+    }
+  }
+  const rankPackageDirs = (a: RawExpertPackage, b: RawExpertPackage): number => {
+    const readable = readabilityRank(a.dirName) - readabilityRank(b.dirName);
+    if (readable !== 0) {
+      return readable;
+    }
+    const lengthDelta = a.dirName.length - b.dirName.length;
+    if (lengthDelta !== 0) {
+      return lengthDelta;
+    }
+    return a.dirName.localeCompare(b.dirName);
+  };
+  const agentPackages: RawExpertPackage[] = [];
+  const twinPackages: RawExpertPackage[] = [];
+  for (const group of byAgentIdentity.values()) {
+    const sorted = [...group].sort(rankPackageDirs);
+    agentPackages.push(sorted[0]);
+    for (const twin of sorted.slice(1)) {
+      twinPackages.push(twin);
+      dropped.push({
+        kind: "agent",
+        slug: packageIdentitySlug(twin),
+        origin: twin.pluginJson.relativePath,
+        reason: `与 ${sorted[0].dirName} 的 plugin.json 与 agents/*.md 一致、仅随包技能内容不同；人设并入同一包，技能按内容逐份比较保留`,
+      });
+    }
+  }
+  agentPackages.sort((a, b) => a.dirName.localeCompare(b.dirName));
+  twinPackages.sort((a, b) => a.dirName.localeCompare(b.dirName));
+
+  // Step 2: skills, including slug conflict resolution. Twin downloads contribute their skills too,
+  // so differing payloads are compared at the content level instead of being discarded.
+  const skillResult = normalizeSkills(agentPackages, snapshot.userSkills, droppedPackageSkills, twinPackages);
   dropped.push(...skillResult.dropped);
 
-  // Step 3: agents and teams, which need the resolved skill slugs.
+  // Step 3: agents and teams, which need the resolved skill slugs. Twin downloads emit nothing here:
+  // their agent identity is identical to the surviving copy's, and openbot's agent id is a primary key.
   const agents: NormalizedAgent[] = [];
   const teams: NormalizedTeam[] = [];
-  for (const pkg of keptPackages) {
+  for (const pkg of agentPackages) {
     const slugs = pkg.skills
       .map((raw) => skillResult.slugBySkillPath.get(raw.skillMd.relativePath))
       .filter((slug): slug is string => slug !== undefined);

@@ -213,9 +213,7 @@ function asRecordList(value: unknown): Record<string, unknown>[] {
 function readAgents(filePath: string, problems: VerifyProblem[]): { ids: string[]; grantCount: number; skills: string[] } {
   const doc = asRecord(parseYaml(readFileSync(filePath, "utf8")));
   const rows = asRecordList(doc.agents);
-  if (rows.length === 0) {
-    problems.push({ file: "agents.yaml", detail: "没有 agents 条目" });
-  }
+  // 空列表不算问题：只带技能或只带连接器的合法包，agents 就是空的。三类全空的判定在 verifyOutDir。
   const ids: string[] = [];
   const skills: string[] = [];
   let grantCount = 0;
@@ -241,9 +239,7 @@ function readAgents(filePath: string, problems: VerifyProblem[]): { ids: string[
 function readSkills(filePath: string, problems: VerifyProblem[]): { slugs: string[] } {
   const doc = asRecord(parseYaml(readFileSync(filePath, "utf8")));
   const rows = asRecordList(doc.skills);
-  if (rows.length === 0) {
-    problems.push({ file: "skills.yaml", detail: "没有 skills 条目" });
-  }
+  // 空列表不算问题：只带专家的合法包，skills 就是空的。三类全空的判定在 verifyOutDir。
   const slugs: string[] = [];
   for (const row of rows) {
     const slug = typeof row.slug === "string" ? row.slug : "";
@@ -357,6 +353,15 @@ export function verifyOutDir(outDir: string): VerifyProblem[] {
   const skills = readSkills(join(outDir, "skills.yaml"), problems);
   const teamCount = readTeams(join(outDir, "teams.yaml"), new Set(agents.ids), problems);
   const connectorIds = readConnectors(join(outDir, "connectors.yaml"), problems);
+
+  // 只要求“三类不全空”：读取端（readWorkBuddy）本来就允许任何一类缺席，只带专家或只带技能的
+  // 包是合法产物；三类全空才说明这份输出什么能力都没有，等于什么都没移植。
+  if (agents.ids.length === 0 && skills.slugs.length === 0 && connectorIds.length === 0) {
+    problems.push({
+      file: "agents.yaml",
+      detail: "agents/skills/connectors 三类条目全空——这份输出没有任何能力，等于什么都没移植",
+    });
+  }
 
   const skillSlugs = new Set(skills.slugs);
   for (const slug of agents.skills) {

@@ -873,3 +873,114 @@ describe("empty sources", () => {
     expect(result.skills[0].instructions).toBe("# Body");
   });
 });
+
+// --------------------------------------------------------------------------------------------------
+// Codex 审查意见修复的回归用例（#498）
+// --------------------------------------------------------------------------------------------------
+
+describe("包去重指纹包含随包技能的内容", () => {
+  const PLUGIN: PluginJson = {
+    name: "shared-pkg",
+    expertType: "agent",
+    agentName: "shared-pkg-agent",
+    skills: ["./skills/shared"],
+  };
+  const AGENT_TEXT = "---\nname: shared-pkg-agent\n---\n\n同一份人设正文。\n";
+
+  /** plugin.json 与 agents/*.md 完全一致、只有 SKILL.md 正文不同的两份下载。 */
+  function build(dirName: string, skillBody: string): RawExpertPackage {
+    return expertPackage({
+      dirName,
+      plugin: PLUGIN,
+      agents: [{ id: "shared-pkg-agent", text: AGENT_TEXT }],
+      skills: [packageSkill(dirName, "shared", `---\nname: shared\n---\n\n${skillBody}\n`)],
+    });
+  }
+
+  test("plugin.json 与 agents 相同、SKILL.md 内容不同的两份下载不是重复包", () => {
+    const first = build("pkg-alpha", "第一版技能正文。");
+    const second = build("pkg-beta", "第二版技能正文，内容不同。");
+    expect(packageFingerprint(first)).not.toBe(packageFingerprint(second));
+    const result = normalizeCapabilities(snapshot({ packages: [first, second] }));
+    // 人设身份只有一份（agent id 是主键，不重复产生），但两份技能正文都按内容保留，一个不少。
+    expect(result.agents).toHaveLength(1);
+    expect(result.skills).toHaveLength(2);
+    const instructions = result.skills.map((skill) => skill.instructions);
+    expect(instructions).toContain("第一版技能正文。");
+    expect(instructions).toContain("第二版技能正文，内容不同。");
+    // 折叠有记录，但理由说的是“仅技能内容不同”，而不是“重复下载”。
+    const merged = result.dropped.find((item) => item.kind === "agent" && item.reason.includes("仅随包技能内容不同"));
+    expect(merged).toBeDefined();
+    expect(result.dropped.filter((item) => item.reason.includes("重复下载"))).toHaveLength(0);
+  });
+
+  test("内容完全一致的两份下载仍然整体折叠（既有行为不回退）", () => {
+    const first = build("engineering-workflow-skills", "同一份正文。");
+    const second = build("ex_eqoqYRT1NIwb", "同一份正文。");
+    expect(packageFingerprint(first)).toBe(packageFingerprint(second));
+    const result = normalizeCapabilities(snapshot({ packages: [first, second] }));
+    expect(result.agents).toHaveLength(1);
+    expect(result.skills).toHaveLength(1);
+    expect(result.dropped.some((item) => item.reason.includes("重复下载"))).toBe(true);
+  });
+});
+
+describe("团队成员用原 ID 查人设文档、用规范化 ID 输出", () => {
+  test("plugin.json 里的 Demo_Lead 能查到 agents/Demo_Lead.md，输出的 id 是 demo-lead", () => {
+    const result = normalizeCapabilities(
+      snapshot({
+        packages: [
+          expertPackage({
+            dirName: "demo-team",
+            plugin: {
+              name: "demo-team",
+              expertType: "team",
+              teamInfo: { leadAgent: "Demo_Lead", memberAgents: ["Demo_Mate"] },
+            },
+            agents: [
+              { id: "Demo_Lead", text: "---\nname: Demo_Lead\n---\n\n负责人的完整人设正文。\n" },
+              { id: "Demo_Mate", text: "---\nname: Demo_Mate\n---\n\n成员的完整人设正文。\n" },
+            ],
+          }),
+        ],
+      }),
+    );
+    const lead = result.agents.find((agent) => agent.id === "demo-lead");
+    expect(lead).toBeDefined();
+    // 修复前：按 kebab 之后的 "demo-lead" 查文档必然落空，system_prompt 退回元数据兜底；
+    // 修复后：人设文档正文（不是兜底模板）成为 system_prompt 的主体。
+    expect(lead?.systemPrompt).toContain("负责人的完整人设正文。");
+    const mate = result.agents.find((agent) => agent.id === "demo-mate");
+    expect(mate?.systemPrompt).toContain("成员的完整人设正文。");
+  });
+});
+
+describe("没有 description 的技能仍得到非空 summary", () => {
+  test("summary 从 SKILL.md 正文首段派生，而不是空串", () => {
+    const result = normalizeCapabilities(
+      snapshot({
+        userSkills: [
+          userSkill("bare-skill", "---\nname: bare-skill\n---\n\n把周报整理成一张表格。\n\n第二段说明。\n"),
+        ],
+      }),
+    );
+    const skill = result.skills[0];
+    // server 侧 parseTenantSkills 用 requiredString 校验 summary：空串会拒绝整个包。
+    expect(skill.summary.length).toBeGreaterThan(0);
+    expect(skill.summary).toContain("把周报整理成一张表格");
+  });
+
+  test("有 description 时仍然优先用 description（既有行为不回退）", () => {
+    const result = normalizeCapabilities(
+      snapshot({
+        userSkills: [
+          userSkill(
+            "with-description",
+            "---\nname: with-description\ndescription: 声明的摘要。\n---\n\n正文首段。\n",
+          ),
+        ],
+      }),
+    );
+    expect(result.skills[0].summary).toBe("声明的摘要。");
+  });
+});

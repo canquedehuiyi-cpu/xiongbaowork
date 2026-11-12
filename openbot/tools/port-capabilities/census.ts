@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { stringify as toYaml } from "yaml";
 
 import type { RunnableLevel } from "./mapping";
+import { stripBom } from "./read-workbuddy";
 
 /** How a catalogue entry is actually shipped, decided from the files on disk rather than from `type`. */
 export type CensusTransport = "mcp-url" | "mcp-command" | "cli" | "missing";
@@ -138,7 +139,7 @@ function readShippedSpec(marketplaceRoot: string, id: string): ShippedSpec {
  */
 function serverShape(mcpPath: string): CensusTransport {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(mcpPath, "utf8"));
+    const parsed: unknown = JSON.parse(stripBom(readFileSync(mcpPath, "utf8")));
     const record = isRecord(parsed) ? parsed : {};
     const servers = isRecord(record.mcpServers) ? record.mcpServers : record;
     const first = Object.values(servers)[0];
@@ -229,7 +230,7 @@ function readCatalogue(sourceRoot: string): Catalogue {
     throw new CensusError(`找不到连接器清单：${indexPath}`);
   }
   const bytes = readFileSync(indexPath, "utf8");
-  const parsed: unknown = JSON.parse(bytes);
+  const parsed: unknown = JSON.parse(stripBom(bytes));
   const list = isRecord(parsed) && Array.isArray(parsed.connectors) ? parsed.connectors : null;
   if (list === null) {
     throw new CensusError(`连接器清单结构不符合预期（缺少 connectors 数组）：${indexPath}`);
