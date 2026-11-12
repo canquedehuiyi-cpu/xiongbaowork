@@ -137,6 +137,35 @@ function abortError(sent: boolean): Error & { sent: boolean } {
   return Object.assign(error, { sent });
 }
 
+/** Reads a pipe to the end; `cancel` releases it at once (a timeout or abort must not wait for EOF). */
+function collect(stream: ReadableStream<Uint8Array> | null | undefined): {
+  text: Promise<string>;
+  cancel: () => void;
+} {
+  if (!stream) return { text: Promise.resolve(""), cancel: () => {} };
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let out = "";
+  const text = (async () => {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        out += decoder.decode(value, { stream: true });
+      }
+    } catch {
+      // Cancelled or the pipe broke: what was read so far is all there is.
+    }
+    return out + decoder.decode();
+  })();
+  return {
+    text,
+    cancel: () => {
+      void reader.cancel().catch(() => {});
+    },
+  };
+}
+
 function systemRoot(): string {
   return process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
 }
@@ -402,13 +431,8 @@ export function createAgentDesktopCli(opts: {
       );
     }
     current = child;
-    const stdout = child.stdout
-      ? new Response(child.stdout).text()
-      : Promise.resolve("");
-    const stderr = child.stderr
-      ? new Response(child.stderr).text().catch(() => "")
-      : Promise.resolve("");
-    void stdout.catch(() => {});
+    const stdout = collect(child.stdout);
+    const stderr = collect(child.stderr);
     if (o.stdin !== undefined && child.stdin) {
       try {
         child.stdin.write(o.stdin);
@@ -432,12 +456,18 @@ export function createAgentDesktopCli(opts: {
       }
     });
     try {
+      // The output is read inside the race: a descendant that keeps the pipe open after the CLI
+      // exits must not hold the queue past the deadline or an abort.
       const outcome = await Promise.race([
-        child.exited.then((code) => ({ code })),
+        Promise.all([child.exited, stdout.text, stderr.text]).then(
+          ([code, out, err]) => ({ code, out, err }),
+        ),
         interrupted,
       ]);
       if (outcome === "timeout" || outcome === "abort") {
         killTree(child, platform);
+        stdout.cancel();
+        stderr.cancel();
         ctx.drain = drainOf(child);
         if (outcome === "abort") throw abortError(true);
         throw new DesktopHelperError(
@@ -448,13 +478,13 @@ export function createAgentDesktopCli(opts: {
       }
       const exitCode = outcome.code;
       if (closed) throw abortError(true);
-      const text = await stdout;
+      const text = outcome.out;
       if (exitCode === 2)
         throw new DesktopHelperError(
           "failed",
           desktopMessage("failed", "INVALID_ARGS"),
           false,
-          (await stderr).trim().slice(-4096) || undefined,
+          outcome.err.trim().slice(-4096) || undefined,
         );
       let envelope: unknown;
       try {
@@ -464,7 +494,7 @@ export function createAgentDesktopCli(opts: {
           "failed",
           desktopMessage("failed", "agent-desktop 的输出不是有效的 JSON"),
           true,
-          (await stderr).trim().slice(-4096) || undefined,
+          outcome.err.trim().slice(-4096) || undefined,
         );
       }
       const env = envelope as {
@@ -555,7 +585,11 @@ export function createAgentDesktopCli(opts: {
   };
 
   return {
-    run(args, o = {}) {
+    run(callerArgs, callerOptions = {}) {
+      // Private copies, taken now: what is checked here is exactly what runs later, whatever the
+      // caller does to its own array or options while the command waits in the queue.
+      const args = [...callerArgs];
+      const o: AdRunOptions = { ...callerOptions };
       for (const arg of args) {
         const bad = [...FORBIDDEN_AD_ARGS].find(
           (f) => arg === f || (f.startsWith("--") && arg.startsWith(`${f}=`)),
