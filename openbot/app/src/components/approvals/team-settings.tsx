@@ -381,7 +381,12 @@ export function TeamApprovalSettings() {
                 )
               }
               onSave={(desktopActionWords) =>
-                team.mutate({ desktopActionWords })
+                team.mutate(
+                  { desktopActionWords },
+                  // Rebuilt even when the saved value did not change (an emptied box is stored as
+                  // no list), so the box always shows the words that now apply.
+                  { onSuccess: () => setResetCount((count) => count + 1) },
+                )
               }
               pending={team.isPending}
               saved={settings.desktopActionWords}
