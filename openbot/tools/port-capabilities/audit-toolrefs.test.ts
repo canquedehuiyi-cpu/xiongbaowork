@@ -334,3 +334,31 @@ describe("negation guard removal", () => {
     expect(judge("Bash (shell) 在 openbot 上不可用").level).toBe("blocked");
   });
 });
+
+// --------------------------------------------------------------------------------------------------
+// Codex 审查意见修复的回归用例（#498）
+// --------------------------------------------------------------------------------------------------
+
+describe("判据与展示分离", () => {
+  test("第 21 个未支持的连接器引用仍然参与判定，不会因截断漏判成 full", () => {
+    // 前 20 个引用全部指向已声明的连接器（不是命中），第 21 个才是未支持的那个。
+    // 修复前 matchAll 在 20 个匹配处截断，未支持的引用根本没进入判定，verdict 错报 full。
+    const known = Array.from({ length: 20 }, (_, i) => `用 mcp__known-${i}__search 完成第 ${i} 步。`).join("\n");
+    const body = `${known}\n用 mcp__unknown-tail__render 生成最终结果。`;
+    const connectorIds = new Set(Array.from({ length: 20 }, (_, i) => `known-${i}`));
+    const finding = auditCapability({ slug: "demo", instructions: body, hasBundledReferences: false }, connectorIds);
+    expect(finding.level).toBe("blocked");
+    const tail = finding.hits.find(
+      (hit) => hit.ruleId === "unknown-mcp-server" && hit.sample.includes("unknown-tail"),
+    );
+    expect(tail).toBeDefined();
+  });
+
+  test("判定全量进行之后，报告仍然只引用最差命中（展示层的既有行为不回退）", () => {
+    const body = Array.from({ length: 25 }, (_, i) => `用 mcp__unknown-${i}__tool 处理。`).join("\n");
+    const finding = judge(body);
+    expect(finding.level).toBe("blocked");
+    // 25 个未知连接器全部成为命中（判定不截断），报告层按规则聚合展示。
+    expect(finding.hits.filter((hit) => hit.ruleId === "unknown-mcp-server")).toHaveLength(25);
+  });
+});

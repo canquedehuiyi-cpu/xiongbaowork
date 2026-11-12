@@ -77,6 +77,8 @@ export const POLICY_SOURCE_LABELS: Record<string, string> = {
   app_enable: "启用本机应用",
   // --- desktop control (sub-project 2) ---
   desktop_window: "敏感窗口",
+  desktop_session: "桌面会话",
+  desktop_action: "桌面操作",
   // --- end desktop control ---
   destructive_tool: "删除类操作",
   outbound_send: "对外发送",
@@ -144,6 +146,8 @@ export type ApprovalInboxData = {
     enforceDangerousCommands?: boolean;
     /** The kinds the admin closed. A kind not named is open. */
     actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
+    /** The words that make a click on the computer ask every time; null or absent is the default list. */
+    desktopActionWords?: string[] | null;
   };
   /** The member's command policy after the team cap. */
   hostCommands?: HostCommandPolicy;
@@ -290,6 +294,8 @@ export const setTeamApprovalSettings = (input: {
   hostCommandsCap?: HostCommandPolicy;
   enforceDangerousCommands?: boolean;
   actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
+  /** Null puts the default list back. */
+  desktopActionWords?: string[] | null;
 }) =>
   client("/api/approvals/team", {
     method: "PATCH",

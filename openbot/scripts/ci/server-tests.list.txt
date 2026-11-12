@@ -88,6 +88,7 @@ tests/approvals-question-resume.integration.test.ts
 tests/approvals-questions.test.ts
 tests/approvals-saved-call.test.ts
 tests/approvals-store.integration.test.ts
+tests/approvals-team-desktop-words.integration.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/apps-page-wording.test.ts
@@ -319,6 +320,8 @@ tests/desktop-connection-failure.test.ts
 tests/desktop-gateway.test.ts
 tests/desktop-session.test.ts
 tests/desktop-tools.integration.test.ts
+tests/desktop-write-tools.integration.test.ts
+tests/desktop-write.test.ts
 tests/dev-actor-email.test.ts
 tests/dev-actor.integration.test.ts
 tests/device-apps.integration.test.ts
@@ -562,6 +565,7 @@ tests/policy-store-tenant.integration.test.ts
 tests/policy-translate.test.ts
 tests/portrait-coworker-access.test.ts
 tests/portrait-image.test.ts
+tests/portrait-media.test.ts
 tests/portraits.test.ts
 tests/private-share-group.test.ts
 tests/proactive-admin.integration.test.ts

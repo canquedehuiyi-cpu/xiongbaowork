@@ -15,6 +15,7 @@ import type { ActionKind, ActionKindPolicy } from "./types";
  *   approval_rules.account                    text，可空            0181（X1，上游 #1298）
  *   approval_team_settings.action_kinds       jsonb，非空，默认 {}  0177（上游 #1394）
  *   approval_team_settings.reviewer_guidance  text，可空            0178（上游 #1397）
+ *   approval_team_settings.desktop_action_words  text[]，可空        0202（桌面逐次审批的词）
  *
  * 新表 approval_conversation_grants 不受冻结限制，在 db/schema/approval-conversation-grants.ts。
  * approval_requests 的 decision 约束由 0177 改成含 'allow_conversation'；schema 里的 check 保持 fork
@@ -125,11 +126,21 @@ export const teamReviewerGuidance: SQL<string | null> = columnOf<string | null>(
   "reviewer_guidance",
 );
 
+/**
+ * `approval_team_settings.desktop_action_words`: the words that make clicking a control on a paired
+ * computer ask every time, as the store normalised them, or null for the default list
+ * (`DEFAULT_DESKTOP_ACTION_WORDS` in shared/desktop-control.ts).
+ */
+export const teamDesktopActionWords: SQL<string[] | null> = columnOf<
+  string[] | null
+>(approvalTeamSettings, "desktop_action_words");
+
 /** Every `approval_team_settings` column, the schema's and the ones above. */
 export const teamSettingsColumns = {
   ...getTableColumns(approvalTeamSettings),
   actionKinds: teamActionKinds,
   reviewerGuidance: teamReviewerGuidance,
+  desktopActionWords: teamDesktopActionWords,
 };
 
 const teamRow = sql`${approvalTeamSettings.id} = 'team' and ${approvalTeamSettings.tenantId} = ${TEAM_TENANT}`;
@@ -155,5 +166,27 @@ export async function saveTeamReviewerGuidance(
 ): Promise<void> {
   await executor.execute(
     sql`update ${approvalTeamSettings} set ${sql.identifier("reviewer_guidance")} = ${guidance} where ${teamRow}`,
+  );
+}
+
+/**
+ * Write the desktop action words on the team row, which the caller has just upserted. The words
+ * must already be normalised (`normaliseDesktopActionWords` in approvals/store.ts); null is the
+ * default list, and so is an empty list. Each word is its own parameter in an `ARRAY[...]`, so
+ * nothing depends on how the driver would serialise a JavaScript array.
+ */
+export async function saveTeamDesktopActionWords(
+  executor: Executor,
+  words: readonly string[] | null,
+): Promise<void> {
+  const value =
+    words && words.length > 0
+      ? sql`ARRAY[${sql.join(
+          words.map((word) => sql`${word}`),
+          sql`, `,
+        )}]::text[]`
+      : sql`NULL`;
+  await executor.execute(
+    sql`update ${approvalTeamSettings} set ${sql.identifier("desktop_action_words")} = ${value} where ${teamRow}`,
   );
 }

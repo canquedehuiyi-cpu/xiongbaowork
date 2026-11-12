@@ -994,3 +994,226 @@ function rgbaPng(width: number, height: number): Uint8Array {
     chunk("IEND", new Uint8Array()),
   ]);
 }
+
+describe("agent-desktop reader: wait and displays (Task 24)", () => {
+  const WAIT_TIMEOUT = (seconds: number) =>
+    `等了 ${seconds} 秒，没有等到这个控件。`;
+  const snapshots = (log: () => string[][]) =>
+    log().filter((args) => args[0] === "snapshot");
+
+  test("wait returns a fresh snapshot whose refs are the latest; timeout is not outcome-unknown", async () => {
+    const { reader, log, set } = setup("windows", {
+      snapshot: ok("snapshot", sample("windows", "snapshot-password").data),
+    });
+    const window = await firstWindow(reader);
+    const before = await reader.snapshot({ windowId: window.windowId });
+    const oldSend = before.elements.find((e) => e.name === "Send")!;
+
+    const waited = await reader.wait!({
+      windowId: window.windowId,
+      name: "Send",
+      type: "button",
+      timeoutSec: 5,
+    });
+    expect(waited.platform).toBe("windows");
+    expect(waited.window.windowId).toBe(window.windowId);
+    expect(waited.snapshotId).not.toBe(before.snapshotId);
+    expect(waited.elements.map((e) => e.name)).toEqual(
+      before.elements.map((e) => e.name),
+    );
+    // The wait's refs replace the old ones for that window.
+    const send = waited.elements.find((e) => e.name === "Send")!;
+    expect(reader.resolveRef(oldSend.ref)).toBe("stale");
+    expect(reader.resolveRef(send.ref)).toMatchObject({
+      windowId: window.windowId,
+      control: { type: "button", name: "Send" },
+    });
+    expect(snapshots(log).at(-1)).toEqual([
+      "snapshot",
+      "--window-id",
+      "w-66058",
+      "--compact",
+      "--max-depth",
+      "12",
+      "--wait-for",
+      "button:Send",
+      "--wait-timeout",
+      "5000",
+    ]);
+
+    // agent-desktop gave up waiting: a plain failure with the copy, never unknown; the refs stand.
+    set("snapshot", err("snapshot", "TIMEOUT"));
+    const timedOut = await rejected(
+      reader.wait!({ windowId: window.windowId, name: "Send", timeoutSec: 5 }),
+    );
+    expect(timedOut.message).toBe(WAIT_TIMEOUT(5));
+    expect(timedOut.outcomeUnknown).toBeUndefined();
+    expect(readFailure(timedOut)).toEqual({
+      ok: false,
+      error: WAIT_TIMEOUT(5),
+    });
+    expect(typeof reader.resolveRef(send.ref)).toBe("object");
+
+    // The CLI's own budget covers the whole wait, and a timeout there reads the same.
+    const budgets: Array<number | undefined> = [];
+    const slow = createAgentDesktopReader({
+      platform: "macos",
+      cli: fakeCli(async (args, opts) => {
+        if (args[0] === "list-windows")
+          return sample("macos", "list-windows").data;
+        if (args[0] === "list-displays")
+          return sample("macos", "list-displays").data;
+        budgets.push(opts?.timeoutMs);
+        throw new DesktopHelperError(
+          "timeout",
+          desktopMessage("timeout", "50"),
+          true,
+        );
+      }),
+    });
+    const sw = await firstWindow(slow);
+    const slowError = await rejected(
+      slow.wait!({ windowId: sw.windowId, type: "button", timeoutSec: 30 }),
+    );
+    expect(slowError.message).toBe(WAIT_TIMEOUT(30));
+    expect(readFailure(slowError)).toEqual({
+      ok: false,
+      error: WAIT_TIMEOUT(30),
+    });
+    expect(budgets).toEqual([30_000 + DESKTOP_LIMITS.adCommandTimeoutMs]);
+  });
+
+  test("wait takes 1 to 30 seconds and something to wait for, and refuses a sensitive title, before any snapshot", async () => {
+    const { reader, log, set } = setup("macos");
+    const window = await firstWindow(reader);
+    const badTime = desktopMessage("failed", "等待时间要在 1～30 秒之间");
+    for (const timeoutSec of [0, 31, 2.5, "5", undefined, -1])
+      expect(
+        (
+          await rejected(
+            reader.wait!({
+              windowId: window.windowId,
+              name: "OK",
+              timeoutSec: timeoutSec as number,
+            }),
+          )
+        ).message,
+      ).toBe(badTime);
+    const badTarget = desktopMessage("failed", "要等的控件写得不对");
+    for (const target of [
+      {},
+      { name: "" },
+      { name: "a\nb" },
+      { name: "x".repeat(DESKTOP_LIMITS.nameMax + 1) },
+      { type: "but:ton" },
+      { type: 7 },
+    ])
+      expect(
+        (
+          await rejected(
+            reader.wait!({
+              windowId: window.windowId,
+              timeoutSec: 3,
+              ...(target as { name?: string; type?: string }),
+            }),
+          )
+        ).message,
+      ).toBe(badTarget);
+    expect(
+      (
+        await rejected(
+          reader.wait!({
+            windowId: "a0123456789abcdef",
+            name: "OK",
+            timeoutSec: 3,
+          }),
+        )
+      ).code,
+    ).toBe("no_window");
+    expect(snapshots(log)).toEqual([]);
+
+    // The same rule as a snapshot: a title that turned sensitive is refused, unless approved.
+    const turned = sample("macos", "list-windows").data.map(
+      (w: { id: string }) =>
+        w.id === "w-43" ? { ...w, title: "网上银行" } : w,
+    );
+    set("list-windows", ok("list-windows", turned));
+    const sensitive = await rejected(
+      reader.wait!({ windowId: window.windowId, name: "OK", timeoutSec: 3 }),
+    );
+    expect(sensitive.code).toBe("sensitive");
+    expect(sensitive.message).toBe(desktopMessage("sensitive", "银行"));
+    expect(snapshots(log)).toEqual([]);
+    const allowed = await reader.wait!({
+      windowId: window.windowId,
+      name: "OK",
+      timeoutSec: 3,
+      allowSensitive: true,
+    });
+    expect(allowed.window.title).toBe("网上银行");
+    // Only a name: the type part is left empty.
+    expect(snapshots(log).at(-1)?.slice(-4)).toEqual([
+      "--wait-for",
+      ":OK",
+      "--wait-timeout",
+      "3000",
+    ]);
+  });
+
+  test("a window on the second display has display 1", async () => {
+    const at = (id: string, x: number) => ({
+      accessible: true,
+      app_name: "app",
+      bounds: { x, y: 100, width: 400, height: 300 },
+      id,
+      is_focused: false,
+      pid: 500,
+      process_instance: "x",
+      title: id,
+      visible: true,
+    });
+    const primary = {
+      id: "monitor-1",
+      bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+      is_primary: true,
+      scale: 1,
+    };
+    const second = {
+      id: "monitor-2",
+      bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
+      is_primary: false,
+      scale: 2,
+    };
+    const windows = [
+      at("w-1", 100),
+      at("w-2", 2500),
+      // Its centre is on the second display, though it starts on the first.
+      at("w-3", 1800),
+      // Its centre is on no display at all.
+      at("w-4", -5000),
+    ];
+    for (const displays of [
+      [primary, second],
+      // Listed with the secondary first: the primary is still 0.
+      [second, primary],
+    ]) {
+      const { reader } = setup("windows", {
+        "list-windows": ok("list-windows", windows),
+        "list-displays": ok("list-displays", displays),
+      });
+      const listed = (await reader.windows()).windows;
+      expect(listed.map((w) => [w.title, w.display])).toEqual([
+        ["w-1", 0],
+        ["w-2", 1],
+        ["w-3", 1],
+        ["w-4", undefined],
+      ]);
+      expect(listed[1]!.bounds).toEqual({
+        x: 2500,
+        y: 100,
+        width: 400,
+        height: 300,
+      });
+    }
+  });
+});

@@ -30,6 +30,8 @@ const COMPUTER_ACTION_EVENT_TYPES = [
   "computer.action_refused",
   "computer.action_failed",
   "computer.action_stopped",
+  // A desktop write that was done: the outcome row of a computer action (gateway.ts).
+  "computer.desktop_write_done",
 ] as const;
 
 const payloadText = (key: string) =>

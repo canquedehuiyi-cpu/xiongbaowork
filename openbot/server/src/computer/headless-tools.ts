@@ -8,6 +8,12 @@ import {
   HeadlessToolSuspension,
 } from "@openbot/toolkit/headless-tools";
 import { z } from "zod";
+import {
+  DESKTOP_SESSION_TOOL,
+  DESKTOP_SNAPSHOT_TOOL,
+  DESKTOP_WAIT_TOOL,
+  DESKTOP_WRITE_TOOLS,
+} from "../approvals/desktop-policy";
 import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { ComputerSeat } from "./computer-key";
@@ -87,9 +93,17 @@ export function createHeadlessComputerTools(options: {
 }): HeadlessTool[] {
   const tools = headlessComputerTools(options);
   const { disabled } = options;
-  return disabled
-    ? tools.filter((tool) => !disabled(tool.definition.name))
-    : tools;
+  if (!disabled) return tools;
+  // Operating the desktop disabled takes every desktop write tool with it.
+  const noDesktopWrites = disabled(DESKTOP_SESSION_TOOL);
+  // Looking at the desktop disabled takes the wait with it: a wait reads the window as a snapshot.
+  const noDesktopReads = disabled(DESKTOP_SNAPSHOT_TOOL);
+  return tools.filter(
+    (tool) =>
+      !disabled(tool.definition.name) &&
+      !(noDesktopWrites && DESKTOP_WRITE_TOOLS.has(tool.definition.name)) &&
+      !(noDesktopReads && tool.definition.name === DESKTOP_WAIT_TOOL),
+  );
 }
 
 function headlessComputerTools(options: {
@@ -375,7 +389,8 @@ function headlessComputerTools(options: {
       // --- end app discovery ---
     );
   // --- desktop control (sub-project 2) ---
-  // Read only, and on the same terms as the local apps: the owner's own run on their paired machine.
+  // The two read tools and the four write tools, on the same terms as the local apps: the owner's
+  // own run on their paired machine. With 操作桌面 disabled the writes are filtered out above.
   if (onDevice && options.apps)
     tools.push(...desktopTools(tool, { gateway, botId, actor }));
   // --- end desktop control ---

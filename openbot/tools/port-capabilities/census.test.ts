@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
+const BOM = "\uFEFF";
+
 import {
   AUTH_MODE_MAP,
   assertCensusConsistent,
@@ -59,10 +61,12 @@ function writeFixture(): void {
     catalogueRow("local-stdio", "mcp", undefined),
     catalogueRow("cli-only", "cli", "token"),
     catalogueRow("orphan", "mcp", undefined),
+    catalogueRow("remote-bom", "mcp", "oauth"),
   ];
+  // 清单文件带 UTF-8 BOM：真实机器上的 connectors.json 确实带过（read-workbuddy 的 stripBom 注释有先例）。
   write(
     "connectors-marketplace/.codebuddy-connector/connectors.json",
-    JSON.stringify({ name: "fixture", connectors: rows }, null, 2),
+    BOM + JSON.stringify({ name: "fixture", connectors: rows }, null, 2),
   );
   write(
     "connectors-marketplace/connectors/remote-open/mcp.json",
@@ -95,6 +99,11 @@ function writeFixture(): void {
   write(
     "connectors-marketplace/connectors/cli-only/cli.json",
     JSON.stringify({ name: "cli-only", binary: "cli-only" }),
+  );
+  // remote-bom 的 mcp.json 带 UTF-8 BOM：JSON.parse 拒绝 BOM，剥掉之前会被误判成无法解析的 stdio。
+  write(
+    "connectors-marketplace/connectors/remote-bom/mcp.json",
+    BOM + JSON.stringify({ mcpServers: { "remote-bom": { url: "https://example.test/bom" } } }),
   );
   // `orphan` deliberately has no directory: the index claims a connector the disk does not have.
 }
@@ -158,6 +167,11 @@ describe("transport is decided by the files, not by the index", () => {
     expect(row("local-stdio").transport).toBe("mcp-command");
     expect(row("cli-only").transport).toBe("cli");
     expect(row("orphan").transport).toBe("missing");
+  });
+
+  test("带 UTF-8 BOM 的 mcp.json 仍按内容判定传输方式，不会被误判成 mcp-command", () => {
+    expect(row("remote-bom").transport).toBe("mcp-url");
+    expect(row("remote-bom").verdict).toBe("full");
   });
 
   test("the directory cell points at the spec file, and never at an absolute path", () => {

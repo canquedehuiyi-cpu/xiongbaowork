@@ -3,14 +3,20 @@ import {
   classifyDesktopKeys,
   DEFAULT_DESKTOP_ACTION_WORDS,
   DESKTOP_ACTIONS,
+  DESKTOP_APP_NAME,
   DESKTOP_KEYS,
   DESKTOP_LIMITS,
   DESKTOP_REF,
+  DESKTOP_TEXT_ROLES,
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
+  type DesktopWritePayload,
+  type DesktopWriteRequest,
   desktopActionWordsOf,
+  desktopActivationKey,
   desktopMessage,
   desktopPlatformOf,
+  desktopTextNeedsApproval,
   desktopWindowWordHit,
   desktopWordHit,
   isAgentWindowId,
@@ -50,14 +56,46 @@ describe("desktop-control protocol", () => {
     expect(desktopMessage("failed", "boom")).toBe("桌面操作没有成功：boom");
   });
 
-  test("the two read actions and the three session actions exist, nothing else", () => {
+  test("the read, session and write actions exist, nothing else", () => {
     expect([...DESKTOP_ACTIONS].sort()).toEqual([
+      "desktop.click",
+      "desktop.clipboard_read",
+      "desktop.clipboard_write",
+      "desktop.focus",
+      "desktop.key",
+      "desktop.launch",
       "desktop.session_end",
       "desktop.session_start",
       "desktop.session_status",
       "desktop.snapshot",
+      "desktop.type",
+      "desktop.wait",
       "desktop.windows",
     ]);
+  });
+
+  test("DESKTOP_ACTIONS is exactly the thirteen actions: three reads, three session actions, seven writes", () => {
+    expect([...DESKTOP_ACTIONS]).toEqual([
+      "desktop.windows",
+      "desktop.snapshot",
+      "desktop.session_start",
+      "desktop.session_status",
+      "desktop.session_end",
+      "desktop.click",
+      "desktop.type",
+      "desktop.key",
+      "desktop.focus",
+      "desktop.wait",
+      "desktop.launch",
+      "desktop.clipboard_read",
+      "desktop.clipboard_write",
+    ]);
+  });
+
+  test("outcome_unknown carries the spec's copy", () => {
+    expect(desktopMessage("outcome_unknown")).toBe(
+      "不确定这一步是否已经生效，请先重新读取窗口确认。",
+    );
   });
 
   test("the limits are the plan's numbers", () => {
@@ -83,6 +121,8 @@ describe("desktop-control protocol", () => {
       headedAckMs: 1_000,
       sessionReadyMs: 2_000,
       textMaxBytes: 9_000,
+      clipboardReadMaxChars: 8_000,
+      waitMaxSec: 30,
     });
   });
 
@@ -404,5 +444,142 @@ describe("desktop-control protocol", () => {
     expect(desktopPlatformOf("linux")).toBe("linux");
     for (const other of ["freebsd", "aix", "", "Windows"])
       expect(desktopPlatformOf(other)).toBeUndefined();
+  });
+
+  test("desktopActivationKey: space alone or with shift only", () => {
+    for (const keys of ["space", "SPACE", "shift+space", "Shift+Space"])
+      expect({ keys, hit: desktopActivationKey(keys) }).toEqual({
+        keys,
+        hit: true,
+      });
+    for (const keys of [
+      "ctrl+space",
+      "alt+space",
+      "cmd+space",
+      "shift+ctrl+space",
+      "enter",
+      "tab",
+      "s",
+      "space+",
+      "",
+    ])
+      expect({ keys, hit: desktopActivationKey(keys) }).toEqual({
+        keys,
+        hit: false,
+      });
+  });
+
+  test("desktopTextNeedsApproval: C0, DEL, NEL, LS and PS; CR and LF only in a multi-line box", () => {
+    for (const text of ["", "plain 熊宝 ✓", "a b", " ", "\u0086"])
+      for (const multiline of [false, true])
+        expect(desktopTextNeedsApproval(text, multiline)).toBe(false);
+    for (const text of ["a\nb", "a\rb", "a\r\nb"]) {
+      expect(desktopTextNeedsApproval(text, false)).toBe(true);
+      expect(desktopTextNeedsApproval(text, true)).toBe(false);
+    }
+    for (const text of [
+      "\u0000",
+      "a\tb",
+      "\u000b",
+      "\u000c",
+      "\u001f",
+      "\u007f",
+      "\u0085",
+      " ",
+      " ",
+    ])
+      for (const multiline of [false, true])
+        expect({
+          text,
+          multiline,
+          hit: desktopTextNeedsApproval(text, multiline),
+        }).toEqual({
+          text,
+          multiline,
+          hit: true,
+        });
+  });
+
+  test("DESKTOP_APP_NAME takes an app's name and nothing that is a path or a flag", () => {
+    for (const app of [
+      "notepad",
+      "Safari",
+      "TextEdit",
+      "calc.exe",
+      "Microsoft Edge",
+      "微信",
+      "Visual Studio Code (Insiders)",
+      "a".repeat(64),
+    ])
+      expect({ app, ok: DESKTOP_APP_NAME.test(app) }).toEqual({
+        app,
+        ok: true,
+      });
+    for (const app of [
+      "",
+      "/bin/sh",
+      "-x",
+      "--help",
+      "../a",
+      ".hidden",
+      "a/b",
+      "C:\\Windows\\notepad.exe",
+      "a;b",
+      "a\nb",
+      " notepad",
+      "a".repeat(65),
+      "notepad -x",
+      "notepad --arg",
+      "a - b",
+      "a\t-x",
+    ])
+      expect({ app, ok: DESKTOP_APP_NAME.test(app) }).toEqual({
+        app,
+        ok: false,
+      });
+  });
+
+  test("a desktop write's payload is typed by its action", () => {
+    const common = {
+      session: "t",
+      botId: "b",
+      actorId: "a",
+      approved: false,
+      actionWords: [],
+    };
+    const click: DesktopWritePayload<"desktop.click"> = { ...common, ref: "r" };
+    const read: DesktopWriteRequest = {
+      action: "desktop.clipboard_read",
+      payload: { ...common, approved: true },
+    };
+    const unapproved: DesktopWriteRequest = {
+      action: "desktop.clipboard_read",
+      // @ts-expect-error a clipboard read is sent only once approved
+      payload: common,
+    };
+    // @ts-expect-error a click names its control
+    const noRef: DesktopWritePayload<"desktop.click"> = common;
+    const noRefRequest: DesktopWriteRequest = {
+      action: "desktop.click",
+      // @ts-expect-error a click names its control, whatever else could carry no target
+      payload: common,
+    };
+    const noApp: DesktopWriteRequest = {
+      action: "desktop.launch",
+      // @ts-expect-error a launch names its app
+      payload: { ...common, text: "x" },
+    };
+    expect([click, read, unapproved, noRef, noRefRequest, noApp]).toHaveLength(
+      6,
+    );
+  });
+
+  test("the text roles a desktop type may write into", () => {
+    expect([...DESKTOP_TEXT_ROLES]).toEqual([
+      "textfield",
+      "textarea",
+      "searchfield",
+      "combobox",
+    ]);
   });
 });

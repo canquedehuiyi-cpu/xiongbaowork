@@ -226,6 +226,12 @@ export type ApprovalSubject = {
     control?: { type: string; name: string } | null;
     keys?: string;
     newlineInSingleLine?: boolean;
+    /** 输入的目标控件不是文本类 role（`DESKTOP_TEXT_ROLES`），由网关按控件缓存判断。 */
+    notTextTarget?: boolean;
+    /** 要输入的文字含控制字符或特殊换行（`desktopTextNeedsApproval`）；服务器不留文字，只留这个结论。 */
+    controlCharacters?: boolean;
+    /** 设备端核对后回 `needs_approval` 给出的理由：服务器按它再问一次。 */
+    deviceReason?: string;
   };
   // --- end desktop control ---
 };
@@ -397,6 +403,12 @@ export type ApprovalTeamSettings = {
   enforceDangerousCommands: boolean;
   /** The kinds the admin closed. A kind not named is `open`. */
   actionKinds: Partial<Record<ActionKind, ActionKindPolicy>>;
+  /**
+   * The words that make clicking a control on a paired computer ask every time, normalised by the
+   * store. Null, or absent where there is no team (the personal edition), is the default list
+   * (`desktopActionWordsOf` in shared/desktop-control.ts).
+   */
+  desktopActionWords?: string[] | null;
 };
 /** The three modes a Bot's tool can be set to on its permissions page (SEC1 §4.5). */
 export type EmployeeToolMode = "direct" | "ask" | "disabled";

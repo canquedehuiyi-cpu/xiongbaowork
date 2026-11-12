@@ -61,6 +61,9 @@ export const ACTION_ENDINGS = [
   "computer.action_failed",
   "computer.action_stopped",
   "computer.action_refused",
+  // A desktop write that was done (gateway.ts): it carries everything its attempt row did, and how
+  // the write went, so it is drawn in the attempt's place.
+  "computer.desktop_write_done",
 ] as const;
 
 const ENDINGS = new Set<string>(ACTION_ENDINGS);

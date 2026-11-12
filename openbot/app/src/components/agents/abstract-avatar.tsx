@@ -1,9 +1,13 @@
 import { QueryClientContext } from "@tanstack/react-query";
 import Avatar from "boring-avatars";
-import { useContext } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useBotLook } from "@/components/agents/bot-look";
 import { BotOrb } from "@/components/agents/bot-orb";
-import { usePortraitSrc } from "@/components/portraits/use-portrait";
+import {
+  AVATAR_MOTION_CLASS,
+  type AvatarMotionState,
+} from "@/components/portraits/preset-animations";
+import { usePortraitSrc, usePortraitVideo } from "@/components/portraits/use-portrait";
 import type { PortraitKind } from "@/lib/portraits/queries";
 
 type FaceProps = {
@@ -20,6 +24,11 @@ type FaceProps = {
    * in place of the abstract one; without it, or until one is chosen, the seed's drawing is.
    */
   portrait?: { kind: PortraitKind; id: string };
+  /**
+   * The motion state to play — one of the seven states a Muse avatar has. Without it the face is
+   * still: a list never plays a video on its own, and a detail view plays only the state it is in.
+   */
+  motion?: AvatarMotionState;
 };
 
 /** A coworker's avatar: a chosen portrait, else its orb, or its face in a skin that has not opted in to orbs. */
@@ -43,7 +52,33 @@ function PortraitFace(
   },
 ) {
   const src = usePortraitSrc(props.portrait.kind, props.portrait.id);
-  return <Face {...props} src={src ?? undefined} />;
+  const videoUrl = usePortraitVideo(props.portrait.kind, props.portrait.id);
+  return (
+    <Face
+      {...props}
+      src={src ?? undefined}
+      videoUrl={videoUrl ?? undefined}
+    />
+  );
+}
+
+/**
+ * Whether the viewer asked for less motion. A CSS media query cannot stop a <video>, so the
+ * video branch reads this directly and falls back to the poster when motion is reduced.
+ */
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
 }
 
 function Face({
@@ -52,38 +87,77 @@ function Face({
   size = 40,
   decorative = false,
   src,
+  videoUrl,
+  motion,
   look,
-}: FaceProps & { src?: string; look: "orb" | "face" }) {
+}: FaceProps & {
+  src?: string;
+  videoUrl?: string;
+  look: "orb" | "face";
+}) {
+  const [videoFailed, setVideoFailed] = useState(false);
+  // A failed video stays failed only for that URL: a replacement upload retries playback.
+  useEffect(() => {
+    if (videoUrl) setVideoFailed(false);
+  }, [videoUrl]);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const motionClass = motion ? AVATAR_MOTION_CLASS[motion] : undefined;
   // A skin that draws coworkers as orbs still shows a portrait somebody chose for them.
   if (look === "orb" && !src) {
     const orb = <BotOrb name={name} seed={seed} size={size} />;
-    return decorative ? (
-      <span aria-hidden="true" className="inline-flex shrink-0">
+    if (!motionClass) {
+      return decorative ? (
+        <span aria-hidden="true" className="inline-flex shrink-0">
+          {orb}
+        </span>
+      ) : (
+        orb
+      );
+    }
+    return (
+      <span
+        aria-hidden="true"
+        className={`inline-flex shrink-0 ${motionClass}`}
+      >
         {orb}
       </span>
-    ) : (
-      orb
     );
   }
-  const drawing = src ? (
-    <img
-      alt=""
-      className="size-full object-cover"
-      data-portrait=""
-      decoding="async"
-      draggable={false}
-      height={size}
-      src={src}
-      width={size}
-    />
-  ) : (
-    <Avatar name={seed} size={size} />
-  );
+  const drawing =
+    videoUrl && motion && !videoFailed && !prefersReducedMotion ? (
+      <video
+        autoPlay
+        className="size-full object-cover"
+        data-portrait-video=""
+        draggable={false}
+        height={size}
+        loop
+        muted
+        onError={() => setVideoFailed(true)}
+        playsInline
+        poster={src}
+        src={videoUrl}
+        width={size}
+      />
+    ) : src ? (
+      <img
+        alt=""
+        className="size-full object-cover"
+        data-portrait=""
+        decoding="async"
+        draggable={false}
+        height={size}
+        src={src}
+        width={size}
+      />
+    ) : (
+      <Avatar name={seed} size={size} />
+    );
   if (decorative) {
     return (
       <span
         aria-hidden="true"
-        className="inline-flex shrink-0 overflow-hidden rounded-[30%]"
+        className={`inline-flex shrink-0 overflow-hidden rounded-[30%] ${motionClass ?? ""}`}
         style={{ height: size, width: size }}
       >
         {drawing}
@@ -94,7 +168,7 @@ function Face({
     <span
       role="img"
       aria-label={name}
-      className="inline-flex shrink-0 overflow-hidden rounded-[30%]"
+      className={`inline-flex shrink-0 overflow-hidden rounded-[30%] ${motionClass ?? ""}`}
       style={{ height: size, width: size }}
     >
       {/* The drawing carries its own role; hidden so the coworker is announced once, by name. */}

@@ -17,12 +17,14 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Fragment } from "react";
+import { DEFAULT_DESKTOP_ACTION_WORDS } from "@openbot/shared/desktop-control";
+import { Fragment, useState } from "react";
 import {
   PageEmpty,
   PageRows,
   PageSection,
 } from "@/components/layout/page-shell";
+import { Button } from "@/components/ui/button";
 import {
   Item,
   ItemActions,
@@ -33,6 +35,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   type ActionKind,
   type ActionKindPolicy,
@@ -99,6 +102,83 @@ const ACTION_KIND_LABELS: Record<ActionKindPolicy, string> = {
 };
 
 /**
+ * 桌面逐次审批的词：成员的员工点击名字含这些词的控件时，每次都问。没存过就显示共享的默认词表，
+ * 保存时一行一个词（去掉首尾空白和空行），「恢复默认」存 null；词表的规范化和上限以服务端为准。
+ */
+function DesktopActionWords({
+  saved,
+  pending,
+  onSave,
+  onReset,
+}: {
+  saved: string[] | null | undefined;
+  pending: boolean;
+  onSave: (words: string[] | null) => void;
+  onReset: () => void;
+}) {
+  const initial = (
+    saved && saved.length > 0 ? saved : DEFAULT_DESKTOP_ACTION_WORDS
+  ).join("\n");
+  const [text, setText] = useState(initial);
+  return (
+    <Item size="sm">
+      <ItemContent>
+        <ItemTitle id="desktop-action-words-title">桌面逐次审批的词</ItemTitle>
+        <ItemDescription id="desktop-action-words-help">
+          员工在电脑上点击名字含这些词的按钮时，每次都要你批准。
+        </ItemDescription>
+        <Textarea
+          aria-describedby="desktop-action-words-help"
+          aria-labelledby="desktop-action-words-title"
+          className="mt-2"
+          disabled={pending}
+          onChange={(event) => setText(event.target.value)}
+          rows={8}
+          value={text}
+        />
+        <p className="mt-1 text-muted-foreground text-xs">每行一个词。</p>
+        <div className="mt-2 flex gap-2">
+          <Button
+            disabled={pending}
+            onClick={() => {
+              const words = [
+                ...new Set(
+                  text
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter((line) => line !== ""),
+                ),
+              ];
+              // Exactly the default list is no list: saving it untouched must not freeze it.
+              onSave(
+                words.length === DEFAULT_DESKTOP_ACTION_WORDS.length &&
+                  words.every(
+                    (word, index) =>
+                      word === DEFAULT_DESKTOP_ACTION_WORDS[index],
+                  )
+                  ? null
+                  : words,
+              );
+            }}
+            size="sm"
+          >
+            保存词表
+          </Button>
+          <Button
+            disabled={pending}
+            onClick={onReset}
+            size="sm"
+            variant="outline"
+          >
+            恢复默认
+          </Button>
+        </div>
+      </ItemContent>
+    </Item>
+  );
+}
+
+/**
  * 上游 main 的版本（fork 曾删掉，团队设置画在 inbox.tsx 里），M5b 接在 管理 → 审批。
  *
  * What every member's Bots must do, set by an administrator: the team-wide controls, the rules that
@@ -118,6 +198,8 @@ export function TeamApprovalSettings() {
   const revokeTeam = useMutation(
     revokeTeamApprovalRuleMutationOptions(queryClient),
   );
+  // Bumped when the default is put back, so the box shows it even if the saved value was already null.
+  const [resetCount, setResetCount] = useState(0);
   const error =
     inbox.error ?? team.error ?? changeTeamRule.error ?? revokeTeam.error;
   if (inbox.isPending && !error) return null;
@@ -284,6 +366,31 @@ export function TeamApprovalSettings() {
                 </Fragment>
               ),
             )}
+          </PageRows>
+        </PageSection>
+      ) : null}
+      {settings ? (
+        <PageSection title="桌面逐次审批">
+          <PageRows>
+            <DesktopActionWords
+              key={`${resetCount}:${JSON.stringify(settings.desktopActionWords ?? null)}`}
+              onReset={() =>
+                team.mutate(
+                  { desktopActionWords: null },
+                  { onSuccess: () => setResetCount((count) => count + 1) },
+                )
+              }
+              onSave={(desktopActionWords) =>
+                team.mutate(
+                  { desktopActionWords },
+                  // Rebuilt even when the saved value did not change (an emptied box is stored as
+                  // no list), so the box always shows the words that now apply.
+                  { onSuccess: () => setResetCount((count) => count + 1) },
+                )
+              }
+              pending={team.isPending}
+              saved={settings.desktopActionWords}
+            />
           </PageRows>
         </PageSection>
       ) : null}

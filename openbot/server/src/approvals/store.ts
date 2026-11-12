@@ -27,6 +27,7 @@ import {
   ruleColumns,
   saveRuleExtras,
   saveTeamActionKinds,
+  saveTeamDesktopActionWords,
   saveTeamReviewerGuidance,
   teamReviewerGuidance,
   teamSettingsColumns,
@@ -90,6 +91,42 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   // 上游：每种动作默认「打开」。本部署的审批底线不随它放宽（见 approvals/policy.ts 的 decideAction）。
   actionKinds: {},
 };
+
+/** The most characters (code points, so one per Chinese character) in one desktop action word. */
+const DESKTOP_ACTION_WORD_LENGTH = 20;
+/** The most words in a team's desktop action list. */
+const DESKTOP_ACTION_WORD_COUNT = 50;
+
+/**
+ * A team's desktop action words as they are stored: each trimmed, blanks and repeats dropped, order
+ * kept. Null, and a list with nothing left in it, is null: the default list. A word longer than 20
+ * characters, more than 50 words after this, or anything that is not text, is refused rather than
+ * cut down, so the admin is never left with a list they did not write.
+ */
+export function normaliseDesktopActionWords(
+  words: readonly string[] | null,
+): string[] | null {
+  if (words === null) return null;
+  if (!Array.isArray(words))
+    throw new ApprovalRefusedError("桌面逐次审批的词要一个一个列出来。");
+  const kept: string[] = [];
+  for (const raw of words as readonly unknown[]) {
+    if (typeof raw !== "string")
+      throw new ApprovalRefusedError("桌面逐次审批的词只能是文字。");
+    const word = raw.trim();
+    if (word === "" || kept.includes(word)) continue;
+    if ([...word].length > DESKTOP_ACTION_WORD_LENGTH)
+      throw new ApprovalRefusedError(
+        `桌面逐次审批的每个词最多 ${DESKTOP_ACTION_WORD_LENGTH} 个字。`,
+      );
+    kept.push(word);
+  }
+  if (kept.length > DESKTOP_ACTION_WORD_COUNT)
+    throw new ApprovalRefusedError(
+      `桌面逐次审批的词最多 ${DESKTOP_ACTION_WORD_COUNT} 个。`,
+    );
+  return kept.length > 0 ? kept : null;
+}
 
 /**
  * A conversation answer still in force: not turned off, and its conversation not deleted. Deleting a
@@ -607,8 +644,10 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           hostCommandsCap: row.hostCommandsCap,
           enforceDangerousCommands: row.enforceDangerousCommands,
           actionKinds: row.actionKinds ?? {},
+          desktopActionWords: row.desktopActionWords ?? null,
         }
-      : { ...DEFAULT_TEAM };
+      : // A team that never saved its settings has no list: the default one.
+        { ...DEFAULT_TEAM, desktopActionWords: null };
   };
   return {
     preferences,
@@ -641,16 +680,23 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
      * in the acting admin's frame.
      */
     async setTeamSettings(by, input) {
+      // The desktop action words are normalised, or refused, before anything is read or written. Not
+      // named, they stay as they are.
+      const { desktopActionWords: words, ...rest } = input;
+      const change =
+        words === undefined
+          ? rest
+          : { ...rest, desktopActionWords: normaliseDesktopActionWords(words) };
       const current = await teamSettings();
       // One kind at a time: a change to one leaves the others as the admin set them.
       const next = {
         ...current,
-        ...input,
-        actionKinds: { ...current.actionKinds, ...input.actionKinds },
+        ...change,
+        actionKinds: { ...current.actionKinds, ...change.actionKinds },
       };
-      // `actionKinds` 不在冻结的 approvals.ts 里：同一事务里先写其余设置，再补写这一列
-      // （approvals/extra-columns.ts）。
-      const { actionKinds, ...columns } = next;
+      // `actionKinds`、`desktopActionWords` 不在冻结的 approvals.ts 里：同一事务里先写其余设置，
+      // 再补写这两列（approvals/extra-columns.ts）。
+      const { actionKinds, desktopActionWords, ...columns } = next;
       await database.transaction(async (tx) => {
         await tx
           .insert(approvalTeamSettings)
@@ -665,13 +711,14 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
             set: { ...columns, updatedBy: by, updatedAt: sql`now()` },
           });
         await saveTeamActionKinds(tx, actionKinds);
+        await saveTeamDesktopActionWords(tx, desktopActionWords ?? null);
       });
       await recordAuditEvent(audit, {
         eventType: "approval.settings_changed",
         targetType: "approval_settings",
         targetId: TEAM,
         actorUserId: by,
-        payload: { changed: input, settings: next },
+        payload: { changed: change, settings: next },
       });
       return next;
     },

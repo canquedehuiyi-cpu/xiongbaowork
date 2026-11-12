@@ -185,8 +185,12 @@ export class SourceLayoutError extends Error {
   }
 }
 
-/** Strip a UTF-8 BOM, which `JSON.parse` refuses and which several of these files carry. */
-function stripBom(text: string): string {
+/** Strip a UTF-8 BOM, which `JSON.parse` refuses and which several of these files carry.
+ *
+ * Exported so the census reads `mcp.json` / `connectors.json` through the same normalization this
+ * reader uses — the two must not contradict each other about the same installation.
+ */
+export function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfe_ff ? text.slice(1) : text;
 }
 
