@@ -52,6 +52,14 @@ BIN=$(find "$OUT/ex/$TRIPLE" -type f \( -name agent-desktop -o -name agent-deskt
 chmod +x "$OUT/ex/$TRIPLE"/* 2>/dev/null
 note "BIN=$BIN"
 export AGENT_DESKTOP_HOME="$OUT/ad-home"; mkdir -p "$AGENT_DESKTOP_HOME"; chmod 700 "$AGENT_DESKTOP_HOME"
+if [ "$OS_NAME" = windows ]; then
+  WH=$(cygpath -w "$AGENT_DESKTOP_HOME")
+  note "== Windows 状态目录 DACL（改之前）=="; icacls "$WH" | tee -a "$SUM"
+  # 先用默认 DACL 跑一次，记录错误（第 1 轮见到 INTERNAL: private file DACL grants an untrusted principal）
+  tmo 30 "$OUT/ex/$TRIPLE/agent-desktop.exe" list-windows > "$OUT/dacl-default.json" 2>&1; note "DACL_DEFAULT_LIST_WINDOWS $(head -c 400 "$OUT/dacl-default.json")"
+  powershell -NoProfile -Command "\$p='$WH'; \$a=New-Object System.Security.AccessControl.DirectorySecurity; \$a.SetAccessRuleProtection(\$true,\$false); \$u=[System.Security.Principal.WindowsIdentity]::GetCurrent().User; \$a.SetOwner(\$u); \$a.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(\$u,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))); Set-Acl -Path \$p -AclObject \$a"
+  note "== Windows 状态目录 DACL（只留本人之后）=="; icacls "$WH" | tee -a "$SUM"
+fi
 S="$OUT/samples"; P="$OS_NAME"
 # run NAME args... ：存 S/NAME.json，打印到日志
 run() { local n=$1; shift; tmo 60 "$BIN" "$@" > "$S/$n.json" 2> "$S/$n.stderr"; local rc=$?; note "RUN $n rc=$rc :: $*"; echo "----- $n -----"; head -c 6000 "$S/$n.json"; echo; head -c 1000 "$S/$n.stderr"; echo "----- end $n -----"; return $rc; }
@@ -59,7 +67,12 @@ runin() { local n=$1 txt=$2; shift 2; printf '%s' "$txt" | tmo 60 "$BIN" "$@" > 
 
 if [ "$P" = linux ]; then
   note "== (k) AT-SPI 没开时的 status =="
+  REAL_BUS="$DBUS_SESSION_BUS_ADDRESS"
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=/nonexistent-bus"
   run $P-status-no-atspi status
+  run $P-permissions-no-atspi permissions
+  run $P-list-windows-no-atspi list-windows
+  export DBUS_SESSION_BUS_ADDRESS="$REAL_BUS"
   export GTK_MODULES=gail:atk-bridge NO_AT_BRIDGE=0 GNOME_ACCESSIBILITY=1
   gsettings set org.gnome.desktop.interface toolkit-accessibility true 2>&1 | head -3
   (/usr/libexec/at-spi-bus-launcher --launch-immediately >"$OUT/atspi-bus.log" 2>&1 &)
@@ -100,7 +113,7 @@ EOP
     (osascript -e 'display dialog "XB password" default answer "secret123" with hidden answer with title "XB Password Dialog"' >/dev/null 2>&1 &)
     sleep 3
     printf 'hello\n' > "$OUT/sample.txt"; open -a TextEdit "$OUT/sample.txt"
-    WIN_RE='XB Password Dialog|XB password' ;;
+    WIN_RE='^osascript$' ;;
   linux)
     (zenity --password --title "XB Password Dialog" >/dev/null 2>&1 &)
     (zenity --entry --title "XB Entry Dialog" --text "single" >/dev/null 2>&1 &)
@@ -153,7 +166,8 @@ run $P-focus-window-headed --headed focus-window --window-id "$EID"
 note "== 错误样本 =="
 run $P-err-window-not-found snapshot --window-id w-999999 --timeout-ms 5000
 run $P-err-snapshot-not-found click "@s0000000000zz:e1"
-REF=$(node "$OUT/ref.js" "$S/$P-snapshot.json" 'text|edit|entry|document')
+if [ "$P" = linux ]; then read -r EID EPID < <(node "$OUT/pick.js" "$S/$P-list-windows.json" 'XB Entry Dialog'); run $P-snapshot snapshot --window-id "$EID" --timeout-ms 10000 -i --compact; fi
+if [ "$P" = windows ]; then REF=$(node "$OUT/ref.js" "$S/$P-snapshot.json" 'text|edit' 'single'); else REF=$(node "$OUT/ref.js" "$S/$P-snapshot.json" 'text|edit|entry|document'); fi
 note "REF=$REF"
 if [ -n "$REF" ]; then
   runin $P-type-headless "熊宝员工 测试" type "$REF" --stdin
