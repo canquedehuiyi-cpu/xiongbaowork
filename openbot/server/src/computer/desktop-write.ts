@@ -762,6 +762,29 @@ function boundControl(
   return { windowId: window.windowId, type: control.type, name: control.name };
 }
 
+/**
+ * The device's reason when this call is the re-check or the run of a card asked again after an
+ * approval (`reasked` in its target, I1 round 2) for this same tool, action and target; else
+ * undefined. The gate still compares the whole action: a write that reads differently now is not
+ * carried out on it.
+ */
+function reaskUnderway(
+  toolName: string,
+  action: DesktopWriteAction,
+  payload: Record<string, unknown>,
+): string | undefined {
+  const bound = approvedActionUnderway();
+  if (!bound || bound.toolRef !== toolName) return undefined;
+  const target = bound.target;
+  if (!isRecord(target) || target.action !== action) return undefined;
+  if (typeof target.reasked !== "string" || !target.reasked) return undefined;
+  const args = isRecord(bound.args) ? bound.args : {};
+  for (const key of ["ref", "windowId"] as const)
+    if (payload[key] !== undefined && args[key] !== payload[key])
+      return undefined;
+  return target.reasked;
+}
+
 export function createDesktopWriteMethods(deps: {
   gate: DesktopWriteGate;
   windows: DesktopWindowCache;
@@ -935,6 +958,14 @@ export function createDesktopWriteMethods(deps: {
             ...(approved && approvedReason !== undefined
               ? { approvedReason }
               : {}),
+            /*
+             * Approved, the process the card showed, or null when it showed none (round 2,
+             * Important-2): the device asks again in the product's own window or a terminal the
+             * owner was not shown.
+             */
+            ...(approved && IN_A_WINDOW.has(plan.action)
+              ? { approvedProcess: facts?.process ?? null }
+              : {}),
             ...plan.payload,
           },
           plan.signal,
@@ -988,23 +1019,49 @@ export function createDesktopWriteMethods(deps: {
       return error;
     };
 
+    /*
+     * THE CARD ASKED AGAIN AFTER AN APPROVAL (final review I1, round 2) is an action of its own: the
+     * device's reason is in its target (`reask`), so neither the first approval nor that approval's
+     * own run (`resume`) lets it through. When this call is that card's own re-check or run, it
+     * starts from it: the same write with the same reason, sent approved with it, under the key of
+     * an approved write asked again. Only once in a call either way.
+     */
+    const reasked = reaskUnderway(plan.toolName, plan.action, plan.payload);
     let output: unknown;
     try {
-      output = await run(resolve);
+      if (reasked !== undefined) {
+        approvedReason = reasked;
+        approvedSuffix = DESKTOP_APPROVED_AGAIN;
+        output = await run(async (owner) => {
+          const resolved = await resolve(owner);
+          if ("refusal" in resolved) return resolved;
+          facts = { ...resolved.subject, deviceReason: reasked, reask: true };
+          return { ...resolved, subject: facts };
+        });
+      } else output = await run(resolve);
     } catch (error) {
       const reason = deviceAsks(error);
-      // Never sent, or not the device asking: its answer (or ours) as it is.
-      if (reason === undefined || approvedSent === undefined || !facts)
+      // Never sent, not the device asking, or asked again already: its answer as it is.
+      if (
+        reason === undefined ||
+        approvedSent === undefined ||
+        !facts ||
+        reasked !== undefined
+      )
         throw failed(error);
       /*
        * Asked once more with the device's reason, approved or not before (I1: an approval is for
        * what the card showed). Sent again approved, with that reason: under the approved key, or,
-       * after an approved write, under a key of its own (see `send`). Only once: whatever comes back
-       * from that goes to the model as it is.
+       * after an approved write, under a key of its own (see `send`), as a card of its own
+       * (`reask`). Only once: whatever comes back from that goes to the model as it is.
        */
       if (approvedSent) approvedSuffix = DESKTOP_APPROVED_AGAIN;
       approvedReason = reason;
-      const asked: DesktopWriteFacts = { ...facts, deviceReason: reason };
+      const asked: DesktopWriteFacts = {
+        ...facts,
+        deviceReason: reason,
+        ...(approvedSent ? { reask: true as const } : {}),
+      };
       try {
         output = await run(asked);
       } catch (again) {

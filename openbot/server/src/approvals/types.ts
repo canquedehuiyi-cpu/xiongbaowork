@@ -232,6 +232,11 @@ export type ApprovalSubject = {
     controlCharacters?: boolean;
     /** 设备端核对后回 `needs_approval` 给出的理由：服务器按它再问一次。 */
     deviceReason?: string;
+    /**
+     * 已批准的写被设备端再问（终审 I1，第 2 轮）：这张卡是「批准后再问」，有自己的审批身份
+     * （设备理由进 target），不会被第一张卡的批准或其续跑放行。只在这种再问时出现。
+     */
+    reask?: true;
   };
   // --- end desktop control ---
 };

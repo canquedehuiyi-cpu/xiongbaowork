@@ -476,6 +476,8 @@ describe("desktop writes through the gateway", () => {
       // Final review C1 and I1: the product's names, and the control's name the card showed.
       selfWindowWords: ["熊宝数字员工", "熊宝", "XiongBao Work"],
       approvedControlName: "确定",
+      // Final review round 2 (Important-2): the process the card showed.
+      approvedProcess: "notepad",
       ref: "abc123-1:1",
     });
     // Recorded through the gateway's own `govern`: the attempt row names the window and control.
@@ -2556,3 +2558,336 @@ describe("the final review", () => {
 });
 
 const needsOf = (reason: string) => desktopMessage("needs_approval", reason);
+
+/*
+ * The final review, round 2 (Important-1, Important-2): the card asked again after an approval is an
+ * action of its own, and the approval's own run (`resume`) is the path every approval takes.
+ */
+describe("the final review, round 2", () => {
+  const TERMINAL: DesktopWindow = {
+    windowId: "a1111111111111111",
+    title: "zsh — 80×24",
+    process: "Terminal",
+    focused: true,
+    minimized: false,
+  };
+  const SELF_DEVICE = "这是熊宝自己的界面或命令行窗口，操作前需要你先确认";
+
+  /**
+   * An in-memory approval store whose requests start pending. `onePerCall` keeps the production
+   * store's rule (approval_requests_action_idx: one request per person, run and tool call, and the
+   * same action); without it, every distinct action of a call gets a request of its own.
+   */
+  function approvals(options: { onePerCall: boolean }) {
+    const rows = new Map<string, ApprovalRecord>();
+    let next = 0;
+    const store: ApprovalStore = {
+      enabled: async () => true,
+      setEnabled: async () => {},
+      open: async (value) => {
+        const prior = [...rows.values()].find(
+          (row) =>
+            row.action.runId === value.runId &&
+            row.action.toolCallId === value.toolCallId &&
+            (options.onePerCall ||
+              row.action.actionDigest === value.actionDigest),
+        );
+        if (prior) {
+          if (prior.action.actionDigest !== value.actionDigest)
+            throw new ApprovalRefusedError("The approved action has changed.");
+          return structuredClone(prior);
+        }
+        next += 1;
+        const row = {
+          id: `approval-${next}`,
+          ownerUserId: value.actorId,
+          action: structuredClone(value),
+          status: "pending",
+          decision: null,
+          result: null,
+          createdAt: new Date(0),
+          decidedAt: null,
+          consumedAt: null,
+          completedAt: null,
+        } as unknown as ApprovalRecord;
+        rows.set(row.id, row);
+        return structuredClone(row);
+      },
+      get: async (_owner, id) =>
+        structuredClone(rows.get(id) as ApprovalRecord),
+      list: async () => [...rows.values()],
+      decide: async (_owner, id) =>
+        structuredClone(rows.get(id) as ApprovalRecord),
+      consume: async (_owner, id, digest) => {
+        const row = rows.get(id) as ApprovalRecord;
+        if (row.action.actionDigest !== digest || row.status !== "approved")
+          return false;
+        row.status = "consumed";
+        return true;
+      },
+      saveResult: async (_owner, id, result) => {
+        const row = rows.get(id) as ApprovalRecord;
+        if (row.result) return false;
+        row.result = structuredClone(result);
+        return true;
+      },
+      finish: async (_owner, id) => {
+        (rows.get(id) as ApprovalRecord).status = "completed";
+      },
+      rules: async () => [],
+      revoke: async () => {},
+    } as ApprovalStore;
+    const service = createApprovalFixtureService(store);
+    approvalFixtureModel(store);
+    return { rows, store, service };
+  }
+
+  /** The owner answers request `id`, then the server carries it out as the resume sweep does. */
+  async function answer(
+    fixture: ReturnType<typeof approvals>,
+    id: string,
+    approve: boolean,
+    tool: () => Promise<unknown>,
+  ) {
+    const row = fixture.rows.get(id) as ApprovalRecord;
+    expect(row.status).toBe("pending");
+    row.status = approve ? "approved" : "denied";
+    (row as { decision: string }).decision = approve ? "allow_once" : "deny";
+    await fixture.service.resume(OWNER, id, {
+      validate: (action: ApprovalRecord["action"]) =>
+        fixture.service.validateReentry(action, tool),
+      execute: () => tool(),
+      continue: async () => {},
+    } as never);
+    return fixture.rows.get(id) as ApprovalRecord;
+  }
+
+  /**
+   * A device that asks with `reason` until it is sent the owner's approval of that very reason, as
+   * the runner does (runner/tests/ad-write.test.ts, round 2), and counts what it carried out.
+   */
+  function scenario(options: {
+    onePerCall?: boolean;
+    session: boolean;
+    reason: string;
+    windows?: DesktopWindow[];
+  }) {
+    const fixture = approvals({ onePerCall: options.onePerCall === true });
+    let carriedOut = 0;
+    const h = harness({
+      session: options.session,
+      journal: true,
+      ...(options.windows ? { windows: options.windows } : {}),
+      gate: (candidate) => fixture.service.gate(candidate),
+      write: (_path, payload) => {
+        if (payload.approvedReason !== options.reason)
+          throw new DeviceActionError(needsOf(options.reason));
+        carriedOut += 1;
+        return {
+          physical: false,
+          durationMs: 3,
+          delivery: "verified",
+          window: {
+            windowId: WECHAT.windowId,
+            title: WECHAT.title,
+            process: "wechat",
+          },
+          note: "n",
+        };
+      },
+    });
+    return { fixture, h, carriedOut: () => carriedOut };
+  }
+
+  const inCall = (
+    toolName: string,
+    args: Record<string, unknown>,
+    write: () => Promise<unknown>,
+  ) =>
+    withApprovalContext(
+      { ...CONTINUATION(args), toolCallId: "call-r2", toolName },
+      () => computerActionIdentity.run("call-r2", write),
+    );
+
+  const clickKeys = (h: ReturnType<typeof harness>) =>
+    h.keys.filter((sent) => sent.path === "/desktop/click").map((s) => s.key);
+
+  test("Important-1 (a, b): in a session, approved, then the device asks: a second card opens, and only its approval carries the write out, once", async () => {
+    await runAsTenant(OWNER, async () => {
+      const reason = `控件名含「删除」：「发送${"x".repeat(120)}删除」`;
+      const { fixture, h, carriedOut } = scenario({ session: true, reason });
+      await h.read(WECHAT.windowId);
+      const args = { ref: "abc123-2:0" };
+      const click = () =>
+        inCall("computer_desktop_click", args, () =>
+          h.gateway.clickDesktop("bot", ACTOR, args),
+        );
+      await expect(click()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      expect([...fixture.rows.keys()]).toEqual(["approval-1"]);
+
+      // The first card approved and carried out: the device asks, and the call waits on a second card.
+      await h.read(WECHAT.windowId);
+      const first = await answer(fixture, "approval-1", true, click);
+      expect(first.result).toEqual({
+        content: "This action is waiting for your approval.",
+        error: "This action is waiting for your approval.",
+      });
+      expect(carriedOut()).toBe(0);
+      const second = fixture.rows.get("approval-2") as ApprovalRecord;
+      expect(second.status).toBe("pending");
+      expect(second.action.actionDigest).not.toBe(first.action.actionDigest);
+      expect((second.action.target as Record<string, unknown>).reasked).toBe(
+        reason.slice(0, DESKTOP_LIMITS.titleMax),
+      );
+      expect(clickKeys(h)).toEqual([
+        JSON.stringify(["bot", "/desktop/click", "call-r2:approved"]),
+      ]);
+
+      // The second approved and carried out: sent with its reason, under its own key, once.
+      await h.read(WECHAT.windowId);
+      const done = await answer(fixture, "approval-2", true, click);
+      // No `error` beside the content: toEqual fails on a defined property it was not given.
+      expect(done.result).toEqual({ content: expect.any(String) });
+      expect(carriedOut()).toBe(1);
+      expect(clickKeys(h)).toEqual([
+        JSON.stringify(["bot", "/desktop/click", "call-r2:approved"]),
+        JSON.stringify(["bot", "/desktop/click", "call-r2:approved2"]),
+      ]);
+      expect(h.writesPosted().at(-1)?.payload).toMatchObject({
+        approved: true,
+        approvedReason: reason.slice(0, DESKTOP_LIMITS.titleMax),
+        approvedControlName: "发送",
+        approvedProcess: "wechat",
+      });
+      expect(fixture.rows.size).toBe(2);
+    });
+  });
+
+  test("Important-1 (c): the second card declined, nothing is carried out", async () => {
+    await runAsTenant(OWNER, async () => {
+      const reason = "控件名含「删除」：「发送…删除」";
+      const { fixture, h, carriedOut } = scenario({ session: true, reason });
+      await h.read(WECHAT.windowId);
+      const args = { ref: "abc123-2:0" };
+      const click = () =>
+        inCall("computer_desktop_click", args, () =>
+          h.gateway.clickDesktop("bot", ACTOR, args),
+        );
+      await expect(click()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      await h.read(WECHAT.windowId);
+      await answer(fixture, "approval-1", true, click);
+      const sent = h.writesPosted().length;
+      const declined = await answer(fixture, "approval-2", false, click);
+      expect(declined.result?.error).toBeDefined();
+      expect(carriedOut()).toBe(0);
+      expect(h.writesPosted()).toHaveLength(sent);
+      expect(fixture.rows.size).toBe(2);
+    });
+  });
+
+  test("Important-1 (d): the first card opened the session; the second is asked in it, and carried out once", async () => {
+    await runAsTenant(OWNER, async () => {
+      const reason = "控件名含「删除」：「发送…删除」";
+      const { fixture, h, carriedOut } = scenario({ session: false, reason });
+      await h.read(WECHAT.windowId);
+      const args = { ref: "abc123-2:0" };
+      const click = () =>
+        inCall("computer_desktop_click", args, () =>
+          h.gateway.clickDesktop("bot", ACTOR, args),
+        );
+      await expect(click()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      const opening = fixture.rows.get("approval-1") as ApprovalRecord;
+      expect((opening.action.target as Record<string, unknown>).session).toBe(
+        "none",
+      );
+      await h.read(WECHAT.windowId);
+      await answer(fixture, "approval-1", true, click);
+      expect(h.paths()).toContain("/desktop/session_start");
+      expect(carriedOut()).toBe(0);
+      const second = fixture.rows.get("approval-2") as ApprovalRecord;
+      expect((second.action.target as Record<string, unknown>).session).toBe(
+        "active",
+      );
+      await h.read(WECHAT.windowId);
+      await answer(fixture, "approval-2", true, click);
+      expect(carriedOut()).toBe(1);
+      expect(
+        h.paths().filter((path) => path === "/desktop/session_start"),
+      ).toHaveLength(1);
+    });
+  });
+
+  test("Important-1: with one request per tool call, as the production store keeps them, the device's ask is never carried out unasked", async () => {
+    await runAsTenant(OWNER, async () => {
+      const reason = "控件名含「删除」：「发送…删除」";
+      const { fixture, h, carriedOut } = scenario({
+        session: true,
+        reason,
+        onePerCall: true,
+      });
+      await h.read(WECHAT.windowId);
+      const args = { ref: "abc123-2:0" };
+      const click = () =>
+        inCall("computer_desktop_click", args, () =>
+          h.gateway.clickDesktop("bot", ACTOR, args),
+        );
+      await expect(click()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      await h.read(WECHAT.windowId);
+      const first = await answer(fixture, "approval-1", true, click);
+      // The second card cannot be opened in the same call: refused, and nothing carried out.
+      expect(first.result?.error).toBe("The approved action has changed.");
+      expect(carriedOut()).toBe(0);
+      expect(fixture.rows.size).toBe(1);
+      expect(clickKeys(h)).toEqual([
+        JSON.stringify(["bot", "/desktop/click", "call-r2:approved"]),
+      ]);
+    });
+  });
+
+  test("Important-2: a card with no control, approved, then a new line typed in a terminal: asked again, carried out only on the second card", async () => {
+    await runAsTenant(OWNER, async () => {
+      const { fixture, h, carriedOut } = scenario({
+        session: true,
+        reason: SELF_DEVICE,
+        windows: [NOTEPAD, WECHAT, TERMINAL],
+      });
+      // A ref this replica never saw: the card names no control, no window and no process.
+      const args = { ref: "abc123-9:1", text: "rm -rf ~\n", mode: "append" };
+      const type = () =>
+        inCall("computer_desktop_type", args, () =>
+          h.gateway.typeDesktop("bot", ACTOR, {
+            ref: "abc123-9:1",
+            text: "rm -rf ~\n",
+            mode: "append",
+          }),
+        );
+      await expect(type()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      // The card names no control and no window.
+      expect(
+        (fixture.rows.get("approval-1") as ApprovalRecord).action.target,
+      ).toEqual({
+        session: "active",
+        window: { windowId: "", title: "", process: "" },
+        action: "type",
+      });
+      await answer(fixture, "approval-1", true, type);
+      expect(carriedOut()).toBe(0);
+      expect(h.writesPosted()[0]?.payload).toMatchObject({
+        approved: true,
+        approvedControlName: null,
+        approvedProcess: null,
+      });
+      expect(
+        (
+          (fixture.rows.get("approval-2") as ApprovalRecord).action
+            .target as Record<string, unknown>
+        ).reasked,
+      ).toBe(SELF_DEVICE);
+      await answer(fixture, "approval-2", true, type);
+      expect(carriedOut()).toBe(1);
+      expect(h.writesPosted().at(-1)?.payload).toMatchObject({
+        approvedReason: SELF_DEVICE,
+      });
+    });
+  });
+});

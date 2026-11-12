@@ -1521,6 +1521,14 @@ export function createComputerGateway(
                 ...(subject.desktopWrite.row.keys !== undefined
                   ? { keys: subject.desktopWrite.row.keys }
                   : {}),
+                /*
+                 * Asked again after an approval, with the device's reason (final review I1, round
+                 * 2): its own action, so neither the first approval nor its run lets it through.
+                 * Only then; every other write's target is as it was.
+                 */
+                ...(desktopWrite?.reask === true && desktopWrite.deviceReason
+                  ? { reasked: desktopWrite.deviceReason }
+                  : {}),
               }
             : // --- end desktop control ---
               app
