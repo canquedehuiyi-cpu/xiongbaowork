@@ -86,9 +86,9 @@ export function EmployeeChangeProposal({
             label="职责描述"
           />
         ) : null}
-        {/* 单独的工作指令只有个人起步员工有（读出来是文字）；别的员工按职责描述工作，写了也不会被用上。 */}
-        {set.instructions !== undefined &&
-        typeof current?.instructions === "string" ? (
+        {/* 单独的工作指令只有个人起步员工有，服务端起草时已经只给它们保留这一项；草稿里有就一定写出来，
+            不等员工资料读到，免得资料还没读回时出现「卡片上看不到、确认后却会做」的空档。 */}
+        {set.instructions !== undefined ? (
           <BeforeAfter
             after={set.instructions}
             before={was(current?.instructions)}
