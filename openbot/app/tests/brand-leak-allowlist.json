@@ -75,11 +75,6 @@
     "reason": "upstream-shell-only: truthful disclosure of who receives upstream desktop's usage data; drawn only inside upstream OpenBot Desktop"
   },
   {
-    "file": "app/src/components/settings/update-routing.tsx",
-    "text": "github.com/CopilotKit/openbot/blob/main/docs/configuration.md",
-    "reason": "admin-only: setup docs link shown only to someone who may open setup; the fork has no docs site yet"
-  },
-  {
     "file": "app/src/components/app-sidebar/app-sidebar.tsx",
     "text": "\"openbot-sidebar-",
     "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
@@ -468,11 +463,6 @@
     "file": "server/src/db/apply-migrations.ts",
     "text": "\"openbot:apply-migrations\"",
     "reason": "persisted-identifier: advisory lock key"
-  },
-  {
-    "file": "server/src/setup/checklist.ts",
-    "text": "https://github.com/CopilotKit/openbot",
-    "reason": "admin-only: setup checklist docs links, admin only; the fork has no docs site yet"
   },
   {
     "file": "server/src/learning/model-endpoint.ts",

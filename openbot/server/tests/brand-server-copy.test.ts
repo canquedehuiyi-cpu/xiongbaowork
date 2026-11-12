@@ -15,6 +15,7 @@ import {
   grantedToolGuidance,
 } from "../src/plugins/tools";
 import { brokerReturnUrl } from "../src/plugins/broker";
+import { type SetupFacts, setupRows } from "../src/setup/checklist";
 import { createVoiceProvider } from "../src/voice/provider";
 
 // A deliberately non-default brand: copy that still says "OpenBot" or the default name would show
@@ -191,5 +192,57 @@ describe("server copy a customer can read takes its name from the brand", () => 
     }
     expect(message).toContain("https://example.com rather than example.com");
     expect(message).not.toContain("openbot.example.com");
+  });
+
+  test("setup checklist guide links go to the deployment's support page, or are left out", () => {
+    const unset: SetupFacts = {
+      intelligence: { state: "unreachable" },
+      model: {
+        provider: "openai",
+        source: null,
+        verdict: "not_checked",
+        model: "gpt-5.6-terra",
+      },
+      computer: false,
+      apps: { configured: false, provider: "arcade" },
+      chat: false,
+    };
+    const envFixes = () =>
+      setupRows(unset, { productName: "甲", audience: "admin" }).flatMap(
+        (row) => (row.fix?.kind === "env" ? [row.fix] : []),
+      );
+
+    setBrand({
+      productName: "甲",
+      englishName: "Jia",
+      supportUrl: "https://support.jia.example",
+    });
+    expect(envFixes().map((fix) => fix.docsUrl)).toEqual([
+      "https://support.jia.example",
+      "https://support.jia.example",
+      "https://support.jia.example",
+      "https://support.jia.example",
+      "https://support.jia.example",
+    ]);
+
+    resetBrand();
+    const bare = envFixes();
+    expect(bare.map((fix) => fix.names[0])).toEqual([
+      "INTELLIGENCE_API_URL",
+      "OPENAI_API_KEY",
+      "AGENT_COMPUTER_URL",
+      "ARCADE_API_KEY",
+      "OPENTAG_SHARED_SECRET",
+    ]);
+    // What the browser receives: no link at all, rather than one to the upstream's repository.
+    const sent: Record<string, unknown>[] = JSON.parse(JSON.stringify(bare));
+    expect(sent.map((fix) => "docsUrl" in fix)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(JSON.stringify(bare)).not.toContain("github.com");
   });
 });

@@ -1,5 +1,6 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
+import { supportUrl } from "../brand";
 import type { DeploymentConfig } from "../config";
 import type { CredentialStatusReader } from "../credentials";
 import type { Edition } from "../edition";
@@ -39,10 +40,6 @@ import type { RuntimeEntitlementResponse } from "../self-host-banner";
  * A person's own apps have no row here: Connections lists those.
  */
 
-/** The guides a fix links to. The repository is where the docs ship from. */
-const DOCS = "https://github.com/CopilotKit/openbot/blob/main/docs";
-const QUICK_START = "https://github.com/CopilotKit/openbot#quick-start";
-
 /** How long a "Check again" is answered from the last one, so a held button is not a flood. */
 export const RECHECK_INTERVAL_MS = 10_000;
 
@@ -69,7 +66,8 @@ export type SetupFix =
   | {
       kind: "env";
       names: string[];
-      docsUrl: string;
+      /** The deployment's support page (brand `support_url`); absent when it publishes none. */
+      docsUrl?: string;
       /** A screen that does the same job, where there is one. */
       page?: { label: string; path: string };
     }
@@ -159,8 +157,8 @@ const KEY_NAME = {
 } as const;
 const PROVIDER_NAME = { openai: "OpenAI", anthropic: "Anthropic" } as const;
 const BROKER = {
-  composio: { key: "COMPOSIO_API_KEY", docs: `${DOCS}/plugins/composio.md` },
-  arcade: { key: "ARCADE_API_KEY", docs: `${DOCS}/plugins/arcade.md` },
+  composio: { key: "COMPOSIO_API_KEY" },
+  arcade: { key: "ARCADE_API_KEY" },
 } as const;
 
 /** What a member is told about a dependency that is set up and was never checked. */
@@ -254,7 +252,7 @@ export function setupRows(
       fix: {
         kind: "env",
         names: [BROKER[facts.apps.provider ?? "composio"].key],
-        docsUrl: BROKER[facts.apps.provider ?? "composio"].docs,
+        docsUrl: supportUrl(),
       },
     }),
     deployment({
@@ -267,7 +265,7 @@ export function setupRows(
       fix: {
         kind: "env",
         names: ["OPENTAG_SHARED_SECRET", "OPENTAG_URL"],
-        docsUrl: `${DOCS}/configuration.md#slack-and-microsoft-teams-opentag-pairing`,
+        docsUrl: supportUrl(),
       },
     }),
   ];
@@ -322,7 +320,7 @@ function intelligenceRow(
     fix: {
       kind: "env" as const,
       names: INTELLIGENCE_VARIABLES,
-      docsUrl: QUICK_START,
+      docsUrl: supportUrl(),
     },
   };
 }
@@ -359,7 +357,7 @@ function computerRow(status: SetupStatus, personal: boolean) {
     fix: {
       kind: "env" as const,
       names: ["AGENT_COMPUTER_URL", "COMPUTER_TOKEN"],
-      docsUrl: `${DOCS}/configuration.md#computer-and-supervisor`,
+      docsUrl: supportUrl(),
     },
   };
 }
@@ -374,7 +372,7 @@ function modelRow(
   const fix: SetupFix = {
     kind: "env",
     names: [KEY_NAME[model.provider]],
-    docsUrl: QUICK_START,
+    docsUrl: supportUrl(),
     page: personal
       ? { label: "Keys", path: "/settings/credentials" }
       : { label: "Credentials", path: "/admin/credentials" },

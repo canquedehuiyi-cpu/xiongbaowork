@@ -137,7 +137,7 @@ describe("setup rows", () => {
     expect(model.fix).toEqual({
       kind: "env",
       names: ["OPENAI_API_KEY"],
-      docsUrl: "https://github.com/CopilotKit/openbot#quick-start",
+      docsUrl: undefined,
       page: { label: "Credentials", path: "/admin/credentials" },
     });
 

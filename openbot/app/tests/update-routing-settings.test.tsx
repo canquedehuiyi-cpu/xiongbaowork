@@ -1,13 +1,18 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+} from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import {
-  CHANNEL_SETUP_DOCS,
-  UpdateRoutingSection,
-} from "@/components/settings/update-routing";
+import { UpdateRoutingSection } from "@/components/settings/update-routing";
 import { authKeys } from "@/lib/auth/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
+import { appConfig } from "@/lib/generated/application-config";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -17,6 +22,19 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
+
+/*
+ * The way to set channels up is the deployment's support page (brand `support_url`). Set here so the tests that expect
+ * no link (Desktop, a member) are refusing one that exists; the generated config of this delivery publishes none.
+ */
+const SUPPORT_URL = "https://support.example.com/channels";
+const publishedSupportUrl = appConfig.brand.supportUrl;
+beforeEach(() => {
+  appConfig.brand.supportUrl = SUPPORT_URL;
+});
+afterEach(() => {
+  appConfig.brand.supportUrl = publishedSupportUrl;
+});
 afterAll(async () => {
   await settleReactWork();
   GlobalRegistrator.unregister();
@@ -160,8 +178,18 @@ test("with no channel set up, it says updates stay in OpenBot, and whoever can s
     ),
   ).toBeTruthy();
   const how = view.getByRole("link", { name: "怎么设置" });
-  expect(how.getAttribute("href")).toBe(CHANNEL_SETUP_DOCS);
+  expect(how.getAttribute("href")).toBe(SUPPORT_URL);
   expect(how.getAttribute("target")).toBe("_blank");
+});
+
+test("with no support page published, the way to set channels up is said but not linked to the upstream's docs", async () => {
+  available = { slack: false, teams: false, sms: false, push: false };
+  serving();
+  appConfig.brand.supportUrl = undefined;
+  const view = draw(ADMIN);
+  expect(await view.findByText("消息只在熊宝里显示")).toBeTruthy();
+  expect(view.queryByRole("link", { name: "怎么设置" })).toBeNull();
+  expect(view.container.innerHTML).not.toContain("github.com");
 });
 
 test("the section asks where updates go only above switches to choose with", async () => {

@@ -34,8 +34,7 @@ describe("the more-apps row names the broker the deployment would use", () => {
     expect(appsRow({ configured: false, provider: "arcade" })?.fix).toEqual({
       kind: "env",
       names: ["ARCADE_API_KEY"],
-      docsUrl:
-        "https://github.com/CopilotKit/openbot/blob/main/docs/plugins/arcade.md",
+      docsUrl: undefined,
     });
   });
 
@@ -43,8 +42,7 @@ describe("the more-apps row names the broker the deployment would use", () => {
     const composio: SetupFix = {
       kind: "env",
       names: ["COMPOSIO_API_KEY"],
-      docsUrl:
-        "https://github.com/CopilotKit/openbot/blob/main/docs/plugins/composio.md",
+      docsUrl: undefined,
     };
     expect(appsRow({ configured: false, provider: "composio" })?.fix).toEqual(
       composio,

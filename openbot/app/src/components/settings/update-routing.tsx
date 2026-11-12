@@ -27,6 +27,7 @@ import {
 import { deliveryQueryOptions } from "@/lib/delivery";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { desktopShell } from "@/lib/desktop/shell";
+import { appConfig } from "@/lib/generated/application-config";
 import { mayOpenSetup } from "@/lib/setup/queries";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
@@ -37,10 +38,9 @@ import { queryClient } from "@/query-client";
  *
  * How each channel is turned on: Slack and Teams through an OpenTag pairing, text messages through Twilio, push through
  * the OpenBot phone app. Each is a setting where OpenBot runs, read at start-up, so the docs say what to set; the two
- * sections sit together there. The setup checklist links the same page for Slack and Teams.
+ * sections sit together there. The setup checklist links the same page for Slack and Teams: the deployment's support
+ * page (brand `support_url`), and no link when it publishes none.
  */
-export const CHANNEL_SETUP_DOCS =
-  "https://github.com/CopilotKit/openbot/blob/main/docs/configuration.md#slack-and-microsoft-teams-opentag-pairing";
 
 const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {
   progress: {
@@ -109,6 +109,7 @@ export function UpdateRoutingSection() {
    * reach it (a phone, OpenTag, Twilio calling it). Its settings are the Desktop's own, so it gets no link to them.
    */
   const desktop = desktopShell() !== null;
+  const setupDocs = appConfig.brand.supportUrl;
   return (
     <PageSection
       // Said only above the switches: above the empty state it would point at nothing to choose.
@@ -126,13 +127,13 @@ export function UpdateRoutingSection() {
       ) : shown.length === 0 ? (
         <PageEmpty
           action={
-            setsUp && !desktop ? (
+            setsUp && !desktop && setupDocs ? (
               // An anchor rather than Button: Base UI gives a rendered anchor role="button", and this is a link.
               <a
                 className={cn(
                   buttonVariants({ size: "sm", variant: "outline" }),
                 )}
-                href={CHANNEL_SETUP_DOCS}
+                href={setupDocs}
                 rel="noopener noreferrer"
                 target="_blank"
               >
