@@ -276,7 +276,14 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/team-bots/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 5 },
   // The catalogue sync writes the deployment's own `system` rows (package-declared Bots).
   // M3: the second is `deploymentNameOf`, reading at boot which former package rows the sync keeps.
-  "src/tenant-package.ts": { 'runAsTenant("system"': 2 },
+  // The platform reads are the connector conflict precheck before the sync's transaction (4a-A1)
+  // and `clearDanglingConnectorRefs` after its commit: questions about rows stamped by other
+  // frames, which the sync's own `system` frame can neither see nor answer. 用户已批准的补登：
+  // 这两处 platform 门在门清单建档前就已存在，此处只登记现状，不新增任何门。
+  "src/tenant-package.ts": {
+    'runAsTenant("platform"': 2,
+    'runAsTenant("system"': 2,
+  },
   "src/tenant/access.ts": { 'runAsTenant("platform"': 1 },
   // `asPlatform` itself.
   "src/tenant/context.ts": { 'runAsTenant("platform"': 1 },
