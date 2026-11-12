@@ -526,9 +526,21 @@ export function createAgentDesktopWriter(opts: {
     const approvedTitle =
       typeof body.approvedTitle === "string" ? body.approvedTitle : undefined;
     // The device's own reason the owner approved, read by its words, title and control apart.
-    const reasonSeen = seenInReason(
-      typeof body.approvedReason === "string" ? body.approvedReason : "",
-    );
+    // One reason, or (round 3) a list of them: each read on its own, what they say together.
+    const reasonSeen = (
+      typeof body.approvedReason === "string"
+        ? [body.approvedReason]
+        : strings(body.approvedReason)
+    )
+      .map(seenInReason)
+      .reduce(
+        (all, one) => ({
+          self: all.self || one.self,
+          title: [...all.title, ...one.title],
+          control: [...all.control, ...one.control],
+        }),
+        { self: false, title: [] as string[], control: [] as string[] },
+      );
     /*
      * I1 checks a name the card showed, and the process it showed, only when the server says which
      * (null: none). A server from before says nothing, and could not ask again after an approval:

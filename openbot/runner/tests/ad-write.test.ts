@@ -2673,3 +2673,49 @@ describe("desktop reads: the title after the read", () => {
     expect(listings(t) - before).toBe(1);
   });
 });
+
+describe("desktop writes: the final review, round 3", () => {
+  test("several reasons approved at once: what each says counts, still title and control apart", async () => {
+    const before = "a".repeat(DESKTOP_LIMITS.titleMax);
+    const shown = "x".repeat(DESKTOP_LIMITS.nameMax);
+    const listing = structuredClone(sample("macos", "list-windows"));
+    listing.data[0].title = `${before}银行`;
+    const data = structuredClone(sample("macos", "snapshot-password").data);
+    data.tree.children[4].name = `${shown}删除`;
+    const t = setup("macos", {
+      "list-windows": { envelope: listing },
+      snapshot: {
+        envelope: { version: "2.6", ok: true, command: "snapshot", data },
+      },
+    });
+    await t.start();
+    // Read with approval: a sensitive window is read only so.
+    const window = (await t.reader.windows()).windows[0];
+    if (!window) throw new Error("no window");
+    const snap = await t.reader.snapshot({
+      windowId: window.windowId,
+      allowSensitive: true,
+    });
+    const ref = snap.elements.find((e) => e.name === shown)?.ref as string;
+    const click = (approvedReason: unknown) =>
+      t.write("desktop.click", {
+        ref,
+        approved: true,
+        approvedTitle: before,
+        approvedControlName: shown,
+        approvedReason,
+      });
+    expect(await click(["窗口标题含「银行」"])).toEqual(
+      fail(
+        desktopMessage("needs_approval", `控件名含「删除」：「${shown}删除」`),
+      ),
+    );
+    expect(
+      await click(["控件名含「删除」：「…」", "控件名含「银行」：「…」"]),
+    ).toEqual(fail(desktopMessage("needs_approval", "窗口标题含「银行」")));
+    expect(t.writes()).toEqual([]);
+    expect(
+      await click(["窗口标题含「银行」", "控件名含「删除」：「…」"]),
+    ).toMatchObject({ ok: true });
+  });
+});

@@ -79,9 +79,10 @@ export type DesktopWriteCommon = {
   approvedControlName?: string | null;
   /**
    * The device's own reason the owner approved (final review I1): sent only with the write sent
-   * again after the device asked. A word it names counts as seen.
+   * again after the device asked, or (round 3) with a write whose card named what the device found
+   * on an earlier call; more than one as a list. A word it names counts as seen.
    */
-  approvedReason?: string;
+  approvedReason?: string | string[];
 };
 /** What each desktop write carries besides `DesktopWriteCommon`, by action. */
 export type DesktopWriteTargets = {
