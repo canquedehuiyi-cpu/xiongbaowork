@@ -118,11 +118,11 @@ async function collectFiles(
 /**
  * The package whose branding the build bakes in, so a change to it invalidates the cache. Unset, the
  * same default `scripts/generate-app-config.ts` and the server use (audit defect #14): hashing a
- * different package than the one the build read let a QoderWake branding change reuse a stale build.
+ * different package than the one the build read let a branding change reuse a stale build.
  */
 export function tenantPackageDir(rootDir: string, env: BuildCacheEnv): string {
   const configured = env.TENANT_PACKAGE_DIR;
-  if (!configured) return join(rootDir, "examples", "qoderwake");
+  if (!configured) return join(rootDir, "examples", "xiongbao");
   return resolve(rootDir, "server", configured);
 }
 

@@ -439,7 +439,7 @@ describe("后台只读调研没有浏览器，也不被告知有", () => {
 
 describe("技能 web-search-guide", () => {
   test("写明用浏览器搜百度、必应作备选，tools 仍为空", async () => {
-    const loaded = await loadTenantPackage("../examples/qoderwake");
+    const loaded = await loadTenantPackage("../examples/xiongbao");
     const skill = loaded.skills.find(
       (entry) => entry.slug === "web-search-guide",
     );
@@ -462,7 +462,7 @@ describe("技能 web-search-guide", () => {
 
   test("去掉了「待 MCP 实测拿到工具名后补 tools」这条过时注释", () => {
     const yaml = readFileSync(
-      new URL("../../examples/qoderwake/skills.yaml", import.meta.url),
+      new URL("../../examples/xiongbao/skills.yaml", import.meta.url),
       "utf8",
     );
     const lines = yaml.split("\n");

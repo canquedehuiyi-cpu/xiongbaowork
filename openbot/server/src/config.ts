@@ -1837,7 +1837,7 @@ export function loadConfig(
     publicUrl,
     appUrl,
     tenantPackageDirectory:
-      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/qoderwake",
+      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/xiongbao",
     runtime: runtimeCapabilities(environment),
     ...(intelligenceSettings(environment)
       ? { intelligence: intelligenceSettings(environment) }

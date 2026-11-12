@@ -97,7 +97,7 @@ echo
 重复执行前先 `docker rm -f xiongbao-local`（命名卷保留）。
 
 能打开页面不等于能对话：还要接入模型。在 `.env.delivery` 里填上 `BOT_MODEL`、`OPENAI_BASE_URL` 和密钥，
-重建容器即可，详见[部署手册](openbot/docs/deployment-qoderwake.md)第 5 节。
+重建容器即可，详见[部署手册](openbot/docs/deployment-xiongbao.md)第 5 节。
 按 digest 固定版本、校验镜像来源、对外部署和登录配置也在部署手册里。
 
 ## 快速上手（Windows Docker Desktop）
@@ -172,7 +172,7 @@ Git Bash 若使用 `docker -v/-w` 的绝对路径，先设置 `MSYS_NO_PATHCONV=
 | `COMPOSIO_API_KEY` / `ARCADE_API_KEY` | 接入应用目录的连接器提供商（可选） |
 | `TENANT_PACKAGE_DIR` | 品牌包目录，构建期写进网页；运行期更换不改变已构建的网页 |
 
-完整配置见[部署手册](openbot/docs/deployment-qoderwake.md)。最常见的三个坑：
+完整配置见[部署手册](openbot/docs/deployment-xiongbao.md)。最常见的三个坑：
 模型名用 **`BOT_MODEL`**（没有 `OPENAI_MODEL` 这个配置）；运行期数据库串必须是**非超级用户、无 BYPASSRLS**；
 Windows 上不能直接用 `bun` 跑服务端，用镜像或 Linux/WSL。
 
@@ -195,7 +195,7 @@ Windows 上不能直接用 `bun` 跑服务端，用镜像或 Linux/WSL。
 
 | 文档 | 内容 |
 | --- | --- |
-| [部署手册](openbot/docs/deployment-qoderwake.md) | 单容器、Compose、外接数据库、登录、模型、备份升级、版本校验 |
+| [部署手册](openbot/docs/deployment-xiongbao.md) | 单容器、Compose、外接数据库、登录、模型、备份升级、版本校验 |
 | [CHANGELOG](openbot/CHANGELOG.md) | 每个版本改了什么、升级要不要做额外的事 |
 | [人工步骤](docs/acceptance/HUMAN-STEPS.md) | 发版、签名、真机验收等需要人来做的步骤和记录 |
 | [功能验收清单](docs/acceptance/STORIES.md) | 每项功能的验收状态 |

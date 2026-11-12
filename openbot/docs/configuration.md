@@ -146,7 +146,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `VAULT_REQUIRE_AAD`  | unset (off)                        | `1` or `true` refuses stored credentials that are not bound to their row. Set it only after `scripts/reseal-credentials.ts` exits `0`; see [above](#binding-stored-credentials-to-their-row-vault_require_aad). |
 | `OPENBOT_EDITION`    | `team`                             | `personal` runs OpenBot for one person with no sign-in, one computer and no Admin. See [personal-edition.md](personal-edition.md). Any value other than `team` or `personal` refuses to start. |
 | `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `OPENBOT_SINGLE_USER`. |
-| `TENANT_PACKAGE_DIR` | `../examples/qoderwake`            | Tenant package directory, resolved from `server/`.                  |
+| `TENANT_PACKAGE_DIR` | `../examples/xiongbao`            | Tenant package directory, resolved from `server/`.                  |
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database (and a shared Intelligence project, when one is connected). |
 | `OPENAI_API_KEY`     | unset                              | Default model key for built-in agents and both shipped Bots.        |
 | `OPENAI_BASE_URL`    | unset                              | OpenAI-compatible endpoint that key is spent against. See below.    |
@@ -1576,7 +1576,7 @@ Each channel requires `id`, `name`, `description`, `permitted_agents`, and `allo
 `avatar: true` adds each person's own 分身 to the channel, next to `permitted_agents`. There is no
 single id to write for it, because it is a different Bot in every workspace, so it is resolved when
 the channel is copied into a person's workspace. A channel whose only answerer is the 分身 is a 1:1
-conversation with it, which is how `examples/qoderwake` makes 「我的分身」 every person's default
+conversation with it, which is how `examples/xiongbao` makes 「我的分身」 every person's default
 conversation and lets it use their paired machine:
 
 ```yaml

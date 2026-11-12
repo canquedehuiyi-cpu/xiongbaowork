@@ -172,7 +172,7 @@ config:
     okta:
       clientId: ""
       issuer: ""
-  tenantPackageDir: /app/examples/qoderwake
+  tenantPackageDir: /app/examples/xiongbao
 
   # Where a coworker's actions are carried out (TENANT_RUNTIME).
   #

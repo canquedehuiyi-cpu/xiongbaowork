@@ -33,7 +33,7 @@ const ids = [
   "ops-assistant",
 ];
 
-const loaded = await loadTenantPackage("../examples/qoderwake");
+const loaded = await loadTenantPackage("../examples/xiongbao");
 
 test("the package declares the product, five seed coworkers and the navigation entries", () => {
   expect(loaded.agents.map((entry) => entry.id)).toEqual(ids);
@@ -103,7 +103,7 @@ test("the shipped copy says nothing in English that a person would read as unfin
 });
 
 test("the checksum moves only when the package changes", async () => {
-  const again = await loadTenantPackage("../examples/qoderwake");
+  const again = await loadTenantPackage("../examples/xiongbao");
   expect(again.checksum).toBe(loaded.checksum);
 });
 

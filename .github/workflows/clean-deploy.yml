@@ -81,9 +81,9 @@ jobs:
           bun scripts/ci/manual-blocks.mjs ../README.md g7:linux > "$EVIDENCE/g7-linux.sh"
           cat "$EVIDENCE/g7-linux.sh"
           if [ "$DATABASE_SHAPE" = external ]; then
-            bun scripts/ci/manual-blocks.mjs docs/deployment-qoderwake.md g7:external-migrate \
+            bun scripts/ci/manual-blocks.mjs docs/deployment-xiongbao.md g7:external-migrate \
               > "$EVIDENCE/g7-external-migrate.sh"
-            bun scripts/ci/manual-blocks.mjs docs/deployment-qoderwake.md g7:external-roles \
+            bun scripts/ci/manual-blocks.mjs docs/deployment-xiongbao.md g7:external-roles \
               > "$EVIDENCE/g7-external-roles.sql"
             cat "$EVIDENCE/g7-external-migrate.sh" "$EVIDENCE/g7-external-roles.sql"
           fi

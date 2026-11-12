@@ -586,7 +586,6 @@ tests/provider-selection.test.ts
 tests/provider-stored-rows.integration.test.ts
 tests/provider-tool-schemas.test.ts
 tests/provider-undecided.test.ts
-tests/qoderwake-package.test.ts
 tests/question-answer-in-conversation.integration.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
@@ -776,6 +775,7 @@ tests/tenant-package-avatar-channel.test.ts
 tests/tenant-package-brand-fields.test.ts
 tests/tenant-package-channel-membership.test.ts
 tests/tenant-package-duplicates.test.ts
+tests/tenant-package-legacy-path.test.ts
 tests/tenant-package-personal.test.ts
 tests/tenant-package-switch-retires.test.ts
 tests/tenant-package.test.ts
@@ -839,3 +839,4 @@ tests/who-can-check.test.ts
 tests/who-can.integration.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
+tests/xiongbao-package.test.ts

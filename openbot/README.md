@@ -314,7 +314,7 @@ most recent release and a version tag such as `:v0.0.9` pins one.
 Leave `EMBEDDED_POSTGRES` off and set `DATABASE_URL` to point at a database you already run. Name a
 role that is not a superuser: row-level security does not bind a superuser or a `BYPASSRLS` role, so
 tenant isolation would fall back to the application alone — see `docs/deployment.md` and `0054_app_role.sql`.
-[docs/deployment.md](docs/deployment.md) has the minimum sizes, the platform notes, and how it behaves behind more than one replica. For this fork — the QoderWake rebuild, where every user is a tenant and the two database roles are not interchangeable — [`docs/deployment-qoderwake.md`](../docs/deployment-qoderwake.md) is the one to follow: it covers the owner-versus-app-role split and why running as the superuser leaves row-level security unenforced, the migration tail a generated file cannot write for a tenant child table, the runner pairing flow, and how to tell a regression from noise in a suite where one parameterized family's timeout count drifts.
+[docs/deployment.md](docs/deployment.md) has the minimum sizes, the platform notes, and how it behaves behind more than one replica. For this fork — the QoderWake rebuild, where every user is a tenant and the two database roles are not interchangeable — [`docs/deployment-xiongbao.md`](../docs/deployment-xiongbao.md) is the one to follow: it covers the owner-versus-app-role split and why running as the superuser leaves row-level security unenforced, the migration tail a generated file cannot write for a tenant child table, the runner pairing flow, and how to tell a regression from noise in a suite where one parameterized family's timeout count drifts.
 
 ## Try it
 
@@ -423,7 +423,7 @@ A host on its own covers any port on that host; a host with a port pins that por
 
 The list covers agent endpoints only. Browsing is unaffected, the addresses holding a deployment's own cloud credentials are refused whatever is listed, and listing an address permits registering an agent there rather than granting that agent anything.
 
-Tenant package agents are declared in the package's own `agents.yaml`, in the directory `TENANT_PACKAGE_DIR` names (`examples/qoderwake` by default), or each in a file of its own under that package's `agents/` directory, as either:
+Tenant package agents are declared in the package's own `agents.yaml`, in the directory `TENANT_PACKAGE_DIR` names (`examples/xiongbao` by default), or each in a file of its own under that package's `agents/` directory, as either:
 
 - `built-in`, with a system prompt; or
 - `remote-ag-ui`, with an endpoint.
@@ -461,7 +461,7 @@ Settings worth knowing:
 | `AGENT_COMPUTER_POLICY`              | JSON action policy. Malformed JSON stops server startup.                  |
 | `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` | Lets a Bot reach this machine's own services. Local only, and refused under `NODE_ENV=production`. |
 | `AGENT_ENDPOINT_ALLOWED_HOSTS`       | Private addresses an agent may be registered at, comma separated. A host, optionally with a port. |
-| `TENANT_PACKAGE_DIR`                 | Directory containing tenant YAML. Defaults to `../examples/qoderwake`.    |
+| `TENANT_PACKAGE_DIR`                 | Directory containing tenant YAML. Defaults to `../examples/xiongbao`.    |
 | `DEPLOYMENT_ID`                      | Names the deployment that minted a thread, when several share one PostgreSQL. |
 | `OPENBOT_SELF_HOST_BANNER`           | Set `true` to show the support bar (off by default; it also needs a tenant `supportUrl`). |
 

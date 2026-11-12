@@ -7,7 +7,7 @@ import { loadTenantPackage } from "../src/tenant-package";
  * 的那一轮挑中的技能可能不再是它，`proposal_status` 就被收走了。说明里照样写清楚该用哪个工具。
  */
 const PACKAGES = [
-  "../examples/qoderwake",
+  "../examples/xiongbao",
   "../examples/personal",
   "../examples/fintech",
 ];

@@ -20,7 +20,7 @@
 | 在线/休息/暂停 | 派生：`tasks.status` 有 running、`agents.hidden` | 卡片状态行三个词的数据来源 | 不是存的状态列；也没有"活动 run"那列（spec D4 原话与本实现的差异是**已知偏离**，见 `tickets/023`） |
 | 档位 | `plans` + `subscriptions` + `usage_counters` | 完整套餐体系，**不接支付** | 不是付费墙：`/plans` 的动词是"切换" |
 | 配对 | `device_pair_codes`（一次一用） | 设备接入的短码 | 不是一次性令牌可复用：配额不足时 402 **不吃码** |
-| 品牌包 | `TENANT_PACKAGE_DIR` + `examples/qoderwake` | 品牌/员工/技能/渠道/主题的声明式租户初始内容，按 checksum 同步 | 不是数据库迁移；也不是 i18n 框架（024 明确不引入） |
+| 品牌包 | `TENANT_PACKAGE_DIR` + `examples/xiongbao` | 品牌/员工/技能/渠道/主题的声明式租户初始内容，按 checksum 同步 | 不是数据库迁移；也不是 i18n 框架（024 明确不引入） |
 | 需要关注 | 看板上方区域 `AttentionRegion`（`tasks.tsx`），两个 Tab：`需要操作 (n)` / `查收结果 (n)` | spec A7 那块固定区：**问人的**都在这儿——`needs_action` 与 C3 的 `failed`；`awaiting_review` 归"查收结果" | 不是泳道（泳道是看板的分区渲染，见 `LANES`/`laneOf`，一个状态恰好落一条）；也不是"未读"计数 |
 | 封禁 | `revoked_access`（按规范化邮箱）+ `isAccessRevoked()` | 管理员收回访问：会话进不来，**且无人值守的活也停**——设备令牌被拒 ⇒ 队列领不动，routine/responsibility 触发记 `skipped`（J5） | 不是删号，也不是停用单个员工（那是 `agents.hidden`）；`skipped` 不是 `failed`：解封后同一条 routine 直接续跑，不需要先修一个失败 |
 | 跨租户默认 404 | 例：`cardIsHere()` 先问存在性，再判泳道（D15） | 别人的 id 进来看不到＝不存在，因此回 404；形状不合法的 id 也回 404 | 不是 403，也不是 409——那两种都在**确认这个 id 存在**；也不是"抛异常说没找到" |
@@ -32,4 +32,4 @@
 
 ## 判回归的口径（不是术语，但同属"共同语言"）
 
-**比失败测试名字的多重集，不比总数。** 有一族参数化用例每次超时的条数会漂（同一批名字，总数 45↔58）。方法在 `docs/deployment-qoderwake.md` §5。
+**比失败测试名字的多重集，不比总数。** 有一族参数化用例每次超时的条数会漂（同一批名字，总数 45↔58）。方法在 `docs/deployment-xiongbao.md` §5。

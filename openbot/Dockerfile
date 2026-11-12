@@ -97,7 +97,7 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
 FROM deps AS app-build
 
 # The SPA configuration is baked during prebuild, not read when the container starts.
-ARG TENANT_PACKAGE_DIR=../examples/qoderwake
+ARG TENANT_PACKAGE_DIR=../examples/xiongbao
 ENV TENANT_PACKAGE_DIR=${TENANT_PACKAGE_DIR}
 
 COPY app app
@@ -221,7 +221,7 @@ COPY --from=app-build /src/app/dist app/dist
 COPY LICENSE NOTICE /licenses/
 COPY --from=app-build /src/THIRD-PARTY-NOTICES.md /licenses/THIRD-PARTY-NOTICES.md
 ENV APP_DIST_DIR=/app/app/dist
-ENV TENANT_PACKAGE_DIR=../examples/qoderwake
+ENV TENANT_PACKAGE_DIR=../examples/xiongbao
 ENV OPENBOT_SELF_HOST_BANNER=false
 
 COPY docker/s6 /etc/s6-overlay

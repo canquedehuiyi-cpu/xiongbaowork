@@ -88,7 +88,7 @@ describe("deployment configuration", () => {
       endpoint: new URL("http://localhost:4200/ag-ui"),
       token: "managed-agent-token",
     });
-    expect(config.tenantPackageDirectory).toBe("../examples/qoderwake");
+    expect(config.tenantPackageDirectory).toBe("../examples/xiongbao");
   });
 
   test("allows deployment without an authentication provider, when asked to", () => {

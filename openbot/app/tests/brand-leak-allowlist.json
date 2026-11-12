@@ -750,11 +750,6 @@
     "reason": "persisted-identifier: deep-link scheme the mobile app registers (mobile/ rebrand is Task 12)"
   },
   {
-    "file": "server/src/config.ts",
-    "text": "\"../examples/qoderwake\"",
-    "reason": "persisted-identifier: default tenant package path; Task 11 renames the directory"
-  },
-  {
     "file": "server/src/learning/ensure-container.ts",
     "text": "copilotkit@latest",
     "reason": "external-name: the vendor CLI's npm package an operator runs"
@@ -833,5 +828,10 @@
     "file": "shared/recorder-page.ts",
     "text": "\"openbot.",
     "reason": "persisted-identifier: message type in the Recorder page protocol"
+  },
+  {
+    "file": "server/src/tenant-package.ts",
+    "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
+    "reason": "persisted-identifier: the pre-rename tenant package directory name, matched only to redirect old TENANT_PACKAGE_DIR values"
   }
 ]

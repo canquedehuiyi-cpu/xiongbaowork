@@ -11,7 +11,7 @@ const tenantPackageDirectory = configuredTenantPackageDirectory
   ? isAbsolute(configuredTenantPackageDirectory)
     ? configuredTenantPackageDirectory
     : resolve(projectRoot, "server", configuredTenantPackageDirectory)
-  : resolve(projectRoot, "examples/qoderwake");
+  : resolve(projectRoot, "examples/xiongbao");
 const tenantPackage = await loadTenantPackage(tenantPackageDirectory);
 const applicationConfiguration = createApplicationConfiguration(tenantPackage);
 const outputPath = resolve(

@@ -290,7 +290,7 @@ const serverEnv: Record<string, string> = {
   OPENBOT_PUBLIC_URL: ORIGIN,
   INITIAL_ADMIN_EMAILS: ADMIN_EMAIL,
   INTELLIGENCE_MODE: "local",
-  TENANT_PACKAGE_DIR: "../examples/qoderwake",
+  TENANT_PACKAGE_DIR: "../examples/xiongbao",
   // The deployment's model is the stub: nothing may reach it (asserted at the end).
   OPENAI_BASE_URL: `http://127.0.0.1:${deploymentStub.port}/v1`,
   OPENAI_API_KEY: "g4-deployment-stub-not-a-secret",
