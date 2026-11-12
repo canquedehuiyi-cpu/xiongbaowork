@@ -1130,14 +1130,29 @@ function normalizePackage(
   return { agents, team };
 }
 
-/** Build one connector, resolving `host` from `url` instead of trusting a copied field. */
-function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): NormalizedConnector {
+/** Build one connector, resolving `host` from `url` instead of trusting a copied field.
+ *
+ * `survey` is the L1 full-marketplace mode (`--connectors=all`): a connector with no reviewed preset in
+ * `mapping.ts` gets a survey fallback instead of a refusal — vendor and title from its own catalogue
+ * row, `auth` mapped from the row's `auth_mode` and `unknown` whenever it does not map (§4a-4: 推导不出
+ * 的写 unknown，不猜), `credentialEnv` from the standard derivation. The reviewed presets stay the only
+ * path an L0 brand package can take: the default (`survey: false`) still refuses, because a preset is
+ * a human decision and a missing one must be filled in, not improvised.
+ */
+function normalizeConnector(
+  raw: RawConnector,
+  dropped: DroppedItem[],
+  survey = false,
+): NormalizedConnector | null {
   const preset = CONNECTOR_PRESETS[raw.id];
-  if (!preset) {
+  if (!preset && !survey) {
     throw new Error(
       `connector ${raw.id} has no preset in mapping.ts: add vendor/auth/credentialEnv before porting it`,
     );
   }
+  const vendor = preset?.vendor ?? raw.marketplace?.name ?? raw.marketplace?.nameEn ?? raw.id;
+  const auth = preset?.auth ?? openbotAuthFor(raw.marketplace?.authMode ?? "") ?? "unknown";
+  const credentialEnv = preset?.credentialEnv || deriveCredentialEnv(raw.id);
   const url = raw.server.url;
   if (!url) {
     throw new Error(`connector ${raw.id} has no url; only remote MCP servers are portable`);
@@ -1146,6 +1161,18 @@ function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): Normaliz
   try {
     host = new URL(url).host;
   } catch {
+    // Survey mode reads the whole marketplace, so one connector whose url is a shell-style template
+    // (measured: tdengine ships `${SCHEMA}://${HOST}:…`) must be dropped with a reason rather than
+    // stop the survey. L0 keeps the hard throw — a preset-approved connector with a bad url is a bug.
+    if (survey) {
+      dropped.push({
+        kind: "connector",
+        slug: raw.id,
+        origin: raw.mcpJson.relativePath,
+        reason: `mcp.json 的 url 不是可解析的端点（疑似模板变量）：${url}`,
+      });
+      return null;
+    }
     throw new Error(`connector ${raw.id} has an unparsable url: ${url}`);
   }
   const connectorDropped: string[] = raw.attachedSkillPaths.map(
@@ -1165,7 +1192,7 @@ function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): Normaliz
   // that the platform used to hold it has to be written down where a reviewer will see it.
   const marketAuthMode = raw.marketplace?.authMode;
   if (marketAuthMode !== undefined && openbotAuthFor(marketAuthMode) === null) {
-    const note = `WorkBuddy auth_mode=${marketAuthMode} 无 openbot 等价物（平台代持凭证），本包按 ${preset.auth} 声明，凭证需自行提供`;
+    const note = `WorkBuddy auth_mode=${marketAuthMode} 无 openbot 等价物（平台代持凭证），本包按 ${auth} 声明，凭证需自行提供`;
     connectorDropped.push(note);
     dropped.push({
       kind: "connector",
@@ -1185,11 +1212,11 @@ function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): Normaliz
   return {
     id: raw.id,
     title: raw.marketplace?.name ?? raw.marketplace?.nameEn ?? raw.id,
-    vendor: preset.vendor,
+    vendor,
     url,
     host,
-    auth: preset.auth,
-    credentialEnv: preset.credentialEnv || deriveCredentialEnv(raw.id),
+    auth,
+    credentialEnv,
     dropped: connectorDropped,
     provenance: buildProvenance({
       source: `workbuddy connector-marketplace:${raw.id}`,
@@ -1211,7 +1238,10 @@ function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): Normaliz
  * does not present its skills as conflict candidates; slugs are resolved before agents are built,
  * because an agent's `skills[]` holds the resolved slugs.
  */
-export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCapabilities {
+export function normalizeCapabilities(
+  snapshot: WorkBuddySnapshot,
+  options: { connectorSurvey?: boolean } = {},
+): NormalizedCapabilities {
   const warnings: string[] = [];
   const dropped: DroppedItem[] = [];
 
@@ -1346,7 +1376,10 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
       });
       continue;
     }
-    connectors.push(normalizeConnector(raw, dropped));
+    const connector = normalizeConnector(raw, dropped, options.connectorSurvey === true);
+    if (connector !== null) {
+      connectors.push(connector);
+    }
   }
 
   // Step 5: uniqueness. An agent id is a primary key in openbot, so a clash must stop the run.

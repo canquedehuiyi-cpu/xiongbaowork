@@ -23,7 +23,10 @@ import {
   type CensusRow,
   CensusError,
   formatCensusCounts,
+  formatCensusTiers,
   judgeConnector,
+  judgeReasonCode,
+  judgeTier,
   mapAuthMode,
   renderCensus,
 } from "./census";
@@ -286,5 +289,84 @@ describe("renderCensus", () => {
     expect(changed.counts.total).toBe(census.counts.total + 1);
     // Restore the fixture so the order of the file's tests cannot matter.
     writeFixture();
+  });
+});
+
+describe("the §4a-3 three tiers", () => {
+  test("a remote endpoint with a self-serviceable credential model is tier A with reason ok", () => {
+    expect(row("remote-open")).toMatchObject({ tier: "A", reason_code: "ok" });
+    expect(row("remote-token")).toMatchObject({ tier: "A", reason_code: "ok" });
+    expect(row("remote-oneid")).toMatchObject({ tier: "A", reason_code: "ok" });
+    // auth_mode "mcp" is unmapped, but it is still an endpoint with a bringable credential: tier A.
+    expect(row("remote-anomaly")).toMatchObject({ tier: "A", reason_code: "ok" });
+  });
+
+  test("an absent auth_mode on a remote endpoint is tier A but auth-undeclared, never folded into ok", () => {
+    expect(row("remote-bare")).toMatchObject({ tier: "A", reason_code: "auth-undeclared" });
+  });
+
+  test("server-side is tier B with its own reason code, not blocked and not silently usable", () => {
+    expect(row("remote-server-side")).toMatchObject({ tier: "B", reason_code: "platform-held-credential" });
+  });
+
+  test("anything without a remote endpoint is tier C, whichever transport shape it takes", () => {
+    expect(row("local-stdio")).toMatchObject({ tier: "C", reason_code: "no-remote-endpoint" });
+    expect(row("cli-only")).toMatchObject({ tier: "C", reason_code: "no-remote-endpoint" });
+    expect(row("orphan")).toMatchObject({ tier: "C", reason_code: "no-remote-endpoint" });
+  });
+
+  test("the counts carry the three tiers, the standalone auth-undeclared number and the reason codes", () => {
+    // Fixture arithmetic: 7 remote rows (6 A + 1 B) and 3 no-endpoint rows（remote-bom 来自主线 BOM 用例，tier A / ok）.
+    expect(census.counts.by_tier).toEqual({ A: 6, B: 1, C: 3 });
+    expect(census.counts.auth_undeclared).toBe(1);
+    expect(census.counts.by_reason_code).toEqual({
+      ok: 5,
+      "auth-undeclared": 1,
+      "platform-held-credential": 1,
+      "no-remote-endpoint": 3,
+    });
+  });
+
+  test("the plan's arithmetic is enforced: A+B = remote url total, C = no-endpoint total", () => {
+    expect(census.counts.by_tier.A + census.counts.by_tier.B).toBe(census.counts.by_transport["mcp-url"]);
+    expect(census.counts.by_tier.C).toBe(
+      census.counts.by_transport["mcp-command"] + census.counts.by_transport.cli + census.counts.by_transport.missing,
+    );
+    expect(census.counts.by_tier.A + census.counts.by_tier.B + census.counts.by_tier.C).toBe(census.counts.total);
+  });
+
+  test("a tampered tier or reason-code summary is a hard failure", () => {
+    const tamperedTier: Census = {
+      ...census,
+      counts: { ...census.counts, by_tier: { ...census.counts.by_tier, C: census.counts.by_tier.C - 1 } },
+    };
+    expect(() => assertCensusConsistent(tamperedTier)).toThrow(CensusError);
+    const tamperedUndeclared: Census = {
+      ...census,
+      counts: { ...census.counts, auth_undeclared: census.counts.auth_undeclared + 1 },
+    };
+    expect(() => assertCensusConsistent(tamperedUndeclared)).toThrow(CensusError);
+    const tamperedReason: Census = {
+      ...census,
+      counts: { ...census.counts, by_reason_code: { ...census.counts.by_reason_code, ok: census.counts.by_reason_code.ok + 1 } },
+    };
+    expect(() => assertCensusConsistent(tamperedReason)).toThrow(CensusError);
+  });
+
+  test("judgeTier is total: every transport × raw auth mode lands in exactly one tier", () => {
+    const rawModes = ["(absent)", "server-side", "token", "oneid-token", "oauth", "mcp", "something-new"];
+    for (const transport of ["mcp-url", "mcp-command", "cli", "missing"] as const) {
+      for (const raw of rawModes) {
+        const tier = judgeTier(transport, raw);
+        expect(["A", "B", "C"]).toContain(tier);
+        expect(judgeReasonCode(tier, raw)).not.toBe("");
+        // Tier B is server-side on a remote endpoint, and nothing else.
+        expect(tier === "B").toBe(transport === "mcp-url" && raw === "server-side");
+      }
+    }
+  });
+
+  test("the CLI tier line names all three tiers with auth-undeclared standing alone", () => {
+    expect(formatCensusTiers(census)).toBe(`A ${census.counts.by_tier.A}（其中 auth-undeclared ${census.counts.auth_undeclared}）/ B ${census.counts.by_tier.B} / C ${census.counts.by_tier.C}`);
   });
 });

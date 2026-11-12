@@ -26,7 +26,7 @@ import {
   countByLevel,
   indexFindings,
 } from "./audit-toolrefs";
-import { buildCensus, type Census, CensusError, formatCensusCounts, renderCensus } from "./census";
+import { buildCensus, type Census, CensusError, formatCensusCounts, formatCensusTiers, renderCensus } from "./census";
 import { EMITTED_REPORT_FILES, EMITTED_YAML_FILES, emitPackage } from "./emit-package";
 import { CONNECTOR_ALLOWLIST, type RunnableLevel } from "./mapping";
 import {
@@ -35,7 +35,7 @@ import {
   validateManifest,
 } from "./manifest";
 import { normalizeCapabilities } from "./normalize";
-import { readWorkBuddy, SourceLayoutError } from "./read-workbuddy";
+import { readConnectorIndex, readWorkBuddy, SourceLayoutError } from "./read-workbuddy";
 
 /** CLI exit codes. `usage` is distinct so a script can tell a typo from a failed conversion. */
 const EXIT_OK = 0;
@@ -47,11 +47,16 @@ const SUPPORTED_SCOPES = ["l0"] as const;
 
 type Scope = (typeof SUPPORTED_SCOPES)[number];
 
+/** Which connectors the run reads. `l0` is the P0 allowlist; `all` is every id in the marketplace index. */
+export type ConnectorScope = "l0" | "all";
+
 /** Parsed command line. */
 export interface CliOptions {
   sourceRoot: string;
   outDir: string;
   scope: Scope;
+  /** Which connectors to read; default `l0` keeps the P0 behaviour byte-for-byte. */
+  connectors: ConnectorScope;
   verify: boolean;
   /** Check an existing `--out` directory without re-reading the source or writing anything. */
   verifyOnly: boolean;
@@ -74,17 +79,18 @@ export class UsageError extends Error {
 }
 
 const USAGE = `用法：
-  bun run port:capabilities -- --out <目录> [--source <WorkBuddy 主目录>] [--only=l0] [--verify]
+  bun run port:capabilities -- --out <目录> [--source <WorkBuddy 主目录>] [--only=l0] [--connectors=l0|all] [--verify]
   bun run port:capabilities -- --census[=<路径>] [--source <WorkBuddy 主目录>]
 
 选项：
-  --source <路径>   WorkBuddy 主目录，默认 ~/.workbuddy
-  --out <路径>      输出目录（必须显式给出；不会写到仓库里的默认位置）
-  --only=<范围>     移植范围，P0 只支持 l0（本机已装：专家包 + 用户技能 + 已授权连接器）
-  --verify          写完后回读输出目录，按同一套规则再校验一遍
-  --verify-only     只回读 --out 里已有的产出，不重新生成（用于复核已生成的包）
-  --census[=<路径>] 只做连接器市场普查，默认写到 openbot/capability-census.yaml（只读、不联网、不产出包）
-  --help            打印本说明`;
+  --source <路径>     WorkBuddy 主目录或抓取缓存（fetch-capabilities 产物），默认 ~/.workbuddy
+  --out <路径>        输出目录（必须显式给出；不会写到仓库里的默认位置）
+  --only=<范围>       移植范围，P0 只支持 l0（本机已装：专家包 + 用户技能 + 已授权连接器）
+  --connectors=<档>   l0 = 仅已授权连接器（默认，P0 行为）；all = 市场索引里的全部连接器（L1 全量普查用）
+  --verify            写完后回读输出目录，按同一套规则再校验一遍
+  --verify-only       只回读 --out 里已有的产出，不重新生成（用于复核已生成的包）
+  --census[=<路径>]   只做连接器市场普查，默认写到 openbot/capability-census.yaml（只读、不联网、不产出包）
+  --help              打印本说明`;
 
 /** Expand a leading `~` and make the path absolute. */
 export function expandPath(input: string): string {
@@ -116,6 +122,7 @@ export function parseArgs(argv: readonly string[]): CliOptions {
       sourceRoot: join(homedir(), ".workbuddy"),
       outDir: "",
       scope: "l0",
+      connectors: "l0",
       verify: false,
       verifyOnly: false,
       census: false,
@@ -126,6 +133,7 @@ export function parseArgs(argv: readonly string[]): CliOptions {
   let source: string | undefined;
   let out: string | undefined;
   let only: string | undefined;
+  let connectors: string | undefined;
   let censusPath: string | undefined;
   let verify = false;
   let verifyOnly = false;
@@ -155,6 +163,9 @@ export function parseArgs(argv: readonly string[]): CliOptions {
       case "--only":
         only = value();
         break;
+      case "--connectors":
+        connectors = value();
+        break;
       case "--verify":
         verify = true;
         break;
@@ -181,10 +192,15 @@ export function parseArgs(argv: readonly string[]): CliOptions {
   if (!SUPPORTED_SCOPES.includes(scope as Scope)) {
     throw new UsageError(`--only=${scope} 不受支持；P0 只实现 ${SUPPORTED_SCOPES.join(" / ")}`);
   }
+  const connectorScope = (connectors ?? "l0").trim();
+  if (connectorScope !== "l0" && connectorScope !== "all") {
+    throw new UsageError(`--connectors=${connectorScope} 不受支持；只支持 l0 / all`);
+  }
   return {
     sourceRoot: expandPath(source ?? join(homedir(), ".workbuddy")),
     outDir: out === undefined ? "" : expandPath(out),
     scope: scope as Scope,
+    connectors: connectorScope as ConnectorScope,
     verify,
     verifyOnly,
     census,
@@ -431,6 +447,7 @@ function runCensus(options: CliOptions): number {
     mkdirSync(dirname(options.censusPath), { recursive: true });
     writeFileSync(options.censusPath, renderCensus(census), "utf8");
     console.log(`[port:capabilities] 普查 ${census.counts.total} 条：${formatCensusCounts(census)}`);
+    console.log(`[port:capabilities] 三档 ${formatCensusTiers(census)}`);
     console.log(
       `[port:capabilities] transport ${TRANSPORT_SUMMARY(census)}`,
     );
@@ -494,15 +511,22 @@ export function main(argv: readonly string[]): number {
     console.log(`[port:capabilities] only   ${options.scope}`);
     console.log(`[port:capabilities] out    ${options.outDir}`);
 
+    // `l0` keeps the P0 allowlist so the audited tool-ref set cannot grow behind the audit's back; `all`
+    // is the L1 survey mode, reading every id the marketplace index declares (normalize still drops the
+    // ones with no remote endpoint, so the manifest only ever gains declarable connectors).
+    const connectorAllowlist =
+      options.connectors === "all"
+        ? [...readConnectorIndex(options.sourceRoot).keys()]
+        : CONNECTOR_ALLOWLIST;
     const snapshot = readWorkBuddy({
       sourceRoot: options.sourceRoot,
-      connectorAllowlist: CONNECTOR_ALLOWLIST,
+      connectorAllowlist,
     });
     console.log(
       `[port:capabilities] 读取 专家包 ${snapshot.packages.length} / 用户技能 ${snapshot.userSkills.length} / 连接器 ${snapshot.connectors.length}`,
     );
 
-    const capabilities = normalizeCapabilities(snapshot);
+    const capabilities = normalizeCapabilities(snapshot, { connectorSurvey: options.connectors === "all" });
     console.log(
       `[port:capabilities] 归一 agent ${capabilities.agents.length} / team ${capabilities.teams.length} / skill ${capabilities.skills.length} / connector ${capabilities.connectors.length}`,
     );
