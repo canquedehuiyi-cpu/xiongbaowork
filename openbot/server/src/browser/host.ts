@@ -33,7 +33,7 @@ import type { BrowserComputers, BrowserRouteDeps } from "./routes";
  * (`COMPUTER_PERSON_ID` with `OPENBOT_EDITION`) and allows it for the same reason.
  */
 export const SHARED_COMPUTER =
-  "This OpenBot can't open a browser of your own, because its Bots share one computer.";
+  "This deployment can't open a browser of your own, because its Bots share one computer.";
 
 /**
  * Why a person's browser cannot run on these computers, or null where it can: on a host-side computer of people's
@@ -65,7 +65,7 @@ export function personBrowserRefusal(
  * (`COMPUTER_PERSON_ID`, scripts/start.sh) and allows Record for the same reason.
  */
 export const SHARED_COMPUTER_RECORD =
-  "This OpenBot can't record in a Bot's browser, because its Bots share one computer.";
+  "This deployment can't record in a Bot's browser, because its Bots share one computer.";
 
 /**
  * Why Record in a Bot's browser cannot run on these computers, or null where it can: a provider that gives every person

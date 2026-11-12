@@ -74,6 +74,7 @@ import {
 } from "./computer/policy";
 // M5: fork 没有采用插件拆分，这两个在 plugins/store.ts。
 import { appCallPolicyContext, type PluginDecision } from "./plugins/store";
+import { englishName } from "./brand";
 
 /** Where the deciders read this OpenBot's settings from: the same stores the live path reads. */
 export type GovernanceReaders = {
@@ -221,7 +222,7 @@ function capabilitySource(answer: CapabilityAnswer): string {
     case "organization":
       return "set for everybody";
     default:
-      return "OpenBot's default";
+      return `${englishName()}'s default`;
   }
 }
 
@@ -273,7 +274,7 @@ function enterpriseLayers(
   const installed = readers.enterprise();
   const isApp = Boolean(context.mcp?.server);
   if (!installed) {
-    const none = "No admin controls are set up on this OpenBot.";
+    const none = "No admin controls are set up on this deployment.";
     return {
       capabilities: layer("capabilities", "allows", none),
       ...(isApp
@@ -294,7 +295,7 @@ function enterpriseLayers(
       layers.capabilities = layer(
         "capabilities",
         "refuses",
-        "The admin controls haven't loaded, so OpenBot refuses every action until they do.",
+        `The admin controls haven't loaded, so ${englishName()} refuses every action until they do.`,
         { page: "/admin/permissions" },
       );
     } else if (check.control === "app_allowlist") {
@@ -482,7 +483,7 @@ async function approvalLayers(
       approvals: layer(
         "approvals",
         "allows",
-        "Approvals aren't set up on this OpenBot.",
+        "Approvals aren't set up on this deployment.",
       ),
     };
 
@@ -575,7 +576,7 @@ async function approvalLayers(
       "approvals",
       "allows",
       group
-        ? "No rule asks about this, with OpenBot's default settings for a member."
+        ? `No rule asks about this, with ${englishName()}'s default settings for a member.`
         : "No rule or setting asks about this.",
       ruleExtra,
     );

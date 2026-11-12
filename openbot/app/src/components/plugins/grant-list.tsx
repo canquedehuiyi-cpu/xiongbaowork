@@ -10,6 +10,7 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
+import { shortName } from "@/lib/brand";
 import { RequestError } from "@/lib/client";
 import { consentCopy } from "@/lib/plugins/enablement-notes";
 import {
@@ -67,7 +68,7 @@ export function GrantList({
     onSuccess: (authorizationUrl) => {
       if (authorizationUrl === null) {
         setNotice(
-          "熊宝的回应里没有授权链接，所以什么都没有授权。请重试；如果一直这样，请联系管理员。",
+          `${shortName()}的回应里没有授权链接，所以什么都没有授权。请重试；如果一直这样，请联系管理员。`,
         );
         return;
       }

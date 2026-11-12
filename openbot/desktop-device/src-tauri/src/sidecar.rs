@@ -1,4 +1,4 @@
-//! The runner as this app starts it: the compiled `openbot-runner` sidecar, its arguments, where
+//! The runner as this app starts it: the compiled `xiongbao-runner` sidecar, its arguments, where
 //! its files go, and which browser it is pointed at.
 //!
 //! Everything the runner writes goes under one directory in the app's data directory, passed as
@@ -15,7 +15,223 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 /// The sidecar's name, as `externalBin` places it next to this app's own executable.
-pub const SIDECAR: &str = "openbot-runner";
+pub const SIDECAR: &str = "xiongbao-runner";
+
+/// What earlier releases called the sidecar. An app that crashed (or was upgraded in place while
+/// running) can leave one of these alive in the install directory, still holding the runner's data
+/// directory, so the first start of this version stops it.
+pub const LEGACY_SIDECAR: &str = "openbot-runner";
+
+/// A path as comparable text: Windows' `\\?\` verbatim prefix dropped (`canonicalize` adds it, WMI
+/// does not), separators unified, no trailing slash, and a drive-letter path lower-cased because
+/// Windows paths are case-insensitive. Text rather than `Path` so the Windows forms can be tested,
+/// and behave the same, on every platform.
+fn comparable(path: &str) -> String {
+    let path = path.strip_prefix(r"\\?\").unwrap_or(path);
+    let mut text = path.replace('\\', "/");
+    while text.len() > 1 && text.ends_with('/') {
+        text.pop();
+    }
+    let drive = text.as_bytes().get(1) == Some(&b':') && text.as_bytes()[0].is_ascii_alphabetic();
+    if drive {
+        text.make_ascii_lowercase();
+    }
+    text
+}
+
+/// Pids among `processes` (`pid`, executable path) that are a leftover legacy runner of *this* app:
+/// named exactly `openbot-runner` (+ the platform suffix) and living directly in `install_dir`.
+/// A same-named program anywhere else is somebody else's and is left alone.
+pub fn legacy_runner_pids(
+    processes: &[(u32, PathBuf)],
+    install_dir: &Path,
+    exe_suffix: &str,
+) -> Vec<u32> {
+    let wanted = comparable(&format!("{LEGACY_SIDECAR}{exe_suffix}"));
+    let dir = comparable(&install_dir.to_string_lossy());
+    processes
+        .iter()
+        .filter(|(_, exe)| {
+            // Linux reports an executable replaced by a package upgrade as "<path> (deleted)",
+            // which is exactly the orphan this is looking for.
+            let text = exe.to_string_lossy();
+            let text = text.strip_suffix(" (deleted)").unwrap_or(&text);
+            let full = comparable(text);
+            let Some((parent, name)) = full.rsplit_once('/') else {
+                return false;
+            };
+            // `wanted` is already lower-case-safe for the .exe case: compare ignoring case only
+            // for drive-letter (Windows) paths, which `comparable` lower-cased.
+            let name_matches = if parent.as_bytes().get(1) == Some(&b':') {
+                name.eq_ignore_ascii_case(&wanted)
+            } else {
+                name == wanted
+            };
+            name_matches && parent == dir
+        })
+        .map(|(pid, _)| *pid)
+        .collect()
+}
+
+/// `command`'s stdout, or None if it fails or has not finished within `limit` (then it is killed).
+/// The process listing must not be able to hang the supervisor thread that `stop()` waits for.
+#[cfg(any(target_os = "macos", windows))]
+fn stdout_within(mut command: Command, limit: std::time::Duration) -> Option<String> {
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut pipe = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = pipe.read_to_end(&mut bytes);
+        bytes
+    });
+    let until = std::time::Instant::now() + limit;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let bytes = reader.join().ok()?;
+                return status
+                    .success()
+                    .then(|| String::from_utf8_lossy(&bytes).into_owned());
+            }
+            Ok(None) if std::time::Instant::now() < until => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", windows))]
+const LISTING_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// `(pid, executable path)` of every process this user can inspect. Best effort: empty if the
+/// platform tool is missing, which only means a stale runner is not found.
+fn running_executables() -> Vec<(u32, PathBuf)> {
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(entries) = std::fs::read_dir("/proc") else {
+            return Vec::new();
+        };
+        entries
+            .flatten()
+            .filter_map(|entry| {
+                let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
+                Some((pid, std::fs::read_link(entry.path().join("exe")).ok()?))
+            })
+            .collect()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS `comm` is the full executable path.
+        let mut ps = Command::new("ps");
+        ps.args(["-A", "-o", "pid=", "-o", "comm="]);
+        let Some(text) = stdout_within(ps, LISTING_LIMIT) else {
+            return Vec::new();
+        };
+        text.lines()
+            .filter_map(|line| {
+                let (pid, path) = line.trim_start().split_once(' ')?;
+                Some((pid.parse().ok()?, PathBuf::from(path.trim())))
+            })
+            .collect()
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let filter = format!("Name = '{LEGACY_SIDECAR}.exe'");
+        let mut powershell = Command::new("powershell");
+        powershell
+            .args(["-NoProfile", "-NonInteractive", "-Command"])
+            .arg(format!(
+                "Get-CimInstance Win32_Process -Filter \"{filter}\" | ForEach-Object {{ \"$($_.ProcessId) $($_.ExecutablePath)\" }}"
+            ))
+            .creation_flags(CREATE_NO_WINDOW);
+        let Some(text) = stdout_within(powershell, LISTING_LIMIT) else {
+            return Vec::new();
+        };
+        text.lines()
+            .filter_map(|line| {
+                let (pid, path) = line.trim().split_once(' ')?;
+                Some((pid.parse().ok()?, PathBuf::from(path.trim())))
+            })
+            .collect()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+    {
+        Vec::new()
+    }
+}
+
+/// Whether a legacy runner of this install could be running, so the process table is worth listing.
+/// Windows cannot delete a running executable, so with no `openbot-runner.exe` in the install
+/// directory none of this install's is running, and the slow WMI query is skipped. Unix can: a
+/// package upgrade unlinks the old file while it runs (the " (deleted)" orphan above), so there a
+/// missing file proves nothing and the listing, a cheap one, always runs.
+pub fn legacy_runner_possible(
+    legacy_file_exists: bool,
+    running_files_can_be_removed: bool,
+) -> bool {
+    legacy_file_exists || running_files_can_be_removed
+}
+
+/// Stop a runner left over from before the rename, if one is running from this app's install
+/// directory. Runs once per app process: an orphan from before the upgrade can only exist at the
+/// first start, and later restarts must not pay for (or hang on) a process listing.
+pub fn stop_legacy_runners() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(stop_legacy_runners_now);
+}
+
+fn stop_legacy_runners_now() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let Some(dir) = exe.parent() else { return };
+    let dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let legacy_file = dir.join(format!("{LEGACY_SIDECAR}{}", std::env::consts::EXE_SUFFIX));
+    if !legacy_runner_possible(legacy_file.exists(), !cfg!(windows)) {
+        return;
+    }
+    for pid in legacy_runner_pids(&running_executables(), &dir, std::env::consts::EXE_SUFFIX) {
+        #[cfg(unix)]
+        {
+            // SAFETY: kill only sends a signal; a pid that is gone is an ESRCH, which is the goal.
+            unsafe {
+                libc::kill(pid as libc::pid_t, libc::SIGTERM);
+            }
+            // Signal 0 only checks that the process is still there.
+            let alive = || unsafe { libc::kill(pid as libc::pid_t, 0) } == 0;
+            for _ in 0..40 {
+                if !alive() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            // Only if it ignored SIGTERM: a pid that is gone may already belong to someone else.
+            if alive() {
+                unsafe {
+                    libc::kill(pid as libc::pid_t, libc::SIGKILL);
+                }
+            }
+        }
+        #[cfg(windows)]
+        {
+            let _ = Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .output();
+        }
+    }
+}
 
 /// What this app remembers about a pairing. Not the token: that is the runner's, in its data dir.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -234,6 +450,7 @@ impl Launcher for RunnerLauncher {
     fn launch(&mut self, pairing: bool, output: Output) -> io::Result<Self::Child> {
         // Before the first start. The runner makes it private (0700) when it is asked for by flag.
         std::fs::create_dir_all(&self.data_dir)?;
+        stop_legacy_runners();
         let log = Arc::new(Mutex::new(self.open_log()?));
         let mut tree = crate::process_tree::spawn(self.command(pairing))?;
         if let Ok(mut file) = log.lock() {
@@ -306,6 +523,74 @@ mod tests {
         args.iter()
             .map(|a| a.to_string_lossy().into_owned())
             .collect()
+    }
+
+    #[test]
+    fn only_a_legacy_runner_in_the_install_dir_is_stopped() {
+        let dir = Path::new("/opt/xiongbao-device");
+        let table = vec![
+            (10, PathBuf::from("/opt/xiongbao-device/openbot-runner")),
+            (11, PathBuf::from("/opt/xiongbao-device/xiongbao-runner")),
+            (12, PathBuf::from("/usr/local/bin/openbot-runner")),
+            (13, PathBuf::from("/opt/xiongbao-device/sub/openbot-runner")),
+            (
+                14,
+                PathBuf::from("/opt/xiongbao-device/openbot-runner-helper"),
+            ),
+            (
+                15,
+                PathBuf::from("/opt/xiongbao-device/openbot-runner (deleted)"),
+            ),
+        ];
+        assert_eq!(legacy_runner_pids(&table, dir, ""), vec![10, 15]);
+        let windows = vec![
+            (20, PathBuf::from("/opt/xiongbao-device/openbot-runner.exe")),
+            (21, PathBuf::from("/opt/xiongbao-device/openbot-runner")),
+        ];
+        assert_eq!(legacy_runner_pids(&windows, dir, ".exe"), vec![20]);
+    }
+
+    #[test]
+    fn windows_paths_match_across_verbatim_prefix_slashes_and_case() {
+        // canonicalize() gives the verbatim form; WMI gives the plain one, in whatever case.
+        let dir = Path::new(r"\\?\C:\Program Files\Xiongbao Device");
+        let table = vec![
+            (
+                1,
+                PathBuf::from(r"C:\Program Files\Xiongbao Device\openbot-runner.exe"),
+            ),
+            (
+                2,
+                PathBuf::from(r"c:\program files\xiongbao device\OPENBOT-RUNNER.EXE"),
+            ),
+            (3, PathBuf::from(r"C:\Other\openbot-runner.exe")),
+            (
+                4,
+                PathBuf::from(r"C:\Program Files\Xiongbao Device\xiongbao-runner.exe"),
+            ),
+        ];
+        assert_eq!(legacy_runner_pids(&table, dir, ".exe"), vec![1, 2]);
+    }
+
+    #[test]
+    fn the_process_table_is_listed_only_when_a_legacy_runner_could_be_running() {
+        // Windows: no legacy file in the install directory, no legacy process from it.
+        assert!(!legacy_runner_possible(false, false));
+        assert!(legacy_runner_possible(true, false));
+        // Unix: an upgrade can unlink the file under a running orphan, so always look.
+        assert!(legacy_runner_possible(false, true));
+        assert!(legacy_runner_possible(true, true));
+    }
+
+    #[test]
+    fn unix_paths_stay_case_sensitive() {
+        let table = vec![(1, PathBuf::from("/opt/App/OPENBOT-RUNNER"))];
+        assert!(legacy_runner_pids(&table, Path::new("/opt/App"), "").is_empty());
+    }
+
+    #[test]
+    fn the_sidecar_is_named_xiongbao_runner() {
+        assert_eq!(SIDECAR, "xiongbao-runner");
     }
 
     #[test]

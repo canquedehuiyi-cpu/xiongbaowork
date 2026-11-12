@@ -39,7 +39,7 @@ recreate() {
 
 up() {
   docker image inspect "$IMAGE" >/dev/null 2>&1 ||
-    die "$IMAGE 不存在：先 build 开发镜像（见 docs/deployment-qoderwake.md §5）"
+    die "$IMAGE 不存在：先 build 开发镜像（见 docs/deployment-xiongbao.md §5）"
 
   # 单用户模式的关键三点（都是实测）：
   #   1) 一个 BETTER_AUTH_* 都不能给 —— 给了就有"登录方式"，单用户会自己关掉（config.ts 的

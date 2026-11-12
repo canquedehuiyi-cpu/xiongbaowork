@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { learningPersonSpaces } from "../db/schema/learning";
 import type { LearningContainerSpec } from "./ensure-container";
+import { englishName } from "../brand";
 
 /**
  * A person's own Learning space: one Intelligence Learning container per OpenBot person, which every recording they make
@@ -199,7 +200,7 @@ export function createPersonalLearningSpaces(deps: {
         const name = (await deps.nameFor?.(userId).catch(() => null))?.trim();
         const result = await create({
           id: containerId,
-          name: `OpenBot: ${name || containerId}`.slice(0, 255),
+          name: `${englishName()}: ${name || containerId}`.slice(0, 255),
         });
         if (result === "skipped") return false;
         // A key that can answer and still cannot see it means the credential made it in another project.

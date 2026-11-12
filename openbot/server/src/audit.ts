@@ -858,6 +858,22 @@ export const auditEventTypes = [
    * approved, `skillSlug`. Never the skill's text.
    */
   "learning.local_candidate_reviewed",
+  /*
+   * A person confirmed a staffing proposal (or retried its failed steps) and it ran as them. Target the
+   * proposal; payload `proposalId`, `kind` and each step's `step`, `target` and `outcome`. `applied`
+   * when every step did what it could, `partially_applied` when one failed and may be retried.
+   */
+  "staffing.proposal_applied",
+  "staffing.proposal_partially_applied",
+  /*
+   * The rest of a staffing proposal's life. Target the proposal (`staffing_proposal`); payload `proposalId`.
+   * `created` is written where the proposal is drafted, `edited` when its owner changed the draft on the
+   * card, `discarded` when the owner dropped it, `expired` the first time a request met it past its seven days.
+   */
+  "staffing.proposal_created",
+  "staffing.proposal_edited",
+  "staffing.proposal_discarded",
+  "staffing.proposal_expired",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

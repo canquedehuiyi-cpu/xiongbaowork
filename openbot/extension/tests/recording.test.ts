@@ -61,13 +61,13 @@ const bea = { id: "p2", name: "Bea", email: "bea@example.test" };
 const DEAL = "https://crm.example.test/deals/42";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SIGNED_OUT =
-  "This browser was disconnected from OpenBot. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
+  "This browser was disconnected from XiongBao Work. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
 const ORGANIZATION_SIGNED_OUT =
   "Your organization sign-in ended. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
 const POLICY_MOVED =
-  "Your organization moved the Recorder to another OpenBot. Your recording stopped, and everything in it is kept in this browser for 7 days.";
+  "Your organization moved the Recorder to another XiongBao Work. Your recording stopped, and everything in it is kept in this browser for 7 days.";
 const REPLACED =
-  "This browser was connected to another OpenBot or person. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
+  "This browser was connected to another XiongBao Work or person. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
 
 const event = (name: string, value: unknown): CapturedEvent => ({
   type: "CUSTOM",
@@ -861,13 +861,13 @@ test("Record after the person took website access away in the browser's settings
   expect(await page({ type: "page.record", title: "T", tabId: 7 })).toEqual({
     ok: false,
     error:
-      "Site access is off for OpenBot Recorder. Open your browser's Extensions page, choose Details on OpenBot Recorder and set Site access to On all sites.",
+      "Site access is off for XiongBao Work Recorder. Open your browser's Extensions page, choose Details on XiongBao Work Recorder and set Site access to On all sites.",
   });
   expect(fake.offscreen.created).toEqual([]);
   expect(await state()).toMatchObject({
     phase: "idle",
     error:
-      "Site access is off for OpenBot Recorder. Open your browser's Extensions page, choose Details on OpenBot Recorder and set Site access to On all sites.",
+      "Site access is off for XiongBao Work Recorder. Open your browser's Extensions page, choose Details on XiongBao Work Recorder and set Site access to On all sites.",
   });
 });
 
@@ -881,7 +881,7 @@ test("Record without a connection is refused", async () => {
   });
   expect(answer).toEqual({
     ok: false,
-    error: "Connect this browser to OpenBot first.",
+    error: "Connect this browser to XiongBao Work first.",
   });
   expect(fake.offscreen.created).toEqual([]);
   expect((await state()).phase).toBe("idle");
@@ -1045,7 +1045,7 @@ test("Stop queues the outcome in the document, and the recording waits as a drai
 test("a recording the document could not send at all never reads as sent: Stop says nothing reached Intelligence", async () => {
   const id = await record();
   const NOT_SENT =
-    "Nothing of this recording reached OpenBot's back end: the Recorder could not start sending it. Try recording again.";
+    "Nothing of this recording reached the server: the Recorder could not start sending it. Try recording again.";
   holdStop = true;
   const stopping = page({ type: "page.stop" });
   await until(
@@ -1818,8 +1818,7 @@ test("once Intelligence takes events again the popup says Streaming, and nothing
   // nothing is lost." The document's status for streaming leaves the reason out, and the reason of the retry stayed.
   const id = await record();
   const trajectory = trajectoryOf(id);
-  const busy =
-    "OpenBot's back end is busy or unreachable. Retrying; nothing is lost.";
+  const busy = "The server is busy or unreachable. Retrying; nothing is lost.";
   doc?.postMessage({
     type: "offscreen.status",
     capture: {
@@ -2683,9 +2682,12 @@ test("a connection check that cannot reach OpenBot, or gets an error page, is no
   expect((await state()).phase).toBe("recording");
   expect(storedConnection()?.token).toBe("obr_one");
 
-  openbot.me = { status: 503, body: { error: "OpenBot is restarting." } };
+  openbot.me = { status: 503, body: { error: "XiongBao Work is restarting." } };
   await advance(30_000);
-  await until(() => meChecks().length === 1, "the check OpenBot answers 503");
+  await until(
+    () => meChecks().length === 1,
+    "the check XiongBao Work answers 503",
+  );
   await settle();
   expect((await state()).phase).toBe("recording");
   expect(storedConnection()?.token).toBe("obr_one");
@@ -2763,7 +2765,8 @@ test("a policy that moves the Recorder away stops the recording, halts the docum
       recordingId: first,
       kept: {
         waitingForReconnect: true,
-        reason: "Your organization moved the Recorder to another OpenBot.",
+        reason:
+          "Your organization moved the Recorder to another XiongBao Work.",
       },
     },
     { recordingId: second, kept: { waitingForReconnect: true } },
@@ -2818,7 +2821,7 @@ test("a Connect approved as another person stops the live recording, halts the o
     phase: "idle",
     kept: {
       recordings: 2,
-      reason: "This browser was connected to another OpenBot or person.",
+      reason: "This browser was connected to another XiongBao Work or person.",
       waitingFor: { name: "Ada", recordings: 2 },
     },
   });
@@ -2831,7 +2834,8 @@ test("a Connect approved as another person stops the live recording, halts the o
       userId: ada.id,
       kept: {
         waitingForReconnect: true,
-        reason: "This browser was connected to another OpenBot or person.",
+        reason:
+          "This browser was connected to another XiongBao Work or person.",
       },
     },
     {
@@ -2860,7 +2864,7 @@ test("Record refuses a connection whose OpenBot the policy no longer allows, and
   expect(answer).toEqual({
     ok: false,
     error:
-      "Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.",
+      "Your organization's Recorder policy does not allow this XiongBao Work. Ask your IT team.",
   });
   expect(sentToDocument("offscreen.start")).toEqual([]);
   expect(active()).toBeUndefined();
@@ -3903,7 +3907,7 @@ test("a refusal from OpenBot reaches the popup in the Recorder's own sentence, n
   for (const [refusal, sentence] of [
     [
       { status: 403, body: { error: hostile } },
-      "OpenBot does not let you record. Ask whoever runs it.",
+      "XiongBao Work does not let you record. Ask whoever runs it.",
     ],
     [
       {
@@ -3914,7 +3918,7 @@ test("a refusal from OpenBot reaches the popup in the Recorder's own sentence, n
     ],
     [
       { status: 500, body: { error: hostile } },
-      "OpenBot did not answer. Try again.",
+      "XiongBao Work did not answer. Try again.",
     ],
   ] as const) {
     openbot.learningRefusal = refusal;
@@ -4183,7 +4187,7 @@ const restartWaits: Wait[] = [
 ];
 const disconnectWaits: Wait[] = [
   {
-    name: "OpenBot forgetting the connection",
+    name: "XiongBao Work forgetting the connection",
     hold: () => holdRoute("disconnect", "/api/recorder/connections/current"),
   },
   {
@@ -4221,7 +4225,7 @@ const documentSignOutWaits: Wait[] = [
 ];
 const popupSignOutWaits: Wait[] = [
   {
-    name: "OpenBot's signed-out answer",
+    name: "XiongBao Work's signed-out answer",
     hold: () => holdRoute("me", "/api/recorder/me"),
   },
   {
@@ -4467,7 +4471,7 @@ async function interleavingViolations(run: {
       problems.push(`(iii) Disconnect left the error "${s.error}"`);
   }
   if (recordingRequests().length > 0)
-    problems.push(`OpenBot heard ${recordingRequests().join(", ")}`);
+    problems.push(`XiongBao Work heard ${recordingRequests().join(", ")}`);
   return problems;
 }
 

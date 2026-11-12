@@ -27,7 +27,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * every package row carries survives a switch. That is how one development database ended up holding
  * eleven coworkers from a brand it no longer loads, each stamped with the brand it is not.
  *
- * Nothing here reads `examples/qoderwake`. The package is built in memory under this suite's own tenant
+ * Nothing here reads `examples/xiongbao`. The package is built in memory under this suite's own tenant
  * key, which gives it its own deployment row and therefore its own stamped rows: retiring a coworker
  * only ever retires a row this file created. Sharing the real package's ids would put this suite's
  * outcome in the hands of whichever test file happened to synchronize it first.

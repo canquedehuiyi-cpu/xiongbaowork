@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { declaredHarness } from "@openbot/shared/harnesses";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
@@ -36,6 +37,7 @@ import type {
   CreateAgentInput,
   Persona,
 } from "./profile-types";
+import { englishName } from "../brand";
 
 type AgentInputParseResult =
   | { ok: true; value: CreateAgentInput }
@@ -227,7 +229,7 @@ export function parseAgentInput(
     if (!named)
       return {
         ok: false,
-        error: "OpenBot doesn't know that framework. Pick one from the list.",
+        error: `${englishName()} doesn't know that framework. Pick one from the list.`,
       };
     if (endpoint) harness = named.id;
   }
@@ -471,14 +473,6 @@ export function parseConnectionHeaders(
   }
   return { ok: true, value: entries.length === 0 ? undefined : headers };
 }
-
-/**
- * The local development actor, which is not a row in `users`.
- *
- * The audit table has a foreign key to that table, so writing this id would fail the constraint and
- * lose the row entirely. Who it was is in the payload either way.
- */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
 
 export function createAgentRoutes(
   store: AgentProfileStore,
@@ -739,7 +733,7 @@ export function createAgentRoutes(
         eventType: "bot.declined",
         targetType: "agent",
         targetId: agentId,
-        ...(actor?.id && actor.email !== DEV_ACTOR_EMAIL
+        ...(actor?.id && !isDevActorEmail(actor.email)
           ? { actorUserId: actor.id }
           : {}),
         payload: {
@@ -889,7 +883,7 @@ export function createAgentRoutes(
         eventType,
         targetType: "agent",
         ...(agentId ? { targetId: agentId } : {}),
-        ...(actor?.id && actor.email !== DEV_ACTOR_EMAIL
+        ...(actor?.id && !isDevActorEmail(actor.email)
           ? { actorUserId: actor.id }
           : {}),
         payload: {
@@ -940,7 +934,7 @@ export function createAgentRoutes(
   };
   /** Said where a deployment's computers cannot make one more. */
   const NO_ISOLATION =
-    "This OpenBot can't give a Bot a computer of its own, so it runs on yours.";
+    "This deployment can't give a Bot a computer of its own, so it runs on yours.";
 
   routes.post("/", requireUser, async (context) => {
     // Malformed JSON is a recoverable client-input error and is validated by the same parser.

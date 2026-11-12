@@ -618,7 +618,7 @@ describe("reviewing proposed skills in Admin, against Intelligence's project-key
     });
     await useDefault(store);
     const said =
-      "Learning can't run on the model you signed in with. To use it, sign OpenBot in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
+      "Learning can't run on the model you signed in with. To use it, sign XiongBao Work in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
     const response = await post(app, "/runs");
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: said });

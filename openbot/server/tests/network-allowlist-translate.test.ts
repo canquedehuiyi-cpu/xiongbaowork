@@ -63,7 +63,7 @@ function serve(recording: Case) {
   if (first) mock.on({ userMessage: /<description>/ }, { content: first });
   if (recording.reader)
     mock.on(
-      { userMessage: /You explain one OpenBot network allowlist/ },
+      { userMessage: /You explain one XiongBao Work network allowlist/ },
       { content: recording.reader },
     );
 }
@@ -302,7 +302,7 @@ describe("POST /api/admin/enterprise/network/translate", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       error:
-        "OpenBot needs a model key to write a list from a description. Add one on the Credentials page, or type the list yourself.",
+        "XiongBao Work needs a model key to write a list from a description. Add one on the Credentials page, or type the list yourself.",
     });
     expect(mock.getRequests()).toHaveLength(0);
     expect(audit.map((event) => event.payload)).toEqual([

@@ -1,11 +1,18 @@
+import { englishName } from "../brand";
 import {
   clearDesktopConnectionFailure,
   recordDesktopConnectionFailure,
 } from "../desktop-connection-failure";
 import type { AuthenticatedActor, AuthService } from "./guards";
 
-export const ORGANIZATION_SESSION_COOKIE = "openbot.organization-session";
+export const ORGANIZATION_SESSION_COOKIE = "xiongbao.organization-session";
+/** The name written before the rename. Still read, so a person signed in across the upgrade stays signed in; it is
+ * cleared whenever the new cookie is set or cleared, and never written. */
+export const LEGACY_ORGANIZATION_SESSION_COOKIE =
+  "openbot.organization-session";
 const COOKIE = ORGANIZATION_SESSION_COOKIE;
+const LEGACY_COOKIE = LEGACY_ORGANIZATION_SESSION_COOKIE;
+const COOKIE_ATTRIBUTES = "Path=/; HttpOnly; SameSite=Lax";
 const HANDOFF_PATH = "/api/auth/organization/session";
 /** How long the organization session cookie lasts, in seconds: its Max-Age, set once at the handoff and never renewed,
  * so a person signs in to their organization again after this. The cookie says when it expires (`expiresAt`), and a
@@ -67,7 +74,7 @@ export function organizationAuthority(value: string): string {
     url.pathname !== "/"
   ) {
     throw new Error(
-      "Organization sign-in requires an HTTPS OpenBot origin (HTTP is allowed only on loopback).",
+      `Organization sign-in requires an HTTPS ${englishName()} origin (HTTP is allowed only on loopback).`,
     );
   }
   return url.origin;
@@ -178,12 +185,15 @@ export function createOrganizationAuth(options: {
   }
 
   function cookieFrom(headers: Headers): string | null {
-    const encoded = headers
+    const parts = headers
       .get("cookie")
       ?.split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(`${COOKIE}=`))
-      ?.slice(COOKIE.length + 1);
+      .map((part) => part.trim());
+    const read = (name: string) =>
+      parts
+        ?.find((part) => part.startsWith(`${name}=`))
+        ?.slice(name.length + 1);
+    const encoded = read(COOKIE) ?? read(LEGACY_COOKIE);
     if (!encoded || encoded.length > 12000) return null;
     const record = organizationRecord(encoded);
     // Binding the cookie to the authority prevents a changed organization setting reusing it.
@@ -221,7 +231,7 @@ export function createOrganizationAuth(options: {
     if (verdict.kind === "actor") return verdict.actor;
     if (verdict.kind === "refused") return null;
     throw new AuthorityUnavailable(
-      "The organization gave an answer OpenBot could not read. Try again.",
+      `The organization gave an answer ${englishName()} could not read. Try again.`,
     );
   }
 
@@ -298,15 +308,21 @@ export function createOrganizationAuth(options: {
               expiresAt: Date.now() + COOKIE_AGE * 1_000,
             }),
           ).toString("base64url");
-          return new Response(null, {
-            status: 303,
-            headers: {
-              location: "/",
-              "cache-control": "no-store",
-              "referrer-policy": "no-referrer",
-              "set-cookie": `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_AGE}${url.protocol === "https:" ? "; Secure" : ""}`,
-            },
+          const headers = new Headers({
+            location: "/",
+            "cache-control": "no-store",
+            "referrer-policy": "no-referrer",
           });
+          headers.append(
+            "set-cookie",
+            `${COOKIE}=${value}; ${COOKIE_ATTRIBUTES}; Max-Age=${COOKIE_AGE}${url.protocol === "https:" ? "; Secure" : ""}`,
+          );
+          // A stale legacy cookie would otherwise outlive this sign-in and be read as a fallback.
+          headers.append(
+            "set-cookie",
+            `${LEGACY_COOKIE}=; ${COOKIE_ATTRIBUTES}; Max-Age=0`,
+          );
+          return new Response(null, { status: 303, headers });
         }
         if (url.pathname === "/api/auth/get-session")
           return json(
@@ -361,18 +377,17 @@ export function createOrganizationAuth(options: {
               );
             }
           }
-          return Response.json(
-            { success: true },
-            {
-              headers: {
-                "cache-control": "no-store",
-                "set-cookie": `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-              },
-            },
-          );
+          const headers = new Headers({ "cache-control": "no-store" });
+          for (const name of [COOKIE, LEGACY_COOKIE]) {
+            headers.append(
+              "set-cookie",
+              `${name}=; ${COOKIE_ATTRIBUTES}; Max-Age=0`,
+            );
+          }
+          return Response.json({ success: true }, { headers });
         }
         return json(
-          { error: "Use the OpenBot organization sign-in screen." },
+          { error: `Use the ${englishName()} organization sign-in screen.` },
           404,
         );
       } catch (error) {

@@ -27,6 +27,7 @@ import {
   type DeliveryState,
   type PushDevice,
 } from "./types";
+import { englishName } from "../brand";
 export function createDeliveryStore(database: Database) {
   async function enqueue(
     db: Pick<Database, "insert" | "execute">,
@@ -286,7 +287,7 @@ export function createDeliveryStore(database: Database) {
       if (held && held.ownerUserId !== input.ownerUserId) {
         if (held.enabled)
           throw new DeliveryRefusedError(
-            "This device is already registered to another account. Sign out of OpenBot on it first.",
+            `This device is already registered to another account. Sign out of ${englishName()} on it first.`,
           );
         await runAsTenant("platform", () =>
           database
@@ -320,7 +321,7 @@ export function createDeliveryStore(database: Database) {
         .returning();
       if (!device)
         throw new DeliveryRefusedError(
-          "This device is already registered to another account. Sign out of OpenBot on it first.",
+          `This device is already registered to another account. Sign out of ${englishName()} on it first.`,
         );
       return device;
     },

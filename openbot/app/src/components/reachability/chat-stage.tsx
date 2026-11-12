@@ -1,5 +1,6 @@
 import { IconAt } from "@tabler/icons-react";
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { shortName } from "@/lib/brand";
 
 /**
  * The @Waker heading's illustration (docs/design/ios-studio `.chat-stage`, 02-Waker.png): a graphite
@@ -50,7 +51,7 @@ export function ChatStage() {
           <div className="flex items-center gap-[7px] text-[#ececec] text-[10px]">
             <BrandLogo className="rounded-[8px]" size={29} />
             <div className="rounded-[8px_8px_8px_2px] border border-white/[0.08] bg-[#161617] px-[8px] py-[5px] leading-[1.45]">
-              <b className="font-semibold">熊宝助手</b>
+              <b className="font-semibold">{shortName()}助手</b>
               <p className="text-[#d0d0d0]">
                 收到。我会整理成一份带优先级的清单。
               </p>

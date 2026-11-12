@@ -1,3 +1,4 @@
+import { englishName } from "../brand";
 import {
   checkAgentEndpoint,
   createAgentFetch,
@@ -92,8 +93,7 @@ function probeBody() {
       {
         id: crypto.randomUUID(),
         role: "user",
-        content:
-          "This is an automated connection test from OpenBot. Reply with one short word.",
+        content: `This is an automated connection test from ${englishName()}. Reply with one short word.`,
       },
     ],
     tools: [],

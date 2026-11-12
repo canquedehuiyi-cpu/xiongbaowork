@@ -10,6 +10,7 @@ import { ReadingStatus } from "@/components/boundaries/rule-reading";
 import { PageCard, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
+import { shortName } from "@/lib/brand";
 import { saveCapabilityChangesMutationOptions } from "@/lib/capability-changes/mutations";
 import { capabilityChangesPreviewQueryOptions } from "@/lib/capability-changes/queries";
 import {
@@ -137,7 +138,7 @@ function DescribePermissionsPage() {
                   // No changes says so itself, with the model's reason.
                   written.changes.length === 0
                     ? ""
-                    : "这些改动没通过检查，熊宝不会保存。"
+                    : `这些改动没通过检查，${shortName()}不会保存。`
                 }
                 heading="这些改动做什么"
                 passed="通过检查。每条改动都对得上这个部署里的权限、角色或用户组。"

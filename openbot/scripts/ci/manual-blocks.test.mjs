@@ -17,7 +17,7 @@ const openbot = join(import.meta.dir, "..", "..");
 const root = join(openbot, "..");
 const readme = readFileSync(join(root, "README.md"), "utf8");
 const manual = readFileSync(
-  join(openbot, "docs", "deployment-qoderwake.md"),
+  join(openbot, "docs", "deployment-xiongbao.md"),
   "utf8",
 );
 const IMAGE = "ghcr.io/canquedehuiyi-cpu/xiongbaowork";
@@ -408,7 +408,7 @@ test("README has no stale candidate or private-repository instructions", () => {
 test("docker build appears only in the build-from-source appendix", () => {
   for (const [name, text] of [
     ["README.md", readme],
-    ["deployment-qoderwake.md", manual],
+    ["deployment-xiongbao.md", manual],
   ]) {
     const appendix = text.indexOf("## 附录：从源码构建");
     expect({ name, appendix: appendix > 0 }).toEqual({ name, appendix: true });

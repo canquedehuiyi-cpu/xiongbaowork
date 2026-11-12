@@ -1426,7 +1426,7 @@ describe("POST /:channelId/attachments", () => {
 
       expect(response.status).toBe(415);
       const { error } = (await response.json()) as { error: string };
-      expect(error).toBe("'archive' isn't a file type OpenBot can read.");
+      expect(error).toBe("'archive' isn't a file type XiongBao Work can read.");
     });
 
   });

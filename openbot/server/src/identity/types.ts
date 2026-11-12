@@ -1,3 +1,4 @@
+import { englishName } from "../brand";
 export type IdentityProvider = "slack" | "github";
 export type LinkMethod = "challenge" | "oauth";
 export type LinkStatus = "active" | "needs_reconnect";
@@ -30,7 +31,7 @@ export class IdentityLinkError extends Error {
 
 export class IdentityConflictError extends Error {
   constructor() {
-    super("This account is already linked to another OpenBot user.");
+    super(`This account is already linked to another ${englishName()} user.`);
     this.name = "IdentityConflictError";
   }
 }

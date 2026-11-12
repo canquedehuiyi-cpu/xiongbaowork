@@ -1,3 +1,4 @@
+import { shortName } from "@/lib/brand";
 import { isBrokeredProvenance } from "./brokered";
 import type { PluginsPage } from "./queries";
 
@@ -125,7 +126,7 @@ export function directoryDescriptions(edition: Edition = "team"): {
   return edition === "personal"
     ? {
         page: "添加一个应用并连接你的账号，你的员工就能用它。",
-        search: "按名字搜索。熊宝没有审核过这些应用。",
+        search: `按名字搜索。${shortName()}没有审核过这些应用。`,
       }
     : {
         page: "添加一个应用后就能把它的工具授予员工；每个人仍要先连接自己的账号，员工才能读到任何东西。",
@@ -138,7 +139,7 @@ export function directoryDescriptions(edition: Edition = "team"): {
  * apps under Connections, with the directory as one more tile ({@link moreAppsRow}).
  */
 export function moreAppsSectionDescription(_provider: PluginsProvider): string {
-  return "更多可以通过熊宝连接的应用，这里没有人审核过它们。";
+  return `更多可以通过${shortName()}连接的应用，这里没有人审核过它们。`;
 }
 
 /**
@@ -204,10 +205,10 @@ export function brokeredConnectionDescription(
   _provider: PluginsProvider,
   personal?: BrokeredApp,
 ): string {
-  if (!personal) return "每个人通过熊宝连接自己的账号。";
+  if (!personal) return `每个人通过${shortName()}连接自己的账号。`;
   if (personal.kind === "no-auth")
-    return `${capitalised(personal.title)} 不需要账号，通过熊宝直接可用。`;
-  return `通过熊宝连接你的 ${personal.title} 账号。`;
+    return `${capitalised(personal.title)} 不需要账号，通过${shortName()}直接可用。`;
+  return `通过${shortName()}连接你的 ${personal.title} 账号。`;
 }
 
 /**
@@ -230,7 +231,7 @@ export function brokeredReach(
   description: string;
   badge: string;
 } {
-  const badge = "通过熊宝";
+  const badge = `通过${shortName()}`;
   if (!personal) {
     return {
       description: takesKey
@@ -243,7 +244,7 @@ export function brokeredReach(
   return {
     description:
       kind === "consent"
-        ? `你在浏览器里登录 ${title}，熊宝永远看不到你的密码。`
+        ? `你在浏览器里登录 ${title}，${shortName()}永远看不到你的密码。`
         : kind === "fields"
           ? `你用 ${title} 账号里的密钥连接，你的员工以你的身份使用它。`
           : "不需要登录。",
@@ -253,7 +254,7 @@ export function brokeredReach(
 
 /** What disconnecting a brokered account does, said where the button is. */
 export function brokeredDisconnectNote(_provider: PluginsProvider): string {
-  return "断开后，熊宝也就不能再访问你的账号。";
+  return `断开后，${shortName()}也就不能再访问你的账号。`;
 }
 
 /**

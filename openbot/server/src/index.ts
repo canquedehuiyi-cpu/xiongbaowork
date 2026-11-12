@@ -1,3 +1,5 @@
+// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+import "../../shared/apply-env-aliases";
 import type { AbstractAgent } from "@ag-ui/client";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -135,6 +137,7 @@ import {
   createAvatarSourceRoutes,
   createAvatarSourceStore,
 } from "./avatar-sources";
+import { englishName, setBrand } from "./brand";
 import { openbotAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
 import { personBrowserEgressPolicy } from "./browser/egress";
@@ -309,7 +312,7 @@ import { offeredMemoryTools } from "./memory/tools";
 import { reportModelAvailability } from "./model-availability-check";
 import { createModelCatalogue } from "./model-catalogue";
 import { installDeepSeekThinkingOff } from "./models/deepseek-thinking";
-import { createModelRoutes } from "./models/routes";
+import { createModelRoutes, createModelShelf } from "./models/routes";
 import {
   createNamedAgentModelResolver,
   modelOf,
@@ -331,6 +334,7 @@ import { createPlatformRoutes } from "./platform/routes";
 import { appAccessTools } from "./plugins/app-access-tool";
 import { showAppAccessTools } from "./plugins/show-app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
+import { useStaffingTools } from "./plugins/builtin-staffing";
 import { useComposioClient } from "./plugins/composio";
 import { createAccountModeSwitch } from "./plugins/account-mode";
 import { useArcadeClient } from "./plugins/arcade";
@@ -458,6 +462,17 @@ import {
 import { createSelfHostBanner } from "./self-host-banner";
 import { createSetupSources, modelKeyOf } from "./setup/checklist";
 import { createComputerCheck } from "./setup/computer-check";
+import {
+  ensureStaffingServer,
+  staffingAppMemory,
+  withStaffingDefault,
+} from "./staffing/default-grant";
+import { createStaffingExecutor } from "./staffing/executor";
+import {
+  createOwnerNameReader,
+  createThreadVisibility,
+} from "./staffing/routes";
+import { createStaffingProposalStore } from "./staffing/store";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
@@ -917,6 +932,13 @@ await startupLifecycle.run(async (startup) => {
   const tenantPackage = await startup.step(() =>
     loadTenantPackage(config.tenantPackageDirectory),
   );
+  setBrand({
+    productName: tenantPackage.productName,
+    shortName: tenantPackage.shortName,
+    englishName: tenantPackage.englishName,
+    companyName: tenantPackage.companyName,
+    supportUrl: tenantPackage.supportUrl,
+  });
   // The package's id unless DEPLOYMENT_ID says otherwise, and the id the deployment was set up under
   // if the package has since been renamed. See `deploymentNameOf`, which frames its own read.
   const deploymentId =
@@ -1574,6 +1596,19 @@ await startupLifecycle.run(async (startup) => {
     );
     void (async () => {
       const pluginStore = await storeBuilt.promise;
+      /*
+       * 「招聘与组群」这个应用：没有它，小管家的默认授予读不到工具。添加应用不授予任何人什么。团队版只在第一次
+       * 添加，管理员之后删掉就不再加回来；个人版和 Routines 一样一直在。
+       */
+      await ensureStaffingServer(
+        pluginStore,
+        staffingAppMemory(database),
+      ).catch((error: unknown) =>
+        console.warn(
+          "[plugins] 没能添加「招聘与组群」应用，小管家暂时不会招人：",
+          error instanceof Error ? error.message : error,
+        ),
+      );
       if (currentEdition() !== "personal") {
         await pluginStore.refreshOwnListings();
         /*
@@ -1786,10 +1821,17 @@ await startupLifecycle.run(async (startup) => {
     sharedAdmits: sharedAudience.admitsPerson,
     responsibilitySources: sharedUseStore.sourcesOf,
   });
-  const pluginStore = withPersonalDefaults(
-    storeWithoutDefaults,
-    personalDeps,
-    bootAuditStore,
+  /*
+   * 小管家默认会招人、组群（`staffing/default-grant.ts`）：在这个人自己的运行帧里读小管家的授予时补一次，
+   * 两个版本都一样，不跨租户。
+   */
+  const pluginStore = withStaffingDefault(
+    withPersonalDefaults(storeWithoutDefaults, personalDeps, bootAuditStore),
+    {
+      database,
+      disabled: (avatarId) =>
+        approvalService.disabledTools(currentTenant(), avatarId),
+    },
   );
   /*
    * 应用的账号模式 Personal ⇄ Shared（X1，上游 #757）：切到 Shared 时写「写之前先问」团队规则，团队账号
@@ -4080,6 +4122,7 @@ await startupLifecycle.run(async (startup) => {
    * own group thread, built exactly as a routine's is, so governance, learning and the computer tools
    * apply unchanged; Bots answering each other reuse the handoff desk's grant and caps.
    */
+  const staffingProposalStore = createStaffingProposalStore(database);
   const groupConversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
@@ -4155,6 +4198,11 @@ await startupLifecycle.run(async (startup) => {
     // A group is shared (`team`), so the people later added to it read it in their own frames.
     createChannel: async (ownerUserId, agentIds, options) =>
       channelStore.create(await actorFor(ownerUserId), agentIds, options),
+    // Adding a Bot to an existing group passes the same access filter as naming it at creation.
+    canUseBot: async (ownerUserId, agentId) =>
+      Boolean(
+        await agentProfileStore.get(await actorFor(ownerUserId), agentId),
+      ),
     // The owner says whether a Bot's words may reach the other people in a group.
     privateShare: createPrivateShareCheck({ approvals: approvalService.store }),
     // A Team Bot's consent card raised in a group turn is drawn in the shared transcript.
@@ -4178,6 +4226,29 @@ await startupLifecycle.run(async (startup) => {
       }, 1_000),
     (resource) => resource.stop(),
   );
+
+  /*
+   * 「招聘与组群」：员工替本人起草提议的工具，与 Routines 一样是按模块解析的内置传输，所以依赖在这里交一次。
+   * 它只起草；执行走 `/api/proposals` 与执行器（见下面 `coworker.staffing`），以本人登录的身份。模型名单与员工的模型选择器同一份
+   * （`GET /api/models`），角色模板只读本人的与套件的官方卡片。
+   */
+  useStaffingTools({
+    database,
+    proposals: staffingProposalStore,
+    profiles: agentProfileStore,
+    plugins: pluginStore,
+    composioConfigured: Boolean(composioBroker),
+    ...(composioBroker ? { directory: () => composioBroker.listApps() } : {}),
+    routines: routineStore,
+    groups: groupConversations,
+    catalogue: createModelShelf({ database, quota }),
+    roleTemplates: createRoleTemplateStore({
+      database,
+      profiles: agentProfileStore,
+      official: () => officialTemplatesFrom(tenantPackage.agents),
+    }),
+    auditStore: bootAuditStore,
+  });
 
   /*
    * `@` a coworker inside a 1:1 conversation (spec B2, B3): a card on the board with the coworker named
@@ -4843,6 +4914,29 @@ await startupLifecycle.run(async (startup) => {
         triggers: responsibilityTriggers,
       },
       groups: groupConversations,
+      staffing: {
+        store: staffingProposalStore,
+        executor: createStaffingExecutor({
+          database,
+          proposals: staffingProposalStore,
+          profiles: agentProfileStore,
+          quota,
+          plugins: pluginStore,
+          composioConfigured: Boolean(composioBroker),
+          ...(composioBroker
+            ? { directory: () => composioBroker.listApps() }
+            : {}),
+          routines: routineStore,
+          channels: channelStore,
+          groups: groupConversations,
+          portraits: createPortraitStore(database),
+          auditStore: bootAuditStore,
+          // Owner approvals of a Shared app are withdrawn with the owner's grants, as in `DELETE /give`.
+          shared: { store: sharedUseStore, audience: sharedAudience },
+        }),
+        canSeeThread: createThreadVisibility(database),
+        ownerName: createOwnerNameReader(database),
+      },
       teamBots,
       // AUT3: the WakerFlow target is registered above, so the form may offer it.
       wakerflowAutomations: true,
@@ -5258,5 +5352,5 @@ await startupLifecycle.run(async (startup) => {
     );
   }
 
-  console.info(`OpenBot server listening on http://127.0.0.1:${port}`);
+  console.info(`${englishName()} server listening on http://127.0.0.1:${port}`);
 });

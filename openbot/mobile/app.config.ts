@@ -2,16 +2,16 @@ import type { ExpoConfig } from "expo/config";
 
 const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 const config: ExpoConfig = {
-  name: "OpenBot",
-  slug: "openbot",
+  name: "熊宝",
+  slug: "xiongbao",
   version: "0.0.1",
-  scheme: "openbotmobile",
-  ios: { bundleIdentifier: "ai.openbot.mobile", supportsTablet: true },
-  android: { package: "ai.openbot.mobile" },
+  scheme: "xiongbao",
+  ios: { bundleIdentifier: "com.xiongbao.mobile", supportsTablet: true },
+  android: { package: "com.xiongbao.mobile" },
   plugins: [
     "expo-router",
     "expo-secure-store",
-    ["expo-notifications", { defaultChannel: "openbot" }],
+    ["expo-notifications", { defaultChannel: "xiongbao" }],
   ],
   extra: { ...(projectId ? { eas: { projectId } } : {}) },
 };

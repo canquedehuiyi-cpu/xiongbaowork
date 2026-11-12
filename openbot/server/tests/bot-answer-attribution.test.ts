@@ -270,7 +270,7 @@ describe("a Bot addressed by its own name", () => {
     const instructions = [...said(sent, "system"), ...said(sent, "developer")];
     expect(instructions).toHaveLength(1);
     expect(instructions[0]).toStartWith(
-      "<identity>\nYou are Knowledge, a Bot in OpenBot.",
+      "<identity>\nYou are Knowledge, a Bot in XiongBao Work.",
     );
     expect(instructions[0]).toContain(
       'People call you "Knowledge" or "the Knowledge Bot".',

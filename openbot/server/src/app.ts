@@ -204,6 +204,12 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
 import type { SelfHostBanner } from "./self-host-banner";
 import { createSetupRoutes, type SetupSources } from "./setup/checklist";
+import type { StaffingExecutor } from "./staffing/executor";
+import {
+  createProposalRoutes,
+  type ProposalRouteOptions,
+} from "./staffing/routes";
+import type { StaffingProposalStore } from "./staffing/store";
 import { createBotTaskRoutes } from "./tasks/bot-task-routes";
 import type { TaskRunner } from "./tasks/runner";
 import type { TaskStore } from "./tasks/store";
@@ -538,6 +544,16 @@ export function createApp(
       };
     };
     groups?: GroupConversations;
+    /**
+     * Confirming, editing, discarding and retrying what a Bot drafted in conversation
+     * (`/api/proposals`, staffing/routes.ts). Absent, the routes are not mounted.
+     */
+    staffing?: {
+      store: StaffingProposalStore;
+      executor: StaffingExecutor;
+      canSeeThread: Parameters<typeof createProposalRoutes>[3];
+      ownerName?: ProposalRouteOptions["ownerName"];
+    };
     teamBots?: TeamBots;
     /** Pause, reset, Activity and attention for a person's own Bots. See agents/lifecycle.ts. */
     lifecycle?: BotLifecycleServices;
@@ -2227,6 +2243,24 @@ export function createApp(
     );
   if (coworker?.groups)
     app.route("/api/groups", createGroupRoutes(coworker.groups, requireUser));
+  if (coworker?.staffing) {
+    /*
+     * Signed in, and for an administrator the request-scoped capability: the executor decides what it may
+     * grant by `capabilityFor(actor.id)`, which is only "admin" inside `adminCapability`'s frame. Without
+     * it a real administrator would be treated as a member here (`requireAdminUser`: `requireUser`, then the
+     * capability). A run's machine credential is no session, so it gets 401.
+     */
+    app.route(
+      "/api/proposals",
+      createProposalRoutes(
+        coworker.staffing.store,
+        coworker.staffing.executor,
+        requireAdminUser,
+        coworker.staffing.canSeeThread,
+        { auditStore, ownerName: coworker.staffing.ownerName },
+      ),
+    );
+  }
   if (coworker?.teamBots)
     app.route(
       "/api/team-bots",

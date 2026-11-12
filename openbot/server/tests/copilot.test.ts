@@ -56,7 +56,7 @@ import { testEnvironment } from "./support/environment";
 
 /** What every built-in Bot reads first: its name, and that a request for it is for it. */
 const identity = (name: string) =>
-  `You are ${name}, a Bot in OpenBot. ${selfAddressGuidance(name)}`;
+  `You are ${name}, a Bot in XiongBao Work. ${selfAddressGuidance(name)}`;
 
 /** The tags of a prompt's sections, in the order the Bot reads them. */
 const sectionsOf = (prompt: string) =>

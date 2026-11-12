@@ -21,7 +21,8 @@ export type SetupFix =
   | {
       kind: "env";
       names: string[];
-      docsUrl: string;
+      /** The deployment's support page; absent when it publishes none, and then no guide is linked. */
+      docsUrl?: string;
       page?: { label: string; path: string };
     }
   | { kind: "page"; label: string; path: string; docsUrl?: string };

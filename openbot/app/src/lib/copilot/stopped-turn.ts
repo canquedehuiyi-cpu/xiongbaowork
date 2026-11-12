@@ -1,5 +1,6 @@
 import { type AbstractAgent, useAgent } from "@copilotkit/react-core/v2";
 import { useEffect, useState } from "react";
+import { shortName } from "@/lib/brand";
 import { reportIfQuotaRunError } from "@/lib/quota/guidance";
 
 /**
@@ -63,8 +64,8 @@ function backEndUnreachable(said: string): string | null {
   if (!match) return null;
   console.warn("OpenBot couldn't reach its back end.", said);
   return match[1] === "run"
-    ? "熊宝连不上后端，你的消息没有发出去。再试一次，或者退出后重新打开熊宝。"
-    : "熊宝连不上后端。再试一次，或者退出后重新打开熊宝。";
+    ? `${shortName()}连不上后端，你的消息没有发出去。再试一次，或者退出后重新打开${shortName()}。`
+    : `${shortName()}连不上后端。再试一次，或者退出后重新打开${shortName()}。`;
 }
 
 /**

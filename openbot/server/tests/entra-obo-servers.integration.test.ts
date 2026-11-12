@@ -812,7 +812,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
       .insert(users)
       .values({ id: danId, email: email("dan"), name: "dan" });
     expect(await backgroundCall(newEntra(), danId)).toBe(
-      `${REFUSAL_MARKER} 「HR」要用你的 Microsoft 账号，但 OpenBot 还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录 OpenBot 一次，再重新提问。`,
+      `${REFUSAL_MARKER} 「HR」要用你的 Microsoft 账号，但熊宝数字员工还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录熊宝数字员工一次，再重新提问。`,
     );
   });
 
@@ -826,7 +826,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
     expect((await storedRefreshToken(ivyId)).raw).toBeNull();
     // Their routine runs later, in a process that never saw that token (a restart, say).
     expect(await backgroundCall(newEntra(), ivyId)).toBe(
-      `${REFUSAL_MARKER} 「HR」要用你的 Microsoft 账号，但 OpenBot 还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录 OpenBot 一次，再重新提问。`,
+      `${REFUSAL_MARKER} 「HR」要用你的 Microsoft 账号，但熊宝数字员工还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录熊宝数字员工一次，再重新提问。`,
     );
   });
 
@@ -841,7 +841,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
     const asked = entra.requests.length;
     const calls = reached.length;
     expect(await backgroundCall(tokens, joId)).toBe(
-      `${REFUSAL_MARKER} 你已经不能使用 OpenBot，所以没有使用「HR」。`,
+      `${REFUSAL_MARKER} 你已经不能使用熊宝数字员工，所以没有使用「HR」。`,
     );
     // Neither the held token nor Entra was asked: nothing reached the system as them.
     expect(entra.requests.length).toBe(asked);
@@ -877,7 +877,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
 
     const fayId = await signedInWithMicrosoft(person("fay"));
     expect(await backgroundCall(newEntra(), fayId, PAYROLL)).toBe(
-      `${REFUSAL_MARKER} 管理员还没有在 Microsoft Entra 里授权 OpenBot 访问「Payroll」。请联系管理员授权。`,
+      `${REFUSAL_MARKER} 管理员还没有在 Microsoft Entra 里授权熊宝数字员工访问「Payroll」。请联系管理员授权。`,
     );
   });
 
@@ -887,7 +887,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
     entra.apiConsented = false;
     try {
       expect(await backgroundCall(newEntra(), halId)).toBe(
-        `${REFUSAL_MARKER} OpenBot 在 Microsoft Entra 里还没有获得对它自己 API 的授权，所以无法以你的身份访问「HR」。请联系管理员授权。`,
+        `${REFUSAL_MARKER} 熊宝数字员工在 Microsoft Entra 里还没有获得对它自己 API 的授权，所以无法以你的身份访问「HR」。请联系管理员授权。`,
       );
     } finally {
       entra.apiConsented = true;
@@ -900,7 +900,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
     entra.apiExposed = false;
     try {
       expect(await backgroundCall(newEntra(), gusId)).toBe(
-        `${REFUSAL_MARKER} OpenBot 在 Microsoft Entra 里还没有设置好，无法以你的身份访问「HR」。请管理员在那里公开 OpenBot 的 API。`,
+        `${REFUSAL_MARKER} 熊宝数字员工在 Microsoft Entra 里还没有设置好，无法以你的身份访问「HR」。请管理员在那里公开熊宝数字员工的 API。`,
       );
     } finally {
       entra.apiExposed = true;
@@ -1084,7 +1084,7 @@ describe("a scope only reaches a registered system, at its own host (review I-2)
         url: `https://${HR_HOST}/mcp`,
         entraScope: `api://${CLIENT_ID}/.default`,
       }),
-    ).toContain("OpenBot 自己的 API");
+    ).toContain("熊宝数字员工自己的 API");
   });
 
   test("a registered system's scope cannot be sent to another host", async () => {

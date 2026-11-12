@@ -47,7 +47,7 @@ type Phase =
  * from OpenBot: confirming that it is OpenBot is what the person is asked to do. */
 const SOURCE = {
   web: "A page at this address in this browser asked to connect.",
-  desktop: "OpenBot Desktop on this computer asked.",
+  desktop: "XiongBao Work Desktop on this computer asked.",
 } as const;
 
 /**
@@ -112,8 +112,8 @@ export function ConnectPage() {
 
   return (
     <Page
-      title="Connect this browser to OpenBot"
-      description={`Confirm this is your OpenBot. It signs this browser in. ${RECORDER_DESTINATION}`}
+      title="Connect this browser to XiongBao Work"
+      description={`Confirm this is your XiongBao Work. It signs this browser in. ${RECORDER_DESTINATION}`}
       width="prose"
     >
       {phase.kind === "ready" ? (
@@ -246,8 +246,8 @@ export function ConnectPage() {
         </p>
       ) : phase.kind === "none" ? (
         <p className="mt-8 text-muted-foreground text-sm" role="status">
-          No connection is waiting. Choose Connect this browser in OpenBot to
-          start one.
+          No connection is waiting. Choose Connect this browser in XiongBao Work
+          to start one.
         </p>
       ) : null}
     </Page>

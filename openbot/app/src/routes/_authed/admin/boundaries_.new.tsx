@@ -47,6 +47,7 @@ import {
   RULE_TEMPLATES,
   type RuleTemplate,
 } from "@/lib/boundaries/rules";
+import { shortName } from "@/lib/brand";
 import { isComposing } from "@/lib/composing";
 import { saveActionPolicyMutationOptions } from "@/lib/computers/mutations";
 import {
@@ -340,7 +341,7 @@ function NewRulePage() {
                 <Field>
                   <FieldLabel htmlFor="rule-expression">规则</FieldLabel>
                   <FieldDescription>
-                    用 CEL 写成。添加前熊宝
+                    用 CEL 写成。添加前{shortName()}
                     会先检查这条规则，写错一个字也不会把所有动作都拦下。
                   </FieldDescription>
                   <Textarea

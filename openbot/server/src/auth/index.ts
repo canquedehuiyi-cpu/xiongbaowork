@@ -32,14 +32,15 @@ import { encryptSsoConfig } from "./encrypt-sso-config";
 import { SIGN_OUT_UNFINISHED } from "./organization";
 import { applyConfiguredAdmin, isConfiguredAdmin, seedRole } from "./roles";
 import { recordProvisioned, scimOptions } from "./scim";
+import { englishName } from "../brand";
 
 /** Answered when a provider sign-in would join an unverified password account with the same address. */
 export const LINK_REFUSAL_MESSAGE =
   "该邮箱已有一个未验证的密码账号，不能直接用第三方登录接管。请用密码登录，或联系管理员处理。";
 
 /** What a person sees when SSO is required and they tried another way in. */
-/** The native app's custom scheme (mobile/app.config.ts). */
-const NATIVE_APP_ORIGIN = "openbotmobile://";
+/** The native app's custom scheme (mobile/app.config.ts), plus the pre-rename one still accepted for sign-in return. */
+const NATIVE_APP_ORIGINS = ["xiongbao://", "openbotmobile://"];
 
 export const SSO_REQUIRED_MESSAGE =
   "This deployment requires signing in through your company's identity provider. Enter your work email to continue.";
@@ -473,7 +474,7 @@ export function createAuth(
     secret: authConfig.secret,
     trustedOrigins: [
       ...authConfig.trustedOrigins,
-      ...(nativeApp ? [NATIVE_APP_ORIGIN] : []),
+      ...(nativeApp ? NATIVE_APP_ORIGINS : []),
     ],
     /*
      * Wrapped, so a company's client secret is ciphertext in the column.
@@ -660,7 +661,7 @@ export function createAuth(
                 },
               });
               throw new APIError("FORBIDDEN", {
-                message: "Your access to OpenBot has been removed.",
+                message: `Your access to ${englishName()} has been removed.`,
               });
             }
             return { data: user };
@@ -680,7 +681,7 @@ export function createAuth(
               authConfig.initialAdminEmails,
             );
             // Every arrival path gets its tenant: a Free subscription and its 分身.
-            await provisionTenant(database, user);
+            await provisionTenant(database, user, { withStaffing: true });
             if (context?.path?.startsWith("/scim")) {
               await recordProvisioned(scimDeps, user);
             }
@@ -742,7 +743,7 @@ export function createAuth(
                 session.userId,
               );
               throw new APIError("FORBIDDEN", {
-                message: "Your access to OpenBot has been removed.",
+                message: `Your access to ${englishName()} has been removed.`,
               });
             }
             /*

@@ -44,6 +44,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { shortName } from "@/lib/brand";
 import {
   assignTeamBotMutationOptions,
   publishTeamBotMutationOptions,
@@ -153,7 +154,7 @@ export function SharingSections({ agent }: { agent: AgentProfile }) {
             }
           >
             {agent.visibility === "public"
-              ? "它是公开的，熊宝上的所有人已经都能用它。"
+              ? `它是公开的，${shortName()}上的所有人已经都能用它。`
               : agent.mine
                 ? "只有你能用它。"
                 : null}

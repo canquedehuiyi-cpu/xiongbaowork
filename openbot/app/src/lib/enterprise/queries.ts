@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { shortName } from "@/lib/brand";
 import { client } from "@/lib/client";
 
 export type CapabilityKey =
@@ -334,7 +335,7 @@ export function myCapabilitiesQueryOptions() {
     queryFn: async (): Promise<MyCapabilities> =>
       (
         await client("/api/admin/enterprise/me", {
-          fallback: "读不到熊宝允许做什么。",
+          fallback: `读不到${shortName()}允许做什么。`,
         })
       ).json(),
   });

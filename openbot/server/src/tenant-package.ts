@@ -1,12 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
+import { resolveTenantPackageDirectory } from "./tenant-package-path";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  HARNESSES,
-  type Harness,
-  OPENBOT_HARNESS_NAME,
-} from "@openbot/shared/harnesses";
+import { HARNESSES, type Harness } from "@openbot/shared/harnesses";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import {
   and,
@@ -20,6 +17,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { parse } from "yaml";
+import { englishName } from "./brand";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
 import {
@@ -250,8 +248,14 @@ export type TenantPackage = {
    */
   formerTenantIds: string[];
   productName: string;
+  /** What a sentence calls the product once it is known (`tenant.short_name`). Optional; callers fall back to the product name. */
+  shortName?: string;
   /** The product's name in English (`tenant.english_name`), drawn beside the Chinese one. Optional. */
   englishName?: string;
+  /** The legal/copyright holder (`tenant.company_name`). Optional; callers fall back to the product name. */
+  companyName?: string;
+  /** Where people get help (`tenant.support_url`). Optional, and always an https address. */
+  supportUrl?: string;
   stylesheet: string | null;
   agents: TenantAgent[];
   /** Remote agents explicitly disabled by a blank endpoint, not arbitrary removed YAML rows. */
@@ -307,7 +311,10 @@ export type ApplicationConfiguration = {
   brand: {
     tenantId: string;
     productName: string;
+    shortName?: string;
     englishName?: string;
+    companyName?: string;
+    supportUrl?: string;
   };
 };
 
@@ -326,8 +333,17 @@ export function createApplicationConfiguration(
     brand: {
       tenantId: tenantPackage.tenantId,
       productName: tenantPackage.productName,
+      ...(tenantPackage.shortName
+        ? { shortName: tenantPackage.shortName }
+        : {}),
       ...(tenantPackage.englishName
         ? { englishName: tenantPackage.englishName }
+        : {}),
+      ...(tenantPackage.companyName
+        ? { companyName: tenantPackage.companyName }
+        : {}),
+      ...(tenantPackage.supportUrl
+        ? { supportUrl: tenantPackage.supportUrl }
         : {}),
     },
   };
@@ -359,6 +375,22 @@ function requiredString(value: unknown, name: string): string {
     throw new Error(`${name} must be a non-empty string`);
   }
   return value;
+}
+
+// A support link is rendered as a clickable href, so anything but https (javascript:, http:) is refused.
+function httpsUrl(value: unknown, name: string): string {
+  const text = requiredString(value, name);
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    throw new Error(`${name} must be an https URL`);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error(`${name} must be an https URL`);
+  }
+  // The trimmed href, so surrounding whitespace never reaches a rendered link.
+  return text.trim();
 }
 
 function agentTitle(value: unknown): string {
@@ -742,6 +774,9 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     tenantId,
     formerTenantIds,
     productName: requiredString(tenant.product_name, "tenant.product_name"),
+    ...(tenant.short_name === undefined
+      ? {}
+      : { shortName: requiredString(tenant.short_name, "tenant.short_name") }),
     ...(tenant.english_name === undefined
       ? {}
       : {
@@ -750,6 +785,17 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
             "tenant.english_name",
           ),
         }),
+    ...(tenant.company_name === undefined
+      ? {}
+      : {
+          companyName: requiredString(
+            tenant.company_name,
+            "tenant.company_name",
+          ),
+        }),
+    ...(tenant.support_url === undefined
+      ? {}
+      : { supportUrl: httpsUrl(tenant.support_url, "tenant.support_url") }),
     stylesheet: skin
       ? requiredString(skin.stylesheet, "skin.stylesheet")
       : null,
@@ -858,8 +904,9 @@ async function readAgentFiles(sourcePath: string): Promise<PackageAgentFile[]> {
 }
 
 export async function loadTenantPackage(
-  sourcePath: string,
+  requestedPath: string,
 ): Promise<LoadedTenantPackage> {
+  const sourcePath = resolveTenantPackageDirectory(requestedPath);
   const filenames = [
     "brand.yaml",
     "agents.yaml",
@@ -1025,7 +1072,7 @@ function personalStarterSeed(
       ? harness
         ? harness.name
         : null
-      : OPENBOT_HARNESS_NAME;
+      : englishName();
     const title = harnessName
       ? `Everyday life. Powered by ${harnessName}.`
       : "Everyday life.";

@@ -5,6 +5,7 @@ import {
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
+import { englishName } from "../brand";
 
 /**
  * The last check before a built-in Bot's model call: a run that would send more tools than its
@@ -74,7 +75,7 @@ export function toolLimitRefusal(
 ): string {
   const whose =
     limit.provider === OPENBOT_TOOL_LIMIT
-      ? `OpenBot sends at most ${limit.limit} at once`
+      ? `${englishName()} sends at most ${limit.limit} at once`
       : `its model takes at most ${limit.limit} at once`;
   return `${botName} can't answer. It needs ${count} tools on every step, and ${whose}. Ask an admin to check this Bot's setup.`;
 }

@@ -37,7 +37,7 @@ const EXTENSION_ID = "test";
 const ada = { id: "p1", name: "Ada", email: "ada@example.test" };
 const ORDER = "http://127.0.0.1:7420/orders/1043";
 const TOKEN = "obr_openbot-page-token";
-const NOT_CONNECTED = "Connect this browser to OpenBot first.";
+const NOT_CONNECTED = "Connect this browser to XiongBao Work first.";
 
 const rows = JSON.parse(
   readFileSync(
@@ -93,7 +93,7 @@ function route(request: Request): Response | Promise<Response> | null {
     if (!liveTokens.has(token))
       return Response.json(
         {
-          error: "This browser is no longer connected to OpenBot.",
+          error: "This browser is no longer connected to XiongBao Work.",
           code: RECORDER_SIGNED_OUT,
           reason: "revoked",
         },
@@ -225,7 +225,7 @@ function openTabs(): void {
   fake.tabs.set(OPENBOT_TAB, {
     id: OPENBOT_TAB,
     url: openbotPage(),
-    title: "OpenBot",
+    title: "XiongBao Work",
     active: true,
     windowId: 1,
   } as chrome.tabs.Tab);
@@ -499,7 +499,7 @@ test("OpenBot's origin in a frame of another page may read the state and stop, b
   });
   expect(await ask({ type: "openbot.record", title: "x" }, framed)).toEqual({
     ok: false,
-    error: "Record from OpenBot's own tab.",
+    error: "Record from XiongBao Work's own tab.",
   });
   expect(fake.storage.local.get("activeRecording")).toBeUndefined();
   expect(await ask({ type: "openbot.state" }, framed)).toEqual({

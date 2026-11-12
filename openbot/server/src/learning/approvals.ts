@@ -6,6 +6,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { learningSkillApprovals } from "../db/schema/learning";
 import type { ReviewSteps } from "./review";
+import { englishName } from "../brand";
 
 /**
  * The name a proposed skill's SKILL.md gives itself in its front matter, or null when it has none or an unusable one.
@@ -335,7 +336,7 @@ export type SkillApprovalStore = ReturnType<typeof createSkillApprovalStore>;
 export class UnnamedSkillError extends Error {
   constructor() {
     super(
-      "This skill has no name OpenBot can record, so it can't be approved here.",
+      `This skill has no name ${englishName()} can record, so it can't be approved here.`,
     );
     this.name = "UnnamedSkillError";
   }

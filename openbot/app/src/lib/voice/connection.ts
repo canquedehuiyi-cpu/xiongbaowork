@@ -1,3 +1,4 @@
+import { shortName } from "@/lib/brand";
 import type { ConnectVoice } from "./types";
 import { connectWebRtc } from "./webrtc";
 import { connectWebSocket } from "./websocket";
@@ -18,11 +19,12 @@ export const connectVoice: ConnectVoice = async (options) => {
     credentials: "include",
     signal: options.signal,
   });
-  if (!response.ok) throw new Error("语音通话不可用。请检查熊宝的语音配置。");
+  if (!response.ok)
+    throw new Error(`语音通话不可用。请检查${shortName()}的语音配置。`);
   const config: unknown = await response.json();
   if (config && typeof config === "object" && "transport" in config) {
     if (config.transport === "webrtc") return connectWebRtc(options);
     if (config.transport === "websocket") return connectWebSocket(options);
   }
-  throw new Error("熊宝用的语音连接方式，这个应用不支持。");
+  throw new Error(`${shortName()}用的语音连接方式，这个应用不支持。`);
 };

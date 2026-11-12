@@ -13,7 +13,7 @@
 | `OPENAI_MODEL` | **不读** | 全仓没有任何代码读它。写进 `.env` 是无效配置 |
 | `OPENAI_BASE_URL` | 读 | 自定义网关地址 |
 | `OPENAI_API_KEY` | 读 | 凭据；为空时 `agent-bot` / `agent-langgraph` 容器直接退出并说"This Bot cannot answer without a model" |
-| 品牌包 `examples/qoderwake/model.yaml` 的 `default_model` | 读 | 现在**写死**了一个 OpenAI 的模型名，见 §3 |
+| 品牌包 `examples/xiongbao/model.yaml` 的 `default_model` | 读 | 现在**写死**了一个 OpenAI 的模型名，见 §3 |
 
 DeepSeek 在 2026-10-09 实测回的句子是"支持的模型名是 …，但你传的是 gpt-5.6-terra"，也就是说：换任何非 OpenAI 厂商，
 **第一轮必然失败**，而失败的原因被界面吞掉。
@@ -39,13 +39,13 @@ DeepSeek 在 2026-10-09 实测回的句子是"支持的模型名是 …，但你
 
 ## 3. 请 B 线做的两件事（交付形态）
 
-1. **`examples/qoderwake/model.yaml` 的 `default_model` 改成占位**，不再预设具体厂商（方案 D-5）。
+1. **`examples/xiongbao/model.yaml` 的 `default_model` 改成占位**，不再预设具体厂商（方案 D-5）。
    按 D-5 的原话："不预设具体厂商：`model.yaml` 保留占位，首次启动若未配置模型则在界面引导'接入模型'"。
    写死厂商名是 §1 那条必然失败的源头；占位之后，`modelConfigured=false` 才有意义。
 2. **`openbot/.env.example` 删掉一切 `OPENAI_MODEL` 字样**，并在 `OPENAI_BASE_URL` 旁边写明"模型名用 `BOT_MODEL`"，
    给 DeepSeek / 通义 / 智谱各一行示例（例如 DeepSeek 2026-10-09 实测可用的名字是 `deepseek-flash`、`deepseek-v4-pro`，
    `deepseek-chat` 不在其支持列表里）。
-   另外 `docs/deployment-qoderwake.md` 与根 README 需要把"Windows 宿主不能直接起 server"之外的这条也写清：
+   另外 `docs/deployment-xiongbao.md` 与根 README 需要把"Windows 宿主不能直接起 server"之外的这条也写清：
    **`OPENAI_MODEL` 是无效配置**，这是用户第一次接自己模型时最容易踩的空坑。
 
 ## 4. 请 C 线做的一件事（界面引导）

@@ -17,6 +17,8 @@
  * tries again on the next tick. So every phase below gets its own try/catch, and nothing here ever
  * lets a phase's error reach the top and take the process down.
  */
+// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+import "../../shared/apply-env-aliases";
 import { createDatabase } from "../../server/src/db/client";
 import { createRoutineStore } from "../../server/src/routines/store";
 import {

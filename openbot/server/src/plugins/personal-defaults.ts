@@ -29,6 +29,7 @@ import {
   isNotNull,
   isNull,
   like,
+  ne,
   notLike,
   sql,
 } from "drizzle-orm";
@@ -52,6 +53,8 @@ import {
 } from "../db/schema/plugins";
 import { currentEdition } from "../edition";
 import { currentTenant, runAsTenant } from "../tenant/context";
+import { STAFFING_DEFAULT_BY } from "../tenant/provisioning";
+import { productName } from "../brand";
 
 type ListedTool = { ref: string };
 
@@ -149,16 +152,26 @@ export function alwaysOnHere(refOrRowId: string): boolean {
   return isAlwaysOn(ref);
 }
 
+/**
+ * 按员工单独授予、不属于「每位员工」的内置应用：「招聘与组群」。默认只给小管家，别的员工要不要有由招它的
+ * 人决定，主人也能逐个员工开关，所以个人版不把它补给每位员工，也不拒绝从一位员工身上收回它。
+ */
+export const PER_BOT_APP = "staffing";
+
+export function isPerBotApp(ref: string): boolean {
+  return ref === PER_BOT_APP || ref.startsWith(`${PER_BOT_APP}/`);
+}
+
 /** 有人想关掉它、或从一位员工身上收回它时，服务端的答复。 */
 export const ALWAYS_ON_REFUSAL = "例行任务一直开着，每位员工都能用。";
 
 /** 个人版里有人想从一位员工身上收回一个应用时，服务端的答复。 */
 export const EVERY_BOT_REFUSAL =
-  "OpenBot 个人版里，你连上的每个应用每位员工都能用。要让所有员工都不用它，请把这个应用关掉。";
+  "个人版里，你连上的每个应用每位员工都能用。要让所有员工都不用它，请把这个应用关掉。";
 
 /** 个人版里有人想不让一位员工去问另一位时，服务端的答复（见 `botsReachableFrom`）。 */
 export const EVERY_BOT_ASKS_REFUSAL =
-  "OpenBot 个人版里，每位员工都可以请你的其他员工帮忙。";
+  "个人版里，每位员工都可以请你的其他员工帮忙。";
 
 /**
  * 一位员工在不在个人默认的「每位员工」里：内置的普通员工在；分身（它的连接器来源只写只读工具，移除就收回，
@@ -190,6 +203,7 @@ export function personalRevokeRefusal(
   if (currentEdition() !== "personal") return null;
   if (bot && !coveredByPersonalDefaults(bot.id, bot.type)) return null;
   if (kind === "mcp" && isAlwaysOn(ref)) return ALWAYS_ON_REFUSAL;
+  if (kind === "mcp" && isPerBotApp(ref)) return null;
   if (kind === "mcp") return EVERY_BOT_REFUSAL;
   if (kind === "bot") return EVERY_BOT_ASKS_REFUSAL;
   return null;
@@ -232,6 +246,8 @@ async function grantEveryTool(
     const first = tools[0];
     if (!first) continue;
     const key = appKeyOf(first.ref);
+    // 只按员工授予的应用：不补给每位员工（见 `PER_BOT_APP`）。
+    if (isPerBotApp(key)) continue;
     const grantedBy = isAlwaysOn(key) ? ALWAYS_ON_BY : by;
     for (const bot of bots) {
       const held = await deps.granted(bot, key);
@@ -485,11 +501,11 @@ export function startPersonalDefaultApps(
       const waiting = await ensurePersonalDefaultApps(store, deps, memory);
       if (waiting.length === 0) return;
       warnOnce(
-        `${waiting.join("、")} 没能列出工具，联网搜索还不能用。OpenBot 会继续尝试。`,
+        `${waiting.join("、")} 没能列出工具，联网搜索还不能用。${productName()}会继续尝试。`,
       );
     } catch (error) {
       warnOnce(
-        `OpenBot 没能打开默认应用（${reasonWithoutStatement(error)}）。会继续尝试。`,
+        `${productName()}没能打开默认应用（${reasonWithoutStatement(error)}）。会继续尝试。`,
       );
     }
     if (stopped) return;
@@ -939,7 +955,13 @@ export async function personalGrantsLeftInTeam(
   const [row] = await database
     .select({ ref: pluginGrants.ref })
     .from(pluginGrants)
-    .where(like(pluginGrants.grantedBy, "openbot:%"))
+    .where(
+      and(
+        like(pluginGrants.grantedBy, "openbot:%"),
+        // 小管家默认的招聘能力两个版本都给，团队版里它是正常的，不是个人版留下的宽授予。
+        ne(pluginGrants.grantedBy, STAFFING_DEFAULT_BY),
+      ),
+    )
     .limit(1);
   return row !== undefined;
 }

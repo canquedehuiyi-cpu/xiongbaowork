@@ -116,7 +116,7 @@ def test_a_routine_starts_claude_code_with_openbots_working_rules(sdk):
     assert "take it in the same reply instead of saying you will" in system_prompt
     assert "Nobody is watching this run" in system_prompt
     assert "What I could not confirm" in system_prompt
-    # Told OpenBot asks before what it gives the Bot, so the Bot does not ask a second time.
-    assert "When you use the apps and tools OpenBot gives you, OpenBot asks" in system_prompt
+    # Told the system asks before what it gives the Bot, so the Bot does not ask a second time.
+    assert "When you use the apps and tools the system gives you, the system asks" in system_prompt
     # The server's instructions are the whole prompt, first: Claude Code's own is not added.
     assert system_prompt.startswith("<identity>\nYou are Risk")

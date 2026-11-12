@@ -33,12 +33,15 @@
   // It is a module and drives this workspace's server, so it is checked here like composio-smoke.
   // `../scripts/e2e/wakerflow-real-model.ts`: the same gate once with a real model, run by hand by
   // the `wakerflow-real-model` job of model-e2e.yml; checked here for the same reason.
+  // `../scripts/e2e/staffing-lifecycle.ts`: the G6 gate's harness (招聘与组群), run by the
+  // `e2e-staffing` CI job; checked here for the same reason as G4's.
   "include": [
     "src",
     "scripts",
     "../scripts/composio-smoke.ts",
     "../scripts/e2e/wakerflow-lifecycle.ts",
     "../scripts/e2e/wakerflow-real-model.ts",
+    "../scripts/e2e/staffing-lifecycle.ts",
     // Laptop setup and its regression tests are checked explicitly; root scripts are not a workspace.
     "../scripts/setup-composio.ts",
     "../scripts/setup-composio.test.ts",

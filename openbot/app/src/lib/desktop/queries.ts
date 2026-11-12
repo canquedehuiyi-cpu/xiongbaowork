@@ -1,4 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
+import { shortName } from "@/lib/brand";
+import { appConfig } from "@/lib/generated/application-config";
 import { desktopShell } from "./shell";
 
 /**
@@ -123,13 +125,15 @@ export const desktopKeys = {
 
 const PLUGIN = "plugin:openbot-desktop";
 
+const PRODUCT = appConfig.brand.englishName ?? appConfig.brand.productName;
+
 /** One command of the desktop app's plugin. Rejects outside Desktop, which no caller reaches. */
 export async function invokeDesktop<T>(
   command: string,
   args?: Record<string, unknown>,
 ): Promise<T> {
   const shell = desktopShell();
-  if (!shell) throw new Error("这个页面需要熊宝桌面端。");
+  if (!shell) throw new Error(`这个页面需要${shortName()}桌面端。`);
   return (await shell.invoke(`${PLUGIN}|${command}`, args)) as T;
 }
 
@@ -237,10 +241,10 @@ export function diagnostics(
           )
           .join(", ");
   return [
-    `OpenBot Desktop ${status.version} (${status.build})`,
+    `${PRODUCT} Desktop ${status.version} (${status.build})`,
     `Installed in ${status.root}${status.appPort ? `, app on port ${status.appPort}` : ""}`,
     `Container engine: ${status.engine ?? "not answering"}`,
-    `OpenBot: ${status.openbotRunning ? "running" : "stopped"}`,
+    `${PRODUCT}: ${status.openbotRunning ? "running" : "stopped"}`,
     `  processes: ${parts(status.processes)}`,
     `  containers: ${parts(status.containers)}`,
     status.intelligenceStack

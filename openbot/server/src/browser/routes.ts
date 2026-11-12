@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type BrowserApiState,
@@ -36,6 +37,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { z } from "zod";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { AppVariables, AuthenticatedActor } from "../auth/guards";
+import { englishName } from "../brand";
 import { type SeatAddress, seatHeaders } from "../computer/client";
 import { checkComputerAddress } from "../computer/target";
 import { reasonWithoutStatement } from "../db/query-failure";
@@ -43,9 +45,6 @@ import { recorderAudit, recorderConnected } from "../recorder/connected";
 import type { ReportingConnection } from "../recorder/connections";
 import type { RecorderExtensionDeps } from "../recorder/wiring";
 import { personBrowserId, personBrowserInstallId } from "./person";
-
-/** What the person sees their OpenBot browser called in Settings, Browsers, and what its connection's trail names. */
-export const OPENBOT_BROWSER_LABEL = "OpenBot browser";
 
 /** Where people's browsers run here: the computers carry them as they carry Bots' (browser/host.ts). */
 export type BrowserComputers = {
@@ -234,12 +233,6 @@ export async function inBudget<T>(
 const CLEAR_TIMEOUT_MS = 60_000;
 
 /**
- * The local actor's address, matched to decide whether the id is a real users row: the audit table's foreign key takes
- * no other (computer/routes.ts `actorOf` has the same rule).
- */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
-
-/**
  * How long a revoke waits for the person's browser to hear of it. The revoke has happened either way: a browser that
  * did not hear in time hears on its next call to OpenBot, and the state route reports it signed out meanwhile.
  */
@@ -255,14 +248,14 @@ const NARRATION_AHEAD_MS = 2 * 60_000;
 const NARRATION_BEHIND_MS = 10 * 60_000;
 
 const SENTENCES = {
-  unavailable: "This OpenBot cannot open a browser for you.",
+  unavailable: "This deployment cannot open a browser for you.",
   notSetUp:
-    "Your browser can't open right now. Ask an admin to check OpenBot's setup.",
+    "Your browser can't open right now. Ask an admin to check the setup.",
   /** `notSetUp` where the person is the admin: nobody else to ask, and something they can do (OpenBot Desktop checks
    * its setup again as it starts, the Recorder included). Never "read the logs": every sentence is for the
    * person, as Desktop's own are. */
   notSetUpSingleUser:
-    "Your browser can't open right now. Quit OpenBot, open it again, and try once more.",
+    "Your browser can't open right now. Quit the app, open it again, and try once more.",
   tooMany:
     "Too many connection codes were asked for at once. Wait a few minutes and try again.",
   notConnected: "Your browser could not be connected. Try again.",
@@ -275,11 +268,11 @@ const SENTENCES = {
   /** `notAnswering` where the person runs OpenBot themselves: quitting OpenBot stops its computer, and the browser on
    * it, and opening it again starts both afresh. */
   notAnsweringSingleUser:
-    "Your browser isn't answering. If it doesn't come back soon, quit OpenBot and open it again.",
+    "Your browser isn't answering. If it doesn't come back soon, quit the app and open it again.",
   notWeb: "Only web addresses open here.",
   /** The profile is gone, and its row on the trail could not be written. */
   clearedNotFinished:
-    "Your browser was cleared, but OpenBot couldn't finish. Clear it again.",
+    "Your browser was cleared, but the system couldn't finish. Clear it again.",
   phraseTimes:
     "That phrase's times do not fit the recording, so it was not added.",
 } as const;
@@ -1283,7 +1276,8 @@ export function createBrowserRoutes(deps: BrowserRouteDeps) {
     try {
       made = await deps.recorder.connections.exchange({
         code: minted.code,
-        label: OPENBOT_BROWSER_LABEL,
+        // What the person sees this browser called in Settings, Browsers, and what its connection's trail names.
+        label: `${englishName()} browser`,
         extensionId: RECORDER_EXTENSION_ID,
         installId: personBrowserInstallId(computerId),
       });
@@ -1512,7 +1506,7 @@ export function createBrowserRoutes(deps: BrowserRouteDeps) {
           eventType: "computer.browser_cleared",
           targetType: "computer",
           targetId: computerId,
-          ...(actor.email === DEV_ACTOR_EMAIL ? {} : { actorUserId: actor.id }),
+          ...(isDevActorEmail(actor.email) ? {} : { actorUserId: actor.id }),
           payload: {
             actor: actor.id,
             reason:

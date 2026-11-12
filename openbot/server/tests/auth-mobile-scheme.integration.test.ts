@@ -22,14 +22,17 @@ const config = {
   keyEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
 } as unknown as DeploymentConfig;
 /** What the Expo plugin's after hook consults before appending the session cookie to a redirect. */
-async function sendsSessionTo(auth: ReturnType<typeof createAuth>) {
+async function sendsSessionTo(
+  auth: ReturnType<typeof createAuth>,
+  scheme = "xiongbao://",
+) {
   const context = (await auth.$context) as {
     isTrustedOrigin: (url: string) => boolean;
   };
   const expoLoaded = (auth.options.plugins ?? []).some(
     (plugin) => plugin.id === "expo",
   );
-  return expoLoaded && context.isTrustedOrigin("openbotmobile://");
+  return expoLoaded && context.isTrustedOrigin(scheme);
 }
 afterEach(() => {
   delete process.env.EXPO_PROJECT_ID;
@@ -44,4 +47,24 @@ test("without the native app, no sign-in redirect carries a session to the app's
 test("a deployment that runs the native app still lets it sign in", async () => {
   process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
   expect(await sendsSessionTo(createAuth(config, database))).toBe(true);
+});
+// The legacy scheme stays accepted so a build still registered as openbotmobile:// can complete sign-in.
+test("the legacy openbotmobile:// scheme is still accepted alongside xiongbao://", async () => {
+  process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
+  const auth = createAuth(config, database);
+  expect(await sendsSessionTo(auth, "xiongbao://")).toBe(true);
+  expect(await sendsSessionTo(auth, "openbotmobile://")).toBe(true);
+});
+test("without the native app the legacy scheme is refused too", async () => {
+  expect(
+    await sendsSessionTo(createAuth(config, database), "openbotmobile://"),
+  ).toBe(false);
+});
+test("look-alike schemes are refused even with the native app on", async () => {
+  process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
+  const auth = createAuth(config, database);
+  expect(await sendsSessionTo(auth, "xiongbao.evil://callback")).toBe(false);
+  expect(await sendsSessionTo(auth, "openbotmobile.attacker://callback")).toBe(
+    false,
+  );
 });

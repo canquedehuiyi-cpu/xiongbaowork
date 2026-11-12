@@ -213,6 +213,29 @@ test("an admin is shown the variable to set, the page, and the guide", async () 
   expect(rowOf(view, "chat").getByText("OPENTAG_SHARED_SECRET")).not.toBeNull();
 });
 
+test("a variable fix from a deployment that publishes no support page names the variables and links no guide", async () => {
+  serving({
+    audience: "admin",
+    rows: [
+      ROW({
+        id: "computer",
+        title: "Bot computer",
+        ready: false,
+        detail: "Without it, Bots can't browse the web or work with files.",
+        fix: { kind: "env", names: ["AGENT_COMPUTER_URL", "COMPUTER_TOKEN"] },
+      }),
+    ],
+  });
+  const view = draw();
+  await view.findByRole("list", { name: "设置项" });
+
+  const computer = rowOf(view, "computer");
+  expect(computer.getByText("AGENT_COMPUTER_URL")).not.toBeNull();
+  expect(computer.getByText("COMPUTER_TOKEN")).not.toBeNull();
+  // Not even an anchor with nowhere to go.
+  expect(computer.queryByText("设置指南")).toBeNull();
+});
+
 test("a fix's links show a full-strength focus ring", async () => {
   serving(ADMIN);
   const view = draw();

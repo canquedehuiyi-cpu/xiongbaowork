@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { linkOptions } from "@tanstack/react-router";
+import { productName } from "@/lib/brand";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 
 export type BrokerDirectory = "composio" | "arcade";
@@ -47,7 +48,7 @@ export function managePaths(edition: "team" | "personal") {
       auditLabel: "活动",
       audit: () => linkOptions({ to: "/settings/activity" }),
       /** What a sentence calls the product itself: its name alone, "本部署" for an admin. */
-      deploymentName: "熊宝数字员工",
+      deploymentName: productName(),
       /** Which edition these paths are for, for the sentences that differ beyond a name. */
       edition: "personal" as const,
     };

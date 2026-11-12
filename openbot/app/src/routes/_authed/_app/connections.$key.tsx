@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { shortName } from "@/lib/brand";
 import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { useManagePaths } from "@/lib/manage-paths";
@@ -647,7 +648,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
         >
           {entry
             ? "员工用这个应用的一个团队账号，所有人都一样。"
-            : "熊宝没有叫这个名字的应用。"}
+            : `${shortName()}没有叫这个名字的应用。`}
         </PageEmpty>
       </PageShell>
     );
@@ -720,7 +721,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
                          * had not, which is the one outcome worse than not offering it.
                          */
                         setNotice(
-                          `断开功能还没有做好。在那之前，请到你的 ${entry.vendor} 账号的第三方访问设置里撤销熊宝的授权——这样会立刻停止访问。`,
+                          `断开功能还没有做好。在那之前，请到你的 ${entry.vendor} 账号的第三方访问设置里撤销${shortName()}的授权——这样会立刻停止访问。`,
                         )
                       }
                       className="whitespace-nowrap"
@@ -760,7 +761,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
 
       {connection ? (
         <PageSection
-          description={`以 ${entry.vendor} 记录的权限为准。它们可能比熊宝申请的少。`}
+          description={`以 ${entry.vendor} 记录的权限为准。它们可能比${shortName()}申请的少。`}
           title="访问权限"
         >
           <PageRows>

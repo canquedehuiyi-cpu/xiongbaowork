@@ -1,3 +1,4 @@
+import { shortName } from "@/lib/brand";
 import type { IdentityProviders, LinkedAccount } from "@/lib/identity/queries";
 import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import type { CatalogueItem, PluginServer } from "@/lib/plugins/queries";
@@ -84,8 +85,8 @@ export function isBrokeredGithub(
 }
 
 export const IDENTITY_SUMMARIES = {
-  github: "让熊宝在 GitHub 上认出你，这样仓库里的事件就能让你的员工开始干活。",
-  slack: "让熊宝在你从 Slack 发消息时认出你。",
+  github: `让${shortName()}在 GitHub 上认出你，这样仓库里的事件就能让你的员工开始干活。`,
+  slack: `让${shortName()}在你从 Slack 发消息时认出你。`,
 } as const;
 
 /**
@@ -94,7 +95,7 @@ export const IDENTITY_SUMMARIES = {
  */
 const IDENTITY_TILE_SUMMARIES = {
   github: "仓库事件可以让员工开始干活。",
-  slack: "从 Slack 给熊宝发消息。",
+  slack: `从 Slack 给${shortName()}发消息。`,
 } as const;
 
 const IDENTITY_TITLES = { github: "GitHub", slack: "Slack" } as const;

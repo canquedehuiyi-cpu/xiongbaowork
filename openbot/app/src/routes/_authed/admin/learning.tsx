@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { shortName } from "@/lib/brand";
 import { skillTitle } from "@/lib/learning/display";
 import {
   reviewLearningProposalMutationOptions,
@@ -74,7 +75,7 @@ function automaticMessage(
     automatic.state === "assigned" &&
     settings.defaultTarget?.containerId === automatic.containerId
   )
-    return `熊宝已自动使用这个 Intelligence 项目里的「${automatic.containerId}」容器，随时可以在这里改。`;
+    return `${shortName()}已自动使用这个 Intelligence 项目里的「${automatic.containerId}」容器，随时可以在这里改。`;
   if (automatic.state === "absent")
     return `这个 Intelligence 项目里还没有「${automatic.containerId}」学习容器，所以暂时什么都不收集。`;
   if (automatic.state === "not_entitled")
@@ -82,7 +83,7 @@ function automaticMessage(
   if (automatic.state === "learning_off")
     return "Intelligence 里关闭了学习，在那里打开之前什么都不收集。";
   if (automatic.state === "unavailable")
-    return "熊宝没能向 Intelligence 查询这个项目的学习容器，会自动重试。";
+    return `${shortName()}没能向 Intelligence 查询这个项目的学习容器，会自动重试。`;
   return undefined;
 }
 
@@ -519,7 +520,8 @@ export function LearningPage() {
             刷新状态
           </Button>
           <p className="text-muted-foreground text-sm">
-            熊宝把项目凭据保存在服务器上。在这里关闭学习会保留设置和对话的容器分配；分析计划仍在
+            {shortName()}
+            把项目凭据保存在服务器上。在这里关闭学习会保留设置和对话的容器分配；分析计划仍在
             Intelligence 里管理。
           </p>
         </div>

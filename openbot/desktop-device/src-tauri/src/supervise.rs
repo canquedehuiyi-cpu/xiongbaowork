@@ -534,7 +534,7 @@ mod tests {
         let bun = [
             "283 |     throw new Error(".to_string(),
             "error: 该配对码无效或已过期。".to_string(),
-            "      at pair (/$bunfs/root/openbot-runner:1:2)".to_string(),
+            "      at pair (/$bunfs/root/xiongbao-runner:1:2)".to_string(),
         ];
         assert_eq!(reason(&bun).as_deref(), Some("该配对码无效或已过期。"));
         let refusal = ["runner: this machine is already paired to https://a".to_string()];

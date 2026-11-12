@@ -181,8 +181,8 @@ async function answer(
  */
 export function noFolders(): string {
   return currentEdition() === "personal"
-    ? "This Bot has no folders it can read right now. Folder access ends when you stop OpenBot. To give it a folder, use Choose folder in Settings → Computer."
-    : "This Bot has no folders it can read right now. Folder access ends when OpenBot stops. An admin gives a Bot a folder with Choose folder in Admin → Computers.";
+    ? "This Bot has no folders it can read right now. Folder access ends when you stop the app. To give it a folder, use Choose folder in Settings → Computer."
+    : "This Bot has no folders it can read right now. Folder access ends when the system stops. An admin gives a Bot a folder with Choose folder in Admin → Computers.";
 }
 
 export function hostAccessTools(options: {

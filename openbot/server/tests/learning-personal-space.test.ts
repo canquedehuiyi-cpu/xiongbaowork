@@ -166,7 +166,7 @@ describe("the person's Learning space", () => {
       containerId: ADA_SPACE,
     });
     expect(h.creates).toEqual([
-      { id: ADA_SPACE, name: "OpenBot: Ada Lovelace" },
+      { id: ADA_SPACE, name: "XiongBao Work: Ada Lovelace" },
     ]);
     expect(h.store.rows.get(ADA)).toBe(ADA_SPACE);
   });

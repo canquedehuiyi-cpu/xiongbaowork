@@ -12,13 +12,15 @@ import {
   requestNotificationPermission,
   useNotificationPermission,
 } from "@/lib/notifications/permission";
+import { readMigrated } from "@/lib/storage-migrate";
 
 /** Set once somebody answers the prompt either way, so it is offered once per browser. */
-export const NOTIFY_PROMPT_KEY = "openbot-notify-prompt-answered";
+export const NOTIFY_PROMPT_KEY = "xiongbao-notify-prompt-answered";
+const LEGACY_NOTIFY_PROMPT_KEY = "openbot-notify-prompt-answered";
 
 function answered(): boolean {
   try {
-    return localStorage.getItem(NOTIFY_PROMPT_KEY) !== null;
+    return readMigrated(NOTIFY_PROMPT_KEY, LEGACY_NOTIFY_PROMPT_KEY) !== null;
   } catch {
     // Storage refused: offer it, and the browser's own answer still hides it once given.
     return false;

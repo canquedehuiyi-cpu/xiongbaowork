@@ -2,22 +2,20 @@ import { IconX } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
+import { appConfig } from "@/lib/generated/application-config";
 import {
   dismissSelfHostBannerMutationOptions,
   useUserPreferences,
 } from "@/lib/settings/message-list";
 import { cn } from "@/lib/utils";
 
-/** `ref` tells CopilotKit the visit came from inside a running OpenBot, not from the README. */
-export const SELF_HOST_URL =
-  "https://copilotkit.ai/talk-to-an-engineer?ref=openbot_app";
-
 /**
- * A slim bar offering help self-hosting OpenBot, until this person closes it.
+ * A slim bar pointing at this tenant's support address, until this person closes it.
  *
  * Hidden until both answers are in, so it never flashes on and then off: the deployment has to say
  * the banner is on (a fork running OpenBot for its own people turns it off), and this person's
- * preferences have to say they have not closed it.
+ * preferences have to say they have not closed it. With no `supportUrl` in the tenant package there is
+ * nowhere to send anyone, so it never shows.
  */
 export function SelfHostBanner() {
   const queryClient = useQueryClient();
@@ -27,6 +25,8 @@ export function SelfHostBanner() {
     dismissSelfHostBannerMutationOptions(queryClient, userId),
   );
 
+  const supportUrl = appConfig.brand.supportUrl;
+  if (!supportUrl) return null;
   if (!capabilities?.selfHostBanner) return null;
   if (!preferences || preferences.selfHostBannerDismissed) return null;
 
@@ -52,7 +52,7 @@ export function SelfHostBanner() {
             buttonVariants({ size: "sm", variant: "link" }),
             "px-0 text-foreground underline",
           )}
-          href={SELF_HOST_URL}
+          href={supportUrl}
           rel="noopener noreferrer"
           target="_blank"
         >

@@ -110,11 +110,11 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     expect(role.content).toContain(BROUGHT_BOT_ASKING_GUIDANCE);
     const said = BROUGHT_BOT_ASKING_GUIDANCE.replace(/\s+/g, " ");
     expect(said).toContain(
-      "When you use the apps and tools OpenBot gives you, OpenBot asks the person itself before you delete",
+      "When you use the apps and tools the system gives you, the system asks the person itself before you delete",
     );
     // Its own tools are not covered, so it still asks before one of them does something final.
     expect(said).toContain(
-      "Tools of your own that OpenBot did not give you are not covered: ask before one of those does something that cannot be undone.",
+      "Tools of your own that the system did not give you are not covered: ask before one of those does something that cannot be undone.",
     );
   });
 
@@ -221,7 +221,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
       "已连接应用的工具（名字以 mcp__ 开头）",
     );
     expect(APPROVAL_GUIDANCE).toContain("你自己的电脑是你的草稿空间");
-    expect(APPROVAL_GUIDANCE).toContain("记忆等 OpenBot 内部工具也不在此列");
+    expect(APPROVAL_GUIDANCE).toContain("记忆等系统内部工具也不在此列");
     // As the policy has it: deleting a file in the Bot's own workspace is an ordinary change.
     expect(
       safetyRequirement({

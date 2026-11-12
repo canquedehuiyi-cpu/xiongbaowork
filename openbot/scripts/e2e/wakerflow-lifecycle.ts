@@ -454,7 +454,7 @@ const serverEnv: Record<string, string> = {
   OPENBOT_PUBLIC_URL: ORIGIN,
   INITIAL_ADMIN_EMAILS: ADMIN_EMAIL,
   INTELLIGENCE_MODE: "local",
-  TENANT_PACKAGE_DIR: "../examples/qoderwake",
+  TENANT_PACKAGE_DIR: "../examples/xiongbao",
   APP_DIST_DIR,
   // The deployment's model (a coworker with no binding of its own speaks it) is the mock.
   OPENAI_BASE_URL: MODEL_BASE_URL,

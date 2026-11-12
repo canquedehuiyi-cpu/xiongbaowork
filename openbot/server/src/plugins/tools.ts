@@ -1,3 +1,4 @@
+import { englishName } from "../brand";
 import { DESTRUCTIVE_TOOL_NOTE } from "@openbot/shared/bot-prompt";
 import { type GrantedTool, parametersFor } from "@openbot/toolkit/granted-tool";
 import { ApprovalRefusedError } from "../approvals/types";
@@ -87,8 +88,12 @@ export { parametersFor };
  * 只说应用工具：记忆等 OpenBot 内部工具不经审批门，`computer_*` 和主人电脑上的命令也不归这条
  * 底线管，Bot 对它们该怎么确认还怎么确认。
  */
-export const CONNECTOR_APPROVAL_GUIDANCE =
-  "For the tools of connected apps (their names start with mcp__), OpenBot itself asks the person before you delete or archive anything and before you use a tool marked destructive, on a card that shows exactly what you are about to do. So for those, do not ask them first: say what you are going to do and call the tool, and they are asked once, by OpenBot. This covers connected-app tools only: not your memory tools, and not commands or files on a computer.";
+export function connectorApprovalGuidance(): string {
+  return `For the tools of connected apps (their names start with mcp__), ${englishName()} itself asks the person before you delete or archive anything and before you use a tool marked destructive, on a card that shows exactly what you are about to do. So for those, do not ask them first: say what you are going to do and call the tool, and they are asked once, by ${englishName()}. This covers connected-app tools only: not your memory tools, and not commands or files on a computer.`;
+}
+
+/** The text under the default brand, for tests that compare against the guidance a run sends. */
+export const CONNECTOR_APPROVAL_GUIDANCE = connectorApprovalGuidance();
 
 /**
  * 应用标为破坏性的工具（MCP 的 `destructiveHint`、Composio 的破坏性标签），提供给模型时追加在
@@ -239,7 +244,7 @@ export function grantedToolGuidance(
         ]
       : []),
     // 只有内部工具（记忆、跟进等）时不说：它们不经审批门。
-    ...(holdsAppTools(tools) ? [CONNECTOR_APPROVAL_GUIDANCE] : []),
+    ...(holdsAppTools(tools) ? [connectorApprovalGuidance()] : []),
     ...(researchConnector
       ? [
           `Parallel provides public-web search and extraction: ${researchTools.map((tool) => tool.name).join(" and ")} discover sources and read selected pages.`,

@@ -4,6 +4,7 @@ import {
   type RoleProfile,
   validateRoleProfile,
 } from "../../../shared/role-profile";
+import { shortName } from "../brand";
 import {
   type FlowGenerateCall,
   firstJsonObject,
@@ -49,14 +50,16 @@ export class RoleGenerationUncertainError extends Error {
   }
 }
 
-const SYSTEM = [
-  "你是熊宝的角色设计助手。根据用户的一句话描述，为一位数字员工写出可复用的角色档案。",
-  "只输出一个 JSON 对象，不要输出任何其他文字。对象字段：",
-  '{"identity": {"title": 头衔, "roleDescription": 职责}, "persona": {"tone": 性格语气, "principles": 工作守则, "habits": 口头约束}, "bible": 工作手册}',
-  `规则：title 一行，不超过 ${ROLE_LIMITS.title} 字；roleDescription 不超过 ${ROLE_LIMITS.roleDescription} 字；`,
-  `tone、principles、habits 各不超过 ${ROLE_LIMITS.personaPart} 字；bible 是 Markdown，不超过 ${ROLE_LIMITS.bible} 字，写背景知识、工作流程或术语表。`,
-  "所有内容用中文，除非描述里要求其他语言。",
-].join("\n");
+// A function, not a constant: the brand is set after this module loads.
+const system = () =>
+  [
+    `你是${shortName()}的角色设计助手。根据用户的一句话描述，为一位数字员工写出可复用的角色档案。`,
+    "只输出一个 JSON 对象，不要输出任何其他文字。对象字段：",
+    '{"identity": {"title": 头衔, "roleDescription": 职责}, "persona": {"tone": 性格语气, "principles": 工作守则, "habits": 口头约束}, "bible": 工作手册}',
+    `规则：title 一行，不超过 ${ROLE_LIMITS.title} 字；roleDescription 不超过 ${ROLE_LIMITS.roleDescription} 字；`,
+    `tone、principles、habits 各不超过 ${ROLE_LIMITS.personaPart} 字；bible 是 Markdown，不超过 ${ROLE_LIMITS.bible} 字，写背景知识、工作流程或术语表。`,
+    "所有内容用中文，除非描述里要求其他语言。",
+  ].join("\n");
 
 /** The plain prompt, exported so a test can see exactly what the model is given. */
 export function roleGenerationPrompt(description: string): string {
@@ -104,7 +107,7 @@ export function createRoleGenerator(
       try {
         const answer = await call({
           model: input.model,
-          system: SYSTEM,
+          system: system(),
           prompt: roleGenerationPrompt(input.description),
           abortSignal: timeout,
         });

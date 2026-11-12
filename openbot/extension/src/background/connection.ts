@@ -73,9 +73,9 @@ type ConnectionDeps = {
 
 const PENDING_MAX_AGE_MS = 5 * 60 * 1000;
 const OUT_OF_DATE =
-  "This page is out of date. Close it and choose Connect this browser in OpenBot again.";
+  "This page is out of date. Close it and choose Connect this browser in XiongBao Work again.";
 const POLICY_REFUSED =
-  "Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.";
+  "Your organization's Recorder policy does not allow this XiongBao Work. Ask your IT team.";
 /**
  * What the Connect page says when OpenBot did not take the code, by what OpenBot answered. Always the Recorder's own
  * sentence and never the text in OpenBot's answer: the site that asked to connect is any site at all until the person
@@ -83,12 +83,13 @@ const POLICY_REFUSED =
  * Recorder's voice (telling the person to install something, say).
  */
 const EXCHANGE_REFUSED: Record<number, string> = {
-  400: "This connect request has expired or was already used. Choose Connect this browser in OpenBot again.",
-  403: "This OpenBot does not accept this copy of the Recorder. Ask whoever runs it to add it.",
-  429: "OpenBot is taking too many connect requests just now. Try again in a few minutes.",
+  400: "This connect request has expired or was already used. Choose Connect this browser in XiongBao Work again.",
+  403: "This XiongBao Work does not accept this copy of the Recorder. Ask whoever runs it to add it.",
+  429: "XiongBao Work is taking too many connect requests just now. Try again in a few minutes.",
 };
-const EXCHANGE_FAILED = "OpenBot could not connect this browser. Try again.";
-const UNREACHABLE = "OpenBot did not answer. Try again.";
+const EXCHANGE_FAILED =
+  "XiongBao Work could not connect this browser. Try again.";
+const UNREACHABLE = "XiongBao Work did not answer. Try again.";
 /** Nothing about this copy: any site can ask to connect, and until the person approves it on the Connect page that site
  * is any site. Its version and its install id for that origin go to it once it is connected (`ping`). */
 const AWAITING_CONFIRMATION: ExternalResponse = {

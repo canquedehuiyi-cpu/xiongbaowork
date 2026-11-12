@@ -267,7 +267,7 @@ export function indicatorWords(view: IndicatorView): {
       button: "Record it",
     };
   return {
-    label: "OpenBot is recording this tab",
+    label: "XiongBao Work is recording this tab",
     voice: view.narrating === true ? "Listening to you" : null,
     button: `Don't record ${view.site}`,
   };

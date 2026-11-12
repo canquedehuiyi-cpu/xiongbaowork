@@ -4,8 +4,8 @@
  *
  *   bun desktop-device/scripts/build-sidecar.ts [--triple <rust target triple>]
  *
- * Writes `src-tauri/binaries/openbot-runner-<triple>[.exe]`, the name Tauri's `externalBin` looks
- * for (`tauri.bundle.conf.json`); the bundle installs it next to the app as `openbot-runner`.
+ * Writes `src-tauri/binaries/xiongbao-runner-<triple>[.exe]`, the name Tauri's `externalBin` looks
+ * for (`tauri.bundle.conf.json`); the bundle installs it next to the app as `xiongbao-runner`.
  *
  * The flags are the ones the stage 0 package test proves (`runner/tests/runner-package.test.ts`):
  * `chromium-bidi` stays external because `playwright-core` only requires it for WebDriver BiDi
@@ -39,9 +39,9 @@ export function bunTargetFor(triple: string): string {
   return target;
 }
 
-/** The file name `externalBin: ["binaries/openbot-runner"]` expects for `triple`. */
+/** The file name `externalBin: ["binaries/xiongbao-runner"]` expects for `triple`. */
 export function sidecarFile(triple: string): string {
-  return `openbot-runner-${triple}${triple.includes("windows") ? ".exe" : ""}`;
+  return `xiongbao-runner-${triple}${triple.includes("windows") ? ".exe" : ""}`;
 }
 
 export function compileArgs(

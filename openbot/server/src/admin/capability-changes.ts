@@ -23,6 +23,7 @@ import {
   type Member,
   resolveCapability,
 } from "./capabilities";
+import { englishName } from "../brand";
 
 export const ROLES = ["admin", "user"] as const;
 export type Role = (typeof ROLES)[number];
@@ -116,7 +117,7 @@ export function checkCapabilityChanges(
         "scope",
         groups.length > 0
           ? `There's no group called "${change.scopeId}". The groups are ${list(groups)}.`
-          : `There's no group called "${change.scopeId}". OpenBot has no groups yet.`,
+          : `There's no group called "${change.scopeId}". ${englishName()} has no groups yet.`,
       );
     if (change.scopeKind === "group" && change.allowed === false)
       problem(

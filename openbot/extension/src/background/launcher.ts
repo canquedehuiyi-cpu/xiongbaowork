@@ -65,14 +65,14 @@ const PHRASE_MAX = 4_000;
 const SENTENCES = {
   invalid: "The Recorder could not read that request.",
   address:
-    "That OpenBot address is not one the Recorder connects to. It must be https, or http on 127.0.0.1 or [::1] with a port.",
+    "That XiongBao Work address is not one the Recorder connects to. It must be https, or http on 127.0.0.1 or [::1] with a port.",
   policyInvalid:
-    "Your organization's Recorder policy names an OpenBot address the Recorder cannot use. Ask your IT team.",
+    "Your organization's Recorder policy names a XiongBao Work address the Recorder cannot use. Ask your IT team.",
   pinnedElsewhere:
-    "Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.",
+    "Your organization's Recorder policy does not allow this XiongBao Work. Ask your IT team.",
   refused:
-    "OpenBot did not accept this browser's connection. Open the browser from OpenBot again.",
-  notConnected: "Connect this browser to OpenBot first.",
+    "XiongBao Work did not accept this browser's connection. Open the browser from XiongBao Work again.",
+  notConnected: "Connect this browser to XiongBao Work first.",
   noTab: "There is no tab to record. Open one and try again.",
   failed: "The Recorder could not do that. Try again.",
 } as const;

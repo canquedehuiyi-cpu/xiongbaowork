@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { shortName } from "@/lib/brand";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { skillTitle } from "@/lib/learning/display";
 import {
@@ -56,7 +57,7 @@ export const SHARING_CHOICES: {
     mode: "open",
     icon: IconUsersGroup,
     title: "所有人的员工",
-    description: "熊宝上的每位员工都会用到你的全部技能。",
+    description: `${shortName()}上的每位员工都会用到你的全部技能。`,
   },
   {
     mode: "choose",
@@ -104,8 +105,8 @@ function emptySentence(
 /** What the Your Skills section says about who draws on them, in the mode chosen. */
 const SKILLS_DESCRIPTION: Record<LearningSharingMode, string> = {
   closed: "只有你用的员工会用到这些技能。",
-  open: "熊宝上的每位员工都会用到这些技能。",
-  choose: "公开一项技能，熊宝上的每位员工就都能用它。",
+  open: `${shortName()}上的每位员工都会用到这些技能。`,
+  choose: `公开一项技能，${shortName()}上的每位员工就都能用它。`,
 };
 
 /**

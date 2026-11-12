@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { shortName } from "@/lib/brand";
 import {
   createTriggerMutationOptions,
   type ResponsibilityRecord,
@@ -357,7 +358,8 @@ function TriggerRow({
             </div>
           ) : (
             <p className="text-amber-600 text-xs dark:text-amber-500">
-              熊宝还没设置收信，所以这个地址暂时收不到邮件。需要管理员开启。
+              {shortName()}
+              还没设置收信，所以这个地址暂时收不到邮件。需要管理员开启。
             </p>
           ))}
         {generated && (
@@ -526,7 +528,7 @@ function NewTriggerDialog({
         <DialogHeader>
           <DialogTitle>添加触发</DialogTitle>
           <DialogDescription>
-            熊宝之外、能让这项长期职责开工的东西。
+            {shortName()}之外、能让这项长期职责开工的东西。
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4 overflow-y-auto">

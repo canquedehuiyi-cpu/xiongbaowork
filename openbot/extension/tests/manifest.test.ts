@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { buildManifest, MINIMUM_CHROME_VERSION } from "../src/manifest";
+import { RECORDER_NAME } from "../src/shared/brand";
 
 const base = { version: "0.2.0", publicKey: "MIIBIjANBgkqh" };
 const PERMISSIONS: chrome.runtime.ManifestPermission[] = [
@@ -94,3 +95,20 @@ test.each([
     );
   },
 );
+
+test("the manifest's name, description and toolbar title carry the product brand and no upstream name", () => {
+  const manifest = buildManifest(base);
+  expect(manifest.name).toBe(RECORDER_NAME);
+  expect(manifest.name).toBe("XiongBao Work Recorder");
+  expect(manifest.action?.default_title).toBe(RECORDER_NAME);
+  expect(manifest.description).toBe(
+    "Record a task in your browser so a XiongBao Work Bot can learn to do it.",
+  );
+  for (const text of [
+    manifest.name,
+    manifest.description,
+    manifest.action?.default_title,
+  ]) {
+    expect(text).not.toMatch(/openbot/i);
+  }
+});

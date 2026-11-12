@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { SingleUserAccess } from "../config";
 import type { Database } from "../db/client";
@@ -6,7 +7,14 @@ import { users } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { provisionTenant } from "../tenant/provisioning";
 import type { AppVariables, AuthenticatedActor } from "./guards";
+import { DEV_ACTOR_EMAIL, LEGACY_DEV_ACTOR_EMAILS } from "./dev-actor-email";
 import { setRole } from "./roles";
+
+export {
+  DEV_ACTOR_EMAIL,
+  LEGACY_DEV_ACTOR_EMAILS,
+  isDevActorEmail,
+} from "./dev-actor-email";
 
 /**
  * A signed-in person, without signing in.
@@ -28,7 +36,7 @@ import { setRole } from "./roles";
 
 export const DEV_ACTOR: AuthenticatedActor = {
   id: "dev-local-user",
-  email: "dev@openbot.local",
+  email: DEV_ACTOR_EMAIL,
   role: "admin",
 };
 
@@ -56,7 +64,14 @@ export async function initializeDevActorUser(
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          // Not `name`: a name the person changed in their profile survives the next start.
+          // A name the person changed in their profile survives the next start. The one name that does
+          // not is the old default: the row was first written with name = email, so after the address
+          // is renamed an upgraded database would keep showing the old address as the person's name
+          // (and `needsName` would stop asking for a real one).
+          name: sql`CASE WHEN lower(${users.name}) IN (${sql.join(
+            LEGACY_DEV_ACTOR_EMAILS.map((legacy) => sql`${legacy}`),
+            sql`, `,
+          )}) THEN ${name} ELSE ${users.name} END`,
           email: DEV_ACTOR.email,
           updatedAt: new Date(),
         },

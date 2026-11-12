@@ -12,7 +12,7 @@
 #   install     silent install (NSIS /S), the uninstall entry, the installed files and their version;
 #               the install directory goes to $env:GITHUB_ENV as INSTALL_DIR for the later phases;
 #   selfcheck   the installed runner's own one-shot commands, with no network;
-#   app         the installed app starts the installed runner, and no openbot-runner outlives it;
+#   app         the installed app starts the installed runner, and no xiongbao-runner outlives it;
 #   uninstall   silent uninstall (/S) removes the files, the uninstall entry and every process;
 #   result      no FAIL line in the evidence, then `RESULT: PASS` as its last line.
 #
@@ -119,7 +119,7 @@ function Invoke-Install {
     if (-not $directory) { $directory = Split-Path -Parent ([string]$entry.UninstallString).Trim().Trim('"') }
     $uninstaller = Join-Path $directory 'uninstall.exe'
     $app = Join-Path $directory 'xiongbao-device.exe'
-    $sidecar = Join-Path $directory 'openbot-runner.exe'
+    $sidecar = Join-Path $directory 'xiongbao-runner.exe'
     foreach ($file in @($app, $sidecar, $uninstaller)) {
         if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "$file is missing after the install." }
     }
@@ -133,14 +133,14 @@ function Invoke-Install {
     Add-Evidence @(
         "安装方式：$scope，安装目录 $directory$(if ($directory -eq $default) { '（Tauri 默认的 %LOCALAPPDATA%\<产品名>）' })"
         "已安装 xiongbao-device.exe，SHA256 $((Get-FileHash -LiteralPath $app -Algorithm SHA256).Hash.ToLowerInvariant())，签名 $([string](Get-AuthenticodeSignature -LiteralPath $app).Status)"
-        "已安装 openbot-runner.exe，SHA256 $((Get-FileHash -LiteralPath $sidecar -Algorithm SHA256).Hash.ToLowerInvariant())，签名 $([string](Get-AuthenticodeSignature -LiteralPath $sidecar).Status)"
-        "PASS 静默安装（/S，退出码 0）：xiongbao-device.exe、openbot-runner.exe、uninstall.exe 都在安装目录，卸载项版本 $($entry.DisplayVersion)"
+        "已安装 xiongbao-runner.exe，SHA256 $((Get-FileHash -LiteralPath $sidecar -Algorithm SHA256).Hash.ToLowerInvariant())，签名 $([string](Get-AuthenticodeSignature -LiteralPath $sidecar).Status)"
+        "PASS 静默安装（/S，退出码 0）：xiongbao-device.exe、xiongbao-runner.exe、uninstall.exe 都在安装目录，卸载项版本 $($entry.DisplayVersion)"
     )
 }
 
 function Invoke-Selfcheck {
     Assert-Value 'InstallDir' $InstallDir
-    $sidecar = Join-Path $InstallDir 'openbot-runner.exe'
+    $sidecar = Join-Path $InstallDir 'xiongbao-runner.exe'
     $temp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
     $scratch = Join-Path $temp 'runner-selfcheck'
     New-Item -ItemType Directory -Path (Join-Path $scratch 'folder') -Force | Out-Null
@@ -155,53 +155,114 @@ function Invoke-Selfcheck {
     if (-not $listed.ok -or $listed.roots[0].name -cne 'selfcheck') { throw "--list-roots: $($listed | ConvertTo-Json -Compress)" }
     $removed = & $sidecar --data-dir $data --remove-root selfcheck | ConvertFrom-Json
     if (-not $removed.ok -or @($removed.roots).Count -ne 0) { throw "--remove-root: $($removed | ConvertTo-Json -Compress)" }
-    if (Get-Process -Name openbot-runner -ErrorAction SilentlyContinue) { throw 'openbot-runner is still running after the one-shot commands.' }
+    if (Get-Process -Name xiongbao-runner -ErrorAction SilentlyContinue) { throw 'xiongbao-runner is still running after the one-shot commands.' }
     Remove-Item -LiteralPath $scratch -Recurse -Force
-    Add-Evidence 'PASS 已安装的 openbot-runner.exe 自检：--help 退出码 2 并打印用法；--add-root / --list-roots / --remove-root 正常；之后没有残留进程'
+    Add-Evidence 'PASS 已安装的 xiongbao-runner.exe 自检：--help 退出码 2 并打印用法；--add-root / --list-roots / --remove-root 正常；之后没有残留进程'
+}
+
+# Written to the job log when the app phase fails, because the evidence file only says that it
+# failed: what the app has running now, how the watched runner ended (this script holds its handle,
+# so the exit code survives it), and the runner's own output, which the app appends to
+# runner.log under Tauri's app_log_dir (%LOCALAPPDATA%\<identifier>\logs, sidecar.rs RunnerLauncher).
+function Write-AppDiagnostics($App, $Runner, [datetime]$Since) {
+    Write-Host '::group::app phase diagnostics'
+    try {
+        if ($App.HasExited) { Write-Host "app pid $($App.Id) exited $($App.ExitCode)" } else { Write-Host "app pid $($App.Id) is running" }
+        if ($Runner) {
+            if ($Runner.HasExited) { Write-Host "watched runner pid $($Runner.Id) exited $($Runner.ExitCode) at $($Runner.ExitTime.ToString('o'))" }
+            else { Write-Host "watched runner pid $($Runner.Id) has not exited" }
+        }
+        Write-Host "children of the app (pid $($App.Id)):"
+        Get-CimInstance Win32_Process -Filter "ParentProcessId = $($App.Id)" | ForEach-Object {
+            Write-Host "  $($_.ProcessId) $($_.Name) started $($_.CreationDate.ToString('o')): $($_.CommandLine)"
+        }
+        Write-Host 'every xiongbao-runner.exe:'
+        Get-CimInstance Win32_Process -Filter "Name = 'xiongbao-runner.exe'" | ForEach-Object {
+            Write-Host "  $($_.ProcessId) parent $($_.ParentProcessId) started $($_.CreationDate.ToString('o')): $($_.CommandLine)"
+        }
+        foreach ($root in @((Join-Path $env:LOCALAPPDATA 'com.xiongbao.device'), (Join-Path $env:APPDATA 'com.xiongbao.device'))) {
+            Write-Host "files under ${root}:"
+            Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+                Write-Host "  $($_.FullName) ($($_.Length) bytes)"
+            }
+        }
+        $log = Join-Path $env:LOCALAPPDATA 'com.xiongbao.device\logs\runner.log'
+        if (Test-Path -LiteralPath $log -PathType Leaf) {
+            Write-Host "last 200 lines of ${log}:"
+            Get-Content -LiteralPath $log -Tail 200 -Encoding utf8 | ForEach-Object { Write-Host "  | $_" }
+        } else {
+            Write-Host "no runner log at $log"
+        }
+        # A runtime that crashed outright (no stderr) leaves an Application Error / WER entry instead.
+        Write-Host 'Application event log entries naming xiongbao since the app started:'
+        Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $Since } -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match 'xiongbao' } | Select-Object -First 20 | ForEach-Object {
+                Write-Host "  $($_.TimeCreated.ToString('o')) $($_.ProviderName) $($_.Id): $(($_.Message -split "`r?`n") -join ' / ')"
+            }
+    } catch {
+        Write-Host "diagnostics stopped: $_"
+    }
+    Write-Host '::endgroup::'
 }
 
 # No server on this machine, so the app is given a pairing that cannot connect: the runner it
 # starts keeps retrying, which is enough to see whose child it is and that it dies with the app.
 function Invoke-App {
     Assert-Value 'InstallDir' $InstallDir
-    $sidecar = Join-Path $InstallDir 'openbot-runner.exe'
+    $sidecar = Join-Path $InstallDir 'xiongbao-runner.exe'
     $data = Join-Path $env:APPDATA 'com.xiongbao.device'
     if (Test-Path -LiteralPath $data) { throw "$data already exists: this is not a clean machine." }
     New-Item -ItemType Directory -Path (Join-Path $data 'runner') -Force | Out-Null
     '{"server": "http://127.0.0.1:9", "name": "clean-windows"}' | Set-Content -LiteralPath (Join-Path $data 'device.json') -Encoding utf8NoBOM
     '{"deviceId": "clean-windows", "token": "not-a-device-token", "server": "http://127.0.0.1:9"}' |
         Set-Content -LiteralPath (Join-Path $data 'runner/runner-state.json') -Encoding utf8NoBOM
-    if (Get-Process -Name openbot-runner -ErrorAction SilentlyContinue) { throw 'An openbot-runner is already running.' }
+    if (Get-Process -Name xiongbao-runner -ErrorAction SilentlyContinue) { throw 'An xiongbao-runner is already running.' }
+    $since = Get-Date
     $app = Start-Process -FilePath (Join-Path $InstallDir 'xiongbao-device.exe') -PassThru
     $child = $null
     foreach ($second in 1..60) {
-        # The supervised runner, not a one-shot --list-roots the window may ask for (roots.rs).
-        $child = Get-CimInstance Win32_Process -Filter "Name = 'openbot-runner.exe' AND ParentProcessId = $($app.Id)" |
-            Where-Object { $_.CommandLine -notlike '*--list-roots*' } | Select-Object -First 1
+        # The supervised runner, not one of the one-shot commands the window runs as it opens
+        # (--list-roots, --list-apps, --discover-apps: roots.rs, apps.rs), which exit within a second
+        # or two. Only the supervised run is given --server (sidecar.rs runner_args); the one-shots
+        # never are. Naming them instead went stale when the window gained the apps sections, and
+        # the first start now lists legacy runners before spawning (stop_legacy_runners), so the
+        # one-shots can be up before the supervised runner is.
+        $child = Get-CimInstance Win32_Process -Filter "Name = 'xiongbao-runner.exe' AND ParentProcessId = $($app.Id)" |
+            Where-Object { $_.CommandLine -like '* --server *' } | Select-Object -First 1
         if ($child) { break }
         if ($app.HasExited) { throw "The app exited $($app.ExitCode) before starting the runner." }
         Start-Sleep -Seconds 1
     }
-    if (-not $child) { throw 'The app did not start openbot-runner within 60s.' }
+    if (-not $child) {
+        Write-AppDiagnostics $app $null $since
+        throw 'The app did not start xiongbao-runner within 60s.'
+    }
+    Write-Host "watching runner pid $($child.ProcessId), started $($child.CreationDate.ToString('o')): $($child.CommandLine)"
+    # Held from here, so that if it exits its exit code can still be read for the diagnostics.
+    $runner = Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
+    if ($runner) { $null = $runner.Handle }
     if ($child.ExecutablePath -ne $sidecar) { throw "The app started $($child.ExecutablePath), not the installed $sidecar." }
     if ($child.CommandLine -match '--pair') { throw 'The app passed --pair without a pairing code.' }
     Start-Sleep -Seconds 5
-    if (-not (Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue)) { throw 'The runner did not keep running.' }
+    if (-not $runner -or $runner.HasExited -or -not (Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue)) {
+        Write-AppDiagnostics $app $runner $since
+        throw 'The runner did not keep running.'
+    }
     # The hardest way out: the app is killed outright, and the job object it holds
     # (process_tree.rs, KILL_ON_JOB_CLOSE) has to take the runner with it.
     Stop-Process -Id $app.Id -Force
     $app.WaitForExit(30000) | Out-Null
     $left = $null
     foreach ($second in 1..15) {
-        $left = Get-Process -Name openbot-runner -ErrorAction SilentlyContinue
+        $left = Get-Process -Name xiongbao-runner -ErrorAction SilentlyContinue
         if (-not $left) { break }
         Start-Sleep -Seconds 1
     }
-    if ($left) { throw "openbot-runner is still running after the app ended: $($left.Id -join ', ')" }
+    if ($left) { throw "xiongbao-runner is still running after the app ended: $($left.Id -join ', ')" }
     Remove-Item -LiteralPath $data -Recurse -Force
     Add-Evidence @(
-        "PASS 启动已安装的 xiongbao-device.exe：它拉起安装目录里的 openbot-runner.exe（PID $($child.ProcessId)，命令行不带 --pair）"
-        'PASS 结束应用进程（Stop-Process -Force，比托盘「退出」更粗暴）后 15 秒内没有任何 openbot-runner 进程（Get-Process）'
+        "PASS 启动已安装的 xiongbao-device.exe：它拉起安装目录里的 xiongbao-runner.exe（PID $($child.ProcessId)，命令行不带 --pair）"
+        'PASS 结束应用进程（Stop-Process -Force，比托盘「退出」更粗暴）后 15 秒内没有任何 xiongbao-runner 进程（Get-Process）'
     )
 }
 
@@ -211,7 +272,7 @@ function Invoke-Uninstall {
     $run = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
     if ($run.ExitCode -ne 0) { throw "The uninstaller exited $($run.ExitCode)." }
     # An NSIS uninstaller copies itself to %TEMP% and finishes from there.
-    $files = @('xiongbao-device.exe', 'openbot-runner.exe', 'uninstall.exe') | ForEach-Object { Join-Path $InstallDir $_ }
+    $files = @('xiongbao-device.exe', 'xiongbao-runner.exe', 'uninstall.exe') | ForEach-Object { Join-Path $InstallDir $_ }
     $remaining = @()
     foreach ($second in 1..60) {
         $remaining = @($files | Where-Object { Test-Path -LiteralPath $_ })
@@ -222,9 +283,9 @@ function Invoke-Uninstall {
     if (@(Get-ItemProperty -Path $UninstallRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -ceq $Product }).Count -ne 0) {
         throw 'The uninstall entry is still registered.'
     }
-    if (Get-Process -Name openbot-runner, xiongbao-device -ErrorAction SilentlyContinue) { throw 'A device process is still running after uninstall.' }
+    if (Get-Process -Name xiongbao-runner, xiongbao-device -ErrorAction SilentlyContinue) { throw 'A device process is still running after uninstall.' }
     $folder = if (Test-Path -LiteralPath $InstallDir) { '安装目录仍在（只剩空目录或非安装文件）' } else { '安装目录已删除' }
-    Add-Evidence "PASS 静默卸载（uninstall.exe /S）：xiongbao-device.exe、openbot-runner.exe、uninstall.exe 与卸载项都已删除，$folder，没有残留进程"
+    Add-Evidence "PASS 静默卸载（uninstall.exe /S）：xiongbao-device.exe、xiongbao-runner.exe、uninstall.exe 与卸载项都已删除，$folder，没有残留进程"
 }
 
 # RESULT: PASS only when every check before it wrote its PASS and none wrote FAIL.

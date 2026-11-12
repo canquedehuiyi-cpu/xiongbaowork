@@ -1,5 +1,6 @@
 import { inFolder, ownToolSubject } from "@openbot/shared/tool-name";
 import { createContext } from "react";
+import { shortName } from "@/lib/brand";
 
 /**
  * A Bot's steps on folders on the person's computer (`host_*` tools), as a person reads them.
@@ -110,7 +111,7 @@ export function folderStepBody(
       names.length > 0
         ? `它能读的文件夹：${names.join("、")}。`
         : "还没有和这位员工共享任何文件夹。",
-      ...(listing.connected ? [] : ["熊宝桌面端没有在运行。"]),
+      ...(listing.connected ? [] : [`${shortName()}桌面端没有在运行。`]),
     ].join("");
   }
   const trimmed = body.trim();

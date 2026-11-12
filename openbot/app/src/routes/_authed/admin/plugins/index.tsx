@@ -23,6 +23,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { shortName } from "@/lib/brand";
 import {
   appKeyOf,
   type CatalogueItem,
@@ -238,7 +239,7 @@ function RouteComponent() {
           </PageSection>
 
           <PageSection
-            description="更多可以通过熊宝连接的应用，这里没有人审核过它们。"
+            description={`更多可以通过${shortName()}连接的应用，这里没有人审核过它们。`}
             title="更多应用"
           >
             <PageRows>

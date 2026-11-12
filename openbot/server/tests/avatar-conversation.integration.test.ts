@@ -36,7 +36,7 @@ import { bindTestRoleWriter } from "./support/role-writer";
  * A deployment WITH sign-in gives every person a conversation with their own 分身.
  *
  * Found on a real deployment (2026-11-06: `OPENBOT_SINGLE_USER=false`, email and password sign-up,
- * `TENANT_PACKAGE_DIR=../examples/qoderwake`, `TENANT_RUNTIME=device`). A brand package's
+ * `TENANT_PACKAGE_DIR=../examples/xiongbao`, `TENANT_RUNTIME=device`). A brand package's
  * conversations are written per person only in single-user mode, so nothing gave a signed-up person a
  * conversation with their 分身. Their first one came from the home composer's default, the first
  * shared coworker -- the catalogue `general-assistant`, then also called 我的分身, which belongs to
@@ -142,7 +142,7 @@ const withAvatarOnly = (
   );
 
 // The deployment's start-up: the package applied for nobody, as it is wherever people sign in.
-const loaded = await loadTenantPackage("../examples/qoderwake");
+const loaded = await loadTenantPackage("../examples/xiongbao");
 await runAsTenant("platform", () =>
   synchronizeTenantPackage(database, loaded, []),
 );

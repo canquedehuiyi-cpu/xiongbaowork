@@ -348,8 +348,8 @@ export type PageResponse =
     }
   | { ok: true; learning: LearningSpaceState }
   | { ok: true; available: boolean }
-  | { ok: true; connected: true } // OpenBot Desktop connected this browser, with no Connect page
-  | { ok: true; connected: false; reason: string } // why OpenBot Desktop did not connect this browser, as a code (DesktopConnect)
+  | { ok: true; connected: true } // XiongBao Work Desktop connected this browser, with no Connect page
+  | { ok: true; connected: false; reason: string } // why XiongBao Work Desktop did not connect this browser, as a code (DesktopConnect)
   | { ok: true }
   | { ok: false; error: string };
 
@@ -435,7 +435,7 @@ export type ExternalResponse =
       installId: string;
       /** A trusted OpenBot's connect (connection.ts `trustedConnectRule`): connected now, with no Connect page. */
       connected?: true;
-    } // the connected origin's ping, and a trusted OpenBot's connect; installId = installIdFor(sender.origin)
+    } // the connected origin's ping, and a trusted XiongBao Work's connect; installId = installIdFor(sender.origin)
   | {
       ok: false;
       error:

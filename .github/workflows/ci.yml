@@ -28,7 +28,7 @@ defaults:
     working-directory: openbot
 
 env:
-  TENANT_PACKAGE_DIR: ../examples/qoderwake
+  TENANT_PACKAGE_DIR: ../examples/xiongbao
   # Frozen at the commit main was created from (D06 candidate). The previous value
   # 03df9efa... does not exist in this repository. Never replace with moving main.
   DELIVERY_BASELINE_SHA: 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634
@@ -248,6 +248,73 @@ jobs:
           name: e2e-wakerflow-evidence
           path: ${{ runner.temp }}/g4/
 
+  # Gate G6: 对话招员工 / 组群聊 in a real browser, the same services and environment as G4 (its own
+  # PostgreSQL, the built app served by the real server, the runner's Chrome, aimock as the model: no
+  # secret, no provider call). Ask 小管家 to hire -> the draft card -> edit the name -> confirm -> the
+  # employee exists under the edited name -> 小管家 reads proposal_status and carries on; ask for a
+  # group of two -> another account opens the conversation and has nothing to press -> confirm -> the
+  # group exists with its employees in the drafted order.
+  e2e-staffing:
+    name: G6 staffing lifecycle (browser, mocked model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: ci-owner
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      # The fresh-database check only (see the harness header).
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+      - name: Build the app the server serves (APP_DIST_DIR)
+        run: bun run --cwd app build
+      - name: The runner's preinstalled Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          "$chrome" --version
+          echo "E2E_CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+      - name: G6 staffing lifecycle
+        env:
+          E2E_APP_DIST_DIR: app/dist
+          E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g6
+        run: bun scripts/e2e/staffing-lifecycle.ts
+      - name: Print server log (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/g6/server-*.log; do
+            bash scripts/ci/print-diagnostics.sh "$f"
+          done
+      # Screenshots of every step (the other account's view included), the Playwright trace, the
+      # server log and the model-call record.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-staffing-evidence
+          path: ${{ runner.temp }}/g6/
+
   image:
     if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest
@@ -260,6 +327,9 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: docker build -f Dockerfile -t openbot:trackb .
+      # The s6 oneshot that copies XIONGBAO_* onto OPENBOT_* runs on the host: it only reads and writes files.
+      - name: env-aliases oneshot
+        run: sh docker/tests/env-aliases.test.sh
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)
         run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
@@ -671,6 +741,9 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the unsigned deb
         working-directory: openbot/desktop-device
         run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
@@ -683,7 +756,7 @@ jobs:
           # Listed once: grep -q on a live pipe kills dpkg-deb with SIGPIPE, and pipefail fails the step.
           contents=$(dpkg-deb -c "$deb")
           grep -Eq 'usr/bin/xiongbao-device$' <<<"$contents"
-          grep -Eq 'usr/bin/openbot-runner$' <<<"$contents"
+          grep -Eq 'usr/bin/xiongbao-runner$' <<<"$contents"
           sudo dpkg --dry-run -i "$deb"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -730,6 +803,9 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       # The bundler downloads NSIS and nsis_tauri_utils.dll itself, once per attempt, and GitHub's release
       # downloads answered 504 for minutes at a time, outlasting the retry below. Seed the exact cache it
       # checks first (%LOCALAPPDATA%\tauri\NSIS, the files and SHA-1s pinned by tauri-bundler 2.11.4)
@@ -872,6 +948,9 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the unsigned app and dmg
         working-directory: openbot/desktop-device
         env:
@@ -984,7 +1063,7 @@ jobs:
       - id: lifecycle
         name: Pair the installed runner, one command, quit, back online
         env:
-          RUNNER_BIN: /usr/bin/openbot-runner
+          RUNNER_BIN: /usr/bin/xiongbao-runner
           APP_BIN: /usr/bin/xiongbao-device
         run: bash scripts/ci/device-clean-linux.sh lifecycle
       - name: Stop the server by its PID
@@ -1073,7 +1152,7 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase selfcheck
       - id: app
-        name: The installed app starts the installed runner, and no openbot-runner outlives it
+        name: The installed app starts the installed runner, and no xiongbao-runner outlives it
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase app
       - id: uninstall

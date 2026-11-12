@@ -98,4 +98,4 @@ export function emailDomainAllowed(
 
 /** What a refused person is told. Names the rule, not the list, which is nobody else's business. */
 export const DOMAIN_REFUSAL_MESSAGE =
-  "OpenBot doesn't accept that email domain. Sign in with your work account, or ask an admin to add your domain.";
+  "This deployment doesn't accept that email domain. Sign in with your work account, or ask an admin to add your domain.";

@@ -109,6 +109,7 @@ import {
 } from "./store";
 import { type AccountRef, anotherArcadeAccount } from "./shared-accounts";
 import { withVendorDeadline } from "./vendor-deadline";
+import { englishName } from "../brand";
 
 /**
  * Whether the person a consent was started for still has access to this deployment.
@@ -2305,7 +2306,7 @@ export function createPluginRoutes(
         return context.json(
           {
             // English, because the route's tests pin "cannot tell how"; no provider named (upstream #1223).
-            error: `OpenBot cannot tell how ${row.title} connects, so nothing was sent and no account was made. ${askAdminTo(`remove it on the ${appsPage()} page and add it again`)}.`,
+            error: `${englishName()} cannot tell how ${row.title} connects, so nothing was sent and no account was made. ${askAdminTo(`remove it on the ${appsPage()} page and add it again`)}.`,
           },
           400,
         );

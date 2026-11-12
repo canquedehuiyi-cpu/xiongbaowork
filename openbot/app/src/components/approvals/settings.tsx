@@ -32,6 +32,7 @@ import {
   updateApprovalRuleMutationOptions,
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { shortName } from "@/lib/brand";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { queryClient } from "@/query-client";
 import {
@@ -156,7 +157,9 @@ export function ApprovalSettings() {
                     id="auto-review-description"
                   >
                     {enforced ? "管理员要求开启。" : ""}
-                    员工要做可能影响你的账号或对外分享信息的事之前，熊宝会先对照你的要求和规则检查一遍；拿不准时再来问你。
+                    员工要做可能影响你的账号或对外分享信息的事之前，
+                    {shortName()}
+                    会先对照你的要求和规则检查一遍；拿不准时再来问你。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -186,7 +189,7 @@ export function ApprovalSettings() {
                       inbox.data.preferences.hostCommands
                       ? `管理员把这一项限定为「${HOST_LABELS[inbox.data.hostCommands]}」。`
                       : ""}
-                    每条命令运行前，熊宝桌面端仍会先给你看。
+                    每条命令运行前，{shortName()}桌面端仍会先给你看。
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>

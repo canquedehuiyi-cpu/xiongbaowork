@@ -12,10 +12,9 @@ import {
 } from "../src/offscreen/grant";
 import { reservePort } from "../../tests/support/reserved-port";
 
-const BUSY =
-  "OpenBot's back end is busy or unreachable. Retrying; nothing is lost.";
+const BUSY = "The server is busy or unreachable. Retrying; nothing is lost.";
 const MARKETPLACE =
-  "OpenBot's back end needs its marketplace licence before it can capture. Retrying; nothing is lost.";
+  "The server needs its marketplace licence before it can capture. Retrying; nothing is lost.";
 
 function body(status: number, code: string, message = "m") {
   return { status, body: { code, message } };
@@ -39,7 +38,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     const r = TRAJECTORY_GATE_REFUSALS.invalidId;
     const v = park(classifyGrantError(r.status, r));
     expect(v.hint).toBe(
-      "Learning capture is off: the Recorder sent OpenBot's back end a request it could not read.",
+      "Learning capture is off: the Recorder sent the server a request it could not read.",
     );
   });
 
@@ -55,7 +54,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     const r = TRAJECTORY_GATE_REFUSALS.forbidden;
     const v = park(classifyGrantError(r.status, r));
     expect(v.hint).toBe(
-      "Learning capture is off: your OpenBot account has no role that may record.",
+      "Learning capture is off: your XiongBao Work account has no role that may record.",
     );
   });
 
@@ -67,7 +66,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     );
     const v = park(classifyGrantError(b.status, b.body));
     expect(v.hint).toBe(
-      "Learning capture is off: OpenBot says this recording belongs to another person.",
+      "Learning capture is off: XiongBao Work says this recording belongs to another person.",
     );
   });
 
@@ -75,7 +74,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     const r = TRAJECTORY_GATE_REFUSALS.authorityUnavailable;
     const v = retry(classifyGrantError(r.status, r));
     expect(v.reason).toBe(
-      "OpenBot could not reach your organization's sign-in. Retrying; nothing is lost.",
+      "XiongBao Work could not reach your organization's sign-in. Retrying; nothing is lost.",
     );
     expect(v.retryAfterMs).toBeUndefined();
     expect(
@@ -96,7 +95,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
   test("row 6: IDENTITY_REQUIRED 401 is held, never signed-out", () => {
     const v = hold(classifyGrantError(401, { code: "IDENTITY_REQUIRED" }));
     expect(v.hint).toBe(
-      "Learning capture is paused: OpenBot could not tell its back end who you are.",
+      "Learning capture is paused: XiongBao Work could not tell its back end who you are.",
     );
   });
 
@@ -105,7 +104,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
       classifyGrantError(503, { code: "INTELLIGENCE_RUNTIME_REQUIRED" }),
     );
     expect(v.hint).toBe(
-      "Learning capture is off: this OpenBot is not connected to its back end.",
+      "Learning capture is off: this XiongBao Work is not connected to its back end.",
     );
   });
 
@@ -122,17 +121,16 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     const b = body(
       502,
       "CONNECTION_FAILED",
-      "OpenBot's back end returned an invalid trajectory connection grant",
+      "The server returned an invalid trajectory connection grant",
     );
     const v = hold(classifyGrantError(b.status, b.body));
     expect(v.hint).toBe(
-      "Learning capture is paused: OpenBot's back end answered the capture pass in a form the Recorder cannot use.",
+      "Learning capture is paused: the server answered the capture pass in a form the Recorder cannot use.",
     );
   });
 
   test("row 10: a rejected request is retried on 5xx, 408 and 429 and held on any other 4xx", () => {
-    const message =
-      "OpenBot's back end rejected the trajectory connection request";
+    const message = "The server rejected the trajectory connection request";
     expect(
       retry(classifyGrantError(503, { code: "CONNECTION_FAILED", message }))
         .reason,
@@ -149,7 +147,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
       classifyGrantError(409, { code: "CONNECTION_FAILED", message }),
     );
     expect(v.hint).toBe(
-      "Learning capture is paused: OpenBot's back end refused the capture pass (409).",
+      "Learning capture is paused: the server refused the capture pass (409).",
     );
   });
 
@@ -161,7 +159,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
       expect(retry(classifyGrantError(503, body)).reason).toBe(BUSY);
       const v = hold(classifyGrantError(409, body));
       expect(v.hint).toBe(
-        "Learning capture is paused: OpenBot's back end refused the capture pass (409).",
+        "Learning capture is paused: the server refused the capture pass (409).",
       );
     }
   });
@@ -171,7 +169,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
       classifyGrantError(404, { code: "TRAJECTORIES_UNAVAILABLE" }),
     );
     expect(v.hint).toBe(
-      "Learning capture is off: Product Trajectories are turned off in OpenBot's back end (FF_LEARNING_TRAJECTORIES).",
+      "Learning capture is off: Product Trajectories are turned off in the server (FF_LEARNING_TRAJECTORIES).",
     );
   });
 
@@ -180,14 +178,14 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
       classifyGrantError(403, { code: "TRAJECTORIES_NOT_ENABLED" }),
     );
     expect(v.hint).toBe(
-      "Learning capture is paused: OpenBot's back end says this organization's licence does not include Product Trajectories, that its billing is blocked, or that it could not check right now.",
+      "Learning capture is paused: the server says this organization's licence does not include Product Trajectories, that its billing is blocked, or that it could not check right now.",
     );
   });
 
   test("row 13: VALIDATION_ERROR is parked", () => {
     const v = park(classifyGrantError(400, { code: "VALIDATION_ERROR" }));
     expect(v.hint).toBe(
-      "Learning capture is off: OpenBot's back end refused the recording's request.",
+      "Learning capture is off: the server refused the recording's request.",
     );
   });
 
@@ -196,7 +194,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
       classifyGrantError(409, { code: "TRAJECTORY_APP_USER_CONFLICT" }),
     );
     expect(v.hint).toBe(
-      "Learning capture is off: OpenBot's back end already holds this recording for someone else.",
+      "Learning capture is off: the server already holds this recording for someone else.",
     );
   });
 
@@ -205,7 +203,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
       classifyGrantError(404, { code: "LEARNING_CONTAINER_NOT_FOUND" }),
     );
     expect(v.hint).toBe(
-      "Learning capture is paused: OpenBot's back end could not find your Learning space.",
+      "Learning capture is paused: the server could not find your Learning space.",
     );
   });
 
@@ -261,7 +259,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
 
   test("row 22: any other 401 is held", () => {
     expect(hold(classifyGrantError(401, null)).hint).toBe(
-      "Learning capture is paused: OpenBot refused the capture pass.",
+      "Learning capture is paused: XiongBao Work refused the capture pass.",
     );
   });
 
@@ -412,7 +410,7 @@ describe("fetchGrant", () => {
       new Response(null, {
         status: 407,
         headers: {
-          "proxy-authenticate": 'Basic realm="OpenBot"',
+          "proxy-authenticate": 'Basic realm="XiongBao Work"',
           "content-type": "text/plain",
         },
       });

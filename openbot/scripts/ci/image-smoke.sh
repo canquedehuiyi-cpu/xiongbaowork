@@ -47,7 +47,7 @@ key=$(bun -e 'console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))
 docker run -d --name "$name" -p 127.0.0.1:3772:3001 \
   -v "$volume:/var/lib/postgresql" \
   -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e COPILOTKIT_TELEMETRY_DISABLED=true \
-  -e TENANT_PACKAGE_DIR=../examples/qoderwake \
+  -e TENANT_PACKAGE_DIR=../examples/xiongbao \
   -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
   -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
 deadline=$((SECONDS+60))
@@ -122,7 +122,7 @@ if [ "$healthy" = true ]; then
   docker run -d --name "$bad" --env-file "$secret_env_native" \
     -v "$volume:/var/lib/postgresql" \
     -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e COPILOTKIT_TELEMETRY_DISABLED=true \
-    -e TENANT_PACKAGE_DIR=../examples/qoderwake \
+    -e TENANT_PACKAGE_DIR=../examples/xiongbao \
     -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
     -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
   deadline=$((SECONDS+60))

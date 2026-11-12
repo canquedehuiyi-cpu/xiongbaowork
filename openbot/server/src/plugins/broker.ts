@@ -760,7 +760,7 @@ export function brokerReturnUrl(returnUrl: string): string {
   const address = webAddress(returnUrl);
   if (address === null) {
     throw new BrokerReturnUrlError(
-      "The address Composio would send you back to is not a web address, so a consent granted there would end on Composio's own page with no way back here. Set OPENBOT_APP_URL to this deployment's own origin including the scheme — https://openbot.example.com rather than openbot.example.com.",
+      "The address Composio would send you back to is not a web address, so a consent granted there would end on Composio's own page with no way back here. Set OPENBOT_APP_URL to this deployment's own origin including the scheme — https://example.com rather than example.com.",
     );
   }
   return address.href;

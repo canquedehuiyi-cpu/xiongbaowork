@@ -7,6 +7,7 @@ import {
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AppVariables } from "../auth/guards";
+import { hasBrowserMarker } from "../browser-request-marker";
 import { TranscriptionError, type TranscriptionProvider } from "./provider";
 
 export function createDictationRoutes(
@@ -20,7 +21,7 @@ export function createDictationRoutes(
     "/transcriptions",
     async (context, next) => {
       // A cross-origin HTML form cannot set this header; this route grants no CORS access.
-      if (context.req.header("x-openbot-dictation") !== "1") {
+      if (!hasBrowserMarker((name) => context.req.header(name), "dictation")) {
         return context.json({ error: "Invalid dictation request." }, 403);
       }
       if (!provider)

@@ -16,7 +16,7 @@ import {
  * waited for the operation's two minutes and then failed with the broker's expiry message.
  */
 export const NO_DESKTOP_HOST =
-  "Only OpenBot Desktop can open folders on this computer. This OpenBot isn't running in it.";
+  "Only the desktop app can open folders on this computer. This deployment isn't running in it.";
 export const DESKTOP_HOST_OFFLINE =
   "The desktop app is offline. Open it, then choose the folder again.";
 

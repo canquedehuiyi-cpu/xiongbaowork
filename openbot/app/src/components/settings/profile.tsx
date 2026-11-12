@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/item";
 import { updateProfileNameMutationOptions } from "@/lib/auth/mutations";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { shortName } from "@/lib/brand";
 import { queryClient } from "@/query-client";
 
 /**
@@ -123,7 +124,9 @@ export function NameRow() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>你的名字</DialogTitle>
-            <DialogDescription>设置熊宝显示给你的名字。</DialogDescription>
+            <DialogDescription>
+              设置{shortName()}显示给你的名字。
+            </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4">
             {user ? (

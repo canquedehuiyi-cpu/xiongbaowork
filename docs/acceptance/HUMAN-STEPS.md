@@ -293,7 +293,7 @@ Settings → Environments → New environment，名称填 `device-release`：
    - macOS：在终端运行 `spctl --assess -vv "/Applications/熊宝数字员工 设备端.app"`，输出必须是 `accepted` 和 `source=Notarized Developer ID`。
 3. 安装后打开「熊宝数字员工 设备端」，在 Web 端「我的设备」生成配对码并填入，截图页面显示设备在线和设备名。
 4. 让一个员工在这台设备上执行一个普通命令，截图结果。
-5. 从托盘退出应用，确认进程列表里没有 `openbot-runner`：Windows 看任务管理器并截图；Linux 和 macOS 保存 `ps -e | grep openbot-runner` 的空输出。
+5. 从托盘退出应用，确认进程列表里没有 `xiongbao-runner`：Windows 看任务管理器并截图；Linux 和 macOS 保存 `ps -e | grep xiongbao-runner` 的空输出。
 6. 重启电脑，不重新配对，设备自动上线，截图。
 7. 卸载。
 
@@ -303,9 +303,9 @@ Settings → Environments → New environment，名称填 `device-release`：
 
 - 第 1 步校验和：两台都自动做（Linux `sha256sum -c --ignore-missing`，Windows `Get-FileHash` 对照 `SHA256SUMS`）。
 - 第 2 步签名：Windows 自动跑 `Get-AuthenticodeSignature`，已签名的发布必须是 `Valid` 且发布者与 `windows` job 校验过的一致；未签名内测版只记录 `NotSigned`，不因此失败。Linux deb 只核对校验和。
-- 第 3 步安装和配对：Linux 用 `sudo apt-get install -y ./xiongbao-device_*_amd64.deb` 安装（依赖从软件源装），检查 `/usr/bin/xiongbao-device`、`/usr/bin/openbot-runner` 和桌面入口；再在同一台机器上起真实服务端和 PostgreSQL，通过 API 注册、在「我的设备」生成配对码，用**已安装的** `openbot-runner` 配对，确认设备在线、配对码不能用第二次。Windows 用 `/S` 静默安装（Tauri 默认按当前用户装到 `%LOCALAPPDATA%\熊宝数字员工 设备端`，实际的安装方式和目录从卸载项读出并写进记录），检查 `xiongbao-device.exe`、`openbot-runner.exe`、卸载项和版本；Windows 上没有带 pgvector 的 PostgreSQL，所以不配对，只跑 runner 自检（`--help`、`--add-root`/`--list-roots`/`--remove-root`）。
+- 第 3 步安装和配对：Linux 用 `sudo apt-get install -y ./xiongbao-device_*_amd64.deb` 安装（依赖从软件源装），检查 `/usr/bin/xiongbao-device`、`/usr/bin/xiongbao-runner` 和桌面入口；再在同一台机器上起真实服务端和 PostgreSQL，通过 API 注册、在「我的设备」生成配对码，用**已安装的** `xiongbao-runner` 配对，确认设备在线、配对码不能用第二次。Windows 用 `/S` 静默安装（Tauri 默认按当前用户装到 `%LOCALAPPDATA%\熊宝数字员工 设备端`，实际的安装方式和目录从卸载项读出并写进记录），检查 `xiongbao-device.exe`、`xiongbao-runner.exe`、卸载项和版本；Windows 上没有带 pgvector 的 PostgreSQL，所以不配对，只跑 runner 自检（`--help`、`--add-root`/`--list-roots`/`--remove-root`）。
 - 第 4 步执行命令：Linux 由服务器给设备下发一条不经过模型的命令（`projects.branches`，设备上运行 `git ls-remote`），确认返回结果。Windows 不做。
-- 第 5 步退出后无残留：Linux 按 PID 停掉 runner，再两次启动已安装的应用、用 SIGTERM 退出（与托盘「退出」走同一个 `quit()`），每次都确认没有 `openbot-runner` 进程、服务器显示离线。Windows 启动已安装的应用，确认它拉起安装目录里的 `openbot-runner.exe`，再强制结束应用（比托盘退出更粗暴），确认 `Get-Process` 里没有 `openbot-runner`。
+- 第 5 步退出后无残留：Linux 按 PID 停掉 runner，再两次启动已安装的应用、用 SIGTERM 退出（与托盘「退出」走同一个 `quit()`），每次都确认没有 `xiongbao-runner` 进程、服务器显示离线。Windows 启动已安装的应用，确认它拉起安装目录里的 `xiongbao-runner.exe`，再强制结束应用（比托盘退出更粗暴），确认 `Get-Process` 里没有 `xiongbao-runner`。
 - 第 6 步重启后自动上线：Linux 用「不重新配对、重新启动应用、设备重新在线」代替，不是真实重启。
 - 第 7 步卸载：Linux `sudo apt-get remove -y xiongbao-device`，Windows `uninstall.exe /S`，都确认程序文件（和 Windows 卸载项）已删除、没有残留进程。
 

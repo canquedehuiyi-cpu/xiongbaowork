@@ -16,7 +16,7 @@ function BrowsersPage() {
   return (
     <PageShell
       title="浏览器"
-      description="在这个浏览器里连接 OpenBot 录制器，自己做一遍任务来教员工。你录下的内容会进入你自己的学习空间。"
+      description="在这个浏览器里连接录制器，自己做一遍任务来教员工。你录下的内容会进入你自己的学习空间。"
     >
       <BrowserSections />
     </PageShell>

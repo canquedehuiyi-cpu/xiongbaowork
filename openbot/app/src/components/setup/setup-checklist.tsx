@@ -299,7 +299,7 @@ function Fix({
       ))}
       ，然后重启{PRODUCT}。
       {fix.page ? <>或者在{page(fix.page)}里添加密钥。</> : null}{" "}
-      {guide(fix.docsUrl)}
+      {fix.docsUrl ? guide(fix.docsUrl) : null}
     </p>
   );
 }

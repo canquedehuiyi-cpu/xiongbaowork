@@ -36,6 +36,7 @@ export * from "./recorder";
 export * from "./responsibilities";
 export * from "./roles";
 export * from "./scim";
+export * from "./staffing";
 export * from "./tasks";
 export * from "./team-bots";
 export * from "./text-translations";

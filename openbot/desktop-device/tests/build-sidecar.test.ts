@@ -13,13 +13,13 @@ import {
 
 test("each platform's sidecar has the name externalBin looks for", () => {
   expect(sidecarFile("x86_64-unknown-linux-gnu")).toBe(
-    "openbot-runner-x86_64-unknown-linux-gnu",
+    "xiongbao-runner-x86_64-unknown-linux-gnu",
   );
   expect(sidecarFile("x86_64-pc-windows-msvc")).toBe(
-    "openbot-runner-x86_64-pc-windows-msvc.exe",
+    "xiongbao-runner-x86_64-pc-windows-msvc.exe",
   );
   expect(sidecarFile("aarch64-apple-darwin")).toBe(
-    "openbot-runner-aarch64-apple-darwin",
+    "xiongbao-runner-aarch64-apple-darwin",
   );
 });
 

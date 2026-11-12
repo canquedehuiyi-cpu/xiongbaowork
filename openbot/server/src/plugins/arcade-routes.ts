@@ -18,6 +18,7 @@ import { type ConnectOrigin, connectedAccountsUrlFor } from "./oauth";
 import { type AccountRef, filedUnderPerson } from "./shared-accounts";
 import type { PluginStore } from "./store";
 import { withVendorDeadline } from "./vendor-deadline";
+import { productName } from "../brand";
 
 /**
  * Arcade 的连接路由（X5，上游 `route-groups/connections.ts` 的授权尝试与回程验证，按 fork 改写）。
@@ -280,8 +281,8 @@ export async function startArcadeAuthorization(
     return context.json(
       {
         error: freed
-          ? "应用开始了这次授权，但 OpenBot 没能记下它，所以没有连接任何东西。可以放心再按一次「连接」。"
-          : "应用开始了这次授权，但 OpenBot 没能记下它，所以没有连接任何东西。这次尝试会在 15 分钟内过期，之后可以重新开始。",
+          ? `应用开始了这次授权，但${productName()}没能记下它，所以没有连接任何东西。可以放心再按一次「连接」。`
+          : `应用开始了这次授权，但${productName()}没能记下它，所以没有连接任何东西。这次尝试会在 15 分钟内过期，之后可以重新开始。`,
       },
       500,
     );
@@ -514,8 +515,7 @@ export function mountArcadeRoutes(
     }
     return context.json(
       {
-        error:
-          "OpenBot 认不出你了，所以什么也没有记录。请联系管理员恢复你的访问，再从应用页面重新连接。",
+        error: `${productName()}认不出你了，所以什么也没有记录。请联系管理员恢复你的访问，再从应用页面重新连接。`,
       },
       403,
     );

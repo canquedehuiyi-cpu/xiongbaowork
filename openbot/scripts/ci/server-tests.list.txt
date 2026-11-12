@@ -186,6 +186,9 @@ tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
 tests/boundaries-replay.integration.test.ts
+tests/brand-server-copy.test.ts
+tests/brand-third-party.test.ts
+tests/brand.test.ts
 tests/brokered-accounts-schema.integration.test.ts
 tests/brokered-multiple-accounts.integration.test.ts
 tests/brokered-relist.integration.test.ts
@@ -193,10 +196,12 @@ tests/brokered-relist.test.ts
 tests/browser-address.test.ts
 tests/browser-egress.test.ts
 tests/browser-real.integration.test.ts
+tests/browser-request-marker.test.ts
 tests/browser-routes.integration.test.ts
 tests/browser-search-guidance.test.ts
 tests/built-in-tool-labels.test.ts
 tests/builtin-routines.test.ts
+tests/builtin-staffing.integration.test.ts
 tests/bunfig-preload.test.ts
 tests/capability-activity-events.test.ts
 tests/catalogue-bot-grants.integration.test.ts
@@ -312,6 +317,7 @@ tests/deployment-route-bot-end-to-end.test.ts
 tests/desktop-connection-failure.test.ts
 tests/desktop-gateway.test.ts
 tests/desktop-tools.integration.test.ts
+tests/dev-actor-email.test.ts
 tests/dev-actor.integration.test.ts
 tests/device-apps.integration.test.ts
 tests/device-queue.test.ts
@@ -343,6 +349,8 @@ tests/entra-obo-config.test.ts
 tests/entra-obo-servers.integration.test.ts
 tests/entra-obo.integration.test.ts
 tests/entra-profile.test.ts
+tests/env-alias-dockerfiles.test.ts
+tests/env-aliases.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
 tests/goal-run-busy-conversation.integration.test.ts
@@ -353,6 +361,7 @@ tests/google-drive-rest.test.ts
 tests/google-oauth-transport.test.ts
 tests/granted-tools-destructive.test.ts
 tests/group-ask-person.integration.test.ts
+tests/group-bots-change.integration.test.ts
 tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
 tests/guards.test.ts
@@ -578,7 +587,6 @@ tests/provider-selection.test.ts
 tests/provider-stored-rows.integration.test.ts
 tests/provider-tool-schemas.test.ts
 tests/provider-undecided.test.ts
-tests/qoderwake-package.test.ts
 tests/question-answer-in-conversation.integration.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
@@ -719,6 +727,16 @@ tests/skill-tools.integration.test.ts
 tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
+tests/staffing-app-key.integration.test.ts
+tests/staffing-bot-creator-tools.test.ts
+tests/staffing-default-grant.integration.test.ts
+tests/staffing-draft.test.ts
+tests/staffing-executor.integration.test.ts
+tests/staffing-gates.integration.test.ts
+tests/staffing-proposals-table.integration.test.ts
+tests/staffing-routes.integration.test.ts
+tests/staffing-settle.integration.test.ts
+tests/staffing-store.integration.test.ts
 tests/stall-guard.test.ts
 tests/starter-tour-routes.test.ts
 tests/subagent.integration.test.ts
@@ -755,8 +773,10 @@ tests/tenant-frame-returned-builder.test.ts
 tests/tenant-invariants.test.ts
 tests/tenant-package-agent-files.test.ts
 tests/tenant-package-avatar-channel.test.ts
+tests/tenant-package-brand-fields.test.ts
 tests/tenant-package-channel-membership.test.ts
 tests/tenant-package-duplicates.test.ts
+tests/tenant-package-legacy-path.test.ts
 tests/tenant-package-personal.test.ts
 tests/tenant-package-switch-retires.test.ts
 tests/tenant-package.test.ts
@@ -765,6 +785,7 @@ tests/tenant-transaction-frame.integration.test.ts
 tests/test-database-url.integration.test.ts
 tests/test-network-guard.test.ts
 tests/text-translations.test.ts
+tests/third-party-notices.test.ts
 tests/thread-identity.test.ts
 tests/thread-routes.test.ts
 tests/thread-status.test.ts
@@ -819,3 +840,4 @@ tests/who-can-check.test.ts
 tests/who-can.integration.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
+tests/xiongbao-package.test.ts

@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import type { Message } from "@ag-ui/client";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
-import { and, asc, desc, eq, isNull, min, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { HandoffCaps } from "../agents/handoff";
@@ -37,6 +37,7 @@ import {
 import type { AppVariables } from "../auth/guards";
 import type { Database } from "../db/client";
 import {
+  channelAgents,
   channelMemberships,
   channels,
   intelligenceChannelMappings,
@@ -121,6 +122,11 @@ export class GroupRefusedError extends Error {
   }
 }
 
+const MIN_GROUP_BOTS = 2;
+const MAX_GROUP_BOTS = 20;
+const CAP_REFUSED = `一个群最多 ${MAX_GROUP_BOTS} 位员工。`;
+const FLOOR_REFUSED = `群里至少要留 ${MIN_GROUP_BOTS} 位员工。`;
+
 export type GroupStore = {
   list(channelId: string): Promise<GroupMessage[]>;
   thread(
@@ -163,6 +169,26 @@ export type GroupStore = {
   ): Promise<void>;
   /** The group's Bots in the order they were chosen. Bots with no thread yet are not listed. */
   order(channelId: string): Promise<string[]>;
+  /** Every Bot linked to the group, as `channel_agents` holds them (not filtered by who may run them). */
+  bots(channelId: string): Promise<string[]>;
+  /** Link Bots to the group and give each a thread after the ones it already has, in the order given. */
+  addBots(
+    ownerUserId: string,
+    channelId: string,
+    agentIds: readonly string[],
+  ): Promise<void>;
+  /** Unlink Bots from the group and drop the caller's own thread rows for them. */
+  removeBots(
+    ownerUserId: string,
+    channelId: string,
+    agentIds: readonly string[],
+  ): Promise<void>;
+  /** Rewrite the caller's thread timestamps so the Bots answer in this order. */
+  reorder(
+    ownerUserId: string,
+    channelId: string,
+    agentIds: readonly string[],
+  ): Promise<void>;
   /** The waiting row a paused approval belongs to, if it is a group turn's. */
   waitingFor(approvalId: string): Promise<GroupMessage | null>;
   /** Which group thread a thread id is, for relaying an answer into the shared transcript. */
@@ -223,6 +249,86 @@ async function stampFor(
     .limit(1);
   if (!row) throw new GroupNotFoundError();
   return row.tenantId === TEAM_TENANT ? { tenantId: TEAM_TENANT } : {};
+}
+
+/** The group's Bots, read under a lock on the channel row so concurrent changes line up one by one. */
+async function lockedBots(tx: GroupExecutor, channelId: string) {
+  await tx
+    .select({ id: channels.id })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .for("update");
+  const rows = await tx
+    .select({ agentId: channelAgents.agentId })
+    .from(channelAgents)
+    .where(eq(channelAgents.channelId, channelId));
+  return rows.map((row) => row.agentId);
+}
+
+/** The given Bots in the order `order` ranks them: earliest thread row first, ties by id. */
+async function rankedBots(
+  tx: GroupExecutor,
+  channelId: string,
+  bots: readonly string[],
+) {
+  const rows = await tx
+    .select({
+      agentId: groupBotThreads.agentId,
+      first: min(groupBotThreads.createdAt),
+    })
+    .from(groupBotThreads)
+    .where(eq(groupBotThreads.channelId, channelId))
+    .groupBy(groupBotThreads.agentId);
+  const at = new Map(rows.map((row) => [row.agentId, row.first?.getTime()]));
+  const rank = (id: string) => at.get(id) ?? Number.POSITIVE_INFINITY;
+  return [...bots].sort(
+    (left, right) =>
+      (rank(left) === rank(right) ? 0 : rank(left) < rank(right) ? -1 : 1) ||
+      left.localeCompare(right),
+  );
+}
+
+/**
+ * Stamp the caller's own thread rows a millisecond apart in this order, starting from the earliest
+ * row anyone in the group has, so the caller's position is each Bot's earliest row. A Bot with no
+ * row of the caller's gets one.
+ */
+async function writeOrder(
+  mintThread: () => string,
+  tx: GroupExecutor,
+  ownerUserId: string,
+  channelId: string,
+  stamp: { tenantId?: typeof TEAM_TENANT },
+  agentIds: readonly string[],
+) {
+  const [earliest] = await tx
+    .select({ at: min(groupBotThreads.createdAt) })
+    .from(groupBotThreads)
+    .where(eq(groupBotThreads.channelId, channelId));
+  const base = earliest?.at?.getTime() ?? Date.now();
+  for (const [index, agentId] of agentIds.entries()) {
+    const createdAt = new Date(base + index);
+    const updated = await tx
+      .update(groupBotThreads)
+      .set({ createdAt })
+      .where(
+        and(
+          eq(groupBotThreads.channelId, channelId),
+          eq(groupBotThreads.ownerUserId, ownerUserId),
+          eq(groupBotThreads.agentId, agentId),
+        ),
+      )
+      .returning({ agentId: groupBotThreads.agentId });
+    if (updated.length === 0)
+      await tx.insert(groupBotThreads).values({
+        ownerUserId,
+        channelId,
+        agentId,
+        threadId: mintThread(),
+        createdAt,
+        ...stamp,
+      });
+  }
 }
 
 /**
@@ -436,6 +542,77 @@ export function createGroupStore(
           asc(groupBotThreads.agentId),
         );
       return rows.map((row) => row.agentId);
+    },
+    async bots(channelId) {
+      const rows = await database
+        .select({ agentId: channelAgents.agentId })
+        .from(channelAgents)
+        .where(eq(channelAgents.channelId, channelId))
+        .orderBy(asc(channelAgents.agentId));
+      return rows.map((row) => row.agentId);
+    },
+    async addBots(ownerUserId, channelId, agentIds) {
+      await database.transaction(async (tx) => {
+        const stamp = await stampFor(tx, channelId);
+        const current = await lockedBots(tx, channelId);
+        if (current.length + agentIds.length > MAX_GROUP_BOTS)
+          throw new GroupRefusedError(CAP_REFUSED);
+        await tx
+          .insert(channelAgents)
+          .values(agentIds.map((agentId) => ({ channelId, agentId, ...stamp })))
+          .onConflictDoNothing();
+        // The creator's rows are rewritten for the whole roster, not only the new Bots: other
+        // members' older rows (which they alone can delete) would otherwise outrank a re-added
+        // Bot's new row in `order`, which ranks each Bot by its earliest row.
+        const ranked = await rankedBots(tx, channelId, current);
+        await writeOrder(mintThread, tx, ownerUserId, channelId, stamp, [
+          ...ranked,
+          ...agentIds,
+        ]);
+      });
+    },
+    async removeBots(ownerUserId, channelId, agentIds) {
+      await database.transaction(async (tx) => {
+        // Two removals racing would each see enough Bots left and together leave the group short.
+        const current = await lockedBots(tx, channelId);
+        if (current.length - agentIds.length < MIN_GROUP_BOTS)
+          throw new GroupRefusedError(FLOOR_REFUSED);
+        const removed = await tx
+          .delete(channelAgents)
+          .where(
+            and(
+              eq(channelAgents.channelId, channelId),
+              inArray(channelAgents.agentId, [...agentIds]),
+            ),
+          )
+          .returning({ agentId: channelAgents.agentId });
+        // Row security lets only the creator unlink a Bot; none removed means it was refused.
+        if (removed.length !== agentIds.length) throw new GroupNotFoundError();
+        // Only this person's own rows are theirs to delete; other members' stale rows only affect
+        // ranking, and the roster is read through `channel_agents`.
+        await tx
+          .delete(groupBotThreads)
+          .where(
+            and(
+              eq(groupBotThreads.channelId, channelId),
+              eq(groupBotThreads.ownerUserId, ownerUserId),
+              inArray(groupBotThreads.agentId, [...agentIds]),
+            ),
+          );
+      });
+    },
+    async reorder(ownerUserId, channelId, agentIds) {
+      await database.transaction(async (tx) => {
+        const stamp = await stampFor(tx, channelId);
+        await writeOrder(
+          mintThread,
+          tx,
+          ownerUserId,
+          channelId,
+          stamp,
+          agentIds,
+        );
+      });
     },
     async waitingFor(approvalId) {
       const [row] = await database
@@ -682,6 +859,14 @@ export async function groupSourceForRun(
     })
     .from(groupBotThreads)
     .innerJoin(channels, eq(channels.id, groupBotThreads.channelId))
+    // A Bot taken out of the group keeps its thread row, but no authority over the group.
+    .innerJoin(
+      channelAgents,
+      and(
+        eq(channelAgents.channelId, groupBotThreads.channelId),
+        eq(channelAgents.agentId, groupBotThreads.agentId),
+      ),
+    )
     .innerJoin(
       channelMemberships,
       and(
@@ -838,6 +1023,11 @@ export function createGroupConversations(deps: {
     agentIds: string[],
     options: { shared: true },
   ) => Promise<{ id: string }>;
+  /**
+   * Whether this person may run the Bot, by the same access filter a new group's Bots pass. Needed
+   * to add Bots to an existing group.
+   */
+  canUseBot?: (ownerUserId: string, agentId: string) => Promise<boolean>;
   /** How often a running reply's partial text is written for the transcript to show. */
   progressEveryMs?: number;
   /**
@@ -1398,13 +1588,34 @@ export function createGroupConversations(deps: {
     }
   }
 
+  /** Only the person who started the group changes its Bots; the same refusal `removeMember` gives. */
+  const creatorOnly = async (owner: string, channel: string) => {
+    await roster(owner, channel);
+    const creator = (await deps.store.people(channel))[0]?.userId;
+    if (owner !== creator)
+      throw new GroupRefusedError("只有发起这个群聊的人才能调整群里的员工。");
+  };
+  const botList = (input: unknown) => {
+    const agentIds = z
+      .array(z.string().min(1))
+      .min(1)
+      .max(MAX_GROUP_BOTS)
+      .parse(input);
+    if (new Set(agentIds).size !== agentIds.length)
+      throw new GroupRefusedError("每位员工只能出现一次。");
+    return agentIds;
+  };
+
   return {
     store: deps.store,
     /** Start a group with Bots in the order the person chose them. */
     async create(owner: string, input: unknown) {
       const body = z
         .strictObject({
-          agentIds: z.array(z.string().min(1)).min(2).max(20),
+          agentIds: z
+            .array(z.string().min(1))
+            .min(MIN_GROUP_BOTS)
+            .max(MAX_GROUP_BOTS),
         })
         .parse(input);
       if (new Set(body.agentIds).size !== body.agentIds.length)
@@ -1417,6 +1628,58 @@ export function createGroupConversations(deps: {
       });
       await deps.store.seedOrder(owner, channel.id, body.agentIds);
       return channel;
+    },
+    /** Add Bots to a group the caller started; they answer after the Bots already in it. */
+    async addBots(
+      owner: string,
+      channel: string,
+      input: string[],
+    ): Promise<{ added: string[] }> {
+      const agentIds = botList(input);
+      await creatorOnly(owner, channel);
+      const current = new Set(await deps.store.bots(channel));
+      const again = agentIds.find((id) => current.has(id));
+      if (again) throw new GroupRefusedError(`员工 ${again} 已经在群里了。`);
+      if (current.size + agentIds.length > MAX_GROUP_BOTS)
+        throw new GroupRefusedError(CAP_REFUSED);
+      for (const id of agentIds)
+        if (!(await deps.canUseBot?.(owner, id)))
+          throw new GroupRefusedError(
+            `你没有权限使用员工 ${id}，无法加进群里。`,
+          );
+      await deps.store.addBots(owner, channel, agentIds);
+      return { added: agentIds };
+    },
+    /** Take Bots out of a group the caller started, leaving it at least two. */
+    async removeBots(
+      owner: string,
+      channel: string,
+      input: string[],
+    ): Promise<{ removed: string[] }> {
+      const agentIds = botList(input);
+      await creatorOnly(owner, channel);
+      const current = await deps.store.bots(channel);
+      const missing = agentIds.find((id) => !current.includes(id));
+      if (missing)
+        throw new GroupRefusedError(`员工 ${missing} 不在这个群里。`);
+      if (current.length - agentIds.length < MIN_GROUP_BOTS)
+        throw new GroupRefusedError(FLOOR_REFUSED);
+      await deps.store.removeBots(owner, channel, agentIds);
+      return { removed: agentIds };
+    },
+    /** Set the order a group's Bots answer in, naming each current Bot exactly once. */
+    async reorder(owner: string, channel: string, input: string[]) {
+      const agentIds = botList(input);
+      await creatorOnly(owner, channel);
+      const current = await deps.store.bots(channel);
+      if (
+        current.length !== agentIds.length ||
+        !agentIds.every((id) => current.includes(id))
+      )
+        throw new GroupRefusedError(
+          "新的顺序必须正好包含群里现有的每一位员工。",
+        );
+      await deps.store.reorder(owner, channel, agentIds);
     },
     /** Add another person to a group this caller is in. They see the whole shared transcript. */
     async addMember(owner: string, channel: string, input: unknown) {
@@ -1892,6 +2155,36 @@ export function createGroupRoutes(
       context.var.actor.id,
       context.req.param("channelId"),
       context.req.param("userId"),
+    );
+    return context.body(null, 204);
+  });
+  const botIds = async (context: { req: { json(): Promise<unknown> } }) =>
+    z
+      .strictObject({ agentIds: z.array(z.string()) })
+      .parse(await context.req.json()).agentIds;
+  routes.post("/:channelId/bots", async (context) =>
+    context.json(
+      await service.addBots(
+        context.var.actor.id,
+        context.req.param("channelId"),
+        await botIds(context),
+      ),
+    ),
+  );
+  routes.delete("/:channelId/bots", async (context) =>
+    context.json(
+      await service.removeBots(
+        context.var.actor.id,
+        context.req.param("channelId"),
+        await botIds(context),
+      ),
+    ),
+  );
+  routes.put("/:channelId/order", async (context) => {
+    await service.reorder(
+      context.var.actor.id,
+      context.req.param("channelId"),
+      await botIds(context),
     );
     return context.body(null, 204);
   });

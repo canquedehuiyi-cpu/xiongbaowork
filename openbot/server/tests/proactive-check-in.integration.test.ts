@@ -750,7 +750,7 @@ describe("a check-in", () => {
       [
         "One thing needs you",
         "• Inbox Bot: Reply to Dana about Friday. Dana asked whether Friday's review still stands. (from Mail)",
-        "Start or hide it in OpenBot.",
+        "Start or hide it in XiongBao Work.",
       ].join("\n"),
     );
     expect(ping?.pushBody).toBe("Inbox Bot: Reply to Dana about Friday");
@@ -1613,7 +1613,7 @@ describe("the ping", () => {
     expect(ping?.text).toContain(
       "• Calendar Bot: Move the standup. The room is double-booked tomorrow. (from Mail)",
     );
-    expect(ping?.text).toEndWith("Start or hide them in OpenBot.");
+    expect(ping?.text).toEndWith("Start or hide them in XiongBao Work.");
     expect((await itemsOf()).every((item) => item.pingId === ping?.id)).toBe(
       true,
     );

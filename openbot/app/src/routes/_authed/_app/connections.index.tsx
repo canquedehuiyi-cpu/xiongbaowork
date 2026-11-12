@@ -41,6 +41,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { shortName } from "@/lib/brand";
 import { useConnectApp } from "@/lib/connections/connect-app";
 import {
   type ConnectionRow,
@@ -150,7 +151,7 @@ export const AUTHORIZATION_NOTICES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "vendor-unavailable",
-    "熊宝去完成这次授权时应用没有回应，所以什么都没有记下。请稍后再打开这个链接试一次。",
+    `${shortName()}去完成这次授权时应用没有回应，所以什么都没有记下。请稍后再打开这个链接试一次。`,
   ],
   [
     "not-your-authorization",
@@ -170,7 +171,7 @@ export const AUTHORIZATION_NOTICES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "name-changed",
-    "这次授权开始之后，熊宝在这个应用那边登记你的名字因为更新变了，所以什么都没有记下，也没有在应用那边确认或撤销任何东西。请在应用的页面按「连接」重新开始。",
+    `这次授权开始之后，${shortName()}在这个应用那边登记你的名字因为更新变了，所以什么都没有记下，也没有在应用那边确认或撤销任何东西。请在应用的页面按「连接」重新开始。`,
   ],
   [
     "not-permitted",
@@ -207,7 +208,7 @@ export const PERSONAL_AUTHORIZATION_NOTICES: ReadonlyMap<string, string> =
     ],
     [
       "not-recorded",
-      "没能记下这次授权，所以什么都没有保存。请从应用的页面重新开始；如果一直这样，请查看熊宝的日志。",
+      `没能记下这次授权，所以什么都没有保存。请从应用的页面重新开始；如果一直这样，请查看${shortName()}的日志。`,
     ],
   ]);
 

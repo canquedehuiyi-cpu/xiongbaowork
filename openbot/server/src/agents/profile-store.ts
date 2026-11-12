@@ -44,6 +44,7 @@ import type {
   CreateAgentInput,
   Persona,
 } from "./profile-types";
+import { englishName } from "../brand";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DatabaseExecutor = Pick<Database, "select"> | Pick<Transaction, "select">;
@@ -97,6 +98,13 @@ export type AgentProfileStore = {
     actor: AgentActor,
     id: string,
     input: CreateAgentInput,
+    /**
+     * Refuse with {@link AgentChangedError} unless the profile still carries this `updated_at`, read
+     * under the same row lock the write takes. A caller that decided what to write from an earlier
+     * read (a staffing proposal drafted against one version) must not overwrite an edit made since;
+     * a check outside this transaction would let two such writers both pass it.
+     */
+    options?: { unchangedSince?: Date },
   ): Promise<AgentProfile>;
   duplicate(
     actor: AgentActor,
@@ -149,6 +157,14 @@ export class AgentNotFoundError extends Error {
   constructor(id: string) {
     super(`Agent ${id} was not found.`);
     this.name = "AgentNotFoundError";
+  }
+}
+
+/** The profile changed after the version the caller wrote against; nothing was written. */
+export class AgentChangedError extends Error {
+  constructor(id: string) {
+    super(`Agent ${id} changed since it was read.`);
+    this.name = "AgentChangedError";
   }
 }
 
@@ -236,7 +252,9 @@ async function requireOwnerMayIsolate(
 
 export class ManagedAgentUnavailableError extends Error {
   constructor() {
-    super("OpenBot has no managed Bot. Give this Bot its own AG-UI endpoint.");
+    super(
+      `${englishName()} has no managed Bot. Give this Bot its own AG-UI endpoint.`,
+    );
     this.name = "ManagedAgentUnavailableError";
   }
 }
@@ -1084,7 +1102,7 @@ export function createAgentProfileStore(
       });
     },
 
-    async update(actor, id, input) {
+    async update(actor, id, input, options) {
       if (input.isolated === true)
         await requireOwnerMayIsolate(database, actor, id);
       return database.transaction(
@@ -1092,6 +1110,15 @@ export function createAgentProfileStore(
           await lockProfileMutationRows(transaction, id);
           const profile = await findAccessibleProfile(transaction, actor, id);
           if (!profile) throw new AgentNotFoundError(id);
+          if (options?.unchangedSince) {
+            const [held] = await transaction
+              .select({ updatedAt: agentProfiles.updatedAt })
+              .from(agentProfiles)
+              .where(eq(agentProfiles.agentId, id))
+              .limit(1);
+            if (held?.updatedAt.getTime() !== options.unchangedSince.getTime())
+              throw new AgentChangedError(id);
+          }
           /*
            * Before the manage check, so a tenant package's Bot is refused for what was asked of it
            * rather than with the general "built in and can't be changed", and the trail can say so.

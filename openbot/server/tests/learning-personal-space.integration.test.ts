@@ -138,7 +138,7 @@ test("a person's space is created once across concurrent calls on several replic
     expect(answer).toEqual({ state: "assigned", containerId: SPACE });
   // Intelligence holds it once; each replica asked at most once, and a replica that lost the race was told it exists.
   expect([...containers.keys()]).toEqual([SPACE]);
-  expect(containers.get(SPACE)).toBe("OpenBot: Ada Lovelace");
+  expect(containers.get(SPACE)).toBe("XiongBao Work: Ada Lovelace");
   expect(posts.length).toBeGreaterThanOrEqual(1);
   expect(posts.length).toBeLessThanOrEqual(replicas.length);
   expect(posts.every((post) => post.id === SPACE)).toBe(true);

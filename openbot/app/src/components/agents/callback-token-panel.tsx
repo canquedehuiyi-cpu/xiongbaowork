@@ -5,6 +5,7 @@ import {
   issueCallbackTokenMutationOptions,
   revokeCallbackTokenMutationOptions,
 } from "@/lib/agents/mutations";
+import { shortName } from "@/lib/brand";
 
 /**
  * The credential this coworker presents when it calls a tool back.
@@ -23,8 +24,7 @@ import {
  * uses its tools with none of its own. The panel says so and offers nothing to generate: it used to
  * tell the personal starter it "can't use tools" while it searched the web and used the browser.
  */
-export const KEY_FROM_OPENBOT =
-  "这位员工由熊宝自己运行，不需要凭据也能用授予它的工具。";
+export const KEY_FROM_OPENBOT = `这位员工由${shortName()}自己运行，不需要凭据也能用授予它的工具。`;
 
 export function CallbackTokenPanel({
   agentId,

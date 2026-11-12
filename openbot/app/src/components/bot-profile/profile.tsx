@@ -3,12 +3,15 @@ import {
   IconChevronRight,
   IconMessage,
   IconPlayerPause,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type * as React from "react";
+import { useState } from "react";
 import { BotNeedsYou } from "@/components/needs-you/board";
 import { SharedAppNotice } from "@/components/plugins/shared-app-notice";
+import { UpdateRoutingSection } from "@/components/settings/update-routing";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -28,12 +31,14 @@ import {
   type BotNotify,
   botLifecycleQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
+import { useOffersMemory } from "@/lib/deployment/queries";
 import {
   requestNotificationPermission,
   useNotificationPermission,
 } from "@/lib/notifications/permission";
 import { queryClient } from "@/query-client";
 import { BotActivityGlance, BotActivityRow } from "./activity";
+import { ResetDialog } from "./manage";
 import { BotPausedBanner } from "./pause-banner";
 import { ProfileAlert, ProfilePanel, ProfileSection } from "./profile-kit";
 import {
@@ -83,6 +88,12 @@ export function BotProfile({
       <BotNeedsYou agentId={agent.id} />
       <AvatarSourcesSection profile={agent} />
       <BotControls agent={agent} />
+      {/*
+       * 「消息发到哪里」 on the employee's page, where v0.2.7 had it. The server keeps one routing per
+       * person (`GET/PUT /api/bots/routing`), so this is that same setting, saying it applies to all
+       * of their employees; 设置 › 通知 shows it too.
+       */}
+      <UpdateRoutingSection />
       <BotActivityGlance agentId={agent.id} />
       <DoneThisWeek agentId={agent.id} />
       {settings}
@@ -93,10 +104,10 @@ export function BotProfile({
 
 /**
  * 对你: this person's relationship with one employee — pause, notifications, a new conversation,
- * and the row to its activity when nothing is running or lined up (`BotActivityRow`; with
- * something under way, `BotActivityGlance` draws its own section under this one). One section of
- * the employee's own page (/bots/$agentId). Reset is a row of 管理 (`ManageSection`), as upstream
- * has it; where updates go is in 设置 › 通知 (`components/settings/update-routing.tsx`).
+ * 重置 (as v0.2.7 had it here; 管理 keeps upstream's row too), and the row to its activity when
+ * nothing is running or lined up (`BotActivityRow`; with something under way, `BotActivityGlance`
+ * draws its own section under this one). One section of the employee's own page (/bots/$agentId).
+ * Where updates go follows this section (`UpdateRoutingSection`, the same setting as 设置 › 通知).
  */
 export function BotControls({ agent }: { agent: AgentProfile }) {
   const lifecycle = useQuery(botLifecycleQueryOptions(agent.id));
@@ -105,6 +116,8 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
   // The browser's answer, shared with the prompt a conversation offers, so a yes there shows here
   // (upstream: one reading for the browser and OpenBot Desktop alike).
   const permission = useNotificationPermission();
+  const memory = useOffersMemory();
+  const [resetOpen, setResetOpen] = useState(false);
 
   return (
     <ProfileSection className="mt-12" title="对你">
@@ -209,9 +222,33 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
               <IconChevronRight className="size-4 text-muted-foreground" />
             </ItemActions>
           </Item>
+          {/*
+           * 重置 here as well as in 管理 below: v0.2.7 put it with the rest of what is between this
+           * person and this employee, and the user wanted it back where they used to find it.
+           */}
+          <Item
+            render={<button onClick={() => setResetOpen(true)} type="button" />}
+            size="sm"
+          >
+            <ItemMedia variant="icon">
+              <IconRefresh />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>重置</ItemTitle>
+              <ItemDescription>
+                {memory
+                  ? "删除你和它的对话、它为你记住的东西和它排期的工作。删除前会先列给你看。"
+                  : "删除你和它的对话和它排期的工作。删除前会先列给你看。"}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <IconChevronRight className="size-4 text-muted-foreground" />
+            </ItemActions>
+          </Item>
           <BotActivityRow agentId={agent.id} />
         </ProfilePanel>
       )}
+      <ResetDialog agent={agent} onOpenChange={setResetOpen} open={resetOpen} />
     </ProfileSection>
   );
 }

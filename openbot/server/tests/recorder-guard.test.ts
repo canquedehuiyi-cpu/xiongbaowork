@@ -21,9 +21,9 @@ const TOKEN = `obr_${"a".repeat(43)}`;
 const SECOND_TOKEN = `obr_${"b".repeat(43)}`;
 const STRANGER_TOKEN = `obr_${"c".repeat(43)}`;
 const SIGNED_OUT_SENTENCE =
-  "This browser is no longer connected to OpenBot. Connect it again.";
+  "This browser is no longer connected. Connect it again.";
 const ORGANIZATION_SENTENCE =
-  "Your organization sign-in ended. Connect this browser to OpenBot again.";
+  "Your organization sign-in ended. Connect this browser again.";
 
 type Refusal = Parameters<RecorderRefusalSink>[0];
 type UserRow = {
@@ -431,7 +431,7 @@ describe("organization mode", () => {
 
     expect(response.status).toBe(200);
     expect(unsealed).toEqual(["sealed-session-one"]);
-    expect(asked).toEqual(["openbot.organization-session=session-one"]);
+    expect(asked).toEqual(["xiongbao.organization-session=session-one"]);
     expect(await response.json()).toEqual({
       id: owner.id,
       email: owner.email,
@@ -539,8 +539,8 @@ describe("organization mode", () => {
 
     await call(bearer(SECOND_TOKEN));
     expect(asked).toEqual([
-      "openbot.organization-session=session-one",
-      "openbot.organization-session=session-two",
+      "xiongbao.organization-session=session-one",
+      "xiongbao.organization-session=session-two",
     ]);
 
     clock.now += 2_000;

@@ -22,6 +22,7 @@
  */
 import type { EntraRefusal, EntraTokens } from "../auth/entra-refusal";
 import { EntraTokenRefusedError } from "../auth/entra-refusal";
+import { productName } from "../brand";
 
 /** 一个 scope 最长多少字符。Entra 的 scope 是 `api://<id>/.default` 这类短串，再长就是填错了。 */
 const ENTRA_SCOPE_MAX = 256;
@@ -172,7 +173,7 @@ export function parseOboResources(
     if (forbidden) {
       throw new Error(
         forbidden === "own"
-          ? `MICROSOFT_OAUTH_OBO_RESOURCES 登记了 OpenBot 自己的 API（${resource}）。换出来的 token 能冒充本人调用 OpenBot，不能登记。`
+          ? `MICROSOFT_OAUTH_OBO_RESOURCES 登记了${productName()}自己的 API（${resource}）。换出来的 token 能冒充本人调用${productName()}，不能登记。`
           : `MICROSOFT_OAUTH_OBO_RESOURCES 登记了 Microsoft 的第一方资源（${resource}）。这类 token 权限太大，不能发给自定义服务器。`,
       );
     }
@@ -207,7 +208,7 @@ export function scopeBindingRefusal(
   }
   const forbidden = forbiddenResource(resource, binding.own);
   if (forbidden === "own") {
-    return "不能用 OpenBot 自己的 API 作为 Entra scope：换出来的 token 能冒充本人调用 OpenBot。";
+    return `不能用${productName()}自己的 API 作为 Entra scope：换出来的 token 能冒充本人调用${productName()}。`;
   }
   if (forbidden === "microsoft") {
     return "不能用 Microsoft 的第一方资源（例如 Microsoft Graph）作为 Entra scope：这类 token 权限太大，不能发给自定义服务器。";
@@ -250,19 +251,19 @@ export function entraRefusalSentence(
 ): string {
   switch (reason) {
     case "not-admitted":
-      return `你已经不能使用 OpenBot，所以没有使用「${title}」。`;
+      return `你已经不能使用${productName()}，所以没有使用「${title}」。`;
     case "no-sign-in":
-      return `「${title}」要用你的 Microsoft 账号，但 OpenBot 还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录 OpenBot 一次，再重新提问。`;
+      return `「${title}」要用你的 Microsoft 账号，但${productName()}还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录${productName()}一次，再重新提问。`;
     case "sign-in-expired":
       return `你的 Microsoft 登录已过期，所以没有使用「${title}」。请重新用 Microsoft 登录后再提问。`;
     case "no-consent":
-      return `管理员还没有在 Microsoft Entra 里授权 OpenBot 访问「${title}」。请联系管理员授权。`;
+      return `管理员还没有在 Microsoft Entra 里授权${productName()}访问「${title}」。请联系管理员授权。`;
     case "no-api-consent":
-      return `OpenBot 在 Microsoft Entra 里还没有获得对它自己 API 的授权，所以无法以你的身份访问「${title}」。请联系管理员授权。`;
+      return `${productName()}在 Microsoft Entra 里还没有获得对它自己 API 的授权，所以无法以你的身份访问「${title}」。请联系管理员授权。`;
     case "no-api":
-      return `OpenBot 在 Microsoft Entra 里还没有设置好，无法以你的身份访问「${title}」。请管理员在那里公开 OpenBot 的 API。`;
+      return `${productName()}在 Microsoft Entra 里还没有设置好，无法以你的身份访问「${title}」。请管理员在那里公开${productName()}的 API。`;
     case "refused":
-      return `Microsoft 不允许 OpenBot 以你的身份访问「${title}」。请稍后再试；如果一直这样，请联系管理员。`;
+      return `Microsoft 不允许${productName()}以你的身份访问「${title}」。请稍后再试；如果一直这样，请联系管理员。`;
   }
 }
 

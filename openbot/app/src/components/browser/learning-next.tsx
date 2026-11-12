@@ -19,6 +19,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { shortName } from "@/lib/brand";
 import { startPersonalLearningRunMutationOptions } from "@/lib/learning/mutations";
 import {
   personalReviewQueryOptions,
@@ -275,19 +276,18 @@ export function learningNextWords(
   if (next.kind === "model" || next.kind === "off")
     return {
       heading: `已保存「${title}」`,
-      sentence: "你的录制已保留。等学习可以运行了，熊宝就会从中学出技能。",
+      sentence: `你的录制已保留。等学习可以运行了，${shortName()}就会从中学出技能。`,
     };
   if (!canReview)
     return {
       heading: `已保存「${title}」`,
-      sentence:
-        "熊宝会从中学出技能，再由管理员审核。批准后，就可以让任意一位员工去做。",
+      sentence: `${shortName()}会从中学出技能，再由管理员审核。批准后，就可以让任意一位员工去做。`,
     };
   return {
     heading: `已保存「${title}」`,
     sentence: autoApprove
-      ? "熊宝会从中学出技能，你可以在「设置 → 学习」里找到它。学会后，就可以让任意一位员工去做。"
-      : "熊宝会从中学出技能，你可以在「设置 → 学习」里审核它。你批准后，就可以让任意一位员工去做。",
+      ? `${shortName()}会从中学出技能，你可以在「设置 → 学习」里找到它。学会后，就可以让任意一位员工去做。`
+      : `${shortName()}会从中学出技能，你可以在「设置 → 学习」里审核它。你批准后，就可以让任意一位员工去做。`,
   };
 }
 

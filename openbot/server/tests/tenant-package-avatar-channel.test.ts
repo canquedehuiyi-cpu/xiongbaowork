@@ -50,7 +50,7 @@ const newcomer = `pkg-avatar-new-${suite}`;
 const existing = `pkg-avatar-old-${suite}`;
 const people = [newcomer, existing];
 
-const loaded = await loadTenantPackage("../examples/qoderwake");
+const loaded = await loadTenantPackage("../examples/xiongbao");
 
 const profileStore = createAgentProfileStore(
   database,

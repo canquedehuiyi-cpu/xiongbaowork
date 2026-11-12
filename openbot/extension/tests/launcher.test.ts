@@ -117,7 +117,7 @@ function route(request: Request): Response | Promise<Response> | null {
     if (!liveTokens.has(token))
       return Response.json(
         {
-          error: "This browser is no longer connected to OpenBot.",
+          error: "This browser is no longer connected to XiongBao Work.",
           code: RECORDER_SIGNED_OUT,
           reason: "revoked",
         },
@@ -492,7 +492,7 @@ test("connect refuses an address the Recorder would not connect to, a malformed 
   ).toEqual({
     ok: false,
     error:
-      "Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.",
+      "Your organization's Recorder policy does not allow this XiongBao Work. Ask your IT team.",
   });
   expect(stored()).toBeUndefined();
   expect(meAsked).toEqual([]);
@@ -570,7 +570,10 @@ test("disconnect forgets the connection OpenBot revoked at once and reports sign
   openOrder();
   expect(
     await launcher().record({ action: "start", title: "After Disconnect" }),
-  ).toEqual({ ok: false, error: "Connect this browser to OpenBot first." });
+  ).toEqual({
+    ok: false,
+    error: "Connect this browser to XiongBao Work first.",
+  });
 
   // Told again, or told with nothing stored: nothing more happens.
   expect(await launcher().disconnect()).toEqual({ ok: true });
@@ -591,7 +594,7 @@ test.each([
   ["", 0],
   [", even when the document is slow to store the outcome", 30],
 ])(
-  "a recording disconnect finds running stops as a sign-out stops one, kept for its person, and goes to OpenBot's back end once the browser is connected again%s",
+  "a recording disconnect finds running stops as a sign-out stops one, kept for its person, and goes to the server once the browser is connected again%s",
   async (_, delayMs) => {
     await launcher().connect({
       connection: connection(),
@@ -1163,8 +1166,7 @@ test("a stopped recording whose capture pass keeps failing reports why while it 
   expect((await launcher().state()).lastStopped).toMatchObject({
     recordingId: recordingId ?? "",
     sending: true,
-    retrying:
-      "OpenBot's back end is busy or unreachable. Retrying; nothing is lost.",
+    retrying: "The server is busy or unreachable. Retrying; nothing is lost.",
   });
   // OpenBot answers again: the reason goes, and so does the rest of the recording.
   passRefusal = null;

@@ -610,7 +610,7 @@ describe("using the bearer", () => {
       "http://openbot.test/api/audio/transcriptions",
       {
         method: "POST",
-        headers: { ...bearer(made.token), "x-openbot-dictation": "1" },
+        headers: { ...bearer(made.token), "x-xiongbao-dictation": "1" },
         body: form,
       },
     );

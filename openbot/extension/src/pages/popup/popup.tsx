@@ -1,4 +1,5 @@
 import { installOnDeviceSpeech } from "@openbot/shared/on-device-speech";
+import { RECORDER_NAME } from "../../shared/brand";
 import type { LearningSpaceState } from "@openbot/shared/recorder-api";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useCallback, useEffect, useState } from "react";
@@ -157,7 +158,7 @@ export function Popup({ deps }: { deps?: Partial<PopupDeps> }) {
 
   if (!view) {
     return (
-      <Page title="OpenBot Recorder" width="popup">
+      <Page title={RECORDER_NAME} width="popup">
         {error ? <ErrorLine message={error} /> : null}
       </Page>
     );
@@ -169,8 +170,8 @@ export function Popup({ deps }: { deps?: Partial<PopupDeps> }) {
     const openAddress = !policy.invalid ? policy.openbotUrl : null;
     return (
       <Page
-        title="Connect the Recorder to OpenBot"
-        description="Open OpenBot, go to Settings, Browsers, and choose Connect this browser."
+        title="Connect the Recorder to XiongBao Work"
+        description="Open XiongBao Work, go to Settings, Browsers, and choose Connect this browser."
         width="popup"
       >
         <Notices notice={view.notice} kept={state.kept} onDismiss={dismiss} />
@@ -178,8 +179,8 @@ export function Popup({ deps }: { deps?: Partial<PopupDeps> }) {
         <AfterStop state={state} connected={false} onDiscard={discardKept} />
         {policy.invalid ? (
           <p className="mt-4 text-muted-foreground text-sm">
-            Your organization's Recorder policy names an OpenBot address the
-            Recorder cannot use. Ask your IT team.
+            Your organization's Recorder policy names a XiongBao Work address
+            the Recorder cannot use. Ask your IT team.
           </p>
         ) : null}
         <div className="mt-4 flex flex-col gap-2">
@@ -211,7 +212,7 @@ export function Popup({ deps }: { deps?: Partial<PopupDeps> }) {
                 await refresh();
               }}
             >
-              Connect with OpenBot Desktop
+              Connect with XiongBao Work Desktop
             </Button>
           ) : null}
         </div>

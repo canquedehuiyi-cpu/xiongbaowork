@@ -73,7 +73,7 @@ function serve(recording: Case) {
   if (first) mock.on({ userMessage: /<description>/ }, { content: first });
   if (recording.reader)
     mock.on(
-      { userMessage: /You explain one OpenBot boundary rule/ },
+      { userMessage: /You explain one XiongBao Work boundary rule/ },
       { content: recording.reader },
     );
 }
@@ -275,7 +275,7 @@ describe("POST /api/computers/policy-translate", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       error:
-        "OpenBot needs a model key to write a rule from a description. Add one on the Credentials page, or write the rule in CEL.",
+        "XiongBao Work needs a model key to write a rule from a description. Add one on the Credentials page, or write the rule in CEL.",
     });
     expect(mock.getRequests()).toHaveLength(0);
     expect(audit.map((event) => event.payload)).toEqual([

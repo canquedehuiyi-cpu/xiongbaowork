@@ -116,7 +116,7 @@ export async function compileRunner(outDir: string): Promise<string> {
   mkdirSync(outDir, { recursive: true });
   const outfile = resolve(
     outDir,
-    process.platform === "win32" ? "openbot-runner.exe" : "openbot-runner",
+    process.platform === "win32" ? "xiongbao-runner.exe" : "xiongbao-runner",
   );
   const host = `${process.platform}-${process.arch}`;
   const build = await runWithTimeout(

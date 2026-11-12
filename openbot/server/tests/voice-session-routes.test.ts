@@ -35,7 +35,7 @@ const session: VoiceSessionRecord = {
 };
 const request = (body: unknown = session): RequestInit => ({
   method: "POST",
-  headers: { "content-type": "application/json", "x-openbot-voice": "1" },
+  headers: { "content-type": "application/json", "x-xiongbao-voice": "1" },
   body: JSON.stringify(body),
 });
 

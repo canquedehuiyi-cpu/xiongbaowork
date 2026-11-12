@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { shortName } from "@/lib/brand";
 import { isBrokeredProvenance } from "@/lib/plugins/brokered";
 import {
   accountKeyOf,
@@ -476,8 +477,8 @@ export function howItConnects(card: PluginCard | null): string | undefined {
     ? AUTH_SENTENCE[card.catalogue.auth]
     : isBrokeredProvenance(card?.server?.provenance)
       ? card?.perPerson
-        ? "通过熊宝连接，每个人连接自己的账号。"
-        : "通过熊宝连接，不需要账号。"
+        ? `通过${shortName()}连接，每个人连接自己的账号。`
+        : `通过${shortName()}连接，不需要账号。`
       : "管理员按地址添加的插件。";
 }
 

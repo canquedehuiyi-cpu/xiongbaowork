@@ -5,6 +5,7 @@ import { type RunAssertion, readRunAssertion } from "../agents/callback-token";
 import type { AgentProfileStore } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
+import { shortName } from "../brand";
 import type { DeploymentConfig } from "../config";
 import type { Database } from "../db/client";
 import type { DeliveryScope } from "../delivery/types";
@@ -157,7 +158,7 @@ export function createServerApprovalService(deps: {
                 id: request.id,
                 kind: "approval",
                 requestId: request.id,
-                text: `${wantsTo(botName, action)}。请在熊宝里打开这位员工的页面查看。`,
+                text: `${wantsTo(botName, action)}。请在${shortName()}里打开这位员工的页面查看。`,
               },
             );
         }
