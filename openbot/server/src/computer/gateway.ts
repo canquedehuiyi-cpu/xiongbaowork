@@ -1665,39 +1665,49 @@ export function createComputerGateway(
     // --- desktop control (sub-project 2) ---
     /*
      * A desktop write that was done gets one more row saying so (every desktop action has its outcome
-     * on the trail): the same attempt, whether a real pointer or keyboard was used and whether the
-     * device verified it, both as the device answered, and how long it took. Its own type, not
-     * `computer.action_*`, so nothing that counts actions counts this one twice. Never the text.
+     * on the trail): everything its attempt row says, the same attempt, and how it went: whether a
+     * real pointer or keyboard was used and whether the device verified it, both as the device
+     * answered, and how long it took. Its own type, not `computer.action_*`, so nothing that counts
+     * actions counts it twice; Activity draws it in its attempt's place (`ACTION_ENDINGS`). Never the
+     * text.
+     *
+     * THE WRITE IS DONE BY NOW. A row that cannot be written is logged, never thrown: an error here
+     * would tell the model the write failed, and it would try again, clicking or typing twice.
      */
     if (subject.desktopWrite) {
       const answer = (result && typeof result === "object" ? result : {}) as {
         physical?: unknown;
         delivery?: unknown;
       };
-      await recordAuditEvent(auditStore, {
-        eventType: "computer.desktop_write_done",
-        targetType: "computer",
-        targetId: seat.botId,
-        initiator: actor.initiator,
-        ...(actor.userId ? { actorUserId: actor.userId } : {}),
-        payload: {
-          action: toolName,
-          bot: seat.botId,
-          computer: computerKeyText(seat.key),
-          actor: actor.id,
-          device: subjectOf.device,
-          attempt,
-          desktop: {
-            ...subject.desktopWrite.row,
-            physical: answer.physical === true,
-            ...(answer.delivery === "verified" ||
-            answer.delivery === "unverified"
-              ? { delivery: answer.delivery }
-              : {}),
-            durationMs: Math.max(0, now() - started),
+      const attemptRow = auditRow({ ...subjectOf, attempt });
+      try {
+        await recordAuditEvent(auditStore, {
+          ...attemptRow,
+          eventType: "computer.desktop_write_done",
+          payload: {
+            ...attemptRow.payload,
+            desktop: {
+              ...subject.desktopWrite.row,
+              physical: answer.physical === true,
+              ...(answer.delivery === "verified" ||
+              answer.delivery === "unverified"
+                ? { delivery: answer.delivery }
+                : {}),
+              durationMs: Math.max(0, now() - started),
+            },
           },
-        },
-      });
+        });
+      } catch (error) {
+        // Which write and why the row failed; never what was typed (the row has its length only).
+        console.warn(
+          JSON.stringify({
+            type: "desktop-write-done-row-failed",
+            action: toolName,
+            attempt,
+            error: cutUtf8(String(error), 500),
+          }),
+        );
+      }
     }
     // --- end desktop control ---
     return withElement(result);

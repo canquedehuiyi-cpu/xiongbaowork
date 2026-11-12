@@ -9,6 +9,7 @@ import {
 } from "../../shared/desktop-control";
 import { desktopActionReason } from "../src/approvals/desktop-policy";
 import { decideAction, refusedOutright } from "../src/approvals/policy";
+import { oneRowPerAction } from "../../shared/activity-rows";
 import { isApprovedExecution } from "../src/approvals/service";
 import {
   type ApprovalCandidate,
@@ -150,6 +151,8 @@ function harness(
     windowsList?: () => DesktopWindow[];
     /** The gateway's clock: its window and control lists age by it. */
     now?: () => number;
+    /** Rows the audit store fails to write (thrown), after keeping nothing. */
+    auditFails?: (row: AuditEventInput) => boolean;
   } = {},
 ) {
   const posts: Posted[] = [];
@@ -157,7 +160,12 @@ function harness(
   const gated: ApprovalCandidate[] = [];
   const early: ApprovalCandidate[] = [];
   const rows: AuditEventInput[] = [];
-  const audit: AuditStore = { insert: async (row) => void rows.push(row) };
+  const audit: AuditStore = {
+    insert: async (row) => {
+      if (options.auditFails?.(row)) throw new Error("the audit store is down");
+      rows.push(row);
+    },
+  };
   let token: string | undefined = options.session ? "ab".repeat(32) : undefined;
   let writes = 0;
   const transport: ComputerTransport = {
@@ -895,6 +903,59 @@ describe("carried over from the session gate (Task 16)", () => {
       expect(isApprovedExecution(h.gated.at(-1) as ApprovalCandidate)).toBe(
         false,
       );
+    });
+  });
+});
+
+describe("round 2 of review", () => {
+  test("a done write whose done row cannot be written is still done, and is not sent again", async () => {
+    const h = harness({
+      session: true,
+      auditFails: (row) => row.eventType === "computer.desktop_write_done",
+    });
+    await h.read();
+    const result = await h.gateway.clickDesktop("bot", ACTOR, {
+      ref: "abc123-1:1",
+    });
+    expect(result.ok).toBe(true);
+    expect(h.writesPosted()).toHaveLength(1);
+    // The attempt row was written; the done row was not, and nothing claims the write failed.
+    expect(h.rows.map((row) => row.eventType)).not.toContain(
+      "computer.action_failed",
+    );
+  });
+
+  test("on Activity a done write is one row: its done row, which carries what the attempt row did", async () => {
+    const h = harness({ session: true });
+    await h.read();
+    await h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" });
+    const writes = h.rows.filter(
+      (row) =>
+        (row.payload as Record<string, unknown>).action ===
+        "computer_desktop_click",
+    );
+    expect(writes.map((row) => row.eventType)).toEqual([
+      "computer.action_allowed",
+      "computer.desktop_write_done",
+    ]);
+    const shown = oneRowPerAction(writes);
+    expect(shown.map((row) => row.eventType)).toEqual([
+      "computer.desktop_write_done",
+    ]);
+    // Everything the attempt row said is on the done row too, which adds how it went.
+    const [attempt, done] = writes as [AuditEventInput, AuditEventInput];
+    const { desktop: attemptDesktop, ...attemptRest } =
+      attempt.payload as Record<string, unknown>;
+    const { desktop: doneDesktop, ...doneRest } = done.payload as Record<
+      string,
+      unknown
+    >;
+    expect(doneRest).toEqual(attemptRest);
+    expect(doneDesktop).toMatchObject({
+      ...(attemptDesktop as object),
+      physical: false,
+      delivery: "verified",
+      durationMs: expect.any(Number),
     });
   });
 });

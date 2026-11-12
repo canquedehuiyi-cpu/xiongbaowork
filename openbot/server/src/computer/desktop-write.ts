@@ -681,9 +681,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * The control an approval bound, for the approved write's own re-check and run only: an approval
  * answered later than this replica keeps its controls (or carried out by another replica) is carried
  * out on the window and control the owner saw, never on "unknown". Nothing is looser for it: the
- * approval compares the whole action again (window title included, read afresh from the machine),
- * and the device resolves the ref strictly against its own snapshot (stale otherwise) and checks the
- * live title again (`needs_approval` if it turned sensitive). Only the same tool, action and ref.
+ * approval compares the whole action again (the window title included, from this replica's window
+ * list, asked of the machine again once that list is too old), and the device resolves the ref
+ * strictly against its own snapshot (stale otherwise) and checks the live title again
+ * (`needs_approval` if it turned sensitive). Only the same tool, action and ref.
  */
 function boundControl(
   toolName: string,

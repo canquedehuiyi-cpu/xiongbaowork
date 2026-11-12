@@ -160,13 +160,6 @@ const validationProbe = new AsyncLocalStorage<{
  */
 export const isApprovalRecheck = () => validationProbe.getStore() !== undefined;
 /**
- * Whether this call is the approved action itself, being carried out by `resume`: the one place the
- * gate lets an action through with no permit although the person approved it (it was decided when
- * they answered, and is never asked again). The same match the gate makes: this person, and exactly
- * the action approved. A caller that has to know whether the person agreed to this very step (opening
- * a desktop session, plan Task 16) asks this as well as whether the gate handed it a permit.
- */
-/**
  * The approved action this call is the re-check or the run of (`validateReentry`, `resume`), as its
  * approval bound it, or undefined anywhere else. For a call whose own view of its target is kept by
  * one replica for a while (a desktop control, plan Task 22): an approval answered after that view is
@@ -179,6 +172,13 @@ export function approvedActionUnderway(): ApprovedActionBinding | undefined {
   );
 }
 
+/**
+ * Whether this call is the approved action itself, being carried out by `resume`: the one place the
+ * gate lets an action through with no permit although the person approved it (it was decided when
+ * they answered, and is never asked again). The same match the gate makes: this person, and exactly
+ * the action approved. A caller that has to know whether the person agreed to this very step (opening
+ * a desktop session, plan Task 16) asks this as well as whether the gate handed it a permit.
+ */
 export function isApprovedExecution(candidate: ApprovalCandidate): boolean {
   const authority = executionAuthority.getStore();
   if (!authority) return false;
