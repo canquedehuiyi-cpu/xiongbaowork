@@ -10,6 +10,8 @@
  * READ ONLY on the desktop: nothing here names a click, a keystroke, a launch or a focus change.
  */
 
+import { DESKTOP_WINDOW_ID } from "./desktop-control";
+
 export const LOCAL_TOOL_NAMES = [
   "computer_apps",
   "computer_app_call",
@@ -91,7 +93,8 @@ export const LOCAL_TOOL_PARAMETERS: Record<LocalToolName, unknown> = {
     properties: {
       windowId: {
         type: "string",
-        pattern: "^w-?[1-9]\\d{0,19}-[1-9]\\d{0,9}$",
+        // The same window ids the server's own schema accepts (phase 1's and agent-desktop's).
+        pattern: DESKTOP_WINDOW_ID.source,
       },
       from: { type: "string", pattern: "^[0-9a-f]{6}-[1-9]\\d{0,8}:\\d{1,4}$" },
       screenshot: { type: "boolean" },
