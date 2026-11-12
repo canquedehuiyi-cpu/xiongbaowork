@@ -1,9 +1,13 @@
 import {
   classifyDesktopKeys,
+  DESKTOP_APP_NAME,
   DESKTOP_LIMITS,
   DESKTOP_TEXT_ROLES,
   DESKTOP_WRITE_ACTIONS,
+  type DesktopClipboardReadOutput,
+  type DesktopClipboardWriteOutput,
   type DesktopKeyClass,
+  type DesktopLaunchOutput,
   type DesktopPlatform,
   type DesktopWriteOutput,
   desktopActionWordsOf,
@@ -60,11 +64,30 @@ import type { DesktopSessions } from "./session";
  * to its copy as a read's is; so is INVALID_ARGS, refused while the arguments are parsed. A
  * timeout, an abort after the command started, a failure that may have been delivered, and ANY
  * failure after `clear` succeeded are `outcome_unknown`, with
- * `outcomeUnknown: true`, never retried, and the window's refs voided.
+ * `outcomeUnknown: true`, never retried, and the window's refs voided. INVALID_ARGS counts as not
+ * delivered only while the envelope says `not_delivered` or nothing at all.
+ *
+ * THREE WRITES WITH NO WINDOW (Task 24): `desktop.launch`, `desktop.clipboard_read` and
+ * `desktop.clipboard_write` take the same lock, platform and session steps and the same stops, then:
+ *  - launch: only a name (`DESKTOP_APP_NAME`: no path, no flag) is ever passed, as `launch <app>`
+ *    and nothing else; the server decides whether it is asked about. `APP_NOT_FOUND` that was not
+ *    delivered is 「没有找到这个应用：<app>」.
+ *  - clipboard_read: always needs `approved: true` on the device too; `clipboard-get --format text`,
+ *    cut to `clipboardReadMaxChars` characters. Reading changes nothing, so it is never
+ *    `outcome_unknown`.
+ *  - clipboard_write: `clipboard-set --stdin` with at most `textMaxBytes`; never asked about here,
+ *    since nothing is typed (the server decides).
+ * No window's refs are voided by these.
  */
 
 export const DESKTOP_WRITE_NOTE =
   "The window may have changed: read it again before the next step.";
+
+export const DESKTOP_LAUNCH_NOTE =
+  "The app may have opened a new window: list the windows to find it.";
+
+const BAD_APP = "应用名只能是应用的名字，不能带路径或参数";
+const CLIPBOARD_READ_REASON = "读取剪贴板，里面可能有刚复制的密码或验证码";
 
 export type AgentDesktopWriter = (
   action: string,
@@ -81,6 +104,17 @@ const HEADED_FALLBACK: ReadonlySet<string> = new Set([
   "POLICY_DENIED",
   "ACTION_NOT_SUPPORTED",
 ]);
+
+/** The text `clipboard-get --format text` answered: a string, or `text` (`content`, `value`) in an object. */
+function clipboardTextOf(data: unknown): string | undefined {
+  if (typeof data === "string") return data;
+  if (!isNode(data)) return undefined;
+  for (const key of ["text", "content", "value"])
+    if (typeof data[key] === "string") return data[key] as string;
+  // An empty clipboard.
+  if ("text" in data && data.text === null) return "";
+  return undefined;
+}
 
 /** A headless attempt that was not delivered and may be made again with a real pointer. */
 const FALL_BACK = Symbol("fall back to --headed");
@@ -169,12 +203,24 @@ function deliveryOf(data: unknown): DesktopWriteOutput["delivery"] {
   return "unverified";
 }
 
+/**
+ * An error agent-desktop does not say was delivered: `not_delivered`, or no disposition at all. Only
+ * for the codes that are refused before anything is done (INVALID_ARGS, APP_NOT_FOUND for launch).
+ */
+function saysNotSent(error: AgentDesktopError): boolean {
+  return error.notDelivered || error.delivery === undefined;
+}
+
 /** Whether a write that failed this way may have changed something. */
 function mayHaveChanged(error: unknown): boolean {
   // INVALID_ARGS is agent-desktop refusing its arguments as it parses them, before any action
-  // (FACTS, 其它发现: a bare `@e1` ref; plan design decision 1: exit code 2 is an argument error).
+  // (FACTS, 其它发现: a bare `@e1` ref; plan design decision 1: exit code 2 is an argument error),
+  // unless its own disposition says the action may have been delivered.
   if (error instanceof AgentDesktopError)
-    return !error.notDelivered && error.code !== "INVALID_ARGS";
+    return !(
+      error.notDelivered ||
+      (error.code === "INVALID_ARGS" && saysNotSent(error))
+    );
   if (isAbort(error)) return (error as { sent?: boolean }).sent !== false;
   if (error instanceof DesktopHelperError) return error.sent;
   return true;
@@ -219,6 +265,121 @@ export function createAgentDesktopWriter(opts: {
     const sessionSignal = sessions.signal;
     const approved = body.approved === true;
 
+    const signals = [sessionSignal, signal].filter(
+      (s): s is AbortSignal => s !== undefined,
+    );
+    const runSignal =
+      signals.length === 0
+        ? undefined
+        : signals.length === 1
+          ? signals[0]
+          : AbortSignal.any(signals);
+    const run = (args: string[], o: AdRunOptions = {}) =>
+      cli.run(args, { ...o, ...(runSignal ? { signal: runSignal } : {}) });
+
+    /**
+     * A failure as the owner and the model read it; `changed` once something may have been done,
+     * which voids `windowId`'s refs when there is one.
+     */
+    const failureIn = (
+      error: unknown,
+      changed: boolean,
+      windowId?: string,
+    ): ActionOutcome => {
+      if (changed) {
+        if (windowId !== undefined) reader.invalidate(windowId);
+        return {
+          ok: false,
+          error: desktopMessage("outcome_unknown"),
+          outcomeUnknown: true,
+        };
+      }
+      if (isAbort(error))
+        return fail(
+          sessionSignal?.aborted
+            ? desktopMessage("stopped")
+            : "已在设备上停止。",
+        );
+      const mapped = toReadError(error, platform);
+      if (mapped instanceof DesktopHelperError) {
+        if (mapped.code === "mac_permission")
+          control.emit({ event: "permission-needed" });
+        return fail(mapped.message);
+      }
+      return fail(desktopMessage("failed"));
+    };
+
+    const succeeded = <T>(output: T): ActionOutcome => {
+      sessions.check(token, botId, actorId);
+      return { ok: true, output };
+    };
+
+    // The writes with no window.
+    if (action === "desktop.launch") {
+      const app = body.app;
+      if (typeof app !== "string" || !DESKTOP_APP_NAME.test(app))
+        return fail(desktopMessage("failed", BAD_APP));
+      let data: unknown;
+      try {
+        data = await run(["launch", app]);
+      } catch (error) {
+        if (
+          error instanceof AgentDesktopError &&
+          error.code === "APP_NOT_FOUND" &&
+          saysNotSent(error)
+        )
+          return fail(`没有找到这个应用：${app}`);
+        return failureIn(error, mayHaveChanged(error));
+      }
+      return succeeded<DesktopLaunchOutput>({
+        app,
+        durationMs: Math.max(0, now() - started),
+        delivery: deliveryOf(data),
+        note: DESKTOP_LAUNCH_NOTE,
+      });
+    }
+    if (action === "desktop.clipboard_read") {
+      // Every time, whatever the session: the clipboard often holds a password just copied.
+      if (!approved) return needs(CLIPBOARD_READ_REASON);
+      let data: unknown;
+      try {
+        data = await run(["clipboard-get", "--format", "text"]);
+      } catch (error) {
+        // Reading changes nothing.
+        return failureIn(error, false);
+      }
+      const whole = clipboardTextOf(data);
+      if (whole === undefined)
+        return fail(desktopMessage("failed", "看不懂剪贴板里的内容"));
+      // Cut on a character, never inside one.
+      const chars = Array.from(whole);
+      const truncated = chars.length > DESKTOP_LIMITS.clipboardReadMaxChars;
+      return succeeded<DesktopClipboardReadOutput>({
+        text: truncated
+          ? chars.slice(0, DESKTOP_LIMITS.clipboardReadMaxChars).join("")
+          : whole,
+        truncated,
+        durationMs: Math.max(0, now() - started),
+      });
+    }
+    if (action === "desktop.clipboard_write") {
+      const content = body.text;
+      if (typeof content !== "string")
+        return fail(desktopMessage("failed", "没有要写入剪贴板的文字"));
+      const bytes = Buffer.byteLength(content, "utf8");
+      if (bytes > DESKTOP_LIMITS.textMaxBytes)
+        return fail(desktopMessage("failed", "文字太长"));
+      try {
+        await run(["clipboard-set", "--stdin"], { stdin: content });
+      } catch (error) {
+        return failureIn(error, mayHaveChanged(error));
+      }
+      return succeeded<DesktopClipboardWriteOutput>({
+        bytes,
+        durationMs: Math.max(0, now() - started),
+      });
+    }
+
     // 3. The target.
     let target: Target;
     if (action === "desktop.click" || action === "desktop.type") {
@@ -261,42 +422,9 @@ export function createAgentDesktopWriter(opts: {
         return fail(desktopMessage("system_keys", keysText));
     }
 
-    const signals = [sessionSignal, signal].filter(
-      (s): s is AbortSignal => s !== undefined,
-    );
-    const runSignal =
-      signals.length === 0
-        ? undefined
-        : signals.length === 1
-          ? signals[0]
-          : AbortSignal.any(signals);
-    const run = (args: string[], o: AdRunOptions = {}) =>
-      cli.run(args, { ...o, ...(runSignal ? { signal: runSignal } : {}) });
-
     /** A failure as the owner and the model read it; `changed` once something may have been done. */
-    const failure = (error: unknown, changed: boolean): ActionOutcome => {
-      if (changed) {
-        reader.invalidate(windowId);
-        return {
-          ok: false,
-          error: desktopMessage("outcome_unknown"),
-          outcomeUnknown: true,
-        };
-      }
-      if (isAbort(error))
-        return fail(
-          sessionSignal?.aborted
-            ? desktopMessage("stopped")
-            : "已在设备上停止。",
-        );
-      const mapped = toReadError(error, platform);
-      if (mapped instanceof DesktopHelperError) {
-        if (mapped.code === "mac_permission")
-          control.emit({ event: "permission-needed" });
-        return fail(mapped.message);
-      }
-      return fail(desktopMessage("failed"));
-    };
+    const failure = (error: unknown, changed: boolean): ActionOutcome =>
+      failureIn(error, changed, windowId);
 
     // 5. The window as it is now.
     let live: Node | undefined;

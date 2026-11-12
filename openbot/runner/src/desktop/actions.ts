@@ -56,7 +56,11 @@ import { createDesktopSessions, type DesktopSessions } from "./session";
  * agent-desktop writer (`ad-write.ts`), the only outcomes here that may be `outcomeUnknown`. A runner
  * the device app did not start (`NO_CONTROL`: no banner, no stop key) offers no write at all, as
  * before they existed: `unsupported`. Linux is `read_only_linux` and the legacy Windows engine
- * `read_only_windows`, before anything is built or run.
+ * `read_only_windows`, before anything is built or run. Task 24's `desktop.launch`,
+ * `desktop.clipboard_read` and `desktop.clipboard_write` are writes the same way.
+ *
+ * `desktop.wait` (Task 24) is a read on agent-desktop (`ad-read.ts`); the legacy Windows reader
+ * cannot wait and answers `unsupported`, starting nothing.
  */
 export type DesktopActions = ((
   action: string,
@@ -420,6 +424,21 @@ export function createDesktopActions(
           ok: true,
           output: await adReader(desktopPlatform).windows(signal),
         };
+      if (action === "desktop.wait") {
+        const r = adReader(desktopPlatform);
+        if (!r.wait) return fail(desktopMessage("unsupported"));
+        const output = await r.wait(
+          {
+            windowId: body.windowId as string,
+            ...(body.name === undefined ? {} : { name: body.name as string }),
+            ...(body.type === undefined ? {} : { type: body.type as string }),
+            timeoutSec: body.timeoutSec as number,
+            allowSensitive: body.allowSensitive === true,
+          },
+          signal,
+        );
+        return { ok: true, output };
+      }
       const output = await adReader(desktopPlatform).snapshot(
         {
           windowId: body.windowId as string,
@@ -562,6 +581,8 @@ export function createDesktopActions(
     }
     if (engine === "agent-desktop")
       return adAct(desktopPlatform, action, body, signal);
+    // The PowerShell reader lists and reads; it cannot wait for a control.
+    if (action === "desktop.wait") return fail(desktopMessage("unsupported"));
     try {
       return action === "desktop.windows"
         ? await windows(signal)
