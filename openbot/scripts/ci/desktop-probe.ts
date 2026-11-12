@@ -28,6 +28,7 @@ import {
   createDesktopActions,
   desktopEngineFor,
 } from "../../runner/src/desktop/actions.ts";
+import { agentDesktopEnv } from "../../runner/src/desktop/agent-desktop.ts";
 import {
   createRunnerExecutor,
   type RunnerExecutor,
@@ -277,6 +278,7 @@ export async function probeAgentDesktop(
       opened,
     );
   } finally {
+    if (!snapshotWorked) diagnose(helper, root);
     // 7. Private (0700, or on Windows the protected DACL a working snapshot proves), never traced,
     // and empty once the desktop actions are closed.
     let mode: number | undefined;
@@ -306,6 +308,46 @@ export async function probeAgentDesktop(
     );
     endEditors(platform, editors);
   }
+}
+
+/**
+ * When the reads fail, what agent-desktop itself says: `list-windows` and `status` run directly,
+ * once with the runner's restricted environment and once with the job's full one, so a failure
+ * caused by a variable the runner does not pass shows up as a difference between the two.
+ */
+function diagnose(helper: string, root: string): void {
+  const state = join(root, "diagnose-state");
+  mkdirSync(state, { recursive: true, mode: 0o700 });
+  const envs = {
+    restricted: agentDesktopEnv(process.env, state),
+    full: { ...process.env, AGENT_DESKTOP_HOME: state } as Record<
+      string,
+      string
+    >,
+  };
+  for (const [name, env] of Object.entries(envs)) {
+    for (const command of ["list-windows", "status"]) {
+      const out = spawnSync(helper, [command], {
+        env,
+        encoding: "utf8",
+        timeout: 30_000,
+      });
+      console.log(
+        JSON.stringify({
+          diagnose: `${command} (${name} env)`,
+          exit: out.status,
+          stdout: (out.stdout ?? "").slice(0, 3000),
+          stderr: (out.stderr ?? "").slice(-1500),
+        }),
+      );
+    }
+  }
+  console.log(
+    JSON.stringify({
+      diagnose: "restricted env keys",
+      keys: Object.keys(envs.restricted),
+    }),
+  );
 }
 
 /** Checks 1 to 6 and 8. Returns whether a snapshot ever worked (on Windows, proof of the DACL). */
