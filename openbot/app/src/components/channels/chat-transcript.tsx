@@ -46,6 +46,10 @@ import {
   ArgumentsArrivingContext,
   TurnInFlightContext,
 } from "@/components/gallery/streaming";
+import {
+  readStaffingCard,
+  StaffingProposalCard,
+} from "@/components/staffing/staffing-proposal-card";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import {
   Dialog,
@@ -1748,6 +1752,9 @@ export function ServerToolLine({
   // 员工替对方申请访问某个应用：画成卡片，申请人可以在上面撤回（迁移 0153）。
   const accessRequest = readAppAccessCard(name, result);
   if (accessRequest) return <AppAccessRequestCard {...accessRequest} />;
+  // 员工起草的招聘与组群提议：画成确认卡片，内容向服务端读（`shared/staffing-proposal.ts`）。
+  const staffing = readStaffingCard(name, args, result);
+  if (staffing) return <StaffingProposalCard {...staffing} />;
   // The file a file step read or saved, as a computer's own file steps name it; a step on a folder
   // on the person's computer names the folder too ("todo.txt in share").
   const detail =

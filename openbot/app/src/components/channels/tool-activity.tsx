@@ -57,6 +57,7 @@ import {
   unofferedTool,
 } from "@/lib/plugins/tool-result";
 import { readTeamBotConsent } from "@/lib/team-bots";
+import { isStaffingProposalTool } from "../../../../shared/staffing-proposal";
 import {
   awaitingFreshLook,
   browserStepDetails,
@@ -185,6 +186,8 @@ function foldable(item: ToolItem, isDrawn: (name: string) => boolean): boolean {
    * card would land inside a group and then jump out of it.
    */
   if (name === SHOW_APP_ACCESS_TOOL) return false;
+  // 招聘与组群的起草也画成一张等人确认的卡片，同样不折进「用了几个工具」，答复还没回来时也不折。
+  if (isStaffingProposalTool(name)) return false;
   return !asksThePerson(item.result);
 }
 

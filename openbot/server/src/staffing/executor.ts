@@ -696,6 +696,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         ? {
             outcome: "needs_connection",
             message: `${given}；你连接自己的账号之后它才能用。`,
+            // 卡片的「去连接」按这个键打开连接页；草稿里的叫法可能是标题或别名，那里认不出来。
+            target: key,
           }
         : done(`${given}。`);
     }
