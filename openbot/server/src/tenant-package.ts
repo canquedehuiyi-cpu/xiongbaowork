@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { resolveTenantPackageDirectory } from "./tenant-package-path";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESSES, type Harness } from "@openbot/shared/harnesses";
@@ -36,6 +35,14 @@ import {
 import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { runAsTenant } from "./tenant/context";
 import { avatarAgentId, packageChannelId } from "./tenant/provisioning";
+import {
+  loadSkillAssetFiles,
+  parseSkillAssetPaths,
+  type SkillAssetFile,
+  skillInstructions,
+  writeSkillAssets,
+} from "./tenant-package-capabilities";
+import { resolveTenantPackageDirectory } from "./tenant-package-path";
 
 const approvedThemeVariables = new Set([
   "--background",
@@ -183,6 +190,13 @@ export type TenantSkill = {
    * which is none of them.
    */
   tools: string[];
+  /**
+   * Files the skill ships beside its instructions (`assets:` in `skills.yaml`), as paths relative to
+   * `skills/<slug>/` in the package. Optional, because every skill written before attachments shipped
+   * declares none. Validated by {@link parseSkillAssetPaths}: a path that would escape the skill's own
+   * directory refuses the whole package, with the slug in the sentence.
+   */
+  assets?: string[];
 };
 
 /**
@@ -290,6 +304,14 @@ export type TenantPackage = {
   }[];
   /** What `skills.yaml` ships, or empty for a package that has none. */
   skills: TenantSkill[];
+  /**
+   * The files those skills ship, read off disk at load, keyed by slug (`assets:` in `skills.yaml`).
+   *
+   * Loaded here rather than re-read at sync so the checksum below covers the CONTENTS — an edited
+   * attachment is a package change the deployment notices on the next boot, exactly like an edited
+   * instruction. Absent on a package assembled in code with no attachments.
+   */
+  skillAssets?: Record<string, SkillAssetFile[]>;
   themeCss: string;
 };
 
@@ -863,6 +885,7 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
       summary: requiredString(skill.summary, "skill.summary"),
       instructions: requiredString(skill.instructions, "skill.instructions"),
       tools,
+      assets: parseSkillAssetPaths(skill.assets, slug),
     };
   });
 }
@@ -953,21 +976,33 @@ export async function loadTenantPackage(
     agentFiles,
     themeCss,
   });
+  // The files the skills ship, after validation (which has already refused a path that would escape
+  // its skill), so the contents are in the package and in its checksum.
+  const skillAssets = await loadSkillAssetFiles(
+    sourcePath,
+    tenantPackage.skills,
+  );
 
   return {
     ...tenantPackage,
+    skillAssets,
     sourcePath,
     // `skills` is in the checksum, so editing it is a package change like any other and the
     // deployment notices on the next boot rather than reporting itself unchanged.
     // `agents/` is in the checksum for the reason `skills` is: a coworker added, edited or removed
     // there is a package change, and a deployment that did not notice would go on running the
     // roster it booted with while the repository said otherwise.
+    // Skill attachments are in it for the same reason, by CONTENT: an attachment edited in place is
+    // a package change even though `skills.yaml` did not move.
     checksum: createHash("sha256")
       .update(
         [
           ...contents,
           skills,
           ...agentFiles.map((file) => `${file.filename}\n${file.contents}`),
+          ...Object.entries(skillAssets).flatMap(([slug, files]) =>
+            files.map((file) => `${slug}/${file.path}\n${file.content}`),
+          ),
         ].join("\n"),
       )
       .digest("hex"),
@@ -1359,7 +1394,8 @@ export async function synchronizeTenantPackage(
                   isNull(agentProfiles.ownerUserId),
                 ),
               );
-            const title = profile && attributionFollowing(profile.title, selected);
+            const title =
+              profile && attributionFollowing(profile.title, selected);
             if (profile && title !== profile.title) {
               await transaction
                 .update(agentProfiles)
@@ -1836,6 +1872,9 @@ export async function synchronizeTenantPackage(
          */
         const ownedSkills = new Map<string, string>();
         for (const skill of tenantPackage.skills) {
+          // The files this skill ships, if any. The instructions below carry their manifest, so a Bot
+          // reading the skill learns the files exist and how to read them one step at a time.
+          const assets = tenantPackage.skillAssets?.[skill.slug] ?? [];
           const [seeded] = await transaction
             .insert(skillTable)
             .values({
@@ -1850,7 +1889,7 @@ export async function synchronizeTenantPackage(
               slug: skill.slug,
               title: skill.title,
               summary: skill.summary,
-              instructions: skill.instructions,
+              instructions: skillInstructions(skill.instructions, assets),
               origin: "catalogue",
               installedBy: null,
               // Which brand brought it in — what makes the sweep below this package's business.
@@ -1872,7 +1911,7 @@ export async function synchronizeTenantPackage(
               set: {
                 title: skill.title,
                 summary: skill.summary,
-                instructions: skill.instructions,
+                instructions: skillInstructions(skill.instructions, assets),
                 // Re-stated with the rest of the identity, so a re-claim is not a row with no brand.
                 packageId: deploymentPackage.id,
                 updatedAt: new Date(),
@@ -1892,6 +1931,11 @@ export async function synchronizeTenantPackage(
             continue;
           }
           ownedSkills.set(skill.slug, seeded.id);
+
+          // The files the skill ships, replaced wholesale with what this package declares (see
+          // `writeSkillAssets`): a resync clears attachments the package stopped declaring, and a
+          // package switch retires the other brand's skill rows, whose files cascade away with them.
+          await writeSkillAssets(transaction, seeded.id, assets);
 
           // Replaced wholesale, so a tool the package stopped declaring stops being declared. The same
           // rule the API path applies, and the reason the table is keyed on (skill, ref).
@@ -2240,7 +2284,6 @@ export async function synchronizeTenantPackage(
 
   return synced.deploymentPackage;
 }
-
 
 /**
  * What this deployment calls itself when `DEPLOYMENT_ID` is unset: the package's tenant id, unless

@@ -723,6 +723,7 @@ tests/shipped-bot-instructions.test.ts
 tests/single-user-identity-store.integration.test.ts
 tests/single-user-identity.integration.test.ts
 tests/single-user.test.ts
+tests/skill-assets-tool.test.ts
 tests/skill-ownership.integration.test.ts
 tests/skill-tenant-slugs.integration.test.ts
 tests/skill-tools.integration.test.ts
@@ -780,6 +781,7 @@ tests/tenant-package-channel-membership.test.ts
 tests/tenant-package-duplicates.test.ts
 tests/tenant-package-legacy-path.test.ts
 tests/tenant-package-personal.test.ts
+tests/tenant-package-skill-assets.test.ts
 tests/tenant-package-switch-retires.test.ts
 tests/tenant-package.test.ts
 tests/tenant-rls.test.ts

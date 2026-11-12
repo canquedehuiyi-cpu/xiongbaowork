@@ -568,6 +568,13 @@
       "when": 1791629841965,
       "tag": "0080_wakerflow_quota_contracts",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1794484103330,
+      "tag": "0081_skill_assets",
+      "breakpoints": true
     }
   ]
 }
