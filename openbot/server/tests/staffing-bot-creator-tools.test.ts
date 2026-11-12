@@ -6,7 +6,11 @@ import { loadTenantPackage } from "../src/tenant-package";
  * 技能上声明不会多给任何东西；可一旦声明，这一轮就按技能挑工具（`plugins/selection.ts`），用户确认卡片之后
  * 的那一轮挑中的技能可能不再是它，`proposal_status` 就被收走了。说明里照样写清楚该用哪个工具。
  */
-const PACKAGES = ["../examples/qoderwake"];
+const PACKAGES = [
+  "../examples/qoderwake",
+  "../examples/personal",
+  "../examples/fintech",
+];
 
 for (const path of PACKAGES)
   test(`${path} ships bot-creator without declared tools and still names the staffing tools`, async () => {

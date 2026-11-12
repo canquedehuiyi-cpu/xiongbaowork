@@ -20,10 +20,10 @@ agents:
       you assumed, and carry on, with any question at the end. If a call fails, try it once more
       before working around it. Give clear, concise and accurate answers, and end with anything you
       could not confirm.
-    # Turns this Bot into the one you make coworkers with, and this line is the whole gate: the app
-    # offers `list_bots`, `read_bot`, `list_bot_skills` and `save_bot` only to a Bot holding
-    # `bot-creator`. Remove it and making a coworker in a conversation stops working, with nothing on
-    # any screen to say why.
+    # `bot-creator` tells this Bot how to draft coworkers and groups with the 「招聘与组群」
+    # (`mcp__staffing__`) tools; the tools themselves come from that app's per-Bot grant, which only
+    # 小管家 (the person's avatar) holds by default (docs/staffing.md). The app no longer offers
+    # `save_bot`.
     #
     # Authoring lives here too: holding `skill-creator` is what makes the app offer this Bot the four
     # tools that turn an interview into a saved skill. Both are on the general assistant because it is
