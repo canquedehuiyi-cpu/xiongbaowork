@@ -31,7 +31,7 @@ describe("rule table", () => {
   });
 
   test("a pattern rule carries a pattern and the mcp rule does not", () => {
-    expect(auditRule("bash-call").pattern).toBeDefined();
+    expect(auditRule("shell-tool-call").pattern).toBeDefined();
     expect(auditRule("unknown-mcp-server").pattern).toBeUndefined();
   });
 
@@ -44,13 +44,37 @@ describe("blocked rules", () => {
   test("a Bash(...) call blocks the capability", () => {
     const finding = judge("Run Bash(git status) to see the tree.");
     expect(finding.level).toBe("blocked");
-    expect(finding.hits.map((hit) => hit.ruleId)).toContain("bash-call");
+    expect(finding.hits.map((hit) => hit.ruleId)).toContain("shell-tool-call");
   });
 
   test("a shell command line blocks the capability", () => {
     expect(judge("先执行 bash scripts/collect.sh 收集数据").level).toBe("blocked");
     expect(judge("run python3 tools/report.py first").level).toBe("blocked");
     expect(judge("then node build.mjs").level).toBe("blocked");
+  });
+
+  test("a heredoc blocks with or without the leading dash", () => {
+    // The dash is not what makes it a heredoc: `python - <<'EOF'` and `python3 <<'EOF'` both feed stdin.
+    // An earlier version of this rule only caught the first, so the second ran as "full".
+    for (const body of ["python - <<'EOF'", "python3 <<'EOF'", "sh <<-END"]) {
+      expect(judge(body).level).toBe("blocked");
+    }
+  });
+
+  test("a flag, a path-shaped argument and a shell operator each suffice on their own", () => {
+    // One case per feature of rule B, so a future loosening has to break a named test.
+    expect(judge("run node --version").level).toBe("blocked"); // flag
+    expect(judge("python run.py").level).toBe("blocked"); // file-shaped argument
+    expect(judge("bash <<< x | grep y && echo done").level).toBe("blocked"); // operator
+    expect(judge("bash -c 'ls'").level).toBe("blocked"); // flag with a quoted body
+  });
+
+  test("a command word alone is not a dependency: prohibitions and prose stay full", () => {
+    // The false positive that cost a real agent its verdict: "Do NOT run bash commands" is a prohibition,
+    // and `\w` used to accept `c` as its argument. `node junction` and `Bash (shell)` are the other two.
+    expect(judge("Do NOT run bash commands to create directories").level).toBe("full");
+    expect(judge("### 3. 接上 node_modules —— 用 node junction，不要用 mklink").level).toBe("full");
+    expect(judge("不要直接执行 python 脚本，先读文档").level).toBe("full");
   });
 
   test("a bare ```bash fence is not by itself a shell command", () => {
@@ -125,7 +149,7 @@ describe("verdict aggregation", () => {
     expect(mixed.level).toBe("blocked");
     const ids = mixed.hits.map((hit) => hit.ruleId);
     expect(ids).toContain("file-tool-call");
-    expect(ids).toContain("bash-call");
+    expect(ids).toContain("shell-tool-call");
   });
 
   test("hits are ordered worst first", () => {
@@ -141,7 +165,7 @@ describe("verdict aggregation", () => {
 
   test("repeated identical matches are reported once", () => {
     const finding = judge("Run Bash(a). Then run Bash(a) again.");
-    expect(finding.hits.filter((hit) => hit.ruleId === "bash-call")).toHaveLength(1);
+    expect(finding.hits.filter((hit) => hit.ruleId === "shell-tool-call")).toHaveLength(1);
   });
 
   test("auditCapabilities preserves input order and countByLevel sums the levels", () => {
@@ -170,11 +194,11 @@ describe("shortenSample", () => {
 
 describe("excerptAt", () => {
   test("starts at the match, so the cell shows the substring that tripped the rule", () => {
-    // The prose case that prompted this: the reviewer needs to see `node junction` as the first thing in
-    // the cell, not hunt for it 30 characters into a truncated line.
-    const finding = judge("### 3. 接上 node_modules —— 用 node junction，不要用 mklink");
-    const hit = finding.hits.find((item) => item.ruleId === "shell-command");
-    expect(hit?.sample.startsWith("node junction")).toBe(true);
+    // The reviewer needs to see the command as the first thing in the cell, not hunt for it 40 characters
+    // into a truncated line.
+    const finding = judge("然后 `node scripts/build.js --all` 生成产物");
+    const hit = finding.hits.find((item) => item.ruleId === "shell-command-prose");
+    expect(hit?.sample.startsWith("node scripts/build.js --all")).toBe(true);
   });
 
   test("keeps a real command recognisable, heredoc included", () => {

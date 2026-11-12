@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { readConnector, readUserSkills, readWorkBuddy, SourceLayoutError } from "./read-workbuddy";
+import { directorySize, readConnector, readUserSkills, readWorkBuddy, SourceLayoutError } from "./read-workbuddy";
 
 const root = mkdtempSync(join(tmpdir(), "port-capabilities-read-"));
 
@@ -207,6 +207,10 @@ describe("readWorkBuddy failure modes", () => {
       expect(readUserSkills(odd)).toEqual([]);
       writeFileSync(join(odd, "skills"), "not a directory\n", "utf8");
       expect(readUserSkills(odd)).toEqual([]);
+      // `refs_bytes` uses the same policy: an absent `references/` is 0 bytes, not an error. A silent 0
+      // for a *present but unreadable* one would make an oversized skill look like it needs no paging.
+      expect(directorySize(join(odd, "no-references"))).toBe(0);
+      expect(directorySize(join(odd, "skills"))).toBe(0);
     } finally {
       rmSync(odd, { recursive: true, force: true });
     }

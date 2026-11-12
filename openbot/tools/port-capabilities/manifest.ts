@@ -40,6 +40,14 @@ export interface ManifestEntry {
   runnable: RunnableLevel;
   /** What the port did not carry, or what collapsed into this row. */
   dropped: string[];
+  /**
+   * Which redactions touched this row's text — currently only `local-user-path`.
+   *
+   * Absent when the text needed none. Present as a list so a second cleaning rule (a token, an internal
+   * hostname) can be added without changing the shape, and so a reviewer can find every row whose shipped
+   * text differs from the source with one grep.
+   */
+  sanitized?: string[];
 }
 
 /**
@@ -137,6 +145,12 @@ export function validateManifest(entries: readonly ManifestEntry[]): ManifestVio
     }
     if (!Array.isArray(entry.dropped) || entry.dropped.some((item) => typeof item !== "string")) {
       push(index, entry.slug, "dropped", "必须是字符串数组");
+    }
+    if (
+      entry.sanitized !== undefined &&
+      (!Array.isArray(entry.sanitized) || entry.sanitized.some((item) => typeof item !== "string"))
+    ) {
+      push(index, entry.slug, "sanitized", "必须是字符串数组");
     }
   });
   const seen = new Map<string, number>();
@@ -240,6 +254,7 @@ export function buildManifest(
     runnable: RunnableLevel,
     extraDropped: readonly string[] = [],
     slugSource?: SlugSource,
+    sanitized: readonly string[] = [],
   ): ManifestEntry => ({
     kind,
     slug,
@@ -254,12 +269,21 @@ export function buildManifest(
     attribution: provenance.attribution,
     runnable,
     dropped: [...(droppedIndex.get(`${kind}:${slug}`) ?? []), ...extraDropped].sort(),
+    ...(sanitized.length === 0 ? {} : { sanitized: [...sanitized] }),
   });
 
   const entries: ManifestEntry[] = [];
   for (const agent of capabilities.agents) {
     entries.push(
-      entry("agent", agent.id, agent.provenance, options.agentFindings.get(agent.id)?.level ?? "full"),
+      entry(
+        "agent",
+        agent.id,
+        agent.provenance,
+        options.agentFindings.get(agent.id)?.level ?? "full",
+        [],
+        undefined,
+        agent.sanitized,
+      ),
     );
   }
   for (const skill of capabilities.skills) {
@@ -271,6 +295,7 @@ export function buildManifest(
         options.skillFindings.get(skill.slug)?.level ?? "full",
         skill.dropped,
         skill.slugSource,
+        skill.sanitized,
       ),
     );
   }

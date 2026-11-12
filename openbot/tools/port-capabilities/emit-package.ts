@@ -136,6 +136,11 @@ export function renderSkillsYaml(
        * `skill_assets` + `skills/read` channel first.
        */
       refs_bytes: skill.refsBytes,
+      /**
+       * Which redactions touched `instructions`. Absent on a clean row, so a reviewer can grep for the key
+       * and get exactly the entries whose text was rewritten rather than every row in the file.
+       */
+      ...(skill.sanitized.length === 0 ? {} : { sanitized: [...skill.sanitized] }),
     },
   }));
   return toYaml({ skills });
@@ -191,6 +196,7 @@ export function renderManifestYaml(manifest: readonly ManifestEntry[]): string {
     attribution: entry.attribution,
     runnable: entry.runnable,
     dropped: [...entry.dropped],
+    ...(entry.sanitized === undefined ? {} : { sanitized: [...entry.sanitized] }),
   }));
   return toYaml(rows);
 }

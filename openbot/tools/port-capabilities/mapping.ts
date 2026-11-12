@@ -157,28 +157,71 @@ export interface AuditRule {
 }
 
 /**
+ * The command words that make a line worth inspecting. A line containing one of these is *not* evidence by
+ * itself — `Do NOT run bash commands` and `用 node junction` both contain one and both mean the opposite of
+ * "the model must shell out". See {@link SHELL_COMMAND_PROSE} for what turns a mention into a hit.
+ */
+const SHELL_COMMAND_WORDS = "bash|sh|zsh|python3?|node|npm|pnpm|yarn|deno|bun|pwsh|powershell|cmd";
+
+/**
+ * The shell features that turn a command *mention* into a command *dependency*.
+ *
+ * Four kinds, because these are what a runnable instruction actually looks like: a heredoc, a flag, an
+ * argument shaped like a path or a file, and a shell operator. `bash commands` has none of them, which is
+ * the whole point — the previous single-regex version accepted any following word (`\w`) as an argument and
+ * so flagged a sentence that *forbids* running bash.
+ *
+ * A bare `|` is deliberately absent. Markdown tables put a pipe after almost every cell, so allowing it
+ * would turn ``| `python` | 3.8+ |`` into a shell dependency; `||`, `&&`, `$(` and redirection still cover
+ * the real operators.
+ */
+const SHELL_COMMAND_PROSE_FEATURES = [
+  "<<-?[ \\t]*['\"`]?\\w+", // heredoc, with or without the leading dash: `<<EOF`, `- <<'EOF'`
+  "(?<=\\s)-{1,2}[A-Za-z]", // a flag: `-c`, `--selftest`
+  // A path-shaped argument, anchored: absolute, home-relative or drive-rooted. Deliberately *not* any
+  // `a/b`: Chinese prose writes `bash 的 mkdir/cp 认 /c/...` to mean "mkdir or cp", and an unanchored
+  // slash turned that alternative into a shell dependency.
+  "[\\s`'\"](?:/[^\\s/]|~/|[A-Za-z]:[\\\\/]|\\.{1,2}/)",
+  "\\S*\\.[A-Za-z]{1,5}(?=\\s|$)", // an argument shaped like a file: `build.mjs`, not a version like `3.8`
+  "\\|\\||&&|\\$\\(", // a shell operator
+  ">\\s*\\S", // redirection
+  "<\\s*\\(", // process substitution
+].join("|");
+
+/** Rule B's pattern, exported so the tests can pin every feature independently. */
+export const SHELL_COMMAND_PROSE = new RegExp(
+  `(?<![\\w-])(?:${SHELL_COMMAND_WORDS})\\b[ \\t][^\\n]{0,80}?(?:${SHELL_COMMAND_PROSE_FEATURES})`,
+  "m",
+);
+
+/**
  * The audit table, in the order §5.3 lists it.
  *
- * The shell rule is deliberately line-bounded (`[ \t]+`, not `\s+`) so that a fenced code block
- * opener (```` ```bash ```` followed by a newline) is not by itself read as "run bash". Measured on
- * the 43 skills on this machine that distinction is worth ~8 skills: prose like "bash scripts/x.sh"
- * means the model is told to shell out, while a bare fence is a formatting habit. Bodies that do put
- * a command after the fence still trip `executable-scripts` or the same rule on the command line.
+ * The shell rule is split in two on purpose. One regex cannot both recognise a *tool call* and recognise a
+ * *command mentioned in prose*, and trying cost us a false positive on the sentence "Do NOT run bash
+ * commands to create directories": `\w` accepted `c` as an argument, so a prohibition read as a dependency.
+ * Rule A answers "is the model told to call a shell tool"; rule B answers "does the prose name a command
+ * with something to run it on".
+ *
+ * Rule A carries one **accepted** false positive: prose like `Bash (shell)` — half-width parenthesis with a
+ * space — trips it. Do not "fix" that. Any loosening of the half-width paren form also stops matching
+ * `Bash(npm install)`, which is the real call this rule exists for, and Chinese text uses the full-width
+ * `（`, which does not match anyway.
  */
 export const AUDIT_RULE_TABLE: readonly AuditRule[] = [
   {
-    id: "bash-call",
+    id: "shell-tool-call",
     level: "blocked",
     kind: "pattern",
-    pattern: /\bBash\s*\(/,
-    reason: "正文调用 Bash(...)；openbot 员工没有本地 shell。",
+    pattern: /\b(?:Bash|Shell|Terminal)\s*\(/,
+    reason: "正文调用 Bash/Shell/Terminal(...)；openbot 员工没有本地 shell。",
   },
   {
-    id: "shell-command",
+    id: "shell-command-prose",
     level: "blocked",
     kind: "pattern",
-    pattern: /(?:^|[\s`$|(])(?:bash|sh|python3?|node)[ \t]+[-\w./~$]/m,
-    reason: "正文要求执行 bash/sh/python/node 命令；openbot 员工没有本地运行时。",
+    pattern: SHELL_COMMAND_PROSE,
+    reason: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。",
   },
   {
     id: "executable-scripts",

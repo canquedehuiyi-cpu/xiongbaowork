@@ -21,6 +21,7 @@ import {
   oneLine,
   packageFingerprint,
   readDeclaredTools,
+  sanitizeLocalUserPaths,
   sha256Hex,
   shortenSlug,
   splitDirectoryName,
@@ -344,12 +345,91 @@ describe("slug provenance", () => {
     expect(result.skills.every((skill) => TENANT_SLUG_PATTERN.test(skill.slug))).toBe(true);
   });
 
-  test("the seed is the source identity, so editing the body cannot rename the skill", () => {
-    const before = normalizeCapabilities(snapshot({ packages: [onePackage("a".repeat(40), "shared", "first body")] }));
+  test("an over-long user-level name is shortened, not fatal, and still says how", () => {
+    // A 41-character directory name used to fail validation and take the whole package with it. Length is
+    // mechanically solvable, so it becomes a hash suffix; illegal characters would still be a hard error,
+    // but `kebab()` cannot produce one.
+    const longName = "a".repeat(41);
+    const result = normalizeCapabilities(
+      snapshot({ userSkills: [userSkill(longName, `---\nname: ${longName}\n---\n\nbody\n`)] }),
+    );
+    const skill = result.skills[0];
+    expect(TENANT_SLUG_PATTERN.test(skill.slug)).toBe(true);
+    expect(skill.slug.length).toBeLessThanOrEqual(TENANT_SLUG_MAX);
+    expect(skill.slugSource).toBe("hashed");
+  });
+
+  test("the same source under two different roots produces the same slug", () => {
+    // The machine-level proof of "规则一经落地不许再改": the hash seed is `<source>/<dir>`, never an
+    // absolute path and never the content, so two machines importing the same skill agree. This only
+    // matters the day `hashed` fires, which is exactly why it has to be pinned now.
+    const longName = "b".repeat(41);
+    const build = (root: string) => {
+      const skill = userSkill(longName, `---\nname: ${longName}\n---\n\nbody\n`);
+      skill.skillMd.absolutePath = `${root}/skills/${longName}/SKILL.md`;
+      return normalizeCapabilities({ sourceRoot: root, packages: [], userSkills: [skill], connectors: [] });
+    };
+    const onWindows = build("C:/Users/alice/.workbuddy");
+    const onLinux = build("/home/bob/.workbuddy");
+    expect(onWindows.skills[0].slugSource).toBe("hashed");
+    expect(onLinux.skills[0].slug).toBe(onWindows.skills[0].slug);
+    expect(onLinux.skills[0].slugSource).toBe(onWindows.skills[0].slugSource);
+  });
+
+  test("the seed is the source identity, so editing the body cannot rename the skill", () => {    const before = normalizeCapabilities(snapshot({ packages: [onePackage("a".repeat(40), "shared", "first body")] }));
     const after = normalizeCapabilities(snapshot({ packages: [onePackage("a".repeat(40), "shared", "edited body")] }));
     expect(before.skills[0].slug).toBe("shared");
     expect(after.skills[0].slug).toBe("shared");
     expect(before.skills[0].slugSource).toBe(after.skills[0].slugSource);
+  });
+});
+
+describe("local user path redaction", () => {
+  test("replaces the account name in all three measured shapes and keeps the structure", () => {
+    expect(sanitizeLocalUserPaths("--content \"C:/Users/canqu/AppData/Local/Temp/twprobe/probe.html\"").text).toBe(
+      "--content \"C:/Users/<user>/AppData/Local/Temp/twprobe/probe.html\"",
+    );
+    expect(sanitizeLocalUserPaths("run /c/Users/canqu/.workbuddy/binaries/python/bin/python3 x.py").text).toBe(
+      "run /c/Users/<user>/.workbuddy/binaries/python/bin/python3 x.py",
+    );
+    expect(sanitizeLocalUserPaths("C:\\Users\\canqu\\AppData\\Local\\Microsoft\\WinGet\\x.exe").text).toBe(
+      "C:\\Users\\<user>\\AppData\\Local\\Microsoft\\WinGet\\x.exe",
+    );
+  });
+
+  test("stops at prose: a name followed by Chinese punctuation does not eat the sentence", () => {
+    // Real source text: `必须用 Windows 路径（C:/Users/canqu，不认 MSYS 路径）`. A looser segment class
+    // would have swallowed everything up to the next space and deleted the explanation.
+    expect(sanitizeLocalUserPaths("必须用 Windows 路径（C:/Users/canqu，不认 MSYS 路径）").text).toBe(
+      "必须用 Windows 路径（C:/Users/<user>，不认 MSYS 路径）",
+    );
+  });
+
+  test("leaves an existing placeholder alone", () => {    const already = "BK=\"C:/Users/<user>/xagent-backup\"; echo $HOME; echo %USERPROFILE%";
+    const result = sanitizeLocalUserPaths(already);
+    expect(result.text).toBe(already);
+    expect(result.hits).toBe(0);
+  });
+
+  test("is idempotent: a second pass over its own output changes nothing", () => {
+    const once = sanitizeLocalUserPaths("C:/Users/canqu/a and /c/Users/canqu/b");
+    expect(once.hits).toBe(2);
+    const twice = sanitizeLocalUserPaths(once.text);
+    expect(twice.text).toBe(once.text);
+    expect(twice.hits).toBe(0);
+  });
+
+  test("a skill whose body quotes the author's machine is redacted and says so", () => {
+    const dirty = userSkill("leaky", "---\nname: leaky\n---\n\n读 C:/Users/canqu/AppData/Local/x.json\n");
+    const clean = userSkill("clean", "---\nname: clean\n---\n\n读 references/x.json\n");
+    const result = normalizeCapabilities(snapshot({ userSkills: [dirty, clean] }));
+    const leaky = result.skills.find((skill) => skill.slug === "leaky");
+    const tidy = result.skills.find((skill) => skill.slug === "clean");
+    expect(leaky?.instructions).toContain("C:/Users/<user>/AppData/Local/x.json");
+    expect(leaky?.instructions.includes("canqu")).toBe(false);
+    expect(leaky?.sanitized).toEqual(["local-user-path"]);
+    // A clean row stays clean, so `sanitized` is evidence rather than a field everyone has to ignore.
+    expect(tidy?.sanitized).toEqual([]);
   });
 });
 

@@ -78,6 +78,8 @@ export interface NormalizedAgent {
   hasBundledReferences: boolean;
   /** Set when the agent belongs to a team. */
   teamId: string | null;
+  /** Which redactions touched `systemPrompt`; empty when the body was already clean. */
+  sanitized: string[];
   provenance: Provenance;
 }
 
@@ -127,6 +129,8 @@ export interface NormalizedSkill {
   refsBytes: number;
   /** Sub-directories the source ships that P0 does not carry. */
   dropped: string[];
+  /** Which redactions touched `instructions`; empty when the body was already clean. */
+  sanitized: string[];
   tier: SkillTier;
   provenance: Provenance;
 }
@@ -199,6 +203,49 @@ export function normalizeText(text: string): string {
 /** SHA-256 of normalised text, lowercase hex. */
 export function sha256Hex(text: string): string {
   return createHash("sha256").update(normalizeText(text), "utf8").digest("hex");
+}
+
+/** Recorded in `_porting.sanitized` when the author's own home directory was replaced. */
+export const SANITIZED_LOCAL_USER_PATH = "local-user-path";
+
+/**
+ * A user home directory inside prose: `C:/Users/<name>`, `C:\Users\<name>`, `/c/Users/<name>` (git bash)
+ * or `/Users/<name>` (macOS). Group 1 is the prefix including the separator, group 2 the user name.
+ *
+ * The name segment is deliberately restricted to ASCII letters, digits, dot, dash and underscore. Anything
+ * looser swallows prose: the source writes `C:/Users/canqu，不认 MSYS 路径` in one place, and a segment
+ * class that allowed CJK would have redacted `canqu，不认 MSYS 路径` — deleting the sentence along with the
+ * account name.
+ */
+const LOCAL_USER_PATH = /((?:[A-Za-z]:[\\/]|\/[A-Za-z]\/|\/)Users[\\/])([A-Za-z0-9._-]+)/gi;
+
+/**
+ * Segments that are already placeholders. A source that ships `C:/Users/<user>/...` is correct as written,
+ * and replacing `<user>` with `<user>` again would only make the redaction look like it did something.
+ */
+const USER_PATH_PLACEHOLDERS: ReadonlySet<string> = new Set(["<user>", "<username>", "~", "$home", "%userprofile%"]);
+
+/**
+ * Replace the author's home directory name with `<user>`, keeping the rest of the path.
+ *
+ * Ported instruction text ships to customers verbatim, and several skills quote the machine they were
+ * written on — `C:/Users/canqu/AppData/Local/Temp/...`, `/c/Users/canqu/.workbuddy/binaries/...`. That is
+ * the author's account name and the internal directory layout, neither of which belongs in a product.
+ *
+ * Only the segment directly after `Users` is touched: the structure below it (`AppData`, `.workbuddy`, a
+ * script path) is what makes the instruction useful, so it stays. Already-placeholder text is left alone,
+ * which also makes the function idempotent — a second pass over its own output changes nothing.
+ */
+export function sanitizeLocalUserPaths(text: string): { text: string; hits: number } {
+  let hits = 0;
+  const sanitized = text.replace(LOCAL_USER_PATH, (match: string, prefix: string, name: string) => {
+    if (USER_PATH_PLACEHOLDERS.has(name.toLowerCase())) {
+      return match;
+    }
+    hits += 1;
+    return `${prefix}<user>`;
+  });
+  return { text: sanitized, hits };
 }
 
 /**
@@ -629,7 +676,14 @@ function resolveSlugs(candidates: SkillCandidate[]): {
 
     let assignment: SlugAssignment;
     if (named) {
-      assignment = { slug: candidate.nameSlug, source: "raw" };
+      // A name that fits is used as-is. A name that is merely *long* is shortened rather than fatal: the
+      // hash is deterministic and seeded from the source identity, so the result is stable, and refusing to
+      // load a whole package over one cosmetic overflow is a worse failure than a hash suffix. A name with
+      // characters the loader forbids would still be a hard error, but `kebab()` cannot produce one, so in
+      // practice length is the only case that lands here.
+      assignment = isTenantSlug(candidate.nameSlug)
+        ? { slug: candidate.nameSlug, source: "raw" }
+        : { slug: ensureTenantSlug(candidate.nameSlug, seed), source: "hashed" };
     } else if (prefixed !== null && isTenantSlug(prefixed)) {
       assignment = { slug: prefixed, source: "package_prefix" };
     } else if (isTenantSlug(candidate.dirSlug)) {
@@ -834,6 +888,7 @@ function normalizeSkills(
       hasBundledReferences: candidate.raw.hasReferencesDir,
       refsBytes: candidate.raw.referencesBytes,
       dropped: droppedAttachments(candidate.raw),
+      sanitized: [],
       tier: candidate.tier,
       provenance: skillProvenance(candidate, packageLicense),
     });
@@ -927,6 +982,7 @@ function normalizePackage(
           skills: skillSlugs,
           hasBundledReferences: pkg.attachments.includes("references"),
           teamId: null,
+          sanitized: [],
           provenance,
         },
       ],
@@ -975,6 +1031,7 @@ function normalizePackage(
       skills: skillSlugs,
       hasBundledReferences: pkg.attachments.includes("references"),
       teamId,
+      sanitized: [],
       provenance: provenanceFor(
         doc?.file.relativePath ?? pkg.pluginJson.relativePath,
         doc ? sha256Hex(doc.file.text) : sha256Hex(pkg.pluginJson.text),
