@@ -968,5 +968,15 @@
     "file": "extension/src/offscreen/grant.ts",
     "text": "Could not connect to OpenBot's back end",
     "reason": "parsed-exact-text: matches the gateway's own error text verbatim to choose retry over hold; rewording stops the match"
+  },
+  {
+    "file": "shared/desktop-control.ts",
+    "text": "\"openbot-runner\",",
+    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1）"
+  },
+  {
+    "file": "shared/desktop-control.ts",
+    "text": "\"openbot-desktop\",",
+    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1）"
   }
 ]

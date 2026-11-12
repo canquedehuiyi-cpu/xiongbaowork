@@ -502,11 +502,10 @@ export const DESKTOP_SELF_PROCESSES: readonly string[] = [
   // and productName, what a Mac names the app.
   "xiongbao-device",
   "熊宝数字员工 设备端",
-  // desktop-device/src-tauri/src/sidecar.rs: SIDECAR and LEGACY_SIDECAR.
+  // desktop-device/src-tauri/src/sidecar.rs: SIDECAR, and LEGACY_SIDECAR for older installs.
   "xiongbao-runner",
   "openbot-runner",
-  // desktop/src-tauri: the Cargo bin (Contents/MacOS/openbot-desktop, openbot-desktop.exe) and the
-  // productName (XiongBao.app).
+  // desktop/src-tauri: the Cargo bin (its executable on a Mac and on Windows) and the productName.
   "openbot-desktop",
   "XiongBao",
 ];
