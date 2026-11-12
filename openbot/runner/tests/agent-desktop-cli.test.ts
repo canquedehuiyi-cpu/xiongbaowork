@@ -7,6 +7,8 @@ import {
   type AdError,
   AgentDesktopError,
   agentDesktopEnv,
+  icaclsArgs,
+  sidFromWhoami,
   createAgentDesktopCli,
   FORBIDDEN_AD_ARGS,
 } from "../src/desktop/agent-desktop";
@@ -192,6 +194,42 @@ describe("agent-desktop CLI layer", () => {
         "/s",
       ),
     ).toEqual({ PATH: "/bin", AGENT_DESKTOP_HOME: "/s" });
+  });
+
+  test("Windows protects the state directory with whoami and icacls, no script", () => {
+    expect(
+      sidFromWhoami(
+        '"fv-az123\\runneradmin","S-1-5-21-1111-2222-3333-500"\r\n',
+      ),
+    ).toBe("S-1-5-21-1111-2222-3333-500");
+    expect(sidFromWhoami("access denied")).toBeUndefined();
+    expect(
+      icaclsArgs("D:\\熊宝 data\\agent-desktop-state", "S-1-5-21-1-2-3-500"),
+    ).toEqual([
+      "D:\\熊宝 data\\agent-desktop-state",
+      "/inheritance:r",
+      "/grant:r",
+      "*S-1-5-21-1-2-3-500:(OI)(CI)F",
+    ]);
+  });
+
+  test("the X11 cookie and session type reach the child on Linux", () => {
+    expect(
+      agentDesktopEnv(
+        {
+          DISPLAY: ":99",
+          XAUTHORITY: "/tmp/xvfb-run.x/Xauthority",
+          XDG_SESSION_TYPE: "x11",
+          SECRET: "s",
+        },
+        "/s",
+      ),
+    ).toEqual({
+      DISPLAY: ":99",
+      XAUTHORITY: "/tmp/xvfb-run.x/Xauthority",
+      XDG_SESSION_TYPE: "x11",
+      AGENT_DESKTOP_HOME: "/s",
+    });
   });
 
   test("an existing state directory with loose permissions is emptied and recreated 0700", async () => {
