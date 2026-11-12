@@ -8,6 +8,23 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **在对话里招员工、改员工、组群聊：小管家起草，本人在卡片上确认后才执行。** 新的内置应用「招聘与组群」
+  （`builtin://staffing`，不连外部主机、不要凭据；团队版只在第一次启动时自动添加，管理员删掉后不再加回，个人版一直在）给员工六个工具：`list_staff`、
+  `propose_employee`、`propose_employee_change`、`propose_group`、`propose_group_change`、`proposal_status`。
+  起草工具只往新表 `staffing_proposals`（迁移 0201，按工作区隔离）写一份草稿，对话里出现一张卡片；本人在卡片上改、
+  按确认后，才以本人身份依次调用现有的建员工、授予应用（给不了的转成访问申请）、建定时任务、建群与定顺序，并逐项显示
+  结果（✓ / 已转申请 / 需要先连接 / 失败可重试，重试不成的可以作废）。卡片写全确认后会做的事：公开给全团队醒目标出，
+  工作手册、定时任务的指令、应用的动作整段列出。只有提出需求的人看得到草稿、能确认；群聊里的其他人在各自的工作区读
+  不到这份提议，卡片只写「读不到这份提议了」，没有按钮。执行中断的提议 10 分钟后读取时落成部分完成或回到待确认。
+  小管家（「我的分身」）默认有这组工具（管理员设为只有管理员能给或删掉应用时不给），别的员工要本人按员工打开；
+  从小管家收回后不会再自动加回。防滥用：
+  同一个人在同一段对话里 10 分钟内最多新起草 5 份，每人最多 20 份等待确认，草稿 7 天过期。起草时被剔除的模型、技能、应用、定时
+  任务由小管家在卡片上方的话里说明，卡片不列；应用的状态只在确认后的结果里出现。新接口：`/api/proposals/:id`
+  （`GET`、`PATCH`、`apply`、`discard`、`retry`）与 `POST/DELETE /api/groups/:id/bots`、`PUT /api/groups/:id/order`；
+  新审计事件 `staffing.proposal_*`。前端不再向员工提供 `save_bot`；`bot-creator` 技能的说明在 qoderwake、personal、
+  fintech 三个包里都改为用新工具。说明见 [docs/staffing.md](docs/staffing.md)，CI 新增浏览器端到端「G6 staffing
+  lifecycle (browser, mocked model)」。需要跑迁移 0201，不需要改配置。
+
 - **侧栏的直达入口和几处小行为按 v0.2.7 找回。** 主导航分成「工作管理」（任务看板、自主工作、@Waker）和
   「员工资源」（员工、能力、连接）两组；「更多」里除了组团流程，又有「团队 Bot」和「审批」。这两个地址（`/team-bots`、
   `/approvals`）不再跳转，重新是页面：审批页是等你处理的事、你的审批设置和规则，管理员还能在这里直接改团队设置和团队

@@ -100,7 +100,7 @@ export function createdBotIdIn(result: string): string | null {
 /**
  * The skill whose grant turns a Bot into one you can make coworkers with.
  *
- * The app offers `save_bot` and the reads beside it only while the active Bot holds this slug, and
+ * The app offers the reads beside `save_bot` (retired, offered to no run) only while the active Bot holds this slug, and
  * the shipped package is what puts the slug in the deployment and on a Bot. So the two have to
  * agree: rename it in one place and making a coworker in a conversation stops working, with nothing
  * on screen to say why and a deployment that still looks healthy. `bot-creator-slug.test.ts` is the
