@@ -1350,8 +1350,7 @@ export async function synchronizeTenantPackage(
                   isNull(agentProfiles.ownerUserId),
                 ),
               );
-            const title =
-              profile && attributionFollowing(profile.title, selected);
+            const title = profile && attributionFollowing(profile.title, selected);
             if (profile && title !== profile.title) {
               await transaction
                 .update(agentProfiles)
@@ -2232,6 +2231,7 @@ export async function synchronizeTenantPackage(
 
   return synced.deploymentPackage;
 }
+
 
 /**
  * What this deployment calls itself when `DEPLOYMENT_ID` is unset: the package's tenant id, unless
