@@ -24,6 +24,7 @@ import {
   runnerAddress,
 } from "../devices/channel";
 import type { DesktopStoppedInfo } from "../devices/socket";
+import { computerActionIdentity } from "./action-identity";
 import {
   DESKTOP_BACKSTOP_MS,
   DESKTOP_UNAVAILABLE_RULE,
@@ -636,6 +637,8 @@ export function createDesktopStoppedHandler(deps: {
  * sent again. A done write forgets its window's controls: the window may have changed.
  */
 
+/** What the approved resend's dispatch key adds to the first request's (see `carry`). */
+export const DESKTOP_APPROVED_RESEND = ":approved";
 /** The model's text is longer than a desktop write may type. */
 export const DESKTOP_TEXT_TOO_LONG = `文字太长，最多 ${DESKTOP_LIMITS.textMaxBytes} 字节。`;
 /** What a done write tells the model, when the device did not say. */
@@ -893,8 +896,23 @@ export function createDesktopWriteMethods(deps: {
       // Asked and approved already, or never sent: the device's answer (or ours) as it is.
       if (reason === undefined || approvedSent !== false || !facts)
         throw failed(error);
+      /*
+       * The resend is another request (it says `approved: true`), so it goes under its own key. The
+       * runner's journal refuses a key it has seen with another payload ("This action id belongs to
+       * another request."), which would leave the approved resend never carried out. A fixed suffix
+       * keeps it stable, so the same call replayed meets the journal's own answer for each of the
+       * two, and it is never the first request's key. There is no third.
+       */
+      const asked: DesktopWriteFacts = { ...facts, deviceReason: reason };
+      const resend = () => run(asked);
+      const identity = computerActionIdentity.getStore();
       try {
-        output = await run({ ...facts, deviceReason: reason });
+        output = identity
+          ? await computerActionIdentity.run(
+              `${identity}${DESKTOP_APPROVED_RESEND}`,
+              resend,
+            )
+          : await resend();
       } catch (again) {
         throw failed(again);
       }

@@ -2141,14 +2141,24 @@ export function createComputerGateway(
     ...[botId, path, payload, signal, timeoutMs, address]: Parameters<DesktopPost>
   ): Promise<T> {
     const machine = parseRunnerAddress(address);
-    return post<T>(
-      machine ? deviceSeat(machine, botId) : botSeat(botId),
-      path,
-      payload,
-      signal,
-      timeoutMs,
-      address,
-    );
+    const send = () =>
+      post<T>(
+        machine ? deviceSeat(machine, botId) : botSeat(botId),
+        path,
+        payload,
+        signal,
+        timeoutMs,
+        address,
+      );
+    /*
+     * A question about the desktop as it is now goes out afresh every time, outside the tool call's
+     * action identity. Under it the runner's journal answers the same tool call run again (after the
+     * owner approved, or its re-check) with the first answer it kept: a session since replaced, a
+     * window list since changed. The writes stay under it, so a write is never carried out twice.
+     */
+    return LIVE_DESKTOP_QUESTIONS.has(path)
+      ? computerActionIdentity.exit(send)
+      : send();
   }
   /*
    * A desktop write through `govern`, under the machine owner's seat like a read. The ref a write
@@ -3520,6 +3530,13 @@ export function evaluateComputerPolicy(
  * the side that builds the path.
  */
 const HUMAN_GESTURES = new Set(["click", "type", "key", "scroll"]);
+
+/** The desktop's read-only questions, whose answer is wanted as it is now, never replayed. */
+const LIVE_DESKTOP_QUESTIONS: ReadonlySet<string> = new Set([
+  "/desktop/session_status",
+  "/desktop/windows",
+  "/desktop/snapshot",
+]);
 
 export function intentOf(
   toolName: string,
