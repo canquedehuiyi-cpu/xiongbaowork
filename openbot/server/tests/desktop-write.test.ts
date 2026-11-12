@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { oneRowPerAction } from "../../shared/activity-rows";
 import {
@@ -13,6 +13,7 @@ import {
   DESKTOP_CLIPBOARD_READ_REASON,
   DESKTOP_SESSION_REASON,
   desktopActionReason,
+  desktopSelfWindowWords,
   desktopWindowReason,
 } from "../src/approvals/desktop-policy";
 import {
@@ -38,6 +39,7 @@ import {
   withApprovalContext,
 } from "../src/approvals/types";
 import type { AuditEventInput, AuditStore } from "../src/audit";
+import { resetBrand, setBrand } from "../src/brand";
 import { computerActionIdentity } from "../src/computer/action-identity";
 import {
   type ComputerTransport,
@@ -58,6 +60,7 @@ import { createDesktopControlCache } from "../src/computer/desktop-state";
 import { desktopTools } from "../src/computer/desktop-tools";
 import {
   createDesktopWriteGate,
+  DESKTOP_APPROVED_AGAIN,
   DESKTOP_BAD_APP,
   DESKTOP_SESSION_UNAPPROVED,
   DESKTOP_STOPPED_REASON,
@@ -470,6 +473,9 @@ describe("desktop writes through the gateway", () => {
       approved: true,
       actionWords: [...DEFAULT_DESKTOP_ACTION_WORDS],
       approvedTitle: NOTEPAD.title,
+      // Final review C1 and I1: the product's names, and the control's name the card showed.
+      selfWindowWords: ["熊宝数字员工", "熊宝", "XiongBao Work"],
+      approvedControlName: "确定",
       ref: "abc123-1:1",
     });
     // Recorded through the gateway's own `govern`: the attempt row names the window and control.
@@ -1431,6 +1437,8 @@ describe("carried over from the device's writes (Task 21)", () => {
       approved: false,
       actionWords: [...DEFAULT_DESKTOP_ACTION_WORDS],
       approvedTitle: "微信",
+      // Final review C1: the product's names, for the device's check of the live title.
+      selfWindowWords: ["熊宝数字员工", "熊宝", "XiongBao Work"],
       windowId: WECHAT.windowId,
       keys: "ctrl+s",
     });
@@ -1588,7 +1596,7 @@ describe("carried over from the device's writes (Task 21)", () => {
     });
   });
 
-  test("a device that still asks after the owner approved is answered in its own words, never asked again", async () => {
+  test("a device that still asks after the owner approved is asked about once more, then answered in its own words", async () => {
     // Approved on the card (opening the session), and the device asks anyway: the title changed.
     const changed = needs("窗口标题刚刚变成含「银行」，请重新列出窗口");
     const h = harness({
@@ -1600,8 +1608,10 @@ describe("carried over from the device's writes (Task 21)", () => {
     await expect(
       h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" }),
     ).rejects.toThrow(changed);
-    expect(h.cards).toHaveLength(1);
-    expect(h.writesPosted()).toHaveLength(1);
+    // Final review I1: an approval is for what the card showed, so the device's reason is asked
+    // about once more (a second card, a second send); asked again after that, never a third.
+    expect(h.cards).toHaveLength(2);
+    expect(h.writesPosted()).toHaveLength(2);
     // Not approved, re-asked once, and the device asks again: no third send, no second card of ours.
     const g = harness({
       session: true,
@@ -2232,3 +2242,317 @@ describe("round 1 of review (Task 25)", () => {
     );
   });
 });
+
+/*
+ * The final whole-branch review (final-fix-brief.md): C1, I1 and I3 on the server. Each only asks
+ * more; the device is still the last gate.
+ */
+describe("the final review", () => {
+  afterEach(() => resetBrand());
+  const SELF_REASON = "这是熊宝自己的界面或命令行窗口，操作前需要你先确认。";
+  const TERMINAL: DesktopWindow = {
+    windowId: "a1111111111111111",
+    title: "zsh — 80×24",
+    process: "Terminal",
+    focused: true,
+    minimized: false,
+  };
+  const CHROME: DesktopWindow = {
+    windowId: "a2222222222222222",
+    title: "待审批 - 熊宝数字员工 - Google Chrome",
+    process: "Google Chrome",
+    focused: true,
+    minimized: false,
+  };
+  const policyFor = (
+    write: Partial<NonNullable<ApprovalSubject["desktopWrite"]>>,
+  ) =>
+    desktopActionReason(
+      {
+        actorId: OWNER,
+        botId: "bot",
+        toolRef: "computer_desktop_key",
+        effect: "write",
+        scope: "desktop",
+        args: {},
+        subject: {
+          runner: true,
+          desktopWrite: {
+            session: "active",
+            action: "key",
+            keys: "tab",
+            ...write,
+          },
+        },
+      },
+      DEFAULT_DESKTOP_ACTION_WORDS,
+    );
+
+  test("C1: the product's own window or a terminal asks, by its process or by the product's name in its title", () => {
+    for (const process of [
+      "Terminal",
+      "iTerm2",
+      "powershell.exe",
+      "WindowsTerminal.exe",
+      "xiongbao-device",
+      "熊宝数字员工 设备端",
+      "XiongBao",
+    ])
+      for (const action of ["click", "type", "key", "focus"] as const)
+        expect({
+          process,
+          action,
+          reason: policyFor({
+            action,
+            title: "x",
+            process,
+            control: { type: "textfield", name: "x" },
+          }),
+        }).toEqual({ process, action, reason: SELF_REASON });
+    expect(policyFor({ title: CHROME.title, process: "Google Chrome" })).toBe(
+      SELF_REASON,
+    );
+    expect(policyFor({ title: "XiongBao Work", process: "Safari" })).toBe(
+      SELF_REASON,
+    );
+    expect(policyFor({ title: "笔记.txt - 记事本", process: "notepad" })).toBe(
+      undefined,
+    );
+    // The name is the deployment's brand, never one written into the server.
+    setBrand({
+      productName: "甲乙数字员工",
+      shortName: "甲乙",
+      englishName: "Jiayi",
+    });
+    expect(desktopSelfWindowWords()).toEqual(["甲乙数字员工", "甲乙", "Jiayi"]);
+    expect(
+      policyFor({ title: "审批 - 甲乙 - Chrome", process: "chrome" }),
+    ).toBe("这是甲乙自己的界面或命令行窗口，操作前需要你先确认。");
+    expect(policyFor({ title: CHROME.title, process: "chrome" })).toBe(
+      undefined,
+    );
+    resetBrand();
+    expect(desktopSelfWindowWords()).toEqual([
+      "熊宝数字员工",
+      "熊宝",
+      "XiongBao Work",
+    ]);
+  });
+
+  test("C1: in a session a key in a terminal is asked about, and the device is sent the product's names", async () => {
+    const h = harness({ session: true, windows: [NOTEPAD, WECHAT, TERMINAL] });
+    await h.gateway.pressDesktopKey("bot", ACTOR, {
+      windowId: TERMINAL.windowId,
+      keys: "l",
+    });
+    expect(h.cards).toHaveLength(1);
+    expect(h.cards[0]?.outcome).toEqual({
+      behaviour: "ask",
+      source: "desktop_action",
+      reason: SELF_REASON,
+    });
+    expect(lastWrite(h)).toMatchObject({
+      approved: true,
+      selfWindowWords: ["熊宝数字员工", "熊宝", "XiongBao Work"],
+    });
+    // A plain key in notepad is not asked about; the device still gets the names.
+    await h.gateway.pressDesktopKey("bot", ACTOR, {
+      windowId: NOTEPAD.windowId,
+      keys: "ctrl+s",
+    });
+    expect(h.cards).toHaveLength(1);
+    expect(lastWrite(h).selfWindowWords).toEqual([
+      "熊宝数字员工",
+      "熊宝",
+      "XiongBao Work",
+    ]);
+    // A write with no window has no window words to check.
+    await h.gateway.writeDesktopClipboard("bot", ACTOR, { text: "x" });
+    expect(Object.keys(h.posts.at(-1)?.payload ?? {})).not.toContain(
+      "selfWindowWords",
+    );
+  });
+
+  test("C1: 允许一次 is asked about whatever the team's words", async () => {
+    const decided = await decideAction({
+      team: [],
+      personal: [],
+      customRulesEnabled: true,
+      autoReview: false,
+      askBeforeChanges: true,
+      desktopActionWords: ["zzz"],
+      candidate: {
+        actorId: OWNER,
+        botId: "bot",
+        toolRef: "computer_desktop_click",
+        effect: "write",
+        scope: "desktop/chrome",
+        args: {},
+        subject: {
+          runner: true,
+          desktopWrite: {
+            session: "active",
+            action: "click",
+            title: "Inbox",
+            process: "chrome",
+            control: { type: "button", name: "允许一次" },
+          },
+        },
+      },
+    });
+    expect(decided).toMatchObject({
+      behaviour: "ask",
+      source: "desktop_action",
+      reason:
+        "在窗口「Inbox」里点击「允许一次」：控件名含「允许」，需要你批准。",
+    });
+  });
+
+  test("I1: a click or a type tells the device the control's name the card showed, or null", async () => {
+    const h = harness();
+    await h.read();
+    // Asked (opening the session): the card named 确定.
+    await h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" });
+    expect(lastWrite(h)).toMatchObject({
+      approved: true,
+      approvedControlName: "确定",
+    });
+    // Let through in the session, unasked: none.
+    await h.read();
+    await h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" });
+    expect(lastWrite(h)).toMatchObject({
+      approved: false,
+      approvedControlName: null,
+    });
+    await h.read();
+    await h.gateway.typeDesktop("bot", ACTOR, {
+      ref: "abc123-1:0",
+      text: "a",
+      mode: "append",
+    });
+    expect(lastWrite(h)).toMatchObject({ approvedControlName: null });
+    // A card with no control on it (a ref this replica never saw): null, approved.
+    const g = harness({ session: true });
+    await g.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-9:1" });
+    expect(lastWrite(g)).toMatchObject({
+      approved: true,
+      approvedControlName: null,
+    });
+    // A key or a focus names no control.
+    await g.gateway.focusDesktopWindow("bot", ACTOR, {
+      windowId: NOTEPAD.windowId,
+    });
+    expect(Object.keys(lastWrite(g))).not.toContain("approvedControlName");
+  });
+
+  test("I1: approved, and the device still asks: asked once more with its reason, sent under a key of its own", async () => {
+    const reason = `控件名含「删除」：「发送${"x".repeat(120)}删除」`;
+    const h = harness({
+      session: true,
+      journal: true,
+      write: (_path, payload) => {
+        if (payload.approvedReason !== reason)
+          throw new DeviceActionError(needsOf(reason));
+        return {
+          physical: false,
+          durationMs: 3,
+          delivery: "verified",
+          window: {
+            windowId: NOTEPAD.windowId,
+            title: NOTEPAD.title,
+            process: "notepad",
+          },
+          note: "n",
+        };
+      },
+    });
+    await h.read(WECHAT.windowId);
+    const click = () =>
+      computerActionIdentity.run("call-i1", () =>
+        h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-2:0" }),
+      );
+    const result = await click();
+    expect(result.ok).toBe(true);
+    // Asked about 发送 (the name as this server holds it), then the device's reason.
+    expect(h.cards.map((card) => card.outcome.reason)).toEqual([
+      "在窗口「微信」里点击「发送」：控件名含「发送」，需要你批准。",
+      `设备端核对后认为这一步需要你批准：${reason.slice(0, DESKTOP_LIMITS.titleMax)}。`,
+    ]);
+    expect(h.writesPosted().map((post) => post.payload.approved)).toEqual([
+      true,
+      true,
+    ]);
+    expect(h.writesPosted()[1]?.payload).toMatchObject({
+      approvedControlName: "发送",
+      approvedReason: reason.slice(0, DESKTOP_LIMITS.titleMax),
+    });
+    expect(Object.keys(h.writesPosted()[0]?.payload ?? {})).not.toContain(
+      "approvedReason",
+    );
+    expect(DESKTOP_APPROVED_AGAIN).toBe(":approved2");
+    const keys = [
+      JSON.stringify(["bot", "/desktop/click", "call-i1:approved"]),
+      JSON.stringify(["bot", "/desktop/click", "call-i1:approved2"]),
+    ];
+    expect(
+      h.keys.filter((sent) => sent.path === "/desktop/click").map((s) => s.key),
+    ).toEqual(keys);
+    // The same call again (a replay): the journal answers both keys, the device does nothing more.
+    await h.read(WECHAT.windowId);
+    const before = h.writesPosted().length;
+    expect((await click()).ok).toBe(true);
+    expect(h.writesPosted()).toHaveLength(before);
+    expect(
+      h.keys.filter((sent) => sent.path === "/desktop/click").map((s) => s.key),
+    ).toEqual([...keys, ...keys]);
+  });
+
+  test("I1: asked again at most once per call, never in a loop", async () => {
+    const asked = needsOf("窗口标题含「银行」");
+    const h = harness({
+      write: () => {
+        throw new DeviceActionError(asked);
+      },
+    });
+    await h.read();
+    await expect(
+      h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" }),
+    ).rejects.toThrow(asked);
+    expect(h.cards).toHaveLength(2);
+    expect(h.writesPosted()).toHaveLength(2);
+    // Unapproved first, then the device asked: one card, as before, and no third send.
+    const g = harness({
+      session: true,
+      write: () => {
+        throw new DeviceActionError(asked);
+      },
+    });
+    await g.read();
+    await expect(
+      g.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" }),
+    ).rejects.toThrow(asked);
+    expect(g.cards).toHaveLength(1);
+    expect(g.writesPosted().map((post) => post.payload.approved)).toEqual([
+      false,
+      true,
+    ]);
+  });
+
+  test("I3: deleting at once is asked about on the server too, with its own words", async () => {
+    const h = harness({ session: true });
+    for (const keys of ["shift+delete", "cmd+backspace", "cmd+alt+backspace"]) {
+      await h.gateway.pressDesktopKey("bot", ACTOR, {
+        windowId: NOTEPAD.windowId,
+        keys,
+      });
+      expect(h.cards.at(-1)?.outcome).toEqual({
+        behaviour: "ask",
+        source: "desktop_action",
+        reason: `在窗口「${NOTEPAD.title}」里按 ${keys}，可能会直接删除文件或内容，需要你批准。`,
+      });
+    }
+    expect(h.cards).toHaveLength(3);
+  });
+});
+
+const needsOf = (reason: string) => desktopMessage("needs_approval", reason);

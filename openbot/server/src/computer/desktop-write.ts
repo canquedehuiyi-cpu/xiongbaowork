@@ -10,7 +10,10 @@ import {
   desktopMessage,
   desktopTextNeedsApproval,
 } from "../../../shared/desktop-control";
-import { DESKTOP_SESSION_TOOL } from "../approvals/desktop-policy";
+import {
+  DESKTOP_SESSION_TOOL,
+  desktopSelfWindowWords,
+} from "../approvals/desktop-policy";
 import { approvedActionUnderway } from "../approvals/service";
 import {
   type ApprovalCandidate,
@@ -635,15 +638,32 @@ export function createDesktopStoppedHandler(deps: {
  * row has its length.
  *
  * The device checks every write again with the same shared rules, and with the team's action words
- * this server sends it (`actionWords`). It is told the title the owner saw (`approvedTitle`). When it
- * still asks for approval this server did not ask for, the owner is asked once with the device's
- * reason and the write is sent once more, approved; asked already, the device's answer goes back to
- * the model as it is. A write whose outcome the device could not tell (`outcomeUnknown`) is never
- * sent again. A done write forgets its window's controls: the window may have changed.
+ * this server sends it (`actionWords`), and with the product's own names (`selfWindowWords`, final
+ * review C1) for a write in a window. It is told the title the owner saw (`approvedTitle`) and, for a
+ * click or a type, the control's name (`approvedControlName`, null when the card named none or nothing
+ * was asked: final review I1). When it still asks for approval, the owner is asked once with the
+ * device's reason and the write is sent once more, approved, with that reason (`approvedReason`):
+ * whether or not this server had asked already (final review I1: an approval is for what the card
+ * showed, and the device sees the whole name and title). At most once per call: asked again after
+ * that, the device's answer goes back to the model as it is. A write whose outcome the device could
+ * not tell (`outcomeUnknown`) is never sent again. A done write forgets its window's controls: the
+ * window may have changed.
  */
 
 /** What an approved write's dispatch key adds to the tool call's (see `send` in `carry`). */
 export const DESKTOP_APPROVED_RESEND = ":approved";
+/**
+ * What the write sent again after an approved one, once the owner approved the device's reason,
+ * adds instead (final review I1): another payload, so another key.
+ */
+export const DESKTOP_APPROVED_AGAIN = ":approved2";
+/** The writes that happen in a window: they carry the product's own names for the device. */
+const IN_A_WINDOW: ReadonlySet<DesktopWriteAction> = new Set([
+  "click",
+  "type",
+  "key",
+  "focus",
+]);
 /** The model's text is longer than a desktop write may type. */
 export const DESKTOP_TEXT_TOO_LONG = `文字太长，最多 ${DESKTOP_LIMITS.textMaxBytes} 字节。`;
 /** A program to launch named by a path, a flag or anything else that is not a name (the device's words). */
@@ -803,7 +823,7 @@ export function createDesktopWriteMethods(deps: {
     };
   }
 
-  /** One write, through the gate; asked again once only when the device asks and we had not. */
+  /** One write, through the gate; asked again once only when the device asks (I1). */
   async function carry<R = DesktopWriteResult>(plan: {
     toolName: string;
     action: DesktopWriteAction;
@@ -864,6 +884,10 @@ export function createDesktopWriteMethods(deps: {
     };
     /** Whether the last write sent had been approved; undefined until one is sent. */
     let approvedSent: boolean | undefined;
+    /** The device's reason the owner approved, once asked again with it (I1). */
+    let approvedReason: string | undefined;
+    /** The suffix an approved write's key takes: the second approved payload has its own (I1). */
+    let approvedSuffix = DESKTOP_APPROVED_RESEND;
     /*
      * ONE KEY PER KIND OF PAYLOAD. The runner's journal carries out a key once and answers the same
      * key with the same payload from what it kept, but refuses the same key with another payload
@@ -872,6 +896,8 @@ export function createDesktopWriteMethods(deps: {
      * the approval's own run of the tool, `resume`) is two requests, so the approved one always goes
      * under the call's key with a fixed suffix, and the unapproved one under the call's key. Each key
      * only ever has one payload, and the same call replayed meets the journal's answer for each.
+     * Approved, then asked again by the device and approved again with its reason (I1), is a third:
+     * `DESKTOP_APPROVED_AGAIN`.
      */
     const send = async (session: string, approved: boolean) => {
       approvedSent = approved;
@@ -893,6 +919,22 @@ export function createDesktopWriteMethods(deps: {
              * empty one only ever asks again.
              */
             approvedTitle: facts?.title ?? "",
+            // The product's own names, for the device's check of the live title (C1).
+            ...(IN_A_WINDOW.has(plan.action)
+              ? { selfWindowWords: desktopSelfWindowWords() }
+              : {}),
+            // The control's name the card showed, or null (I1): the device checks the whole name.
+            ...(plan.action === "click" || plan.action === "type"
+              ? {
+                  approvedControlName: approved
+                    ? (facts?.control?.name ?? null)
+                    : null,
+                }
+              : {}),
+            // The device's own reason, when the owner approved it (I1).
+            ...(approved && approvedReason !== undefined
+              ? { approvedReason }
+              : {}),
             ...plan.payload,
           },
           plan.signal,
@@ -900,10 +942,7 @@ export function createDesktopWriteMethods(deps: {
           runnerAddress(machine as { tenantId: string; deviceId: string }),
         );
       return approved && identity !== undefined
-        ? computerActionIdentity.run(
-            `${identity}${DESKTOP_APPROVED_RESEND}`,
-            write,
-          )
+        ? computerActionIdentity.run(`${identity}${approvedSuffix}`, write)
         : write();
     };
     /*
@@ -954,10 +993,17 @@ export function createDesktopWriteMethods(deps: {
       output = await run(resolve);
     } catch (error) {
       const reason = deviceAsks(error);
-      // Asked and approved already, or never sent: the device's answer (or ours) as it is.
-      if (reason === undefined || approvedSent !== false || !facts)
+      // Never sent, or not the device asking: its answer (or ours) as it is.
+      if (reason === undefined || approvedSent === undefined || !facts)
         throw failed(error);
-      // Sent again, approved: under the approved key (see `send`).
+      /*
+       * Asked once more with the device's reason, approved or not before (I1: an approval is for
+       * what the card showed). Sent again approved, with that reason: under the approved key, or,
+       * after an approved write, under a key of its own (see `send`). Only once: whatever comes back
+       * from that goes to the model as it is.
+       */
+      if (approvedSent) approvedSuffix = DESKTOP_APPROVED_AGAIN;
+      approvedReason = reason;
       const asked: DesktopWriteFacts = { ...facts, deviceReason: reason };
       try {
         output = await run(asked);

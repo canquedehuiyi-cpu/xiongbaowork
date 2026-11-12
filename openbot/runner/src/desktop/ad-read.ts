@@ -211,6 +211,31 @@ export function toReadError(error: unknown, platform: DesktopPlatform): Error {
   return readError("failed");
 }
 
+/**
+ * Whatever a write's CLI call threw, as the writer reports it (final review M3): an agent-desktop
+ * error by its code and our own words, never its message, which could repeat what a control holds;
+ * a helper that did not start without the detail it gave. The one exception is INVALID_ARGS, refused
+ * while agent-desktop reads our own command line: it can only repeat what we passed there (a ref, a
+ * window id, an app's name, a key), never typed text, which goes through stdin.
+ */
+export function toWriteError(error: unknown, platform: DesktopPlatform): Error {
+  if (error instanceof AgentDesktopError && error.code !== "INVALID_ARGS") {
+    const code = codeFor(error, platform);
+    if (code !== "failed") return readError(code);
+    const named = /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code)
+      ? error.code
+      : "UNKNOWN";
+    return readError("failed", `错误码 ${named}`);
+  }
+  if (error instanceof DesktopHelperError && error.code === "start_failed")
+    return new DesktopHelperError(
+      "start_failed",
+      desktopMessage("start_failed"),
+      error.sent,
+    );
+  return toReadError(error, platform);
+}
+
 /** A failed read as an action outcome. Never `outcomeUnknown`. */
 export function readFailure(error: unknown): ActionOutcome {
   if (isAbort(error)) return { ok: false, error: "已在设备上停止。" };

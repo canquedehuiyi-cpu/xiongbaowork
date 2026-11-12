@@ -66,6 +66,22 @@ export type DesktopWriteCommon = {
   approved: boolean;
   actionWords: string[];
   approvedTitle?: string;
+  /**
+   * The product's own names (final review C1), sent by the server from its brand: a window whose
+   * title holds one is the product's own page or app, asked about every time like a sensitive one.
+   * Sent with the writes in a window (click, type, key, focus).
+   */
+  selfWindowWords?: string[];
+  /**
+   * The control's name the owner saw on the card (final review I1), from the server's cache; null
+   * when nothing was approved or the card named no control. Click and type only.
+   */
+  approvedControlName?: string | null;
+  /**
+   * The device's own reason the owner approved (final review I1): sent only with the write sent
+   * again after the device asked. A word it names counts as seen.
+   */
+  approvedReason?: string;
 };
 /** What each desktop write carries besides `DesktopWriteCommon`, by action. */
 export type DesktopWriteTargets = {
@@ -302,15 +318,37 @@ export const DESKTOP_WINDOW_WORDS: readonly string[] = [
   "paypal",
 ];
 
-/** The first of `words` that `text` contains, ignoring case; an empty word never matches. */
+/*
+ * MATCHING FORMS (final review M2). Only for matching, never for what is shown: NFKC (a full-width
+ * `ｓｅｎｄ` is `send`), format characters (`\p{Cf}`: zero-width spaces and joiners, the soft hyphen)
+ * taken out, lower case; `compact` also takes out every space, so 「删 除」 is 「删除」. A word matches
+ * as it did before OR in these forms: only ever more matches.
+ */
+const FORMAT_CHARS = /\p{Cf}/gu;
+const SPACES = /\s/gu;
+function folded(text: string): string {
+  return text.normalize("NFKC").replace(FORMAT_CHARS, "").toLowerCase();
+}
+function compact(text: string): string {
+  return folded(text).replace(SPACES, "");
+}
+
+/**
+ * The first of `words` that `text` contains, ignoring case; an empty word never matches. Also in the
+ * matching forms above, where a word with nothing left of it never matches.
+ */
 export function sensitiveWord(
   text: string,
   words: readonly string[],
 ): string | undefined {
   const haystack = text.toLowerCase();
-  return words.find(
-    (word) => word !== "" && haystack.includes(word.toLowerCase()),
-  );
+  const tight = compact(text);
+  return words.find((word) => {
+    if (word === "") return false;
+    if (haystack.includes(word.toLowerCase())) return true;
+    const needle = compact(word);
+    return needle !== "" && tight.includes(needle);
+  });
 }
 
 /**
@@ -338,41 +376,186 @@ export const DEFAULT_DESKTOP_ACTION_WORDS: readonly string[] = [
   "purchase",
 ];
 
+/**
+ * Approving, allowing and refusing (final review C1): action words whatever list is in force, the
+ * team's or the default, so a click on 「允许一次」 or 「Approve」 asks every time. They are not in
+ * `DEFAULT_DESKTOP_ACTION_WORDS` (the spec's seventeen, which a team's list replaces): a team that
+ * replaced its list (or an employee that replaced it) cannot drop them.
+ */
+export const DESKTOP_APPROVAL_WORDS: readonly string[] = [
+  "批准",
+  "允许",
+  "同意",
+  "拒绝",
+  "approve",
+  "allow",
+  "deny",
+  "reject",
+];
+
 const ASCII_WORD = /^[\x20-\x7e]+$/;
+
+/** Whether `word` (lower case, ASCII) stands as a whole word in `haystack` (lower case). */
+function wholeWord(haystack: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(haystack);
+}
+
+/** Whether `word` is in `text` as `desktopWordHit` reads it. */
+function wordIn(text: string, word: unknown): boolean {
+  if (typeof word !== "string" || word.trim() === "") return false;
+  const needle = word.toLowerCase();
+  if (!ASCII_WORD.test(word)) {
+    if (text.toLowerCase().includes(needle)) return true;
+    const tight = compact(word);
+    return tight !== "" && compact(text).includes(tight);
+  }
+  // An ASCII word stays a whole word in the matching form too: spaces are kept, so no word is made
+  // by joining two (`Pay now` is not `paynow`).
+  return (
+    wholeWord(text.toLowerCase(), needle) || wholeWord(folded(text), needle)
+  );
+}
 
 /**
  * The first of `words` that `text` holds, for a desktop write (design decision 11): a word with any
  * non-ASCII character (Chinese) matches as a substring; a plain ASCII word matches only as a whole
- * word, ignoring case, so `pay` is in `Pay now` and not in `Display`. Blank words never match.
+ * word, ignoring case, so `pay` is in `Pay now` and not in `Display`. Blank words never match. Also
+ * in the matching forms (M2): 「删\u200b除」, 「删 除」 and `ｓｅｎｄ` hold 删除 and send.
  */
 export function desktopWordHit(
   text: string,
   words: readonly string[],
 ): string | undefined {
   if (typeof text !== "string" || text === "") return undefined;
-  const lower = text.toLowerCase();
-  return words.find((word) => {
-    if (typeof word !== "string" || word.trim() === "") return false;
-    const needle = word.toLowerCase();
-    if (!ASCII_WORD.test(word)) return lower.includes(needle);
-    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(lower);
-  });
+  return words.find((word) => wordIn(text, word));
+}
+
+/** Every one of `words` that `text` holds, in the order of `words` (`desktopWordHit`'s reading). */
+export function desktopWordHits(
+  text: string,
+  words: readonly string[],
+): string[] {
+  if (typeof text !== "string" || text === "") return [];
+  return words.filter((word) => wordIn(text, word));
+}
+
+/**
+ * The action word a control's name holds: the words in force (`desktopActionWordsOf`) first, then
+ * `DESKTOP_APPROVAL_WORDS`, which apply whatever the list.
+ */
+export function desktopActionWordHit(
+  name: string,
+  words: readonly string[],
+): string | undefined {
+  return (
+    desktopWordHit(name, words) ?? desktopWordHit(name, DESKTOP_APPROVAL_WORDS)
+  );
+}
+
+/** The product's names as given, without anything that has nothing left in the matching form. */
+function windowWordsWith(extra: readonly string[] | undefined): string[] {
+  const more = (Array.isArray(extra) ? extra : []).filter(
+    (word): word is string => typeof word === "string" && compact(word) !== "",
+  );
+  return [...DESKTOP_WINDOW_WORDS, ...more];
+}
+
+/**
+ * Every window word a title holds, in order: `DESKTOP_WINDOW_WORDS` first, then `extra` (the
+ * product's own names, final review C1). Each by substring or by whole word, whichever hits.
+ */
+export function desktopWindowWordHits(
+  title: string,
+  extra?: readonly string[],
+): string[] {
+  if (typeof title !== "string") return [];
+  return windowWordsWith(extra).filter(
+    (word) =>
+      sensitiveWord(title, [word]) !== undefined ||
+      desktopWordHit(title, [word]) !== undefined,
+  );
 }
 
 /**
  * The first of `DESKTOP_WINDOW_WORDS` a window's title holds, for a desktop write (design decision 11
  * as revised by the coordinator): a substring match, as phase 1 reads windows, or a whole-word match,
  * whichever hits. A window title errs towards asking (`1Password`, `Online-Banking`); only a control's
- * action words keep the whole-word reading alone. The device checks with this same function.
+ * action words keep the whole-word reading alone. The device checks with this same function. With
+ * `extra` (the product's own names, final review C1) those count too, after the sensitive words.
  */
-export function desktopWindowWordHit(title: string): string | undefined {
-  if (typeof title !== "string") return undefined;
-  return (
-    sensitiveWord(title, DESKTOP_WINDOW_WORDS) ??
-    desktopWordHit(title, DESKTOP_WINDOW_WORDS)
-  );
+export function desktopWindowWordHit(
+  title: string,
+  extra?: readonly string[],
+): string | undefined {
+  return desktopWindowWordHits(title, extra)[0];
 }
+
+/*
+ * THE PRODUCT'S OWN WINDOWS AND TERMINALS (final review C1, M8). A write in one of these is asked
+ * about every time, as in a window with a sensitive title: an employee must not quietly approve its
+ * own cards, change the team's words or settings, or run commands in a terminal. Told apart by the
+ * process `list-windows` names (`app_name`), as packaged:
+ */
+export const DESKTOP_SELF_PROCESSES: readonly string[] = [
+  // desktop-device/src-tauri/tauri.conf.json: mainBinaryName (tauri.linux.conf.json's productName)
+  // and productName, what a Mac names the app.
+  "xiongbao-device",
+  "熊宝数字员工 设备端",
+  // desktop-device/src-tauri/src/sidecar.rs: SIDECAR and LEGACY_SIDECAR.
+  "xiongbao-runner",
+  "openbot-runner",
+  // desktop/src-tauri: the Cargo bin (Contents/MacOS/openbot-desktop, openbot-desktop.exe) and the
+  // productName (XiongBao.app).
+  "openbot-desktop",
+  "XiongBao",
+];
+/** Terminals: what is typed or pasted there runs as a command. */
+export const DESKTOP_TERMINAL_PROCESSES: readonly string[] = [
+  "Terminal",
+  "iTerm2",
+  "cmd.exe",
+  "powershell.exe",
+  "pwsh.exe",
+  "WindowsTerminal.exe",
+  "conhost.exe",
+  "gnome-terminal",
+  // The process that owns gnome-terminal's windows.
+  "gnome-terminal-server",
+  "konsole",
+  "xterm",
+];
+
+/** A process name as compared: its last path segment, NFKC, trimmed, lower case, no `.exe` or `.app`. */
+function processKey(name: string): string {
+  const base = name.normalize("NFKC").trim();
+  const last = base.slice(
+    Math.max(base.lastIndexOf("/"), base.lastIndexOf("\\")) + 1,
+  );
+  return last
+    .toLowerCase()
+    .replace(/\.(exe|app)$/, "")
+    .trim();
+}
+
+const SELF_OR_TERMINAL: ReadonlySet<string> = new Set(
+  [...DESKTOP_SELF_PROCESSES, ...DESKTOP_TERMINAL_PROCESSES].map(processKey),
+);
+
+/** Whether a window's process is the product itself or a terminal (whole names only). */
+export function desktopSelfOrTerminalProcess(process: string): boolean {
+  if (typeof process !== "string") return false;
+  const key = processKey(process);
+  return key !== "" && SELF_OR_TERMINAL.has(key);
+}
+
+/** Why a write in the product's own window or a terminal is asked about, naming the product. */
+export function desktopSelfWindowReason(name: string): string {
+  return `这是${name}自己的界面或命令行窗口，操作前需要你先确认`;
+}
+
+/** The device's copy of it: the device app is this product. */
+export const DESKTOP_SELF_WINDOW_REASON = desktopSelfWindowReason("熊宝");
 
 /**
  * The action words in force: the team's list without blank words, or the default when nothing is
@@ -438,11 +621,22 @@ const SYSTEM_KEYS = [
 ];
 /** Closing a program: asked every time, like deleting; with more modifiers held too. */
 const CLOSE_KEYS = ["alt+f4", "ctrl+f4", "cmd+q", "cmd+w", "ctrl+w"];
+/**
+ * Deleting at once (final review I3): Shift+Delete deletes for good in Explorer, Cmd+Backspace moves
+ * to the Bin in Finder and Cmd+Option+Backspace deletes there, none with a question. Asked every
+ * time, like closing; with more modifiers held too. `delete` is the forward-delete key.
+ */
+const DELETE_KEYS = [
+  "shift+delete",
+  "shift+forwarddelete",
+  "cmd+backspace",
+  "cmd+alt+backspace",
+];
 /** The only two sent with `--force`, once approved, and only exactly these. */
 const FORCED_KEYS: ReadonlySet<string> = new Set(["alt+f4", "cmd+q"]);
 
 export type DesktopKeyClass = {
-  kind: "system" | "close" | "submit" | "plain";
+  kind: "system" | "close" | "delete" | "submit" | "plain";
   normalized: string;
   force: boolean;
 };
@@ -481,6 +675,7 @@ function holds(parsed: ParsedKeys, combo: string): boolean {
 function kindOf(parsed: ParsedKeys): DesktopKeyClass["kind"] {
   if (SYSTEM_KEYS.some((combo) => holds(parsed, combo))) return "system";
   if (CLOSE_KEYS.some((combo) => holds(parsed, combo))) return "close";
+  if (DELETE_KEYS.some((combo) => holds(parsed, combo))) return "delete";
   if (
     parsed.key === "enter" &&
     (parsed.modifiers.size === 0 ||
@@ -495,14 +690,16 @@ function kindOf(parsed: ParsedKeys): DesktopKeyClass["kind"] {
 const KIND_RANK: Record<DesktopKeyClass["kind"], number> = {
   plain: 0,
   submit: 1,
-  close: 2,
-  system: 3,
+  delete: 2,
+  close: 3,
+  system: 4,
 };
 
 /**
  * What pressing `keys` is (design decision 10): `system` (refused, never asked), `close` (asked;
- * `force` only for exactly `alt+f4` and `cmd+q`), `submit` (Enter alone or with ctrl, cmd or alt;
- * shift+Enter is a new line) or `plain`. Undefined when `keys` is not a combination at all.
+ * `force` only for exactly `alt+f4` and `cmd+q`), `delete` (asked, never forced: final review I3),
+ * `submit` (Enter alone or with ctrl, cmd or alt; shift+Enter is a new line) or `plain`. Undefined
+ * when `keys` is not a combination at all.
  *
  * agent-desktop reads `meta` as the Command key on a Mac, so a combination holding `win` is also
  * read as if it held `cmd`, and the stricter reading wins: `meta+q` is closing a program there.
@@ -530,10 +727,26 @@ export function classifyDesktopKeys(keys: string): DesktopKeyClass | undefined {
  * Whether pressing `keys` may press whatever button has the focus: Space alone or with Shift
  * (round-1 ruling: Tab to a button, then Space, would otherwise be an unasked click). The class of
  * the combination is unchanged (`plain`); a write asks for this on top of it.
+ *
+ * On Windows and Linux also Alt with a letter or a digit, Shift held or not (final review I3): the
+ * button's mnemonic, such as 「发送(S)」. On a Mac Alt with a letter types a character, so not there;
+ * with no platform given, Space alone as before.
  */
-export function desktopActivationKey(keys: string): boolean {
+export function desktopActivationKey(
+  keys: string,
+  platform?: DesktopPlatform,
+): boolean {
   const parsed = parseKeys(keys);
   if (!parsed) return false;
+  if (
+    (platform === "windows" || platform === "linux") &&
+    /^[a-z0-9]$/.test(parsed.key) &&
+    parsed.modifiers.has("alt") &&
+    [...parsed.modifiers].every(
+      (modifier) => modifier === "alt" || modifier === "shift",
+    )
+  )
+    return true;
   if (parsed.key !== "space") return false;
   for (const modifier of parsed.modifiers)
     if (modifier !== "shift") return false;
