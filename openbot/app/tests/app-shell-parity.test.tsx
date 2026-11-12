@@ -312,7 +312,10 @@ test("top to bottom: 新对话, the search, the conversations, the destinations,
   expect(follows(list, nav)).toBe(true);
   expect(follows(nav, more)).toBe(true);
   expect(follows(more, account)).toBe(true);
-  expect(textOf(nav)).toBe("员工任务看板自主工作@Waker能力连接");
+  // 用户决定找回 #452 去掉的熊宝分组标题「工作管理」「员工资源」，六项按组排。
+  expect(textOf(nav)).toBe(
+    "工作管理任务看板自主工作@Waker员工资源员工能力连接",
+  );
 });
 
 test("the open entry is drawn with the active row and nothing else is", async () => {

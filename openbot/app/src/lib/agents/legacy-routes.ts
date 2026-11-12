@@ -28,6 +28,10 @@ export function legacyAgentsTarget(search: { new?: boolean; agent?: string }) {
  * 重定向、不能删。
  */
 export const LEGACY_PAGES = {
+  /*
+   * `/approvals` 和 `/team-bots` 不再重定向：熊宝的审批收件箱和团队 Bot 页恢复了，侧栏「更多」直达。两个条目
+   * 留着，说的是同样的内容在上游结构里的位置，tests/legacy-agent-routes.test.ts 按整张表锁着这份清单。
+   */
   "/approvals": "/settings/approvals",
   "/memory": "/capabilities/memory",
   /*
@@ -35,7 +39,7 @@ export const LEGACY_PAGES = {
    * 两位以上员工也开群聊——而 tests/legacy-agent-routes.test.ts 按整张表锁着这份清单。
    */
   "/group/new": "/channel/new",
-  // 团队 Bot：列表里「共享给你的」一节，加上每位员工的「共享」分页。
+  // 团队 Bot 的内容在上游结构里：员工列表「共享给你的」一节，加上每位员工的「共享」分页。
   "/team-bots": "/bots",
   "/knowledge": "/capabilities/knowledge",
   "/role-templates": "/capabilities/roles",

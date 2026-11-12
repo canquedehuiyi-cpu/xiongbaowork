@@ -1,8 +1,14 @@
-import { IconBrightness, IconLanguage, IconLogout } from "@tabler/icons-react";
+import {
+  IconBrightness,
+  IconGauge,
+  IconLanguage,
+  IconLogout,
+} from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { OpenBotVersion } from "@/components/layout/openbot-version";
 import { useOptionalTheme } from "@/components/theme-provider";
+import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +30,7 @@ import {
   useNavigationItems,
 } from "@/lib/navigation";
 import { planSummaryQueryOptions } from "@/lib/quota/queries";
+import { cn } from "@/lib/utils";
 import { useSignOut } from "./use-sign-out";
 
 const menuItemClassName = "gap-2 px-2 py-1.5 text-[13px]";
@@ -58,7 +65,8 @@ function useAvatarAgentId(): string | undefined {
 }
 
 /**
- * 侧栏最底下的账户行：头像、名字和服务端的版本号，点开向上弹出账户菜单——
+ * 侧栏最底下的账户行：头像、名字（下面一行是现在的套餐）和服务端的版本号，旁边是直达套餐与用量的图标；
+ * 点开向上弹出账户菜单——
  * 我的分身、套餐与用量（第二行写着现在的套餐）、设置、管理（仅管理员）、主题、语言、退出登录。
  *
  * 套餐、设置、管理三项读自 `lib/navigation.ts` 的 `account` 分区，皮肤用的是同一份清单。
@@ -78,20 +86,32 @@ export function SidebarAccount() {
     .filter((item) => item.section === "account");
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem className="flex items-center gap-[2px]">
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <SidebarMenuButton
               aria-label={`账户：${name}`}
-              className="h-[46px] gap-[9px] rounded-[9px] px-[4px] hover:bg-foreground/[0.03]"
+              className="h-[46px] min-w-0 flex-1 gap-[9px] rounded-[9px] px-[4px] hover:bg-foreground/[0.03]"
             />
           }
         >
           <AccountAvatar label={name} />
-          {/* The name and the release the server runs, side by side: 80/20 of the row. */}
+          {/*
+           * The name with the plan under it (v0.2.7's second line, back at the user's request), and
+           * the release the server runs beside them: 80/20 of the row.
+           */}
           <span className="grid min-w-0 flex-1 grid-cols-[4fr_1fr] items-center gap-2">
-            <span className="truncate font-semibold text-[12px]">{name}</span>
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-semibold text-[12px] leading-[17px]">
+                {name}
+              </span>
+              {plan ? (
+                <span className="truncate text-[11px] text-faint leading-[15px]">
+                  {plan}
+                </span>
+              ) : null}
+            </span>
             <OpenBotVersion className="text-right text-[10px] text-faint leading-3" />
           </span>
         </DropdownMenuTrigger>
@@ -181,6 +201,22 @@ export function SidebarAccount() {
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      {/*
+       * v0.2.7 的直达图标：套餐与用量一步就到。旧地址 `/plans` 现在重定向到 设置 › 套餐，所以直接链到落点；
+       * 账户菜单里的「套餐与用量」照旧在。
+       */}
+      <Link
+        activeProps={{ className: "bg-foreground/5" }}
+        aria-label="套餐与用量"
+        className={cn(
+          buttonVariants({ size: "icon", variant: "ghost" }),
+          "size-[28px] shrink-0 text-muted-foreground",
+        )}
+        title="套餐与用量"
+        to="/settings/plans"
+      >
+        <IconGauge className="size-[16px]" />
+      </Link>
     </SidebarMenuItem>
   );
 }
