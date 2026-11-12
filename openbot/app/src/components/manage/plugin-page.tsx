@@ -1412,7 +1412,7 @@ export function PluginPage({
                 <p className="mt-3 text-destructive text-sm" role="alert">
                   {atStart(paths.deploymentName)}没有公网地址，所以
                   {personal ? "你" : "谁都"}完成不了连接。请设置
-                  OPENBOT_PUBLIC_URL。
+                  XIONGBAO_PUBLIC_URL（旧名 OPENBOT_PUBLIC_URL 仍可用）。
                 </p>
               ) : server?.dynamicClient ? null : (
                 /* Selectable and monospaced: it is copied by hand into somebody else's console. */

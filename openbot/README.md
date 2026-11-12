@@ -463,7 +463,7 @@ Settings worth knowing:
 | `AGENT_ENDPOINT_ALLOWED_HOSTS`       | Private addresses an agent may be registered at, comma separated. A host, optionally with a port. |
 | `TENANT_PACKAGE_DIR`                 | Directory containing tenant YAML. Defaults to `../examples/qoderwake`.    |
 | `DEPLOYMENT_ID`                      | Names the deployment that minted a thread, when several share one PostgreSQL. |
-| `OPENBOT_SELF_HOST_BANNER`           | Set `false` to hide the bar offering CopilotKit's help self-hosting OpenBot. |
+| `OPENBOT_SELF_HOST_BANNER`           | Set `true` to show the support bar (off by default; it also needs a tenant `supportUrl`). |
 
 Full reference: [docs/configuration.md](docs/configuration.md).
 

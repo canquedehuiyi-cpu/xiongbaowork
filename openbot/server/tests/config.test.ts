@@ -1116,27 +1116,24 @@ describe("generated interfaces", () => {
 });
 
 describe("the self-host banner", () => {
-  test("is on when nothing is set", () => {
-    expect(loadConfig(baseEnvironment).selfHostBanner).toBe(true);
+  test("is off when nothing is set", () => {
+    expect(loadConfig(baseEnvironment).selfHostBanner).toBe(false);
   });
 
-  test.each(["false", "0"])(
-    "is off for OPENBOT_SELF_HOST_BANNER=%p",
+  test("is on only for an explicit OPENBOT_SELF_HOST_BANNER=true", () => {
+    expect(
+      loadConfig({ ...baseEnvironment, OPENBOT_SELF_HOST_BANNER: "true" })
+        .selfHostBanner,
+    ).toBe(true);
+  });
+
+  test.each(["false", "0", "1", "", "no"])(
+    "stays off for OPENBOT_SELF_HOST_BANNER=%p",
     (value) => {
       expect(
         loadConfig({ ...baseEnvironment, OPENBOT_SELF_HOST_BANNER: value })
           .selfHostBanner,
       ).toBe(false);
-    },
-  );
-
-  test.each(["true", "1", "", "no"])(
-    "stays on for OPENBOT_SELF_HOST_BANNER=%p",
-    (value) => {
-      expect(
-        loadConfig({ ...baseEnvironment, OPENBOT_SELF_HOST_BANNER: value })
-          .selfHostBanner,
-      ).toBe(true);
     },
   );
 });

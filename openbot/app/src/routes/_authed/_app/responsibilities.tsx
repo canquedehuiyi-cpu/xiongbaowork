@@ -974,8 +974,8 @@ function TriggerRow({
           </div>
         ) : (
           <p className="text-[12px] text-signal-ink">
-            这个部署没有配置收信（OPENBOT_INBOUND_EMAIL_DOMAIN 和
-            OPENBOT_INBOUND_EMAIL_SNS_TOPIC_ARNS），所以这个地址暂时收不到邮件。
+            这个部署没有配置收信（XIONGBAO_INBOUND_EMAIL_DOMAIN 和
+            XIONGBAO_INBOUND_EMAIL_SNS_TOPIC_ARNS，旧名 OPENBOT_* 仍可用），所以这个地址暂时收不到邮件。
           </p>
         ))}
       {generated && (
