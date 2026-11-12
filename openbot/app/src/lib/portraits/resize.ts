@@ -5,13 +5,33 @@
  * Re-encoding here is what keeps the server's job small and safe. Whatever was picked — a 12MB phone
  * photo, a PNG with metadata — leaves as a fresh WebP (or PNG where the browser cannot write WebP)
  * well under the server's byte limit, with nothing in it but pixels.
+ *
+ * A GIF is the exception: it goes back exactly as it was picked. `createImageBitmap` decodes only
+ * the first frame and the canvas below would re-encode that one frame as WebP, so an animated GIF
+ * uploaded through the picker came back as a still. The server stores a GIF's bytes as they arrive
+ * and still refuses one over its byte limit, so passing it through changes nothing about safety.
  */
 export const PORTRAIT_PIXELS = 256;
 
 /** The formats a person may pick. SVG is deliberately absent: it is a document, not a picture. */
-export const PORTRAIT_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
+export const PORTRAIT_ACCEPT =
+  "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm";
+
+/** A GIF's first four bytes, `GIF8`, read from the file itself, not its claimed type. */
+const GIF_MAGIC = [0x47, 0x49, 0x46, 0x38];
 
 export async function squarePortrait(file: Blob): Promise<Blob> {
+  if (file.type.startsWith("video/")) {
+    throw new Error("视频请直接上传，不要经过图片处理。");
+  }
+  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  if (
+    file.type === "image/gif" ||
+    GIF_MAGIC.every((byte, index) => head[index] === byte)
+  ) {
+    // An animated GIF's frames live in the file; re-encoding would keep only the first.
+    return file;
+  }
   const bitmap = await createImageBitmap(file);
   try {
     const side = Math.min(bitmap.width, bitmap.height);

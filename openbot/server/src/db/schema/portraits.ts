@@ -28,6 +28,10 @@ const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR cu
  * small raster the browser has already squared and re-encoded; the database refuses anything over
  * 256 KiB and any type but PNG, JPEG, WebP and GIF, so a portrait can never be an SVG document.
  *
+ * `outfit` (migration 0203) names the 宝小熊 outfit worn with the face, or nothing: dressing a
+ * face in all five outfits is the second batch, and until then the column only records the choice.
+ * A video loop is not stored here at all; it has its own table (`portrait_media`, also 0203).
+ *
  * WHOSE IT IS. Keyed by the subject, not by a foreign key: a coworker id lives in `agents` and a group
  * id in `waker_groups`, and one table serves both. The route checks the subject exists and that the
  * caller may change it before writing; removing a coworker or a group leaves at most one small row
@@ -40,6 +44,7 @@ export const portraits = pgTable(
     subjectKind: text("subject_kind").notNull(),
     subjectId: text("subject_id").notNull(),
     preset: text("preset"),
+    outfit: text("outfit"),
     contentType: text("content_type"),
     bytes: bytea("bytes"),
     updatedBy: text("updated_by"),
@@ -63,6 +68,10 @@ export const portraits = pgTable(
     check(
       "portraits_preset",
       sql`${table.preset} IS NULL OR ${table.preset} IN ('naughty', 'cute', 'cool', 'happy', 'sweet')`,
+    ),
+    check(
+      "portraits_outfit",
+      sql`${table.outfit} IS NULL OR ${table.outfit} IN ('street', 'guofeng', 'casual', 'tech', 'lion')`,
     ),
     check(
       "portraits_content_type",

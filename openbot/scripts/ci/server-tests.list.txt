@@ -565,6 +565,7 @@ tests/policy-store-tenant.integration.test.ts
 tests/policy-translate.test.ts
 tests/portrait-coworker-access.test.ts
 tests/portrait-image.test.ts
+tests/portrait-media.test.ts
 tests/portraits.test.ts
 tests/private-share-group.test.ts
 tests/proactive-admin.integration.test.ts
