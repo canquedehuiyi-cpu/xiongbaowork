@@ -5,6 +5,12 @@ import {
   setAppEnabled,
   testApp,
 } from "./apps.js";
+import {
+  createDesktopCard,
+  openSettings,
+  restartApp,
+  wireNotice,
+} from "./desktop.js";
 // --- app discovery (sub-project 3) ---
 import { describeCandidates, toggleCandidate } from "./discover.js";
 // --- end app discovery ---
@@ -29,6 +35,8 @@ function render(view) {
   // The folders are this computer's, offered once it is paired to somebody's 分身.
   $("folders").hidden = screen !== "status";
   $("apps").hidden = screen !== "status";
+  $("desktop").hidden = screen !== "status";
+  syncDesktop();
   $("browser").hidden = !view.browserMissing;
 
   if (screen === "form" && view.state.state === "failed") {
@@ -42,6 +50,79 @@ function render(view) {
   $("autostart").textContent = view.autostart ? "已开启" : "未开启";
   $("restart").hidden = !["failed", "stopped"].includes(view.state.state);
   $("log").textContent = view.log;
+}
+
+/** The 「桌面操作」 card, drawn from the shell's answer. Text only. */
+function drawDesktop(described) {
+  if ("error" in described) {
+    $("desktop-error").textContent = described.error;
+    return;
+  }
+  $("desktop-error").textContent = "";
+  $("desktop-title").textContent = described.title;
+  $("desktop-rows").replaceChildren(
+    ...described.rows.map((item) => {
+      const row = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = item.label;
+      const right = document.createElement("span");
+      const state = document.createElement("span");
+      state.className = "state";
+      state.textContent = item.status;
+      state.dataset.tone = item.allowed ? "ok" : "wait";
+      right.append(state);
+      if (item.action) {
+        const { kind } = item.action;
+        const open = document.createElement("button");
+        open.type = "button";
+        open.textContent = item.action.text;
+        open.addEventListener("click", async () => {
+          const result = await openSettings(kind, invoke);
+          if (result.error) $("desktop-error").textContent = result.error;
+        });
+        right.append(open);
+      }
+      row.append(label, right);
+      return row;
+    }),
+  );
+  $("desktop-note").textContent = described.note ?? "";
+  $("desktop-note").hidden = !described.note;
+  $("desktop-guide").hidden = !described.guide;
+  if (described.guide) {
+    $("desktop-guide-image").src = described.guide.image;
+    $("desktop-guide-text").textContent = described.guide.text;
+  }
+  $("desktop-restart").hidden = !described.restart;
+  if (described.restart) {
+    $("desktop-restart-text").textContent = described.restart.text;
+    $("desktop-restart-button").textContent = described.restart.button;
+  }
+}
+
+const desktop = createDesktopCard({ invoke, draw: drawDesktop });
+
+/** Polled only while the card is on screen: its section shown and the window not hidden. */
+function syncDesktop() {
+  desktop.setVisible(
+    !$("desktop").hidden && document.visibilityState !== "hidden",
+  );
+}
+document.addEventListener("visibilitychange", syncDesktop);
+
+$("desktop-restart-button").addEventListener("click", async () => {
+  const result = await restartApp(invoke);
+  if (result.error) $("desktop-error").textContent = result.error;
+});
+
+/** The runner said a desktop action needs a grant (main.rs `show_desktop`). */
+window.showDesktop = () => {
+  void desktop.refresh();
+  $("desktop").scrollIntoView();
+};
+
+for (const details of document.querySelectorAll("#about details")) {
+  wireNotice(details, invoke);
 }
 
 async function refresh() {

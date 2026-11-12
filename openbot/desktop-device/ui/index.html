@@ -148,6 +148,30 @@
         border: 1px solid var(--line);
         border-radius: 6px;
       }
+      #desktop-rows { list-style: none; margin: 0 0 8px; padding: 0; }
+      #desktop-rows li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 6px;
+      }
+      #desktop-rows .state { margin-left: 8px; font-size: 12px; }
+      #desktop button { margin: 0 0 0 4px; padding: 4px 10px; }
+      #desktop-guide img { display: block; max-width: 100%; height: auto; margin: 8px 0 4px; }
+      #about details { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; }
+      #about summary { cursor: pointer; }
+      #about pre {
+        max-height: 240px;
+        overflow: auto;
+        margin: 8px 0 0;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
       [data-tone="ok"] { color: var(--ok); font-weight: 600; }
       [data-tone="wait"] { color: var(--wait); }
       [data-tone="bad"] { color: var(--bad); }
@@ -263,6 +287,44 @@
       </details>
       <div id="app-error" class="error" role="alert"></div>
       <!-- end app discovery -->
+    </section>
+
+    <section id="desktop" hidden>
+      <h2 id="desktop-title">桌面操作</h2>
+      <ul id="desktop-rows"></ul>
+      <p id="desktop-note" class="hint" hidden></p>
+      <div id="desktop-guide" hidden>
+        <img id="desktop-guide-image" alt="系统设置「隐私与安全性 → 辅助功能」列表里，熊宝数字员工 设备端的开关已打开" />
+        <p id="desktop-guide-text" class="hint"></p>
+      </div>
+      <p id="desktop-restart" class="hint" hidden>
+        <span id="desktop-restart-text"></span><button id="desktop-restart-button" type="button"></button>
+      </p>
+      <div id="desktop-error" class="error" role="alert"></div>
+    </section>
+
+    <section id="about">
+      <h2>关于</h2>
+      <details data-notice="LICENSE">
+        <summary>本软件许可</summary>
+        <pre></pre>
+      </details>
+      <details data-notice="NOTICE">
+        <summary>NOTICE</summary>
+        <pre></pre>
+      </details>
+      <details data-notice="THIRD-PARTY-NOTICES.md">
+        <summary>第三方许可</summary>
+        <pre></pre>
+      </details>
+      <details data-notice="licenses/agent-desktop/LICENSE licenses/agent-desktop/COPYRIGHT">
+        <summary>agent-desktop 许可</summary>
+        <pre></pre>
+      </details>
+      <details data-notice="licenses/agent-desktop/THIRD-PARTY.md">
+        <summary>agent-desktop 的第三方许可</summary>
+        <pre></pre>
+      </details>
     </section>
 
     <script type="module" src="main.js"></script>
