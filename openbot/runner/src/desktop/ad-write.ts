@@ -199,7 +199,7 @@ export function createAgentDesktopWriter(opts: {
   const { cli, reader, sessions, control, platform } = opts;
   const now = opts.now ?? Date.now;
 
-  return async (action, body, signal, context) => {
+  const write: AgentDesktopWriter = async (action, body, signal, context) => {
     const started = now();
     if (!DESKTOP_WRITE_ACTIONS.has(action))
       return fail(desktopMessage("unsupported"));
@@ -335,7 +335,9 @@ export function createAgentDesktopWriter(opts: {
               )
             : undefined,
         );
-        const name = target.control?.name ?? "";
+        // The whole name: the one shown is cut to `nameMax`, and a word past that must not go unseen.
+        const name =
+          reader.fullName?.(body.ref as string) ?? target.control?.name ?? "";
         // A control with no name cannot be told apart from any other (round 1).
         if (name.trim() === "") return needs("没能确认要操作的控件");
         const word = desktopWordHit(name, words);
@@ -456,4 +458,51 @@ export function createAgentDesktopWriter(opts: {
     };
     return { ok: true, output };
   };
+
+  /**
+   * ONE WRITE AT A TIME, from resolving its ref to voiding the refs afterwards. The CLI queue only
+   * keeps commands from overlapping; without this, two writes on one snapshot would both resolve
+   * their target before either ran, and the second would act on a window the first just changed.
+   */
+  let tail: Promise<void> = Promise.resolve();
+  return async (action, body, signal, context) => {
+    const prev = tail;
+    let release: () => void = () => {};
+    const mine = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // The next write waits for the one before this and for this one, even if this one gives up.
+    tail = prev.then(() => mine);
+    try {
+      const sessionSignal = sessions.signal;
+      const signals = [signal, sessionSignal].filter(
+        (s): s is AbortSignal => s !== undefined,
+      );
+      if (!(await turn(prev, signals)))
+        // Stopped while waiting: nothing was resolved, checked or sent.
+        return fail(
+          sessionSignal?.aborted
+            ? desktopMessage("stopped")
+            : "已在设备上停止。",
+        );
+      return await write(action, body, signal, context);
+    } finally {
+      release();
+    }
+  };
+}
+
+/** Waits for `prev`; false as soon as any of `signals` aborts (or already has). */
+function turn(prev: Promise<void>, signals: AbortSignal[]): Promise<boolean> {
+  if (signals.some((s) => s.aborted)) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const done = (value: boolean) => {
+      for (const s of signals) s.removeEventListener("abort", onAbort);
+      resolve(value);
+    };
+    const onAbort = () => done(false);
+    for (const s of signals)
+      s.addEventListener("abort", onAbort, { once: true });
+    void prev.then(() => done(true));
+  });
 }
