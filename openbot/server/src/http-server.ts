@@ -15,7 +15,12 @@ import {
 import type { DeploymentConfig } from "./config";
 import type { DeviceChannel } from "./devices/channel";
 import type { DeviceScreens } from "./devices/screen";
-import { runnerClose, runnerMessage, runnerOpen } from "./devices/socket";
+import {
+  type RunnerMessageOptions,
+  runnerClose,
+  runnerMessage,
+  runnerOpen,
+} from "./devices/socket";
 import type { DeviceOwner, DeviceStore } from "./devices/store";
 import {
   CROSS_SITE_REFUSAL,
@@ -204,6 +209,17 @@ function frameLetGo(stream: StreamData) {
     stream.inward.send(FRAME_RECEIVED);
 }
 
+/**
+ * What a runner's socket hands on beyond its frames: a heartbeat's desktop stop goes to the gateway,
+ * whose desktop write gate holds this replica's sessions (desktop write, phase 2). No gateway, nothing.
+ */
+export function runnerMessageOptions(
+  computerGateway: ComputerGateway | undefined,
+): RunnerMessageOptions {
+  const stopped = computerGateway?.desktopStopped?.bind(computerGateway);
+  return stopped ? { onDesktopStopped: stopped } : {};
+}
+
 export function startHttpServer(deps: {
   port: number;
   config: DeploymentConfig;
@@ -237,6 +253,7 @@ export function startHttpServer(deps: {
     devices,
     app,
   } = deps;
+  const runnerOptions = runnerMessageOptions(computerGateway);
 
   /**
    * The live screen, proxied.
@@ -463,6 +480,7 @@ export function startHttpServer(deps: {
             devices.channel,
             raw,
             devices.screens,
+            runnerOptions,
           );
           return;
         }

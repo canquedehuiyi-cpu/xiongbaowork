@@ -89,15 +89,31 @@ import {
 import {
   type DesktopSnapshot,
   type DesktopWindow,
+  desktopActionWordsOf,
   snapshotForStorage,
 } from "@openbot/shared/desktop-control";
+import { isApprovedExecution } from "../approvals/service";
+import type { DesktopStoppedInfo } from "../devices/socket";
 import {
   createDesktopMethods,
   type DesktopGovern,
   type DesktopPost,
   type DesktopSubject,
 } from "./desktop-gateway";
-import { createDesktopWindowCache } from "./desktop-state";
+import { createDesktopSessionCache } from "./desktop-session";
+import {
+  createDesktopControlCache,
+  createDesktopWindowCache,
+} from "./desktop-state";
+import {
+  createDesktopStoppedHandler,
+  createDesktopWriteGate,
+  createDesktopWriteMethods,
+  type DesktopWriteGovern,
+  type DesktopWriteResult,
+  type DesktopWriteRow,
+  type DesktopWriteSubject,
+} from "./desktop-write";
 // --- end desktop control ---
 import {
   botSeat,
@@ -335,6 +351,14 @@ export type ComputerGatewayOptions = {
   approvalRefusal?: (
     candidate: ApprovalCandidate,
   ) => Promise<string | undefined>;
+  // --- desktop control (sub-project 2) ---
+  /**
+   * The team's action words for desktop clicks (`approval_team_settings.desktop_action_words`), sent
+   * to the device with every desktop write so it checks with the list the policy decided on. Absent,
+   * empty or blank: the default list.
+   */
+  desktopActionWords?: () => Promise<readonly string[] | null | undefined>;
+  // --- end desktop control ---
   /** The clock a device's cached tool list is aged by. Tests hand in their own. */
   now?: () => number;
   provider: ComputerProvider;
@@ -616,6 +640,42 @@ export interface ComputerGateway {
     input: { windowId: string; from?: string; screenshot?: boolean },
     signal?: AbortSignal,
   ): Promise<{ untrusted: string } & DesktopSnapshot>;
+  /** Click a control a snapshot showed, inside the owner's desktop session (desktop-write.ts). */
+  clickDesktop(
+    botId: string,
+    actor: ActionActor,
+    input: { ref: string },
+    signal?: AbortSignal,
+  ): Promise<DesktopWriteResult>;
+  /** Type into a control a snapshot showed; the text is never on a row, only its length. */
+  typeDesktop(
+    botId: string,
+    actor: ActionActor,
+    input: { ref: string; text: string; mode: "replace" | "append" },
+    signal?: AbortSignal,
+  ): Promise<DesktopWriteResult>;
+  /** Press a key combination in the window in front. A system key is refused outright. */
+  pressDesktopKey(
+    botId: string,
+    actor: ActionActor,
+    input: { windowId: string; keys: string },
+    signal?: AbortSignal,
+  ): Promise<DesktopWriteResult>;
+  /** Bring a window to the front. */
+  focusDesktopWindow(
+    botId: string,
+    actor: ActionActor,
+    input: { windowId: string },
+    signal?: AbortSignal,
+  ): Promise<DesktopWriteResult>;
+  /**
+   * A runner's heartbeat says the owner stopped a desktop session on that machine: this replica
+   * forgets it and records the stop. Wired to the runner socket (`runnerMessage`'s `onDesktopStopped`).
+   */
+  desktopStopped?(
+    target: { tenantId: string; deviceId: string },
+    info: DesktopStoppedInfo,
+  ): Promise<void>;
   // --- end desktop control ---
 }
 
@@ -1028,6 +1088,11 @@ export function createComputerGateway(
       // --- desktop control (sub-project 2) ---
       /** The desktop window a read is for, from the machine's own window list (never the model's). */
       desktop?: DesktopSubject;
+      /**
+       * A desktop write (desktop-write.ts): `subject` for the approval policy's floors (absent on a
+       * refusal, which never reaches the gate), `row` for the trail, typed text by its length only.
+       */
+      desktopWrite?: { subject?: DesktopWriteSubject; row: DesktopWriteRow };
       // --- end desktop control ---
       /**
        * A local app's tool this call is about (device MCP bridge §3.4): the app's name and the tool.
@@ -1054,7 +1119,8 @@ export function createComputerGateway(
       enable?: { candidate: string; name: string; source: string };
       // --- end app discovery ---
     },
-    run: (address?: string) => Promise<T>,
+    /** `approved`: the person was asked about this very action and agreed (a desktop write's session). */
+    run: (address?: string, approved?: boolean) => Promise<T>,
   ): Promise<T> {
     const { ref, filePath, snapshotId } = subject;
     // Loaded from the store, not this process's memory: the snapshot these refs belong to was very
@@ -1109,7 +1175,11 @@ export function createComputerGateway(
             screenshot: subject.desktop.screenshot,
           },
         }
-      : {};
+      : // A write, by its window and control; what was typed by its length, never its text.
+        subject.desktopWrite
+        ? { desktop: subject.desktopWrite.row }
+        : {};
+    const desktopWrite = subject.desktopWrite?.subject;
     // --- end desktop control ---
 
     /*
@@ -1297,6 +1367,8 @@ export function createComputerGateway(
         : output;
     const continuation = currentApprovalContext();
     let approval: Awaited<ReturnType<ApprovalGate>>;
+    /** What the gate was asked: the person's answer is about exactly this. */
+    let asked: ApprovalCandidate | undefined;
     try {
       if (located?.starting) throw located.starting;
       if (ref && stored && !element) {
@@ -1324,7 +1396,7 @@ export function createComputerGateway(
         if (refused) throw new ApprovalRefusedError(refused);
         app = { ...app, ...(await subject.resolveApp()) };
       }
-      approval = await options.approvalGate?.({
+      asked = {
         actorId: actor.id,
         botId: seat.botId,
         toolRef: toolName,
@@ -1342,34 +1414,44 @@ export function createComputerGateway(
         // --- desktop control (sub-project 2): a window by its process, the listing as `desktop` ---
         scope: subject.desktop
           ? `desktop/${subject.desktop.process}`
-          : toolName === "computer_desktop_windows"
-            ? "desktop"
-            : // --- end desktop control ---
-              app
-              ? `${app.name}/${app.tool}`
-              : approvalScopeOf({
-                  filePath,
-                  command: subject.command,
-                  pageUrl,
-                }),
+          : desktopWrite
+            ? desktopWrite.process
+              ? `desktop/${desktopWrite.process}`
+              : "desktop"
+            : toolName === "computer_desktop_windows"
+              ? "desktop"
+              : // --- end desktop control ---
+                app
+                ? `${app.name}/${app.tool}`
+                : approvalScopeOf({
+                    filePath,
+                    command: subject.command,
+                    pageUrl,
+                  }),
         ...(app?.description
           ? { display: { description: app.description } }
           : {}),
-        args: continuation?.args ?? {
-          ...subject,
-          signal: undefined,
-          device: undefined,
-          refusal: undefined,
-          refusalRule: undefined,
-          app: undefined,
-          resolveApp: undefined,
-          // --- app discovery (sub-project 3) ---
-          enable: undefined,
-          // --- end app discovery ---
-          // --- desktop control (sub-project 2) ---
-          desktop: undefined,
-          // --- end desktop control ---
-        },
+        args:
+          continuation?.args ??
+          // --- desktop control (sub-project 2): a write by its row, typed text by its length ---
+          (subject.desktopWrite
+            ? { ...subject.desktopWrite.row }
+            : // --- end desktop control ---
+              {
+                ...subject,
+                signal: undefined,
+                device: undefined,
+                refusal: undefined,
+                refusalRule: undefined,
+                app: undefined,
+                resolveApp: undefined,
+                // --- app discovery (sub-project 3) ---
+                enable: undefined,
+                // --- end app discovery ---
+                // --- desktop control (sub-project 2) ---
+                desktop: undefined,
+                // --- end desktop control ---
+              }),
         /*
          * A local app's tool is named by the app and the tool alone. Its description is for the card
          * only (`display`): the device reports it afresh each time, and not at all while it is away,
@@ -1384,14 +1466,30 @@ export function createComputerGateway(
               },
               screenshot: subject.desktop.screenshot,
             }
-          : // --- end desktop control ---
-            app
-            ? { app: app.name, tool: app.tool }
-            : {
-                pageUrl,
-                ...(element ? { element, snapshotId } : {}),
-                ...(filePath ? { filePath } : {}),
-              },
+          : subject.desktopWrite
+            ? // The window, control, action and keys an approval binds; never the typed text.
+              {
+                window: {
+                  windowId: subject.desktopWrite.row.windowId,
+                  title: subject.desktopWrite.row.title,
+                  process: subject.desktopWrite.row.process,
+                },
+                action: subject.desktopWrite.row.action,
+                ...(subject.desktopWrite.row.control
+                  ? { control: subject.desktopWrite.row.control }
+                  : {}),
+                ...(subject.desktopWrite.row.keys !== undefined
+                  ? { keys: subject.desktopWrite.row.keys }
+                  : {}),
+              }
+            : // --- end desktop control ---
+              app
+              ? { app: app.name, tool: app.tool }
+              : {
+                  pageUrl,
+                  ...(element ? { element, snapshotId } : {}),
+                  ...(filePath ? { filePath } : {}),
+                },
         /*
          * What this call will actually run and touch, from this call site rather than from the
          * model's arguments, for the gate's dangerous-command and sensitive-path floors and the
@@ -1419,6 +1517,8 @@ export function createComputerGateway(
                 },
               }
             : {}),
+          // The write's window, control and session, for the desktop session and per-action floors.
+          ...(desktopWrite ? { desktopWrite } : {}),
           // --- end desktop control ---
         },
         // --- app discovery (sub-project 3) ---
@@ -1444,7 +1544,8 @@ export function createComputerGateway(
           ...subjectOf,
           refusal: { kind: "person_declined", reason: DECLINED_BY_PERSON },
         }),
-      });
+      };
+      approval = await options.approvalGate?.(asked);
     } catch (error) {
       // Waiting for the person, or the re-check before an approved action runs: nothing was attempted
       // and nothing was refused, so there is nothing to record yet.
@@ -1476,6 +1577,14 @@ export function createComputerGateway(
     // Carried out (or done by the person) when it was first answered, and recorded then.
     if (approval && "replay" in approval)
       return withElement(approval.replay as T);
+    /*
+     * Whether the person agreed to this very action: the gate handed a permit (asked and approved),
+     * or this is the approved action being carried out by its approval, where the gate lets it
+     * through with none. Let through by a rule, or by a deployment with no gate, is not approved.
+     */
+    const approved =
+      approval !== undefined ||
+      (asked !== undefined && isApprovedExecution(asked));
 
     /*
      * The attempt, written before acting: there is no path that acts without this row. An allowed
@@ -1500,10 +1609,13 @@ export function createComputerGateway(
         }
       : undefined;
     let result: T;
+    // --- desktop control (sub-project 2): how long a desktop write took, for its failure row ---
+    const started = now();
+    // --- end desktop control ---
     try {
       result = origin
-        ? await computerActionOrigin.run(origin, () => run(address))
-        : await run(address);
+        ? await computerActionOrigin.run(origin, () => run(address, approved))
+        : await run(address, approved);
       await approval?.complete(
         toolName === "computer_desktop_snapshot"
           ? snapshotForStorage(result as { image?: unknown })
@@ -1526,6 +1638,16 @@ export function createComputerGateway(
        */
       await write(auditStore, {
         ...subjectOf,
+        // --- desktop control (sub-project 2) ---
+        ...(subject.desktopWrite
+          ? {
+              desktop: {
+                ...subject.desktopWrite.row,
+                durationMs: Math.max(0, now() - started),
+              },
+            }
+          : {}),
+        // --- end desktop control ---
         attempt,
         failure: error instanceof Error ? error.message : "The action failed.",
         // A person pressing Stop mid-action is not the computer failing. The message still says so;
@@ -1975,6 +2097,47 @@ export function createComputerGateway(
       address,
     );
   }
+  /*
+   * A desktop write through `govern`, under the machine owner's seat like a read. The ref a write
+   * names is a desktop control's, resolved by the write itself (desktop-write.ts) and never against
+   * the browser's snapshot, so it is not handed to `govern` as one; the row and the approval carry
+   * the window and control instead. `run` is told whether the owner approved this very write.
+   */
+  const desktopWriteGovern: DesktopWriteGovern = (
+    toolName,
+    botId,
+    actor,
+    subject,
+    run,
+  ) =>
+    govern(
+      toolName,
+      deviceSeat(subject.device, botId),
+      actor,
+      {
+        device: subject.device,
+        ...(subject.signal ? { signal: subject.signal } : {}),
+        ...(subject.refusal ? { refusal: subject.refusal } : {}),
+        ...(subject.refusalRule ? { refusalRule: subject.refusalRule } : {}),
+        ...(subject.row
+          ? {
+              desktopWrite: {
+                row: subject.row,
+                ...(subject.desktopWrite
+                  ? { subject: subject.desktopWrite }
+                  : {}),
+              },
+            }
+          : {}),
+      },
+      (_address, approved) => run(approved === true),
+    );
+  /** The windows a read listed, shared with the writes, which name the same windows. */
+  const desktopWindows = createDesktopWindowCache({ now });
+  /** The controls a read showed, which the writes name by ref. */
+  const desktopControls = createDesktopControlCache({ now });
+  /** This replica's memory of the owners' desktop sessions; the device is authoritative. */
+  const desktopSessions = createDesktopSessionCache({ now });
   // --- end desktop control ---
 
   return {
@@ -1995,7 +2158,28 @@ export function createComputerGateway(
       hasApprovalGate: options.approvalGate !== undefined,
       govern: desktopGovern,
       post: desktopPost,
-      windows: createDesktopWindowCache({ now }),
+      windows: desktopWindows,
+      controls: desktopControls,
+    }),
+    ...createDesktopWriteMethods({
+      gate: createDesktopWriteGate({
+        resolveDevice: options.resolveDevice,
+        approvalRefusal: options.approvalRefusal,
+        govern: desktopWriteGovern,
+        post: desktopPost,
+        sessions: desktopSessions,
+      }),
+      windows: desktopWindows,
+      controls: desktopControls,
+      actionWords: async () =>
+        desktopActionWordsOf(
+          (await options.desktopActionWords?.()) ?? undefined,
+        ),
+      post: desktopPost,
+    }),
+    desktopStopped: createDesktopStoppedHandler({
+      sessions: desktopSessions,
+      auditStore,
     }),
     // --- end desktop control ---
 
@@ -3328,6 +3512,12 @@ export function intentOf(
     case "computer_desktop_windows":
     case "computer_desktop_snapshot":
       return "read";
+    // Clicking, typing, pressing a key and switching windows on the owner's desktop.
+    case "computer_desktop_click":
+    case "computer_desktop_type":
+    case "computer_desktop_key":
+    case "computer_desktop_focus":
+      return "write";
     // --- end desktop control ---
     default:
       return undefined;
@@ -3341,7 +3531,7 @@ export function intentOf(
 export function approvalEffectOf(
   intent: PolicyContext["intent"],
 ): "read" | "write" {
-  return ["activate", "type", "write_file", "run_command"].includes(
+  return ["activate", "type", "write_file", "run_command", "write"].includes(
     intent ?? "",
   )
     ? "write"
@@ -3402,13 +3592,18 @@ type ActionRow = {
    */
   app?: { name: string; tool?: string; source?: string };
   // --- desktop control (sub-project 2) ---
-  /** The desktop window a read was for, by title and process; never what was read from it. */
-  desktop?: {
-    windowId: string;
-    title: string;
-    process: string;
-    screenshot: boolean;
-  };
+  /**
+   * The desktop window a read was for, by title and process; never what was read from it. A write's
+   * (`DesktopWriteRow`): the window, control, action and keys, and typed text by its length only.
+   */
+  desktop?:
+    | {
+        windowId: string;
+        title: string;
+        process: string;
+        screenshot: boolean;
+      }
+    | DesktopWriteRow;
   // --- end desktop control ---
 };
 

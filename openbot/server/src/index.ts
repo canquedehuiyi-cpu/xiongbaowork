@@ -1512,6 +1512,8 @@ await startupLifecycle.run(async (startup) => {
         approvalGate: approvalService.gate,
         // Asked before a local app's tool list starts the app on the machine (MCP bridge §4).
         approvalRefusal: approvalService.refusal,
+        // The team's words for desktop clicks, sent to the device with every desktop write.
+        desktopActionWords: () => approvalService.desktopActionWords(),
         policy: () => policyStore.get(),
         // In Postgres, so the ref a click carries resolves against the snapshot that produced it even
         // when the snapshot was taken by another server. A Map here would be blank on every replica

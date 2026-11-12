@@ -75,6 +75,8 @@ const INTENTS: Record<Intent, string> = {
     "an app tool call that changes something, or that is not known to be a read",
   app_call:
     "any call to a connected app's tool, whether it reads or changes something",
+  write:
+    "operating the owner's own desktop: computer_desktop_click, computer_desktop_type, computer_desktop_key, computer_desktop_focus",
 };
 
 /**

@@ -1,5 +1,6 @@
 import {
   classifyDesktopKeys,
+  desktopActivationKey,
   desktopWindowWordHit,
   desktopWordHit,
 } from "../../../shared/desktop-control";
@@ -90,7 +91,12 @@ export function activeDesktopSession(candidate: ApprovalCandidate): boolean {
  *  4. clicking a control whose name has one of the action words (the team's list, or the default);
  *  5. a key that closes a program or submits; a system key or one that cannot be read asks too (the
  *     gateway refuses those before asking, so one reaching here asks rather than slipping through);
- *  6. typing a newline into a single-line field, which submits it.
+ *     Space alone or with Shift (`desktopActivationKey`), which presses the focused button;
+ *  6. typing into a control that is not a text box (`notTextTarget`), a newline into a single-line
+ *     field, which submits it, and any other control character (`controlCharacters`).
+ *
+ * The device checks the same with the same shared functions (Task 21); when it still asks for
+ * approval the server did not ask for, its reason (`deviceReason`) comes first, asked once.
  *
  * Everything here comes from `subject.desktopWrite`, set by the gateway, never from the model.
  */
@@ -108,6 +114,20 @@ export const DESKTOP_CLIPBOARD_READ_REASON =
 /** A system key, or one that cannot be read, that reached the policy (coordinator's copy). */
 export const DESKTOP_SYSTEM_KEY_REASON =
   "这个按键可能会触发系统操作，需要你先确认。";
+/*
+ * The device's further checks (plan Task 21, round 1), asked on the server too so the owner sees one
+ * card rather than a refusal from the device: Space alone or with Shift presses the focused button;
+ * typing into something that is not a text box; control characters or special line breaks.
+ */
+export const DESKTOP_ACTIVATION_KEY_REASON =
+  "这个按键可能会按下当前选中的按钮，需要你先确认。";
+export const DESKTOP_NOT_TEXT_TARGET_REASON = "目标不是输入框，需要你先确认。";
+export const DESKTOP_CONTROL_CHARACTERS_REASON =
+  "输入的文字含控制字符或特殊的换行符，需要你先确认。";
+/** The device asked for approval the server had not asked for (`needs_approval`): its reason. */
+export function desktopDeviceReason(reason: string): string {
+  return `设备端核对后认为这一步需要你批准：${reason.replace(/[。.\s]+$/u, "")}。`;
+}
 /** The writes that happen in a window, so an unknown title is an unknown target. */
 const IN_A_WINDOW: ReadonlySet<DesktopWriteAction> = new Set([
   "click",
@@ -123,6 +143,8 @@ export function desktopActionReason(
 ): string | undefined {
   const write = candidate.subject?.desktopWrite;
   if (!write) return undefined;
+  if (typeof write.deviceReason === "string" && write.deviceReason.trim())
+    return desktopDeviceReason(write.deviceReason);
   const title = write.title ?? "";
   const windowWord = desktopWindowWordHit(title);
   if (windowWord)
@@ -130,7 +152,9 @@ export function desktopActionReason(
   if (write.action === "clipboard_read") return DESKTOP_CLIPBOARD_READ_REASON;
   if (
     write.control === null ||
-    (!write.title?.trim() && IN_A_WINDOW.has(write.action))
+    (!write.title?.trim() && IN_A_WINDOW.has(write.action)) ||
+    // A control with no name cannot be told apart from any other (Task 21, round 1).
+    (write.action === "click" && !write.control?.name?.trim())
   )
     return `没能确认要操作的控件，在窗口「${title}」里执行前需要你批准。`;
   if (write.action === "click" && write.control) {
@@ -146,9 +170,15 @@ export function desktopActionReason(
     if (kind === "submit")
       return `在窗口「${title}」里按 ${keys}，可能会把内容提交或发送出去，需要你批准。`;
     if (kind !== "plain") return DESKTOP_SYSTEM_KEY_REASON;
+    if (desktopActivationKey(keys)) return DESKTOP_ACTIVATION_KEY_REASON;
   }
-  if (write.action === "type" && write.newlineInSingleLine === true)
-    return `往窗口「${title}」的单行输入框「${write.control?.name ?? ""}」里输入带换行的文字，相当于提交，需要你批准。`;
+  if (write.action === "type") {
+    if (write.notTextTarget === true) return DESKTOP_NOT_TEXT_TARGET_REASON;
+    if (write.newlineInSingleLine === true)
+      return `往窗口「${title}」的单行输入框「${write.control?.name ?? ""}」里输入带换行的文字，相当于提交，需要你批准。`;
+    if (write.controlCharacters === true)
+      return DESKTOP_CONTROL_CHARACTERS_REASON;
+  }
   return undefined;
 }
 
