@@ -18,6 +18,7 @@
 
 mod apps;
 mod autostart;
+mod desktop_permissions;
 mod process_tree;
 mod roots;
 mod sidecar;
@@ -92,6 +93,10 @@ impl Observer for Tray {
             Ok(()) => set_autostart_check(&self.0, true),
             Err(error) => eprintln!("[device] could not turn on start at login: {error}"),
         }
+    }
+
+    fn desktop_permission(&self) {
+        show_desktop(&self.0);
     }
 }
 
@@ -325,6 +330,100 @@ async fn enable_candidate(app: AppHandle, candidate: String) -> Result<serde_jso
 }
 // --- end app discovery ---
 
+/// The notices bundled as resources (tauri.bundle.conf.json) that the 「关于」 section may show.
+const BUNDLED_NOTICES: [&str; 6] = [
+    "LICENSE",
+    "NOTICE",
+    "THIRD-PARTY-NOTICES.md",
+    "licenses/agent-desktop/LICENSE",
+    "licenses/agent-desktop/THIRD-PARTY.md",
+    "licenses/agent-desktop/COPYRIGHT",
+];
+
+/// `name` if it is one of the bundled notices, exactly. Anything else is refused, never resolved.
+fn bundled_notice(name: &str) -> Result<&'static str, String> {
+    BUNDLED_NOTICES
+        .into_iter()
+        .find(|notice| *notice == name)
+        .ok_or_else(|| "没有这份许可文件。".to_string())
+}
+
+/// One of the bundled notices, for the 「关于」 section.
+#[tauri::command]
+fn read_bundled_text(app: AppHandle, name: String) -> Result<String, String> {
+    let name = bundled_notice(&name)?;
+    let mut path = app
+        .path()
+        .resource_dir()
+        .map_err(|error| error.to_string())?;
+    path.extend(name.split('/'));
+    std::fs::read_to_string(&path).map_err(|error| format!("无法读取 {name}：{error}"))
+}
+
+/// Whether this computer lets the app read and operate windows, as the bundled agent-desktop says.
+/// Async, because the helper is given up to five seconds.
+#[tauri::command]
+async fn desktop_permissions() -> Result<desktop_permissions::DesktopPermissionView, String> {
+    let platform = std::env::consts::OS;
+    let reply = match desktop_permissions::command_for(platform) {
+        Some(command) => {
+            let program = sidecar::agent_desktop_path().map_err(|error| error.to_string())?;
+            desktop_permissions::run(&program, &[command], desktop_permissions::TIMEOUT)?
+        }
+        None => String::new(),
+    };
+    desktop_permissions::view_for(platform, &reply)
+}
+
+/// Open System Settings at the pane for `kind` (`accessibility` or `screen`). macOS only.
+#[tauri::command]
+fn open_desktop_settings(kind: String) -> Result<(), String> {
+    let url = desktop_permissions::settings_url(&kind).ok_or("没有这个设置项。")?;
+    if !cfg!(target_os = "macos") {
+        return Err("只有 macOS 需要在系统设置里开启。".into());
+    }
+    std::process::Command::new("open")
+        .arg(url)
+        .status()
+        .map_err(|error| error.to_string())
+        .and_then(|status| {
+            if status.success() {
+                Ok(())
+            } else {
+                Err("无法打开系统设置。".into())
+            }
+        })
+}
+
+/// Start this app again, for a grant macOS applies only to a new process. The runner's tree is
+/// stopped first, as on Quit, so the new copy does not find a second runner using the same token.
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    let device = app.state::<Device>();
+    if device.quitting.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(item) = device.status_item.lock().unwrap().as_ref() {
+        let _ = item.set_text("状态：正在重新打开…");
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        stop(&app);
+        app.state::<Device>().stopped.store(true, Ordering::SeqCst);
+        // From a thread other than the main one, this asks the event loop to exit and restarts on
+        // its Exit, which `run` below lets through because the runner is already stopped.
+        app.restart();
+    });
+}
+
+/// The window, opened at its 「桌面操作」 card, when the runner says a desktop action needs a grant.
+fn show_desktop(app: &AppHandle) {
+    show_window(app);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.eval("window.showDesktop && window.showDesktop()");
+    }
+}
+
 /// The window, opened at its folder section, for the tray's 「添加本地文件夹…」.
 fn show_folders(app: &AppHandle) {
     show_window(app);
@@ -475,8 +574,12 @@ fn main() {
             set_app_enabled,
             // --- app discovery (sub-project 3) ---
             discover_apps,
-            enable_candidate
+            enable_candidate,
             // --- end app discovery ---
+            desktop_permissions,
+            open_desktop_settings,
+            restart_app,
+            read_bundled_text
         ])
         // Closing the window hides it; the app lives in the tray and Quit is there.
         .on_window_event(|window, event| {
@@ -551,6 +654,39 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_the_five_bundled_notices_can_be_read() {
+        for name in super::BUNDLED_NOTICES {
+            assert_eq!(super::bundled_notice(name), Ok(name));
+        }
+        for name in [
+            "../device.json",
+            "/etc/passwd",
+            "licenses/agent-desktop/../../x",
+            "licenses/agent-desktop/../../LICENSE",
+            "./LICENSE",
+            "LICENSE ",
+            "license",
+            "licenses\\agent-desktop\\LICENSE",
+            "C:\\Windows\\win.ini",
+            "",
+        ] {
+            assert!(super::bundled_notice(name).is_err(), "{name}");
+        }
+        // Each one is a resource the bundle really ships.
+        let bundle: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.bundle.conf.json")).unwrap();
+        let shipped: Vec<&str> = bundle["bundle"]["resources"]
+            .as_object()
+            .unwrap()
+            .values()
+            .filter_map(|target| target.as_str())
+            .collect();
+        for name in super::BUNDLED_NOTICES {
+            assert!(shipped.contains(&name), "{name} is not bundled");
+        }
+    }
+
     #[test]
     fn the_identifier_is_ours_and_the_name_is_the_product_s() {
         let config: serde_json::Value =

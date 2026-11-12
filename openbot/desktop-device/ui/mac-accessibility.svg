@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="220" viewBox="0 0 400 220" role="img" aria-labelledby="title">
+  <title id="title">系统设置 → 隐私与安全性 → 辅助功能：熊宝数字员工 设备端 的开关已打开</title>
+  <style>
+    text { font: 12px system-ui, -apple-system, "PingFang SC", sans-serif; fill: #1f2328; }
+    .muted { fill: #656d76; }
+    .head { font-size: 14px; font-weight: 600; }
+    .strong { font-weight: 600; }
+  </style>
+  <!-- The window -->
+  <rect x="0.5" y="0.5" width="399" height="219" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <circle cx="16" cy="16" r="5" fill="#ff5f57"/>
+  <circle cx="32" cy="16" r="5" fill="#febc2e"/>
+  <circle cx="48" cy="16" r="5" fill="#28c840"/>
+  <!-- Sidebar -->
+  <rect x="1" y="30" width="120" height="189" fill="#f3f4f6"/>
+  <text x="14" y="56" class="muted">通用</text>
+  <text x="14" y="80" class="muted">显示器</text>
+  <rect x="8" y="92" width="106" height="24" rx="6" fill="#0969da"/>
+  <text x="14" y="108" style="fill:#ffffff">隐私与安全性</text>
+  <text x="14" y="134" class="muted">桌面与程序坞</text>
+  <!-- Pane -->
+  <text x="136" y="50" class="head">‹ 辅助功能</text>
+  <text x="136" y="72" class="muted">允许下面的 App 控制你的电脑。</text>
+  <rect x="136" y="84" width="250" height="112" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <!-- Another app, switch off -->
+  <rect x="148" y="96" width="16" height="16" rx="4" fill="#8c959f"/>
+  <text x="172" y="109" class="muted">其他 App</text>
+  <rect x="338" y="96" width="34" height="18" rx="9" fill="#d0d7de"/>
+  <circle cx="347" cy="105" r="7" fill="#ffffff"/>
+  <line x1="148" y1="126" x2="374" y2="126" stroke="#d0d7de"/>
+  <!-- Ours, switch on, highlighted -->
+  <rect x="140" y="132" width="242" height="30" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="2"/>
+  <rect x="148" y="139" width="16" height="16" rx="4" fill="#bf8700"/>
+  <text x="172" y="152" class="strong">熊宝数字员工 设备端</text>
+  <rect x="338" y="138" width="34" height="18" rx="9" fill="#1a7f37"/>
+  <circle cx="363" cy="147" r="7" fill="#ffffff"/>
+  <text x="148" y="184" class="muted">打开开关后，回到设备端窗口查看。</text>
+  <!-- Pointer at the switch -->
+  <path d="M368 166 l14 24 l-7 -2 l-4 8 l-4 -2 l4 -8 l-7 -1 z" fill="#1f2328" stroke="#ffffff" stroke-width="1"/>
+</svg>
