@@ -133,12 +133,27 @@ const userTurnsOf = (continuation: ApprovalContinuation | undefined) =>
  * lives with its person-facing version in shared/approval-outcomes.ts.
  */
 export const APPROVAL_OUTCOME_UNKNOWN = OUTCOME_UNKNOWN;
+/** The approved action, as its approval bound it: which tool, with which arguments, on what. */
+export type ApprovedActionBinding = {
+  toolRef: string;
+  args: unknown;
+  target: unknown;
+};
+const bindingOf = (action: ApprovalAction): ApprovedActionBinding => ({
+  toolRef: action.toolRef,
+  args: action.args,
+  target: action.target,
+});
 const executionAuthority = new AsyncLocalStorage<{
   approvalId: string;
   digest: string;
   owner: string;
+  bound: ApprovedActionBinding;
 }>();
-const validationProbe = new AsyncLocalStorage<{ action?: ApprovalAction }>();
+const validationProbe = new AsyncLocalStorage<{
+  action?: ApprovalAction;
+  bound?: ApprovedActionBinding;
+}>();
 /**
  * Whether this call is an approved action's re-check, which only asks the gate what it would decide.
  * Anything with a side effect of its own (spending a one-time consent) must wait for the real run.
@@ -151,6 +166,19 @@ export const isApprovalRecheck = () => validationProbe.getStore() !== undefined;
  * the action approved. A caller that has to know whether the person agreed to this very step (opening
  * a desktop session, plan Task 16) asks this as well as whether the gate handed it a permit.
  */
+/**
+ * The approved action this call is the re-check or the run of (`validateReentry`, `resume`), as its
+ * approval bound it, or undefined anywhere else. For a call whose own view of its target is kept by
+ * one replica for a while (a desktop control, plan Task 22): an approval answered after that view is
+ * gone can be carried out on the target the person approved, and the gate still compares the whole
+ * action, so a target that reads differently now is not carried out.
+ */
+export function approvedActionUnderway(): ApprovedActionBinding | undefined {
+  return (
+    executionAuthority.getStore()?.bound ?? validationProbe.getStore()?.bound
+  );
+}
+
 export function isApprovedExecution(candidate: ApprovalCandidate): boolean {
   const authority = executionAuthority.getStore();
   if (!authority) return false;
@@ -474,7 +502,8 @@ export function createApprovalService(
       execute: () => Promise<unknown>,
     ): Promise<ApprovalAction> {
       const continuation = parseApprovalContinuation(action.continuation);
-      const probe: { action?: ApprovalAction } = {};
+      const probe: { action?: ApprovalAction; bound?: ApprovedActionBinding } =
+        { bound: bindingOf(action) };
       try {
         await withApprovalContext(continuation, () =>
           validationProbe.run(probe, execute),
@@ -1204,6 +1233,7 @@ export function createApprovalService(
                     approvalId: id,
                     digest: approved.actionDigest,
                     owner: ownerUserId,
+                    bound: bindingOf(approved),
                   },
                   () => dependencies.execute(approved),
                 ),

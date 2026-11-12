@@ -146,6 +146,10 @@ function harness(
     gate?: "allow" | ((candidate: ApprovalCandidate) => Promise<unknown>);
     refusal?: (candidate: ApprovalCandidate) => string | undefined;
     teamWords?: string[];
+    /** What the device lists as its windows now (default: `windows`, or notepad and WeChat). */
+    windowsList?: () => DesktopWindow[];
+    /** The gateway's clock: its window and control lists age by it. */
+    now?: () => number;
   } = {},
 ) {
   const posts: Posted[] = [];
@@ -168,7 +172,10 @@ function harness(
       const body = (payload ?? {}) as Record<string, unknown>;
       posts.push({ path, payload: body });
       if (path === "/desktop/windows")
-        return { windows: options.windows ?? [NOTEPAD, WECHAT] } as T;
+        return {
+          windows: options.windowsList?.() ??
+            options.windows ?? [NOTEPAD, WECHAT],
+        } as T;
       if (path === "/desktop/snapshot") {
         const window =
           [NOTEPAD, WECHAT].find((w) => w.windowId === body.windowId) ??
@@ -221,6 +228,7 @@ function harness(
     auditStore: audit,
     policy: () => PERMISSIVE,
     transport,
+    ...(options.now ? { now: options.now } : {}),
     resolveDevice: async () =>
       options.owner === undefined
         ? MACHINE
@@ -271,7 +279,77 @@ function harness(
     payloads,
     read,
     token: () => token,
+    /** The owner stopped the session on the device, or it expired there. */
+    endSession: () => {
+      token = undefined;
+    },
   };
+}
+
+/** An approval service over an in-memory store whose one request starts pending (see approval-fresh-producer.test.ts). */
+function approvalFixture() {
+  const rows = new Map<string, ApprovalRecord>();
+  const store: ApprovalStore = {
+    enabled: async () => true,
+    setEnabled: async () => {},
+    open: async (value) => {
+      const row: ApprovalRecord = {
+        id: "approval",
+        ownerUserId: value.actorId,
+        action: structuredClone(value),
+        status: "pending",
+        decision: null,
+        result: null,
+        createdAt: new Date(0),
+        decidedAt: null,
+        consumedAt: null,
+        completedAt: null,
+      } as unknown as ApprovalRecord;
+      if (!rows.has(row.id)) rows.set(row.id, row);
+      return structuredClone(rows.get(row.id) as ApprovalRecord);
+    },
+    get: async (_owner, id) => structuredClone(rows.get(id) as ApprovalRecord),
+    list: async () => [...rows.values()],
+    decide: async (_owner, id) =>
+      structuredClone(rows.get(id) as ApprovalRecord),
+    consume: async (_owner, id, digest) => {
+      const row = rows.get(id) as ApprovalRecord;
+      if (row.action.actionDigest !== digest || row.status !== "approved")
+        return false;
+      row.status = "consumed";
+      return true;
+    },
+    saveResult: async (_owner, id, result) => {
+      const row = rows.get(id) as ApprovalRecord;
+      if (row.result) return false;
+      row.result = structuredClone(result);
+      return true;
+    },
+    finish: async (_owner, id) => {
+      (rows.get(id) as ApprovalRecord).status = "completed";
+    },
+    rules: async () => [],
+    revoke: async () => {},
+  } as ApprovalStore;
+  const service = createApprovalFixtureService(store);
+  approvalFixtureModel(store);
+  return { rows, store, service };
+}
+
+/** The pending request approved, then carried out by the server as the resume sweep does. */
+async function approveAndResume(
+  fixture: ReturnType<typeof approvalFixture>,
+  tool: () => Promise<unknown>,
+) {
+  const row = fixture.rows.get("approval") as ApprovalRecord;
+  row.status = "approved";
+  await fixture.service.resume(OWNER, "approval", {
+    validate: (action: ApprovalRecord["action"]) =>
+      fixture.service.validateReentry(action, tool),
+    execute: () => tool(),
+    continue: async () => {},
+  } as never);
+  return fixture.rows.get("approval") as ApprovalRecord;
 }
 
 const lastWrite = (h: ReturnType<typeof harness>) =>
@@ -287,6 +365,7 @@ describe("desktop writes through the gateway", () => {
     expect(result).toEqual({
       ok: true,
       physical: false,
+      delivery: "verified",
       window: {
         windowId: NOTEPAD.windowId,
         title: NOTEPAD.title,
@@ -353,7 +432,8 @@ describe("desktop writes through the gateway", () => {
       reason: "没能确认要操作的控件，在窗口「」里执行前需要你批准。",
     });
     expect(lastWrite(h)).toMatchObject({ approved: true, ref: "abc123-9:1" });
-    expect(lastWrite(h)).not.toHaveProperty("approvedTitle");
+    // No title known: an empty one, so the device asks again if the live title is sensitive.
+    expect(lastWrite(h).approvedTitle).toBe("");
   });
 
   test("win+r is refused before any card or frame", async () => {
@@ -776,52 +856,7 @@ describe("carried over from the session gate (Task 16)", () => {
 
   test("the approved action carried out by its approval's resume counts as approved", async () => {
     await runAsTenant(OWNER, async () => {
-      const rows = new Map<string, ApprovalRecord>();
-      const store: ApprovalStore = {
-        enabled: async () => true,
-        setEnabled: async () => {},
-        open: async (value) => {
-          const row: ApprovalRecord = {
-            id: "approval",
-            ownerUserId: value.actorId,
-            action: structuredClone(value),
-            status: "pending",
-            decision: null,
-            result: null,
-            createdAt: new Date(0),
-            decidedAt: null,
-            consumedAt: null,
-            completedAt: null,
-          } as unknown as ApprovalRecord;
-          if (!rows.has(row.id)) rows.set(row.id, row);
-          return structuredClone(rows.get(row.id) as ApprovalRecord);
-        },
-        get: async (_owner, id) =>
-          structuredClone(rows.get(id) as ApprovalRecord),
-        list: async () => [...rows.values()],
-        decide: async (_owner, id) =>
-          structuredClone(rows.get(id) as ApprovalRecord),
-        consume: async (_owner, id, digest) => {
-          const row = rows.get(id) as ApprovalRecord;
-          if (row.action.actionDigest !== digest || row.status !== "approved")
-            return false;
-          row.status = "consumed";
-          return true;
-        },
-        saveResult: async (_owner, id, result) => {
-          const row = rows.get(id) as ApprovalRecord;
-          if (row.result) return false;
-          row.result = structuredClone(result);
-          return true;
-        },
-        finish: async (_owner, id) => {
-          (rows.get(id) as ApprovalRecord).status = "completed";
-        },
-        rules: async () => [],
-        revoke: async () => {},
-      } as ApprovalStore;
-      const service = createApprovalFixtureService(store);
-      approvalFixtureModel(store);
+      const { rows, service } = approvalFixture();
       const h = harness({ gate: (candidate) => service.gate(candidate) });
       const args = { windowId: NOTEPAD.windowId };
       const focus = () =>
@@ -860,6 +895,175 @@ describe("carried over from the session gate (Task 16)", () => {
       expect(isApprovedExecution(h.gated.at(-1) as ApprovalCandidate)).toBe(
         false,
       );
+    });
+  });
+});
+
+describe("round 1 of review", () => {
+  test("a write approved while the session was on is not carried out once the device has ended it", async () => {
+    await runAsTenant(OWNER, async () => {
+      const fixture = approvalFixture();
+      const h = harness({
+        session: true,
+        gate: (candidate) => fixture.service.gate(candidate),
+      });
+      const args = { windowId: NOTEPAD.windowId };
+      const focus = () => h.gateway.focusDesktopWindow("bot", ACTOR, args);
+      const context = {
+        ...CONTINUATION(args),
+        toolName: "computer_desktop_focus",
+      };
+      await expect(withApprovalContext(context, focus)).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      // The owner stops the session (or it runs out) before the approval is carried out.
+      h.endSession();
+      const answered = await approveAndResume(fixture, () =>
+        withApprovalContext(context, focus),
+      );
+      expect(h.paths()).not.toContain("/desktop/session_start");
+      expect(h.writesPosted()).toHaveLength(0);
+      expect(answered.result?.error).toContain(
+        "The approved action or resolved target has changed.",
+      );
+    });
+  });
+
+  test("a done write leaves a computer.desktop_write_done row with how it went, and never the text", async () => {
+    const h = harness({ session: true });
+    await h.read();
+    await h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" });
+    const attempt = h
+      .payloads()
+      .find((row) => row.action === "computer_desktop_click");
+    const done = h.rows.filter(
+      (row) => row.eventType === "computer.desktop_write_done",
+    );
+    expect(done).toHaveLength(1);
+    expect(done[0]?.targetType).toBe("computer");
+    expect(done[0]?.payload).toMatchObject({
+      action: "computer_desktop_click",
+      bot: "bot",
+      attempt: attempt?.attempt,
+      desktop: {
+        windowId: NOTEPAD.windowId,
+        title: NOTEPAD.title,
+        process: "notepad",
+        control: { type: "button", name: "确定" },
+        action: "click",
+        physical: false,
+        delivery: "verified",
+        durationMs: expect.any(Number),
+      },
+    });
+    expect(typeof attempt?.attempt).toBe("string");
+    // Typing: the length, never the text.
+    await h.read();
+    await h.gateway.typeDesktop("bot", ACTOR, {
+      ref: "abc123-1:0",
+      text: "SECRET-77 正文",
+      mode: "append",
+    });
+    const typed = h.rows.filter(
+      (row) => row.eventType === "computer.desktop_write_done",
+    )[1];
+    expect((typed as AuditEventInput).payload.desktop).toMatchObject({
+      action: "type",
+      textLength: "SECRET-77 正文".length,
+    });
+    expect(JSON.stringify(h.rows)).not.toContain("SECRET-77");
+    // A failed write has no such row.
+    const g = harness({
+      session: true,
+      write: () => {
+        throw new DeviceActionError(desktopMessage("stale"));
+      },
+    });
+    await g.gateway
+      .focusDesktopWindow("bot", ACTOR, { windowId: NOTEPAD.windowId })
+      .catch(() => undefined);
+    expect(
+      g.rows.filter((row) => row.eventType === "computer.desktop_write_done"),
+    ).toHaveLength(0);
+  });
+
+  test("an approval answered after this replica forgot the control is carried out with the control it bound", async () => {
+    await runAsTenant(OWNER, async () => {
+      let clock = 1_000;
+      const fixture = approvalFixture();
+      const h = harness({
+        now: () => clock,
+        gate: (candidate) => fixture.service.gate(candidate),
+      });
+      await h.read();
+      const args = { ref: "abc123-1:1" };
+      const click = () => h.gateway.clickDesktop("bot", ACTOR, args);
+      const context = {
+        ...CONTINUATION(args),
+        toolName: "computer_desktop_click",
+      };
+      await expect(withApprovalContext(context, click)).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      const asked = h.gated.at(-1) as ApprovalCandidate;
+      expect(asked.subject?.desktopWrite?.control).toEqual({
+        type: "button",
+        name: "确定",
+      });
+      // Answered later than this replica keeps its lists.
+      clock += 300_001;
+      const answered = await approveAndResume(fixture, () =>
+        withApprovalContext(context, click),
+      );
+      expect(answered.result?.error).toBeUndefined();
+      expect(h.paths()).toContain("/desktop/session_start");
+      expect(lastWrite(h)).toMatchObject({
+        approved: true,
+        ref: "abc123-1:1",
+        approvedTitle: NOTEPAD.title,
+      });
+      // The window was asked for again (its title is checked, never assumed).
+      expect(
+        h.paths().filter((path) => path === "/desktop/windows"),
+      ).toHaveLength(2);
+      // Outside an approval's own run, a forgotten control still asks as unknown.
+      const g = harness({ session: true, now: () => clock });
+      await g.read();
+      clock += 300_001;
+      await g.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" });
+      expect(g.cards[0]?.candidate.subject?.desktopWrite?.control).toBeNull();
+    });
+  });
+
+  test("an approval whose window title changed since is not carried out", async () => {
+    await runAsTenant(OWNER, async () => {
+      let clock = 1_000;
+      const fixture = approvalFixture();
+      let windows = [NOTEPAD, WECHAT];
+      const h = harness({
+        now: () => clock,
+        gate: (candidate) => fixture.service.gate(candidate),
+        windowsList: () => windows,
+      });
+      await h.read();
+      const args = { ref: "abc123-1:1" };
+      const click = () => h.gateway.clickDesktop("bot", ACTOR, args);
+      const context = {
+        ...CONTINUATION(args),
+        toolName: "computer_desktop_click",
+      };
+      await expect(withApprovalContext(context, click)).rejects.toBeInstanceOf(
+        HeadlessToolSuspension,
+      );
+      clock += 300_001;
+      windows = [{ ...NOTEPAD, title: "网上银行 - 记事本" }, WECHAT];
+      const answered = await approveAndResume(fixture, () =>
+        withApprovalContext(context, click),
+      );
+      expect(answered.result?.error).toContain(
+        "The approved action or resolved target has changed.",
+      );
+      expect(h.writesPosted()).toHaveLength(0);
     });
   });
 });

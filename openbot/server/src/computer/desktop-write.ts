@@ -10,6 +10,7 @@ import {
   desktopTextNeedsApproval,
 } from "../../../shared/desktop-control";
 import { DESKTOP_SESSION_TOOL } from "../approvals/desktop-policy";
+import { approvedActionUnderway } from "../approvals/service";
 import {
   type ApprovalCandidate,
   type ApprovalSubject,
@@ -118,7 +119,9 @@ export type DesktopWriteFacts = Omit<DesktopWriteSubject, "session">;
 /**
  * A desktop write on its audit row: which window and control, the action, the keys, and of typed text
  * ONLY ITS LENGTH. The text itself is never on a row (it goes to the device and, for the owner to read
- * before approving, on the approval card). How long it took is on the row that says it failed.
+ * before approving, on the approval card). How long it took is on the row that says it failed, or on
+ * the `computer.desktop_write_done` row that says it was done, with whether a real pointer or
+ * keyboard was used and whether the device verified it (gateway.ts).
  */
 export type DesktopWriteRow = {
   windowId: string;
@@ -127,6 +130,10 @@ export type DesktopWriteRow = {
   control?: { type: string; name: string };
   action: DesktopWriteAction;
   keys?: string;
+  /**
+   * How long the typed text was, in UTF-16 code units (`text.length`). The limit a write is refused
+   * at is counted differently: `textMaxBytes`, in UTF-8 bytes.
+   */
   textLength?: number;
   physical?: boolean;
   delivery?: string;
@@ -643,6 +650,8 @@ const [NEEDS_HEAD, NEEDS_TAIL] = desktopMessage(
 export type DesktopWriteResult = {
   ok: true;
   physical: boolean;
+  /** Whether the device verified the write took effect, when it said. */
+  delivery?: "verified" | "unverified";
   window: { windowId: string; title: string; process: string };
   control?: { type: string; name: string };
   note: string;
@@ -667,6 +676,38 @@ function deviceAsks(error: unknown): string | undefined {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The control an approval bound, for the approved write's own re-check and run only: an approval
+ * answered later than this replica keeps its controls (or carried out by another replica) is carried
+ * out on the window and control the owner saw, never on "unknown". Nothing is looser for it: the
+ * approval compares the whole action again (window title included, read afresh from the machine),
+ * and the device resolves the ref strictly against its own snapshot (stale otherwise) and checks the
+ * live title again (`needs_approval` if it turned sensitive). Only the same tool, action and ref.
+ */
+function boundControl(
+  toolName: string,
+  action: DesktopWriteAction,
+  ref: string,
+): DesktopControlEntry | undefined {
+  const bound = approvedActionUnderway();
+  if (!bound || bound.toolRef !== toolName) return undefined;
+  if (!isRecord(bound.args) || bound.args.ref !== ref) return undefined;
+  const target = bound.target;
+  if (!isRecord(target) || target.action !== action) return undefined;
+  const window = isRecord(target.window) ? target.window : undefined;
+  const control = isRecord(target.control) ? target.control : undefined;
+  if (
+    !window ||
+    typeof window.windowId !== "string" ||
+    !DESKTOP_WINDOW_ID.test(window.windowId) ||
+    !control ||
+    typeof control.type !== "string" ||
+    typeof control.name !== "string"
+  )
+    return undefined;
+  return { windowId: window.windowId, type: control.type, name: control.name };
+}
 
 export function createDesktopWriteMethods(deps: {
   gate: DesktopWriteGate;
@@ -712,6 +753,9 @@ export function createDesktopWriteMethods(deps: {
     return {
       ok: true,
       physical: answer.physical === true,
+      ...(answer.delivery === "verified" || answer.delivery === "unverified"
+        ? { delivery: answer.delivery }
+        : {}),
       window: {
         windowId: text(window.windowId, windowId ?? ""),
         title: text(window.title, facts?.title ?? ""),
@@ -756,7 +800,8 @@ export function createDesktopWriteMethods(deps: {
       const control =
         plan.ref === undefined
           ? undefined
-          : deps.controls.control(key, plan.ref);
+          : (deps.controls.control(key, plan.ref) ??
+            boundControl(plan.toolName, plan.action, plan.ref));
       if (plan.ref !== undefined) windowId = control?.windowId;
       const more = plan.facts?.(control) ?? {};
       if ("refusal" in more) return { refusal: more.refusal };
@@ -796,8 +841,12 @@ export function createDesktopWriteMethods(deps: {
           actorId: plan.actor.id,
           approved,
           actionWords: words,
-          // The title the owner saw on the card, or the one this server holds when not asked.
-          ...(facts?.title !== undefined ? { approvedTitle: facts.title } : {}),
+          /*
+           * The title the owner saw on the card, or the one this server holds when not asked; empty
+           * when none is known. The device compares it only when the live title is sensitive, so an
+           * empty one only ever asks again.
+           */
+          approvedTitle: facts?.title ?? "",
           ...plan.payload,
         },
         plan.signal,

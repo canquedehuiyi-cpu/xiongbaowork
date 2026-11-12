@@ -1467,8 +1467,13 @@ export function createComputerGateway(
               screenshot: subject.desktop.screenshot,
             }
           : subject.desktopWrite
-            ? // The window, control, action and keys an approval binds; never the typed text.
+            ? /*
+               * The window, control, action and keys an approval binds, and the session the owner
+               * answered in: approved in a session the device has since ended, it is a different
+               * action (opening a session, asked on its own) and is not carried out. Never the text.
+               */
               {
+                ...(desktopWrite ? { session: desktopWrite.session } : {}),
                 window: {
                   windowId: subject.desktopWrite.row.windowId,
                   title: subject.desktopWrite.row.title,
@@ -1657,6 +1662,44 @@ export function createComputerGateway(
       });
       throw error;
     }
+    // --- desktop control (sub-project 2) ---
+    /*
+     * A desktop write that was done gets one more row saying so (every desktop action has its outcome
+     * on the trail): the same attempt, whether a real pointer or keyboard was used and whether the
+     * device verified it, both as the device answered, and how long it took. Its own type, not
+     * `computer.action_*`, so nothing that counts actions counts this one twice. Never the text.
+     */
+    if (subject.desktopWrite) {
+      const answer = (result && typeof result === "object" ? result : {}) as {
+        physical?: unknown;
+        delivery?: unknown;
+      };
+      await recordAuditEvent(auditStore, {
+        eventType: "computer.desktop_write_done",
+        targetType: "computer",
+        targetId: seat.botId,
+        initiator: actor.initiator,
+        ...(actor.userId ? { actorUserId: actor.userId } : {}),
+        payload: {
+          action: toolName,
+          bot: seat.botId,
+          computer: computerKeyText(seat.key),
+          actor: actor.id,
+          device: subjectOf.device,
+          attempt,
+          desktop: {
+            ...subject.desktopWrite.row,
+            physical: answer.physical === true,
+            ...(answer.delivery === "verified" ||
+            answer.delivery === "unverified"
+              ? { delivery: answer.delivery }
+              : {}),
+            durationMs: Math.max(0, now() - started),
+          },
+        },
+      });
+    }
+    // --- end desktop control ---
     return withElement(result);
   }
 
