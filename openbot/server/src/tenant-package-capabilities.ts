@@ -6,6 +6,7 @@ import { type CredentialStore, sealCredential } from "./credentials";
 import type { Database } from "./db/client";
 import { mcpServers, pluginGrants, skillAssets, skillTools } from "./db/schema";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
+import { catalogueEntry } from "./plugins/catalogue";
 import { isSafeSkillAssetPath } from "./skills/assets-store";
 
 /**
@@ -486,12 +487,40 @@ async function connectorCredentialId(
  * caller can clear the plain-text refs (`plugin_grants`, `skill_tools`) that do not cascade, in the
  * frame that can see them (see `clearDanglingConnectorRefs`).
  */
+/**
+ * 声明了 `auth: user-oauth`、但本构建目录里没有条目的连接器。
+ *
+ * WHY THIS IS A REFUSAL, NOT A WRITE. 平台提供逐用户 OAuth 的全部前提——OAuth client、授权
+ * 端点、scope、逐用户连接的存取——都在目录条目里；store.ts 的 client 注册与逐用户凭据解析
+ * 都按目录条目设闸，没有条目的行只会被 `accessFor` 解析成 `deployment-token`（共享凭据）。
+ * 一个包声明 `user-oauth` 却不在目录里，原样写入的结果是：不同用户的调用全部打到同一个
+ * 账号上，而包面说的是「逐用户授权」。宁可拒绝加载并点名连接器，也不静默降级。
+ *
+ * `hasCatalogueEntry` 注入默认读 {@link catalogueEntry}，为纯函数级测试保留。
+ */
+export function unsupportedPerUserConnectors(
+  connectors: readonly PackageConnector[],
+  hasCatalogueEntry: (id: string) => boolean = (id) => catalogueEntry(id) !== null,
+): string[] {
+  return connectors
+    .filter((connector) => connector.auth === "user-oauth" && !hasCatalogueEntry(connector.id))
+    .map((connector) => connector.id);
+}
+
 export async function synchronizePackageConnectors(
   executor: Pick<Database, "select" | "insert" | "update" | "delete">,
   connectors: readonly PackageConnector[],
   vault: PackageVault | undefined,
   environment: Record<string, string | undefined> = process.env,
 ): Promise<string[]> {
+  const unsupported = unsupportedPerUserConnectors(connectors);
+  if (unsupported.length > 0) {
+    throw new Error(
+      `connectors.yaml 声明的 user-oauth 连接器 ${unsupported.join("、")} 在本构建的目录里没有条目，` +
+        "平台无法为它们提供逐用户 OAuth。拒绝加载，而不是把它们注册成共享凭据的服务器让不同用户的调用打到同一个账号——" +
+        "等目录补上该连接器，或把声明改为 deployment-bearer（明确共享）后再发布。",
+    );
+  }
   for (const connector of connectors) {
     const credentialId = await connectorCredentialId(
       executor,

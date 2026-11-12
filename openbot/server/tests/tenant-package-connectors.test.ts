@@ -325,6 +325,24 @@ describe("connectors in a tenant package", () => {
     expect(await grantCount(`pkg-wild-${suite}/`)).toBe(1);
   });
 
+  test("拒绝加载声明了无目录项 user-oauth 连接器的包：不静默降级成共享凭据", async () => {
+    // user-oauth 声明的是逐用户授权；本构建目录里没有这个连接器的条目，平台给不了逐用户
+    // OAuth。原样写入的结果是共享凭据上所有人打到同一个账号——所以同步必须拒绝，
+    // 而不是像修复前那样把声明丢在一边、注册一个普通的 custom 服务器。
+    const declared = connector({ id: `pkg-useroauth-${suite}`, auth: "user-oauth" });
+    let message = "";
+    try {
+      await applyPackage(packageWith([declared], "useroauth"));
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain(declared.id);
+    expect(message).toContain("user-oauth");
+    // 整包拒绝：什么都没写进来，也没有回收任何行。
+    expect(await serverRow(declared.id)).toHaveLength(0);
+    expect(await packageRows()).toHaveLength(0);
+  });
+
   test("credential_id stays null while the named environment variable is unset", async () => {
     const declared = connector({
       id: `pkg-cred-${suite}`,
