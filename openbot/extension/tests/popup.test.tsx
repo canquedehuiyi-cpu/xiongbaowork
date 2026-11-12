@@ -1390,14 +1390,14 @@ test("kept events are discarded only after the dialog confirms, and Cancel sends
     stateResponse({ state: { ...STOPPED, kept: KEPT, draining: 2 } }),
   );
   await findByText(
-    "40 events from 2 recordings are kept in this browser: the server refused the capture pass (503).",
+    "40 events from 2 recordings are kept in this browser: The server refused the capture pass (503).",
   );
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
   await findByText("The server will never receive them.");
   expect(queryByText(/Discard them\?/)).toBeNull();
   fireEvent.click(getByRole("button", { name: "Cancel" }));
   await waitFor(() =>
-    expect(queryByText(/the server will never receive them/)).toBeNull(),
+    expect(queryByText(/The server will never receive them/)).toBeNull(),
   );
   expect(sent.some((m) => m.type === "page.kept.discard")).toBe(false);
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
@@ -1491,11 +1491,11 @@ test("signed out with recordings kept, the popup says how to send them and Disca
   expect(queryByText("Sending to the server")).toBeNull();
   expect(queryByRole("link")).toBeNull();
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
-  await findByText(/the server will never receive them/);
+  await findByText(/The server will never receive them/);
   expect(sent.some((m) => m.type === "page.kept.discard")).toBe(false);
   fireEvent.click(getByRole("button", { name: "Cancel" }));
   await waitFor(() =>
-    expect(queryByText(/the server will never receive them/)).toBeNull(),
+    expect(queryByText(/The server will never receive them/)).toBeNull(),
   );
   expect(sent.some((m) => m.type === "page.kept.discard")).toBe(false);
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
