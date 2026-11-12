@@ -51,6 +51,9 @@ test("LICENSE, NOTICE and the third-party notices are bundled from where they ar
     "../../LICENSE": "LICENSE",
     "../../NOTICE": "NOTICE",
     "../../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md",
+    "../licenses/agent-desktop/LICENSE": "licenses/agent-desktop/LICENSE",
+    "../licenses/agent-desktop/THIRD-PARTY.md": "licenses/agent-desktop/THIRD-PARTY.md",
+    "../licenses/agent-desktop/COPYRIGHT": "licenses/agent-desktop/COPYRIGHT",
   });
   for (const src of ["../../LICENSE", "../../NOTICE"]) expect(existsSync(join(tauri, src))).toBe(true);
   // Generated, not committed: the bundle reads the file the generator writes at the project root.
