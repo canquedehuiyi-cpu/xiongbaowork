@@ -46,11 +46,11 @@ export function organizationUserStore(database: Database) {
      * switch with POST /api/quota/plan, plus the same 分身 every other arrival path gets.
      */
     if (!provisioned.has(local.id)) {
-      await provisionTenant(database, {
-        id: local.id,
-        email: user.email,
-        name: user.name,
-      });
+      await provisionTenant(
+        database,
+        { id: local.id, email: user.email, name: user.name },
+        { withStaffing: true },
+      );
       provisioned.add(local.id);
     }
     return { ...user, id: local.id };

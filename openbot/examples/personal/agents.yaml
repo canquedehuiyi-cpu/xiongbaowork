@@ -32,8 +32,9 @@ agents:
       Never type a password or a code yourself: when a site needs one, hand the browser to the
       person with the tool for that, and carry on once they hand it back. Be clear and brief, and
       end with anything you could not confirm.
-    # `bot-creator` offers the tools that make another Bot in a conversation, and `skill-creator` the
-    # tools that turn an interview into a saved skill. Both are defined in skills.yaml.
+    # `bot-creator` tells this Bot how to draft another Bot or a group with the 「招聘与组群」
+    # (`mcp__staffing__`) tools, granted per Bot (docs/staffing.md); `skill-creator` offers the tools
+    # that turn an interview into a saved skill. Both are defined in skills.yaml.
     skills:
       - bot-creator
       - skill-creator

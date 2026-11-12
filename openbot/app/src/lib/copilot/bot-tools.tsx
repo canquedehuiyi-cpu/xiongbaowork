@@ -53,11 +53,19 @@ import { queryClient } from "@/query-client";
  * `bot-offer.ts`.
  */
 const authoring: OfferRule = (bot) => bot.skills.has(BOT_CREATOR_SLUG);
-const OFFERED: Readonly<Record<string, OfferRule>> = {
+
+/**
+ * Offered to nobody: employees now draft through the server's staffing tools and the person confirms
+ * on a card, so no run is told it can call `save_bot`. It stays registered because
+ * `authoring-tool-cards.test.tsx` still drives its card through that name.
+ */
+const retired: OfferRule = () => false;
+
+export const OFFERED: Readonly<Record<string, OfferRule>> = {
   list_bots: authoring,
   read_bot: authoring,
   list_bot_skills: authoring,
-  save_bot: authoring,
+  save_bot: retired,
 };
 
 export function BotTools() {
