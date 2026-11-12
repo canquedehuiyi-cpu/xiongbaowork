@@ -111,7 +111,7 @@ export function desktopActionReason(
   if (write.action === "clipboard_read") return DESKTOP_CLIPBOARD_READ_REASON;
   if (
     write.control === null ||
-    (write.title === undefined && IN_A_WINDOW.has(write.action))
+    (!write.title?.trim() && IN_A_WINDOW.has(write.action))
   )
     return `没能确认要操作的控件，在窗口「${title}」里执行前需要你批准。`;
   if (write.action === "click" && write.control) {

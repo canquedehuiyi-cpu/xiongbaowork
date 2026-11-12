@@ -237,24 +237,26 @@ describe("desktop per-action approval", () => {
   });
 
   test("a write in a window whose title is unknown asks as an unknown control", async () => {
-    for (const action of ["click", "type", "key", "focus"] as const) {
-      const out = await decideAction({
-        ...base,
-        candidate: candidate({
+    for (const title of [undefined, "", "  "])
+      for (const action of ["click", "type", "key", "focus"] as const) {
+        const out = await decideAction({
+          ...base,
+          candidate: candidate({
+            action,
+            title,
+            keys: action === "key" ? "ctrl+s" : undefined,
+          }),
+        });
+        expect({ title, action, out }).toEqual({
+          title,
           action,
-          title: undefined,
-          keys: action === "key" ? "ctrl+s" : undefined,
-        }),
-      });
-      expect({ action, out }).toEqual({
-        action,
-        out: {
-          behaviour: "ask",
-          source: "desktop_action",
-          reason: "没能确认要操作的控件，在窗口「」里执行前需要你批准。",
-        },
-      });
-    }
+          out: {
+            behaviour: "ask",
+            source: "desktop_action",
+            reason: `没能确认要操作的控件，在窗口「${title ?? ""}」里执行前需要你批准。`,
+          },
+        });
+      }
     // Launching a program and writing the clipboard have no window to confirm.
     for (const action of ["launch", "clipboard_write"] as const)
       expect({
