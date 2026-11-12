@@ -148,7 +148,12 @@ impl Observer for Tray {
 /// mouse check and the tray are handled one at a time. Not on the main thread (see `Device::guard`).
 fn guard_do(app: &AppHandle, decide: impl FnOnce(&mut Guard) -> Vec<GuardAction>) {
     let device = app.state::<Device>();
-    let mut guard = device.guard.lock().unwrap();
+    // A panic elsewhere while it was held leaves the guard's state as it was; carrying on with it
+    // beats taking the runner's output thread down too.
+    let mut guard = device
+        .guard
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let actions = decide(&mut guard);
     desktop_guard::apply(&mut guard, actions, &mut Shell(app));
 }
@@ -162,12 +167,29 @@ fn cursor(app: &AppHandle) -> Option<(f64, f64)> {
 /// The guard's actions on the banner window, the stop key and the runner's stdin.
 struct Shell<'a>(&'a AppHandle);
 
+impl Shell<'_> {
+    fn banner(&self) -> Result<tauri::WebviewWindow, String> {
+        self.0
+            .get_webview_window(desktop_guard::BANNER_LABEL)
+            .ok_or_else(|| "没有提示条窗口".to_string())
+    }
+
+    /// The banner's words: its title for screen readers, and the page's 「正在移动鼠标」.
+    fn say(&self, window: &tauri::WebviewWindow, headed: bool) -> Result<(), String> {
+        let _ = window.set_title(&desktop_guard::banner_title(headed));
+        self.0
+            .emit_to(
+                desktop_guard::BANNER_LABEL,
+                desktop_guard::BANNER_EVENT,
+                desktop_guard::BannerView { headed },
+            )
+            .map_err(|error| error.to_string())
+    }
+}
+
 impl Effects for Shell<'_> {
     fn show_banner(&mut self, headed: bool) -> Result<(), String> {
-        let window = self
-            .0
-            .get_webview_window(desktop_guard::BANNER_LABEL)
-            .ok_or("没有提示条窗口")?;
+        let window = self.banner()?;
         if let Ok(Some(monitor)) = window.primary_monitor() {
             let area = monitor.work_area();
             let (x, y) = desktop_guard::banner_origin(
@@ -177,24 +199,22 @@ impl Effects for Shell<'_> {
             );
             let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
         }
-        let _ = window.set_title(&desktop_guard::banner_title(headed));
         // Shown, never focused: whatever the person is typing into keeps the keyboard.
         window.show().map_err(|error| error.to_string())?;
         window
             .set_ignore_cursor_events(true)
             .map_err(|error| error.to_string())?;
-        self.0
-            .emit_to(
-                desktop_guard::BANNER_LABEL,
-                desktop_guard::BANNER_EVENT,
-                desktop_guard::BannerView { headed },
-            )
-            .map_err(|error| error.to_string())?;
+        self.say(&window, headed)?;
         if !window.is_visible().map_err(|error| error.to_string())? {
             return Err("提示条窗口没有显示".into());
         }
         set_stop_desktop_item(self.0, true);
         Ok(())
+    }
+
+    fn update_banner(&mut self, headed: bool) -> Result<(), String> {
+        let window = self.banner()?;
+        self.say(&window, headed)
     }
 
     fn hide_banner(&mut self) {
@@ -212,10 +232,8 @@ impl Effects for Shell<'_> {
         unregister_stop_key(self.0)
     }
 
-    fn send(&mut self, line: &str) {
-        if let Err(error) = self.0.state::<Device>().control.send(line) {
-            eprintln!("[device] could not answer the runner: {error}");
-        }
+    fn send(&mut self, line: &str) -> std::io::Result<()> {
+        self.0.state::<Device>().control.send(line)
     }
 }
 
@@ -261,23 +279,38 @@ fn create_banner(app: &AppHandle) -> tauri::Result<()> {
 }
 
 /// The mouse check: every `POLL_MS`, while a session is on and no `--headed` step is under way, the
-/// cursor is compared with where it started; a move stops the session.
+/// cursor is compared with where it started; a move stops the session, and so does a cursor that
+/// keeps failing to be read. Until this thread has told the guard it runs, no session is ready.
 fn watch_the_mouse(app: &AppHandle) {
     let app = app.clone();
-    let _ = std::thread::Builder::new()
+    let spawned = std::thread::Builder::new()
         .name("desktop-mouse".into())
-        .spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_millis(desktop_guard::POLL_MS));
+        .spawn(move || {
             guard_do(&app, |guard| {
-                if !guard.is_polling() {
-                    return Vec::new();
-                }
-                cursor(&app)
-                    .and_then(|position| guard.on_cursor(position))
+                guard.mouse_check_started();
+                Vec::new()
+            });
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(desktop_guard::POLL_MS));
+                guard_do(&app, |guard| {
+                    if !guard.is_polling() {
+                        return Vec::new();
+                    }
+                    match cursor(&app) {
+                        Some(position) => guard.on_cursor(position),
+                        None => guard.on_cursor_error(),
+                    }
                     .into_iter()
                     .collect()
-            });
+                });
+            }
         });
+    // The guard was never told the check runs, so every session gets `session-failed`.
+    if let Err(error) = spawned {
+        eprintln!(
+            "[device] could not start the mouse check; no desktop session can start: {error}"
+        );
+    }
 }
 
 // --- end desktop session guard ---

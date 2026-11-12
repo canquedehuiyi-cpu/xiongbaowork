@@ -31,6 +31,10 @@ pub const POLL_MS: u64 = 250;
 /// The reasons a session could not be brought up, as `session-failed` carries them.
 pub const BANNER_FAILED: &str = "提示条没能显示";
 pub const HOTKEY_FAILED: &str = "停止键没能注册";
+/// The mouse check is not running, or the cursor cannot be read: moving the mouse would not stop.
+pub const MOUSE_FAILED: &str = "鼠标检测没能启动";
+/// Cursor reads that may fail in a row during a session before it is stopped (one second).
+pub const CURSOR_FAILURE_LIMIT: u32 = 4;
 /// What registering the stop key says until the key is wired up.
 pub const HOTKEY_MISSING: &str = "停止键尚未接入";
 
@@ -143,8 +147,13 @@ pub struct Guard {
     headed: Vec<u64>,
     /// Where the cursor was when watching started; None until it could be read.
     baseline: Option<(f64, f64)>,
-    /// A stop was said for this session: it is the runner's to end, and is not said again.
+    /// A stop reached the runner for this session: it is the runner's to end, and is not said
+    /// again. Cleared when the write failed, so the next reading or key press says it again.
     stopped: bool,
+    /// Cursor reads that failed in a row during this session.
+    cursor_failures: u32,
+    /// The mouse check's thread is running. The only field kept across sessions.
+    mouse_check: bool,
 }
 
 impl Guard {
@@ -167,6 +176,7 @@ impl Guard {
                 *self = Guard {
                     setting_up: Some(label.clone()),
                     baseline: cursor,
+                    mouse_check: self.mouse_check,
                     ..Guard::default()
                 };
                 let mut actions = Vec::new();
@@ -231,11 +241,47 @@ impl Guard {
         self.setting_up.is_some()
     }
 
+    /// Whether the mouse check can watch the session being set up: its thread runs and the cursor
+    /// could be read where the session starts. Without both, moving the mouse would stop nothing.
+    pub fn mouse_ready(&self) -> Result<(), &'static str> {
+        if self.mouse_check && self.baseline.is_some() {
+            Ok(())
+        } else {
+            Err(MOUSE_FAILED)
+        }
+    }
+
+    /// The mouse check's thread is running.
+    pub fn mouse_check_started(&mut self) {
+        self.mouse_check = true;
+    }
+
+    /// The cursor could not be read. `CURSOR_FAILURE_LIMIT` failures in a row stop the session: it
+    /// is no longer watched.
+    pub fn on_cursor_error(&mut self) -> Option<GuardAction> {
+        if !self.is_polling() {
+            return None;
+        }
+        self.cursor_failures += 1;
+        if self.cursor_failures >= CURSOR_FAILURE_LIMIT {
+            self.stopped = true;
+            Some(GuardAction::Stop("mouse"))
+        } else {
+            None
+        }
+    }
+
+    /// A stop could not be written to the runner: it has not heard it.
+    fn stop_not_heard(&mut self) {
+        self.stopped = false;
+    }
+
     /// 有会话、不在真实输入期间、相对起点在任一方向移动 ≥ 3 px 时，回 Stop("mouse")。
     pub fn on_cursor(&mut self, pos: (f64, f64)) -> Option<GuardAction> {
         if !self.is_polling() {
             return None;
         }
+        self.cursor_failures = 0;
         let Some((x, y)) = self.baseline else {
             self.baseline = Some(pos);
             return None;
@@ -257,7 +303,10 @@ impl Guard {
 
     /// Back to no session: the session ended, could not start, or its runner is gone.
     pub fn reset(&mut self) -> Vec<GuardAction> {
-        *self = Guard::default();
+        *self = Guard {
+            mouse_check: self.mouse_check,
+            ..Guard::default()
+        };
         vec![GuardAction::HideBanner, GuardAction::UnregisterHotkey]
     }
 
@@ -277,24 +326,34 @@ pub fn runner_gone(state: &crate::supervise::State) -> bool {
 /// What carries the guard's actions out.
 pub trait Effects {
     fn show_banner(&mut self, headed: bool) -> Result<(), String>;
+    /// The banner is already up: only its words change.
+    fn update_banner(&mut self, headed: bool) -> Result<(), String>;
     fn hide_banner(&mut self);
     fn register_hotkey(&mut self) -> Result<(), String>;
     fn unregister_hotkey(&mut self);
     /// One line to the runner's stdin.
-    fn send(&mut self, line: &str);
+    fn send(&mut self, line: &str) -> std::io::Result<()>;
 }
 
 /// Carry `actions` out, in order. Once the banner or the stop key fails, nothing more is brought up
 /// or promised in this batch (no later banner, key, ack or ready); hiding, unregistering and stops
-/// still go through. A session being set up then gets its answer from [`Guard::on_setup`], and those
-/// actions are carried out too.
+/// still go through. A session being set up then gets its answer from [`Guard::on_setup`] (which
+/// also needs [`Guard::mouse_ready`]), and those actions are carried out too. A stop the runner
+/// could not be told is left unsaid in the guard, to be said again; other lines that fail are logged.
 pub fn apply(guard: &mut Guard, actions: Vec<GuardAction>, effects: &mut dyn Effects) {
     let mut failed: Option<&'static str> = None;
+    // The first show of a session brings the window up; later ones only change its words.
+    let first_show = guard.setting_up();
     for action in actions {
         match action {
             GuardAction::ShowBanner { headed } => {
                 if failed.is_none() {
-                    if let Err(error) = effects.show_banner(headed) {
+                    let shown = if first_show {
+                        effects.show_banner(headed)
+                    } else {
+                        effects.update_banner(headed)
+                    };
+                    if let Err(error) = shown {
                         eprintln!("[device] the desktop banner did not come up: {error}");
                         failed = Some(BANNER_FAILED);
                     }
@@ -312,14 +371,24 @@ pub fn apply(guard: &mut Guard, actions: Vec<GuardAction>, effects: &mut dyn Eff
             GuardAction::UnregisterHotkey => effects.unregister_hotkey(),
             GuardAction::SendAck(_) | GuardAction::SendReady { .. } if failed.is_some() => {}
             other => {
-                if let Some(line) = control_line(&other) {
-                    effects.send(&line);
+                let Some(line) = control_line(&other) else {
+                    continue;
+                };
+                if let Err(error) = effects.send(&line) {
+                    eprintln!("[device] could not tell the runner {line}: {error}");
+                    if matches!(other, GuardAction::Stop(_)) {
+                        guard.stop_not_heard();
+                    }
                 }
             }
         }
     }
     if guard.setting_up() {
-        let answer = guard.on_setup(failed.map_or(Ok(()), Err));
+        let outcome = match failed {
+            Some(reason) => Err(reason),
+            None => guard.mouse_ready(),
+        };
+        let answer = guard.on_setup(outcome);
         apply(guard, answer, effects);
     }
 }
@@ -400,6 +469,7 @@ mod tests {
     /// A guard with a session that came up.
     fn live(at: (f64, f64)) -> Guard {
         let mut guard = Guard::new();
+        guard.mouse_check_started();
         guard.on_event(&started("0123abcd"), Some(at));
         guard.on_setup(Ok(()));
         guard
@@ -796,6 +866,8 @@ mod tests {
     struct Record {
         banner_fails: bool,
         hotkey_fails: bool,
+        /// How many of the next writes to the runner fail.
+        send_fails: u32,
         done: Vec<String>,
         sent: Vec<String>,
     }
@@ -806,6 +878,13 @@ mod tests {
                 return Err("no window".into());
             }
             self.done.push(format!("show headed={headed}"));
+            Ok(())
+        }
+        fn update_banner(&mut self, headed: bool) -> Result<(), String> {
+            if self.banner_fails {
+                return Err("no window".into());
+            }
+            self.done.push(format!("update headed={headed}"));
             Ok(())
         }
         fn hide_banner(&mut self) {
@@ -821,13 +900,19 @@ mod tests {
         fn unregister_hotkey(&mut self) {
             self.done.push("unregister".into());
         }
-        fn send(&mut self, line: &str) {
+        fn send(&mut self, line: &str) -> std::io::Result<()> {
+            if self.send_fails > 0 {
+                self.send_fails -= 1;
+                return Err(std::io::ErrorKind::BrokenPipe.into());
+            }
             self.sent.push(line.into());
+            Ok(())
         }
     }
 
     fn start(effects: &mut Record) -> Guard {
         let mut guard = Guard::new();
+        guard.mouse_check_started();
         let actions = guard.on_event(&started("0123abcd"), Some((0.0, 0.0)));
         apply(&mut guard, actions, effects);
         guard
@@ -895,6 +980,123 @@ mod tests {
         assert_eq!(
             effects.sent.last().map(String::as_str),
             Some(r#"{"control":"stop","reason":"hotkey"}"#)
+        );
+    }
+
+    #[test]
+    fn a_stop_that_could_not_be_written_is_said_again() {
+        let mut effects = Record::default();
+        let mut guard = start(&mut effects);
+        effects.sent.clear();
+        effects.send_fails = 1;
+        let stop = guard.on_cursor((10.0, 0.0)).into_iter().collect();
+        apply(&mut guard, stop, &mut effects);
+        assert_eq!(effects.sent, Vec::<String>::new());
+        assert!(
+            guard.is_polling(),
+            "still watching: the runner did not hear it"
+        );
+        let again: Vec<GuardAction> = guard.on_cursor((10.0, 0.0)).into_iter().collect();
+        assert_eq!(again, vec![GuardAction::Stop("mouse")]);
+        apply(&mut guard, again, &mut effects);
+        assert_eq!(effects.sent, vec![r#"{"control":"stop","reason":"mouse"}"#]);
+        assert_eq!(guard.on_cursor((50.0, 0.0)), None, "heard: not said again");
+
+        // The stop key and the tray's button too.
+        let mut guard = start(&mut effects);
+        effects.sent.clear();
+        effects.send_fails = 1;
+        let stop = guard.on_stop("hotkey");
+        apply(&mut guard, stop, &mut effects);
+        assert!(guard.is_polling());
+        assert_eq!(
+            guard.on_cursor((10.0, 0.0)),
+            Some(GuardAction::Stop("mouse"))
+        );
+
+        // An ack, a ready or a failed that cannot be written is only logged.
+        let mut effects = Record {
+            send_fails: 1,
+            ..Record::default()
+        };
+        let guard = start(&mut effects);
+        assert!(guard.is_polling());
+    }
+
+    #[test]
+    fn a_session_is_not_ready_without_a_running_mouse_check_and_a_readable_cursor() {
+        // The thread never started.
+        let mut effects = Record::default();
+        let mut guard = Guard::new();
+        let actions = guard.on_event(&started("0123abcd"), Some((0.0, 0.0)));
+        apply(&mut guard, actions, &mut effects);
+        assert_eq!(
+            effects.sent,
+            vec![r#"{"control":"session-failed","label":"0123abcd","reason":"鼠标检测没能启动"}"#]
+        );
+        assert_eq!(
+            effects.done,
+            vec!["show headed=false", "register", "hide", "unregister"]
+        );
+        assert!(!guard.is_polling());
+
+        // The cursor cannot be read where the session starts.
+        let mut effects = Record::default();
+        let mut guard = Guard::new();
+        guard.mouse_check_started();
+        let actions = guard.on_event(&started("0123abcd"), None);
+        apply(&mut guard, actions, &mut effects);
+        assert_eq!(
+            effects.sent,
+            vec![r#"{"control":"session-failed","label":"0123abcd","reason":"鼠标检测没能启动"}"#]
+        );
+
+        // Kept across sessions: a session that ends does not stop the thread.
+        let mut effects = Record::default();
+        let mut guard = start(&mut effects);
+        let end = guard.on_event(&ended(), None);
+        apply(&mut guard, end, &mut effects);
+        effects.sent.clear();
+        let actions = guard.on_event(&started("89abcdef"), Some((0.0, 0.0)));
+        apply(&mut guard, actions, &mut effects);
+        assert_eq!(
+            effects.sent,
+            vec![r#"{"control":"session-ready","label":"89abcdef"}"#]
+        );
+    }
+
+    #[test]
+    fn a_cursor_that_keeps_failing_stops_the_session() {
+        let mut guard = live((0.0, 0.0));
+        for _ in 1..CURSOR_FAILURE_LIMIT {
+            assert_eq!(guard.on_cursor_error(), None);
+        }
+        // A good reading in between starts the count again.
+        assert_eq!(guard.on_cursor((1.0, 1.0)), None);
+        for _ in 1..CURSOR_FAILURE_LIMIT {
+            assert_eq!(guard.on_cursor_error(), None);
+        }
+        assert_eq!(guard.on_cursor_error(), Some(GuardAction::Stop("mouse")));
+        assert_eq!(guard.on_cursor_error(), None, "said once");
+        // No session: nothing to stop.
+        let mut idle = Guard::new();
+        for _ in 0..CURSOR_FAILURE_LIMIT * 2 {
+            assert_eq!(idle.on_cursor_error(), None);
+        }
+    }
+
+    #[test]
+    fn headed_only_changes_the_banner_s_words() {
+        let mut effects = Record::default();
+        let mut guard = start(&mut effects);
+        effects.done.clear();
+        let begin = guard.on_event(&DesktopEvent::HeadedBegin { seq: 1 }, None);
+        apply(&mut guard, begin, &mut effects);
+        let end = guard.on_event(&DesktopEvent::HeadedEnd { seq: 1 }, Some((0.0, 0.0)));
+        apply(&mut guard, end, &mut effects);
+        assert_eq!(
+            effects.done,
+            vec!["update headed=true", "update headed=false"]
         );
     }
 }

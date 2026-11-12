@@ -254,6 +254,10 @@ struct Shared {
     inner: Mutex<Inner>,
     wake: Condvar,
     observer: Box<dyn Observer>,
+    /// The run whose desktop events still count. Moved on as soon as a run ends, before the state
+    /// that resets the guard, so a line the ended runner left in its pipe cannot bring a banner
+    /// back. A lock of its own, held while an event is delivered: never taken on the main thread.
+    current_run: Mutex<u64>,
 }
 
 impl Shared {
@@ -268,6 +272,25 @@ impl Shared {
 
     fn stopping(&self) -> bool {
         self.inner.lock().unwrap().stop
+    }
+
+    /// The run that just ended is over: its late desktop lines are dropped.
+    fn end_run(&self) {
+        *self
+            .current_run
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
+    }
+
+    fn output(self: &Arc<Self>) -> Output {
+        let run = *self
+            .current_run
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Output {
+            shared: Arc::clone(self),
+            run,
+        }
     }
 
     /// Sleep for `duration` unless asked to stop first. True when asked to stop.
@@ -285,32 +308,44 @@ impl Shared {
     }
 }
 
-/// Where a child's output goes: each line is handed over as it is read.
+/// Where a child's output goes: each line is handed over as it is read. Tied to one run.
 #[derive(Clone)]
-pub struct Output(Arc<Shared>);
+pub struct Output {
+    shared: Arc<Shared>,
+    run: u64,
+}
 
 impl Output {
     pub fn stdout(&self, line: &str) {
         match signal(line) {
             Some(Signal::Paired) => {
                 let first = {
-                    let mut inner = self.0.inner.lock().unwrap();
+                    let mut inner = self.shared.inner.lock().unwrap();
                     !std::mem::replace(&mut inner.paired, true)
                 };
                 if first {
-                    self.0.observer.paired();
+                    self.shared.observer.paired();
                 }
             }
-            Some(Signal::Connected) => self.0.set(State::Online),
-            Some(Signal::ConnectionLost) => self.0.set(State::Offline),
-            Some(Signal::DesktopPermission) => self.0.observer.desktop_permission(),
-            Some(Signal::Desktop(event)) => self.0.observer.desktop(event),
+            Some(Signal::Connected) => self.shared.set(State::Online),
+            Some(Signal::ConnectionLost) => self.shared.set(State::Offline),
+            Some(Signal::DesktopPermission) => self.shared.observer.desktop_permission(),
+            Some(Signal::Desktop(event)) => {
+                let current = self
+                    .shared
+                    .current_run
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if *current == self.run {
+                    self.shared.observer.desktop(event);
+                }
+            }
             None => {}
         }
     }
 
     pub fn stderr(&self, line: &str) {
-        let mut inner = self.0.inner.lock().unwrap();
+        let mut inner = self.shared.inner.lock().unwrap();
         if inner.stderr.len() == STDERR_LINES {
             inner.stderr.remove(0);
         }
@@ -342,6 +377,7 @@ impl Supervisor {
             }),
             wake: Condvar::new(),
             observer,
+            current_run: Mutex::new(0),
         });
         let running = Arc::clone(&shared);
         let thread = std::thread::Builder::new()
@@ -390,9 +426,10 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
         });
         shared.inner.lock().unwrap().stderr.clear();
         let started = Instant::now();
-        let mut child = match launcher.launch(pairing, Output(Arc::clone(&shared))) {
+        let mut child = match launcher.launch(pairing, shared.output()) {
             Ok(child) => child,
             Err(error) => {
+                shared.end_run();
                 shared.set(State::Failed {
                     message: format!("无法启动设备端服务：{error}"),
                 });
@@ -403,6 +440,7 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
         let exit = loop {
             if shared.stopping() {
                 child.kill_tree(policy.grace);
+                shared.end_run();
                 shared.set(State::Stopped);
                 return;
             }
@@ -418,6 +456,7 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
         };
         // Whatever the runner left running is not left running.
         child.kill_tree(Duration::ZERO);
+        shared.end_run();
         let said = reason(&shared.inner.lock().unwrap().stderr);
 
         if pairing {
@@ -471,7 +510,7 @@ pub(crate) mod tests {
 
     /// An `Output` that leads nowhere, for a launcher started outside a supervisor.
     pub(crate) fn output() -> Output {
-        Output(Arc::new(Shared {
+        Arc::new(Shared {
             inner: Mutex::new(Inner {
                 state: State::Stopped,
                 stop: false,
@@ -480,7 +519,9 @@ pub(crate) mod tests {
             }),
             wake: Condvar::new(),
             observer: Box::new(Quiet),
-        }))
+            current_run: Mutex::new(0),
+        })
+        .output()
     }
 
     fn quick() -> Policy {
@@ -673,6 +714,8 @@ pub(crate) mod tests {
         paired: u32,
         permission: u32,
         desktop: Vec<DesktopEvent>,
+        /// Each launch's output, so a test can speak for a runner after it has ended.
+        outputs: Vec<Output>,
     }
 
     struct FakeChild {
@@ -710,6 +753,7 @@ pub(crate) mod tests {
                 .unwrap()
                 .launches
                 .push((Instant::now(), pairing));
+            self.record.lock().unwrap().outputs.push(output.clone());
             let script = self.scripts.pop_front().unwrap_or_else(online);
             for line in &script.stderr {
                 output.stderr(line);
@@ -1001,6 +1045,30 @@ pub(crate) mod tests {
         assert_eq!(
             record.states,
             vec![State::Starting, State::Online, State::Stopped]
+        );
+    }
+
+    #[test]
+    fn a_runner_s_late_desktop_lines_are_dropped_once_it_has_ended() {
+        let (mut supervisor, record) = supervise(vec![crash(), online()], quick(), false);
+        until(&supervisor, |s| *s == State::Online);
+        let (old, new) = {
+            let record = record.lock().unwrap();
+            (record.outputs[0].clone(), record.outputs[1].clone())
+        };
+        let line = r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#;
+        // The crashed runner's pipe still held a line: the guard has been reset since, and a
+        // banner for it would never be taken down.
+        old.stdout(line);
+        assert_eq!(record.lock().unwrap().desktop, vec![]);
+        new.stdout(line);
+        assert_eq!(record.lock().unwrap().desktop.len(), 1);
+        supervisor.stop();
+        new.stdout(line);
+        assert_eq!(
+            record.lock().unwrap().desktop.len(),
+            1,
+            "a stopped runner is over too"
         );
     }
 
