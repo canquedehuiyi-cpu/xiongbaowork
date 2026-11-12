@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
+  classifyDesktopKeys,
+  DEFAULT_DESKTOP_ACTION_WORDS,
   DESKTOP_ACTIONS,
+  DESKTOP_KEYS,
   DESKTOP_LIMITS,
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
   desktopMessage,
   desktopPlatformOf,
+  desktopWordHit,
   isAgentWindowId,
   parseWindowId,
   sensitiveWord,
@@ -76,6 +80,7 @@ describe("desktop-control protocol", () => {
       sessionMaxMs: 3_600_000,
       headedAckMs: 1_000,
       sessionReadyMs: 2_000,
+      textMaxBytes: 9_000,
     });
   });
 
@@ -200,6 +205,128 @@ describe("desktop-control protocol", () => {
       ],
     ];
     for (const [code, text] of copy) expect(desktopMessage(code)).toBe(text);
+  });
+
+  test("the per-action codes carry the plan's copy", () => {
+    expect(desktopMessage("system_keys", "win+r")).toBe(
+      "这个组合键（win+r）是系统级的，员工不能按。",
+    );
+    expect(desktopMessage("needs_approval", "控件名含「发送」")).toBe(
+      "这一步需要先获得批准（控件名含「发送」）。请重新读取窗口后再试。",
+    );
+    expect(desktopMessage("password_field")).toBe(
+      "这是密码框，员工不能往里输入。请用 computer_request_secret 让主人自己输入。",
+    );
+    expect(desktopMessage("not_foreground")).toBe(
+      "这个窗口不在前台，请先用 computer_desktop_focus 把它切到前台。",
+    );
+  });
+
+  test("classifyDesktopKeys: system, close, submit, plain, and junk", () => {
+    for (const keys of [
+      "win+r",
+      "WIN+R",
+      "ctrl+win+r",
+      "cmd+space",
+      "ctrl+alt+delete",
+    ])
+      expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
+        keys,
+        kind: "system",
+      });
+    expect(classifyDesktopKeys("alt+f4")).toEqual({
+      kind: "close",
+      normalized: "alt+f4",
+      force: true,
+    });
+    expect(classifyDesktopKeys("cmd+w")).toEqual({
+      kind: "close",
+      normalized: "cmd+w",
+      force: false,
+    });
+    for (const keys of ["enter", "ctrl+enter", "cmd+return"])
+      expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
+        keys,
+        kind: "submit",
+      });
+    for (const keys of ["shift+enter", "ctrl+s", "pagedown"])
+      expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
+        keys,
+        kind: "plain",
+      });
+    for (const keys of ["ctrl+alt+shift+cmd+x", "ctrl+", "f13"]) {
+      expect({ keys, out: classifyDesktopKeys(keys) }).toEqual({
+        keys,
+        out: undefined,
+      });
+      expect({ keys, ok: DESKTOP_KEYS.test(keys) }).toEqual({
+        keys,
+        ok: false,
+      });
+    }
+  });
+
+  test("classifyDesktopKeys normalises case, order and the win aliases", () => {
+    expect(classifyDesktopKeys("WIN+R")?.normalized).toBe("win+r");
+    expect(classifyDesktopKeys("Super+R")?.normalized).toBe("win+r");
+    expect(classifyDesktopKeys("meta+d")?.kind).toBe("system");
+    expect(classifyDesktopKeys("shift+ctrl+s")?.normalized).toBe(
+      "ctrl+shift+s",
+    );
+    expect(classifyDesktopKeys("cmd+q")).toEqual({
+      kind: "close",
+      normalized: "cmd+q",
+      force: true,
+    });
+    // Only alt+f4 and cmd+q are ever forced, not a superset of them.
+    expect(classifyDesktopKeys("ctrl+alt+f4")).toEqual({
+      kind: "close",
+      normalized: "ctrl+alt+f4",
+      force: false,
+    });
+    // A doubled modifier is junk.
+    expect(classifyDesktopKeys("ctrl+ctrl+x")).toBeUndefined();
+    for (const keys of ["win+r", "ctrl+enter", "pagedown", "shift+tab"])
+      expect({ keys, ok: DESKTOP_KEYS.test(keys) }).toEqual({ keys, ok: true });
+  });
+
+  test("desktopWordHit: Chinese by substring, ASCII by whole word", () => {
+    expect(desktopWordHit("发送(S)", DEFAULT_DESKTOP_ACTION_WORDS)).toBe(
+      "发送",
+    );
+    expect(
+      desktopWordHit("Display", DEFAULT_DESKTOP_ACTION_WORDS),
+    ).toBeUndefined();
+    expect(desktopWordHit("Pay now", DEFAULT_DESKTOP_ACTION_WORDS)).toBe("pay");
+    expect(desktopWordHit("DELETE", DEFAULT_DESKTOP_ACTION_WORDS)).toBe(
+      "delete",
+    );
+    expect(
+      desktopWordHit("确定", DEFAULT_DESKTOP_ACTION_WORDS),
+    ).toBeUndefined();
+    expect(desktopWordHit("anything", ["", " "])).toBeUndefined();
+  });
+
+  test("the default action words are the spec's seventeen", () => {
+    expect([...DEFAULT_DESKTOP_ACTION_WORDS]).toEqual([
+      "发送",
+      "删除",
+      "付款",
+      "支付",
+      "提交",
+      "确认支付",
+      "转账",
+      "购买",
+      "下单",
+      "发布",
+      "撤回",
+      "注销",
+      "send",
+      "delete",
+      "pay",
+      "submit",
+      "purchase",
+    ]);
   });
 
   test("desktopPlatformOf maps win32, darwin, linux and nothing else", () => {

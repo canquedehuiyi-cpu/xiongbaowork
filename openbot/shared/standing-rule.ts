@@ -37,7 +37,8 @@ export function offersStandingRule(action: {
  * send button or a keyboard send on a web page), `share_access` (sharing, changing permissions,
  * adding collaborators) and `publish_post` (forwarding, going live, publishing a release, posting)
  * are the floors this deployment asks for after every rule, so a saved rule or a conversation answer
- * could never answer one either.
+ * could never answer one either. So are the desktop's `desktop_session` (opening a session to operate
+ * the owner's computer) and `desktop_action` (a sensitive desktop write, asked every time).
  */
 export const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
   "task",
@@ -46,4 +47,6 @@ export const ONCE_ONLY_SOURCES: ReadonlySet<string> = new Set([
   "outbound_send",
   "share_access",
   "publish_post",
+  "desktop_session",
+  "desktop_action",
 ]);

@@ -72,6 +72,7 @@ tests/approvals-continuation-recovery.test.ts
 tests/approvals-database-settlement.integration.test.ts
 tests/approvals-declined-audit.integration.test.ts
 tests/approvals-desktop-policy.test.ts
+tests/approvals-desktop-write.test.ts
 tests/approvals-destructive-tool.integration.test.ts
 tests/approvals-edition-defaults.integration.test.ts
 tests/approvals-employee-permissions.integration.test.ts
