@@ -117,7 +117,7 @@ async function organizationCookie() {
   );
   expect(consumed.status).toBe(303);
   const cookie = consumed.headers.get("set-cookie")?.split(";")[0];
-  expect(cookie).toStartWith("openbot.organization-session=");
+  expect(cookie).toStartWith("xiongbao.organization-session=");
   return cookie as string;
 }
 
@@ -342,7 +342,7 @@ test("the stored organization session is sealed, never the raw cookie", async ()
     .from(recorderConnections)
     .where(eq(recorderConnections.id, connection.id));
   expect(row?.sealed).toBeTruthy();
-  const value = cookie.slice("openbot.organization-session=".length);
+  const value = cookie.slice("xiongbao.organization-session=".length);
   expect(row?.sealed).not.toContain(value);
   expect(row?.sealed).not.toContain("better-auth.session_token");
   expect(row?.sealed).not.toContain(cookie);

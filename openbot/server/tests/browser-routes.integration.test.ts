@@ -3009,7 +3009,7 @@ describe("organization mode", () => {
       `${APP}/api/auth/organization/session?ticket=${ticket}`,
     );
     const cookie = consumed.headers.get("set-cookie")?.split(";")[0] as string;
-    expect(cookie).toStartWith("openbot.organization-session=");
+    expect(cookie).toStartWith("xiongbao.organization-session=");
 
     const opened = await org.app.request(`${APP}/api/browser/open`, {
       method: "POST",

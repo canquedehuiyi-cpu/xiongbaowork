@@ -1,5 +1,15 @@
 [
   {
+    "file": "app/index.html",
+    "text": "\"openbot-theme\"",
+    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name"
+  },
+  {
+    "file": "app/index.html",
+    "text": "\"openbot-skin\"",
+    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name"
+  },
+  {
     "file": "app/src/components/desktop/desktop-return.tsx",
     "text": "\"openbot://open\"",
     "reason": "persisted-identifier: URL scheme the upstream desktop app registers"
@@ -17,12 +27,12 @@
   {
     "file": "app/src/components/delivery/reaching-you.tsx",
     "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/components/reachability/link-conversation-dialog.tsx",
     "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/components/browser/learning-next.tsx",
@@ -32,7 +42,7 @@
   {
     "file": "app/src/components/browser/teach-steps.tsx",
     "text": "\"openbot.teach-a-bot.introduced\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/components/approvals/describe-rules.tsx",
@@ -47,7 +57,7 @@
   {
     "file": "app/src/components/notifications/notify-prompt.tsx",
     "text": "\"openbot-notify-prompt-answered\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/components/settings/browsers/connected-browsers.tsx",
@@ -72,7 +82,7 @@
   {
     "file": "app/src/components/app-sidebar/app-sidebar.tsx",
     "text": "\"openbot-sidebar-",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/components/computer/computer-view.tsx",
@@ -102,7 +112,7 @@
   {
     "file": "app/src/skins/store.ts",
     "text": "\"openbot-skin\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/skins/registry.ts",
@@ -117,22 +127,22 @@
   {
     "file": "app/src/lib/theme.ts",
     "text": "\"openbot-theme\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/wakerflows.ts",
     "text": "\"openbot.wakerflow-share-return\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/computers/handoff.ts",
     "text": "`openbot:pending-handoff:",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/computers/activity.ts",
     "text": "\"openbot:computer-activity-wiped:\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/desktop/speech.ts",
@@ -157,12 +167,12 @@
   {
     "file": "app/src/lib/sidebar.ts",
     "text": "\"openbot-sidebar",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/voice/outbox.ts",
     "text": "\"openbot:voice-outbox:\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/voice/transcript.ts",
@@ -217,17 +227,17 @@
   {
     "file": "app/src/lib/copilot/carry-on.ts",
     "text": "\"openbot:carried-on:\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/copilot/check-in-offer-tool.tsx",
     "text": "\"openbot:check-in-declined:\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/copilot/bot-thread.ts",
     "text": "\"openbot.bot-thread\"",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
   },
   {
     "file": "app/src/lib/copilot/stopped-turn.ts",
@@ -248,11 +258,6 @@
     "file": "app/src/routes/_authed/settings/about.tsx",
     "text": "OpenBot（MIT）",
     "reason": "external-name: MIT attribution on the open-source notices page, required by the licence"
-  },
-  {
-    "file": "app/index.html",
-    "text": "localStorage.getItem(\"openbot-",
-    "reason": "persisted-identifier: browser storage key; renaming it forgets every saved choice"
   },
   {
     "file": "app/index.html",
@@ -357,7 +362,7 @@
   {
     "file": "server/src/auth/organization.ts",
     "text": "\"openbot.organization-session\"",
-    "reason": "persisted-identifier: cookie name; renaming signs everyone out"
+    "reason": "persisted-identifier: legacy cookie name, still read (and cleared on sign-in/out) so a session started before the rename keeps working"
   },
   {
     "file": "server/src/delivery/opentag.ts",

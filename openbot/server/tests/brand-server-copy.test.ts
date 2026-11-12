@@ -91,7 +91,7 @@ describe("server copy a customer can read takes its name from the brand", () => 
         }),
       ).toString("base64url");
       await expect(
-        auth.verifySessionQuietly(`openbot.organization-session=${value}`),
+        auth.verifySessionQuietly(`xiongbao.organization-session=${value}`),
       ).rejects.toThrow(
         "The organization gave an answer Jia could not read. Try again.",
       );

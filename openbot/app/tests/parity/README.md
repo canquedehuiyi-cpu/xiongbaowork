@@ -41,7 +41,7 @@ bun tests/parity/capture.ts \
 
 截图前会：
 
-- 用 `addInitScript` 写入 `localStorage["openbot-theme"]`（`dark` 或 `light`）；
+- 用 `addInitScript` 写入 `localStorage["xiongbao-theme"]`（`dark` 或 `light`）；
 - 把页面时钟固定在 `2026-11-07T10:00:00+08:00`（`page.clock.setFixedTime`），时区 `Asia/Shanghai`，语言 `zh-CN`；
 - 注入 CSS 关闭动画、过渡与光标闪烁，并隐藏 CopilotKit 在开发模式下挂出的 `<cpk-web-inspector>` 浮层（生产构建没有它）；
 - 拦截所有对外部域名的请求（例如 CopilotKit 的公告源），本地返回 `{}`，记录在 `externalRequests`；

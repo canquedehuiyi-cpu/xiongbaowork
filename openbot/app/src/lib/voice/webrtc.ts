@@ -113,7 +113,7 @@ export const connectWebRtc: ConnectVoice = async ({
     const response = await fetch("/api/voice/calls", {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", "x-openbot-voice": "1" },
+      headers: { "Content-Type": "application/json", "x-xiongbao-voice": "1" },
       body: JSON.stringify({ channelId, sdp: offer.sdp }),
       signal,
     });

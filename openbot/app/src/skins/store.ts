@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { DEFAULT_SKIN, SKIN_IDS, type SkinId } from "./types";
+import { readMigrated } from "@/lib/storage-migrate";
 
 /*
  * The skin is saved on the person's account (`skin` in their preferences), so it follows them to
@@ -12,7 +13,9 @@ import { DEFAULT_SKIN, SKIN_IDS, type SkinId } from "./types";
  * the account always wins. Signing out clears the cache, so the next person on a shared machine
  * starts from the default.
  */
-export const SKIN_STORAGE_KEY = "openbot-skin";
+export const SKIN_STORAGE_KEY = "xiongbao-skin";
+/** Read once to carry a pre-rename choice across; see `readMigrated`. */
+export const LEGACY_SKIN_STORAGE_KEY = "openbot-skin";
 
 export { DEFAULT_SKIN };
 
@@ -81,11 +84,7 @@ export function reconcileSkin(
 }
 
 function readStoredValue() {
-  try {
-    return window.localStorage.getItem(SKIN_STORAGE_KEY);
-  } catch {
-    return null;
-  }
+  return readMigrated(SKIN_STORAGE_KEY, LEGACY_SKIN_STORAGE_KEY);
 }
 
 let current: SkinId = reconcileSkin(readStoredValue(), browserEffects);

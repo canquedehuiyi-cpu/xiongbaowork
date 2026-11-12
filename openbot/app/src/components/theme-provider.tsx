@@ -8,8 +8,10 @@ import {
 import {
   applyDarkTheme,
   parseStoredDarkTheme,
+  LEGACY_THEME_STORAGE_KEY,
   THEME_STORAGE_KEY,
 } from "@/lib/theme";
+import { readMigrated } from "@/lib/storage-migrate";
 
 type ThemeContextValue = {
   dark: boolean;
@@ -20,7 +22,9 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(() =>
-    parseStoredDarkTheme(window.localStorage.getItem(THEME_STORAGE_KEY)),
+    parseStoredDarkTheme(
+      readMigrated(THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY),
+    ),
   );
 
   useEffect(() => {

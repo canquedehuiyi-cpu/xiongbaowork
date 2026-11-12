@@ -1,4 +1,6 @@
-export const THEME_STORAGE_KEY = "openbot-theme";
+export const THEME_STORAGE_KEY = "xiongbao-theme";
+/** Read once to carry a pre-rename preference across; see `readMigrated`. */
+export const LEGACY_THEME_STORAGE_KEY = "openbot-theme";
 
 export function parseStoredDarkTheme(value: string | null) {
   return value === "dark";

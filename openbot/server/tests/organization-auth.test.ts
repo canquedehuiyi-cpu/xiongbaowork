@@ -72,7 +72,7 @@ test("missing local cookie requests focused refresh; transient authority failure
     expect(handoff.status).toBe(503);
     expect(await failure()).toBeNull();
     const cookie =
-      "openbot.organization-session=" +
+      "xiongbao.organization-session=" +
       Buffer.from(
         JSON.stringify({
           authority: authority.url.origin,
@@ -413,7 +413,7 @@ describe("quiet verification of a forwarded cookie", () => {
         cookie: "better-auth.session_token=abc",
       }),
     ).toString("base64url");
-    cookieHeader = `openbot.organization-session=${value}`;
+    cookieHeader = `xiongbao.organization-session=${value}`;
   });
   afterEach(() => {
     authority.stop(true);
@@ -446,8 +446,19 @@ describe("quiet verification of a forwarded cookie", () => {
 
   test("a malformed cookie is a sign-out", async () => {
     expect(
-      await auth.verifySessionQuietly("openbot.organization-session=x"),
+      await auth.verifySessionQuietly("xiongbao.organization-session=x"),
     ).toBeNull();
+  });
+
+  test("a cookie under the legacy openbot name still signs in", async () => {
+    body = { user: employee };
+    const legacy = cookieHeader.replace(
+      "xiongbao.organization-session=",
+      "openbot.organization-session=",
+    );
+    expect(legacy).toStartWith("openbot.organization-session=");
+    const user = await auth.verifySessionQuietly(legacy);
+    expect(user?.id).toBe("local-employee-1");
   });
 
   test("a valid actor comes back as the local user", async () => {
@@ -514,7 +525,7 @@ describe("the organization session cookie's own expiry", () => {
       const [cookie = ""] = (consumed.headers.get("set-cookie") ?? "").split(
         ";",
       );
-      const value = cookie.slice("openbot.organization-session=".length);
+      const value = cookie.slice("xiongbao.organization-session=".length);
       const written = JSON.parse(
         Buffer.from(value, "base64url").toString(),
       ) as { expiresAt: number };
@@ -523,7 +534,7 @@ describe("the organization session cookie's own expiry", () => {
       const session = (cookieValue: string) =>
         auth.api.getSession({
           headers: new Headers({
-            cookie: `openbot.organization-session=${cookieValue}`,
+            cookie: `xiongbao.organization-session=${cookieValue}`,
           }),
           query: { disableCookieCache: true },
         });

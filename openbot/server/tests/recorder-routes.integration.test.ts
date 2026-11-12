@@ -610,7 +610,7 @@ describe("using the bearer", () => {
       "http://openbot.test/api/audio/transcriptions",
       {
         method: "POST",
-        headers: { ...bearer(made.token), "x-openbot-dictation": "1" },
+        headers: { ...bearer(made.token), "x-xiongbao-dictation": "1" },
         body: form,
       },
     );
@@ -655,13 +655,11 @@ describe("recordings", () => {
       ),
     );
     await runAsTenant(busy, () =>
-      database
-        .insert(recorderTrajectoryBindings)
-        .values({
-          trajectoryId: theirs,
-          userId: busy,
-          createdAt: new Date(base),
-        }),
+      database.insert(recorderTrajectoryBindings).values({
+        trajectoryId: theirs,
+        userId: busy,
+        createdAt: new Date(base),
+      }),
     );
     const asked: string[] = [];
     const intelligenceFetch = (async (input: Request | string | URL) => {
