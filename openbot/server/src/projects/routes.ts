@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import { gitUrlProblem } from "../../../shared/projects";
 import type { AppVariables } from "../auth/guards";
+import { shortName } from "../brand";
 import {
   isProjectId,
   ProjectRefusal,
@@ -72,7 +73,7 @@ export function createProjectRoutes(
     const target = { tenantId: personId, deviceId: machine.runnerDeviceId };
     if (!devices.isReachable(target))
       throw new ProjectRefusal(
-        "设备当前离线，无法同步或列出分支。请在设备上打开熊宝设备端后再试。",
+        `设备当前离线，无法同步或列出分支。请在设备上打开${shortName()}设备端后再试。`,
         409,
       );
     return target;

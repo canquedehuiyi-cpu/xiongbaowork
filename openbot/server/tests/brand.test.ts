@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  brandSlug,
   companyName,
   copyrightLine,
   englishName,
   productName,
   resetBrand,
   setBrand,
+  shortName,
   supportUrl,
 } from "../src/brand";
 
@@ -47,5 +49,25 @@ describe("brand", () => {
     expect(copyrightLine(2030)).toBe(
       "Copyright (c) 2030 熊宝; portions Copyright (c) 2026 CopilotKit (MIT)",
     );
+  });
+
+  test("shortName is the package's short name, else the product name itself", () => {
+    expect(shortName()).toBe("熊宝");
+    setBrand({ productName: "Ledgerline", shortName: "Ledger" });
+    expect(shortName()).toBe("Ledger");
+    setBrand({ productName: "Ledgerline" });
+    expect(shortName()).toBe("Ledgerline");
+  });
+
+  test("brandSlug is the English name's first word, lower-case, safe for an id", () => {
+    expect(brandSlug()).toBe("xiongbao");
+    setBrand({ productName: "P", englishName: "Ledger Line Pro" });
+    expect(brandSlug()).toBe("ledger");
+    setBrand({ productName: "P", englishName: "Ledger.io_2 Work" });
+    expect(brandSlug()).toBe("ledgerio2");
+    setBrand({ productName: "P", englishName: "  Acme-Works  Cloud" });
+    expect(brandSlug()).toBe("acme-works");
+    setBrand({ productName: "P", englishName: "甲乙" });
+    expect(brandSlug()).toBe("xiongbao");
   });
 });

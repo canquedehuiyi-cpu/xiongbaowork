@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { brandSlug } from "../brand";
 import { cutAtCodeUnits } from "../channels/text";
 import { createGuardedFetch, type OutboundPolicy } from "../net/outbound-guard";
 import {
@@ -520,7 +521,7 @@ async function withClient<T>(
     requestInit: dial.requestInit,
     ...(dial.fetch ? { fetch: dial.fetch } : {}),
   });
-  const client = new Client({ name: "xiongbao", version: "1.0.0" });
+  const client = new Client({ name: brandSlug(), version: "1.0.0" });
 
   try {
     await connectWithinDeadline(client, transport);

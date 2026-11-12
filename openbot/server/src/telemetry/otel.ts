@@ -26,6 +26,7 @@ import {
   BatchLogRecordProcessor,
   LoggerProvider,
 } from "@opentelemetry/sdk-logs";
+import { brandSlug } from "../brand";
 import { scrubCommand } from "./scrub";
 
 export type ExportedEvent = {
@@ -160,7 +161,7 @@ export function createOtelEventExporter(
   });
   const provider = new LoggerProvider({
     resource: resourceFromAttributes({
-      "service.name": env.OTEL_SERVICE_NAME?.trim() || "xiongbao",
+      "service.name": env.OTEL_SERVICE_NAME?.trim() || brandSlug(),
     }),
     processors: [new BatchLogRecordProcessor({ exporter })],
   });

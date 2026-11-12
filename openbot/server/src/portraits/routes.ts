@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
+import { shortName } from "../brand";
 import { PORTRAIT_MAX_BYTES, sniffPortrait } from "./image";
 import {
   PORTRAIT_PRESETS,
@@ -156,7 +157,7 @@ export function createPortraitRoutes(
         };
     if (body.preset !== undefined) {
       if (!isPreset(body.preset)) {
-        return context.json({ error: "没有这个熊宝表情。" }, 400);
+        return context.json({ error: `没有这个${shortName()}表情。` }, 400);
       }
       choice = { preset: body.preset };
     } else if (typeof body.image === "string") {
@@ -177,7 +178,7 @@ export function createPortraitRoutes(
       choice = { image: { contentType, bytes } };
     } else {
       return context.json(
-        { error: "请选择一个熊宝表情，或上传一张图片。" },
+        { error: `请选择一个${shortName()}表情，或上传一张图片。` },
         400,
       );
     }

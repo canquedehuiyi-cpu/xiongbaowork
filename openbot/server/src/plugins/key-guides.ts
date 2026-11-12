@@ -1,3 +1,4 @@
+import { shortName } from "../brand";
 import type { BrokerField, FieldScheme } from "./broker";
 
 /**
@@ -223,7 +224,7 @@ const PLAIN_LABELS: Record<string, string> = {
 const BROKER_NAME = /\bcomposio\b/gi;
 
 function forPerson(text: string): string {
-  return text.replace(BROKER_NAME, "熊宝");
+  return text.replace(BROKER_NAME, shortName());
 }
 
 /** The form's boxes, each labelled and explained for a person. Names and order are untouched. */

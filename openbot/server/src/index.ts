@@ -934,6 +934,7 @@ await startupLifecycle.run(async (startup) => {
   );
   setBrand({
     productName: tenantPackage.productName,
+    shortName: tenantPackage.shortName,
     englishName: tenantPackage.englishName,
     companyName: tenantPackage.companyName,
     supportUrl: tenantPackage.supportUrl,

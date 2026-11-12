@@ -5,6 +5,7 @@ import {
   type WakerFlowCandidate,
   type WakerFlowPlan,
 } from "../../../shared/wakerflows";
+import { shortName } from "../brand";
 import { withUntrustedNotice } from "../untrusted-content";
 import { createWakerFlowPlanSchema } from "./plan";
 
@@ -83,16 +84,18 @@ export type FlowGenerationInput = {
   signal?: AbortSignal;
 };
 
-const SYSTEM = [
-  "你是熊宝的 WakerFlow 规划助手。根据用户的想法，把工作拆成交给候选员工依次执行的步骤。",
-  "只输出一个 JSON 对象，不要输出任何其他文字。对象字段：",
-  '{"name": 流程名称, "description": 流程简介, "members": [{"agentId": 候选员工 id, "role": 在本流程中的职责}],',
-  ' "inputs": [{"key": 输入名, "label": 输入说明, "required": 是否必填}],',
-  ' "steps": [{"id": 步骤名, "agentId": 执行员工 id, "instruction": 要做的事, "inputKeys": [读取的输入名], "outputKey": 产出名}]}',
-  "规则：agentId 只能使用候选员工列表里的 id；members 不重复，最多 10 位；steps 1 到 10 步；",
-  "key、id、outputKey 以小写字母开头，只含小写字母、数字和下划线；",
-  "每一步的 inputKeys 只能引用 inputs 中的 key 或前面步骤的 outputKey；outputKey 不能与已有名称重复。",
-].join("\n");
+// A function, not a constant: the brand is set after this module loads.
+const system = () =>
+  [
+    `你是${shortName()}的 WakerFlow 规划助手。根据用户的想法，把工作拆成交给候选员工依次执行的步骤。`,
+    "只输出一个 JSON 对象，不要输出任何其他文字。对象字段：",
+    '{"name": 流程名称, "description": 流程简介, "members": [{"agentId": 候选员工 id, "role": 在本流程中的职责}],',
+    ' "inputs": [{"key": 输入名, "label": 输入说明, "required": 是否必填}],',
+    ' "steps": [{"id": 步骤名, "agentId": 执行员工 id, "instruction": 要做的事, "inputKeys": [读取的输入名], "outputKey": 产出名}]}',
+    "规则：agentId 只能使用候选员工列表里的 id；members 不重复，最多 10 位；steps 1 到 10 步；",
+    "key、id、outputKey 以小写字母开头，只含小写字母、数字和下划线；",
+    "每一步的 inputKeys 只能引用 inputs 中的 key 或前面步骤的 outputKey；outputKey 不能与已有名称重复。",
+  ].join("\n");
 
 /** WF9 (D3): how many earlier turns of a session the context carries. */
 export const CUSTOMIZATION_TURNS = 6;
@@ -251,7 +254,7 @@ export function createFlowGenerator(
       try {
         const answer = await call({
           model: input.model,
-          system: SYSTEM,
+          system: system(),
           prompt: flowPlanningPrompt(input),
           abortSignal: AbortSignal.any([caller, timeout]),
         });

@@ -5,11 +5,15 @@ import {
   createOrganizationAuth,
   organizationAuthority,
 } from "../src/auth/organization";
-import { resetBrand, setBrand } from "../src/brand";
+import { brandSlug, resetBrand, setBrand } from "../src/brand";
 import { accessibilityTitle, identityGuidance } from "../src/copilot";
-import { turnFailureMessage } from "../src/delivery/opentag-agent";
+import {
+  linkInstructions,
+  turnFailureMessage,
+} from "../src/delivery/opentag-agent";
 import { defaultPushTitle } from "../src/delivery/router";
 import { createTwilioTransport } from "../src/delivery/twilio";
+import { PROVIDERS } from "../src/identity/providers";
 import {
   connectorApprovalGuidance,
   grantedToolGuidance,
@@ -244,5 +248,21 @@ describe("server copy a customer can read takes its name from the brand", () => 
       false,
     ]);
     expect(JSON.stringify(bare)).not.toContain("github.com");
+  });
+
+  test("chat-side link sentences call the product by the brand's short name", () => {
+    // 甲 gives no short name, so its full name stands in; the default's 熊宝 must not appear.
+    expect(linkInstructions("slack")).toContain("我还不知道你在甲里是谁");
+    expect(linkInstructions("slack")).toContain("请在甲的「触达方式」里");
+    expect(PROVIDERS.slack.instruction?.("abc")).toBe(
+      "在 Slack 里私信甲应用，发送这条消息：link abc",
+    );
+    setBrand({ productName: "甲乙数字员工", shortName: "甲乙" });
+    expect(linkInstructions("teams")).toContain("我还不知道你在甲乙里是谁");
+    expect(linkInstructions("teams")).not.toContain("熊宝");
+  });
+
+  test("technical ids take the brand's slug", () => {
+    expect(brandSlug()).toBe("jia");
   });
 });
