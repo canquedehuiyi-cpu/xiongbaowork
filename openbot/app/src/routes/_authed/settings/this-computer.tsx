@@ -29,6 +29,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { shortName } from "@/lib/brand";
 import {
   checkAppUpdateMutationOptions,
   installAppUpdateMutationOptions,
@@ -75,14 +76,14 @@ function ComputerPage() {
   const inDesktop = desktopShell() !== null;
   return (
     <PageShell
-      description="熊宝在这台电脑上运行了哪些部分、各占多少内存。哪个部分卡住了，就重启它。"
+      description={`${shortName()}在这台电脑上运行了哪些部分、各占多少内存。哪个部分卡住了，就重启它。`}
       title="这台电脑"
     >
       {inDesktop ? (
         <ComputerSections />
       ) : (
         <PageSection>
-          <PageEmpty>这个页面只在熊宝桌面端里提供。</PageEmpty>
+          <PageEmpty>这个页面只在{shortName()}桌面端里提供。</PageEmpty>
         </PageSection>
       )}
     </PageShell>
@@ -103,7 +104,7 @@ function ComputerSections() {
   if (!data)
     return (
       <p className="text-destructive text-sm" role="alert">
-        读不到熊宝在这台电脑上运行了什么。
+        读不到{shortName()}在这台电脑上运行了什么。
       </p>
     );
   const isMeasured = measured.data !== undefined;
@@ -221,7 +222,7 @@ function IntelligenceSection({
   const memory = totalMemory(status.intelligenceContainers);
   return (
     <PageSection
-      description="保存员工的对话和技能。熊宝运行时会用到它。"
+      description={`保存员工的对话和技能。${shortName()}运行时会用到它。`}
       title="后端"
     >
       <PageRows>
@@ -496,11 +497,11 @@ function VersionRow({ status }: { status: DesktopStatus }) {
 function checked(found: DesktopAppUpdateCheck): string {
   switch (found.found) {
     case "available":
-      return `熊宝 ${found.version} 已发布。`;
+      return `${shortName()} ${found.version} 已发布。`;
     case "upToDate":
-      return `熊宝 ${found.current} 已是最新版本。`;
+      return `${shortName()} ${found.current} 已是最新版本。`;
     case "installing":
-      return `熊宝正在下载 ${found.version}，下载完会自动重启。`;
+      return `${shortName()}正在下载 ${found.version}，下载完会自动重启。`;
     case "notOffered":
       return DOESNT_UPDATE_ITSELF;
   }

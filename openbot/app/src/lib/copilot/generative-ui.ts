@@ -1,4 +1,4 @@
-import { appConfig } from "@/lib/generated/application-config";
+import { englishName } from "@/lib/brand";
 
 /**
  * What a Bot is told about drawing an interface it wrote itself.
@@ -25,7 +25,7 @@ import { appConfig } from "@/lib/generated/application-config";
  * text can fix.
  */
 /** The delivery's own name, so a generated interface is never told it belongs to somebody else's product. */
-const PRODUCT = appConfig.brand.englishName ?? "XiongBao Work";
+const PRODUCT = englishName();
 
 export const GENERATIVE_UI_DESIGN_SKILL = `You are generating a self-contained interface that renders inside a sandboxed iframe in ${PRODUCT}'s chat transcript. It must look like it belongs to ${PRODUCT}, not like a widget from somewhere else.
 

@@ -16,6 +16,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { shortName } from "@/lib/brand";
 import {
   deliveryQueryOptions,
   type Reachability,
@@ -72,7 +73,7 @@ export function NativeDevices() {
   const error = reach.error ?? remove.error;
   return (
     <PageSection
-      description="在手机上登录熊宝应用并打开通知，它就会出现在这里。"
+      description={`在手机上登录${shortName()}应用并打开通知，它就会出现在这里。`}
       title="接收通知的手机"
     >
       {error ? (

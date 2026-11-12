@@ -42,6 +42,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { shortName } from "@/lib/brand";
 import {
   addMemorySourceMutationOptions,
   availableMemorySourcesQueryOptions,
@@ -224,7 +225,7 @@ export function MemorySources({ agentId: fixedBot }: { agentId?: string }) {
           <DialogHeader>
             <DialogTitle>添加来源</DialogTitle>
             <DialogDescription>
-              熊宝会马上读一次，之后开着时每 15 分钟读一次。
+              {shortName()}会马上读一次，之后开着时每 15 分钟读一次。
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4 overflow-y-auto">
@@ -255,7 +256,9 @@ export function MemorySources({ agentId: fixedBot }: { agentId?: string }) {
                         .map((entry) => entry.trim())
                         .filter(Boolean);
                     else if (setting.schema.type === "object")
-                      throw new Error("这个动作的设置熊宝显示不了，请换一个。");
+                      throw new Error(
+                        `这个动作的设置${shortName()}显示不了，请换一个。`,
+                      );
                     else values[setting.name] = value;
                   }
                   setError("");

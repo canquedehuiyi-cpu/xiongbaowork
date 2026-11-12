@@ -17,6 +17,7 @@ import {
   translateApprovalRules,
 } from "@/lib/approval-rules/translate";
 import type { ApprovalRuleInput } from "@/lib/approvals";
+import { shortName } from "@/lib/brand";
 import { queryClient } from "@/query-client";
 
 export const Route = createFileRoute("/_authed/admin/approvals_/describe")({
@@ -143,7 +144,7 @@ function DescribeTeamRulesPage() {
                   // No rules says so itself, with the model's reason.
                   written.rules.length === 0
                     ? ""
-                    : "这些规则没通过检查，熊宝不会保存。"
+                    : `这些规则没通过检查，${shortName()}不会保存。`
                 }
                 heading="这些规则做什么"
                 passed="通过检查。每条规则都对得上这个部署里的工具和员工。"

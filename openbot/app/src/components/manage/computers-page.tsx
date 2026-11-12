@@ -37,6 +37,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { shortName } from "@/lib/brand";
 import { clearBrowserMutationOptions } from "@/lib/browser/mutations";
 import {
   type HostAccessPendingOperation,
@@ -152,9 +153,11 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
    */
   const titleOf = (computer: ComputerProfile): string => {
     if (isOwnBrowser(computer)) {
-      if (personal) return "你的熊宝浏览器";
+      if (personal) return `你的${shortName()}浏览器`;
       const owner = computer.person?.name ?? computer.person?.email;
-      return owner ? `${owner} 的熊宝浏览器` : "某个人的熊宝浏览器";
+      return owner
+        ? `${owner} 的${shortName()}浏览器`
+        : `某个人的${shortName()}浏览器`;
     }
     // One person, so a row is one of their Bots.
     if (personal) return computer.botId ? nameFor(computer.botId) : "电脑";
@@ -451,7 +454,8 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
           <strong>重置</strong>会删除员工的浏览器资料，让它退出所有登录。
           {computers?.some(isOwnBrowser) ? (
             <>
-              <strong>清除浏览器数据</strong>对你的熊宝浏览器做同样的事。
+              <strong>清除浏览器数据</strong>对你的{shortName()}
+              浏览器做同样的事。
             </>
           ) : null}
           每一项都会记在
@@ -531,7 +535,7 @@ function HostFoldersSection({
 
   return (
     <PageSection
-      description="选择员工可以读取的这台电脑上的文件夹。每次改文件或运行命令前，桌面应用都会先问你。退出熊宝后访问就结束。"
+      description={`选择员工可以读取的这台电脑上的文件夹。每次改文件或运行命令前，桌面应用都会先问你。退出${shortName()}后访问就结束。`}
       title="这台电脑上的文件夹"
     >
       {problem ? (
@@ -550,8 +554,9 @@ function HostFoldersSection({
       ) : null}
 
       {loading ? null : !desktop ? (
-        <PageEmpty icon={IconDeviceDesktop} title="需要熊宝桌面版">
-          这里的熊宝不是在桌面应用里运行的。用熊宝桌面版才能让员工读取这台电脑上的文件夹。
+        <PageEmpty icon={IconDeviceDesktop} title={`需要${shortName()}桌面版`}>
+          这里的{shortName()}不是在桌面应用里运行的。用{shortName()}
+          桌面版才能让员工读取这台电脑上的文件夹。
         </PageEmpty>
       ) : botIds.length === 0 ? (
         <PageEmpty icon={IconBolt} title="还没有员工">
@@ -718,11 +723,11 @@ function pendingSentence(
   if (personal) {
     switch (request.kind) {
       case "write_file":
-        return "有一处文件改动在等你。熊宝桌面版正在弹窗问你。";
+        return `有一处文件改动在等你。${shortName()}桌面版正在弹窗问你。`;
       case "run_command":
-        return "有一条命令在等你或还在运行。熊宝桌面版会弹窗问你。";
+        return `有一条命令在等你或还在运行。${shortName()}桌面版会弹窗问你。`;
       default:
-        return "有一个文件夹访问在等你。熊宝桌面版正在弹窗问你。";
+        return `有一个文件夹访问在等你。${shortName()}桌面版正在弹窗问你。`;
     }
   }
   const owner = ownerLabel(request);

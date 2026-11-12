@@ -1,6 +1,7 @@
 import { IconX } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { shortName } from "@/lib/brand";
 import {
   dismissAppUpdateMutationOptions,
   installAppUpdateMutationOptions,
@@ -34,10 +35,12 @@ export function UpdateBanner() {
 
   return (
     <aside
-      aria-label="熊宝更新"
+      aria-label={`${shortName()}更新`}
       className="flex shrink-0 flex-wrap items-center gap-x-2 border-b border-border bg-muted/60 px-4 py-1.5 text-sm"
     >
-      <p className="text-foreground">熊宝 {version} 已发布。</p>
+      <p className="text-foreground">
+        {shortName()} {version} 已发布。
+      </p>
       {busy ? (
         <p className="text-muted-foreground" role="status">
           {describe(progress)}

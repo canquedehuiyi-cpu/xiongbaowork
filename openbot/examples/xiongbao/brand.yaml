@@ -3,6 +3,8 @@
 tenant:
   id: openbot
   product_name: 熊宝数字员工
+  # 句子里提到产品时用的短名（"在熊宝里打开…"）。不写就用 product_name 全称。
+  short_name: 熊宝
   english_name: XiongBao Work
   company_name: 熊宝
   tagline: 给每个人一支会在自己电脑上干活的数字员工队伍

@@ -29,6 +29,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { shortName } from "@/lib/brand";
 import {
   openAndStartBrowserRecordingMutationOptions,
   startBrowserRecordingMutationOptions,
@@ -273,7 +274,7 @@ function heldIn(stopped: Stopped): string {
  */
 const NOT_SAVED: Record<NonNullable<Stopped["kept"]>, string> = {
   refused: "它保留在这个浏览器里，稍后会重新发送。",
-  "signed-out": "它保留在这个浏览器里，等你重新连接熊宝后再发送。",
+  "signed-out": `它保留在这个浏览器里，等你重新连接${shortName()}后再发送。`,
 };
 
 /** What the page says once Stop ended a recording, naming it. The sidebar's Browser button says the same. */

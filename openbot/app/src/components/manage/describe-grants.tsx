@@ -45,6 +45,7 @@ import {
   type AppGrantTranslation,
   translateAppGrants,
 } from "@/lib/app-grants/translate";
+import { shortName } from "@/lib/brand";
 import type { SharedUseApproval } from "@/lib/plugins/shared-use";
 import { relativeTime } from "@/lib/relative-time";
 import { queryClient } from "@/query-client";
@@ -320,7 +321,7 @@ export function DescribeGrants({
             check={written.check}
             edited={null}
             explanation={written.explanation}
-            failed="这些动作没通过核对，所以熊宝不会保存它们。"
+            failed={`这些动作没通过核对，所以${shortName()}不会保存它们。`}
             heading={`这会让 ${botName} 能做什么`}
             passed={`核对通过：每个动作都是 ${appTitle} 提供的。`}
             warning={written.warning}
@@ -424,7 +425,7 @@ function RecentUse({
       <FieldLabel id="app-grants-replay">按 {botName} 最近的活动</FieldLabel>
       {report === null ? (
         <FieldDescription>
-          熊宝这里没有可以读的活动记录，所以没有东西可以拿来对照。
+          {shortName()}这里没有可以读的活动记录，所以没有东西可以拿来对照。
         </FieldDescription>
       ) : report.calls === 0 ? (
         <FieldDescription>

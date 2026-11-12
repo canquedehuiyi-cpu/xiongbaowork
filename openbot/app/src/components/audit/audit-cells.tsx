@@ -22,6 +22,7 @@ import {
 } from "react";
 import { type AuditOutcome, outcomeOf } from "@/lib/audit/outcome";
 import { silenceOf } from "@/lib/audit/silence";
+import { productName, shortName } from "@/lib/brand";
 import { galleryComponent } from "@/lib/copilot/gallery-registry";
 import { cn } from "@/lib/utils";
 
@@ -478,7 +479,7 @@ export function startedByText(
       return "目标";
     case "deployment":
       // The product by its short name: 「熊宝数字员工」 reads as one of the person's Bots.
-      return deployment === "熊宝数字员工" ? "熊宝" : deployment;
+      return deployment === productName() ? shortName() : deployment;
     default:
       return "某个人";
   }

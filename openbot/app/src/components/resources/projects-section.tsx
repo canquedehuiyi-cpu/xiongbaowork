@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
+import { shortName } from "@/lib/brand";
 import {
   devicesQueryOptions,
   type RegisteredDevice,
@@ -57,8 +58,7 @@ type Folder = { ref: string; name: string; mode?: "read" | "write" };
 const foldersOf = (device: RegisteredDevice | undefined): Folder[] =>
   (device?.roots ?? []) as Folder[];
 
-const OFFLINE_REASON =
-  "设备离线，无法同步或列出分支。请在设备上打开熊宝设备端后再试。";
+const OFFLINE_REASON = `设备离线，无法同步或列出分支。请在设备上打开${shortName()}设备端后再试。`;
 
 const characters = (value: string) => [...value].length;
 

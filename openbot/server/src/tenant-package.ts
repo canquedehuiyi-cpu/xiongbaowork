@@ -248,6 +248,8 @@ export type TenantPackage = {
    */
   formerTenantIds: string[];
   productName: string;
+  /** What a sentence calls the product once it is known (`tenant.short_name`). Optional; callers fall back to the product name. */
+  shortName?: string;
   /** The product's name in English (`tenant.english_name`), drawn beside the Chinese one. Optional. */
   englishName?: string;
   /** The legal/copyright holder (`tenant.company_name`). Optional; callers fall back to the product name. */
@@ -309,6 +311,7 @@ export type ApplicationConfiguration = {
   brand: {
     tenantId: string;
     productName: string;
+    shortName?: string;
     englishName?: string;
     companyName?: string;
     supportUrl?: string;
@@ -330,6 +333,9 @@ export function createApplicationConfiguration(
     brand: {
       tenantId: tenantPackage.tenantId,
       productName: tenantPackage.productName,
+      ...(tenantPackage.shortName
+        ? { shortName: tenantPackage.shortName }
+        : {}),
       ...(tenantPackage.englishName
         ? { englishName: tenantPackage.englishName }
         : {}),
@@ -768,6 +774,9 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     tenantId,
     formerTenantIds,
     productName: requiredString(tenant.product_name, "tenant.product_name"),
+    ...(tenant.short_name === undefined
+      ? {}
+      : { shortName: requiredString(tenant.short_name, "tenant.short_name") }),
     ...(tenant.english_name === undefined
       ? {}
       : {

@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { shortName } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { explainAuditEvent, type WhatIfExplained } from "@/lib/what-if/check";
 import { OUTCOMES, WhatIfResultView } from "./what-if-result";
@@ -79,7 +80,8 @@ export function WhyButton({ event }: { event: AuditEvent }) {
           <DialogHeader>
             <DialogTitle>为什么会这样？</DialogTitle>
             <DialogDescription>
-              用今天的设置，拿这条事件自己的事实逐一去问熊宝的每一道管控。
+              用今天的设置，拿这条事件自己的事实逐一去问{shortName()}
+              的每一道管控。
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="mt-4 overflow-y-auto">

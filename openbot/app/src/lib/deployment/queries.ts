@@ -3,6 +3,7 @@ import {
   queryOptions,
   useQuery,
 } from "@tanstack/react-query";
+import { shortName } from "@/lib/brand";
 import { client } from "@/lib/client";
 
 /**
@@ -71,7 +72,7 @@ export function deploymentCapabilitiesQueryOptions() {
        */
       const body = (await (
         await client("/api/capabilities", {
-          fallback: "读不到熊宝能做什么。",
+          fallback: `读不到${shortName()}能做什么。`,
         })
       ).json()) as {
         generativeUi?: boolean;

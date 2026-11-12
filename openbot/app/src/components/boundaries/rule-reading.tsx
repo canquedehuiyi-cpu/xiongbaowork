@@ -1,5 +1,6 @@
 import { IconAlertTriangle, IconCircleCheck } from "@tabler/icons-react";
 import type { WrittenRule } from "@/components/boundaries/describe-rule";
+import { shortName } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 /**
@@ -105,9 +106,9 @@ export function RuleReading({
           : null
       }
       explanation={written.explanation}
-      failed="编译不通过，熊宝不会保存它。"
+      failed={`编译不通过，${shortName()}不会保存它。`}
       heading="这条规则做什么"
-      passed="能编译。熊宝可以在每个动作上检查它。"
+      passed={`能编译。${shortName()}可以在每个动作上检查它。`}
       warning={written.warning}
     />
   );

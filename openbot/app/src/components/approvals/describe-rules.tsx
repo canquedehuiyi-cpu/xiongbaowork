@@ -31,6 +31,7 @@ import type {
 } from "@/lib/approval-rules/queries";
 import type { RuleRowProblem } from "@/lib/approval-rules/translate";
 import { type ApprovalRuleInput, BEHAVIOUR_LABELS } from "@/lib/approvals";
+import { shortName } from "@/lib/brand";
 import { LabelSelect } from "./rules";
 
 /** More than this is not one description's worth; the server refuses it too. */
@@ -231,7 +232,7 @@ export function replayWords(
   asksMore: boolean,
 ): string {
   return [
-    `用熊宝最近检查过的 ${report.scanned} 个动作重放了一遍。`,
+    `用${shortName()}最近检查过的 ${report.scanned} 个动作重放了一遍。`,
     report.matched === 0
       ? "这些规则跟其中任何一个都无关。"
       : `这些规则涉及其中 ${report.matched} 个。`,

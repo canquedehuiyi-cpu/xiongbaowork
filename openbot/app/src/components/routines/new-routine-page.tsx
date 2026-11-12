@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { shortName } from "@/lib/brand";
 import { untitledLine } from "@/lib/channels/label";
 import {
   type ChannelSummary,
@@ -416,7 +417,7 @@ export function NewRoutinePage({
                         <FieldLabel htmlFor={field.name}>发到哪里</FieldLabel>
                         <FieldDescription>
                           {field.state.value === NEW_CONVERSATION
-                            ? "熊宝为这条定时任务新开一段对话，用它的名称命名。"
+                            ? `${shortName()}为这条定时任务新开一段对话，用它的名称命名。`
                             : field.state.value === AUTO_CONVERSATION
                               ? "不指定对话：系统会找你和这位员工共有的那段对话；如果有不止一段，会请你改选一段。"
                               : "每次运行都发到这段对话里。"}

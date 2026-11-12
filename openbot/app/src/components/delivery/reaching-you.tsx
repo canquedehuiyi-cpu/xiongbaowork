@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useBotNames } from "@/lib/agents/bot-names";
+import { shortName } from "@/lib/brand";
 import { conversationLabel } from "@/lib/channels/label";
 import { channelListQueryOptions } from "@/lib/channels/queries";
 import {
@@ -507,7 +508,8 @@ function ConnectDialog({
                   在 {Math.ceil((linked.expiresAt - Date.now()) / 60_000)}{" "}
                   分钟内，在{" "}
                   {linked.platform === "teams" ? "Microsoft Teams" : "Slack"}{" "}
-                  里私信熊宝应用发送这条消息，就会把那个账号关联到这段对话和这位员工。
+                  里私信{shortName()}
+                  应用发送这条消息，就会把那个账号关联到这段对话和这位员工。
                 </ItemDescription>
                 <ItemTitle className="break-all font-mono">
                   {linked.command}

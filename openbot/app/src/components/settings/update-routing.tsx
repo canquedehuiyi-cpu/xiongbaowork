@@ -24,6 +24,7 @@ import {
   type UpdateTransport,
   updateRoutingQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
+import { shortName } from "@/lib/brand";
 import { deliveryQueryOptions } from "@/lib/delivery";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { desktopShell } from "@/lib/desktop/shell";
@@ -142,12 +143,12 @@ export function UpdateRoutingSection() {
             ) : undefined
           }
           icon={IconRoute}
-          title="消息只在熊宝里显示"
+          title={`消息只在${shortName()}里显示`}
         >
           {desktop
-            ? "推送、Slack、Microsoft Teams 和短信需要熊宝运行在服务器上。"
+            ? `推送、Slack、Microsoft Teams 和短信需要${shortName()}运行在服务器上。`
             : setsUp
-              ? "在熊宝运行的地方设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。"
+              ? `在${shortName()}运行的地方设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。`
               : "管理员设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。"}
         </PageEmpty>
       ) : (

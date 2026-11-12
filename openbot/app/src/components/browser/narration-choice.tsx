@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { shortName } from "@/lib/brand";
 import {
   saveUserPreferencesMutationOptions,
   userPreferencesQueryOptions,
@@ -111,7 +112,8 @@ export function NarrationChoiceDialog({
             你的浏览器会在你自己的电脑上把语音转成文字。你的声音不会离开这台电脑，也不会保留录音。
           </p>
           <p className="mt-2">
-            熊宝会在之后的每次录制里沿用你这次的选择。你随时可以用本页的「讲解」开关修改。
+            {shortName()}
+            会在之后的每次录制里沿用你这次的选择。你随时可以用本页的「讲解」开关修改。
           </p>
         </DialogBody>
         <DialogFooter className="mt-4">

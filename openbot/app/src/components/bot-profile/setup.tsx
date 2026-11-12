@@ -63,6 +63,7 @@ import {
   type AgentProfile,
   agentCapabilitiesQueryOptions,
 } from "@/lib/agents/queries";
+import { shortName } from "@/lib/brand";
 import { isComposing } from "@/lib/composing";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { myCapabilitiesQueryOptions } from "@/lib/enterprise/queries";
@@ -176,9 +177,9 @@ export function SetupSections({ agent }: { agent: AgentProfile }) {
                   <IconShieldCheck />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>随熊宝自带</ItemTitle>
+                  <ItemTitle>随{shortName()}自带</ItemTitle>
                   <ItemDescription>
-                    随熊宝自带，不属于任何一个人。
+                    随{shortName()}自带，不属于任何一个人。
                   </ItemDescription>
                 </ItemContent>
               </Item>
@@ -225,8 +226,8 @@ function VisibilityRow({
                 ? `只有你能看到它、和它开始对话。${ISOLATED_MAKING_PUBLIC}`
                 : "只有你能看到它、和它开始对话。"
               : agent.isolationActive
-                ? `熊宝上的所有人都能找到并使用它。${ISOLATED_PUBLIC_SHARES_LOGINS}`
-                : "熊宝上的所有人都能找到并使用它。")}
+                ? `${shortName()}上的所有人都能找到并使用它。${ISOLATED_PUBLIC_SHARES_LOGINS}`
+                : `${shortName()}上的所有人都能找到并使用它。`)}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -302,7 +303,7 @@ function IsolatedRow({
     (agent.isolated || (available && allowed));
 
   const summary = agent.systemOwned
-    ? "随熊宝自带，所以在使用它的人自己的电脑上运行。"
+    ? `随${shortName()}自带，所以在使用它的人自己的电脑上运行。`
     : agent.isolated
       ? agent.isolationActive
         ? isolatedExplained(isPublic)
@@ -489,7 +490,9 @@ function ConnectionSection({ agent }: { agent: AgentProfile }) {
                 builtIn ? undefined : "line-clamp-none break-all font-mono"
               }
             >
-              {builtIn ? "在熊宝里运行，不需要连接。" : agent.endpoint}
+              {builtIn
+                ? `在${shortName()}里运行，不需要连接。`
+                : agent.endpoint}
             </ItemDescription>
           </ItemContent>
         </Item>
@@ -516,6 +519,6 @@ export function frameworkName(
     agent.framework === OPENBOT_HARNESS_NAME ||
     (!agent.framework && agent.builtIn)
   )
-    return "熊宝内置";
+    return `${shortName()}内置`;
   return agent.framework ?? "未注明（按地址接入的外部员工）";
 }

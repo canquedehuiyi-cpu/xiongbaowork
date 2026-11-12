@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { shortName } from "@/lib/brand";
 import { renameChannelMutationOptions } from "@/lib/channels/mutations";
 import { queryClient } from "@/query-client";
 
@@ -80,7 +81,9 @@ export function RenameConversationDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>重命名会话</DialogTitle>
-          <DialogDescription>留空就恢复成熊宝起的名字。</DialogDescription>
+          <DialogDescription>
+            留空就恢复成{shortName()}起的名字。
+          </DialogDescription>
         </DialogHeader>
         <DialogBody className="mt-4">
           <form

@@ -25,7 +25,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
-import { appConfig } from "@/lib/generated/application-config";
+import { englishName, shortName } from "@/lib/brand";
 import { revokeRecorderConnectionMutationOptions } from "@/lib/recorder/mutations";
 import { recorderConnectionsQueryOptions } from "@/lib/recorder/queries";
 import { relativeTime } from "@/lib/relative-time";
@@ -33,7 +33,7 @@ import { queryClient } from "@/query-client";
 
 /** What the server names a person's own browser's connection now (browser/routes.ts); a row stored before the rename
  * still holds the upstream name, so the row is drawn under this one instead. */
-const OWN_BROWSER_LABEL = `${appConfig.brand.englishName ?? "XiongBao Work"} browser`;
+const OWN_BROWSER_LABEL = `${englishName()} browser`;
 
 /** When a browser connected, to the minute: two copies with the same name (two Chrome profiles) stay told apart. */
 const connectedAt = new Intl.DateTimeFormat(undefined, {
@@ -104,7 +104,7 @@ function ConnectedBrowserRow({
   const which = here
     ? "当前浏览器"
     : connection.via === "openbot-browser"
-      ? "你的熊宝浏览器"
+      ? `你的${shortName()}浏览器`
       : label;
   return (
     <>
@@ -115,12 +115,14 @@ function ConnectedBrowserRow({
         <ItemContent>
           <ItemTitle>{name}</ItemTitle>
           <ItemDescription>
-            {connection.via === "openbot-browser" ? "你的熊宝浏览器，" : ""}
+            {connection.via === "openbot-browser"
+              ? `你的${shortName()}浏览器，`
+              : ""}
             {connectedAt.format(new Date(connection.createdAt))} 连接
             {connection.via === "desktop"
-              ? "，来自熊宝桌面端"
+              ? `，来自${shortName()}桌面端`
               : connection.via === "web"
-                ? "，来自熊宝网页"
+                ? `，来自${shortName()}网页`
                 : ""}
             ，
             {/* A recording streams to the gateway, not to OpenBot, so its last use lags: it says so instead. */}
@@ -153,7 +155,7 @@ function ConnectedBrowserRow({
           </DialogHeader>
           <DialogBody className="mt-4 text-sm">
             <p>
-              熊宝会让{which}
+              {shortName()}会让{which}
               里的录制器退出登录。重新连接之前，它不会再为你录制任何内容，正在那里进行的录制也会停止。
             </p>
             {revoke.error ? (

@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { shortName } from "@/lib/brand";
 import { appConfig } from "@/lib/generated/application-config";
 import { desktopShell } from "./shell";
 
@@ -132,7 +133,7 @@ export async function invokeDesktop<T>(
   args?: Record<string, unknown>,
 ): Promise<T> {
   const shell = desktopShell();
-  if (!shell) throw new Error("这个页面需要熊宝桌面端。");
+  if (!shell) throw new Error(`这个页面需要${shortName()}桌面端。`);
   return (await shell.invoke(`${PLUGIN}|${command}`, args)) as T;
 }
 

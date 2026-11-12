@@ -62,11 +62,11 @@ import {
   type GiveableApp,
   giveableAppsQueryOptions,
 } from "@/lib/app-access/queries";
+import { englishName, shortName } from "@/lib/brand";
 import { isComposing } from "@/lib/composing";
 import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { myCapabilitiesQueryOptions } from "@/lib/enterprise/queries";
-import { appConfig } from "@/lib/generated/application-config";
 import {
   type PluginsPage,
   pluginKeys,
@@ -140,7 +140,7 @@ function frameworkName(runtime: Runtime): string {
   return harness ? harness.name : "AG-UI agent";
 }
 
-const PRODUCT = appConfig.brand.englishName ?? "XiongBao Work";
+const PRODUCT = englishName();
 
 /**
  * The subtitle under a new Bot's name: what runs it. OpenBot itself for a Bot that runs here, the
@@ -1036,8 +1036,8 @@ function EndpointStep({
             />
           ) : (
             <FieldDescription>
-              任何支持 AG-UI
-              的智能体都可以。由熊宝去连接它，所以熊宝的服务器必须能访问到它。
+              任何支持 AG-UI 的智能体都可以。由{shortName()}去连接它，所以
+              {shortName()}的服务器必须能访问到它。
             </FieldDescription>
           )}
         </Field>

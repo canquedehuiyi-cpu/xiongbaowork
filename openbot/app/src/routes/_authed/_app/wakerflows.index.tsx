@@ -11,6 +11,7 @@ import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { TabSkeleton } from "@/components/resources/resource-kit";
 import { Button } from "@/components/ui/button";
 import { CARD_FACE, StateBadge } from "@/components/wakerflow/flow-ui";
+import { shortName } from "@/lib/brand";
 import { wakerFlowsQueryOptions } from "@/lib/wakerflows";
 
 /**
@@ -68,7 +69,7 @@ function WakerFlowsPage() {
         <WorkbenchEmpty
           action={<NewButton />}
           className="border border-border"
-          description="说出你想要的流程，比如周会准备或工作周报，熊宝会帮你生成一份可编辑的计划。"
+          description={`说出你想要的流程，比如周会准备或工作周报，${shortName()}会帮你生成一份可编辑的计划。`}
           title="还没有 WakerFlow"
         />
       ) : (

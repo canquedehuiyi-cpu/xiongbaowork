@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { shortName } from "@/lib/brand";
 import {
   blobToBase64,
   PORTRAIT_PRESETS,
@@ -93,7 +94,8 @@ export function PortraitPicker({
           <DialogTitle>更换头像</DialogTitle>
           <DialogDescription>
             为{KIND_LABEL[kind]}「{name}
-            」选一个熊宝表情，或上传一张自己的图片。工作区里的每个人都会看到这个头像。
+            」选一个{shortName()}
+            表情，或上传一张自己的图片。工作区里的每个人都会看到这个头像。
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-4">
@@ -106,7 +108,7 @@ export function PortraitPicker({
           />
           <fieldset className="w-full">
             <legend className="mb-2 text-[12px] text-muted-foreground">
-              熊宝表情
+              {shortName()}表情
             </legend>
             <div className="grid grid-cols-5 gap-2">
               {PORTRAIT_PRESETS.map((preset) => {
