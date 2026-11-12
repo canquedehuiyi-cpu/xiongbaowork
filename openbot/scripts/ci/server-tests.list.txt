@@ -186,6 +186,7 @@ tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
 tests/boundaries-replay.integration.test.ts
+tests/brand.test.ts
 tests/brokered-accounts-schema.integration.test.ts
 tests/brokered-multiple-accounts.integration.test.ts
 tests/brokered-relist.integration.test.ts
@@ -767,6 +768,7 @@ tests/tenant-frame-returned-builder.test.ts
 tests/tenant-invariants.test.ts
 tests/tenant-package-agent-files.test.ts
 tests/tenant-package-avatar-channel.test.ts
+tests/tenant-package-brand-fields.test.ts
 tests/tenant-package-channel-membership.test.ts
 tests/tenant-package-duplicates.test.ts
 tests/tenant-package-personal.test.ts

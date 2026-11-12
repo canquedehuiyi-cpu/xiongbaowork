@@ -135,6 +135,7 @@ import {
   createAvatarSourceRoutes,
   createAvatarSourceStore,
 } from "./avatar-sources";
+import { setBrand } from "./brand";
 import { openbotAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
 import { personBrowserEgressPolicy } from "./browser/egress";
@@ -929,6 +930,12 @@ await startupLifecycle.run(async (startup) => {
   const tenantPackage = await startup.step(() =>
     loadTenantPackage(config.tenantPackageDirectory),
   );
+  setBrand({
+    productName: tenantPackage.productName,
+    englishName: tenantPackage.englishName,
+    companyName: tenantPackage.companyName,
+    supportUrl: tenantPackage.supportUrl,
+  });
   // The package's id unless DEPLOYMENT_ID says otherwise, and the id the deployment was set up under
   // if the package has since been renamed. See `deploymentNameOf`, which frames its own read.
   const deploymentId =

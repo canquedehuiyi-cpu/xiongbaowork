@@ -252,6 +252,10 @@ export type TenantPackage = {
   productName: string;
   /** The product's name in English (`tenant.english_name`), drawn beside the Chinese one. Optional. */
   englishName?: string;
+  /** The legal/copyright holder (`tenant.company_name`). Optional; callers fall back to the product name. */
+  companyName?: string;
+  /** Where people get help (`tenant.support_url`). Optional, and always an https address. */
+  supportUrl?: string;
   stylesheet: string | null;
   agents: TenantAgent[];
   /** Remote agents explicitly disabled by a blank endpoint, not arbitrary removed YAML rows. */
@@ -308,6 +312,8 @@ export type ApplicationConfiguration = {
     tenantId: string;
     productName: string;
     englishName?: string;
+    companyName?: string;
+    supportUrl?: string;
   };
 };
 
@@ -328,6 +334,12 @@ export function createApplicationConfiguration(
       productName: tenantPackage.productName,
       ...(tenantPackage.englishName
         ? { englishName: tenantPackage.englishName }
+        : {}),
+      ...(tenantPackage.companyName
+        ? { companyName: tenantPackage.companyName }
+        : {}),
+      ...(tenantPackage.supportUrl
+        ? { supportUrl: tenantPackage.supportUrl }
         : {}),
     },
   };
@@ -359,6 +371,21 @@ function requiredString(value: unknown, name: string): string {
     throw new Error(`${name} must be a non-empty string`);
   }
   return value;
+}
+
+// A support link is rendered as a clickable href, so anything but https (javascript:, http:) is refused.
+function httpsUrl(value: unknown, name: string): string {
+  const text = requiredString(value, name);
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    throw new Error(`${name} must be an https URL`);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error(`${name} must be an https URL`);
+  }
+  return text;
 }
 
 function agentTitle(value: unknown): string {
@@ -750,6 +777,17 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
             "tenant.english_name",
           ),
         }),
+    ...(tenant.company_name === undefined
+      ? {}
+      : {
+          companyName: requiredString(
+            tenant.company_name,
+            "tenant.company_name",
+          ),
+        }),
+    ...(tenant.support_url === undefined
+      ? {}
+      : { supportUrl: httpsUrl(tenant.support_url, "tenant.support_url") }),
     stylesheet: skin
       ? requiredString(skin.stylesheet, "skin.stylesheet")
       : null,
