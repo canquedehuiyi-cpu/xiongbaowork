@@ -1,5 +1,6 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
+import { desktopActionWordsOf } from "../../../shared/desktop-control";
 import {
   activeDesktopSession,
   type DesktopFloor,
@@ -1842,6 +1843,10 @@ export async function decideAction(input: {
   enforceDangerousCommands?: boolean;
   /** The team's host-command cap, applied here to commands on a paired computer (D5). */
   hostCommandsCap?: HostCommandPolicy;
+  // --- desktop control (sub-project 2) ---
+  /** The team's desktop action words; absent, empty or all blank means the default list (design decision 11). */
+  desktopActionWords?: readonly string[];
+  // --- end desktop control ---
 }): Promise<ApprovalPolicyOutcome> {
   const { candidate } = input;
   const layers = applicableRules({
@@ -1900,12 +1905,11 @@ export async function decideAction(input: {
       input.enforceDangerousCommands === true,
     ) ??
     onceOnly ??
-    (runnerCommand && input.hostCommandsCap === "ask"
-      ? {
-          source: "host_command_cap",
-          reason:
-            "Your team asks before any command runs on a paired computer, so this needs approval.",
-        }
+    // --- desktop control (sub-project 2): a desktop write's cap of `ask` is asked after its own floors, below ---
+    (runnerCommand &&
+    input.hostCommandsCap === "ask" &&
+    !candidate.subject?.desktopWrite
+      ? HOST_COMMAND_CAP_ASK
       : undefined) ??
     /*
      * A local app's tool runs without asking only when the device's own list marks it read-only and
@@ -1930,10 +1934,19 @@ export async function decideAction(input: {
   // --- end app discovery ---
     // --- desktop control (sub-project 2) ---
     /*
-     * The window floor, then the session floor (`desktopFloor ?? desktopSessionFloor`). Task 17's
-     * per-action floor joins inside `desktopFloors`, before the session floor (see there).
+     * The window floor, the per-action floor, then the session floor (see `desktopFloors`). Blank
+     * team words are dropped, and a list with none left is no list: the default words apply.
      */
-    desktopFloors(candidate);
+    desktopFloors(candidate, desktopActionWordsOf(input.desktopActionWords)) ??
+    /*
+     * The team's cap of `ask` for a desktop write: asked when none of the desktop's own floors did,
+     * so a write that opens a session or asks on its own keeps its once-only card and its words.
+     */
+    (runnerCommand &&
+    input.hostCommandsCap === "ask" &&
+    candidate.subject?.desktopWrite
+      ? HOST_COMMAND_CAP_ASK
+      : undefined);
   // --- end desktop control ---
   const ruled = await decideByRules(input, matched);
   // --- desktop control (sub-project 2) ---
@@ -2037,17 +2050,28 @@ export function closedKind(
   return undefined;
 }
 
+/** The team's cap of `ask` for a command on a paired computer, as a floor. */
+const HOST_COMMAND_CAP_ASK = {
+  source: "host_command_cap",
+  reason:
+    "Your team asks before any command runs on a paired computer, so this needs approval.",
+} as const;
+
 /**
  * Calling a local app's MCP tool on a paired machine runs a program there, so the team's
  * host-command cap applies to it exactly as to a command (device MCP bridge §4.3).
  */
 function isRunnerCommand(candidate: ApprovalCandidate): boolean {
   return (
-    candidate.subject?.runner === true &&
-    (candidate.toolRef === "computer_run_command" ||
-      candidate.toolRef === "computer_app_call" ||
-      // --- app discovery (sub-project 3) ---
-      candidate.toolRef === APP_ENABLE_TOOL)
+    // --- desktop control (sub-project 2) ---
+    // A desktop write drives the owner's machine like a command does; it only ever exists there.
+    candidate.subject?.desktopWrite !== undefined ||
+    // --- end desktop control ---
+    (candidate.subject?.runner === true &&
+      (candidate.toolRef === "computer_run_command" ||
+        candidate.toolRef === "computer_app_call" ||
+        // --- app discovery (sub-project 3) ---
+        candidate.toolRef === APP_ENABLE_TOOL))
     // --- end app discovery ---
   );
 }
