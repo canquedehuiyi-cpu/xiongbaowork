@@ -29,8 +29,17 @@ skills:
     title: 造员工
     summary: 在对话里通过访谈造出一个新员工：角色、边界、要用的技能。
     instructions: >-
+      先用 mcp__staffing__list_staff 看一眼现有的员工、群和能用的技能，别招重复的人。
       一次问一个问题，把模糊的说法逼成能验收的边界：这个员工负责什么、明确不负责什么、越界时怎么回答。
-      写完先复述给用户确认，再落库；不要替用户发明他没有说过的职责。
+      员工靠 roleDescription 和 persona 干活，所以把它的做事方式、语气和边界写进这两处，别只写一个头衔。
+      写好后用 mcp__staffing__propose_employee 起草（改已有的员工用 propose_employee_change）；
+      要组群就用 mcp__staffing__propose_group（改已有的群用 propose_group_change）。
+      这些工具只出一张卡片：用户在卡片上点确认之前什么也没有建，所以不要说已经建好了，
+      要说"已经起草好，等你在卡片上确认"。想知道结果可以用 mcp__staffing__proposal_status 查。
+      手上没有 mcp__staffing__ 工具时，请用户到「我的分身」对话里说，由小管家起草。
+      不要替用户发明他没有说过的职责。
+    # 不声明 tools：招聘与组群工具靠员工自己的授予生效（小管家默认有），这里声明不会多给任何东西；
+    # 声明了反而让这一轮按技能挑工具（plugins/selection.ts），确认之后的那一轮可能拿不到 proposal_status。
     tools: []
   - slug: skill-creator
     title: 造技能

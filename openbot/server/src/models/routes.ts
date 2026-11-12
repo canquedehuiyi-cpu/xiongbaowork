@@ -29,6 +29,94 @@ import type { PoolKeyEnvironment } from "./runtime-resolver";
 
 type Ctx = { Variables: AppVariables };
 
+/** One platform pool model as a picker offers it: never its key variable, only whether a key is there. */
+export type OfferedPoolModel = {
+  id: string;
+  provider: string;
+  modelName: string;
+  label: string;
+  available: boolean;
+};
+
+/**
+ * The platform pool models this plan may bind, as the model picker lists them: switched on, offered
+ * on the plan, and `available` when the deployment holds the key behind the row. Read in the caller's
+ * own frame (the pool has no row security; openbot_app may only SELECT it).
+ *
+ * One reader for the picker (`GET /api/models`) and for the staffing tools, so an employee drafted in
+ * conversation is offered exactly the pool the person would see in the employee's model picker.
+ */
+export async function poolFor(
+  database: Database,
+  planId: string,
+  environment: PoolKeyEnvironment,
+): Promise<OfferedPoolModel[]> {
+  const rows = await database
+    .select({
+      id: platformModelPool.id,
+      provider: platformModelPool.provider,
+      modelName: platformModelPool.modelName,
+      label: platformModelPool.label,
+      apiKeyEnv: platformModelPool.apiKeyEnv,
+      tiers: platformModelPool.tiers,
+    })
+    .from(platformModelPool)
+    .where(eq(platformModelPool.enabled, true))
+    .orderBy(platformModelPool.label, platformModelPool.id);
+  return rows
+    .filter((row) => (row.tiers as readonly string[]).includes(planId))
+    .map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      modelName: row.modelName,
+      label: row.label,
+      available:
+        PLATFORM_POOL_KEY_ENV.test(row.apiKeyEnv) &&
+        Boolean(environment[row.apiKeyEnv]),
+    }));
+}
+
+/** The models a person may bind an employee to: their library's switched-on rows, and the pool. */
+export type ModelShelf = {
+  choices(actorId: string): Promise<{
+    library: { id: string; label: string | null; modelName: string }[];
+    pool: OfferedPoolModel[];
+  }>;
+};
+
+/**
+ * The model picker's shelf, read without a request: the same library rows the employee update accepts
+ * (`modelRegistry` switched on, in the caller's frame) and the same pool (`poolFor`, on the person's
+ * plan, Free when this deployment counts no quota, as `GET /api/models` reads it).
+ */
+export function createModelShelf(options: {
+  database: Database;
+  quota?: Pick<QuotaService, "planFor">;
+  environment?: PoolKeyEnvironment;
+}): ModelShelf {
+  const environment = options.environment ?? process.env;
+  return {
+    async choices(actorId) {
+      const library = await options.database
+        .select({
+          id: modelRegistry.id,
+          label: modelRegistry.label,
+          modelName: modelRegistry.modelName,
+        })
+        .from(modelRegistry)
+        .where(eq(modelRegistry.enabled, true))
+        .orderBy(desc(modelRegistry.updatedAt));
+      const plan: Plan = options.quota
+        ? await options.quota.planFor(actorId)
+        : FREE_PLAN_FALLBACK;
+      return {
+        library,
+        pool: await poolFor(options.database, plan.id, environment),
+      };
+    },
+  };
+}
+
 /**
  * The tenant's model library: connect a provider template with one's own key,
  * list what is connected, probe it, remove it. Keys go to the same encrypted
@@ -106,18 +194,6 @@ export function createModelRoutes(
     const plan: Plan = quota
       ? await quota.planFor(context.var.actor.id)
       : FREE_PLAN_FALLBACK;
-    const poolRows = await database
-      .select({
-        id: platformModelPool.id,
-        provider: platformModelPool.provider,
-        modelName: platformModelPool.modelName,
-        label: platformModelPool.label,
-        apiKeyEnv: platformModelPool.apiKeyEnv,
-        tiers: platformModelPool.tiers,
-      })
-      .from(platformModelPool)
-      .where(eq(platformModelPool.enabled, true))
-      .orderBy(platformModelPool.label, platformModelPool.id);
     // Under this tenant's row-level security, like the library count above: other tenants' coworkers
     // on the same pool row are not this tenant's business.
     const pooled = await database
@@ -136,18 +212,10 @@ export function createModelRoutes(
     const poolCounts = new Map(
       pooled.map((row) => [row.platformModelRef, row.coworkers]),
     );
-    const pool = poolRows
-      .filter((row) => (row.tiers as readonly string[]).includes(plan.id))
-      .map((row) => ({
-        id: row.id,
-        provider: row.provider,
-        modelName: row.modelName,
-        label: row.label,
-        coworkers: poolCounts.get(row.id) ?? 0,
-        available:
-          PLATFORM_POOL_KEY_ENV.test(row.apiKeyEnv) &&
-          Boolean(environment[row.apiKeyEnv]),
-      }));
+    const pool = (await poolFor(database, plan.id, environment)).map((row) => ({
+      ...row,
+      coworkers: poolCounts.get(row.id) ?? 0,
+    }));
     return context.json({
       models: rows.map((row) => ({
         ...row,

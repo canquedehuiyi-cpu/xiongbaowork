@@ -18,6 +18,8 @@
  * forgery primitive pointed at the deployment's own network.
  */
 
+// 招聘与组群的工具名：一份常量，目录、授予与对话记录读同一组名字。它什么也不导入。
+import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
 /**
  * How a server is authenticated, and whose credential does it.
  *
@@ -1717,6 +1719,31 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
      */
     readTools: Object.freeze(["list_routines", "list_goals"]),
     docsUrl: "https://github.com/CopilotKit/OpenBot/blob/main/docs/routines.md",
+  },
+
+  {
+    key: "staffing",
+    title: "招聘与组群",
+    vendor: "OpenBot",
+    summary:
+      "员工替本人起草新员工、员工改动和群聊的提议；本人在卡片上确认之后，才以本人的身份执行。",
+    /*
+     * 和 Routines 一样是本部署自己的代码，没有要拨的主机、没有凭据。仍然放进目录，因为哪位员工能替人起草
+     * 招人提议，是管理员与主人要像授予应用一样明确授予的能力（授予写成 `staffing/<工具名>`）。
+     */
+    host: "builtin://staffing",
+    path: "/",
+    transport: "builtin-staffing",
+    auth: Object.freeze({ kind: "builtin" }),
+    /*
+     * 六个工具全是读：`list_staff`、`proposal_status` 只读本人看得见的；四个 `propose_*` 只往提议表写一份
+     * 草稿，不建员工、不建群、不改任何授予——那些只在本人登录后确认时发生（`/api/proposals/:id/apply`）。
+     * 所以它们不走「改动之前先问」：卡片上的确认就是那一问，再问一遍只是让人点两次。
+     */
+    writeTools: Object.freeze([]),
+    readTools: Object.freeze([...STAFFING_TOOL_NAMES]),
+    docsUrl:
+      "https://github.com/CopilotKit/OpenBot/blob/main/docs/coworkers.md",
   },
 ]);
 
