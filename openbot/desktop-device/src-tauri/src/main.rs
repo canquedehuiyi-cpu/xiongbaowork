@@ -29,6 +29,7 @@ use sidecar::{RunnerLauncher, Settings};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 use supervise::{Observer, Policy, State, Supervisor};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -43,6 +44,11 @@ struct Paths {
     /// The runner's `--data-dir`.
     data_dir: PathBuf,
     log: PathBuf,
+    /// agent-desktop's home for the 「桌面操作」 card's probe: private, emptied before each probe,
+    /// and not the runner's `agent-desktop-state`.
+    probe: PathBuf,
+    /// Left by `restart_app` so the restarted app shows its window even if it was started at login.
+    show_once: PathBuf,
 }
 
 struct Device {
@@ -57,6 +63,8 @@ struct Device {
     autostart_item: Mutex<Option<CheckMenuItem<Wry>>>,
     quitting: AtomicBool,
     stopped: AtomicBool,
+    /// When the window was last brought up for a `permission-needed`.
+    desktop_raised: Mutex<Option<Instant>>,
 }
 
 impl Device {
@@ -96,7 +104,23 @@ impl Observer for Tray {
     }
 
     fn desktop_permission(&self) {
-        show_desktop(&self.0);
+        let Some(window) = self.0.get_webview_window("main") else {
+            return;
+        };
+        let visible =
+            window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
+        let device = self.0.state::<Device>();
+        let mut raised = device.desktop_raised.lock().unwrap();
+        let now = Instant::now();
+        match desktop_permissions::react(visible, *raised, now) {
+            desktop_permissions::Reaction::Scroll => scroll_to_desktop(&self.0),
+            desktop_permissions::Reaction::Raise => {
+                *raised = Some(now);
+                show_window(&self.0);
+                scroll_to_desktop(&self.0);
+            }
+            desktop_permissions::Reaction::Nothing => {}
+        }
     }
 }
 
@@ -361,18 +385,25 @@ fn read_bundled_text(app: AppHandle, name: String) -> Result<String, String> {
 }
 
 /// Whether this computer lets the app read and operate windows, as the bundled agent-desktop says.
-/// Async, because the helper is given up to five seconds.
+/// The helper is given up to five seconds, on a blocking thread of its own.
 #[tauri::command]
-async fn desktop_permissions() -> Result<desktop_permissions::DesktopPermissionView, String> {
-    let platform = std::env::consts::OS;
-    let reply = match desktop_permissions::command_for(platform) {
-        Some(command) => {
-            let program = sidecar::agent_desktop_path().map_err(|error| error.to_string())?;
-            desktop_permissions::run(&program, &[command], desktop_permissions::TIMEOUT)?
-        }
-        None => String::new(),
-    };
-    desktop_permissions::view_for(platform, &reply)
+async fn desktop_permissions(
+    app: AppHandle,
+) -> Result<desktop_permissions::DesktopPermissionView, String> {
+    let home = app.state::<Device>().paths.probe.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let platform = std::env::consts::OS;
+        let reply = match desktop_permissions::command_for(platform) {
+            Some(command) => {
+                let program = sidecar::agent_desktop_path().map_err(|error| error.to_string())?;
+                desktop_permissions::run(&program, &[command], &home, desktop_permissions::TIMEOUT)?
+            }
+            None => String::new(),
+        };
+        desktop_permissions::view_for(platform, &reply)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 /// Open System Settings at the pane for `kind` (`accessibility` or `screen`). macOS only.
@@ -382,7 +413,7 @@ fn open_desktop_settings(kind: String) -> Result<(), String> {
     if !cfg!(target_os = "macos") {
         return Err("只有 macOS 需要在系统设置里开启。".into());
     }
-    std::process::Command::new("open")
+    std::process::Command::new("/usr/bin/open")
         .arg(url)
         .status()
         .map_err(|error| error.to_string())
@@ -406,6 +437,11 @@ fn restart_app(app: AppHandle) {
     if let Some(item) = device.status_item.lock().unwrap().as_ref() {
         let _ = item.set_text("状态：正在重新打开…");
     }
+    // The new process gets this one's arguments, `--autostart` included: this note makes it show
+    // its window all the same.
+    if let Err(error) = desktop_permissions::mark_show_once(&device.paths.show_once) {
+        eprintln!("[device] could not leave the show-window note: {error}");
+    }
     let app = app.clone();
     std::thread::spawn(move || {
         stop(&app);
@@ -416,9 +452,8 @@ fn restart_app(app: AppHandle) {
     });
 }
 
-/// The window, opened at its 「桌面操作」 card, when the runner says a desktop action needs a grant.
-fn show_desktop(app: &AppHandle) {
-    show_window(app);
+/// Refresh the 「桌面操作」 card and scroll to it, without showing or focusing the window.
+fn scroll_to_desktop(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.eval("window.showDesktop && window.showDesktop()");
     }
@@ -604,6 +639,8 @@ fn main() {
                     settings: data.join("device.json"),
                     data_dir: data.join("runner"),
                     log,
+                    probe: data.join("agent-desktop-probe"),
+                    show_once: data.join("show-window-once"),
                 },
                 browser,
                 supervisor: Mutex::new(None),
@@ -613,6 +650,7 @@ fn main() {
                 autostart_item: Mutex::new(None),
                 quitting: AtomicBool::new(false),
                 stopped: AtomicBool::new(false),
+                desktop_raised: Mutex::new(None),
             });
             let handle = app.handle().clone();
             #[cfg(unix)]
@@ -627,7 +665,9 @@ fn main() {
                         *device.state.lock().unwrap() = State::Failed { message: error };
                     }
                     show_state(&handle, &device.state.lock().unwrap().clone());
-                    if !autostarted {
+                    // Restarted from the 「桌面操作」 card: shown even when it was started at login.
+                    let show_once = desktop_permissions::take_show_once(&device.paths.show_once);
+                    if !autostarted || show_once {
                         show_window(&handle);
                     }
                 }
@@ -655,7 +695,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn only_the_five_bundled_notices_can_be_read() {
+    fn only_the_bundled_notices_can_be_read() {
         for name in super::BUNDLED_NOTICES {
             assert_eq!(super::bundled_notice(name), Ok(name));
         }

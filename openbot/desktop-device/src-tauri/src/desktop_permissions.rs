@@ -6,10 +6,11 @@
 //! there is no AT-SPI bus). Windows needs no grant, so nothing is run there.
 
 use serde::Serialize;
-use std::io::Read;
+use std::ffi::OsString;
+use std::io::{self, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{mpsc, Mutex};
 use std::time::{Duration, Instant};
 
 /// How long agent-desktop is given to answer before the card says it did not.
@@ -112,14 +113,85 @@ pub fn view_for(platform: &'static str, reply: &str) -> Result<DesktopPermission
     })
 }
 
-/// Run `program args`, and return what it printed, or why not, within `timeout`. A helper that has
-/// not answered by then is killed.
-pub fn run(program: &Path, args: &[&str], timeout: Duration) -> Result<String, String> {
-    let mut child = Command::new(program)
+/// The environment agent-desktop is given, besides `AGENT_DESKTOP_HOME`: the runner's own list
+/// (`ENV_KEEP` in `runner/src/desktop/agent-desktop.ts`). Nothing else of this app's environment.
+pub const ENV_KEEP: [&str; 17] = [
+    "PATH",
+    "HOME",
+    "USER",
+    "USERPROFILE",
+    "SystemRoot",
+    "windir",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "DISPLAY",
+    "XAUTHORITY",
+    "XDG_SESSION_TYPE",
+    "WAYLAND_DISPLAY",
+    "XDG_RUNTIME_DIR",
+    "DBUS_SESSION_BUS_ADDRESS",
+];
+
+/// The child's whole environment: the allow-listed keys `get` has a value for, then
+/// `AGENT_DESKTOP_HOME` set to `home`.
+pub fn child_env(get: &dyn Fn(&str) -> Option<OsString>, home: &Path) -> Vec<(OsString, OsString)> {
+    let mut env: Vec<(OsString, OsString)> = ENV_KEEP
+        .iter()
+        .filter_map(|key| get(key).map(|value| (OsString::from(key), value)))
+        .collect();
+    env.push(("AGENT_DESKTOP_HOME".into(), home.as_os_str().to_owned()));
+    env
+}
+
+/// Make `home` an empty directory only this user can open: whatever an earlier probe left in it is
+/// removed first. It is the probe's own, never the runner's `agent-desktop-state`.
+pub fn fresh_home(home: &Path) -> io::Result<()> {
+    match std::fs::symlink_metadata(home) {
+        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(home)?,
+        Ok(_) => std::fs::remove_file(home)?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    if let Some(parent) = home.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(home)
+}
+
+/// One probe at a time: they share the home directory each one empties first.
+static PROBE: Mutex<()> = Mutex::new(());
+
+/// Run `program args` with an emptied private `home` and only the allow-listed environment, and
+/// return what it printed, or why not, within `timeout`. A helper that has not answered by then is
+/// killed.
+pub fn run(
+    program: &Path,
+    args: &[&str],
+    home: &Path,
+    timeout: Duration,
+) -> Result<String, String> {
+    let _one = PROBE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    fresh_home(home).map_err(|error| format!("无法准备桌面助手的目录：{error}"))?;
+    let mut command = Command::new(program);
+    command
         .args(args)
+        .env_clear()
+        .envs(child_env(&|key| std::env::var_os(key), home))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = command
         .spawn()
         .map_err(|error| format!("无法启动桌面助手：{error}"))?;
     let mut stdout = child.stdout.take().expect("stdout is piped");
@@ -144,13 +216,58 @@ pub fn run(program: &Path, args: &[&str], timeout: Duration) -> Result<String, S
                     timeout.as_secs_f64().ceil() as u64
                 ));
             }
-            Err(error) => return Err(format!("桌面助手出错：{error}")),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("桌面助手出错：{error}"));
+            }
         }
     }
     // It has exited; whatever it printed is in the pipe, unless something it started holds it open.
     receive
         .recv_timeout(Duration::from_secs(1))
         .map_err(|_| "桌面助手没有回答。".to_string())
+}
+
+/// The window is brought up for a `permission-needed` at most this often.
+pub const RAISE_EVERY: Duration = Duration::from_secs(60);
+
+/// What a `permission-needed` from the runner does to the window.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Reaction {
+    /// The window is on screen: refresh the card and scroll to it, without taking the focus.
+    Scroll,
+    /// Show and raise the window at the card.
+    Raise,
+    /// Raised less than `RAISE_EVERY` ago: leave the person alone.
+    Nothing,
+}
+
+/// `visible`: the window is shown and not minimized. `last`: when it was last raised for this.
+pub fn react(visible: bool, last: Option<Instant>, now: Instant) -> Reaction {
+    if visible {
+        Reaction::Scroll
+    } else if last.map_or(true, |last| {
+        now.saturating_duration_since(last) >= RAISE_EVERY
+    }) {
+        Reaction::Raise
+    } else {
+        Reaction::Nothing
+    }
+}
+
+/// Leave a note that the next start should show the window, even one started at login: a restart
+/// from the card re-runs this process with its original arguments, `--autostart` included.
+pub fn mark_show_once(marker: &Path) -> io::Result<()> {
+    if let Some(parent) = marker.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(marker, b"")
+}
+
+/// Whether the note was there; it is removed, so it counts for one start only.
+pub fn take_show_once(marker: &Path) -> bool {
+    std::fs::remove_file(marker).is_ok()
 }
 
 #[cfg(test)]
@@ -263,23 +380,149 @@ mod tests {
         );
     }
 
+    /// A directory of this test's own under the system's temporary directory, emptied.
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "xiongbao-device-test-{}-{name}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_helper_that_answers_is_read_and_one_that_hangs_is_given_up_on() {
+        let home = scratch("answers").join("agent-desktop-probe");
         let sh = Path::new("/bin/sh");
         assert_eq!(
-            run(sh, &["-c", "printf '{\"ok\":true}'"], TIMEOUT).as_deref(),
+            run(sh, &["-c", "printf '{\"ok\":true}'"], &home, TIMEOUT).as_deref(),
             Ok("{\"ok\":true}")
         );
         let started = std::time::Instant::now();
-        let hung = run(sh, &["-c", "exec sleep 30"], Duration::from_millis(300));
+        let hung = run(
+            sh,
+            &["-c", "exec sleep 30"],
+            &home,
+            Duration::from_millis(300),
+        );
         assert!(hung.is_err(), "{hung:?}");
         assert!(started.elapsed() < Duration::from_secs(5), "waited it out");
         assert!(run(
             Path::new("/nonexistent/agent-desktop"),
             &["status"],
+            &home,
             TIMEOUT
         )
         .is_err());
+    }
+
+    #[test]
+    fn the_child_environment_is_the_allow_list_and_the_private_home() {
+        let home = Path::new("/data/agent-desktop-probe");
+        let env = child_env(
+            &|key| match key {
+                "XAUTHORITY" | "SECRET_TOKEN" => None,
+                _ => Some(OsString::from(format!("value of {key}"))),
+            },
+            home,
+        );
+        let keys: Vec<&OsString> = env.iter().map(|(key, _)| key).collect();
+        let mut want: Vec<OsString> = ENV_KEEP
+            .iter()
+            .filter(|key| **key != "XAUTHORITY")
+            .map(OsString::from)
+            .collect();
+        want.push("AGENT_DESKTOP_HOME".into());
+        assert_eq!(keys, want.iter().collect::<Vec<_>>());
+        assert_eq!(
+            env.last(),
+            Some(&(
+                OsString::from("AGENT_DESKTOP_HOME"),
+                OsString::from("/data/agent-desktop-probe")
+            ))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_helper_sees_only_the_allow_list_and_an_emptied_private_home() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = scratch("env").join("agent-desktop-probe");
+        std::fs::create_dir_all(home.join("left-over")).unwrap();
+        std::fs::write(home.join("left-over").join("snapshot.json"), "{}").unwrap();
+
+        let printed = run(
+            Path::new("/bin/sh"),
+            &["-c", "env; echo '--'; ls -A \"$AGENT_DESKTOP_HOME\""],
+            &home,
+            TIMEOUT,
+        )
+        .unwrap();
+        let (env, listing) = printed.split_once("--\n").unwrap();
+        assert_eq!(listing.trim(), "", "the probe's directory was not emptied");
+
+        // The shell itself adds a few of its own; nothing else may come from this process.
+        let shell_own = ["PWD", "SHLVL", "_", "OLDPWD"];
+        let mut seen = Vec::new();
+        for line in env.lines() {
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            if key.is_empty() || !key.chars().all(|c| c == '_' || c.is_ascii_alphanumeric()) {
+                continue;
+            }
+            assert!(
+                ENV_KEEP.contains(&key) || key == "AGENT_DESKTOP_HOME" || shell_own.contains(&key),
+                "{key} reached the helper"
+            );
+            if key == "AGENT_DESKTOP_HOME" {
+                assert_eq!(Path::new(value), home);
+            }
+            seen.push(key.to_string());
+        }
+        assert!(seen.iter().any(|key| key == "AGENT_DESKTOP_HOME"));
+        if std::env::var_os("CARGO_MANIFEST_DIR").is_some() {
+            assert!(!seen.iter().any(|key| key == "CARGO_MANIFEST_DIR"));
+        }
+
+        let mode = std::fs::metadata(&home).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o700);
+    }
+
+    #[test]
+    fn the_window_is_raised_at_most_once_a_minute_and_never_grabbed_when_shown() {
+        let now = Instant::now();
+        assert_eq!(react(false, None, now), Reaction::Raise);
+        assert_eq!(
+            react(false, Some(now), now + Duration::from_secs(10)),
+            Reaction::Nothing
+        );
+        assert_eq!(
+            react(
+                false,
+                Some(now),
+                now + RAISE_EVERY - Duration::from_millis(1)
+            ),
+            Reaction::Nothing
+        );
+        assert_eq!(react(false, Some(now), now + RAISE_EVERY), Reaction::Raise);
+        // On screen already: the card is refreshed and scrolled to, every time, without the focus.
+        assert_eq!(react(true, Some(now), now), Reaction::Scroll);
+        assert_eq!(react(true, None, now), Reaction::Scroll);
+        assert_eq!(RAISE_EVERY, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn the_show_once_note_counts_for_one_start() {
+        let marker = scratch("marker").join("data").join("show-window-once");
+        assert!(!take_show_once(&marker));
+        mark_show_once(&marker).unwrap();
+        assert!(take_show_once(&marker));
+        assert!(
+            !take_show_once(&marker),
+            "a second start is an ordinary one"
+        );
     }
 }
