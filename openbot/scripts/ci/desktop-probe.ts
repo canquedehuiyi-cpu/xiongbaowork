@@ -2,7 +2,14 @@
  * The desktop probe (plan docs/plans/2026-11-12-desktop-write.md, Task 10): the runner's own
  * `desktop.windows` and `desktop.snapshot`, through the real pinned agent-desktop binary, against a
  * real editor on each hosted runner (Notepad on windows-latest, TextEdit on macos-latest, gedit under
- * Xvfb with an AT-SPI bus on ubuntu-latest). Read only.
+ * Xvfb with an AT-SPI bus on ubuntu-latest).
+ *
+ * Then the writes (Task 23), through the runner's own session actions and the control channel, whose
+ * device end the probe plays itself (it answers that the banner is up and the mouse check paused). On
+ * macOS only: Chinese typed into TextEdit and read back, a write voiding the window's refs, and a key
+ * that needs the window in front. Each write is sent once and never again: a write that failed is
+ * reported as it came back, not retried, so nothing is typed twice. Linux and the legacy Windows engine
+ * must refuse a write in their own words.
  *
  *   bun scripts/ci/desktop-probe.ts <fresh empty dir> --helper <agent-desktop binary>
  *
@@ -15,6 +22,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -29,6 +37,12 @@ import {
   desktopEngineFor,
 } from "../../runner/src/desktop/actions.ts";
 import { agentDesktopEnv } from "../../runner/src/desktop/agent-desktop.ts";
+import {
+  CONTROL_LINE_PREFIX,
+  type ControlChannel,
+  createControlChannel,
+} from "../../runner/src/desktop/control.ts";
+import { createDesktopHost } from "../../runner/src/desktop/host.ts";
 import {
   createRunnerExecutor,
   type RunnerExecutor,
@@ -50,7 +64,7 @@ type Run = (
   payload: Record<string, unknown>,
 ) => Promise<Result>;
 
-/** The labels, in the order the checks run. All eight must pass for DESKTOP_PROBE_PASS. */
+/** The read checks' labels, in the order they run. Every platform must pass all eight. */
 export const DESKTOP_PROBE_CHECKS = {
   listed: "agent-desktop lists the editor with its Chinese title",
   read: "the editor's text reads back in Chinese",
@@ -62,12 +76,95 @@ export const DESKTOP_PROBE_CHECKS = {
   state: "the state directory is private, untraced and wiped on close",
 } as const;
 
+/** The write checks' labels (Task 23). macOS runs the first three; Linux and Windows the last. */
+export const DESKTOP_PROBE_WRITE_CHECKS = {
+  typed: "macOS: typing Chinese reads back",
+  staleAfterWrite: "a write makes the window's refs stale",
+  foreground: "a key needs the window in front",
+  readOnly:
+    "a write is refused in defined words where the desktop is read-only",
+} as const;
+
+/** Every label that must pass on `platform` for DESKTOP_PROBE_PASS. */
+export function probeChecksFor(platform: DesktopPlatform): string[] {
+  const writes = DESKTOP_PROBE_WRITE_CHECKS;
+  return [
+    ...Object.values(DESKTOP_PROBE_CHECKS),
+    ...(platform === "macos"
+      ? [writes.typed, writes.staleAfterWrite, writes.foreground]
+      : [writes.readOnly]),
+  ];
+}
+
 const TEXT = "熊宝员工-桌面探针";
+/** What the macOS write check types over the editor's text. */
+const WRITE_TEXT = "熊宝员工 写入 abc 123";
+/** The coworker and person the probe's desktop session is for. */
+const PROBE_WHO = {
+  botId: "desktop-probe-bot",
+  actorId: "desktop-probe-owner",
+};
+/** How long a window may take to come to the front, or leave it. */
+const FOCUS_WAIT_MS = 10_000;
 /** What the agent-desktop reader says when macOS has not granted screen recording (Task 8). */
 const NO_SCREEN_RECORDING = "没有屏幕录制权限，截不到图。";
 /** How long an editor window may take to show up in the list (Windows needs about 8 s). */
 const WINDOW_WAIT_MS = 30_000;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/**
+ * The device app's end of the runner's control channel, played by the probe: every new session's
+ * banner is up and every `--headed` step's mouse check is paused, at once. The events are printed
+ * for the log; they name a session by its label, never by its token.
+ */
+export function probeControl(): { control: ControlChannel; close(): void } {
+  const pending: string[] = [];
+  let wake: (() => void) | undefined;
+  let closed = false;
+  const poke = () => {
+    const resolve = wake;
+    wake = undefined;
+    resolve?.();
+  };
+  const push = (input: unknown) => {
+    pending.push(JSON.stringify(input));
+    poke();
+  };
+  const lines: AsyncIterable<string> = {
+    async *[Symbol.asyncIterator]() {
+      for (;;) {
+        while (pending.length > 0) yield pending.shift() as string;
+        if (closed) return;
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+      }
+    },
+  };
+  const control = createControlChannel({
+    lines,
+    write: (line) => {
+      if (!line.startsWith(CONTROL_LINE_PREFIX)) return;
+      const event = JSON.parse(line.slice(CONTROL_LINE_PREFIX.length)) as {
+        event?: string;
+        label?: string;
+        seq?: number;
+      };
+      console.log(JSON.stringify({ control: event }));
+      if (event.event === "session-started")
+        push({ control: "session-ready", label: event.label });
+      if (event.event === "headed-begin")
+        push({ control: "headed-ack", seq: event.seq });
+    },
+  });
+  return {
+    control,
+    close() {
+      closed = true;
+      poke();
+    },
+  };
+}
 
 /** agent-desktop's state directory for a probe workspace; the executor and the probe agree on it. */
 export function probeStateDir(root: string): string {
@@ -280,9 +377,11 @@ export async function probeAgentDesktop(
     helper: string;
     platform: DesktopPlatform;
     execute: RunnerExecutor;
+    /** The channel the executor's desktop actions were built with (`probeControl`). */
+    control: ControlChannel;
   },
 ): Promise<void> {
-  const { root, helper, platform, execute } = opts;
+  const { root, helper, platform, execute, control } = opts;
   const stateDir = probeStateDir(root);
   const traces = new Set<string>();
   const run: Run = async (action, payload) => {
@@ -300,7 +399,7 @@ export async function probeAgentDesktop(
   const permissions = permissionsOf(helper, root);
   let snapshotWorked = false;
   try {
-    snapshotWorked = await readChecks(
+    const read = await readChecks(
       assert,
       run,
       root,
@@ -309,6 +408,8 @@ export async function probeAgentDesktop(
       permissions,
       opened,
     );
+    snapshotWorked = read.worked;
+    await writeChecks(assert, run, platform, read.windowId, control);
   } finally {
     if (!snapshotWorked) diagnose(helper, root);
     // 7. Private (0700, or on Windows the protected DACL a working snapshot proves), never traced,
@@ -382,7 +483,10 @@ function diagnose(helper: string, root: string): void {
   );
 }
 
-/** Checks 1 to 6 and 8. Returns whether a snapshot ever worked (on Windows, proof of the DACL). */
+/**
+ * Checks 1 to 6 and 8. Returns whether a snapshot ever worked (on Windows, proof of the DACL) and the
+ * editor's window id once the runner was built again, for the write checks.
+ */
 async function readChecks(
   assert: Assert,
   run: Run,
@@ -391,7 +495,7 @@ async function readChecks(
   execute: RunnerExecutor,
   permissions: Record<string, { state?: string }> | undefined,
   opened: (pid: number | undefined) => void,
-): Promise<boolean> {
+): Promise<{ worked: boolean; windowId?: string }> {
   // 1. An editor with a Chinese file name and Chinese text, in the runner's window list. The BOM
   // keeps every editor from guessing another encoding.
   const file = join(root, "熊宝员工.txt");
@@ -406,7 +510,7 @@ async function readChecks(
     DESKTOP_PROBE_CHECKS.listed,
     listed.seen,
   );
-  if (!listed.window) return false;
+  if (!listed.window) return { worked: false };
   const firstId = listed.window.windowId;
 
   // 2. Its text, read back, with every ref in the runner's own form.
@@ -424,7 +528,7 @@ async function readChecks(
     DESKTOP_PROBE_CHECKS.read,
     first ? brief(first) : one,
   );
-  if (!first) return false;
+  if (!first) return { worked: false };
 
   // 3. Once a second snapshot is read, a ref from the first is stale.
   const oldRef = first.elements[Math.max(textAt, 0)]?.ref;
@@ -452,7 +556,7 @@ async function readChecks(
     DESKTOP_PROBE_CHECKS.restarted,
     { firstId, again: again.window ?? again.seen, gone },
   );
-  if (!again.window) return true;
+  if (!again.window) return { worked: true };
   const windowId = again.window.windowId;
 
   // 5. A window whose title has a sensitive word is read only when allowed.
@@ -593,7 +697,181 @@ async function readChecks(
     tried,
     part: brief(part),
   });
-  return true;
+  return { worked: true, windowId };
+}
+
+/** Lists windows until `windowId` is (or is not) the one in front, for up to `FOCUS_WAIT_MS`. */
+async function waitForFocus(
+  run: Run,
+  windowId: string,
+  inFront: boolean,
+): Promise<boolean> {
+  const deadline = Date.now() + FOCUS_WAIT_MS;
+  for (;;) {
+    const listed = await run("desktop.windows", {});
+    const window = windowsOf(listed).find((w) => w.windowId === windowId);
+    if (window && window.focused === inFront) return true;
+    if (!listed.ok || Date.now() > deadline) return false;
+    await Bun.sleep(250);
+  }
+}
+
+/**
+ * The write checks (Task 23). Linux, and Windows on the legacy engine, refuse every write before
+ * anything runs. macOS writes to the editor through a session the probe opens with the runner's own
+ * `desktop.session_start`. EVERY WRITE IS SENT ONCE: one that failed is reported as it came back and
+ * never sent again, so a write the machine may have carried out is not repeated (the second type
+ * below is sent only after the first succeeded, when its ref must already be void).
+ */
+async function writeChecks(
+  assert: Assert,
+  run: Run,
+  platform: DesktopPlatform,
+  windowId: string | undefined,
+  control: ControlChannel,
+): Promise<void> {
+  const writes: Array<[string, Record<string, unknown>]> = [
+    ["desktop.click", { ref: "abcdef-1:1" }],
+    ["desktop.type", { ref: "abcdef-1:1", text: WRITE_TEXT, mode: "replace" }],
+    ["desktop.key", { windowId: "a0123456789abcdef", keys: "cmd+s" }],
+    ["desktop.focus", { windowId: "a0123456789abcdef" }],
+  ];
+  if (platform !== "macos") {
+    // Windows: the legacy engine, which is what a Windows device runs until its writes are accepted.
+    const legacy =
+      platform === "windows"
+        ? createDesktopActions({
+            platform: "win32",
+            engine: "legacy",
+            control,
+            host: createDesktopHost({
+              spec: () => {
+                throw new Error("A refused write must not start the helper.");
+              },
+            }),
+          })
+        : undefined;
+    const expected = desktopMessage(
+      platform === "linux" ? "read_only_linux" : "read_only_windows",
+    );
+    const answers: Result[] = [];
+    for (const [action, body] of writes) {
+      const payload = { session: "0".repeat(64), ...PROBE_WHO, ...body };
+      const outcome = legacy
+        ? await legacy(action, payload, undefined, { botId: PROBE_WHO.botId })
+        : await run(action, payload);
+      answers.push(
+        outcome.ok
+          ? { ok: true, output: outcome.output }
+          : { ok: false, error: outcome.error },
+      );
+    }
+    await legacy?.close();
+    assert(
+      answers.every((answer) => !answer.ok && answer.error === expected),
+      DESKTOP_PROBE_WRITE_CHECKS.readOnly,
+      { expected, answers },
+    );
+    return;
+  }
+
+  // macOS. Without the editor's window nothing is written, and the three checks are reported missing.
+  if (!windowId) return;
+  const token = randomBytes(32).toString("hex");
+  const started = await run("desktop.session_start", { token, ...PROBE_WHO });
+  // No session, no write: say why at once (the token is never printed, only what came back).
+  if (!started.ok)
+    console.log(
+      JSON.stringify({
+        sessionStart: "the desktop session did not start; no write was sent",
+        seen: started,
+      }),
+    );
+  const write = (action: string, body: Record<string, unknown>) =>
+    run(action, {
+      session: token,
+      ...PROBE_WHO,
+      approved: false,
+      actionWords: [],
+      ...body,
+    });
+  try {
+    // Typed over the editor's text (its text box is the one holding it), then a second time with
+    // the same ref before any new read: refused as stale. Then read back.
+    const before = await run("desktop.snapshot", { windowId });
+    const snapshot = before.ok ? (before.output as DesktopSnapshot) : undefined;
+    const box = snapshot?.elements.find((element) =>
+      (element.value ?? "").includes(TEXT),
+    );
+    const typed =
+      started.ok && box
+        ? await write("desktop.type", {
+            ref: box.ref,
+            text: WRITE_TEXT,
+            mode: "replace",
+          })
+        : undefined;
+    const again =
+      typed?.ok === true && box
+        ? await write("desktop.type", {
+            ref: box.ref,
+            text: WRITE_TEXT,
+            mode: "replace",
+          })
+        : undefined;
+    const after = await run("desktop.snapshot", { windowId });
+    const reread = after.ok ? (after.output as DesktopSnapshot) : undefined;
+    const readBack = reread?.elements.find(
+      (element) => (element.value ?? "").trim() === WRITE_TEXT,
+    );
+    assert(
+      started.ok && typed?.ok === true && readBack !== undefined,
+      DESKTOP_PROBE_WRITE_CHECKS.typed,
+      {
+        started,
+        box: box && { ref: box.ref, type: box.type },
+        typed,
+        reread: reread ? brief(reread) : after,
+      },
+    );
+    assert(
+      again !== undefined &&
+        !again.ok &&
+        again.error === desktopMessage("stale"),
+      DESKTOP_PROBE_WRITE_CHECKS.staleAfterWrite,
+      { typed: typed?.ok, again },
+    );
+
+    // A key: pressed with the editor in front; refused, never pressed, once Finder is in front.
+    const focused = started.ok
+      ? await write("desktop.focus", { windowId })
+      : undefined;
+    const inFront =
+      focused?.ok === true && (await waitForFocus(run, windowId, true));
+    const saved = inFront
+      ? await write("desktop.key", { windowId, keys: "cmd+s" })
+      : undefined;
+    // Through Launch Services, not an Apple event: no Automation permission to ask for.
+    const finder = spawnSync("open", ["-a", "Finder"], {
+      stdio: "ignore",
+      timeout: 30_000,
+    });
+    const behindNow = await waitForFocus(run, windowId, false);
+    const behind =
+      saved?.ok === true && behindNow
+        ? await write("desktop.key", { windowId, keys: "cmd+s" })
+        : undefined;
+    assert(
+      saved?.ok === true &&
+        behind !== undefined &&
+        !behind.ok &&
+        behind.error === desktopMessage("not_foreground"),
+      DESKTOP_PROBE_WRITE_CHECKS.foreground,
+      { focused, inFront, saved, finder: finder.status, behindNow, behind },
+    );
+  } finally {
+    await run("desktop.session_end", { token });
+  }
 }
 
 if (import.meta.main) {
@@ -622,6 +900,7 @@ if (import.meta.main) {
     throw new Error("Use a fresh, empty directory for each run.");
   mkdirSync(root, { recursive: true });
 
+  const probe = probeControl();
   const execute = createRunnerExecutor(
     root,
     undefined,
@@ -634,6 +913,7 @@ if (import.meta.main) {
         engine,
         helper,
         stateDir: probeStateDir(root),
+        control: probe.control,
       }),
     },
   );
@@ -653,7 +933,13 @@ if (import.meta.main) {
     JSON.stringify({ runtime: `Bun ${Bun.version}`, platform, engine }),
   );
   try {
-    await probeAgentDesktop(assert, { root, helper, platform, execute });
+    await probeAgentDesktop(assert, {
+      root,
+      helper,
+      platform,
+      execute,
+      control: probe.control,
+    });
   } catch (error) {
     failed++;
     console.log(
@@ -664,7 +950,8 @@ if (import.meta.main) {
       }),
     );
   }
-  const missing = Object.values(DESKTOP_PROBE_CHECKS).filter(
+  probe.close();
+  const missing = probeChecksFor(platform).filter(
     (label) => !passed.has(label),
   );
   if (failed === 0 && missing.length === 0) console.log("DESKTOP_PROBE_PASS");
