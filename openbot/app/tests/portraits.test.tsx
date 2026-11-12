@@ -47,6 +47,8 @@ const cute: Portrait = {
   id: "bot-1",
   preset: "cute",
   imageUrl: null,
+  videoUrl: null,
+  outfit: null,
   updatedAt: "2026-11-08T00:00:00.000Z",
 };
 
@@ -86,6 +88,8 @@ test("an uploaded picture is drawn from its versioned URL, and a face without a 
         id: "g-1",
         preset: null,
         imageUrl: "/api/portraits/group/g-1/image?v=1",
+        videoUrl: null,
+        outfit: null,
         updatedAt: "2026-11-08T00:00:00.000Z",
       },
     ],
