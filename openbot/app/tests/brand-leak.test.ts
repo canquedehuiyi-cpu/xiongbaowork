@@ -29,20 +29,35 @@ const NEVER_CHANGE = [
   "/openbot/deliver",
 ];
 
-// The crypto / signing domains among them: a rename silently invalidates every stored secret,
-// token or signature, so each must still be spelled verbatim somewhere in the source.
+// The crypto / signing / hashing domains: a rename silently invalidates every stored secret,
+// token, signature, published key or pseudonymous id, so each must still be spelled verbatim.
 const SIGNING_DOMAINS = [
   "openbot.vault.credential.v2",
   "openbot:agent-run",
   "openbot-bearer",
   "openbot-automation-hook-signing:v1",
+  "openbot web-bot-auth ed25519 v1",
+  "openbot-product",
+  "openbot computer token v1",
+];
+
+// Wire headers peers send and read (Global Constraints「绝对不改」).
+const WIRE_HEADERS = [
+  "x-openbot-agent-token",
+  "x-openbot-bot-id",
+  "x-openbot-computer-token",
+  "x-openbot-desktop-host-token",
+  "x-openbot-egress",
 ];
 
 const COPYRIGHT =
   "Copyright (c) 2026 熊宝; portions Copyright (c) 2026 CopilotKit (MIT)";
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const WORD = "(?:openbot|copilotkit|qoder)";
+// Case-sensitive on purpose: `OpenBotVersion` is code, `OpenBots` and `QoderWake` are names.
+const OPENBOT =
+  "(?:OpenBot|Openbot|openBot|openbot|OPENBOT|CopilotKit|Copilotkit|copilotKit|copilotkit|COPILOTKIT)";
+const QODER = "(?:Qoder|qoder|QODER)";
 
 // Each rule erases what it allows; whatever brand text survives the masking is a finding.
 const RULES: { pattern: RegExp; reason: string }[] = [
@@ -67,7 +82,10 @@ const RULES: { pattern: RegExp; reason: string }[] = [
     reason: "wire headers and DOM attributes peers depend on",
   },
   {
-    pattern: new RegExp(NEVER_CHANGE.map(escapeRegExp).join("|"), "g"),
+    pattern: new RegExp(
+      [...NEVER_CHANGE, ...SIGNING_DOMAINS].map(escapeRegExp).join("|"),
+      "g",
+    ),
     reason:
       "Global Constraints「绝对不改」: persisted markers and signing domains",
   },
@@ -76,12 +94,21 @@ const RULES: { pattern: RegExp; reason: string }[] = [
     reason: "MIT attribution the licence requires",
   },
   {
-    // Part of a longer identifier: openbotHome, useCopilotKit, OPENBOT, openbot_app, qoderwake…
-    pattern: new RegExp(`[\\w$]*(?:[\\w$]${WORD}|${WORD}[\\w$])[\\w$]*`, "gi"),
+    // Part of a longer identifier: the brand word after a lower-case letter, `_` or `$`
+    // (useCopilotKit, my_openbot), or before an upper-case letter or `_` (OpenBotVersion,
+    // openbotRunning, OPENBOT_X). A digit after it does not count, so "OpenBot2" is still a name;
+    // Qoder only joins with `_`, since no code identifier starts with it and QoderWake is a name.
+    pattern: new RegExp(
+      `[\\w$]*[a-z_$](?:${OPENBOT}|${QODER})[\\w$]*|${OPENBOT}(?=[A-Z_])[\\w$]*|${QODER}(?=_)[\\w$]*`,
+      "g",
+    ),
     reason: "code identifiers are not renamed (Global Constraints)",
   },
   {
-    pattern: /(?<![\w@/-])copilotkit(?![\w$/-]|\.ai\b)/g,
+    // `copilotkit` alone, or after a `.` as a property, but never a host name such as
+    // www.copilotkit.com or api.intelligence.copilotkit.ai.
+    pattern:
+      /(?<![\w@/:-])copilotkit(?![\w$/@-]|\.(?:com|ai|dev|io|net|org|cn)\b)/g,
     reason:
       "the upstream SDK's lowercase `copilotkit` handle is a JS identifier, never prose",
   },
@@ -91,8 +118,14 @@ const RULES: { pattern: RegExp; reason: string }[] = [
       "camelCase `openBot` (the Bot that is open) is a variable, not the brand",
   },
   {
+    // The closing line of a multi-line import or re-export.
+    pattern: /^\s*\}\s*from\s+["'][^"']*["']/,
+    reason: "module paths follow file names, which are identifiers",
+  },
+  {
+    // Only a real import or re-export statement, never `from '…'` inside a sentence.
     pattern:
-      /(?<=(?:^|[\s{}])(?:from\s+|import\s*\(\s*|import\s+)["'])[^"']*(?=["'])/g,
+      /^(\s*(?:import|export)\b[^"'`]*?(?:\bfrom\s+|\bimport\s+|import\s*\(\s*))["'][^"']*["']/,
     reason: "module paths follow file names, which are identifiers",
   },
   {
@@ -115,8 +148,11 @@ const EXEMPT_PATHS: { test: (path: string) => boolean; reason: string }[] = [
   },
   { test: (p) => p.includes("/generated/"), reason: "generated code" },
   {
-    test: (p) => /(^|\/)(tests|__tests__)\//.test(p) || /\.test\.tsx?$/.test(p),
-    reason: "tests",
+    // Tests are exempt beyond the brief: they must spell old values (dev@openbot.local, legacy
+    // markers) to prove those still work, and nothing in them ships.
+    test: (p) =>
+      /(^|\/)(tests|__tests__|fixtures)\//.test(p) || /\.test\.tsx?$/.test(p),
+    reason: "tests and their fixtures",
   },
   { test: (p) => p === "server/src/brand.ts", reason: "the brand exit itself" },
   {
@@ -139,6 +175,8 @@ function scannedFiles(): string[] {
     ...walk(join(REPO, "app/src")),
     ...walk(join(REPO, "server/src")),
     ...walk(join(REPO, "runner/src")),
+    ...walk(join(REPO, "shared")),
+    ...walk(join(REPO, "toolkit/src")),
     ...walk(join(REPO, "desktop-device/src-tauri/src")),
     ...readdirSync(join(REPO, "desktop-device/src-tauri"))
       .filter((name) => name.endsWith(".json"))
@@ -153,11 +191,32 @@ function scannedFiles(): string[] {
 }
 
 // Whole-line comments only: a trailing comment after code still counts, which is the cautious side.
-function codeLines(source: string): { line: string; number: number }[] {
+// `#` is not a comment in any scanned language (TS private fields, CSS ids). Inside a multi-line
+// template literal nothing is a comment: a prompt's Markdown bullets start with `*` too.
+function codeLines(
+  source: string,
+  templates = true,
+): { line: string; number: number }[] {
   const out: { line: string; number: number }[] = [];
   let inBlock = false;
+  let inTemplate = false;
   source.split("\n").forEach((line, index) => {
     const trimmed = line.trim();
+    // Outside a template, backticks inside quotes or a regex character class open nothing.
+    const bare = line.replace(/\\./g, "");
+    const ticks = templates
+      ? (
+          (inTemplate
+            ? bare
+            : bare.replace(/"[^"]*"|'[^']*'|(?<=[/|(])\[[^\]]*\]/g, "")
+          ).match(/`/g) ?? []
+        ).length
+      : 0;
+    if (inTemplate) {
+      out.push({ line, number: index + 1 });
+      if (ticks % 2 === 1) inTemplate = false;
+      return;
+    }
     if (inBlock) {
       if (trimmed.includes("*/")) inBlock = false;
       return;
@@ -166,8 +225,9 @@ function codeLines(source: string): { line: string; number: number }[] {
       if (!trimmed.includes("*/") && !trimmed.includes("-->")) inBlock = true;
       return;
     }
-    if (/^(\/\/|\*|#)/.test(trimmed)) return;
+    if (/^(\/\/|\*)/.test(trimmed)) return;
     out.push({ line, number: index + 1 });
+    if (ticks % 2 === 1) inTemplate = true;
   });
   return out;
 }
@@ -182,6 +242,7 @@ function findings(): Finding[] {
   for (const file of scannedFiles()) {
     for (const { line, number } of codeLines(
       readFileSync(join(REPO, file), "utf8"),
+      /\.(ts|tsx|js|mjs|cjs|jsx)$/.test(file),
     )) {
       if (BRAND.test(masked(line)))
         found.push({ file, number, line: line.trim() });
@@ -198,6 +259,7 @@ const CATEGORIES = [
   "persisted-identifier", // stored keys, ids, file names, protocol values
   "developer-only", // test fixtures and dev tooling that ship to nobody
   "external-name", // a real third party the reader must recognise, or the MIT attribution the licence requires
+  "upstream-shell-only", // drawn only inside upstream OpenBot Desktop, which this fork does not ship
 ] as const;
 
 type AllowEntry = { file: string; text: string; reason: string };
@@ -207,6 +269,10 @@ const ALLOWLIST: AllowEntry[] = JSON.parse(
 
 describe("brand leak guard", () => {
   const all = findings();
+
+  test("every allowlist entry's text itself carries a brand word, so it names the hit", () => {
+    expect(ALLOWLIST.filter((entry) => !BRAND.test(entry.text))).toEqual([]);
+  });
 
   test("allowlist entries name a known category and a note", () => {
     const bad = ALLOWLIST.filter((entry) => {
@@ -242,19 +308,81 @@ describe("brand leak guard", () => {
 
 describe("never-change strings survive", () => {
   const corpus = [
-    ...walk(join(REPO, "server/src")),
-    ...walk(join(REPO, "app/src")),
-    ...walk(join(REPO, "runner/src")),
-    ...walk(join(REPO, "desktop-device/src-tauri/src")),
+    "server/src",
+    "app/src",
+    "runner/src",
+    "shared",
+    "toolkit/src",
+    "agent-computer/src",
+    "desktop-device/src-tauri/src",
   ]
+    .flatMap((root) => [...walk(join(REPO, root))])
     .map((file) => readFileSync(file, "utf8"))
     .join("\n");
 
-  for (const domain of SIGNING_DOMAINS) {
-    test(`signing domain ${domain} is still spelled verbatim`, () => {
-      expect(corpus.includes(domain)).toBe(true);
+  for (const value of [
+    ...new Set([...NEVER_CHANGE, ...SIGNING_DOMAINS, ...WIRE_HEADERS]),
+    "/api/copilotkit",
+  ]) {
+    test(`${value} is still spelled verbatim`, () => {
+      expect(corpus.includes(value)).toBe(true);
     });
   }
+});
+
+/*
+ * The rules must not swallow names. Each line below is something a person could read; if a rule
+ * ever masks it, the guard has gone blind to that shape.
+ */
+const MUST_REPORT = [
+  'title: "Welcome to QoderWake",',
+  'body: "Your OpenBots are ready",',
+  "label: \"Imported from 'OpenBot Desktop'\",",
+  'href: "https://www.copilotkit.com/pricing",',
+  'cta: "Try OpenBot2",',
+  'site: "openbotcloud.com",',
+  '#label = "OpenBot browser";',
+  'note: "Use OpenBot to do it",',
+  'note: "let OpenBot do it",',
+];
+
+// …and must not report plain code.
+const MUST_ALLOW = [
+  "const { copilotkit } = useCopilotKit();",
+  "<OpenBotVersion />",
+  'import { OpenBotVersion } from "@/components/layout/openbot-version";',
+  "if (status.openbotRunning) return openbot_app;",
+  "const value = props.copilotkit;",
+  "OPENBOT_PUBLIC_URL",
+];
+
+describe("the rules do not hide names", () => {
+  for (const line of MUST_REPORT) {
+    test(`reports ${line}`, () => {
+      expect(codeLines(line).length).toBe(1);
+      expect(BRAND.test(masked(line))).toBe(true);
+    });
+  }
+  for (const line of MUST_ALLOW) {
+    test(`allows ${line}`, () => {
+      expect(BRAND.test(masked(line))).toBe(false);
+    });
+  }
+  test("a prompt's Markdown bullets inside a template literal are scanned", () => {
+    const source = [
+      "const PROMPT = `",
+      "# Rules",
+      "* Always say OpenBot",
+      "`;",
+      "* a JSDoc line about OpenBot",
+    ].join("\n");
+    expect(codeLines(source).map((l) => l.line)).toEqual([
+      "const PROMPT = `",
+      "# Rules",
+      "* Always say OpenBot",
+      "`;",
+    ]);
+  });
 });
 
 describe("desktop-device does not borrow the upstream desktop app", () => {

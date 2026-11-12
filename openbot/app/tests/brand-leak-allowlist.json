@@ -57,12 +57,12 @@
   {
     "file": "app/src/components/settings/usage-data.tsx",
     "text": "github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
-    "reason": "external-name: upstream desktop's own telemetry doc; the section is drawn only inside upstream OpenBot Desktop"
+    "reason": "upstream-shell-only: upstream desktop's own telemetry doc; the section is drawn only inside upstream OpenBot Desktop"
   },
   {
     "file": "app/src/components/settings/usage-data.tsx",
     "text": "向 CopilotKit 发送使用数据",
-    "reason": "external-name: truthful disclosure of who receives upstream desktop's usage data; drawn only inside upstream OpenBot Desktop"
+    "reason": "upstream-shell-only: truthful disclosure of who receives upstream desktop's usage data; drawn only inside upstream OpenBot Desktop"
   },
   {
     "file": "app/src/components/settings/update-routing.tsx",
@@ -86,7 +86,12 @@
   },
   {
     "file": "app/src/components/bot-profile/attention.tsx",
-    "text": "`openbot-",
+    "text": "`openbot-attention-",
+    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice"
+  },
+  {
+    "file": "app/src/components/bot-profile/attention.tsx",
+    "text": "`openbot-ping-",
     "reason": "persisted-identifier: notification tag; only used to replace an earlier notice"
   },
   {
@@ -142,7 +147,7 @@
   {
     "file": "app/src/lib/desktop/part-names.ts",
     "text": "bots: \"OpenBot service\"",
-    "reason": "parsed-exact-text: copy of openbot/desktop/src/partNames.ts (never touched); desktop-part-names.test.ts holds the two equal"
+    "reason": "upstream-shell-only: upstream Desktop shell only, kept in sync with desktop/src/partNames.ts (desktop-part-names.test.ts holds the two equal)"
   },
   {
     "file": "app/src/lib/desktop/open-requests.ts",
@@ -265,26 +270,6 @@
     "reason": "persisted-identifier: granted_by marker stored on grants"
   },
   {
-    "file": "server/src/admin/capability-translate.ts",
-    "text": "This OpenBot has no groups, so no change can name one.",
-    "reason": "admin-only: vocabulary inside the permission-writer prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/admin/capability-translate.ts",
-    "text": "You write permission changes for OpenBot.",
-    "reason": "admin-only: permission-writer prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/admin/network-translate.ts",
-    "text": "You write the network allowlist for OpenBot",
-    "reason": "admin-only: allowlist-writer prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/admin/network-translate.ts",
-    "text": "You explain one OpenBot network allowlist",
-    "reason": "admin-only: allowlist-reader prompt; output only an admin sees"
-  },
-  {
     "file": "server/src/intelligence-entitlement-check.ts",
     "text": "on OpenBot alone is not enough",
     "reason": "internal-log: boot-time licence advice written to the server log"
@@ -401,12 +386,12 @@
   },
   {
     "file": "server/src/browser/bot-browser.ts",
-    "text": "has no address a browser can reach it at",
+    "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
     "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL"
   },
   {
     "file": "server/src/browser/routes.ts",
-    "text": "has no address a person's browser can reach it at",
+    "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
     "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL"
   },
   {
@@ -426,28 +411,8 @@
   },
   {
     "file": "server/src/tenant-package.ts",
-    "text": "You are a personal assistant for one person.",
+    "text": "say exactly what you are doing; OpenBot asks the person before it happens",
     "reason": "parsed-exact-text: EARLIER_STARTER_INSTRUCTIONS: matched verbatim to recognise unedited old starters"
-  },
-  {
-    "file": "server/src/approvals/reviewer-guidance.ts",
-    "text": "for OpenBot's auto-review, for the admin deciding",
-    "reason": "admin-only: guidance-reader prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/approvals/rule-translate.ts",
-    "text": "You write team approval rules for OpenBot.",
-    "reason": "admin-only: rule-writer prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/approvals/rule-vocabulary.ts",
-    "text": "APPS SET UP IN OPENBOT.",
-    "reason": "admin-only: vocabulary inside the rule-writer prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/approvals/rule-vocabulary.ts",
-    "text": "OPENBOT'S OWN TOOLS.",
-    "reason": "admin-only: vocabulary inside the rule-writer prompt; output only an admin sees"
   },
   {
     "file": "server/src/config.ts",
@@ -468,31 +433,6 @@
     "file": "server/src/config.ts",
     "text": "creates the openbot Learning container",
     "reason": "internal-error: configuration error that stops start-up; names the container id"
-  },
-  {
-    "file": "server/src/what-if.ts",
-    "text": "about what OpenBot would do",
-    "reason": "admin-only: what-if parser prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/what-if.ts",
-    "text": "OpenBot then uses the Bot",
-    "reason": "admin-only: what-if parser prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/what-if.ts",
-    "text": "If it asks about something that already happened",
-    "reason": "admin-only: what-if parser prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/computer/policy-translate.ts",
-    "text": "You write one boundary rule for OpenBot.",
-    "reason": "admin-only: boundary-rule writer prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/computer/policy-translate.ts",
-    "text": "You explain one OpenBot boundary rule",
-    "reason": "admin-only: boundary-rule reader prompt; output only an admin sees"
   },
   {
     "file": "server/src/computer/policy-network.ts",
@@ -518,11 +458,6 @@
     "file": "server/src/request-actor.ts",
     "text": "A CopilotKit run requires",
     "reason": "internal-error: guard error caught by the runtime, not shown to a person"
-  },
-  {
-    "file": "server/src/web-bot-auth.ts",
-    "text": "\"openbot web-bot-auth ed25519 v1\"",
-    "reason": "persisted-identifier: key-derivation domain of the published Web Bot Auth key; renaming changes the key"
   },
   {
     "file": "server/src/db/apply-migrations.ts",
@@ -575,36 +510,6 @@
     "reason": "internal-log: written once to the server log"
   },
   {
-    "file": "server/src/audit-ask.ts",
-    "text": "\"OpenBot itself, at start-up",
-    "reason": "admin-only: initiator vocabulary inside the audit-ask prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/audit-ask.ts",
-    "text": "deployment: \"OpenBot itself\",",
-    "reason": "admin-only: starter vocabulary inside the audit-ask prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/audit-ask.ts",
-    "text": "about OpenBot's audit trail into filters",
-    "reason": "admin-only: audit-ask prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/audit-ask.ts",
-    "text": "\"unanswered\" says it",
-    "reason": "admin-only: audit-ask prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/audit-ask.ts",
-    "text": "You read one set of filters on OpenBot's audit trail",
-    "reason": "admin-only: audit-ask reader prompt; output only an admin sees"
-  },
-  {
-    "file": "server/src/plugins/grant-translate.ts",
-    "text": "may call in OpenBot. The app is",
-    "reason": "admin-only: grant-writer prompt; output only an admin sees"
-  },
-  {
     "file": "server/src/plugins/composio-adapter.ts",
     "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
     "reason": "persisted-identifier: suffix of auth configs already created at Composio, still matched (Task 9)"
@@ -635,11 +540,6 @@
     "reason": "persisted-identifier: vendor-side account prefix already stored at the broker"
   },
   {
-    "file": "server/src/memory/store.ts",
-    "text": "\"OpenBot memory\"",
-    "reason": "persisted-identifier: provenance stored on memories in Intelligence"
-  },
-  {
     "file": "server/src/memory/defaults.ts",
     "text": "`openbot:defaults:",
     "reason": "persisted-identifier: advisory lock key"
@@ -656,13 +556,13 @@
   },
   {
     "file": "server/src/telemetry/product.ts",
-    "text": "app_id",
+    "text": "app_id: \"openbot\"",
     "reason": "persisted-identifier: telemetry schema value; consumers key on it"
   },
   {
     "file": "server/src/telemetry/product.ts",
-    "text": "openbot-product",
-    "reason": "persisted-identifier: HMAC domain of the pseudonymous user id; renaming re-identifies everyone"
+    "text": "z.literal(\"openbot\")",
+    "reason": "persisted-identifier: telemetry schema value; consumers key on it"
   },
   {
     "file": "server/src/telemetry/product.ts",
@@ -671,8 +571,13 @@
   },
   {
     "file": "server/src/telemetry/otel.ts",
-    "text": "openbot.",
+    "text": "\"openbot.",
     "reason": "persisted-identifier: OTel logger and attribute names admins filter on (Task 9 keeps them)"
+  },
+  {
+    "file": "server/src/telemetry/otel.ts",
+    "text": "`openbot.payload.",
+    "reason": "persisted-identifier: OTel attribute names admins filter on (Task 9 keeps them)"
   },
   {
     "file": "server/src/computer/sandbox.ts",
@@ -733,11 +638,6 @@
     "file": "server/src/learning/ensure-container.ts",
     "text": "id: \"openbot\",",
     "reason": "persisted-identifier: Learning container id already created in Intelligence projects"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "name: \"OpenBot\",",
-    "reason": "persisted-identifier: display name of that container, seen only in the vendor's dashboard"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
@@ -831,7 +731,107 @@
   },
   {
     "file": "desktop-device/src-tauri/src/sidecar.rs",
-    "text": "PathBuf::from(",
+    "text": "openbot-runner",
     "reason": "developer-only: Rust unit-test fixtures for the legacy openbot-runner cleanup"
+  },
+  {
+    "file": "desktop-device/src-tauri/src/sidecar.rs",
+    "text": "OPENBOT-RUNNER",
+    "reason": "developer-only: Rust unit-test fixtures: the cleanup matches the old name case-insensitively"
+  },
+  {
+    "file": "server/src/auth/index.ts",
+    "text": "\"openbotmobile://\"",
+    "reason": "persisted-identifier: URL scheme the mobile app registers (mobile/ rebrand is Task 12)"
+  },
+  {
+    "file": "server/src/delivery/push.ts",
+    "text": "openbotmobile://",
+    "reason": "persisted-identifier: deep-link scheme the mobile app registers (mobile/ rebrand is Task 12)"
+  },
+  {
+    "file": "server/src/config.ts",
+    "text": "\"../examples/qoderwake\"",
+    "reason": "persisted-identifier: default tenant package path; Task 11 renames the directory"
+  },
+  {
+    "file": "server/src/learning/ensure-container.ts",
+    "text": "copilotkit@latest",
+    "reason": "external-name: the vendor CLI's npm package an operator runs"
+  },
+  {
+    "file": "shared/harnesses.ts",
+    "text": "OPENBOT_HARNESS_NAME = \"OpenBot\"",
+    "reason": "persisted-identifier: AgentProfile.framework value the app compares; readers see englishName() (Task 9)"
+  },
+  {
+    "file": "shared/harnesses.ts",
+    "text": "(?:openbot-)?(agent-",
+    "reason": "persisted-identifier: matches published container image names"
+  },
+  {
+    "file": "shared/release-policy.schema.json",
+    "text": "\"OpenBot release policy\"",
+    "reason": "developer-only: JSON Schema title read only by the release tooling"
+  },
+  {
+    "file": "shared/release-manifest.schema.json",
+    "text": "\"OpenBot release manifest v1\"",
+    "reason": "developer-only: JSON Schema title read only by the release tooling"
+  },
+  {
+    "file": "shared/harnesses.json",
+    "text": "the agent harnesses OpenBot knows by name",
+    "reason": "developer-only: `_readme` key for developers; no program reads it"
+  },
+  {
+    "file": "shared/recorder-api.ts",
+    "text": "\"openbot-browser\"",
+    "reason": "persisted-identifier: recorder connection `via` value stored in the database"
+  },
+  {
+    "file": "shared/recorder-extension.json",
+    "text": "\"ai.copilotkit.openbot.recorder\"",
+    "reason": "persisted-identifier: native messaging host id the installed extension and host register"
+  },
+  {
+    "file": "shared/desktop-updates.ts",
+    "text": "This version of OpenBot doesn't update itself.",
+    "reason": "upstream-shell-only: drawn only inside upstream Desktop; desktop/src/App.test.tsx (never touched) pins the exact words"
+  },
+  {
+    "file": "shared/learning.ts",
+    "text": "AUTOMATIC_LEARNING_CONTAINER_ID = \"openbot\"",
+    "reason": "persisted-identifier: Learning container id already created in Intelligence projects"
+  },
+  {
+    "file": "shared/user-preferences.ts",
+    "text": "\"openbot\",",
+    "reason": "persisted-identifier: default skin id saved in user preferences"
+  },
+  {
+    "file": "shared/user-preferences.ts",
+    "text": "DEFAULT_SKIN: SkinId = \"openbot\"",
+    "reason": "persisted-identifier: default skin id saved in user preferences"
+  },
+  {
+    "file": "shared/openbot-actor.ts",
+    "text": "actor.startsWith(\"openbot:\")",
+    "reason": "persisted-identifier: stored actor id prefix"
+  },
+  {
+    "file": "shared/staffing-proposal.ts",
+    "text": "\"<<openbot:staffing-proposal>>\"",
+    "reason": "persisted-identifier: marker stored in conversation text and matched verbatim"
+  },
+  {
+    "file": "shared/audit-words.ts",
+    "text": "\"openbot/share_private_information\"",
+    "reason": "persisted-identifier: built-in tool ref used as a lookup key"
+  },
+  {
+    "file": "shared/recorder-page.ts",
+    "text": "\"openbot.",
+    "reason": "persisted-identifier: message type in the Recorder page protocol"
   }
 ]
