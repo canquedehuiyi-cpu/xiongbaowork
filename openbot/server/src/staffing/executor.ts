@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { ZodError } from "zod";
+import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
 import { enterpriseControls } from "../admin/controls";
 import { canManageAgent, canRunAgent } from "../agents/profile-policy";
 import {
@@ -45,7 +46,6 @@ import {
 import { MAX_PENDING_APP_ACCESS_REQUESTS } from "../plugins/app-access-tool";
 import {
   approveOwnersSharedUse,
-  ownerAppsAllowed,
   ownerGrantRefusal,
   withdrawOwnersSharedUse,
 } from "../plugins/owner-grants";
@@ -115,17 +115,13 @@ export class ProposalRefusedError extends Error {
 }
 
 /**
- * 「招聘与组群」这组工具的名字，授予写成 `staffing/<名字>`。与内置服务在目录里列出的必须是同一组，
- * 否则勾了「也给它招聘与组群能力」的员工会少一个工具。
+ * 「招聘与组群」这组工具的名字，授予写成 `staffing/<名字>`。与内置服务在目录里列出的是同一份常量
+ * （`shared/staffing-proposal.ts`），勾了「也给它招聘与组群能力」的员工不会少一个工具。
  */
-export const STAFFING_TOOL_NAMES = [
-  "list_staff",
-  "propose_employee",
-  "propose_employee_change",
-  "propose_group",
-  "propose_group_change",
-  "proposal_status",
-] as const;
+export { STAFFING_TOOL_NAMES };
+
+/** 「招聘与组群」在目录里的键（`plugins/catalogue.ts`）。 */
+const STAFFING_APP = "staffing";
 
 export type StaffingExecutorDeps = {
   database: Database;
@@ -279,7 +275,8 @@ const INPUT_REFUSALS: [RegExp, string][] = [
   [/^Pick a model/, "请从模型库里选一个模型。"],
 ];
 
-function inputRefusal(error: string): string {
+/** 起草时也用它（`builtin-staffing.ts`）：同一条检查、同一句中文，模型当场就知道，不等本人确认时才失败。 */
+export function inputRefusal(error: string): string {
   if (hasChinese(error)) return error;
   return (
     INPUT_REFUSALS.find(([pattern]) => pattern.test(error))?.[1] ??
@@ -627,6 +624,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     run: Run,
     agentId: string,
     entry: { app: string; actions: string[] },
+    options: { request?: boolean } = {},
   ): Promise<Outcome> {
     const inspected = await deps.plugins.inspectApp({
       app: entry.app,
@@ -741,6 +739,9 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         ? done(`员工已经有「${name}」了。`)
         : failed(`「${name}」的 ${lacking.join("、")} 要由管理员单独授予。`);
     }
+
+    // 不替人提申请的一项（见 `giveStaffingTools`）：照实说为什么本人给不了。
+    if (options.request === false) return failed(refusal);
 
     // 申请只为本人能用的员工提，同浏览器里的申请入口。
     const bot = await deps.profiles.get(run.agentActor, agentId);
@@ -931,24 +932,22 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     return done("已删除定时任务。");
   }
 
-  /** 本人能给的「招聘与组群」；管理员对这个人关掉了「把自己的应用给自己的员工」时不给。 */
+  /**
+   * 「也给它招聘与组群能力」：和员工页上给任何应用同一条路（`giveApp`）——部署里有没有这个应用、管理员是否
+   * 把它收归自己（`owner_grants = admin`）、是否对这个人关掉了「把自己的应用给自己的员工」，都按此刻的答案。
+   * 本人给不了时照实说原因，不替人向管理员提申请：这是卡片上一个默认不勾的选项，不是本人点名要的应用；
+   * 真要的话，本人在员工页上申请。
+   */
   async function giveStaffingTools(
     run: Run,
     agentId: string,
   ): Promise<Outcome> {
-    if (!(await ownerAppsAllowed(run.actor.id)))
-      return failed("管理员关闭了「把自己的应用给自己的员工」，所以没有做。");
-    for (const tool of STAFFING_TOOL_NAMES)
-      await deps.plugins.grant(
-        "mcp",
-        `staffing/${tool}`,
-        agentId,
-        run.actor.email,
-        {
-          as: "owner",
-        },
-      );
-    return done("已给它招聘与组群的能力。");
+    return giveApp(
+      run,
+      agentId,
+      { app: STAFFING_APP, actions: [] },
+      { request: false },
+    );
   }
 
   /** 建好员工之后的各步，顺序固定：重试按位置对上上一次的结果。 */

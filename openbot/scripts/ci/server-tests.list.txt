@@ -197,6 +197,7 @@ tests/browser-routes.integration.test.ts
 tests/browser-search-guidance.test.ts
 tests/built-in-tool-labels.test.ts
 tests/builtin-routines.test.ts
+tests/builtin-staffing.integration.test.ts
 tests/bunfig-preload.test.ts
 tests/capability-activity-events.test.ts
 tests/catalogue-bot-grants.integration.test.ts
@@ -720,8 +721,11 @@ tests/skill-tools.integration.test.ts
 tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
+tests/staffing-bot-creator-tools.test.ts
+tests/staffing-default-grant.integration.test.ts
 tests/staffing-draft.test.ts
 tests/staffing-executor.integration.test.ts
+tests/staffing-gates.integration.test.ts
 tests/staffing-proposals-table.integration.test.ts
 tests/staffing-routes.integration.test.ts
 tests/staffing-settle.integration.test.ts

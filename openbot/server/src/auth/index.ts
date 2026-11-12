@@ -680,7 +680,7 @@ export function createAuth(
               authConfig.initialAdminEmails,
             );
             // Every arrival path gets its tenant: a Free subscription and its 分身.
-            await provisionTenant(database, user);
+            await provisionTenant(database, user, { withStaffing: true });
             if (context?.path?.startsWith("/scim")) {
               await recordProvisioned(scimDeps, user);
             }
