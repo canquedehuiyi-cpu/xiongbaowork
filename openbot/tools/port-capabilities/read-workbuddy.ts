@@ -20,6 +20,7 @@
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { existsSync } from "node:fs";
+import type { Dirent } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 /** Directory names below the WorkBuddy home. Kept here so every caller agrees on the layout. */
@@ -223,7 +224,10 @@ function isFile(path: string): boolean {
  * `refs_bytes` would look exactly like a skill that ships no `references/`, and P2 decides whether an
  * attachment needs paging from that number.
  */
-function readDirOrThrow(path: string): ReturnType<typeof readdirSync> {
+function readDirOrThrow(path: string): Dirent<string>[] {
+  // The return type is spelled out rather than derived from `ReturnType<typeof readdirSync>`: that
+  // derivation picks the buffer-valued overload (`Dirent<NonSharedBuffer>[]`), while the call below uses
+  // `withFileTypes: true`, whose overload yields `Dirent<string>[]` under @types/node ≥ 26.
   try {
     return readdirSync(path, { withFileTypes: true });
   } catch (error) {
