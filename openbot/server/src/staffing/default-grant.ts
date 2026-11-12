@@ -123,6 +123,8 @@ export type StaffingBackfillDeps = {
   allowed(): Promise<boolean>;
   /** 这位分身已持有的 `staffing/*` 授予行数，不论谁授予的。 */
   held(avatarId: string): Promise<number>;
+  /** 其中是这个默认自己授予的（`granted_by` 为 `STAFFING_DEFAULT_BY`）行数。 */
+  automatic(avatarId: string): Promise<number>;
   /** 这位分身上被 SEC1 禁用的工具（`approvalService.disabledTools`）。 */
   disabled(avatarId: string): Promise<(toolRef: string) => boolean>;
   /** 这位分身是否已经处理过一次默认授予。 */
@@ -136,7 +138,8 @@ export type StaffingBackfillDeps = {
 /**
  * 给还没处理过的分身补授，每位只处理一次。逐人在他自己的帧里做，不开新的出帧门。
  *
- * 已经持有任何 `staffing/*` 行的不给：那是人或管理员已经做过决定。本人用「禁用」关掉过其中任何一个的
+ * 已经持有任何 `staffing/*` 行的不给：那是人或管理员已经做过决定。例外是持有的全是这个默认自己授予的、
+ * 又不满六个：那是六个授予做到一半失败留下的，不是谁的决定，补齐之后才记下处理过。本人用「禁用」关掉过其中任何一个的
  * 也不给：关掉的开关一直优先。这两种也记下处理过了；授予之后同样记下，所以本人之后收回的不会回来。
  *
  * @returns 这次补授了几位分身
@@ -153,9 +156,14 @@ export async function backfillStaffingForAvatars(
     if (avatars.length === 0 || !(await deps.allowed())) return 0;
     for (const avatarId of avatars) {
       const disabled = await deps.disabled(avatarId);
+      const held = await deps.held(avatarId);
+      // 持有的全是默认自己给的、又没给全：做到一半失败的残留，接着补，不当作本人的决定。
+      const incomplete =
+        held > 0 &&
+        held < STAFFING_REFS.length &&
+        (await deps.automatic(avatarId)) === held;
       const keep =
-        (await deps.held(avatarId)) > 0 ||
-        STAFFING_REFS.some((ref) => disabled(ref));
+        (held > 0 && !incomplete) || STAFFING_REFS.some((ref) => disabled(ref));
       if (!keep) {
         await grantStaffingToAvatar(deps.store, avatarId);
         granted += 1;
@@ -193,6 +201,20 @@ export function staffingBackfillDeps(
               eq(pluginGrants.kind, "mcp"),
               eq(pluginGrants.agentId, avatarId),
               like(pluginGrants.ref, "staffing/%"),
+            ),
+          )
+      ).length,
+    automatic: async (avatarId) =>
+      (
+        await database
+          .select({ ref: pluginGrants.ref })
+          .from(pluginGrants)
+          .where(
+            and(
+              eq(pluginGrants.kind, "mcp"),
+              eq(pluginGrants.agentId, avatarId),
+              like(pluginGrants.ref, "staffing/%"),
+              eq(pluginGrants.grantedBy, STAFFING_DEFAULT_BY),
             ),
           )
       ).length,

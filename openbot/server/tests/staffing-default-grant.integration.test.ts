@@ -181,6 +181,45 @@ describe("小管家默认会招人组群", () => {
     );
   });
 
+  test("a grant that failed halfway is completed before the once-marker is written", async () => {
+    const userId = await upgradedPerson("halfway");
+    const avatarId = avatarAgentId(userId);
+    let calls = 0;
+    const flaky = {
+      grant: (...args: Parameters<typeof plugins.grant>) => {
+        calls += 1;
+        if (calls === 2) throw new Error("第二个授予失败");
+        return plugins.grant(...args);
+      },
+    };
+    const given = () =>
+      runAsTenant(userId, () =>
+        staffingBackfillDeps(database, {
+          store: plugins,
+          disabled: (id) => approvals.disabledTools(userId, id),
+        }).given(avatarId),
+      );
+    await expect(
+      runAsTenant(userId, () =>
+        backfillStaffingForAvatars(
+          staffingBackfillDeps(database, {
+            store: flaky,
+            disabled: (id) => approvals.disabledTools(userId, id),
+          }),
+        ),
+      ),
+    ).rejects.toThrow("第二个授予失败");
+    expect(await staffingRows(avatarId)).toHaveLength(1);
+    expect(await given()).toBe(false);
+
+    // 下一次读取：残缺的自动授予不当作本人的决定，补齐六个之后才记下。
+    expect(await backfill(userId)).toBe(1);
+    expect(await staffingRows(avatarId)).toHaveLength(
+      STAFFING_TOOL_NAMES.length,
+    );
+    expect(await given()).toBe(true);
+  });
+
   test("a bot other than the avatar is not granted", async () => {
     const userId = await upgradedPerson("others");
     const hired = await runAsTenant(userId, () =>

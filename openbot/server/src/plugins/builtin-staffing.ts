@@ -17,6 +17,7 @@ import {
   channelAgents,
   channelMemberships,
   channels,
+  pluginGrants,
   staffingProposals,
 } from "../db/schema";
 import type { ModelShelf } from "../models/routes";
@@ -1120,6 +1121,27 @@ const APP_STATUS_WORDS = {
   "needs-admin": "需要管理员批准，确认后会替用户提申请",
 } as const;
 
+/** 草稿点名的动作里，有没有这位员工还没持有的。 */
+async function lacksNamedAction(
+  run: Run,
+  agentId: string,
+  key: string,
+  actions: readonly string[],
+): Promise<boolean> {
+  if (actions.length === 0 || agentId === "") return false;
+  const rows = await run.deps.database
+    .select({ ref: pluginGrants.ref })
+    .from(pluginGrants)
+    .where(
+      and(eq(pluginGrants.agentId, agentId), eq(pluginGrants.kind, "mcp")),
+    );
+  const held = new Set(rows.map((row) => row.ref));
+  return actions.some(
+    (action) =>
+      !held.has(action.startsWith(`${key}/`) ? action : `${key}/${action}`),
+  );
+}
+
 /**
  * 应用：叫不出来的剔除；其余按执行时的判断算出状态写给模型——本人能直接给的（应用已打开、对主人开放、管理员
  * 没关掉「把自己的应用给自己的员工」）是 grantable，要先连账号的是 needs-connection，其余 needs-admin。
@@ -1153,7 +1175,19 @@ async function keptApps(
       });
       continue;
     }
-    if (inspected.access.granted) {
+    /*
+     * 「已经有」是按应用算的（`access.granted`），持有一个动作不等于持有草稿点名的另一个：点名的动作有没有
+     * 全部在手，按动作比（同执行器 `giveApp`），还缺的留下，由执行器在执行时再查。没点名动作的，持有就是有了。
+     */
+    if (
+      inspected.access.granted &&
+      !(await lacksNamedAction(
+        run,
+        target?.id ?? "",
+        inspected.access.key,
+        entry.actions,
+      ))
+    ) {
       dropped.push({
         field: "apps",
         value: entry.app,

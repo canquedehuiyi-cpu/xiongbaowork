@@ -798,6 +798,49 @@ describe("what a draft keeps, and what it hands the executor", () => {
     expect(sentence).toContain("开放应用（grantable）");
   });
 
+  test("an app held in part keeps the entry that asks for an action it lacks", async () => {
+    const owner = await person("apps-part");
+    const helper = await bot(owner, "小管家");
+    const target = await bot(owner, "小黄");
+    await asPlatform(() =>
+      database.insert(mcpTools).values({
+        tenantId: "team",
+        serverId: OPEN_APP,
+        name: "fetch",
+        description: "取回。",
+        effect: "read",
+      }),
+    );
+    await runAsTenant(owner.id, () =>
+      plugins.grant(
+        "mcp",
+        `${OPEN_APP}/search`,
+        target,
+        `${owner.id}@example.test`,
+        {
+          as: "owner",
+        },
+      ),
+    );
+    const call = (actions: string[]) =>
+      run(owner, helper, id(`thread-${randomUUID().slice(0, 6)}`)).call(
+        "propose_employee_change",
+        {
+          agentId: target,
+          set: { apps: [{ app: OPEN_APP, actions }] },
+        },
+      );
+
+    const answer = await call(["fetch"]);
+    const draft = (await proposalRow(cardOf(answer.text).card.proposalId))
+      ?.draft as { set: { apps: unknown } };
+    expect(draft.set.apps).toEqual([{ app: OPEN_APP, actions: ["fetch"] }]);
+
+    // 要的动作已经都有了，仍然剔除并说员工已经有。
+    const held = await call(["search"]);
+    expect(held.text).toContain("员工已经有这个应用了");
+  });
+
   test("a skill that is not there is dropped and the person's own is kept", async () => {
     const owner = await person("skills");
     const helper = await bot(owner, "小管家");
