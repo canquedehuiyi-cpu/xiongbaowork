@@ -48,7 +48,7 @@ import { newId } from "../../../../lib/new-id";
  * Creates the conversation on first send. One employee in the To: field is an ordinary channel; two
  * or more are a group (群聊), answering in the order they were picked. The first employee stays in
  * the URL so profile links and reloads preserve the pending recipient without creating an empty
- * channel. (M5b: 熊宝原来只能选一位、群聊从单独的「新建群聊」页开始；现在跟上游一样在这里多选。)
+ * channel. (M5b: 跟上游一样在这里多选；熊宝自己的「新建群聊」页 `/group/new` 也在，先建空群聊再说话。)
  */
 /** What `GET /api/agents/:id` answers for a Bot this person cannot see. */
 const AGENT_NOT_FOUND = "Couldn't find that Bot.";
