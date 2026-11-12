@@ -359,6 +359,13 @@ export const auditEventTypes = [
   // `action_failed` because a stop is not an outage: a count of failures that folds in every Stop
   // reports a broken computer where somebody simply changed their mind.
   "computer.action_stopped",
+  // --- desktop control (sub-project 2) ---
+  // A desktop write that was done: the outcome beside its `computer.action_allowed` attempt row (same
+  // `attempt`), with whether a real pointer or keyboard was used, whether the device verified it and
+  // how long it took. Typed text by its length only. Not `computer.action_*`, so it is never counted
+  // as a second action.
+  "computer.desktop_write_done",
+  // --- end desktop control ---
   // A person taking the wheel and giving it back. Recorded as a period rather than as keystrokes: the
   // useful fact for an investigator is that a human drove this browser between these two times, and
   // logging every click a person made would bury it while telling nobody anything.

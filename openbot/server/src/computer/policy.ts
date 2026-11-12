@@ -112,7 +112,11 @@ export type PolicyContext = {
     | "write_tool"
     | "run_command"
     // A tool of a local app on the person's paired machine (device MCP bridge).
-    | "app_call";
+    | "app_call"
+    // --- desktop control (sub-project 2) ---
+    // Clicking, typing, pressing a key or switching windows on the owner's own desktop.
+    | "write";
+  // --- end desktop control ---
   /**
    * The file a `computer_read_file`, `computer_download_file` or `computer_write_file` call is aimed at.
    *

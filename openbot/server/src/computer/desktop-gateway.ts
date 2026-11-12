@@ -11,7 +11,11 @@ import { currentApprovalContext } from "../approvals/types";
 import { runnerAddress } from "../devices/channel";
 import { withUntrustedNotice } from "../untrusted-content";
 import { ComputerUnavailableError } from "./client";
-import { type DesktopWindowCache, desktopCacheKey } from "./desktop-state";
+import {
+  type DesktopControlCache,
+  type DesktopWindowCache,
+  desktopCacheKey,
+} from "./desktop-state";
 import {
   type ActionActor,
   ActionRefusedError,
@@ -78,9 +82,10 @@ export type DesktopGovern = <T>(
   run: () => Promise<T>,
 ) => Promise<T>;
 
+/** The gateway's post to a desktop path on the owner's machine: the reads here, the writes in desktop-write.ts. */
 export type DesktopPost = <T>(
   botId: string,
-  path: "/desktop/windows" | "/desktop/snapshot",
+  path: `/desktop/${string}`,
   payload: unknown,
   signal: AbortSignal | undefined,
   timeoutMs: number,
@@ -93,7 +98,7 @@ export type DesktopPost = <T>(
  * malformed one never reaches the sensitive-word check, the approval scope or a row. Anything that
  * is not an array is an empty list.
  */
-function windowsOf(result: { windows?: unknown }): DesktopWindow[] {
+export function windowsOf(result: { windows?: unknown }): DesktopWindow[] {
   if (!Array.isArray(result?.windows)) return [];
   return result.windows.flatMap((entry: unknown): DesktopWindow[] => {
     if (!entry || typeof entry !== "object") return [];
@@ -120,6 +125,23 @@ function windowsOf(result: { windows?: unknown }): DesktopWindow[] {
   });
 }
 
+/**
+ * The owner's machine, or a refusal: no machine, or someone other than the owner. The same lock as
+ * the local apps: the desktop is the owner's, so nothing is sent for anyone else. The one owner check
+ * for the desktop, reading (below) and writing (desktop-write.ts) alike.
+ */
+export async function desktopOwnersMachine(
+  resolveDevice: ComputerGatewayOptions["resolveDevice"],
+  botId: string,
+  actor: ActionActor,
+): Promise<{ tenantId: string; deviceId: string }> {
+  const machine = resolveDevice ? await resolveDevice(botId) : null;
+  if (!machine) throw new ComputerUnavailableError(NO_DESKTOP);
+  if (machine.tenantId !== actor.id)
+    throw new ActionRefusedError(DESKTOP_OWNER_ONLY, DESKTOP_UNAVAILABLE_RULE);
+  return machine;
+}
+
 export function createDesktopMethods(deps: {
   resolveDevice?: ComputerGatewayOptions["resolveDevice"];
   approvalRefusal?: ComputerGatewayOptions["approvalRefusal"];
@@ -127,6 +149,8 @@ export function createDesktopMethods(deps: {
   govern: DesktopGovern;
   post: DesktopPost;
   windows: DesktopWindowCache;
+  /** Where a window's controls are kept for the writes (desktop-write.ts). */
+  controls?: DesktopControlCache;
 }) {
   /** The machine's answer, with an old runner's English "does not handle this" made Chinese. */
   const post = async <T>(...args: Parameters<DesktopPost>): Promise<T> => {
@@ -142,20 +166,8 @@ export function createDesktopMethods(deps: {
     }
   };
 
-  /**
-   * The owner's machine, or a refusal: no machine, or someone other than the owner. The same lock as
-   * the local apps: the desktop is the owner's, so nothing is sent for anyone else.
-   */
-  async function ownersMachine(botId: string, actor: ActionActor) {
-    const machine = deps.resolveDevice ? await deps.resolveDevice(botId) : null;
-    if (!machine) throw new ComputerUnavailableError(NO_DESKTOP);
-    if (machine.tenantId !== actor.id)
-      throw new ActionRefusedError(
-        DESKTOP_OWNER_ONLY,
-        DESKTOP_UNAVAILABLE_RULE,
-      );
-    return machine;
-  }
+  const ownersMachine = (botId: string, actor: ActionActor) =>
+    desktopOwnersMachine(deps.resolveDevice, botId, actor);
 
   /** Ask the machine for its windows and keep the answer as the list a read is judged against. */
   async function fetchWindows(
@@ -286,8 +298,8 @@ export function createDesktopMethods(deps: {
          * is raised to an ask by the floor and runs only once approved. So this is the one place the
          * machine is told it may read a sensitive window.
          */
-        () =>
-          post<DesktopSnapshot>(
+        async () => {
+          const snapshot = await post<DesktopSnapshot>(
             botId,
             "/desktop/snapshot",
             {
@@ -299,7 +311,14 @@ export function createDesktopMethods(deps: {
             signal,
             DESKTOP_BACKSTOP_MS,
             runnerAddress(machine),
-          ),
+          );
+          // The controls a write may name next, filed under the window asked for, not the one claimed.
+          deps.controls?.rememberSnapshot(key, {
+            ...snapshot,
+            window: { ...snapshot?.window, windowId },
+          });
+          return snapshot;
+        },
       );
       return withUntrustedNotice(result, "desktop window", [
         "window",

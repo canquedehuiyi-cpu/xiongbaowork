@@ -231,6 +231,6 @@ test("the Blocked view asks for the denied write, and Computer actions for every
     "computer.action_refused",
   );
   expect(eventTypeFilter(COMPUTER_ACTION_EVENT_TYPES)).toBe(
-    "?eventType=computer.action_allowed,computer.action_refused,computer.action_failed,computer.action_stopped",
+    "?eventType=computer.action_allowed,computer.action_refused,computer.action_failed,computer.action_stopped,computer.desktop_write_done",
   );
 });

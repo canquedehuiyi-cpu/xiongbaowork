@@ -105,6 +105,7 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "computer.action_refused": "使用电脑",
   "computer.action_failed": "使用电脑",
   "computer.action_stopped": "使用电脑",
+  "computer.desktop_write_done": "操作桌面完成",
   "computer.help_requested": "请人帮忙",
   "computer.help_cancelled": "取消求助",
   "computer.control_taken": "接管电脑",

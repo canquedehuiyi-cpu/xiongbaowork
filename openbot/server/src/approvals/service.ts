@@ -12,6 +12,7 @@ import {
   WITHDRAWN_RULE_ALLOWS,
 } from "@openbot/shared/approval-outcomes";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { desktopActionWordsOf } from "../../../shared/desktop-control";
 import { PERSON_INITIATOR } from "../audit";
 import { currentTenant } from "../tenant/context";
 import { DESKTOP_SESSION_TOOL, desktopFloor } from "./desktop-policy";
@@ -132,17 +133,65 @@ const userTurnsOf = (continuation: ApprovalContinuation | undefined) =>
  * lives with its person-facing version in shared/approval-outcomes.ts.
  */
 export const APPROVAL_OUTCOME_UNKNOWN = OUTCOME_UNKNOWN;
+/** The approved action, as its approval bound it: which tool, with which arguments, on what. */
+export type ApprovedActionBinding = {
+  toolRef: string;
+  args: unknown;
+  target: unknown;
+};
+const bindingOf = (action: ApprovalAction): ApprovedActionBinding => ({
+  toolRef: action.toolRef,
+  args: action.args,
+  target: action.target,
+});
 const executionAuthority = new AsyncLocalStorage<{
   approvalId: string;
   digest: string;
   owner: string;
+  bound: ApprovedActionBinding;
 }>();
-const validationProbe = new AsyncLocalStorage<{ action?: ApprovalAction }>();
+const validationProbe = new AsyncLocalStorage<{
+  action?: ApprovalAction;
+  bound?: ApprovedActionBinding;
+}>();
 /**
  * Whether this call is an approved action's re-check, which only asks the gate what it would decide.
  * Anything with a side effect of its own (spending a one-time consent) must wait for the real run.
  */
 export const isApprovalRecheck = () => validationProbe.getStore() !== undefined;
+/**
+ * The approved action this call is the re-check or the run of (`validateReentry`, `resume`), as its
+ * approval bound it, or undefined anywhere else. For a call whose own view of its target is kept by
+ * one replica for a while (a desktop control, plan Task 22): an approval answered after that view is
+ * gone can be carried out on the target the person approved, and the gate still compares the whole
+ * action, so a target that reads differently now is not carried out.
+ */
+export function approvedActionUnderway(): ApprovedActionBinding | undefined {
+  return (
+    executionAuthority.getStore()?.bound ?? validationProbe.getStore()?.bound
+  );
+}
+
+/**
+ * Whether this call is the approved action itself, being carried out by `resume`: the one place the
+ * gate lets an action through with no permit although the person approved it (it was decided when
+ * they answered, and is never asked again). The same match the gate makes: this person, and exactly
+ * the action approved. A caller that has to know whether the person agreed to this very step (opening
+ * a desktop session, plan Task 16) asks this as well as whether the gate handed it a permit.
+ */
+export function isApprovedExecution(candidate: ApprovalCandidate): boolean {
+  const authority = executionAuthority.getStore();
+  if (!authority) return false;
+  try {
+    const approved = approvalAction(candidate);
+    return (
+      authority.owner === approved.actorId &&
+      authority.digest === approved.actionDigest
+    );
+  } catch {
+    return false;
+  }
+}
 class ApprovalValidated extends HeadlessToolSuspension {
   constructor() {
     super("The action was checked before execution.", {
@@ -453,7 +502,8 @@ export function createApprovalService(
       execute: () => Promise<unknown>,
     ): Promise<ApprovalAction> {
       const continuation = parseApprovalContinuation(action.continuation);
-      const probe: { action?: ApprovalAction } = {};
+      const probe: { action?: ApprovalAction; bound?: ApprovedActionBinding } =
+        { bound: bindingOf(action) };
       try {
         await withApprovalContext(continuation, () =>
           validationProbe.run(probe, execute),
@@ -793,6 +843,17 @@ export function createApprovalService(
           : {}),
       });
       return outcome.reason;
+    },
+    /**
+     * The action words that make a desktop click ask (plan design decision 11): the team's list
+     * without blank words, or the default. What the gateway sends the device, so the device checks
+     * with the same list the policy decided on.
+     */
+    async desktopActionWords(): Promise<readonly string[]> {
+      const policy = store.policy;
+      if (!policy) return desktopActionWordsOf(undefined);
+      const team = await policy.teamSettings();
+      return desktopActionWordsOf(team.desktopActionWords ?? undefined);
     },
     /** Commands on this person's own computer, after the team cap: the stricter setting applies. */
     async hostCommandPolicy(ownerUserId: string): Promise<HostCommandPolicy> {
@@ -1172,6 +1233,7 @@ export function createApprovalService(
                     approvalId: id,
                     digest: approved.actionDigest,
                     owner: ownerUserId,
+                    bound: bindingOf(approved),
                   },
                   () => dependencies.execute(approved),
                 ),

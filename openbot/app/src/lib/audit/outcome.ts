@@ -110,6 +110,8 @@ export const COMPUTER_ACTION_EVENT_TYPES = [
   "computer.action_refused",
   "computer.action_failed",
   "computer.action_stopped",
+  // A desktop write that went through: written after the action, beside its attempt row.
+  "computer.desktop_write_done",
 ] as const;
 
 /**
