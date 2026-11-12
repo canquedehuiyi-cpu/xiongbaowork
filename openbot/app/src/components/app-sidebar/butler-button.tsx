@@ -2,9 +2,15 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { BrandLogo } from "@/components/layout/brand-logo";
 
 /**
- * 小管家出现的工作台页面：任务看板、自主工作、员工列表，以及能力的每个页签（`/capabilities/<页签>`）。
+ * 小管家出现的工作台页面：v0.2.7 的五个工作台页（任务看板、@Waker、自主工作，以及员工管理和能力与资源——
+ * 这两页现在叫员工、能力）再加能力的每个页签（`/capabilities/<页签>`）。@Waker 曾在 #452 里掉了，按用户要求加回。
  */
-const WORKBENCH_PATHS = new Set(["/tasks", "/autonomous", "/bots"]);
+const WORKBENCH_PATHS = new Set([
+  "/tasks",
+  "/reachability",
+  "/autonomous",
+  "/bots",
+]);
 const WORKBENCH_PREFIXES = ["/capabilities"];
 
 export function showsButler(pathname: string): boolean {

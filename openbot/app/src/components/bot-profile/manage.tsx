@@ -75,7 +75,8 @@ function resetLines(plan: ResetPlan): string[] {
     .map(([count, noun]) => `${count} ${noun}`);
 }
 
-function ResetDialog({
+/** Also opened from 对你 on the employee's own page (`BotControls`), as v0.2.7 had it there. */
+export function ResetDialog({
   agent,
   onOpenChange,
   open,
