@@ -259,17 +259,29 @@ test("a change that makes an employee public says so in the signal colour", asyn
   expect(shown.className).toContain("text-signal");
 });
 
-test("instructions are shown only for a personal starter", async () => {
+test("drafted instructions are always shown, and nothing is shown without them", async () => {
   agent();
+  serving("employee_change", {
+    agentId: "a1",
+    set: { title: "主管" },
+    appsRemove: [],
+    routinesRemove: [],
+  });
+  const without = routed(line("employee_change", "调整「小红」"));
+  await without.findByText("主管");
+  expect(without.queryByText("补充指令")).toBeNull();
+  cleanup();
+
   serving("employee_change", {
     agentId: "a1",
     set: { title: "主管", instructions: "先看日程。" },
     appsRemove: [],
     routinesRemove: [],
   });
-  const ordinary = routed(line("employee_change", "调整「小红」"));
-  await ordinary.findByText("主管");
-  expect(ordinary.queryByText("先看日程。")).toBeNull();
+  // 员工资料读回之前也写出草稿里的指令。
+  answers["GET /api/agents/a1"] = () => new Response(null, { status: 404 });
+  const unloaded = routed(line("employee_change", "调整「小红」"));
+  expect(await unloaded.findByText("先看日程。")).toBeTruthy();
   cleanup();
 
   agent({ instructions: "先看邮件。" });

@@ -15,7 +15,7 @@ import {
   DecisionButtons,
   useDecision,
 } from "./card-parts";
-import { READ_ONLY_ACTIONS } from "./employee-proposal";
+import { defaultActions } from "./employee-proposal";
 import { BeforeAfter } from "./group-proposal";
 
 /**
@@ -145,7 +145,9 @@ export function EmployeeChangeProposal({
         ) : null}
         {set.apps && set.apps.length > 0 ? (
           <Listed
-            items={set.apps.map((entry) => appLine(entry, READ_ONLY_ACTIONS))}
+            items={set.apps.map((entry) =>
+              appLine(entry, defaultActions(entry.app)),
+            )}
             label="新增应用"
           />
         ) : null}

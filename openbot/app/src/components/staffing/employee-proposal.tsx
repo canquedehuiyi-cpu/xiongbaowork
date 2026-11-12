@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import Avatar from "boring-avatars";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId } from "react";
 import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,9 @@ import {
   CardShell,
   DecisionButtons,
   Section,
+  StaleNotice,
   UpgradeLink,
+  useCardDraft,
   useDecision,
 } from "./card-parts";
 
@@ -37,14 +39,18 @@ export function EmployeeProposal({
 }: {
   proposal: Proposal & { kind: "employee" };
 }) {
-  const [draft, setDraft] = useState<EmployeeDraft>(proposal.draft);
-  const [edited, setEdited] = useState(false);
+  const {
+    draft,
+    edited,
+    stale,
+    change: update,
+    reload,
+  } = useCardDraft(proposal.draft);
   const decision = useDecision(proposal.id);
   const quota = useQuery(staffingQuotaQueryOptions());
 
   const change = (patch: Partial<EmployeeDraft>) => {
-    setDraft((current) => ({ ...current, ...patch }));
-    setEdited(true);
+    update((current) => ({ ...current, ...patch }));
   };
   const changePersona = (key: keyof Persona, value: string) =>
     change({
@@ -180,7 +186,7 @@ export function EmployeeProposal({
               detail:
                 entry.actions.length > 0
                   ? entry.actions.join("、")
-                  : READ_ONLY_ACTIONS,
+                  : defaultActions(entry.app),
             }))}
             noun="应用"
             onRemove={(app) =>
@@ -249,10 +255,11 @@ export function EmployeeProposal({
         {blank ? (
           <p className="text-destructive text-sm">名字和职责描述不能为空。</p>
         ) : null}
+        {stale ? <StaleNotice onReload={reload} /> : null}
         {decision.error ? <ActionProblem error={decision.error} /> : null}
         <DecisionButtons
           busy={decision.busy}
-          confirmBlocked={full || blank}
+          confirmBlocked={full || blank || stale}
           confirmLabel="确认创建"
           onConfirm={() => void decision.confirm(edited ? draft : null)}
           onDiscard={() => void decision.discard()}
@@ -264,6 +271,18 @@ export function EmployeeProposal({
 
 /** 应用没有点名动作时给的是什么（服务端 `giveApp`：本人能直接给的只读动作）。 */
 export const READ_ONLY_ACTIONS = "能直接给的只读动作";
+
+/** 内置应用没点名动作时，服务端 `giveApp` 给它的全部动作，写动作也在内。 */
+export const ALL_BUILTIN_ACTIONS =
+  "这个内置应用的全部动作（包括新建、修改、删除）";
+
+/** 服务端目录里认证方式为内置的应用（`catalogue.ts`）：卡片读不到目录，按名字认。 */
+const BUILTIN_APPS = new Set(["routines", "staffing"]);
+
+/** 应用没有点名动作时实际会给的是什么。 */
+export function defaultActions(app: string): string {
+  return BUILTIN_APPS.has(app) ? ALL_BUILTIN_ACTIONS : READ_ONLY_ACTIONS;
+}
 
 /**
  * 谁能用它。公开是确认之后最难收回的一件事（团队里每个人都看得到、用得上），所以用信号色写明，并给一个

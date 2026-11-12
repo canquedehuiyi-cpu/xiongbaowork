@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 import { Badge, GalleryFrame, type Tone } from "@/components/gallery/frame";
 import { Button } from "@/components/ui/button";
 import { RequestError } from "@/lib/client";
@@ -228,4 +228,52 @@ export function useDecision(proposalId: string) {
         await discardIt.mutateAsync();
       }),
   };
+}
+
+/**
+ * 卡片里的草稿：起点是服务端那份，本人在卡片上改。服务端那份换了（别的标签页改过、重新读到）时：
+ * 本地没改过就跟着换；本地改过就不悄悄覆盖，`stale` 为真，卡片要提示并要求「重新载入」（丢掉本地改动）
+ * 之后才能确认。
+ */
+export function useCardDraft<T>(server: T) {
+  const serverKey = JSON.stringify(server);
+  const [draft, setDraft] = useState<T>(server);
+  const [edited, setEdited] = useState(false);
+  const [seen, setSeen] = useState(serverKey);
+
+  let stale = false;
+  if (serverKey !== seen) {
+    if (!edited || serverKey === JSON.stringify(draft)) {
+      // 没有未存的改动，或本地改动恰好就是服务端现在这份（刚存完）：跟上去。
+      setDraft(server);
+      setEdited(false);
+      setSeen(serverKey);
+    } else stale = true;
+  }
+
+  const change = useCallback((patch: (current: T) => T) => {
+    setDraft(patch);
+    setEdited(true);
+  }, []);
+  const reload = () => {
+    setDraft(server);
+    setEdited(false);
+    setSeen(serverKey);
+  };
+  return { draft, edited, stale, change, reload };
+}
+
+/** 本地改动与服务端那份冲突时的提示：只能丢掉本地改动重新载入。 */
+export function StaleNotice({ onReload }: { onReload: () => void }) {
+  return (
+    <div className="flex flex-col gap-2 text-sm" role="alert">
+      <p className="font-medium text-signal">这份提议在别处改过了</p>
+      <p className="text-muted-foreground text-xs">
+        你在这里改的内容还没有保存。重新载入会丢掉它们，换成最新的提议，之后才能确认。
+      </p>
+      <Button className="h-11 self-start" onClick={onReload} variant="outline">
+        重新载入
+      </Button>
+    </div>
+  );
 }
