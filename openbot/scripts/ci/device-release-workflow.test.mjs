@@ -1080,3 +1080,49 @@ test("device jobs and the server side both use Bun 1.4.4", () => {
     expect(bunOf(ci, name)).toEqual(["1.4.4"]);
   expect(bunOf(workflow, "clean-linux")).toEqual(["1.4.4"]);
 });
+
+// Phase 2 of desktop control: every device bundle fetches the pinned agent-desktop, checks it against
+// agent-desktop.lock.json, and ships it next to the runner.
+test("every device bundle fetches and verifies agent-desktop before tauri build", () => {
+  const ci = Bun.YAML.parse(readFileSync(join(workflows, "ci.yml"), "utf8"));
+  const targets = [
+    [ci, "device-bundle-linux", false],
+    [ci, "device-bundle-windows", false],
+    [ci, "device-bundle-macos", true],
+    [workflow, "linux", false],
+    [workflow, "windows", false],
+    [workflow, "macos", true],
+  ];
+  for (const [doc, job, macos] of targets) {
+    const steps = doc.jobs[job].steps;
+    const runs = steps.map((s) => s.run ?? "");
+    const fetchAt = runs.findIndex((r) => r.includes("fetch-agent-desktop.ts"));
+    const builds = runs.flatMap((r, i) =>
+      r.includes("tauri build") ? [i] : [],
+    );
+    expect(fetchAt, `${job} fetches agent-desktop`).toBeGreaterThan(-1);
+    expect(builds.length, `${job} builds`).toBeGreaterThan(0);
+    for (const at of builds) {
+      expect(fetchAt, `${job} fetches before step ${at}`).toBeLessThan(at);
+      if (macos)
+        expect(runs[at], `${job} bundles the macOS helper`).toContain(
+          "tauri.agent-desktop-macos.conf.json",
+        );
+    }
+    if (job === "device-bundle-linux" || job === "linux") {
+      const check = runs.find((r) => r.includes("dpkg-deb -c"));
+      expect(check, `${job} lists the deb contents`).toBeDefined();
+      expect(
+        check,
+        `${job} checks the deb carries agent-desktop`,
+      ).toContain("usr/bin/agent-desktop$");
+    }
+  }
+});
+
+// macOS 13 is the floor for the device app, and the release notes say so.
+test("release notes name macOS 13+ as the floor", () => {
+  const text = readFileSync(join(workflows, "device-release.yml"), "utf8");
+  expect(text).toContain("macOS 13+，Apple 芯片");
+  expect(text).not.toContain("macOS 11+");
+});
