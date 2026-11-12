@@ -25,7 +25,7 @@ mod roots;
 mod sidecar;
 mod supervise;
 
-use desktop_guard::{DesktopEvent, Effects, Guard, GuardAction};
+use desktop_guard::{DesktopEvent, Effects, Guard, GuardAction, HotkeyError};
 use serde::Serialize;
 use sidecar::{ControlPipe, RunnerLauncher, Settings};
 use std::path::PathBuf;
@@ -36,6 +36,7 @@ use supervise::{Observer, Policy, State, Supervisor};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Wry};
+use tauri_plugin_global_shortcut::GlobalShortcut;
 
 const PRODUCT: &str = "熊宝数字员工 设备端";
 const BROWSER_MISSING: &str = "未检测到 Chrome 或 Edge，浏览器相关任务无法执行";
@@ -224,12 +225,28 @@ impl Effects for Shell<'_> {
         set_stop_desktop_item(self.0, false);
     }
 
-    fn register_hotkey(&mut self) -> Result<(), String> {
-        register_stop_key(self.0)
+    fn register_hotkey(&mut self) -> Result<(), HotkeyError> {
+        register_stop_key(self.0)?;
+        // A stop key that was taken last time is not any more.
+        let state = self.0.state::<Device>().state.lock().unwrap().clone();
+        show_state(self.0, &state);
+        Ok(())
     }
 
     fn unregister_hotkey(&mut self) {
         unregister_stop_key(self.0)
+    }
+
+    fn notice(&mut self, text: &'static str) {
+        eprintln!("[device] {text}");
+        let device = self.0.state::<Device>();
+        let state = device.state.lock().unwrap().label();
+        if let Some(item) = device.status_item.lock().unwrap().as_ref() {
+            let _ = item.set_text(format!("状态：{state} · {text}"));
+        }
+        if let Some(tray) = self.0.tray_by_id("device") {
+            let _ = tray.set_tooltip(Some(format!("{PRODUCT} · {text}")));
+        }
     }
 
     fn send(&mut self, line: &str) -> std::io::Result<()> {
@@ -237,16 +254,54 @@ impl Effects for Shell<'_> {
     }
 }
 
-/// The stop key, Ctrl+Alt+Esc (⌃⌥⎋ on a Mac): the one place it is registered. Not wired up yet, so
-/// registering fails, every session ends in `session-failed` and nothing physical runs. The
-/// global-shortcut plugin replaces these two functions (plan Task 15); the key's handler is then
-/// `guard_do(app, |guard| guard.on_stop("hotkey"))`, on a thread of its own.
-fn register_stop_key(_app: &AppHandle) -> Result<(), String> {
-    Err(desktop_guard::HOTKEY_MISSING.into())
+/// The stop key, Ctrl+Alt+Esc (⌃⌥⎋ on a Mac): the one place it is registered, for a session only.
+/// The plugin does the registering on the main thread and this waits for the answer (ruling C5:
+/// no `session-ready` without the key). That is safe here: the guard's lock, which the caller holds,
+/// is never taken on the main thread. Linux has no plugin (see `main`), so no key and no session.
+/// Always asks the system, never the plugin's list: an unregistering still queued on the main
+/// thread (see below) runs first there, so only the system's answer says the key is up.
+fn register_stop_key(app: &AppHandle) -> Result<(), HotkeyError> {
+    let Some(shortcuts) = app.try_state::<GlobalShortcut<Wry>>() else {
+        return Err(HotkeyError::Unsupported);
+    };
+    shortcuts
+        .register(desktop_guard::stop_shortcut())
+        .map_err(|error| HotkeyError::Taken(error.to_string()))
 }
 
 /// Must be harmless when the key is not registered: a failed or replaced session unregisters too.
-fn unregister_stop_key(_app: &AppHandle) {}
+/// Handed to the main thread without waiting, so a session that ends never waits on it; a later
+/// registration is queued behind it there, so it cannot be undone by it.
+fn unregister_stop_key(app: &AppHandle) {
+    let Some(shortcuts) = app.try_state::<GlobalShortcut<Wry>>() else {
+        return;
+    };
+    if !shortcuts.is_registered(desktop_guard::stop_shortcut()) {
+        return;
+    }
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let shortcuts = handle.state::<GlobalShortcut<Wry>>();
+        if let Err(error) = shortcuts.unregister(desktop_guard::stop_shortcut()) {
+            eprintln!("[device] could not unregister the stop key: {error}");
+        }
+    });
+}
+
+/// The stop key's plugin. Its handler runs on the main thread, where the guard is never locked, so
+/// the stop goes through a thread of its own, as the tray's button does.
+fn stop_key_plugin() -> tauri::plugin::TauriPlugin<Wry> {
+    use tauri_plugin_global_shortcut::ShortcutState;
+    tauri_plugin_global_shortcut::Builder::new()
+        .with_handler(|app, shortcut, event| {
+            if event.state == ShortcutState::Pressed && *shortcut == desktop_guard::stop_shortcut()
+            {
+                let app = app.clone();
+                std::thread::spawn(move || guard_do(&app, |guard| guard.on_stop("hotkey")));
+            }
+        })
+        .build()
+}
 
 fn set_stop_desktop_item(app: &AppHandle, enabled: bool) {
     if let Some(item) = app
@@ -280,8 +335,16 @@ fn create_banner(app: &AppHandle) -> tauri::Result<()> {
 
 /// The mouse check: every `POLL_MS`, while a session is on and no `--headed` step is under way, the
 /// cursor is compared with where it started; a move stops the session, and so does a cursor that
-/// keeps failing to be read. Until this thread has told the guard it runs, no session is ready.
+/// keeps failing to be read. Until this thread has told the guard it runs, no session is ready, and
+/// once it leaves its loop (a panic) no session is again. Not on Linux, which has no write actions.
 fn watch_the_mouse(app: &AppHandle) {
+    /// Dropped only when the loop is left: the guard then stops counting on the check.
+    struct Ended(AppHandle);
+    impl Drop for Ended {
+        fn drop(&mut self) {
+            guard_do(&self.0, Guard::mouse_check_ended);
+        }
+    }
     let app = app.clone();
     let spawned = std::thread::Builder::new()
         .name("desktop-mouse".into())
@@ -290,19 +353,10 @@ fn watch_the_mouse(app: &AppHandle) {
                 guard.mouse_check_started();
                 Vec::new()
             });
+            let _ended = Ended(app.clone());
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(desktop_guard::POLL_MS));
-                guard_do(&app, |guard| {
-                    if !guard.is_polling() {
-                        return Vec::new();
-                    }
-                    match cursor(&app) {
-                        Some(position) => guard.on_cursor(position),
-                        None => guard.on_cursor_error(),
-                    }
-                    .into_iter()
-                    .collect()
-                });
+                guard_do(&app, |guard| guard.poll(|| cursor(&app)));
             }
         });
     // The guard was never told the check runs, so every session gets `session-failed`.
@@ -791,11 +845,18 @@ fn route_signals_to_quit(app: &AppHandle) {
 
 fn main() {
     let autostarted = std::env::args().any(|arg| arg == autostart::AUTOSTART_ARG);
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Two copies would run two runners with one device token. A second launch shows the window.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_window(app);
-        }))
+        }));
+    // The stop key, registered only during a desktop session. Not on Linux (no session there).
+    let builder = if cfg!(target_os = "linux") {
+        builder
+    } else {
+        builder.plugin(stop_key_plugin())
+    };
+    builder
         .invoke_handler(tauri::generate_handler![
             status,
             pair,
@@ -867,7 +928,10 @@ fn main() {
             if let Err(error) = create_banner(&handle) {
                 eprintln!("[device] could not make the desktop banner: {error}");
             }
-            watch_the_mouse(&handle);
+            // No mouse check on Linux: no session can be ready there (no write actions either).
+            if !cfg!(target_os = "linux") {
+                watch_the_mouse(&handle);
+            }
 
             match device.settings() {
                 Some(settings) => {
