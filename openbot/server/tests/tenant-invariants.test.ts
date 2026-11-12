@@ -135,9 +135,11 @@ function doorCounts(files: Parsed[]): Record<string, Record<string, number>> {
  *
  * Beside the identity layer (`auth/guards.ts`, `index.ts`'s runtime actor lookup, `app.ts`'s auth
  * handler) and the refusal rows `app.ts` files as nobody's for a bad worker secret or callback token,
- * four doors are reachable by a member's or a signed-out request on purpose, each one narrow read:
+ * five doors are reachable by a member's or a signed-out request on purpose, each one narrow read:
  * `delivery/store.ts` (`registerDevice`'s platform lookup of who already holds a device token, plan
- * (d)) and `agents/profile-store.ts` (the callback route's `asPlatform` read of {id, tenantId} by
+ * (d), and `bind`'s lookup of who already holds a delivery identity — a row stamped with the
+ * holder's tenant that the caller's frame cannot see, so the refusal is answered instead of a bare
+ * 42501) and `agents/profile-store.ts` (the callback route's `asPlatform` read of {id, tenantId} by
  * token hash, PCB), which both hand the work back to a person's frame; `app.ts`'s
  * `/api/capabilities` count of identity providers, which signed-out requests reach too (P16a): it
  * reads deployment rows and only the count leaves; and `automations/ingress-routes.ts`'s public
@@ -191,7 +193,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // M3: the third finds the binding a chat sender names, then checked against its own tenant.
   "src/delivery/opentag-agent.ts": { 'runAsTenant("platform"': 3 },
   "src/delivery/router.ts": { 'runAsTenant("platform"': 3 },
-  "src/delivery/store.ts": { 'runAsTenant("platform"': 3 },
+  // `bind`'s fourth: who already holds a delivery identity. The holder's row is stamped with the
+  // holder's tenant and so invisible to the caller's frame; it is read as `platform`, a holder who
+  // is not the caller is refused there, and the write stays in the caller's own frame.
+  "src/delivery/store.ts": { 'runAsTenant("platform"': 4 },
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
   // The third is the background translator (migration 0145): it reads and writes only
   // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
@@ -276,12 +281,14 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/team-bots/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 5 },
   // The catalogue sync writes the deployment's own `system` rows (package-declared Bots).
   // M3: the second is `deploymentNameOf`, reading at boot which former package rows the sync keeps.
-  // The platform reads are the connector conflict precheck before the sync's transaction (4a-A1)
-  // and `clearDanglingConnectorRefs` after its commit: questions about rows stamped by other
-  // frames, which the sync's own `system` frame can neither see nor answer. 用户已批准的补登：
-  // 这两处 platform 门在门清单建档前就已存在，此处只登记现状，不新增任何门。
+  // The platform reads are the connector conflict precheck before the sync's transaction (4a-A1),
+  // `clearDanglingConnectorRefs` after its commit, and `agentConflicts` inside it — the agent
+  // conflict precheck, whose rows are stamped with their owners' tenants and so invisible to the
+  // sync's own `system` frame. Questions about rows stamped by other frames, nothing written in
+  // any of them; the sync refuses with the id before it writes. 用户已批准的补登：前两处在门清单
+  // 建档前就已存在，第三处是本轮产品修复新增的唯一门。
   "src/tenant-package.ts": {
-    'runAsTenant("platform"': 2,
+    'runAsTenant("platform"': 3,
     'runAsTenant("system"': 2,
   },
   "src/tenant/access.ts": { 'runAsTenant("platform"': 1 },

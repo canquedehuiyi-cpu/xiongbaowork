@@ -9,6 +9,7 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   ne,
   notInArray,
@@ -1225,6 +1226,56 @@ function personalStarterSeed(
   return { agents, channels, picked };
 }
 
+/*
+ * A package agent may not take a row somebody created — the same 4a-A1 rule as the connectors. A
+ * user-created Bot or a person's own profile on a package coworker is stamped with its owner's
+ * tenant, which the sync's `system` frame can neither see nor answer: the upserts below would hit
+ * that invisible conflict row and die as a bare 42501 from row-level security before the `!row`
+ * fallbacks could refuse. So who holds each declared id is asked once, in the platform frame — the
+ * only frame that sees every stamped row — and the sync refuses before anything is written, with
+ * the same sentence those fallbacks carry. The constraints and the `setWhere` guards below stay as
+ * the backstop behind this read; nothing here writes or returns another frame's rows.
+ */
+async function agentConflicts(
+  database: Database,
+  /** The agents this sync will write, in declaration order. */
+  agents: readonly { id: string }[],
+  /** The package row this sync writes against: a package-owned row is not a conflict. */
+  packageId: string,
+): Promise<{ agentIdConflicts: string[]; profileIdConflicts: string[] }> {
+  const agentIds = agents.map(({ id }) => id);
+  const [canonical, owned] = await runAsTenant("platform", async () =>
+    Promise.all([
+      database
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(
+          and(
+            inArray(agentTable.id, agentIds),
+            // `package_id` is nullable on a row somebody created by hand: SQL `<>` answers UNKNOWN
+            // against NULL, which would let the conflict row slip past this read and blow up as a
+            // bare 42501 at the upsert below anyway. A row no package owns is every package's
+            // collision, which is what the `setWhere` guard answers too.
+            or(isNull(agentTable.packageId), ne(agentTable.packageId, packageId)),
+          ),
+        ),
+      database
+        .select({ agentId: agentProfiles.agentId })
+        .from(agentProfiles)
+        .where(
+          and(
+            inArray(agentProfiles.agentId, agentIds),
+            isNotNull(agentProfiles.ownerUserId),
+          ),
+        ),
+    ]),
+  );
+  return {
+    agentIdConflicts: canonical.map(({ id }) => id),
+    profileIdConflicts: owned.map(({ agentId }) => agentId),
+  };
+}
+
 export async function synchronizeTenantPackage(
   database: Database,
   tenantPackage: LoadedTenantPackage,
@@ -1371,6 +1422,29 @@ export async function synchronizeTenantPackage(
         const omittedAgentIds = bundledPersonal
           ? tenantPackage.omittedAgentIds.filter((id) => id !== PICKED_HARNESS)
           : tenantPackage.omittedAgentIds;
+
+        /*
+         * Refused here, before any of the seeding writes: an agent id this sync will write that a
+         * user already created, or that already carries a person's own profile, throws the same
+         * sentence the upserts' `!row` fallbacks carry -- see `agentConflicts` for why the read
+         * must be the platform frame. The transaction rolls back, so the deployment comes up
+         * refused rather than half-synchronised.
+         */
+        const { agentIdConflicts, profileIdConflicts } = await agentConflicts(
+          database,
+          agents,
+          deploymentPackage.id,
+        );
+        for (const agent of agents) {
+          if (agentIdConflicts.includes(agent.id))
+            throw new Error(
+              `Tenant package agent "${agent.id}" collides with a user-created agent`,
+            );
+          if (profileIdConflicts.includes(agent.id))
+            throw new Error(
+              `Tenant package agent "${agent.id}" collides with a user-owned profile`,
+            );
+        }
 
         if (personal?.picked && !freshPersonal) {
           const { picked } = personal;
