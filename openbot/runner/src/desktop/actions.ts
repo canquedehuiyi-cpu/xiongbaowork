@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import {
   DESKTOP_ACTIONS,
   DESKTOP_LIMITS,
@@ -19,6 +18,7 @@ import {
   DesktopHelperError,
   defaultHelperSpec,
 } from "./host";
+import { scrub } from "./scrub";
 
 /**
  * `desktop.windows` and `desktop.snapshot` (docs/specs/2026-11-07-desktop-control.md, Phase 1: read
@@ -64,52 +64,6 @@ const fail = (error: string): ActionOutcome => ({ ok: false, error });
 function clip(value: unknown, max: number): string {
   const text = typeof value === "string" ? value : "";
   return text.length > max ? text.slice(0, max) : text;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** The names this account goes by on this machine: its user name and its home folder's last segment. */
-function accountNames(): string[] {
-  const names = new Set<string>();
-  const add = (value: string | undefined) => {
-    const name = value?.trim();
-    if (name && name.length >= 2) names.add(name);
-  };
-  add(process.env.USERNAME);
-  add(process.env.USER);
-  for (const home of [process.env.HOME, process.env.USERPROFILE]) {
-    add(home?.split(/[\\/]/).filter(Boolean).pop());
-  }
-  try {
-    add(homedir().split(/[\\/]/).filter(Boolean).pop());
-  } catch {
-    // No home folder to learn a name from.
-  }
-  return [...names];
-}
-
-/**
- * The helper's stderr tail with every file path and the account's name taken out, so neither leaves
- * the device in an error message.
- */
-function scrub(text: string): string {
-  let out = text
-    // C:\dir\sub dir\file (folders may hold spaces; the last part ends at whitespace).
-    .replace(
-      /[A-Za-z]:[\\/](?:[^\\/:*?"<>|\r\n]+[\\/])*[^\s\\/:*?"<>|]*/g,
-      "<路径>",
-    )
-    // \\server\share\file
-    .replace(/\\\\[^\s"'<>|]+/g, "<路径>")
-    // /home/x/y, ~/x
-    .replace(/(?<![\w.:])(?:~|\/)(?:[^\s/"'<>|:]+\/)*[^\s/"'<>|:]*/g, (hit) =>
-      hit === "/" || hit === "~" ? hit : "<路径>",
-    );
-  for (const name of accountNames())
-    out = out.replace(new RegExp(escapeRegExp(name), "gi"), "<用户>");
-  return out;
 }
 
 /** A helper failure in the words the owner and the model read. Never `outcomeUnknown`. */

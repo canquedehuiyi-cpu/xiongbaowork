@@ -441,6 +441,36 @@ describe("agent-desktop CLI layer", () => {
     expect((await rejected(d.cli.run(["list-windows"]))).sent).toBe(false);
   });
 
+  test("the arguments run are the ones checked, even if the caller changes its array afterwards", async () => {
+    const { cli, log } = setup({});
+    const args = ["list-windows"];
+    const pending = cli.run(args);
+    args.splice(0, args.length, "mcp", "--trace", "x");
+    await pending;
+    const commands = log().map((e) => e.args);
+    expect(commands).toContainEqual(["list-windows"]);
+    expect(commands.flat()).not.toContain("mcp");
+    expect(commands.flat()).not.toContain("--trace");
+  });
+
+  test("a grandchild holding stdout open cannot hold the queue past the deadline", async () => {
+    const { cli, log } = setup({
+      commands: { "list-windows": { holdPipe: true } },
+    });
+    const started = Date.now();
+    const error = await rejected(
+      cli.run(["list-windows"], { timeoutMs: 1500 }),
+    );
+    expect(error).toBeInstanceOf(DesktopHelperError);
+    expect(error.code).toBe("timeout");
+    expect(Date.now() - started).toBeLessThan(5000);
+    const entry = log().find((e) => e.args[0] === "list-windows");
+    await Bun.sleep(200);
+    expect(alive(entry?.childPid ?? 0)).toBe(false);
+    // The queue moves on.
+    await cli.run(["list-displays"]);
+  });
+
   test("a command that follows a timeout starts only after the killed child is gone", async () => {
     const { cli, log } = setup({
       commands: { click: { delayMs: 30_000, spawnChild: true } },
