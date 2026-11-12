@@ -1119,3 +1119,10 @@ test("every device bundle fetches and verifies agent-desktop before tauri build"
     }
   }
 });
+
+// macOS 13 is the floor for the device app, and the release notes say so.
+test("release notes name macOS 13+ as the floor", () => {
+  const text = readFileSync(join(workflows, "device-release.yml"), "utf8");
+  expect(text).toContain("macOS 13+，Apple 芯片");
+  expect(text).not.toContain("macOS 11+");
+});

@@ -714,7 +714,7 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| \`${windows}\` | Windows 10/11 x64 | ${windows_state} |"
             if [ "$MACOS_SIGNED" != skipped ]; then
-              echo "| \`${macos}\` | macOS 11+，Apple 芯片 | ${macos_state} |"
+              echo "| \`${macos}\` | macOS 13+，Apple 芯片 | ${macos_state} |"
             fi
             echo "| \`${linux}\` | Ubuntu / Debian x64 | 不做代码签名，只提供 SHA256 校验和 |"
             echo
