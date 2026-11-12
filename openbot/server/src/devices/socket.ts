@@ -1,5 +1,5 @@
 import { isScreenFrameType } from "../../../shared/device-screen";
-import type { DeviceChannel } from "./channel";
+import type { DeviceChannel, DispatchTarget } from "./channel";
 import type { DeviceScreens } from "./screen";
 import { type DeviceOwner, type DeviceStore, reportedApps, reportedRoots } from "./store";
 
@@ -65,12 +65,52 @@ export function runnerClose(
   if (ws.data.connection) channel.detach(ws.data.connection);
 }
 
+// --- desktop control (sub-project 2) ---
+/**
+ * The owner's latest stop of a desktop session, as a heartbeat carries it once (plan Task 13): which
+ * Bot and person the session was for, and how it was stopped (`hotkey`, `mouse`, `button`). Untrusted
+ * input from the device; never a token.
+ */
+export type DesktopStoppedInfo = {
+  botId: string;
+  actorId: string;
+  reason: string;
+  at?: number;
+};
+
+export type RunnerMessageOptions = {
+  /** A heartbeat reported a desktop stop on this machine. Wired to the desktop write gate. */
+  onDesktopStopped?: (
+    target: DispatchTarget,
+    info: DesktopStoppedInfo,
+  ) => void | Promise<void>;
+};
+
+/** A heartbeat's `desktopStopped`, kept only when it has the shape the runner sends. */
+function desktopStoppedOf(value: unknown): DesktopStoppedInfo | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const { botId, actorId, reason, at } = value as Record<string, unknown>;
+  const text = (field: unknown): field is string =>
+    typeof field === "string" && field.length > 0 && field.length <= 200;
+  if (!text(botId) || !text(actorId) || typeof reason !== "string")
+    return undefined;
+  return {
+    botId,
+    actorId,
+    reason: reason.slice(0, 40),
+    ...(typeof at === "number" && Number.isFinite(at) ? { at } : {}),
+  };
+}
+// --- end desktop control ---
+
 export async function runnerMessage(
   ws: RunnerSocketLike,
   store: DeviceStore,
   channel: DeviceChannel,
   raw: string | Buffer | ArrayBuffer | Uint8Array,
   screens?: DeviceScreens,
+  options: RunnerMessageOptions = {},
 ): Promise<void> {
   /*
    * The live screen, before the database is asked anything.
@@ -121,6 +161,18 @@ export async function runnerMessage(
       reportedRoots(frame.roots),
       reportedApps(frame.apps),
     );
+    // --- desktop control (sub-project 2) ---
+    // The owner stopped a desktop session: forget it here and record it. A failure here never costs
+    // the beat its ack.
+    const stopped = desktopStoppedOf(frame.desktopStopped);
+    if (stopped && options.onDesktopStopped) {
+      try {
+        await options.onDesktopStopped({ tenantId, deviceId }, stopped);
+      } catch {
+        // Recorded or not, the device has already ended its session.
+      }
+    }
+    // --- end desktop control ---
     ws.send(JSON.stringify({ type: "ack" }));
     void channel.flush({ tenantId, deviceId }).catch(() => undefined);
     return;

@@ -121,6 +121,13 @@ export type ApprovalPolicyOutcome = {
     // --- desktop control (sub-project 2) ---
     /** 标题含敏感词的桌面窗口，读之前要问（设备端桌面查看 §4.2）。 */
     | "desktop_window"
+    /**
+     * 桌面会话（第 2 期）：没有会话时写动作先问开会话，只给「允许一次」；会话进行中，
+     * 「改动前先问」这一默认不再逐个问。
+     */
+    | "desktop_session"
+    /** 桌面写动作的逐次审批（第 2 期，Task 17）：只给「允许一次」。 */
+    | "desktop_action"
     // --- end desktop control ---
     /**
      * 删除、归档，或应用标为破坏性的工具：总是先问，且只能「允许一次」（见 `offersStandingRule`）。
@@ -209,8 +216,30 @@ export type ApprovalSubject = {
    * 只来自调用处，从不来自模型的参数；读窗口时缺了它，按「没能确认标题」处理，要审批。
    */
   desktop?: { title: string; sensitiveWord?: string };
+  /** 桌面写动作（第 2 期），只来自网关。session 为服务器所知的会话状态，从不来自模型参数。 */
+  desktopWrite?: {
+    session: "active" | "none";
+    action: DesktopWriteAction;
+    title?: string;
+    process?: string;
+    /** null：没能确认要操作的控件。 */
+    control?: { type: string; name: string } | null;
+    keys?: string;
+    newlineInSingleLine?: boolean;
+  };
   // --- end desktop control ---
 };
+// --- desktop control (sub-project 2) ---
+/** 桌面写动作（第 2 期）。 */
+export type DesktopWriteAction =
+  | "click"
+  | "type"
+  | "key"
+  | "focus"
+  | "launch"
+  | "clipboard_read"
+  | "clipboard_write";
+// --- end desktop control ---
 export type ApprovalCandidate = {
   actorId: string;
   botId: string;

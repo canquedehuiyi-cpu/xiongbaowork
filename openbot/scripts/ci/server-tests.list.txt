@@ -316,6 +316,7 @@ tests/deployment-model-metering.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
 tests/desktop-connection-failure.test.ts
 tests/desktop-gateway.test.ts
+tests/desktop-session.test.ts
 tests/desktop-tools.integration.test.ts
 tests/dev-actor-email.test.ts
 tests/dev-actor.integration.test.ts
