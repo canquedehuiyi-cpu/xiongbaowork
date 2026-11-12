@@ -1,6 +1,11 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
-import { desktopFloor } from "./desktop-policy";
+import {
+  activeDesktopSession,
+  type DesktopFloor,
+  desktopFloors,
+  desktopOnceOnly,
+} from "./desktop-policy";
 import {
   type ActionKind,
   type ActionKindPolicy,
@@ -1886,6 +1891,7 @@ export async function decideAction(input: {
     // --- end app discovery ---
     // --- desktop control (sub-project 2) ---
     | { source: "desktop_window"; reason: string }
+    | DesktopFloor
     // --- end desktop control ---
     | undefined =
     securityFloor(
@@ -1923,15 +1929,41 @@ export async function decideAction(input: {
       : undefined) ??
   // --- end app discovery ---
     // --- desktop control (sub-project 2) ---
-    desktopFloor(candidate);
+    /*
+     * The window floor, then the session floor (`desktopFloor ?? desktopSessionFloor`). Task 17's
+     * per-action floor joins inside `desktopFloors`, before the session floor (see there).
+     */
+    desktopFloors(candidate);
   // --- end desktop control ---
-  const decided = await decideByRules(input, matched);
+  const ruled = await decideByRules(input, matched);
+  // --- desktop control (sub-project 2) ---
+  /*
+   * In a desktop session the device holds now, the person's "ask before changes" default does not
+   * ask about each write (design decision 6). Only that default: a rule that asks, the reviewer, a
+   * hand-off or a refusal keep their answer, and every floor below still raises.
+   */
+  const decided: ApprovalPolicyOutcome =
+    ruled.behaviour === "ask" &&
+    ruled.source === "default" &&
+    activeDesktopSession(candidate)
+      ? {
+          behaviour: "allow",
+          source: "desktop_session",
+          reason: "桌面会话进行中。",
+          ...(ruled.review ? { review: ruled.review } : {}),
+        }
+      : ruled;
+  // --- end desktop control ---
   // A floor only raises: an action the rules let through still asks; one already asked about or
   // handed off keeps the stricter answer it had. 只给「允许一次」的底线（删除类、对外发送、分享、
   // 公开发布）多做一步：规则、偏好或审查本来就要问的，也改记为这条底线，卡片才不会给出一条存了也
   // 永远用不上的「总是允许」或「在这段对话里都允许」；原来的理由接在后面保留。
+  // --- desktop control (sub-project 2): the desktop's once-only floors (a session) are restated too ---
   const restated =
-    floor !== undefined && floor === onceOnly && decided.behaviour === "ask";
+    floor !== undefined &&
+    (floor === onceOnly || desktopOnceOnly(floor)) &&
+    decided.behaviour === "ask";
+  // --- end desktop control ---
   const outcome: ApprovalPolicyOutcome =
     floor && (decided.behaviour === "allow" || restated)
       ? {
