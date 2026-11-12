@@ -1,10 +1,11 @@
 /**
- * The desktop-viewing protocol the runner and the server share (docs/specs/2026-11-07-desktop-control.md,
- * Phase 1: read only).
+ * The desktop-control protocol the runner and the server share (docs/specs/2026-11-07-desktop-control.md,
+ * Phase 1; docs/specs/2026-11-12-desktop-write-agent-desktop.md, Phase 2).
  *
- * READ ONLY. There are exactly two actions, `desktop.windows` and `desktop.snapshot`. Nothing here
- * names a click, a keystroke, a launch or a focus change, and nothing should: a write action is a
- * later spec revision, not a new entry in this set.
+ * Two read actions, `desktop.windows` and `desktop.snapshot`, and three session actions
+ * (`desktop.session_start`, `desktop.session_status`, `desktop.session_end`, plan Task 13): the
+ * device owns the desktop session, so the server hands it a token and asks it what is current. A
+ * write action joins this set only with the spec revision that brings it.
  *
  * The Chinese copy is the spec's §5 and the plan's design decision 8, word for word. The server
  * shows it to the owner and the model as it stands.
@@ -16,6 +17,9 @@ export const DESKTOP_ACTION_PREFIX = "desktop.";
 export const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
   "desktop.windows",
   "desktop.snapshot",
+  "desktop.session_start",
+  "desktop.session_status",
+  "desktop.session_end",
 ]);
 
 export const DESKTOP_LIMITS = {
@@ -46,6 +50,14 @@ export const DESKTOP_LIMITS = {
   adIdleWipeMs: 600_000,
   /** Window ids the runner keeps a mapping for; the oldest is dropped beyond this. */
   windowIdsKept: 200,
+  /** A desktop session ends after this long without a write. */
+  sessionIdleMs: 900_000,
+  /** And after this long in all, however busy. */
+  sessionMaxMs: 3_600_000,
+  /** How long the runner waits for the device to pause its mouse check before a `--headed` step. */
+  headedAckMs: 1_000,
+  /** How long a new session waits for the device's banner, stop key and mouse check to be up. */
+  sessionReadyMs: 2_000,
 } as const;
 
 /** The agent-desktop release the runner is built against; any other version is refused. */
@@ -86,6 +98,14 @@ export type DesktopErrorCode =
   | "policy_denied"
   | "ambiguous"
   | "not_actionable"
+  | "stopped"
+  | "session_expired"
+  | "no_session"
+  | "no_control_channel"
+  | "headed_unconfirmed"
+  | "read_only_linux"
+  | "read_only_windows"
+  | "guard_unready"
   | "failed";
 
 /** The Chinese text for a desktop failure. `detail` is the stderr tail, seconds, word or details. */
@@ -124,6 +144,22 @@ export function desktopMessage(
       return "这个控件没有可识别的名字，无法确定要操作哪一个。";
     case "not_actionable":
       return "这个控件不能直接操作，请换一个控件或用快捷键。";
+    case "stopped":
+      return "用户已停止桌面操作，需要重新获得授权。";
+    case "session_expired":
+      return "桌面会话已结束（15 分钟没有操作或已满 60 分钟），需要重新获得授权。";
+    case "no_session":
+      return "没有进行中的桌面会话，需要重新获得授权。";
+    case "no_control_channel":
+      return "只有在设备端应用里运行时才能操作桌面（需要提示条和停止键）。";
+    case "headed_unconfirmed":
+      return "设备端没有确认暂停『动鼠标即停』，为安全起见没有执行这一步。";
+    case "read_only_linux":
+      return "这台 Linux 电脑目前只能查看，不能操作界面。";
+    case "read_only_windows":
+      return "这台 Windows 电脑暂时只能查看，操作界面的功能还在验收。";
+    case "guard_unready":
+      return "设备端没能显示提示条或注册停止键，为安全起见没有开始操作。";
     case "failed":
       return detail ? `桌面操作没有成功：${detail}` : "桌面操作没有成功。";
   }

@@ -28,6 +28,13 @@ import {
 // --- desktop control (sub-project 2) ---
 import type { DesktopEngine } from "../../shared/desktop-control";
 import { createDesktopActions, desktopEngineFor } from "./desktop/actions";
+import {
+  type ControlChannel,
+  createControlChannel,
+  linesOf,
+  NO_CONTROL,
+} from "./desktop/control";
+import { createDesktopSessions, type DesktopSessions } from "./desktop/session";
 // --- end desktop control ---
 import { createRunnerDispatcher } from "./dispatch";
 // --- app discovery (sub-project 3) ---
@@ -89,6 +96,8 @@ export type Options = {
     engine?: DesktopEngine;
     /** agent-desktop's private state directory, emptied when the runner stops. */
     stateDir: string;
+    /** `stdio` when the device app started this runner and talks to it over stdin and stdout. */
+    control?: "stdio";
   };
   // --- end desktop control ---
 };
@@ -147,6 +156,11 @@ function desktopOptions(
     : undefined;
   if (helperFlag === "") return "--desktop-helper needs a path.";
   const helper = helperFlag || env[DESKTOP_HELPER_ENV]?.trim() || "";
+  const control = args.has("desktop-control")
+    ? args.get("desktop-control")?.trim()
+    : undefined;
+  if (control !== undefined && control !== "stdio")
+    return "--desktop-control must be stdio.";
   return {
     helper: helper
       ? resolve(cwd, helper)
@@ -156,7 +170,22 @@ function desktopOptions(
         ),
     ...(engine ? { engine: engine as DesktopEngine } : {}),
     stateDir: desktopStateDir(dataDir),
+    ...(control ? { control } : {}),
   };
+}
+
+/**
+ * The channel to the device app: its lines on stdin (UTF-8, split on `\n`) and ours on stdout, when
+ * it started this runner with `--desktop-control stdio`. Otherwise none, and no session can start.
+ */
+export function desktopControlFor(
+  options: Pick<Options, "desktop">,
+): ControlChannel {
+  if (options.desktop.control !== "stdio") return NO_CONTROL;
+  return createControlChannel({
+    lines: linesOf(process.stdin),
+    write: (line) => console.log(line),
+  });
 }
 // --- end desktop control ---
 
@@ -190,6 +219,8 @@ function usage(): string {
     "  --desktop-helper PATH      the agent-desktop binary (default: next to this runner).",
     "                             Also read from OPENBOT_DESKTOP_HELPER.",
     "  --desktop-engine NAME      legacy | agent-desktop, on Windows. Also read from OPENBOT_DESKTOP_ENGINE.",
+    "  --desktop-control stdio    set by the device app that starts this runner: its banner and stop key",
+    "                             talk to the runner over stdin and stdout. Without it nothing is written.",
     "",
     "A headless browser is a browser nobody is watching: it cannot be closed by hand when it goes",
     "wrong, and a site that asks you to prove you are a person has nobody to answer. Leave it off.",
@@ -786,17 +817,52 @@ async function pair(options: Options, deviceId: string): Promise<string> {
  *
  * Carried on every beat rather than once, so a folder added or removed with `--add-root` while this
  * runs reaches the owner's screen within one interval, without a restart.
+ *
+ * `desktopStopped` is the owner's latest stop of a desktop session, carried once (Task 13).
  */
 export function heartbeatFrame(
   roots: Pick<RootRegistry, "reported">,
   apps?: Pick<ReturnType<typeof createAppRegistry>, "reported">,
+  desktopStopped?: {
+    botId: string;
+    actorId: string;
+    reason: string;
+    at: number;
+  },
 ): string {
   return JSON.stringify({
     type: "heartbeat",
     roots: roots.reported(),
     ...(apps ? { apps: apps.reported() } : {}),
+    ...(desktopStopped ? { desktopStopped } : {}),
   });
 }
+
+/**
+ * Sends one heartbeat. The desktop stop it carries is handed back when the send throws, so the next
+ * beat on the next connection still reports it; the throw goes on to the caller.
+ */
+export function sendHeartbeat(
+  send: (frame: string) => void,
+  roots: Pick<RootRegistry, "reported">,
+  apps: Pick<ReturnType<typeof createAppRegistry>, "reported"> | undefined,
+  sessions: Pick<DesktopSessions, "takeStopped" | "returnStopped">,
+): void {
+  const stopped = sessions.takeStopped();
+  try {
+    send(heartbeatFrame(roots, apps, stopped));
+  } catch (error) {
+    if (stopped) sessions.returnStopped(stopped);
+    throw error;
+  }
+}
+
+/** The desktop session's part in the heartbeat: what to report, and a beat sent at once on a stop. */
+type DesktopBeat = {
+  sessions: Pick<DesktopSessions, "takeStopped" | "returnStopped">;
+  /** Set while a connection is up. */
+  now?: () => void;
+};
 
 /**
  * One connection's life, resolved when the socket closes.
@@ -814,6 +880,7 @@ function connect(
   browser: RunnerBrowser,
   roots: RootRegistry,
   apps: ReturnType<typeof createAppRegistry>,
+  desktop: DesktopBeat,
 ): Promise<void> {
   return new Promise((resolve) => {
     const url = `${options.server.replace(/^http/, "ws")}/api/runner/ws?token=${encodeURIComponent(token)}`;
@@ -833,6 +900,7 @@ function connect(
 
     const stop = () => {
       if (beat) clearInterval(beat);
+      desktop.now = undefined;
       void screens.stopAll();
       // Said once per connection that was up. A desktop shell reads these lines for its tray
       // (desktop-device/src-tauri/src/supervise.rs `classify`): without it, a dropped connection would
@@ -852,14 +920,21 @@ function connect(
     socket.addEventListener("open", () => {
       open = true;
       console.log(`runner: connected as ${deviceId}`);
-      socket.send(heartbeatFrame(roots, apps));
-      beat = setInterval(() => {
+      const sendBeat = () => {
         try {
-          socket.send(heartbeatFrame(roots, apps));
+          sendHeartbeat(
+            (frame) => socket.send(frame),
+            roots,
+            apps,
+            desktop.sessions,
+          );
         } catch {
           stop();
         }
-      }, options.intervalMs);
+      };
+      sendBeat();
+      beat = setInterval(sendBeat, options.intervalMs);
+      desktop.now = sendBeat;
     });
     socket.addEventListener("message", (event) => {
       const text = String(event.data);
@@ -964,6 +1039,11 @@ export async function main(
     process.platform,
     parsed.desktop.engine,
   );
+  const desktopControl = desktopControlFor(parsed);
+  const desktopSessions = createDesktopSessions({ control: desktopControl });
+  const desktopBeat: DesktopBeat = { sessions: desktopSessions };
+  // After the sessions' own listener: the stop is recorded by the time this beat carries it.
+  desktopControl.onStop(() => desktopBeat.now?.());
   // --- end desktop control ---
   const executor = createRunnerExecutor(
     paths.workspaceDir,
@@ -985,6 +1065,8 @@ export async function main(
         ...(desktopEngine ? { engine: desktopEngine } : {}),
         helper: parsed.desktop.helper,
         stateDir: parsed.desktop.stateDir,
+        control: desktopControl,
+        sessions: desktopSessions,
       }),
       // --- end desktop control ---
     },
@@ -997,7 +1079,16 @@ export async function main(
   const dispatch = createRunnerDispatcher(journal, executor);
   let delay = 1_000;
   for (;;) {
-    await connect(parsed, token, deviceId, dispatch, browser, roots, apps);
+    await connect(
+      parsed,
+      token,
+      deviceId,
+      dispatch,
+      browser,
+      roots,
+      apps,
+      desktopBeat,
+    );
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, 30_000);
   }

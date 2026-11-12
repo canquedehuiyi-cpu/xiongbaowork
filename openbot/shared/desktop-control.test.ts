@@ -44,8 +44,11 @@ describe("desktop-control protocol", () => {
     expect(desktopMessage("failed", "boom")).toBe("桌面操作没有成功：boom");
   });
 
-  test("only the two read actions exist", () => {
+  test("the two read actions and the three session actions exist, nothing else", () => {
     expect([...DESKTOP_ACTIONS].sort()).toEqual([
+      "desktop.session_end",
+      "desktop.session_start",
+      "desktop.session_status",
       "desktop.snapshot",
       "desktop.windows",
     ]);
@@ -69,6 +72,10 @@ describe("desktop-control protocol", () => {
       adSnapshotTimeoutMs: 10_000,
       adIdleWipeMs: 600_000,
       windowIdsKept: 200,
+      sessionIdleMs: 900_000,
+      sessionMaxMs: 3_600_000,
+      headedAckMs: 1_000,
+      sessionReadyMs: 2_000,
     });
   });
 
@@ -164,6 +171,35 @@ describe("desktop-control protocol", () => {
     }
     // An agent id is not a legacy `w<hwnd>-<pid>`.
     expect(parseWindowId("a0123456789abcdef")).toBeUndefined();
+  });
+
+  test("the session codes carry the plan's and the spec's copy", () => {
+    const copy: Array<[Parameters<typeof desktopMessage>[0], string]> = [
+      ["stopped", "用户已停止桌面操作，需要重新获得授权。"],
+      [
+        "session_expired",
+        "桌面会话已结束（15 分钟没有操作或已满 60 分钟），需要重新获得授权。",
+      ],
+      ["no_session", "没有进行中的桌面会话，需要重新获得授权。"],
+      [
+        "no_control_channel",
+        "只有在设备端应用里运行时才能操作桌面（需要提示条和停止键）。",
+      ],
+      [
+        "headed_unconfirmed",
+        "设备端没有确认暂停『动鼠标即停』，为安全起见没有执行这一步。",
+      ],
+      ["read_only_linux", "这台 Linux 电脑目前只能查看，不能操作界面。"],
+      [
+        "read_only_windows",
+        "这台 Windows 电脑暂时只能查看，操作界面的功能还在验收。",
+      ],
+      [
+        "guard_unready",
+        "设备端没能显示提示条或注册停止键，为安全起见没有开始操作。",
+      ],
+    ];
+    for (const [code, text] of copy) expect(desktopMessage(code)).toBe(text);
   });
 
   test("desktopPlatformOf maps win32, darwin, linux and nothing else", () => {
