@@ -55,7 +55,14 @@ const WIRE_HEADERS = [
 // spelled here, so renaming the company moves the expected line with it instead of failing on a stale literal.
 const { tenant } = parse(
   readFileSync(join(REPO, "examples/xiongbao/brand.yaml"), "utf8"),
-) as { tenant: { product_name: string; company_name?: string } };
+) as {
+  tenant: {
+    product_name: string;
+    english_name?: string;
+    short_name?: string;
+    company_name?: string;
+  };
+};
 const COPYRIGHT = `Copyright (c) 2026 ${tenant.company_name ?? tenant.product_name}; portions Copyright (c) 2026 CopilotKit (MIT)`;
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -387,6 +394,120 @@ describe("the rules do not hide names", () => {
       "* Always say OpenBot",
       "`;",
     ]);
+  });
+});
+
+/*
+ * The upstream names above are one leak; the current product's own names are the other. Copy that
+ * spells 熊宝 out stays 熊宝 when another tenant package is mounted, so the product would ship under
+ * someone else's name. The names come from the delivered package itself, so a renamed package moves
+ * the rule with it. Only app/src and server/src are held to it: the Recorder extension and the Tauri
+ * config cannot call the brand exit and keep their own constants by ruling.
+ */
+const CURRENT_NAMES = [
+  ...new Set(
+    [
+      tenant.product_name,
+      tenant.english_name,
+      tenant.short_name ?? "熊宝",
+    ].filter((name): name is string => Boolean(name)),
+  ),
+];
+// Case-insensitive so "xiongbao work" in a sentence counts as the English name too.
+const CURRENT_NAME = new RegExp(CURRENT_NAMES.map(escapeRegExp).join("|"), "i");
+
+const NAME_EXEMPT_PATHS: { test: (path: string) => boolean; reason: string }[] =
+  [
+    ...EXEMPT_PATHS,
+    {
+      test: (p) => p === "app/src/lib/brand.ts",
+      reason: "the web brand exit itself",
+    },
+  ];
+
+function nameFindings(): Finding[] {
+  const files = [
+    ...walk(join(REPO, "app/src")),
+    ...walk(join(REPO, "server/src")),
+  ]
+    .map((file) => relative(REPO, file))
+    .filter((path) => !NAME_EXEMPT_PATHS.some((exempt) => exempt.test(path)));
+  const found: Finding[] = [];
+  for (const file of files) {
+    for (const { line, number } of codeLines(
+      readFileSync(join(REPO, file), "utf8"),
+      /\.(ts|tsx|js|mjs|cjs|jsx)$/.test(file),
+    )) {
+      if (CURRENT_NAME.test(line))
+        found.push({ file, number, line: line.trim() });
+    }
+  }
+  return found;
+}
+
+const NAME_ALLOWLIST: AllowEntry[] = JSON.parse(
+  readFileSync(
+    new URL("./product-name-allowlist.json", import.meta.url),
+    "utf8",
+  ),
+);
+
+describe("the current product name comes from the brand exit", () => {
+  const all = nameFindings();
+
+  test("the package names are what the rule looks for", () => {
+    expect(CURRENT_NAMES).toEqual(["熊宝数字员工", "XiongBao Work", "熊宝"]);
+  });
+
+  test("every allowlist entry's text itself carries a current name, so it names the hit", () => {
+    expect(
+      NAME_ALLOWLIST.filter((entry) => !CURRENT_NAME.test(entry.text)),
+    ).toEqual([]);
+  });
+
+  test("allowlist entries name a known category and a note", () => {
+    const bad = NAME_ALLOWLIST.filter((entry) => {
+      const [category, note] = entry.reason.split(/:\s*/, 2);
+      return (
+        !CATEGORIES.includes(category as (typeof CATEGORIES)[number]) ||
+        !note?.trim()
+      );
+    });
+    expect(bad).toEqual([]);
+  });
+
+  test("no literal product name in app/src or server/src outside the brand exits and the allowlist", () => {
+    const unexplained = all
+      .filter(
+        (f) =>
+          !NAME_ALLOWLIST.some(
+            (entry) => entry.file === f.file && f.line.includes(entry.text),
+          ),
+      )
+      .map((f) => `${f.file}:${f.number}: ${f.line}`);
+    expect(unexplained).toEqual([]);
+  });
+
+  test("every allowlist entry still matches a finding, so the list only shrinks", () => {
+    const stale = NAME_ALLOWLIST.filter(
+      (entry) =>
+        !all.some((f) => f.file === entry.file && f.line.includes(entry.text)),
+    ).map((entry) => `${entry.file}: ${entry.text}`);
+    expect(stale).toEqual([]);
+  });
+
+  test("a JSX text node naming the product is reported", () => {
+    const source = "<p>欢迎使用熊宝</p>";
+    expect(codeLines(source).length).toBe(1);
+    expect(CURRENT_NAME.test(source)).toBe(true);
+  });
+
+  test("the English name is reported whatever its case", () => {
+    expect(CURRENT_NAME.test('title: "Welcome to xiongbao work",')).toBe(true);
+  });
+
+  test("a call to the brand exit is not reported", () => {
+    expect(CURRENT_NAME.test("<p>欢迎使用{shortName()}</p>")).toBe(false);
   });
 });
 
