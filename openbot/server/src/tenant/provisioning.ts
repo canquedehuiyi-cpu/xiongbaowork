@@ -9,7 +9,6 @@ import {
   pluginGrants,
   subscriptions,
 } from "../db/schema";
-import { ownerAppsAllowed } from "../plugins/owner-grants";
 import { runAsTenant } from "./context";
 
 /**
@@ -58,6 +57,10 @@ export async function staffingDefaultAllowed(
     .where(eq(mcpServers.catalogueKey, "staffing"));
   if (rows.length === 0) return false;
   if (rows.some((row) => row.ownerGrants === "admin")) return false;
+  // Loaded here rather than at the top: this module is imported by the tenant-package loader that
+  // `scripts/generate-app-config.ts` runs at image build time, and owner-grants pulls in the admin
+  // controls and the computer egress policy, which the app build stage does not ship.
+  const { ownerAppsAllowed } = await import("../plugins/owner-grants");
   return ownerAppsAllowed(userId);
 }
 
