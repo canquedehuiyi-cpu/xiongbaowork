@@ -180,6 +180,7 @@ export function renderManifestYaml(manifest: readonly ManifestEntry[]): string {
   const rows = manifest.map((entry) => ({
     kind: entry.kind,
     slug: entry.slug,
+    ...(entry.slug_source === undefined ? {} : { slug_source: entry.slug_source }),
     source: entry.source,
     source_url: entry.source_url,
     source_version: entry.source_version,

@@ -27,6 +27,7 @@ import {
   splitFrontmatter,
 } from "./normalize";
 import { TENANT_SLUG_MAX, TENANT_SLUG_PATTERN } from "./mapping";
+import { SourceLayoutError } from "./read-workbuddy";
 import type {
   PluginJson,
   RawConnector,
@@ -199,8 +200,7 @@ describe("slug rules", () => {
     expect(result.conflicts[0].resolution).toHaveLength(3);
   });
 
-  test("a user-level skill keeps the bare slug when it collides with a package-bundled one", () => {
-    const result = normalizeCapabilities(
+  test("a user-level skill keeps the bare slug when it collides with a package-bundled one", () => {    const result = normalizeCapabilities(
       snapshot({
         userSkills: [userSkill("github", "---\nname: github\n---\n\nuser body\n")],
         packages: [
@@ -282,6 +282,74 @@ describe("package deduplication", () => {
     expect(result.skills.map((skill) => skill.slug)).toEqual(["engineering-workflow"]);
     expect(result.agents[0].provenance.sourceUrl).toContain("engineering-workflow-skills");
     expect(result.dropped.some((item) => item.origin.includes("ex_eqoqYRT1NIwb"))).toBe(true);
+  });
+});
+
+describe("slug provenance", () => {
+  /** One package shipping one skill, with a distinguishable agent body so packages never dedupe. */
+  function onePackage(packageDirName: string, skillDir: string, body: string): RawExpertPackage {
+    return expertPackage({
+      dirName: packageDirName,
+      plugin: {
+        name: packageDirName,
+        expertType: "agent",
+        agentName: `${packageDirName}-agent`,
+        skills: [`./skills/${skillDir}`],
+      },
+      agents: [{ id: `${packageDirName}-agent`, text: `# ${packageDirName}\n` }],
+      skills: [packageSkill(packageDirName, skillDir, `---\nname: ${skillDir}\n---\n\n${body}\n`)],
+    });
+  }
+
+  test("each of the first four rules labels the row it produced", () => {
+    const result = normalizeCapabilities(
+      snapshot({
+        userSkills: [
+          userSkill("unique-name", "---\nname: unique-name\n---\n\nbody\n"),
+          userSkill("dev-expert__skillhub", "---\nname: dev-expert\n---\n\nA\n"),
+          userSkill("dev-expert__indiv-weishui__skillhub", "---\nname: dev-expert\n---\n\nB\n"),
+        ],
+        // 49 characters with the prefix, so this one has to fall back to its bare directory name.
+        packages: [onePackage("engineering-workflow-skills", "engineering-workflow", "C")],
+      }),
+    );
+    const sourceOf = (slug: string) => result.skills.find((skill) => skill.slug === slug)?.slugSource;
+    expect(sourceOf("unique-name")).toBe("raw");
+    expect(sourceOf("dev-expert--skillhub")).toBe("dechannel");
+    expect(sourceOf("engineering-workflow")).toBe("bare");
+    // The package prefix fits, so the ordinary rule applies.
+    const withPrefix = normalizeCapabilities(
+      snapshot({ packages: [onePackage("demo-expert", "design-html", "D")] }),
+    );
+    expect(withPrefix.skills[0].slug).toBe("demo-expert--design-html");
+    expect(withPrefix.skills[0].slugSource).toBe("package_prefix");
+  });
+
+  test("a hash is the last resort, and only when the bare name is already taken", () => {
+    // Two packages whose prefixes both overflow, shipping a skill with the same directory name: the first
+    // gets the bare name, the second has nowhere left to go.
+    const result = normalizeCapabilities(
+      snapshot({
+        packages: [
+          onePackage("a".repeat(40), "shared-skill-dir", "one"),
+          onePackage("b".repeat(40), "shared-skill-dir", "two"),
+        ],
+      }),
+    );
+    const [first, second] = [...result.skills].sort((a, b) => a.slug.localeCompare(b.slug));
+    expect(first.slug).toBe("shared-skill-dir");
+    expect(first.slugSource).toBe("bare");
+    expect(second.slugSource).toBe("hashed");
+    expect(second.slug).not.toBe(first.slug);
+    expect(result.skills.every((skill) => TENANT_SLUG_PATTERN.test(skill.slug))).toBe(true);
+  });
+
+  test("the seed is the source identity, so editing the body cannot rename the skill", () => {
+    const before = normalizeCapabilities(snapshot({ packages: [onePackage("a".repeat(40), "shared", "first body")] }));
+    const after = normalizeCapabilities(snapshot({ packages: [onePackage("a".repeat(40), "shared", "edited body")] }));
+    expect(before.skills[0].slug).toBe("shared");
+    expect(after.skills[0].slug).toBe("shared");
+    expect(before.skills[0].slugSource).toBe(after.skills[0].slugSource);
   });
 });
 
@@ -686,5 +754,42 @@ describe("id uniqueness", () => {
       agents: [{ id: "same", text: "# two\n" }],
     });
     expect(() => normalizeCapabilities(snapshot({ packages: [one, two] }))).toThrow(/duplicate agent id/);
+  });
+});
+
+describe("empty sources", () => {
+  // A zero-byte or whitespace-only `SKILL.md` used to survive normalisation and become a skill whose
+  // `instructions` were empty — a capability that reads downstream as "the model has nothing to do".
+  // `--verify` caught it, but only after the package was written and without saying which source it
+  // came from. These three shapes all have to stop the run, naming the skill.
+  const cases: { name: string; text: string }[] = [
+    { name: "0 字节的 SKILL.md", text: "" },
+    { name: "只有空白的 SKILL.md", text: "  \r\n\n\t \n" },
+    { name: "只有 front matter、没有正文的 SKILL.md", text: "---\nname: empty-body\n---\n" },
+  ];
+
+  for (const item of cases) {
+    test(`${item.name} 在归一化阶段就报错`, () => {
+      const skill = userSkill("empty-body", item.text);
+      let thrown: unknown;
+      try {
+        normalizeCapabilities(snapshot({ userSkills: [skill] }));
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(SourceLayoutError);
+      const message = (thrown as Error).message;
+      // The slug says which capability broke; the absolute path says which file to fix. The path is
+      // diagnostic only and never reaches an emitted artifact.
+      expect(message).toContain("empty-body");
+      expect(message).toContain("/abs/skills/empty-body/SKILL.md");
+    });
+  }
+
+  test("正文非空的技能不受影响", () => {
+    const skill = userSkill("has-body", "---\nname: has-body\n---\n\n# Body\n");
+    const result = normalizeCapabilities(snapshot({ userSkills: [skill] }));
+    expect(result.skills).toHaveLength(1);
+    expect(result.skills[0].instructions).toBe("# Body");
   });
 });

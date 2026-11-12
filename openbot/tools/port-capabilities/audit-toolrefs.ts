@@ -58,6 +58,20 @@ export function lineAt(text: string, index: number): string {
   return text.slice(start, end === -1 ? text.length : end);
 }
 
+/**
+ * The matched text plus the rest of its line — what the audit table's "命中的引用" column shows.
+ *
+ * It starts *at the match* rather than at the start of the line. A cell that begins forty characters
+ * before the interesting token makes the reviewer hunt for it, and the one question that column has to
+ * answer is "which substring tripped this rule": `node junction` sitting in "用 node junction，不要用
+ * mklink" is immediately recognisable as prose, while the same line truncated from the left is not.
+ */
+export function excerptAt(text: string, index: number): string {
+  const rest = text.slice(index);
+  const end = rest.indexOf("\n");
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
 /** Pattern for an MCP tool reference. Group 1 is the server id, group 2 the tool name. */
 const MCP_REFERENCE = /mcp__([\w-]+)__([\w-]+)/;
 
@@ -111,14 +125,17 @@ function evaluateRule(
   const hits: AuditHit[] = [];
   const seen = new Set<string>();
   for (const match of matchAll(capability.instructions, pattern)) {
-    // A rule may match its leading whitespace (a command on the line after a fence), so the sample is
+    // A rule may match its leading whitespace (a command on the line after a fence), so the excerpt is
     // taken from where the interesting text starts rather than from where the match happens to begin.
     const leading = match[0].length - match[0].replace(/^\s+/, "").length;
-    const sample = shortenSample(lineAt(capability.instructions, match.index + leading));
-    if (seen.has(sample)) {
+    const sample = shortenSample(excerptAt(capability.instructions, match.index + leading));
+    // Dedupe on the matched text, not on the excerpt: the excerpt now runs to the end of its line, so two
+    // hits on one line (`Bash(a). … Bash(a)`) would look different while being the same offence.
+    const token = match[0].trim();
+    if (seen.has(token)) {
       continue;
     }
-    seen.add(sample);
+    seen.add(token);
     hits.push({ ruleId: rule.id, level: rule.level, sample, reason: rule.reason });
   }
   return hits;

@@ -20,7 +20,7 @@
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { existsSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 /** Directory names below the WorkBuddy home. Kept here so every caller agrees on the layout. */
 export const WORKBUDDY_LAYOUT = {
@@ -210,15 +210,37 @@ function isFile(path: string): boolean {
   }
 }
 
-function listDirectories(path: string): string[] {
+/**
+ * `readdir` with the two failures that mean "nothing here" turned into an empty list.
+ *
+ * An absent directory is the ordinary case — a WorkBuddy home may legitimately have no `skills/` and no
+ * `plugins/`, and callers read that as "none of this category". Any *other* failure (`EACCES`, `EPERM`,
+ * `EIO`, …) is not ordinary: swallowing it would turn a present-but-unreadable category into an empty one,
+ * and the run would report success while emitting an incomplete package. Those surface as
+ * `SourceLayoutError` with the absolute path and the errno code, so the operator can tell the two apart.
+ *
+ * Shared by {@link listDirectories} and {@link directorySize} so the two cannot drift: a silently-zero
+ * `refs_bytes` would look exactly like a skill that ships no `references/`, and P2 decides whether an
+ * attachment needs paging from that number.
+ */
+function readDirOrThrow(path: string): ReturnType<typeof readdirSync> {
   try {
-    return readdirSync(path, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort();
-  } catch {
-    return [];
+    return readdirSync(path, { withFileTypes: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? "UNKNOWN";
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      return [];
+    }
+    throw new SourceLayoutError(`读取目录失败：${toPosix(resolve(path))}（${code}）`);
   }
+}
+
+/** Directory names under `path`, sorted. See {@link readDirOrThrow} for the failure policy. */
+function listDirectories(path: string): string[] {
+  return readDirOrThrow(path)
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
 }
 
 /**
@@ -230,13 +252,7 @@ function listDirectories(path: string): string[] {
  */
 export function directorySize(path: string): number {
   let total = 0;
-  let entries: ReturnType<typeof readdirSync>;
-  try {
-    entries = readdirSync(path, { withFileTypes: true });
-  } catch {
-    return 0;
-  }
-  for (const entry of entries) {
+  for (const entry of readDirOrThrow(path)) {
     const child = join(path, entry.name);
     if (entry.isDirectory()) {
       total += directorySize(child);

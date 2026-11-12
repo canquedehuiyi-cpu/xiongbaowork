@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { readConnector, readWorkBuddy, SourceLayoutError } from "./read-workbuddy";
+import { readConnector, readUserSkills, readWorkBuddy, SourceLayoutError } from "./read-workbuddy";
 
 const root = mkdtempSync(join(tmpdir(), "port-capabilities-read-"));
 
@@ -196,6 +196,19 @@ describe("readWorkBuddy failure modes", () => {
       expect(() => readWorkBuddy({ sourceRoot: broken })).toThrow(/not valid JSON/);
     } finally {
       rmSync(broken, { recursive: true, force: true });
+    }
+  });
+
+  test("treats a missing category as empty, and a file where a directory belongs as empty too", () => {
+    // ENOENT and ENOTDIR are the two ordinary shapes: a home that never had the category, and one where
+    // the name is taken by a stray file. Both mean "no capabilities here", so neither may stop the run.
+    const odd = mkdtempSync(join(tmpdir(), "port-capabilities-notdir-"));
+    try {
+      expect(readUserSkills(odd)).toEqual([]);
+      writeFileSync(join(odd, "skills"), "not a directory\n", "utf8");
+      expect(readUserSkills(odd)).toEqual([]);
+    } finally {
+      rmSync(odd, { recursive: true, force: true });
     }
   });
 });

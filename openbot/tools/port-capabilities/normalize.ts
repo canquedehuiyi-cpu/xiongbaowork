@@ -29,6 +29,7 @@ import {
   TENANT_SLUG_MAX,
   UNSPECIFIED_LICENSE,
 } from "./mapping";
+import { SourceLayoutError } from "./read-workbuddy";
 import type {
   PluginJson,
   PluginMember,
@@ -103,6 +104,14 @@ export interface NormalizedTeam {
 /** A ported skill. */
 export interface NormalizedSkill {
   slug: string;
+  /**
+   * Which of the three slug rules produced `slug`.
+   *
+   * Recorded in the manifest because the rule that fired is the only evidence of *why* a slug looks the
+   * way it does — `engineering-workflow` could have come from a bare directory name or from a prefix that
+   * did not fit, and only the label tells them apart a year later.
+   */
+  slugSource: SlugSource;
   /** Slug before conflict resolution, kept so the conflict report can group rows. */
   baseSlug: string;
   title: string;
@@ -523,28 +532,82 @@ function droppedAttachments(raw: RawSkill): string[] {
 }
 
 /**
+ * Which rule produced a slug. Recorded in the manifest as `slug_source`.
+ *
+ * - `raw` — the user-level skill's front-matter `name`, used untouched.
+ * - `dechannel` — the same, but the name was claimed by more than one installed skill, so the directory
+ *   name was used instead. That name already carries author and channel (`dev-expert__indiv-weishui__skillhub`),
+ *   minus the channel token, which is why the rule is called that.
+ * - `package_prefix` — `<package>--<skill directory>`, the rule for skills bundled inside an expert.
+ * - `bare` — a package slug that would not fit 40 characters, so the bare skill directory name was used.
+ * - `hashed` — the last resort: {@link shortenSlug}. It has never fired on real input; if it does, the
+ *   input changed rather than the rules, and the hash is the receipt.
+ */
+export type SlugSource = "raw" | "dechannel" | "package_prefix" | "bare" | "hashed";
+
+/** A slug and the rule that produced it. */
+interface SlugAssignment {
+  slug: string;
+  source: SlugSource;
+}
+
+/**
+ * Stable seed for {@link shortenSlug}: the source's identity, never its content.
+ *
+ * Deliberately **not** the checksum and **not** the relative path: a seed that moves when the author fixes
+ * a typo would rename the skill on the next run, which is the one thing §3.2 forbids. `<package>/<dir>` and
+ * `user/<dir>` are the two things a ported skill is actually identified by on disk.
+ */
+function slugSeed(candidate: SkillCandidate): string {
+  return candidate.tier === "package"
+    ? `${candidate.packageDirName ?? ""}/${candidate.raw.dirName}`
+    : `user/${candidate.raw.dirName}`;
+}
+
+/**
  * Hand every skill its slug.
  *
- * Two rules, both deterministic — there is no "winner" to argue about, which is the property that
- * matters because the alternative silently dropped two of the three `dev-expert` builds:
+ * ## The rules
  *
- *   1. **User-level**: the skill keeps the slug from its front matter `name`. When more than one
- *      installed skill claims that name, all of them fall back to their directory name instead — which
- *      already carries the channel or author (`dev-expert--skillhub`, `dev-expert--indiv-weishui`,
- *      `dev-expert--user-814dbe54`). Nobody is dropped and nobody wins.
- *   2. **Package-level**: `<package>--<skill directory>`. A bundled skill is only meaningful as part of
- *      its expert, and this is what keeps `frontend-developer`'s and `senior-developer`'s `fullstack-dev`
- *      from colliding with each other or with the user's own copy.
+ * Three levels, tried in this order, with no human in the loop — the alternative silently dropped two of
+ * the three `dev-expert` builds:
  *
- * Both rules can produce a slug the tenant-package loader rejects — over 40 characters, which
- * `humanize-ppt-team--remotion-video-toolkit` does — so the last step shortens deterministically and
- * guarantees uniqueness.
+ *   1. **User-level**: the skill keeps the slug from its front-matter `name`. When more than one installed
+ *      skill claims that name, all of them fall back to their directory name instead — which already
+ *      carries author and channel (`dev-expert--skillhub`, `dev-expert--indiv-weishui`,
+ *      `dev-expert--user-814dbe54`). Nobody is dropped and nobody wins; picking a "real" owner would make
+ *      the other two permanently second-class for no reason the user could predict.
+ *   2. **Package-level**: `<package>--<skill directory>`. A bundled skill is only meaningful as part of its
+ *      expert, and this is what keeps `frontend-developer`'s and `senior-developer`'s `fullstack-dev` from
+ *      colliding with each other or with the user's own copy.
+ *   3. **Overflow**: a prefixed slug that the loader rejects (over 40 characters —
+ *      `engineering-workflow-skills--engineering-workflow` is 49) falls back to the bare directory name if
+ *      that is free, and only then to a hash suffix. Hash input is the source identity from
+ *      {@link slugSeed}, never the truncated slug, so the same source produces the same output on any
+ *      machine.
+ *
+ * ## slug 是用户契约，规则一经落地不许再改
+ *
+ * This is a hard constraint, not a preference, and it is why the levels are explicit rather than
+ * "whatever fits":
+ *
+ *   1. `slug` is what a person types after `/`. Renaming it renames their muscle memory.
+ *   2. `plugin_grants.ref` stores the slug. A rename leaves existing grants pointing at nothing, and a
+ *      dangling ref **fails silently by design** — the employee simply stops being able to use that skill,
+ *      with no error anyone can trace back.
+ *   3. `skills.slug` is globally unique, so a rename frees the old slug for another package to take. The
+ *      same string would then mean two different things in two deployments.
+ *
+ * So rule corrections must land before the first package reaches production; after that, only mappings
+ * that leave existing output unchanged are allowed. {@link shortenSlug} is consequently a permanent
+ * backstop rather than a rough edge to smooth later: if it fires, the input changed, and that deserves
+ * attention rather than a quiet new slug.
  */
 function resolveSlugs(candidates: SkillCandidate[]): {
-  slugs: Map<SkillCandidate, string>;
+  assignments: Map<SkillCandidate, SlugAssignment>;
   conflicts: SlugConflict[];
 } {
-  const slugs = new Map<SkillCandidate, string>();
+  const assignments = new Map<SkillCandidate, SlugAssignment>();
 
   // How many user-level skills claim each name: more than one means the name alone cannot be the slug.
   const nameClaims = new Map<string, number>();
@@ -559,28 +622,39 @@ function resolveSlugs(candidates: SkillCandidate[]): {
   );
   const taken = new Set<string>();
   for (const candidate of ordered) {
-    const desired =
-      candidate.tier === "package"
-        ? `${directorySlug(candidate.packageDirName ?? "")}--${candidate.dirSlug}`
-        : (nameClaims.get(candidate.nameSlug) ?? 0) === 1
-          ? candidate.nameSlug
-          : candidate.dirSlug;
-    // A package prefix that will not fit the loader falls back to the bare directory name; both
-    // `engineering-workflow-skills--engineering-workflow` (49) and
-    // `humanize-ppt-team--remotion-video-toolkit` (41) are over 40 and both fall back to a name that is
-    // unique here.
-    const preferred = isTenantSlug(desired) ? desired : ensureTenantSlug(candidate.dirSlug, desired);
-    let slug = preferred;
-    if (taken.has(slug)) {
-      slug = shortenSlug(preferred, `${candidate.raw.skillMd.relativePath}#${candidate.checksum}`);
+    const seed = slugSeed(candidate);
+    const prefixed =
+      candidate.tier === "package" ? `${directorySlug(candidate.packageDirName ?? "")}--${candidate.dirSlug}` : null;
+    const named = candidate.tier === "user" && (nameClaims.get(candidate.nameSlug) ?? 0) === 1;
+
+    let assignment: SlugAssignment;
+    if (named) {
+      assignment = { slug: candidate.nameSlug, source: "raw" };
+    } else if (prefixed !== null && isTenantSlug(prefixed)) {
+      assignment = { slug: prefixed, source: "package_prefix" };
+    } else if (isTenantSlug(candidate.dirSlug)) {
+      // Level 2 of the overflow rule: the bare directory name, which the package prefix was obscuring.
+      // `dechannel` only describes a user-level name that fell back, where the directory name is the
+      // de-channeled original.
+      assignment = {
+        slug: candidate.dirSlug,
+        source: candidate.tier === "package" ? "bare" : "dechannel",
+      };
+    } else {
+      assignment = { slug: ensureTenantSlug(candidate.dirSlug, seed), source: "hashed" };
+    }
+
+    // Uniqueness is the last word: two sources must never share one slug, whatever the rules produced.
+    if (taken.has(assignment.slug)) {
+      assignment = { slug: shortenSlug(assignment.slug, seed), source: "hashed" };
       let index = 2;
-      while (taken.has(slug)) {
-        slug = shortenSlug(`${preferred}-${index}`, `${candidate.raw.skillMd.relativePath}#${index}`);
+      while (taken.has(assignment.slug)) {
+        assignment = { slug: shortenSlug(`${assignment.slug}-${index}`, `${seed}#${index}`), source: "hashed" };
         index += 1;
       }
     }
-    taken.add(slug);
-    slugs.set(candidate, slug);
+    taken.add(assignment.slug);
+    assignments.set(candidate, assignment);
   }
 
   // Reporting: which names had more than one source. Under the rules above the resulting slugs are all
@@ -601,13 +675,13 @@ function resolveSlugs(candidates: SkillCandidate[]): {
       resolution: group
         .sort((a, b) => a.order - b.order)
         .map((candidate) => ({
-          slug: slugs.get(candidate) ?? baseSlug,
+          slug: assignments.get(candidate)?.slug ?? baseSlug,
           origin: candidate.raw.skillMd.relativePath,
         })),
     }))
     .sort((a, b) => a.baseSlug.localeCompare(b.baseSlug));
 
-  return { slugs, conflicts };
+  return { assignments, conflicts };
 }
 
 /** Read a package's members, falling back to `teamInfo.memberAgents` when `members[]` is absent. */
@@ -723,7 +797,7 @@ function normalizeSkills(
   }
   survivors.sort((a, b) => a.order - b.order);
 
-  const { slugs, conflicts } = resolveSlugs(survivors);
+  const { assignments, conflicts } = resolveSlugs(survivors);
 
   const licenseByPackage = new Map<string, string | undefined>();
   for (const pkg of packages) {
@@ -733,13 +807,24 @@ function normalizeSkills(
   const skills: NormalizedSkill[] = [];
   const slugBySkillPath = new Map<string, string>();
   for (const candidate of survivors) {
-    const slug = slugs.get(candidate) ?? candidate.baseSlug;
+    const assignment = assignments.get(candidate) ?? { slug: candidate.baseSlug, source: "raw" as SlugSource };
+    const slug = assignment.slug;
+    // A `SKILL.md` with an empty body is a broken source, not a skill with no content: shipped, it
+    // becomes a capability whose `instructions` are zero bytes, which reads downstream as "the model
+    // has nothing to do". `--verify` does catch it, but only after the package is on disk and the
+    // message no longer says which source produced it. Fail here instead, naming both.
+    if (candidate.body.trim() === "") {
+      throw new SourceLayoutError(
+        `技能 "${slug}" 的 SKILL.md 正文为空：${candidate.raw.skillMd.absolutePath}`,
+      );
+    }
     const packageLicense =
       candidate.tier === "package" && candidate.packageDirName
         ? licenseByPackage.get(candidate.packageDirName)
         : undefined;
     skills.push({
       slug,
+      slugSource: assignment.source,
       baseSlug: candidate.baseSlug,
       title: skillTitle(candidate),
       summary: skillSummary(candidate),
@@ -762,7 +847,7 @@ function normalizeSkills(
   // still binds the skill it declared.
   for (const candidate of candidates) {
     const representative = representativeOf.get(candidate) ?? candidate;
-    const slug = slugs.get(representative);
+    const slug = assignments.get(representative)?.slug;
     if (slug !== undefined) {
       slugBySkillPath.set(candidate.raw.skillMd.relativePath, slug);
     }
@@ -1108,6 +1193,23 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
   teams.sort((a, b) => a.id.localeCompare(b.id));
   connectors.sort((a, b) => a.id.localeCompare(b.id));
   dropped.sort((a, b) => `${a.kind}:${a.slug}:${a.origin}`.localeCompare(`${b.kind}:${b.slug}:${b.origin}`));
+
+  // Step 6: redaction, after every body has been assembled and before anything leaves this function.
+  // Instruction text ships to customers verbatim, and several sources quote the author's own machine.
+  for (const skill of skillResult.skills) {
+    const { text, hits } = sanitizeLocalUserPaths(skill.instructions);
+    if (hits > 0) {
+      skill.instructions = text;
+      skill.sanitized = [SANITIZED_LOCAL_USER_PATH];
+    }
+  }
+  for (const agent of agents) {
+    const { text, hits } = sanitizeLocalUserPaths(agent.systemPrompt);
+    if (hits > 0) {
+      agent.systemPrompt = text;
+      agent.sanitized = [SANITIZED_LOCAL_USER_PATH];
+    }
+  }
 
   return {
     agents,

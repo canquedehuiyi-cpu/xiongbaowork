@@ -121,7 +121,12 @@ export const TOOL_NAME_MAP: readonly ToolMapping[] = [
   },
 ];
 
-/** Index `TOOL_NAME_MAP` by its WorkBuddy spelling, for P3's rewrite pass. */
+/**
+ * Index `TOOL_NAME_MAP` by its WorkBuddy spelling.
+ *
+ * P3 内容改写层使用，P0 不消费：P0 只做静态审计（把引用判成 full/degraded/blocked），不改写正文，
+ * 所以这里在 P0 没有调用点。它是留给 P3 改写 pass 的 API，不是死代码，别当垃圾清掉。
+ */
 export function toolMapping(workbuddy: string): ToolMapping | undefined {
   return TOOL_NAME_MAP.find((row) => row.workbuddy === workbuddy);
 }
@@ -244,8 +249,15 @@ export function isTenantSlug(value: string): boolean {
 export interface ConnectorPreset {
   /** Who publishes the remote server. */
   readonly vendor: string;
-  /** How openbot authenticates against it. */
-  readonly auth: "user-oauth" | "tenant-credential";
+  /**
+   * How openbot authenticates against it.
+   *
+   * One concept, one name: `deployment-bearer` is the deployment holding one token and spending it on
+   * everyone's behalf, which is exactly what WorkBuddy's `auth_mode: token` describes. This used to be
+   * called `tenant-credential` here, which would have been a second name for `CatalogueEntry.auth`'s
+   * existing value — a translation to maintain for no gain.
+   */
+  readonly auth: "user-oauth" | "deployment-bearer";
   /** Environment variable openbot reads the credential id from. */
   readonly credentialEnv: string;
 }
@@ -267,7 +279,7 @@ export const CONNECTOR_PRESETS: Readonly<Record<string, ConnectorPreset>> = {
   },
   tapd: {
     vendor: "腾讯",
-    auth: "tenant-credential",
+    auth: "deployment-bearer",
     credentialEnv: "TAPD_MCP_CREDENTIAL_ID",
   },
   "tencent-docs": {

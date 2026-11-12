@@ -14,12 +14,21 @@ import {
   type DroppedItem,
   KIND_ORDER,
   type NormalizedCapabilities,
+  type SlugSource,
 } from "./normalize";
 
 /** One row of `capability-manifest.yaml`. */
 export interface ManifestEntry {
   kind: CapabilityKind;
   slug: string;
+  /**
+   * Which slug rule produced this row's `slug`, on skill rows only.
+   *
+   * Other kinds have ids that come straight from the source (`agents/<id>.md`, `plugin.json`, the
+   * connector directory), so there is no rule to record. Present so a reviewer can tell a bare name that
+   * was always bare from one that fell back when a package prefix did not fit.
+   */
+  slug_source?: SlugSource;
   source: string;
   source_url: string;
   source_version: string;
@@ -66,6 +75,9 @@ export interface ManifestViolation {
   problem: string;
 }
 
+/** The five slug rules, in the order §3.2 tries them. */
+const SLUG_SOURCES: readonly SlugSource[] = ["raw", "dechannel", "package_prefix", "bare", "hashed"];
+
 /** Whether a level is one of the three this pipeline assigns. */
 function isRunnableLevel(value: unknown): value is RunnableLevel {
   return value === "full" || value === "degraded" || value === "blocked";
@@ -87,7 +99,20 @@ export function validateManifest(entries: readonly ManifestEntry[]): ManifestVio
       push(index, entry.slug, "kind", `未知 kind: ${String(entry.kind)}`);
     }
     if (!isTenantSlug(entry.slug)) {
-      push(index, entry.slug, "slug", "slug 必须通过 tenant-package 的校验（小写字母/数字/连字符，2–40 字符）");
+      push(
+        index,
+        entry.slug,
+        "slug",
+        "slug 必须通过 tenant-package 的校验（小写字母/数字/连字符，2–40 字符）。" +
+          "注意 slug 是用户契约（人在 / 后面敲的字、plugin_grants.ref 的取值、skills.slug 全局唯一），" +
+          "规则一经落地不得再改，只能在首次进生产的包生效之前修正",
+      );
+    }
+    if (entry.slug_source !== undefined && !SLUG_SOURCES.includes(entry.slug_source)) {
+      push(index, entry.slug, "slug_source", `未知来源档位: ${String(entry.slug_source)}`);
+    }
+    if (entry.kind === "skill" && entry.slug_source === undefined) {
+      push(index, entry.slug, "slug_source", "技能行必须记录 slug 由哪条规则产生（raw/dechannel/package_prefix/bare/hashed）");
     }
     for (const field of REQUIRED_MANIFEST_FIELDS) {
       const value = entry[field];
@@ -214,9 +239,11 @@ export function buildManifest(
     },
     runnable: RunnableLevel,
     extraDropped: readonly string[] = [],
+    slugSource?: SlugSource,
   ): ManifestEntry => ({
     kind,
     slug,
+    ...(slugSource === undefined ? {} : { slug_source: slugSource }),
     source: provenance.source,
     source_url: provenance.sourceUrl,
     source_version: provenance.sourceVersion,
@@ -237,7 +264,14 @@ export function buildManifest(
   }
   for (const skill of capabilities.skills) {
     entries.push(
-      entry("skill", skill.slug, skill.provenance, options.skillFindings.get(skill.slug)?.level ?? "full", skill.dropped),
+      entry(
+        "skill",
+        skill.slug,
+        skill.provenance,
+        options.skillFindings.get(skill.slug)?.level ?? "full",
+        skill.dropped,
+        skill.slugSource,
+      ),
     );
   }
   for (const team of capabilities.teams) {

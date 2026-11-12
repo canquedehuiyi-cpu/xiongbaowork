@@ -167,3 +167,18 @@ describe("shortenSample", () => {
     expect(long.endsWith("…")).toBe(true);
   });
 });
+
+describe("excerptAt", () => {
+  test("starts at the match, so the cell shows the substring that tripped the rule", () => {
+    // The prose case that prompted this: the reviewer needs to see `node junction` as the first thing in
+    // the cell, not hunt for it 30 characters into a truncated line.
+    const finding = judge("### 3. 接上 node_modules —— 用 node junction，不要用 mklink");
+    const hit = finding.hits.find((item) => item.ruleId === "shell-command");
+    expect(hit?.sample.startsWith("node junction")).toBe(true);
+  });
+
+  test("keeps a real command recognisable, heredoc included", () => {
+    const finding = judge("python - <<'EOF'");
+    expect(finding.hits[0].sample).toBe("python - <<'EOF'");
+  });
+});
