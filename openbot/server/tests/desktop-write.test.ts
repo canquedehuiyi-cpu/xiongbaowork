@@ -1076,7 +1076,8 @@ describe("round 1 of review", () => {
       const answered = await approveAndResume(fixture, () =>
         withApprovalContext(context, click),
       );
-      expect(answered.result?.error).toBeUndefined();
+      // Carried out: a result with content and no error.
+      expect(answered.result).toEqual({ content: expect.any(String) });
       expect(h.paths()).toContain("/desktop/session_start");
       expect(lastWrite(h)).toMatchObject({
         approved: true,
