@@ -18,6 +18,7 @@
 
 mod apps;
 mod autostart;
+mod desktop_permissions;
 mod process_tree;
 mod roots;
 mod sidecar;
@@ -28,6 +29,7 @@ use sidecar::{RunnerLauncher, Settings};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 use supervise::{Observer, Policy, State, Supervisor};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -42,6 +44,11 @@ struct Paths {
     /// The runner's `--data-dir`.
     data_dir: PathBuf,
     log: PathBuf,
+    /// agent-desktop's home for the 「桌面操作」 card's probe: private, emptied before each probe,
+    /// and not the runner's `agent-desktop-state`.
+    probe: PathBuf,
+    /// Left by `restart_app` so the restarted app shows its window even if it was started at login.
+    show_once: PathBuf,
 }
 
 struct Device {
@@ -56,6 +63,8 @@ struct Device {
     autostart_item: Mutex<Option<CheckMenuItem<Wry>>>,
     quitting: AtomicBool,
     stopped: AtomicBool,
+    /// When the window was last brought up for a `permission-needed`.
+    desktop_raised: Mutex<Option<Instant>>,
 }
 
 impl Device {
@@ -91,6 +100,26 @@ impl Observer for Tray {
         match autostart::set(true, &identifier) {
             Ok(()) => set_autostart_check(&self.0, true),
             Err(error) => eprintln!("[device] could not turn on start at login: {error}"),
+        }
+    }
+
+    fn desktop_permission(&self) {
+        let Some(window) = self.0.get_webview_window("main") else {
+            return;
+        };
+        let visible =
+            window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
+        let device = self.0.state::<Device>();
+        let mut raised = device.desktop_raised.lock().unwrap();
+        let now = Instant::now();
+        match desktop_permissions::react(visible, *raised, now) {
+            desktop_permissions::Reaction::Scroll => scroll_to_desktop(&self.0),
+            desktop_permissions::Reaction::Raise => {
+                *raised = Some(now);
+                show_window(&self.0);
+                scroll_to_desktop(&self.0);
+            }
+            desktop_permissions::Reaction::Nothing => {}
         }
     }
 }
@@ -325,6 +354,111 @@ async fn enable_candidate(app: AppHandle, candidate: String) -> Result<serde_jso
 }
 // --- end app discovery ---
 
+/// The notices bundled as resources (tauri.bundle.conf.json) that the 「关于」 section may show.
+const BUNDLED_NOTICES: [&str; 6] = [
+    "LICENSE",
+    "NOTICE",
+    "THIRD-PARTY-NOTICES.md",
+    "licenses/agent-desktop/LICENSE",
+    "licenses/agent-desktop/THIRD-PARTY.md",
+    "licenses/agent-desktop/COPYRIGHT",
+];
+
+/// `name` if it is one of the bundled notices, exactly. Anything else is refused, never resolved.
+fn bundled_notice(name: &str) -> Result<&'static str, String> {
+    BUNDLED_NOTICES
+        .into_iter()
+        .find(|notice| *notice == name)
+        .ok_or_else(|| "没有这份许可文件。".to_string())
+}
+
+/// One of the bundled notices, for the 「关于」 section.
+#[tauri::command]
+fn read_bundled_text(app: AppHandle, name: String) -> Result<String, String> {
+    let name = bundled_notice(&name)?;
+    let mut path = app
+        .path()
+        .resource_dir()
+        .map_err(|error| error.to_string())?;
+    path.extend(name.split('/'));
+    std::fs::read_to_string(&path).map_err(|error| format!("无法读取 {name}：{error}"))
+}
+
+/// Whether this computer lets the app read and operate windows, as the bundled agent-desktop says.
+/// The helper is given up to five seconds, on a blocking thread of its own.
+#[tauri::command]
+async fn desktop_permissions(
+    app: AppHandle,
+) -> Result<desktop_permissions::DesktopPermissionView, String> {
+    let home = app.state::<Device>().paths.probe.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let platform = std::env::consts::OS;
+        let reply = match desktop_permissions::command_for(platform) {
+            Some(command) => {
+                let program = sidecar::agent_desktop_path().map_err(|error| error.to_string())?;
+                desktop_permissions::run(&program, &[command], &home, desktop_permissions::TIMEOUT)?
+            }
+            None => String::new(),
+        };
+        desktop_permissions::view_for(platform, &reply)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// Open System Settings at the pane for `kind` (`accessibility` or `screen`). macOS only.
+#[tauri::command]
+fn open_desktop_settings(kind: String) -> Result<(), String> {
+    let url = desktop_permissions::settings_url(&kind).ok_or("没有这个设置项。")?;
+    if !cfg!(target_os = "macos") {
+        return Err("只有 macOS 需要在系统设置里开启。".into());
+    }
+    std::process::Command::new("/usr/bin/open")
+        .arg(url)
+        .status()
+        .map_err(|error| error.to_string())
+        .and_then(|status| {
+            if status.success() {
+                Ok(())
+            } else {
+                Err("无法打开系统设置。".into())
+            }
+        })
+}
+
+/// Start this app again, for a grant macOS applies only to a new process. The runner's tree is
+/// stopped first, as on Quit, so the new copy does not find a second runner using the same token.
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    let device = app.state::<Device>();
+    if device.quitting.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(item) = device.status_item.lock().unwrap().as_ref() {
+        let _ = item.set_text("状态：正在重新打开…");
+    }
+    // The new process gets this one's arguments, `--autostart` included: this note makes it show
+    // its window all the same.
+    if let Err(error) = desktop_permissions::mark_show_once(&device.paths.show_once) {
+        eprintln!("[device] could not leave the show-window note: {error}");
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        stop(&app);
+        app.state::<Device>().stopped.store(true, Ordering::SeqCst);
+        // From a thread other than the main one, this asks the event loop to exit and restarts on
+        // its Exit, which `run` below lets through because the runner is already stopped.
+        app.restart();
+    });
+}
+
+/// Refresh the 「桌面操作」 card and scroll to it, without showing or focusing the window.
+fn scroll_to_desktop(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.eval("window.showDesktop && window.showDesktop()");
+    }
+}
+
 /// The window, opened at its folder section, for the tray's 「添加本地文件夹…」.
 fn show_folders(app: &AppHandle) {
     show_window(app);
@@ -475,8 +609,12 @@ fn main() {
             set_app_enabled,
             // --- app discovery (sub-project 3) ---
             discover_apps,
-            enable_candidate
+            enable_candidate,
             // --- end app discovery ---
+            desktop_permissions,
+            open_desktop_settings,
+            restart_app,
+            read_bundled_text
         ])
         // Closing the window hides it; the app lives in the tray and Quit is there.
         .on_window_event(|window, event| {
@@ -501,6 +639,8 @@ fn main() {
                     settings: data.join("device.json"),
                     data_dir: data.join("runner"),
                     log,
+                    probe: data.join("agent-desktop-probe"),
+                    show_once: data.join("show-window-once"),
                 },
                 browser,
                 supervisor: Mutex::new(None),
@@ -510,6 +650,7 @@ fn main() {
                 autostart_item: Mutex::new(None),
                 quitting: AtomicBool::new(false),
                 stopped: AtomicBool::new(false),
+                desktop_raised: Mutex::new(None),
             });
             let handle = app.handle().clone();
             #[cfg(unix)]
@@ -524,7 +665,9 @@ fn main() {
                         *device.state.lock().unwrap() = State::Failed { message: error };
                     }
                     show_state(&handle, &device.state.lock().unwrap().clone());
-                    if !autostarted {
+                    // Restarted from the 「桌面操作」 card: shown even when it was started at login.
+                    let show_once = desktop_permissions::take_show_once(&device.paths.show_once);
+                    if !autostarted || show_once {
                         show_window(&handle);
                     }
                 }
@@ -551,6 +694,39 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_the_bundled_notices_can_be_read() {
+        for name in super::BUNDLED_NOTICES {
+            assert_eq!(super::bundled_notice(name), Ok(name));
+        }
+        for name in [
+            "../device.json",
+            "/etc/passwd",
+            "licenses/agent-desktop/../../x",
+            "licenses/agent-desktop/../../LICENSE",
+            "./LICENSE",
+            "LICENSE ",
+            "license",
+            "licenses\\agent-desktop\\LICENSE",
+            "C:\\Windows\\win.ini",
+            "",
+        ] {
+            assert!(super::bundled_notice(name).is_err(), "{name}");
+        }
+        // Each one is a resource the bundle really ships.
+        let bundle: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.bundle.conf.json")).unwrap();
+        let shipped: Vec<&str> = bundle["bundle"]["resources"]
+            .as_object()
+            .unwrap()
+            .values()
+            .filter_map(|target| target.as_str())
+            .collect();
+        for name in super::BUNDLED_NOTICES {
+            assert!(shipped.contains(&name), "{name} is not bundled");
+        }
+    }
+
     #[test]
     fn the_identifier_is_ours_and_the_name_is_the_product_s() {
         let config: serde_json::Value =
