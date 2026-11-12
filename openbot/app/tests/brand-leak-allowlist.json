@@ -828,5 +828,15 @@
     "file": "server/src/tenant-package-path.ts",
     "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
     "reason": "persisted-identifier: the pre-rename tenant package directory name, matched only to redirect old TENANT_PACKAGE_DIR values"
+  },
+  {
+    "file": "mobile/package.json",
+    "text": "\"name\": \"openbot-mobile\"",
+    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users"
+  },
+  {
+    "file": "mobile/package-lock.json",
+    "text": "\"name\": \"openbot-mobile\"",
+    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users"
   }
 ]

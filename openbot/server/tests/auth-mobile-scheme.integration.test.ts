@@ -60,3 +60,11 @@ test("without the native app the legacy scheme is refused too", async () => {
     await sendsSessionTo(createAuth(config, database), "openbotmobile://"),
   ).toBe(false);
 });
+test("look-alike schemes are refused even with the native app on", async () => {
+  process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
+  const auth = createAuth(config, database);
+  expect(await sendsSessionTo(auth, "xiongbao.evil://callback")).toBe(false);
+  expect(await sendsSessionTo(auth, "openbotmobile.attacker://callback")).toBe(
+    false,
+  );
+});
