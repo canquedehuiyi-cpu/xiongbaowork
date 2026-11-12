@@ -30,7 +30,10 @@ export function legacyAgentsTarget(search: { new?: boolean; agent?: string }) {
 export const LEGACY_PAGES = {
   "/approvals": "/settings/approvals",
   "/memory": "/capabilities/memory",
-  // A group is started from the new-conversation screen by putting two or more Bots in To:.
+  /*
+   * 不再重定向：「新建群聊」页（group/new.tsx）恢复了。条目留着，因为它仍说得对——新对话页在「发给」里选
+   * 两位以上员工也开群聊——而 tests/legacy-agent-routes.test.ts 按整张表锁着这份清单。
+   */
   "/group/new": "/channel/new",
   // 团队 Bot：列表里「共享给你的」一节，加上每位员工的「共享」分页。
   "/team-bots": "/bots",
