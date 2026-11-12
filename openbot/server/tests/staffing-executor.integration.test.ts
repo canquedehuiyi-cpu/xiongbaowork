@@ -794,18 +794,51 @@ describe("applying a staffing proposal as the person", () => {
         apps: [{ app: "routines", actions: [] }],
       }),
     );
-    const rule = (value: "admin" | null) =>
-      asPlatform(() =>
-        database
-          .update(mcpServers)
-          .set({ ownerGrants: value })
-          .where(eq(mcpServers.url, "builtin://routines")),
-      );
-    await rule("admin");
+    // A fresh database has no built-in rows (the server syncs them at boot), so the test brings its own
+    // and takes away only what it added; where the row exists already, only the rule is set and put back.
+    const serverId = "team:routines";
+    const seeded = await asPlatform(async () => {
+      const inserted = await database
+        .insert(mcpServers)
+        .values({
+          id: serverId,
+          tenantId: "team",
+          title: "定时任务",
+          vendor: "OpenBot",
+          url: "builtin://routines",
+          provenance: "first-party",
+          catalogueKey: "routines",
+        })
+        .onConflictDoNothing()
+        .returning({ id: mcpServers.id });
+      await database
+        .insert(mcpTools)
+        .values(
+          ["create_routine", "list_routines"].map((name) => ({
+            tenantId: "team",
+            serverId,
+            name,
+            description: "内置动作。",
+          })),
+        )
+        .onConflictDoNothing();
+      await database
+        .update(mcpServers)
+        .set({ ownerGrants: "admin" })
+        .where(eq(mcpServers.id, serverId));
+      return inserted.length > 0;
+    });
     try {
       await asRequest(ADMIN, () => executor.apply(admin, proposal.id));
     } finally {
-      await rule(null);
+      await asPlatform(() =>
+        seeded
+          ? database.delete(mcpServers).where(eq(mcpServers.id, serverId))
+          : database
+              .update(mcpServers)
+              .set({ ownerGrants: null })
+              .where(eq(mcpServers.id, serverId)),
+      );
     }
 
     const items = (await stored(proposal.id))?.result as {
