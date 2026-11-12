@@ -1,5 +1,13 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -10,7 +18,9 @@ import {
   type DesktopWindow,
   desktopMessage,
 } from "../../shared/desktop-control";
-import { createDesktopActions } from "../src/desktop/actions";
+import { LOCAL_TOOL_DESCRIPTIONS } from "../../shared/local-tools";
+import { createDesktopActions, desktopEngineFor } from "../src/desktop/actions";
+import type { AgentDesktopReader } from "../src/desktop/ad-read";
 import {
   createDesktopHost,
   DesktopHelperError,
@@ -101,9 +111,9 @@ function throwingActions(error: unknown, prefix?: string): Actions {
 }
 
 describe("desktop actions", () => {
-  test("on a non-Windows platform every desktop action refuses in Chinese and starts nothing", async () => {
+  test("on an unsupported platform every desktop action refuses with unsupported_platform and starts nothing", async () => {
     const actions = createDesktopActions({
-      platform: "linux",
+      platform: "freebsd",
       host: createDesktopHost({
         spec: () => {
           throw new Error("must not start a helper");
@@ -112,13 +122,26 @@ describe("desktop actions", () => {
     });
     const expected: Out = {
       ok: false,
-      error: "这台设备不是 Windows，暂不支持桌面操作。",
+      error: desktopMessage("unsupported_platform"),
     };
     expect(await actions("desktop.windows", {})).toEqual(expected);
     expect(await actions("desktop.snapshot", { windowId: "w4242-77" })).toEqual(
       expected,
     );
     expect(await actions("desktop.click", {})).toEqual(expected);
+    expect(desktopMessage("unsupported_platform")).toBe(
+      "这台设备的系统不支持桌面操作。",
+    );
+    const asked = createDesktopActions({
+      platform: "freebsd",
+      engine: "agent-desktop",
+      reader: fakeReader({
+        windows: () => {
+          throw new Error("must not read");
+        },
+      }),
+    });
+    expect(await asked("desktop.windows", {})).toEqual(expected);
   });
 
   test("desktop.click and every other desktop action are unsupported and never reach the helper", async () => {
@@ -523,3 +546,294 @@ function throwingShot(message: string) {
   } as unknown as ReturnType<typeof createDesktopHost>;
   return { actions: createDesktopActions({ platform: "win32", host }) };
 }
+
+/** A reader that answers from `impl` and fails the test on anything it was not given. */
+function fakeReader(
+  impl: Partial<{
+    windows: AgentDesktopReader["windows"];
+    snapshot: AgentDesktopReader["snapshot"];
+  }> = {},
+): AgentDesktopReader & { calls: string[] } {
+  const calls: string[] = [];
+  return {
+    prefix: "abc123",
+    calls,
+    async windows(signal) {
+      calls.push("windows");
+      if (!impl.windows) throw new Error("unexpected windows");
+      return impl.windows(signal);
+    },
+    async snapshot(body, signal) {
+      calls.push(`snapshot ${JSON.stringify(body)}`);
+      if (!impl.snapshot) throw new Error("unexpected snapshot");
+      return impl.snapshot(body, signal);
+    },
+    resolveRef: () => "stale",
+    adWindow: () => undefined,
+    invalidate: () => {},
+  };
+}
+
+describe("desktop engines (agent-desktop on macOS and Linux)", () => {
+  const listed: DesktopWindow[] = [
+    {
+      windowId: "a0123456789abcdef",
+      title: "Untitled - TextEdit",
+      process: "TextEdit",
+      focused: true,
+      minimized: false,
+    },
+  ];
+
+  test("darwin and linux read through agent-desktop", async () => {
+    for (const [node, platform] of [
+      ["darwin", "macos"],
+      ["linux", "linux"],
+    ] as const) {
+      const reader = fakeReader({
+        windows: async () => ({ platform, windows: listed }),
+        snapshot: async (body) => ({
+          platform,
+          snapshotId: "abc123-1",
+          window: listed[0] as DesktopWindow,
+          truncated: false,
+          elements: [
+            {
+              ref: "abc123-1:0",
+              type: "window",
+              name: body.windowId,
+              depth: 0,
+            },
+          ],
+        }),
+      });
+      const actions = createDesktopActions({
+        platform: node,
+        engine: "agent-desktop",
+        reader,
+        // The PowerShell reader is never started on these systems.
+        host: createDesktopHost({
+          spec: () => {
+            throw new Error("must not start a helper");
+          },
+        }),
+      });
+      closers.push(() => actions.close());
+      expect(await actions("desktop.windows", {})).toEqual({
+        ok: true,
+        output: { platform, windows: listed },
+      });
+      const snap = await actions("desktop.snapshot", {
+        windowId: "a0123456789abcdef",
+        from: "abc123-0:2",
+        screenshot: true,
+        allowSensitive: "yes",
+      });
+      expect(snap).toEqual({
+        ok: true,
+        output: {
+          platform,
+          snapshotId: "abc123-1",
+          window: listed[0],
+          truncated: false,
+          elements: [
+            {
+              ref: "abc123-1:0",
+              type: "window",
+              name: "a0123456789abcdef",
+              depth: 0,
+            },
+          ],
+        },
+      });
+      // Only a literal true asks for a picture or past the sensitive-title check.
+      expect(reader.calls).toEqual([
+        "windows",
+        `snapshot ${JSON.stringify({
+          windowId: "a0123456789abcdef",
+          from: "abc123-0:2",
+          screenshot: true,
+          allowSensitive: false,
+        })}`,
+      ]);
+      expect(await actions("desktop.click", {})).toEqual({
+        ok: false,
+        error: desktopMessage("unsupported"),
+      });
+      expect(reader.calls).toHaveLength(2);
+    }
+  });
+
+  test("a macOS listing names the platform", async () => {
+    const actions = createDesktopActions({
+      platform: "darwin",
+      engine: "agent-desktop",
+      reader: fakeReader({
+        windows: async () => ({ platform: "macos", windows: listed }),
+      }),
+    });
+    const outcome = await actions("desktop.windows", {});
+    expect(
+      outcome.ok && (outcome.output as { platform: string }).platform,
+    ).toBe("macos");
+  });
+
+  test("the PowerShell reader's listing names the platform too", async () => {
+    const { actions } = setup();
+    const result = output<{ platform: string; windows: DesktopWindow[] }>(
+      await actions("desktop.windows", {}),
+    );
+    expect(result.platform).toBe("windows");
+  });
+
+  test("agent-desktop read errors are the reader's Chinese copy, once, and never outcomeUnknown", async () => {
+    const cases: Array<[unknown, string]> = [
+      [
+        new DesktopHelperError("no_window", desktopMessage("no_window"), false),
+        desktopMessage("no_window"),
+      ],
+      [
+        new DesktopHelperError(
+          "mac_permission",
+          desktopMessage("mac_permission"),
+          false,
+        ),
+        desktopMessage("mac_permission"),
+      ],
+      [
+        new DesktopHelperError(
+          "timeout",
+          desktopMessage("timeout", "20"),
+          true,
+        ),
+        desktopMessage("timeout", "20"),
+      ],
+      [
+        Object.assign(new Error("aborted"), { name: "AbortError" }),
+        "已在设备上停止。",
+      ],
+      [new Error("???"), desktopMessage("failed")],
+    ];
+    for (const [error, copy] of cases) {
+      const actions = createDesktopActions({
+        platform: "linux",
+        engine: "agent-desktop",
+        reader: fakeReader({
+          windows: async () => {
+            throw error;
+          },
+          snapshot: async () => {
+            throw error;
+          },
+        }),
+      });
+      for (const outcome of [
+        await actions("desktop.windows", {}),
+        await actions("desktop.snapshot", { windowId: "a0123456789abcdef" }),
+      ]) {
+        expect(outcome).toEqual({ ok: false, error: copy });
+        noUnknown(outcome);
+      }
+    }
+  });
+
+  test("the default reader runs the helper it is given, and close empties its state directory", async () => {
+    const root = mkdtempSync(join(DIR, "ad-"));
+    const stateDir = join(root, "agent-desktop-state");
+    mkdirSync(stateDir);
+    writeFileSync(join(stateDir, "leftover.json"), "{}");
+    const actions = createDesktopActions({
+      platform: "linux",
+      engine: "agent-desktop",
+      helper: join(root, "no-such-agent-desktop"),
+      stateDir,
+    });
+    const outcome = await actions("desktop.windows", {});
+    expect(outcome).toEqual({
+      ok: false,
+      error: desktopMessage("start_failed", "没有找到 agent-desktop"),
+    });
+    noUnknown(outcome);
+    await actions.close();
+    expect(readdirSync(stateDir)).toEqual([]);
+  });
+
+  test("close wipes a leftover state directory even when no desktop action ever ran", async () => {
+    for (const engine of ["agent-desktop", "legacy"] as const) {
+      const root = mkdtempSync(join(DIR, "ad-left-"));
+      const stateDir = join(root, "agent-desktop-state");
+      mkdirSync(join(stateDir, "snapshots"), { recursive: true });
+      writeFileSync(join(stateDir, "snapshots", "leftover.json"), "{}");
+      const actions = createDesktopActions({
+        platform: "linux",
+        engine,
+        helper: join(root, "no-such-agent-desktop"),
+        stateDir,
+      });
+      await actions.close();
+      expect(existsSync(stateDir)).toBe(false);
+      // Nothing to wipe is not an error.
+      await actions.close();
+    }
+  });
+
+  test("agent-desktop without a helper to run fails to start, and never outcomeUnknown", async () => {
+    const actions = createDesktopActions({
+      platform: "darwin",
+      engine: "agent-desktop",
+    });
+    const outcome = await actions("desktop.windows", {});
+    expect(outcome).toEqual({
+      ok: false,
+      error: desktopMessage("start_failed", "没有找到 agent-desktop"),
+    });
+    noUnknown(outcome);
+  });
+
+  test("win32 stays on the PowerShell reader unless OPENBOT_DESKTOP_ENGINE is agent-desktop", () => {
+    expect(desktopEngineFor("win32", undefined)).toBe("legacy");
+    expect(desktopEngineFor("win32", "legacy")).toBe("legacy");
+    expect(desktopEngineFor("win32", "agent-desktop")).toBe("agent-desktop");
+    expect(desktopEngineFor("darwin", undefined)).toBe("agent-desktop");
+    expect(desktopEngineFor("linux", undefined)).toBe("agent-desktop");
+    // macOS and Linux only have agent-desktop.
+    expect(desktopEngineFor("darwin", "legacy")).toBe("agent-desktop");
+    expect(desktopEngineFor("linux", "legacy")).toBe("agent-desktop");
+    expect(desktopEngineFor("freebsd", undefined)).toBeUndefined();
+    expect(desktopEngineFor("freebsd", "agent-desktop")).toBeUndefined();
+  });
+
+  test("win32 with agent-desktop asked for reads through it, as windows", async () => {
+    const actions = createDesktopActions({
+      platform: "win32",
+      engine: "agent-desktop",
+      reader: fakeReader({
+        windows: async () => ({ platform: "windows", windows: listed }),
+      }),
+      host: createDesktopHost({
+        spec: () => {
+          throw new Error("must not start the PowerShell helper");
+        },
+      }),
+    });
+    expect(await actions("desktop.windows", {})).toEqual({
+      ok: true,
+      output: { platform: "windows", windows: listed },
+    });
+  });
+
+  test("the read tools are described for Windows, macOS and Linux", () => {
+    const windows = LOCAL_TOOL_DESCRIPTIONS.computer_desktop_windows;
+    const snapshot = LOCAL_TOOL_DESCRIPTIONS.computer_desktop_snapshot;
+    expect(windows).toContain(
+      "on the person's own paired computer (Windows, macOS, or Linux as a trial):",
+    );
+    expect(windows).toContain("The result names the platform.");
+    expect(snapshot).toContain(
+      "Read one window on the person's own paired computer as a tree",
+    );
+    expect(snapshot).toContain("Read-only");
+    for (const text of [windows, snapshot])
+      expect(text).not.toContain("paired Windows computer");
+  });
+});

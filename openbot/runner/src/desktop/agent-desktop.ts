@@ -98,6 +98,10 @@ const ENV_KEEP = [
   "LANG",
   "LC_ALL",
   "DISPLAY",
+  // X11 needs its cookie: without it agent-desktop cannot reach the X server on Linux and refuses
+  // every window as "native window unproven" (seen on CI under xvfb-run; desktop sessions set it too).
+  "XAUTHORITY",
+  "XDG_SESSION_TYPE",
   "WAYLAND_DISPLAY",
   "XDG_RUNTIME_DIR",
   "DBUS_SESSION_BUS_ADDRESS",
@@ -206,57 +210,64 @@ function killTree(child: Child, platform: string): void {
   }
 }
 
-const SECURE_DIR_SCRIPT = [
-  "$ErrorActionPreference = 'Stop'",
-  "$p = $env:XB_AD_STATE_DIR",
-  "$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User",
-  "$acl = New-Object System.Security.AccessControl.DirectorySecurity",
-  "$acl.SetAccessRuleProtection($true, $false)",
-  "$acl.SetOwner($sid)",
-  "$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')",
-  "$acl.AddAccessRule($rule)",
-  "Set-Acl -LiteralPath $p -AclObject $acl",
-].join("; ");
+/** The current user's SID from `whoami /user /fo csv /nh` (`"host\\name","S-1-5-21-…"`). */
+export function sidFromWhoami(output: string): string | undefined {
+  return /"(S-1-[0-9]+(?:-[0-9]+)+)"/.exec(output)?.[1];
+}
 
 /**
- * Windows: gives `dir` a protected DACL that grants only the current user FullControl, with nothing
- * inherited. agent-desktop's `snapshot` refuses a state directory whose DACL names anyone else. The
- * path is passed in an environment variable, never spliced into the script.
+ * The `icacls` arguments that leave `dir` with a protected DACL granting only `sid` FullControl:
+ * inherited entries removed (`/inheritance:r`), ours replacing any explicit one (`/grant:r`), for the
+ * directory and everything created under it (`(OI)(CI)`).
  */
-export async function secureWindowsStateDir(dir: string): Promise<void> {
-  const powershell = win32.join(
-    systemRoot(),
-    "System32",
-    "WindowsPowerShell",
-    "v1.0",
-    "powershell.exe",
-  );
+export function icaclsArgs(dir: string, sid: string): string[] {
+  return [dir, "/inheritance:r", "/grant:r", `*${sid}:(OI)(CI)F`];
+}
+
+/** Runs a System32 tool with an argument array (no shell), within the time limit. */
+async function runSystemTool(
+  name: string,
+  args: string[],
+): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    [
-      powershell,
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      SECURE_DIR_SCRIPT,
-    ],
+    [win32.join(systemRoot(), "System32", name), ...args],
     {
       stdin: "ignore",
-      stdout: "ignore",
+      stdout: "pipe",
       stderr: "pipe",
       windowsHide: true,
-      env: { ...agentDesktopEnv(process.env, dir), XB_AD_STATE_DIR: dir },
     },
   );
+  const stdout = new Response(proc.stdout).text();
   const stderr = new Response(proc.stderr).text();
   const timer = setTimeout(() => proc.kill(), SECURE_DIR_TIMEOUT_MS);
   try {
     const code = await proc.exited;
-    if (code !== 0) {
-      const tail = (await stderr).trim().slice(-500);
-      throw new Error(`退出码 ${code}${tail ? `：${tail}` : ""}`);
-    }
+    return { code, stdout: await stdout, stderr: await stderr };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * Windows: gives `dir` a protected DACL that grants only the current user FullControl, with nothing
+ * inherited. agent-desktop's `snapshot` refuses a state directory whose DACL names anyone else.
+ * `whoami` and `icacls` are plain System32 tools: no PowerShell, so no module that can fail to load
+ * (CI found Windows PowerShell unable to load Set-Acl's module under a PowerShell 7 environment), and
+ * the path is an argument, never part of a script.
+ */
+export async function secureWindowsStateDir(dir: string): Promise<void> {
+  const who = await runSystemTool("whoami.exe", ["/user", "/fo", "csv", "/nh"]);
+  const sid = who.code === 0 ? sidFromWhoami(who.stdout) : undefined;
+  if (!sid) {
+    throw new Error(
+      `取不到当前用户的 SID（whoami 退出码 ${who.code}${who.stderr.trim() ? `：${who.stderr.trim().slice(-300)}` : ""}）`,
+    );
+  }
+  const acl = await runSystemTool("icacls.exe", icaclsArgs(dir, sid));
+  if (acl.code !== 0) {
+    const tail = `${acl.stdout}\n${acl.stderr}`.trim().slice(-500);
+    throw new Error(`icacls 退出码 ${acl.code}${tail ? `：${tail}` : ""}`);
   }
 }
 
