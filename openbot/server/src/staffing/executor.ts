@@ -368,6 +368,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
   const audit = async (
     actor: AuthenticatedActor,
     event: Omit<Parameters<typeof recordAuditEvent>[1], "actorUserId">,
+    /** 写不进去时是否把错误交出去：建员工的那一条要交出去，由落定把提议记成部分完成。 */
+    strict = false,
   ) => {
     try {
       await recordAuditEvent(deps.auditStore, {
@@ -383,6 +385,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
           error: String(error),
         }),
       );
+      if (strict) throw error;
     }
   };
 
@@ -405,18 +408,23 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     eventType: "bot.created" | "bot.updated",
     agentId: string,
     payload: Record<string, unknown>,
+    strict = false,
   ) =>
-    audit(run.actor, {
-      eventType,
-      targetType: "agent",
-      targetId: agentId,
-      payload: {
-        bot: agentId,
-        actor: run.actor.email,
-        ...payload,
-        proposalId: run.proposalId,
+    audit(
+      run.actor,
+      {
+        eventType,
+        targetType: "agent",
+        targetId: agentId,
+        payload: {
+          bot: agentId,
+          actor: run.actor.email,
+          ...payload,
+          proposalId: run.proposalId,
+        },
       },
-    });
+      strict,
+    );
 
   /** 过一遍创建 / 编辑员工的路由用的同一个检查；过不了就是中文的原因。 */
   const checkedInput = (
@@ -640,8 +648,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       agentId,
       inspected,
     );
+    const builtin = inspected.entry?.auth.kind === "builtin";
     if (refusal === null) {
-      const builtin = inspected.entry?.auth.kind === "builtin";
       const refs = await toolsToGive(
         inspected,
         entry.actions,
@@ -701,7 +709,9 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       const refs = await toolsToGive(
         inspected,
         entry.actions,
+        // 内置应用是平台自己的，给全部动作（同本人的那一支）；其余没点名动作时只给只读的。
         (tool) =>
+          builtin ||
           entry.actions.length > 0 ||
           (tool.effect === "read" && !tool.destructive),
       );
@@ -1159,12 +1169,13 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
 
   /**
    * 建员工：创建员工那条路径的检查、名额（与写入同一个事务里数）、角色模板。失败时什么都没建，由调用方
-   * 放回待确认。
+   * 放回待确认。员工一建好就返回，轨迹交给调用方在结果落库之后再写：轨迹出错或进程在这中间没了，
+   * 提议里也已经有这位员工，不会因为回到待确认而再建一个。
    */
   async function createEmployee(
     run: Run,
     draft: EmployeeDraft,
-  ): Promise<ResultItem> {
+  ): Promise<{ item: ResultItem; trail: () => Promise<void> }> {
     const checked = checkedInput({
       name: draft.name,
       title: draft.title,
@@ -1197,16 +1208,21 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
             quota.assertCapacityWithin(transaction, run.actor.id, "wakers")
         : undefined,
     );
-    await botTrail(run, "bot.created", agent.id, {
-      name: input.name,
-      visibility: input.visibility,
-      hasKey: false,
-    });
     return {
-      step: "create",
-      target: agent.id,
-      outcome: "done",
-      message: `已建好员工「${agent.name}」。`,
+      item: {
+        step: "create",
+        target: agent.id,
+        outcome: "done",
+        message: `已建好员工「${agent.name}」。`,
+      },
+      trail: () =>
+        botTrail(
+          run,
+          "bot.created",
+          agent.id,
+          { name: input.name, visibility: input.visibility, hasKey: false },
+          true,
+        ),
     };
   }
 
@@ -1309,6 +1325,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     proposal: Proposal,
     draft: ProposalDraft,
     previous: readonly ResultItem[],
+    afterRecorded?: () => Promise<void>,
   ): Promise<Proposal> {
     const results: ResultItem[] = [];
     const sofar = () => [...results, ...previous.slice(results.length)];
@@ -1318,6 +1335,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     };
     try {
       if (previous.length > 0) await progress();
+      // 建员工的轨迹排在员工记进结果之后：它出错也只是部分完成，员工已经在结果里。
+      await afterRecorded?.();
       await carryOut(run, proposal, draft, previous, results, progress);
       // 落定也在这里面：它自己出错时同样走下面的退路，不让提议停在执行中。
       return await finish(run, proposal, results);
@@ -1392,19 +1411,21 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       };
       let draft: ProposalDraft;
       let created: ResultItem[];
+      let trail: (() => Promise<void>) | undefined;
       try {
         draft = draftOf(claimed);
         await assertFresh(actor, claimed, draft);
         // 建员工先做、先记下：之后哪一步出了意外，结果里也有员工 id，重试不会再建一个。
-        created =
-          claimed.kind === "employee"
-            ? [await createEmployee(run, draft as EmployeeDraft)]
-            : [];
+        if (claimed.kind === "employee") {
+          const made = await createEmployee(run, draft as EmployeeDraft);
+          created = [made.item];
+          trail = made.trail;
+        } else created = [];
       } catch (error) {
         await deps.proposals.release(proposalId, actor.id);
         throw error;
       }
-      return settle(run, claimed, draft, created);
+      return settle(run, claimed, draft, created, trail);
     },
 
     /** 重做上一次失败的项；成了的项和建好的员工、群聊都不再动。不比对版本：对象正是上一次改的。 */
