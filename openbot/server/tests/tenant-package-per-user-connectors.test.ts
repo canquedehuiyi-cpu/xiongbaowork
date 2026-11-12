@@ -37,6 +37,16 @@ describe("unsupportedPerUserConnectors", () => {
     expect(unsupportedPerUserConnectors([connector({ id: "github" })])).toEqual([]);
   });
 
+  test("user-oauth 但目录条目是共享凭据类（deployment-bearer）：仍被标记", () => {
+    // parallel-authenticated 在本构建目录里，但其条目 auth.kind 是 deployment-bearer——
+    // accessFor 按「目录条目的 auth.kind」（CREDENTIAL_BY_AUTH）解析，行会被解析成
+    // 共享凭据 deployment-token，与包声明的「逐用户授权」不符。条目存在不够，
+    // 条目的认证类型也必须是 user-oauth。
+    expect(unsupportedPerUserConnectors([connector({ id: "parallel-authenticated" })])).toEqual([
+      "parallel-authenticated",
+    ]);
+  });
+
   test("deployment-bearer 与 none 不受影响：共享本来就是声明的一部分", () => {
     expect(
       unsupportedPerUserConnectors([
