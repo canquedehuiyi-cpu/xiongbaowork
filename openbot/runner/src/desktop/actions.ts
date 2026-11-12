@@ -4,6 +4,7 @@ import {
   DESKTOP_LIMITS,
   DESKTOP_REF,
   DESKTOP_WINDOW_WORDS,
+  DESKTOP_WRITE_ACTIONS,
   type DesktopElement,
   type DesktopEngine,
   type DesktopErrorCode,
@@ -22,6 +23,7 @@ import {
   createAgentDesktopReader,
   readFailure,
 } from "./ad-read";
+import { type AgentDesktopWriter, createAgentDesktopWriter } from "./ad-write";
 import { type AgentDesktopCli, createAgentDesktopCli } from "./agent-desktop";
 import { type ControlChannel, NO_CONTROL } from "./control";
 import {
@@ -49,6 +51,12 @@ import { createDesktopSessions, type DesktopSessions } from "./session";
  * to now and, for that bot and person, which session is current; `desktop.session_start` takes the
  * server's token and waits for the device app's guard (`session.ts`); `desktop.session_end` ends
  * it. They change nothing on the screen either, so they are never `outcomeUnknown`.
+ *
+ * THE WRITES (Task 21): `desktop.click`, `desktop.type`, `desktop.key`, `desktop.focus` go to the
+ * agent-desktop writer (`ad-write.ts`), the only outcomes here that may be `outcomeUnknown`. A runner
+ * the device app did not start (`NO_CONTROL`: no banner, no stop key) offers no write at all, as
+ * before they existed: `unsupported`. Linux is `read_only_linux` and the legacy Windows engine
+ * `read_only_windows`, before anything is built or run.
  */
 export type DesktopActions = ((
   action: string,
@@ -283,6 +291,18 @@ export function createDesktopActions(
       platform: desktopPlatform,
     });
     return reader;
+  };
+  let writer: AgentDesktopWriter | undefined;
+  const adWriter = (desktopPlatform: DesktopPlatform): AgentDesktopWriter => {
+    writer ??= createAgentDesktopWriter({
+      cli: adCli(),
+      reader: adReader(desktopPlatform),
+      sessions,
+      control,
+      platform: desktopPlatform,
+      now,
+    });
+    return writer;
   };
 
   /** The device app is told, so it can bring its permission card up. */
@@ -521,6 +541,18 @@ export function createDesktopActions(
       return fail(desktopMessage("not_windows"));
     if (!DESKTOP_ACTIONS.has(action))
       return fail(desktopMessage("unsupported"));
+    if (DESKTOP_WRITE_ACTIONS.has(action)) {
+      if (control === NO_CONTROL) return fail(desktopMessage("unsupported"));
+      if (desktopPlatform === "linux")
+        return fail(desktopMessage("read_only_linux"));
+      if (engine === "legacy") return fail(desktopMessage("read_only_windows"));
+      try {
+        return await adWriter(desktopPlatform)(action, body, signal, context);
+      } catch (error) {
+        // Building the writer failed (no agent-desktop): nothing was sent.
+        return readFailure(error);
+      }
+    }
     if (SESSION_ACTIONS.has(action)) {
       try {
         return await sessionAct(desktopPlatform, action, body, signal, context);
@@ -549,6 +581,7 @@ export function createDesktopActions(
       if (closing) {
         cli = undefined;
         reader = opts.reader;
+        writer = undefined;
       }
       const stateDir = opts.stateDir;
       await Promise.all([

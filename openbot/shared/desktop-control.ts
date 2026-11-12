@@ -2,10 +2,11 @@
  * The desktop-control protocol the runner and the server share (docs/specs/2026-11-07-desktop-control.md,
  * Phase 1; docs/specs/2026-11-12-desktop-write-agent-desktop.md, Phase 2).
  *
- * Two read actions, `desktop.windows` and `desktop.snapshot`, and three session actions
+ * Two read actions, `desktop.windows` and `desktop.snapshot`; three session actions
  * (`desktop.session_start`, `desktop.session_status`, `desktop.session_end`, plan Task 13): the
- * device owns the desktop session, so the server hands it a token and asks it what is current. A
- * write action joins this set only with the spec revision that brings it.
+ * device owns the desktop session, so the server hands it a token and asks it what is current; and
+ * four write actions inside a session (`desktop.click`, `desktop.type`, `desktop.key`,
+ * `desktop.focus`, plan Task 21). A further write joins this set only with the task that brings it.
  *
  * The Chinese copy is the spec's §5 and the plan's design decision 8, word for word. The server
  * shows it to the owner and the model as it stands.
@@ -20,7 +21,53 @@ export const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
   "desktop.session_start",
   "desktop.session_status",
   "desktop.session_end",
+  "desktop.click",
+  "desktop.type",
+  "desktop.key",
+  "desktop.focus",
 ]);
+
+/** The write actions among them: each runs inside the device's desktop session (`DesktopWritePayload`). */
+export const DESKTOP_WRITE_ACTIONS: ReadonlySet<string> = new Set([
+  "desktop.click",
+  "desktop.type",
+  "desktop.key",
+  "desktop.focus",
+]);
+
+/**
+ * What every desktop write carries. `session` is the token the server minted; `approved` says the
+ * owner approved this very step; `actionWords` is the team's list (blank or empty means the default,
+ * `desktopActionWordsOf`); `approvedTitle` is the window title the owner saw on the card, when the
+ * step was asked about. The device reads the coworker from the transport, never from `botId` here.
+ */
+export type DesktopWriteCommon = {
+  session: string;
+  botId: string;
+  actorId: string;
+  approved: boolean;
+  actionWords: string[];
+  approvedTitle?: string;
+};
+/** One write's payload: click `{ ref }`, type `{ ref, text, mode }`, key `{ windowId, keys }`, focus `{ windowId }`. */
+export type DesktopWritePayload = DesktopWriteCommon &
+  (
+    | { ref: string }
+    | { ref: string; text: string; mode: "replace" | "append" }
+    | { windowId: string; keys: string }
+    | { windowId: string }
+  );
+
+/** A write that went through. `note` tells the model the window may have changed. */
+export type DesktopWriteOutput = {
+  /** A real pointer or keyboard was used (`--headed`, or a key press). */
+  physical: boolean;
+  durationMs: number;
+  delivery: "verified" | "unverified";
+  window: { windowId: string; title: string; process: string };
+  control?: { type: string; name: string };
+  note: string;
+};
 
 export const DESKTOP_LIMITS = {
   /** UIA tree depth below the starting element. */
@@ -112,6 +159,7 @@ export type DesktopErrorCode =
   | "needs_approval"
   | "password_field"
   | "not_foreground"
+  | "outcome_unknown"
   | "failed";
 
 /** The Chinese text for a desktop failure. `detail` is the stderr tail, seconds, word or details. */
@@ -174,6 +222,8 @@ export function desktopMessage(
       return "这是密码框，员工不能往里输入。请用 computer_request_secret 让主人自己输入。";
     case "not_foreground":
       return "这个窗口不在前台，请先用 computer_desktop_focus 把它切到前台。";
+    case "outcome_unknown":
+      return "不确定这一步是否已经生效，请先重新读取窗口确认。";
     case "failed":
       return detail ? `桌面操作没有成功：${detail}` : "桌面操作没有成功。";
   }
@@ -411,6 +461,58 @@ export function classifyDesktopKeys(keys: string): DesktopKeyClass | undefined {
     normalized,
     force: kind === "close" && FORCED_KEYS.has(normalized),
   };
+}
+
+/**
+ * Whether pressing `keys` may press whatever button has the focus: Space alone or with Shift
+ * (round-1 ruling: Tab to a button, then Space, would otherwise be an unasked click). The class of
+ * the combination is unchanged (`plain`); a write asks for this on top of it.
+ */
+export function desktopActivationKey(keys: string): boolean {
+  const parsed = parseKeys(keys);
+  if (!parsed) return false;
+  if (parsed.key !== "space") return false;
+  for (const modifier of parsed.modifiers)
+    if (modifier !== "shift") return false;
+  return true;
+}
+
+/**
+ * Control roles a desktop type writes into without asking. Only `textfield` is in the samples
+ * measured on CI (runner/tests/fixtures/agent-desktop); the others are the further text roles the
+ * round-1 ruling names. A `textarea` is multi-line; a `textfield` is multi-line only inside a
+ * `scrollarea` (FACTS (b)); every other one is single-line.
+ */
+export const DESKTOP_TEXT_ROLES: ReadonlySet<string> = new Set([
+  "textfield",
+  "textarea",
+  "searchfield",
+  "combobox",
+]);
+
+/**
+ * Whether typing `text` needs the owner's approval for its characters alone: any C0 control
+ * (U+0000–U+001F, the tab included), DEL, NEL, LINE SEPARATOR or PARAGRAPH SEPARATOR. In a multi-line
+ * box CR and LF are ordinary; in a single-line one they submit, so they are asked about too.
+ */
+export function desktopTextNeedsApproval(
+  text: string,
+  multiline: boolean,
+): boolean {
+  if (typeof text !== "string") return false;
+  for (const char of text) {
+    const code = char.codePointAt(0) as number;
+    if (multiline && (code === 0x0a || code === 0x0d)) continue;
+    if (
+      code <= 0x1f ||
+      code === 0x7f ||
+      code === 0x85 ||
+      code === 0x2028 ||
+      code === 0x2029
+    )
+      return true;
+  }
+  return false;
 }
 
 /**

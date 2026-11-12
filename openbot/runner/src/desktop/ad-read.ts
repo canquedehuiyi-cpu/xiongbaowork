@@ -70,6 +70,11 @@ export type AgentDesktopReader = {
   /** For write actions: only refs of this window's latest snapshot resolve; anything else is "stale"; a node with no ref_id is "not_actionable". */
   resolveRef(ref: string): ResolvedRef | "stale" | "not_actionable";
   adWindow(windowId: string): { adWindowId: string; pid: number } | undefined;
+  /**
+   * The window's title as the latest read saw it (a listing or a snapshot), cut to `titleMax`; a
+   * write compares it with the title now (spec §5). Optional so a stand-in reader may leave it out.
+   */
+  readTitle?(windowId: string): string | undefined;
   /** After a write succeeds, and after the idle wipe: this window's refs (or every window's) are void. */
   invalidate(windowId?: string): void;
 };
@@ -151,7 +156,7 @@ function codeFor(
  * to its Chinese copy (details with paths and the account name taken out), the CLI layer's own
  * errors with paths taken out.
  */
-function toReadError(error: unknown, platform: DesktopPlatform): Error {
+export function toReadError(error: unknown, platform: DesktopPlatform): Error {
   if (isAbort(error)) return error as Error;
   if (error instanceof AgentDesktopError) {
     const code = codeFor(error, platform);
@@ -338,6 +343,8 @@ export function createAgentDesktopReader(opts: {
   const windowIds = new Map<string, AdWindow>();
   /** Runner window id → its latest snapshot, the latest `snapshotsKept` windows. */
   const snaps = new Map<string, Snap>();
+  /** Runner window id → its title as last read; kept for the same windows as `windowIds`. */
+  const titles = new Map<string, string>();
   let counter = 0;
   /**
    * Invalidation generations, so a snapshot that was running while its window (or every window) was
@@ -411,10 +418,19 @@ export function createAgentDesktopReader(opts: {
     const result: DesktopWindow[] = [];
     for (const { raw: entry, ad } of listed) {
       const windowId = idOf(ad);
-      remember(windowIds, windowId, ad, DESKTOP_LIMITS.windowIdsKept, (gone) =>
-        snaps.delete(gone),
+      remember(
+        windowIds,
+        windowId,
+        ad,
+        DESKTOP_LIMITS.windowIdsKept,
+        (gone) => {
+          snaps.delete(gone);
+          titles.delete(gone);
+        },
       );
-      result.push(windowOf(entry, windowId, displays));
+      const window = windowOf(entry, windowId, displays);
+      titles.set(windowId, window.title);
+      result.push(window);
     }
     return { platform, windows: result };
   }
@@ -556,10 +572,12 @@ export function createAgentDesktopReader(opts: {
         { snapshotId, elements: flat.elements, adRefs: flat.adRefs },
         DESKTOP_LIMITS.snapshotsKept,
       );
+    const window = windowOf(live, windowId);
+    if (windowIds.has(windowId)) titles.set(windowId, window.title);
     const result: DesktopSnapshot & { platform: DesktopPlatform } = {
       platform,
       snapshotId,
-      window: windowOf(live, windowId),
+      window,
       truncated: flat.truncated || envelope.complete === false,
       elements: flat.elements,
     };
@@ -599,6 +617,9 @@ export function createAgentDesktopReader(opts: {
     adWindow(windowId) {
       const target = windowIds.get(windowId);
       return target ? { ...target } : undefined;
+    },
+    readTitle(windowId) {
+      return titles.get(windowId);
     },
     invalidate(windowId) {
       epoch++;
