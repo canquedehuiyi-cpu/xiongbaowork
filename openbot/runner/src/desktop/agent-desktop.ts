@@ -40,6 +40,8 @@ export class AgentDesktopError extends Error {
   readonly exitCode: number;
   /** The CLI says the action was not delivered (`disposition.delivery === "not_delivered"`). */
   readonly notDelivered: boolean;
+  /** `disposition.delivery` as the CLI gave it; absent when the envelope says nothing. */
+  readonly delivery?: string;
   /** `details.kind`, or `platform_detail`. */
   readonly detail?: string;
   constructor(error: AdError, exitCode: number) {
@@ -47,7 +49,9 @@ export class AgentDesktopError extends Error {
     this.name = "AgentDesktopError";
     this.code = error.code;
     this.exitCode = exitCode;
-    this.notDelivered = error.disposition?.delivery === "not_delivered";
+    const delivery = error.disposition?.delivery;
+    if (typeof delivery === "string") this.delivery = delivery;
+    this.notDelivered = delivery === "not_delivered";
     const kind = error.details?.kind;
     const detail = typeof kind === "string" ? kind : error.platform_detail;
     if (typeof detail === "string") this.detail = detail;

@@ -1,8 +1,10 @@
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DESKTOP_CLIPBOARD_NOT_KEPT,
   DESKTOP_LIMITS,
   type DesktopPlatform,
   desktopMessage,
@@ -21,6 +23,7 @@ import {
 import { createDesktopHost } from "../src/desktop/host";
 import { createDesktopSessions } from "../src/desktop/session";
 import { createRunnerExecutor } from "../src/execute";
+import { createActionJournal } from "../src/journal";
 
 /* The four desktop writes on agent-desktop (plan docs/plans/2026-11-12-desktop-write.md, Task 21):
    the real CLI layer and reader over the fake binary, a real session over an in-memory channel whose
@@ -1462,5 +1465,404 @@ describe("desktop writes: review fixes 2", () => {
       approvedTitle: before,
     });
     expect(output(done).window).toMatchObject({ title: before });
+  });
+});
+
+describe("desktop writes: launch and the clipboard (Task 24)", () => {
+  const BAD_APP = desktopMessage(
+    "failed",
+    "应用名只能是应用的名字，不能带路径或参数",
+  );
+  const commandsOf = (t: Setup, name: string) =>
+    t.log().filter((args) => args[0] === name);
+
+  test("launch refuses paths and flags (/bin/sh, -x, ../a) without running anything", async () => {
+    const t = setup("windows", {
+      launch: {
+        envelope: {
+          version: "2.6",
+          ok: false,
+          command: "launch",
+          error: {
+            code: "APP_NOT_FOUND",
+            message: "No application named 'nosuchapp'",
+            disposition: { delivery: "not_delivered", retry: "safe" },
+          },
+        },
+        exitCode: 1,
+      },
+    });
+    // No session: nothing runs, whatever the name.
+    expect(await t.write("desktop.launch", { app: "notepad" })).toEqual(
+      fail(desktopMessage("no_session")),
+    );
+    await t.start();
+    for (const app of [
+      "/bin/sh",
+      "-x",
+      "../a",
+      "--cdp",
+      "C:\\Windows\\System32\\cmd.exe",
+      "",
+      undefined,
+      42,
+    ])
+      expect(await t.write("desktop.launch", { app, approved: true })).toEqual(
+        fail(BAD_APP),
+      );
+    expect(t.log()).toEqual([]);
+
+    // A plain name goes as one argument, with no --headed, --activate, --arg, --env or --cdp.
+    expect(await t.write("desktop.launch", { app: "nosuchapp" })).toEqual(
+      fail("没有找到这个应用：nosuchapp"),
+    );
+    t.set("launch", {
+      envelope: {
+        version: "2.6",
+        ok: true,
+        command: "launch",
+        data: { app: "notepad", pid: 4242 },
+      },
+    });
+    const done = await t.write("desktop.launch", { app: "notepad" });
+    expect(output(done)).toMatchObject({ app: "notepad" });
+    expect(t.log()).toEqual([
+      ["version"],
+      ["launch", "nosuchapp"],
+      ["launch", "notepad"],
+    ]);
+
+    // A name with a space is one argument; a flag after a space is no name at all.
+    expect(
+      output(await t.write("desktop.launch", { app: "Microsoft Edge" })),
+    ).toMatchObject({ app: "Microsoft Edge" });
+    expect(t.log().at(-1)).toEqual(["launch", "Microsoft Edge"]);
+    const ran = t.log().length;
+    for (const app of ["notepad -x", "notepad --arg", "a - b"])
+      expect(await t.write("desktop.launch", { app })).toEqual(fail(BAD_APP));
+    expect(t.log()).toHaveLength(ran);
+
+    // Linux is read only: launch never reaches the binary there either.
+    const linux = setup("linux");
+    await linux.start();
+    expect(await linux.write("desktop.launch", { app: "gedit" })).toEqual(
+      fail(desktopMessage("read_only_linux")),
+    );
+    expect(linux.log()).toEqual([]);
+  });
+
+  test("clipboard read without approval is needs_approval; approved returns text cut to 8000", async () => {
+    const long = `${"剪".repeat(7_999)}😀tail`;
+    const t = setup("macos", {
+      "clipboard-get": {
+        envelope: {
+          version: "2.6",
+          ok: true,
+          command: "clipboard-get",
+          data: { format: "text", text: long },
+        },
+      },
+    });
+    expect(await t.write("desktop.clipboard_read", { approved: true })).toEqual(
+      fail(desktopMessage("no_session")),
+    );
+    await t.start();
+    expect(await t.write("desktop.clipboard_read", {})).toEqual(
+      fail(
+        desktopMessage(
+          "needs_approval",
+          "读取剪贴板，里面可能有刚复制的密码或验证码",
+        ),
+      ),
+    );
+    expect(
+      await t.write("desktop.clipboard_read", { approved: "true" }),
+    ).toEqual(
+      fail(
+        desktopMessage(
+          "needs_approval",
+          "读取剪贴板，里面可能有刚复制的密码或验证码",
+        ),
+      ),
+    );
+    expect(commandsOf(t, "clipboard-get")).toEqual([]);
+
+    const read = output<{ text: string; truncated: boolean }>(
+      await t.write("desktop.clipboard_read", { approved: true }),
+    );
+    expect(read.truncated).toBe(true);
+    expect([...read.text]).toHaveLength(DESKTOP_LIMITS.clipboardReadMaxChars);
+    // Cut on a character, never inside one.
+    expect(read.text).toBe(`${"剪".repeat(7_999)}😀`);
+    expect(commandsOf(t, "clipboard-get")).toEqual([
+      ["clipboard-get", "--format", "text"],
+    ]);
+
+    t.set("clipboard-get", {
+      envelope: {
+        version: "2.6",
+        ok: true,
+        command: "clipboard-get",
+        data: { format: "text", text: "短的" },
+      },
+    });
+    expect(
+      output(await t.write("desktop.clipboard_read", { approved: true })),
+    ).toMatchObject({ text: "短的", truncated: false });
+
+    // Reading changes nothing: a failure is a plain failure, never unknown.
+    t.set("clipboard-get", {
+      envelope: {
+        version: "2.6",
+        ok: false,
+        command: "clipboard-get",
+        error: { code: "INTERNAL", message: "pasteboard unavailable" },
+      },
+      exitCode: 1,
+    });
+    const failed = await t.write("desktop.clipboard_read", { approved: true });
+    expect(failed).toEqual(
+      fail(desktopMessage("failed", "INTERNAL：pasteboard unavailable")),
+    );
+  });
+
+  test("clipboard write sends the exact bytes through stdin", async () => {
+    const t = setup("windows");
+    const text = "熊宝员工 😀\r\nline two\ttab";
+    expect(await t.write("desktop.clipboard_write", { text })).toEqual(
+      fail(desktopMessage("no_session")),
+    );
+    await t.start();
+    // No approval needed on the device; the text never goes on the command line.
+    const done = await t.write("desktop.clipboard_write", { text });
+    expect(output(done)).toMatchObject({
+      bytes: Buffer.byteLength(text, "utf8"),
+    });
+    const sets = t
+      .entries()
+      .filter((entry) => entry.args[0] === "clipboard-set");
+    expect(sets.map((entry) => entry.args)).toEqual([
+      ["clipboard-set", "--stdin"],
+    ]);
+    expect(stdinOf(sets[0])).toBe(text);
+
+    // 9 000 bytes go through; one more is refused before anything runs.
+    const max = "字".repeat(3_000);
+    expect(Buffer.byteLength(max, "utf8")).toBe(DESKTOP_LIMITS.textMaxBytes);
+    expect(
+      await t.write("desktop.clipboard_write", { text: max }),
+    ).toMatchObject({ ok: true });
+    expect(
+      await t.write("desktop.clipboard_write", { text: `${max}a` }),
+    ).toEqual(fail(desktopMessage("failed", "文字太长")));
+    expect(
+      await t.write("desktop.clipboard_write", { text: undefined }),
+    ).toEqual(fail(desktopMessage("failed", "没有要写入剪贴板的文字")));
+    expect(
+      t.entries().filter((entry) => entry.args[0] === "clipboard-set"),
+    ).toHaveLength(2);
+
+    // A write that may have landed is unknown, as any write is.
+    t.set("clipboard-set", {
+      write: { delivery: "unknown", error: "INTERNAL" },
+    });
+    expect(await t.write("desktop.clipboard_write", { text })).toEqual(unknown);
+  });
+
+  test("the actions route launch, both clipboard actions and wait", async () => {
+    const t = setup("windows", {
+      snapshot: { sample: "snapshot-password" },
+    });
+    const actions = createDesktopActions({
+      platform: "win32",
+      engine: "agent-desktop",
+      cli: t.cli,
+      reader: t.reader,
+      control: t.control,
+      sessions: t.sessions,
+    });
+    await t.start();
+    const payload = {
+      session: TOKEN,
+      actorId: ACTOR,
+      approved: false,
+      actionWords: [],
+    };
+    const context = { botId: BOT };
+    expect(
+      await actions("desktop.clipboard_read", payload, undefined, context),
+    ).toEqual(
+      fail(
+        desktopMessage(
+          "needs_approval",
+          "读取剪贴板，里面可能有刚复制的密码或验证码",
+        ),
+      ),
+    );
+    expect(
+      await actions(
+        "desktop.clipboard_write",
+        { ...payload, text: "x" },
+        undefined,
+        context,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      await actions(
+        "desktop.launch",
+        { ...payload, app: "-x" },
+        undefined,
+        context,
+      ),
+    ).toEqual(fail(BAD_APP));
+
+    // wait is a read: no session needed.
+    const { window } = await read(t);
+    t.sessions.end(TOKEN);
+    const waited = await actions(
+      "desktop.wait",
+      {
+        windowId: window.windowId,
+        name: "Send",
+        type: "button",
+        timeoutSec: 3,
+      },
+      undefined,
+      context,
+    );
+    expect(output(waited)).toMatchObject({
+      window: { windowId: window.windowId },
+    });
+
+    // The legacy engine cannot wait; it starts nothing.
+    const legacy = createDesktopActions({
+      platform: "win32",
+      control: t.control,
+      sessions: t.sessions,
+      host: createDesktopHost({
+        spec: () => {
+          throw new Error("must not start a helper");
+        },
+      }),
+    });
+    cleanup.push(() => legacy.close());
+    expect(
+      await legacy(
+        "desktop.wait",
+        { windowId: "w123-45", name: "Send", timeoutSec: 3 },
+        undefined,
+        context,
+      ),
+    ).toEqual(fail(desktopMessage("unsupported")));
+    for (const action of [
+      "desktop.launch",
+      "desktop.clipboard_read",
+      "desktop.clipboard_write",
+    ])
+      expect(
+        await legacy(
+          action,
+          { ...payload, app: "notepad", text: "x" },
+          undefined,
+          context,
+        ),
+      ).toEqual(fail(desktopMessage("read_only_windows")));
+  });
+});
+
+describe("desktop writes: review fixes 3", () => {
+  test("INVALID_ARGS that agent-desktop says may have been delivered is outcome_unknown", async () => {
+    const message = "Invalid ref_id '@e1': expected @<snapshot_id>:e<N>";
+    const invalid = (disposition?: Record<string, string>) => ({
+      envelope: {
+        version: "2.6",
+        ok: false,
+        command: "click",
+        error: {
+          code: "INVALID_ARGS",
+          message,
+          ...(disposition ? { disposition } : {}),
+        },
+      },
+      exitCode: 1,
+    });
+    const t = setup("windows", {
+      click: invalid({ delivery: "not_delivered", retry: "safe" }),
+    });
+    await t.start();
+    let { el } = await read(t);
+    let ref = el("Single line").ref;
+    // Not delivered, or nothing said: refused as the arguments were read.
+    expect(await t.write("desktop.click", { ref })).toEqual(
+      fail(desktopMessage("failed", `INVALID_ARGS：${message}`)),
+    );
+    expect(typeof t.reader.resolveRef(ref)).toBe("object");
+
+    for (const delivery of ["delivered_unverified", "unknown"]) {
+      t.set("click", invalid({ delivery, retry: "unsafe" }));
+      ({ el } = await read(t));
+      ref = el("Single line").ref;
+      expect(await t.write("desktop.click", { ref })).toEqual(unknown);
+      // Unknown voids the window's refs.
+      expect(t.reader.resolveRef(ref)).toBe("stale");
+    }
+    // Never tried again, headed or not.
+    expect(t.writes().filter((args) => args.includes("--headed"))).toEqual([]);
+  });
+});
+
+describe("desktop writes: review fixes 4", () => {
+  test("a clipboard read is journaled as its length only; a replay says it was not kept", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ad-write-journal-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    const file = join(dir, "actions.sqlite");
+    const journal = createActionJournal(file);
+    cleanup.push(() => journal.close());
+    const secret = "验证码 123456 😀";
+    const action = {
+      action: "desktop.clipboard_read",
+      payload: { session: TOKEN, actorId: ACTOR, approved: true },
+    };
+    const live = await journal.execute("scope", "k1", action, async () => ({
+      ok: true,
+      output: { text: secret, truncated: false, durationMs: 4 },
+    }));
+    // The live answer carries the text.
+    expect(live).toEqual({
+      ok: true,
+      output: { text: secret, truncated: false, durationMs: 4 },
+    });
+
+    const database = new Database(file, { readonly: true });
+    const rows = database
+      .query<{ outcome: string }, []>("SELECT outcome FROM actions")
+      .all()
+      .map((row) => row.outcome);
+    database.close();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toContain("验证码");
+    expect(rows[0]).not.toContain("123456");
+    expect(JSON.parse(rows[0] ?? "{}")).toEqual({
+      ok: true,
+      output: { chars: [...secret].length, truncated: false },
+    });
+
+    // A replay cannot give the text back, and says so rather than pass off an empty clipboard.
+    const replay = await journal.execute("scope", "k1", action, async () => {
+      throw new Error("a replay must not run again");
+    });
+    expect(replay).toEqual({ ok: false, error: DESKTOP_CLIPBOARD_NOT_KEPT });
+    expect(DESKTOP_CLIPBOARD_NOT_KEPT).toBe(
+      "剪贴板内容不会被保存，请重新读取。",
+    );
+
+    // A failed read holds no text and replays as it was.
+    const failed = { ok: false as const, error: desktopMessage("failed") };
+    await journal.execute("scope", "k2", action, async () => failed);
+    expect(
+      await journal.execute("scope", "k2", action, async () => {
+        throw new Error("a replay must not run again");
+      }),
+    ).toEqual(failed);
   });
 });

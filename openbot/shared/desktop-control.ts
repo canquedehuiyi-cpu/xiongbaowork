@@ -6,7 +6,9 @@
  * (`desktop.session_start`, `desktop.session_status`, `desktop.session_end`, plan Task 13): the
  * device owns the desktop session, so the server hands it a token and asks it what is current; and
  * four write actions inside a session (`desktop.click`, `desktop.type`, `desktop.key`,
- * `desktop.focus`, plan Task 21). A further write joins this set only with the task that brings it.
+ * `desktop.focus`, plan Task 21). Task 24 adds a third read, `desktop.wait` (for a control to show
+ * up), and three more writes: `desktop.launch`, `desktop.clipboard_read`, `desktop.clipboard_write`.
+ * A further action joins this set only with the task that brings it.
  *
  * The Chinese copy is the spec's §5 and the plan's design decision 8, word for word. The server
  * shows it to the owner and the model as it stands.
@@ -25,6 +27,10 @@ export const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
   "desktop.type",
   "desktop.key",
   "desktop.focus",
+  "desktop.wait",
+  "desktop.launch",
+  "desktop.clipboard_read",
+  "desktop.clipboard_write",
 ]);
 
 /** The write actions among them: each runs inside the device's desktop session (`DesktopWritePayload`). */
@@ -33,7 +39,19 @@ export const DESKTOP_WRITE_ACTIONS: ReadonlySet<string> = new Set([
   "desktop.type",
   "desktop.key",
   "desktop.focus",
+  "desktop.launch",
+  "desktop.clipboard_read",
+  "desktop.clipboard_write",
 ]);
+
+/**
+ * An app `desktop.launch` may start: a name, never a path or a flag. It starts with a letter or a
+ * digit (so not `-x`, `.`, `..` or `/`), holds no slash, backslash, colon or control character, and
+ * no space is followed by `-` (so not `notepad -x`, which reads like a flag even as one argument).
+ * On Windows agent-desktop itself only finds programs in System32 or the Windows directory.
+ */
+export const DESKTOP_APP_NAME =
+  /^[\p{L}\p{N}](?:[\p{L}\p{N}._()-]| (?!-)){0,63}$/u;
 
 /**
  * What every desktop write carries. `session` is the token the server minted; `approved` says the
@@ -49,14 +67,37 @@ export type DesktopWriteCommon = {
   actionWords: string[];
   approvedTitle?: string;
 };
-/** One write's payload: click `{ ref }`, type `{ ref, text, mode }`, key `{ windowId, keys }`, focus `{ windowId }`. */
-export type DesktopWritePayload = DesktopWriteCommon &
-  (
-    | { ref: string }
-    | { ref: string; text: string; mode: "replace" | "append" }
-    | { windowId: string; keys: string }
-    | { windowId: string }
-  );
+/** What each desktop write carries besides `DesktopWriteCommon`, by action. */
+export type DesktopWriteTargets = {
+  "desktop.click": { ref: string };
+  "desktop.type": { ref: string; text: string; mode: "replace" | "append" };
+  "desktop.key": { windowId: string; keys: string };
+  "desktop.focus": { windowId: string };
+  "desktop.launch": { app: string };
+  /** Nothing more, but `approved: true`, always. */
+  "desktop.clipboard_read": { approved: true };
+  "desktop.clipboard_write": { text: string };
+};
+export type DesktopWriteAction = keyof DesktopWriteTargets;
+
+/** One write's payload, for its action: a click without `ref` does not type-check. */
+export type DesktopWritePayload<A extends DesktopWriteAction> =
+  DesktopWriteCommon & DesktopWriteTargets[A];
+
+/** A desktop write as sent: the action and its own payload, told apart by `action`. */
+export type DesktopWriteRequest = {
+  [A in DesktopWriteAction]: { action: A; payload: DesktopWritePayload<A> };
+}[DesktopWriteAction];
+
+/** `desktop.wait`'s payload, a read: no session. `allowSensitive` as for a snapshot. */
+export type DesktopWaitPayload = {
+  windowId: string;
+  name?: string;
+  type?: string;
+  /** 1 to `DESKTOP_LIMITS.waitMaxSec`. */
+  timeoutSec: number;
+  allowSensitive?: boolean;
+};
 
 /** A write that went through. `note` tells the model the window may have changed. */
 export type DesktopWriteOutput = {
@@ -68,6 +109,24 @@ export type DesktopWriteOutput = {
   control?: { type: string; name: string };
   note: string;
 };
+
+/** `desktop.launch` that went through: the app was asked to start; its window is listed afresh. */
+export type DesktopLaunchOutput = {
+  app: string;
+  durationMs: number;
+  delivery: "verified" | "unverified";
+  note: string;
+};
+
+/** `desktop.clipboard_read`: the text, cut to `clipboardReadMaxChars` characters. */
+export type DesktopClipboardReadOutput = {
+  text: string;
+  truncated: boolean;
+  durationMs: number;
+};
+
+/** `desktop.clipboard_write`: how many UTF-8 bytes went onto the clipboard (never the text). */
+export type DesktopClipboardWriteOutput = { bytes: number; durationMs: number };
 
 export const DESKTOP_LIMITS = {
   /** UIA tree depth below the starting element. */
@@ -107,6 +166,10 @@ export const DESKTOP_LIMITS = {
   sessionReadyMs: 2_000,
   /** The longest text one desktop write may type, in UTF-8 bytes; longer is refused at the server. */
   textMaxBytes: 9_000,
+  /** The most of the clipboard one `desktop.clipboard_read` returns, in characters. */
+  clipboardReadMaxChars: 8_000,
+  /** The longest one `desktop.wait` may wait, in seconds. */
+  waitMaxSec: 30,
 } as const;
 
 /** The agent-desktop release the runner is built against; any other version is refused. */
@@ -575,6 +638,12 @@ export type DesktopElement = {
 };
 
 export type DesktopImage = { base64: string; width: number; height: number };
+
+/**
+ * What a replayed `desktop.clipboard_read` answers: the action journal keeps only the length of
+ * what was read (plan: clipboard contents are recorded by length only), never the text.
+ */
+export const DESKTOP_CLIPBOARD_NOT_KEPT = "剪贴板内容不会被保存，请重新读取。";
 
 /** What replaces a screenshot the approval store did not keep. */
 export const DESKTOP_IMAGE_NOT_KEPT = "截图未保存，请重新读取窗口。";

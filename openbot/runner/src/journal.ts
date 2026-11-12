@@ -1,8 +1,11 @@
 import { Database } from "bun:sqlite";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { DESKTOP_CLIPBOARD_NOT_KEPT } from "../../shared/desktop-control";
 import { actionFingerprint } from "../../shared/runner-actions";
 import type { ActionOutcome, RunnerAction } from "./execute";
+
+const CLIPBOARD_READ = "desktop.clipboard_read";
 
 /**
  * What the journal keeps of a result. A desktop screenshot is large and sensitive and is never
@@ -10,11 +13,23 @@ import type { ActionOutcome, RunnerAction } from "./execute";
  * `session` of `desktop.session_status`, which carries the session token) is dropped whole: the
  * token lives only in memory (plan docs/plans/2026-11-12-desktop-write.md, design decision 5), and a
  * replayed status without a session makes the server ask the device again or ask the owner again,
- * never skip a question. Everything else is kept.
+ * never skip a question. What `desktop.clipboard_read` read is kept as its length only (plan
+ * docs/plans/2026-11-12-desktop-write.md: clipboard contents are recorded by length alone), so a
+ * replay of it answers `DESKTOP_CLIPBOARD_NOT_KEPT` (`replayed`). Everything else is kept.
  */
 function journaled(action: string, outcome: ActionOutcome): ActionOutcome {
   if (!action.startsWith("desktop.") || !outcome.ok) return outcome;
   const output = outcome.output;
+  if (action === CLIPBOARD_READ) {
+    const read = (output ?? {}) as { text?: unknown; truncated?: unknown };
+    return {
+      ok: true,
+      output: {
+        chars: typeof read.text === "string" ? [...read.text].length : 0,
+        truncated: read.truncated === true,
+      },
+    };
+  }
   if (typeof output !== "object" || output === null) return outcome;
   let kept = output as Record<string, unknown>;
   if ("session" in kept) {
@@ -27,6 +42,13 @@ function journaled(action: string, outcome: ActionOutcome): ActionOutcome {
     kept = { ...kept, image: rest };
   }
   return kept === output ? outcome : { ok: true, output: kept };
+}
+
+/** A stored outcome as a replay answers it: a clipboard read that went through cannot be given back. */
+function replayed(action: string, outcome: ActionOutcome): ActionOutcome {
+  if (action === CLIPBOARD_READ && outcome.ok)
+    return { ok: false, error: DESKTOP_CLIPBOARD_NOT_KEPT };
+  return outcome;
 }
 
 /** The claim is flushed before touching the machine. Restarting never replays an unfinished claim. */
@@ -80,7 +102,10 @@ export function createActionJournal(path: string) {
         const pending = running.get(identity);
         if (pending) return pending;
         if (row.state === "completed" && row.outcome)
-          return JSON.parse(row.outcome) as ActionOutcome;
+          return replayed(
+            action.action,
+            JSON.parse(row.outcome) as ActionOutcome,
+          );
         return unknown();
       }
       const result = (async () => {

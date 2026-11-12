@@ -3,12 +3,15 @@ import {
   classifyDesktopKeys,
   DEFAULT_DESKTOP_ACTION_WORDS,
   DESKTOP_ACTIONS,
+  DESKTOP_APP_NAME,
   DESKTOP_KEYS,
   DESKTOP_LIMITS,
   DESKTOP_REF,
   DESKTOP_TEXT_ROLES,
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
+  type DesktopWritePayload,
+  type DesktopWriteRequest,
   desktopActionWordsOf,
   desktopActivationKey,
   desktopMessage,
@@ -56,18 +59,22 @@ describe("desktop-control protocol", () => {
   test("the read, session and write actions exist, nothing else", () => {
     expect([...DESKTOP_ACTIONS].sort()).toEqual([
       "desktop.click",
+      "desktop.clipboard_read",
+      "desktop.clipboard_write",
       "desktop.focus",
       "desktop.key",
+      "desktop.launch",
       "desktop.session_end",
       "desktop.session_start",
       "desktop.session_status",
       "desktop.snapshot",
       "desktop.type",
+      "desktop.wait",
       "desktop.windows",
     ]);
   });
 
-  test("DESKTOP_ACTIONS is exactly the nine actions: two reads, three session actions, four writes", () => {
+  test("DESKTOP_ACTIONS is exactly the thirteen actions: three reads, three session actions, seven writes", () => {
     expect([...DESKTOP_ACTIONS]).toEqual([
       "desktop.windows",
       "desktop.snapshot",
@@ -78,6 +85,10 @@ describe("desktop-control protocol", () => {
       "desktop.type",
       "desktop.key",
       "desktop.focus",
+      "desktop.wait",
+      "desktop.launch",
+      "desktop.clipboard_read",
+      "desktop.clipboard_write",
     ]);
   });
 
@@ -110,6 +121,8 @@ describe("desktop-control protocol", () => {
       headedAckMs: 1_000,
       sessionReadyMs: 2_000,
       textMaxBytes: 9_000,
+      clipboardReadMaxChars: 8_000,
+      waitMaxSec: 30,
     });
   });
 
@@ -485,6 +498,80 @@ describe("desktop-control protocol", () => {
           multiline,
           hit: true,
         });
+  });
+
+  test("DESKTOP_APP_NAME takes an app's name and nothing that is a path or a flag", () => {
+    for (const app of [
+      "notepad",
+      "Safari",
+      "TextEdit",
+      "calc.exe",
+      "Microsoft Edge",
+      "微信",
+      "Visual Studio Code (Insiders)",
+      "a".repeat(64),
+    ])
+      expect({ app, ok: DESKTOP_APP_NAME.test(app) }).toEqual({
+        app,
+        ok: true,
+      });
+    for (const app of [
+      "",
+      "/bin/sh",
+      "-x",
+      "--help",
+      "../a",
+      ".hidden",
+      "a/b",
+      "C:\\Windows\\notepad.exe",
+      "a;b",
+      "a\nb",
+      " notepad",
+      "a".repeat(65),
+      "notepad -x",
+      "notepad --arg",
+      "a - b",
+      "a\t-x",
+    ])
+      expect({ app, ok: DESKTOP_APP_NAME.test(app) }).toEqual({
+        app,
+        ok: false,
+      });
+  });
+
+  test("a desktop write's payload is typed by its action", () => {
+    const common = {
+      session: "t",
+      botId: "b",
+      actorId: "a",
+      approved: false,
+      actionWords: [],
+    };
+    const click: DesktopWritePayload<"desktop.click"> = { ...common, ref: "r" };
+    const read: DesktopWriteRequest = {
+      action: "desktop.clipboard_read",
+      payload: { ...common, approved: true },
+    };
+    const unapproved: DesktopWriteRequest = {
+      action: "desktop.clipboard_read",
+      // @ts-expect-error a clipboard read is sent only once approved
+      payload: common,
+    };
+    // @ts-expect-error a click names its control
+    const noRef: DesktopWritePayload<"desktop.click"> = common;
+    const noRefRequest: DesktopWriteRequest = {
+      action: "desktop.click",
+      // @ts-expect-error a click names its control, whatever else could carry no target
+      payload: common,
+    };
+    const noApp: DesktopWriteRequest = {
+      action: "desktop.launch",
+      // @ts-expect-error a launch names its app
+      payload: { ...common, text: "x" },
+    };
+    expect([click, read, unapproved, noRef, noRefRequest, noApp]).toHaveLength(
+      6,
+    );
   });
 
   test("the text roles a desktop type may write into", () => {
