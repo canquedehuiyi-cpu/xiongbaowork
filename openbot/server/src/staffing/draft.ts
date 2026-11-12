@@ -117,7 +117,7 @@ function avatar(value: unknown): NonNullable<EmployeeDraft["avatar"]> {
   if (given.preset !== undefined) {
     const preset = given.preset as PortraitPreset;
     if (!PORTRAIT_PRESETS.includes(preset)) {
-      return refuse(`头像只能是 ${PORTRAIT_PRESETS.join("、")} 之一。`);
+      return refuse(`头像只能是 ${[...PORTRAIT_PRESETS].join("、")} 之一。`);
     }
     return { preset };
   }
