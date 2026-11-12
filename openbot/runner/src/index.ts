@@ -14,8 +14,8 @@
  */
 // Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
 import "../../shared/apply-env-aliases";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { hostname, platform } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { hostname, platform, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { APP_REF, type AppEntry, type AppInput, createAppRegistry } from "./apps";
 import { createAppHost } from "./app-host";
@@ -27,7 +27,12 @@ import {
 } from "./credentials";
 // --- desktop control (sub-project 2) ---
 import type { DesktopEngine } from "../../shared/desktop-control";
-import { createDesktopActions, desktopEngineFor } from "./desktop/actions";
+import {
+  compareDesktopEngines,
+  createDesktopActions,
+  desktopEngineFor,
+  formatEngineComparison,
+} from "./desktop/actions";
 import {
   type ControlChannel,
   createControlChannel,
@@ -135,6 +140,86 @@ export function clearDesktopState(
 }
 
 /**
+ * The agent-desktop binary: `--desktop-helper`, else `OPENBOT_DESKTOP_HELPER`, else the one shipped
+ * next to the runner's own executable. Undefined when the flag is there without a path.
+ */
+function desktopHelperPath(
+  args: Map<string, string>,
+  env: Record<string, string | undefined>,
+  cwd: string,
+): string | undefined {
+  const helperFlag = args.has("desktop-helper")
+    ? (args.get("desktop-helper")?.trim() ?? "")
+    : undefined;
+  if (helperFlag === "") return undefined;
+  const helper = helperFlag || env[DESKTOP_HELPER_ENV]?.trim() || "";
+  return helper
+    ? resolve(cwd, helper)
+    : join(
+        dirname(process.execPath),
+        `agent-desktop${process.platform === "win32" ? ".exe" : ""}`,
+      );
+}
+
+/**
+ * `--desktop-compare [--desktop-helper PATH]`: null when the arguments are not that command, or the
+ * sentence that says what was wrong. Nothing else goes with it: no server, no data directory.
+ */
+export function parseDesktopCompare(
+  argv: string[],
+  env: Record<string, string | undefined> = process.env,
+  cwd: string = process.cwd(),
+): { helper: string } | string | null {
+  if (!argv.includes("--desktop-compare")) return null;
+  const args = new Map<string, string>();
+  for (let index = 0; index < argv.length; index += 1) {
+    const entry = argv[index] ?? "";
+    if (entry === "--desktop-compare") continue;
+    if (entry !== "--desktop-helper")
+      return "--desktop-compare takes only --desktop-helper PATH.";
+    args.set("desktop-helper", argv[index + 1] ?? "");
+    index += 1;
+  }
+  const helper = desktopHelperPath(args, env, cwd);
+  if (helper === undefined) return "--desktop-helper needs a path.";
+  return { helper };
+}
+
+/**
+ * Reads the first ten windows through both engines and prints the table. The old PowerShell reader
+ * exists only on Windows; elsewhere its column says so. Nothing is written but what agent-desktop
+ * itself needs: its private state directory, made afresh under the system's temporary directory and
+ * removed before this returns (a running runner's own state directory is never touched).
+ */
+export async function runDesktopCompare(
+  parsed: { helper: string },
+  print: (line: string) => void = (line) => console.log(line),
+): Promise<number> {
+  const scratch = mkdtempSync(join(tmpdir(), "xiongbao-desktop-compare-"));
+  const legacy = createDesktopActions({
+    platform: process.platform,
+    engine: "legacy",
+  });
+  const agentDesktop = createDesktopActions({
+    platform: process.platform,
+    engine: "agent-desktop",
+    helper: parsed.helper,
+    stateDir: join(scratch, "agent-desktop-state"),
+  });
+  try {
+    print(
+      formatEngineComparison(
+        await compareDesktopEngines({ legacy, agentDesktop }),
+      ),
+    );
+    return 0;
+  } finally {
+    await Promise.allSettled([legacy.close(), agentDesktop.close()]);
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/**
  * The desktop engine's settings. The flag wins over the environment; an engine that is neither is
  * refused rather than guessed at. Without `--desktop-helper` the binary is the one shipped next to
  * the runner's own executable. Whether it exists is found out when a desktop action first needs it.
@@ -151,23 +236,15 @@ function desktopOptions(
   const engine = engineFlag ?? env[DESKTOP_ENGINE_ENV]?.trim() ?? "";
   if ((engineFlag !== undefined || engine) && !DESKTOP_ENGINES.has(engine))
     return "--desktop-engine must be legacy or agent-desktop.";
-  const helperFlag = args.has("desktop-helper")
-    ? (args.get("desktop-helper")?.trim() ?? "")
-    : undefined;
-  if (helperFlag === "") return "--desktop-helper needs a path.";
-  const helper = helperFlag || env[DESKTOP_HELPER_ENV]?.trim() || "";
+  const helper = desktopHelperPath(args, env, cwd);
+  if (helper === undefined) return "--desktop-helper needs a path.";
   const control = args.has("desktop-control")
     ? args.get("desktop-control")?.trim()
     : undefined;
   if (control !== undefined && control !== "stdio")
     return "--desktop-control must be stdio.";
   return {
-    helper: helper
-      ? resolve(cwd, helper)
-      : join(
-          dirname(process.execPath),
-          `agent-desktop${process.platform === "win32" ? ".exe" : ""}`,
-        ),
+    helper,
     ...(engine ? { engine: engine as DesktopEngine } : {}),
     stateDir: desktopStateDir(dataDir),
     ...(control ? { control } : {}),
@@ -221,6 +298,8 @@ function usage(): string {
     "  --desktop-engine NAME      legacy | agent-desktop, on Windows. Also read from OPENBOT_DESKTOP_ENGINE.",
     "  --desktop-control stdio    set by the device app that starts this runner: its banner and stop key",
     "                             talk to the runner over stdin and stdout. Without it nothing is written.",
+    "  --desktop-compare          read the first ten windows through both engines, print a table and exit",
+    "                             (with --desktop-helper PATH only; nothing is kept).",
     "",
     "A headless browser is a browser nobody is watching: it cannot be closed by hand when it goes",
     "wrong, and a site that asks you to prove you are a person has nobody to answer. Leave it off.",
@@ -967,6 +1046,14 @@ export async function main(
     stateFile: string,
   ) => CredentialStore = createFileCredentialStore,
 ): Promise<number> {
+  // --- desktop control (sub-project 2) ---
+  const compare = parseDesktopCompare(argv);
+  if (typeof compare === "string") {
+    console.error(compare);
+    return 2;
+  }
+  if (compare) return runDesktopCompare(compare);
+  // --- end desktop control ---
   const rootCommand = parseRootCommand(argv);
   if (typeof rootCommand === "string") {
     console.error(rootCommand);
