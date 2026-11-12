@@ -81,7 +81,7 @@ export function sidecarFiles(
 const sha256 = (bytes: Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
 
-function tarProgram(): string {
+export function tarProgram(): string {
   // The same tar the upstream postinstall uses on Windows (Git Bash's tar cannot read C:\ paths).
   if (process.platform === "win32") {
     return join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");

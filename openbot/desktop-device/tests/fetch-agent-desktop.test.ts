@@ -18,6 +18,7 @@ import {
   archiveUrl,
   fetchAgentDesktop,
   sidecarFiles,
+  tarProgram,
 } from "../scripts/fetch-agent-desktop";
 
 const dirs: string[] = [];
@@ -47,7 +48,7 @@ function build(files: Record<string, string> = FILES) {
     writeFileSync(join(src, name), body);
   const archive = join(scratch(), "a.tar.gz");
   const made = Bun.spawnSync(
-    ["tar", "-czf", archive, "-C", src, ...Object.keys(files)],
+    [tarProgram(), "-czf", archive, "-C", src, ...Object.keys(files)],
     { stderr: "pipe" },
   );
   if (made.exitCode !== 0) throw new Error(made.stderr.toString());
@@ -183,7 +184,10 @@ test("a good archive installs exactly the sidecar files, executable", async () =
   expect(written).toEqual([join(outDir, name)]);
   expect(readdirSync(outDir)).toEqual([name]);
   expect(readFileSync(join(outDir, name), "utf8")).toBe("cli bytes");
-  expect(statSync(join(outDir, name)).mode & 0o777).toBe(0o755);
+  // Windows has no POSIX mode bits; elsewhere the sidecar must be 0755.
+  if (process.platform !== "win32") {
+    expect(statSync(join(outDir, name)).mode & 0o777).toBe(0o755);
+  }
 });
 
 test("the committed lock pins six targets and the binaries of design decision 2", () => {
@@ -256,10 +260,10 @@ test("a download that always fails gives up after 5 attempts", async () => {
 test("a symlink entry is refused by name before anything is installed", async () => {
   const src = scratch();
   writeFileSync(join(src, "agent-desktop"), FILES["agent-desktop"] ?? "");
-  symlinkSync("/etc/passwd", join(src, "agent-desktop-linux-clipboard-owner"));
+  symlinkSync("agent-desktop", join(src, "agent-desktop-linux-clipboard-owner"));
   const archive = join(scratch(), "a.tar.gz");
   const made = Bun.spawnSync(
-    ["tar", "-czf", archive, "-C", src, ...Object.keys(FILES)],
+    [tarProgram(), "-czf", archive, "-C", src, ...Object.keys(FILES)],
     { stderr: "pipe" },
   );
   expect(made.exitCode).toBe(0);
