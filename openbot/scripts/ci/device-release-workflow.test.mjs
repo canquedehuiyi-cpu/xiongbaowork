@@ -764,7 +764,7 @@ test("nothing is published until a fresh Ubuntu and a fresh Windows machine chec
   expect(step("clean-windows", "install").run).toContain("-Phase install");
   expect(windowsPhase("install")).toContain("-ArgumentList '/S'");
   expect(step("clean-windows", "app").run).toContain("-Phase app");
-  expect(windowsPhase("app")).toContain("Get-Process -Name openbot-runner");
+  expect(windowsPhase("app")).toContain("Get-Process -Name xiongbao-runner");
   expect(step("clean-windows", "uninstall").run).toContain("-Phase uninstall");
   expect(windowsPhase("uninstall")).toContain("uninstall.exe");
   expect(windowsPhase("uninstall")).toContain("-ArgumentList '/S'");
@@ -777,7 +777,7 @@ test("nothing is published until a fresh Ubuntu and a fresh Windows machine chec
   expect(linuxScript).toContain(`echo "xiongbao-device_\${VERSION}_amd64.deb"`);
   const lifecycle = step("clean-linux", "lifecycle");
   expect(lifecycle.run).toContain("device-clean-linux.sh lifecycle");
-  expect(lifecycle.env.RUNNER_BIN).toBe("/usr/bin/openbot-runner");
+  expect(lifecycle.env.RUNNER_BIN).toBe("/usr/bin/xiongbao-runner");
   expect(lifecycle.env.APP_BIN).toBe("/usr/bin/xiongbao-device");
   expect(step("clean-linux", "uninstall").run).toContain(
     "device-clean-linux.sh uninstall",

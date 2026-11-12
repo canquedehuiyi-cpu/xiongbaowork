@@ -179,7 +179,7 @@ jobs:
           test "$(dpkg-deb -f "$deb" Version)" = "$VERSION"
           contents=$(dpkg-deb -c "$deb")
           grep -Eq 'usr/bin/xiongbao-device$' <<<"$contents"
-          grep -Eq 'usr/bin/openbot-runner$' <<<"$contents"
+          grep -Eq 'usr/bin/xiongbao-runner$' <<<"$contents"
           sudo dpkg --dry-run -i "$deb"
           mkdir -p "$RUNNER_TEMP/dist"
           cp "$deb" "$RUNNER_TEMP/dist/xiongbao-device_${VERSION}_amd64.deb"
@@ -722,7 +722,7 @@ jobs:
   # HUMAN-STEPS 12.6 on a fresh GitHub-hosted Ubuntu machine, with the exact files assemble made:
   # SHA256SUMS, apt install (Depends from the archive), the installed files, the installed runner
   # paired with a real server (and PostgreSQL) through the API, one command from the server, quit with
-  # no openbot-runner left, the installed app back online without pairing, apt remove. No secret and
+  # no xiongbao-runner left, the installed app back online without pairing, apt remove. No secret and
   # no Environment; publish waits for it. Not the default success(): macOS may have been skipped.
   # Every check is a phase of scripts/ci/device-clean-linux.sh, which ci.yml's device-clean-linux
   # also runs on each pull request's unsigned deb.
@@ -799,7 +799,7 @@ jobs:
       - id: lifecycle
         name: Pair the installed runner, one command, quit, back online
         env:
-          RUNNER_BIN: /usr/bin/openbot-runner
+          RUNNER_BIN: /usr/bin/xiongbao-runner
           APP_BIN: /usr/bin/xiongbao-device
         run: bash scripts/ci/device-clean-linux.sh lifecycle
       - name: Stop the server by its PID
@@ -883,7 +883,7 @@ jobs:
       # No server on this machine, so the app is given a pairing that cannot connect: the runner it
       # starts keeps retrying, which is enough to see whose child it is and that it dies with the app.
       - id: app
-        name: The installed app starts the installed runner, and no openbot-runner outlives it
+        name: The installed app starts the installed runner, and no xiongbao-runner outlives it
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase app
       - id: uninstall

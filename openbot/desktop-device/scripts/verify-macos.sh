@@ -71,12 +71,12 @@ check_app() {
     [ "$got" = "$want" ] || fail "$key of $(basename "$app") is '$got', expected '$want'"
   done
   [ -x "$app/Contents/MacOS/$main_binary" ] || fail "$(basename "$app") has no Contents/MacOS/$main_binary"
-  [ -x "$app/Contents/MacOS/openbot-runner" ] || fail "$(basename "$app") has no Contents/MacOS/openbot-runner"
+  [ -x "$app/Contents/MacOS/xiongbao-runner" ] || fail "$(basename "$app") has no Contents/MacOS/xiongbao-runner"
   codesign --verify --deep --strict --verbose=2 "$app"
 }
 
 check_app "$app"
-sidecar="$app/Contents/MacOS/openbot-runner"
+sidecar="$app/Contents/MacOS/xiongbao-runner"
 # The runner is a Bun binary: under the hardened runtime it starts only with the JIT entitlements.
 # --help prints usage and exits 2; a signature or entitlement problem kills it before that.
 help="$("$sidecar" --help 2>&1 || true)"

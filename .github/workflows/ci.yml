@@ -753,7 +753,7 @@ jobs:
           # Listed once: grep -q on a live pipe kills dpkg-deb with SIGPIPE, and pipefail fails the step.
           contents=$(dpkg-deb -c "$deb")
           grep -Eq 'usr/bin/xiongbao-device$' <<<"$contents"
-          grep -Eq 'usr/bin/openbot-runner$' <<<"$contents"
+          grep -Eq 'usr/bin/xiongbao-runner$' <<<"$contents"
           sudo dpkg --dry-run -i "$deb"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1054,7 +1054,7 @@ jobs:
       - id: lifecycle
         name: Pair the installed runner, one command, quit, back online
         env:
-          RUNNER_BIN: /usr/bin/openbot-runner
+          RUNNER_BIN: /usr/bin/xiongbao-runner
           APP_BIN: /usr/bin/xiongbao-device
         run: bash scripts/ci/device-clean-linux.sh lifecycle
       - name: Stop the server by its PID
@@ -1143,7 +1143,7 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase selfcheck
       - id: app
-        name: The installed app starts the installed runner, and no openbot-runner outlives it
+        name: The installed app starts the installed runner, and no xiongbao-runner outlives it
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase app
       - id: uninstall

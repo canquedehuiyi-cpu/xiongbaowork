@@ -5,7 +5,7 @@
 #   verify-windows-signatures.ps1 -Unsigned [-ExpectedVersion X.Y.Z]
 #
 # Always: exactly one *-setup.exe; its payload carries the app (mainBinaryName.exe) and the runner
-# sidecar (openbot-runner.exe); the installer and the app carry tauri.conf.json's productName and the
+# sidecar (xiongbao-runner.exe); the installer and the app carry tauri.conf.json's productName and the
 # version tauri.conf.json resolves (and -ExpectedVersion, when given).
 # Signed: the installer, the app and the sidecar each have a Valid Authenticode signature from
 # exactly -ExpectedPublisher, with a timestamp, and pass `signtool verify /pa /all /v /tw`.
@@ -52,10 +52,10 @@ $installer = $installers[0]
 # the unsigned build output after bundling, so target/release is not what users receive.
 $payload = Join-Path ([System.IO.Path]::GetTempPath()) "device-payload-$([Guid]::NewGuid())"
 New-Item -ItemType Directory -Path $payload -Force | Out-Null
-& 7z e $installer.FullName "-o$payload" -r -y $mainBinary 'openbot-runner.exe' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "Could not extract $mainBinary and openbot-runner.exe from $($installer.Name)." }
+& 7z e $installer.FullName "-o$payload" -r -y $mainBinary 'xiongbao-runner.exe' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Could not extract $mainBinary and xiongbao-runner.exe from $($installer.Name)." }
 $app = Join-Path $payload $mainBinary
-$sidecar = Join-Path $payload 'openbot-runner.exe'
+$sidecar = Join-Path $payload 'xiongbao-runner.exe'
 foreach ($required in @($app, $sidecar)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "The installer does not carry $([System.IO.Path]::GetFileName($required))."
@@ -151,4 +151,4 @@ try {
     files = $records
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'signatures.json') -Encoding utf8
 $state = if ($Unsigned) { 'unsigned (NotSigned on all three)' } else { "signed by $ExpectedPublisher" }
-Write-Host "Verified $($installer.Name), $mainBinary and openbot-runner.exe: $productName $configVersion, $state. Evidence: $EvidenceDirectory"
+Write-Host "Verified $($installer.Name), $mainBinary and xiongbao-runner.exe: $productName $configVersion, $state. Evidence: $EvidenceDirectory"
