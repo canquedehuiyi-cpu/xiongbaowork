@@ -21,6 +21,12 @@ export type ConversationFocus = {
    * Undefined when neither says — a conversation with no employee in it.
    */
   agentId?: string;
+  /**
+   * Still finding out whose it is: the roster, or the open conversation's own record, has not
+   * answered yet. Undefined `agentId` then means "not known yet", not "nobody", and a screen that
+   * would otherwise fall back to every conversation waits instead of flashing that list.
+   */
+  resolving?: boolean;
 };
 
 /**
@@ -53,12 +59,22 @@ export function useConversationFocus(): ConversationFocus {
   });
   if (!route) return { active: false };
   if (route.kind === "new") {
+    const agentId = searchAgent ?? defaultAgentId(agents.data);
     return {
       active: true,
       kind: "new",
-      agentId: searchAgent ?? defaultAgentId(agents.data),
+      agentId,
+      resolving: agentId === undefined && agents.isPending,
     };
   }
   const agentIds = listed?.agentIds ?? detail.data?.agentIds;
-  return { active: true, kind: route.kind, channelId, agentId: agentIds?.[0] };
+  return {
+    active: true,
+    kind: route.kind,
+    channelId,
+    agentId: agentIds?.[0],
+    resolving:
+      agentIds === undefined &&
+      (roster.isPending || (detail.isPending && !detail.isError)),
+  };
 }
