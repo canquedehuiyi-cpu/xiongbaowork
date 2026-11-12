@@ -85,6 +85,11 @@ type RouterStore = Pick<
   | "setSmsOptOut"
   | "botIdentity"
 >;
+/** The title of a push that carries no heading of its own. */
+export function defaultPushTitle(): string {
+  return productName();
+}
+
 export function createDeliveryRouter(deps: {
   store: RouterStore;
   queue: Pick<WorkQueue, "claim" | "renew" | "finish" | "release">;
@@ -680,7 +685,7 @@ export function createDeliveryRouter(deps: {
         const [title, body] =
           row.kind === "attention"
             ? headedText(row.text)
-            : [productName(), row.text];
+            : [defaultPushTitle(), row.text];
         result = await deps.providers.push.send({
           token: device.token,
           title,

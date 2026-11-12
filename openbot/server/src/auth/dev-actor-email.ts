@@ -17,6 +17,7 @@ export const LEGACY_DEV_ACTOR_EMAILS: readonly string[] = ["dev@openbot.local"];
  */
 export function isDevActorEmail(email: string | null | undefined): boolean {
   if (!email) return false;
+  // Trim and case-insensitive on purpose: an address typed or stored with stray spaces or capitals is still the same account.
   const lowered = email.trim().toLowerCase();
   return (
     lowered === DEV_ACTOR_EMAIL || LEGACY_DEV_ACTOR_EMAILS.includes(lowered)

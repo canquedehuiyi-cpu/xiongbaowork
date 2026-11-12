@@ -300,6 +300,11 @@ export function selfAddressGuidance(name: string): string {
   return `People call you "${name}" or "${named}". A request to ask, message or hand work to ${name} is a request to you, so answer it yourself.`;
 }
 
+/** The title the runtime shows assistive technology for the chat. */
+export function accessibilityTitle(): string {
+  return productName();
+}
+
 /**
  * The first thing a built-in Bot reads: its name, and the subtitle under it. A Bot's prompt is
  * whatever somebody wrote about its job, and the package's own Knowledge prompt never says what it
@@ -309,7 +314,7 @@ export function selfAddressGuidance(name: string): string {
  * (`standingRoleMessage`), and the framework it runs on, which is OpenBot's own whatever the
  * subtitle says (`frameworkOf`).
  */
-function identityGuidance(
+export function identityGuidance(
   name: string,
   title?: string,
   framework?: string,
@@ -3812,7 +3817,7 @@ export function mountCopilotRuntime(
     telemetryProperties: {
       app_id: "openbot",
       ...options.productTelemetry?.deploymentProperties(),
-      ...(config.accessibility ? { accessibility_title: productName() } : {}),
+      ...(config.accessibility ? { accessibility_title: accessibilityTitle() } : {}),
       ...desktopTelemetryProperties(),
     },
     /*

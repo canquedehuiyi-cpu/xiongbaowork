@@ -212,6 +212,11 @@ export function linkInstructions(transport: ChatTransport) {
   return `我还不知道你在熊宝里是谁，所以什么都没有执行。请在熊宝的「触达方式」里选好对话和 ${platformName(transport)}，把页面上给出的 \`link <关联码>\` 消息发给我。`;
 }
 
+/** What a person reads when a turn fails for a reason the Bot is not meant to explain. */
+export function turnFailureMessage(): string {
+  return `${englishName()} could not complete this turn. Try again, or open the conversation in ${englishName()}.`;
+}
+
 export async function handleOpenTagRun(
   deps: OpenTagAgentDeps,
   request: Request,
@@ -290,7 +295,7 @@ export async function handleOpenTagRun(
         message:
           error instanceof DeliveryRefusedError
             ? error.message
-            : `${englishName()} could not complete this turn. Try again, or open the conversation in ${englishName()}.`,
+            : turnFailureMessage(),
       });
     }
   });

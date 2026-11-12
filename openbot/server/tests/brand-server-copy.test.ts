@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { testAgentConnection } from "../src/agents/connection-test";
 import { desktopAuthPage } from "../src/auth/native-browser";
-import { organizationAuthority } from "../src/auth/organization";
+import {
+  createOrganizationAuth,
+  organizationAuthority,
+} from "../src/auth/organization";
 import { resetBrand, setBrand } from "../src/brand";
+import { accessibilityTitle, identityGuidance } from "../src/copilot";
+import { turnFailureMessage } from "../src/delivery/opentag-agent";
+import { defaultPushTitle } from "../src/delivery/router";
 import { createTwilioTransport } from "../src/delivery/twilio";
 import {
   connectorApprovalGuidance,
@@ -55,6 +61,52 @@ describe("server copy a customer can read takes its name from the brand", () => 
     );
   });
 
+  test("push title, turn failure text, identity sentence and accessibility title", () => {
+    expect(defaultPushTitle()).toBe("甲");
+    expect(turnFailureMessage()).toBe(
+      "Jia could not complete this turn. Try again, or open the conversation in Jia.",
+    );
+    expect(identityGuidance("Helper")).toStartWith(
+      "You are Helper, a Bot in Jia.",
+    );
+    expect(identityGuidance("Helper")).not.toContain("OpenBot");
+    expect(accessibilityTitle()).toBe("甲");
+  });
+
+  test("organization sign-in: unreadable authority answer and unknown route", async () => {
+    const authority = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => Response.json({ user: null }),
+    });
+    try {
+      const auth = createOrganizationAuth({
+        authorityUrl: authority.url.origin,
+        materializeUser: async (user) => user,
+      });
+      const value = Buffer.from(
+        JSON.stringify({
+          authority: authority.url.origin,
+          cookie: "better-auth.session_token=abc",
+        }),
+      ).toString("base64url");
+      await expect(
+        auth.verifySessionQuietly(`openbot.organization-session=${value}`),
+      ).rejects.toThrow(
+        "The organization gave an answer Jia could not read. Try again.",
+      );
+      const response = await auth.handler(
+        new Request("https://customer.example/api/auth/no-such-route"),
+      );
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: "Use the Jia organization sign-in screen.",
+      });
+    } finally {
+      authority.stop(true);
+    }
+  });
+
   test("connected-app approval guidance sent to the model", () => {
     const text = connectorApprovalGuidance();
     expect(text).toContain("Jia itself asks the person");
@@ -62,7 +114,7 @@ describe("server copy a customer can read takes its name from the brand", () => 
     expect(text).not.toContain("OpenBot");
     expect(
       grantedToolGuidance([{ name: "mcp__demo__send" }] as never),
-    ).toContain("Jia itself asks the person");
+    ).toContain(connectorApprovalGuidance());
   });
 
   test("SMS truncation footer", async () => {
