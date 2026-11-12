@@ -407,9 +407,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
         )?
     };
     TrayIconBuilder::with_id("device")
-        .icon(tauri::include_image!(
-            "../../desktop/src-tauri/icons/64x64.png"
-        ))
+        .icon(tauri::include_image!("icons/64x64.png"))
         .tooltip(PRODUCT)
         .menu(&menu)
         .on_menu_event(|app, event| chose(app, event.id().as_ref()))

@@ -29,15 +29,16 @@
     "active": true,
     "targets": ["deb", "appimage", "nsis", "dmg"],
     "icon": [
-      "../../desktop/src-tauri/icons/32x32.png",
-      "../../desktop/src-tauri/icons/128x128.png",
-      "../../desktop/src-tauri/icons/128x128@2x.png",
-      "../../desktop/src-tauri/icons/icon.icns",
-      "../../desktop/src-tauri/icons/icon.ico"
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ],
     "linux": {
       "deb": { "depends": ["procps"] }
     },
+    "copyright": "Copyright (c) 2026 熊宝; portions Copyright (c) 2026 CopilotKit (MIT)",
     "category": "Utility",
     "shortDescription": "让熊宝数字员工在这台电脑上工作",
     "longDescription": "熊宝数字员工设备端：输入配对码后，这台电脑主动连接你的熊宝服务器，供数字员工使用本机的文件、命令行和浏览器。本机不开放任何端口。"
