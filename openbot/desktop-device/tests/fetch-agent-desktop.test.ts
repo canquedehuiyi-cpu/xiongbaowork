@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -32,6 +33,7 @@ function scratch(): string {
 const sha = (bytes: Uint8Array | string) =>
   createHash("sha256").update(bytes).digest("hex");
 
+const noSleep = async () => {};
 const TRIPLE = "x86_64-unknown-linux-gnu";
 const FILES: Record<string, string> = {
   "agent-desktop": "cli bytes",
@@ -207,4 +209,131 @@ test("the committed lock pins six targets and the binaries of design decision 2"
   expect(hash("x86_64-pc-windows-msvc", "agent-desktop.exe")).toBe(
     "d274667031322e50b9c2b1ab81c2ca46835d52cc932769a5c34bd4d481fd94c3",
   );
+});
+
+test("a download that fails twice is retried and installs", async () => {
+  const { bytes, lock } = build();
+  const outDir = join(scratch(), "out");
+  let calls = 0;
+  const waits: number[] = [];
+  await fetchAgentDesktop({
+    triple: TRIPLE,
+    lock,
+    outDir,
+    sleep: async (ms) => {
+      waits.push(ms);
+    },
+    download: async () => {
+      if (++calls <= 2) throw new Error("504");
+      return bytes;
+    },
+  });
+  expect(calls).toBe(3);
+  expect(waits.length).toBe(2);
+  expect(readdirSync(outDir)).toEqual([`agent-desktop-${TRIPLE}`]);
+});
+
+test("a download that always fails gives up after 5 attempts", async () => {
+  const { lock } = build();
+  const outDir = join(scratch(), "out");
+  let calls = 0;
+  await expect(
+    fetchAgentDesktop({
+      triple: TRIPLE,
+      lock,
+      outDir,
+      sleep: noSleep,
+      download: async () => {
+        calls++;
+        throw new Error("boom");
+      },
+    }),
+  ).rejects.toThrow("boom");
+  expect(calls).toBe(5);
+  expect(!existsSync(outDir) || readdirSync(outDir).length === 0).toBe(true);
+});
+
+test("a symlink entry is refused by name before anything is installed", async () => {
+  const src = scratch();
+  writeFileSync(join(src, "agent-desktop"), FILES["agent-desktop"] ?? "");
+  symlinkSync("/etc/passwd", join(src, "agent-desktop-linux-clipboard-owner"));
+  const archive = join(scratch(), "a.tar.gz");
+  const made = Bun.spawnSync(
+    ["tar", "-czf", archive, "-C", src, ...Object.keys(FILES)],
+    { stderr: "pipe" },
+  );
+  expect(made.exitCode).toBe(0);
+  const bytes = new Uint8Array(readFileSync(archive));
+  const { lock } = build();
+  const target = lock.targets[TRIPLE];
+  if (!target) throw new Error("no target");
+  target.archiveSha256 = sha(bytes);
+  const outDir = join(scratch(), "out");
+  await expect(
+    fetchAgentDesktop({
+      triple: TRIPLE,
+      lock,
+      outDir,
+      download: async () => bytes,
+    }),
+  ).rejects.toThrow(/agent-desktop-linux-clipboard-owner.*not a regular file/);
+  expect(!existsSync(outDir) || readdirSync(outDir).length === 0).toBe(true);
+});
+
+test("a failed install leaves existing files untouched and no .tmp behind", async () => {
+  const { bytes, lock } = build();
+  const outDir = join(scratch(), "out");
+  mkdirSync(outDir);
+  const name = `agent-desktop-${TRIPLE}`;
+  // A directory where the file must go makes the final rename fail.
+  mkdirSync(join(outDir, name));
+  writeFileSync(join(outDir, "keep"), "keep");
+  await expect(
+    fetchAgentDesktop({
+      triple: TRIPLE,
+      lock,
+      outDir,
+      download: async () => bytes,
+    }),
+  ).rejects.toThrow();
+  expect(readdirSync(outDir).sort()).toEqual([name, "keep"]);
+});
+
+test("macOS installs the CLI and its helper", async () => {
+  const triple = "aarch64-apple-darwin";
+  const files = {
+    "agent-desktop": "mac cli",
+    "agent-desktop-macos-helper": "mac helper",
+  };
+  const { bytes, lock } = build(files);
+  const source = lock.targets[TRIPLE];
+  if (!source) throw new Error("no target");
+  lock.targets = {
+    [triple]: {
+      archive: `agent-desktop-v1.2.0-${triple}.tar.gz`,
+      archiveSha256: source.archiveSha256,
+      entries: Object.entries(files).map(([name, body]) => ({
+        name,
+        sha256: sha(body),
+      })),
+    },
+  };
+  const outDir = join(scratch(), "out");
+  const written = await fetchAgentDesktop({
+    triple,
+    lock,
+    outDir,
+    download: async () => bytes,
+  });
+  expect(written.map((p) => p.slice(outDir.length + 1))).toEqual([
+    `agent-desktop-${triple}`,
+    `agent-desktop-macos-helper-${triple}`,
+  ]);
+  expect(readFileSync(join(outDir, `agent-desktop-${triple}`), "utf8")).toBe(
+    "mac cli",
+  );
+  expect(
+    readFileSync(join(outDir, `agent-desktop-macos-helper-${triple}`), "utf8"),
+  ).toBe("mac helper");
+  expect(readdirSync(outDir).length).toBe(2);
 });

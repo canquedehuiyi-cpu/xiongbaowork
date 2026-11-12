@@ -90,12 +90,38 @@ function tarProgram(): string {
   return "tar";
 }
 
+/** A failure retrying cannot fix (an HTTP 4xx). */
+class Permanent extends Error {}
+
 async function download(url: string): Promise<Uint8Array> {
   const response = await fetch(url, { redirect: "follow" });
   if (!response.ok) {
-    throw new Error(`GET ${url} answered ${response.status}`);
+    const message = `GET ${url} answered ${response.status}`;
+    // GitHub's release downloads answer 5xx for minutes at a time; a 4xx will not change.
+    throw response.status >= 500 ? new Error(message) : new Permanent(message);
   }
   return new Uint8Array(await response.arrayBuffer());
+}
+
+const ATTEMPTS = 5;
+
+/** Up to 5 attempts with 10s, 20s, 40s, 80s between them (about 2.5 minutes). */
+async function withRetry(
+  fn: () => Promise<Uint8Array>,
+  sleep: (ms: number) => Promise<void>,
+): Promise<Uint8Array> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error instanceof Permanent || attempt >= ATTEMPTS) throw error;
+      const wait = 10_000 * 2 ** (attempt - 1);
+      console.warn(
+        `download failed (attempt ${attempt}/${ATTEMPTS}): ${error instanceof Error ? error.message : error}; retrying in ${wait / 1000}s`,
+      );
+      await sleep(wait);
+    }
+  }
 }
 
 export async function fetchAgentDesktop(opts: {
@@ -104,6 +130,8 @@ export async function fetchAgentDesktop(opts: {
   outDir: string;
   download?: (url: string) => Promise<Uint8Array>;
   tar?: string;
+  /** Waits between download attempts; tests inject an instant one. */
+  sleep?: (ms: number) => Promise<void>;
 }): Promise<string[]> {
   const { triple, lock, outDir } = opts;
   const target = targetOf(lock, triple);
@@ -111,7 +139,11 @@ export async function fetchAgentDesktop(opts: {
   const url = archiveUrl(lock, triple);
   const work = mkdtempSync(join(tmpdir(), "agent-desktop-"));
   try {
-    const bytes = await (opts.download ?? download)(url);
+    const get = opts.download ?? download;
+    const bytes = await withRetry(
+      () => get(url),
+      opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    );
     const actual = sha256(bytes);
     if (actual !== target.archiveSha256) {
       throw new Error(
@@ -141,6 +173,22 @@ export async function fetchAgentDesktop(opts: {
       );
     }
 
+    // Only regular files: no directories, symlinks or hardlinks (first column of tar -tv).
+    const verbose = Bun.spawnSync([tar, "-tvzf", archive], { stderr: "pipe" });
+    if (verbose.exitCode !== 0) {
+      throw new Error(`tar -tvzf failed: ${verbose.stderr.toString()}`);
+    }
+    for (const line of verbose.stdout.toString().split(/\r?\n/)) {
+      if (line === "" || line.startsWith("-")) continue;
+      const name =
+        [...expected]
+          .sort((a, b) => b.length - a.length)
+          .find((n) => line.includes(n)) ?? line;
+      throw new Error(
+        `${target.archive}: entry ${name} is not a regular file (${line})`,
+      );
+    }
+
     const extracted = join(work, "extracted");
     mkdirSync(extracted);
     const untar = Bun.spawnSync([tar, "-xzf", archive, "-C", extracted], {
@@ -158,26 +206,25 @@ export async function fetchAgentDesktop(opts: {
       }
     }
 
-    // Everything checked: stage inside work first, then move, so a failure leaves outDir untouched.
-    const staged: { from: string; to: string }[] = [];
-    for (const { entry, file } of sidecarFiles(triple)) {
-      if (!target.entries.some((e) => e.name === entry)) {
-        throw new Error(`${target.archive} does not carry ${entry}`);
-      }
-      const from = join(work, `stage-${file}`);
-      copyFileSync(join(extracted, entry), from);
-      chmodSync(from, 0o755);
-      staged.push({ from, to: join(outDir, file) });
-    }
+    // Everything checked: stage every file next to its destination as <name>.tmp, then rename them
+    // all. A failure removes the .tmp files and leaves files already in outDir untouched.
     mkdirSync(outDir, { recursive: true });
-    for (const { from, to } of staged) {
-      if (existsSync(to)) rmSync(to);
-      try {
-        renameSync(from, to);
-      } catch {
-        copyFileSync(from, to); // across devices
-        chmodSync(to, 0o755);
+    const staged: { tmp: string; to: string }[] = [];
+    try {
+      for (const { entry, file } of sidecarFiles(triple)) {
+        if (!target.entries.some((e) => e.name === entry)) {
+          throw new Error(`${target.archive} does not carry ${entry}`);
+        }
+        const to = join(outDir, file);
+        const tmp = `${to}.tmp`;
+        staged.push({ tmp, to });
+        copyFileSync(join(extracted, entry), tmp);
+        chmodSync(tmp, 0o755);
       }
+      for (const { tmp, to } of staged) renameSync(tmp, to);
+    } catch (error) {
+      for (const { tmp } of staged) rmSync(tmp, { force: true });
+      throw error;
     }
     return staged.map((s) => s.to);
   } finally {

@@ -1109,10 +1109,13 @@ test("every device bundle fetches and verifies agent-desktop before tauri build"
           "tauri.agent-desktop-macos.conf.json",
         );
     }
-    if (job === "device-bundle-linux" || job === "linux")
+    if (job === "device-bundle-linux" || job === "linux") {
+      const check = runs.find((r) => r.includes("dpkg-deb -c"));
+      expect(check, `${job} lists the deb contents`).toBeDefined();
       expect(
-        runs.some((r) => r.includes("usr/bin/agent-desktop$")),
+        check,
         `${job} checks the deb carries agent-desktop`,
-      ).toBe(true);
+      ).toContain("usr/bin/agent-desktop$");
+    }
   }
 });
