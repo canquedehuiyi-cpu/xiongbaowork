@@ -1,9 +1,21 @@
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { CredentialStore } from "../src/credentials";
-import { DATA_DIR_ENV, main, type Options, parseArgs } from "../src/index";
+import {
+  clearDesktopState,
+  DATA_DIR_ENV,
+  main,
+  type Options,
+  parseArgs,
+} from "../src/index";
 
 const SERVER = ["--server", "https://bot.example.com"];
 const root = mkdtempSync(join(tmpdir(), "openbot-runner-data-dir-"));
@@ -161,6 +173,13 @@ test("parseArgs takes --desktop-helper and --desktop-engine, and refuses an unkn
     stateDir: "/launch/agent-desktop-state",
   });
   expect(parsed(["--desktop-engine", "legacy"]).desktop.engine).toBe("legacy");
+  // The command-line value is trimmed like the environment's.
+  expect(parsed(["--desktop-engine", " agent-desktop "]).desktop.engine).toBe(
+    "agent-desktop",
+  );
+  expect(
+    parsed([], { OPENBOT_DESKTOP_ENGINE: " legacy " }).desktop.engine,
+  ).toBe("legacy");
   // A relative helper is taken from the launch directory, like a browser executable.
   expect(parsed(["--desktop-helper", "bin/ad"]).desktop.helper).toBe(
     "/launch/bin/ad",
@@ -196,5 +215,23 @@ test("parseArgs takes --desktop-helper and --desktop-engine, and refuses an unkn
   );
   expect(parseArgs([...SERVER, "--desktop-helper"], {}, "/launch")).toBe(
     "--desktop-helper needs a path.",
+  );
+});
+
+test("start-up wipes agent-desktop's state directory without any desktop action, and carries on when it cannot", () => {
+  const stateDir = parsed(["--data-dir", join(root, "wipe")]).desktop.stateDir;
+  mkdirSync(join(stateDir, "snapshots"), { recursive: true });
+  writeFileSync(join(stateDir, "snapshots", "leftover.json"), "{}");
+  const logged: string[] = [];
+  clearDesktopState(stateDir, (line) => logged.push(line));
+  expect(existsSync(stateDir)).toBe(false);
+  // Nothing there is nothing to say.
+  clearDesktopState(stateDir, (line) => logged.push(line));
+  expect(logged).toEqual([]);
+  // A path that cannot be removed is logged, not thrown.
+  clearDesktopState("\0bad", (line) => logged.push(line));
+  expect(logged).toHaveLength(1);
+  expect(logged[0]).toStartWith(
+    "runner: could not clear the desktop state directory",
   );
 });

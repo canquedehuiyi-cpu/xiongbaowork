@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import {
   DESKTOP_ACTIONS,
   DESKTOP_LIMITS,
@@ -7,6 +8,7 @@ import {
   type DesktopEngine,
   type DesktopErrorCode,
   type DesktopImage,
+  type DesktopPlatform,
   type DesktopSnapshot,
   type DesktopWindow,
   desktopMessage,
@@ -176,8 +178,10 @@ export function createDesktopActions(
   opts: {
     platform?: string;
     /**
-     * Without one: what `desktopEngineFor` picks when there is an agent-desktop to run (a `reader`
-     * or a `helper`), otherwise the PowerShell reader, which is all the executor's own fallback has.
+     * Callers pass one (`main` passes `desktopEngineFor`'s). The inference without one exists only
+     * for the executor's own fallback (`createDesktopActions()` with no options): what
+     * `desktopEngineFor` picks when there is an agent-desktop to run (a `reader` or a `helper`),
+     * otherwise the PowerShell reader, which is all that fallback has.
      */
     engine?: DesktopEngine;
     /** The PowerShell reader (legacy engine). */
@@ -186,7 +190,7 @@ export function createDesktopActions(
     reader?: AgentDesktopReader;
     /** The agent-desktop binary. */
     helper?: string;
-    /** agent-desktop's private state directory (emptied on close). */
+    /** agent-desktop's private state directory, wiped on close even if nothing ever ran. */
     stateDir?: string;
   } = {},
 ): DesktopActions {
@@ -202,9 +206,9 @@ export function createDesktopActions(
   // agent-desktop: built on first use, like the host below.
   let cli: AgentDesktopCli | undefined;
   let reader: AgentDesktopReader | undefined = opts.reader;
-  const adReader = (): AgentDesktopReader => {
+  const adReader = (desktopPlatform: DesktopPlatform): AgentDesktopReader => {
     if (reader) return reader;
-    if (!opts.helper || !opts.stateDir || !desktopPlatform)
+    if (!opts.helper || !opts.stateDir)
       throw new DesktopHelperError(
         "start_failed",
         desktopMessage("start_failed", "没有找到 agent-desktop"),
@@ -226,14 +230,18 @@ export function createDesktopActions(
   };
 
   async function adAct(
+    desktopPlatform: DesktopPlatform,
     action: string,
     body: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<ActionOutcome> {
     try {
       if (action === "desktop.windows")
-        return { ok: true, output: await adReader().windows(signal) };
-      const output = await adReader().snapshot(
+        return {
+          ok: true,
+          output: await adReader(desktopPlatform).windows(signal),
+        };
+      const output = await adReader(desktopPlatform).snapshot(
         {
           windowId: body.windowId as string,
           ...(body.from === undefined ? {} : { from: body.from as string }),
@@ -352,7 +360,8 @@ export function createDesktopActions(
       return fail(desktopMessage("not_windows"));
     if (!DESKTOP_ACTIONS.has(action))
       return fail(desktopMessage("unsupported"));
-    if (engine === "agent-desktop") return adAct(action, body, signal);
+    if (engine === "agent-desktop")
+      return adAct(desktopPlatform, action, body, signal);
     try {
       return action === "desktop.windows"
         ? await windows(signal)
@@ -364,14 +373,25 @@ export function createDesktopActions(
 
   return Object.assign(act, {
     close: async () => {
-      // Empties agent-desktop's state directory. A later action starts afresh, with a new prefix,
-      // so no ref from before resolves.
+      // Wipes agent-desktop's state: through the CLI when one ran (it empties the directory after
+      // its last command), and directly when none did, so a leftover from a crashed run never
+      // outlives a runner that stops. A later action starts afresh, with a new prefix, so no ref
+      // from before resolves.
       const closing = cli;
       if (closing) {
         cli = undefined;
         reader = opts.reader;
       }
-      await Promise.all([owned?.close(), closing?.close()]);
+      const stateDir = opts.stateDir;
+      await Promise.all([
+        owned?.close(),
+        closing
+          ? closing.close()
+          : stateDir
+            ? // Best effort: the next start wipes it again.
+              rm(stateDir, { recursive: true, force: true }).catch(() => {})
+            : undefined,
+      ]);
     },
   });
 }

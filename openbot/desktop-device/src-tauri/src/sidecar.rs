@@ -820,7 +820,10 @@ mod tests {
 
     #[test]
     fn agent_desktop_path_is_next_to_the_app() {
-        if std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY").is_some() {
+        // Either override moves a path this test compares, as in `the_sidecar_sits_next_to_the_app`.
+        if std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY").is_some()
+            || std::env::var_os("OPENBOT_RUNNER_BINARY").is_some()
+        {
             return;
         }
         let path = agent_desktop_path().unwrap();

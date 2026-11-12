@@ -14,7 +14,7 @@
  */
 // Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
 import "../../shared/apply-env-aliases";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { hostname, platform } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { APP_REF, type AppEntry, type AppInput, createAppRegistry } from "./apps";
@@ -107,6 +107,25 @@ function desktopStateDir(dataDir: string): string {
 }
 
 /**
+ * Wipes agent-desktop's state directory at start-up. The CLI only starts when a desktop action needs
+ * it, so without this a leftover from a crashed run (control names, the values of fields it read)
+ * would survive every later run that never touches the desktop. Best effort: a failure is logged and
+ * the runner carries on; the CLI wipes it again on its idle timer and at close.
+ */
+export function clearDesktopState(
+  stateDir: string,
+  log: (line: string) => void = console.log,
+): void {
+  try {
+    rmSync(stateDir, { recursive: true, force: true });
+  } catch (error) {
+    log(
+      `runner: could not clear the desktop state directory (${error instanceof Error ? error.message : String(error)}); carrying on`,
+    );
+  }
+}
+
+/**
  * The desktop engine's settings. The flag wins over the environment; an engine that is neither is
  * refused rather than guessed at. Without `--desktop-helper` the binary is the one shipped next to
  * the runner's own executable. Whether it exists is found out when a desktop action first needs it.
@@ -118,7 +137,7 @@ function desktopOptions(
   dataDir: string,
 ): Options["desktop"] | string {
   const engineFlag = args.has("desktop-engine")
-    ? (args.get("desktop-engine") ?? "")
+    ? (args.get("desktop-engine")?.trim() ?? "")
     : undefined;
   const engine = engineFlag ?? env[DESKTOP_ENGINE_ENV]?.trim() ?? "";
   if ((engineFlag !== undefined || engine) && !DESKTOP_ENGINES.has(engine))
@@ -940,6 +959,7 @@ export async function main(
   // One host for the executor and for discovery, so an app is never started twice.
   const appHost = createAppHost(apps);
   // --- desktop control (sub-project 2) ---
+  clearDesktopState(parsed.desktop.stateDir);
   const desktopEngine = desktopEngineFor(
     process.platform,
     parsed.desktop.engine,

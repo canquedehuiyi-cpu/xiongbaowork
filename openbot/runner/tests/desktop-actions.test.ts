@@ -609,6 +609,7 @@ describe("desktop engines (agent-desktop on macOS and Linux)", () => {
       });
       const actions = createDesktopActions({
         platform: node,
+        engine: "agent-desktop",
         reader,
         // The PowerShell reader is never started on these systems.
         host: createDesktopHost({
@@ -666,6 +667,7 @@ describe("desktop engines (agent-desktop on macOS and Linux)", () => {
   test("a macOS listing names the platform", async () => {
     const actions = createDesktopActions({
       platform: "darwin",
+      engine: "agent-desktop",
       reader: fakeReader({
         windows: async () => ({ platform: "macos", windows: listed }),
       }),
@@ -715,6 +717,7 @@ describe("desktop engines (agent-desktop on macOS and Linux)", () => {
     for (const [error, copy] of cases) {
       const actions = createDesktopActions({
         platform: "linux",
+        engine: "agent-desktop",
         reader: fakeReader({
           windows: async () => {
             throw error;
@@ -753,6 +756,25 @@ describe("desktop engines (agent-desktop on macOS and Linux)", () => {
     noUnknown(outcome);
     await actions.close();
     expect(readdirSync(stateDir)).toEqual([]);
+  });
+
+  test("close wipes a leftover state directory even when no desktop action ever ran", async () => {
+    for (const engine of ["agent-desktop", "legacy"] as const) {
+      const root = mkdtempSync(join(DIR, "ad-left-"));
+      const stateDir = join(root, "agent-desktop-state");
+      mkdirSync(join(stateDir, "snapshots"), { recursive: true });
+      writeFileSync(join(stateDir, "snapshots", "leftover.json"), "{}");
+      const actions = createDesktopActions({
+        platform: "linux",
+        engine,
+        helper: join(root, "no-such-agent-desktop"),
+        stateDir,
+      });
+      await actions.close();
+      expect(existsSync(stateDir)).toBe(false);
+      // Nothing to wipe is not an error.
+      await actions.close();
+    }
   });
 
   test("agent-desktop without a helper to run fails to start, and never outcomeUnknown", async () => {
