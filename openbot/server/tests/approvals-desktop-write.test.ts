@@ -166,18 +166,26 @@ describe("desktop per-action approval", () => {
         },
       });
     }
-    // ASCII window words by whole word: PayPal asks, a window that merely contains "bank" inside a word does not.
-    const paypal = await decideAction({
-      ...base,
-      candidate: candidate({ title: "PayPal - Checkout" }),
-    });
-    expect(paypal.source).toBe("desktop_action");
-    expect(
-      await decideAction({
-        ...base,
-        candidate: candidate({ title: "Embankment notes" }),
-      }),
-    ).toEqual(SESSION_ALLOW);
+    // Window words match by substring as well as by whole word: the stricter reading wins.
+    for (const [title, word] of [
+      ["PayPal - Checkout", "paypal"],
+      ["1Password", "password"],
+      ["Passwords", "password"],
+      ["Chase Online Banking", "bank"],
+      ["Online-Banking", "bank"],
+      ["Embankment notes", "bank"],
+    ])
+      expect({
+        title,
+        out: await decideAction({ ...base, candidate: candidate({ title }) }),
+      }).toEqual({
+        title,
+        out: {
+          behaviour: "ask",
+          source: "desktop_action",
+          reason: `窗口「${title}」的标题含「${word}」，在里面点击需要你批准。`,
+        },
+      });
   });
 
   test("reading the clipboard always asks", async () => {
@@ -226,6 +234,40 @@ describe("desktop per-action approval", () => {
         },
       });
     }
+  });
+
+  test("a write in a window whose title is unknown asks as an unknown control", async () => {
+    for (const action of ["click", "type", "key", "focus"] as const) {
+      const out = await decideAction({
+        ...base,
+        candidate: candidate({
+          action,
+          title: undefined,
+          keys: action === "key" ? "ctrl+s" : undefined,
+        }),
+      });
+      expect({ action, out }).toEqual({
+        action,
+        out: {
+          behaviour: "ask",
+          source: "desktop_action",
+          reason: "没能确认要操作的控件，在窗口「」里执行前需要你批准。",
+        },
+      });
+    }
+    // Launching a program and writing the clipboard have no window to confirm.
+    for (const action of ["launch", "clipboard_write"] as const)
+      expect({
+        action,
+        out: await decideAction({
+          ...base,
+          candidate: candidate({
+            action,
+            title: undefined,
+            control: undefined,
+          }),
+        }),
+      }).toEqual({ action, out: SESSION_ALLOW });
   });
 
   test("enter asks; shift+enter does not", async () => {
@@ -286,15 +328,24 @@ describe("desktop per-action approval", () => {
   });
 
   test("keys the gateway should have refused, or cannot read, still ask", async () => {
-    for (const keys of ["win+r", "ctrl+alt+shift+cmd+x", "f13", undefined]) {
+    for (const keys of [
+      "win+r",
+      "win+tab",
+      "ctrl+alt+shift+cmd+x",
+      "f13",
+      undefined,
+    ]) {
       const out = await decideAction({
         ...base,
         candidate: candidate({ action: "key", control: undefined, keys }),
       });
-      expect({ keys, behaviour: out.behaviour, source: out.source }).toEqual({
+      expect({ keys, out }).toEqual({
         keys,
-        behaviour: "ask",
-        source: "desktop_action",
+        out: {
+          behaviour: "ask",
+          source: "desktop_action",
+          reason: "这个按键可能会触发系统操作，需要你先确认。",
+        },
       });
     }
   });
@@ -485,6 +536,34 @@ describe("desktop per-action approval", () => {
         })
       ).source,
     ).toBe("desktop_action");
+  });
+
+  test("a team word list of blank words is no list: the default applies", async () => {
+    for (const desktopActionWords of [[], ["", "  "]]) {
+      const out = await decideAction({
+        ...base,
+        desktopActionWords,
+        candidate: candidate({
+          title: "微信",
+          control: { type: "Button", name: "发送" },
+        }),
+      });
+      expect({ desktopActionWords, source: out.source }).toEqual({
+        desktopActionWords,
+        source: "desktop_action",
+      });
+    }
+    // A blank word next to a real one is dropped, never matched against everything.
+    expect(
+      await decideAction({
+        ...base,
+        desktopActionWords: ["归档", " "],
+        candidate: candidate({
+          title: "邮件",
+          control: { type: "Button", name: "发送" },
+        }),
+      }),
+    ).toEqual(SESSION_ALLOW);
   });
 
   test("both desktop sources are once only", () => {

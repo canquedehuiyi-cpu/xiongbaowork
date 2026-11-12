@@ -1,6 +1,6 @@
 import {
   classifyDesktopKeys,
-  DESKTOP_WINDOW_WORDS,
+  desktopWindowWordHit,
   desktopWordHit,
 } from "../../../shared/desktop-control";
 import type { ApprovalCandidate, DesktopWriteAction } from "./types";
@@ -64,12 +64,13 @@ export function activeDesktopSession(candidate: ApprovalCandidate): boolean {
  * PER-ACTION APPROVAL (desktop write, phase 2; plan Task 17, design decisions 10, 11 and 13). Inside
  * a session or not, these writes ask every time, once only, in this order, the first that applies:
  *
- *  1. any write in a window whose title has one of `DESKTOP_WINDOW_WORDS`;
+ *  1. any write in a window whose title has one of `DESKTOP_WINDOW_WORDS` (`desktopWindowWordHit`);
  *  2. reading the clipboard;
- *  3. a write whose control the gateway could not confirm (`control: null`);
+ *  3. a write whose control the gateway could not confirm (`control: null`), or a click, typing, key
+ *     or focus whose window title it could not confirm;
  *  4. clicking a control whose name has one of the action words (the team's list, or the default);
- *  5. a key that closes a program or submits (and any key that is not a plain one: the gateway
- *     refuses system keys before asking, so one reaching here asks rather than slipping through);
+ *  5. a key that closes a program or submits; a system key or one that cannot be read asks too (the
+ *     gateway refuses those before asking, so one reaching here asks rather than slipping through);
  *  6. typing a newline into a single-line field, which submits it.
  *
  * Everything here comes from `subject.desktopWrite`, set by the gateway, never from the model.
@@ -85,6 +86,16 @@ const ACTION_VERB: Record<DesktopWriteAction, string> = {
 };
 export const DESKTOP_CLIPBOARD_READ_REASON =
   "读取你的剪贴板（里面可能有刚复制的密码或验证码），需要你批准。";
+/** A system key, or one that cannot be read, that reached the policy (coordinator's copy). */
+export const DESKTOP_SYSTEM_KEY_REASON =
+  "这个按键可能会触发系统操作，需要你先确认。";
+/** The writes that happen in a window, so an unknown title is an unknown target. */
+const IN_A_WINDOW: ReadonlySet<DesktopWriteAction> = new Set([
+  "click",
+  "type",
+  "key",
+  "focus",
+]);
 
 /** Why this desktop write asks on its own (design decision 13), or nothing when it does not. */
 export function desktopActionReason(
@@ -94,11 +105,14 @@ export function desktopActionReason(
   const write = candidate.subject?.desktopWrite;
   if (!write) return undefined;
   const title = write.title ?? "";
-  const windowWord = desktopWordHit(title, DESKTOP_WINDOW_WORDS);
+  const windowWord = desktopWindowWordHit(title);
   if (windowWord)
     return `窗口「${title}」的标题含「${windowWord}」，在里面${ACTION_VERB[write.action] ?? "操作"}需要你批准。`;
   if (write.action === "clipboard_read") return DESKTOP_CLIPBOARD_READ_REASON;
-  if (write.control === null)
+  if (
+    write.control === null ||
+    (write.title === undefined && IN_A_WINDOW.has(write.action))
+  )
     return `没能确认要操作的控件，在窗口「${title}」里执行前需要你批准。`;
   if (write.action === "click" && write.control) {
     const word = desktopWordHit(write.control.name, words);
@@ -110,8 +124,9 @@ export function desktopActionReason(
     const kind = classifyDesktopKeys(keys)?.kind;
     if (kind === "close")
       return `在窗口「${title}」里按 ${keys}，会关闭程序，需要你批准。`;
-    if (kind !== "plain")
+    if (kind === "submit")
       return `在窗口「${title}」里按 ${keys}，可能会把内容提交或发送出去，需要你批准。`;
+    if (kind !== "plain") return DESKTOP_SYSTEM_KEY_REASON;
   }
   if (write.action === "type" && write.newlineInSingleLine === true)
     return `往窗口「${title}」的单行输入框「${write.control?.name ?? ""}」里输入带换行的文字，相当于提交，需要你批准。`;

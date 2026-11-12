@@ -8,8 +8,10 @@ import {
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
+  desktopActionWordsOf,
   desktopMessage,
   desktopPlatformOf,
+  desktopWindowWordHit,
   desktopWordHit,
   isAgentWindowId,
   parseWindowId,
@@ -284,10 +286,77 @@ describe("desktop-control protocol", () => {
       normalized: "ctrl+alt+f4",
       force: false,
     });
+    // agent-desktop reads meta as Command on a Mac: a combination with win is also read as cmd.
+    for (const [keys, kind] of [
+      ["meta+q", "close"],
+      ["win+w", "close"],
+      ["win+enter", "submit"],
+      ["meta+space", "system"],
+      ["ctrl+shift+esc", "system"],
+    ])
+      expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
+        keys,
+        kind,
+      });
+    // Read as cmd, but never forced: only alt+f4 and cmd+q as typed.
+    expect(classifyDesktopKeys("meta+q")?.force).toBe(false);
     // A doubled modifier is junk.
     expect(classifyDesktopKeys("ctrl+ctrl+x")).toBeUndefined();
     for (const keys of ["win+r", "ctrl+enter", "pagedown", "shift+tab"])
       expect({ keys, ok: DESKTOP_KEYS.test(keys) }).toEqual({ keys, ok: true });
+  });
+
+  test("the coordinator's further system keys, and more modifiers on them", () => {
+    for (const keys of [
+      "cmd+alt+escape",
+      "cmd+alt+esc",
+      "win+tab",
+      "alt+space",
+      "ctrl+escape",
+      "ctrl+esc",
+      "ctrl+alt+space",
+      "shift+win+tab",
+    ])
+      expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
+        keys,
+        kind: "system",
+      });
+    // Their neighbours stay plain.
+    for (const keys of ["escape", "tab", "space", "alt+escape", "ctrl+tab"])
+      expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
+        keys,
+        kind: "plain",
+      });
+  });
+
+  test("window titles match by substring or by whole word, whichever is stricter", () => {
+    for (const [title, word] of [
+      ["1Password", "password"],
+      ["Passwords", "password"],
+      ["Chase Online Banking", "bank"],
+      ["Online-Banking", "bank"],
+      ["Embankment notes", "bank"],
+      ["招商银行", "银行"],
+      ["PayPal - Checkout", "paypal"],
+    ])
+      expect({ title, hit: desktopWindowWordHit(title) }).toEqual({
+        title,
+        hit: word,
+      });
+    for (const title of ["无标题 - 记事本", "Display settings", ""])
+      expect({ title, hit: desktopWindowWordHit(title) }).toEqual({
+        title,
+        hit: undefined,
+      });
+  });
+
+  test("a team's action words drop blank words, and an empty list is the default", () => {
+    expect(desktopActionWordsOf(undefined)).toBe(DEFAULT_DESKTOP_ACTION_WORDS);
+    expect(desktopActionWordsOf([])).toBe(DEFAULT_DESKTOP_ACTION_WORDS);
+    expect(desktopActionWordsOf(["", "  ", "\t"])).toBe(
+      DEFAULT_DESKTOP_ACTION_WORDS,
+    );
+    expect(desktopActionWordsOf(["归档", " ", ""])).toEqual(["归档"]);
   });
 
   test("desktopWordHit: Chinese by substring, ASCII by whole word", () => {

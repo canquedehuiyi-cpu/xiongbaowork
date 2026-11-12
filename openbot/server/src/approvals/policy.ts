@@ -1,6 +1,6 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
-import { DEFAULT_DESKTOP_ACTION_WORDS } from "../../../shared/desktop-control";
+import { desktopActionWordsOf } from "../../../shared/desktop-control";
 import {
   activeDesktopSession,
   type DesktopFloor,
@@ -1844,7 +1844,7 @@ export async function decideAction(input: {
   /** The team's host-command cap, applied here to commands on a paired computer (D5). */
   hostCommandsCap?: HostCommandPolicy;
   // --- desktop control (sub-project 2) ---
-  /** The team's desktop action words; absent or empty means the default list (design decision 11). */
+  /** The team's desktop action words; absent, empty or all blank means the default list (design decision 11). */
   desktopActionWords?: readonly string[];
   // --- end desktop control ---
 }): Promise<ApprovalPolicyOutcome> {
@@ -1934,15 +1934,10 @@ export async function decideAction(input: {
   // --- end app discovery ---
     // --- desktop control (sub-project 2) ---
     /*
-     * The window floor, the per-action floor, then the session floor (see `desktopFloors`). An empty
-     * team list is no list: the default words apply.
+     * The window floor, the per-action floor, then the session floor (see `desktopFloors`). Blank
+     * team words are dropped, and a list with none left is no list: the default words apply.
      */
-    desktopFloors(
-      candidate,
-      input.desktopActionWords?.length
-        ? input.desktopActionWords
-        : DEFAULT_DESKTOP_ACTION_WORDS,
-    ) ??
+    desktopFloors(candidate, desktopActionWordsOf(input.desktopActionWords)) ??
     /*
      * The team's cap of `ask` for a desktop write: asked when none of the desktop's own floors did,
      * so a write that opens a session or asks on its own keeps its once-only card and its words.

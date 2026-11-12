@@ -247,6 +247,33 @@ export function desktopWordHit(
   });
 }
 
+/**
+ * The first of `DESKTOP_WINDOW_WORDS` a window's title holds, for a desktop write (design decision 11
+ * as revised by the coordinator): a substring match, as phase 1 reads windows, or a whole-word match,
+ * whichever hits. A window title errs towards asking (`1Password`, `Online-Banking`); only a control's
+ * action words keep the whole-word reading alone. The device checks with this same function.
+ */
+export function desktopWindowWordHit(title: string): string | undefined {
+  if (typeof title !== "string") return undefined;
+  return (
+    sensitiveWord(title, DESKTOP_WINDOW_WORDS) ??
+    desktopWordHit(title, DESKTOP_WINDOW_WORDS)
+  );
+}
+
+/**
+ * The action words in force: the team's list without blank words, or the default when nothing is
+ * left of it. A blank word is dropped rather than read as matching every control or none.
+ */
+export function desktopActionWordsOf(
+  team: readonly string[] | undefined,
+): readonly string[] {
+  const words = (team ?? []).filter(
+    (word) => typeof word === "string" && word.trim() !== "",
+  );
+  return words.length > 0 ? words : DEFAULT_DESKTOP_ACTION_WORDS;
+}
+
 /*
  * KEYS (design decision 10). Lower case after normalising, joined by `+`: up to three modifiers
  * (`ctrl`, `alt`, `shift`, `cmd`, `win`; `meta` and `super` are `win`) and one key. The runner turns
@@ -289,6 +316,12 @@ const SYSTEM_KEYS = [
   "ctrl+cmd+q",
   "cmd+shift+q",
   "cmd+alt+shift+q",
+  // Added by the coordinator's ruling (they only ever refuse more): force quit, task view, the window
+  // menu, the start menu.
+  "cmd+alt+escape",
+  "win+tab",
+  "alt+space",
+  "ctrl+escape",
 ];
 /** Closing a program: asked every time, like deleting; with more modifiers held too. */
 const CLOSE_KEYS = ["alt+f4", "ctrl+f4", "cmd+q", "cmd+w", "ctrl+w"];
