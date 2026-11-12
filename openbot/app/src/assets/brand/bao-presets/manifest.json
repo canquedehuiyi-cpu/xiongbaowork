@@ -29,7 +29,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/doctor.png"
+      "asset": "app/src/assets/brand/bao-presets/doctor.png"
     },
     {
       "slug": "teacher",
@@ -53,7 +53,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/teacher.png"
+      "asset": "app/src/assets/brand/bao-presets/teacher.png"
     },
     {
       "slug": "chef",
@@ -77,7 +77,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/chef.png"
+      "asset": "app/src/assets/brand/bao-presets/chef.png"
     },
     {
       "slug": "tech-engineer",
@@ -101,7 +101,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/tech-engineer.png"
+      "asset": "app/src/assets/brand/bao-presets/tech-engineer.png"
     },
     {
       "slug": "financial-advisor",
@@ -125,7 +125,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/financial-advisor.png"
+      "asset": "app/src/assets/brand/bao-presets/financial-advisor.png"
     },
     {
       "slug": "lawyer",
@@ -149,7 +149,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/lawyer.png"
+      "asset": "app/src/assets/brand/bao-presets/lawyer.png"
     },
     {
       "slug": "construction-engineer",
@@ -173,7 +173,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/construction-engineer.png"
+      "asset": "app/src/assets/brand/bao-presets/construction-engineer.png"
     },
     {
       "slug": "farmer",
@@ -197,7 +197,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/farmer.png"
+      "asset": "app/src/assets/brand/bao-presets/farmer.png"
     },
     {
       "slug": "courier",
@@ -221,7 +221,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/courier.png"
+      "asset": "app/src/assets/brand/bao-presets/courier.png"
     },
     {
       "slug": "pilot",
@@ -245,7 +245,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/pilot.png"
+      "asset": "app/src/assets/brand/bao-presets/pilot.png"
     },
     {
       "slug": "firefighter",
@@ -269,7 +269,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/firefighter.png"
+      "asset": "app/src/assets/brand/bao-presets/firefighter.png"
     },
     {
       "slug": "tour-guide",
@@ -293,7 +293,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/tour-guide.png"
+      "asset": "app/src/assets/brand/bao-presets/tour-guide.png"
     },
     {
       "slug": "journalist",
@@ -317,7 +317,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/journalist.png"
+      "asset": "app/src/assets/brand/bao-presets/journalist.png"
     },
     {
       "slug": "creative-designer",
@@ -341,7 +341,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/creative-designer.png"
+      "asset": "app/src/assets/brand/bao-presets/creative-designer.png"
     },
     {
       "slug": "fitness-coach",
@@ -365,7 +365,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/fitness-coach.png"
+      "asset": "app/src/assets/brand/bao-presets/fitness-coach.png"
     },
     {
       "slug": "general-manager",
@@ -389,7 +389,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/general-manager.png"
+      "asset": "app/src/assets/brand/bao-presets/general-manager.png"
     },
     {
       "slug": "accountant",
@@ -413,7 +413,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/accountant.png"
+      "asset": "app/src/assets/brand/bao-presets/accountant.png"
     },
     {
       "slug": "operations-director",
@@ -437,7 +437,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/operations-director.png"
+      "asset": "app/src/assets/brand/bao-presets/operations-director.png"
     },
     {
       "slug": "designer",
@@ -461,7 +461,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/designer.png"
+      "asset": "app/src/assets/brand/bao-presets/designer.png"
     },
     {
       "slug": "director",
@@ -485,7 +485,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/director.png"
+      "asset": "app/src/assets/brand/bao-presets/director.png"
     },
     {
       "slug": "programmer",
@@ -509,7 +509,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/programmer.png"
+      "asset": "app/src/assets/brand/bao-presets/programmer.png"
     },
     {
       "slug": "social-media-operator",
@@ -533,7 +533,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/social-media-operator.png"
+      "asset": "app/src/assets/brand/bao-presets/social-media-operator.png"
     },
     {
       "slug": "actor",
@@ -557,7 +557,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/actor.png"
+      "asset": "app/src/assets/brand/bao-presets/actor.png"
     },
     {
       "slug": "singer",
@@ -581,7 +581,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/singer.png"
+      "asset": "app/src/assets/brand/bao-presets/singer.png"
     },
     {
       "slug": "product-manager",
@@ -605,7 +605,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/product-manager.png"
+      "asset": "app/src/assets/brand/bao-presets/product-manager.png"
     },
     {
       "slug": "data-analyst",
@@ -629,7 +629,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/data-analyst.png"
+      "asset": "app/src/assets/brand/bao-presets/data-analyst.png"
     },
     {
       "slug": "marketing-director",
@@ -653,7 +653,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/marketing-director.png"
+      "asset": "app/src/assets/brand/bao-presets/marketing-director.png"
     },
     {
       "slug": "hr-manager",
@@ -677,7 +677,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/hr-manager.png"
+      "asset": "app/src/assets/brand/bao-presets/hr-manager.png"
     },
     {
       "slug": "legal-advisor",
@@ -701,7 +701,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/legal-advisor.png"
+      "asset": "app/src/assets/brand/bao-presets/legal-advisor.png"
     },
     {
       "slug": "customer-service-manager",
@@ -725,7 +725,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/customer-service-manager.png"
+      "asset": "app/src/assets/brand/bao-presets/customer-service-manager.png"
     },
     {
       "slug": "founder-assistant",
@@ -749,7 +749,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/founder-assistant.png"
+      "asset": "app/src/assets/brand/bao-presets/founder-assistant.png"
     },
     {
       "slug": "project-manager",
@@ -773,7 +773,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/project-manager.png"
+      "asset": "app/src/assets/brand/bao-presets/project-manager.png"
     },
     {
       "slug": "admin-specialist",
@@ -797,7 +797,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/admin-specialist.png"
+      "asset": "app/src/assets/brand/bao-presets/admin-specialist.png"
     },
     {
       "slug": "sales-consultant",
@@ -821,7 +821,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/sales-consultant.png"
+      "asset": "app/src/assets/brand/bao-presets/sales-consultant.png"
     },
     {
       "slug": "business-development",
@@ -845,7 +845,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/business-development.png"
+      "asset": "app/src/assets/brand/bao-presets/business-development.png"
     },
     {
       "slug": "customer-success",
@@ -869,7 +869,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/customer-success.png"
+      "asset": "app/src/assets/brand/bao-presets/customer-success.png"
     },
     {
       "slug": "copywriter",
@@ -893,7 +893,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/copywriter.png"
+      "asset": "app/src/assets/brand/bao-presets/copywriter.png"
     },
     {
       "slug": "brand-planner",
@@ -917,7 +917,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/brand-planner.png"
+      "asset": "app/src/assets/brand/bao-presets/brand-planner.png"
     },
     {
       "slug": "ad-specialist",
@@ -941,7 +941,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/ad-specialist.png"
+      "asset": "app/src/assets/brand/bao-presets/ad-specialist.png"
     },
     {
       "slug": "store-manager",
@@ -965,7 +965,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/store-manager.png"
+      "asset": "app/src/assets/brand/bao-presets/store-manager.png"
     },
     {
       "slug": "live-stream-operator",
@@ -989,7 +989,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/live-stream-operator.png"
+      "asset": "app/src/assets/brand/bao-presets/live-stream-operator.png"
     },
     {
       "slug": "private-domain-operator",
@@ -1013,7 +1013,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/private-domain-operator.png"
+      "asset": "app/src/assets/brand/bao-presets/private-domain-operator.png"
     },
     {
       "slug": "automation-engineer",
@@ -1037,7 +1037,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/automation-engineer.png"
+      "asset": "app/src/assets/brand/bao-presets/automation-engineer.png"
     },
     {
       "slug": "test-engineer",
@@ -1061,7 +1061,7 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/test-engineer.png"
+      "asset": "app/src/assets/brand/bao-presets/test-engineer.png"
     },
     {
       "slug": "security-officer",
@@ -1085,8 +1085,8 @@
         ],
         "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
       },
-      "asset": "openbot/app/src/assets/brand/bao-presets/security-officer.png"
+      "asset": "app/src/assets/brand/bao-presets/security-officer.png"
     }
   ],
-  "assets": "openbot/app/src/assets/brand/bao-presets/"
+  "assets": "app/src/assets/brand/bao-presets/"
 }

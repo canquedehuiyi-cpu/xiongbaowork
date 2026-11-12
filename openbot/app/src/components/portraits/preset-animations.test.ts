@@ -5,7 +5,11 @@ import {
   AVATAR_MOTION_STATES,
   PRESET_ANIMATIONS,
 } from "./preset-animations";
-import { BAO_ROLE_PRESETS, PORTRAIT_PRESETS } from "@/lib/portraits/queries";
+import {
+  BAO_ROLE_GROUPS,
+  BAO_ROLE_PRESETS,
+  PORTRAIT_PRESETS,
+} from "@/lib/portraits/queries";
 
 test("every preset has all seven motion states, each with a poster and a loop", () => {
   expect(AVATAR_MOTION_STATES).toHaveLength(7);
@@ -30,4 +34,13 @@ test("every preset has all seven motion states, each with a poster and a loop", 
 test("the seven states each move differently", () => {
   const classes = new Set(Object.values(AVATAR_MOTION_CLASS));
   expect(classes.size).toBe(7);
+});
+
+test("every role face belongs to a group the picker renders", () => {
+  for (const role of BAO_ROLE_PRESETS) {
+    expect(BAO_ROLE_GROUPS).toContain(role.group);
+  }
+  for (const group of BAO_ROLE_GROUPS) {
+    expect(BAO_ROLE_PRESETS.some((role) => role.group === group)).toBe(true);
+  }
 });

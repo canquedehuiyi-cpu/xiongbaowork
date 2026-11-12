@@ -5,6 +5,7 @@ import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -158,7 +159,7 @@ export function PortraitPicker({
             表情或角色形象，或上传一张自己的图片、一段 6 秒以内的短视频。工作区里的每个人都会看到这个头像。
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col items-center gap-4">
+        <DialogBody className="items-center">
           <AbstractAvatar
             decorative
             motion={previewMotion ?? undefined}
@@ -295,7 +296,7 @@ export function PortraitPicker({
               {problem}
             </p>
           ) : null}
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button
             disabled={busy || !current}

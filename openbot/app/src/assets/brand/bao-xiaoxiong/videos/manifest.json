@@ -326,5 +326,5 @@
     "max_seconds": 6,
     "size_px": 512
   },
-  "assets": "openbot/app/src/assets/brand/bao-xiaoxiong/videos/"
+  "assets": "app/src/assets/brand/bao-xiaoxiong/videos/"
 }

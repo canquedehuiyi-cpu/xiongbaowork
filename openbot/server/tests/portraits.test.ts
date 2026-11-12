@@ -118,6 +118,11 @@ test("a role face from the second batch is a known preset too", async () => {
   };
   expect(portrait.preset).toBe("doctor");
   expect(portrait.imageUrl).toBeNull();
+  // The next tests expect the face from the first one to still be there.
+  const restored = await call(tenantA, "PUT", `/coworker/${MINE}`, {
+    preset: "cute",
+  });
+  expect(restored.status).toBe(200);
 });
 
 test("an uploaded picture is stored, listed by a versioned URL and served back byte for byte", async () => {
