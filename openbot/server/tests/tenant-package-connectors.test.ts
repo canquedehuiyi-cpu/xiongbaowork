@@ -141,7 +141,8 @@ afterEach(async () => {
     await database
       .delete(skillTable)
       .where(eq(skillTable.id, `pkg-skill-${suite}`));
-    await database.delete(agentTable).where(eq(agentTable.id, grantBot));
+    // grantBot 不在这里删：后续用例还要往 plugin_grants 里写它的授权，afterEach 删掉它会让
+    // 下一个用例的 INSERT 撞外键。清理归 afterAll（见下）。
   });
 });
 
@@ -278,6 +279,50 @@ describe("connectors in a tenant package", () => {
     // The refs did not survive the recycle: no dead name in a picker.
     expect(await grantCount(`${declared.id}/`)).toBe(0);
     expect(await skillToolCount(`${declared.id}/`)).toBe(0);
+  });
+
+  test("带下划线的连接器 id 只清自己的悬空 ref，不误删同形异写 id 的授权", async () => {
+    // `pkg_wild_<suite>` 用下划线：未转义时 LIKE 模式里的 `_` 是单字符通配符，
+    // `pkg-wild-<suite>`（连字符版，形近的另一个连接器）的 ref 会被一并删掉——跨租户的整表删除。
+    const declared = connector({ id: `pkg_wild_${suite}` });
+    const lookalikeRef = `pkg-wild-${suite}/search`;
+
+    await runAsTenant("platform", async () => {
+      await database.insert(skillTable).values({
+        id: `pkg-skill-${suite}`,
+        tenantId: SYSTEM_TENANT,
+        ownerUserId: null,
+        slug: `pkg-skill-${suite}`,
+        title: "通配符清理测试技能",
+        summary: "为下划线 id 的悬空 ref 清理而设。",
+        instructions: "无关。",
+        origin: "catalogue",
+      });
+      await database.insert(pluginGrants).values([
+        // 声明连接器自己的悬空 ref：回收后应当被清掉。
+        { kind: "mcp", ref: `${declared.id}/search`, agentId: grantBot, tenantId: SYSTEM_TENANT },
+        // 形近连接器的 ref：无论何时都不是这次回收的对象。
+        { kind: "mcp", ref: lookalikeRef, agentId: grantBot, tenantId: SYSTEM_TENANT },
+      ]);
+      await database.insert(skillTools).values({
+        skillId: `pkg-skill-${suite}`,
+        tenantId: SYSTEM_TENANT,
+        ref: `${declared.id}/search`,
+        declaredBy: null,
+      });
+    });
+
+    await applyPackage(packageWith([declared], "v1"));
+    expect(await grantCount(`${declared.id}/`)).toBe(1);
+    expect(await grantCount(`pkg-wild-${suite}/`)).toBe(1);
+
+    // 包停止声明该连接器：只回收自己的行与自己的 ref。
+    await applyPackage(packageWith([], "v2"));
+    expect(await serverRow(declared.id)).toHaveLength(0);
+    expect(await grantCount(`${declared.id}/`)).toBe(0);
+    expect(await skillToolCount(`${declared.id}/`)).toBe(0);
+    // 形近 id 的授权原样保留：这是本条意见的核心断言。
+    expect(await grantCount(`pkg-wild-${suite}/`)).toBe(1);
   });
 
   test("credential_id stays null while the named environment variable is unset", async () => {

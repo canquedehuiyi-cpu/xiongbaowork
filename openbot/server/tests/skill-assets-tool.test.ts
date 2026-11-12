@@ -215,6 +215,81 @@ describe("the skills asset read tools", () => {
     expect(result.text).toContain("../other-skill/secrets.md");
   });
 
+  test("81–200 字符的附件路径原样可读：读取端与加载器同一上限", async () => {
+    await grantSkill(entitledBot);
+    // 加载器 isSafeSkillAssetPath 放行至 200 字符；读取端曾用 80 字符截断 path，
+    // 81–200 字符的合法文件因此读不到。160 字符的路径必须整段可读。
+    const longPath = `references/${"a".repeat(141)}/step.md`;
+    expect(longPath.length).toBe(160);
+    await inCatalogue(async () => {
+      await writeSkillAssets(database, skillId, [
+        {
+          path: longPath,
+          mediaType: "text/markdown",
+          content: "# 长路径附件",
+          bytes: Buffer.byteLength("# 长路径附件", "utf8"),
+          checksum: "checksum-long-path",
+        },
+      ]);
+    });
+    const result = await call(entitledBot, "read_skill_asset", { skillId, path: longPath });
+    expect(result.isError).toBe(false);
+    expect(result.text).toBe("# 长路径附件");
+    // 清理：把长路径附件删掉，免得影响后续断言附件总数的用例。
+    await inCatalogue(async () => {
+      await database.delete(skillAssets).where(eq(skillAssets.path, longPath));
+    });
+  });
+
+  test("超长附件按 offset 分页读全，默认行为向后兼容", async () => {
+    await grantSkill(entitledBot);
+    const head = "# 第 1 段开头\n\n";
+    const tail = "\n\n# 最后一段结尾";
+    const middle = "中".repeat(25_000);
+    const longContent = `${head}${middle}${tail}`;
+    const pagedPath = "references/paged.md";
+    await inCatalogue(async () => {
+      await writeSkillAssets(database, skillId, [
+        {
+          path: pagedPath,
+          mediaType: "text/markdown",
+          content: longContent,
+          bytes: Buffer.byteLength(longContent, "utf8"),
+          checksum: "checksum-paged",
+        },
+      ]);
+    });
+    // 默认调用（向后兼容）：只返回第一窗，并给出续读 offset。
+    const first = await call(entitledBot, "read_skill_asset", { skillId, path: pagedPath });
+    expect(first.isError).toBe(false);
+    expect(first.text.startsWith(head)).toBe(true);
+    expect(first.text).toContain("继续读");
+    expect(first.text).toContain(String(longContent.length));
+    // 按 first 提示的 offset 续读：修复前这一段永远读不到。
+    let offset = Number(first.text.match(/offset=(\d+)/)?.[1]);
+    expect(Number.isFinite(offset)).toBe(true);
+    let last = first;
+    let guard = 0;
+    let reachedEnd = false;
+    while (guard++ < 10) {
+      last = await call(entitledBot, "read_skill_asset", { skillId, path: pagedPath, offset });
+      expect(last.isError).toBe(false);
+      if (last.text.includes("读到结尾")) {
+        reachedEnd = true;
+        break;
+      }
+      const next = Number(last.text.match(/offset=(\d+)/)?.[1]);
+      expect(Number.isFinite(next) && next > offset).toBe(true);
+      offset = next;
+    }
+    expect(reachedEnd).toBe(true);
+    // 拼回全文，证明分页覆盖整份内容。
+    expect(last.text).toContain("最后一段结尾");
+    await inCatalogue(async () => {
+      await database.delete(skillAssets).where(eq(skillAssets.path, pagedPath));
+    });
+  });
+
   test("deleting the skill takes its attachments with it", async () => {
     // A throwaway skill so the suite's shared rows are untouched.
     const throwaway = `asset-gone-${suite}`;

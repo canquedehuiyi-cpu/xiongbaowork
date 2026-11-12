@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { and, eq, inArray, like, notInArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { type CredentialStore, sealCredential } from "./credentials";
 import type { Database } from "./db/client";
 import { mcpServers, pluginGrants, skillAssets, skillTools } from "./db/schema";
@@ -561,6 +561,26 @@ export async function synchronizePackageConnectors(
 }
 
 /**
+ * Escape the LIKE wildcards (`\`, `%`, `_`) in a connector id.
+ *
+ * The id is DATA, not a pattern: `clearDanglingConnectorRefs` matches refs by prefix, and an
+ * unescaped id turned `_` into a single-character wildcard — recycling `my_app` then deleted
+ * `my-app`'s grants too, on every tenant, because the delete runs across the sync's whole database.
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+/**
+ * The `ref LIKE '<escaped id>/%'` predicate, with an explicit ESCAPE so the escaped wildcards stay
+ * literal. Exported beside {@link escapeLikePattern} so tests can pin the rendered SQL without a
+ * database.
+ */
+export function refPrefixPredicate(column: AnyColumn, id: string): SQL {
+  return sql`${column} like ${`${escapeLikePattern(id)}/%`} escape '\\'`;
+}
+
+/**
  * The plain-text refs a recycled connector leaves behind, cleared in the PLATFORM frame.
  *
  * `plugin_grants.ref` and `skill_tools.ref` are text on purpose (no foreign key — see
@@ -581,11 +601,8 @@ export async function clearDanglingConnectorRefs(
   ]) {
     for (const id of recycledIds) {
       const predicate = tableRef.kind
-        ? and(
-            eq(tableRef.table.kind, tableRef.kind),
-            like(tableRef.table.ref, `${id}/%`),
-          )
-        : like(tableRef.table.ref, `${id}/%`);
+        ? and(eq(tableRef.table.kind, tableRef.kind), refPrefixPredicate(tableRef.table.ref, id))
+        : refPrefixPredicate(tableRef.table.ref, id);
       await database.delete(tableRef.table).where(predicate);
     }
   }

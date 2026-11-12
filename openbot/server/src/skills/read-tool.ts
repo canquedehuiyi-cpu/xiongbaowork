@@ -78,6 +78,7 @@ const TOOLS: readonly McpTool[] = Object.freeze([
     name: "read_skill_asset",
     description: [
       "读一个技能随附的某一个文件。path 取自 list_skill_assets 的清单，逐个按步读取，不要一次全读。",
+      "文件超过上限时分段返回：按结果末尾提示的 offset 传入继续读，直到读到结尾。",
     ].join("\n"),
     inputSchema: {
       type: "object",
@@ -89,6 +90,14 @@ const TOOLS: readonly McpTool[] = Object.freeze([
         path: {
           type: "string",
           description: "文件在技能里的路径，取自 list_skill_assets。",
+        },
+        offset: {
+          type: "integer",
+          description: "从全文第几个字符开始读（UTF-16 码元计）。缺省为 0；续读用上次结果提示的值。",
+        },
+        limit: {
+          type: "integer",
+          description: "本次最多读多少个字符。缺省 20000，即单次返回上限。",
         },
       },
       required: ["skillId", "path"],
@@ -119,6 +128,34 @@ const failure = (message: string): McpCallResult => ({
   truncated: false,
 });
 
+/** 一个分页窗口：本段文本、全文字符数，以及尚未读完时的下一个 offset。 */
+export type PaginatedAsset = {
+  text: string;
+  totalChars: number;
+  /** 还有后续内容时的下一个 offset（UTF-16 码元计），读到结尾时为 null。 */
+  nextOffset: number | null;
+};
+
+/**
+ * 按 offset/limit 切出一个附件内容的窗口。纯函数，导出供测试固化分页契约。
+ *
+ * 分页是「能力保留优先」的选择：附件超长时加载与写入照旧，读取端分页取用，后半段不再
+ * 永久丢失。默认 offset=0、limit=MAX_RESULT_CHARS，行为与不分页时逐字符相同（向后兼容）。
+ */
+export function paginateAssetContent(content: string, offset: number, limit: number): PaginatedAsset {
+  const totalChars = content.length;
+  if (offset < 0 || offset >= totalChars) {
+    return { text: "", totalChars, nextOffset: null };
+  }
+  const text = content.slice(offset, offset + limit);
+  const consumed = offset + text.length;
+  return {
+    text,
+    totalChars,
+    nextOffset: consumed < totalChars ? consumed : null,
+  };
+}
+
 function asResult(text: string): McpCallResult {
   if (text.length <= MAX_RESULT_CHARS)
     return { text, isError: false, truncated: false };
@@ -131,11 +168,31 @@ function asResult(text: string): McpCallResult {
 
 const SKILL_ID_CHARS = 80;
 
+/**
+ * 附件路径的清洗上限，与加载器 `isSafeSkillAssetPath` 的 200 字符上限保持一致。
+ *
+ * 读取端曾借用技能 id 的 80 字符上限截断路径：81–200 字符的合法附件路径（加载器放行、清单里
+ * 就是这个名字）被悄悄截短，读工具于是去查一个不存在的文件。两端必须用同一个数——这里以
+ * 加载器为准。
+ */
+const SKILL_ASSET_PATH_CHARS = 200;
+
 /** A model-supplied skill id is data, not identity: flattened and bounded before it reaches SQL. */
 function cleanSkillId(value: unknown): string {
   if (typeof value !== "string") return "";
   return [...value.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, " ").trim()]
     .slice(0, SKILL_ID_CHARS)
+    .join("");
+}
+
+/**
+ * 附件路径清洗：与技能 id 同一规则压平控制字符，但上限取 {@link SKILL_ASSET_PATH_CHARS}。
+ * 导出供测试固化两端上限一致（加载器 200 / 读取端 200）。
+ */
+export function cleanSkillAssetPath(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return [...value.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, " ").trim()]
+    .slice(0, SKILL_ASSET_PATH_CHARS)
     .join("");
 }
 
@@ -168,6 +225,57 @@ async function skillGranted(
     )
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * 解析 read_skill_asset 的 offset/limit 参数。缺省 offset=0、limit=MAX_RESULT_CHARS，
+ * 与分页前的行为逐字符相同。返回值是参数二元组或一条拒绝理由。
+ */
+function readPaginationArgs(
+  args: Record<string, unknown>,
+): { offset: number; limit: number } | string {
+  let offset = 0;
+  if (args.offset !== undefined) {
+    const value = args.offset;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+      return "offset 必须是不小于 0 的整数（与上次结果里的「继续读」提示衔接）。";
+    }
+    offset = value;
+  }
+  let limit = MAX_RESULT_CHARS;
+  if (args.limit !== undefined) {
+    const value = args.limit;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > MAX_RESULT_CHARS) {
+      return `limit 必须是 1 到 ${MAX_RESULT_CHARS} 之间的整数。`;
+    }
+    limit = value;
+  }
+  return { offset, limit };
+}
+
+/** 续读提示（含前后缀）预留的字符数，保证提示本身不会被 asResult 截掉。 */
+const CONTINUATION_HINT_RESERVE = 120;
+
+/** 组装 read_skill_asset 的结果：分页窗口 + 续读提示，文本总量不超过 MAX_RESULT_CHARS。 */
+function assetReadResult(asset: { content: string }, path: string, offset: number, limit: number): McpCallResult {
+  const page = paginateAssetContent(asset.content, offset, limit);
+  if (page.text === "" && asset.content.length > 0) {
+    return failure(`文件 ${path} 共 ${page.totalChars} 个字符，offset ${offset} 超出范围。`);
+  }
+  let text = page.text;
+  let nextOffset = page.nextOffset;
+  if (nextOffset !== null || offset > 0) {
+    const budget = MAX_RESULT_CHARS - CONTINUATION_HINT_RESERVE;
+    if (text.length > budget) {
+      text = text.slice(0, budget);
+      nextOffset = offset + budget;
+    }
+    text =
+      nextOffset !== null
+        ? `${text}\n\n[文件 ${path} 共 ${page.totalChars} 个字符；本段结束于 offset ${nextOffset}，用 offset=${nextOffset} 继续读]`
+        : `[续读 offset ${offset}，全文共 ${page.totalChars} 个字符；本次读到结尾]\n\n${text}`;
+  }
+  return asResult(text);
 }
 
 /**
@@ -215,7 +323,7 @@ export async function callTool(
         ].join("\n"),
       );
     }
-    const path = cleanSkillId(given.path);
+    const path = cleanSkillAssetPath(given.path);
     if (!path)
       return failure("read_skill_asset 需要一个 path 参数，指明读哪个文件。");
     if (!isSafeSkillAssetPath(path))
@@ -225,7 +333,10 @@ export async function callTool(
       return asResult(
         `技能 ${skillId} 没有名为 ${path} 的文件。用 list_skill_assets 看有哪些文件。`,
       );
-    return asResult(asset.content);
+    const pagination = readPaginationArgs(given);
+    if (typeof pagination === "string")
+      return failure(pagination);
+    return assetReadResult(asset, path, pagination.offset, pagination.limit);
   } catch (error) {
     console.error(
       JSON.stringify({
