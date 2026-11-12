@@ -216,7 +216,9 @@ export function toReadError(error: unknown, platform: DesktopPlatform): Error {
  * error by its code and our own words, never its message, which could repeat what a control holds;
  * a helper that did not start without the detail it gave. The one exception is INVALID_ARGS, refused
  * while agent-desktop reads our own command line: it can only repeat what we passed there (a ref, a
- * window id, an app's name, a key), never typed text, which goes through stdin.
+ * window id, an app's name, a key), never typed text, which goes through stdin. A command that reads
+ * stdin has its INVALID_ARGS message replaced with our own words before it gets here
+ * (`DESKTOP_STDIN_INVALID_ARGS` in ./ad-write.ts, final review round 4).
  */
 export function toWriteError(error: unknown, platform: DesktopPlatform): Error {
   if (error instanceof AgentDesktopError && error.code !== "INVALID_ARGS") {

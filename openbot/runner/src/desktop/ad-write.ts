@@ -100,6 +100,14 @@ import type { DesktopSessions } from "./session";
  * No window's refs are voided by these.
  */
 
+/**
+ * What a write that hands agent-desktop the typed text on stdin (`type`, `set-value`,
+ * `clipboard-set`, each with `--stdin`) says when agent-desktop refuses its arguments (INVALID_ARGS,
+ * final review round 4): our own words in place of its message, which may repeat what it read.
+ */
+export const DESKTOP_STDIN_INVALID_ARGS =
+  "参数没有通过检查；这条命令带着要输入的文字，原始说明不显示";
+
 export const DESKTOP_WRITE_NOTE =
   "The window may have changed: read it again before the next step.";
 
@@ -278,6 +286,26 @@ function saysNotSent(error: AgentDesktopError): boolean {
   return error.notDelivered || error.delivery === undefined;
 }
 
+/**
+ * A command that read the typed text on stdin, refused as agent-desktop read its arguments
+ * (INVALID_ARGS, final review round 4): the same refusal (its code, whether it was delivered), in our
+ * own words instead of its message, which may repeat what it read. Anything else as it is.
+ */
+function withoutInput(error: unknown): unknown {
+  if (!(error instanceof AgentDesktopError) || error.code !== "INVALID_ARGS")
+    return error;
+  return new AgentDesktopError(
+    {
+      code: error.code,
+      message: DESKTOP_STDIN_INVALID_ARGS,
+      ...(error.delivery !== undefined
+        ? { disposition: { delivery: error.delivery } }
+        : {}),
+    },
+    error.exitCode,
+  );
+}
+
 /** Whether a write that failed this way may have changed something. */
 function mayHaveChanged(error: unknown): boolean {
   // INVALID_ARGS is agent-desktop refusing its arguments as it parses them, before any action
@@ -347,8 +375,16 @@ export function createAgentDesktopWriter(opts: {
         : signals.length === 1
           ? signals[0]
           : AbortSignal.any(signals);
-    const run = (args: string[], o: AdRunOptions = {}) =>
-      cli.run(args, { ...o, ...(runSignal ? { signal: runSignal } : {}) });
+    const run = async (args: string[], o: AdRunOptions = {}) => {
+      try {
+        return await cli.run(args, {
+          ...o,
+          ...(runSignal ? { signal: runSignal } : {}),
+        });
+      } catch (error) {
+        throw o.stdin === undefined ? error : withoutInput(error);
+      }
+    };
 
     /**
      * A failure as the owner and the model read it; `changed` once something may have been done,

@@ -13,7 +13,10 @@ import {
 } from "../../shared/desktop-control";
 import { createDesktopActions } from "../src/desktop/actions";
 import { createAgentDesktopReader } from "../src/desktop/ad-read";
-import { createAgentDesktopWriter } from "../src/desktop/ad-write";
+import {
+  createAgentDesktopWriter,
+  DESKTOP_STDIN_INVALID_ARGS,
+} from "../src/desktop/ad-write";
 import {
   type AgentDesktopCli,
   createAgentDesktopCli,
@@ -2717,5 +2720,59 @@ describe("desktop writes: the final review, round 3", () => {
     expect(
       await click(["窗口标题含「银行」", "控件名含「删除」：「…」"]),
     ).toMatchObject({ ok: true });
+  });
+});
+
+describe("desktop writes: the final review, round 4", () => {
+  /** What a write that carries the typed text on stdin says, refused as its arguments are read. */
+  const refused = desktopMessage(
+    "failed",
+    `INVALID_ARGS：${DESKTOP_STDIN_INVALID_ARGS}`,
+  );
+  const secret = "口令 hunter2 的原文";
+  const invalid = (command: string) => ({
+    envelope: {
+      version: "2.6",
+      ok: false,
+      command,
+      // agent-desktop's own words, which could repeat what it read on stdin.
+      error: { code: "INVALID_ARGS", message: `bad input: ${secret}` },
+    },
+    exitCode: 1,
+  });
+
+  test("INVALID_ARGS from type, set-value or clipboard-set (the text on stdin): its code and our words only, never its message", async () => {
+    const t = setup("windows", {
+      type: invalid("type"),
+      "set-value": invalid("set-value"),
+      "clipboard-set": invalid("clipboard-set"),
+    });
+    await t.start();
+    let { el } = await read(t);
+    const appended = await t.write("desktop.type", {
+      ref: el("Single line").ref,
+      text: secret,
+      mode: "append",
+    });
+    ({ el } = await read(t));
+    const replaced = await t.write("desktop.type", {
+      ref: el("Single line").ref,
+      text: secret,
+      mode: "replace",
+    });
+    const copied = await t.write("desktop.clipboard_write", { text: secret });
+    for (const outcome of [appended, replaced, copied]) {
+      expect(outcome).toEqual(fail(refused));
+      // Not delivered: refused as the arguments were read, never unknown.
+      expect(JSON.stringify(outcome)).not.toContain("hunter2");
+      expect(JSON.stringify(outcome)).not.toContain("bad input");
+    }
+    // Each went through stdin, and nothing of the text was on a command line.
+    expect(
+      t
+        .entries()
+        .filter((entry) => entry.args.includes("--stdin"))
+        .map((entry) => entry.args[0]),
+    ).toEqual(["type", "set-value", "clipboard-set"]);
   });
 });
