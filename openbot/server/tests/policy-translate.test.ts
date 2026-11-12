@@ -13,6 +13,7 @@ import { intentOf } from "../src/computer/gateway";
 import { checkPolicyRule } from "../src/computer/policy";
 import {
   COMPUTER_TOOLS,
+  POLICY_SCHEMA,
   ruleProblem,
   ruleWarning,
 } from "../src/computer/policy-translate";
@@ -384,5 +385,33 @@ describe("the rule's checks", () => {
         entry.tool,
         entry.intent,
       ]);
+  });
+});
+
+describe("the intents the writer and the reader are told (final review M4)", () => {
+  test("every desktop tool is named under the intent the policy sees it with", () => {
+    const lineOf = (intent: string) =>
+      POLICY_SCHEMA.split("\n").find((line) =>
+        line.startsWith(`    "${intent}": `),
+      ) ?? "";
+    for (const tool of [
+      "computer_desktop_windows",
+      "computer_desktop_snapshot",
+      "computer_desktop_wait",
+      "computer_desktop_clipboard_read",
+      "computer_desktop_click",
+      "computer_desktop_type",
+      "computer_desktop_key",
+      "computer_desktop_focus",
+      "computer_desktop_launch",
+      "computer_desktop_clipboard_write",
+    ]) {
+      const intent = intentOf(tool, undefined) as string;
+      expect({ tool, intent, named: lineOf(intent).includes(tool) }).toEqual({
+        tool,
+        intent,
+        named: true,
+      });
+    }
   });
 });
