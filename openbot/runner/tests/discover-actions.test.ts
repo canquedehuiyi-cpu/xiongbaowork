@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, win32 } from "node:path";
 import { createAppHost } from "../src/app-host";
 import {
+  APP_REF,
   APPS_FILE,
   type AppEntry,
   createAppRegistry,
@@ -564,7 +565,12 @@ test("apps.enable stores npx -y pkg as the bundled runtime, with the env value c
       tools: [{ name: "read_note" }],
     },
   });
-  const text = JSON.stringify(outcome);
+  // The ref is 128 random bits in base64url, so it can spell "npx" or "bunx" by chance. Mask it
+  // (after pinning its shape) and look for the secrets in every other byte of the output.
+  const appRef = entry?.ref ?? "";
+  expect(appRef).toMatch(APP_REF);
+  const text = JSON.stringify(outcome).replaceAll(appRef, "<ref>");
+  expect(text).toContain('"ref":"<ref>"');
   for (const secret of [
     "sk-test-secret",
     "API_KEY",
