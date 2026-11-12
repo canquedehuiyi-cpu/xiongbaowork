@@ -5,11 +5,11 @@
 #   verify-windows-signatures.ps1 -Unsigned [-ExpectedVersion X.Y.Z]
 #
 # Always: exactly one *-setup.exe; its payload carries the app (mainBinaryName.exe) and the runner
-# sidecar (xiongbao-runner.exe); the installer and the app carry tauri.conf.json's productName and the
+# sidecar (xiongbao-runner.exe) and the agent-desktop binary (agent-desktop.exe); the installer and the app carry tauri.conf.json's productName and the
 # version tauri.conf.json resolves (and -ExpectedVersion, when given).
-# Signed: the installer, the app and the sidecar each have a Valid Authenticode signature from
+# Signed: the installer, the app, the sidecar and agent-desktop.exe each have a Valid Authenticode signature from
 # exactly -ExpectedPublisher, with a timestamp, and pass `signtool verify /pa /all /v /tw`.
-# -Unsigned: each of the three is NotSigned, so a build labelled unsigned is never secretly signed by
+# -Unsigned: each of the four is NotSigned (upstream ships agent-desktop.exe unsigned), so a build labelled unsigned is never secretly signed by
 # someone else and a signed release can never fall back to this mode without saying so.
 # Evidence (signatures.json, signtool output) goes to -EvidenceDirectory.
 [CmdletBinding(DefaultParameterSetName = 'Signed')]
@@ -52,11 +52,12 @@ $installer = $installers[0]
 # the unsigned build output after bundling, so target/release is not what users receive.
 $payload = Join-Path ([System.IO.Path]::GetTempPath()) "device-payload-$([Guid]::NewGuid())"
 New-Item -ItemType Directory -Path $payload -Force | Out-Null
-& 7z e $installer.FullName "-o$payload" -r -y $mainBinary 'xiongbao-runner.exe' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "Could not extract $mainBinary and xiongbao-runner.exe from $($installer.Name)." }
+& 7z e $installer.FullName "-o$payload" -r -y $mainBinary 'xiongbao-runner.exe' 'agent-desktop.exe' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Could not extract $mainBinary, xiongbao-runner.exe and agent-desktop.exe from $($installer.Name)." }
 $app = Join-Path $payload $mainBinary
 $sidecar = Join-Path $payload 'xiongbao-runner.exe'
-foreach ($required in @($app, $sidecar)) {
+$agentDesktop = Join-Path $payload 'agent-desktop.exe'
+foreach ($required in @($app, $sidecar, $agentDesktop)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "The installer does not carry $([System.IO.Path]::GetFileName($required))."
     }
@@ -91,7 +92,7 @@ if (-not $Unsigned) {
 New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
 $records = @()
 try {
-    foreach ($file in @($installer.FullName, $app, $sidecar)) {
+    foreach ($file in @($installer.FullName, $app, $sidecar, $agentDesktop)) {
         $name = [System.IO.Path]::GetFileName($file)
         $info = (Get-Item -LiteralPath $file).VersionInfo
         $signature = Get-AuthenticodeSignature -LiteralPath $file
@@ -150,5 +151,5 @@ try {
     verifiedAtUtc = [DateTime]::UtcNow.ToString('o')
     files = $records
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'signatures.json') -Encoding utf8
-$state = if ($Unsigned) { 'unsigned (NotSigned on all three)' } else { "signed by $ExpectedPublisher" }
-Write-Host "Verified $($installer.Name), $mainBinary and xiongbao-runner.exe: $productName $configVersion, $state. Evidence: $EvidenceDirectory"
+$state = if ($Unsigned) { 'unsigned (NotSigned on all four)' } else { "signed by $ExpectedPublisher" }
+Write-Host "Verified $($installer.Name), $mainBinary, xiongbao-runner.exe and agent-desktop.exe: $productName $configVersion, $state. Evidence: $EvidenceDirectory"

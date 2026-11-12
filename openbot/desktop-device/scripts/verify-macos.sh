@@ -8,8 +8,9 @@
 # identifier, productName and version, the main binary and the runner sidecar; the sidecar starts
 # under the app's signature and entitlements (it prints its usage); the dmg holds the same app.
 # Signed: app, sidecar and dmg are signed by a Developer ID Application certificate of --team-id,
-# with the hardened runtime and the JIT entitlement on the sidecar; `stapler validate` passes on app
-# and dmg; `spctl --assess` accepts the app as notarized Developer ID and the dmg for opening.
+# with the hardened runtime and the JIT entitlement on the sidecar; agent-desktop and its helper carry
+# the same team and the hardened runtime (their entitlements go to agent-desktop.entitlements.plist);
+# `stapler validate` passes on app and dmg; `spctl --assess` accepts the app as notarized Developer ID and the dmg for opening.
 # --unsigned: the app is ad-hoc signed only, and Gatekeeper (`spctl --assess`) rejects it, so a build
 # labelled unsigned never carries someone's real identity.
 set -euo pipefail
@@ -59,6 +60,22 @@ shopt -u nullglob
 app="${apps[0]}"
 dmg="${dmgs[0]}"
 
+# agent-desktop and its macOS helper: present, executable, not writable by group or others, and the
+# binary reports the pinned version (FACTS (f): {"ok":true,"data":{"version":"1.2.0",...}}).
+check_agent_desktop() {
+  local app="$1" name path mode out got
+  for name in agent-desktop agent-desktop-macos-helper; do
+    path="$app/Contents/MacOS/$name"
+    [ -x "$path" ] || fail "$(basename "$app") has no executable Contents/MacOS/$name"
+    mode="$(stat -f %Lp "$path")"
+    [ $(( 8#$mode & 8#022 )) -eq 0 ] || fail "Contents/MacOS/$name is writable by group or others (mode $mode)"
+  done
+  out="$("$app/Contents/MacOS/agent-desktop" version 2>&1)" || fail "agent-desktop version failed: $out"
+  got="$(python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d["data"]["version"] if d.get("ok") is True else "")' <<<"$out" 2>/dev/null)" ||
+    fail "agent-desktop version printed no valid JSON envelope: $out"
+  [ "$got" = "1.2.0" ] || fail "agent-desktop reports version '$got', expected 1.2.0: $out"
+}
+
 check_app() {
   local app="$1" plist="$1/Contents/Info.plist" key want got
   for key in CFBundleIdentifier CFBundleName CFBundleShortVersionString CFBundleVersion; do
@@ -72,6 +89,7 @@ check_app() {
   done
   [ -x "$app/Contents/MacOS/$main_binary" ] || fail "$(basename "$app") has no Contents/MacOS/$main_binary"
   [ -x "$app/Contents/MacOS/xiongbao-runner" ] || fail "$(basename "$app") has no Contents/MacOS/xiongbao-runner"
+  check_agent_desktop "$app"
   codesign --verify --deep --strict --verbose=2 "$app"
 }
 
@@ -88,6 +106,14 @@ codesign -d --entitlements - --xml "$sidecar" > "$evidence/runner.entitlements.p
 # In the job log too: which signature, flags (runtime) and entitlements the runner really carries.
 grep -E '^(Identifier|Format|CodeDirectory|Signature|Authority|TeamIdentifier|Timestamp)' "$evidence/runner.codesign.txt" || true
 grep -o 'com\.apple\.security\.[a-z.-]*' "$evidence/runner.entitlements.plist" || true
+for name in agent-desktop agent-desktop-macos-helper; do
+  codesign -dv --verbose=4 "$app/Contents/MacOS/$name" > "$evidence/$name.codesign.txt" 2>&1
+done
+helper="$app/Contents/MacOS/agent-desktop-macos-helper"
+[ -x "$helper" ] || fail "the app has no Contents/MacOS/agent-desktop-macos-helper"
+# Entitlements agent-desktop really carries (the helper's own are only checked for team and runtime).
+codesign -d --entitlements - --xml "$app/Contents/MacOS/agent-desktop" > "$evidence/agent-desktop.entitlements.plist" 2> /dev/null || true
+grep -o 'com\.apple\.security\.[a-z.-]*' "$evidence/agent-desktop.entitlements.plist" || true
 
 if [ "$mode" = unsigned ]; then
   grep -q '^Signature=adhoc' "$evidence/app.codesign.txt" || fail "an unsigned build must be ad-hoc signed only: $(cat "$evidence/app.codesign.txt")"
@@ -95,7 +121,7 @@ if [ "$mode" = unsigned ]; then
     fail "Gatekeeper accepted a build labelled unsigned: $(cat "$evidence/app.spctl.txt")"
   fi
 else
-  for record in app runner; do
+  for record in app runner agent-desktop agent-desktop-macos-helper; do
     file="$evidence/$record.codesign.txt"
     grep -q '^Authority=Developer ID Application: ' "$file" || fail "$record is not signed with a Developer ID Application certificate"
     grep -qx "TeamIdentifier=$team" "$file" || fail "$record is not signed by team $team"
