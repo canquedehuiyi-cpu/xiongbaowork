@@ -545,6 +545,88 @@ jobs:
           name: g5-browser-probe-windows-log
           path: ${{ runner.temp }}/g5-browser-windows.log
 
+  # Desktop control phase 2 (plan docs/plans/2026-11-12-desktop-write.md, Task 10): the runner's own
+  # desktop.windows and desktop.snapshot through the pinned agent-desktop binary, against a real
+  # editor on each hosted runner (Notepad, TextEdit, gedit under Xvfb with an AT-SPI bus). Read only.
+  # A runner without accessibility permission or a session bus fails the probe; it is never skipped.
+  desktop-probe:
+    name: desktop probe, agent-desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            triple: x86_64-pc-windows-msvc
+          - os: macos-latest
+            triple: aarch64-apple-darwin
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+    env:
+      TRIPLE: ${{ matrix.triple }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      # runner/src imports agent-computer and shared code that need the root workspaces.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install Xvfb, gedit, openbox and the AT-SPI bus
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb gedit openbox at-spi2-core dbus-x11 libatspi2.0-0 gsettings-desktop-schemas
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts --triple "$TRIPLE" --out "$RUNNER_TEMP/agent-desktop"
+      - name: Desktop probe (gedit under Xvfb, with a session bus and the AT-SPI bus)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/desktop-probe.log"
+          xvfb-run -a -s "-screen 0 1280x800x24" dbus-run-session -- bash -c '
+            set -euo pipefail
+            export GTK_MODULES=gail:atk-bridge NO_AT_BRIDGE=0 GNOME_ACCESSIBILITY=1
+            gsettings set org.gnome.desktop.interface toolkit-accessibility true || echo "gsettings could not set toolkit-accessibility"
+            /usr/libexec/at-spi-bus-launcher --launch-immediately >"$RUNNER_TEMP/at-spi-bus.log" 2>&1 &
+            openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
+            sleep 3
+            bun scripts/ci/desktop-probe.ts "$RUNNER_TEMP/desktop-probe" --helper "$RUNNER_TEMP/agent-desktop/agent-desktop-$TRIPLE"
+          ' 2>&1 | tee "$log"
+          grep -q '^DESKTOP_PROBE_PASS$' "$log"
+          if grep -q '"passed":false' "$log"; then echo "::error::a probe check failed"; exit 1; fi
+      - name: Desktop probe (TextEdit)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/desktop-probe.log"
+          bun scripts/ci/desktop-probe.ts "$RUNNER_TEMP/desktop-probe" --helper "$RUNNER_TEMP/agent-desktop/agent-desktop-$TRIPLE" 2>&1 | tee "$log"
+          grep -q '^DESKTOP_PROBE_PASS$' "$log"
+          if grep -q '"passed":false' "$log"; then echo "::error::a probe check failed"; exit 1; fi
+      - name: Desktop probe (Notepad, the agent-desktop engine)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          OPENBOT_DESKTOP_ENGINE: agent-desktop
+        run: |
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          $dir = Join-Path $env:RUNNER_TEMP 'desktop-probe'
+          $helper = Join-Path $env:RUNNER_TEMP "agent-desktop\agent-desktop-$env:TRIPLE.exe"
+          $log = Join-Path $env:RUNNER_TEMP 'desktop-probe.log'
+          bun scripts/ci/desktop-probe.ts $dir --helper $helper *>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { throw "desktop-probe exited $code" }
+          if (-not (Select-String -LiteralPath $log -Quiet -Pattern '^DESKTOP_PROBE_PASS$')) { throw 'DESKTOP_PROBE_PASS missing.' }
+          if (Select-String -LiteralPath $log -SimpleMatch -Quiet -Pattern '"passed":false') { throw 'a probe check failed ("passed":false).' }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: desktop-probe-${{ matrix.os }}-log
+          path: ${{ runner.temp }}/desktop-probe.log
+
   # Desktop shell on Windows: frontend typecheck, Bun tests and build (Tauri embeds ../dist at
   # compile time), then the Rust regression tests. Ignored live tests stay off; no secrets used.
   desktop-windows:
