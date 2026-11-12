@@ -173,3 +173,30 @@ test("saving the default list untouched sends null, not the list", async () => {
     }),
   );
 });
+
+test("saving an emptied box shows the default words again, which still apply", async () => {
+  const view = draw();
+  const box = (await view.findByRole("textbox", {
+    name: "桌面逐次审批的词",
+  })) as HTMLTextAreaElement;
+  const user = userEvent.setup({ document });
+  await user.clear(box);
+  await user.click(view.getByRole("button", { name: "保存词表" }));
+  await waitFor(() =>
+    expect(sent).toContainEqual({
+      path: "/api/approvals/team",
+      method: "PATCH",
+      body: { desktopActionWords: [] },
+    }),
+  );
+  // The server stores an empty list as no list, so the default words are what applies.
+  await waitFor(() =>
+    expect(
+      (
+        view.getByRole("textbox", {
+          name: "桌面逐次审批的词",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe(DEFAULT_DESKTOP_ACTION_WORDS.join("\n")),
+  );
+});
