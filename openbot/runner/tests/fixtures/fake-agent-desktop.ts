@@ -5,7 +5,8 @@
  * FAKE_AD_SCRIPT is JSON: { platform?: "linux" | "macos" | "windows" (default linux),
  *   commands?: { "<command>": { sample?: "<key in the platform file>", error?: "<key in errors.json>",
  *     envelope?: <any JSON, answered as is>, raw?: "<text, answered as is>", exitCode?: number,
- *     delayMs?: number, spawnChild?: true } } }.
+ *     delayMs?: number, spawnChild?: true, holdPipe?: true } } }.
+ * `holdPipe` leaves a grandchild holding this process's stdout open after it exits.
  * `version` answers the platform's own `version` sample unless the script says otherwise; a command
  * with no entry answers `{"version":"2.6","ok":true,"command":"<cmd>","data":{}}`.
  *
@@ -35,6 +36,13 @@ if (args.includes("--stdin")) {
 }
 
 let childPid: number | undefined;
+if (entry.holdPipe) {
+  const child = spawn("bun", ["-e", "setTimeout(() => {}, 60000)"], {
+    stdio: ["ignore", "inherit", "ignore"],
+  });
+  childPid = child.pid;
+  child.unref();
+}
 if (entry.spawnChild) {
   const child = spawn("bun", ["-e", "setTimeout(() => {}, 60000)"], {
     stdio: "ignore",
