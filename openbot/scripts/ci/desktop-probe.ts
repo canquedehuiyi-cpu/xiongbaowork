@@ -58,7 +58,7 @@ export const DESKTOP_PROBE_CHECKS = {
   restarted: "ids from an earlier runner process are refused",
   sensitive: "a sensitive title is read only when allowed",
   screenshot: "a window screenshot is a PNG within 1280 px, or says why not",
-  from: "reading under a control with from works",
+  from: "reading under a control with from works, or on Linux is refused in defined words",
   state: "the state directory is private, untraced and wiped on close",
 } as const;
 
@@ -126,27 +126,54 @@ function isPng(base64: string, width: number, height: number): boolean {
   );
 }
 
-/** Opens `file` in the platform's own editor; returns the process to end afterwards, if any. */
-function openEditor(
+function textEditPids(): Set<number> {
+  const listed = spawnSync("pgrep", ["-x", "TextEdit"], {
+    encoding: "utf8",
+    timeout: 15_000,
+  });
+  return new Set(
+    String(listed.stdout ?? "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(Number),
+  );
+}
+
+/**
+ * Opens `file` in the platform's own editor; returns the process to end afterwards, if any. With
+ * `own`, the window gets a process of its own, so ending that process closes exactly this window
+ * (Notepad always has one; gedit --standalone and a second TextEdit instance are asked for).
+ */
+async function openEditor(
   platform: DesktopPlatform,
   file: string,
-): number | undefined {
+  own = false,
+): Promise<number | undefined> {
   if (platform === "macos") {
-    // `open` hands the file to TextEdit and returns.
-    const opened = spawnSync("open", ["-a", "TextEdit", file], {
-      stdio: "ignore",
-      timeout: 30_000,
-    });
+    const before = own ? textEditPids() : new Set<number>();
+    // `open` hands the file to TextEdit and returns; -n starts another instance.
+    const opened = spawnSync(
+      "open",
+      [...(own ? ["-n"] : []), "-a", "TextEdit", file],
+      { stdio: "ignore", timeout: 30_000 },
+    );
     if (opened.status !== 0)
       console.log(JSON.stringify({ openTextEdit: opened.status }));
+    if (!own) return undefined;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const added = [...textEditPids()].find((pid) => !before.has(pid));
+      if (added !== undefined) return added;
+      await Bun.sleep(250);
+    }
     return undefined;
   }
   // gedit hands a second file to the instance that runs; --new-window keeps it out of the first
-  // window's tabs, so the first window's title stays the same.
+  // window's tabs, so the first window's title stays the same. --standalone keeps it in a process
+  // of its own instead.
   const command =
     platform === "windows"
       ? ["notepad.exe", file]
-      : ["gedit", "--new-window", file];
+      : ["gedit", own ? "--standalone" : "--new-window", file];
   const child = Bun.spawn(command, {
     stdin: "ignore",
     stdout: "ignore",
@@ -156,7 +183,11 @@ function openEditor(
   return child.pid;
 }
 
-function endEditors(platform: DesktopPlatform, pids: number[]): void {
+function endEditors(
+  platform: DesktopPlatform,
+  pids: number[],
+  all = true,
+): void {
   if (platform === "windows") {
     const root =
       process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
@@ -175,6 +206,7 @@ function endEditors(platform: DesktopPlatform, pids: number[]): void {
       // Already gone.
     }
   }
+  if (!all) return;
   spawnSync("pkill", ["-x", platform === "macos" ? "TextEdit" : "gedit"], {
     stdio: "ignore",
     timeout: 15_000,
@@ -364,7 +396,7 @@ async function readChecks(
   // keeps every editor from guessing another encoding.
   const file = join(root, "熊宝员工.txt");
   writeFileSync(file, `\uFEFF${TEXT}`, "utf8");
-  opened(openEditor(platform, file));
+  opened(await openEditor(platform, file));
   const editor = (window: DesktopWindow) => window.title.includes("熊宝员工");
   const listed = await waitForWindow(run, editor);
   assert(
@@ -426,7 +458,8 @@ async function readChecks(
   // 5. A window whose title has a sensitive word is read only when allowed.
   const bankFile = join(root, "银行-探针.txt");
   writeFileSync(bankFile, `\uFEFF${TEXT}`, "utf8");
-  opened(openEditor(platform, bankFile));
+  const bankPid = await openEditor(platform, bankFile, true);
+  opened(bankPid);
   const bank = await waitForWindow(run, (window) =>
     window.title.includes("银行-探针"),
   );
@@ -452,6 +485,23 @@ async function readChecks(
     },
   );
 
+  // The sensitive window is closed again before the screenshot: on Linux it was drawn over the
+  // editor, and agent-desktop cannot read the pixels of a covered window there (ACTION_FAILED
+  // "Another window is drawn over this window…"). Waits up to 10 s for it to leave the list.
+  if (bankPid !== undefined) endEditors(platform, [bankPid], false);
+  const bankGoneBy = Date.now() + 10_000;
+  let bankGone = false;
+  for (;;) {
+    const listedNow = await run("desktop.windows", {});
+    bankGone =
+      listedNow.ok &&
+      !windowsOf(listedNow).some((window) =>
+        window.title.includes("银行-探针"),
+      );
+    if (bankGone || Date.now() > bankGoneBy) break;
+    await Bun.sleep(500);
+  }
+
   // 6. A screenshot of the editor: a PNG no longer than 1280 px on its long side. On macOS without
   // screen recording, the reason instead.
   const shot = await run("desktop.snapshot", { windowId, screenshot: true });
@@ -467,6 +517,8 @@ async function readChecks(
       Math.max(image.width, image.height) <= 1280 &&
       isPng(image.base64, image.width, image.height);
   assert(pictured && imageOk, DESKTOP_PROBE_CHECKS.screenshot, {
+    bankPid,
+    bankGone,
     screenRecording,
     snapshot: pictured ? brief(pictured) : shot,
   });
@@ -511,18 +563,36 @@ async function readChecks(
         },
       }),
     );
-  assert(
-    part &&
-      part.elements.length > 0 &&
-      part.elements.every((element) => DESKTOP_REF.test(element.ref)),
-    DESKTOP_PROBE_CHECKS.from,
-    {
-      fresh: whole ? { count: whole.elements.length } : fresh,
-      containers: containers.length,
-      tried,
-      part: brief(part),
-    },
-  );
+  const worked =
+    part !== undefined &&
+    part.elements.length > 0 &&
+    part.elements.every((element) => DESKTOP_REF.test(element.ref));
+  // Linux is a read-only trial here: AT-SPI cannot prove a control's identity, so group containers
+  // carry no ref (every one "not actionable") and --root on a ref'd node answers AMBIGUOUS_TARGET.
+  // There the check also passes when `from` is refused in exactly one of those two defined copies;
+  // any other answer still fails. macOS and Windows must read the subtree.
+  const lastTried = tried.at(-1) as { ok: boolean; error?: string } | undefined;
+  const refusedInDefinedWords =
+    platform === "linux" &&
+    lastTried !== undefined &&
+    !lastTried.ok &&
+    (lastTried.error === desktopMessage("ambiguous") ||
+      lastTried.error === desktopMessage("not_actionable"));
+  if (!worked && refusedInDefinedWords)
+    console.log(
+      JSON.stringify({ from: { linuxRefused: lastTried?.error, tried } }),
+    );
+  assert(worked || refusedInDefinedWords, DESKTOP_PROBE_CHECKS.from, {
+    outcome: worked
+      ? "read"
+      : refusedInDefinedWords
+        ? "refused in defined words"
+        : "failed",
+    fresh: whole ? { count: whole.elements.length } : fresh,
+    containers: containers.length,
+    tried,
+    part: brief(part),
+  });
   return true;
 }
 
