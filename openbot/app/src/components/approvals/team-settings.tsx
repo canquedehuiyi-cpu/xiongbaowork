@@ -109,10 +109,12 @@ function DesktopActionWords({
   saved,
   pending,
   onSave,
+  onReset,
 }: {
   saved: string[] | null | undefined;
   pending: boolean;
   onSave: (words: string[] | null) => void;
+  onReset: () => void;
 }) {
   const initial = (
     saved && saved.length > 0 ? saved : DEFAULT_DESKTOP_ACTION_WORDS
@@ -138,24 +140,33 @@ function DesktopActionWords({
         <div className="mt-2 flex gap-2">
           <Button
             disabled={pending}
-            onClick={() =>
+            onClick={() => {
+              const words = [
+                ...new Set(
+                  text
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter((line) => line !== ""),
+                ),
+              ];
+              // Exactly the default list is no list: saving it untouched must not freeze it.
               onSave(
-                text
-                  .split("\n")
-                  .map((line) => line.trim())
-                  .filter((line) => line !== ""),
-              )
-            }
+                words.length === DEFAULT_DESKTOP_ACTION_WORDS.length &&
+                  words.every(
+                    (word, index) =>
+                      word === DEFAULT_DESKTOP_ACTION_WORDS[index],
+                  )
+                  ? null
+                  : words,
+              );
+            }}
             size="sm"
           >
             保存词表
           </Button>
           <Button
             disabled={pending}
-            onClick={() => {
-              setText(DEFAULT_DESKTOP_ACTION_WORDS.join("\n"));
-              onSave(null);
-            }}
+            onClick={onReset}
             size="sm"
             variant="outline"
           >
@@ -187,6 +198,8 @@ export function TeamApprovalSettings() {
   const revokeTeam = useMutation(
     revokeTeamApprovalRuleMutationOptions(queryClient),
   );
+  // Bumped when the default is put back, so the box shows it even if the saved value was already null.
+  const [resetCount, setResetCount] = useState(0);
   const error =
     inbox.error ?? team.error ?? changeTeamRule.error ?? revokeTeam.error;
   if (inbox.isPending && !error) return null;
@@ -360,7 +373,13 @@ export function TeamApprovalSettings() {
         <PageSection title="桌面逐次审批">
           <PageRows>
             <DesktopActionWords
-              key={JSON.stringify(settings.desktopActionWords ?? null)}
+              key={`${resetCount}:${JSON.stringify(settings.desktopActionWords ?? null)}`}
+              onReset={() =>
+                team.mutate(
+                  { desktopActionWords: null },
+                  { onSuccess: () => setResetCount((count) => count + 1) },
+                )
+              }
               onSave={(desktopActionWords) =>
                 team.mutate({ desktopActionWords })
               }

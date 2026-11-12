@@ -127,8 +127,15 @@ test("the box shows the default words when none is saved, and 恢复默认 sends
       body: { desktopActionWords: null },
     }),
   );
+  // The box is rebuilt once the server has answered, so read it afresh.
   await waitFor(() =>
-    expect(box.value).toBe(DEFAULT_DESKTOP_ACTION_WORDS.join("\n")),
+    expect(
+      (
+        view.getByRole("textbox", {
+          name: "桌面逐次审批的词",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe(DEFAULT_DESKTOP_ACTION_WORDS.join("\n")),
   );
 });
 
@@ -149,6 +156,20 @@ test("saving sends the lines trimmed, blank lines dropped", async () => {
       path: "/api/approvals/team",
       method: "PATCH",
       body: { desktopActionWords: ["归档", "发送"] },
+    }),
+  );
+});
+
+test("saving the default list untouched sends null, not the list", async () => {
+  const view = draw();
+  await view.findByRole("textbox", { name: "桌面逐次审批的词" });
+  const user = userEvent.setup({ document });
+  await user.click(view.getByRole("button", { name: "保存词表" }));
+  await waitFor(() =>
+    expect(sent).toContainEqual({
+      path: "/api/approvals/team",
+      method: "PATCH",
+      body: { desktopActionWords: null },
     }),
   );
 });
