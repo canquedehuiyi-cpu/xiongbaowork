@@ -137,9 +137,9 @@ describe("setup rows", () => {
     expect(model.fix).toEqual({
       kind: "env",
       names: ["OPENAI_API_KEY"],
-      docsUrl: undefined,
       page: { label: "Credentials", path: "/admin/credentials" },
     });
+    expect((model.fix as { docsUrl?: string }).docsUrl).toBeUndefined();
 
     expect(row(rows, "computer").fix).toMatchObject({
       kind: "env",
