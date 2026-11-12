@@ -121,6 +121,24 @@ export function agentDesktopEnv(
   return env;
 }
 
+/**
+ * The environment of the PowerShell that protects the state directory. Unlike agent-desktop, this is
+ * our own fixed script, and PowerShell needs its usual variables (PSModulePath and the profile
+ * folders) to load `Set-Acl`'s module; with only agent-desktop's allow-list it hung until killed
+ * (seen on CI). The directory travels in a variable, never in the script text.
+ */
+export function secureDirEnv(
+  base: NodeJS.ProcessEnv,
+  dir: string,
+): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (typeof value === "string") env[key] = value;
+  }
+  env.XB_AD_STATE_DIR = dir;
+  return env;
+}
+
 type Child = {
   pid: number;
   exited: Promise<number>;
@@ -248,7 +266,7 @@ export async function secureWindowsStateDir(dir: string): Promise<void> {
       stdout: "ignore",
       stderr: "pipe",
       windowsHide: true,
-      env: { ...agentDesktopEnv(process.env, dir), XB_AD_STATE_DIR: dir },
+      env: secureDirEnv(process.env, dir),
     },
   );
   const stderr = new Response(proc.stderr).text();
