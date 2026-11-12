@@ -453,28 +453,38 @@ export function desktopActionWordHit(
   );
 }
 
-/** The product's names as given, without anything that has nothing left in the matching form. */
-function windowWordsWith(extra: readonly string[] | undefined): string[] {
-  const more = (Array.isArray(extra) ? extra : []).filter(
-    (word): word is string => typeof word === "string" && compact(word) !== "",
+/**
+ * The product's names as given (final review C1), without one that is shorter than two characters
+ * in the matching form (round 2, Minor-3: a one-character name would match nearly any title).
+ */
+function productWords(extra: readonly string[] | undefined): string[] {
+  return (Array.isArray(extra) ? extra : []).filter(
+    (word): word is string =>
+      typeof word === "string" && Array.from(compact(word)).length >= 2,
   );
-  return [...DESKTOP_WINDOW_WORDS, ...more];
 }
 
 /**
- * Every window word a title holds, in order: `DESKTOP_WINDOW_WORDS` first, then `extra` (the
- * product's own names, final review C1). Each by substring or by whole word, whichever hits.
+ * Every window word a title holds, in order: `DESKTOP_WINDOW_WORDS` first, by substring or by whole
+ * word, whichever hits; then `extra` (the product's own names, final review C1): an ASCII name only
+ * as a whole word (round 2, Minor-3: `Jia` is not in `Jiangsu`), any other by substring.
  */
 export function desktopWindowWordHits(
   title: string,
   extra?: readonly string[],
 ): string[] {
   if (typeof title !== "string") return [];
-  return windowWordsWith(extra).filter(
+  const sensitive = DESKTOP_WINDOW_WORDS.filter(
     (word) =>
       sensitiveWord(title, [word]) !== undefined ||
       desktopWordHit(title, [word]) !== undefined,
   );
+  const product = productWords(extra).filter((word) =>
+    ASCII_WORD.test(word)
+      ? desktopWordHit(title, [word]) !== undefined
+      : sensitiveWord(title, [word]) !== undefined,
+  );
+  return [...sensitive, ...product.filter((word) => !sensitive.includes(word))];
 }
 
 /**
@@ -523,6 +533,25 @@ export const DESKTOP_TERMINAL_PROCESSES: readonly string[] = [
   "gnome-terminal-server",
   "konsole",
   "xterm",
+  // Final review, round 2: the Chinese macOS name of Terminal, and more terminals.
+  "终端",
+  "Warp",
+  "Ghostty",
+  "Alacritty",
+  "kitty",
+  "WezTerm",
+  "Tabby",
+  "Hyper",
+  "xfce4-terminal",
+  "tilix",
+  "terminator",
+  "mintty",
+  "OpenConsole.exe",
+  // /proc/<pid>/comm keeps 15 characters: gnome-terminal-server as Linux may list it.
+  "gnome-terminal-",
+  // The Linux process names of WezTerm and Warp.
+  "wezterm-gui",
+  "warp-terminal",
 ];
 
 /** A process name as compared: its last path segment, NFKC, trimmed, lower case, no `.exe` or `.app`. */

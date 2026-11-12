@@ -620,6 +620,25 @@ describe("desktop-control: the final review's fixes", () => {
       "gnome-terminal-server",
       "konsole",
       "xterm",
+      // Round 2 (Important-3): the Chinese macOS name, more terminals, and the 15-character name
+      // /proc/<pid>/comm keeps for gnome-terminal-server.
+      "终端",
+      "Warp",
+      "Ghostty",
+      "Alacritty",
+      "kitty",
+      "WezTerm",
+      "Tabby",
+      "Hyper",
+      "xfce4-terminal",
+      "tilix",
+      "terminator",
+      "mintty",
+      "OpenConsole.exe",
+      "gnome-terminal-",
+      // Their Linux process names where the app's is not one: WezTerm's and Warp's.
+      "wezterm-gui",
+      "warp-terminal",
     ]);
     for (const process of [
       ...DESKTOP_SELF_PROCESSES,
@@ -868,5 +887,55 @@ describe("desktop-control: the product's own processes are its packaged names", 
         name,
         listed: true,
       });
+  });
+});
+
+describe("desktop-control: the final review, round 2", () => {
+  test("Important-3: more terminals, by their names as listed", () => {
+    for (const process of [
+      "终端",
+      "Warp",
+      "ghostty",
+      "alacritty",
+      "kitty",
+      "wezterm-gui",
+      "WezTerm",
+      "Tabby",
+      "Hyper",
+      "xfce4-terminal",
+      "tilix",
+      "terminator",
+      "mintty.exe",
+      "OpenConsole.exe",
+      "gnome-terminal-",
+      "gnome-terminal-server",
+      "warp-terminal",
+    ])
+      expect({ process, hit: desktopSelfOrTerminalProcess(process) }).toEqual({
+        process,
+        hit: true,
+      });
+    for (const process of ["kitty-notes", "Hyperion", "终端机", "Warpinator"])
+      expect({ process, hit: desktopSelfOrTerminalProcess(process) }).toEqual({
+        process,
+        hit: false,
+      });
+  });
+
+  test("Minor-3: a product name of one character is ignored; an ASCII one matches only as a whole word", () => {
+    expect(desktopWindowWordHits("甲 - Chrome", ["甲"])).toEqual([]);
+    expect(desktopWindowWordHits("甲乙 - Chrome", ["甲", "甲乙"])).toEqual([
+      "甲乙",
+    ]);
+    expect(desktopWindowWordHits("Jiangsu notes", ["Jia"])).toEqual([]);
+    expect(desktopWindowWordHits("Approvals - Jia", ["Jia"])).toEqual(["Jia"]);
+    expect(
+      desktopWindowWordHits("XiongBao Workspace", ["XiongBao Work"]),
+    ).toEqual([]);
+    expect(
+      desktopWindowWordHits("Approvals · XiongBao Work", ["XiongBao Work"]),
+    ).toEqual(["XiongBao Work"]);
+    // The sensitive words keep their substring reading.
+    expect(desktopWindowWordHits("1Password", [])).toEqual(["password"]);
   });
 });

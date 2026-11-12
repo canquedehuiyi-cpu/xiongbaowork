@@ -702,6 +702,26 @@ export function createAgentDesktopReader(opts: {
           // partial tree (`complete: false`) rather than a killed process.
           DESKTOP_LIMITS.adCommandTimeoutMs,
         );
+    /*
+     * The title as it is after the read too (final review, round 2: Qoder P1 on #494): a wait can
+     * take 30 seconds, and the window may have gone to a bank's or a payment page meanwhile. Read
+     * with the same words as before it; a hit throws away what was read and keeps none of its refs.
+     */
+    let after = live;
+    if (body.allowSensitive !== true) {
+      const now = (await listRaw(signal)).find((entry) => {
+        const ad = adWindowOf(entry);
+        return (
+          ad !== undefined &&
+          ad.adWindowId === target.adWindowId &&
+          ad.pid === target.pid
+        );
+      }) as Node | undefined;
+      if (!now) throw readError("no_window");
+      const word = sensitiveWord(clip(now.title, 10_000), DESKTOP_WINDOW_WORDS);
+      if (word !== undefined) throw readError("sensitive", word);
+      after = now;
+    }
     const envelope = isNode(data) ? data : {};
     counter++;
     const snapshotId = `${prefix}-${counter}`;
@@ -723,12 +743,12 @@ export function createAgentDesktopReader(opts: {
         },
         DESKTOP_LIMITS.snapshotsKept,
       );
-    const window = windowOf(live, windowId);
+    const window = windowOf(after, windowId);
     if (windowIds.has(windowId)) {
       titles.set(windowId, window.title);
       fullTitles.set(
         windowId,
-        typeof live.title === "string" ? live.title : "",
+        typeof after.title === "string" ? after.title : "",
       );
     }
     const result: DesktopSnapshot & { platform: DesktopPlatform } = {

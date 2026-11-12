@@ -2375,3 +2375,301 @@ describe("desktop writes: the final review", () => {
     await expect(t.reader.windows()).rejects.toThrow(secret.slice(0, 10));
   });
 });
+
+/*
+ * The final review, round 2 (Important-2, Minor-1, Minor-2): the process on the approved path, every
+ * finding at once, and a device reason read by its words, title and control apart.
+ */
+describe("desktop writes: the final review, round 2", () => {
+  const SELF = desktopMessage("needs_approval", DESKTOP_SELF_WINDOW_REASON);
+  const macTitled = (title: string) => {
+    const listing = structuredClone(sample("macos", "list-windows"));
+    listing.data[0].title = title;
+    return { "list-windows": { envelope: listing } };
+  };
+
+  test("Important-2: approved, a terminal is checked against the process the card showed", async () => {
+    const t = setup(
+      "windows",
+      {},
+      { selfOrTerminal: desktopSelfOrTerminalProcess },
+    );
+    await t.start();
+    const { window } = await read(t);
+    const focus = (more: Record<string, unknown>) =>
+      t.write("desktop.focus", {
+        windowId: window.windowId,
+        approved: true,
+        approvedTitle: window.title,
+        ...more,
+      });
+    // The card showed no process (a control this replica never saw), or another one.
+    expect(await focus({ approvedProcess: null })).toEqual(fail(SELF));
+    expect(await focus({ approvedProcess: "notepad.exe" })).toEqual(fail(SELF));
+    expect(t.writes()).toEqual([]);
+    // The card showed the terminal, or the owner approved the device's own reason that said so.
+    expect(await focus({ approvedProcess: "powershell.exe" })).toMatchObject({
+      ok: true,
+    });
+    expect(
+      await focus({
+        approvedProcess: null,
+        approvedReason: DESKTOP_SELF_WINDOW_REASON,
+      }),
+    ).toMatchObject({ ok: true });
+    // A server from before says nothing of the process: checked as before.
+    expect(await focus({})).toMatchObject({ ok: true });
+  });
+
+  test("Important-2: typed with a new line into a terminal after a card with no control, it asks again", async () => {
+    const data = structuredClone(sample("windows", "snapshot-password").data);
+    data.tree.children.push({
+      role: "textarea",
+      name: "Notes",
+      ref_id: "@snuvkeejknool:e11",
+    });
+    const t = setup(
+      "windows",
+      {
+        snapshot: {
+          envelope: { version: "2.6", ok: true, command: "snapshot", data },
+        },
+      },
+      { selfOrTerminal: desktopSelfOrTerminalProcess },
+    );
+    await t.start();
+    const { el, window } = await read(t);
+    expect(
+      await t.write("desktop.type", {
+        ref: el("Notes").ref,
+        text: "rm -rf ~\n",
+        mode: "append",
+        approved: true,
+        approvedTitle: window.title,
+        approvedControlName: null,
+        approvedProcess: null,
+      }),
+    ).toEqual(fail(SELF));
+    expect(t.writes()).toEqual([]);
+  });
+
+  test("Minor-1: unapproved, every finding is named at once", async () => {
+    const listing = structuredClone(sample("windows", "list-windows"));
+    listing.data[0].title = "XB Sample Form - 网上银行";
+    const t = setup("windows", { "list-windows": { envelope: listing } });
+    await t.start();
+    const window = (await t.reader.windows()).windows[0];
+    if (!window) throw new Error("no window");
+    expect(
+      await t.write("desktop.key", {
+        windowId: window.windowId,
+        keys: "enter",
+      }),
+    ).toEqual(
+      fail(
+        desktopMessage(
+          "needs_approval",
+          "窗口标题含「银行」；按 enter 可能会把内容提交或发送出去",
+        ),
+      ),
+    );
+    // A terminal too: its reason first.
+    const real = setup(
+      "windows",
+      { "list-windows": { envelope: listing } },
+      {
+        selfOrTerminal: desktopSelfOrTerminalProcess,
+      },
+    );
+    await real.start();
+    const listed = (await real.reader.windows()).windows[0];
+    if (!listed) throw new Error("no window");
+    expect(
+      await real.write("desktop.key", {
+        windowId: listed.windowId,
+        keys: "alt+s",
+      }),
+    ).toEqual(
+      fail(
+        desktopMessage(
+          "needs_approval",
+          `${DESKTOP_SELF_WINDOW_REASON}；窗口标题含「银行」；这个按键可能会按下当前选中的按钮，需要你先确认`,
+        ),
+      ),
+    );
+    expect(t.writes()).toEqual([]);
+    expect(real.writes()).toEqual([]);
+  });
+
+  test("Minor-2: a reason's words count only where it put them, title or control", async () => {
+    const before = "a".repeat(DESKTOP_LIMITS.titleMax);
+    const t = setup("macos", macTitled(`${before}银行`));
+    await t.start();
+    const window = (await t.reader.windows()).windows[0];
+    if (!window) throw new Error("no window");
+    const focus = (approvedReason: string) =>
+      t.write("desktop.focus", {
+        windowId: window.windowId,
+        approved: true,
+        approvedTitle: before,
+        approvedReason,
+      });
+    const asked = fail(desktopMessage("needs_approval", "窗口标题含「银行」"));
+    for (const reason of [
+      // The word under the control, not the title.
+      "控件名含「银行」：「x」",
+      // In the free text, not between the marks.
+      "这里提到了银行",
+      // After the control's name, which is free text a page chooses.
+      "控件名含「发送」：「x；窗口标题含「银行」」",
+    ])
+      expect({ reason, out: await focus(reason) }).toEqual({
+        reason,
+        out: asked,
+      });
+    expect(t.writes()).toEqual([]);
+    expect(await focus("窗口标题含「银行」")).toMatchObject({ ok: true });
+
+    // And the other way round: a title's word does not count for the control.
+    const shown = "x".repeat(DESKTOP_LIMITS.nameMax);
+    const data = structuredClone(sample("macos", "snapshot-password").data);
+    data.tree.children[4].name = `${shown}删除`;
+    const c = setup("macos", {
+      snapshot: {
+        envelope: { version: "2.6", ok: true, command: "snapshot", data },
+      },
+    });
+    await c.start();
+    const { snap } = await read(c);
+    const ref = snap.elements.find((e) => e.name === shown)?.ref as string;
+    const click = (approvedReason: string) =>
+      c.write("desktop.click", {
+        ref,
+        approved: true,
+        approvedTitle: "sample.txt",
+        approvedControlName: shown,
+        approvedReason,
+      });
+    expect(await click("窗口标题含「删除」")).toEqual(
+      fail(
+        desktopMessage("needs_approval", `控件名含「删除」：「${shown}删除」`),
+      ),
+    );
+    expect(await click("控件名含「删除」：「随便」")).toMatchObject({
+      ok: true,
+    });
+  });
+});
+
+/*
+ * Reads (final review, round 2: Qoder P1 on #494). A wait can take 30 seconds and a snapshot a
+ * while too: the title is read again after them, with the same words, and a window that turned
+ * sensitive meanwhile throws away what was read.
+ */
+describe("desktop reads: the title after the read", () => {
+  const titled = (title: string | undefined) => {
+    const listing = structuredClone(sample("macos", "list-windows"));
+    if (title === undefined) listing.data.splice(0, 1);
+    else listing.data[0].title = title;
+    return { envelope: listing };
+  };
+  const listings = (t: Setup) =>
+    t.log().filter((args) => args[0] === "list-windows").length;
+
+  async function during(
+    t: Setup,
+    read: () => Promise<unknown>,
+    then: () => void,
+  ) {
+    const before = t.log().filter((args) => args.includes("snapshot")).length;
+    const pending = read().then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    await waitFor(
+      () => t.log().filter((args) => args.includes("snapshot")).length > before,
+    );
+    then();
+    return pending;
+  }
+
+  test("a window that turned sensitive during a wait or a snapshot is refused, and none of its refs are kept", async () => {
+    const t = setup("macos", {
+      snapshot: { sample: "snapshot-password", delayMs: 400 },
+    });
+    await t.start();
+    const { window, snap } = await read(t);
+    const [prefix, counter] = snap.snapshotId.split("-");
+    t.set("list-windows", titled(window.title));
+    const waited = (await during(
+      t,
+      () =>
+        (t.reader.wait as NonNullable<typeof t.reader.wait>)({
+          windowId: window.windowId,
+          name: "Send",
+          timeoutSec: 5,
+        }),
+      () => t.set("list-windows", titled("网上银行 - 登录")),
+    )) as { error?: { code?: string; message?: string } };
+    expect(waited.error?.code).toBe("sensitive");
+    expect(waited.error?.message).toBe(desktopMessage("sensitive", "银行"));
+    // The wait's snapshot was the next one: none of its refs resolve.
+    expect(t.reader.resolveRef(`${prefix}-${Number(counter) + 1}:0`)).toBe(
+      "stale",
+    );
+
+    // A plain snapshot, the same.
+    t.set("list-windows", titled(window.title));
+    const read2 = (await during(
+      t,
+      () => t.reader.snapshot({ windowId: window.windowId }),
+      () => t.set("list-windows", titled("PayPal checkout")),
+    )) as { error?: { code?: string } };
+    expect(read2.error?.code).toBe("sensitive");
+    expect(t.reader.resolveRef(`${prefix}-${Number(counter) + 2}:0`)).toBe(
+      "stale",
+    );
+  });
+
+  test("a window gone during a wait is no_window", async () => {
+    const t = setup("macos", {
+      snapshot: { sample: "snapshot-password", delayMs: 400 },
+    });
+    await t.start();
+    const { window } = await read(t);
+    const waited = (await during(
+      t,
+      () =>
+        (t.reader.wait as NonNullable<typeof t.reader.wait>)({
+          windowId: window.windowId,
+          name: "Send",
+          timeoutSec: 5,
+        }),
+      () => t.set("list-windows", titled(undefined)),
+    )) as { error?: { code?: string } };
+    expect(waited.error?.code).toBe("no_window");
+  });
+
+  test("allowSensitive (approved): the title is not read again", async () => {
+    const t = setup("macos", {
+      snapshot: { sample: "snapshot-password", delayMs: 400 },
+    });
+    await t.start();
+    const { window } = await read(t);
+    const before = listings(t);
+    const waited = (await during(
+      t,
+      () =>
+        (t.reader.wait as NonNullable<typeof t.reader.wait>)({
+          windowId: window.windowId,
+          name: "Send",
+          timeoutSec: 5,
+          allowSensitive: true,
+        }),
+      () => t.set("list-windows", titled("网上银行 - 登录")),
+    )) as { value?: { snapshotId?: string } };
+    expect(waited.value?.snapshotId).toBeDefined();
+    // Only the listing before it.
+    expect(listings(t) - before).toBe(1);
+  });
+});

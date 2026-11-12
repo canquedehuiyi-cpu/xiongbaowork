@@ -13,7 +13,6 @@ import {
   type DesktopLaunchOutput,
   type DesktopPlatform,
   type DesktopWriteOutput,
-  desktopActionWordHit,
   desktopActionWordsOf,
   desktopActivationKey,
   desktopMessage,
@@ -183,6 +182,32 @@ function strings(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+/**
+ * What a reason this device gave says the owner saw (round 2, Minor-2), read by its own grammar:
+ * the product's own window or a terminal (the reason starts with that sentence), the window's words
+ * (between the marks of `窗口标题含「…」`), and the control's words (between the marks of
+ * `控件名含「…」`, up to its `：`, after which the control's name is free text and never read). Only
+ * words between the marks count, and only where the reason put them.
+ */
+function seenInReason(reason: string): {
+  self: boolean;
+  title: string[];
+  control: string[];
+} {
+  const marked = (list: string) =>
+    [...list.matchAll(/「([^「」]*)」/g)].map((match) => match[1] as string);
+  const control = reason.search(/(?:^|；)控件名含「/);
+  const head = control < 0 ? reason : reason.slice(0, control);
+  const tail = control < 0 ? "" : reason.slice(control);
+  const title = /(?:^|；)窗口标题含((?:「[^「」]*」)+)(?=；|$)/.exec(head);
+  const words = /^；?控件名含((?:「[^「」]*」)+)(?=：|；|$)/.exec(tail);
+  return {
+    self: reason.startsWith(DESKTOP_SELF_WINDOW_REASON),
+    title: title ? marked(title[1] as string) : [],
+    control: words ? marked(words[1] as string) : [],
+  };
 }
 
 /** A name as a reason shows it: at most `REASON_NAME_MAX` code points, an ellipsis when cut. */
@@ -500,19 +525,26 @@ export function createAgentDesktopWriter(opts: {
       titleWords.some((word) => !DESKTOP_WINDOW_WORDS.includes(word));
     const approvedTitle =
       typeof body.approvedTitle === "string" ? body.approvedTitle : undefined;
-    const approvedReason =
-      typeof body.approvedReason === "string" ? body.approvedReason : "";
+    // The device's own reason the owner approved, read by its words, title and control apart.
+    const reasonSeen = seenInReason(
+      typeof body.approvedReason === "string" ? body.approvedReason : "",
+    );
     /*
-     * I1 checks a name the card showed only when the server says which one (null: none). A server
-     * from before says nothing, and could not ask again after an approval: the device then checks
-     * as it did, rather than refusing every approved click on such a control.
+     * I1 checks a name the card showed, and the process it showed, only when the server says which
+     * (null: none). A server from before says nothing, and could not ask again after an approval:
+     * the device then checks as it did, rather than refusing every such approved write.
      */
     const namesShown = "approvedControlName" in body;
     const approvedControlName =
       typeof body.approvedControlName === "string"
         ? body.approvedControlName
         : "";
+    const processShown = "approvedProcess" in body;
+    const approvedProcess =
+      typeof body.approvedProcess === "string" ? body.approvedProcess : "";
+    const liveProcess = text(live.app_name);
     const words = desktopActionWordsOf(strings(body.actionWords));
+    const allWords = [...words, ...DESKTOP_APPROVAL_WORDS];
     // The whole name: the one shown is cut to `nameMax`, and a word past that must not go unseen.
     const name =
       action === "desktop.click"
@@ -534,74 +566,97 @@ export function createAgentDesktopWriter(opts: {
         (approvedTitle !== undefined && approvedTitle !== title))
     )
       return needs(`窗口标题刚刚变成含「${titleWord}」，请重新列出窗口`);
+    /*
+     * Every finding at once (round 2, Minor-1), approved or not, in one order: the product's own
+     * window or a terminal, the window's words, the rest, and the control's words last (on the
+     * approved path with its whole name, the only free text in a reason).
+     */
+    const findings: string[] = [];
     if (approved) {
       /*
-       * I1: approved for what the owner saw. A window word in the whole title, or an action word in
-       * the whole name, that was not on the card (the title, the control's name, or the device's
-       * own reason approved) is asked about, all of them at once.
+       * I1: approved for what the owner saw. The product's own window or a terminal the card did
+       * not show (round 2, Important-2), a window word in the whole title, or an action word in the
+       * whole name, that was not on the card (the title, the process, the control's name, or the
+       * device's own reason approved) is asked about.
        */
+      if (
+        processShown &&
+        selfOrTerminal(liveProcess) &&
+        !selfOrTerminal(approvedProcess) &&
+        !reasonSeen.self
+      )
+        findings.push(DESKTOP_SELF_WINDOW_REASON);
       const titleSeen = [
         ...desktopWindowWordHits(approvedTitle ?? "", selfWords),
-        ...desktopWindowWordHits(approvedReason, selfWords),
+        ...reasonSeen.title,
       ];
       const unseenTitle =
         approvedTitle === undefined
           ? []
-          : titleWords.filter((word) => !titleSeen.includes(word));
-      const allWords = [...words, ...DESKTOP_APPROVAL_WORDS];
+          : titleWords.filter(
+              (word) =>
+                !titleSeen.includes(word) &&
+                // The product's own names are what the reason for its own window says.
+                !(reasonSeen.self && !DESKTOP_WINDOW_WORDS.includes(word)),
+            );
+      if (unseenTitle.length > 0)
+        findings.push(`窗口标题含「${unseenTitle.join("」「")}」`);
       const nameSeen = [
         ...desktopWordHits(approvedControlName, allWords),
-        ...desktopWordHits(approvedReason, allWords),
+        ...reasonSeen.control,
       ];
       const unseenName = namesShown
         ? desktopWordHits(name, allWords).filter(
             (word) => !nameSeen.includes(word),
           )
         : [];
-      const findings = [
-        ...(unseenTitle.length > 0
-          ? [`窗口标题含「${unseenTitle.join("」「")}」`]
-          : []),
-        ...(unseenName.length > 0
-          ? [`控件名含「${unseenName.join("」「")}」：「${shownName(name)}」`]
-          : []),
-      ];
-      if (findings.length > 0) return needs(findings.join("；"));
-    }
-    if (!approved) {
-      if (liveTitle.trim() === "") return needs("没能确认窗口的标题");
+      if (unseenName.length > 0)
+        findings.push(
+          `控件名含「${unseenName.join("」「")}」：「${shownName(name)}」`,
+        );
+    } else {
+      if (liveTitle.trim() === "") findings.push("没能确认窗口的标题");
       // C1: the product's own window or a terminal, every time.
-      if (selfWindow) return needs(DESKTOP_SELF_WINDOW_REASON);
-      if (titleWord !== undefined) return needs(`窗口标题含「${titleWord}」`);
-      if (action === "desktop.click") {
-        // A control with no name cannot be told apart from any other (round 1).
-        if (name.trim() === "") return needs("没能确认要操作的控件");
-        const word = desktopActionWordHit(name, words);
-        if (word !== undefined) return needs(`控件名含「${word}」`);
-      }
+      if (selfWindow) findings.push(DESKTOP_SELF_WINDOW_REASON);
+      const sensitive = titleWords.filter((word) =>
+        DESKTOP_WINDOW_WORDS.includes(word),
+      );
+      if (sensitive.length > 0)
+        findings.push(`窗口标题含「${sensitive.join("」「")}」`);
       if (keys?.kind === "submit")
-        return needs(`按 ${keysText} 可能会把内容提交或发送出去`);
-      if (keys?.kind === "close") return needs(`按 ${keysText} 会关闭程序`);
+        findings.push(`按 ${keysText} 可能会把内容提交或发送出去`);
+      if (keys?.kind === "close") findings.push(`按 ${keysText} 会关闭程序`);
       if (keys?.kind === "delete")
-        return needs(`按 ${keysText} 可能会直接删除文件或内容`);
+        findings.push(`按 ${keysText} 可能会直接删除文件或内容`);
       // Tab to a button and Space presses it: as good as an unasked click (round 1). On Windows and
       // Linux, Alt with a letter presses the button it names (I3).
       if (action === "desktop.key" && desktopActivationKey(keysText, platform))
-        return needs("这个按键可能会按下当前选中的按钮，需要你先确认");
+        findings.push("这个按键可能会按下当前选中的按钮，需要你先确认");
       if (action === "desktop.type") {
         const role = target.control?.type ?? "";
         if (!DESKTOP_TEXT_ROLES.has(role))
-          return needs("目标不是输入框，需要你先确认");
+          findings.push("目标不是输入框，需要你先确认");
         // FACTS (b) and round 1: a textarea, or a textfield inside a scrollarea, is multi-line.
         const multiline =
           role === "textarea" ||
           (role === "textfield" && target.control?.singleLine !== true);
-        if (!multiline && /[\r\n]/.test(typed))
-          return needs("往单行输入框里输入带换行的文字");
-        if (desktopTextNeedsApproval(typed, multiline))
-          return needs("输入的文字含控制字符或特殊的换行符");
+        const newline = !multiline && /[\r\n]/.test(typed);
+        if (newline) findings.push("往单行输入框里输入带换行的文字");
+        // A new line already named is not named again as a control character.
+        if (desktopTextNeedsApproval(typed, multiline || newline))
+          findings.push("输入的文字含控制字符或特殊的换行符");
+      }
+      if (action === "desktop.click") {
+        // A control with no name cannot be told apart from any other (round 1).
+        if (name.trim() === "") findings.push("没能确认要操作的控件");
+        const hits = [
+          ...desktopWordHits(name, words),
+          ...desktopWordHits(name, DESKTOP_APPROVAL_WORDS),
+        ].filter((word, index, all) => all.indexOf(word) === index);
+        if (hits.length > 0) findings.push(`控件名含「${hits.join("」「")}」`);
       }
     }
+    if (findings.length > 0) return needs(findings.join("；"));
     // A key press goes to the window in front, and only there.
     if (action === "desktop.key" && live.is_focused !== true)
       return fail(desktopMessage("not_foreground"));
