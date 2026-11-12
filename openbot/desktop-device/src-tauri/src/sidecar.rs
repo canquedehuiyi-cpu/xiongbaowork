@@ -172,6 +172,18 @@ fn running_executables() -> Vec<(u32, PathBuf)> {
     }
 }
 
+/// Whether a legacy runner of this install could be running, so the process table is worth listing.
+/// Windows cannot delete a running executable, so with no `openbot-runner.exe` in the install
+/// directory none of this install's is running, and the slow WMI query is skipped. Unix can: a
+/// package upgrade unlinks the old file while it runs (the " (deleted)" orphan above), so there a
+/// missing file proves nothing and the listing, a cheap one, always runs.
+pub fn legacy_runner_possible(
+    legacy_file_exists: bool,
+    running_files_can_be_removed: bool,
+) -> bool {
+    legacy_file_exists || running_files_can_be_removed
+}
+
 /// Stop a runner left over from before the rename, if one is running from this app's install
 /// directory. Runs once per app process: an orphan from before the upgrade can only exist at the
 /// first start, and later restarts must not pay for (or hang on) a process listing.
@@ -186,6 +198,10 @@ fn stop_legacy_runners_now() {
     };
     let Some(dir) = exe.parent() else { return };
     let dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let legacy_file = dir.join(format!("{LEGACY_SIDECAR}{}", std::env::consts::EXE_SUFFIX));
+    if !legacy_runner_possible(legacy_file.exists(), !cfg!(windows)) {
+        return;
+    }
     for pid in legacy_runner_pids(&running_executables(), &dir, std::env::consts::EXE_SUFFIX) {
         #[cfg(unix)]
         {
@@ -554,6 +570,16 @@ mod tests {
             ),
         ];
         assert_eq!(legacy_runner_pids(&table, dir, ".exe"), vec![1, 2]);
+    }
+
+    #[test]
+    fn the_process_table_is_listed_only_when_a_legacy_runner_could_be_running() {
+        // Windows: no legacy file in the install directory, no legacy process from it.
+        assert!(!legacy_runner_possible(false, false));
+        assert!(legacy_runner_possible(true, false));
+        // Unix: an upgrade can unlink the file under a running orphan, so always look.
+        assert!(legacy_runner_possible(false, true));
+        assert!(legacy_runner_possible(true, true));
     }
 
     #[test]
