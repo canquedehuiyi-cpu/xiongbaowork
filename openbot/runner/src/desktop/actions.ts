@@ -94,7 +94,7 @@ function accountNames(): string[] {
  * The helper's stderr tail with every file path and the account's name taken out, so neither leaves
  * the device in an error message.
  */
-function scrub(text: string): string {
+export function scrub(text: string): string {
   let out = text
     // C:\dir\sub dir\file (folders may hold spaces; the last part ends at whitespace).
     .replace(
