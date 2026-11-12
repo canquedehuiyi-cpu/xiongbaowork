@@ -52,7 +52,11 @@ function PortraitFace(
   },
 ) {
   const src = usePortraitSrc(props.portrait.kind, props.portrait.id);
-  const videoUrl = usePortraitVideo(props.portrait.kind, props.portrait.id);
+  const videoUrl = usePortraitVideo(
+    props.portrait.kind,
+    props.portrait.id,
+    props.motion,
+  );
   return (
     <Face
       {...props}

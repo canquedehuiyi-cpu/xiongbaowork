@@ -1,0 +1,1092 @@
+{
+  "batch": "bao-preset-batch2",
+  "count": 45,
+  "format": "256x256 PNG, circular, transparent background",
+  "crop_size_px": 400,
+  "source": "用户 2026-11-12 21:40 上传的 15 张设计稿, 每张 1536x1024 JPEG, 3 角色",
+  "license": "用户自有素材, 待用户确认许可方可入库",
+  "head_center_method": "muse.visual_grounding 实测每张稿 3 个头部中心点; 另抽查 3 张 bbox 校核脸+耳宽约 330-360px",
+  "entries": [
+    {
+      "slug": "doctor",
+      "name_cn": "暖心医生",
+      "series": "职业形象系列 01",
+      "subtitle": "医疗健康",
+      "source_file": "workspace/user/media_library/image/exec-eb8c5e93-9fcc-49d0-94ff-8d610ffe692e.jpg",
+      "face_center": {
+        "x": 287,
+        "y": 311
+      },
+      "crop": {
+        "center_x": 287,
+        "center_y": 311,
+        "size": 400,
+        "box": [
+          87,
+          111,
+          487,
+          511
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/doctor.png"
+    },
+    {
+      "slug": "teacher",
+      "name_cn": "智慧教师",
+      "series": "职业形象系列 01",
+      "subtitle": "教育培训",
+      "source_file": "workspace/user/media_library/image/exec-eb8c5e93-9fcc-49d0-94ff-8d610ffe692e.jpg",
+      "face_center": {
+        "x": 765,
+        "y": 313
+      },
+      "crop": {
+        "center_x": 765,
+        "center_y": 313,
+        "size": 400,
+        "box": [
+          565,
+          113,
+          965,
+          513
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/teacher.png"
+    },
+    {
+      "slug": "chef",
+      "name_cn": "星级主厨",
+      "series": "职业形象系列 01",
+      "subtitle": "餐饮美食",
+      "source_file": "workspace/user/media_library/image/exec-eb8c5e93-9fcc-49d0-94ff-8d610ffe692e.jpg",
+      "face_center": {
+        "x": 1276,
+        "y": 314
+      },
+      "crop": {
+        "center_x": 1276,
+        "center_y": 314,
+        "size": 400,
+        "box": [
+          1076,
+          114,
+          1476,
+          514
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/chef.png"
+    },
+    {
+      "slug": "tech-engineer",
+      "name_cn": "科技工程师",
+      "series": "职业形象系列 02",
+      "subtitle": "人工智能",
+      "source_file": "workspace/user/media_library/image/exec-0e1b63c5-b15f-450c-9f29-60b8458a4a19.jpg",
+      "face_center": {
+        "x": 270,
+        "y": 285
+      },
+      "crop": {
+        "center_x": 270,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          70,
+          105,
+          470,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/tech-engineer.png"
+    },
+    {
+      "slug": "financial-advisor",
+      "name_cn": "理财顾问",
+      "series": "职业形象系列 02",
+      "subtitle": "金融服务",
+      "source_file": "workspace/user/media_library/image/exec-0e1b63c5-b15f-450c-9f29-60b8458a4a19.jpg",
+      "face_center": {
+        "x": 756,
+        "y": 285
+      },
+      "crop": {
+        "center_x": 756,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          556,
+          105,
+          956,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/financial-advisor.png"
+    },
+    {
+      "slug": "lawyer",
+      "name_cn": "专业律师",
+      "series": "职业形象系列 02",
+      "subtitle": "法律服务",
+      "source_file": "workspace/user/media_library/image/exec-0e1b63c5-b15f-450c-9f29-60b8458a4a19.jpg",
+      "face_center": {
+        "x": 1272,
+        "y": 285
+      },
+      "crop": {
+        "center_x": 1272,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1072,
+          105,
+          1472,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/lawyer.png"
+    },
+    {
+      "slug": "construction-engineer",
+      "name_cn": "建造工程师",
+      "series": "职业形象系列 03",
+      "subtitle": "建筑工程",
+      "source_file": "workspace/user/media_library/image/exec-42ee917c-7afe-49b3-ae2a-f1a0fc498f4c.jpg",
+      "face_center": {
+        "x": 272,
+        "y": 320
+      },
+      "crop": {
+        "center_x": 272,
+        "center_y": 320,
+        "size": 400,
+        "box": [
+          72,
+          120,
+          472,
+          520
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/construction-engineer.png"
+    },
+    {
+      "slug": "farmer",
+      "name_cn": "丰收果农",
+      "series": "职业形象系列 03",
+      "subtitle": "现代农业",
+      "source_file": "workspace/user/media_library/image/exec-42ee917c-7afe-49b3-ae2a-f1a0fc498f4c.jpg",
+      "face_center": {
+        "x": 759,
+        "y": 313
+      },
+      "crop": {
+        "center_x": 759,
+        "center_y": 313,
+        "size": 400,
+        "box": [
+          559,
+          113,
+          959,
+          513
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/farmer.png"
+    },
+    {
+      "slug": "courier",
+      "name_cn": "快递先锋",
+      "series": "职业形象系列 03",
+      "subtitle": "智慧物流",
+      "source_file": "workspace/user/media_library/image/exec-42ee917c-7afe-49b3-ae2a-f1a0fc498f4c.jpg",
+      "face_center": {
+        "x": 1279,
+        "y": 309
+      },
+      "crop": {
+        "center_x": 1279,
+        "center_y": 309,
+        "size": 400,
+        "box": [
+          1079,
+          109,
+          1479,
+          509
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/courier.png"
+    },
+    {
+      "slug": "pilot",
+      "name_cn": "王牌飞行员",
+      "series": "职业形象系列 04",
+      "subtitle": "航空出行",
+      "source_file": "workspace/user/media_library/image/exec-6db114cd-1c6f-4c6f-977c-2fcb1128200a.jpg",
+      "face_center": {
+        "x": 292,
+        "y": 328
+      },
+      "crop": {
+        "center_x": 292,
+        "center_y": 328,
+        "size": 400,
+        "box": [
+          92,
+          128,
+          492,
+          528
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/pilot.png"
+    },
+    {
+      "slug": "firefighter",
+      "name_cn": "勇敢消防员",
+      "series": "职业形象系列 04",
+      "subtitle": "应急消防",
+      "source_file": "workspace/user/media_library/image/exec-6db114cd-1c6f-4c6f-977c-2fcb1128200a.jpg",
+      "face_center": {
+        "x": 768,
+        "y": 333
+      },
+      "crop": {
+        "center_x": 768,
+        "center_y": 333,
+        "size": 400,
+        "box": [
+          568,
+          133,
+          968,
+          533
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/firefighter.png"
+    },
+    {
+      "slug": "tour-guide",
+      "name_cn": "金牌导游",
+      "series": "职业形象系列 04",
+      "subtitle": "文化旅游",
+      "source_file": "workspace/user/media_library/image/exec-6db114cd-1c6f-4c6f-977c-2fcb1128200a.jpg",
+      "face_center": {
+        "x": 1252,
+        "y": 328
+      },
+      "crop": {
+        "center_x": 1252,
+        "center_y": 328,
+        "size": 400,
+        "box": [
+          1052,
+          128,
+          1452,
+          528
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/tour-guide.png"
+    },
+    {
+      "slug": "journalist",
+      "name_cn": "现场记者",
+      "series": "职业形象系列 05",
+      "subtitle": "新闻传媒",
+      "source_file": "workspace/user/media_library/image/exec-74f80d1b-fa9c-40fb-9627-7bd91a7c0278.jpg",
+      "face_center": {
+        "x": 275,
+        "y": 278
+      },
+      "crop": {
+        "center_x": 275,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          75,
+          105,
+          475,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/journalist.png"
+    },
+    {
+      "slug": "creative-designer",
+      "name_cn": "灵感设计师",
+      "series": "职业形象系列 05",
+      "subtitle": "创意设计",
+      "source_file": "workspace/user/media_library/image/exec-74f80d1b-fa9c-40fb-9627-7bd91a7c0278.jpg",
+      "face_center": {
+        "x": 756,
+        "y": 289
+      },
+      "crop": {
+        "center_x": 756,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          556,
+          105,
+          956,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/creative-designer.png"
+    },
+    {
+      "slug": "fitness-coach",
+      "name_cn": "活力教练",
+      "series": "职业形象系列 05",
+      "subtitle": "体育健身",
+      "source_file": "workspace/user/media_library/image/exec-74f80d1b-fa9c-40fb-9627-7bd91a7c0278.jpg",
+      "face_center": {
+        "x": 1260,
+        "y": 280
+      },
+      "crop": {
+        "center_x": 1260,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1060,
+          105,
+          1460,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/fitness-coach.png"
+    },
+    {
+      "slug": "general-manager",
+      "name_cn": "总经理",
+      "series": "内置员工形象 01",
+      "subtitle": "沉稳自信",
+      "source_file": "workspace/user/media_library/image/exec-bf39c520-d812-4715-8d18-755b076960d4.jpg",
+      "face_center": {
+        "x": 270,
+        "y": 271
+      },
+      "crop": {
+        "center_x": 270,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          70,
+          105,
+          470,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/general-manager.png"
+    },
+    {
+      "slug": "accountant",
+      "name_cn": "会计",
+      "series": "内置员工形象 01",
+      "subtitle": "专注严谨",
+      "source_file": "workspace/user/media_library/image/exec-bf39c520-d812-4715-8d18-755b076960d4.jpg",
+      "face_center": {
+        "x": 759,
+        "y": 294
+      },
+      "crop": {
+        "center_x": 759,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          559,
+          105,
+          959,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/accountant.png"
+    },
+    {
+      "slug": "operations-director",
+      "name_cn": "运营总监",
+      "series": "内置员工形象 01",
+      "subtitle": "干练有活力",
+      "source_file": "workspace/user/media_library/image/exec-bf39c520-d812-4715-8d18-755b076960d4.jpg",
+      "face_center": {
+        "x": 1250,
+        "y": 274
+      },
+      "crop": {
+        "center_x": 1250,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1050,
+          105,
+          1450,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/operations-director.png"
+    },
+    {
+      "slug": "designer",
+      "name_cn": "设计师",
+      "series": "内置员工形象 02",
+      "subtitle": "灵动好奇",
+      "source_file": "workspace/user/media_library/image/exec-98190576-d5ed-4e0b-95db-5b3d7e9491e7.jpg",
+      "face_center": {
+        "x": 276,
+        "y": 297
+      },
+      "crop": {
+        "center_x": 276,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          76,
+          105,
+          476,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/designer.png"
+    },
+    {
+      "slug": "director",
+      "name_cn": "导演",
+      "series": "内置员工形象 02",
+      "subtitle": "投入专注",
+      "source_file": "workspace/user/media_library/image/exec-98190576-d5ed-4e0b-95db-5b3d7e9491e7.jpg",
+      "face_center": {
+        "x": 760,
+        "y": 292
+      },
+      "crop": {
+        "center_x": 760,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          560,
+          105,
+          960,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/director.png"
+    },
+    {
+      "slug": "programmer",
+      "name_cn": "编程大佬",
+      "series": "内置员工形象 02",
+      "subtitle": "机智得意",
+      "source_file": "workspace/user/media_library/image/exec-98190576-d5ed-4e0b-95db-5b3d7e9491e7.jpg",
+      "face_center": {
+        "x": 1252,
+        "y": 292
+      },
+      "crop": {
+        "center_x": 1252,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1052,
+          105,
+          1452,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/programmer.png"
+    },
+    {
+      "slug": "social-media-operator",
+      "name_cn": "自媒体运营官",
+      "series": "内置员工形象 03",
+      "subtitle": "俏皮有感染力",
+      "source_file": "workspace/user/media_library/image/exec-4b46d53d-82e9-48c1-a022-c3c0c34a6713.jpg",
+      "face_center": {
+        "x": 323,
+        "y": 271
+      },
+      "crop": {
+        "center_x": 323,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          123,
+          105,
+          523,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/social-media-operator.png"
+    },
+    {
+      "slug": "actor",
+      "name_cn": "演员",
+      "series": "内置员工形象 03",
+      "subtitle": "温柔有戏感",
+      "source_file": "workspace/user/media_library/image/exec-4b46d53d-82e9-48c1-a022-c3c0c34a6713.jpg",
+      "face_center": {
+        "x": 745,
+        "y": 271
+      },
+      "crop": {
+        "center_x": 745,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          545,
+          105,
+          945,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/actor.png"
+    },
+    {
+      "slug": "singer",
+      "name_cn": "歌手",
+      "series": "内置员工形象 03",
+      "subtitle": "热情投入",
+      "source_file": "workspace/user/media_library/image/exec-4b46d53d-82e9-48c1-a022-c3c0c34a6713.jpg",
+      "face_center": {
+        "x": 1236,
+        "y": 266
+      },
+      "crop": {
+        "center_x": 1236,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1036,
+          105,
+          1436,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/singer.png"
+    },
+    {
+      "slug": "product-manager",
+      "name_cn": "产品经理",
+      "series": "内置员工形象 04",
+      "subtitle": "思考有洞察",
+      "source_file": "workspace/user/media_library/image/exec-2c7d130b-db2b-42ec-890a-233da52c46dd.jpg",
+      "face_center": {
+        "x": 286,
+        "y": 291
+      },
+      "crop": {
+        "center_x": 286,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          86,
+          105,
+          486,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/product-manager.png"
+    },
+    {
+      "slug": "data-analyst",
+      "name_cn": "数据分析师",
+      "series": "内置员工形象 04",
+      "subtitle": "理性而温和",
+      "source_file": "workspace/user/media_library/image/exec-2c7d130b-db2b-42ec-890a-233da52c46dd.jpg",
+      "face_center": {
+        "x": 756,
+        "y": 290
+      },
+      "crop": {
+        "center_x": 756,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          556,
+          105,
+          956,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/data-analyst.png"
+    },
+    {
+      "slug": "marketing-director",
+      "name_cn": "市场总监",
+      "series": "内置员工形象 04",
+      "subtitle": "热情自信",
+      "source_file": "workspace/user/media_library/image/exec-2c7d130b-db2b-42ec-890a-233da52c46dd.jpg",
+      "face_center": {
+        "x": 1243,
+        "y": 292
+      },
+      "crop": {
+        "center_x": 1243,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1043,
+          105,
+          1443,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/marketing-director.png"
+    },
+    {
+      "slug": "hr-manager",
+      "name_cn": "人力资源主管",
+      "series": "内置员工形象 05",
+      "subtitle": "亲切包容",
+      "source_file": "workspace/user/media_library/image/exec-18a0dd2a-1fc4-4ad9-8c15-df6427d0f7d9.jpg",
+      "face_center": {
+        "x": 269,
+        "y": 292
+      },
+      "crop": {
+        "center_x": 269,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          69,
+          105,
+          469,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/hr-manager.png"
+    },
+    {
+      "slug": "legal-advisor",
+      "name_cn": "法务顾问",
+      "series": "内置员工形象 05",
+      "subtitle": "沉着坚定",
+      "source_file": "workspace/user/media_library/image/exec-18a0dd2a-1fc4-4ad9-8c15-df6427d0f7d9.jpg",
+      "face_center": {
+        "x": 774,
+        "y": 279
+      },
+      "crop": {
+        "center_x": 774,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          574,
+          105,
+          974,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/legal-advisor.png"
+    },
+    {
+      "slug": "customer-service-manager",
+      "name_cn": "客服主管",
+      "series": "内置员工形象 05",
+      "subtitle": "耐心温暖",
+      "source_file": "workspace/user/media_library/image/exec-18a0dd2a-1fc4-4ad9-8c15-df6427d0f7d9.jpg",
+      "face_center": {
+        "x": 1283,
+        "y": 298
+      },
+      "crop": {
+        "center_x": 1283,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1083,
+          105,
+          1483,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/customer-service-manager.png"
+    },
+    {
+      "slug": "founder-assistant",
+      "name_cn": "创始人助理",
+      "series": "OPC员工形象 06",
+      "subtitle": "机灵周到",
+      "source_file": "workspace/user/media_library/image/exec-d7568613-50b5-42fc-8637-536e3fe7bfb1.jpg",
+      "face_center": {
+        "x": 276,
+        "y": 266
+      },
+      "crop": {
+        "center_x": 276,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          76,
+          105,
+          476,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/founder-assistant.png"
+    },
+    {
+      "slug": "project-manager",
+      "name_cn": "项目经理",
+      "series": "OPC员工形象 06",
+      "subtitle": "专注可靠",
+      "source_file": "workspace/user/media_library/image/exec-d7568613-50b5-42fc-8637-536e3fe7bfb1.jpg",
+      "face_center": {
+        "x": 740,
+        "y": 267
+      },
+      "crop": {
+        "center_x": 740,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          540,
+          105,
+          940,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/project-manager.png"
+    },
+    {
+      "slug": "admin-specialist",
+      "name_cn": "行政专员",
+      "series": "OPC员工形象 06",
+      "subtitle": "亲切利落",
+      "source_file": "workspace/user/media_library/image/exec-d7568613-50b5-42fc-8637-536e3fe7bfb1.jpg",
+      "face_center": {
+        "x": 1252,
+        "y": 270
+      },
+      "crop": {
+        "center_x": 1252,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1052,
+          105,
+          1452,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/admin-specialist.png"
+    },
+    {
+      "slug": "sales-consultant",
+      "name_cn": "销售顾问",
+      "series": "OPC员工形象 07",
+      "subtitle": "自信有魅力",
+      "source_file": "workspace/user/media_library/image/exec-45188f04-d4e2-4677-ba02-7eb1a80d7d04.jpg",
+      "face_center": {
+        "x": 267,
+        "y": 263
+      },
+      "crop": {
+        "center_x": 267,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          67,
+          105,
+          467,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/sales-consultant.png"
+    },
+    {
+      "slug": "business-development",
+      "name_cn": "商务拓展",
+      "series": "OPC员工形象 07",
+      "subtitle": "开放有远见",
+      "source_file": "workspace/user/media_library/image/exec-45188f04-d4e2-4677-ba02-7eb1a80d7d04.jpg",
+      "face_center": {
+        "x": 730,
+        "y": 261
+      },
+      "crop": {
+        "center_x": 730,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          530,
+          105,
+          930,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/business-development.png"
+    },
+    {
+      "slug": "customer-success",
+      "name_cn": "客户成功",
+      "series": "OPC员工形象 07",
+      "subtitle": "温暖有耐心",
+      "source_file": "workspace/user/media_library/image/exec-45188f04-d4e2-4677-ba02-7eb1a80d7d04.jpg",
+      "face_center": {
+        "x": 1230,
+        "y": 259
+      },
+      "crop": {
+        "center_x": 1230,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1030,
+          105,
+          1430,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/customer-success.png"
+    },
+    {
+      "slug": "copywriter",
+      "name_cn": "文案策划",
+      "series": "OPC员工形象 08",
+      "subtitle": "细腻会思考",
+      "source_file": "workspace/user/media_library/image/exec-b8cf0c7e-f55d-4e07-9496-edfa4633ace5.jpg",
+      "face_center": {
+        "x": 261,
+        "y": 282
+      },
+      "crop": {
+        "center_x": 261,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          61,
+          105,
+          461,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/copywriter.png"
+    },
+    {
+      "slug": "brand-planner",
+      "name_cn": "品牌策划",
+      "series": "OPC员工形象 08",
+      "subtitle": "灵感十足",
+      "source_file": "workspace/user/media_library/image/exec-b8cf0c7e-f55d-4e07-9496-edfa4633ace5.jpg",
+      "face_center": {
+        "x": 806,
+        "y": 282
+      },
+      "crop": {
+        "center_x": 806,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          606,
+          105,
+          1006,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/brand-planner.png"
+    },
+    {
+      "slug": "ad-specialist",
+      "name_cn": "广告投手",
+      "series": "OPC员工形象 08",
+      "subtitle": "敏锐果断",
+      "source_file": "workspace/user/media_library/image/exec-b8cf0c7e-f55d-4e07-9496-edfa4633ace5.jpg",
+      "face_center": {
+        "x": 1236,
+        "y": 282
+      },
+      "crop": {
+        "center_x": 1236,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1036,
+          105,
+          1436,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/ad-specialist.png"
+    },
+    {
+      "slug": "store-manager",
+      "name_cn": "电商店长",
+      "series": "OPC员工形象 09",
+      "subtitle": "稳妥有条理",
+      "source_file": "workspace/user/media_library/image/exec-950b47b3-ba9a-47e4-8261-62dd9e434269.jpg",
+      "face_center": {
+        "x": 253,
+        "y": 266
+      },
+      "crop": {
+        "center_x": 253,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          53,
+          105,
+          453,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/store-manager.png"
+    },
+    {
+      "slug": "live-stream-operator",
+      "name_cn": "直播运营",
+      "series": "OPC员工形象 09",
+      "subtitle": "热情带节奏",
+      "source_file": "workspace/user/media_library/image/exec-950b47b3-ba9a-47e4-8261-62dd9e434269.jpg",
+      "face_center": {
+        "x": 714,
+        "y": 261
+      },
+      "crop": {
+        "center_x": 714,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          514,
+          105,
+          914,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/live-stream-operator.png"
+    },
+    {
+      "slug": "private-domain-operator",
+      "name_cn": "私域运营",
+      "series": "OPC员工形象 09",
+      "subtitle": "俏皮有亲和力",
+      "source_file": "workspace/user/media_library/image/exec-950b47b3-ba9a-47e4-8261-62dd9e434269.jpg",
+      "face_center": {
+        "x": 1252,
+        "y": 271
+      },
+      "crop": {
+        "center_x": 1252,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1052,
+          105,
+          1452,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/private-domain-operator.png"
+    },
+    {
+      "slug": "automation-engineer",
+      "name_cn": "自动化工程师",
+      "series": "OPC员工形象 10",
+      "subtitle": "好奇善解题",
+      "source_file": "workspace/user/media_library/image/exec-5a09e064-6753-4533-8d4b-f8224158d5ef.jpg",
+      "face_center": {
+        "x": 264,
+        "y": 292
+      },
+      "crop": {
+        "center_x": 264,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          64,
+          105,
+          464,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/automation-engineer.png"
+    },
+    {
+      "slug": "test-engineer",
+      "name_cn": "测试工程师",
+      "series": "OPC员工形象 10",
+      "subtitle": "严谨又细致",
+      "source_file": "workspace/user/media_library/image/exec-5a09e064-6753-4533-8d4b-f8224158d5ef.jpg",
+      "face_center": {
+        "x": 756,
+        "y": 307
+      },
+      "crop": {
+        "center_x": 756,
+        "center_y": 307,
+        "size": 400,
+        "box": [
+          556,
+          107,
+          956,
+          507
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/test-engineer.png"
+    },
+    {
+      "slug": "security-officer",
+      "name_cn": "网络安全官",
+      "series": "OPC员工形象 10",
+      "subtitle": "沉稳有担当",
+      "source_file": "workspace/user/media_library/image/exec-5a09e064-6753-4533-8d4b-f8224158d5ef.jpg",
+      "face_center": {
+        "x": 1269,
+        "y": 282
+      },
+      "crop": {
+        "center_x": 1269,
+        "center_y": 305,
+        "size": 400,
+        "box": [
+          1069,
+          105,
+          1469,
+          505
+        ],
+        "note": "center_y raised to >=310 so circle top clears the sheet title bar (bottom ~y95); face sits up to 51px above circle center"
+      },
+      "asset": "openbot/app/src/assets/brand/bao-presets/security-officer.png"
+    }
+  ],
+  "assets": "openbot/app/src/assets/brand/bao-presets/"
+}

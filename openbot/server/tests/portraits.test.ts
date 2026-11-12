@@ -108,6 +108,18 @@ test("a coworker's manager gives it one of 熊宝's expressions, and the list sa
   ).toMatchObject({ kind: "coworker", preset: "cute", imageUrl: null });
 });
 
+test("a role face from the second batch is a known preset too", async () => {
+  const response = await call(tenantA, "PUT", `/coworker/${MINE}`, {
+    preset: "doctor",
+  });
+  expect(response.status).toBe(200);
+  const { portrait } = (await response.json()) as {
+    portrait: { preset: string; imageUrl: string | null };
+  };
+  expect(portrait.preset).toBe("doctor");
+  expect(portrait.imageUrl).toBeNull();
+});
+
 test("an uploaded picture is stored, listed by a versioned URL and served back byte for byte", async () => {
   const saved = await call(tenantA, "PUT", `/group/${groupOfA.id}`, {
     image: base64(PNG),

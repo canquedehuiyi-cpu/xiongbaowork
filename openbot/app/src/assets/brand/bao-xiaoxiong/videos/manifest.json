@@ -1,0 +1,330 @@
+{
+  "batch": "v2-ai",
+  "count": 35,
+  "entries": [
+    {
+      "expression": "naughty",
+      "expression_cn": "调皮",
+      "face_check": "close to design: red face, wink, tongue out",
+      "file": "naughty-idle.mp4",
+      "raw": "media-generation-naughty-idle-0-f3a12cf1-8dbf-473c-93db-12212e680665.mp4",
+      "size_bytes": 153315,
+      "state": "idle"
+    },
+    {
+      "expression": "cute",
+      "expression_cn": "可爱",
+      "face_check": "FIXED v2: red face paint restored, no forehead flower",
+      "file": "cute-idle.mp4",
+      "raw": "media-generation-cute-idle-v2-0-dd1d41af-99dd-407c-8cc4-161bb753e42d.mp4",
+      "size_bytes": 245201,
+      "state": "idle"
+    },
+    {
+      "expression": "cool",
+      "expression_cn": "帅气",
+      "face_check": "FIXED v2: tight framing, no neighbouring panels; face close",
+      "file": "cool-idle.mp4",
+      "raw": "media-generation-cool-idle-v2-0-28644500-2706-4f4d-a0fa-2ed39fa5a58d.mp4",
+      "size_bytes": 143991,
+      "state": "idle"
+    },
+    {
+      "expression": "happy",
+      "expression_cn": "开心",
+      "face_check": "FIXED v2: red face paint restored, eyes closed laughing",
+      "file": "happy-idle.mp4",
+      "raw": "media-generation-happy-idle-v2-0-215265f8-9d76-4f3b-8c86-898f16016c24.mp4",
+      "size_bytes": 340756,
+      "state": "idle"
+    },
+    {
+      "expression": "sweet",
+      "expression_cn": "卖萌",
+      "face_check": "close-ish: red face, wink, swirl pattern; background changed to framed wall",
+      "file": "sweet-idle.mp4",
+      "raw": "media-generation-sweet-idle-0-7f4ecb66-311c-4bc5-b933-cd310d25af01.mp4",
+      "size_bytes": 311281,
+      "state": "idle"
+    },
+    {
+      "expression": "happy",
+      "expression_cn": "开心",
+      "face_check": "close: red face, open smile, raised fists, Tang suit with dragon",
+      "file": "happy-working.mp4",
+      "raw": "media-generation-happy-working-0-65bf685f-79e1-47eb-ba32-35731be56421.mp4",
+      "size_bytes": 445559,
+      "state": "working"
+    },
+    {
+      "expression": "naughty",
+      "expression_cn": "调皮",
+      "state": "connecting",
+      "file": "naughty-connecting.mp4",
+      "raw": "media-generation-naughty-connecting-0-4a73b8b9-5c96-44f4-94a0-52e6fd1db8db.mp4",
+      "size_bytes": 224148,
+      "face_check": "close: red/white face, wink, tongue, pointing"
+    },
+    {
+      "expression": "cute",
+      "expression_cn": "可爱",
+      "state": "connecting",
+      "file": "cute-connecting.mp4",
+      "raw": "media-generation-cute-connecting-0-10361096-c5a1-4f00-84a5-4ba9bae1f21e.mp4",
+      "size_bytes": 178626,
+      "face_check": "close-ish: red/white face, big eyes, hands under chin"
+    },
+    {
+      "expression": "cool",
+      "expression_cn": "帅气",
+      "state": "connecting",
+      "file": "cool-connecting.mp4",
+      "raw": "media-generation-cool-connecting-v3-0-14509778-216a-455b-b941-8c9f684e24bc.mp4",
+      "size_bytes": 188552,
+      "face_check": "FIXED v3: forehead ornament + moustache gone, plain red forehead, tight framing"
+    },
+    {
+      "expression": "happy",
+      "expression_cn": "开心",
+      "state": "connecting",
+      "file": "happy-connecting.mp4",
+      "raw": "media-generation-happy-connecting-v2-0-3d72c120-4c6a-4f62-95f5-149d8f67678b.mp4",
+      "size_bytes": 297728,
+      "face_check": "FIXED v2: red face paint restored, big eyes, open smile"
+    },
+    {
+      "expression": "sweet",
+      "expression_cn": "卖萌",
+      "state": "connecting",
+      "file": "sweet-connecting.mp4",
+      "raw": "media-generation-sweet-connecting-0-03aacfb9-05ab-4ed4-8276-dae51e5d8f1c.mp4",
+      "size_bytes": 215171,
+      "face_check": "close-ish: red face, wink, swirl pattern, sparkles"
+    },
+    {
+      "expression": "happy",
+      "expression_cn": "开心",
+      "state": "making_something",
+      "file": "happy-making-something.mp4",
+      "raw": "media-generation-happy-making-something-0-94e3b4d0-d3b7-4cb2-8979-7f8a05b878a1.mp4",
+      "size_bytes": 205998,
+      "face_check": "REDRAWN face paint (forehead swirls + blush), but on-theme: crafting a lantern with sparkles"
+    },
+    {
+      "expression": "naughty",
+      "expression_cn": "调皮",
+      "state": "working",
+      "file": "naughty-working.mp4",
+      "raw": "media-generation-naughty-working-v5-0-3f7ce1b1-8985-4a5c-85fc-0f2c045a0501.mp4",
+      "size_bytes": 279812,
+      "face_check": "NEW v5: plain solid red forehead (no swirls), eyes winking, tongue out"
+    },
+    {
+      "expression": "cute",
+      "expression_cn": "可爱",
+      "state": "working",
+      "file": "cute-working.mp4",
+      "raw": "media-generation-cute-working-0-63d615d5-e39a-48db-9920-52af45e6ccd5.mp4",
+      "size_bytes": 272222,
+      "face_check": "close-ish: red/white face, big eyes, open smile"
+    },
+    {
+      "expression": "cool",
+      "expression_cn": "帅气",
+      "state": "working",
+      "file": "cool-working.mp4",
+      "raw": "media-generation-cool-working-v2-0-14054f6f-9bc4-41bf-a201-333834192a66.mp4",
+      "size_bytes": 371586,
+      "face_check": "FIXED v2: tight framing, no neighbouring panels; face close"
+    },
+    {
+      "expression": "sweet",
+      "expression_cn": "卖萌",
+      "state": "working",
+      "file": "sweet-working.mp4",
+      "raw": "media-generation-sweet-working-0-e3f5315f-f36a-42ae-985a-d6aa83495321.mp4",
+      "size_bytes": 362410,
+      "face_check": "close: red face, wink, swirl pattern"
+    },
+    {
+      "expression": "naughty",
+      "expression_cn": "调皮",
+      "state": "making_something",
+      "file": "naughty-making-something.mp4",
+      "raw": "media-generation-naughty-making-something-0-f1907d8d-8dc4-404d-9387-378fcfce0683.mp4",
+      "size_bytes": 131427,
+      "face_check": "close: red/white face, eyes closed, tongue out, painting a lantern"
+    },
+    {
+      "expression": "cute",
+      "expression_cn": "可爱",
+      "state": "making_something",
+      "file": "cute-making-something.mp4",
+      "raw": "media-generation-cute-making-something-v2-0-3dd58759-4427-4bd3-ae6e-3c511439f79f.mp4",
+      "size_bytes": 179423,
+      "face_check": "FIXED v2: red face paint restored (red forehead/cheeks, black eye patches, white muzzle), lantern + sparkles kept"
+    },
+    {
+      "expression": "cool",
+      "expression_cn": "帅气",
+      "state": "making_something",
+      "file": "cool-making-something.mp4",
+      "raw": "media-generation-cool-making-something-v3-0-3337cd8c-542f-4151-974f-d48ce10f9ff3.mp4",
+      "size_bytes": 167069,
+      "face_check": "NEW v3: black round paws (no human hands), face close, lantern scene"
+    },
+    {
+      "expression": "sweet",
+      "expression_cn": "卖萌",
+      "state": "making_something",
+      "file": "sweet-making-something.mp4",
+      "raw": "media-generation-sweet-making-something-v3-0-9ee75a37-1792-41fd-9ab4-62854de74ae7.mp4",
+      "size_bytes": 197991,
+      "face_check": "NEW v3: tight framing, no neighbouring character; face close, painting lantern"
+    },
+    {
+      "expression": "naughty",
+      "expression_cn": "调皮",
+      "state": "milestone_level_up",
+      "file": "naughty-milestone-level-up.mp4",
+      "raw": "media-generation-naughty-milestone-level-up-v3-0-489b05c5-3989-4d61-88b8-26527b1249a8.mp4",
+      "size_bytes": 182006,
+      "face_check": "NEW v3: plain red forehead (flame motif gone), eyes closed, tongue out, confetti"
+    },
+    {
+      "expression": "cute",
+      "expression_cn": "可爱",
+      "state": "milestone_level_up",
+      "file": "cute-milestone-level-up.mp4",
+      "raw": "media-generation-cute-milestone-level-up-v2-0-fc6c817b-9920-4197-a8c2-b1bfc01de9f4.mp4",
+      "size_bytes": 290466,
+      "face_check": "FIXED v2: red face paint restored, eyes closed laughing, confetti"
+    },
+    {
+      "expression": "cool",
+      "expression_cn": "帅气",
+      "state": "milestone_level_up",
+      "file": "cool-milestone-level-up.mp4",
+      "raw": "media-generation-cool-milestone-level-up-0-01ed9aba-e7cc-4c1f-ab84-ed4bc07f4272.mp4",
+      "size_bytes": 176587,
+      "face_check": "close: red/white face, eyes closed laughing, jumping with hearts and confetti"
+    },
+    {
+      "expression": "happy",
+      "expression_cn": "开心",
+      "state": "milestone_level_up",
+      "file": "happy-milestone-level-up.mp4",
+      "raw": "media-generation-happy-milestone-level-up-v2-0-2ca1842b-aee6-4b22-bddd-52908ab04544.mp4",
+      "size_bytes": 544567,
+      "face_check": "FIXED v2: red face paint restored (red forehead with flame pattern, red cheeks, black eye patches), lanterns + confetti kept"
+    },
+    {
+      "expression": "sweet",
+      "expression_cn": "卖萌",
+      "state": "milestone_level_up",
+      "file": "sweet-milestone-level-up.mp4",
+      "raw": "media-generation-sweet-milestone-level-up-v2-0-b0a1753a-f058-4d1f-aec5-4c5ff6aa6ca8.mp4",
+      "size_bytes": 358945,
+      "face_check": "FIXED v2: red face paint restored, LEVEL UP text gone"
+    },
+    {
+      "expression": "naughty",
+      "expression_cn": "调皮",
+      "state": "waiting_for_subagents",
+      "file": "naughty-waiting-for-subagents.mp4",
+      "raw": "media-generation-naughty-waiting-for-subagents-0-da4503dc-c2b3-47d8-97fe-e3793b7aedb5.mp4",
+      "size_bytes": 151107,
+      "face_check": "close: red/white face, tongue out, pointing, looking around"
+    },
+    {
+      "expression": "cute",
+      "expression_cn": "可爱",
+      "state": "waiting_for_subagents",
+      "file": "cute-waiting-for-subagents.mp4",
+      "raw": "media-generation-cute-waiting-for-subagents-0-b8682b21-4963-4106-a28d-a1a6b99095ec.mp4",
+      "size_bytes": 224633,
+      "face_check": "close-ish: red/white face with swirl accents, big eyes, hands under chin"
+    },
+    {
+      "expression": "cool",
+      "expression_cn": "帅气",
+      "state": "waiting_for_subagents",
+      "file": "cool-waiting-for-subagents.mp4",
+      "raw": "media-generation-cool-waiting-for-subagents-v2-0-198a7b19-54a4-4999-80f2-4029875db98c.mp4",
+      "size_bytes": 235261,
+      "face_check": "FIXED v2: tight framing, no neighbouring panels; face close"
+    },
+    {
+      "expression": "happy",
+      "expression_cn": "开心",
+      "state": "waiting_for_subagents",
+      "file": "happy-waiting-for-subagents.mp4",
+      "raw": "media-generation-happy-waiting-for-subagents-0-9a07b6c6-5db3-42c6-b68a-3f49708e8ad3.mp4",
+      "size_bytes": 317258,
+      "face_check": "close: red forehead with swirls, red cheeks, black eye patches, open smile"
+    },
+    {
+      "expression": "sweet",
+      "expression_cn": "卖萌",
+      "state": "waiting_for_subagents",
+      "file": "sweet-waiting-for-subagents.mp4",
+      "raw": "media-generation-sweet-waiting-for-subagents-0-5d686cad-d90b-4db8-a58f-0ab5472be7eb.mp4",
+      "size_bytes": 235099,
+      "face_check": "close: red/white face, winking"
+    },
+    {
+      "expression": "naughty",
+      "expression_cn": "调皮",
+      "state": "waking",
+      "file": "naughty-waking.mp4",
+      "raw": "media-generation-naughty-waking-0-624ea154-3c79-4c8c-8680-e15b03d81031.mp4",
+      "size_bytes": 172250,
+      "face_check": "close: red/white face, eyes closed, rubbing eye, yawning"
+    },
+    {
+      "expression": "cute",
+      "expression_cn": "可爱",
+      "state": "waking",
+      "file": "cute-waking.mp4",
+      "raw": "media-generation-cute-waking-0-a50e8f4d-a147-4bf5-9231-9f24ac09a4f9.mp4",
+      "size_bytes": 244445,
+      "face_check": "close: red/white face, big yawn, stretching arms up"
+    },
+    {
+      "expression": "cool",
+      "expression_cn": "帅气",
+      "state": "waking",
+      "file": "cool-waking.mp4",
+      "raw": "media-generation-cool-waking-v2-0-7e65876c-df25-4178-81d9-6582f0a64748.mp4",
+      "size_bytes": 195376,
+      "face_check": "FIXED v2: tight framing, no neighbouring panels; face close"
+    },
+    {
+      "expression": "happy",
+      "expression_cn": "开心",
+      "state": "waking",
+      "file": "happy-waking.mp4",
+      "raw": "media-generation-happy-waking-0-f1fcbe78-4daf-4fdd-a705-d1f15074a5c8.mp4",
+      "size_bytes": 279493,
+      "face_check": "close: red/white face with swirls, big yawn, stretching"
+    },
+    {
+      "expression": "sweet",
+      "expression_cn": "卖萌",
+      "state": "waking",
+      "file": "sweet-waking.mp4",
+      "raw": "media-generation-sweet-waking-v2-0-575923b8-45b0-4ca5-a9af-932357877813.mp4",
+      "size_bytes": 272276,
+      "face_check": "FIXED v2: neighbouring arm at left edge gone, tight framing; face close"
+    }
+  ],
+  "method": "AI image-to-video from poster PNG, then trimmed to spec",
+  "spec": {
+    "audio": "none",
+    "codec": "h264",
+    "max_bytes": 2097152,
+    "max_seconds": 6,
+    "size_px": 512
+  },
+  "assets": "openbot/app/src/assets/brand/bao-xiaoxiong/videos/"
+}
