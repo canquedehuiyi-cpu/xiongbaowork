@@ -20,6 +20,8 @@
  * Ordered from best to worst; `SEVERITY_ORDER` turns the ordering into something `Math.max` can use,
  * which is how the auditor reduces many hits to one verdict.
  */
+import { createHash } from "node:crypto";
+
 export type RunnableLevel = "full" | "degraded" | "blocked";
 
 /** Numeric weight for each level. Higher wins when a body hits several rules. */
@@ -282,6 +284,53 @@ export const TENANT_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
 
 /** Longest slug the loader accepts. */
 export const TENANT_SLUG_MAX = 40;
+
+/**
+ * Fingerprint of the audit ruleset: what a `runnable` verdict was produced by.
+ *
+ * A verdict carries no version of its own, and the rules changed twice in a day. Without this number a
+ * report from yesterday cannot be told apart from one produced by a different rule set, which makes every
+ * "34 of 60 can run" claim unattributable. The manifest carries the hash in a header comment; the audit
+ * report prints the same value from the same function, so there is one source of truth.
+ *
+ * What goes in, and why:
+ *
+ *   - every rule, sorted by id, as `id \t level \t kind \t pattern.source \t pattern.flags` — sorted so
+ *     that reordering the table (a semantically empty edit) does not change the number;
+ *   - `severity_order`, joined **in rank order** (`0:full;1:degraded;2:blocked`). This is the one line that
+ *     is deliberately order-sensitive: the final verdict is decided by "worst wins", so flipping the ranks
+ *     would rewrite every `runnable` in the manifest while leaving a key-sorted fingerprint unchanged —
+ *     the exact failure this hash exists to catch;
+ *   - the rule count, so a silently dropped rule cannot pass unnoticed.
+ *
+ * Excluded on purpose: absolute paths, timestamps, versions and machine names — the hash must be equal for
+ * the same source on every machine, or it becomes a second thing to diff.
+ */
+export function auditRulesSha256(
+  rules: readonly AuditRule[] = AUDIT_RULE_TABLE,
+  severity: Readonly<Record<RunnableLevel, number>> = SEVERITY_ORDER,
+): string {
+  const lines = [...rules]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((rule) =>
+      [
+        rule.id,
+        rule.level,
+        rule.kind,
+        rule.pattern === undefined ? "" : rule.pattern.source,
+        rule.pattern === undefined ? "" : rule.pattern.flags,
+      ].join("\t"),
+    );
+  const severityOrder = Object.entries(severity)
+    // Rank ascending, i.e. the order the levels actually appear in. Sorting by key name here would make
+    // `full>degraded>blocked` and its reverse hash identically.
+    .sort(([, left], [, right]) => left - right)
+    .map(([level, rank]) => `${rank}:${level}`)
+    .join(";");
+  lines.push(`severity_order\t${severityOrder}`);
+  lines.push(`rules_count\t${rules.length}`);
+  return createHash("sha256").update(lines.join("\n"), "utf8").digest("hex");
+}
 
 /** Whether a string can be used as `skills.slug` / an agent id without the loader refusing it. */
 export function isTenantSlug(value: string): boolean {

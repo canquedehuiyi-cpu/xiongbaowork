@@ -10,6 +10,10 @@
  * what `--verify` is for — it re-reads what was written and checks it against the same rules, so a
  * package that parses but contradicts itself (an agent granting a skill that is not there) fails here
  * rather than at server boot.
+ *
+ * If `bun test` or even `import "./normalize.ts"` hangs and then dies on SIGTERM, the cause is a poisoned
+ * Bun transpile cache, not the code: run with `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0`. Worth knowing before
+ * spending an hour on the regexes.
  */
 import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";

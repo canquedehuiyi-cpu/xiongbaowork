@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { stringify } from "yaml";
 
 import type { AuditFinding } from "./audit-toolrefs";
+import { auditRulesSha256 } from "./mapping";
 import { countByLevel } from "./audit-toolrefs";
 import type { ManifestEntry } from "./manifest";
 import type { NormalizedCapabilities } from "./normalize";
@@ -198,7 +199,10 @@ export function renderManifestYaml(manifest: readonly ManifestEntry[]): string {
     dropped: [...entry.dropped],
     ...(entry.sanitized === undefined ? {} : { sanitized: [...entry.sanitized] }),
   }));
-  return toYaml(rows);
+  // A comment rather than a field: the manifest's root is a sequence (the tenant loader and `--verify`
+  // both require that), so a top-level key would break loading. A comment survives `parse`, is stable
+  // across runs, and still lets anyone holding the file name the rule set that produced `runnable`.
+  return `# audit_rules_sha256: ${auditRulesSha256()} ← 生成这些 runnable 的审计规则集指纹\n${toYaml(rows)}`;
 }
 
 /**
@@ -294,10 +298,22 @@ export function renderToolRefAudit(
   agentFindings: readonly AuditFinding[],
 ): string {
   const lines: string[] = ["# 工具引用审计", ""];
+  // The same number the manifest carries, computed from the same function: one source of truth, printed
+  // twice so a reader of either file can tell which rule set produced the verdicts.
+  lines.push(`audit_rules_sha256: ${auditRulesSha256()}`, "");
   lines.push("本文件由 `bun run port:capabilities` 按 `mapping.ts` 的规则表静态扫描生成。", "");
   lines.push("档位：`full` 可执行 / `degraded` 需改写后才能跑 / `blocked` 本环境不可执行。", "");
   lines.push(...auditSection("技能（skills.yaml 的 instructions）", skillFindings));
   lines.push(...auditSection("专家（agents.yaml 的 system_prompt）", agentFindings));
+  lines.push(
+    "## 已知限制（成对列出，单写一边等于没写）",
+    "",
+    "| 方向 | 例子 | 取舍 |",
+    "| --- | --- | --- |",
+    "| 已接受的**假阳性** | `Bash (shell)`（半角括号 + 空格）判 blocked | 接受。半角括号形态一律当调用处理；放宽它会连带丢掉 `Bash(npm install)` 这个真调用。中文正文用全角 `（`，天然不命中 |",
+    "| 已接受的**假阴性** | ``` `cat f \\| grep x` ``` 这类散文里的单竖线管道不命中 | 接受。单 `\\|` 在 Markdown 表格里远比 shell 管道常见，放行会让几乎每张表都变成 blocked；`\\|\\|`、`$(` 与括号形态仍覆盖真实场景 |",
+    "",
+  );
   return `${lines.join("\n")}\n`;
 }
 

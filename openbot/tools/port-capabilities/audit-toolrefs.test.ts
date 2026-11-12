@@ -11,7 +11,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { auditCapability, auditCapabilities, countByLevel, shortenSample } from "./audit-toolrefs";
-import { AUDIT_RULE_TABLE, auditRule, SEVERITY_ORDER } from "./mapping";
+import { AUDIT_RULE_TABLE, auditRule, auditRulesSha256, SEVERITY_ORDER } from "./mapping";
+import { sanitizeLocalUserPaths } from "./normalize";
 
 const NO_CONNECTORS: ReadonlySet<string> = new Set<string>();
 
@@ -179,6 +180,61 @@ describe("verdict aggregation", () => {
     );
     expect(findings.map((finding) => finding.slug)).toEqual(["one", "two", "three"]);
     expect(countByLevel(findings)).toEqual({ full: 1, degraded: 1, blocked: 1 });
+  });
+});
+
+describe("audit_rules_sha256", () => {
+  test("is stable across calls and independent of the rule array's order", () => {
+    // Reordering the table is a semantically empty edit; if it moved the hash, every unrelated commit
+    // would look like a rule change.
+    const reversed = [...AUDIT_RULE_TABLE].reverse();
+    expect(auditRulesSha256(reversed)).toBe(auditRulesSha256());
+    expect(auditRulesSha256()).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("changes when a severity rank changes, because that rewrites every verdict", () => {
+    // The one order-sensitive input. If this could not be detected, the hash would report "same rules"
+    // while all 89 `runnable` values flipped.
+    const flipped = { ...SEVERITY_ORDER, full: SEVERITY_ORDER.blocked, blocked: SEVERITY_ORDER.full };
+    expect(auditRulesSha256(undefined, flipped)).not.toBe(auditRulesSha256());
+  });
+
+  test("changes when a rule's pattern or level changes", () => {
+    const retuned = AUDIT_RULE_TABLE.map((rule) =>
+      rule.id === "shell-command-prose" ? { ...rule, level: "degraded" as const } : rule,
+    );
+    expect(auditRulesSha256(retuned)).not.toBe(auditRulesSha256());
+  });
+});
+
+describe("redaction does not change what the audit decides", () => {
+  // The port redacts the author's home directory before writing `instructions`, and the audit runs over
+  // the same text. This pins the property QA measured over the whole corpus: replacing a path segment with
+  // `<user>` must never move a verdict, otherwise a "clean" row could be clean only because it was cleaned.
+  const bodies = [
+    "run bash scripts/x.sh under C:/Users/alice/proj",
+    "Bash(npm install) then Write(C:/Users/alice/a.json)",
+    "python - <<'EOF' from /c/Users/alice/x",
+    "no command here, just C:\\Users\\alice\\notes.txt",
+  ];
+
+  for (const body of bodies) {
+    test(`level is unchanged for: ${body.slice(0, 34)}`, () => {
+      const redacted = sanitizeLocalUserPaths(body);
+      expect(redacted.hits).toBeGreaterThan(0);
+      const before = auditCapability({ slug: "x", instructions: body, hasBundledReferences: false }, NO_CONNECTORS);
+      const after = auditCapability({ slug: "x", instructions: redacted.text, hasBundledReferences: false }, NO_CONNECTORS);
+      expect(after.level).toBe(before.level);
+      expect(after.hits.map((hit) => hit.ruleId)).toEqual(before.hits.map((hit) => hit.ruleId));
+    });
+  }
+
+  test("the `<user>` placeholder we emit is not a shell redirect", () => {
+    // Regression: `<user>` closes with `>`, which the prose rule read as `> file`. A body could therefore
+    // gain a hit only because the port redacted it — the verdict would be caused by our own output.
+    const findings = judge("Write(C:/Users/<user>/a.json)");
+    expect(findings.hits.some((hit) => hit.ruleId === "shell-command-prose")).toBe(false);
+    expect(findings.level).toBe(judge("Write(C:/Users/alice/a.json)").level);
   });
 });
 

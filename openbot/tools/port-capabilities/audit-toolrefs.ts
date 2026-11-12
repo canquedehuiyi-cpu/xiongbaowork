@@ -75,6 +75,25 @@ export function excerptAt(text: string, index: number): string {
 /** Pattern for an MCP tool reference. Group 1 is the server id, group 2 the tool name. */
 const MCP_REFERENCE = /mcp__([\w-]+)__([\w-]+)/;
 
+/**
+ * Prose notation for "some value goes here": `<user>`, `<username>`, `<file>`.
+ *
+ * The port itself writes one of these — redaction turns `C:/Users/alice/…` into `C:/Users/<user>/…` — so
+ * the auditor has to treat them as literal text, not as syntax. It did not, once: the `>` closing the
+ * placeholder read as a shell redirect and `Write(C:/Users/alice/a.json)` gained a `shell-command-prose`
+ * hit purely from being redacted. A verdict may not depend on our own sanitising.
+ */
+const ANGLE_PLACEHOLDER = /<[A-Za-z][A-Za-z0-9_.-]{0,23}>/g;
+
+/**
+ * Blank out placeholders while keeping every offset intact.
+ *
+ * Indices still address the original string, so `excerptAt` keeps quoting the body the reader will see.
+ */
+function maskPlaceholders(text: string): string {
+  return text.replace(ANGLE_PLACEHOLDER, (placeholder) => "x".repeat(placeholder.length));
+}
+
 /** Collect every match of a pattern, cloned with `g` so a shared constant cannot carry `lastIndex`. */
 function matchAll(text: string, source: RegExp): RegExpExecArray[] {
   const flags = source.flags.includes("g") ? source.flags : `${source.flags}g`;
@@ -99,7 +118,7 @@ function evaluateRule(
 ): AuditHit[] {
   if (rule.kind === "mcp-server") {
     const unknown = new Set<string>();
-    for (const match of matchAll(capability.instructions, MCP_REFERENCE)) {
+    for (const match of matchAll(maskPlaceholders(capability.instructions), MCP_REFERENCE)) {
       const serverId = match[1];
       if (!connectorIds.has(serverId)) {
         unknown.add(match[0]);
@@ -124,7 +143,8 @@ function evaluateRule(
   }
   const hits: AuditHit[] = [];
   const seen = new Set<string>();
-  for (const match of matchAll(capability.instructions, pattern)) {
+  const scanned = maskPlaceholders(capability.instructions);
+  for (const match of matchAll(scanned, pattern)) {
     // A rule may match its leading whitespace (a command on the line after a fence), so the excerpt is
     // taken from where the interesting text starts rather than from where the match happens to begin.
     const leading = match[0].length - match[0].replace(/^\s+/, "").length;
