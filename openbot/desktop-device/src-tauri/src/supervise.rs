@@ -15,6 +15,7 @@
 //! The loop is written against [`Launcher`] and [`Running`] so the tests can drive it with fake
 //! children that crash on cue; [`crate::sidecar`] is the real launcher.
 
+use crate::desktop_guard::{parse_desktop_line, DesktopEvent};
 use serde::Serialize;
 use std::io;
 use std::sync::{Arc, Condvar, Mutex};
@@ -155,26 +156,27 @@ pub enum Signal {
     ConnectionLost,
     /// A desktop action needs a macOS grant this app does not have yet.
     DesktopPermission,
+    /// The desktop session's other news, for its guard (`desktop_guard`). Not a connection state.
+    Desktop(DesktopEvent),
 }
 
-/// The runner's control-channel lines (`CONTROL_LINE_PREFIX` in `runner/src/desktop/control.ts`):
-/// one JSON object each. Only `permission-needed` means something here yet; the others are for the
-/// desktop session's guard, and none of them is a connection state.
-const DESKTOP_PREFIX: &str = "runner: desktop ";
-
-fn desktop_signal(json: &str) -> Option<Signal> {
-    let event: serde_json::Value = serde_json::from_str(json).ok()?;
-    match event.get("event")?.as_str()? {
-        "permission-needed" => Some(Signal::DesktopPermission),
-        _ => None,
-    }
+/// Everything a line means: what [`classify`] reads, else one of the desktop session's events.
+pub fn signal(line: &str) -> Option<Signal> {
+    classify(line).or_else(|| parse_desktop_line(line).map(Signal::Desktop))
 }
 
-/// The runner's own log lines, from `runner/src/index.ts`.
+/// The runner's own log lines, from `runner/src/index.ts`, as connection states, and its
+/// control-channel line `permission-needed` (`runner/src/desktop/control.ts`, read by
+/// [`parse_desktop_line`]). The control channel's other events are for the desktop session's guard
+/// ([`signal`]); none of them is a connection state.
 pub fn classify(line: &str) -> Option<Signal> {
     let line = line.trim();
-    if let Some(json) = line.strip_prefix(DESKTOP_PREFIX) {
-        desktop_signal(json)
+    if line.starts_with(crate::desktop_guard::CONTROL_LINE_PREFIX) {
+        matches!(
+            parse_desktop_line(line),
+            Some(DesktopEvent::PermissionNeeded)
+        )
+        .then_some(Signal::DesktopPermission)
     } else if line.starts_with("runner: paired as ") {
         Some(Signal::Paired)
     } else if line.starts_with("runner: connected as ") {
@@ -212,6 +214,8 @@ pub trait Observer: Send + Sync {
     fn paired(&self) {}
     /// The runner said a desktop action needs a permission: the card that grants it is shown.
     fn desktop_permission(&self) {}
+    /// The runner said something about its desktop session (any event but `permission-needed`).
+    fn desktop(&self, _event: DesktopEvent) {}
 }
 
 pub trait Running: Send {
@@ -287,7 +291,7 @@ pub struct Output(Arc<Shared>);
 
 impl Output {
     pub fn stdout(&self, line: &str) {
-        match classify(line) {
+        match signal(line) {
             Some(Signal::Paired) => {
                 let first = {
                     let mut inner = self.0.inner.lock().unwrap();
@@ -300,6 +304,7 @@ impl Output {
             Some(Signal::Connected) => self.0.set(State::Online),
             Some(Signal::ConnectionLost) => self.0.set(State::Offline),
             Some(Signal::DesktopPermission) => self.0.observer.desktop_permission(),
+            Some(Signal::Desktop(event)) => self.0.observer.desktop(event),
             None => {}
         }
     }
@@ -460,9 +465,23 @@ fn run<L: Launcher>(mut launcher: L, policy: Policy, mut pairing: bool, shared: 
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::collections::VecDeque;
+
+    /// An `Output` that leads nowhere, for a launcher started outside a supervisor.
+    pub(crate) fn output() -> Output {
+        Output(Arc::new(Shared {
+            inner: Mutex::new(Inner {
+                state: State::Stopped,
+                stop: false,
+                paired: false,
+                stderr: Vec::new(),
+            }),
+            wake: Condvar::new(),
+            observer: Box::new(Quiet),
+        }))
+    }
 
     fn quick() -> Policy {
         Policy {
@@ -580,6 +599,31 @@ mod tests {
     }
 
     #[test]
+    fn desktop_lines_are_signals_for_the_guard() {
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#),
+            Some(Signal::Desktop(DesktopEvent::SessionStarted {
+                label: "0123abcd".into()
+            }))
+        );
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"headed-end","seq":4}"#),
+            Some(Signal::Desktop(DesktopEvent::HeadedEnd { seq: 4 }))
+        );
+        // The permission line keeps its own signal, and the states read as before.
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"permission-needed"}"#),
+            Some(Signal::DesktopPermission)
+        );
+        assert_eq!(signal("runner: connected as d"), Some(Signal::Connected));
+        assert_eq!(
+            signal(r#"runner: desktop {"event":"connected as d"}"#),
+            None
+        );
+        assert_eq!(signal("runner: closing any open browser"), None);
+    }
+
+    #[test]
     fn the_reason_is_bun_s_error_line_or_the_last_line() {
         let bun = [
             "283 |     throw new Error(".to_string(),
@@ -628,6 +672,7 @@ mod tests {
         states: Vec<State>,
         paired: u32,
         permission: u32,
+        desktop: Vec<DesktopEvent>,
     }
 
     struct FakeChild {
@@ -694,6 +739,9 @@ mod tests {
         }
         fn desktop_permission(&self) {
             self.0.lock().unwrap().permission += 1;
+        }
+        fn desktop(&self, event: DesktopEvent) {
+            self.0.lock().unwrap().desktop.push(event);
         }
     }
 
@@ -911,6 +959,44 @@ mod tests {
         until(&supervisor, |s| *s == State::Online);
         supervisor.stop();
         let record = record.lock().unwrap();
+        assert_eq!(record.permission, 1);
+        assert_eq!(
+            record.states,
+            vec![State::Starting, State::Online, State::Stopped]
+        );
+    }
+
+    #[test]
+    fn the_session_s_lines_reach_the_observer_in_order_and_leave_the_state_alone() {
+        let session = Script {
+            stdout: vec![
+                "runner: connected as d",
+                r#"runner: desktop {"event":"session-started","label":"0123abcd"}"#,
+                r#"runner: desktop {"event":"headed-begin","seq":1}"#,
+                r#"runner: desktop {"event":"permission-needed"}"#,
+                r#"runner: desktop {"event":"headed-end","seq":1}"#,
+                r#"runner: desktop {"event":"session-ended","reason":"stopped"}"#,
+            ],
+            stderr: vec![],
+            exit: None,
+        };
+        let (mut supervisor, record) = supervise(vec![session], quick(), false);
+        until(&supervisor, |s| *s == State::Online);
+        supervisor.stop();
+        let record = record.lock().unwrap();
+        assert_eq!(
+            record.desktop,
+            vec![
+                DesktopEvent::SessionStarted {
+                    label: "0123abcd".into()
+                },
+                DesktopEvent::HeadedBegin { seq: 1 },
+                DesktopEvent::HeadedEnd { seq: 1 },
+                DesktopEvent::SessionEnded {
+                    reason: "stopped".into()
+                },
+            ]
+        );
         assert_eq!(record.permission, 1);
         assert_eq!(
             record.states,
