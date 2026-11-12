@@ -1950,6 +1950,7 @@ export async function decideAction(input: {
           behaviour: "allow",
           source: "desktop_session",
           reason: "桌面会话进行中。",
+          ...(ruled.review ? { review: ruled.review } : {}),
         }
       : ruled;
   // --- end desktop control ---

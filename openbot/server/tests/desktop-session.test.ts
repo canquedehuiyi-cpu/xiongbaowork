@@ -5,7 +5,7 @@ import {
   DESKTOP_SESSION_TOOL,
   desktopSessionFloor,
 } from "../src/approvals/desktop-policy";
-import { decideAction } from "../src/approvals/policy";
+import { decideAction, type ReviewModel } from "../src/approvals/policy";
 import type {
   ApprovalCandidate,
   ApprovalPolicyOutcome,
@@ -26,6 +26,7 @@ import {
 import {
   createDesktopStoppedHandler,
   createDesktopWriteGate,
+  DESKTOP_WRITE_OLD_RUNNER,
   type DesktopWriteGovern,
   type DesktopWritePost,
 } from "../src/computer/desktop-write";
@@ -34,6 +35,7 @@ import {
   DESKTOP_UNAVAILABLE_RULE,
 } from "../src/computer/desktop-gateway";
 import { ActionRefusedError } from "../src/computer/gateway";
+import { currentTenant } from "../src/tenant/context";
 
 /**
  * The server side of a desktop session (plan Task 16): the session floor in the approval policy, the
@@ -139,6 +141,27 @@ describe("desktop session floor", () => {
       behaviour: "allow",
       source: "desktop_session",
       reason: "桌面会话进行中。",
+    });
+    // The reviewer's verdict stays on the outcome the session turned into an allow.
+    const model: ReviewModel = async () =>
+      JSON.stringify({
+        verdict: "proceed",
+        preApproved: false,
+        reason: "看起来正常",
+      });
+    const reviewed = await decideAction({
+      ...base,
+      autoReview: true,
+      model,
+      candidate: candidate({
+        subject: { runner: true, desktopWrite: write({ session: "active" }) },
+      }),
+    });
+    expect(reviewed).toMatchObject({
+      behaviour: "allow",
+      source: "desktop_session",
+      reason: "桌面会话进行中。",
+      review: { verdict: "proceed", reason: "看起来正常" },
     });
     // A write that is not a desktop one keeps the default's ask.
     const other = await decideAction({
@@ -258,6 +281,10 @@ function harness(
     owner?: string;
     status?: (call: number) => Record<string, unknown>;
     start?: () => void;
+    /** Awaited before an ask is approved: the owner taking their time. */
+    approve?: () => Promise<void>;
+    /** Thrown by every post: an old runner, an offline machine. */
+    postError?: Error;
     refusal?: (candidate: ApprovalCandidate) => string | undefined;
     sessions?: ReturnType<typeof createDesktopSessionCache>;
   } = {},
@@ -282,6 +309,7 @@ function harness(
     expect(botId).toBe("bot");
     expect(address).toBe(runnerAddress(MACHINE));
     posts.push({ path, payload: payload as Record<string, unknown> });
+    if (options.postError) throw options.postError;
     if (path === "/desktop/session_status") {
       statusCalls += 1;
       return (options.status?.(statusCalls) ?? {
@@ -322,7 +350,10 @@ function harness(
       throw new ApprovalRefusedError(outcome.reason);
     }
     const approved = outcome.behaviour === "ask";
-    if (approved) cards.push({ candidate: asked, outcome });
+    if (approved) {
+      cards.push({ candidate: asked, outcome });
+      await options.approve?.();
+    }
     rows.push({ action: toolName, attempt: true, outcome });
     try {
       return await run(approved);
@@ -622,9 +653,67 @@ describe("desktop write gate", () => {
     expect(h.paths()).toEqual(["/desktop/session_status"]);
   });
 
+  test("two writes while a session is being opened ask once and share its token", async () => {
+    let release: () => void = () => undefined;
+    const approval = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = harness({ approve: () => approval });
+    const first = h.click();
+    const second = h.click();
+    // Let both reach the device's status and the first reach its card.
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(h.cards).toHaveLength(1);
+    release();
+    expect(await first).toEqual({ done: true });
+    expect(await second).toEqual({ done: true });
+    expect(h.cards).toHaveLength(1);
+    const starts = h.posts.filter((p) => p.path === "/desktop/session_start");
+    expect(starts).toHaveLength(1);
+    const token = String(starts[0]?.payload.token);
+    expect(h.sent).toEqual([
+      { session: token, approved: true },
+      { session: token, approved: false },
+    ]);
+    expect(h.leaks()).not.toMatch(HEX64);
+  });
+
+  test("a waiting write whose session was refused asks for itself", async () => {
+    const unready = desktopMessage("guard_unready");
+    let starts = 0;
+    const h = harness({
+      start: () => {
+        starts += 1;
+        if (starts === 1) throw new DeviceActionError(unready);
+      },
+    });
+    const first = h.click().catch((e: unknown) => e);
+    const second = h.click();
+    expect(((await first) as Error).message).toBe(unready);
+    expect(await second).toEqual({ done: true });
+    expect(h.cards).toHaveLength(2);
+    expect(starts).toBe(2);
+    expect(h.sent).toHaveLength(1);
+  });
+
+  test("an old runner is a refusal, not a failure of the action", async () => {
+    const h = harness({
+      postError: new Error(
+        'Nothing on this machine handles "desktop.session_status".',
+      ),
+    });
+    const error = await h.click().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ActionRefusedError);
+    expect((error as Error).message).toBe(DESKTOP_WRITE_OLD_RUNNER);
+    expect(h.cards).toHaveLength(0);
+    expect(h.sent).toHaveLength(0);
+  });
+
   test("someone other than the owner is refused and nothing is sent", async () => {
     const h = harness({ owner: "someone-else" });
     await expect(h.click()).rejects.toThrow(DESKTOP_OWNER_ONLY);
+    // The owner check comes before anything else, the early refusal question included.
+    expect(h.early).toHaveLength(0);
     expect(h.posts).toHaveLength(0);
     expect(h.cards).toHaveLength(0);
     expect(h.sent).toHaveLength(0);
@@ -637,7 +726,11 @@ describe("desktop write gate", () => {
     sessions.set(key, token);
     const rows: AuditEventInput[] = [];
     const auditStore: AuditStore = {
-      insert: async (row) => void rows.push(row),
+      insert: async (row) => {
+        // Filed in the machine owner's tenant, from the runner's credential.
+        expect(currentTenant()).toBe(MACHINE.tenantId);
+        rows.push(row);
+      },
     };
     const onDesktopStopped = createDesktopStoppedHandler({
       sessions,
@@ -675,6 +768,7 @@ describe("desktop write gate", () => {
       eventType: "computer.action_refused",
       targetType: "computer",
       targetId: "bot",
+      actorUserId: OWNER,
       payload: {
         action: DESKTOP_SESSION_TOOL,
         bot: "bot",
@@ -697,5 +791,11 @@ describe("desktop write gate", () => {
     await beat({ botId: "bot", actorId: OWNER, reason: "<script>", at: 2 });
     expect(rows).toHaveLength(2);
     expect(rows[1]?.payload.stoppedBy).toBe("unknown");
+    // A person other than the machine's owner is not written into the trail.
+    await beat({ botId: "bot", actorId: "mallory", reason: "button", at: 3 });
+    expect(rows).toHaveLength(3);
+    expect(rows[2]?.actorUserId).toBe(OWNER);
+    expect(rows[2]?.payload).not.toHaveProperty("actor");
+    expect(JSON.stringify(rows[2])).not.toContain("mallory");
   });
 });

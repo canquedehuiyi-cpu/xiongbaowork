@@ -6,7 +6,7 @@ import {
   currentApprovalContext,
   type DesktopWriteAction,
 } from "../approvals/types";
-import { type AuditStore, recordAuditEvent } from "../audit";
+import { type AuditStore, recordPersonAuditEvent } from "../audit";
 import { type DispatchTarget, runnerAddress } from "../devices/channel";
 import type { DesktopStoppedInfo } from "../devices/socket";
 import { ComputerUnavailableError } from "./client";
@@ -162,10 +162,23 @@ export function createDesktopWriteGate(deps: {
         error instanceof Error &&
         error.message.startsWith("Nothing on this machine handles")
       )
-        throw new Error(DESKTOP_WRITE_OLD_RUNNER);
+        // Nothing was carried out: a refusal, never an outcome to wonder about.
+        throw new ActionRefusedError(
+          DESKTOP_WRITE_OLD_RUNNER,
+          DESKTOP_UNAVAILABLE_RULE,
+        );
       throw error;
     }
   }
+
+  /*
+   * Sessions being opened in this replica now, per key: approved or waiting for the owner, then
+   * `desktop.session_start`. A second write for the same key waits here and uses that session's
+   * token instead of asking the owner again and minting a second token (which would replace the
+   * first on the device and fail the first write). Settles with undefined when the opening failed or
+   * was refused; the waiter then goes on as if it were first.
+   */
+  const opening = new Map<string, Promise<string | undefined>>();
 
   return {
     async run<T>(
@@ -253,7 +266,7 @@ export function createDesktopWriteGate(deps: {
 
       const key = desktopSessionKey(machine, botId, actor.id);
       const reported = status.session?.token;
-      const current =
+      let current =
         typeof reported === "string" && DESKTOP_SESSION_TOKEN.test(reported)
           ? reported
           : undefined;
@@ -261,67 +274,92 @@ export function createDesktopWriteGate(deps: {
       if (!current) deps.sessions.drop(key);
       else if (deps.sessions.get(key) !== current)
         deps.sessions.set(key, current);
+      // No session on the device, but this replica is opening one for the same key: wait for it.
+      for (
+        let pending = current ? undefined : opening.get(key);
+        pending && !current;
+        pending = current ? undefined : opening.get(key)
+      ) {
+        current = await pending;
+        signal?.throwIfAborted();
+      }
+      // Still none: this write opens it, and any write for the same key from now on waits for it.
+      let opened: (token: string | undefined) => void = () => undefined;
+      const mine = current
+        ? undefined
+        : new Promise<string | undefined>((resolve) => {
+            opened = resolve;
+          });
+      if (mine) opening.set(key, mine);
+      const session = current;
 
       // 4. Decided, recorded and, with no session, asked about (the session floor).
-      return deps.govern<T>(
-        toolName,
-        botId,
-        actor,
-        {
-          device: machine,
-          desktopWrite: {
-            ...input.subject,
-            // Last, so nothing the caller passed can claim a session the device did not report.
-            session: current ? "active" : "none",
+      try {
+        return await deps.govern<T>(
+          toolName,
+          botId,
+          actor,
+          {
+            device: machine,
+            desktopWrite: {
+              ...input.subject,
+              // Last, so nothing the caller passed can claim a session the device did not report.
+              session: session ? "active" : "none",
+            },
+            ...(input.windowId ? { windowId: input.windowId } : {}),
+            ...(input.ref ? { ref: input.ref } : {}),
+            ...(signal ? { signal } : {}),
           },
-          ...(input.windowId ? { windowId: input.windowId } : {}),
-          ...(input.ref ? { ref: input.ref } : {}),
-          ...(signal ? { signal } : {}),
-        },
-        async (approved) => {
-          let token = current;
-          if (token) deps.sessions.touch(key);
-          else {
-            // 5. Open the session, and only on the owner's approval.
-            if (!approved)
-              throw new ActionRefusedError(
-                DESKTOP_SESSION_UNAPPROVED,
-                DESKTOP_UNAVAILABLE_RULE,
-              );
-            const minted = mintDesktopSessionToken();
-            try {
-              await post(
-                botId,
-                "/desktop/session_start",
-                { token: minted, botId, actorId: actor.id },
-                signal,
-                DESKTOP_BACKSTOP_MS,
-                address,
-              );
-            } catch (error) {
-              deps.sessions.drop(key);
-              if (signal?.aborted) throw error;
-              // Nothing was done on the screen: a refusal in the device's words, never "unknown".
-              throw new ActionRefusedError(
-                error instanceof Error && error.message
-                  ? error.message
-                  : desktopMessage("guard_unready"),
-                DESKTOP_UNAVAILABLE_RULE,
-              );
+          async (approved) => {
+            let token = session;
+            if (token) deps.sessions.touch(key);
+            else {
+              // 5. Open the session, and only on the owner's approval.
+              if (!approved)
+                throw new ActionRefusedError(
+                  DESKTOP_SESSION_UNAPPROVED,
+                  DESKTOP_UNAVAILABLE_RULE,
+                );
+              const minted = mintDesktopSessionToken();
+              try {
+                await post(
+                  botId,
+                  "/desktop/session_start",
+                  { token: minted, botId, actorId: actor.id },
+                  signal,
+                  DESKTOP_BACKSTOP_MS,
+                  address,
+                );
+              } catch (error) {
+                deps.sessions.drop(key);
+                if (signal?.aborted) throw error;
+                // Nothing was done on the screen: a refusal in the device's words, never "unknown".
+                throw new ActionRefusedError(
+                  error instanceof Error && error.message
+                    ? error.message
+                    : desktopMessage("guard_unready"),
+                  DESKTOP_UNAVAILABLE_RULE,
+                );
+              }
+              deps.sessions.set(key, minted);
+              opened(minted);
+              token = minted;
             }
-            deps.sessions.set(key, minted);
-            token = minted;
-          }
-          // 6. The write itself.
-          try {
-            return await send(token, approved);
-          } catch (error) {
-            if (error instanceof Error && SESSION_OVER.has(error.message))
-              deps.sessions.drop(key);
-            throw error;
-          }
-        },
-      );
+            // 6. The write itself.
+            try {
+              return await send(token, approved);
+            } catch (error) {
+              if (error instanceof Error && SESSION_OVER.has(error.message))
+                deps.sessions.drop(key);
+              throw error;
+            }
+          },
+        );
+      } finally {
+        // Refused, failed or done: whoever waits goes on (with the token, if the session opened).
+        opened(undefined);
+        if (mine && opening.get(key) === mine) opening.delete(key);
+      }
     },
   };
 }
@@ -330,6 +368,10 @@ export function createDesktopWriteGate(deps: {
  * A heartbeat's `desktopStopped` (the owner stopped a session on the device): this replica forgets
  * the session and the trail gets one refusal row naming how it was stopped. Wired to the runner
  * socket's `onDesktopStopped`. Other replicas learn it from the device on their next write.
+ *
+ * The row is filed in the machine owner's tenant (G01): `target.tenantId` comes from the runner's
+ * credential, the identity layer, never from the frame. The person the frame names is recorded only
+ * when it is that owner; a device cannot write anyone else into the trail.
  */
 export function createDesktopStoppedHandler(deps: {
   sessions: DesktopSessionCache;
@@ -337,14 +379,15 @@ export function createDesktopStoppedHandler(deps: {
 }): (target: DispatchTarget, info: DesktopStoppedInfo) => Promise<void> {
   return async (target, info) => {
     deps.sessions.drop(desktopSessionKey(target, info.botId, info.actorId));
-    await recordAuditEvent(deps.auditStore, {
+    await recordPersonAuditEvent(deps.auditStore, target.tenantId, {
       eventType: "computer.action_refused",
       targetType: "computer",
       targetId: info.botId,
+      actorUserId: target.tenantId,
       payload: {
         action: DESKTOP_SESSION_TOOL,
         bot: info.botId,
-        actor: info.actorId,
+        ...(info.actorId === target.tenantId ? { actor: info.actorId } : {}),
         device: target.deviceId,
         reason: DESKTOP_STOPPED_REASON,
         stoppedBy: STOP_METHODS.has(info.reason) ? info.reason : "unknown",

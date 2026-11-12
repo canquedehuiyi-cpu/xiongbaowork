@@ -27,6 +27,13 @@ export type DesktopSessionStatus = {
   session?: { token: string };
 };
 
+/**
+ * This replica's memory of the sessions it opened or learned. NOT AUTHORITATIVE: every write asks the
+ * device (`desktop.session_status`) and the device's answer replaces what is here, so a token kept
+ * here is never used on its own. It serves the heartbeat's stop notice (forget the session at once)
+ * and, with the write gate's in-flight openings, lets a second write for the same key reuse the
+ * session the first one is opening instead of asking and minting again.
+ */
 export type DesktopSessionCache = {
   /** The token for `key`, or undefined when there is none or it is past idle or total time. */
   get(key: string): string | undefined;
