@@ -81,6 +81,12 @@ export type AgentDesktopReader = {
    * write compares it with the title now (spec §5). Optional so a stand-in reader may leave it out.
    */
   readTitle?(windowId: string): string | undefined;
+  /**
+   * The same title whole, as agent-desktop gave it, for the approval checks only: a word added past
+   * `titleMax` changes the title without changing what is shown. Never passed on. Optional so a
+   * stand-in reader may leave it out.
+   */
+  readFullTitle?(windowId: string): string | undefined;
   /** After a write succeeds, and after the idle wipe: this window's refs (or every window's) are void. */
   invalidate(windowId?: string): void;
 };
@@ -363,6 +369,8 @@ export function createAgentDesktopReader(opts: {
   const snaps = new Map<string, Snap>();
   /** Runner window id → its title as last read; kept for the same windows as `windowIds`. */
   const titles = new Map<string, string>();
+  /** The same titles whole, never cut and never passed on. */
+  const fullTitles = new Map<string, string>();
   let counter = 0;
   /**
    * Invalidation generations, so a snapshot that was running while its window (or every window) was
@@ -444,10 +452,15 @@ export function createAgentDesktopReader(opts: {
         (gone) => {
           snaps.delete(gone);
           titles.delete(gone);
+          fullTitles.delete(gone);
         },
       );
       const window = windowOf(entry, windowId, displays);
       titles.set(windowId, window.title);
+      fullTitles.set(
+        windowId,
+        typeof entry.title === "string" ? entry.title : "",
+      );
       result.push(window);
     }
     return { platform, windows: result };
@@ -596,7 +609,13 @@ export function createAgentDesktopReader(opts: {
         DESKTOP_LIMITS.snapshotsKept,
       );
     const window = windowOf(live, windowId);
-    if (windowIds.has(windowId)) titles.set(windowId, window.title);
+    if (windowIds.has(windowId)) {
+      titles.set(windowId, window.title);
+      fullTitles.set(
+        windowId,
+        typeof live.title === "string" ? live.title : "",
+      );
+    }
     const result: DesktopSnapshot & { platform: DesktopPlatform } = {
       platform,
       snapshotId,
@@ -656,6 +675,9 @@ export function createAgentDesktopReader(opts: {
     },
     readTitle(windowId) {
       return titles.get(windowId);
+    },
+    readFullTitle(windowId) {
+      return fullTitles.get(windowId);
     },
     invalidate(windowId) {
       epoch++;

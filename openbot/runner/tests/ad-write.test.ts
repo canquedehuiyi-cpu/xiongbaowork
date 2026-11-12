@@ -1421,3 +1421,46 @@ describe("desktop writes: review fixes", () => {
     });
   });
 });
+
+describe("desktop writes: review fixes 2", () => {
+  test("a word added past the 200 characters shown still makes the title one that turned sensitive", async () => {
+    const before = "a".repeat(200);
+    const listing = structuredClone(sample("windows", "list-windows"));
+    listing.data[0].title = before;
+    const t = setup("windows", { "list-windows": { envelope: listing } });
+    await t.start();
+    const { el, window } = await read(t);
+    // What is shown is the same 200 characters before and after.
+    expect(window.title).toBe(before);
+    const turned = fail(
+      desktopMessage(
+        "needs_approval",
+        "窗口标题刚刚变成含「银行」，请重新列出窗口",
+      ),
+    );
+    const live = structuredClone(listing);
+    live.data[0].title = `${before}银行`;
+    t.set("list-windows", { envelope: live });
+    const ref = el("Single line").ref;
+    for (const approved of [true, false])
+      expect(await t.write("desktop.click", { ref, approved })).toEqual(turned);
+    // Approved for the title as shown (cut the same way), it is still the change that counts.
+    expect(
+      await t.write("desktop.focus", {
+        windowId: window.windowId,
+        approved: true,
+        approvedTitle: before,
+      }),
+    ).toEqual(turned);
+    expect(t.writes()).toEqual([]);
+
+    // Listed again, the read knows the whole title: approved, it goes through.
+    await t.reader.windows();
+    const done = await t.write("desktop.focus", {
+      windowId: window.windowId,
+      approved: true,
+      approvedTitle: before,
+    });
+    expect(output(done).window).toMatchObject({ title: before });
+  });
+});

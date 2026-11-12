@@ -316,12 +316,20 @@ export function createAgentDesktopWriter(opts: {
     const titleWord = desktopWindowWordHit(liveTitle);
     const approvedTitle =
       typeof body.approvedTitle === "string" ? body.approvedTitle : undefined;
+    // Compared whole: a word added past the `titleMax` characters shown still changes the title.
+    // A stand-in reader without whole titles falls back to the cut ones.
+    const readFull = reader.readFullTitle?.(windowId);
     const readTitle = reader.readTitle?.(windowId);
-    // Approved or not: a title that is sensitive now and is not the one that was read (or approved).
+    const changedSinceRead =
+      readFull !== undefined
+        ? readFull !== liveTitle
+        : readTitle !== undefined && readTitle !== title;
+    // Approved or not: a title that is sensitive now (judged whole) and is not the one that was read,
+    // or not the one approved (as shown, cut the same way).
     if (
       titleWord !== undefined &&
-      ((approvedTitle !== undefined && approvedTitle !== title) ||
-        (readTitle !== undefined && readTitle !== title))
+      (changedSinceRead ||
+        (approvedTitle !== undefined && approvedTitle !== title))
     )
       return needs(`窗口标题刚刚变成含「${titleWord}」，请重新列出窗口`);
     if (!approved) {
