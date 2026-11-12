@@ -92,7 +92,10 @@ import {
   desktopActionWordsOf,
   snapshotForStorage,
 } from "@openbot/shared/desktop-control";
-import { isApprovedExecution } from "../approvals/service";
+import {
+  approvedActionUnderway,
+  isApprovedExecution,
+} from "../approvals/service";
 import type { DesktopStoppedInfo } from "../devices/socket";
 import {
   createDesktopMethods,
@@ -361,6 +364,12 @@ export type ComputerGatewayOptions = {
    * empty or blank: the default list.
    */
   desktopActionWords?: () => Promise<readonly string[] | null | undefined>;
+  /**
+   * The approval store keeps one request per tool call (`approval_requests_action_idx`), as
+   * production's does: a desktop write the device asks about again after an approval is not asked
+   * again in the same call (final review, round 3).
+   */
+  desktopOneApprovalPerCall?: boolean;
   // --- end desktop control ---
   /** The clock a device's cached tool list is aged by. Tests hand in their own. */
   now?: () => number;
@@ -1154,8 +1163,15 @@ export function createComputerGateway(
       enable?: { candidate: string; name: string; source: string };
       // --- end app discovery ---
     },
-    /** `approved`: the person was asked about this very action and agreed (a desktop write's session). */
-    run: (address?: string, approved?: boolean) => Promise<T>,
+    /**
+     * `approved`: the person was asked about this very action and agreed (a desktop write's session).
+     * `deviceReasons`: what the approved request's own card named of the device's reasons (round 4).
+     */
+    run: (
+      address?: string,
+      approved?: boolean,
+      deviceReasons?: readonly string[],
+    ) => Promise<T>,
   ): Promise<T> {
     const { ref, filePath, snapshotId } = subject;
     // Loaded from the store, not this process's memory: the snapshot these refs belong to was very
@@ -1521,6 +1537,14 @@ export function createComputerGateway(
                 ...(subject.desktopWrite.row.keys !== undefined
                   ? { keys: subject.desktopWrite.row.keys }
                   : {}),
+                /*
+                 * Asked again after an approval, with the device's reason (final review I1, round
+                 * 2): its own action, so neither the first approval nor its run lets it through.
+                 * Only then; every other write's target is as it was.
+                 */
+                ...(desktopWrite?.reask === true && desktopWrite.deviceReason
+                  ? { reasked: desktopWrite.deviceReason }
+                  : {}),
               }
             : // --- end desktop control ---
               app
@@ -1625,6 +1649,17 @@ export function createComputerGateway(
     const approved =
       approval !== undefined ||
       (asked !== undefined && isApprovedExecution(asked));
+    /*
+     * The device's reasons the approved request's own card named (final review, round 4): from the
+     * permit the gate handed (the request approved, replayed in this run), or from the approval
+     * carrying this very action out (`resume`). Kept with the request; never this replica's memory.
+     */
+    const deviceReasons =
+      approval !== undefined
+        ? (approval.deviceReasons ?? [])
+        : approved
+          ? (approvedActionUnderway()?.deviceReasons ?? [])
+          : [];
 
     /*
      * The attempt, written before acting: there is no path that acts without this row. An allowed
@@ -1654,8 +1689,10 @@ export function createComputerGateway(
     // --- end desktop control ---
     try {
       result = origin
-        ? await computerActionOrigin.run(origin, () => run(address, approved))
-        : await run(address, approved);
+        ? await computerActionOrigin.run(origin, () =>
+            run(address, approved, deviceReasons),
+          )
+        : await run(address, approved, deviceReasons);
       await approval?.complete(
         toolName === "computer_desktop_snapshot"
           ? snapshotForStorage(result as { image?: unknown })
@@ -2234,7 +2271,8 @@ export function createComputerGateway(
             }
           : {}),
       },
-      (_address, approved) => run(approved === true),
+      (_address, approved, deviceReasons) =>
+        run(approved === true, deviceReasons ?? []),
     );
   /** The windows a read listed, shared with the writes, which name the same windows. */
   const desktopWindows = createDesktopWindowCache({ now });
@@ -2280,6 +2318,10 @@ export function createComputerGateway(
           (await options.desktopActionWords?.()) ?? undefined,
         ),
       post: desktopPost,
+      ...(options.desktopOneApprovalPerCall
+        ? { oneApprovalPerCall: true }
+        : {}),
+      now,
     }),
     desktopStopped: createDesktopStoppedHandler({
       sessions: desktopSessions,

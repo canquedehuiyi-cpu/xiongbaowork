@@ -1293,8 +1293,15 @@
     {
       "idx": 204,
       "version": "7",
-      "when": 1794503654778,
-      "tag": "0204_skill_assets",
+      "when": 1794502160837,
+      "tag": "0204_bao_role_presets",
+      "breakpoints": true
+    },
+    {
+      "idx": 205,
+      "version": "7",
+      "when": 1794527335046,
+      "tag": "0205_skill_assets",
       "breakpoints": true
     }
   ]

@@ -10,13 +10,27 @@
  * It needs an interactive desktop (session 1 or later). If the helper reports session 0 or none, the
  * probe fails with `session0`: per the plan's design decision 14 that is reported, never skipped.
  *
- * Called from windows-runner-probe.ts. With `execute`, the same Notepad is then read through the
- * runner's own `desktop.*` actions (step 9).
+ * Called from windows-runner-probe.ts. Then the same Notepad is read through both engines, the
+ * PowerShell reader and agent-desktop, as `xiongbao-runner --desktop-compare` reads it (step 8b, plan
+ * docs/plans/2026-11-12-desktop-write.md Task 28): agent-desktop is the binary `OPENBOT_DESKTOP_HELPER`
+ * names, or else the pinned release, fetched and checked against the lock like a build does. With
+ * `execute`, the same Notepad is then read through the runner's own `desktop.*` actions (step 9).
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, win32 } from "node:path";
+import {
+  type AgentDesktopLock,
+  fetchAgentDesktop,
+  sidecarFiles,
+} from "../../desktop-device/scripts/fetch-agent-desktop.ts";
+import {
+  compareDesktopEngines,
+  createDesktopActions,
+  type EngineComparison,
+  formatEngineComparison,
+} from "../../runner/src/desktop/actions.ts";
 import {
   createDesktopHost,
   DesktopHelperError,
@@ -204,6 +218,87 @@ type Run = (
   action: string,
   payload: Record<string, unknown>,
 ) => Promise<{ ok: boolean; output?: unknown; error?: string }>;
+
+/** The label of step 8b. */
+export const ENGINE_COMPARISON_CHECK =
+  "both engines read the same Notepad (--desktop-compare)";
+
+/**
+ * agent-desktop for the comparison: `OPENBOT_DESKTOP_HELPER` when set, else the pinned release for
+ * this machine, downloaded into `<root>/agent-desktop-bin` and checked against the lock (archive and
+ * every entry by SHA-256) before anything runs it.
+ */
+async function comparisonHelper(root: string): Promise<string> {
+  const given = process.env.OPENBOT_DESKTOP_HELPER?.trim();
+  if (given) return given;
+  const triple =
+    process.arch === "arm64"
+      ? "aarch64-pc-windows-msvc"
+      : "x86_64-pc-windows-msvc";
+  const lock = JSON.parse(
+    readFileSync(
+      join(
+        import.meta.dir,
+        "..",
+        "..",
+        "desktop-device",
+        "agent-desktop.lock.json",
+      ),
+      "utf8",
+    ),
+  ) as AgentDesktopLock;
+  const outDir = join(root, "agent-desktop-bin");
+  await fetchAgentDesktop({ triple, lock, outDir });
+  return join(outDir, sidecarFiles(triple)[0]?.file ?? "agent-desktop.exe");
+}
+
+/**
+ * Step 8b: the windows on screen read through the PowerShell reader and through agent-desktop, the
+ * way `--desktop-compare` reads them, and the row for this Notepad must have controls on both sides.
+ * The whole table goes to the log, with what agent-desktop lacks, for Task 29 to compare against a
+ * real machine. Reads only: one listing and one read per window and engine, nothing written.
+ */
+async function compareEngines(assert: Assert, root: string): Promise<void> {
+  let helper: string | undefined;
+  let rows: EngineComparison[] | undefined;
+  let failure: string | undefined;
+  const legacy = createDesktopActions({ platform: "win32", engine: "legacy" });
+  let agentDesktop: ReturnType<typeof createDesktopActions> | undefined;
+  try {
+    helper = await comparisonHelper(root);
+    agentDesktop = createDesktopActions({
+      platform: "win32",
+      engine: "agent-desktop",
+      helper,
+      stateDir: join(root, "compare-agent-desktop-state"),
+    });
+    rows = await compareDesktopEngines({
+      legacy,
+      agentDesktop,
+      maxWindows: 20,
+    });
+    console.log(formatEngineComparison(rows));
+  } catch (error) {
+    failure =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+  } finally {
+    await Promise.allSettled([legacy.close(), agentDesktop?.close()]);
+  }
+  const notepad = rows?.find(
+    (row) =>
+      row.title.includes("熊宝员工") &&
+      row.process.toLowerCase().replace(/\.exe$/, "") === "notepad",
+  );
+  assert(
+    notepad !== undefined &&
+      "count" in notepad.legacy &&
+      notepad.legacy.count > 0 &&
+      "count" in notepad.agentDesktop &&
+      notepad.agentDesktop.count > 0,
+    ENGINE_COMPARISON_CHECK,
+    { helper, failure, notepad, rows },
+  );
+}
 
 /** Reads the open Notepad (and a second one with a sensitive title) through `execute`. */
 async function probeExecutor(
@@ -575,6 +670,9 @@ export async function probeDesktop(
       host: host.running,
       raw: raw.running,
     });
+
+    // 8b. The same Notepad through both engines, as --desktop-compare reads it.
+    await compareEngines(assert, root);
 
     // 9. The same Notepad through the executor.
     if (execute) await probeExecutor(assert, root, execute, notepad.pid);

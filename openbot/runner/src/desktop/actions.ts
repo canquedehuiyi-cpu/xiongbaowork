@@ -227,6 +227,184 @@ export function desktopEngineFor(
   }
 }
 
+/** One window read through both engines (`--desktop-compare`, plan Task 28). */
+export type EngineComparison = {
+  title: string;
+  process: string;
+  legacy: { count: number; names: string[] } | { error: string };
+  agentDesktop: { count: number; names: string[] } | { error: string };
+  missingInAgentDesktop: string[];
+};
+
+/** The PowerShell reader's control types a person acts on; a named one agent-desktop lacks is a gap. */
+const OPERABLE_LEGACY_TYPES: ReadonlySet<string> = new Set([
+  "Button",
+  "Edit",
+  "Document",
+  "MenuItem",
+  "CheckBox",
+]);
+
+/** The same window under both engines: the process without `.exe`, in any case, and the title. */
+function comparisonKey(window: DesktopWindow): string {
+  return `${window.process.toLowerCase().replace(/\.exe$/, "")}\0${window.title}`;
+}
+
+/** An engine's window list, or the reason it has none. */
+async function listedBy(
+  engine: DesktopActions,
+): Promise<DesktopWindow[] | { error: string }> {
+  try {
+    const outcome = await engine("desktop.windows", {});
+    if (!outcome.ok) return { error: outcome.error };
+    const windows = (outcome.output as { windows?: unknown })?.windows;
+    return Array.isArray(windows) ? (windows as DesktopWindow[]) : [];
+  } catch (error) {
+    return { error: messageOf(error) };
+  }
+}
+
+/** One window's controls as an engine reads them: how many, and their names, each once. */
+async function readBy(
+  engine: DesktopActions,
+  windowId: string,
+): Promise<
+  | { count: number; names: string[]; elements: DesktopElement[] }
+  | { error: string }
+> {
+  try {
+    // Never past the sensitive-title check, and no picture: this only counts controls.
+    const outcome = await engine("desktop.snapshot", { windowId });
+    if (!outcome.ok) return { error: outcome.error };
+    const elements = (outcome.output as DesktopSnapshot)?.elements ?? [];
+    const names = [
+      ...new Set(elements.map((element) => element.name).filter(Boolean)),
+    ];
+    return { count: elements.length, names, elements };
+  } catch (error) {
+    return { error: messageOf(error) };
+  }
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : desktopMessage("failed");
+}
+
+/**
+ * Reads the first `maxWindows` (10) windows through the PowerShell reader and through agent-desktop,
+ * one after the other, and says for each which named Button / Edit / Document / MenuItem / CheckBox
+ * the old reader saw that agent-desktop has under no name at all. The windows are the PowerShell
+ * reader's list, matched to agent-desktop's by process and title (in order, for two of the same);
+ * agent-desktop's list when the old reader has none. A side that fails is `{ error }` and the other is
+ * read as usual. Reads only, never a sensitive title, never a picture.
+ */
+export async function compareDesktopEngines(opts: {
+  legacy: DesktopActions;
+  agentDesktop: DesktopActions;
+  maxWindows?: number;
+}): Promise<EngineComparison[]> {
+  const max = opts.maxWindows ?? 10;
+  const legacyList = await listedBy(opts.legacy);
+  const adList = await listedBy(opts.agentDesktop);
+  const legacyBase = Array.isArray(legacyList);
+  const base = Array.isArray(legacyList)
+    ? legacyList
+    : Array.isArray(adList)
+      ? adList
+      : undefined;
+  if (!base)
+    return [
+      {
+        title: "",
+        process: "",
+        legacy: legacyList as { error: string },
+        agentDesktop: adList as { error: string },
+        missingInAgentDesktop: [],
+      },
+    ];
+  const other = legacyBase ? adList : legacyList;
+  const otherName = legacyBase ? "agent-desktop" : "旧读取器";
+  const unused = Array.isArray(other) ? [...other] : [];
+  const rows: EngineComparison[] = [];
+  for (const window of base.slice(0, max)) {
+    const at = unused.findIndex(
+      (candidate) => comparisonKey(candidate) === comparisonKey(window),
+    );
+    const twin = at === -1 ? undefined : unused.splice(at, 1)[0];
+    const baseRead = await readBy(
+      legacyBase ? opts.legacy : opts.agentDesktop,
+      window.windowId,
+    );
+    const otherRead = !Array.isArray(other)
+      ? other
+      : twin
+        ? await readBy(
+            legacyBase ? opts.agentDesktop : opts.legacy,
+            twin.windowId,
+          )
+        : { error: `${otherName} 没有列出这个窗口。` };
+    const legacy = legacyBase ? baseRead : otherRead;
+    const agentDesktop = legacyBase ? otherRead : baseRead;
+    let missing: string[] = [];
+    if ("elements" in legacy && "elements" in agentDesktop) {
+      const seen = new Set(agentDesktop.names);
+      missing = [
+        ...new Set(
+          legacy.elements
+            .filter(
+              (element) =>
+                OPERABLE_LEGACY_TYPES.has(element.type) &&
+                element.name !== "" &&
+                !seen.has(element.name),
+            )
+            .map((element) => element.name),
+        ),
+      ];
+    }
+    const side = (read: typeof baseRead) =>
+      "error" in read
+        ? { error: read.error }
+        : { count: read.count, names: read.names };
+    rows.push({
+      title: window.title,
+      process: window.process,
+      legacy: side(legacy),
+      agentDesktop: side(agentDesktop),
+      missingInAgentDesktop: missing,
+    });
+  }
+  return rows;
+}
+
+/** `--desktop-compare`'s table: one row per window, `|` between columns. */
+export function formatEngineComparison(rows: EngineComparison[]): string {
+  if (rows.length === 0) return "没有可读的窗口。";
+  const cell = (text: string) =>
+    text.replace(/[\r\n]+/g, " ").replace(/\|/g, "｜");
+  const count = (side: EngineComparison["legacy"]) =>
+    "error" in side ? `出错：${cell(side.error)}` : String(side.count);
+  return [
+    `两个桌面引擎读取同一批窗口的对比（共 ${rows.length} 个窗口）`,
+    "序号 | 窗口标题 | 程序 | 旧读取器控件数 | agent-desktop 控件数 | agent-desktop 缺少的有名字的可操作控件",
+    ...rows.map((row, at) =>
+      [
+        String(at + 1),
+        cell(row.title) || "（无标题）",
+        cell(row.process),
+        count(row.legacy),
+        count(row.agentDesktop),
+        "error" in row.legacy || "error" in row.agentDesktop
+          ? "（有一边出错，无法比较）"
+          : row.missingInAgentDesktop.length === 0
+            ? "无"
+            : row.missingInAgentDesktop.map(cell).join("、"),
+      ].join(" | "),
+    ),
+  ].join("\n");
+}
+
 export function createDesktopActions(
   opts: {
     platform?: string;
@@ -252,6 +430,8 @@ export function createDesktopActions(
     /** The device's desktop session; built on `control` when absent. */
     sessions?: DesktopSessions;
     now?: () => number;
+    /** The writer's process rule (final review C1); a test hook, the shared rule when absent. */
+    selfOrTerminal?: (process: string) => boolean;
   } = {},
 ): DesktopActions {
   const platform = opts.platform ?? process.platform;
@@ -305,6 +485,7 @@ export function createDesktopActions(
       control,
       platform: desktopPlatform,
       now,
+      ...(opts.selfOrTerminal ? { selfOrTerminal: opts.selfOrTerminal } : {}),
     });
     return writer;
   };

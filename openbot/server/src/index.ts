@@ -1523,6 +1523,8 @@ await startupLifecycle.run(async (startup) => {
         approvalRefusal: approvalService.refusal,
         // The team's words for desktop clicks, sent to the device with every desktop write.
         desktopActionWords: () => approvalService.desktopActionWords(),
+        // The approval store keeps one request per tool call (approval_requests_action_idx).
+        desktopOneApprovalPerCall: true,
         policy: () => policyStore.get(),
         // In Postgres, so the ref a click carries resolves against the snapshot that produced it even
         // when the snapshot was taken by another server. A Map here would be blank on every replica

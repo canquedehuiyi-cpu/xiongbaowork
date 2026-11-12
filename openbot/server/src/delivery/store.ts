@@ -195,32 +195,52 @@ export function createDeliveryStore(database: Database) {
           id: existing?.id ?? randomUUID(),
           enabled: true,
         };
-        const [bound] = await tx
+        /*
+         * Two steps instead of `ON CONFLICT DO UPDATE ... WHERE`. PostgreSQL 17.12 (CVE-2026-120154)
+         * checks the conflicting row against the UPDATE row-security policy before it evaluates that
+         * WHERE, so a row stamped for another tenant raised 42501 instead of returning no row. A plain
+         * UPDATE just filters such a row out, and the refusal below is the same on every version.
+         */
+        const [inserted] = await tx
           .insert(deliveryBindings)
           .values(row)
-          .onConflictDoUpdate({
+          .onConflictDoNothing({
             target: [
               deliveryBindings.transport,
               deliveryBindings.realm,
               deliveryBindings.identity,
             ],
-            set: {
-              channelId: row.channelId,
-              agentId: row.agentId,
-              threadId: row.threadId,
-              address: row.address,
-              mentionId: row.mentionId ?? null,
-              enabled: true,
-              /*
-               * Relinking restamps the row as the tenant this runs as: the owner's own frame on
-               * every link path (G01). A binding linked before the OpenTag route was framed carries
-               * `system`, which delivery now refuses; linking it again is how it recovers.
-               */
-              tenantId: sql`current_setting('app.tenant_id', true)`,
-            },
-            setWhere: eq(deliveryBindings.ownerUserId, input.ownerUserId),
           })
           .returning();
+        const bound =
+          inserted ??
+          (
+            await tx
+              .update(deliveryBindings)
+              .set({
+                channelId: row.channelId,
+                agentId: row.agentId,
+                threadId: row.threadId,
+                address: row.address,
+                mentionId: row.mentionId ?? null,
+                enabled: true,
+                /*
+                 * Relinking restamps the row as the tenant this runs as: the owner's own frame on
+                 * every link path (G01). A binding linked before the OpenTag route was framed carries
+                 * `system`, which delivery now refuses; linking it again is how it recovers.
+                 */
+                tenantId: sql`current_setting('app.tenant_id', true)`,
+              })
+              .where(
+                and(
+                  eq(deliveryBindings.transport, input.transport),
+                  eq(deliveryBindings.realm, input.realm),
+                  eq(deliveryBindings.identity, input.identity),
+                  eq(deliveryBindings.ownerUserId, input.ownerUserId),
+                ),
+              )
+              .returning()
+          )[0];
         if (!bound)
           throw new DeliveryRefusedError(
             "That identity is already connected to another person.",

@@ -166,6 +166,13 @@ export type ApprovalPolicyOutcome = {
    * once and Deny only (`offersStandingRule`).
    */
   closed?: true;
+  /**
+   * 桌面写动作（终审第 4 轮）：这张卡的理由里写明了的设备端理由（设备这次回的 `deviceReason`，以及
+   * 上一次批准后设备仍发现的 `rememberedReasons`），原文逐条。随请求一起保存（`approval_requests.action`
+   * 里的 policy），不进摘要也不进 equivalence。批准后发给设备的 `approvedReason` 只取自所批准请求的这一项：
+   * 续跑（`resume`）和运行内重放（gate 的 approved 加 consume）都一样，从不读服务器内存。
+   */
+  deviceReasons?: string[];
   review?: {
     verdict: "proceed" | "needs_approval" | "hand_off";
     preApproved: boolean;
@@ -232,6 +239,16 @@ export type ApprovalSubject = {
     controlCharacters?: boolean;
     /** 设备端核对后回 `needs_approval` 给出的理由：服务器按它再问一次。 */
     deviceReason?: string;
+    /**
+     * 已批准的写被设备端再问（终审 I1，第 2 轮）：这张卡是「批准后再问」，有自己的审批身份
+     * （设备理由进 target），不会被第一张卡的批准或其续跑放行。只在这种再问时出现。
+     */
+    reask?: true;
+    /**
+     * 上一次同一个写动作批准后设备端仍然发现的情况（终审第 3 轮）：本副本短期记住，并进这次的第一张卡；
+     * 只在 subject 里，不进摘要，这张卡按它自己的正常审批身份走。
+     */
+    rememberedReasons?: string[];
   };
   // --- end desktop control ---
 };
@@ -590,6 +607,11 @@ export type ApprovalPolicyStore = {
 export type ApprovalPermit = {
   replay?: unknown;
   complete(result: unknown): Promise<void>;
+  /**
+   * 所批准的请求自己保存的设备端理由（`policy.deviceReasons`，终审第 4 轮）：运行内重放拿到 permit 时，
+   * 桌面写动作只从这里取 `approvedReason`。没有就不发。
+   */
+  deviceReasons?: string[];
 };
 export type ApprovalGate = (
   candidate: ApprovalCandidate,

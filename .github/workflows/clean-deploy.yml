@@ -110,7 +110,7 @@ jobs:
           echo "::add-mask::$owner_pw"
           docker run -d --name xiongbao-external-pg \
             -e POSTGRES_USER=openbot -e POSTGRES_PASSWORD="$owner_pw" -e POSTGRES_DB=openbot_b \
-            pgvector/pgvector:pg17 >/dev/null
+            pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd >/dev/null
           # TCP, not the socket: the image's init-time server listens on the socket only.
           deadline=$((SECONDS+60))
           until docker exec xiongbao-external-pg pg_isready -h 127.0.0.1 -U openbot -d openbot_b >/dev/null 2>&1; do

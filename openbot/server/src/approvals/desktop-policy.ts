@@ -1,10 +1,19 @@
 import {
   classifyDesktopKeys,
+  DESKTOP_WINDOW_WORDS,
+  desktopActionWordHit,
   desktopActivationKey,
+  desktopSelfOrTerminalProcess,
+  desktopSelfWindowReason,
   desktopWindowWordHit,
-  desktopWordHit,
+  desktopWindowWordHits,
 } from "../../../shared/desktop-control";
-import type { ApprovalCandidate, DesktopWriteAction } from "./types";
+import { englishName, productName, shortName } from "../brand";
+import type {
+  ApprovalCandidate,
+  ApprovalPolicyOutcome,
+  DesktopWriteAction,
+} from "./types";
 
 /**
  * The floor for reading a desktop window (device-side desktop viewing §4.2). The title and the
@@ -90,12 +99,15 @@ export function activeDesktopSession(candidate: ApprovalCandidate): boolean {
  * PER-ACTION APPROVAL (desktop write, phase 2; plan Task 17, design decisions 10, 11 and 13). Inside
  * a session or not, these writes ask every time, once only, in this order, the first that applies:
  *
+ *  0. any write in this product's own window or a terminal (final review C1): by its process
+ *     (`desktopSelfOrTerminalProcess`) or the product's names in its title (`desktopSelfWindowWords`);
  *  1. any write in a window whose title has one of `DESKTOP_WINDOW_WORDS` (`desktopWindowWordHit`);
  *  2. reading the clipboard;
  *  3. a write whose control the gateway could not confirm (`control: null`), or a click, typing, key
  *     or focus whose window title it could not confirm;
- *  4. clicking a control whose name has one of the action words (the team's list, or the default);
- *  5. a key that closes a program or submits; a system key or one that cannot be read asks too (the
+ *  4. clicking a control whose name has one of the action words (the team's list, or the default),
+ *     or approving or refusing (`DESKTOP_APPROVAL_WORDS`, whatever the list);
+ *  5. a key that closes a program, deletes at once or submits; a system key or one that cannot be read asks too (the
  *     gateway refuses those before asking, so one reaching here asks rather than slipping through);
  *     Space alone or with Shift (`desktopActivationKey`), which presses the focused button;
  *  6. typing into a control that is not a text box (`notTextTarget`), a newline into a single-line
@@ -142,8 +154,118 @@ const IN_A_WINDOW: ReadonlySet<DesktopWriteAction> = new Set([
   "focus",
 ]);
 
-/** Why this desktop write asks on its own (design decision 13), or nothing when it does not. */
+/**
+ * The product's own names (final review C1), from this deployment's brand (the tenant package,
+ * `brand.ts`), never written here: a window whose title holds one is this product's own page or app
+ * (its approval cards, the team's words and settings). The policy reads the cached title with them
+ * and the gateway sends them to the device (`selfWindowWords`), which reads the live title with them.
+ */
+export function desktopSelfWindowWords(): string[] {
+  const names: string[] = [];
+  for (const name of [productName(), shortName(), englishName()])
+    if (typeof name === "string" && name.trim() && !names.includes(name))
+      names.push(name);
+  return names;
+}
+
+/** Why a write in this product's own window or a terminal asks (C1), naming the product. */
+export function desktopSelfReason(): string {
+  return `${desktopSelfWindowReason(shortName())}。`;
+}
+
+/** Whether a write's window is this product's own (by process or title) or a terminal (C1). */
+function selfWindow(title: string, process: string | undefined): boolean {
+  return (
+    desktopSelfOrTerminalProcess(process ?? "") ||
+    desktopWindowWordHits(title, desktopSelfWindowWords()).some(
+      (word) => !DESKTOP_WINDOW_WORDS.includes(word),
+    )
+  );
+}
+
+/** What the device found the last time this write went through approved (final review, round 3). */
+export function desktopRememberedReason(reasons: readonly string[]): string {
+  return `设备端上次核对时发现了确认卡上没写的情况：${reasons
+    .map((reason) => reason.replace(/[。.\s]+$/u, ""))
+    .join("；")}。`;
+}
+
+/**
+ * Why this desktop write asks on its own (design decision 13), or nothing when it does not. With
+ * what the device found the last time it went through approved (`rememberedReasons`, round 3), that
+ * comes after, and the write asks for it alone too.
+ */
 export function desktopActionReason(
+  candidate: ApprovalCandidate,
+  words: readonly string[],
+): string | undefined {
+  const own = ownActionReason(candidate, words);
+  const remembered = candidate.subject?.desktopWrite?.rememberedReasons;
+  if (!Array.isArray(remembered) || remembered.length === 0) return own;
+  return `${own ?? ""}${desktopRememberedReason(remembered)}`;
+}
+
+/**
+ * The device's own reasons a desktop write's card is about (final review, round 4), word for word:
+ * what it answered this time (`deviceReason`), then what it found the last time this write went
+ * through approved (`rememberedReasons`).
+ */
+export function desktopDeviceReasonsOf(candidate: ApprovalCandidate): string[] {
+  const write = candidate.subject?.desktopWrite;
+  if (!write) return [];
+  const all = [
+    ...(typeof write.deviceReason === "string" && write.deviceReason.trim()
+      ? [write.deviceReason]
+      : []),
+    ...(Array.isArray(write.rememberedReasons)
+      ? write.rememberedReasons.filter(
+          (reason): reason is string =>
+            typeof reason === "string" && reason.trim() !== "",
+        )
+      : []),
+  ];
+  return all.filter((reason, index) => all.indexOf(reason) === index);
+}
+
+/** Whether a card's words name the device's `reason` (its closing stop aside). */
+const cardNames = (words: string, reason: string) =>
+  words.includes(reason.replace(/[。.\s]+$/u, ""));
+
+/**
+ * A desktop write's card with the device's reasons named on it and kept with its request
+ * (`deviceReasons`, final review round 4). Whichever layer's words the card has (a check-in task's
+ * `TASK_ASKS`, a rule's), a reason it does not name yet is put after them, so the owner reads every
+ * reason that is kept; the device is only ever sent the reasons kept with the request approved. Only
+ * a card that asks: a hand-off is done by the person, a refusal is not sent at all.
+ */
+export function desktopCardWithDeviceReasons(
+  candidate: ApprovalCandidate,
+  outcome: ApprovalPolicyOutcome,
+): ApprovalPolicyOutcome {
+  if (outcome.behaviour !== "ask") return outcome;
+  const reasons = desktopDeviceReasonsOf(candidate);
+  if (reasons.length === 0) return outcome;
+  const write = candidate.subject?.desktopWrite;
+  let words = outcome.reason;
+  const after = (more: string) => {
+    words = /[A-Za-z0-9.!?)]$/u.test(words)
+      ? `${words} ${more}`
+      : `${words}${more}`;
+  };
+  const now =
+    typeof write?.deviceReason === "string" && write.deviceReason.trim()
+      ? write.deviceReason
+      : undefined;
+  if (now !== undefined && !cardNames(words, now))
+    after(desktopDeviceReason(now));
+  const earlier = reasons.filter(
+    (reason) => reason !== now && !cardNames(words, reason),
+  );
+  if (earlier.length > 0) after(desktopRememberedReason(earlier));
+  return { ...outcome, reason: words, deviceReasons: reasons };
+}
+
+function ownActionReason(
   candidate: ApprovalCandidate,
   words: readonly string[],
 ): string | undefined {
@@ -152,6 +274,9 @@ export function desktopActionReason(
   if (typeof write.deviceReason === "string" && write.deviceReason.trim())
     return desktopDeviceReason(write.deviceReason);
   const title = write.title ?? "";
+  // The product's own window or a terminal (final review C1): every time, before anything else.
+  if (IN_A_WINDOW.has(write.action) && selfWindow(title, write.process))
+    return desktopSelfReason();
   const windowWord = desktopWindowWordHit(title);
   if (windowWord)
     return `窗口「${title}」的标题含「${windowWord}」，在里面${ACTION_VERB[write.action] ?? "操作"}需要你批准。`;
@@ -164,7 +289,8 @@ export function desktopActionReason(
   )
     return `没能确认要操作的控件，在窗口「${title}」里执行前需要你批准。`;
   if (write.action === "click" && write.control) {
-    const word = desktopWordHit(write.control.name, words);
+    // The words in force, and approving or refusing whatever they are (final review C1).
+    const word = desktopActionWordHit(write.control.name, words);
     if (word)
       return `在窗口「${title}」里点击「${write.control.name}」：控件名含「${word}」，需要你批准。`;
   }
@@ -175,6 +301,9 @@ export function desktopActionReason(
       return `在窗口「${title}」里按 ${keys}，会关闭程序，需要你批准。`;
     if (kind === "submit")
       return `在窗口「${title}」里按 ${keys}，可能会把内容提交或发送出去，需要你批准。`;
+    // Deleting at once (final review I3).
+    if (kind === "delete")
+      return `在窗口「${title}」里按 ${keys}，可能会直接删除文件或内容，需要你批准。`;
     if (kind !== "plain") return DESKTOP_SYSTEM_KEY_REASON;
     if (desktopActivationKey(keys)) return DESKTOP_ACTIVATION_KEY_REASON;
   }
