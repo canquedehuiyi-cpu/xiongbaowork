@@ -78,6 +78,25 @@ describe("blocked rules", () => {
     expect(judge("不要直接执行 python 脚本，先读文档").level).toBe("full");
   });
 
+  test("an unambiguous command name counts, an English word that happens to be one does not", () => {
+    // The P1 widening of the word list. `git bundle create` is the real dependency of the git-repair
+    // skill and used to be reachable only through a nearby sentence about it.
+    expect(judge("git bundle create backup.bundle --all").level).toBe("blocked");
+    expect(judge("所以用 docker build -t img . 重打包").level).toBe("blocked");
+    // `make`, `go` and `run` were kept out of the list for exactly these two sentences.
+    expect(judge("make sure to check /path before you start").level).toBe("full");
+    expect(judge("go to C:/Users/x and open it").level).toBe("full");
+  });
+
+  test("a redirect does not reach across a line break", () => {
+    // `\s` includes `\n`, so `>\s*\S` read the `>` that closes a prose placeholder as a redirect onto the
+    // first word of the *next* line. This exact two-line shape blocked a real agent (`Branch: <git branch>`).
+    expect(judge("Branch: <git branch>\nResult: ok").level).toBe("full");
+    expect(judge("Branch: <git branch>").level).toBe("full");
+    // A redirect on one line still counts.
+    expect(judge("node build.js > out.txt").level).toBe("blocked");
+  });
+
   test("a bare ```bash fence is not by itself a shell command", () => {
     // The fence is formatting. Eight of the 43 skills on this machine open a fence and never put a
     // command after it, and treating the fence as an execution request would misreport them.

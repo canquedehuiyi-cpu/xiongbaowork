@@ -1,0 +1,2431 @@
+# capability-census — 连接器市场的全量普查（`bun run port:capabilities -- --census`）
+# 只读：读 connectors.json 与每个连接器目录，不联网、不写源目录、不产出包。
+# generated_at 取清单文件自身的写入时间，不是本次运行时间；两次运行对同一份清单必须完全一致。
+generated_at: 2026-09-24T12:59:26.000Z
+source_index_checksum: 581fd1d69c058a9b0a439bfb08cbde1e58b284558c8b4a4241b8c3ed180b45cc
+counts:
+  total: 298
+  by_transport:
+    mcp-url: 239
+    mcp-command: 15
+    cli: 44
+    missing: 0
+  by_auth_mode:
+    none: 222
+    user-oauth: 5
+    deployment-bearer: 70
+    unknown: 1
+  by_verdict:
+    full: 238
+    degraded: 1
+    blocked: 59
+cross_table:
+  - transport: mcp-url
+    none: 168
+    user-oauth: 5
+    deployment-bearer: 65
+    unknown: 1
+    total: 239
+  - transport: mcp-command
+    none: 10
+    user-oauth: 0
+    deployment-bearer: 5
+    unknown: 0
+    total: 15
+  - transport: cli
+    none: 44
+    user-oauth: 0
+    deployment-bearer: 0
+    unknown: 0
+    total: 44
+  - transport: missing
+    none: 0
+    user-oauth: 0
+    deployment-bearer: 0
+    unknown: 0
+    total: 0
+rows:
+  - id: 24haowan
+    directory: connectors/24haowan/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: 24haowan-space
+    directory: connectors/24haowan-space/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: 3chat-customer-growth
+    directory: connectors/3chat-customer-growth/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: 51shebao-hr-tools
+    directory: connectors/51shebao-hr-tools/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: 58pic-qiantu-ai
+    directory: connectors/58pic-qiantu-ai/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: 77ircloud
+    directory: connectors/77ircloud/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: agent-earth
+    directory: connectors/agent-earth/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: aholo-lux3d
+    directory: connectors/aholo-lux3d/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: ai-hive
+    directory: connectors/ai-hive/mcp.json
+    transport: mcp-command
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: aiclass-teaching
+    directory: connectors/aiclass-teaching/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: aidd-saas
+    directory: connectors/aidd-saas/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: ailit
+    directory: connectors/ailit/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: aimoderator
+    directory: connectors/aimoderator/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: alphapai-lite-mcp
+    directory: connectors/alphapai-lite-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: archive-hospital-mcp
+    directory: connectors/archive-hospital-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: awesun
+    directory: connectors/awesun/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: baidu-netdisk
+    directory: connectors/baidu-netdisk/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: baijimu-enterprise-ai
+    directory: connectors/baijimu-enterprise-ai/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: baixiao-mcp
+    directory: connectors/baixiao-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: bazhuayu
+    directory: connectors/bazhuayu/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: beatapi-beatdesign
+    directory: connectors/beatapi-beatdesign/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: beisen-cli
+    directory: connectors/beisen-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: biobuddy
+    directory: connectors/biobuddy/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: bizmuse-ai-music-video
+    directory: connectors/bizmuse-ai-music-video/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: bugly-token
+    directory: connectors/bugly-token/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: caihui-mcp
+    directory: connectors/caihui-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: camscanner-mcp
+    directory: connectors/camscanner-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: candao-age
+    directory: connectors/candao-age/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: canva
+    directory: connectors/canva/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: chainlon-geo-mcp
+    directory: connectors/chainlon-geo-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: charge-order-query
+    directory: connectors/charge-order-query/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: chuangkit
+    directory: connectors/chuangkit/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: chuhaijiang
+    directory: connectors/chuhaijiang/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: cisp-mcp
+    directory: connectors/cisp-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: cloudbase
+    directory: connectors/cloudbase/mcp.json
+    transport: mcp-command
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: cloudhub
+    directory: connectors/cloudhub/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: cloudmall-operations
+    directory: connectors/cloudmall-operations/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: cnb-api
+    directory: connectors/cnb-api/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: connector-workshop
+    directory: connectors/connector-workshop/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: coros
+    directory: connectors/coros/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: dami-external-mcp
+    directory: connectors/dami-external-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: databuddy
+    directory: connectors/databuddy/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: datahub
+    directory: connectors/datahub/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: datayes-data
+    directory: connectors/datayes-data/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: dcs-cloud
+    directory: connectors/dcs-cloud/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: deeplink
+    directory: connectors/deeplink/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: deli-mcp
+    directory: connectors/deli-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: designkit-buddy-cli
+    directory: connectors/designkit-buddy-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: dingdanbao
+    directory: connectors/dingdanbao/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: dingtalk
+    directory: connectors/dingtalk/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: dknowc-mcp
+    directory: connectors/dknowc-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: dnb-global-data
+    directory: connectors/dnb-global-data/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: dnb-longyicha-workbuddy
+    directory: connectors/dnb-longyicha-workbuddy/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: dramabuddy
+    directory: connectors/dramabuddy/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: duoguan-course
+    directory: connectors/duoguan-course/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: duoguan-fengchao
+    directory: connectors/duoguan-fengchao/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: duoguan-ge
+    directory: connectors/duoguan-ge/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: dzh-mcp
+    directory: connectors/dzh-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: easymofang
+    directory: connectors/easymofang/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: eccang-reconcile
+    directory: connectors/eccang-reconcile/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: edgeone-pages
+    directory: connectors/edgeone-pages/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: edu-next
+    directory: connectors/edu-next/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: efunds
+    directory: connectors/efunds/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: emes-ai
+    directory: connectors/emes-ai/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: emr-query
+    directory: connectors/emr-query/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: erhao-hr
+    directory: connectors/erhao-hr/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: es
+    directory: connectors/es/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: ezjoin-meeting
+    directory: connectors/ezjoin-meeting/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: ezr-crm
+    directory: connectors/ezr-crm/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: fadada-richee
+    directory: connectors/fadada-richee/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: fanruan-growth-advisor
+    directory: connectors/fanruan-growth-advisor/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: fastmoss
+    directory: connectors/fastmoss/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: fazhi-law
+    directory: connectors/fazhi-law/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: fbs-connector
+    directory: connectors/fbs-connector/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: feishu
+    directory: connectors/feishu/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: fenbeitong
+    directory: connectors/fenbeitong/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: fenbi-baokao-decision
+    directory: connectors/fenbi-baokao-decision/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: finenter
+    directory: connectors/finenter/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: flova
+    directory: connectors/flova/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: oauth
+    auth_mode_mapped: user-oauth
+    verdict: full
+    reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
+  - id: fuma-ai-callout
+    directory: connectors/fuma-ai-callout/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: fyopen-lawsearch
+    directory: connectors/fyopen-lawsearch/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: gangtise-mcp
+    directory: connectors/gangtise-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: gaoding
+    directory: connectors/gaoding/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: gaodun-job
+    directory: connectors/gaodun-job/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: getnote
+    directory: connectors/getnote/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: gfsecurities
+    directory: connectors/gfsecurities/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: gildata
+    directory: connectors/gildata/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: github
+    directory: connectors/github/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: gongxie-erp
+    directory: connectors/gongxie-erp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: gongyi-open-mcp
+    directory: connectors/gongyi-open-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: gt-generate-sql-data
+    directory: connectors/gt-generate-sql-data/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: guansd
+    directory: connectors/guansd/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: h3c-cloudnet
+    directory: connectors/h3c-cloudnet/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: h3yun-connector
+    directory: connectors/h3yun-connector/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: haier-assistant
+    directory: connectors/haier-assistant/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: hanyi-fonts
+    directory: connectors/hanyi-fonts/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: hefei-city-alerts
+    directory: connectors/hefei-city-alerts/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: hose-ai-assistant
+    directory: connectors/hose-ai-assistant/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: huita-ims
+    directory: connectors/huita-ims/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: huize-insurance-product-recommendation
+    directory: connectors/huize-insurance-product-recommendation/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: ifind-mcp
+    directory: connectors/ifind-mcp/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: ihr-cli
+    directory: connectors/ihr-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: ima-mcp
+    directory: connectors/ima-mcp/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: infimind-ecommerce-content
+    directory: connectors/infimind-ecommerce-content/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: intco-ai-platform
+    directory: connectors/intco-ai-platform/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: investoday-finance-data
+    directory: connectors/investoday-finance-data/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: ioa
+    directory: connectors/ioa/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: iyiou-connector
+    directory: connectors/iyiou-connector/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: jiandaoyun
+    directory: connectors/jiandaoyun/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: jinshouzhi
+    directory: connectors/jinshouzhi/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: jinshuju
+    directory: connectors/jinshuju/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: jiucuodashi
+    directory: connectors/jiucuodashi/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: jiushuyun
+    directory: connectors/jiushuyun/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: joyread-english
+    directory: connectors/joyread-english/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: jufa-mcp-server
+    directory: connectors/jufa-mcp-server/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: jumper-kpi
+    directory: connectors/jumper-kpi/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: kdocs
+    directory: connectors/kdocs/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: kingbot-xiaodie
+    directory: connectors/kingbot-xiaodie/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: kiwi-sourcing
+    directory: connectors/kiwi-sourcing/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: kling-ai-plugin
+    directory: connectors/kling-ai-plugin/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: kuaicha-search
+    directory: connectors/kuaicha-search/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: kuka-service
+    directory: connectors/kuka-service/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: laiye-adp
+    directory: connectors/laiye-adp/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: lawyerone
+    directory: connectors/lawyerone/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: leads-cloud-crm
+    directory: connectors/leads-cloud-crm/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: lemon-agi
+    directory: connectors/lemon-agi/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: lemonclaw
+    directory: connectors/lemonclaw/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: lexiang
+    directory: connectors/lexiang/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: liesun
+    directory: connectors/liesun/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: lingxing-mcp
+    directory: connectors/lingxing-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: lingyi-mcp
+    directory: connectors/lingyi-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: linkfox
+    directory: connectors/linkfox/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: listinggood
+    directory: connectors/listinggood/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: lovrabet-cli
+    directory: connectors/lovrabet-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: lxcloud
+    directory: connectors/lxcloud/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: magic-agent-token
+    directory: connectors/magic-agent-token/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: masocloud-barcode-generator
+    directory: connectors/masocloud-barcode-generator/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: mastergo-vibe-mcp
+    directory: connectors/mastergo-vibe-mcp/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: medgroup-drgdip-toolkit
+    directory: connectors/medgroup-drgdip-toolkit/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: medlive-medical-qa
+    directory: connectors/medlive-medical-qa/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: meitu-ai
+    directory: connectors/meitu-ai/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: meitu-kaipai
+    directory: connectors/meitu-kaipai/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: meituan-for-business
+    directory: connectors/meituan-for-business/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: menglar-ozon
+    directory: connectors/menglar-ozon/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: meo-xiaoyuan
+    directory: connectors/meo-xiaoyuan/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: mergerinfo
+    directory: connectors/mergerinfo/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: mglc
+    directory: connectors/mglc/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: miaoda
+    directory: connectors/miaoda/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: miki-cursor-catalog
+    directory: connectors/miki-cursor-catalog/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: mindbye-contract-review
+    directory: connectors/mindbye-contract-review/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: moka
+    directory: connectors/moka/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: morningstar
+    directory: connectors/morningstar/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: mx-ds-mcp
+    directory: connectors/mx-ds-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: myunker-mcp
+    directory: connectors/myunker-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: mzl-trademark
+    directory: connectors/mzl-trademark/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: neo-crm
+    directory: connectors/neo-crm/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: neo-eakey
+    directory: connectors/neo-eakey/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: neodata
+    directory: connectors/neodata/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: notion
+    directory: connectors/notion/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: novai-studio
+    directory: connectors/novai-studio/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: oauth
+    auth_mode_mapped: user-oauth
+    verdict: full
+    reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
+  - id: noxinfluencer-cli
+    directory: connectors/noxinfluencer-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: nvapp-windows-local
+    directory: connectors/nvapp-windows-local/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: ofdh-doc-convert
+    directory: connectors/ofdh-doc-convert/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: oiioii
+    directory: connectors/oiioii/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: opcmenu
+    directory: connectors/opcmenu/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: opendata
+    directory: connectors/opendata/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: orientfutures-mobile-knowledge-base
+    directory: connectors/orientfutures-mobile-knowledge-base/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: pandadata
+    directory: connectors/pandadata/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: paper-retrieval
+    directory: connectors/paper-retrieval/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: patsnap-search
+    directory: connectors/patsnap-search/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: picset-commerce-images
+    directory: connectors/picset-commerce-images/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: picset-video-generation
+    directory: connectors/picset-video-generation/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: pkulaw
+    directory: connectors/pkulaw/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: plaud
+    directory: connectors/plaud/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: primematrix-company
+    directory: connectors/primematrix-company/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: proboost
+    directory: connectors/proboost/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: property-saas
+    directory: connectors/property-saas/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: qcc-company
+    directory: connectors/qcc-company/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: qcc-legal
+    directory: connectors/qcc-legal/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: qibook-mcp
+    directory: connectors/qibook-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: qingflow
+    directory: connectors/qingflow/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: qinghu-ai
+    directory: connectors/qinghu-ai/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: qisemierp
+    directory: connectors/qisemierp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: oauth
+    auth_mode_mapped: user-oauth
+    verdict: full
+    reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
+  - id: qixinhuiyan-mcp
+    directory: connectors/qixinhuiyan-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: qiyuan-robot-executor
+    directory: connectors/qiyuan-robot-executor/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: qq-mail
+    directory: connectors/qq-mail/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: qveris
+    directory: connectors/qveris/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: qzd-connector
+    directory: connectors/qzd-connector/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: realtrace
+    directory: connectors/realtrace/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: replygen
+    directory: connectors/replygen/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: reportgem-research
+    directory: connectors/reportgem-research/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: salesnail-instructor
+    directory: connectors/salesnail-instructor/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: salestouch
+    directory: connectors/salestouch/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: seeyon-office-marketing-suite
+    directory: connectors/seeyon-office-marketing-suite/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: sesunfox-gateway
+    directory: connectors/sesunfox-gateway/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: shanglv-mcp-gateway
+    directory: connectors/shanglv-mcp-gateway/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: shangyitong
+    directory: connectors/shangyitong/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: shanlong-claw
+    directory: connectors/shanlong-claw/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: sharecrm
+    directory: connectors/sharecrm/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: shopee-market-intelligence
+    directory: connectors/shopee-market-intelligence/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: shuidi-credit
+    directory: connectors/shuidi-credit/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: shuidi-discovery
+    directory: connectors/shuidi-discovery/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: shunong-assistant
+    directory: connectors/shunong-assistant/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: sif-mcp
+    directory: connectors/sif-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: smartsalary
+    directory: connectors/smartsalary/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: sq-company-dynamic
+    directory: connectors/sq-company-dynamic/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: sugon-scinsight-agent
+    directory: connectors/sugon-scinsight-agent/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: oauth
+    auth_mode_mapped: user-oauth
+    verdict: full
+    reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
+  - id: sumscope-data
+    directory: connectors/sumscope-data/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: sungo-device-registry
+    directory: connectors/sungo-device-registry/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: syspetro-service-22065846
+    directory: connectors/syspetro-service-22065846/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: tanyuan-assistant
+    directory: connectors/tanyuan-assistant/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tapd
+    directory: connectors/tapd/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tapnow
+    directory: connectors/tapnow/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tc-chengxin
+    directory: connectors/tc-chengxin/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: tct-business-expert
+    directory: connectors/tct-business-expert/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tdengine
+    directory: connectors/tdengine/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: tdx-connector
+    directory: connectors/tdx-connector/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: teacher-assistant
+    directory: connectors/teacher-assistant/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tec-do
+    directory: connectors/tec-do/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-dlc
+    directory: connectors/tencent-dlc/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-docs
+    directory: connectors/tencent-docs/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-docs-oa
+    directory: connectors/tencent-docs-oa/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: oneid-token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: tencent-health-nges
+    directory: connectors/tencent-health-nges/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-map
+    directory: connectors/tencent-map/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: tencent-map-guide
+    directory: connectors/tencent-map-guide/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-marketing-solution
+    directory: connectors/tencent-marketing-solution/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-qidian-cs
+    directory: connectors/tencent-qidian-cs/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: mcp
+    auth_mode_mapped: unknown
+    verdict: degraded
+    reason: 远端 server 可直连，但 auth_mode 无法映射到 openbot 的三种凭据模型，需人工定夺
+  - id: tencent-survey
+    directory: connectors/tencent-survey/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-tchouse-c
+    directory: connectors/tencent-tchouse-c/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-weiyun
+    directory: connectors/tencent-weiyun/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencent-yaoxiang-bi
+    directory: connectors/tencent-yaoxiang-bi/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tencentads
+    directory: connectors/tencentads/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: textin-xparse
+    directory: connectors/textin-xparse/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: thinkingai-ae-cli
+    directory: connectors/thinkingai-ae-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: tiktok
+    directory: connectors/tiktok/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tmeet
+    directory: connectors/tmeet/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: today-watermark-camera
+    directory: connectors/today-watermark-camera/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tongzhou-fin-research
+    directory: connectors/tongzhou-fin-research/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tplus-api
+    directory: connectors/tplus-api/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: tuniu-travel
+    directory: connectors/tuniu-travel/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: tushare
+    directory: connectors/tushare/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: tyc-mcp
+    directory: connectors/tyc-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: uptgai-manager
+    directory: connectors/uptgai-manager/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: uupt
+    directory: connectors/uupt/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: variflight-mcp
+    directory: connectors/variflight-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: verya-knowledgebase
+    directory: connectors/verya-knowledgebase/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: viaim
+    directory: connectors/viaim/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: vibeknow-cli
+    directory: connectors/vibeknow-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: voko-guest
+    directory: connectors/voko-guest/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: wangxiaobao
+    directory: connectors/wangxiaobao/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: wavenote-audio
+    directory: connectors/wavenote-audio/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: weaver-eteams-connector
+    directory: connectors/weaver-eteams-connector/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: wecom
+    directory: connectors/wecom/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: weiban-agent-mcp
+    directory: connectors/weiban-agent-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: weisheng-scrm
+    directory: connectors/weisheng-scrm/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: welife-ai-workbench-connector
+    directory: connectors/welife-ai-workbench-connector/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: westock-mcp
+    directory: connectors/westock-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: wind-finance
+    directory: connectors/wind-finance/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: wisenote
+    directory: connectors/wisenote/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: wk-workbuddy
+    directory: connectors/wk-workbuddy/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: wm-weight-manage
+    directory: connectors/wm-weight-manage/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: workrally1
+    directory: connectors/workrally1/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: woscli
+    directory: connectors/woscli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: wpe-general-connector
+    directory: connectors/wpe-general-connector/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: wps-knowledgebase
+    directory: connectors/wps-knowledgebase/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: wscnmcp-token
+    directory: connectors/wscnmcp-token/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: xhcj-mcp-announcements-news-policy
+    directory: connectors/xhcj-mcp-announcements-news-policy/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: xiaoe-cloud-cli
+    directory: connectors/xiaoe-cloud-cli/mcp.json
+    transport: mcp-url
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xiaoliebian-scrm
+    directory: connectors/xiaoliebian-scrm/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xiaolv-law-search
+    directory: connectors/xiaolv-law-search/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xiehui-fr
+    directory: connectors/xiehui-fr/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xingtu-claw-risk
+    directory: connectors/xingtu-claw-risk/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xinke-laile-analytics-enterprise
+    directory: connectors/xinke-laile-analytics-enterprise/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: xmed-figure-mcp
+    directory: connectors/xmed-figure-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xmind
+    directory: connectors/xmind/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xrxs
+    directory: connectors/xrxs/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: server-side
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: xuanpian-schedule
+    directory: connectors/xuanpian-schedule/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: yanxu
+    directory: connectors/yanxu/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: yichayun-trade-data
+    directory: connectors/yichayun-trade-data/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: yingmi-mcp
+    directory: connectors/yingmi-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: yixiaoke
+    directory: connectors/yixiaoke/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: youshu-bd-mate
+    directory: connectors/youshu-bd-mate/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: youzan-workbuddy
+    directory: connectors/youzan-workbuddy/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: yuanbei-hub
+    directory: connectors/yuanbei-hub/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: yuandian-mcp
+    directory: connectors/yuandian-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: yunjing-crm-analytics
+    directory: connectors/yunjing-crm-analytics/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: yunke-cli
+    directory: connectors/yunke-cli/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: yuntu-ft-workbench
+    directory: connectors/yuntu-ft-workbench/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: yunzhi-campus
+    directory: connectors/yunzhi-campus/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: oauth
+    auth_mode_mapped: user-oauth
+    verdict: full
+    reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
+  - id: yunzhi-mcp
+    directory: connectors/yunzhi-mcp/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: yzf-general-mcp-server
+    directory: connectors/yzf-general-mcp-server/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: zenava
+    directory: connectors/zenava/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: zfs-fssc-ai
+    directory: connectors/zfs-fssc-ai/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: token
+    auth_mode_mapped: deployment-bearer
+    verdict: full
+    reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
+  - id: zhangsanfeng
+    directory: connectors/zhangsanfeng/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管
+  - id: zsxq
+    directory: connectors/zsxq/cli.json
+    transport: cli
+    declared_type: cli
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
+  - id: zw3d-mcp
+    directory: connectors/zw3d-mcp/mcp.json
+    transport: mcp-command
+    declared_type: (absent)
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: zwcad-mcp
+    directory: connectors/zwcad-mcp/mcp.json
+    transport: mcp-command
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: blocked
+    reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
+  - id: zxygj-business-data
+    directory: connectors/zxygj-business-data/mcp.json
+    transport: mcp-url
+    declared_type: mcp
+    auth_mode_raw: (absent)
+    auth_mode_mapped: none
+    verdict: full
+    reason: 远端 server + 凭据模型 none，openbot 可直接托管

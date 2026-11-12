@@ -162,8 +162,15 @@ export interface AuditRule {
  * The command words that make a line worth inspecting. A line containing one of these is *not* evidence by
  * itself — `Do NOT run bash commands` and `用 node junction` both contain one and both mean the opposite of
  * "the model must shell out". See {@link SHELL_COMMAND_PROSE} for what turns a mention into a hit.
+ *
+ * Only names that are a command and nothing else belong here. `make`, `go` and `run` are deliberately
+ * absent even though they start real command lines: `make sure to check /path` and `go to C:/Users/...`
+ * are ordinary English, so the word alone would fire and the rule would collect prose. `git`, `npx`,
+ * `docker`, `kubectl` and `ssh` are unambiguous, and without `git` a recipe whose real dependency is
+ * `git bundle create …` could only be caught by a nearby sentence describing it.
  */
-const SHELL_COMMAND_WORDS = "bash|sh|zsh|python3?|node|npm|pnpm|yarn|deno|bun|pwsh|powershell|cmd";
+const SHELL_COMMAND_WORDS =
+  "bash|sh|zsh|python3?|node|npm|pnpm|yarn|deno|bun|pwsh|powershell|cmd|git|npx|docker|kubectl|ssh";
 
 /**
  * The shell features that turn a command *mention* into a command *dependency*.
@@ -186,8 +193,11 @@ const SHELL_COMMAND_PROSE_FEATURES = [
   "[\\s`'\"](?:/[^\\s/]|~/|[A-Za-z]:[\\\\/]|\\.{1,2}/)",
   "\\S*\\.[A-Za-z]{1,5}(?=\\s|$)", // an argument shaped like a file: `build.mjs`, not a version like `3.8`
   "\\|\\||&&|\\$\\(", // a shell operator
-  ">\\s*\\S", // redirection
-  "<\\s*\\(", // process substitution
+  // Redirection stays on its own line. `\s` includes `\n`, so `>\s*\S` read the `>` closing a prose
+  // placeholder as a redirect onto the *next* line: the agent body line `Branch: <git branch>` was
+  // blocked by the `R` of the following line. A real redirect never spans a line break.
+  ">[ \\t]*\\S",
+  "<[ \\t]*\\(", // process substitution
 ].join("|");
 
 /** Rule B's pattern, exported so the tests can pin every feature independently. */

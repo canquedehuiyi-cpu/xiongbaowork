@@ -16,8 +16,8 @@
  * spending an hour on the regexes.
  */
 import { homedir } from "node:os";
-import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import {
@@ -26,6 +26,7 @@ import {
   countByLevel,
   indexFindings,
 } from "./audit-toolrefs";
+import { buildCensus, type Census, CensusError, formatCensusCounts, renderCensus } from "./census";
 import { EMITTED_REPORT_FILES, EMITTED_YAML_FILES, emitPackage } from "./emit-package";
 import { CONNECTOR_ALLOWLIST, type RunnableLevel } from "./mapping";
 import {
@@ -54,8 +55,15 @@ export interface CliOptions {
   verify: boolean;
   /** Check an existing `--out` directory without re-reading the source or writing anything. */
   verifyOnly: boolean;
+  /** Survey the connector marketplace instead of porting. */
+  census: boolean;
+  /** Where the census is written. Resolved even when `--census` is absent, so the type stays simple. */
+  censusPath: string;
   help: boolean;
 }
+
+/** Default location of the census, anchored to the repo rather than to the caller's working directory. */
+export const DEFAULT_CENSUS_PATH = resolve(import.meta.dir, "..", "..", "capability-census.yaml");
 
 /** Thrown for a malformed command line; `main` turns it into exit code 2. */
 export class UsageError extends Error {
@@ -67,6 +75,7 @@ export class UsageError extends Error {
 
 const USAGE = `用法：
   bun run port:capabilities -- --out <目录> [--source <WorkBuddy 主目录>] [--only=l0] [--verify]
+  bun run port:capabilities -- --census[=<路径>] [--source <WorkBuddy 主目录>]
 
 选项：
   --source <路径>   WorkBuddy 主目录，默认 ~/.workbuddy
@@ -74,6 +83,7 @@ const USAGE = `用法：
   --only=<范围>     移植范围，P0 只支持 l0（本机已装：专家包 + 用户技能 + 已授权连接器）
   --verify          写完后回读输出目录，按同一套规则再校验一遍
   --verify-only     只回读 --out 里已有的产出，不重新生成（用于复核已生成的包）
+  --census[=<路径>] 只做连接器市场普查，默认写到 openbot/capability-census.yaml（只读、不联网、不产出包）
   --help            打印本说明`;
 
 /** Expand a leading `~` and make the path absolute. */
@@ -102,13 +112,24 @@ function splitFlag(arg: string): { flag: string; inline: string | undefined } {
  */
 export function parseArgs(argv: readonly string[]): CliOptions {
   if (argv.includes("--help") || argv.includes("-h")) {
-    return { sourceRoot: join(homedir(), ".workbuddy"), outDir: "", scope: "l0", verify: false, help: true };
+    return {
+      sourceRoot: join(homedir(), ".workbuddy"),
+      outDir: "",
+      scope: "l0",
+      verify: false,
+      verifyOnly: false,
+      census: false,
+      censusPath: DEFAULT_CENSUS_PATH,
+      help: true,
+    };
   }
   let source: string | undefined;
   let out: string | undefined;
   let only: string | undefined;
+  let censusPath: string | undefined;
   let verify = false;
   let verifyOnly = false;
+  let census = false;
   const unknown: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     const { flag, inline } = splitFlag(argv[index]);
@@ -140,6 +161,12 @@ export function parseArgs(argv: readonly string[]): CliOptions {
       case "--verify-only":
         verifyOnly = true;
         break;
+      case "--census":
+        // `--census` may stand alone or take a path, so an inline value is optional here in a way `--out`
+        // is not: the default target is a fixed path inside the repo, which CI relies on.
+        census = true;
+        censusPath = inline ?? undefined;
+        break;
       default:
         unknown.push(argv[index]);
     }
@@ -147,8 +174,8 @@ export function parseArgs(argv: readonly string[]): CliOptions {
   if (unknown.length > 0) {
     throw new UsageError(`无法识别的参数：${unknown.join(" ")}`);
   }
-  if (!out) {
-    throw new UsageError("缺少 --out：输出目录必须显式给出");
+  if (!out && !census) {
+    throw new UsageError("缺少 --out：输出目录必须显式给出（或改用 --census）");
   }
   const scope = (only ?? "l0").trim();
   if (!SUPPORTED_SCOPES.includes(scope as Scope)) {
@@ -156,10 +183,12 @@ export function parseArgs(argv: readonly string[]): CliOptions {
   }
   return {
     sourceRoot: expandPath(source ?? join(homedir(), ".workbuddy")),
-    outDir: expandPath(out),
+    outDir: out === undefined ? "" : expandPath(out),
     scope: scope as Scope,
     verify,
     verifyOnly,
+    census,
+    censusPath: censusPath === undefined ? DEFAULT_CENSUS_PATH : expandPath(censusPath),
     help: false,
   };
 }
@@ -385,6 +414,40 @@ function formatCounts(counts: Record<RunnableLevel, number>): string {
 }
 
 /**
+ * Survey the connector marketplace and write the census.
+ *
+ * Nothing here touches the source tree: one file is read, the directories are stat-ed, one YAML file is
+ * written. That is what makes it safe to run in CI on every push.
+ */
+function runCensus(options: CliOptions): number {
+  try {
+    console.log(`[port:capabilities] census ${options.sourceRoot}`);
+    const census = buildCensus(options.sourceRoot);
+    mkdirSync(dirname(options.censusPath), { recursive: true });
+    writeFileSync(options.censusPath, renderCensus(census), "utf8");
+    console.log(`[port:capabilities] 普查 ${census.counts.total} 条：${formatCensusCounts(census)}`);
+    console.log(
+      `[port:capabilities] transport ${TRANSPORT_SUMMARY(census)}`,
+    );
+    console.log(`[port:capabilities] 写出 ${options.censusPath}`);
+    return EXIT_OK;
+  } catch (error) {
+    if (error instanceof CensusError) {
+      console.error(`[port:capabilities] 普查失败：${error.message}`);
+      return EXIT_INVALID;
+    }
+    throw error;
+  }
+}
+
+/** `mcp-url 239 / mcp-command 15 / cli 44`, in report order. */
+function TRANSPORT_SUMMARY(census: Census): string {
+  return Object.entries(census.counts.by_transport)
+    .map(([transport, count]) => `${transport} ${count}`)
+    .join(" / ");
+}
+
+/**
  * Run the pipeline.
  *
  * Returns a process exit code instead of calling `process.exit`, so the tests can drive `main` directly
@@ -416,6 +479,9 @@ export function main(argv: readonly string[]): number {
     }
     console.log(`[port:capabilities] verify OK（${options.outDir}）`);
     return EXIT_OK;
+  }
+  if (options.census) {
+    return runCensus(options);
   }
 
   try {

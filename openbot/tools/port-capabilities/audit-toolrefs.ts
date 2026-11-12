@@ -76,14 +76,15 @@ export function excerptAt(text: string, index: number): string {
 const MCP_REFERENCE = /mcp__([\w-]+)__([\w-]+)/;
 
 /**
- * Prose notation for "some value goes here": `<user>`, `<username>`, `<file>`.
+ * Prose notation for "some value goes here": `<user>`, `<file>`, `<git branch>`.
  *
  * The port itself writes one of these — redaction turns `C:/Users/alice/…` into `C:/Users/<user>/…` — so
  * the auditor has to treat them as literal text, not as syntax. It did not, once: the `>` closing the
  * placeholder read as a shell redirect and `Write(C:/Users/alice/a.json)` gained a `shell-command-prose`
- * hit purely from being redacted. A verdict may not depend on our own sanitising.
+ * hit purely from being redacted. A verdict may not depend on our own sanitising. Spaces are allowed
+ * inside because templates write `<git branch>` as often as `<user>`.
  */
-const ANGLE_PLACEHOLDER = /<[A-Za-z][A-Za-z0-9_.-]{0,23}>/g;
+const ANGLE_PLACEHOLDER = /<[A-Za-z][A-Za-z0-9_.\- ]{0,23}>/g;
 
 /**
  * Blank out placeholders while keeping every offset intact.
