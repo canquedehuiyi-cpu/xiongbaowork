@@ -144,6 +144,8 @@ export type ApprovalInboxData = {
     enforceDangerousCommands?: boolean;
     /** The kinds the admin closed. A kind not named is open. */
     actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
+    /** The words that make a click on the computer ask every time; null or absent is the default list. */
+    desktopActionWords?: string[] | null;
   };
   /** The member's command policy after the team cap. */
   hostCommands?: HostCommandPolicy;
@@ -290,6 +292,8 @@ export const setTeamApprovalSettings = (input: {
   hostCommandsCap?: HostCommandPolicy;
   enforceDangerousCommands?: boolean;
   actionKinds?: Partial<Record<ActionKind, ActionKindPolicy>>;
+  /** Null puts the default list back. */
+  desktopActionWords?: string[] | null;
 }) =>
   client("/api/approvals/team", {
     method: "PATCH",

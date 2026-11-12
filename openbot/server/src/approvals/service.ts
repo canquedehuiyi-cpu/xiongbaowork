@@ -382,6 +382,7 @@ export function createApprovalService(
       ...(employee ? { security: employee.security } : {}),
       enforceDangerousCommands: team.enforceDangerousCommands,
       hostCommandsCap: team.hostCommandsCap,
+      desktopActionWords: team.desktopActionWords ?? undefined,
       ...(guidance ? { guidance } : {}),
     });
     // An unremarkable read is not a verdict anybody asked for; everything else is on the trail.
