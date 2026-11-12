@@ -14,7 +14,7 @@
  * childPid? }. The command is the first argument that is not --headed.
  */
 import { spawn } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const args = process.argv.slice(2);
@@ -42,7 +42,32 @@ if (entry.spawnChild) {
   childPid = child.pid;
 }
 
+/** Running, not merely an unreaped zombie. */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  try {
+    return !/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8"));
+  } catch {
+    return true;
+  }
+}
+
 if (process.env.FAKE_AD_LOG) {
+  // Which earlier fakes (and their children) are still running as this one starts.
+  const prevAlive: number[] = [];
+  if (existsSync(process.env.FAKE_AD_LOG))
+    for (const line of readFileSync(process.env.FAKE_AD_LOG, "utf8").split(
+      "\n",
+    )) {
+      if (!line) continue;
+      const earlier = JSON.parse(line);
+      for (const pid of [earlier.pid, earlier.childPid])
+        if (typeof pid === "number" && alive(pid)) prevAlive.push(pid);
+    }
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env))
     if (
@@ -52,7 +77,7 @@ if (process.env.FAKE_AD_LOG) {
       env[k] = v;
   appendFileSync(
     process.env.FAKE_AD_LOG,
-    `${JSON.stringify({ args, stdin, env, startedAt, pid: process.pid, childPid })}\n`,
+    `${JSON.stringify({ args, stdin, env, startedAt, pid: process.pid, childPid, prevAlive })}\n`,
   );
 }
 

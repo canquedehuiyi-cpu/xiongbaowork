@@ -1,4 +1,4 @@
-import { chmod, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, readdir, rm } from "node:fs/promises";
 import { join, win32 } from "node:path";
 import {
   AGENT_DESKTOP_VERSION,
@@ -127,7 +127,8 @@ type Child = {
 };
 type SpawnFn = (cmd: string[], options: Record<string, unknown>) => Child;
 
-const KILL_WAIT_MS = 3000;
+/** How long a killed child may take to be gone before the queue is given up on. */
+const EXIT_WAIT_MS = 15_000;
 const SECURE_DIR_TIMEOUT_MS = 30_000;
 
 function abortError(sent: boolean): Error & { sent: boolean } {
@@ -145,11 +146,11 @@ function systemRoot(): string {
 }
 
 /** Ends the child and everything it started (`taskkill /T /F` on Windows, the process group elsewhere). */
-function killTree(spawn: SpawnFn, child: Child, platform: string): void {
+function killTree(child: Child, platform: string): void {
   const { pid } = child;
   if (platform === "win32") {
     try {
-      const killer = spawn(
+      const killer = Bun.spawn(
         [
           win32.join(systemRoot(), "System32", "taskkill.exe"),
           "/PID",
@@ -157,7 +158,12 @@ function killTree(spawn: SpawnFn, child: Child, platform: string): void {
           "/T",
           "/F",
         ],
-        { stdin: "ignore", stdout: "ignore", stderr: "ignore" },
+        {
+          windowsHide: true,
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "ignore",
+        },
       );
       // A failed tree kill still ends the child itself.
       void killer.exited.then((code) => {
@@ -247,6 +253,8 @@ export function createAgentDesktopCli(opts: {
   onIdleWipe?: () => void;
   /** Windows only: protects the state directory (default: `secureWindowsStateDir`). */
   secureDir?: (dir: string) => Promise<void>;
+  /** How long a killed child may take to exit (default 15 s); a test hook. */
+  exitWaitMs?: number;
 }): AgentDesktopCli {
   const { binary, stateDir } = opts;
   const platform = opts.platform ?? process.platform;
@@ -254,21 +262,59 @@ export function createAgentDesktopCli(opts: {
   const now = opts.now ?? Date.now;
   const idleWipeMs = opts.idleWipeMs ?? DESKTOP_LIMITS.adIdleWipeMs;
   const secureDir = opts.secureDir ?? secureWindowsStateDir;
+  const exitWaitMs = opts.exitWaitMs ?? EXIT_WAIT_MS;
 
   let tail: Promise<unknown> = Promise.resolve();
   let ready = false;
   let closed = false;
   let current: Child | undefined;
   let busy = 0;
+  /** A killed child did not exit in time: nothing more runs, so nothing can overlap it. */
+  let stuck = false;
   let lastEnd = now();
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  /** `touch: false` for a wipe: it leaves nothing for the idle timer to wipe again. */
-  const enqueue = <T>(task: () => Promise<T>, touch = true): Promise<T> => {
+  /** The killed child of the request in flight, if any, that the queue must wait for. */
+  type Ctx = { drain?: Promise<void> };
+
+  /**
+   * Runs `task` after everything queued before it. `touch: false` is for a wipe: it leaves nothing
+   * for the idle timer to wipe again. A `signal` that aborts while the request still waits rejects it
+   * at once (`sent: false`) and takes it out of the queue's way. The next request starts only once
+   * this one's killed child (if it killed one) has exited.
+   */
+  const enqueue = <T>(
+    task: (ctx: Ctx) => Promise<T>,
+    touch = true,
+    signal?: AbortSignal,
+  ): Promise<T> => {
     busy++;
-    const result = tail.then(async () => {
+    const prev = tail;
+    const ctx: Ctx = {};
+    const result = (async () => {
+      let onAbort: (() => void) | undefined;
       try {
-        return await task();
+        const waiting = new Promise<never>((_, reject) => {
+          if (!signal) return;
+          if (signal.aborted) return reject(abortError(false));
+          onAbort = () => reject(abortError(false));
+          signal.addEventListener("abort", onAbort, { once: true });
+        });
+        await Promise.race([prev, waiting]);
+      } catch (error) {
+        busy--;
+        throw error;
+      } finally {
+        if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+      }
+      try {
+        if (stuck)
+          throw new DesktopHelperError(
+            "failed",
+            desktopMessage("failed", "上一条桌面命令没能结束"),
+            false,
+          );
+        return await task(ctx);
       } finally {
         busy--;
         if (touch) {
@@ -276,8 +322,14 @@ export function createAgentDesktopCli(opts: {
           armIdle(idleWipeMs);
         }
       }
-    });
-    tail = result.catch(() => {});
+    })();
+    tail = Promise.all([
+      prev,
+      result.then(
+        () => ctx.drain,
+        () => ctx.drain,
+      ),
+    ]).then(() => {});
     return result;
   };
 
@@ -299,7 +351,7 @@ export function createAgentDesktopCli(opts: {
     if (closed || idleWipeMs <= 0) return;
     idleTimer = setTimeout(() => {
       idleTimer = undefined;
-      if (busy > 0) return; // the task that ends re-arms the timer
+      if (closed || busy > 0) return; // the task that ends re-arms the timer
       const rest = idleWipeMs - (now() - lastEnd);
       if (rest > 0) return armIdle(rest);
       void enqueue(async () => {
@@ -310,10 +362,20 @@ export function createAgentDesktopCli(opts: {
     idleTimer.unref?.();
   };
 
+  /** Resolves when a killed child is gone; if it is not within the cap, the queue is given up on. */
+  const drainOf = async (child: Child): Promise<void> => {
+    const gone = await Promise.race([
+      child.exited.then(() => true),
+      sleep(exitWaitMs).then(() => false),
+    ]);
+    if (!gone) stuck = true;
+  };
+
   /** Spawns the binary once and reads its single envelope. Not queued. */
   const exec = async (
     args: readonly string[],
-    o: AdRunOptions = {},
+    o: AdRunOptions,
+    ctx: Ctx,
   ): Promise<unknown> => {
     const { signal } = o;
     if (signal?.aborted) throw abortError(false);
@@ -375,8 +437,8 @@ export function createAgentDesktopCli(opts: {
         interrupted,
       ]);
       if (outcome === "timeout" || outcome === "abort") {
-        killTree(spawn, child, platform);
-        await Promise.race([child.exited, sleep(KILL_WAIT_MS)]);
+        killTree(child, platform);
+        ctx.drain = drainOf(child);
         if (outcome === "abort") throw abortError(true);
         throw new DesktopHelperError(
           "timeout",
@@ -385,12 +447,13 @@ export function createAgentDesktopCli(opts: {
         );
       }
       const exitCode = outcome.code;
+      if (closed) throw abortError(true);
       const text = await stdout;
       if (exitCode === 2)
         throw new DesktopHelperError(
           "failed",
           desktopMessage("failed", "INVALID_ARGS"),
-          true,
+          false,
           (await stderr).trim().slice(-4096) || undefined,
         );
       let envelope: unknown;
@@ -440,23 +503,18 @@ export function createAgentDesktopCli(opts: {
     }
   };
 
+  /** Starts from nothing: whatever an earlier run left (control names, values, an old DACL) goes. */
   const ensureDir = async () => {
-    if (platform === "linux" || platform === "darwin") {
-      let mode: number | undefined;
-      try {
-        mode = (await stat(stateDir)).mode & 0o777;
-      } catch {
-        mode = undefined;
-      }
-      // A directory with looser permissions may hold what others could read: clear it and start over.
-      if (mode !== undefined && mode !== 0o700)
-        await rm(stateDir, { recursive: true, force: true });
-    }
+    await rm(stateDir, { recursive: true, force: true });
     await mkdir(stateDir, { recursive: true, mode: 0o700 });
     if (platform !== "win32") await chmod(stateDir, 0o700);
   };
 
-  const prepare = async (signal?: AbortSignal) => {
+  const prepare = async (
+    ctx: Ctx,
+    signal?: AbortSignal,
+    timeoutMs?: number,
+  ) => {
     if (closed) throw abortError(false);
     if (ready) return;
     try {
@@ -477,7 +535,7 @@ export function createAgentDesktopCli(opts: {
     }
     let data: unknown;
     try {
-      data = await exec(["version"], { signal });
+      data = await exec(["version"], { signal, timeoutMs }, ctx);
     } catch (error) {
       if (error instanceof AgentDesktopError)
         throw startFailed(error.detail ?? error.message);
@@ -487,6 +545,13 @@ export function createAgentDesktopCli(opts: {
     if (actual !== AGENT_DESKTOP_VERSION)
       throw startFailed(`版本不对：${String(actual)}`);
     ready = true;
+  };
+
+  /** Whatever stopped before the requested command started never sent it. */
+  const unsent = (error: unknown): never => {
+    if (error && typeof error === "object" && "sent" in error)
+      (error as { sent: boolean }).sent = false;
+    throw error;
   };
 
   return {
@@ -504,13 +569,17 @@ export function createAgentDesktopCli(opts: {
             ),
           );
       }
-      return enqueue(async () => {
-        await prepare(o.signal);
-        return exec(args, o);
-      });
+      return enqueue(
+        async (ctx) => {
+          await prepare(ctx, o.signal, o.timeoutMs).catch(unsent);
+          return exec(args, o, ctx);
+        },
+        true,
+        o.signal,
+      );
     },
     ensureReady(signal) {
-      return enqueue(() => prepare(signal));
+      return enqueue((ctx) => prepare(ctx, signal).catch(unsent), true, signal);
     },
     wipeState() {
       return enqueue(wipe, false);
@@ -519,8 +588,12 @@ export function createAgentDesktopCli(opts: {
       closed = true;
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = undefined;
-      if (current) killTree(spawn, current, platform);
+      if (current) {
+        killTree(current, platform);
+        await drainOf(current);
+      }
       await tail;
+      await wipe();
     },
   };
 }
