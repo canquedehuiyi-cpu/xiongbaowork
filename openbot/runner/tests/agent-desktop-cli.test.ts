@@ -194,6 +194,25 @@ describe("agent-desktop CLI layer", () => {
     ).toEqual({ PATH: "/bin", AGENT_DESKTOP_HOME: "/s" });
   });
 
+  test("the X11 cookie and session type reach the child on Linux", () => {
+    expect(
+      agentDesktopEnv(
+        {
+          DISPLAY: ":99",
+          XAUTHORITY: "/tmp/xvfb-run.x/Xauthority",
+          XDG_SESSION_TYPE: "x11",
+          SECRET: "s",
+        },
+        "/s",
+      ),
+    ).toEqual({
+      DISPLAY: ":99",
+      XAUTHORITY: "/tmp/xvfb-run.x/Xauthority",
+      XDG_SESSION_TYPE: "x11",
+      AGENT_DESKTOP_HOME: "/s",
+    });
+  });
+
   test("an existing state directory with loose permissions is emptied and recreated 0700", async () => {
     const { cli, stateDir } = setup();
     await mkdir(join(stateDir, "snapshots"), { recursive: true, mode: 0o755 });

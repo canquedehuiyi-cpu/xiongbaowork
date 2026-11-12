@@ -98,6 +98,10 @@ const ENV_KEEP = [
   "LANG",
   "LC_ALL",
   "DISPLAY",
+  // X11 needs its cookie: without it agent-desktop cannot reach the X server on Linux and refuses
+  // every window as "native window unproven" (seen on CI under xvfb-run; desktop sessions set it too).
+  "XAUTHORITY",
+  "XDG_SESSION_TYPE",
   "WAYLAND_DISPLAY",
   "XDG_RUNTIME_DIR",
   "DBUS_SESSION_BUS_ADDRESS",
