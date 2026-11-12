@@ -1,0 +1,1184 @@
+{
+  "list-windows": {
+    "version": "2.6",
+    "ok": true,
+    "command": "list-windows",
+    "data": [
+      {
+        "accessible": true,
+        "app_name": "gedit",
+        "bounds": {
+          "height": 756.0,
+          "width": 910.0,
+          "x": 370.0,
+          "y": 44.0
+        },
+        "id": "w-1.4-org-a11y-atspi-accessible-164",
+        "is_focused": true,
+        "minimized": false,
+        "pid": 4378,
+        "process_instance": "652afa7b:6387",
+        "title": "sample.txt (~/work/xiongbaowork/xiongbaowork/capture-out) - gedit",
+        "visible": true
+      },
+      {
+        "accessible": true,
+        "app_name": "zenity",
+        "bounds": {
+          "height": 257.0,
+          "width": 310.0,
+          "x": 82.0,
+          "y": 1.0
+        },
+        "id": "w-1.6-org-gnome-Zenity-a11y-970a0ab7_0650_41e8_ba70_fe5730098f46",
+        "is_focused": false,
+        "minimized": false,
+        "pid": 4376,
+        "process_instance": "652afa7b:6387",
+        "title": "XB Entry Dialog",
+        "visible": true
+      },
+      {
+        "accessible": true,
+        "app_name": "zenity",
+        "bounds": {
+          "height": 281.0,
+          "width": 329.0,
+          "x": 475.0,
+          "y": 259.0
+        },
+        "id": "w-1.5-org-gnome-Zenity-a11y-40ac84eb_5a90_4973_92b7_d41f02b1db85",
+        "is_focused": false,
+        "minimized": false,
+        "pid": 4374,
+        "process_instance": "652afa7b:6387",
+        "title": "XB Password Dialog",
+        "visible": true
+      }
+    ]
+  },
+  "snapshot": {
+    "version": "2.6",
+    "ok": true,
+    "command": "snapshot",
+    "data": {
+      "app": "zenity",
+      "complete": true,
+      "ref_count": 3,
+      "snapshot_id": "s2sjhluah6jpuf",
+      "tree": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [
+                                      {
+                                        "available_actions": [
+                                          "Click",
+                                          "SetValue",
+                                          "TypeText",
+                                          "SetFocus"
+                                        ],
+                                        "name": "single",
+                                        "ref_id": "@s2sjhluah6jpuf:e1",
+                                        "role": "textfield",
+                                        "states": [
+                                          "haspopup"
+                                        ]
+                                      }
+                                    ],
+                                    "native_id": {
+                                      "kind": "ax_identifier",
+                                      "value": "vbox4"
+                                    },
+                                    "role": "group"
+                                  }
+                                ],
+                                "native_id": {
+                                  "kind": "ax_identifier",
+                                  "value": "vbox3"
+                                },
+                                "role": "group"
+                              }
+                            ],
+                            "native_id": {
+                              "kind": "ax_identifier",
+                              "value": "zenity_entry_box"
+                            },
+                            "role": "group"
+                          }
+                        ],
+                        "native_id": {
+                          "kind": "ax_identifier",
+                          "value": "child_bin"
+                        },
+                        "role": "group"
+                      }
+                    ],
+                    "native_id": {
+                      "kind": "ax_identifier",
+                      "value": "message_area"
+                    },
+                    "role": "group"
+                  },
+                  {
+                    "children": [
+                      {
+                        "available_actions": [
+                          "Click",
+                          "SetFocus"
+                        ],
+                        "name": "Cancel",
+                        "ref_id": "@s2sjhluah6jpuf:e2",
+                        "role": "button"
+                      },
+                      {
+                        "available_actions": [
+                          "Click",
+                          "SetFocus"
+                        ],
+                        "name": "OK",
+                        "ref_id": "@s2sjhluah6jpuf:e3",
+                        "role": "button"
+                      }
+                    ],
+                    "native_id": {
+                      "kind": "ax_identifier",
+                      "value": "response_area"
+                    },
+                    "role": "group"
+                  }
+                ],
+                "native_id": {
+                  "kind": "ax_identifier",
+                  "value": "___object_3___"
+                },
+                "role": "group"
+              }
+            ],
+            "native_id": {
+              "kind": "ax_identifier",
+              "value": "___object_2___"
+            },
+            "role": "group"
+          }
+        ],
+        "name": "XB Entry Dialog",
+        "native_id": {
+          "kind": "ax_identifier",
+          "value": "zenity_entry_dialog"
+        },
+        "role": "dialog",
+        "states": [
+          "modal"
+        ]
+      },
+      "window": {
+        "id": "w-1.6-org-gnome-Zenity-a11y-970a0ab7_0650_41e8_ba70_fe5730098f46",
+        "title": "XB Entry Dialog"
+      }
+    }
+  },
+  "snapshot-password": {
+    "version": "2.6",
+    "ok": true,
+    "command": "snapshot",
+    "data": {
+      "app": "zenity",
+      "complete": true,
+      "ref_count": 3,
+      "snapshot_id": "s83mkk0gmdsj1",
+      "tree": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "available_actions": [
+                              "RightClick"
+                            ],
+                            "name": "XB Password Dialog",
+                            "native_id": {
+                              "kind": "ax_identifier",
+                              "value": "heading_label"
+                            },
+                            "role": "statictext"
+                          }
+                        ],
+                        "native_id": {
+                          "kind": "ax_identifier",
+                          "value": "heading_bin"
+                        },
+                        "role": "group"
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "native_id": {
+                                      "kind": "ax_identifier",
+                                      "value": "zenity_password_image"
+                                    },
+                                    "role": "image"
+                                  },
+                                  {
+                                    "available_actions": [
+                                      "RightClick"
+                                    ],
+                                    "name": "Type your password",
+                                    "native_id": {
+                                      "kind": "ax_identifier",
+                                      "value": "zenity_password_title"
+                                    },
+                                    "role": "statictext"
+                                  }
+                                ],
+                                "native_id": {
+                                  "kind": "ax_identifier",
+                                  "value": "___object_1___"
+                                },
+                                "role": "group"
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "available_actions": [
+                                      "RightClick"
+                                    ],
+                                    "name": "Password:",
+                                    "role": "statictext"
+                                  },
+                                  {
+                                    "available_actions": [
+                                      "Click",
+                                      "SetValue",
+                                      "TypeText",
+                                      "SetFocus"
+                                    ],
+                                    "ref_id": "@s83mkk0gmdsj1:e1",
+                                    "role": "textfield",
+                                    "states": [
+                                      "secure",
+                                      "haspopup"
+                                    ]
+                                  }
+                                ],
+                                "native_id": {
+                                  "kind": "ax_identifier",
+                                  "value": "zenity_password_grid"
+                                },
+                                "role": "group"
+                              }
+                            ],
+                            "native_id": {
+                              "kind": "ax_identifier",
+                              "value": "zenity_password_box"
+                            },
+                            "role": "group"
+                          }
+                        ],
+                        "native_id": {
+                          "kind": "ax_identifier",
+                          "value": "child_bin"
+                        },
+                        "role": "group"
+                      }
+                    ],
+                    "native_id": {
+                      "kind": "ax_identifier",
+                      "value": "message_area"
+                    },
+                    "role": "group"
+                  },
+                  {
+                    "children": [
+                      {
+                        "available_actions": [
+                          "Click",
+                          "SetFocus"
+                        ],
+                        "children": [
+                          {
+                            "available_actions": [
+                              "RightClick"
+                            ],
+                            "name": "Cancel",
+                            "role": "statictext"
+                          }
+                        ],
+                        "name": "Cancel",
+                        "ref_id": "@s83mkk0gmdsj1:e2",
+                        "role": "button"
+                      },
+                      {
+                        "available_actions": [
+                          "Click",
+                          "SetFocus"
+                        ],
+                        "children": [
+                          {
+                            "available_actions": [
+                              "RightClick"
+                            ],
+                            "name": "OK",
+                            "role": "statictext"
+                          }
+                        ],
+                        "name": "OK",
+                        "ref_id": "@s83mkk0gmdsj1:e3",
+                        "role": "button"
+                      }
+                    ],
+                    "native_id": {
+                      "kind": "ax_identifier",
+                      "value": "response_area"
+                    },
+                    "role": "group"
+                  }
+                ],
+                "native_id": {
+                  "kind": "ax_identifier",
+                  "value": "___object_3___"
+                },
+                "role": "group"
+              }
+            ],
+            "native_id": {
+              "kind": "ax_identifier",
+              "value": "___object_2___"
+            },
+            "role": "group"
+          }
+        ],
+        "name": "XB Password Dialog",
+        "native_id": {
+          "kind": "ax_identifier",
+          "value": "zenity_password_dialog"
+        },
+        "role": "dialog",
+        "states": [
+          "modal"
+        ]
+      },
+      "window": {
+        "id": "w-1.5-org-gnome-Zenity-a11y-40ac84eb_5a90_4973_92b7_d41f02b1db85",
+        "title": "XB Password Dialog"
+      }
+    }
+  },
+  "snapshot-editor": {
+    "version": "2.6",
+    "ok": true,
+    "command": "snapshot",
+    "data": {
+      "app": "gedit",
+      "complete": true,
+      "ref_count": 225,
+      "snapshot_id": "s1el02edrsgmkf",
+      "tree": {
+        "children": [
+          {
+            "available_actions": [
+              "SetFocus"
+            ],
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "available_actions": [
+                          "Click"
+                        ],
+                        "name": "Minimize",
+                        "ref_id": "@s1el02edrsgmkf:e1",
+                        "role": "button",
+                        "states": [
+                          "offscreen"
+                        ]
+                      },
+                      {
+                        "available_actions": [
+                          "Click"
+                        ],
+                        "name": "Maximize",
+                        "ref_id": "@s1el02edrsgmkf:e2",
+                        "role": "button",
+                        "states": [
+                          "offscreen"
+                        ]
+                      },
+                      {
+                        "available_actions": [
+                          "Click"
+                        ],
+                        "name": "Close",
+                        "ref_id": "@s1el02edrsgmkf:e3",
+                        "role": "button",
+                        "states": [
+                          "offscreen"
+                        ]
+                      }
+                    ],
+                    "role": "group",
+                    "states": [
+                      "offscreen"
+                    ]
+                  },
+                  {
+                    "children": [
+                      {
+                        "available_actions": [
+                          "Click",
+                          "SetFocus"
+                        ],
+                        "name": "Documents",
+                        "ref_id": "@s1el02edrsgmkf:e4",
+                        "role": "switch",
+                        "states": [
+                          "offscreen"
+                        ]
+                      }
+                    ],
+                    "role": "group",
+                    "states": [
+                      "offscreen"
+                    ]
+                  }
+                ],
+                "role": "group",
+                "states": [
+                  "hidden"
+                ]
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "available_actions": [
+                          "Click"
+                        ],
+                        "name": "Minimize",
+                        "ref_id": "@s1el02edrsgmkf:e5",
+                        "role": "button"
+                      },
+                      {
+                        "available_actions": [
+                          "Click"
+                        ],
+                        "name": "Maximize",
+                        "ref_id": "@s1el02edrsgmkf:e6",
+                        "role": "button"
+                      },
+                      {
+                        "available_actions": [
+                          "Click"
+                        ],
+                        "name": "Close",
+                        "ref_id": "@s1el02edrsgmkf:e7",
+                        "role": "button"
+                      }
+                    ],
+                    "role": "group"
+                  },
+                  {
+                    "available_actions": [
+                      "Click",
+                      "SetFocus"
+                    ],
+                    "description": "Save the current file",
+                    "name": "Save",
+                    "ref_id": "@s1el02edrsgmkf:e8",
+                    "role": "button"
+                  },
+                  {
+                    "available_actions": [
+                      "Click",
+                      "SetFocus"
+                    ],
+                    "name": "Menu",
+                    "ref_id": "@s1el02edrsgmkf:e9",
+                    "role": "switch"
+                  },
+                  {
+                    "available_actions": [
+                      "Click",
+                      "SetFocus"
+                    ],
+                    "name": "Create a new document",
+                    "ref_id": "@s1el02edrsgmkf:e10",
+                    "role": "button"
+                  },
+                  {
+                    "children": [
+                      {
+                        "available_actions": [
+                          "Click",
+                          "SetFocus"
+                        ],
+                        "description": "Open a file",
+                        "name": "Open",
+                        "ref_id": "@s1el02edrsgmkf:e11",
+                        "role": "button"
+                      },
+                      {
+                        "available_actions": [
+                          "Click",
+                          "SetFocus"
+                        ],
+                        "children": [
+                          {
+                            "available_actions": [
+                              "Click"
+                            ],
+                            "description": "Open '/home/user/work/sample.txt'",
+                            "name": "sample.txt",
+                            "ref_id": "@s1el02edrsgmkf:e13",
+                            "role": "menuitem",
+                            "states": [
+                              "offscreen"
+                            ]
+                          },
+                          {
+                            "name": "No items found",
+                            "ref_id": "@s1el02edrsgmkf:e14",
+                            "role": "menuitem",
+                            "states": [
+                              "disabled",
+                              "hidden"
+                            ]
+                          }
+                        ],
+                        "description": "Open a recently used file",
+                        "name": "Menu",
+                        "ref_id": "@s1el02edrsgmkf:e12",
+                        "role": "switch"
+                      }
+                    ],
+                    "role": "group"
+                  }
+                ],
+                "role": "group"
+              }
+            ],
+            "role": "group"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "available_actions": [
+                      "SetFocus"
+                    ],
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [
+                                      {
+                                        "available_actions": [
+                                          "SetFocus",
+                                          "Scroll"
+                                        ],
+                                        "children": [
+                                          {
+                                            "available_actions": [
+                                              "Scroll"
+                                            ],
+                                            "children": [
+                                              {
+                                                "available_actions": [
+                                                  "Select"
+                                                ],
+                                                "children": [
+                                                  {
+                                                    "available_actions": [
+                                                      "Select"
+                                                    ],
+                                                    "children": [
+                                                      {
+                                                        "children": [
+                                                          {
+                                                            "children": [
+                                                              {
+                                                                "available_actions": [
+                                                                  "Click",
+                                                                  "SetFocus"
+                                                                ],
+                                                                "ref_id": "@s1el02edrsgmkf:e19",
+                                                                "role": "button",
+                                                                "states": [
+                                                                  "offscreen"
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "role": "group",
+                                                            "states": [
+                                                              "offscreen"
+                                                            ]
+                                                          }
+                                                        ],
+                                                        "role": "group",
+                                                        "states": [
+                                                          "offscreen"
+                                                        ]
+                                                      }
+                                                    ],
+                                                    "ref_id": "@s1el02edrsgmkf:e18",
+                                                    "role": "option",
+                                                    "states": [
+                                                      "hidden"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "available_actions": [
+                                                      "Select"
+                                                    ],
+                                                    "children": [
+                                                      {
+                                                        "children": [
+                                                          {
+                                                            "children": [
+                                                              {
+                                                                "available_actions": [
+                                                                  "Click",
+                                                                  "SetFocus"
+                                                                ],
+                                                                "ref_id": "@s1el02edrsgmkf:e21",
+                                                                "role": "button",
+                                                                "states": [
+                                                                  "offscreen"
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "role": "group",
+                                                            "states": [
+                                                              "offscreen"
+                                                            ]
+                                                          }
+                                                        ],
+                                                        "role": "group",
+                                                        "states": [
+                                                          "offscreen"
+                                                        ]
+                                                      }
+                                                    ],
+                                                    "ref_id": "@s1el02edrsgmkf:e20",
+                                                    "role": "option",
+                                                    "states": [
+                                                      "selected",
+                                                      "offscreen"
+                                                    ]
+                                                  }
+                                                ],
+                                                "ref_id": "@s1el02edrsgmkf:e17",
+                                                "role": "listbox",
+                                                "states": [
+                                                  "offscreen"
+                                                ]
+                                              }
+                                            ],
+                                            "ref_id": "@s1el02edrsgmkf:e16",
+                                            "role": "group",
+                                            "states": [
+                                              "offscreen"
+                                            ]
+                                          },
+                                          {
+                                            "available_actions": [
+                                              "SetValue"
+                                            ],
+                                            "ref_id": "@s1el02edrsgmkf:e22",
+                                            "role": "scrollbar",
+                                            "states": [
+                                              "offscreen"
+                                            ],
+                                            "value": "0"
+                                          },
+                                          {
+                                            "available_actions": [
+                                              "SetValue"
+                                            ],
+                                            "ref_id": "@s1el02edrsgmkf:e23",
+                                            "role": "scrollbar",
+                                            "states": [
+                                              "offscreen"
+                                            ],
+                                            "value": "0"
+                                          }
+                                        ],
+                                        "ref_id": "@s1el02edrsgmkf:e15",
+                                        "role": "scrollarea",
+                                        "states": [
+                                          "offscreen"
+                                        ]
+                                      }
+                                    ],
+                                    "role": "group",
+                                    "states": [
+                                      "offscreen"
+                                    ]
+                                  }
+                                ],
+                                "role": "group",
+                                "states": [
+                                  "offscreen"
+                                ]
+                              }
+                            ],
+                            "role": "group",
+                            "states": [
+                              "offscreen"
+                            ]
+                          }
+                        ],
+                        "role": "group",
+                        "states": [
+                          "hidden"
+                        ]
+                      },
+                      {
+                        "children": [
+                          {
+                            "available_actions": [
+                              "SetFocus"
+                            ],
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "available_actions": [
+                                      "Select"
+                                    ],
+                                    "children": [
+                                      {
+                                        "available_actions": [
+                                          "Select"
+                                        ],
+                                        "children": [
+                                          {
+                                            "children": [
+                                              {
+                                                "children": [
+                                                  {
+                                                    "available_actions": [
+                                                      "SetFocus",
+                                                      "Scroll"
+                                                    ],
+                                                    "children": [
+                                                      {
+                                                        "available_actions": [
+                                                          "SetValue",
+                                                          "TypeText",
+                                                          "SetFocus"
+                                                        ],
+                                                        "ref_id": "@s1el02edrsgmkf:e27",
+                                                        "role": "textfield",
+                                                        "states": [
+                                                          "focused"
+                                                        ],
+                                                        "value": "hello"
+                                                      },
+                                                      {
+                                                        "available_actions": [
+                                                          "SetValue"
+                                                        ],
+                                                        "ref_id": "@s1el02edrsgmkf:e28",
+                                                        "role": "scrollbar",
+                                                        "states": [
+                                                          "offscreen"
+                                                        ],
+                                                        "value": "0"
+                                                      },
+                                                      {
+                                                        "available_actions": [
+                                                          "SetValue"
+                                                        ],
+                                                        "ref_id": "@s1el02edrsgmkf:e29",
+                                                        "role": "scrollbar",
+                                                        "states": [
+                                                          "offscreen"
+                                                        ],
+                                                        "value": "0"
+                                                      }
+                                                    ],
+                                                    "ref_id": "@s1el02edrsgmkf:e26",
+                                                    "role": "scrollarea"
+                                                  },
+                                                  {
+                                                    "children": [
+                                                      {
+                                                        "children": [
+                                                          {
+                                                            "children": [
+                                                              {
+                                                                "available_actions": [
+                                                                  "Click",
+                                                                  "SetValue",
+                                                                  "TypeText",
+                                                                  "SetFocus"
+                                                                ],
+                                                                "children": [
+                                                                  {
+                                                                    "available_actions": [
+                                                                      "Click"
+                                                                    ],
+                                                                    "name": "edit-find-symbolic",
+                                                                    "ref_id": "@s1el02edrsgmkf:e31",
+                                                                    "role": "image",
+                                                                    "states": [
+                                                                      "offscreen"
+                                                                    ]
+                                                                  }
+                                                                ],
+                                                                "name": "Search",
+                                                                "ref_id": "@s1el02edrsgmkf:e30",
+                                                                "role": "textfield",
+                                                                "states": [
+                                                                  "offscreen"
+                                                                ]
+                                                              },
+                                                              {
+                                                                "available_actions": [
+                                                                  "Click"
+                                                                ],
+                                                                "ref_id": "@s1el02edrsgmkf:e32",
+                                                                "role": "button",
+                                                                "states": [
+                                                                  "offscreen"
+                                                                ]
+                                                              },
+                                                              {
+                                                                "available_actions": [
+                                                                  "Click"
+                                                                ],
+                                                                "ref_id": "@s1el02edrsgmkf:e33",
+                                                                "role": "button",
+                                                                "states": [
+                                                                  "offscreen"
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "role": "group",
+                                                            "states": [
+                                                              "offscreen"
+                                                            ]
+                                                          }
+                                                        ],
+                                                        "role": "group",
+                                                        "states": [
+                                                          "offscreen"
+                                                        ]
+                                                      }
+                                                    ],
+                                                    "role": "group"
+                                                  }
+                                                ],
+                                                "role": "group"
+                                              }
+                                            ],
+                                            "role": "group"
+                                          }
+                                        ],
+                                        "ref_id": "@s1el02edrsgmkf:e25",
+                                        "role": "tab",
+                                        "states": [
+                                          "selected"
+                                        ]
+                                      }
+                                    ],
+                                    "ref_id": "@s1el02edrsgmkf:e24",
+                                    "role": "tablist"
+                                  }
+                                ],
+                                "role": "group"
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "available_actions": [
+                                      "Click",
+                                      "SetFocus"
+                                    ],
+                                    "description": "Hide panel",
+                                    "name": "Close",
+                                    "ref_id": "@s1el02edrsgmkf:e34",
+                                    "role": "button",
+                                    "states": [
+                                      "offscreen"
+                                    ]
+                                  }
+                                ],
+                                "role": "group",
+                                "states": [
+                                  "hidden"
+                                ]
+                              }
+                            ],
+                            "role": "group"
+                          }
+                        ],
+                        "role": "group"
+                      }
+                    ],
+                    "role": "group"
+                  }
+                ],
+                "role": "group"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "available_actions": [
+                              "Click",
+                              "SetFocus"
+                            ],
+                            "description": "Save the current file",
+                            "name": "Save",
+                            "ref_id": "@s1el02edrsgmkf:e35",
+                            "role": "button",
+                            "states": [
+                              "offscreen"
+                            ]
+                          },
+                          {
+                            "available_actions": [
+                              "Click",
+                              "SetFocus"
+                            ],
+                            "name": "Menu",
+                            "ref_id": "@s1el02edrsgmkf:e36",
+                            "role": "switch",
+                            "states": [
+                              "offscreen"
+                            ]
+                          },
+                          {
+                            "available_actions": [
+                              "Click",
+                              "SetFocus"
+                            ],
+                            "description": "Leave Fullscreen",
+                            "name": "Leave Fullscreen",
+                            "ref_id": "@s1el02edrsgmkf:e37",
+                            "role": "button",
+                            "states": [
+                              "offscreen"
+                            ]
+                          },
+                          {
+                            "available_actions": [
+                              "Click",
+                              "SetFocus"
+                            ],
+                            "name": "Create a new document",
+                            "ref_id": "@s1el02edrsgmkf:e38",
+                            "role": "button",
+                            "states": [
+                              "offscreen"
+                            ]
+                          },
+                          {
+                            "children": [
+                              {
+                                "available_actions": [
+                                  "Click",
+                                  "SetFocus"
+                                ],
+                                "description": "Open a file",
+                                "name": "Open",
+                                "ref_id": "@s1el02edrsgmkf:e39",
+                                "role": "button",
+                                "states": [
+                                  "offscreen"
+                                ]
+                              },
+                              {
+                                "available_actions": [
+                                  "Click",
+                                  "SetFocus"
+                                ],
+                                "children": [
+                                  {
+                                    "available_actions": [
+                                      "Click"
+                                    ],
+                                    "description": "Open '/home/user/work/sample.txt'",
+                                    "name": "sample.txt",
+                                    "ref_id": "@s1el02edrsgmkf:e41",
+                                    "role": "menuitem",
+                                    "states": [
+                                      "offscreen"
+                                    ]
+                                  },
+                                  {
+                                    "name": "No items found",
+                                    "ref_id": "@s1el02edrsgmkf:e42",
+                                    "role": "menuitem",
+                                    "states": [
+                                      "disabled",
+                                      "hidden"
+                                    ]
+                                  }
+                                ],
+                                "description": "Open a recently used file",
+                                "name": "Menu",
+                                "ref_id": "@s1el02edrsgmkf:e40",
+                                "role": "switch",
+                                "states": [
+                                  "offscreen"
+                                ]
+                              }
+                            ],
+                            "role": "group",
+                            "states": [
+                              "offscreen"
+                            ]
+                          }
+                        ],
+                        "role": "group",
+                        "states": [
+                          "offscreen"
+                        ]
+                      }
+                    ],
+                    "role": "group",
+                    "states": [
+                      "offscreen"
+                    ]
+                  }
+                ],
+                "role": "group",
+                "states": [
+                  "hidden"
+                ]
+              }
+            ],
+            "role": "group"
+          }
+        ],
+        "name": "sample.txt (~/work/xiongbaowork/xiongbaowork/capture-out) - gedit",
+        "role": "window"
+      },
+      "window": {
+        "id": "w-1.4-org-a11y-atspi-accessible-164",
+        "title": "sample.txt (~/work/xiongbaowork/xiongbaowork/capture-out) - gedit"
+      }
+    }
+  },
+  "list-displays": {
+    "version": "2.6",
+    "ok": true,
+    "command": "list-displays",
+    "data": [
+      {
+        "bounds": {
+          "height": 800.0,
+          "width": 1280.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "screen",
+        "is_primary": true,
+        "scale": 1.0
+      }
+    ]
+  },
+  "screenshot": {
+    "version": "2.6",
+    "ok": true,
+    "command": "screenshot",
+    "data": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "format": "png",
+      "height": 756,
+      "scale_factor": 1.0,
+      "width": 910
+    }
+  },
+  "version": {
+    "version": "2.6",
+    "ok": true,
+    "command": "version",
+    "data": {
+      "os": "linux",
+      "target": "x86_64",
+      "version": "1.2.0"
+    }
+  },
+  "permissions": {
+    "version": "2.6",
+    "ok": true,
+    "command": "permissions",
+    "data": {
+      "accessibility": {
+        "state": "granted"
+      },
+      "automation": {
+        "state": "not_required"
+      },
+      "screen_recording": {
+        "state": "not_required"
+      }
+    }
+  },
+  "status": {
+    "version": "2.6",
+    "ok": true,
+    "command": "status",
+    "data": {
+      "permissions": {
+        "accessibility": {
+          "state": "granted"
+        },
+        "automation": {
+          "state": "not_required"
+        },
+        "screen_recording": {
+          "state": "not_required"
+        }
+      },
+      "platform": "linux",
+      "ref_count": null,
+      "session_id": null,
+      "snapshot_id": null,
+      "state_root": "/home/user/ad-home",
+      "supported_surfaces": [
+        "window",
+        "sheet",
+        "alert",
+        "menu"
+      ],
+      "tracing": false,
+      "version": "1.2.0"
+    }
+  }
+}

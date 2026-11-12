@@ -1,0 +1,651 @@
+{
+  "list-windows": {
+    "version": "2.6",
+    "ok": true,
+    "command": "list-windows",
+    "data": [
+      {
+        "accessible": true,
+        "app_name": "TextEdit",
+        "bounds": {
+          "height": 439.0,
+          "width": 673.0,
+          "x": 79.0,
+          "y": 56.0
+        },
+        "id": "w-43",
+        "is_focused": true,
+        "pid": 1731,
+        "process_instance": "macos-proc-v1:1794471894:511218",
+        "title": "sample.txt",
+        "visible": true
+      },
+      {
+        "accessible": false,
+        "app_name": "TextEdit",
+        "bounds": {
+          "height": 500.0,
+          "width": 500.0,
+          "x": 0.0,
+          "y": 268.0
+        },
+        "id": "w-42",
+        "is_focused": false,
+        "pid": 1731,
+        "process_instance": "macos-proc-v1:1794471894:511218",
+        "title": "TextEdit",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "TextEdit",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-41",
+        "is_focused": false,
+        "pid": 1731,
+        "process_instance": "macos-proc-v1:1794471894:511218",
+        "title": "TextEdit",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "TextEdit",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-40",
+        "is_focused": false,
+        "pid": 1731,
+        "process_instance": "macos-proc-v1:1794471894:511218",
+        "title": "TextEdit",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "TextEdit",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-39",
+        "is_focused": false,
+        "pid": 1731,
+        "process_instance": "macos-proc-v1:1794471894:511218",
+        "title": "TextEdit",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "TextEdit",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-38",
+        "is_focused": false,
+        "pid": 1731,
+        "process_instance": "macos-proc-v1:1794471894:511218",
+        "title": "TextEdit",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "xbform",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-33",
+        "is_focused": false,
+        "pid": 1719,
+        "process_instance": "macos-proc-v1:1794471889:221910",
+        "title": "xbform",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "xbform",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-32",
+        "is_focused": false,
+        "pid": 1719,
+        "process_instance": "macos-proc-v1:1794471889:221910",
+        "title": "xbform",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "xbform",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-31",
+        "is_focused": false,
+        "pid": 1719,
+        "process_instance": "macos-proc-v1:1794471889:221910",
+        "title": "xbform",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "xbform",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-30",
+        "is_focused": false,
+        "pid": 1719,
+        "process_instance": "macos-proc-v1:1794471889:221910",
+        "title": "xbform",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "xbform",
+        "bounds": {
+          "height": 500.0,
+          "width": 500.0,
+          "x": 0.0,
+          "y": 268.0
+        },
+        "id": "w-29",
+        "is_focused": false,
+        "pid": 1719,
+        "process_instance": "macos-proc-v1:1794471889:221910",
+        "title": "xbform",
+        "visible": false
+      },
+      {
+        "accessible": true,
+        "app_name": "xbform",
+        "bounds": {
+          "height": 292.0,
+          "width": 420.0,
+          "x": 100.0,
+          "y": 376.0
+        },
+        "id": "w-28",
+        "is_focused": false,
+        "pid": 1719,
+        "process_instance": "macos-proc-v1:1794471889:221910",
+        "title": "XB Sample Form",
+        "visible": true
+      },
+      {
+        "accessible": false,
+        "app_name": "Spotlight",
+        "bounds": {
+          "height": 64.0,
+          "width": 64.0,
+          "x": 0.0,
+          "y": 268.0
+        },
+        "id": "w-22",
+        "is_focused": false,
+        "pid": 491,
+        "process_instance": "macos-proc-v1:1794471772:999426",
+        "title": "Spotlight",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "Finder",
+        "bounds": {
+          "height": 64.0,
+          "width": 64.0,
+          "x": 0.0,
+          "y": 268.0
+        },
+        "id": "w-16",
+        "is_focused": false,
+        "pid": 381,
+        "process_instance": "macos-proc-v1:1794471768:82293",
+        "title": "Finder",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "Finder",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-15",
+        "is_focused": false,
+        "pid": 381,
+        "process_instance": "macos-proc-v1:1794471768:82293",
+        "title": "Finder",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "Finder",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-14",
+        "is_focused": false,
+        "pid": 381,
+        "process_instance": "macos-proc-v1:1794471768:82293",
+        "title": "Finder",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "Finder",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-13",
+        "is_focused": false,
+        "pid": 381,
+        "process_instance": "macos-proc-v1:1794471768:82293",
+        "title": "Finder",
+        "visible": false
+      },
+      {
+        "accessible": false,
+        "app_name": "Finder",
+        "bounds": {
+          "height": 30.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "w-12",
+        "is_focused": false,
+        "pid": 381,
+        "process_instance": "macos-proc-v1:1794471768:82293",
+        "title": "Finder",
+        "visible": false
+      }
+    ]
+  },
+  "snapshot": {
+    "version": "2.6",
+    "ok": true,
+    "command": "snapshot",
+    "data": {
+      "app": "TextEdit",
+      "complete": true,
+      "ref_count": 8,
+      "snapshot_id": "s1h53ygbhq22wz",
+      "tree": {
+        "children": [
+          {
+            "available_actions": [
+              "Scroll",
+              "SetFocus"
+            ],
+            "children": [
+              {
+                "available_actions": [
+                  "RightClick",
+                  "SetValue",
+                  "SetFocus",
+                  "TypeText"
+                ],
+                "native_id": {
+                  "kind": "ax_identifier",
+                  "value": "First Text View"
+                },
+                "ref_id": "@s1h53ygbhq22wz:e2",
+                "role": "textfield",
+                "states": [
+                  "focused"
+                ],
+                "value": "hello\n"
+              },
+              {
+                "available_actions": [
+                  "SetValue"
+                ],
+                "native_id": {
+                  "kind": "ax_identifier",
+                  "value": "_NS:24"
+                },
+                "ref_id": "@s1h53ygbhq22wz:e3",
+                "role": "scrollbar",
+                "states": [
+                  "disabled"
+                ],
+                "value": "0.18518517911434174"
+              },
+              {
+                "available_actions": [
+                  "SetValue"
+                ],
+                "native_id": {
+                  "kind": "ax_identifier",
+                  "value": "_NS:27"
+                },
+                "ref_id": "@s1h53ygbhq22wz:e4",
+                "role": "scrollbar",
+                "states": [
+                  "disabled"
+                ],
+                "value": "0"
+              }
+            ],
+            "native_id": {
+              "kind": "ax_identifier",
+              "value": "_NS:8"
+            },
+            "ref_id": "@s1h53ygbhq22wz:e1",
+            "role": "scrollarea"
+          },
+          {
+            "available_actions": [
+              "Click"
+            ],
+            "name": "Close",
+            "ref_id": "@s1h53ygbhq22wz:e5",
+            "role": "button"
+          },
+          {
+            "available_actions": [
+              "Click",
+              "RightClick"
+            ],
+            "name": "Full Screen",
+            "ref_id": "@s1h53ygbhq22wz:e6",
+            "role": "button"
+          },
+          {
+            "available_actions": [
+              "Click"
+            ],
+            "name": "Minimize",
+            "ref_id": "@s1h53ygbhq22wz:e7",
+            "role": "button"
+          },
+          {
+            "available_actions": [
+              "Click",
+              "Expand",
+              "Collapse"
+            ],
+            "name": "document actions",
+            "ref_id": "@s1h53ygbhq22wz:e8",
+            "role": "menubutton",
+            "states": [
+              "disabled"
+            ]
+          }
+        ],
+        "name": "sample.txt",
+        "native_id": {
+          "kind": "ax_identifier",
+          "value": "_NS:34"
+        },
+        "role": "window"
+      },
+      "window": {
+        "id": "w-43",
+        "title": "sample.txt"
+      }
+    }
+  },
+  "snapshot-password": {
+    "version": "2.6",
+    "ok": true,
+    "command": "snapshot",
+    "data": {
+      "app": "xbform",
+      "complete": true,
+      "ref_count": 9,
+      "snapshot_id": "s37cvd8pszfcox",
+      "tree": {
+        "children": [
+          {
+            "available_actions": [
+              "Click",
+              "RightClick",
+              "SetValue",
+              "SetFocus",
+              "TypeText"
+            ],
+            "name": "Single line",
+            "ref_id": "@s37cvd8pszfcox:e1",
+            "role": "textfield",
+            "states": [
+              "focused"
+            ]
+          },
+          {
+            "available_actions": [
+              "Click",
+              "RightClick",
+              "SetValue",
+              "SetFocus"
+            ],
+            "name": "Password",
+            "ref_id": "@s37cvd8pszfcox:e2",
+            "role": "textfield",
+            "states": [
+              "secure"
+            ]
+          },
+          {
+            "available_actions": [
+              "Scroll",
+              "SetFocus"
+            ],
+            "children": [
+              {
+                "available_actions": [
+                  "RightClick",
+                  "SetValue",
+                  "SetFocus",
+                  "TypeText"
+                ],
+                "name": "Multi line",
+                "ref_id": "@s37cvd8pszfcox:e4",
+                "role": "textfield"
+              }
+            ],
+            "ref_id": "@s37cvd8pszfcox:e3",
+            "role": "scrollarea"
+          },
+          {
+            "available_actions": [
+              "Click"
+            ],
+            "name": "Disabled button",
+            "ref_id": "@s37cvd8pszfcox:e5",
+            "role": "button",
+            "states": [
+              "disabled"
+            ]
+          },
+          {
+            "available_actions": [
+              "Click",
+              "SetFocus"
+            ],
+            "name": "Send",
+            "ref_id": "@s37cvd8pszfcox:e6",
+            "role": "button"
+          },
+          {
+            "available_actions": [
+              "Click"
+            ],
+            "name": "Close",
+            "ref_id": "@s37cvd8pszfcox:e7",
+            "role": "button"
+          },
+          {
+            "available_actions": [
+              "Click",
+              "RightClick"
+            ],
+            "children": [
+              {
+                "children": [
+                  {
+                    "role": "group"
+                  }
+                ],
+                "role": "group"
+              }
+            ],
+            "name": "Zoom",
+            "ref_id": "@s37cvd8pszfcox:e8",
+            "role": "button",
+            "states": [
+              "disabled"
+            ]
+          },
+          {
+            "available_actions": [
+              "Click"
+            ],
+            "name": "Minimize",
+            "ref_id": "@s37cvd8pszfcox:e9",
+            "role": "button",
+            "states": [
+              "disabled"
+            ]
+          },
+          {
+            "name": "XB Sample Form",
+            "role": "statictext",
+            "value": "XB Sample Form"
+          }
+        ],
+        "name": "XB Sample Form",
+        "role": "window"
+      },
+      "window": {
+        "id": "w-28",
+        "title": "XB Sample Form"
+      }
+    }
+  },
+  "list-displays": {
+    "version": "2.6",
+    "ok": true,
+    "command": "list-displays",
+    "data": [
+      {
+        "bounds": {
+          "height": 768.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "1",
+        "is_primary": true,
+        "scale": 1.0
+      }
+    ]
+  },
+  "screenshot": {
+    "version": "2.6",
+    "ok": true,
+    "command": "screenshot",
+    "data": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "format": "png",
+      "height": 551,
+      "scale_factor": 1.0,
+      "width": 785
+    }
+  },
+  "version": {
+    "version": "2.6",
+    "ok": true,
+    "command": "version",
+    "data": {
+      "os": "macos",
+      "target": "aarch64",
+      "version": "1.2.0"
+    }
+  },
+  "permissions": {
+    "version": "2.6",
+    "ok": true,
+    "command": "permissions",
+    "data": {
+      "accessibility": {
+        "state": "granted"
+      },
+      "automation": {
+        "state": "unknown"
+      },
+      "screen_recording": {
+        "state": "granted"
+      }
+    }
+  },
+  "status": {
+    "version": "2.6",
+    "ok": true,
+    "command": "status",
+    "data": {
+      "permissions": {
+        "accessibility": {
+          "state": "granted"
+        },
+        "automation": {
+          "state": "unknown"
+        },
+        "screen_recording": {
+          "state": "granted"
+        }
+      },
+      "platform": "macos",
+      "ref_count": null,
+      "session_id": null,
+      "snapshot_id": null,
+      "state_root": "/Users/user/ad-home",
+      "supported_surfaces": [
+        "window",
+        "focused",
+        "menu",
+        "menubar",
+        "sheet",
+        "popover",
+        "alert",
+        "dock",
+        "menu-bar-extras"
+      ],
+      "tracing": false,
+      "version": "1.2.0"
+    }
+  }
+}
