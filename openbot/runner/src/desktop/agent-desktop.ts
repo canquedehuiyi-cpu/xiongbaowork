@@ -137,10 +137,6 @@ function abortError(sent: boolean): Error & { sent: boolean } {
   return Object.assign(error, { sent });
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function systemRoot(): string {
   return process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
 }
@@ -364,10 +360,14 @@ export function createAgentDesktopCli(opts: {
 
   /** Resolves when a killed child is gone; if it is not within the cap, the queue is given up on. */
   const drainOf = async (child: Child): Promise<void> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const gone = await Promise.race([
       child.exited.then(() => true),
-      sleep(exitWaitMs).then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), exitWaitMs);
+      }),
     ]);
+    clearTimeout(timer);
     if (!gone) stuck = true;
   };
 
