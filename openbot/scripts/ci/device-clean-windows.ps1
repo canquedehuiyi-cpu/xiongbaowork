@@ -160,6 +160,51 @@ function Invoke-Selfcheck {
     Add-Evidence 'PASS 已安装的 xiongbao-runner.exe 自检：--help 退出码 2 并打印用法；--add-root / --list-roots / --remove-root 正常；之后没有残留进程'
 }
 
+# Written to the job log when the app phase fails, because the evidence file only says that it
+# failed: what the app has running now, how the watched runner ended (this script holds its handle,
+# so the exit code survives it), and the runner's own output, which the app appends to
+# runner.log under Tauri's app_log_dir (%LOCALAPPDATA%\<identifier>\logs, sidecar.rs RunnerLauncher).
+function Write-AppDiagnostics($App, $Runner, [datetime]$Since) {
+    Write-Host '::group::app phase diagnostics'
+    try {
+        if ($App.HasExited) { Write-Host "app pid $($App.Id) exited $($App.ExitCode)" } else { Write-Host "app pid $($App.Id) is running" }
+        if ($Runner) {
+            if ($Runner.HasExited) { Write-Host "watched runner pid $($Runner.Id) exited $($Runner.ExitCode) at $($Runner.ExitTime.ToString('o'))" }
+            else { Write-Host "watched runner pid $($Runner.Id) has not exited" }
+        }
+        Write-Host "children of the app (pid $($App.Id)):"
+        Get-CimInstance Win32_Process -Filter "ParentProcessId = $($App.Id)" | ForEach-Object {
+            Write-Host "  $($_.ProcessId) $($_.Name) started $($_.CreationDate.ToString('o')): $($_.CommandLine)"
+        }
+        Write-Host 'every xiongbao-runner.exe:'
+        Get-CimInstance Win32_Process -Filter "Name = 'xiongbao-runner.exe'" | ForEach-Object {
+            Write-Host "  $($_.ProcessId) parent $($_.ParentProcessId) started $($_.CreationDate.ToString('o')): $($_.CommandLine)"
+        }
+        foreach ($root in @((Join-Path $env:LOCALAPPDATA 'com.xiongbao.device'), (Join-Path $env:APPDATA 'com.xiongbao.device'))) {
+            Write-Host "files under ${root}:"
+            Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+                Write-Host "  $($_.FullName) ($($_.Length) bytes)"
+            }
+        }
+        $log = Join-Path $env:LOCALAPPDATA 'com.xiongbao.device\logs\runner.log'
+        if (Test-Path -LiteralPath $log -PathType Leaf) {
+            Write-Host "last 200 lines of ${log}:"
+            Get-Content -LiteralPath $log -Tail 200 -Encoding utf8 | ForEach-Object { Write-Host "  | $_" }
+        } else {
+            Write-Host "no runner log at $log"
+        }
+        # A runtime that crashed outright (no stderr) leaves an Application Error / WER entry instead.
+        Write-Host 'Application event log entries naming xiongbao since the app started:'
+        Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $Since } -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match 'xiongbao' } | Select-Object -First 20 | ForEach-Object {
+                Write-Host "  $($_.TimeCreated.ToString('o')) $($_.ProviderName) $($_.Id): $(($_.Message -split "`r?`n") -join ' / ')"
+            }
+    } catch {
+        Write-Host "diagnostics stopped: $_"
+    }
+    Write-Host '::endgroup::'
+}
+
 # No server on this machine, so the app is given a pairing that cannot connect: the runner it
 # starts keeps retrying, which is enough to see whose child it is and that it dies with the app.
 function Invoke-App {
@@ -172,6 +217,7 @@ function Invoke-App {
     '{"deviceId": "clean-windows", "token": "not-a-device-token", "server": "http://127.0.0.1:9"}' |
         Set-Content -LiteralPath (Join-Path $data 'runner/runner-state.json') -Encoding utf8NoBOM
     if (Get-Process -Name xiongbao-runner -ErrorAction SilentlyContinue) { throw 'An xiongbao-runner is already running.' }
+    $since = Get-Date
     $app = Start-Process -FilePath (Join-Path $InstallDir 'xiongbao-device.exe') -PassThru
     $child = $null
     foreach ($second in 1..60) {
@@ -182,11 +228,21 @@ function Invoke-App {
         if ($app.HasExited) { throw "The app exited $($app.ExitCode) before starting the runner." }
         Start-Sleep -Seconds 1
     }
-    if (-not $child) { throw 'The app did not start xiongbao-runner within 60s.' }
+    if (-not $child) {
+        Write-AppDiagnostics $app $null $since
+        throw 'The app did not start xiongbao-runner within 60s.'
+    }
+    Write-Host "watching runner pid $($child.ProcessId), started $($child.CreationDate.ToString('o')): $($child.CommandLine)"
+    # Held from here, so that if it exits its exit code can still be read for the diagnostics.
+    $runner = Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
+    if ($runner) { $null = $runner.Handle }
     if ($child.ExecutablePath -ne $sidecar) { throw "The app started $($child.ExecutablePath), not the installed $sidecar." }
     if ($child.CommandLine -match '--pair') { throw 'The app passed --pair without a pairing code.' }
     Start-Sleep -Seconds 5
-    if (-not (Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue)) { throw 'The runner did not keep running.' }
+    if (-not $runner -or $runner.HasExited -or -not (Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue)) {
+        Write-AppDiagnostics $app $runner $since
+        throw 'The runner did not keep running.'
+    }
     # The hardest way out: the app is killed outright, and the job object it holds
     # (process_tree.rs, KILL_ON_JOB_CLOSE) has to take the runner with it.
     Stop-Process -Id $app.Id -Force
