@@ -154,6 +154,32 @@ test("the two desktop tools can be set like any other: 列出桌面窗口 and �
   );
 });
 
+test('操作桌面 offers only 询问 and 禁用; 禁用 sends { toolRef: "computer_desktop_session", mode: "disabled" }', async () => {
+  const view = draw();
+  const group = await view.findByRole("radiogroup", {
+    name: "「操作桌面」的权限",
+  });
+  expect(
+    Array.from(group.querySelectorAll('[role="radio"]')).map(
+      (node) => node.textContent,
+    ),
+  ).toEqual(["询问", "禁用"]);
+  fireEvent.click(choice(view, "操作桌面", "禁用"));
+  await waitFor(() =>
+    expect(sent).toContainEqual({
+      path: "/api/approvals/employees/desk/tools",
+      method: "PUT",
+      body: { toolRef: "computer_desktop_session", mode: "disabled" },
+    }),
+  );
+});
+
+test("the Linux trial hint is shown under the desktop rows", async () => {
+  const view = draw();
+  await view.findByRole("radiogroup", { name: "「操作桌面」的权限" });
+  expect(view.getByText("Linux 电脑目前只能查看（试用）。")).toBeTruthy();
+});
+
 test("the permissions page lists 启用本机应用", async () => {
   const view = draw();
   await view.findByRole("radiogroup", { name: "「启用本机应用」的权限" });

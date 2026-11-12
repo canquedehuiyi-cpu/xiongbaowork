@@ -2,15 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { offersStandingRule } from "@openbot/shared/standing-rule";
 import {
   DESKTOP_SESSION_REASON,
+  DESKTOP_WRITE_TOOLS,
   desktopActionReason,
 } from "../src/approvals/desktop-policy";
 import { decideAction, refusedOutright } from "../src/approvals/policy";
+import { createApprovalService } from "../src/approvals/service";
 import type {
   ApprovalCandidate,
   ApprovalPolicyOutcome,
   ApprovalRule,
   ApprovalSubject,
 } from "../src/approvals/types";
+import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 
 /**
  * Per-action approval for desktop writes (plan Task 17, design decisions 6, 10, 11 and 13): the
@@ -594,5 +597,100 @@ describe("desktop per-action approval", () => {
     });
     expect(out.behaviour).not.toBe("deny");
     expect(out.source).not.toBe("desktop_action");
+  });
+});
+
+describe("the permissions row 操作桌面 (plan Task 20)", () => {
+  test("direct is refused for computer_desktop_session", async () => {
+    const created: unknown[] = [];
+    const service = createApprovalService({
+      policy: {
+        employee: async () => ({ ownerUserId: OWNER }),
+        teamSettings: async () => ({ customRulesEnabled: true }),
+        withdrawPending: async () => 0,
+        createRule: async (_owner: string, input: unknown) => {
+          created.push(input);
+          return input;
+        },
+      },
+      rules: async () => [],
+    } as never);
+    await expect(
+      service.setEmployeeToolMode(
+        OWNER,
+        "bot",
+        "computer_desktop_session",
+        "direct",
+      ),
+    ).rejects.toThrow("操作桌面每次开始前都要你批准，不能设为直接。");
+    expect(created).toEqual([]);
+    // Asking is allowed, and so is another tool run directly.
+    await service.setEmployeeToolMode(
+      OWNER,
+      "bot",
+      "computer_desktop_session",
+      "ask",
+    );
+    await service.setEmployeeToolMode(OWNER, "bot", "computer_click", "direct");
+    expect(created).toHaveLength(2);
+  });
+
+  test("a disabled session row disables every desktop write", async () => {
+    const sessionOff = rule("deny", {
+      toolRef: "computer_desktop_session",
+      botId: "bot",
+    });
+    for (const action of Object.keys(toolOf)) {
+      const c = candidate({
+        action: action as NonNullable<
+          ApprovalSubject["desktopWrite"]
+        >["action"],
+      });
+      expect(
+        refusedOutright({ ...base, personal: [sessionOff], candidate: c })
+          ?.behaviour,
+      ).toBe("deny");
+      expect(
+        (await decideAction({ ...base, personal: [sessionOff], candidate: c }))
+          .behaviour,
+      ).toBe("deny");
+    }
+    // Without the row disabled nothing is refused outright, and a disabled session row does not
+    // touch a desktop read.
+    expect(
+      refusedOutright({ ...base, candidate: candidate() }),
+    ).toBeUndefined();
+    expect(
+      refusedOutright({
+        ...base,
+        personal: [sessionOff],
+        candidate: {
+          ...candidate(),
+          toolRef: "computer_desktop_snapshot",
+          effect: "read",
+          subject: { runner: true },
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  test("the desktop write tool set is the seven write tools, and a disabled session row hides them from the model", () => {
+    expect([...DESKTOP_WRITE_TOOLS].sort()).toEqual(
+      Object.values(toolOf).sort(),
+    );
+    const names = (disabled?: (ref: string) => boolean) =>
+      createHeadlessComputerTools({
+        gateway: {} as never,
+        seat: {} as never,
+        actor: { id: OWNER } as never,
+        ...(disabled ? { disabled } : {}),
+      }).map((tool) => tool.definition.name);
+    const all = names();
+    const hidden = names((ref) => ref === "computer_desktop_session");
+    // Today no write tool is registered; whatever is must not be a desktop write once hidden.
+    expect(hidden.filter((name) => DESKTOP_WRITE_TOOLS.has(name))).toEqual([]);
+    expect(hidden).toEqual(
+      all.filter((name) => !DESKTOP_WRITE_TOOLS.has(name)),
+    );
   });
 });

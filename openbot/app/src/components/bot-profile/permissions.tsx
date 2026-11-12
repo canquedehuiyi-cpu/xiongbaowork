@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { IconLock } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,11 @@ import { ProfileAlert, ProfilePanel, ProfileSection } from "./profile-kit";
  * and the one for handing work to another Bot. Granted connector tools are added from the Bot's
  * grants. Named the way the approval gate names them, so a mode set here is the rule it checks.
  */
-const BUILT_IN_TOOLS: { ref: string; label: string }[] = [
+const BUILT_IN_TOOLS: {
+  ref: string;
+  label: string;
+  modes?: EmployeeToolMode[];
+}[] = [
   { ref: "computer_navigate", label: "打开网页" },
   { ref: "computer_click", label: "点击网页" },
   { ref: "computer_type", label: "在网页上输入" },
@@ -42,6 +46,12 @@ const BUILT_IN_TOOLS: { ref: string; label: string }[] = [
   // Looking at the owner's desktop, read only (device-side desktop viewing, Phase 1).
   { ref: "computer_desktop_windows", label: "列出桌面窗口" },
   { ref: "computer_desktop_snapshot", label: "查看桌面" },
+  // Operating it: every session starts by asking, so "direct" is not offered.
+  {
+    ref: "computer_desktop_session",
+    label: "操作桌面",
+    modes: ["ask", "disabled"],
+  },
   { ref: "host/read_file", label: "读取你电脑上的文件" },
   { ref: "host/write_file", label: "写入你电脑上的文件" },
   { ref: "host/list_files", label: "列出你电脑上的文件" },
@@ -288,7 +298,7 @@ function ToolModes({
   busy,
   onChange,
 }: {
-  tools: { ref: string; label: string }[];
+  tools: { ref: string; label: string; modes?: EmployeeToolMode[] }[];
   data: EmployeePermissions;
   editable: boolean;
   busy: boolean;
@@ -318,56 +328,60 @@ function ToolModes({
             ? MODE_OF_BEHAVIOUR[saved.behaviour]
             : undefined;
           return (
-            <div
-              className={cn(ROW, "flex-wrap gap-y-[7px] py-[9px]")}
-              key={tool.ref}
-            >
-              <span className="min-w-0 text-[13px]">
-                <span className="font-medium">{tool.label}</span>
-                <span className="ml-2 break-all font-mono text-[11px] text-muted-foreground">
-                  {tool.ref}
-                </span>
-                {saved && data.ownedByAnother ? (
-                  <span className="ml-2 text-muted-foreground">
-                    员工所有者设定
+            <Fragment key={tool.ref}>
+              <div className={cn(ROW, "flex-wrap gap-y-[7px] py-[9px]")}>
+                <span className="min-w-0 text-[13px]">
+                  <span className="font-medium">{tool.label}</span>
+                  <span className="ml-2 break-all font-mono text-[11px] text-muted-foreground">
+                    {tool.ref}
                   </span>
-                ) : null}
-              </span>
-              {/*
-               * The three modes as one segmented control (theme.css `.segmented`): the chosen one
-               * filled white, the others quiet; choosing the chosen one again goes back to the
-               * default, as before.
-               */}
-              <div
-                aria-label={`「${tool.label}」的权限`}
-                className="inline-flex shrink-0 gap-[2px] rounded-[10px] border border-border bg-background/60 p-[2px]"
-                role="radiogroup"
-              >
-                {MODES.map((choice) => (
-                  <Button
-                    aria-checked={current === choice}
-                    className={cn(
-                      "h-[26px] rounded-[8px] px-[10px] text-[12px]",
-                      current === choice ? null : "text-muted-foreground",
-                    )}
-                    disabled={!editable || busy}
-                    key={choice}
-                    onClick={() =>
-                      onChange(
-                        tool.ref,
-                        current === choice ? "default" : choice,
-                      )
-                    }
-                    role="radio"
-                    size="sm"
-                    type="button"
-                    variant={current === choice ? "default" : "ghost"}
-                  >
-                    {TOOL_MODE_LABELS[choice]}
-                  </Button>
-                ))}
+                  {saved && data.ownedByAnother ? (
+                    <span className="ml-2 text-muted-foreground">
+                      员工所有者设定
+                    </span>
+                  ) : null}
+                </span>
+                {/*
+                 * The three modes as one segmented control (theme.css `.segmented`): the chosen one
+                 * filled white, the others quiet; choosing the chosen one again goes back to the
+                 * default, as before.
+                 */}
+                <div
+                  aria-label={`「${tool.label}」的权限`}
+                  className="inline-flex shrink-0 gap-[2px] rounded-[10px] border border-border bg-background/60 p-[2px]"
+                  role="radiogroup"
+                >
+                  {(tool.modes ?? MODES).map((choice) => (
+                    <Button
+                      aria-checked={current === choice}
+                      className={cn(
+                        "h-[26px] rounded-[8px] px-[10px] text-[12px]",
+                        current === choice ? null : "text-muted-foreground",
+                      )}
+                      disabled={!editable || busy}
+                      key={choice}
+                      onClick={() =>
+                        onChange(
+                          tool.ref,
+                          current === choice ? "default" : choice,
+                        )
+                      }
+                      role="radio"
+                      size="sm"
+                      type="button"
+                      variant={current === choice ? "default" : "ghost"}
+                    >
+                      {TOOL_MODE_LABELS[choice]}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
+              {tool.ref === "computer_desktop_session" ? (
+                <p className="px-[14px] pb-[9px] text-[12px] text-muted-foreground">
+                  Linux 电脑目前只能查看（试用）。
+                </p>
+              ) : null}
+            </Fragment>
           );
         })}
       </ProfilePanel>

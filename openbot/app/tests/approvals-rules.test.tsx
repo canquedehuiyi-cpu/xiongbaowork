@@ -359,6 +359,38 @@ test("a sensitive-window request names its source 敏感窗口", async () => {
   }
 });
 
+test("desktop requests name 桌面会话 and 桌面操作", async () => {
+  for (const [source, label] of [
+    ["desktop_session", "桌面会话"],
+    ["desktop_action", "桌面操作"],
+  ] as const) {
+    const asked = {
+      ...ownerAsked,
+      id: `request-${source}`,
+      action: {
+        ...ownerAsked.action,
+        toolRef: "computer_desktop_click",
+        scope: "desktop/notepad",
+        args: {},
+        toolCallId: `${source}-call`,
+        policy: {
+          behaviour: "ask",
+          source,
+          reason: "需要你批准。",
+        },
+      },
+    };
+    inbox.requests.push(asked as unknown as (typeof inbox.requests)[number]);
+    try {
+      const view = draw();
+      expect(await view.findByText(`（来源：${label}）`)).toBeTruthy();
+      view.unmount();
+    } finally {
+      inbox.requests.pop();
+    }
+  }
+});
+
 test("SEC1: 禁用 is shown as its own behaviour, and a request set by the Bot's owner names that layer", async () => {
   inbox.requests.push(ownerAsked as unknown as (typeof inbox.requests)[number]);
   inbox.teamRules.unshift({
