@@ -1,3 +1,4 @@
+# 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
 # GitHub only discovers workflows here. openbot/.github/workflows is retained
 # for upstream synchronisation and does not execute in this fork.
 name: 熊宝交付 CI
@@ -73,7 +74,8 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -97,6 +99,8 @@ jobs:
       TEST_DATABASE_BYPASS_URL: postgres://openbot_fixture:ci-fixture@127.0.0.1:5432/postgres
       PGPASSWORD: ci-owner
     steps:
+      - name: Print database version
+        run: psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'select version()'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -194,7 +198,8 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -260,7 +265,8 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -1079,7 +1085,8 @@ jobs:
       contents: read
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
