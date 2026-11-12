@@ -173,6 +173,15 @@ const SHELL_COMMAND_WORDS =
   "bash|sh|zsh|python3?|node|npm|pnpm|yarn|deno|bun|pwsh|powershell|cmd|git|npx|docker|kubectl|ssh";
 
 /**
+ * A line that *starts* with a command word — possibly wrapped in backticks, possibly after a `$` prompt.
+ *
+ * Used only to rank citations, never to decide a verdict: "does this line read as a command" is exactly the
+ * question the audit table's evidence column has to answer, and a word in the middle of a sentence cannot
+ * answer it.
+ */
+export const LEADING_COMMAND_PATTERN = new RegExp(`^[ \\t]*(?:\\$[ \\t]*)?\`?(?:${SHELL_COMMAND_WORDS})\\b`);
+
+/**
  * The shell features that turn a command *mention* into a command *dependency*.
  *
  * Four kinds, because these are what a runnable instruction actually looks like: a heredoc, a flag, an
@@ -187,10 +196,14 @@ const SHELL_COMMAND_WORDS =
 const SHELL_COMMAND_PROSE_FEATURES = [
   "<<-?[ \\t]*['\"`]?\\w+", // heredoc, with or without the leading dash: `<<EOF`, `- <<'EOF'`
   "(?<=\\s)-{1,2}[A-Za-z]", // a flag: `-c`, `--selftest`
-  // A path-shaped argument, anchored: absolute, home-relative or drive-rooted. Deliberately *not* any
-  // `a/b`: Chinese prose writes `bash 的 mkdir/cp 认 /c/...` to mean "mkdir or cp", and an unanchored
-  // slash turned that alternative into a shell dependency.
-  "[\\s`'\"](?:/[^\\s/]|~/|[A-Za-z]:[\\\\/]|\\.{1,2}/)",
+  // A path-shaped argument, anchored: absolute, home-relative or drive-rooted. The lead is a *lookbehind*,
+  // not a consumed `[ \t]`: rule B's own `[ \\t]` after the command word has already eaten the one space
+  // between `bash` and `/path`, and a single character cannot be consumed twice — a consumed-space version
+  // made `bash /opt/scripts/run`, `node /usr/local/bin/tool` and `bash ~/bin/tool` systematically
+  // unmatchable while `bash -c anything` still hit, i.e. every well-formed path invocation was a silent
+  // false negative. Deliberately *not* any `a/b`: Chinese prose writes `bash 的 mkdir/cp 认 /c/...` to
+  // mean "mkdir or cp", and an unanchored slash turned that alternative into a shell dependency.
+  "(?<=[ \\t`'\"])(?:/[^\\s/]|~/|[A-Za-z]:[\\\\/]|\\.{1,2}/)",
   "\\S*\\.[A-Za-z]{1,5}(?=\\s|$)", // an argument shaped like a file: `build.mjs`, not a version like `3.8`
   "\\|\\||&&|\\$\\(", // a shell operator
   // Redirection stays on its own line. `\s` includes `\n`, so `>\s*\S` read the `>` closing a prose

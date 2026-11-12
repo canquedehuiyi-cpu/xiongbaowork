@@ -62,12 +62,33 @@ describe("blocked rules", () => {
     }
   });
 
-  test("a flag, a path-shaped argument and a shell operator each suffice on their own", () => {
+  test("a flag, a file-shaped argument and a shell operator each suffice on their own", () => {
     // One case per feature of rule B, so a future loosening has to break a named test.
+    // The path feature has its own test group below: its leading space used to be consumed twice, which
+    // made it the systematic-false-negative hotspot.
     expect(judge("run node --version").level).toBe("blocked"); // flag
     expect(judge("python run.py").level).toBe("blocked"); // file-shaped argument
     expect(judge("bash <<< x | grep y && echo done").level).toBe("blocked"); // operator
     expect(judge("bash -c 'ls'").level).toBe("blocked"); // flag with a quoted body
+  });
+
+  test("a path-shaped argument blocks the capability, in every anchored spelling", () => {
+    // The path feature required a *consumed* leading space, but rule B's own `[ \t]` after the command
+    // word had already eaten that space — one character cannot be consumed twice, so `cmd /path`, the
+    // most well-formed invocation there is, never matched while `bash -c anything` did. The five
+    // spellings below are the regression set for the zero-width lookbehind that replaced it; removing
+    // any of them re-opens the false negative.
+    for (const body of [
+      "bash /opt/scripts/run", // posix absolute
+      "node /usr/local/bin/tool", // posix absolute behind node
+      "bash ~/bin/tool", // home-relative
+      "bash C:/tools/run", // windows drive root
+      "bash /opt/scripts/run.sh", // absolute, previously saved only by the file-shaped branch
+    ]) {
+      const finding = judge(body);
+      expect(finding.level).toBe("blocked");
+      expect(finding.hits.some((hit) => hit.ruleId === "shell-command-prose")).toBe(true);
+    }
   });
 
   test("a command word alone is not a dependency: prohibitions and prose stay full", () => {
@@ -180,7 +201,7 @@ describe("verdict aggregation", () => {
 
   test("a body with no rule hits is full and carries no hits", () => {
     const finding = judge("Explain the trade-off and ask one clarifying question.");
-    expect(finding).toEqual({ slug: "demo", level: "full", hits: [] });
+    expect(finding).toEqual({ slug: "demo", level: "full", hits: [], marginal: false });
   });
 
   test("repeated identical matches are reported once", () => {
@@ -279,5 +300,37 @@ describe("excerptAt", () => {
   test("keeps a real command recognisable, heredoc included", () => {
     const finding = judge("python - <<'EOF'");
     expect(finding.hits[0].sample).toBe("python - <<'EOF'");
+  });
+});
+
+describe("negation guard removal", () => {
+  // The negation guard (findNegation + NEGATION_MARKERS) was removed in full: over the whole corpus its
+  // only intended catch measured 0 occurrences, while it produced reproducible false negatives — the real
+  // dependency in the second half of `不要用 X，改用 Y` was exempted together with the prohibition. These
+  // tests pin the post-removal behaviour. The conditions for ever rebuilding a guard, and the two things
+  // it must then carry, live in the ruling comment inside `audit-toolrefs.ts`.
+
+  test("the dependency after a prohibition is no longer exempted", () => {
+    expect(judge("不要用 node -e 猜参数，改用 node run.js --selftest").level).toBe("blocked");
+    expect(judge("不要用 bash 跑脚本，改用 bash scripts/collect.sh").level).toBe("blocked");
+  });
+
+  test("a prohibition whose command word has no flag, path or operator stays full", () => {
+    // "commands" carries none of rule B's features, so this is not a guard exemption any more — the
+    // pattern itself simply does not fire. Pinned so a future guard cannot quietly regress it.
+    expect(judge("Do NOT run bash commands to create directories").level).toBe("full");
+  });
+
+  test("否定语境不豁免，属已接受的假阳性：禁止句单独成段且内含 flag 时判 blocked", () => {
+    // Known limitation, accepted on purpose: the `-e` flag fires rule B and nothing exempts it any more.
+    // The false positives this sentence costs are discoverable (they show up as report rows with a weak
+    // citation); the false negatives the guard cost were not.
+    expect(judge("不要用 ssh host 'node -e \"...\"' 做关键判定").level).toBe("blocked");
+  });
+
+  test("Bash (shell)（半角括号散文形态）判 blocked，这是有意接受，不要放宽", () => {
+    // Deliberate: loosening the half-width-paren form also stops matching `Bash(npm install)`, the real
+    // call rule A exists for. Chinese prose uses the full-width `（`, which does not match anyway.
+    expect(judge("Bash (shell) 在 openbot 上不可用").level).toBe("blocked");
   });
 });

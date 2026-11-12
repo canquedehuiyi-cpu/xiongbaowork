@@ -9,7 +9,7 @@
  * when other parts are fine. Rules and their severities live in `mapping.ts`; this module only applies
  * them, which keeps the policy reviewable in one table.
  */
-import { AUDIT_RULE_TABLE, type AuditRule, SEVERITY_ORDER, type RunnableLevel } from "./mapping";
+import { AUDIT_RULE_TABLE, type AuditRule, LEADING_COMMAND_PATTERN, SEVERITY_ORDER, type RunnableLevel } from "./mapping";
 
 /** One capability to judge. */
 export interface AuditableCapability {
@@ -21,6 +21,16 @@ export interface AuditableCapability {
   hasBundledReferences: boolean;
 }
 
+/**
+ * Where a citation sits, best first. The number is the tier, so sorting is `a - b`.
+ *
+ * - 1: a command at the start of a line inside a fenced code block — this is a recipe, the reader sees it.
+ * - 2: a command at the start of a line, inline-code ticks allowed.
+ * - 3: a command inside inline code in the middle of a sentence — quoted, but part of an instruction.
+ * - 4: a plain mention. Only used when 1–3 produced nothing, and the row is marked `incidental`.
+ */
+export type EvidenceTier = 1 | 2 | 3 | 4;
+
 /** One rule that fired. */
 export interface AuditHit {
   ruleId: string;
@@ -28,6 +38,8 @@ export interface AuditHit {
   /** The offending text, trimmed and shortened so the report is one line per hit. */
   sample: string;
   reason: string;
+  /** How good this citation is; see {@link EvidenceTier}. */
+  tier: EvidenceTier;
 }
 
 /** The verdict for one capability. */
@@ -35,6 +47,13 @@ export interface AuditFinding {
   slug: string;
   level: RunnableLevel;
   hits: AuditHit[];
+  /**
+   * `true` when the verdict rests on a weak citation — a bare mention rather than a command.
+   *
+   * Derived, never listed by hand: a slug allowlist here would be the exact shape the "no special cases"
+   * gate greps for, and it would hide the next skill that has the same problem.
+   */
+  marginal: boolean;
 }
 
 /** Longest sample kept in a finding. The full text stays in the source; this is for a table cell. */
@@ -74,6 +93,64 @@ export function excerptAt(text: string, index: number): string {
 
 /** Pattern for an MCP tool reference. Group 1 is the server id, group 2 the tool name. */
 const MCP_REFERENCE = /mcp__([\w-]+)__([\w-]+)/;
+
+/**
+ * 这里曾经有一条「否定语境护栏」（`findNegation` + `NEGATION_MARKERS`/`ALTERNATIVE_MARKERS`）：
+ * 命中落在 `不要/禁止/never…` 之后时把该命中挪进 `excluded`，不计入判定。
+ *
+ * **整套撤掉的裁定（2026-11 评审）**：全语料实测，「禁止句被独立当成依赖」的假阳性为 0 例，而护栏
+ * 产出了可复现的假阴性——`不要用 node -e 猜参数，改用 node run.js --selftest` 后半句是真依赖，被一起
+ * 豁免成 full。假阳性会被发现，假阴性不会，所以方向宁可反向。
+ *
+ * 若将来出现某技能的**全部**命中都落在否定语境、导致本规则误判 blocked：届时再做护栏，且必须同时带
+ * （1）替代标记兜底（`改用|而是|instead` 等，护栏止于替代标记处）和（2）反向反证单测（护栏缺席时用例
+ * 必须变红）。两者缺一不可，缺了就是这次的教训重演。
+ *
+ * 撤掉护栏后，禁止句仍可能被引用为证据；误报靠 {@link evidenceTier} 的引文质量排序兜底
+ * （代码块内命令 > 行首命令 > 散文片段 > 描述性提及），把最有说服力的证据排在报告首行。
+ */
+
+/**
+ * Whether the offset sits inside a fenced code block.
+ *
+ * A fence is Markdown formatting, so this only needs to count fence lines before the offset. Getting it
+ * wrong cannot change a verdict; it only decides whether a citation is quoted as a recipe (tier 1) or as a
+ * line of prose (tier 2+).
+ */
+function insideFence(text: string, index: number): boolean {
+  let fences = 0;
+  let cursor = text.indexOf("\n");
+  while (cursor !== -1 && cursor < index) {
+    if (text.slice(cursor + 1, cursor + 4) === "```") {
+      fences += 1;
+    }
+    cursor = text.indexOf("\n", cursor + 1);
+  }
+  if (text.slice(0, Math.min(3, text.length)) === "```") {
+    fences += 1;
+  }
+  return fences % 2 === 1;
+}
+
+/**
+ * Rank a citation by how well it shows the reader what cannot run.
+ *
+ * The reason this exists is a real report row: a skill whose body has twenty `git` command lines was cited
+ * with the sentence `bash 的 mkdir/cp 认 /c/...`, because that happened to be the first match. The verdict
+ * was right and the evidence was worthless, which for a document a customer reads is the same as wrong.
+ */
+export function evidenceTier(text: string, index: number): EvidenceTier {
+  const line = lineAt(text, index);
+  const leading = LEADING_COMMAND_PATTERN.test(line);
+  if (leading && insideFence(text, index)) {
+    return 1;
+  }
+  if (leading) {
+    return 2;
+  }
+  const quoted = index > 0 && text[index - 1] === "`";
+  return quoted ? 3 : 4;
+}
 
 /**
  * Prose notation for "some value goes here": `<user>`, `<file>`, `<git branch>`.
@@ -130,6 +207,7 @@ function evaluateRule(
       level: rule.level,
       sample: shortenSample(sample),
       reason: rule.reason,
+      tier: 3 as EvidenceTier,
     }));
   }
 
@@ -149,7 +227,8 @@ function evaluateRule(
     // A rule may match its leading whitespace (a command on the line after a fence), so the excerpt is
     // taken from where the interesting text starts rather than from where the match happens to begin.
     const leading = match[0].length - match[0].replace(/^\s+/, "").length;
-    const sample = shortenSample(excerptAt(capability.instructions, match.index + leading));
+    const start = match.index + leading;
+    const sample = shortenSample(excerptAt(capability.instructions, start));
     // Dedupe on the matched text, not on the excerpt: the excerpt now runs to the end of its line, so two
     // hits on one line (`Bash(a). … Bash(a)`) would look different while being the same offence.
     const token = match[0].trim();
@@ -157,7 +236,15 @@ function evaluateRule(
       continue;
     }
     seen.add(token);
-    hits.push({ ruleId: rule.id, level: rule.level, sample, reason: rule.reason });
+    // No negation guard here on purpose — see the block comment above `insideFence` for the removal
+    // ruling and the conditions under which one may be rebuilt.
+    hits.push({
+      ruleId: rule.id,
+      level: rule.level,
+      sample,
+      reason: rule.reason,
+      tier: evidenceTier(capability.instructions, start),
+    });
   }
   return hits;
 }
@@ -182,10 +269,20 @@ export function auditCapability(
       level = hit.level;
     }
   }
+  // Severity first, then citation quality, then id: the first row is the one the report quotes, so it must
+  // be the best evidence for the worst verdict rather than whichever rule happened to run first.
   const ordered = [...hits].sort(
-    (a, b) => SEVERITY_ORDER[b.level] - SEVERITY_ORDER[a.level] || a.ruleId.localeCompare(b.ruleId),
+    (a, b) =>
+      SEVERITY_ORDER[b.level] - SEVERITY_ORDER[a.level] ||
+      a.tier - b.tier ||
+      a.ruleId.localeCompare(b.ruleId),
   );
-  return { slug: capability.slug, level, hits: ordered };
+  return {
+    slug: capability.slug,
+    level,
+    hits: ordered,
+    marginal: level === "blocked" && ordered.length > 0 && ordered[0].tier >= 3,
+  };
 }
 
 /** Judge a batch, preserving the input order. */
@@ -208,4 +305,14 @@ export function countByLevel(findings: readonly AuditFinding[]): Record<Runnable
     counts[finding.level] += 1;
   }
   return counts;
+}
+
+/**
+ * How many verdicts rest on a bare mention rather than on a command.
+ *
+ * Exported so a test can pin the number: the debt is only visible while its size is asserted, and a rising
+ * count is the signal that the citation ranking stopped finding real commands.
+ */
+export function countMarginal(findings: readonly AuditFinding[]): number {
+  return findings.filter((finding) => finding.marginal).length;
 }

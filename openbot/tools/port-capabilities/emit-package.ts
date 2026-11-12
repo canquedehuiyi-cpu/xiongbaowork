@@ -19,7 +19,7 @@ import { stringify } from "yaml";
 
 import type { AuditFinding } from "./audit-toolrefs";
 import { auditRulesSha256 } from "./mapping";
-import { countByLevel } from "./audit-toolrefs";
+import { countByLevel, countMarginal } from "./audit-toolrefs";
 import type { ManifestEntry } from "./manifest";
 import type { NormalizedCapabilities } from "./normalize";
 
@@ -265,24 +265,48 @@ export function renderSlugConflicts(capabilities: NormalizedCapabilities): strin
 /** Render one audit section as a Markdown table. */
 function auditSection(title: string, findings: readonly AuditFinding[]): string[] {
   const counts = countByLevel(findings);
+  const marginal = countMarginal(findings);
   const lines: string[] = [
     `## ${title}`,
     "",
     `合计 ${findings.length} 条：full ${counts.full} / degraded ${counts.degraded} / blocked ${counts.blocked}。`,
     "",
-    "| slug | runnable | 命中的引用 | 原因 |",
-    "| --- | --- | --- | --- |",
+    "| slug | runnable | margin | 命中的引用 | 原因 |",
+    "| --- | --- | --- | --- | --- |",
   ];
   for (const finding of findings) {
     if (finding.hits.length === 0) {
-      lines.push(`| ${mdCell(finding.slug)} | ${finding.level} | — | 无命中 |`);
+      lines.push(`| ${mdCell(finding.slug)} | ${finding.level} | — | — | 无命中 |`);
       continue;
     }
-    const samples = finding.hits.map((hit) => `${hit.ruleId}:"${hit.sample}"`).join("; ");
+    // One citation per rule, the best-graded one, with the total count kept beside it: a reader needs the
+    // strongest example, and an auditor needs to know there were others.
+    const byRule = new Map<string, typeof finding.hits>();
+    for (const hit of finding.hits) {
+      byRule.set(hit.ruleId, [...(byRule.get(hit.ruleId) ?? []), hit]);
+    }
+    const samples = [...byRule.entries()]
+      .map(([ruleId, group]) => {
+        const best = group[0];
+        const total = group.length > 1 ? `（共 ${group.length} 处）` : "";
+        return `${ruleId}:"${best.sample}"${total}`;
+      })
+      .join("; ");
     const reasons = [...new Set(finding.hits.map((hit) => hit.reason))].join(" ");
-    lines.push(`| ${mdCell(finding.slug)} | ${finding.level} | ${mdCell(samples)} | ${mdCell(reasons)} |`);
+    // `marginal` says the verdict rests on a mention rather than a command. It is a disclosure, not a
+    // downgrade: the row stays blocked because the rule fired.
+    const margin = finding.marginal ? "`incidental`" : "—";
+    lines.push(
+      `| ${mdCell(finding.slug)} | ${finding.level} | ${margin} | ${mdCell(samples)} | ${mdCell(reasons)} |`,
+    );
   }
   lines.push("");
+  if (marginal > 0) {
+    lines.push(
+      `其中 ${marginal} 条标 \`incidental\`：判定成立，但决定性命中落在“散文里夹带的命令”或“纯描述性提及”，删掉那句话判定就会翻。`,
+      "",
+    );
+  }
   return lines;
 }
 
@@ -310,8 +334,10 @@ export function renderToolRefAudit(
     "",
     "| 方向 | 例子 | 取舍 |",
     "| --- | --- | --- |",
-    "| 已接受的**假阳性** | `Bash (shell)`（半角括号 + 空格）判 blocked | 接受。半角括号形态一律当调用处理；放宽它会连带丢掉 `Bash(npm install)` 这个真调用。中文正文用全角 `（`，天然不命中 |",
+    "| 已接受的**假阳性** | `Bash (shell)`（半角括号 + 空格）判 blocked | 接受。半角括号形态一律当调用处理；放宽它会连带丢掉 `Bash(npm install)` 这个真调用。中文正文用全角 `（`，天然不命中。**单测已钉住，别放宽** |",
     "| 已接受的**假阴性** | ``` `cat f \\| grep x` ``` 这类散文里的单竖线管道不命中 | 接受。单 `\\|` 在 Markdown 表格里远比 shell 管道常见，放行会让几乎每张表都变成 blocked；`\\|\\|`、`$(` 与括号形态仍覆盖真实场景 |",
+    "| 有意保留的**债** | 只依赖 `git`/`docker`/`kubectl`/`ssh` 且不含现词表命令的技能会被判 full | `git status` 既可能是“去跑它”，也可能是“看它的输出做诊断”，词表分不出祈使与描述。收进词表会把第二种批量误判成 blocked，比现在的假阴性更坏。这是有意保留，不是遗漏 |",
+    "| 无否定语境护栏（已撤） | `不要用 \\`ssh host 'node -e \"…\"'\\` 做关键判定` 单独成段时判 blocked | 有意接受。护栏在全语料实测 0 例假阳性、却产出可复现的假阴性（禁止句后半句的真依赖被一起豁免），故整套撤掉；禁止句误报靠引文质量排序兜底。重建条件见 `audit-toolrefs.ts` 内的裁定注释 |",
     "",
   );
   return `${lines.join("\n")}\n`;
