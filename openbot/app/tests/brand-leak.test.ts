@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { parse } from "yaml";
 
 /*
  * This fork ships as 熊宝. The upstream names (OpenBot, CopilotKit, Qoder) must not reach a
@@ -50,8 +51,12 @@ const WIRE_HEADERS = [
   "x-openbot-egress",
 ];
 
-const COPYRIGHT =
-  "Copyright (c) 2026 熊宝; portions Copyright (c) 2026 CopilotKit (MIT)";
+// The holder is the delivered tenant package's company (brand.ts copyrightLine), read from the package rather than
+// spelled here, so renaming the company moves the expected line with it instead of failing on a stale literal.
+const { tenant } = parse(
+  readFileSync(join(REPO, "examples/xiongbao/brand.yaml"), "utf8"),
+) as { tenant: { product_name: string; company_name?: string } };
+const COPYRIGHT = `Copyright (c) 2026 ${tenant.company_name ?? tenant.product_name}; portions Copyright (c) 2026 CopilotKit (MIT)`;
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // Case-sensitive on purpose: `OpenBotVersion` is code, `OpenBots` and `QoderWake` are names.
