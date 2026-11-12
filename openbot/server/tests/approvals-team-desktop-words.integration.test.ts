@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { Hono } from "hono";
 import {
   DEFAULT_DESKTOP_ACTION_WORDS,
   desktopActionWordsOf,
@@ -12,8 +13,15 @@ import {
   teamDesktopActionWords,
   teamSettingsColumns,
 } from "../src/approvals/extra-columns";
+import { createApprovalRoutes } from "../src/approvals/routes";
+import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
-import { ApprovalRefusedError } from "../src/approvals/types";
+import {
+  type ApprovalCandidate,
+  ApprovalRefusedError,
+} from "../src/approvals/types";
+import { createAdminScope } from "../src/auth/admin-scope";
+import { type AppVariables, createRoleRepository } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import { approvalTeamSettings } from "../src/db/schema/approvals";
 import { users } from "../src/db/schema/core";
@@ -221,4 +229,166 @@ test("another tenant cannot read or write this team's list", async () => {
   );
   expect(await storedWords("platform")).toEqual([{ words: ["归档"] }]);
   expect((await membersView()).desktopActionWords).toEqual(["归档"]);
+});
+
+const service = createApprovalService(store);
+const scope = createAdminScope({
+  roleRepository: createRoleRepository(database),
+});
+
+/** A signed-in request through the approval routes, in the person's own frame, as the app runs it. */
+function client(id: string, role: "user" | "admin") {
+  const app = new Hono<{ Variables: AppVariables }>();
+  app.route(
+    "/api/approvals",
+    createApprovalRoutes(
+      service,
+      async (context, next) => {
+        context.set("actor", { id, email: `${id}@example.test`, role });
+        await runAsTenant(id, () => next());
+      },
+      scope.adminCapability,
+    ),
+  );
+  return async (method: string, path: string, body?: unknown) => {
+    const response = await app.request(
+      `http://openbot.test/api/approvals${path}`,
+      {
+        method,
+        ...(body === undefined
+          ? {}
+          : {
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(body),
+            }),
+      },
+    );
+    return {
+      status: response.status,
+      body: (await response.json()) as Record<string, unknown>,
+    };
+  };
+}
+
+/** A click on a control named `name`, in a desktop session the device holds. */
+function click(name: string): ApprovalCandidate {
+  const toolCallId = randomUUID();
+  const args = { windowId: "a0123456789abcdef", ref: "abc123-1:0" };
+  return {
+    actorId: member,
+    botId: `${prefix}-bot`,
+    toolRef: "computer_desktop_click",
+    effect: "write",
+    scope: "desktop/mail",
+    args,
+    subject: {
+      runner: true,
+      desktopWrite: {
+        session: "active",
+        action: "click",
+        title: "邮件",
+        process: "mail",
+        control: { type: "Button", name },
+      },
+    },
+    continuation: {
+      runId: randomUUID(),
+      threadId: `${prefix}-${toolCallId}`,
+      toolCallId,
+      toolName: "computer_desktop_click",
+      args,
+      messages: [],
+      state: {},
+      context: [],
+      forwardedProps: {},
+    },
+  };
+}
+
+test("only an admin can change the list; a member gets 403", async () => {
+  const asAdmin = client(admin, "admin");
+  const asMember = client(member, "user");
+
+  const refused = await asMember("PATCH", "/team", {
+    desktopActionWords: ["归档"],
+  });
+  expect(refused.status).toBe(403);
+  expect((await membersView()).desktopActionWords).toBeNull();
+
+  const saved = await asAdmin("PATCH", "/team", {
+    desktopActionWords: [" 归档 ", "", "发送"],
+  });
+  expect(saved.status).toBe(200);
+  expect(saved.body.desktopActionWords).toEqual(["归档", "发送"]);
+  expect((await membersView()).desktopActionWords).toEqual(["归档", "发送"]);
+
+  // Members read it in the inbox, and null puts the default back.
+  const inbox = await asMember("GET", "");
+  expect(
+    (inbox.body.team as { desktopActionWords: string[] | null })
+      .desktopActionWords,
+  ).toEqual(["归档", "发送"]);
+  const reset = await asAdmin("PATCH", "/team", { desktopActionWords: null });
+  expect(reset.status).toBe(200);
+  expect(reset.body.desktopActionWords).toBeNull();
+  expect((await membersView()).desktopActionWords).toBeNull();
+});
+
+test("the route answers the store's refusal as a 400, not the schema's: 20 Chinese characters pass, 21 do not", async () => {
+  const asAdmin = client(admin, "admin");
+  const twenty = "一二三四五六七八九十甲乙丙丁戊己庚辛壬癸";
+  const accepted = await asAdmin("PATCH", "/team", {
+    desktopActionWords: [twenty],
+  });
+  expect(accepted.status).toBe(200);
+  expect(accepted.body.desktopActionWords).toEqual([twenty]);
+
+  const tooLong = await asAdmin("PATCH", "/team", {
+    desktopActionWords: [`${twenty}子`],
+  });
+  expect(tooLong.status).toBe(400);
+  expect(String(tooLong.body.error)).toContain("20");
+  // A word that makes no sense for a field, and a list far beyond any limit, are the schema's.
+  expect(
+    (await asAdmin("PATCH", "/team", { desktopActionWords: [1] })).status,
+  ).toBe(400);
+  expect(
+    (
+      await asAdmin("PATCH", "/team", {
+        desktopActionWords: Array.from({ length: 201 }, (_, i) => `词${i}`),
+      })
+    ).status,
+  ).toBe(400);
+  // Refused saves change nothing.
+  expect((await membersView()).desktopActionWords).toEqual([twenty]);
+});
+
+test('a saved list reaches the gate: clicking 归档 asks after saving ["归档"]', async () => {
+  const asAdmin = client(admin, "admin");
+  const gate = (name: string) =>
+    runAsTenant(member, () => service.gate(click(name)));
+
+  // The default words do not hold 归档, and 发送 is one of them.
+  await expect(gate("归档")).resolves.toBeUndefined();
+  await expect(gate("发送")).rejects.toMatchObject({
+    name: "HeadlessToolSuspension",
+  });
+
+  expect(
+    (await asAdmin("PATCH", "/team", { desktopActionWords: ["归档"] })).status,
+  ).toBe(200);
+  await expect(gate("归档")).rejects.toMatchObject({
+    name: "HeadlessToolSuspension",
+  });
+  // The list replaces the default, so 发送 no longer asks.
+  await expect(gate("发送")).resolves.toBeUndefined();
+
+  // Back to the default words.
+  expect(
+    (await asAdmin("PATCH", "/team", { desktopActionWords: null })).status,
+  ).toBe(200);
+  await expect(gate("归档")).resolves.toBeUndefined();
+  await expect(gate("发送")).rejects.toMatchObject({
+    name: "HeadlessToolSuspension",
+  });
 });

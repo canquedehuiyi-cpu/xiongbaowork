@@ -217,6 +217,16 @@ export function createApprovalRoutes(
         actionKinds: z
           .partialRecord(z.enum(ACTION_KINDS), z.enum(ACTION_KIND_POLICIES))
           .optional(),
+        /*
+         * The words that make clicking a control on a member's computer ask every time. Only a cheap
+         * size bound here: the store trims, drops blanks and repeats and counts a word's length by
+         * code point, and its refusal comes back as a 400 below. Null is the default list.
+         */
+        desktopActionWords: z
+          .array(z.string().max(200))
+          .max(200)
+          .nullable()
+          .optional(),
       })
       .parse(await context.req.json());
     return context.json(
