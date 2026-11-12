@@ -280,6 +280,7 @@ export function EditablePortrait({
   seed,
   size,
   className,
+  motion,
 }: {
   kind: PortraitKind;
   id: string;
@@ -287,6 +288,11 @@ export function EditablePortrait({
   seed: string;
   size: number;
   className?: string;
+  /**
+   * The motion state the face plays — a detail header passes one so an uploaded video plays;
+   * lists leave it out and stay still.
+   */
+  motion?: AvatarMotionState;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -308,6 +314,7 @@ export function EditablePortrait({
       >
         <AbstractAvatar
           decorative
+          motion={motion}
           name={name}
           portrait={{ kind, id }}
           seed={seed}

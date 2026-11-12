@@ -1,6 +1,6 @@
 import { QueryClientContext } from "@tanstack/react-query";
 import Avatar from "boring-avatars";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useBotLook } from "@/components/agents/bot-look";
 import { BotOrb } from "@/components/agents/bot-orb";
 import {
@@ -62,6 +62,25 @@ function PortraitFace(
   );
 }
 
+/**
+ * Whether the viewer asked for less motion. A CSS media query cannot stop a <video>, so the
+ * video branch reads this directly and falls back to the poster when motion is reduced.
+ */
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
 function Face({
   name,
   seed,
@@ -77,6 +96,11 @@ function Face({
   look: "orb" | "face";
 }) {
   const [videoFailed, setVideoFailed] = useState(false);
+  // A failed video stays failed only for that URL: a replacement upload retries playback.
+  useEffect(() => {
+    setVideoFailed(false);
+  }, [videoUrl]);
+  const prefersReducedMotion = usePrefersReducedMotion();
   const motionClass = motion ? AVATAR_MOTION_CLASS[motion] : undefined;
   // A skin that draws coworkers as orbs still shows a portrait somebody chose for them.
   if (look === "orb" && !src) {
@@ -100,7 +124,7 @@ function Face({
     );
   }
   const drawing =
-    videoUrl && motion && !videoFailed ? (
+    videoUrl && motion && !videoFailed && !prefersReducedMotion ? (
       <video
         autoPlay
         className="size-full object-cover"
