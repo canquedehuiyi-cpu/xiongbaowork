@@ -10,13 +10,17 @@ import {
 import { createDesktopActions } from "../src/desktop/actions";
 import { createAgentDesktopReader } from "../src/desktop/ad-read";
 import { createAgentDesktopWriter } from "../src/desktop/ad-write";
-import { createAgentDesktopCli } from "../src/desktop/agent-desktop";
+import {
+  type AgentDesktopCli,
+  createAgentDesktopCli,
+} from "../src/desktop/agent-desktop";
 import {
   CONTROL_LINE_PREFIX,
   createControlChannel,
 } from "../src/desktop/control";
 import { createDesktopHost } from "../src/desktop/host";
 import { createDesktopSessions } from "../src/desktop/session";
+import { createRunnerExecutor } from "../src/execute";
 
 /* The four desktop writes on agent-desktop (plan docs/plans/2026-11-12-desktop-write.md, Task 21):
    the real CLI layer and reader over the fake binary, a real session over an in-memory channel whose
@@ -105,7 +109,12 @@ type Entry = { args: string[]; stdin?: string; prevAlive: number[] };
 function setup(
   platform: DesktopPlatform,
   commands: Record<string, Command> = {},
-  options: { ack?: boolean; ackMs?: number } = {},
+  options: {
+    ack?: boolean;
+    ackMs?: number;
+    /** Stands between the writer and the CLI, for an event no binary can time (an abort just so). */
+    wrapCli?: (cli: AgentDesktopCli) => AgentDesktopCli;
+  } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "ad-write-"));
   const logPath = join(root, "log.jsonl");
@@ -161,7 +170,7 @@ function setup(
   const now = () => time;
   const sessions = createDesktopSessions({ control, now });
   const writer = createAgentDesktopWriter({
-    cli,
+    cli: options.wrapCli ? options.wrapCli(cli) : cli,
     reader,
     sessions,
     control,
@@ -610,11 +619,13 @@ describe("desktop writes: type", () => {
 
     let { el } = await read(t);
     let target = adRef(t, el("Single line").ref);
+    // The tab is a control character, asked about since round 1: approved, so the bytes go as they are.
     const replaced = output(
       await t.write("desktop.type", {
         ref: el("Single line").ref,
         text,
         mode: "replace",
+        approved: true,
       }),
     );
     expect(replaced.physical).toBe(false);
@@ -637,6 +648,7 @@ describe("desktop writes: type", () => {
         ref: el("Single line").ref,
         text,
         mode: "append",
+        approved: true,
       }),
     );
     expect(appended.physical).toBe(true);
@@ -1054,5 +1066,283 @@ describe("desktop writes: stops, success and the queue", () => {
     });
     expect(done).toMatchObject({ ok: true });
     expect(t.writes()).toEqual([["focus-window", "--window-id", "w-66058"]]);
+  });
+});
+
+describe("desktop writes: round 1", () => {
+  /** The Windows sample form with a textarea, a searchfield and a combobox added, and `name` for Send. */
+  function form(send = "Send") {
+    const data = structuredClone(sample("windows", "snapshot-password").data);
+    data.tree.children[4].name = send;
+    data.tree.children.push(
+      { role: "textarea", name: "Notes", ref_id: "@snuvkeejknool:e11" },
+      { role: "searchfield", name: "Search", ref_id: "@snuvkeejknool:e12" },
+      { role: "combobox", name: "Pick", ref_id: "@snuvkeejknool:e13" },
+    );
+    return {
+      snapshot: {
+        envelope: { version: "2.6", ok: true, command: "snapshot", data },
+      },
+    };
+  }
+
+  test("space alone or with shift may press the selected button: asked unless approved", async () => {
+    const t = setup("windows");
+    await t.start();
+    const { window } = await read(t);
+    const key = (keys: string, approved = false) =>
+      t.write("desktop.key", { windowId: window.windowId, keys, approved });
+    const asked = fail(
+      desktopMessage(
+        "needs_approval",
+        "这个按键可能会按下当前选中的按钮，需要你先确认。",
+      ),
+    );
+    expect(await key("space")).toEqual(asked);
+    expect(await key("shift+space")).toEqual(asked);
+    expect(await key("SPACE")).toEqual(asked);
+    expect(t.writes()).toEqual([]);
+    expect(await key("ctrl+space")).toMatchObject({ ok: true });
+    expect(await key("space", true)).toMatchObject({ ok: true });
+    expect(t.writes()).toEqual([
+      ["press", "ctrl+space", "--window-id", "w-66058"],
+      ["press", "space", "--window-id", "w-66058"],
+    ]);
+  });
+
+  test("control characters in the text are asked about; a multi-line box takes CR and LF", async () => {
+    const t = setup("windows", form());
+    await t.start();
+    let { el } = await read(t);
+    const controls = desktopMessage(
+      "needs_approval",
+      "输入的文字含控制字符或特殊的换行符",
+    );
+    for (const text of [
+      "a\tb",
+      "a\u0000b",
+      "a\u001bb",
+      "a\u007fb",
+      "a\u0085b",
+      "a b",
+      "a b",
+    ]) {
+      expect(
+        await t.write("desktop.type", {
+          ref: el("Single line").ref,
+          text,
+          mode: "replace",
+        }),
+      ).toEqual(fail(controls));
+      // A textarea is multi-line, and only CR and LF are let through there.
+      expect(
+        await t.write("desktop.type", {
+          ref: el("Notes").ref,
+          text,
+          mode: "append",
+        }),
+      ).toEqual(fail(controls));
+    }
+    expect(t.writes()).toEqual([]);
+    const notes = await t.write("desktop.type", {
+      ref: el("Notes").ref,
+      text: "a\r\nb\nc\rd",
+      mode: "replace",
+    });
+    expect(notes).toMatchObject({ ok: true });
+
+    ({ el } = await read(t));
+    const approved = await t.write("desktop.type", {
+      ref: el("Single line").ref,
+      text: "a b\u0000",
+      mode: "replace",
+      approved: true,
+    });
+    expect(approved).toMatchObject({ ok: true });
+    const typed = t.entries().filter((e) => e.args[0] === "set-value");
+    expect(typed.map(stdinOf)).toEqual(["a\r\nb\nc\rd", "a b\u0000"]);
+
+    // macOS: a textfield inside a scrollarea is multi-line, but a tab is still asked about.
+    const mac = setup("macos");
+    await mac.start();
+    ({ el } = await read(mac));
+    expect(
+      await mac.write("desktop.type", {
+        ref: el("Multi line").ref,
+        text: "a\tb",
+        mode: "replace",
+      }),
+    ).toEqual(fail(controls));
+  });
+
+  test("type only writes into a text box unless approved; a searchfield and a combobox are single-line", async () => {
+    const t = setup("windows", form());
+    await t.start();
+    let { el } = await read(t);
+    expect(
+      await t.write("desktop.type", {
+        ref: el("Send").ref,
+        text: "abc",
+        mode: "replace",
+      }),
+    ).toEqual(
+      fail(desktopMessage("needs_approval", "目标不是输入框，需要你先确认。")),
+    );
+    const newline = fail(
+      desktopMessage("needs_approval", "往单行输入框里输入带换行的文字"),
+    );
+    for (const name of ["Search", "Pick"])
+      expect(
+        await t.write("desktop.type", {
+          ref: el(name).ref,
+          text: "a\nb",
+          mode: "append",
+        }),
+      ).toEqual(newline);
+    expect(t.writes()).toEqual([]);
+    for (const name of ["Search", "Pick"]) {
+      ({ el } = await read(t));
+      expect(
+        await t.write("desktop.type", {
+          ref: el(name).ref,
+          text: "abc",
+          mode: "replace",
+        }),
+      ).toMatchObject({ ok: true });
+    }
+    ({ el } = await read(t));
+    const approved = await t.write("desktop.type", {
+      ref: el("Send").ref,
+      text: "abc",
+      mode: "replace",
+      approved: true,
+    });
+    expect(approved).toMatchObject({ ok: true });
+    expect(t.writes()).toEqual([
+      ["set-value", "@snuvkeejknool:e12", "--stdin"],
+      ["set-value", "@snuvkeejknool:e13", "--stdin"],
+      ["set-value", "@snuvkeejknool:e5", "--stdin"],
+    ]);
+  });
+
+  test("a click on a control with no name is asked about unless approved", async () => {
+    const t = setup("windows", form("   "));
+    await t.start();
+    let { snap } = await read(t);
+    const asked = fail(
+      desktopMessage("needs_approval", "没能确认要操作的控件"),
+    );
+    const blank = snap.elements.find(
+      (e) => e.type === "button" && e.name.trim() === "",
+    );
+    const titleBar = snap.elements.find(
+      (e) => e.type === "group" && e.name === "",
+    );
+    if (!blank || !titleBar) throw new Error("no nameless control");
+    expect(await t.write("desktop.click", { ref: blank.ref })).toEqual(asked);
+    expect(await t.write("desktop.click", { ref: titleBar.ref })).toEqual(
+      asked,
+    );
+    expect(t.writes()).toEqual([]);
+    ({ snap } = await read(t));
+    const again = snap.elements.find(
+      (e) => e.type === "button" && e.name.trim() === "",
+    );
+    expect(
+      await t.write("desktop.click", { ref: again?.ref, approved: true }),
+    ).toMatchObject({ ok: true });
+    expect(t.writes()).toEqual([["click", "@snuvkeejknool:e5"]]);
+  });
+
+  test("an abort between the headless attempt and the pointer sends no headed-begin", async () => {
+    const controller = new AbortController();
+    const t = setup(
+      "windows",
+      {
+        click: { error: "POLICY_DENIED" },
+        "--headed click": { write: { delivery: "delivered_verified" } },
+      },
+      {
+        wrapCli: (cli) => ({
+          ...cli,
+          run: async (args, o) => {
+            try {
+              return await cli.run(args, o);
+            } catch (error) {
+              // The headless click came back not delivered: stop right then.
+              if (args[0] === "click" && !o?.headed) controller.abort();
+              throw error;
+            }
+          },
+        }),
+      },
+    );
+    await t.start();
+    const { el } = await read(t);
+    const ref = el("Single line").ref;
+    const target = adRef(t, ref);
+    expect(await t.write("desktop.click", { ref }, controller.signal)).toEqual(
+      fail("已在设备上停止。"),
+    );
+    expect(t.trace).toEqual([]);
+    expect(t.writes()).toEqual([["click", target]]);
+  });
+
+  test("INVALID_ARGS is refused while the arguments are read: not delivered, not unknown", async () => {
+    const message = "Invalid ref_id '@e1': expected @<snapshot_id>:e<N>";
+    const t = setup("windows", {
+      click: {
+        envelope: {
+          version: "2.6",
+          ok: false,
+          command: "click",
+          error: { code: "INVALID_ARGS", message },
+        },
+        exitCode: 1,
+      },
+      press: { exitCode: 2, raw: "usage: agent-desktop press <COMBO>" },
+    });
+    await t.start();
+    const { el, window } = await read(t);
+    const ref = el("Single line").ref;
+    expect(await t.write("desktop.click", { ref })).toEqual(
+      fail(desktopMessage("failed", `INVALID_ARGS：${message}`)),
+    );
+    // Not unknown: the window's refs stay good.
+    expect(typeof t.reader.resolveRef(ref)).toBe("object");
+    expect(
+      await t.write("desktop.key", {
+        windowId: window.windowId,
+        keys: "ctrl+s",
+      }),
+    ).toEqual(fail(desktopMessage("failed", "INVALID_ARGS")));
+  });
+
+  test("the executor hands a write's outcomeUnknown back exactly as it is", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "ad-write-ws-"));
+    cleanup.push(() => rmSync(workspace, { recursive: true, force: true }));
+    const seen: unknown[] = [];
+    const desktop = Object.assign(
+      async (...args: unknown[]) => {
+        seen.push(args[3]);
+        return unknown;
+      },
+      { close: async () => {} },
+    );
+    const execute = createRunnerExecutor(
+      workspace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { desktop },
+    );
+    expect(
+      await execute({
+        action: "desktop.click",
+        payload: { botId: BOT, session: TOKEN, ref: "abc123-1:1" },
+      }),
+    ).toEqual(unknown);
+    expect(seen).toEqual([{ botId: BOT }]);
   });
 });

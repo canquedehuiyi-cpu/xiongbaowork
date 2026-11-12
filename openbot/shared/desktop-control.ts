@@ -464,6 +464,58 @@ export function classifyDesktopKeys(keys: string): DesktopKeyClass | undefined {
 }
 
 /**
+ * Whether pressing `keys` may press whatever button has the focus: Space alone or with Shift
+ * (round-1 ruling: Tab to a button, then Space, would otherwise be an unasked click). The class of
+ * the combination is unchanged (`plain`); a write asks for this on top of it.
+ */
+export function desktopActivationKey(keys: string): boolean {
+  const parsed = parseKeys(keys);
+  if (!parsed) return false;
+  if (parsed.key !== "space") return false;
+  for (const modifier of parsed.modifiers)
+    if (modifier !== "shift") return false;
+  return true;
+}
+
+/**
+ * Control roles a desktop type writes into without asking. Only `textfield` is in the samples
+ * measured on CI (runner/tests/fixtures/agent-desktop); the others are the further text roles the
+ * round-1 ruling names. A `textarea` is multi-line; a `textfield` is multi-line only inside a
+ * `scrollarea` (FACTS (b)); every other one is single-line.
+ */
+export const DESKTOP_TEXT_ROLES: ReadonlySet<string> = new Set([
+  "textfield",
+  "textarea",
+  "searchfield",
+  "combobox",
+]);
+
+/**
+ * Whether typing `text` needs the owner's approval for its characters alone: any C0 control
+ * (U+0000–U+001F, the tab included), DEL, NEL, LINE SEPARATOR or PARAGRAPH SEPARATOR. In a multi-line
+ * box CR and LF are ordinary; in a single-line one they submit, so they are asked about too.
+ */
+export function desktopTextNeedsApproval(
+  text: string,
+  multiline: boolean,
+): boolean {
+  if (typeof text !== "string") return false;
+  for (const char of text) {
+    const code = char.codePointAt(0) as number;
+    if (multiline && (code === 0x0a || code === 0x0d)) continue;
+    if (
+      code <= 0x1f ||
+      code === 0x7f ||
+      code === 0x85 ||
+      code === 0x2028 ||
+      code === 0x2029
+    )
+      return true;
+  }
+  return false;
+}
+
+/**
  * A control's ref: `${snapshotId}:${index}`, where the snapshot id is `${prefix}-${n}` and the prefix
  * is six hex digits drawn afresh for every helper process. A ref minted by an earlier helper carries
  * a prefix that no longer matches and is refused as stale.

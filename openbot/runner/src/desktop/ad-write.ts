@@ -1,12 +1,15 @@
 import {
   classifyDesktopKeys,
   DESKTOP_LIMITS,
+  DESKTOP_TEXT_ROLES,
   DESKTOP_WRITE_ACTIONS,
   type DesktopKeyClass,
   type DesktopPlatform,
   type DesktopWriteOutput,
   desktopActionWordsOf,
+  desktopActivationKey,
   desktopMessage,
+  desktopTextNeedsApproval,
   desktopWindowWordHit,
   desktopWordHit,
 } from "../../../shared/desktop-control";
@@ -41,17 +44,21 @@ import type { DesktopSessions } from "./session";
  *     that does not parse, text over `textMaxBytes`.
  *  5. The check on the spot, against `list-windows`: a title that turned sensitive since the read (or
  *     since the owner approved it) is refused even when approved; without `approved`, a sensitive or
- *     unknown title, a control named with an action word (click), a submit or close key, and a newline
- *     into a single-line field (type) are each refused with `needs_approval`. The device decides with
- *     the same shared functions as the server, so the two agree.
+ *     unknown title, a control with no name or named with an action word (click), a submit or close
+ *     key, Space alone or with Shift (`desktopActivationKey`), a target that is not a text box
+ *     (`DESKTOP_TEXT_ROLES`), a newline into a single-line field and any other control character
+ *     (`desktopTextNeedsApproval`, type) are each refused with `needs_approval`. The device decides
+ *     with the same shared functions as the server, so the two agree.
  *  6. The action, under the session's signal and the caller's: headless first; a pointer
  *     (`--headed`, inside the device's headed-begin/ack/end) only when agent-desktop answers that the
- *     headless route was not delivered because it is unavailable.
+ *     headless route was not delivered because it is unavailable, and only if nothing was stopped
+ *     meanwhile (no headed-begin is sent then).
  *
  * OUTCOMES. Success voids the window's refs (the model reads again), renews the session and says so
  * in `note`. A failure agent-desktop marks `not_delivered`, or one before anything was sent, is mapped
- * to its copy as a read's is. A timeout, an abort after the command started, a failure that may have
- * been delivered, and ANY failure after `clear` succeeded are `outcome_unknown`, with
+ * to its copy as a read's is; so is INVALID_ARGS, refused while the arguments are parsed. A
+ * timeout, an abort after the command started, a failure that may have been delivered, and ANY
+ * failure after `clear` succeeded are `outcome_unknown`, with
  * `outcomeUnknown: true`, never retried, and the window's refs voided.
  */
 
@@ -113,6 +120,13 @@ function isAbort(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
+/** An abort before anything was sent, as the CLI layer reports one. */
+function abortError(): Error & { sent: boolean } {
+  const error = new Error("The desktop request was aborted.");
+  error.name = "AbortError";
+  return Object.assign(error, { sent: false });
+}
+
 /**
  * `classifyDesktopKeys`, and on Windows the stricter of it and the same combination with `cmd` read
  * as `win`: agent-desktop sends `cmd` to the Windows key there, so `cmd+r` is `win+r`.
@@ -156,7 +170,10 @@ function deliveryOf(data: unknown): DesktopWriteOutput["delivery"] {
 
 /** Whether a write that failed this way may have changed something. */
 function mayHaveChanged(error: unknown): boolean {
-  if (error instanceof AgentDesktopError) return !error.notDelivered;
+  // INVALID_ARGS is agent-desktop refusing its arguments as it parses them, before any action
+  // (FACTS, 其它发现: a bare `@e1` ref; plan design decision 1: exit code 2 is an argument error).
+  if (error instanceof AgentDesktopError)
+    return !error.notDelivered && error.code !== "INVALID_ARGS";
   if (isAbort(error)) return (error as { sent?: boolean }).sent !== false;
   if (error instanceof DesktopHelperError) return error.sent;
   return true;
@@ -317,18 +334,31 @@ export function createAgentDesktopWriter(opts: {
               )
             : undefined,
         );
-        const word = desktopWordHit(target.control?.name ?? "", words);
+        const name = target.control?.name ?? "";
+        // A control with no name cannot be told apart from any other (round 1).
+        if (name.trim() === "") return needs("没能确认要操作的控件");
+        const word = desktopWordHit(name, words);
         if (word !== undefined) return needs(`控件名含「${word}」`);
       }
       if (keys?.kind === "submit")
         return needs(`按 ${keysText} 可能会把内容提交或发送出去`);
       if (keys?.kind === "close") return needs(`按 ${keysText} 会关闭程序`);
-      if (
-        action === "desktop.type" &&
-        target.control?.singleLine &&
-        /[\r\n]/.test(typed)
-      )
-        return needs("往单行输入框里输入带换行的文字");
+      // Tab to a button and Space presses it: as good as an unasked click (round 1).
+      if (action === "desktop.key" && desktopActivationKey(keysText))
+        return needs("这个按键可能会按下当前选中的按钮，需要你先确认。");
+      if (action === "desktop.type") {
+        const role = target.control?.type ?? "";
+        if (!DESKTOP_TEXT_ROLES.has(role))
+          return needs("目标不是输入框，需要你先确认。");
+        // FACTS (b) and round 1: a textarea, or a textfield inside a scrollarea, is multi-line.
+        const multiline =
+          role === "textarea" ||
+          (role === "textfield" && target.control?.singleLine !== true);
+        if (!multiline && /[\r\n]/.test(typed))
+          return needs("往单行输入框里输入带换行的文字");
+        if (desktopTextNeedsApproval(typed, multiline))
+          return needs("输入的文字含控制字符或特殊的换行符");
+      }
     }
     // A key press goes to the window in front, and only there.
     if (action === "desktop.key" && live.is_focused !== true)
@@ -354,6 +384,8 @@ export function createAgentDesktopWriter(opts: {
     };
     /** A real pointer, with the device's mouse check paused around it. */
     const headed = (args: string[], stdin?: string) => {
+      // Stopped while the headless attempt ran: no pause is announced and nothing physical runs.
+      if (runSignal?.aborted) return Promise.reject(abortError());
       physical = true;
       return control.headed(() =>
         run(args, { headed: true, ...(stdin === undefined ? {} : { stdin }) }),
