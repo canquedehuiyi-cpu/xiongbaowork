@@ -17,3 +17,13 @@ export function usePortraitSrc(kind: PortraitKind, id: string): string | null {
   if (!chosen) return null;
   return chosen.preset ? PRESET_IMAGES[chosen.preset] : chosen.imageUrl;
 }
+
+/**
+ * An uploaded video for this coworker or group, if somebody uploaded one: the picture above is
+ * its poster, and the video only plays where a motion state is active — a list always draws the
+ * still. Null means there is no video to play.
+ */
+export function usePortraitVideo(kind: PortraitKind, id: string): string | null {
+  const portraits = useQuery(portraitsQueryOptions());
+  return portraitIndex(portraits.data).get(`${kind}:${id}`)?.videoUrl ?? null;
+}

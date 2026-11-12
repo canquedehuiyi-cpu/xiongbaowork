@@ -119,6 +119,9 @@ const FACE_RING =
  */
 export function ProfileCard({ profile }: { profile: AgentProfile }) {
   const status = useProfileStatus(profile.id);
+  // The detail header is the one place a video plays: working while the coworker works,
+  // idling otherwise. Lists never pass a motion state and stay still.
+  const motion = status === "working" ? "working" : "idle";
   const sources = useQuery({
     ...avatarSourcesQueryOptions(),
     enabled: profile.mine,
@@ -194,6 +197,7 @@ export function ProfileCard({ profile }: { profile: AgentProfile }) {
             className={FACE_RING}
             id={profile.id}
             kind="coworker"
+            motion={motion}
             name={profile.name}
             seed={profile.avatarSeed}
             size={44}
@@ -201,6 +205,7 @@ export function ProfileCard({ profile }: { profile: AgentProfile }) {
         ) : (
           <span className={FACE_RING}>
             <AbstractAvatar
+              motion={motion}
               name={profile.name}
               portrait={{ kind: "coworker", id: profile.id }}
               seed={profile.avatarSeed}

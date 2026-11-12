@@ -1,0 +1,23 @@
+version: 1
+source:
+  workbuddy_home: ~/.workbuddy
+  cache_dir: .cache/capabilities
+  phase: p0
+  fetched_at: null
+  planned_inputs:
+    - id: expert-marketplace
+      kind: expert
+      url: https://download.codebuddy.cn/workbuddy/expert-marketplace.zip
+      verified: false
+      note: 专家市场全量包，约 428 个专家；本机 L0 已有 9 个包，L1 用它补齐其余
+    - id: skill-marketplace
+      kind: skill
+      url: https://download.codebuddy.cn/workbuddy/skill-marketplace.zip
+      verified: false
+      note: 官方技能市场包，约 293 个技能，约 30MB
+    - id: connector-marketplace
+      kind: connector
+      url: https://download.codebuddy.cn/workbuddy/connector-marketplace.zip
+      verified: false
+      note: 连接器定义包，298 个 mcp.json，约 63MB；只入锁，内容不入仓
+entries: []
