@@ -55,6 +55,7 @@ import { Route as AuthedAdminSkillsRouteImport } from './routes/_authed/admin/sk
 import { Route as AuthedAdminWhatIfRouteImport } from './routes/_authed/admin/what-if'
 import { Route as AuthedSettingsIndexRouteImport } from './routes/_authed/settings/index'
 import { Route as AuthedSettingsPersonalRouteImport } from './routes/_authed/settings/_personal'
+import { Route as AuthedSettingsAboutRouteImport } from './routes/_authed/settings/about'
 import { Route as AuthedSettingsApprovalsRouteImport } from './routes/_authed/settings/approvals'
 import { Route as AuthedSettingsBrowsersRouteImport } from './routes/_authed/settings/browsers'
 import { Route as AuthedSettingsDevicesRouteImport } from './routes/_authed/settings/devices'
@@ -363,6 +364,11 @@ const AuthedSettingsIndexRoute = AuthedSettingsIndexRouteImport.update({
 } as any)
 const AuthedSettingsPersonalRoute = AuthedSettingsPersonalRouteImport.update({
   id: '/_personal',
+  getParentRoute: () => AuthedSettingsRouteRoute,
+} as any)
+const AuthedSettingsAboutRoute = AuthedSettingsAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => AuthedSettingsRouteRoute,
 } as any)
 const AuthedSettingsApprovalsRoute = AuthedSettingsApprovalsRouteImport.update({
@@ -864,6 +870,7 @@ export interface FileRoutesByFullPath {
   '/admin/providers': typeof AuthedAdminProvidersRoute
   '/admin/skills': typeof AuthedAdminSkillsRoute
   '/admin/what-if': typeof AuthedAdminWhatIfRoute
+  '/settings/about': typeof AuthedSettingsAboutRoute
   '/settings/approvals': typeof AuthedSettingsApprovalsRoute
   '/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/settings/devices': typeof AuthedSettingsDevicesRoute
@@ -987,6 +994,7 @@ export interface FileRoutesByTo {
   '/admin/skills': typeof AuthedAdminSkillsRoute
   '/admin/what-if': typeof AuthedAdminWhatIfRoute
   '/settings': typeof AuthedSettingsIndexRoute
+  '/settings/about': typeof AuthedSettingsAboutRoute
   '/settings/approvals': typeof AuthedSettingsApprovalsRoute
   '/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/settings/devices': typeof AuthedSettingsDevicesRoute
@@ -1114,6 +1122,7 @@ export interface FileRoutesById {
   '/_authed/admin/skills': typeof AuthedAdminSkillsRoute
   '/_authed/admin/what-if': typeof AuthedAdminWhatIfRoute
   '/_authed/settings/_personal': typeof AuthedSettingsPersonalRouteWithChildren
+  '/_authed/settings/about': typeof AuthedSettingsAboutRoute
   '/_authed/settings/approvals': typeof AuthedSettingsApprovalsRoute
   '/_authed/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/_authed/settings/devices': typeof AuthedSettingsDevicesRoute
@@ -1242,6 +1251,7 @@ export interface FileRouteTypes {
     | '/admin/providers'
     | '/admin/skills'
     | '/admin/what-if'
+    | '/settings/about'
     | '/settings/approvals'
     | '/settings/browsers'
     | '/settings/devices'
@@ -1365,6 +1375,7 @@ export interface FileRouteTypes {
     | '/admin/skills'
     | '/admin/what-if'
     | '/settings'
+    | '/settings/about'
     | '/settings/approvals'
     | '/settings/browsers'
     | '/settings/devices'
@@ -1491,6 +1502,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/skills'
     | '/_authed/admin/what-if'
     | '/_authed/settings/_personal'
+    | '/_authed/settings/about'
     | '/_authed/settings/approvals'
     | '/_authed/settings/browsers'
     | '/_authed/settings/devices'
@@ -1903,6 +1915,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/settings'
       preLoaderRoute: typeof AuthedSettingsPersonalRouteImport
+      parentRoute: typeof AuthedSettingsRouteRoute
+    }
+    '/_authed/settings/about': {
+      id: '/_authed/settings/about'
+      path: '/about'
+      fullPath: '/settings/about'
+      preLoaderRoute: typeof AuthedSettingsAboutRouteImport
       parentRoute: typeof AuthedSettingsRouteRoute
     }
     '/_authed/settings/approvals': {
@@ -2577,6 +2596,7 @@ const AuthedSettingsPersonalRouteWithChildren =
 
 interface AuthedSettingsRouteRouteChildren {
   AuthedSettingsPersonalRoute: typeof AuthedSettingsPersonalRouteWithChildren
+  AuthedSettingsAboutRoute: typeof AuthedSettingsAboutRoute
   AuthedSettingsApprovalsRoute: typeof AuthedSettingsApprovalsRoute
   AuthedSettingsBrowsersRoute: typeof AuthedSettingsBrowsersRoute
   AuthedSettingsDevicesRoute: typeof AuthedSettingsDevicesRoute
@@ -2596,6 +2616,7 @@ interface AuthedSettingsRouteRouteChildren {
 
 const AuthedSettingsRouteRouteChildren: AuthedSettingsRouteRouteChildren = {
   AuthedSettingsPersonalRoute: AuthedSettingsPersonalRouteWithChildren,
+  AuthedSettingsAboutRoute: AuthedSettingsAboutRoute,
   AuthedSettingsApprovalsRoute: AuthedSettingsApprovalsRoute,
   AuthedSettingsBrowsersRoute: AuthedSettingsBrowsersRoute,
   AuthedSettingsDevicesRoute: AuthedSettingsDevicesRoute,
