@@ -130,6 +130,7 @@ fn start(app: &AppHandle, settings: Settings, pair_code: Option<String>) -> Resu
         settings,
         pair_code,
         browser: device.browser.clone(),
+        desktop_helper: sidecar::agent_desktop_path().ok(),
         log: device.paths.log.clone(),
     };
     let supervisor = Supervisor::start(

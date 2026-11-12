@@ -4,15 +4,23 @@ import {
   DESKTOP_REF,
   DESKTOP_WINDOW_WORDS,
   type DesktopElement,
+  type DesktopEngine,
   type DesktopErrorCode,
   type DesktopImage,
   type DesktopSnapshot,
   type DesktopWindow,
   desktopMessage,
+  desktopPlatformOf,
   parseWindowId,
   windowIdOf,
 } from "../../../shared/desktop-control";
 import type { ActionOutcome } from "../execute";
+import {
+  type AgentDesktopReader,
+  createAgentDesktopReader,
+  readFailure,
+} from "./ad-read";
+import { type AgentDesktopCli, createAgentDesktopCli } from "./agent-desktop";
 import {
   createDesktopHost,
   DesktopHelperError,
@@ -24,6 +32,11 @@ import { scrub } from "./scrub";
  * `desktop.windows` and `desktop.snapshot` (docs/specs/2026-11-07-desktop-control.md, Phase 1: read
  * only; plan Task 4). Every other `desktop.*` action is answered `unsupported` here and never reaches
  * the helper.
+ *
+ * TWO ENGINES (plan docs/plans/2026-11-12-desktop-write.md, Task 9). macOS and Linux read through
+ * agent-desktop (`ad-read.ts`); Windows keeps phase 1's PowerShell reader (`host.ts`) unless
+ * agent-desktop is asked for (`desktopEngineFor`). Any other system is `unsupported_platform` and
+ * starts nothing. `desktop.windows` names the platform either way.
  *
  * NO OUTCOME IS EVER `outcomeUnknown`. Listing windows, reading a tree and taking a picture change
  * nothing on the machine, so a call that timed out or was stopped must not pause the device.
@@ -139,10 +152,103 @@ function imageErrorOf(error: unknown): string {
   return desktopMessage("failed");
 }
 
+/**
+ * The engine for a Node `process.platform` and the engine asked for (`--desktop-engine`): on Windows
+ * the PowerShell reader unless agent-desktop is asked for; macOS and Linux only have agent-desktop;
+ * any other system has none.
+ */
+export function desktopEngineFor(
+  nodePlatform: string,
+  asked: string | undefined,
+): DesktopEngine | undefined {
+  switch (desktopPlatformOf(nodePlatform)) {
+    case "windows":
+      return asked === "agent-desktop" ? "agent-desktop" : "legacy";
+    case "macos":
+    case "linux":
+      return "agent-desktop";
+    default:
+      return undefined;
+  }
+}
+
 export function createDesktopActions(
-  opts: { platform?: string; host?: Host } = {},
+  opts: {
+    platform?: string;
+    /**
+     * Without one: what `desktopEngineFor` picks when there is an agent-desktop to run (a `reader`
+     * or a `helper`), otherwise the PowerShell reader, which is all the executor's own fallback has.
+     */
+    engine?: DesktopEngine;
+    /** The PowerShell reader (legacy engine). */
+    host?: Host;
+    /** The agent-desktop reader; a test hook. Built from `helper` and `stateDir` when absent. */
+    reader?: AgentDesktopReader;
+    /** The agent-desktop binary. */
+    helper?: string;
+    /** agent-desktop's private state directory (emptied on close). */
+    stateDir?: string;
+  } = {},
 ): DesktopActions {
   const platform = opts.platform ?? process.platform;
+  const desktopPlatform = desktopPlatformOf(platform);
+  const engine: DesktopEngine =
+    opts.engine ??
+    ((opts.reader || opts.helper
+      ? desktopEngineFor(platform, undefined)
+      : undefined) ||
+      "legacy");
+
+  // agent-desktop: built on first use, like the host below.
+  let cli: AgentDesktopCli | undefined;
+  let reader: AgentDesktopReader | undefined = opts.reader;
+  const adReader = (): AgentDesktopReader => {
+    if (reader) return reader;
+    if (!opts.helper || !opts.stateDir || !desktopPlatform)
+      throw new DesktopHelperError(
+        "start_failed",
+        desktopMessage("start_failed", "没有找到 agent-desktop"),
+        false,
+      );
+    const built = createAgentDesktopCli({
+      binary: opts.helper,
+      stateDir: opts.stateDir,
+      platform,
+      // The wiped state held the refs: every window's are void.
+      onIdleWipe: () => reader?.invalidate(),
+    });
+    cli = built;
+    reader = createAgentDesktopReader({
+      cli: built,
+      platform: desktopPlatform,
+    });
+    return reader;
+  };
+
+  async function adAct(
+    action: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<ActionOutcome> {
+    try {
+      if (action === "desktop.windows")
+        return { ok: true, output: await adReader().windows(signal) };
+      const output = await adReader().snapshot(
+        {
+          windowId: body.windowId as string,
+          ...(body.from === undefined ? {} : { from: body.from as string }),
+          screenshot: body.screenshot === true,
+          allowSensitive: body.allowSensitive === true,
+        },
+        signal,
+      );
+      return { ok: true, output };
+    } catch (error) {
+      // Already the Chinese copy: never through `describe` again.
+      return readFailure(error);
+    }
+  }
+
   // Built on first use: constructing a host starts nothing, but a machine that never sees a desktop
   // action should not build one at all.
   let owned: Host | undefined = opts.host;
@@ -159,6 +265,7 @@ export function createDesktopActions(
     return {
       ok: true,
       output: {
+        platform: "windows",
         windows: (result.windows ?? []).map(windowOf),
       },
     };
@@ -240,9 +347,12 @@ export function createDesktopActions(
     body: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<ActionOutcome> => {
-    if (platform !== "win32") return fail(desktopMessage("not_windows"));
+    if (!desktopPlatform) return fail(desktopMessage("unsupported_platform"));
+    if (engine === "legacy" && platform !== "win32")
+      return fail(desktopMessage("not_windows"));
     if (!DESKTOP_ACTIONS.has(action))
       return fail(desktopMessage("unsupported"));
+    if (engine === "agent-desktop") return adAct(action, body, signal);
     try {
       return action === "desktop.windows"
         ? await windows(signal)
@@ -254,7 +364,14 @@ export function createDesktopActions(
 
   return Object.assign(act, {
     close: async () => {
-      await owned?.close();
+      // Empties agent-desktop's state directory. A later action starts afresh, with a new prefix,
+      // so no ref from before resolves.
+      const closing = cli;
+      if (closing) {
+        cli = undefined;
+        reader = opts.reader;
+      }
+      await Promise.all([owned?.close(), closing?.close()]);
     },
   });
 }

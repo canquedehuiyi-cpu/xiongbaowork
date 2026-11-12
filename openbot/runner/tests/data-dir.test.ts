@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { CredentialStore } from "../src/credentials";
 import { DATA_DIR_ENV, main, type Options, parseArgs } from "../src/index";
 
@@ -135,4 +135,66 @@ test("main keeps its token in whatever store it is handed, and never opens the d
     join(dataDir, "runner-state.json"),
   ]);
   expect(existsSync(join(dataDir, "runner-state.json"))).toBeFalse();
+});
+
+test("parseArgs takes --desktop-helper and --desktop-engine, and refuses an unknown engine", () => {
+  // By default: agent-desktop next to the runner's own executable, its state inside the data directory.
+  const plain = parsed(["--data-dir", "/d"]).desktop;
+  expect(plain).toEqual({
+    helper: join(
+      dirname(process.execPath),
+      `agent-desktop${process.platform === "win32" ? ".exe" : ""}`,
+    ),
+    stateDir: join("/d", "agent-desktop-state"),
+  });
+  expect(parsed([]).desktop.stateDir).toBe("/launch/agent-desktop-state");
+
+  const flags = parsed([
+    "--desktop-helper",
+    "/opt/app/agent-desktop",
+    "--desktop-engine",
+    "agent-desktop",
+  ]).desktop;
+  expect(flags).toEqual({
+    helper: "/opt/app/agent-desktop",
+    engine: "agent-desktop",
+    stateDir: "/launch/agent-desktop-state",
+  });
+  expect(parsed(["--desktop-engine", "legacy"]).desktop.engine).toBe("legacy");
+  // A relative helper is taken from the launch directory, like a browser executable.
+  expect(parsed(["--desktop-helper", "bin/ad"]).desktop.helper).toBe(
+    "/launch/bin/ad",
+  );
+
+  // The environment is the same switch, and the flag wins over it.
+  const env = {
+    OPENBOT_DESKTOP_HELPER: "/env/agent-desktop",
+    OPENBOT_DESKTOP_ENGINE: "agent-desktop",
+  };
+  expect(parsed([], env).desktop).toMatchObject({
+    helper: "/env/agent-desktop",
+    engine: "agent-desktop",
+  });
+  expect(
+    parsed(["--desktop-helper", "/flag/ad", "--desktop-engine", "legacy"], env)
+      .desktop,
+  ).toMatchObject({ helper: "/flag/ad", engine: "legacy" });
+
+  const refused = "--desktop-engine must be legacy or agent-desktop.";
+  expect(parseArgs([...SERVER, "--desktop-engine", "uia"], {}, "/launch")).toBe(
+    refused,
+  );
+  expect(
+    parseArgs(
+      [...SERVER],
+      { OPENBOT_DESKTOP_ENGINE: "AgentDesktop" },
+      "/launch",
+    ),
+  ).toBe(refused);
+  expect(parseArgs([...SERVER, "--desktop-engine"], {}, "/launch")).toBe(
+    refused,
+  );
+  expect(parseArgs([...SERVER, "--desktop-helper"], {}, "/launch")).toBe(
+    "--desktop-helper needs a path.",
+  );
 });

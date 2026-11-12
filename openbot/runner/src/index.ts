@@ -16,7 +16,7 @@
 import "../../shared/apply-env-aliases";
 import { existsSync, mkdirSync } from "node:fs";
 import { hostname, platform } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { APP_REF, type AppEntry, type AppInput, createAppRegistry } from "./apps";
 import { createAppHost } from "./app-host";
 import { createRunnerBrowser, type RunnerBrowser } from "./browser";
@@ -25,6 +25,10 @@ import {
   createFileCredentialStore,
   deviceIdFor,
 } from "./credentials";
+// --- desktop control (sub-project 2) ---
+import type { DesktopEngine } from "../../shared/desktop-control";
+import { createDesktopActions, desktopEngineFor } from "./desktop/actions";
+// --- end desktop control ---
 import { createRunnerDispatcher } from "./dispatch";
 // --- app discovery (sub-project 3) ---
 import type { DiscoverDeps } from "./discover";
@@ -77,7 +81,65 @@ export type Options = {
     executablePath?: string;
     channel?: string;
   };
+  // --- desktop control (sub-project 2) ---
+  desktop: {
+    /** The agent-desktop binary. */
+    helper: string;
+    /** As asked for; `desktopEngineFor` decides with the platform. */
+    engine?: DesktopEngine;
+    /** agent-desktop's private state directory, emptied when the runner stops. */
+    stateDir: string;
+  };
+  // --- end desktop control ---
 };
+
+// --- desktop control (sub-project 2) ---
+const DESKTOP_HELPER_ENV = "OPENBOT_DESKTOP_HELPER";
+const DESKTOP_ENGINE_ENV = "OPENBOT_DESKTOP_ENGINE";
+const DESKTOP_ENGINES: ReadonlySet<string> = new Set<DesktopEngine>([
+  "legacy",
+  "agent-desktop",
+]);
+
+/** Where agent-desktop's state lives inside the data directory. */
+function desktopStateDir(dataDir: string): string {
+  return join(dataDir, "agent-desktop-state");
+}
+
+/**
+ * The desktop engine's settings. The flag wins over the environment; an engine that is neither is
+ * refused rather than guessed at. Without `--desktop-helper` the binary is the one shipped next to
+ * the runner's own executable. Whether it exists is found out when a desktop action first needs it.
+ */
+function desktopOptions(
+  args: Map<string, string>,
+  env: Record<string, string | undefined>,
+  cwd: string,
+  dataDir: string,
+): Options["desktop"] | string {
+  const engineFlag = args.has("desktop-engine")
+    ? (args.get("desktop-engine") ?? "")
+    : undefined;
+  const engine = engineFlag ?? env[DESKTOP_ENGINE_ENV]?.trim() ?? "";
+  if ((engineFlag !== undefined || engine) && !DESKTOP_ENGINES.has(engine))
+    return "--desktop-engine must be legacy or agent-desktop.";
+  const helperFlag = args.has("desktop-helper")
+    ? (args.get("desktop-helper")?.trim() ?? "")
+    : undefined;
+  if (helperFlag === "") return "--desktop-helper needs a path.";
+  const helper = helperFlag || env[DESKTOP_HELPER_ENV]?.trim() || "";
+  return {
+    helper: helper
+      ? resolve(cwd, helper)
+      : join(
+          dirname(process.execPath),
+          `agent-desktop${process.platform === "win32" ? ".exe" : ""}`,
+        ),
+    ...(engine ? { engine: engine as DesktopEngine } : {}),
+    stateDir: desktopStateDir(dataDir),
+  };
+}
+// --- end desktop control ---
 
 const DEFAULT_INTERVAL_MS = 20_000;
 /** The browsers `playwright-core` knows how to find on a machine, by the name it expects. */
@@ -103,6 +165,12 @@ function usage(): string {
     "  --browser-profile PATH     where browser profiles live (default: beside the workspace)",
     "  --browser-headless BOOL    run without a window (default: false; for tests, not for work)",
     "  --browser-private-hosts BOOL  let it open addresses on your own network (default: false)",
+    "",
+    "Desktop. A coworker's assistant can read the windows on this machine (macOS and Linux: agent-desktop;",
+    "Windows: the built-in PowerShell reader unless agent-desktop is asked for).",
+    "  --desktop-helper PATH      the agent-desktop binary (default: next to this runner).",
+    "                             Also read from OPENBOT_DESKTOP_HELPER.",
+    "  --desktop-engine NAME      legacy | agent-desktop, on Windows. Also read from OPENBOT_DESKTOP_ENGINE.",
     "",
     "A headless browser is a browser nobody is watching: it cannot be closed by hand when it goes",
     "wrong, and a site that asks you to prove you are a person has nobody to answer. Leave it off.",
@@ -245,6 +313,10 @@ function runnerPrivatePaths(paths: RunnerPaths, profileRoot: string): string[] {
     paths.journalFile,
     paths.workspaceDir,
     profileRoot,
+    // --- desktop control (sub-project 2) ---
+    // Control names and the values of fields agent-desktop read.
+    desktopStateDir(paths.dataDir),
+    // --- end desktop control ---
     ...(paths.explicitDataDir ? [paths.dataDir] : []),
   ];
 }
@@ -649,6 +721,10 @@ export function parseArgs(
   if (typeof paths === "string") return paths;
   const browser = browserOptions(args, paths);
   if (typeof browser === "string") return browser;
+  // --- desktop control (sub-project 2) ---
+  const desktop = desktopOptions(args, env, cwd, paths.dataDir);
+  if (typeof desktop === "string") return desktop;
+  // --- end desktop control ---
   return {
     server: server.replace(/\/+$/, ""),
     name: (args.get("name") || hostname()).slice(0, 120),
@@ -656,6 +732,9 @@ export function parseArgs(
     paths,
     intervalMs: interval * 1000,
     browser,
+    // --- desktop control (sub-project 2) ---
+    desktop,
+    // --- end desktop control ---
   };
 }
 
@@ -860,21 +939,35 @@ export async function main(
   const apps = createAppRegistry({ dataDir: paths.dataDir });
   // One host for the executor and for discovery, so an app is never started twice.
   const appHost = createAppHost(apps);
+  // --- desktop control (sub-project 2) ---
+  const desktopEngine = desktopEngineFor(
+    process.platform,
+    parsed.desktop.engine,
+  );
+  // --- end desktop control ---
   const executor = createRunnerExecutor(
     paths.workspaceDir,
     browser,
     roots,
     undefined,
     appHost,
-    // --- app discovery (sub-project 3) ---
     {
+      // --- app discovery (sub-project 3) ---
       discovery: createDiscoverActions({
         dataDir: paths.dataDir,
         registry: apps,
         host: appHost,
       }),
+      // --- end app discovery ---
+      // --- desktop control (sub-project 2) ---
+      // Nothing starts until a desktop action needs it; closeDesktop empties the state directory.
+      desktop: createDesktopActions({
+        ...(desktopEngine ? { engine: desktopEngine } : {}),
+        helper: parsed.desktop.helper,
+        stateDir: parsed.desktop.stateDir,
+      }),
+      // --- end desktop control ---
     },
-    // --- end app discovery ---
   );
   running = executor;
 

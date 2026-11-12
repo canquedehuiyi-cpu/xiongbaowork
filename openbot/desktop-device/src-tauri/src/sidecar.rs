@@ -17,6 +17,10 @@ use std::sync::{Arc, Mutex};
 /// The sidecar's name, as `externalBin` places it next to this app's own executable.
 pub const SIDECAR: &str = "xiongbao-runner";
 
+/// The desktop helper's name, shipped next to this app's own executable like the sidecar. The
+/// runner reads the desktop through it on macOS and Linux (and on Windows when asked for).
+pub const AGENT_DESKTOP: &str = "agent-desktop";
+
 /// What earlier releases called the sidecar. An app that crashed (or was upgraded in place while
 /// running) can leave one of these alive in the install directory, still holding the runner's data
 /// directory, so the first start of this version stops it.
@@ -309,6 +313,7 @@ pub fn runner_args(
     data_dir: &Path,
     pair: Option<&str>,
     browser: Option<&Path>,
+    desktop_helper: Option<&Path>,
 ) -> Vec<OsString> {
     let mut args: Vec<OsString> = vec![
         "--server".into(),
@@ -327,6 +332,9 @@ pub fn runner_args(
             "--browser-executable".into(),
             browser.as_os_str().to_owned(),
         ]);
+    }
+    if let Some(helper) = desktop_helper {
+        args.extend(["--desktop-helper".into(), helper.as_os_str().to_owned()]);
     }
     args
 }
@@ -396,6 +404,24 @@ pub fn sidecar_path() -> io::Result<PathBuf> {
     Ok(dir.join(format!("{SIDECAR}{}", std::env::consts::EXE_SUFFIX)))
 }
 
+/// The desktop helper next to this executable, where the sidecar is.
+///
+/// A debug build also honours `OPENBOT_AGENT_DESKTOP_BINARY`, as `sidecar_path` does
+/// `OPENBOT_RUNNER_BINARY`. Whether the file is there is found out by the runner, when a desktop
+/// action first needs it.
+pub fn agent_desktop_path() -> io::Result<PathBuf> {
+    if cfg!(debug_assertions) {
+        if let Some(path) = std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY") {
+            return Ok(PathBuf::from(path));
+        }
+    }
+    let exe = std::env::current_exe()?;
+    let dir = exe
+        .parent()
+        .ok_or_else(|| io::Error::other("the app's executable has no directory"))?;
+    Ok(dir.join(format!("{AGENT_DESKTOP}{}", std::env::consts::EXE_SUFFIX)))
+}
+
 /// Starts the compiled runner, writes its output to a log, and hands each line to the supervisor.
 pub struct RunnerLauncher {
     pub program: PathBuf,
@@ -404,6 +430,8 @@ pub struct RunnerLauncher {
     /// Taken by the first launch.
     pub pair_code: Option<String>,
     pub browser: Option<PathBuf>,
+    /// The agent-desktop binary, passed as `--desktop-helper`. None: the runner looks next to itself.
+    pub desktop_helper: Option<PathBuf>,
     pub log: PathBuf,
 }
 
@@ -420,6 +448,7 @@ impl RunnerLauncher {
                 &self.data_dir,
                 code.as_deref(),
                 self.browser.as_deref(),
+                self.desktop_helper.as_deref(),
             ))
             .current_dir(&self.data_dir)
             .stdin(Stdio::null())
@@ -596,7 +625,7 @@ mod tests {
     #[test]
     fn the_data_dir_is_always_passed() {
         let dir = PathBuf::from("/data/熊宝 设备端/runner");
-        let args = strings(&runner_args(&settings(), &dir, None, None));
+        let args = strings(&runner_args(&settings(), &dir, None, None, None));
         let at = args
             .iter()
             .position(|a| a == "--data-dir")
@@ -622,9 +651,15 @@ mod tests {
     #[test]
     fn the_pairing_code_is_only_sent_when_pairing() {
         let dir = PathBuf::from("/d");
-        let pairing = strings(&runner_args(&settings(), &dir, Some("AB12CD34"), None));
+        let pairing = strings(&runner_args(
+            &settings(),
+            &dir,
+            Some("AB12CD34"),
+            None,
+            None,
+        ));
         assert!(pairing.windows(2).any(|w| w == ["--pair", "AB12CD34"]));
-        let steady = strings(&runner_args(&settings(), &dir, None, None));
+        let steady = strings(&runner_args(&settings(), &dir, None, None, None));
         assert!(!steady.iter().any(|a| a == "--pair"));
     }
 
@@ -635,7 +670,13 @@ mod tests {
             ..settings()
         };
         let chrome = PathBuf::from("/opt/google/chrome/chrome");
-        let args = strings(&runner_args(&unnamed, Path::new("/d"), None, Some(&chrome)));
+        let args = strings(&runner_args(
+            &unnamed,
+            Path::new("/d"),
+            None,
+            Some(&chrome),
+            None,
+        ));
         assert!(!args.iter().any(|a| a == "--name"));
         assert!(args
             .windows(2)
@@ -650,6 +691,7 @@ mod tests {
             settings: settings(),
             pair_code: Some("CODE1234".into()),
             browser: None,
+            desktop_helper: None,
             log: PathBuf::from("/data/runner.log"),
         };
         let first = launcher.command(true);
@@ -660,6 +702,38 @@ mod tests {
             !again.get_args().any(|a| a == "--pair"),
             "a code is single use"
         );
+    }
+
+    #[test]
+    fn the_desktop_helper_is_passed_when_known() {
+        let dir = PathBuf::from("/d");
+        let helper = PathBuf::from("/Applications/熊宝 设备端.app/Contents/MacOS/agent-desktop");
+        let args = strings(&runner_args(&settings(), &dir, None, None, Some(&helper)));
+        assert!(
+            args.windows(2)
+                .any(|w| w == ["--desktop-helper", &*helper.to_string_lossy()]),
+            "one argument, spaces and all"
+        );
+        let unknown = strings(&runner_args(&settings(), &dir, None, None, None));
+        assert!(!unknown.iter().any(|a| a == "--desktop-helper"));
+
+        let mut launcher = RunnerLauncher {
+            program: PathBuf::from("runner"),
+            data_dir: PathBuf::from("/data/runner"),
+            settings: settings(),
+            pair_code: None,
+            browser: None,
+            desktop_helper: Some(helper.clone()),
+            log: PathBuf::from("/data/runner.log"),
+        };
+        let command = launcher.command(false);
+        let launched: Vec<String> = command
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(launched
+            .windows(2)
+            .any(|w| w == ["--desktop-helper", &*helper.to_string_lossy()]));
     }
 
     #[test]
@@ -742,5 +816,20 @@ mod tests {
             .unwrap()
             .to_string_lossy()
             .starts_with(SIDECAR));
+    }
+
+    #[test]
+    fn agent_desktop_path_is_next_to_the_app() {
+        if std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY").is_some() {
+            return;
+        }
+        let path = agent_desktop_path().unwrap();
+        assert_eq!(path.parent(), std::env::current_exe().unwrap().parent());
+        assert_eq!(
+            path.file_name().unwrap().to_string_lossy(),
+            format!("{AGENT_DESKTOP}{}", std::env::consts::EXE_SUFFIX)
+        );
+        assert_eq!(AGENT_DESKTOP, "agent-desktop");
+        assert_eq!(path.parent(), sidecar_path().unwrap().parent());
     }
 }
