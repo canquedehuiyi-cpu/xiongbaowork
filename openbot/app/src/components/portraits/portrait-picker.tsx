@@ -11,10 +11,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AVATAR_MOTION_LABELS,
+  type AvatarMotionState,
+} from "@/components/portraits/preset-animations";
 import { shortName } from "@/lib/brand";
 import {
   blobToBase64,
   PORTRAIT_PRESETS,
+  PORTRAIT_VIDEO_MAX_BYTES,
   type PortraitKind,
   portraitIndex,
   portraitsQueryOptions,
@@ -24,6 +29,27 @@ import {
 import { PORTRAIT_ACCEPT, squarePortrait } from "@/lib/portraits/resize";
 import { cn } from "@/lib/utils";
 import { PRESET_IMAGES } from "./preset-images";
+
+/** A video's length in seconds, or null when the browser cannot read it. */
+function videoDuration(file: Blob): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(video.duration) ? video.duration : null);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    video.src = url;
+  });
+}
+
+/** A video avatar is a short loop: at most this many seconds. */
+const PORTRAIT_VIDEO_MAX_SECONDS = 6;
 
 const KIND_LABEL: Record<PortraitKind, string> = {
   coworker: "员工",
@@ -57,6 +83,9 @@ export function PortraitPicker({
   const reset = useMutation(resetPortraitMutationOptions(queryClient));
   const [problem, setProblem] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  /** The motion state the preview face is playing, or null for the still. */
+  const [previewMotion, setPreviewMotion] =
+    useState<AvatarMotionState | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const busy = save.isPending || reset.isPending || preparing;
 
@@ -68,6 +97,35 @@ export function PortraitPicker({
     event.target.value = "";
     if (!file) return;
     setProblem(null);
+    if (file.type.startsWith("video/")) {
+      // A video is sent as it was picked: the browser does not re-encode video, and the
+      // server caps it at 2 MiB. Its length is checked here; the server cannot read it.
+      if (file.size > PORTRAIT_VIDEO_MAX_BYTES) {
+        setProblem("这段视频太大了，请换一段 2 MB 以内的 MP4 或 WebM 视频。");
+        return;
+      }
+      setPreparing(true);
+      const duration = await videoDuration(file);
+      if (duration === null) {
+        setPreparing(false);
+        setProblem("这段视频无法读取，请换一段 MP4 或 WebM 视频。");
+        return;
+      }
+      if (duration > PORTRAIT_VIDEO_MAX_SECONDS) {
+        setPreparing(false);
+        setProblem("这段视频太长了，请换一段 6 秒以内的 MP4 或 WebM 视频。");
+        return;
+      }
+      try {
+        const video = await blobToBase64(file);
+        setPreparing(false);
+        save.mutate({ kind, id, choice: { video } }, { onError: fail });
+      } catch {
+        setPreparing(false);
+        setProblem("这段视频无法读取，请换一段 MP4 或 WebM 视频。");
+      }
+      return;
+    }
     setPreparing(true);
     let image: string;
     try {
@@ -95,17 +153,40 @@ export function PortraitPicker({
           <DialogDescription>
             为{KIND_LABEL[kind]}「{name}
             」选一个{shortName()}
-            表情，或上传一张自己的图片。工作区里的每个人都会看到这个头像。
+            表情，或上传一张自己的图片、一段 6 秒以内的短视频。工作区里的每个人都会看到这个头像。
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-4">
           <AbstractAvatar
             decorative
+            motion={previewMotion ?? undefined}
             name={name}
             portrait={{ kind, id }}
             seed={seed}
             size={88}
           />
+          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            <span>预览动态</span>
+            {(["idle", "working"] as const).map((state) => (
+              <button
+                aria-pressed={previewMotion === state}
+                className={cn(
+                  "rounded-full px-2.5 py-1 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50",
+                  previewMotion === state
+                    ? "bg-accent text-foreground ring-1 ring-signal"
+                    : "hover:bg-foreground/5 hover:text-foreground",
+                )}
+                disabled={busy}
+                key={state}
+                onClick={() =>
+                  setPreviewMotion(previewMotion === state ? null : state)
+                }
+                type="button"
+              >
+                {AVATAR_MOTION_LABELS[state]}
+              </button>
+            ))}
+          </div>
           <fieldset className="w-full">
             <legend className="mb-2 text-[12px] text-muted-foreground">
               {shortName()}表情
@@ -180,7 +261,7 @@ export function PortraitPicker({
             type="button"
           >
             <IconPhotoUp />
-            {preparing || save.isPending ? "正在保存…" : "上传图片"}
+            {preparing || save.isPending ? "正在保存…" : "上传图片/视频"}
           </Button>
         </DialogFooter>
       </DialogContent>
