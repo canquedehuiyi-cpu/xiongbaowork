@@ -251,7 +251,7 @@ test("another workspace neither sees nor changes this workspace's videos", async
 });
 
 test("the new table itself refuses a video that is not MP4/WebM or is too large", async () => {
-  const insert = (values: Record<string, unknown>) =>
+  const insert = (values: { contentType: string; bytes: Buffer }) =>
     runAsTenant(tenantA, async () => {
       await database.insert(portraitMedia).values({
         subjectKind: "group",

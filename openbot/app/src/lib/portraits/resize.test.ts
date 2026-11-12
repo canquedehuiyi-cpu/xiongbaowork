@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PORTRAIT_PIXELS, squarePortrait } from "./resize";
+import { squarePortrait } from "./resize";
 
 const gifBytes = (...values: number[]) =>
   new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, ...values]);
@@ -68,9 +68,10 @@ test("a still picture is still squared and re-encoded", async () => {
     });
     const result = await squarePortrait(png);
     expect(result.type).toBe("image/webp");
-    // Centre-cropped to the shorter side (200), then scaled to PORTRAIT_PIXELS.
-    expect(canvas.width).toBe(PORTRAIT_PIXELS);
-    expect(canvas.height).toBe(PORTRAIT_PIXELS);
+    // Centre-cropped to the shorter side (200); a smaller picture is never
+    // scaled up, so the canvas stays 200.
+    expect(canvas.width).toBe(200);
+    expect(canvas.height).toBe(200);
     expect(drawn).toEqual([{ x: 100, y: 0, w: 200, h: 200 }]);
   } finally {
     if (previousBitmap === undefined) {
