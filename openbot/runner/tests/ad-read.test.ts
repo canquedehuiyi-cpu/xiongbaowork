@@ -561,6 +561,23 @@ describe("agent-desktop reader: snapshot", () => {
     });
     expect(snap.window.title).toBe("Bank login");
 
+    // A read rooted at a control of the earlier snapshot is refused the same way, before any command.
+    const before = log().filter(
+      (a) => a[0] === "snapshot" || a[0] === "screenshot",
+    ).length;
+    const fromError = await rejected(
+      reader.snapshot({
+        windowId: window.windowId,
+        from: snap.elements[1]!.ref,
+        screenshot: true,
+      }),
+    );
+    expect(fromError.code).toBe("sensitive");
+    expect(fromError.message).toBe(desktopMessage("sensitive", "bank"));
+    expect(
+      log().filter((a) => a[0] === "snapshot" || a[0] === "screenshot"),
+    ).toHaveLength(before);
+
     // A window that is gone from the live list is no_window, still before any snapshot.
     set("list-windows", ok("list-windows", []));
     expect(
@@ -643,6 +660,103 @@ describe("agent-desktop reader: snapshot", () => {
     expect(noneSnap.image).toBeUndefined();
     expect(noneSnap.imageError).toBeUndefined();
     expect(none.log().filter((a) => a[0] === "screenshot")).toEqual([]);
+  });
+});
+
+describe("agent-desktop reader: timeouts and invalidation", () => {
+  /** A fake CLI whose every `snapshot` waits until the test lets it answer. */
+  function gatedReader() {
+    const calls: Array<{ args: string[]; timeoutMs?: number }> = [];
+    const waiting: Array<() => void> = [];
+    let onWaiting: (() => void) | undefined;
+    const reader = createAgentDesktopReader({
+      platform: "macos",
+      cli: fakeCli(async (args, opts) => {
+        calls.push({ args: [...args], timeoutMs: opts?.timeoutMs });
+        if (args[0] === "list-windows")
+          return sample("macos", "list-windows").data;
+        if (args[0] === "list-displays")
+          return sample("macos", "list-displays").data;
+        if (args[0] === "snapshot") {
+          await new Promise<void>((r) => {
+            waiting.push(r);
+            onWaiting?.();
+          });
+          return sample("macos", "snapshot").data;
+        }
+        return {};
+      }),
+    });
+    /** Resolves once a snapshot command is waiting on the gate. */
+    const snapshotRunning = () =>
+      waiting.length > 0
+        ? Promise.resolve()
+        : new Promise<void>((r) => {
+            onWaiting = r;
+          });
+    const release = () => waiting.shift()?.();
+    /** Runs one snapshot straight through. */
+    const read = async (windowId: string) => {
+      const p = reader.snapshot({ windowId });
+      await snapshotRunning();
+      release();
+      return p;
+    };
+    return { reader, calls, snapshotRunning, release, read };
+  }
+
+  test("the snapshot command gets the CLI's 20 s budget while agent-desktop keeps its own 10 s", async () => {
+    const { reader, calls, read } = gatedReader();
+    const window = await firstWindow(reader);
+    await read(window.windowId);
+    const snapshot = calls.find((c) => c.args[0] === "snapshot")!;
+    expect(snapshot.timeoutMs).toBe(DESKTOP_LIMITS.adCommandTimeoutMs);
+    expect(snapshot.timeoutMs).toBe(20_000);
+    expect(snapshot.args.slice(-2)).toEqual(["--timeout-ms", "10000"]);
+    // Other commands keep the CLI's default.
+    for (const c of calls.filter((c) => c.args[0] !== "snapshot"))
+      expect(c.timeoutMs).toBeUndefined();
+  });
+
+  test("a snapshot whose window is invalidated while it runs returns, but its refs are stale", async () => {
+    for (const invalidateAll of [false, true]) {
+      const { reader, snapshotRunning, release, read } = gatedReader();
+      const { windows } = await reader.windows();
+      const [target, other] = windows as [
+        (typeof windows)[0],
+        (typeof windows)[0],
+      ];
+      const otherSnap = await read(other.windowId);
+      // Invalidated while agent-desktop is still reading the tree.
+      const pending = reader.snapshot({ windowId: target.windowId });
+      await snapshotRunning();
+      reader.invalidate(invalidateAll ? undefined : target.windowId);
+      release();
+      const snap = await pending;
+      expect(snap.elements.length).toBeGreaterThan(0);
+      expect(reader.resolveRef(snap.elements[2]!.ref)).toBe("stale");
+      expect(typeof reader.resolveRef(otherSnap.elements[2]!.ref)).toBe(
+        invalidateAll ? "string" : "object",
+      );
+      // The next snapshot, started after the invalidation, resolves again.
+      const fresh = await read(target.windowId);
+      expect(typeof reader.resolveRef(fresh.elements[2]!.ref)).toBe("object");
+    }
+  });
+
+  test("invalidating another window while a snapshot runs leaves its refs alone", async () => {
+    const { reader, snapshotRunning, release } = gatedReader();
+    const { windows } = await reader.windows();
+    const [target, other] = windows as [
+      (typeof windows)[0],
+      (typeof windows)[0],
+    ];
+    const pending = reader.snapshot({ windowId: target.windowId });
+    await snapshotRunning();
+    reader.invalidate(other.windowId);
+    release();
+    const snap = await pending;
+    expect(typeof reader.resolveRef(snap.elements[2]!.ref)).toBe("object");
   });
 });
 

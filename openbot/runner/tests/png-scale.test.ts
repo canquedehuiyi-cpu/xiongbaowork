@@ -265,6 +265,25 @@ describe("scalePngToMaxEdge", () => {
     expect(scalePngToMaxEdge(interlaced, 1280)).toBe("unsupported");
   });
 
+  test("IDAT that inflates to more than the header's size is unsupported", () => {
+    // 10x10 RGBA needs 10 * (1 + 40) = 410 bytes; this inflates to far more.
+    for (const [width, height] of [
+      [10, 10],
+      [2000, 10],
+    ] as const) {
+      const expected = height * (1 + width * 4);
+      for (const extra of [1, 1_000_000]) {
+        const png = concat([
+          new Uint8Array(SIGNATURE),
+          chunk("IHDR", ihdr(width, height, 8, 6)),
+          chunk("IDAT", deflateSync(new Uint8Array(expected + extra))),
+          chunk("IEND", new Uint8Array()),
+        ]);
+        expect(scalePngToMaxEdge(png, 1280)).toBe("unsupported");
+      }
+    }
+  });
+
   test("a corrupt PNG is unsupported, never a throw", () => {
     const good = makeRgba(1500, 20);
     const cases: Uint8Array[] = [

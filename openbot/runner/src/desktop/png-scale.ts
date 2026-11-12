@@ -16,7 +16,7 @@ import { deflateSync, inflateSync } from "node:zlib";
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10] as const;
 
 /** Above this many source pixels the picture is not decoded at all (an 8K screen is about 33M). */
-const MAX_PIXELS = 50_000_000;
+const MAX_PIXELS = 40_000_000;
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);

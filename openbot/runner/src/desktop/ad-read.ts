@@ -13,10 +13,10 @@ import {
   sensitiveWord,
 } from "../../../shared/desktop-control";
 import type { ActionOutcome } from "../execute";
-import { scrub } from "./actions";
 import { type AgentDesktopCli, AgentDesktopError } from "./agent-desktop";
 import { DesktopHelperError } from "./host";
 import { scalePngToMaxEdge } from "./png-scale";
+import { scrub } from "./scrub";
 
 /**
  * Reading the desktop through agent-desktop (plan docs/plans/2026-11-12-desktop-write.md, Task 8):
@@ -339,6 +339,16 @@ export function createAgentDesktopReader(opts: {
   /** Runner window id → its latest snapshot, the latest `snapshotsKept` windows. */
   const snaps = new Map<string, Snap>();
   let counter = 0;
+  /**
+   * Invalidation generations, so a snapshot that was running while its window (or every window) was
+   * invalidated does not store refs read before the change: `epoch` counts invalidations, and a
+   * snapshot stores its ref map only if nothing it covers was invalidated after it started. The
+   * per-window marks matter only while a snapshot runs, so they are dropped once none does.
+   */
+  let epoch = 0;
+  let allInvalidatedAt = 0;
+  const invalidatedAt = new Map<string, number>();
+  let running = 0;
 
   const idOf = (w: AdWindow) =>
     `a${createHash("sha256")
@@ -346,9 +356,16 @@ export function createAgentDesktopReader(opts: {
       .digest("hex")
       .slice(0, 16)}`;
 
-  const run = async (args: string[], signal?: AbortSignal) => {
+  const run = async (
+    args: string[],
+    signal?: AbortSignal,
+    timeoutMs?: number,
+  ) => {
     try {
-      return await cli.run(args, signal ? { signal } : undefined);
+      return await cli.run(args, {
+        ...(signal ? { signal } : {}),
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
+      });
     } catch (error) {
       throw toReadError(error, platform);
     }
@@ -470,6 +487,24 @@ export function createAgentDesktopReader(opts: {
       if (root === undefined) throw readError("not_actionable");
     }
 
+    const started = epoch;
+    running++;
+    try {
+      return await read(body, windowId, target, root, started, signal);
+    } finally {
+      running--;
+      if (running === 0) invalidatedAt.clear();
+    }
+  }
+
+  async function read(
+    body: { screenshot?: boolean; allowSensitive?: boolean },
+    windowId: string,
+    target: AdWindow,
+    root: string | undefined,
+    started: number,
+    signal?: AbortSignal,
+  ) {
     // The title as it is now, before anything is read (spec §5).
     const live = (await listRaw(signal)).find((entry) => {
       const ad = adWindowOf(entry);
@@ -501,17 +536,26 @@ export function createAgentDesktopReader(opts: {
         String(DESKTOP_LIMITS.adSnapshotTimeoutMs),
       ],
       signal,
+      // The CLI waits longer than agent-desktop's own budget, so a slow window comes back as a
+      // partial tree (`complete: false`) rather than a killed process.
+      DESKTOP_LIMITS.adCommandTimeoutMs,
     );
     const envelope = isNode(data) ? data : {};
     counter++;
     const snapshotId = `${prefix}-${counter}`;
     const flat = flattenTree(envelope.tree, snapshotId, DESKTOP_LIMITS);
-    remember(
-      snaps,
-      windowId,
-      { snapshotId, elements: flat.elements, adRefs: flat.adRefs },
-      DESKTOP_LIMITS.snapshotsKept,
-    );
+    // Invalidated (or forgotten) while it ran: the result goes back, but its refs never resolve.
+    if (
+      allInvalidatedAt <= started &&
+      (invalidatedAt.get(windowId) ?? 0) <= started &&
+      windowIds.has(windowId)
+    )
+      remember(
+        snaps,
+        windowId,
+        { snapshotId, elements: flat.elements, adRefs: flat.adRefs },
+        DESKTOP_LIMITS.snapshotsKept,
+      );
     const result: DesktopSnapshot & { platform: DesktopPlatform } = {
       platform,
       snapshotId,
@@ -557,8 +601,15 @@ export function createAgentDesktopReader(opts: {
       return target ? { ...target } : undefined;
     },
     invalidate(windowId) {
-      if (windowId === undefined) snaps.clear();
-      else snaps.delete(windowId);
+      epoch++;
+      if (windowId === undefined) {
+        allInvalidatedAt = epoch;
+        invalidatedAt.clear();
+        snaps.clear();
+      } else {
+        if (running > 0) invalidatedAt.set(windowId, epoch);
+        snaps.delete(windowId);
+      }
     },
   };
 }
