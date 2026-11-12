@@ -14,7 +14,6 @@ import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
