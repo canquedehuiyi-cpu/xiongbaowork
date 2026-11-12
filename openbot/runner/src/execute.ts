@@ -337,9 +337,13 @@ export function createRunnerExecutor(
         return { ok: true, output };
       }
       // --- desktop control (sub-project 2) ---
-      // Never throws and never says "outcome unknown": every desktop action here only reads.
+      // Never throws and never says "outcome unknown": every desktop action here only reads. The
+      // coworker goes in the context, from the transport, like the browser's identity: the caller's
+      // payload never names the session it acts in.
       if (action.startsWith(DESKTOP_ACTION_PREFIX))
-        return await desktop(action, callerPayload(body), signal);
+        return await desktop(action, callerPayload(body), signal, {
+          botId: typeof body.botId === "string" ? body.botId : undefined,
+        });
       // --- end desktop control ---
       // --- app discovery (sub-project 3) ---
       if (extras?.discovery && DISCOVER_ACTIONS.has(action)) {
