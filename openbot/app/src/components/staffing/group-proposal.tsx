@@ -6,16 +6,14 @@ import { Input } from "@/components/ui/input";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { channelQueryOptions } from "@/lib/channels/queries";
 import { useConversation } from "@/lib/copilot/conversation";
-import type {
-  GroupChangeDraft,
-  GroupDraft,
-  Proposal,
-} from "@/lib/staffing/queries";
+import type { GroupDraft, Proposal } from "@/lib/staffing/queries";
 import {
   ActionProblem,
   CardShell,
   DecisionButtons,
+  StaleNotice,
   TAP,
+  useCardDraft,
   useDecision,
 } from "./card-parts";
 
@@ -43,13 +41,17 @@ export function GroupProposal({
   proposal: Proposal & { kind: "group" };
   missingRoles: string[];
 }) {
-  const [draft, setDraft] = useState<GroupDraft>(proposal.draft);
-  const [edited, setEdited] = useState(false);
+  const {
+    draft,
+    edited,
+    stale,
+    change: update,
+    reload,
+  } = useCardDraft(proposal.draft);
   const decision = useDecision(proposal.id);
   const nameId = useId();
   const change = (patch: Partial<GroupDraft>) => {
-    setDraft((current) => ({ ...current, ...patch }));
-    setEdited(true);
+    update((current) => ({ ...current, ...patch }));
   };
   const blank = draft.name.trim() === "";
 
@@ -81,10 +83,11 @@ export function GroupProposal({
         {blank ? (
           <p className="text-destructive text-sm">群名不能为空。</p>
         ) : null}
+        {stale ? <StaleNotice onReload={reload} /> : null}
         {decision.error ? <ActionProblem error={decision.error} /> : null}
         <DecisionButtons
           busy={decision.busy}
-          confirmBlocked={blank}
+          confirmBlocked={blank || stale}
           confirmLabel="确认建群"
           onConfirm={() => void decision.confirm(edited ? draft : null)}
           onDiscard={() => void decision.discard()}
@@ -99,8 +102,13 @@ export function GroupChangeProposal({
 }: {
   proposal: Proposal & { kind: "group_change" };
 }) {
-  const [draft, setDraft] = useState<GroupChangeDraft>(proposal.draft);
-  const [edited, setEdited] = useState(false);
+  const {
+    draft,
+    edited,
+    stale,
+    change: update,
+    reload,
+  } = useCardDraft(proposal.draft);
   const decision = useDecision(proposal.id);
   const channel = useQuery(channelQueryOptions(draft.channelId));
   const nameOf = useNames();
@@ -144,15 +152,16 @@ export function GroupChangeProposal({
             <MemberOrder
               members={draft.order}
               onChange={(order) => {
-                setDraft((current) => ({ ...current, order }));
-                setEdited(true);
+                update((current) => ({ ...current, order }));
               }}
             />
           </div>
         ) : null}
+        {stale ? <StaleNotice onReload={reload} /> : null}
         {decision.error ? <ActionProblem error={decision.error} /> : null}
         <DecisionButtons
           busy={decision.busy}
+          confirmBlocked={stale}
           confirmLabel="确认调整"
           onConfirm={() => void decision.confirm(edited ? draft : null)}
           onDiscard={() => void decision.discard()}

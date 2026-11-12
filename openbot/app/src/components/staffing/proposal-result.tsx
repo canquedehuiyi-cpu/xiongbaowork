@@ -60,7 +60,6 @@ export function ProposalResult({
     item,
     key: `${item.step}:${item.target ?? ""}:${position}`,
   }));
-  const failed = items.some((item) => item.outcome === "failed");
   const open = openLink(proposal);
 
   const again = async () => {
@@ -89,10 +88,10 @@ export function ProposalResult({
           <ResultRow item={row.item} key={row.key} />
         ))}
       </ul>
-      {failed && proposal.status === "partially_applied" ? (
+      {proposal.status === "partially_applied" ? (
         <div className="mt-3 flex flex-col gap-2">
           <p className="text-muted-foreground text-xs">
-            重试只按草稿里的内容把失败的几步再做一遍，已经做成的不会重做。
+            重试只按草稿里的内容把失败或没来得及做的几步再做一遍，已经做成的不会重做。
           </p>
           {error ? <ActionProblem error={error} /> : null}
           <div className="flex justify-end gap-2">
@@ -110,7 +109,7 @@ export function ProposalResult({
               onClick={() => void again()}
               variant="outline"
             >
-              {retry.isPending ? "正在重试…" : "重试失败的步骤"}
+              {retry.isPending ? "正在重试…" : "重试"}
             </Button>
           </div>
         </div>

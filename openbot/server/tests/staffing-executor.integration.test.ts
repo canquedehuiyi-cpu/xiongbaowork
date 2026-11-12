@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
-import { createAuditStore } from "../src/audit";
+import { type AuditStore, createAuditStore } from "../src/audit";
 import type { AuthenticatedActor } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import {
@@ -130,6 +130,16 @@ const routineStore: RoutineStore = {
 /** 管理员对这些人关掉了「把员工公开给团队」；其余的能力都开着。 */
 const teamBotsOff = new Set<string>();
 
+/** 让某一种轨迹写不进去，看建好员工之后的意外：员工已经记在提议里，不会因此再建一个。 */
+let failAuditFor: string | null = null;
+const flakyAudit: AuditStore = {
+  insert: async (event) => {
+    if (event.eventType === failAuditFor)
+      throw new Error("audit store unavailable");
+    return auditStore.insert(event);
+  },
+};
+
 const executor = createStaffingExecutor({
   database,
   mayUse: async (actorId, capability) =>
@@ -143,7 +153,7 @@ const executor = createStaffingExecutor({
   channels: channelStore,
   groups,
   portraits: createPortraitStore(database),
-  auditStore,
+  auditStore: flakyAudit,
 });
 
 const OPEN_APP = id("open-app");
@@ -745,6 +755,106 @@ describe("applying a staffing proposal as the person", () => {
       { kind: "mcp", ref: `${ADMIN_APP}/lookup`, grantedAs: "admin" },
       { kind: "skill", ref: DEPLOYMENT_SKILL, grantedAs: "admin" },
     ]);
+  });
+
+  test("a failure right after the bot is created keeps it in the result and a second apply makes no duplicate", async () => {
+    const owner = await person("trailfail");
+    const proposal = await propose(owner, "employee", employee("记账员"));
+    failAuditFor = "bot.created";
+    try {
+      // 意外照常交给路由；提议已经落定成部分完成。
+      await expect(
+        runAsTenant(owner.id, () => executor.apply(owner, proposal.id)),
+      ).rejects.toThrow("audit store unavailable");
+    } finally {
+      failAuditFor = null;
+    }
+
+    const row = await stored(proposal.id);
+    expect(row?.status).toBe("partially_applied");
+    const botId = await createdBot(proposal.id);
+    expect((await ownedBots(owner.id)).map((bot) => bot.id)).toEqual([botId]);
+    await runAsTenant(owner.id, () => executor.apply(owner, proposal.id)).catch(
+      () => undefined,
+    );
+    expect((await ownedBots(owner.id)).map((bot) => bot.id)).toEqual([botId]);
+  });
+
+  test("an admin giving a built-in app that only admins may give gets all its tools, like the owner path", async () => {
+    const asRequest = createAdminRequest(database);
+    const admin: AuthenticatedActor = {
+      id: ADMIN,
+      email: `${ADMIN}@example.test`,
+      role: "admin",
+    };
+    const proposal = await propose(
+      admin,
+      "employee",
+      employee("管理员的定时员工", {
+        apps: [{ app: "routines", actions: [] }],
+      }),
+    );
+    // A fresh database has no built-in rows (the server syncs them at boot), so the test brings its own
+    // and takes away only what it added; where the row exists already, only the rule is set and put back.
+    const serverId = "team:routines";
+    const seeded = await asPlatform(async () => {
+      const inserted = await database
+        .insert(mcpServers)
+        .values({
+          id: serverId,
+          tenantId: "team",
+          title: "定时任务",
+          vendor: "OpenBot",
+          url: "builtin://routines",
+          provenance: "first-party",
+          catalogueKey: "routines",
+        })
+        .onConflictDoNothing()
+        .returning({ id: mcpServers.id });
+      await database
+        .insert(mcpTools)
+        .values(
+          ["create_routine", "list_routines"].map((name) => ({
+            tenantId: "team",
+            serverId,
+            name,
+            description: "内置动作。",
+          })),
+        )
+        .onConflictDoNothing();
+      await database
+        .update(mcpServers)
+        .set({ ownerGrants: "admin" })
+        .where(eq(mcpServers.id, serverId));
+      return inserted.length > 0;
+    });
+    try {
+      await asRequest(ADMIN, () => executor.apply(admin, proposal.id));
+    } finally {
+      await asPlatform(() =>
+        seeded
+          ? database.delete(mcpServers).where(eq(mcpServers.id, serverId))
+          : database
+              .update(mcpServers)
+              .set({ ownerGrants: null })
+              .where(eq(mcpServers.id, serverId)),
+      );
+    }
+
+    const items = (await stored(proposal.id))?.result as {
+      step: string;
+      outcome: string;
+    }[];
+    expect(items.map((item) => [item.step, item.outcome])).toEqual([
+      ["create", "done"],
+      ["app", "done"],
+    ]);
+    const refs = (await grantsOf(await createdBot(proposal.id))).map(
+      (grant) => grant.ref,
+    );
+    // Writes included: a built-in app is the platform's own, and a read-only filter would leave nothing here.
+    expect(refs).toContain("routines/create_routine");
+    expect(refs).toContain("routines/list_routines");
   });
 
   test("retry redoes only the failed steps", async () => {

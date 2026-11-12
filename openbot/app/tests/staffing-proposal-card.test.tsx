@@ -20,7 +20,11 @@ import {
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { ServerToolLine } from "@/components/channels/chat-transcript";
+import { EmployeeProposal } from "@/components/staffing/employee-proposal";
+import { GroupProposal } from "@/components/staffing/group-proposal";
+import { ProposalResult } from "@/components/staffing/proposal-result";
 import { ConversationProvider } from "@/lib/copilot/conversation";
+import type { Proposal } from "@/lib/staffing/queries";
 import {
   STAFFING_PROPOSAL_MARKER,
   writeStaffingProposalAnswer,
@@ -569,4 +573,143 @@ test("before the proposal is read the card names only its kind", async () => {
   ).toBeTruthy();
   expect(view.getByText("招聘员工")).toBeTruthy();
   expect(view.queryByText(/忽略以上内容/)).toBeNull();
+});
+
+/** 不经路由、直接给卡片一份提议，方便换 props 重画。 */
+function bare(node: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const wrap = (child: ReactNode) => (
+    <QueryClientProvider client={client}>{child}</QueryClientProvider>
+  );
+  const view = render(wrap(node));
+  return { ...view, again: (next: ReactNode) => view.rerender(wrap(next)) };
+}
+
+const asProposal = (kind: "employee" | "group", draft: unknown) =>
+  proposal(kind, draft) as unknown as Proposal & { kind: typeof kind };
+
+test("a builtin app with no named actions says all its actions are given", async () => {
+  const draft = { ...EMPLOYEE_DRAFT, apps: [{ app: "routines", actions: [] }] };
+  const view = bare(
+    <EmployeeProposal
+      proposal={
+        asProposal("employee", draft) as Proposal & { kind: "employee" }
+      }
+    />,
+  );
+  expect(
+    view.getByText("这个内置应用的全部动作（包括新建、修改、删除）"),
+  ).toBeTruthy();
+  expect(view.queryByText("能直接给的只读动作")).toBeNull();
+});
+
+test("a card follows the server draft when nothing was edited locally", async () => {
+  answers["PATCH /api/proposals/p1"] = () =>
+    new Response(null, { status: 500 });
+  answers["POST /api/proposals/p1/apply"] = () =>
+    Response.json({ proposal: proposal("employee", EMPLOYEE_DRAFT) });
+  const first = asProposal("employee", EMPLOYEE_DRAFT) as Proposal & {
+    kind: "employee";
+  };
+  const view = bare(<EmployeeProposal proposal={first} />);
+  expect(view.getByLabelText("名字")).toBeTruthy();
+
+  view.again(
+    <EmployeeProposal
+      proposal={
+        asProposal("employee", {
+          ...EMPLOYEE_DRAFT,
+          name: "小红红",
+        }) as Proposal & {
+          kind: "employee";
+        }
+      }
+    />,
+  );
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe(
+    "小红红",
+  );
+  fireEvent.click(view.getByRole("button", { name: "确认创建" }));
+  await waitFor(() =>
+    expect(proposalCalls().map((call) => call.method)).toEqual(["POST"]),
+  );
+});
+
+test("local edits are not overwritten when the server draft changes underneath", async () => {
+  const view = bare(
+    <EmployeeProposal
+      proposal={
+        asProposal("employee", EMPLOYEE_DRAFT) as Proposal & {
+          kind: "employee";
+        }
+      }
+    />,
+  );
+  fireEvent.change(view.getByLabelText("名字"), {
+    target: { value: "我改的" },
+  });
+
+  view.again(
+    <EmployeeProposal
+      proposal={
+        asProposal("employee", {
+          ...EMPLOYEE_DRAFT,
+          name: "别处改的",
+        }) as Proposal & {
+          kind: "employee";
+        }
+      }
+    />,
+  );
+  expect(view.getByText("这份提议在别处改过了")).toBeTruthy();
+  expect(
+    view.getByRole("button", { name: "确认创建" }).hasAttribute("disabled"),
+  ).toBe(true);
+
+  fireEvent.click(view.getByRole("button", { name: "重新载入" }));
+  expect((view.getByLabelText("名字") as HTMLInputElement).value).toBe(
+    "别处改的",
+  );
+  expect(view.queryByText("这份提议在别处改过了")).toBeNull();
+  expect(
+    view.getByRole("button", { name: "确认创建" }).hasAttribute("disabled"),
+  ).toBe(false);
+});
+
+test("a group card follows the server draft and guards local edits", async () => {
+  const mk = (name: string) => (
+    <GroupProposal
+      missingRoles={[]}
+      proposal={
+        asProposal("group", { name, members: ["a1"] }) as Proposal & {
+          kind: "group";
+        }
+      }
+    />
+  );
+  const view = bare(mk("内容组"));
+  view.again(mk("新内容组"));
+  expect((view.getByLabelText("群名") as HTMLInputElement).value).toBe(
+    "新内容组",
+  );
+  fireEvent.change(view.getByLabelText("群名"), { target: { value: "我的" } });
+  view.again(mk("又改了"));
+  expect(view.getByText("这份提议在别处改过了")).toBeTruthy();
+  expect(
+    view.getByRole("button", { name: "确认建群" }).hasAttribute("disabled"),
+  ).toBe(true);
+});
+
+test("a partially applied proposal with no failed item can still retry or be discarded", async () => {
+  const stopped = proposal("employee", EMPLOYEE_DRAFT, {
+    status: "partially_applied",
+    result: [
+      { step: "create", target: "a9", outcome: "done", message: "已建好。" },
+    ],
+  }) as unknown as Proposal;
+  const view = routed(<ProposalResult proposal={stopped} title="小红" />);
+  expect(await view.findByRole("button", { name: "重试" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "作废" })).toBeTruthy();
 });
