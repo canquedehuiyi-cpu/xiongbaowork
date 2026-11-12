@@ -47,8 +47,9 @@ import type { DesktopSessions } from "./session";
  *     unknown title, a control with no name or named with an action word (click), a submit or close
  *     key, Space alone or with Shift (`desktopActivationKey`), a target that is not a text box
  *     (`DESKTOP_TEXT_ROLES`), a newline into a single-line field and any other control character
- *     (`desktopTextNeedsApproval`, type) are each refused with `needs_approval`. The device decides
- *     with the same shared functions as the server, so the two agree.
+ *     (`desktopTextNeedsApproval`, type) are each refused with `needs_approval`. Every check is a
+ *     shared function; the server's policy uses the title, word and key ones today, and the device is
+ *     the last gate for the rest (Space, non-text targets, control characters, unnamed controls).
  *  6. The action, under the session's signal and the caller's: headless first; a pointer
  *     (`--headed`, inside the device's headed-begin/ack/end) only when agent-desktop answers that the
  *     headless route was not delivered because it is unavailable, and only if nothing was stopped
