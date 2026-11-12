@@ -3,6 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GENERATIVE_UI_DESIGN_SKILL } from "@/lib/copilot/generative-ui";
 import { appConfig } from "@/lib/generated/application-config";
+import { installedCards, marketCards } from "@/lib/plugins/market";
+import type {
+  CatalogueItem,
+  PluginServer,
+  PluginsPage,
+} from "@/lib/plugins/queries";
 
 const appSource = join(import.meta.dir, "../src");
 const read = (path: string) => readFileSync(join(appSource, path), "utf8");
@@ -41,4 +47,51 @@ test("admin hints show the XIONGBAO_ names and say the old ones still work", () 
   expect(read("routes/_authed/_app/responsibilities.tsx")).toContain(
     "XIONGBAO_INBOUND_EMAIL_DOMAIN",
   );
+});
+
+test("a built-in plugin installed before the rename shows the catalogue's vendor, not the stored upstream name", () => {
+  const entry = {
+    key: "routines",
+    title: "Routines",
+    vendor: "熊宝",
+    summary: "",
+    docsUrl: "",
+    auth: "builtin",
+  } as unknown as CatalogueItem;
+  const stored = (provenance: string, vendor: string) =>
+    ({
+      id: "routines",
+      title: "Routines",
+      vendor,
+      url: "builtin://routines",
+      summary: "",
+      docsUrl: "",
+      provenance,
+      authScheme: null,
+      tools: [],
+      withdrawn: [],
+    }) as unknown as PluginServer;
+  const page = (server: PluginServer) =>
+    ({
+      catalogue: [entry],
+      servers: [server],
+      skills: [],
+    }) as unknown as PluginsPage;
+
+  const [installed] = installedCards(
+    page(stored("first-party", "OpenBot")),
+    undefined,
+  );
+  expect(installed?.vendor).toBe("熊宝");
+  const [market] = marketCards(
+    page(stored("first-party", "OpenBot")),
+    undefined,
+  );
+  expect(market?.vendor).toBe("熊宝");
+  // A row an administrator typed in by address keeps the host it was derived from.
+  const [custom] = installedCards(
+    page(stored("custom", "mcp.example.com")),
+    undefined,
+  );
+  expect(custom?.vendor).toBe("mcp.example.com");
 });

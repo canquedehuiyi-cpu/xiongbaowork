@@ -25,10 +25,15 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { appConfig } from "@/lib/generated/application-config";
 import { revokeRecorderConnectionMutationOptions } from "@/lib/recorder/mutations";
 import { recorderConnectionsQueryOptions } from "@/lib/recorder/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { queryClient } from "@/query-client";
+
+/** What the server names a person's own browser's connection now (browser/routes.ts); a row stored before the rename
+ * still holds the upstream name, so the row is drawn under this one instead. */
+const OWN_BROWSER_LABEL = `${appConfig.brand.englishName ?? "XiongBao Work"} browser`;
 
 /** When a browser connected, to the minute: two copies with the same name (two Chrome profiles) stay told apart. */
 const connectedAt = new Intl.DateTimeFormat(undefined, {
@@ -91,14 +96,16 @@ function ConnectedBrowserRow({
   const revoke = useMutation(
     revokeRecorderConnectionMutationOptions(queryClient),
   );
-  const name = here ? `${connection.label} · 当前浏览器` : connection.label;
+  const label =
+    connection.via === "openbot-browser" ? OWN_BROWSER_LABEL : connection.label;
+  const name = here ? `${label} · 当前浏览器` : label;
   // The browser the dialog is about, by the name the row shows: "this browser" only for the copy in the browser this page
   // is open in, which every row's dialog used to say.
   const which = here
     ? "当前浏览器"
     : connection.via === "openbot-browser"
       ? "你的熊宝浏览器"
-      : connection.label;
+      : label;
   return (
     <>
       <Item size="sm">
@@ -142,7 +149,7 @@ function ConnectedBrowserRow({
       <Dialog onOpenChange={setAsking} open={asking}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>断开{connection.label}？</DialogTitle>
+            <DialogTitle>断开{label}？</DialogTitle>
           </DialogHeader>
           <DialogBody className="mt-4 text-sm">
             <p>

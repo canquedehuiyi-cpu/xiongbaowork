@@ -355,7 +355,9 @@ test("the OpenBot browser's connection says it is the person's OpenBot browser",
     }),
   ];
   const view = draw(<ConnectedBrowsers />);
-  await view.findByText("OpenBot browser");
+  // Stored under the upstream name before the rename; drawn under the name new connections get.
+  await view.findByText("XiongBao Work browser");
+  expect(view.queryByText("OpenBot browser")).toBeNull();
   const at = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -487,7 +489,7 @@ test("the Disconnect dialog says this browser only on this browser's row, and na
   expect(await said("断开Edge on Windows")).toStartWith(
     "熊宝会让Edge on Windows里的录制器退出登录。",
   );
-  expect(await said("断开OpenBot browser")).toStartWith(
+  expect(await said("断开XiongBao Work browser")).toStartWith(
     "熊宝会让你的熊宝浏览器里的录制器退出登录。",
   );
   expect(sent).toEqual([]);
