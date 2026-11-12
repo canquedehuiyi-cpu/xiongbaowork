@@ -781,6 +781,7 @@ tests/tenant-transaction-frame.integration.test.ts
 tests/test-database-url.integration.test.ts
 tests/test-network-guard.test.ts
 tests/text-translations.test.ts
+tests/third-party-notices.test.ts
 tests/thread-identity.test.ts
 tests/thread-routes.test.ts
 tests/thread-status.test.ts

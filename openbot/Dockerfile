@@ -214,6 +214,12 @@ COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
 # The built app, served by the API on the same origin. There is no CORS in this server, so this is
 # not a convenience: two origins would simply fail.
 COPY --from=app-build /src/app/dist app/dist
+
+# MIT requires the copyright notice and license text to travel with the code. LICENSE and NOTICE are
+# ours; THIRD-PARTY-NOTICES.md is written by the app-build stage's prebuild (generate:app-config) from
+# the full install, before the prune above removes anything.
+COPY LICENSE NOTICE /licenses/
+COPY --from=app-build /src/THIRD-PARTY-NOTICES.md /licenses/THIRD-PARTY-NOTICES.md
 ENV APP_DIST_DIR=/app/app/dist
 ENV TENANT_PACKAGE_DIR=../examples/qoderwake
 ENV OPENBOT_SELF_HOST_BANNER=false
