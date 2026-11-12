@@ -869,7 +869,12 @@ async function saveDialogCheck(
     await Bun.sleep(250);
   }
   if (!untitled) return { passed: false, seen: { created, untitled } };
-  const inFront = await waitForFocus(run, untitled.windowId, true);
+  // A new document window is not always handed the focus on a CI runner (seen: focused false,
+  // inFront false), so bring it forward explicitly. This is a new write to a different window,
+  // sent once, not a retry of cmd+n.
+  const raised = await write("desktop.focus", { windowId: untitled.windowId });
+  const inFront =
+    raised.ok === true && (await waitForFocus(run, untitled.windowId, true));
   const pressed = inFront
     ? await write("desktop.key", {
         windowId: untitled.windowId,
@@ -893,6 +898,7 @@ async function saveDialogCheck(
     passed: button !== undefined,
     seen: {
       untitled,
+      raised,
       inFront,
       pressed,
       waited: seen ? brief(seen) : waited,
