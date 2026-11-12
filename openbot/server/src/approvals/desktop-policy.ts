@@ -9,7 +9,11 @@ import {
   desktopWindowWordHits,
 } from "../../../shared/desktop-control";
 import { englishName, productName, shortName } from "../brand";
-import type { ApprovalCandidate, DesktopWriteAction } from "./types";
+import type {
+  ApprovalCandidate,
+  ApprovalPolicyOutcome,
+  DesktopWriteAction,
+} from "./types";
 
 /**
  * The floor for reading a desktop window (device-side desktop viewing §4.2). The title and the
@@ -199,6 +203,66 @@ export function desktopActionReason(
   const remembered = candidate.subject?.desktopWrite?.rememberedReasons;
   if (!Array.isArray(remembered) || remembered.length === 0) return own;
   return `${own ?? ""}${desktopRememberedReason(remembered)}`;
+}
+
+/**
+ * The device's own reasons a desktop write's card is about (final review, round 4), word for word:
+ * what it answered this time (`deviceReason`), then what it found the last time this write went
+ * through approved (`rememberedReasons`).
+ */
+export function desktopDeviceReasonsOf(candidate: ApprovalCandidate): string[] {
+  const write = candidate.subject?.desktopWrite;
+  if (!write) return [];
+  const all = [
+    ...(typeof write.deviceReason === "string" && write.deviceReason.trim()
+      ? [write.deviceReason]
+      : []),
+    ...(Array.isArray(write.rememberedReasons)
+      ? write.rememberedReasons.filter(
+          (reason): reason is string =>
+            typeof reason === "string" && reason.trim() !== "",
+        )
+      : []),
+  ];
+  return all.filter((reason, index) => all.indexOf(reason) === index);
+}
+
+/** Whether a card's words name the device's `reason` (its closing stop aside). */
+const cardNames = (words: string, reason: string) =>
+  words.includes(reason.replace(/[。.\s]+$/u, ""));
+
+/**
+ * A desktop write's card with the device's reasons named on it and kept with its request
+ * (`deviceReasons`, final review round 4). Whichever layer's words the card has (a check-in task's
+ * `TASK_ASKS`, a rule's), a reason it does not name yet is put after them, so the owner reads every
+ * reason that is kept; the device is only ever sent the reasons kept with the request approved. Only
+ * a card that asks: a hand-off is done by the person, a refusal is not sent at all.
+ */
+export function desktopCardWithDeviceReasons(
+  candidate: ApprovalCandidate,
+  outcome: ApprovalPolicyOutcome,
+): ApprovalPolicyOutcome {
+  if (outcome.behaviour !== "ask") return outcome;
+  const reasons = desktopDeviceReasonsOf(candidate);
+  if (reasons.length === 0) return outcome;
+  const write = candidate.subject?.desktopWrite;
+  let words = outcome.reason;
+  const after = (more: string) => {
+    words = /[A-Za-z0-9.!?)]$/u.test(words)
+      ? `${words} ${more}`
+      : `${words}${more}`;
+  };
+  const now =
+    typeof write?.deviceReason === "string" && write.deviceReason.trim()
+      ? write.deviceReason
+      : undefined;
+  if (now !== undefined && !cardNames(words, now))
+    after(desktopDeviceReason(now));
+  const earlier = reasons.filter(
+    (reason) => reason !== now && !cardNames(words, reason),
+  );
+  if (earlier.length > 0) after(desktopRememberedReason(earlier));
+  return { ...outcome, reason: words, deviceReasons: reasons };
 }
 
 function ownActionReason(

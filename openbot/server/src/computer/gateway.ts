@@ -92,7 +92,10 @@ import {
   desktopActionWordsOf,
   snapshotForStorage,
 } from "@openbot/shared/desktop-control";
-import { isApprovedExecution } from "../approvals/service";
+import {
+  approvedActionUnderway,
+  isApprovedExecution,
+} from "../approvals/service";
 import type { DesktopStoppedInfo } from "../devices/socket";
 import {
   createDesktopMethods,
@@ -1160,8 +1163,15 @@ export function createComputerGateway(
       enable?: { candidate: string; name: string; source: string };
       // --- end app discovery ---
     },
-    /** `approved`: the person was asked about this very action and agreed (a desktop write's session). */
-    run: (address?: string, approved?: boolean) => Promise<T>,
+    /**
+     * `approved`: the person was asked about this very action and agreed (a desktop write's session).
+     * `deviceReasons`: what the approved request's own card named of the device's reasons (round 4).
+     */
+    run: (
+      address?: string,
+      approved?: boolean,
+      deviceReasons?: readonly string[],
+    ) => Promise<T>,
   ): Promise<T> {
     const { ref, filePath, snapshotId } = subject;
     // Loaded from the store, not this process's memory: the snapshot these refs belong to was very
@@ -1639,6 +1649,17 @@ export function createComputerGateway(
     const approved =
       approval !== undefined ||
       (asked !== undefined && isApprovedExecution(asked));
+    /*
+     * The device's reasons the approved request's own card named (final review, round 4): from the
+     * permit the gate handed (the request approved, replayed in this run), or from the approval
+     * carrying this very action out (`resume`). Kept with the request; never this replica's memory.
+     */
+    const deviceReasons =
+      approval !== undefined
+        ? (approval.deviceReasons ?? [])
+        : approved
+          ? (approvedActionUnderway()?.deviceReasons ?? [])
+          : [];
 
     /*
      * The attempt, written before acting: there is no path that acts without this row. An allowed
@@ -1668,8 +1689,10 @@ export function createComputerGateway(
     // --- end desktop control ---
     try {
       result = origin
-        ? await computerActionOrigin.run(origin, () => run(address, approved))
-        : await run(address, approved);
+        ? await computerActionOrigin.run(origin, () =>
+            run(address, approved, deviceReasons),
+          )
+        : await run(address, approved, deviceReasons);
       await approval?.complete(
         toolName === "computer_desktop_snapshot"
           ? snapshotForStorage(result as { image?: unknown })
@@ -2248,7 +2271,8 @@ export function createComputerGateway(
             }
           : {}),
       },
-      (_address, approved) => run(approved === true),
+      (_address, approved, deviceReasons) =>
+        run(approved === true, deviceReasons ?? []),
     );
   /** The windows a read listed, shared with the writes, which name the same windows. */
   const desktopWindows = createDesktopWindowCache({ now });

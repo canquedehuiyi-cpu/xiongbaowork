@@ -18,6 +18,7 @@ import { currentTenant } from "../tenant/context";
 import {
   DESKTOP_SESSION_TOOL,
   desktopActionFloor,
+  desktopCardWithDeviceReasons,
   desktopFloor,
 } from "./desktop-policy";
 import {
@@ -142,17 +143,30 @@ export type ApprovedActionBinding = {
   toolRef: string;
   args: unknown;
   target: unknown;
-  /** The reason the card gave, as the person read it before approving (not part of the action). */
-  reason?: string;
+  /**
+   * The device's reasons the card named, kept with the request (`policy.deviceReasons`, final review
+   * round 4): what a desktop write approved is sent with, and nothing else. Not part of the action.
+   */
+  deviceReasons?: string[];
 };
-const bindingOf = (action: ApprovalAction): ApprovedActionBinding => ({
-  toolRef: action.toolRef,
-  args: action.args,
-  target: action.target,
-  ...(typeof action.policy?.reason === "string"
-    ? { reason: action.policy.reason }
-    : {}),
-});
+/** The device's reasons a request kept with its card (round 4), or none. */
+const deviceReasonsOf = (action: ApprovalAction): string[] | undefined => {
+  const kept = action.policy?.deviceReasons;
+  if (!Array.isArray(kept)) return undefined;
+  const reasons = kept.filter(
+    (reason): reason is string => typeof reason === "string" && reason !== "",
+  );
+  return reasons.length > 0 ? reasons : undefined;
+};
+const bindingOf = (action: ApprovalAction): ApprovedActionBinding => {
+  const deviceReasons = deviceReasonsOf(action);
+  return {
+    toolRef: action.toolRef,
+    args: action.args,
+    target: action.target,
+    ...(deviceReasons ? { deviceReasons } : {}),
+  };
+};
 const executionAuthority = new AsyncLocalStorage<{
   approvalId: string;
   digest: string;
@@ -624,7 +638,7 @@ export function createApprovalService(
        * withdraw what the task is waiting on. Only a stricter answer, a hand-off or a refusal,
        * keeps its own source.
        */
-      const outcome: ApprovalPolicyOutcome | undefined =
+      const decided: ApprovalPolicyOutcome | undefined =
         taskAsks &&
         evaluated?.behaviour !== "hand_off" &&
         evaluated?.behaviour !== "deny"
@@ -635,6 +649,15 @@ export function createApprovalService(
               ...(evaluated?.review ? { review: evaluated.review } : {}),
             }
           : evaluated;
+      /*
+       * A desktop write's card names the device's reasons whichever layer's words it has (a task's
+       * replace the floor's), and keeps them with the request: the one place an approved write's
+       * `approvedReason` is taken from (final review, round 4).
+       */
+      const outcome =
+        decided && candidate.subject?.desktopWrite
+          ? desktopCardWithDeviceReasons(candidate, decided)
+          : decided;
       if (outcome) {
         if (outcome.behaviour === "allow") return;
         // Disabled: refused here, after its audit row, with nothing opened and nothing to approve.
@@ -677,8 +700,11 @@ export function createApprovalService(
       if (
         request.status === "approved" &&
         (await store.consume(action.actorId, request.id, action.actionDigest))
-      )
+      ) {
+        // What the approved request's own card named (round 4): never this call's view of it.
+        const deviceReasons = deviceReasonsOf(request.action);
         return {
+          ...(deviceReasons ? { deviceReasons } : {}),
           complete: async (output) => {
             const content =
               typeof output === "string" ? output : JSON.stringify(output);
@@ -690,6 +716,7 @@ export function createApprovalService(
             await store.finish(action.actorId, request.id);
           },
         };
+      }
       if (request.status !== "pending")
         throw new ApprovalAlreadyAnsweredError(
           "This approval has already been used or revoked. The action was not repeated.",
@@ -1247,7 +1274,8 @@ export function createApprovalService(
                     approvalId: id,
                     digest: approved.actionDigest,
                     owner: ownerUserId,
-                    // The card's reason is the request's own: the re-check's action has none.
+                    // What the card named is the request's own (`policy.deviceReasons`, round
+                    // 4): the re-check's action has no policy.
                     bound: bindingOf({
                       ...approved,
                       ...(request.action.policy

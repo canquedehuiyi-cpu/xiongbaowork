@@ -166,6 +166,13 @@ export type ApprovalPolicyOutcome = {
    * once and Deny only (`offersStandingRule`).
    */
   closed?: true;
+  /**
+   * 桌面写动作（终审第 4 轮）：这张卡的理由里写明了的设备端理由（设备这次回的 `deviceReason`，以及
+   * 上一次批准后设备仍发现的 `rememberedReasons`），原文逐条。随请求一起保存（`approval_requests.action`
+   * 里的 policy），不进摘要也不进 equivalence。批准后发给设备的 `approvedReason` 只取自所批准请求的这一项：
+   * 续跑（`resume`）和运行内重放（gate 的 approved 加 consume）都一样，从不读服务器内存。
+   */
+  deviceReasons?: string[];
   review?: {
     verdict: "proceed" | "needs_approval" | "hand_off";
     preApproved: boolean;
@@ -600,6 +607,11 @@ export type ApprovalPolicyStore = {
 export type ApprovalPermit = {
   replay?: unknown;
   complete(result: unknown): Promise<void>;
+  /**
+   * 所批准的请求自己保存的设备端理由（`policy.deviceReasons`，终审第 4 轮）：运行内重放拿到 permit 时，
+   * 桌面写动作只从这里取 `approvedReason`。没有就不发。
+   */
+  deviceReasons?: string[];
 };
 export type ApprovalGate = (
   candidate: ApprovalCandidate,
