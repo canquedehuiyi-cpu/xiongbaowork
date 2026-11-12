@@ -7,6 +7,7 @@ import {
   type AdError,
   AgentDesktopError,
   agentDesktopEnv,
+  secureDirEnv,
   createAgentDesktopCli,
   FORBIDDEN_AD_ARGS,
 } from "../src/desktop/agent-desktop";
@@ -192,6 +193,20 @@ describe("agent-desktop CLI layer", () => {
         "/s",
       ),
     ).toEqual({ PATH: "/bin", AGENT_DESKTOP_HOME: "/s" });
+  });
+
+  test("the PowerShell that protects the state directory keeps its own variables", () => {
+    const env = secureDirEnv(
+      {
+        PSModulePath: "C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\Modules",
+        LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local",
+        SystemRoot: "C:\\Windows",
+      },
+      "D:\\data\\agent-desktop-state",
+    );
+    expect(env.PSModulePath).toContain("Modules");
+    expect(env.LOCALAPPDATA).toBeDefined();
+    expect(env.XB_AD_STATE_DIR).toBe("D:\\data\\agent-desktop-state");
   });
 
   test("the X11 cookie and session type reach the child on Linux", () => {
