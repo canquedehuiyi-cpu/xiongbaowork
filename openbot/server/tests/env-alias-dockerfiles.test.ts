@@ -14,7 +14,9 @@ function copiedSharedFiles(dockerfile: string): {
   whole: boolean;
   files: string[];
 } {
-  const lines = dockerfile.split("\n").filter((line) => /^COPY\s/.test(line));
+  // Only the final stage ships: a `COPY shared shared` in a builder stage says nothing about the image.
+  const finalStage = dockerfile.split(/^FROM\s.*$/m).pop() ?? "";
+  const lines = finalStage.split("\n").filter((line) => /^COPY\s/.test(line));
   // `COPY shared shared` ships the directory, so every file in it.
   const whole = lines.some((line) =>
     /^COPY\s+(--\S+\s+)*shared\/?\s+\S*shared\/?\s*$/.test(line),
