@@ -337,9 +337,12 @@ export function createRunnerExecutor(
         return { ok: true, output };
       }
       // --- desktop control (sub-project 2) ---
-      // Never throws and never says "outcome unknown": every desktop action here only reads. The
-      // coworker goes in the context, from the transport, like the browser's identity: the caller's
-      // payload never names the session it acts in.
+      // Never throws. The reads and the session actions never say "outcome unknown"; a write
+      // (desktop.click, .type, .key, .focus) may answer `outcomeUnknown: true` when it timed out, was
+      // stopped or may have been delivered. That outcome is handed back exactly as it is: no try/catch
+      // of its own around this call and nothing rewritten, so the journal and the server know the
+      // step may have happened. The coworker goes in the context, from the transport, like the
+      // browser's identity: the caller's payload never names the session it acts in.
       if (action.startsWith(DESKTOP_ACTION_PREFIX))
         return await desktop(action, callerPayload(body), signal, {
           botId: typeof body.botId === "string" ? body.botId : undefined,

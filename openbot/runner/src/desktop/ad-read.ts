@@ -69,7 +69,24 @@ export type AgentDesktopReader = {
   ): Promise<DesktopSnapshot & { platform: DesktopPlatform }>;
   /** For write actions: only refs of this window's latest snapshot resolve; anything else is "stale"; a node with no ref_id is "not_actionable". */
   resolveRef(ref: string): ResolvedRef | "stale" | "not_actionable";
+  /**
+   * The whole name of a ref's control, as agent-desktop gave it, for the approval checks only: the
+   * snapshot and every output carry it cut to `nameMax`, so a word past that point would otherwise
+   * go unseen. Undefined for a ref that does not resolve. Optional so a stand-in may leave it out.
+   */
+  fullName?(ref: string): string | undefined;
   adWindow(windowId: string): { adWindowId: string; pid: number } | undefined;
+  /**
+   * The window's title as the latest read saw it (a listing or a snapshot), cut to `titleMax`; a
+   * write compares it with the title now (spec §5). Optional so a stand-in reader may leave it out.
+   */
+  readTitle?(windowId: string): string | undefined;
+  /**
+   * The same title whole, as agent-desktop gave it, for the approval checks only: a word added past
+   * `titleMax` changes the title without changing what is shown. Never passed on. Optional so a
+   * stand-in reader may leave it out.
+   */
+  readFullTitle?(windowId: string): string | undefined;
   /** After a write succeeds, and after the idle wipe: this window's refs (or every window's) are void. */
   invalidate(windowId?: string): void;
 };
@@ -80,6 +97,8 @@ type Snap = {
   snapshotId: string;
   elements: DesktopElement[];
   adRefs: (string | undefined)[];
+  /** Index → the whole name of a node whose name was cut for `elements`; never passed on. */
+  longNames?: Map<number, string>;
 };
 
 /** agent-desktop's own qualified ref, `@<snapshot id>:e<N>`; nothing else is ever passed back to it. */
@@ -151,7 +170,7 @@ function codeFor(
  * to its Chinese copy (details with paths and the account name taken out), the CLI layer's own
  * errors with paths taken out.
  */
-function toReadError(error: unknown, platform: DesktopPlatform): Error {
+export function toReadError(error: unknown, platform: DesktopPlatform): Error {
   if (isAbort(error)) return error as Error;
   if (error instanceof AgentDesktopError) {
     const code = codeFor(error, platform);
@@ -187,9 +206,12 @@ export function flattenTree(
   elements: DesktopElement[];
   adRefs: (string | undefined)[];
   truncated: boolean;
+  /** Index → the whole name, only for names cut to `nameMax`; absent when none was. */
+  longNames?: Map<number, string>;
 } {
   const elements: DesktopElement[] = [];
   const adRefs: (string | undefined)[] = [];
+  const longNames = new Map<number, string>();
   let truncated = false;
   if (!isNode(tree)) return { elements, adRefs, truncated };
   const stack: Array<{ node: Node; depth: number; parentRole?: unknown }> = [
@@ -204,6 +226,8 @@ export function flattenTree(
     const states = Array.isArray(node.states)
       ? node.states.filter((s): s is string => typeof s === "string")
       : [];
+    if (typeof node.name === "string" && node.name.length > limits.nameMax)
+      longNames.set(elements.length, node.name);
     const element: DesktopElement = {
       ref: `${snapshotId}:${elements.length}`,
       type: clip(node.role, TYPE_MAX),
@@ -235,7 +259,12 @@ export function flattenTree(
         stack.push({ node: child, depth: depth + 1, parentRole: node.role });
     }
   }
-  return { elements, adRefs, truncated };
+  return {
+    elements,
+    adRefs,
+    truncated,
+    ...(longNames.size > 0 ? { longNames } : {}),
+  };
 }
 
 function boundsOf(value: unknown): DesktopWindow["bounds"] {
@@ -338,6 +367,10 @@ export function createAgentDesktopReader(opts: {
   const windowIds = new Map<string, AdWindow>();
   /** Runner window id → its latest snapshot, the latest `snapshotsKept` windows. */
   const snaps = new Map<string, Snap>();
+  /** Runner window id → its title as last read; kept for the same windows as `windowIds`. */
+  const titles = new Map<string, string>();
+  /** The same titles whole, never cut and never passed on. */
+  const fullTitles = new Map<string, string>();
   let counter = 0;
   /**
    * Invalidation generations, so a snapshot that was running while its window (or every window) was
@@ -411,10 +444,24 @@ export function createAgentDesktopReader(opts: {
     const result: DesktopWindow[] = [];
     for (const { raw: entry, ad } of listed) {
       const windowId = idOf(ad);
-      remember(windowIds, windowId, ad, DESKTOP_LIMITS.windowIdsKept, (gone) =>
-        snaps.delete(gone),
+      remember(
+        windowIds,
+        windowId,
+        ad,
+        DESKTOP_LIMITS.windowIdsKept,
+        (gone) => {
+          snaps.delete(gone);
+          titles.delete(gone);
+          fullTitles.delete(gone);
+        },
       );
-      result.push(windowOf(entry, windowId, displays));
+      const window = windowOf(entry, windowId, displays);
+      titles.set(windowId, window.title);
+      fullTitles.set(
+        windowId,
+        typeof entry.title === "string" ? entry.title : "",
+      );
+      result.push(window);
     }
     return { platform, windows: result };
   }
@@ -553,19 +600,44 @@ export function createAgentDesktopReader(opts: {
       remember(
         snaps,
         windowId,
-        { snapshotId, elements: flat.elements, adRefs: flat.adRefs },
+        {
+          snapshotId,
+          elements: flat.elements,
+          adRefs: flat.adRefs,
+          ...(flat.longNames ? { longNames: flat.longNames } : {}),
+        },
         DESKTOP_LIMITS.snapshotsKept,
       );
+    const window = windowOf(live, windowId);
+    if (windowIds.has(windowId)) {
+      titles.set(windowId, window.title);
+      fullTitles.set(
+        windowId,
+        typeof live.title === "string" ? live.title : "",
+      );
+    }
     const result: DesktopSnapshot & { platform: DesktopPlatform } = {
       platform,
       snapshotId,
-      window: windowOf(live, windowId),
+      window,
       truncated: flat.truncated || envelope.complete === false,
       elements: flat.elements,
     };
     if (body.screenshot === true)
       Object.assign(result, await screenshot(target.adWindowId, signal));
     return result;
+  }
+
+  function fullName(ref: string): string | undefined {
+    const resolved = resolveRef(ref);
+    if (typeof resolved === "string") return undefined;
+    const colon = ref.indexOf(":");
+    const snapshotId = ref.slice(0, colon);
+    const index = Number(ref.slice(colon + 1));
+    for (const snap of snaps.values())
+      if (snap.snapshotId === snapshotId)
+        return snap.longNames?.get(index) ?? snap.elements[index]?.name;
+    return undefined;
   }
 
   function resolveRef(ref: string): ResolvedRef | "stale" | "not_actionable" {
@@ -596,9 +668,16 @@ export function createAgentDesktopReader(opts: {
     windows,
     snapshot,
     resolveRef,
+    fullName,
     adWindow(windowId) {
       const target = windowIds.get(windowId);
       return target ? { ...target } : undefined;
+    },
+    readTitle(windowId) {
+      return titles.get(windowId);
+    },
+    readFullTitle(windowId) {
+      return fullTitles.get(windowId);
     },
     invalidate(windowId) {
       epoch++;

@@ -6,11 +6,14 @@ import {
   DESKTOP_KEYS,
   DESKTOP_LIMITS,
   DESKTOP_REF,
+  DESKTOP_TEXT_ROLES,
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
   desktopActionWordsOf,
+  desktopActivationKey,
   desktopMessage,
   desktopPlatformOf,
+  desktopTextNeedsApproval,
   desktopWindowWordHit,
   desktopWordHit,
   isAgentWindowId,
@@ -50,14 +53,38 @@ describe("desktop-control protocol", () => {
     expect(desktopMessage("failed", "boom")).toBe("桌面操作没有成功：boom");
   });
 
-  test("the two read actions and the three session actions exist, nothing else", () => {
+  test("the read, session and write actions exist, nothing else", () => {
     expect([...DESKTOP_ACTIONS].sort()).toEqual([
+      "desktop.click",
+      "desktop.focus",
+      "desktop.key",
       "desktop.session_end",
       "desktop.session_start",
       "desktop.session_status",
       "desktop.snapshot",
+      "desktop.type",
       "desktop.windows",
     ]);
+  });
+
+  test("DESKTOP_ACTIONS is exactly the nine actions: two reads, three session actions, four writes", () => {
+    expect([...DESKTOP_ACTIONS]).toEqual([
+      "desktop.windows",
+      "desktop.snapshot",
+      "desktop.session_start",
+      "desktop.session_status",
+      "desktop.session_end",
+      "desktop.click",
+      "desktop.type",
+      "desktop.key",
+      "desktop.focus",
+    ]);
+  });
+
+  test("outcome_unknown carries the spec's copy", () => {
+    expect(desktopMessage("outcome_unknown")).toBe(
+      "不确定这一步是否已经生效，请先重新读取窗口确认。",
+    );
   });
 
   test("the limits are the plan's numbers", () => {
@@ -404,5 +431,68 @@ describe("desktop-control protocol", () => {
     expect(desktopPlatformOf("linux")).toBe("linux");
     for (const other of ["freebsd", "aix", "", "Windows"])
       expect(desktopPlatformOf(other)).toBeUndefined();
+  });
+
+  test("desktopActivationKey: space alone or with shift only", () => {
+    for (const keys of ["space", "SPACE", "shift+space", "Shift+Space"])
+      expect({ keys, hit: desktopActivationKey(keys) }).toEqual({
+        keys,
+        hit: true,
+      });
+    for (const keys of [
+      "ctrl+space",
+      "alt+space",
+      "cmd+space",
+      "shift+ctrl+space",
+      "enter",
+      "tab",
+      "s",
+      "space+",
+      "",
+    ])
+      expect({ keys, hit: desktopActivationKey(keys) }).toEqual({
+        keys,
+        hit: false,
+      });
+  });
+
+  test("desktopTextNeedsApproval: C0, DEL, NEL, LS and PS; CR and LF only in a multi-line box", () => {
+    for (const text of ["", "plain 熊宝 ✓", "a b", " ", "\u0086"])
+      for (const multiline of [false, true])
+        expect(desktopTextNeedsApproval(text, multiline)).toBe(false);
+    for (const text of ["a\nb", "a\rb", "a\r\nb"]) {
+      expect(desktopTextNeedsApproval(text, false)).toBe(true);
+      expect(desktopTextNeedsApproval(text, true)).toBe(false);
+    }
+    for (const text of [
+      "\u0000",
+      "a\tb",
+      "\u000b",
+      "\u000c",
+      "\u001f",
+      "\u007f",
+      "\u0085",
+      " ",
+      " ",
+    ])
+      for (const multiline of [false, true])
+        expect({
+          text,
+          multiline,
+          hit: desktopTextNeedsApproval(text, multiline),
+        }).toEqual({
+          text,
+          multiline,
+          hit: true,
+        });
+  });
+
+  test("the text roles a desktop type may write into", () => {
+    expect([...DESKTOP_TEXT_ROLES]).toEqual([
+      "textfield",
+      "textarea",
+      "searchfield",
+      "combobox",
+    ]);
   });
 });
