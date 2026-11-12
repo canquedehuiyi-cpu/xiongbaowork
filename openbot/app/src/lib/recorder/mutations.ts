@@ -70,7 +70,7 @@ export function connectRecorderHereMutationOptions(queryClient: QueryClient) {
 }
 
 /** What the Browser button says when the Recorder it asked did not answer at all. */
-const UNANSWERED = "OpenBot 录制器没有回应。请再试一次。";
+const UNANSWERED = "录制器没有回应。请再试一次。";
 
 /** `openbot.record` or `openbot.stop`, with the Recorder's refusal thrown in its own sentence. */
 async function askRecorderHere(

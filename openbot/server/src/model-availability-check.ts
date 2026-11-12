@@ -1,3 +1,4 @@
+import { englishName } from "./brand";
 /**
  * Whether the model this deployment's Bots run on is one its key can call, said once at boot.
  *
@@ -72,7 +73,7 @@ export function modelCheckOutcome(input: {
         provider,
         model,
         status,
-        fix: `${provider} refused the model key (${keyName} or the credential stored in OpenBot), so every Bot turn will fail until it is replaced.`,
+        fix: `${provider} refused the model key (${keyName} or the credential stored in ${englishName()}), so every Bot turn will fail until it is replaced.`,
       },
     };
   }

@@ -57,15 +57,15 @@ export function callerOf(context: Context): NetworkCaller | undefined {
 
 /** What a page from another site is told. The person reads it when something they did not start was stopped. */
 export const CROSS_SITE_REFUSAL =
-  "OpenBot only takes this from its own pages. Open OpenBot and try again there.";
+  "The server only takes this from its own pages. Open the app and try again there.";
 
 /** What a single-user OpenBot says to a request addressed to a name it does not answer to. */
 export const SINGLE_USER_HOST_REFUSAL =
-  "OpenBot doesn't answer at this address. Open it at localhost or 127.0.0.1 on this computer.";
+  "The server doesn't answer at this address. Open it at localhost or 127.0.0.1 on this computer.";
 
 /** What a single-user OpenBot on somebody's own machine says to another machine. */
 export const SINGLE_USER_MACHINE_REFUSAL =
-  "This OpenBot only answers on the computer it runs on. Open it there, or set up sign-in so other people can use it.";
+  "This deployment only answers on the computer it runs on. Open it there, or set up sign-in so other people can use it.";
 
 /**
  * Whether a browser origin is one of this deployment's own pages, or the Recorder extension.

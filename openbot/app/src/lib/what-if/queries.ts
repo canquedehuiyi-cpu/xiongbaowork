@@ -17,7 +17,7 @@ export function whatIfVocabularyQueryOptions() {
     queryFn: async (): Promise<WhatIfVocabulary> =>
       (
         await client("/api/admin/what-if/vocabulary", {
-          fallback: "Couldn't load this OpenBot's Bots and apps",
+          fallback: "Couldn't load this deployment's Bots and apps",
         })
       ).json(),
   });

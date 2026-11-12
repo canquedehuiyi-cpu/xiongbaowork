@@ -44,6 +44,7 @@ import type {
   CreateAgentInput,
   Persona,
 } from "./profile-types";
+import { englishName } from "../brand";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DatabaseExecutor = Pick<Database, "select"> | Pick<Transaction, "select">;
@@ -251,7 +252,9 @@ async function requireOwnerMayIsolate(
 
 export class ManagedAgentUnavailableError extends Error {
   constructor() {
-    super("OpenBot has no managed Bot. Give this Bot its own AG-UI endpoint.");
+    super(
+      `${englishName()} has no managed Bot. Give this Bot its own AG-UI endpoint.`,
+    );
     this.name = "ManagedAgentUnavailableError";
   }
 }

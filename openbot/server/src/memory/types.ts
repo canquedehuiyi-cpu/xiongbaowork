@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { englishName } from "../brand";
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 export const memoryInputSchema = z
@@ -45,7 +46,7 @@ export class MemoryRefusedError extends Error {
 export class MemoryUnavailableError extends Error {
   constructor() {
     super(
-      "This memory is kept in OpenBot's back end, which cannot be reached right now. Try again.",
+      `This memory is kept in ${englishName()}'s back end, which cannot be reached right now. Try again.`,
     );
     this.name = "MemoryUnavailableError";
   }

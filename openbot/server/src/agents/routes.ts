@@ -37,6 +37,7 @@ import type {
   CreateAgentInput,
   Persona,
 } from "./profile-types";
+import { englishName } from "../brand";
 
 type AgentInputParseResult =
   | { ok: true; value: CreateAgentInput }
@@ -228,7 +229,7 @@ export function parseAgentInput(
     if (!named)
       return {
         ok: false,
-        error: "OpenBot doesn't know that framework. Pick one from the list.",
+        error: `${englishName()} doesn't know that framework. Pick one from the list.`,
       };
     if (endpoint) harness = named.id;
   }
@@ -933,7 +934,7 @@ export function createAgentRoutes(
   };
   /** Said where a deployment's computers cannot make one more. */
   const NO_ISOLATION =
-    "This OpenBot can't give a Bot a computer of its own, so it runs on yours.";
+    "This deployment can't give a Bot a computer of its own, so it runs on yours.";
 
   routes.post("/", requireUser, async (context) => {
     // Malformed JSON is a recoverable client-input error and is validated by the same parser.

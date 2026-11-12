@@ -64,6 +64,7 @@ import {
   checkAction,
   type GovernanceReaders,
 } from "./what-if-check";
+import { englishName } from "./brand";
 
 /** How many of an app's tools the model is shown, and how many in all. */
 const PROMPT_TOOLS_PER_APP = 200;
@@ -1059,8 +1060,7 @@ export function createWhatIfRoutes(options: {
         await record("what_if.asked", { question, outcome: "no_model" });
         return context.json(
           {
-            error:
-              "OpenBot needs a model key to read a question. Add one on the Credentials page, or set the action yourself.",
+            error: `${englishName()} needs a model key to read a question. Add one on the Credentials page, or set the action yourself.`,
           },
           503,
         );

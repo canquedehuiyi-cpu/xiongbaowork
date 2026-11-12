@@ -32,6 +32,7 @@ import {
   ModelNotConfiguredError,
 } from "../routing/model";
 import { checkPolicyRule, type PolicyContext } from "./policy";
+import { englishName } from "../brand";
 
 type Intent = NonNullable<PolicyContext["intent"]>;
 
@@ -509,8 +510,7 @@ export function createPolicyTranslateRoutes(options: {
         await record({ outcome: "no_model" });
         return context.json(
           {
-            error:
-              "OpenBot needs a model key to write a rule from a description. Add one on the Credentials page, or write the rule in CEL.",
+            error: `${englishName()} needs a model key to write a rule from a description. Add one on the Credentials page, or write the rule in CEL.`,
           },
           503,
         );

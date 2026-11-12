@@ -160,6 +160,7 @@ import { shareTargetOf } from "./share-target";
 import { connectAppRefusal } from "@openbot/shared/connect-prompt";
 import { withReadRetries } from "./transient";
 import { type TransportKind, transportFor } from "./transport";
+import { englishName } from "../brand";
 
 /**
  * Plugins: what this deployment has added, which Bots may use it, and the one path a call takes.
@@ -4627,7 +4628,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       if (input.id === MEMORY_TOOLS_SERVER) {
         throw new CustomServerRefusedError(
-          `${input.id} is the name of OpenBot's own memory tools. Choose another.`,
+          `${input.id} is the name of ${englishName()}'s own memory tools. Choose another.`,
         );
       }
 
@@ -12193,7 +12194,9 @@ export function createPluginStore(options: PluginStoreOptions) {
               // 「招聘与组群」没有账号可开，`actorId` 就是提议的主人：说话的人。Team Bot 上它若取了主人，
               // 队友起草的提议就会记到主人名下。只限这个传输：别的传输照旧（Routines 的取法另议）。
               actorId:
-                access.transport === "builtin-staffing" ? input.actorId : runsAs,
+                access.transport === "builtin-staffing"
+                  ? input.actorId
+                  : runsAs,
               botId: input.botId,
               ...((pinned?.accountId ?? ownersAccountId)
                 ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }

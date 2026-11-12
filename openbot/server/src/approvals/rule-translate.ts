@@ -50,6 +50,7 @@ import {
   type ApprovalRuleInput,
   RULE_BEHAVIOURS,
 } from "./types";
+import { englishName } from "../brand";
 
 /** How the gate matches a rule, said once and given to the writer and the reader alike. */
 const MATCHING = [
@@ -512,8 +513,7 @@ export function createApprovalRuleDraftRoutes(options: {
         await record({ outcome: "no_model" });
         return context.json(
           {
-            error:
-              "OpenBot needs a model key to write rules from a description. Add one on the Credentials page, or add the rule by hand.",
+            error: `${englishName()} needs a model key to write rules from a description. Add one on the Credentials page, or add the rule by hand.`,
           },
           503,
         );

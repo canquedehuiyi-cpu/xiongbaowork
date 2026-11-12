@@ -29,6 +29,7 @@ import {
   visitingBots,
 } from "./network-replay";
 import { translateAllowlist } from "./network-translate";
+import { englishName } from "../brand";
 
 /** Page visits replayed by default, and at most. */
 const REPLAY_LIMIT = 500;
@@ -113,8 +114,7 @@ export function createNetworkAllowlistRoutes(options: {
         await record({ outcome: "no_model" });
         return context.json(
           {
-            error:
-              "OpenBot needs a model key to write a list from a description. Add one on the Credentials page, or type the list yourself.",
+            error: `${englishName()} needs a model key to write a list from a description. Add one on the Credentials page, or type the list yourself.`,
           },
           503,
         );
@@ -163,7 +163,7 @@ export function createNetworkAllowlistRoutes(options: {
       return context.json(
         {
           error:
-            "This OpenBot records no readable trail, so there is no history to test against.",
+            "This deployment records no readable trail, so there is no history to test against.",
         },
         501,
       );

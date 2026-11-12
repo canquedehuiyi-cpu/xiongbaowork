@@ -109,10 +109,10 @@ const REAL_COMPUTER_PORT = 7815;
 const SHARED_COMPUTER_PORT = 7816;
 /** What the person is told when their browser cannot open for OpenBot's own setup. */
 const NOT_SET_UP =
-  "Your browser can't open right now. Ask an admin to check OpenBot's setup.";
+  "Your browser can't open right now. Ask an admin to check the setup.";
 /** The same, on a single-user OpenBot (OpenBot Desktop), where the person is the admin. */
 const NOT_SET_UP_SINGLE_USER =
-  "Your browser can't open right now. Quit OpenBot, open it again, and try once more.";
+  "Your browser can't open right now. Quit the app, open it again, and try once more.";
 
 // ---- The stand-in computer --------------------------------------------------------------------
 
@@ -835,7 +835,7 @@ describe("opening a person's own browser", () => {
     );
     expect(mine).toEqual([
       expect.objectContaining({
-        label: "OpenBot browser",
+        label: "XiongBao Work browser",
         via: "openbot-browser",
         extensionId: RECORDER_EXTENSION_ID,
         installId: computerId.slice("person-".length),
@@ -847,7 +847,7 @@ describe("opening a person's own browser", () => {
           event.eventType === "recorder.connected" &&
           event.targetId === connection.connectionId,
       )?.payload,
-    ).toMatchObject({ via: "openbot-browser", label: "OpenBot browser" });
+    ).toMatchObject({ via: "openbot-browser", label: "XiongBao Work browser" });
 
     // The browser's network policy went to its computer ahead of the browser: the open web and this OpenBot and the
     // Intelligence gateway by name on their own ports, nothing inside the deployment.
@@ -2922,7 +2922,7 @@ describe("a single-user OpenBot, where the person is its admin", () => {
       ).toMatchObject({
         available: true,
         problem:
-          "Your browser isn't answering. If it doesn't come back soon, quit OpenBot and open it again.",
+          "Your browser isn't answering. If it doesn't come back soon, quit the app and open it again.",
       });
     } finally {
       silentState = null;

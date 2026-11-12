@@ -50,6 +50,7 @@ import {
   ApprovalRefusedError,
   targetSubject,
 } from "./types";
+import { englishName } from "../brand";
 
 /** Longer than this is not guidance for one reviewer, and every review would carry it. */
 export const GUIDANCE_LIMIT = 2_000;
@@ -471,8 +472,7 @@ export function createReviewerGuidanceRoutes(options: {
       if (error instanceof ModelNotConfiguredError)
         return {
           status: 503,
-          error:
-            "OpenBot needs a model key to check guidance, and auto-review needs one to run. Add one on the Credentials page.",
+          error: `${englishName()} needs a model key to check guidance, and auto-review needs one to run. Add one on the Credentials page.`,
         };
       if (error instanceof PolicyTranslationError)
         return { status: 502, error: error.message };
@@ -528,7 +528,7 @@ export function createReviewerGuidanceRoutes(options: {
     const recent = options.service.store.policy?.recentRequests;
     if (!recent)
       throw new ApprovalRefusedError(
-        "This OpenBot keeps no requests to test against.",
+        "This deployment keeps no requests to test against.",
       );
     return guidanceSample(await recent(BACKTEST_SCAN), limit);
   }
@@ -554,14 +554,13 @@ export function createReviewerGuidanceRoutes(options: {
     const policyStore = options.service.store.policy;
     if (!policyStore)
       throw new ApprovalRefusedError(
-        "This OpenBot keeps no requests to test against.",
+        "This deployment keeps no requests to test against.",
       );
     // Without one every request would come back unreviewed, which is no answer about the guidance.
     if (!options.service.reviewer)
       return context.json(
         {
-          error:
-            "OpenBot needs a model key to run auto-review. Add one on the Credentials page.",
+          error: `${englishName()} needs a model key to run auto-review. Add one on the Credentials page.`,
         },
         503,
       );

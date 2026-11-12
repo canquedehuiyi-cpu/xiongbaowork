@@ -55,6 +55,7 @@ import {
   previewCapabilityChanges,
 } from "./capability-changes";
 import { type EnterpriseControls, enterpriseControls } from "./controls";
+import { englishName } from "../brand";
 
 /** What a change can name: the switches set now, and every group with how many people are in it. */
 export type CapabilityVocabulary = {
@@ -607,8 +608,7 @@ export function createCapabilityChangeRoutes(options: {
         await record({ outcome: "no_model" });
         return context.json(
           {
-            error:
-              "OpenBot needs a model key to write changes from a description. Add one on the Credentials page, or set the switches by hand.",
+            error: `${englishName()} needs a model key to write changes from a description. Add one on the Credentials page, or set the switches by hand.`,
           },
           503,
         );

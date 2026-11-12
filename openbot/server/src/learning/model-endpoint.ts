@@ -20,6 +20,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { sameToken } from "../agents/callback-token";
 import { PlanModel, type PlanModelConfig } from "../agents/plan-model";
+import { englishName } from "../brand";
 
 export const LEARNING_MODEL_ROUTE = "/api/learning-model/v1/chat/completions";
 
@@ -255,9 +256,12 @@ function failureOf(
   if (signIn)
     return refused(
       401,
-      "The model plan OpenBot is signed in to needs signing in again.",
+      `The model plan ${englishName()} is signed in to needs signing in again.`,
     );
-  return refused(502, "The model plan OpenBot is signed in to didn't answer.");
+  return refused(
+    502,
+    `The model plan ${englishName()} is signed in to didn't answer.`,
+  );
 }
 
 type Completion = {
@@ -293,7 +297,10 @@ export function createLearningModelHandler(
     const offered = incoming.headers.get("authorization") ?? "";
     if (!sameToken(offered, `Bearer ${endpoint.token}`)) {
       record("refused");
-      return refused(401, "This endpoint answers OpenBot's Learning only.");
+      return refused(
+        401,
+        `This endpoint answers ${englishName()}'s Learning only.`,
+      );
     }
 
     let body: ChatRequest;

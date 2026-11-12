@@ -88,7 +88,7 @@ const REAL_BROWSER_NAMES: Record<RealBrowser, string> = {
  * that browser.
  */
 export function storeOpenedSentence(browser: RealBrowser): string {
-  return `OpenBot 录制器的页面已在 ${REAL_BROWSER_NAMES[browser]} 里打开。在那里添加它，就能在你自己的浏览器里录制。`;
+  return `录制器的页面已在 ${REAL_BROWSER_NAMES[browser]} 里打开。在那里添加它，就能在你自己的浏览器里录制。`;
 }
 
 /** What the person is told when Start recording found their own everyday browser rather than the one OpenBot opens:

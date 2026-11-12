@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { appConfig } from "@/lib/generated/application-config";
 import { desktopShell } from "./shell";
 
 /**
@@ -123,6 +124,8 @@ export const desktopKeys = {
 
 const PLUGIN = "plugin:openbot-desktop";
 
+const PRODUCT = appConfig.brand.englishName ?? appConfig.brand.productName;
+
 /** One command of the desktop app's plugin. Rejects outside Desktop, which no caller reaches. */
 export async function invokeDesktop<T>(
   command: string,
@@ -237,10 +240,10 @@ export function diagnostics(
           )
           .join(", ");
   return [
-    `OpenBot Desktop ${status.version} (${status.build})`,
+    `${PRODUCT} Desktop ${status.version} (${status.build})`,
     `Installed in ${status.root}${status.appPort ? `, app on port ${status.appPort}` : ""}`,
     `Container engine: ${status.engine ?? "not answering"}`,
-    `OpenBot: ${status.openbotRunning ? "running" : "stopped"}`,
+    `${PRODUCT}: ${status.openbotRunning ? "running" : "stopped"}`,
     `  processes: ${parts(status.processes)}`,
     `  containers: ${parts(status.containers)}`,
     status.intelligenceStack

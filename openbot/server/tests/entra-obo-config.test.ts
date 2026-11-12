@@ -46,17 +46,17 @@ describe("MICROSOFT_OAUTH_OBO_RESOURCES", () => {
       entra({
         MICROSOFT_OAUTH_OBO_RESOURCES: `api://${OPENBOT}=hr.example.com`,
       }),
-    ).toThrow("登记了 OpenBot 自己的 API");
+    ).toThrow("登记了熊宝数字员工自己的 API");
     expect(() =>
       entra({ MICROSOFT_OAUTH_OBO_RESOURCES: `${OPENBOT}=hr.example.com` }),
-    ).toThrow("登记了 OpenBot 自己的 API");
+    ).toThrow("登记了熊宝数字员工自己的 API");
     expect(() =>
       entra({
         MICROSOFT_OAUTH_API_SCOPE: "api://openbot.example.com/access_as_user",
         MICROSOFT_OAUTH_OBO_RESOURCES:
           "api://openbot.example.com=hr.example.com",
       }),
-    ).toThrow("登记了 OpenBot 自己的 API");
+    ).toThrow("登记了熊宝数字员工自己的 API");
   });
 
   test("Microsoft Graph and other first-party resources cannot be registered", () => {

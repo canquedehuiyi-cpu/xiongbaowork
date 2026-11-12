@@ -1386,7 +1386,7 @@ describe("clearing a Bot's browser", () => {
       expect(cleared.status).toBe(500);
       expect(await cleared.json()).toEqual({
         error:
-          "The Bot's browser was cleared, but OpenBot couldn't finish. Clear it again.",
+          "The Bot's browser was cleared, but the system couldn't finish. Clear it again.",
       });
     } finally {
       auditFails = null;

@@ -39,6 +39,7 @@ import {
   proactiveSuggestions,
 } from "../db/schema/proactive";
 import type { AttentionItem, AttentionPing } from "./contracts";
+import { englishName } from "../brand";
 
 /** The least time between two pings to one person. */
 export const PING_GAP_MINUTES = 60;
@@ -102,8 +103,8 @@ export function pingText(items: readonly AttentionItem[]): {
     ...lines,
     ...andMore,
     items.length === 1
-      ? "Start or hide it in OpenBot."
-      : "Start or hide them in OpenBot.",
+      ? `Start or hide it in ${englishName()}.`
+      : `Start or hide them in ${englishName()}.`,
   ].join("\n");
   const pushBody = clip(
     [

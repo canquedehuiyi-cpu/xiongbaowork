@@ -19,6 +19,7 @@ import {
   type ComponentStore,
   SandboxedPublicationRequiredError,
 } from "./store";
+import { englishName } from "../brand";
 
 /** Who a component's data grant names when OpenBot Personal gave it, not a person. */
 export const PERSONAL_GRANTED_BY = "openbot:personal-defaults";
@@ -206,7 +207,7 @@ export function createComponentRoutes(
         "component.description_updated",
         name,
         {
-          note: "Its description follows this version of OpenBot. Nobody had edited it here.",
+          note: `Its description follows this version of ${englishName()}. Nobody had edited it here.`,
         },
         DEPLOYMENT_INITIATOR,
       );
@@ -237,7 +238,7 @@ export function createComponentRoutes(
             name,
             {
               functions: given,
-              note: "Given by OpenBot Personal, where everything it reads is yours.",
+              note: `Given by ${englishName()} Personal, where everything it reads is yours.`,
             },
             DEPLOYMENT_INITIATOR,
           );
@@ -562,78 +563,83 @@ export function createComponentRoutes(
     return context.json({ revoked: true });
   });
 
-  routes.post("/:name/publication", requireUser, capability, async (context) => {
-    const forbidden = requireAdmin(context);
-    if (forbidden) return forbidden;
+  routes.post(
+    "/:name/publication",
+    requireUser,
+    capability,
+    async (context) => {
+      const forbidden = requireAdmin(context);
+      if (forbidden) return forbidden;
 
-    const name = context.req.param("name");
-    const body = (await context.req.json().catch(() => null)) as {
-      published?: unknown;
-    } | null;
-    /*
-     * A real boolean, not truthiness. This used to read `body?.published !== false`, so an
-     * empty body, invalid JSON, `{}`, `"no"`, `0` and `null` all evaluated to true and
-     * *published* the component with a 200 and a `component.published` audit row. A toggle
-     * that publishes on malformed input fails open on the endpoint that decides what every
-     * Bot may draw, and the sibling toggles (`PUT /routines/:id/enabled`, channel pin/busy)
-     * all answer 400 on non-boolean. Only an explicit true or false moves anything.
-     */
-    if (typeof body?.published !== "boolean") {
-      return context.json({ error: "published must be true or false." }, 400);
-    }
-    const published = body.published;
-
-    let recordedBySource = false;
-    try {
-      if (published) {
-        await store.publish(name, context.var.actor.email);
-      } else {
-        await store.unpublish(name, context.var.actor.email);
+      const name = context.req.param("name");
+      const body = (await context.req.json().catch(() => null)) as {
+        published?: unknown;
+      } | null;
+      /*
+       * A real boolean, not truthiness. This used to read `body?.published !== false`, so an
+       * empty body, invalid JSON, `{}`, `"no"`, `0` and `null` all evaluated to true and
+       * *published* the component with a 200 and a `component.published` audit row. A toggle
+       * that publishes on malformed input fails open on the endpoint that decides what every
+       * Bot may draw, and the sibling toggles (`PUT /routines/:id/enabled`, channel pin/busy)
+       * all answer 400 on non-boolean. Only an explicit true or false moves anything.
+       */
+      if (typeof body?.published !== "boolean") {
+        return context.json({ error: "published must be true or false." }, 400);
       }
-    } catch (error) {
-      if (error instanceof SandboxedPublicationRequiredError) {
-        if (!sandboxedStore) {
-          return context.json(
-            {
-              error:
-                "The playground source is unavailable, so the component was not published.",
-            },
-            409,
-          );
+      const published = body.published;
+
+      let recordedBySource = false;
+      try {
+        if (published) {
+          await store.publish(name, context.var.actor.email);
+        } else {
+          await store.unpublish(name, context.var.actor.email);
         }
-        try {
-          if (published) {
-            await sandboxedStore.publish(name, context.var.actor.email);
-          } else {
-            await sandboxedStore.unpublish(name, context.var.actor.email);
+      } catch (error) {
+        if (error instanceof SandboxedPublicationRequiredError) {
+          if (!sandboxedStore) {
+            return context.json(
+              {
+                error:
+                  "The playground source is unavailable, so the component was not published.",
+              },
+              409,
+            );
           }
-          recordedBySource = true;
-        } catch (sourceError) {
-          if (sourceError instanceof SandboxedPublicationRefusedError) {
-            return context.json({ error: sourceError.message }, 409);
+          try {
+            if (published) {
+              await sandboxedStore.publish(name, context.var.actor.email);
+            } else {
+              await sandboxedStore.unpublish(name, context.var.actor.email);
+            }
+            recordedBySource = true;
+          } catch (sourceError) {
+            if (sourceError instanceof SandboxedPublicationRefusedError) {
+              return context.json({ error: sourceError.message }, 409);
+            }
+            if (sourceError instanceof SandboxedNotFoundError) {
+              return context.json({ error: sourceError.message }, 404);
+            }
+            throw sourceError;
           }
-          if (sourceError instanceof SandboxedNotFoundError) {
-            return context.json({ error: sourceError.message }, 404);
-          }
-          throw sourceError;
+        } else if (error instanceof ComponentNotFoundError) {
+          return context.json({ error: error.message }, 404);
+        } else {
+          throw error;
         }
-      } else if (error instanceof ComponentNotFoundError) {
-        return context.json({ error: error.message }, 404);
-      } else {
-        throw error;
       }
-    }
 
-    if (recordedBySource) return context.json({ published });
+      if (recordedBySource) return context.json({ published });
 
-    await audit(
-      context,
-      published ? "component.published" : "component.unpublished",
-      name,
-      {},
-    );
-    return context.json({ published });
-  });
+      await audit(
+        context,
+        published ? "component.published" : "component.unpublished",
+        name,
+        {},
+      );
+      return context.json({ published });
+    },
+  );
 
   /**
    * Edit the draft. Changes nothing a model can see until it is published, which is the point of

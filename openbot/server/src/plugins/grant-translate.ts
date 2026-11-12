@@ -44,6 +44,7 @@ import {
   type PluginStore,
   type ToolRecord,
 } from "./store";
+import { englishName } from "../brand";
 
 /** One action the app offers, as the writer, the check, the reader and the replay see it. */
 export type GrantTool = Pick<
@@ -829,8 +830,7 @@ export function createAppGrantDraftRoutes(options: {
           await record({ outcome: "no_model" });
           return context.json(
             {
-              error:
-                "OpenBot needs a model key to choose actions from a description. Add one on the Credentials page, or turn actions on by hand.",
+              error: `${englishName()} needs a model key to choose actions from a description. Add one on the Credentials page, or turn actions on by hand.`,
             },
             503,
           );

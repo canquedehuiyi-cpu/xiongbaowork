@@ -101,7 +101,7 @@ export async function ensureSingleUserIdentity(
         type: "single-user-connections-retired",
         provider,
         apps: retired.sort(),
-        note: "These apps were connected under dev-local-user, the name every single-user OpenBot shared at this broker, and this deployment now has its own. Their records here were removed and nothing was ended at the broker, because other deployments on the same key may be using those accounts. Each app reads as not connected until it is connected again.",
+        note: "These apps were connected under dev-local-user, the name every single-user deployment shared at this broker, and this deployment now has its own. Their records here were removed and nothing was ended at the broker, because other deployments on the same key may be using those accounts. Each app reads as not connected until it is connected again.",
       }),
     );
   }

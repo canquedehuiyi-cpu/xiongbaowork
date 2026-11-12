@@ -50,11 +50,11 @@ const APP_ORIGIN = "http://127.0.0.1:3010";
 const EXTENSION_ORIGIN = `chrome-extension://${RECORDER_EXTENSION_ID}`;
 const REBOUND = "rebind.evil.example";
 const CROSS_SITE =
-  "OpenBot only takes this from its own pages. Open OpenBot and try again there.";
+  "The server only takes this from its own pages. Open the app and try again there.";
 const WRONG_HOST =
-  "OpenBot doesn't answer at this address. Open it at localhost or 127.0.0.1 on this computer.";
+  "The server doesn't answer at this address. Open it at localhost or 127.0.0.1 on this computer.";
 const OTHER_MACHINE =
-  "This OpenBot only answers on the computer it runs on. Open it there, or set up sign-in so other people can use it.";
+  "This deployment only answers on the computer it runs on. Open it there, or set up sign-in so other people can use it.";
 
 /** This machine's address on its network: a connection to it arrives from there, as another machine's would. */
 const lanAddress = Object.values(networkInterfaces())

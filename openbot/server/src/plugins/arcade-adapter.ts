@@ -25,6 +25,7 @@ import {
   type GrantState,
 } from "./broker";
 import { personAccount } from "./shared-accounts";
+import { englishName, productName } from "../brand";
 
 /**
  * THE VENDOR'S ONLY DOOR INTO THE SERVER. This is the one file under `server/src` that imports
@@ -1498,7 +1499,7 @@ function mergedRequirement(
 
 const unreadableRequirement = (toolkit: string) =>
   new BrokerRefusalError(
-    `OpenBot 读不懂 ${toolkit} 的某个动作需要什么，所以这里还不能连接 ${toolkit}。没有动你的账号。`,
+    `${productName()}读不懂 ${toolkit} 的某个动作需要什么，所以这里还不能连接 ${toolkit}。没有动你的账号。`,
   );
 
 /**
@@ -1658,7 +1659,7 @@ const verifierNames = (settings: VerifierSettings, address: string) =>
  */
 const verifierUnreadable = (subject: string, cause: unknown) =>
   new BrokerRefusalError(
-    `Couldn't start connecting ${subject}. OpenBot couldn't check where Arcade sends you back after you sign in. Try again, or ask an admin if it keeps happening.`,
+    `Couldn't start connecting ${subject}. ${englishName()} couldn't check where Arcade sends you back after you sign in. Try again, or ask an admin if it keeps happening.`,
     { cause },
   );
 
@@ -1677,7 +1678,7 @@ const verifierElsewhere = (subject: string, address: string) =>
  */
 const verifierNotTaken = (subject: string, address: string, cause: unknown) =>
   new BrokerRefusalError(
-    `Couldn't start connecting ${subject}. OpenBot couldn't set Arcade to send you back here after you sign in. Set the custom verifier in Arcade's dashboard to ${address}`,
+    `Couldn't start connecting ${subject}. ${englishName()} couldn't set Arcade to send you back here after you sign in. Set the custom verifier in Arcade's dashboard to ${address}`,
     { cause },
   );
 

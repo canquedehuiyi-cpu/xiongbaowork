@@ -51,6 +51,7 @@ import {
   type ModelCompleter,
   ModelNotConfiguredError,
 } from "./routing/model";
+import { englishName } from "./brand";
 
 /** What this deployment has that a question can name: the only values a filter may hold. */
 export type AuditVocabulary = {
@@ -1190,8 +1191,7 @@ export function createAuditAskRoutes(options: {
         await record({ outcome: "no_model" });
         return context.json(
           {
-            error:
-              "OpenBot needs a model key to answer a question. Add one on the Credentials page, or set the filters yourself.",
+            error: `${englishName()} needs a model key to answer a question. Add one on the Credentials page, or set the filters yourself.`,
           },
           503,
         );

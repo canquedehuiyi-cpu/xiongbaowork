@@ -75,12 +75,12 @@ test("in the browser, it confirms the account and then brings OpenBot Desktop fo
   const { asked, opened, view } = show("gmail");
 
   expect(
-    await view.findByRole("heading", { name: "Back to OpenBot" }),
+    await view.findByRole("heading", { name: "Back to XiongBao Work" }),
   ).toBeTruthy();
   await waitFor(() => expect(opened).toEqual([DESKTOP_LINK]));
   expect(asked).toContain("POST /api/plugins/servers/gmail/connection/confirm");
   expect(
-    view.getByRole("link", { name: "Open OpenBot" }).getAttribute("href"),
+    view.getByRole("link", { name: "Open XiongBao Work" }).getAttribute("href"),
   ).toBe("openbot://open");
 });
 

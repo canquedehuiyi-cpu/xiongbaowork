@@ -46,7 +46,7 @@ const STORE_NAMES: Record<RecorderStore, string> = {
  * open in: adding it there is what lets them record from here.
  */
 export function storeTabSentence(store: RecorderStore): string {
-  return `OpenBot 录制器的页面已在新标签页打开。把它添加到 ${STORE_NAMES[store]}，就能在熊宝里录制。`;
+  return `录制器的页面已在新标签页打开。把它添加到 ${STORE_NAMES[store]}，就能在熊宝里录制。`;
 }
 
 /** The short note that waits in OpenBot for a person who opened the Recorder's store page in a new tab: one at a time,

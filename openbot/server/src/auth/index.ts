@@ -32,6 +32,7 @@ import { encryptSsoConfig } from "./encrypt-sso-config";
 import { SIGN_OUT_UNFINISHED } from "./organization";
 import { applyConfiguredAdmin, isConfiguredAdmin, seedRole } from "./roles";
 import { recordProvisioned, scimOptions } from "./scim";
+import { englishName } from "../brand";
 
 /** Answered when a provider sign-in would join an unverified password account with the same address. */
 export const LINK_REFUSAL_MESSAGE =
@@ -660,7 +661,7 @@ export function createAuth(
                 },
               });
               throw new APIError("FORBIDDEN", {
-                message: "Your access to OpenBot has been removed.",
+                message: `Your access to ${englishName()} has been removed.`,
               });
             }
             return { data: user };
@@ -742,7 +743,7 @@ export function createAuth(
                 session.userId,
               );
               throw new APIError("FORBIDDEN", {
-                message: "Your access to OpenBot has been removed.",
+                message: `Your access to ${englishName()} has been removed.`,
               });
             }
             /*

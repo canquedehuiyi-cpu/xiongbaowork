@@ -7,6 +7,7 @@ import type {
 } from "@openbot/shared/learning";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { LearningModelCalls } from "./model-endpoint";
+import { englishName } from "../brand";
 
 /** The runtime key's own Learning routes: a project's containers, runs and proposed Skills. */
 export type LearningManagement = Pick<
@@ -55,7 +56,7 @@ export function noLearningModel(
   unavailable: LearningModelUnavailable | undefined,
 ): string {
   return unavailable === "unsupported"
-    ? "Learning can't run on the model you signed in with. To use it, sign OpenBot in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan."
+    ? `Learning can't run on the model you signed in with. To use it, sign ${englishName()} in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.`
     : "The back end has no Learning model yet. Give its Learning agent a model and key, then try again.";
 }
 
@@ -144,18 +145,18 @@ export function runFailure(
   if (run.status !== "failed") return null;
   const code = run.failureCode ?? "";
   if (code === "LEARNING_MODEL_NOT_CONFIGURED")
-    return "Learning has no model to think with. Sign OpenBot in to a model, then choose Learn now.";
+    return `Learning has no model to think with. Sign ${englishName()} in to a model, then choose Learn now.`;
   if (AGENT_FAILURES.has(code)) {
     if (calls) {
       const from = Date.parse(run.startedAt ?? run.createdAt);
       const to = run.completedAt ? Date.parse(run.completedAt) : now();
       const seen = calls.between(from, to);
       if (seen.includes("sign-in"))
-        return "Your model plan needs signing in again. Sign in to it in OpenBot, then choose Learn now.";
+        return `Your model plan needs signing in again. Sign in to it in ${englishName()}, then choose Learn now.`;
       if (seen.includes("refused"))
-        return "Learning couldn't sign in to OpenBot. Quit OpenBot and open it again, then choose Learn now.";
+        return `Learning couldn't sign in to ${englishName()}. Quit ${englishName()} and open it again, then choose Learn now.`;
       if (seen.length === 0)
-        return "Learning couldn't reach OpenBot to use your model plan. Quit OpenBot and open it again, then choose Learn now.";
+        return `Learning couldn't reach ${englishName()} to use your model plan. Quit ${englishName()} and open it again, then choose Learn now.`;
       if (!seen.includes("answered") || seen.includes("unanswered"))
         return "Your model plan didn't answer Learning. Try Learn now again in a few minutes.";
     }

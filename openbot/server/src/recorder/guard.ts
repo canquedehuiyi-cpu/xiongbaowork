@@ -246,8 +246,8 @@ export function createRequireRecorder(
       {
         error:
           reason === "organization"
-            ? "Your organization sign-in ended. Connect this browser to OpenBot again."
-            : "This browser is no longer connected to OpenBot. Connect it again.",
+            ? "Your organization sign-in ended. Connect this browser again."
+            : "This browser is no longer connected. Connect it again.",
         code: RECORDER_SIGNED_OUT,
         reason:
           reason === "removed"
