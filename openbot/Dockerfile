@@ -107,6 +107,8 @@ COPY toolkit toolkit
 # The server's source as well: the app's prebuild step reads the tenant package through
 # `server/src/tenant-package`, so the app cannot be built without it.
 COPY server server
+# The About page imports ../../../../../LICENSE?raw, so Vite needs the file at /src/LICENSE.
+COPY LICENSE LICENSE
 COPY examples examples
 RUN bun run --cwd app build
 
