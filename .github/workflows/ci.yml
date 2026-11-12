@@ -1213,4 +1213,4 @@ jobs:
       # Some crates ship licence files with CRLF line ends; the repository stores text as LF
       # (.gitattributes eol=lf), so only that line-ending difference is normalised before comparing.
       - name: The committed notice matches the generated one
-        run: tr -d '\r' < "$RUNNER_TEMP/THIRD-PARTY.md" | diff -u openbot/desktop-device/licenses/agent-desktop/THIRD-PARTY.md -
+        run: tr -d '\r' < "$RUNNER_TEMP/THIRD-PARTY.md" | diff -u desktop-device/licenses/agent-desktop/THIRD-PARTY.md -
