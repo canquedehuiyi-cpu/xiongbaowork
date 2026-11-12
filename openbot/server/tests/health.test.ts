@@ -112,7 +112,7 @@ describe("runtime capabilities", () => {
       generativeUi: true,
       // AUT3: off unless the WakerFlow automation target was registered (index.ts does).
       wakerflowAutomations: false,
-      // Default-on: a fresh clone is somebody evaluating the template.
+      // Default-off: the banner is opt-in (OPENBOT_SELF_HOST_BANNER=true) and needs a tenant support URL.
       selfHostBanner: false,
       // Off: this deployment has an identity provider, so it is not somebody's local trial.
       localEvaluation: false,

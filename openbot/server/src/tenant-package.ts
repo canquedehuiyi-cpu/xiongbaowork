@@ -385,7 +385,8 @@ function httpsUrl(value: unknown, name: string): string {
   if (parsed.protocol !== "https:") {
     throw new Error(`${name} must be an https URL`);
   }
-  return text;
+  // The trimmed href, so surrounding whitespace never reaches a rendered link.
+  return text.trim();
 }
 
 function agentTitle(value: unknown): string {

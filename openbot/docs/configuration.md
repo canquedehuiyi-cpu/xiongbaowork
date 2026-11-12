@@ -169,7 +169,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `AUDIT_RETENTION_DAYS` | unset                            | Whole number of days to keep audit rows; older ones are removed. Unset keeps the trail forever. |
 | `WORKER_SHARED_SECRET` | unset; `start.sh` uses a fixed local default; the Helm chart generates one | The secret the routines worker presents to fire a due routine. Without it the server refuses every handoff, whether or not a worker exists to send one. |
 | `OPENBOT_GENERATIVE_UI` | unset (capability on)               | Set `false` or `0` to stop Bots from answering with generated interfaces. |
-| `OPENBOT_SELF_HOST_BANNER` | unset (banner on)               | Set `false` or `0` to hide the bar offering help self-hosting OpenBot, for everybody. Each person can also close it for themselves. |
+| `OPENBOT_SELF_HOST_BANNER` | unset (banner off)              | Set `true` to show the support bar. It also needs the tenant `support_url` in brand.yaml, and each person can close it for themselves. |
 | `OPENBOT_ACCESSIBILITY_DISABLED` | unset | `true` or `1` stops naming OpenBot on the analytics the runtime already sends. |
 | `COMPOSIO_API_KEY`   | provisioned during desktop sign-in or local setup when no broker is configured | One project key for the whole deployment. Desktop sign-in saves a provisioned key in native protected storage and supplies it on Start/restart. A key in `.env` or the environment always wins and is never moved. `start.sh` / `bun run setup:composio` uses the existing CLI login; supplied keys are preserved. Direct server/container launches still need the prepared key. See [Composio](plugins/composio.md). |
 | `COMPOSIO_<SLUG>_CLIENT_ID`, `COMPOSIO_<SLUG>_CLIENT_SECRET` | unset | This deployment's own OAuth client for one Composio app that connects with a server-to-server grant (`S2S_OAUTH2`), such as `COMPOSIO_SHOPIFY_CLIENT_ID`. Both or neither. Set, the app can be enabled and connected as one shared account; unset, it stays hidden. Read only when the app is enabled; see [rotating the client](#rotating-a-composio-apps-own-client). See [Composio](plugins/composio.md#the-56-that-are-not-offered). |
@@ -186,11 +186,12 @@ Set `OPENBOT_GENERATIVE_UI=false` or `0` to disable both. `true`, `1`, an empty 
 value leave the capability on. The server configures both runtime renderers and reports the same
 setting through `/api/capabilities` to the browser.
 
-**`OPENBOT_SELF_HOST_BANNER`** shows a slim bar at the top of the signed-in app offering
-CopilotKit's help self-hosting OpenBot, linking to the OpenBot for Business page,
-`https://open.bot/business`, where a call can be booked. Closing it is saved to that person's
-preferences, so it stays closed on every device they sign in from. Set `false` or `0` to hide it for everybody, which suits a fork running
-OpenBot for its own organization. Any other value, or none, leaves it on.
+**`OPENBOT_SELF_HOST_BANNER`** shows a slim bar at the top of the signed-in app linking to the
+tenant's support address. It is off unless the value is exactly `true`, and even then it appears
+only when the tenant package sets `tenant.support_url` in brand.yaml (an https address); without one
+there is nowhere to send anybody, so nothing is shown. Closing it is saved to that person's
+preferences, so it stays closed on every device they sign in from. Any other value, or none, leaves
+it off.
 
 The component catalogue has separate per-Bot grants. Its sortable data table (`showTable`),
 interactive form (`askForm`), and other compiled or playground-authored components remain governed

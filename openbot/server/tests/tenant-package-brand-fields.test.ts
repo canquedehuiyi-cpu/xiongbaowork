@@ -31,6 +31,13 @@ describe("tenant package brand fields", () => {
     expect(loaded.supportUrl).toBe("https://help.example.com/x");
   });
 
+  test("trims whitespace around an https support_url", () => {
+    const loaded = packageWith(
+      "tenant: { id: openbot, product_name: P, support_url: '  https://help.example.com/x  ' }",
+    );
+    expect(loaded.supportUrl).toBe("https://help.example.com/x");
+  });
+
   test("rejects a non-https support_url naming the field", () => {
     expect(() =>
       packageWith(

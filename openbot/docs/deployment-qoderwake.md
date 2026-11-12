@@ -142,7 +142,7 @@ SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
 
 发布镜像在构建期内置 `examples/qoderwake` 品牌包。SPA 首屏标题与主 JS 品牌在构建期注入，
 只设置运行期 TENANT_PACKAGE_DIR 不会重写 bundle；换品牌包需要按附录从源码构建。
-上游推广条在运行期由 `OPENBOT_SELF_HOST_BANNER=false` 关闭。
+推广条默认关闭（只有 `OPENBOT_SELF_HOST_BANNER=true` 且租户包配了 `support_url` 才显示），这里保留 `=false` 只是显式声明。
 
 模型可在产品模型库接入并绑定到员工；部署默认的 OpenAI 兼容接口配置为：
 
