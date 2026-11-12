@@ -224,7 +224,7 @@ export async function skillAssetRows(
  * the button, so a package-shaped constant cannot collide with a person, and a redeploy can take back
  * exactly — and only — what the package wrote.
  */
-export const PACKAGE_CONNECTOR_MARK = "tenant-package";
+export const PACKAGE_MARK = "tenant-package";
 
 /** How a package connector authenticates. A closed set: a package cannot name an auth the build does not know. */
 export type PackageConnectorAuth = "user-oauth" | "deployment-bearer" | "none";
@@ -416,7 +416,7 @@ export async function connectorConflicts(
     .select({ id: mcpServers.id, addedBy: mcpServers.addedBy })
     .from(mcpServers)
     .where(inArray(mcpServers.id, declaredIds));
-  return rows.filter((row) => row.addedBy !== PACKAGE_CONNECTOR_MARK);
+  return rows.filter((row) => row.addedBy !== PACKAGE_MARK);
 }
 
 /**
@@ -509,20 +509,20 @@ export async function synchronizePackageConnectors(
         url: connector.url,
         provenance: "custom",
         // Stated, not defaulted, so the row reads as the package's wherever it is read.
-        addedBy: PACKAGE_CONNECTOR_MARK,
+        addedBy: PACKAGE_MARK,
         ...(credentialId ? { credentialId } : {}),
       })
       .onConflictDoUpdate({
         target: mcpServers.id,
         // The conflict check before the transaction refused rows this package does not own; this is
         // that decision restated on the write, so a row created in between is skipped, not rewritten.
-        setWhere: eq(mcpServers.addedBy, PACKAGE_CONNECTOR_MARK),
+        setWhere: eq(mcpServers.addedBy, PACKAGE_MARK),
         set: {
           title: connector.title,
           vendor: connector.vendor,
           url: connector.url,
           provenance: "custom",
-          addedBy: PACKAGE_CONNECTOR_MARK,
+          addedBy: PACKAGE_MARK,
           ...(credentialId ? { credentialId } : {}),
         },
       });
@@ -536,7 +536,7 @@ export async function synchronizePackageConnectors(
     connectors.length > 0
       ? and(
           eq(mcpServers.tenantId, SYSTEM_TENANT),
-          eq(mcpServers.addedBy, PACKAGE_CONNECTOR_MARK),
+          eq(mcpServers.addedBy, PACKAGE_MARK),
           notInArray(
             mcpServers.id,
             connectors.map(({ id }) => id),
@@ -544,7 +544,7 @@ export async function synchronizePackageConnectors(
         )
       : and(
           eq(mcpServers.tenantId, SYSTEM_TENANT),
-          eq(mcpServers.addedBy, PACKAGE_CONNECTOR_MARK),
+          eq(mcpServers.addedBy, PACKAGE_MARK),
         );
   const recycled = await executor
     .update(mcpServers)
@@ -588,5 +588,296 @@ export async function clearDanglingConnectorRefs(
         : like(tableRef.table.ref, `${id}/%`);
       await database.delete(tableRef.table).where(predicate);
     }
+  }
+}
+
+// --------------------------------------------------------------------------------------------------
+// 4b-B1: expert teams (`teams.yaml`)
+
+/** One member of a package team. `role` is prose for the lead's prompt, never a table. */
+export type PackageTeamMember = {
+  id: string;
+  role: string | null;
+};
+
+/** One hand-off rule: `from` may @ the agents in `to`, which is a `plugin_grants` row of kind `bot`. */
+export type PackageTeamAddress = {
+  from: string;
+  to: string[];
+};
+
+/** One expert team a package declares, as `teams.yaml` states it. */
+export type PackageTeam = {
+  /** The `channels` row id the team materializes into. */
+  id: string;
+  name: string;
+  description: string;
+  lead: string;
+  members: PackageTeamMember[];
+  address: PackageTeamAddress[];
+};
+
+/** A team member may name a role; anything longer is a prompt in the wrong file. */
+const TEAM_ROLE_CHARS = 40;
+
+/**
+ * The teams one package document declares, shape-checked.
+ *
+ * Absent is a package with no teams — every package written before this contract shipped. Agent
+ * references are checked LATER, against the agents the package actually declares (see
+ * {@link validateTeamAgentRefs}), because this function sees only `teams.yaml` and the same team may
+ * legally name a coworker declared beside it in `agents.yaml`.
+ */
+export function parseTeams(
+  document: Record<string, unknown>,
+  source = "teams.yaml",
+): PackageTeam[] {
+  if (document.teams === undefined || document.teams === null) return [];
+  const entries = document.teams;
+  if (!Array.isArray(entries)) {
+    throw new Error(`${source} teams must be a list`);
+  }
+  const teams: PackageTeam[] = [];
+  const seen = new Set<string>();
+  for (const raw of entries) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error(`${source} team must be an object`);
+    }
+    const entry = raw as Record<string, unknown>;
+    const id = entry.id;
+    if (typeof id !== "string" || !id.trim()) {
+      throw new Error(`${source} team.id must be a non-empty string`);
+    }
+    if (seen.has(id)) {
+      throw new Error(`${source} declares team "${id}" twice`);
+    }
+    seen.add(id);
+    const members: PackageTeamMember[] = (
+      Array.isArray(entry.members) ? entry.members : []
+    ).map((rawMember) => {
+      if (
+        !rawMember ||
+        typeof rawMember !== "object" ||
+        Array.isArray(rawMember)
+      ) {
+        throw new Error(`${source} team "${id}" member must be an object`);
+      }
+      const member = rawMember as Record<string, unknown>;
+      if (typeof member.id !== "string" || !member.id.trim()) {
+        throw new Error(
+          `${source} team "${id}" member.id must be a non-empty string`,
+        );
+      }
+      const role = member.role;
+      if (role !== undefined && role !== null && typeof role !== "string") {
+        throw new Error(`${source} team "${id}" member.role must be a string`);
+      }
+      return {
+        id: member.id,
+        role:
+          typeof role === "string" && role.trim()
+            ? [...role.trim()].slice(0, TEAM_ROLE_CHARS).join("")
+            : null,
+      };
+    });
+    const memberIds = new Set(members.map(({ id: memberId }) => memberId));
+    if (memberIds.size !== members.length) {
+      throw new Error(`${source} team "${id}" lists the same member twice`);
+    }
+    const lead = entry.lead;
+    if (typeof lead !== "string" || !lead.trim()) {
+      throw new Error(`${source} team "${id}" lead must be a non-empty string`);
+    }
+    const address: PackageTeamAddress[] = (
+      Array.isArray(entry.address) ? entry.address : []
+    ).map((rawRule) => {
+      if (!rawRule || typeof rawRule !== "object" || Array.isArray(rawRule)) {
+        throw new Error(
+          `${source} team "${id}" address entry must be an object`,
+        );
+      }
+      const rule = rawRule as Record<string, unknown>;
+      if (typeof rule.from !== "string" || !rule.from.trim()) {
+        throw new Error(
+          `${source} team "${id}" address.from must be a non-empty string`,
+        );
+      }
+      if (!Array.isArray(rule.to) || rule.to.length === 0) {
+        throw new Error(
+          `${source} team "${id}" address.to must be a non-empty list of agent ids`,
+        );
+      }
+      if (rule.to.some((agentId) => typeof agentId !== "string" || !agentId)) {
+        throw new Error(
+          `${source} team "${id}" address.to must name agent ids`,
+        );
+      }
+      const targets = [...new Set(rule.to as string[])];
+      if (targets.length !== (rule.to as string[]).length) {
+        throw new Error(
+          `${source} team "${id}" address names the same recipient twice for ${rule.from}`,
+        );
+      }
+      return { from: rule.from, to: targets };
+    });
+    teams.push({
+      id,
+      name:
+        typeof entry.name === "string" && entry.name.trim()
+          ? entry.name.trim()
+          : id,
+      description:
+        typeof entry.description === "string" ? entry.description.trim() : "",
+      lead,
+      members,
+      address,
+    });
+  }
+  return teams;
+}
+
+/**
+ * A team's channel, as the ordinary `channels.yaml` machinery expects it.
+ *
+ * A team IS a channel plus two grants, so it materializes as a channel row under the team's id and
+ * rides every path a declared channel already rides: the upsert, the `channel_agents` write, the
+ * per-person copies, and the retire sweep when a package stops declaring it. Nothing team-specific
+ * is added to any of those paths — that reuse IS the design.
+ */
+export function teamChannels(teams: readonly PackageTeam[]): {
+  id: string;
+  name: string;
+  description: string;
+  permittedAgents: string[];
+  allowedGroups: string[];
+}[] {
+  return teams.map((team) => ({
+    id: team.id,
+    name: team.name,
+    description: team.description,
+    permittedAgents: [
+      ...new Set([team.lead, ...team.members.map(({ id }) => id)]),
+    ],
+    allowedGroups: [],
+  }));
+}
+
+/**
+ * Every agent id a team names, checked against the agents the package declares.
+ *
+ * The same rule `channels.yaml` gets, and for the same reason: a team whose members are typos would
+ * silently build a channel with nobody in it and a lead whose prompt names coworkers that do not
+ * exist — the silent gap package loading refuses everywhere else. The error names the team.
+ */
+export function validateTeamAgentRefs(
+  teams: readonly PackageTeam[],
+  declaredAgentIds: ReadonlySet<string>,
+): void {
+  for (const team of teams) {
+    const named = [team.lead, ...team.members.map(({ id }) => id)];
+    for (const rule of team.address) named.push(rule.from, ...rule.to);
+    for (const agentId of new Set(named)) {
+      if (!declaredAgentIds.has(agentId)) {
+        throw new Error(
+          `team "${team.id}" references unknown agent "${agentId}"`,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * The lead's `system_prompt`, with the team appended.
+ *
+ * The prompt is where the lead learns WHO it leads and HOW work moves: the members with their roles,
+ * and the hand-off rule — @ a member with the request, take the result back, and do not invent a
+ * member's completion. Only built-in leads are touched (a remote lead runs on its own server and has
+ * no `system_prompt` here to append to); a package with no teams changes nothing, and the author's
+ * text stays byte-identical above the separator.
+ */
+export function teamLeadPrompts<
+  AgentShape extends {
+    id: string;
+    type: string;
+    configuration: Record<string, unknown>;
+  },
+>(agents: readonly AgentShape[], teams: readonly PackageTeam[]): AgentShape[] {
+  if (teams.length === 0) return [...agents];
+  const ledBy = new Map<string, PackageTeam[]>();
+  for (const team of teams) {
+    ledBy.set(team.lead, [...(ledBy.get(team.lead) ?? []), team]);
+  }
+  return agents.map((agent) => {
+    const teamsLed = ledBy.get(agent.id);
+    if (!teamsLed || agent.type !== "built_in") return agent;
+    const systemPrompt = agent.configuration.systemPrompt;
+    if (typeof systemPrompt !== "string") return agent;
+    return {
+      ...agent,
+      configuration: {
+        ...agent.configuration,
+        systemPrompt: [
+          systemPrompt,
+          ...teamsLed.map((team) =>
+            [
+              "---",
+              `你的团队（${team.name}）：`,
+              ...team.members.map(
+                ({ id, role }) => `- ${id}${role ? `（${role}）` : ""}`,
+              ),
+              "交接规则：需要成员做的事，直接 @ 成员的 id 并把要求写清；成员完成后会回报，由你汇总与把关。不要替成员编造结果，成员没有响应时如实告诉用户。",
+            ].join("\n"),
+          ),
+        ].join("\n\n"),
+      },
+    };
+  });
+}
+
+/**
+ * The team's bot-to-bot grants, written inside the sync transaction.
+ *
+ * DIRECTION IS THE CONTRACT (verified against the only reader): a row says `from` may reach `to`,
+ * and `botsReachableFrom` reads it as agentId = the initiator, ref = the recipient. A row reversed is
+ * a member who can summon its lead and a lead who cannot dispatch — so the test asserts the columns
+ * by name, not just the row count.
+ *
+ * Replaced wholesale under the package's mark, like the skill grants: every `kind = 'bot'` grant the
+ * package made last time is removed first, so a team whose hand-off changed takes the old rows back.
+ * Nothing else writes this kind with this mark, so the sweep cannot reach a grant a person or an
+ * administrator made.
+ */
+export async function synchronizeTeamGrants(
+  executor: Pick<Database, "delete" | "insert">,
+  teams: readonly PackageTeam[],
+): Promise<void> {
+  await executor
+    .delete(pluginGrants)
+    .where(
+      and(
+        eq(pluginGrants.kind, "bot"),
+        eq(pluginGrants.grantedBy, PACKAGE_MARK),
+      ),
+    );
+  const pairs = teams.flatMap((team) =>
+    team.address.flatMap((rule) =>
+      rule.to.map((to) => ({ agentId: rule.from, ref: to })),
+    ),
+  );
+  if (pairs.length > 0) {
+    // A grant an administrator happened to make for the same pair keeps their credit: the package
+    // adds what is missing and retracts only what it wrote, exactly as the skill grants do.
+    await executor
+      .insert(pluginGrants)
+      .values(
+        pairs.map((pair) => ({
+          kind: "bot" as const,
+          ref: pair.ref,
+          agentId: pair.agentId,
+          grantedBy: PACKAGE_MARK,
+          tenantId: SYSTEM_TENANT,
+        })),
+      )
+      .onConflictDoNothing();
   }
 }

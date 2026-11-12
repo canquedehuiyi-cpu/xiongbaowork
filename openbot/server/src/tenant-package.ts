@@ -40,12 +40,18 @@ import {
   connectorConflicts,
   loadSkillAssetFiles,
   type PackageConnector,
+  type PackageTeam,
   type PackageVault,
   parseConnectors,
   parseSkillAssetPaths,
+  parseTeams,
   type SkillAssetFile,
   skillInstructions,
   synchronizePackageConnectors,
+  synchronizeTeamGrants,
+  teamChannels,
+  teamLeadPrompts,
+  validateTeamAgentRefs,
   writeSkillAssets,
 } from "./tenant-package-capabilities";
 import { resolveTenantPackageDirectory } from "./tenant-package-path";
@@ -155,6 +161,11 @@ type PackageFiles = {
    * package that declares none, which is every package written before this contract shipped.
    */
   connectors?: string;
+  /**
+   * Optional, like `connectors.yaml`: `teams.yaml`, the expert teams the package declares. Absent is
+   * a package that declares none.
+   */
+  teams?: string;
   /**
    * A coworker per file, from `agents/` beside `agents.yaml`, in the order they should be read.
    *
@@ -320,6 +331,8 @@ export type TenantPackage = {
    * writes `mcp_servers` rows for these — never grants — and takes back only its own on a redeploy.
    */
   connectors?: PackageConnector[];
+  /** What `teams.yaml` declares (4b-B1), or empty for a package that declares none. */
+  teams?: PackageTeam[];
   /**
    * The files those skills ship, read off disk at load, keyed by slug (`assets:` in `skills.yaml`).
    *
@@ -687,6 +700,8 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
   const connectorsYaml = files.connectors?.trim()
     ? yaml(files.connectors, "connectors.yaml")
     : {};
+  const teamsYaml = files.teams?.trim() ? yaml(files.teams, "teams.yaml") : {};
+  const packageTeams = parseTeams(teamsYaml);
   const tenant = asRecord(brand.tenant, "brand.tenant");
   const skin =
     brand.skin === undefined ? undefined : asRecord(brand.skin, "brand.skin");
@@ -778,6 +793,20 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
       };
     },
   );
+  /*
+   * A team that also answers to a channels.yaml id is two declarations of one channel, and which one
+   * a deployment would get would depend on which file the sync happened to read last — refused, the
+   * way a repeated id inside either file is.
+   */
+  for (const team of packageTeams) {
+    if (channelIds.has(team.id)) {
+      throw new Error(
+        `team "${team.id}" is declared in both teams.yaml and channels.yaml`,
+      );
+    }
+  }
+  validateTeamAgentRefs(packageTeams, agentIds);
+
   const model = asRecord(modelYaml.model, "model");
   if (model.provider !== "openai" && model.provider !== "anthropic") {
     throw new Error("model.provider must be openai or anthropic");
@@ -841,9 +870,12 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     stylesheet: skin
       ? requiredString(skin.stylesheet, "skin.stylesheet")
       : null,
-    agents,
+    // The leads' prompts carry their teams, so a seeded lead already knows who it leads.
+    agents: teamLeadPrompts(agents, packageTeams),
     omittedAgentIds: [...omittedAgentIds],
-    channels,
+    // A team IS a channel plus two grants (see teamChannels): it rides the ordinary channel paths.
+    channels: [...channels, ...teamChannels(packageTeams)],
+    teams: packageTeams,
     avatarSkills,
     model: {
       provider: model.provider,
@@ -992,6 +1024,12 @@ export async function loadTenantPackage(
       if (error.code === "ENOENT") return "";
       throw error;
     });
+  const teams = await readFile(join(sourcePath, "teams.yaml"), "utf8")
+    .then((file) => expandEnvironment(file, "teams.yaml"))
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "";
+      throw error;
+    });
   const agentFiles = await readAgentFiles(sourcePath);
   const tenantPackage = validateTenantPackage({
     brand,
@@ -1001,6 +1039,7 @@ export async function loadTenantPackage(
     knowledge,
     skills,
     connectors,
+    teams,
     agentFiles,
     themeCss,
   });
@@ -1028,6 +1067,7 @@ export async function loadTenantPackage(
           ...contents,
           skills,
           connectors,
+          teams,
           ...agentFiles.map((file) => `${file.filename}\n${file.contents}`),
           ...Object.entries(skillAssets).flatMap(([slug, files]) =>
             files.map((file) => `${slug}/${file.path}\n${file.content}`),
@@ -2116,6 +2156,10 @@ export async function synchronizeTenantPackage(
           tenantPackage.connectors ?? [],
           vault,
         );
+
+        // The teams' bot-to-bot grants, replaced wholesale under the package's mark (4b-B1). The
+        // channels themselves needed no team-specific code: teams are ordinary declared channels.
+        await synchronizeTeamGrants(transaction, tenantPackage.teams ?? []);
 
         return {
           deploymentPackage,

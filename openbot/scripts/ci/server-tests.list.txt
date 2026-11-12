@@ -784,6 +784,7 @@ tests/tenant-package-legacy-path.test.ts
 tests/tenant-package-personal.test.ts
 tests/tenant-package-skill-assets.test.ts
 tests/tenant-package-switch-retires.test.ts
+tests/tenant-package-teams.test.ts
 tests/tenant-package.test.ts
 tests/tenant-rls.test.ts
 tests/tenant-transaction-frame.integration.test.ts
