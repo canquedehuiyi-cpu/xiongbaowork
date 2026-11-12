@@ -21,6 +21,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { shortName } from "@/lib/brand";
 import { describeAiConnection } from "@/lib/desktop/ai-connection";
 import { changeAiConnectionMutationOptions } from "@/lib/desktop/mutations";
 import {
@@ -42,7 +43,7 @@ export function AiModelSection() {
   if (desktopShell() === null || !connection.data) return null;
   return (
     <PageSection
-      description="选择员工用哪家 AI 提供方，以及熊宝怎样登录它。"
+      description={`选择员工用哪家 AI 提供方，以及${shortName()}怎样登录它。`}
       title="AI 模型"
     >
       <PageRows>
@@ -112,7 +113,8 @@ function AiConnectionRow({ connection }: { connection: DesktopAiConnection }) {
               </ItemGroup>
             )}
             <p className="text-muted-foreground">
-              要更换的话，熊宝会先停下并打开设置窗口，按你在那里选的连接重新启动。
+              要更换的话，{shortName()}
+              会先停下并打开设置窗口，按你在那里选的连接重新启动。
             </p>
             {change.error ? (
               <p className="text-destructive" role="alert">
@@ -129,7 +131,7 @@ function AiConnectionRow({ connection }: { connection: DesktopAiConnection }) {
               onClick={() => change.mutate()}
               size="sm"
             >
-              {stopping ? "正在停止熊宝…" : "更换 AI 连接"}
+              {stopping ? `正在停止${shortName()}…` : "更换 AI 连接"}
             </Button>
           </DialogFooter>
         </DialogContent>

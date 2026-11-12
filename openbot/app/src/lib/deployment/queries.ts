@@ -3,6 +3,7 @@ import {
   queryOptions,
   useQuery,
 } from "@tanstack/react-query";
+import { shortName } from "@/lib/brand";
 import { client } from "@/lib/client";
 
 /**
@@ -23,9 +24,9 @@ export type DeploymentCapabilities = {
    */
   generativeUi: boolean;
   /**
-   * Whether to show the banner offering help self-hosting OpenBot. A fork that runs OpenBot for its
-   * own organization turns it off with OPENBOT_SELF_HOST_BANNER=false, and the server answers false
-   * for a deployment on a paid Intelligence plan.
+   * Whether the operator turned the support banner on (OPENBOT_SELF_HOST_BANNER=true; off by
+   * default). The server answers false for a deployment on a paid Intelligence plan, and the banner
+   * itself stays hidden without a tenant `supportUrl`.
    */
   selfHostBanner: boolean;
   /**
@@ -71,7 +72,7 @@ export function deploymentCapabilitiesQueryOptions() {
        */
       const body = (await (
         await client("/api/capabilities", {
-          fallback: "读不到熊宝能做什么。",
+          fallback: `读不到${shortName()}能做什么。`,
         })
       ).json()) as {
         generativeUi?: boolean;

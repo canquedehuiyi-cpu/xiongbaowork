@@ -36,7 +36,7 @@ export default function Layout() {
   }, [session]);
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
-      <Stack.Screen name="index" options={{ title: "OpenBot" }} />
+      <Stack.Screen name="index" options={{ title: "熊宝" }} />
       <Stack.Screen name="conversation" options={{ title: "Conversation" }} />
       <Stack.Screen name="approvals" options={{ title: "Approval inbox" }} />
       <Stack.Screen name="needs-you" options={{ title: "Needs you" }} />

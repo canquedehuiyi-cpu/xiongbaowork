@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PRESET_IMAGES } from "@/components/portraits/preset-images";
+import { shortName } from "@/lib/brand";
 import type { PortraitPreset } from "@/lib/portraits/queries";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +23,7 @@ export function BearMascot({
 }) {
   return (
     <img
-      alt="熊宝"
+      alt={shortName()}
       className={cn(
         "shrink-0 select-none rounded-[30%] border border-foreground/15 bg-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.07)]",
         className,

@@ -101,8 +101,10 @@ export function summaryFor(harness: Harness): string {
 }
 
 /**
- * What a Bot that runs inside OpenBot is powered by: its subtitle's "Powered by OpenBot", and the
- * framework it is told it runs on.
+ * The identifier `AgentProfile.framework` carries for a Bot that runs inside this server; the app
+ * compares against it, so the value stays. What a person or the model READS is the product's English
+ * name, substituted where the text is made (`frameworkLabel` in server/src/agents/framework.ts, the
+ * starter seed in tenant-package.ts, `poweredBy` in the app's new-bot sheet).
  */
 export const OPENBOT_HARNESS_NAME = "OpenBot";
 

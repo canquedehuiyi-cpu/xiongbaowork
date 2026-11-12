@@ -14,6 +14,7 @@ import { emailDomainAllowed } from "./email-domain";
 import { type EntraRefusal, EntraTokenRefusedError } from "./entra-refusal";
 import type { AuthService } from "./guards";
 import { type createAuth, decideSignInMethod } from "./index";
+import { englishName } from "../brand";
 
 /**
  * Microsoft Entra on both sides of OpenBot: a person's own app calling OpenBot with their Entra
@@ -265,7 +266,7 @@ export function createEntra(options: {
         console.warn(
           JSON.stringify({
             type: "entra-token-sign-in-refused",
-            note: "A valid Entra token arrived for somebody OpenBot has not seen, and signing them in was refused.",
+            note: `A valid Entra token arrived for somebody ${englishName()} has not seen, and signing them in was refused.`,
             error: error instanceof Error ? error.message : String(error),
           }),
         );
@@ -475,7 +476,7 @@ export function createEntra(options: {
       forget(userId);
       throw new EntraTokenRefusedError(
         "not-admitted",
-        "This person may no longer use OpenBot.",
+        `This person may no longer use ${englishName()}.`,
       );
     }
     return await reused(`${userId}\n${scope}`, async () => {

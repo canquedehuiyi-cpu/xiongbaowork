@@ -6,7 +6,9 @@
  * this app on a server, and nothing ever read that cookie back — so the preference lives here
  * instead, in the same shape and the same storage as the theme preference next door.
  */
-export const SIDEBAR_STORAGE_KEY = "openbot-sidebar";
+export const SIDEBAR_STORAGE_KEY = "xiongbao-sidebar";
+/** Read once to carry a pre-rename preference across; see `readMigrated`. */
+export const LEGACY_SIDEBAR_STORAGE_KEY = "openbot-sidebar";
 
 /**
  * Only the exact stored `collapsed` starts the sidebar closed.
@@ -39,7 +41,8 @@ export function applySidebarOpen(open: boolean, effects: SidebarEffects) {
  * the rail measures as the drag starts, nor than `SIDEBAR_MIN_WIDTH`; never wider than
  * `SIDEBAR_MAX_WIDTH`, past which a roster stops being a column beside the work and becomes the work.
  */
-export const SIDEBAR_WIDTH_STORAGE_PREFIX = "openbot-sidebar-width:";
+export const SIDEBAR_WIDTH_STORAGE_PREFIX = "xiongbao-sidebar-width:";
+export const LEGACY_SIDEBAR_WIDTH_STORAGE_PREFIX = "openbot-sidebar-width:";
 export const SIDEBAR_MIN_WIDTH = 220;
 export const SIDEBAR_MAX_WIDTH = 480;
 

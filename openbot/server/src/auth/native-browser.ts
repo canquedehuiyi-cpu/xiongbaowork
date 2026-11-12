@@ -1,3 +1,4 @@
+import { englishName } from "../brand";
 import type { AuthProviderId } from "../config";
 
 /** Browser half of Better Auth's official desktop transfer; OAuth remains with Better Auth. */
@@ -40,8 +41,13 @@ export function desktopAuthPage(
     callback: url.href,
   }).replaceAll("<", "\\u003c");
   const nonce = crypto.randomUUID();
+  // The name is tenant-supplied and lands in HTML, so it is escaped rather than trusted.
+  const name = englishName().replace(
+    /[&<>"']/g,
+    (c) => `&#${c.charCodeAt(0)};`,
+  );
   return new Response(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sign in to OpenBot</title></head><body><main><h1>Sign in to OpenBot</h1><p id="status">Continue with your organization account to return to OpenBot.</p><button id="continue">Continue</button></main><script nonce="${nonce}">
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sign in to ${name}</title></head><body><main><h1>Sign in to ${name}</h1><p id="status">Continue with your organization account to return to ${name}.</p><button id="continue">Continue</button></main><script nonce="${nonce}">
 const config=${config};
 const status=document.getElementById('status');
 const button=document.getElementById('continue');

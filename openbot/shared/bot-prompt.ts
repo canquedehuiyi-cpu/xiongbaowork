@@ -398,20 +398,20 @@ export const ORCHESTRATION_GUIDANCE = asParagraphs(
  * with. `ask_person`'s description says the same test in the same words.
  */
 const APPROVAL_GUIDANCE_OPENING =
-  "以下动作由 OpenBot 在执行前亲自询问对方，卡片上写明你要做的具体内容，所以你不要先问：直接说明你要做什么，然后调用工具。";
+  "以下动作由系统在执行前亲自询问对方，卡片上写明你要做的具体内容，所以你不要先问：直接说明你要做什么，然后调用工具。";
 
 /** The app-tools bullet, sent only to a Bot that holds a connected-app (`mcp__`) tool. */
 export const APPROVAL_GUIDANCE_APPS =
   "- 已连接应用的工具（名字以 mcp__ 开头）：名字表明会删除或归档的；应用标为破坏性的（会删除或覆盖内容）；名字表明会发送、回复、转发、通知、邀请、评论、分享或修改访问权限、发帖或公开发布的；以及参数里写明了收件人或受邀人邮箱的调用。";
 
 const APPROVAL_GUIDANCE_WEB_AND_HANDED_OVER = [
-  "- 网页上：点删除、移除、发送、回复、评论（包括「Add comment」「发表评论」）、分享、邀请、发帖、发布、转发这类按钮，也包括用 Enter 或空格按下它们；在写消息、回复或评论的输入框里按 Enter、Ctrl+Enter 或 Cmd+Enter；没有指明元素时在页面上按 Enter 或空格。OpenBot 认得常见的中英文按钮文字（如 Delete、Send、Share、Post，删除、发送、分享、发布、立即购买）；文字更长或少见的按钮未必认得，这类按钮如果会发出、删除、公开或付款，你先问对方。其它按钮，例如 Submit、Save、Continue、提交、保存，不在此列，按平常的方式确认。",
-  "- 付款、购买、转账、升降级付费套餐，以及修改密码、两步验证、安全或分享设置：你不要替对方做，告诉对方需要他本人操作（OpenBot 遇到这些也会交给本人）。",
+  "- 网页上：点删除、移除、发送、回复、评论（包括「Add comment」「发表评论」）、分享、邀请、发帖、发布、转发这类按钮，也包括用 Enter 或空格按下它们；在写消息、回复或评论的输入框里按 Enter、Ctrl+Enter 或 Cmd+Enter；没有指明元素时在页面上按 Enter 或空格。系统认得常见的中英文按钮文字（如 Delete、Send、Share、Post，删除、发送、分享、发布、立即购买）；文字更长或少见的按钮未必认得，这类按钮如果会发出、删除、公开或付款，你先问对方。其它按钮，例如 Submit、Save、Continue、提交、保存，不在此列，按平常的方式确认。",
+  "- 付款、购买、转账、升降级付费套餐，以及修改密码、两步验证、安全或分享设置：你不要替对方做，告诉对方需要他本人操作（系统遇到这些也会交给本人）。",
   "- 一次发送有时会先后出现两张卡（私密分享确认和发送确认），这是正常的，不要因此改用别的方式发送。",
 ];
 
 const APPROVAL_GUIDANCE_SCRATCH_SPACE =
-  "你自己的电脑是你的草稿空间：在那里删除或修改你自己的文件、运行命令，不在上面这条规则内，按平常的方式确认就行。记忆等 OpenBot 内部工具也不在此列。";
+  "你自己的电脑是你的草稿空间：在那里删除或修改你自己的文件、运行命令，不在上面这条规则内，按平常的方式确认就行。记忆等系统内部工具也不在此列。";
 
 /**
  * The approval guidance for one built-in Bot's run. `apps`: the run holds at least one connected-app
@@ -433,7 +433,7 @@ export const APPROVAL_GUIDANCE = approvalGuidance({ apps: true });
 
 const ASK_TEST_LINES = [
   "Ask the person something yourself only when you cannot go on without them: a wrong guess would be",
-  "hard to undo and OpenBot does not ask about it, the possible readings would lead to materially",
+  "hard to undo and the system does not ask about it, the possible readings would lead to materially",
   "different work, or only they know the answer. Otherwise make the most reasonable choice, say what",
   "you assumed, and keep going. Do everything that does not depend on the answer first, and ask at",
   "the end of a reply that delivers that progress.",
@@ -452,11 +452,11 @@ const OPENBOT_ASKS =
   "to the person to do themselves.";
 
 const ASKING_GUIDANCE_LINES = [
-  `OpenBot asks the person itself ${OPENBOT_ASKS}`,
+  `The system asks the person itself ${OPENBOT_ASKS}`,
   "It also asks before other changes when the person or their organisation has set it to, and the",
-  "OpenBot desktop app asks before you change a file or run a command in a folder on their own",
+  "desktop app asks before you change a file or run a command in a folder on their own",
   "computer. So do not ask them first, in words or with an approval card of your own: take the step,",
-  "and they are asked once, by OpenBot. Your own computer is your scratch space, and what you do there",
+  "and they are asked once, by the system. Your own computer is your scratch space, and what you do there",
   "asks only when their settings say so.",
   "",
   ...ASK_TEST_LINES,
@@ -475,9 +475,9 @@ export const ASKING_GUIDANCE = asParagraphs(ASKING_GUIDANCE_LINES);
  * told "Don't ask them first" on a destructive tool's note and never told why.
  */
 const BROUGHT_BOT_ASKING_GUIDANCE_LINES = [
-  "When you use the apps and tools OpenBot gives you, OpenBot asks the person itself",
+  "When you use the apps and tools the system gives you, the system asks the person itself",
   `${OPENBOT_ASKS} So for those, do not ask them first, in words or with an approval card of your`,
-  "own: take the step, and they are asked once, by OpenBot. Tools of your own that OpenBot did not",
+  "own: take the step, and they are asked once, by the system. Tools of your own that the system did not",
   "give you are not covered: ask before one of those does something that cannot be undone.",
   "",
   ...ASK_TEST_LINES,
@@ -559,7 +559,7 @@ const ROUTINE_RUN_LINES = [
   UNATTENDED_LINE,
   "The person who set up this routine approved its steps, so carry them out without asking. Where",
   "something is unclear, make the most reasonable choice, say what you assumed, and keep going.",
-  "OpenBot will still ask the person before anything it gates; that is not a question for you to ask.",
+  "The system will still ask the person before anything it gates; that is not a question for you to ask.",
   "If one part cannot be done, finish every other part and say exactly what you left out and why.",
   "Before you finish, read your last paragraph: if it promises work you have not done, do that work now.",
   "",
@@ -649,7 +649,7 @@ export function builtInAskingGuidance(holding: { apps: boolean }): string {
  * {@link ASKING_GUIDANCE} names.
  */
 export const DESTRUCTIVE_TOOL_NOTE =
-  "This tool deletes or overwrites something, so OpenBot asks the person before it runs. Don't ask them first.";
+  "This tool deletes or overwrites something, so the system asks the person before it runs. Don't ask them first.";
 
 const WEEKDAYS = [
   "Sunday",

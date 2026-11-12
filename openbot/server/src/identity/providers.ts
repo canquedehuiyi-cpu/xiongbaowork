@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { shortName } from "../brand";
 import {
   type Identity,
   IdentityInputError,
@@ -26,7 +27,7 @@ export const PROVIDERS: Readonly<Record<IdentityProvider, ProviderSpec>> =
       title: "Slack",
       methods: ["challenge"],
       instruction: (code) =>
-        `在 Slack 里私信熊宝应用，发送这条消息：link ${code}`,
+        `在 Slack 里私信${shortName()}应用，发送这条消息：link ${code}`,
     },
     github: {
       title: "GitHub",

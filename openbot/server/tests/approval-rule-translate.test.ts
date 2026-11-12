@@ -299,7 +299,7 @@ describe("POST /api/approvals/team/rules/translate", () => {
       warning: null,
     });
     expect((check as { error: string }).error).toBe(
-      'Tool or app: "composio-hubspot/*" matches no tool OpenBot has. Apps set up: composio-gmail, composio-salesforce, composio-slack.',
+      'Tool or app: "composio-hubspot/*" matches no tool XiongBao Work has. Apps set up: composio-gmail, composio-salesforce, composio-slack.',
     );
     // Two writings and no reading: rows that don't check are not explained as though they worked.
     expect(prompts()).toHaveLength(2);
@@ -365,7 +365,7 @@ describe("POST /api/approvals/team/rules/translate", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       error:
-        "OpenBot needs a model key to write rules from a description. Add one on the Credentials page, or add the rule by hand.",
+        "XiongBao Work needs a model key to write rules from a description. Add one on the Credentials page, or add the rule by hand.",
     });
     expect(mock.getRequests()).toHaveLength(0);
     expect(audit.map((event) => event.payload)).toEqual([
@@ -468,13 +468,13 @@ describe("the rows' check", () => {
       "an app that is not set up",
       row({ toolRef: "composio-hubspot/*", scope: "composio-hubspot" }),
       "toolRef",
-      "matches no tool OpenBot has",
+      "matches no tool XiongBao Work has",
     ],
     [
       "a tool the app does not have",
       row({ toolRef: "composio-gmail/GMAIL_SEND_FAX" }),
       "toolRef",
-      "is not a tool OpenBot has. composio-gmail has: GMAIL_ADD_LABEL_TO_EMAIL",
+      "is not a tool XiongBao Work has. composio-gmail has: GMAIL_ADD_LABEL_TO_EMAIL",
     ],
     [
       "a kind of action the tool never takes",
@@ -511,7 +511,7 @@ describe("the rows' check", () => {
       vocabulary,
     );
     expect((check as { error: string }).error).toStartWith(
-      'Rule 2, Tool or app: "composio-gmail/NOPE" is not a tool OpenBot has.',
+      'Rule 2, Tool or app: "composio-gmail/NOPE" is not a tool XiongBao Work has.',
     );
   });
 

@@ -37,7 +37,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const suite = randomUUID().slice(0, 8);
 const person = `pkg-channels-${suite}`;
-const loaded = await loadTenantPackage("../examples/qoderwake");
+const loaded = await loadTenantPackage("../examples/xiongbao");
 const expected = loaded.channels.map((channel) =>
   packageChannelId(person, channel.id),
 );

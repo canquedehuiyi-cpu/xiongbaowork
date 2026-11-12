@@ -6,7 +6,7 @@ import {
   LiveScreen,
   type LiveScreenHandle,
 } from "@/components/computer/live-screen";
-import { OpenBotLogo } from "@/components/edition/openbot-logo";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -350,9 +350,9 @@ export function OpeningBrowser({
                 aria-live="polite"
                 className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-muted-foreground text-sm"
               >
-                <OpenBotLogo
-                  aria-hidden="true"
-                  className="size-12 drop-shadow-[0_8px_24px_rgb(120_100_220/0.35)] motion-safe:animate-pulse"
+                <BrandLogo
+                  className="drop-shadow-[0_8px_24px_rgb(120_100_220/0.35)] motion-safe:animate-pulse"
+                  size={48}
                 />
                 正在打开你的浏览器…
               </div>
@@ -447,14 +447,17 @@ function Screen({
 }
 
 /**
- * What an empty tab shows: the OpenBot orb and one field to search or go to a site, as a browser's new tab page does,
+ * What an empty tab shows: the product logo and one field to search or go to a site, as a browser's new tab page does,
  * over the empty page the browser itself would draw white. It goes where the address bar would.
  */
 function StartPage({ onGo }: { onGo: (url: string) => void }) {
   const [typed, setTyped] = useState("");
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-background px-6">
-      <OpenBotLogo className="size-14 drop-shadow-[0_8px_24px_rgb(120_100_220/0.35)]" />
+      <BrandLogo
+        className="drop-shadow-[0_8px_24px_rgb(120_100_220/0.35)]"
+        size={56}
+      />
       <form
         aria-label="搜索或前往网站"
         className="w-full max-w-lg"

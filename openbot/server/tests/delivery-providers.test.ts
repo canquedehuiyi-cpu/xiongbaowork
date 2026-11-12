@@ -200,7 +200,7 @@ describe("real HTTP provider adapters", () => {
       "";
     expect(body).not.toContain("\uFFFD");
     expect(body).toBe(
-      `${"a".repeat(1399)}…\nOpen OpenBot to read the full message.`,
+      `${"a".repeat(1399)}…\nOpen XiongBao Work to read the full message.`,
     );
   });
   test("Expo sends canonical deep links and reads receipts including invalid devices", async () => {
@@ -231,7 +231,7 @@ describe("real HTTP provider adapters", () => {
       channelId: "ch1",
       kind: "question",
       requestId: "q1",
-      url: "openbotmobile://approvals?channelId=ch1&requestId=q1",
+      url: "xiongbao://approvals?channelId=ch1&requestId=q1",
     });
     expect(await push.receipt("ticket1")).toEqual({
       status: "failed",

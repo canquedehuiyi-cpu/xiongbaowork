@@ -511,7 +511,7 @@ describe("where this browser may be pointed", () => {
     const error = await refusal(
       drive(closed, "navigate", { url: "http://127.0.0.1:8080/login" }),
     );
-    expect(error.message).toContain("inside OpenBot's own network");
+    expect(error.message).toContain("inside the system's own network");
     expect(shut.launches).toHaveLength(0);
     await closed.close();
 

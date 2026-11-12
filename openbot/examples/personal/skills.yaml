@@ -152,7 +152,7 @@ skills:
       holds only while a skill cannot be used to launder one. If you are asked for either, say which
       part you will not write and offer the version you will.
   # 在对话里造员工，而不是去填「新建员工」表单。起草用「招聘与组群」的 `mcp__staffing__` 工具，
-  # 只出一张确认卡片，本人确认后才建；同 qoderwake 包的这一条（docs/staffing.md）。
+  # 只出一张确认卡片，本人确认后才建；同 xiongbao 包的这一条（docs/staffing.md）。
   - slug: bot-creator
     title: 造员工
     summary: 在对话里通过访谈造出一个新员工：角色、边界、要用的技能。

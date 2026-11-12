@@ -90,7 +90,7 @@ describe("creating the container with a service token", () => {
     expect(headers["x-copilotkit-ei-service-token"]).toBe(serviceToken.token);
     expect(JSON.parse(String(request.init.body))).toEqual({
       id: "openbot",
-      name: "OpenBot",
+      name: "XiongBao Work",
     });
     expect(runtimeKey.probes).toBe(2);
   });

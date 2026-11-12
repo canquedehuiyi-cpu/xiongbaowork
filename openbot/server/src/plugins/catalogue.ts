@@ -20,6 +20,7 @@
 
 // 招聘与组群的工具名：一份常量，目录、授予与对话记录读同一组名字。它什么也不导入。
 import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
+import { companyName, supportUrl } from "../brand";
 /**
  * How a server is authenticated, and whose credential does it.
  *
@@ -219,7 +220,8 @@ export type CatalogueEntry = {
    * naming it resolves to a Composio dial with no app and no brokered gate.
    */
   transport?: CuratedTransportKind;
-  docsUrl: string;
+  /** Absent for first-party entries when the deployment publishes no support URL. */
+  docsUrl?: string;
 };
 
 /**
@@ -1676,7 +1678,10 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
   {
     key: "routines",
     title: "Routines",
-    vendor: "OpenBot",
+    // Getters, not values: the catalogue is built at import, before the tenant package sets the brand.
+    get vendor() {
+      return companyName();
+    },
     summary:
       "Standing instructions a Bot runs on a schedule, as whoever scheduled them.",
     /*
@@ -1718,13 +1723,18 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
      * tools.ts` 里 `store.list(ownerUserId)` 再按 Bot 过滤），没有地址或凭据，列为读。
      */
     readTools: Object.freeze(["list_routines", "list_goals"]),
-    docsUrl: "https://github.com/CopilotKit/OpenBot/blob/main/docs/routines.md",
+    get docsUrl() {
+      return supportUrl();
+    },
   },
 
   {
     key: "staffing",
     title: "招聘与组群",
-    vendor: "OpenBot",
+    // Getters, not values: the catalogue is built at import, before the tenant package sets the brand.
+    get vendor() {
+      return companyName();
+    },
     summary:
       "员工替本人起草新员工、员工改动和群聊的提议；本人在卡片上确认之后，才以本人的身份执行。",
     /*
@@ -1742,8 +1752,9 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
      */
     writeTools: Object.freeze([]),
     readTools: Object.freeze([...STAFFING_TOOL_NAMES]),
-    docsUrl:
-      "https://github.com/CopilotKit/OpenBot/blob/main/docs/coworkers.md",
+    get docsUrl() {
+      return supportUrl();
+    },
   },
 ]);
 

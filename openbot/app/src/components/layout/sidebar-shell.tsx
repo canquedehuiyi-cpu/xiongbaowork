@@ -12,11 +12,14 @@ import {
 } from "@/components/ui/sidebar";
 import {
   applySidebarOpen,
+  LEGACY_SIDEBAR_STORAGE_KEY,
+  LEGACY_SIDEBAR_WIDTH_STORAGE_PREFIX,
   parseStoredSidebarOpen,
   parseStoredSidebarWidth,
   SIDEBAR_STORAGE_KEY,
   SIDEBAR_WIDTH_STORAGE_PREFIX,
 } from "@/lib/sidebar";
+import { readMigrated } from "@/lib/storage-migrate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,12 +57,14 @@ export function SidebarShell({
 }) {
   // Read before the first paint, so a shell somebody left collapsed never flashes open.
   const [open, setOpen] = useState(() =>
-    parseStoredSidebarOpen(window.localStorage.getItem(SIDEBAR_STORAGE_KEY)),
+    parseStoredSidebarOpen(
+      readMigrated(SIDEBAR_STORAGE_KEY, LEGACY_SIDEBAR_STORAGE_KEY),
+    ),
   );
   const widthKey = `${SIDEBAR_WIDTH_STORAGE_PREFIX}${name}`;
   const [width, setWidth] = useState(() =>
     parseStoredSidebarWidth(
-      window.localStorage.getItem(widthKey),
+      readMigrated(widthKey, `${LEGACY_SIDEBAR_WIDTH_STORAGE_PREFIX}${name}`),
       defaultWidth,
     ),
   );

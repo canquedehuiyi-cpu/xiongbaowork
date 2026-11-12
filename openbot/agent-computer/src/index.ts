@@ -1,3 +1,5 @@
+// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+import "../../shared/apply-env-aliases";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { setDefaultAutoSelectFamily } from "node:net";
 import { join } from "node:path";

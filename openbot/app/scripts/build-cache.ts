@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
+import { resolveTenantPackageDirectory } from "../../server/src/tenant-package-path";
 
 const MANIFEST_VERSION = 1;
 const MANIFEST_NAME = ".openbot-build-cache.json";
@@ -118,12 +119,12 @@ async function collectFiles(
 /**
  * The package whose branding the build bakes in, so a change to it invalidates the cache. Unset, the
  * same default `scripts/generate-app-config.ts` and the server use (audit defect #14): hashing a
- * different package than the one the build read let a QoderWake branding change reuse a stale build.
+ * different package than the one the build read let a branding change reuse a stale build.
  */
 export function tenantPackageDir(rootDir: string, env: BuildCacheEnv): string {
   const configured = env.TENANT_PACKAGE_DIR;
-  if (!configured) return join(rootDir, "examples", "qoderwake");
-  return resolve(rootDir, "server", configured);
+  if (!configured) return join(rootDir, "examples", "xiongbao");
+  return resolveTenantPackageDirectory(resolve(rootDir, "server", configured));
 }
 
 function viteEnvironment(env: BuildCacheEnv): Record<string, string> {

@@ -1,3 +1,5 @@
+// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+import "../../shared/apply-env-aliases";
 import { serve } from "bun";
 import { Hono } from "hono";
 import { authorised } from "./authorisation";

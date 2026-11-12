@@ -2,7 +2,7 @@
 
 以下保留原文，包含本机共享栈和共享库的历史操作命令。它们不是交付部署指令；并行工作一律使用独立容器/库，禁止执行旧文中的共享栈写入、重启或共享库迁移。
 
-当前部署请读 [部署手册](deployment-qoderwake.md)。Windows 宿主不能直接 bun 起 server；镜像或 Linux/WSL 是交付路径。
+当前部署请读 [部署手册](deployment-xiongbao.md)。Windows 宿主不能直接 bun 起 server；镜像或 Linux/WSL 是交付路径。
 
 ---
 
@@ -65,7 +65,7 @@ docker compose up -d postgres   # 或复用已存在的 openbot-postgres-1
 | --- | --- | --- |
 | `DATABASE_URL` | 见 §1 运行期串 | 服务端与 RLS 的租户注入都走它 |
 | `TENANT_RUNTIME` | `cloud` \| `device` | `device` 时动作下发到租户自己的设备（runner），无可达设备就**拒绝**而不是悄悄在云端做；`cloud` 走部署自带的 agent-computer。不设这个键时：`NODE_ENV=production` 取 `device`，开发和测试取 `cloud`（F6，canquedehuiyi-cpu/xiongbaowork#169）；服务启动时打印一行 `tenant-runtime` 日志说明取值和原因。已登记进 `.env.example`（2026-10-08 之前只在 `src/config.ts` 里读、示例文件没有它，现已补上） |
-| `TENANT_PACKAGE_DIR` | 例 `examples/qoderwake` | 品牌包（品牌/员工/技能/渠道/主题），启动时按 checksum 同步 |
+| `TENANT_PACKAGE_DIR` | 例 `examples/xiongbao` | 品牌包（品牌/员工/技能/渠道/主题），启动时按 checksum 同步 |
 | `OPENBOT_SINGLE_USER` | `true` 仅限本机单用户 | 关掉才走真实登录与租户隔离 |
 
 多租户口径：**个人用户即租户**，注册即 `provisionTenant`（Free 订阅 + 一个"分身"），分身不计入座位配额。套餐与配额在写入路径拦截（`src/quota/limits.ts`），**不做支付**：`/plans` 页的动词是"切换"。
@@ -99,7 +99,7 @@ MSYS_NO_PATHCONV=1 docker run --rm \
 
 **挂载少一条，就会多出一批看起来像回归的红灯**（2026-10-07 实测，每条都对应一次真误判）：
 `server/drizzle` 少了 ⇒ `migration-journal` 读镜像里的旧迁移清单，报本分支新增迁移"缺快照"；
-`examples` 少了 ⇒ `qoderwake-package.test.ts` 在装载期 ENOENT（`TENANT_PACKAGE_DIR` 默认相对 cwd 指 `../examples`），产出**一条没有名字的失败**——这就是全量里 `(unnamed)` 的一种形状；补上后同一文件 4 pass / 0 fail；
+`examples` 少了 ⇒ `xiongbao-package.test.ts` 在装载期 ENOENT（`TENANT_PACKAGE_DIR` 默认相对 cwd 指 `../examples`），产出**一条没有名字的失败**——这就是全量里 `(unnamed)` 的一种形状；补上后同一文件 4 pass / 0 fail；
 `.env` 少了 ⇒ `local-threads.test.ts` 的 `applicationDatabaseUrl()` 读 `/app/.env` ENOENT；
 `server/scripts` 只在跑清库脚本时要，但一次挂齐比事后猜缺哪条便宜。
 app 侧对应 `-v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests`（凡 import `../../server/src/...` 的测试再加 `$B/server/src`），cwd 换成 `/app/app`。
@@ -153,7 +153,7 @@ done
 - `.env` 里 `OPENBOT_SINGLE_USER=true` 已开、`OPENBOT_ORGANIZATION_AUTHORITY` 是注释掉的（按 `auth/dev-actor.ts` 的口径，此时访客即管理员）。
 - **但**：`curl http://localhost:3001/api/tasks` 回 **401**，而浏览器里 `/tasks` 的 DOM 只有空的 `RootWebArea`（React 没挂载完）。所以 **G2 的"跑通"这件事目前没有证据**，卡点在这两条之一：单用户 actor 需要先拿到 dev session cookie，或前端 boot 依赖某个请求没回来。**下一步就从这条查起**，别看别的。
 - 三个必须踩的坑（每个都对应我这次真实撞上的现象）：
-  1. **app 容器也要挂 `examples`**。只给 server 挂 ⇒ app 的 `predev`（`scripts/generate-app-config.ts` → `loadTenantPackage`）在 `/app/examples/qoderwake/channels.yaml` 上 ENOENT，报的是镜像里的旧副本缺文件，不是仓库缺文件（仓库里 `examples/qoderwake/channels.yaml` 确实在）。
+  1. **app 容器也要挂 `examples`**。只给 server 挂 ⇒ app 的 `predev`（`scripts/generate-app-config.ts` → `loadTenantPackage`）在 `/app/examples/xiongbao/channels.yaml` 上 ENOENT，报的是镜像里的旧副本缺文件，不是仓库缺文件（仓库里 `examples/xiongbao/channels.yaml` 确实在）。
   2. **`loadTenantPackage` 需要的六个文件是硬读**（`server/src/tenant-package.ts:727`：brand/agents/channels/model/knowledge + theme.css，前五个**没有 `.catch`**）。品牌包少任何一个文件就不是"这块内容没有"，是**整个装载抛错**。
   3. **挂进来的 `app/src` 会让 TanStack 路由树生成器 EXDEV 失败**（`.tanstack/tmp/… -> /app/app/src/routeTree.gen.ts` 跨设备 rename）。本次**没有损坏工作区**（`git status` 空、文件 1206 行完好），Vite 也照样起来了，但 `routeTree.gen.ts` 从此**不会被 dev server 更新**——这正好对上本项目"新路由手工登记 routeTree"的既有约定。
 - 起法（`docker compose up --build` 那条路**我没走**，因为它会重建你机器上正在用的 `openbot-postgres-1`）：
@@ -196,20 +196,20 @@ done
 - **白标那条推广条确实没了**：带上 `OPENBOT_SELF_HOST_BANNER=false` 重启后，`/wakers` 的结构快照里不再有 `complementary "Self-host OpenBot"`，`/api/capabilities` 也回 `selfHostBanner:false`。**配置生效，不需要改代码**。
 - **D1 成立**：`heading "数字员工"` + 双页签「员工 / 小组」（小组 = D3 的入口已存在）+ 状态筛选带计数「全部 (16) / 运行中 (0) / 待命 (16) / 已停用 (0)」，卡片「打开」链到 `/agents?agent=<id>`（D5 的入口）。
 - **品牌包真的同步进来了**：16 位员工里有 `后端工程师/Backend Engineer`、`代码审核员/Code Reviewer`、`运营助手/Operations`、`测试工程师/QA Engineer`、`我的分身/个人分身`（当时以为是 CONTEXT.md 里 `avatar-<tenant>` 那位；**更正（2026-11-06）**：这张卡其实是品牌包的公共员工 `general-assistant`，它和本人的分身同名。现在它叫「通用助手/General Assistant」，默认对话「我的分身」由本人的 `avatar-<tenant>` 接，见 #283）。
-- ⚠️ **024 的实证缺口（新found，具体到名字）**：这 16 位里**只有 5 位是中文显示名**，其余 11 位仍是上游英文名与英文角色标签——`Expense Review / Finance Operations`、`Feedback Digest / Product Research`、`Interview Notes / Recruiting`、`Knowledge / Company Knowledge`、`Meeting Follow-ups / Meetings`、`Onboarding Buddy / People Operations`、`On-call Handover / Reliability`、`Release Notes / Release Communications`、`Research Desk / Briefings`、`Ticket Triage / Support Operations`、`Vendor Review / Procurement`。**下一刀就是这些**：改 `examples/qoderwake/agents.yaml` 的显示名/角色（品牌包路径，不是改界面文案），因为界面是从包读的名字。
+- ⚠️ **024 的实证缺口（新found，具体到名字）**：这 16 位里**只有 5 位是中文显示名**，其余 11 位仍是上游英文名与英文角色标签——`Expense Review / Finance Operations`、`Feedback Digest / Product Research`、`Interview Notes / Recruiting`、`Knowledge / Company Knowledge`、`Meeting Follow-ups / Meetings`、`Onboarding Buddy / People Operations`、`On-call Handover / Reliability`、`Release Notes / Release Communications`、`Research Desk / Briefings`、`Ticket Triage / Support Operations`、`Vendor Review / Procurement`。**下一刀就是这些**：改 `examples/xiongbao/agents.yaml` 的显示名/角色（品牌包路径，不是改界面文案），因为界面是从包读的名字。
 - **走查工具在本机的形状**（省下一轮时间）：`navigate_page` 对 vite dev server **经常 30s 超时**（HMR 长连让 load 事件不结），**但页面其实没导航成功与否要看重试**——原样再调一次通常立刻成功；`take_screenshot` 不可用（`NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`，`visibilityState=hidden`），`list_network_requests` 恒返回 `No requests found`，所以**只能靠 `take_snapshot` 的结构树当证据**。SPA 全客户端渲染，`curl` 只能拿到空壳，替代不了浏览器。
 
 ## 11. 更正上一条的最后一节：那 11 个英文名**不是 024 的活**（我写错了，实测为证）
-上一条说"16 位里 11 位是上游英文名，下一刀改 `examples/qoderwake/agents.yaml`"。**错了，而且错的方向是危险的**：把一个数据库残留当成了产品缺陷。实测：
+上一条说"16 位里 11 位是上游英文名，下一刀改 `examples/xiongbao/agents.yaml`"。**错了，而且错的方向是危险的**：把一个数据库残留当成了产品缺陷。实测：
 - `grep -rl "Ticket Triage"` 全仓只命中 **`examples/fintech/agents/ticket-triage.yaml`** —— 另一个示例包。
 - `select name, tenant_id, package_id from agents where name in ('Ticket Triage','Vendor Review','Expense Review')` ⇒ 三行都是 `tenant_id='system'`、同一个 `package_id=90f73a05-…`（fintech 包那次同步留下的）。`select tenant_id, count(*) from agents group by 1` ⇒ **16 行全在 `system`**。
-- 所以 qoderwake 品牌包**自己**只声明 5 位（`general-assistant / backend-engineer / code-reviewer / qa-engineer / ops-assistant`，见 `examples/qoderwake/agents.yaml`），这 5 位显示名**都是中文**；它们的 `title` 是英文（`Backend Engineer` 等）是**包里就这么写的**，不是漏翻。
+- 所以 qoderwake 品牌包**自己**只声明 5 位（`general-assistant / backend-engineer / code-reviewer / qa-engineer / ops-assistant`，见 `examples/xiongbao/agents.yaml`），这 5 位显示名**都是中文**；它们的 `title` 是英文（`Backend Engineer` 等）是**包里就这么写的**，不是漏翻。
 - 界面上多出来的 11 位是**本机 dev 库的历史行**（早先用 fintech 包跑过一次），走查时会被误读成"本产品有 16 位员工"。**判 D1 之前先清这张库**，或按 `package_id` 过滤再看。
 - **仍然成立的部分**：D1 的骨架证据不受影响（双页签「员工/小组」、带计数的状态筛选、卡片「打开」→ `/agents?agent=<id>`），白标开关生效也不受影响。
 - **教训（写死）**：从**渲染出来的列表**倒推"产品内容"，等于把测试残留当成需求。要看 `tenant_id`/`package_id`/来源文件三样对齐了再下结论——这次我只做了第一样就写了工单级结论。
 
 ## 12. 再更正上一条的定性：这**不是本机脏数据，是产品缺陷**（见工单 029，提交 `889eb34`）
-上一条把 11 位英文员工说成"本机 dev 库的历史残留"。**定性错了，方向反过来才成立**：`deployment_packages` 全库只有 1 行、`source_path` 已经是 `../examples/qoderwake`，而那 11 位员工与 2 个频道**就带着这个 qoderwake 的 `package_id`**。也就是说换包时包行被改写、旧包写下的内容行**没有任何回收路径**（`tenant-package.ts` 的 `omittedAgentIds` 只管"本包内留空 id"，注释里写的是从频道里过滤掉、每次同步禁用再启用，**不删行**）。
+上一条把 11 位英文员工说成"本机 dev 库的历史残留"。**定性错了，方向反过来才成立**：`deployment_packages` 全库只有 1 行、`source_path` 已经是 `../examples/xiongbao`，而那 11 位员工与 2 个频道**就带着这个 qoderwake 的 `package_id`**。也就是说换包时包行被改写、旧包写下的内容行**没有任何回收路径**（`tenant-package.ts` 的 `omittedAgentIds` 只管"本包内留空 id"，注释里写的是从频道里过滤掉、每次同步禁用再启用，**不删行**）。
 - **谁能碰到**：任何换过品牌包的租户都会，不是我本机的偶然。
 - **不只是难看**：座位配额按行数算（`assertCapacity(tenant,"wakers")`），**11 个幽灵白占 11 席**，Free 档会被顶满并在租户真要建员工时回 402——拒得"看起来合理"，这才是它危险的地方。`/wakers`、@ 派活候选（B1）、装配页（015）读同一批行，三处一起错。
 - 本轮为走查**手工清了本机 dev 库**（`DELETE 11` / profiles `DELETE 11` / channels `DELETE 2`，`docker exec -i` 才收 stdin——第一次不带 `-i` 整段事务**根本没执行**，别踩）。清完 D1 实屏变成「全部 (5) / 待命 (5)」，五位中文名字。
@@ -230,7 +230,7 @@ done
 **`/resources` 是 024 剩下最大的一块，精确到串**（这一屏的**框架文案整片是英文**，而品牌包灌进去的技能是中文——两种语言并排出现在同一屏上）：
 - 屏名与分区：`Capabilities & resources`、`Models`、`Skills`、`Connectors`、`Knowledge sources`、`Components`；按钮 `Connect`/`Write`/`Manage`；状态词 `not granted`/`granted to 1`/`published`。
 - 技能区里 **6 条上游英文技能**（`Check a claim against a source`、`Find a document`、`Find a Notion page`、`Research the public web`、`What changed recently`、`Who owns this`）与 **5 条品牌包中文技能**（代码审阅 / 在我电脑上跑 / 派活 / 造员工 / 造技能）并存 ⇒ **品牌包确实把技能同步进去了**（这是 024/003 的正向证据），但上游默认技能目录没有跟着本地化。
-- 组件区 11 个 `published` 条目全英文名（Activity report、Checklist、Data table、Headline figures、Notice、Quotation、Record、Area/Bar/Donut/Line chart）——同一条纹：目录是平台的，`examples/qoderwake` 没覆盖它。
+- 组件区 11 个 `published` 条目全英文名（Activity report、Checklist、Data table、Headline figures、Notice、Quotation、Record、Area/Bar/Donut/Line chart）——同一条纹：目录是平台的，`examples/xiongbao` 没覆盖它。
 - `/plans` 的额度行也是英文拼出来的：`coworkers · tasks a month · machines · the deployment's models only`，而这一屏的标题/说明/按钮已是中文。
 - `app/index.html:6` 的 `<title>OpenBot</title>` 依旧（每个页面的 RootWebArea 名字都是 `OpenBot`）。
 

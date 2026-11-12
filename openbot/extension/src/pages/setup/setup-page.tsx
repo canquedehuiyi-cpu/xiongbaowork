@@ -27,6 +27,7 @@ import type { PageResponse } from "../../protocol/messages";
 import { narrationLanguage } from "../../shared/speech-language";
 import { microphoneState } from "../popup/voice";
 import { DISCLOSURE, DISCLOSURE_TITLE } from "../ui/disclosure";
+import { RECORDER_NAME } from "../../shared/brand";
 import { Page } from "../ui/page";
 import { ask } from "../ui/runtime";
 
@@ -121,7 +122,7 @@ function sentence(status: Status, browser: Browser): string {
     case "dismissed":
       return "Not allowed yet. Choose Allow microphone and answer the browser's prompt.";
     case "denied":
-      return `Blocked. Open ${browser.settings}, allow OpenBot Recorder, then choose Allow microphone.`;
+      return `Blocked. Open ${browser.settings}, allow ${RECORDER_NAME}, then choose Allow microphone.`;
     case "no-microphone":
       return "No microphone was found, or another app is using it. Connect one, then choose Allow microphone.";
   }

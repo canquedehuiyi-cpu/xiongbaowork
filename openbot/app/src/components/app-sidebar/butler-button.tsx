@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { shortName } from "@/lib/brand";
 
 /**
  * 小管家出现的工作台页面：v0.2.7 的五个工作台页（任务看板、@Waker、自主工作，以及员工管理和能力与资源——
@@ -37,11 +38,11 @@ export function ButlerButton() {
     <Link
       aria-label="小管家"
       className="flex shrink-0 items-center gap-[7px] rounded-[10px] border border-border bg-popover py-[4px] pr-[8px] pl-[4px] text-[11px] text-foreground/90 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60"
-      title="熊宝小管家"
+      title={`${shortName()}小管家`}
       to="/bot"
     >
-      <BrandLogo alt="熊宝" className="rounded-[6px]" size={23} />
-      <span className="hidden sm:inline">熊宝小管家</span>
+      <BrandLogo alt={shortName()} className="rounded-[6px]" size={23} />
+      <span className="hidden sm:inline">{shortName()}小管家</span>
     </Link>
   );
 }

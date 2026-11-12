@@ -1144,7 +1144,7 @@ describe("telling this deployment's auth configs from anybody else's", () => {
     // The count of what is standing and the marker that would claim it, which together are the
     // whole remedy: an operator can look at one config and see which of the two readings it is.
     expect(refusal.message).toMatch(/Composio holds 1 for linear/);
-    expect(refusal.message).toMatch(/\(OpenBot\)/);
+    expect(refusal.message).toMatch(/\(XiongBao Work\)/);
     /*
      * AND NOTHING WAS DELETED, which is the half this refusal is not allowed to trade away. The
      * row carries no marker, so deleting it is as likely to destroy an operator's own dashboard
@@ -1188,7 +1188,7 @@ describe("telling this deployment's auth configs from anybody else's", () => {
     expect(refusal.message).not.toMatch(A_CRASH);
     // The renamed-config reading, which is the one this refusal already carried.
     expect(refusal.message).toMatch(/Composio holds 1 for linear/);
-    expect(refusal.message).toMatch(/\(OpenBot\)/);
+    expect(refusal.message).toMatch(/\(XiongBao Work\)/);
     // And the row that was never sorted, whose remedy is the same dashboard and whose existence is
     // what stops the sentence promising a removal that would go through.
     expect(refusal.message).toMatch(/no id or no name/);
@@ -1635,7 +1635,7 @@ describe("telling this deployment's auth configs from anybody else's", () => {
     expect(created).toEqual([
       [
         "linear",
-        { type: "use_composio_managed_auth", name: "Linear (OpenBot)" },
+        { type: "use_composio_managed_auth", name: "Linear (XiongBao Work)" },
       ],
     ]);
   });
@@ -1688,7 +1688,7 @@ describe("the config each kind of app is enabled with", () => {
         {
           type: "use_custom_auth",
           authScheme: "DCR_OAUTH",
-          name: "Linear MCP (OpenBot)",
+          name: "Linear MCP (XiongBao Work)",
           credentials: {},
         },
       ],
@@ -1727,7 +1727,7 @@ describe("the config each kind of app is enabled with", () => {
         {
           type: "use_custom_auth",
           authScheme: "API_KEY",
-          name: "Perplexity (OpenBot)",
+          name: "Perplexity (XiongBao Work)",
           credentials: {},
         },
       ],
@@ -2418,7 +2418,7 @@ describe("withdrawing one person's grants", () => {
     // The count standing and the marker that would have claimed it, which is the same pair
     // `deleteAuthConfig` hands an operator for the same state and the same one act in a dashboard.
     expect(refusal.message).toMatch(/Composio holds 1 for gmail/);
-    expect(refusal.message).toMatch(/\(OpenBot\)/);
+    expect(refusal.message).toMatch(/\(XiongBao Work\)/);
   });
 
   /**
@@ -2626,7 +2626,7 @@ describe("withdrawing one person's grants", () => {
     expect(failure.message).not.toMatch(A_CRASH);
     // The renamed-config reading, which this refusal already carried.
     expect(failure.message).toMatch(/Composio holds 1 for gmail/);
-    expect(failure.message).toMatch(/\(OpenBot\)/);
+    expect(failure.message).toMatch(/\(XiongBao Work\)/);
     // And the row that was never sorted, which is what makes the rename alone insufficient.
     expect(failure.message).toMatch(/cannot read/);
     // Nothing was withdrawn either way — the listing was never scoped, so no delete was composed.

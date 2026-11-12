@@ -11,6 +11,7 @@ import {
   type RecorderPageState,
 } from "@openbot/shared/recorder-page";
 import { z } from "zod";
+import { shortName } from "@/lib/brand";
 
 // The browser's extension messaging API, with no server traffic. The app has no @types/chrome, so the members used
 // are declared here. `webview` is not an extension's: it is how WebView2 (OpenBot Desktop's own app window on
@@ -158,14 +159,13 @@ export async function askConnectWait(id: string): Promise<ConnectWait> {
 }
 
 const CONNECT_REFUSALS: Record<string, string> = {
-  "not-https": "录制器只通过 HTTPS 连接熊宝。",
-  "pinned-elsewhere": "你的组织把录制器设成了连接另一个熊宝。",
-  "policy-invalid":
-    "你的组织给录制器设的熊宝地址用不了。请联系你们的 IT 团队。",
+  "not-https": `录制器只通过 HTTPS 连接${shortName()}。`,
+  "pinned-elsewhere": `你的组织把录制器设成了连接另一个${shortName()}。`,
+  "policy-invalid": `你的组织给录制器设的${shortName()}地址用不了。请联系你们的 IT 团队。`,
   busy: "录制器正在处理另一个连接请求。请稍后再试。",
   // A trusted OpenBot's connect, which the Recorder completes itself with OpenBot, with no Connect page.
-  "exchange-refused": "熊宝没有接受录制器的连接请求。请再试一次。",
-  "openbot-unreachable": "录制器连不上熊宝。请检查网络后再试。",
+  "exchange-refused": `${shortName()}没有接受录制器的连接请求。请再试一次。`,
+  "openbot-unreachable": `录制器连不上${shortName()}。请检查网络后再试。`,
 };
 /** The Recorder can also answer `unreachable` or `invalid`, which have no sentence of their own. */
 const CONNECT_REFUSAL_FALLBACK = "录制器没有接受这个请求。请再试一次。";

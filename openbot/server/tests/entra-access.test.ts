@@ -270,10 +270,10 @@ describe("entraTokenFor", () => {
   });
 
   test.each([
-    ["not-admitted", "你已经不能使用 OpenBot，所以没有使用「HR」。"],
+    ["not-admitted", "你已经不能使用熊宝数字员工，所以没有使用「HR」。"],
     [
       "no-sign-in",
-      "「HR」要用你的 Microsoft 账号，但 OpenBot 还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录 OpenBot 一次，再重新提问。",
+      "「HR」要用你的 Microsoft 账号，但熊宝数字员工还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录熊宝数字员工一次，再重新提问。",
     ],
     [
       "sign-in-expired",
@@ -281,19 +281,19 @@ describe("entraTokenFor", () => {
     ],
     [
       "no-consent",
-      "管理员还没有在 Microsoft Entra 里授权 OpenBot 访问「HR」。请联系管理员授权。",
+      "管理员还没有在 Microsoft Entra 里授权熊宝数字员工访问「HR」。请联系管理员授权。",
     ],
     [
       "no-api-consent",
-      "OpenBot 在 Microsoft Entra 里还没有获得对它自己 API 的授权，所以无法以你的身份访问「HR」。请联系管理员授权。",
+      "熊宝数字员工在 Microsoft Entra 里还没有获得对它自己 API 的授权，所以无法以你的身份访问「HR」。请联系管理员授权。",
     ],
     [
       "no-api",
-      "OpenBot 在 Microsoft Entra 里还没有设置好，无法以你的身份访问「HR」。请管理员在那里公开 OpenBot 的 API。",
+      "熊宝数字员工在 Microsoft Entra 里还没有设置好，无法以你的身份访问「HR」。请管理员在那里公开熊宝数字员工的 API。",
     ],
     [
       "refused",
-      "Microsoft 不允许 OpenBot 以你的身份访问「HR」。请稍后再试；如果一直这样，请联系管理员。",
+      "Microsoft 不允许熊宝数字员工以你的身份访问「HR」。请稍后再试；如果一直这样，请联系管理员。",
     ],
   ] as const)(
     "Entra's %s reads as a plain sentence",
@@ -405,7 +405,7 @@ describe("which resources a scope may name, and where its token may go (review I
     ).toThrow("写法不对");
     expect(() =>
       parseOboResources([`api://${OPENBOT}=hr.example.com`], BINDING.own),
-    ).toThrow("登记了 OpenBot 自己的 API");
+    ).toThrow("登记了熊宝数字员工自己的 API");
     expect(() =>
       parseOboResources(
         ["https://graph.microsoft.com=hr.example.com"],
@@ -422,7 +422,7 @@ describe("which resources a scope may name, and where its token may go (review I
     expect(
       scopeBindingRefusal(`api://${OPENBOT}/.default`, HR_URL, BINDING),
     ).toBe(
-      "不能用 OpenBot 自己的 API 作为 Entra scope：换出来的 token 能冒充本人调用 OpenBot。",
+      "不能用熊宝数字员工自己的 API 作为 Entra scope：换出来的 token 能冒充本人调用熊宝数字员工。",
     );
     expect(
       scopeBindingRefusal(

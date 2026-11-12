@@ -17,7 +17,9 @@ document.title = appConfig.brand.englishName
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
-  throw new Error("OpenBot could not find the application root element.");
+  throw new Error(
+    `${appConfig.brand.productName} could not find the application root element.`,
+  );
 }
 
 createRoot(rootElement).render(

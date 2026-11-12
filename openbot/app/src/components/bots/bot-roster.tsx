@@ -50,6 +50,7 @@ import {
 import type { AgentProfile } from "@/lib/agents/queries";
 import { groupRoster } from "@/lib/agents/roster";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
+import { shortName } from "@/lib/brand";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -263,7 +264,7 @@ export function BotRoster({
               ? undefined
               : "同事发布给你、或公开给所有人的员工。你和它的每段对话只属于你，它的主人看不到。"
           }
-          title={personal ? "熊宝自带的员工" : "共享给你的"}
+          title={personal ? `${shortName()}自带的员工` : "共享给你的"}
         >
           {shared.length ? (
             draw("shared", shared)

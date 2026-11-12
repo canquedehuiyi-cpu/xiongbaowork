@@ -19,6 +19,16 @@ import {
   harnessForImage,
   OPENBOT_HARNESS_NAME,
 } from "@openbot/shared/harnesses";
+import { englishName } from "../brand";
+
+/**
+ * What the model is told the framework is called. `OPENBOT_HARNESS_NAME` stays the identifier on the
+ * wire (the app compares `AgentProfile.framework` to it), so only the sentence the model reads is
+ * swapped for the product's English name, which a coworker may repeat to a customer.
+ */
+export function frameworkLabel(framework: string): string {
+  return framework === OPENBOT_HARNESS_NAME ? englishName() : framework;
+}
 
 const trimmed = (url: string) => url.trim().replace(/\/+$/, "");
 

@@ -76,7 +76,7 @@ export function AllowlistReading({
           : null
       }
       explanation={written.explanation}
-      failed="Some entries aren't valid, so OpenBot won't save the list."
+      failed="Some entries aren't valid, so the list won't be saved."
       heading="What becomes reachable"
       passed="Every entry is valid. Bot computers can enforce this list."
       points={written.reachable}

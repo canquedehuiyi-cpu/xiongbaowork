@@ -8,6 +8,20 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **产品改名熊宝数字员工（XiongBao Work），客户看到的地方不再出现上游名字；只设旧名的部署不用改配置。**
+  网页底部的推广条默认关（显式设 `XIONGBAO_SELF_HOST_BANNER=true` 且租户包配了 `support_url` 才出现）；单用户模式的
+  演示账号邮箱改为 `admin@xiongbao.local`，旧库里的 `dev@openbot.local` 启动时自动改写。环境变量有了 `XIONGBAO_*` 新名，
+  旧的 `OPENBOT_*` 照用，两个都设时用新名并在启动日志提示一次，京东云的 `.env.delivery` 一字不用改；直接调 `loadConfig`
+  的脚本（定时任务触发、闲置电脑回收、凭据重封等）也认新名。租户包目录改名为 `examples/xiongbao`：`TENANT_PACKAGE_DIR`
+  仍写旧路径 `examples/qoderwake` 时自动改找新目录，启动时打一行提示，建议改成新路径。OTel 默认 `service.name` 改为
+  `xiongbao`（`openbot.*` 属性名不变），按服务名建的仪表盘和告警要跟着改。设备端随包的 runner 改名为 `xiongbao-runner`，
+  按文件名写的 EDR / 防火墙白名单要改；新版启动时会停掉本机旧的 `openbot-runner`。组织登录 cookie 改名，旧名照认，已登录
+  的人不用重新登录。向第三方注册的 OAuth 客户端名、Composio 授权配置名后缀和内置插件的厂商名改为品牌名（已有的 Composio
+  配置仍按旧后缀认出，不会再建一份；改名前装好的内置插件界面上也显示新厂商名）。设置里新增「关于 / 开源软件声明」页，
+  镜像在 `/licenses/` 下附 LICENSE、NOTICE 与第三方许可汇总，设备端安装包也带上这三份。CopilotKit runtime 的遥测默认
+  关闭。设置清单和「消息发到哪里」的设置指南链接改指租户包的 `support_url`，没配时不显示链接。浏览器录制扩展改名并换
+  新图标。移动端改名（尚未发布）。没有迁移；不需要改配置。
+
 - **在对话里招员工、改员工、组群聊：小管家起草，本人在卡片上确认后才执行。** 新的内置应用「招聘与组群」
   （`builtin://staffing`，不连外部主机、不要凭据；团队版只在第一次启动时自动添加，管理员删掉后不再加回，个人版一直在）给员工六个工具：`list_staff`、
   `propose_employee`、`propose_employee_change`、`propose_group`、`propose_group_change`、`proposal_status`。

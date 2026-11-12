@@ -101,29 +101,45 @@ describe("production build cache", () => {
     },
   );
 
-  test("with no TENANT_PACKAGE_DIR it hashes the package the build brands from: qoderwake", async () => {
+  test("with no TENANT_PACKAGE_DIR it hashes the package the build brands from: xiongbao", async () => {
     expect(tenantPackageDir("/repo", {})).toBe(
-      join("/repo", "examples", "qoderwake"),
+      join("/repo", "examples", "xiongbao"),
     );
     const generator = await readFile(
       new URL("../../scripts/generate-app-config.ts", import.meta.url),
       "utf8",
     );
-    expect(generator).toContain('"examples/qoderwake"');
+    expect(generator).toContain('"examples/xiongbao"');
     await withProject(async (paths) => {
-      await mkdir(join(paths.rootDir, "examples/qoderwake"), {
+      await mkdir(join(paths.rootDir, "examples/xiongbao"), {
         recursive: true,
       });
       await writeFile(
-        join(paths.rootDir, "examples/qoderwake/brand.yaml"),
+        join(paths.rootDir, "examples/xiongbao/brand.yaml"),
         "name: A\n",
       );
       await writeBuildCacheManifest(paths, {});
       await writeFile(
-        join(paths.rootDir, "examples/qoderwake/brand.yaml"),
+        join(paths.rootDir, "examples/xiongbao/brand.yaml"),
         "name: B\n",
       );
       expect(await isReusableBuild(paths, {})).toBe(false);
+    });
+  });
+
+  test("an old TENANT_PACKAGE_DIR spelling still hashes the renamed package", async () => {
+    // Without the redirect the missing directory hashes as empty and a brand edit would reuse a stale SPA.
+    const env = { TENANT_PACKAGE_DIR: "../examples/qoderwake" };
+    await withProject(async (paths) => {
+      const brand = join(paths.rootDir, "examples/xiongbao/brand.yaml");
+      await mkdir(join(paths.rootDir, "examples/xiongbao"), { recursive: true });
+      await writeFile(brand, "name: A\n");
+      expect(tenantPackageDir(paths.rootDir, env)).toBe(
+        join(paths.rootDir, "examples/xiongbao"),
+      );
+      await writeBuildCacheManifest(paths, env);
+      await writeFile(brand, "name: B\n");
+      expect(await isReusableBuild(paths, env)).toBe(false);
     });
   });
 

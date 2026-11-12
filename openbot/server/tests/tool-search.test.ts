@@ -770,7 +770,7 @@ describe("the pre-flight count", () => {
         limit: 128,
       }),
     ).toBe(
-      "General Assistant can't answer. It needs 131 tools on every step, and OpenBot sends at most 128 at once. Ask an admin to check this Bot's setup.",
+      "General Assistant can't answer. It needs 131 tools on every step, and XiongBao Work sends at most 128 at once. Ask an admin to check this Bot's setup.",
     );
   });
 

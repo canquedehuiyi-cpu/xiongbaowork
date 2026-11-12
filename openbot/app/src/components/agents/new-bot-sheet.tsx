@@ -1,8 +1,4 @@
-import {
-  OPENBOT_HARNESS_NAME,
-  summaryFor,
-  WEB_HARNESSES,
-} from "@openbot/shared/harnesses";
+import { summaryFor, WEB_HARNESSES } from "@openbot/shared/harnesses";
 import {
   IconCheck,
   IconInfoCircle,
@@ -66,6 +62,7 @@ import {
   type GiveableApp,
   giveableAppsQueryOptions,
 } from "@/lib/app-access/queries";
+import { englishName, shortName } from "@/lib/brand";
 import { isComposing } from "@/lib/composing";
 import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
@@ -143,13 +140,15 @@ function frameworkName(runtime: Runtime): string {
   return harness ? harness.name : "AG-UI agent";
 }
 
+const PRODUCT = englishName();
+
 /**
  * The subtitle under a new Bot's name: what runs it. OpenBot itself for a Bot that runs here, the
  * framework for one picked from the list. Nothing for an agent somebody already runs, since OpenBot
  * cannot know what is behind its address.
  */
 function poweredBy(runtime: Runtime): string {
-  if (runtime.kind === "builtin") return `由 ${OPENBOT_HARNESS_NAME} 驱动`;
+  if (runtime.kind === "builtin") return `由 ${PRODUCT} 驱动`;
   if (runtime.harness === "byo-url") return "";
   const framework = WEB_HARNESSES.find(
     (harness) => harness.id === runtime.harness,
@@ -1037,8 +1036,8 @@ function EndpointStep({
             />
           ) : (
             <FieldDescription>
-              任何支持 AG-UI
-              的智能体都可以。由熊宝去连接它，所以熊宝的服务器必须能访问到它。
+              任何支持 AG-UI 的智能体都可以。由{shortName()}去连接它，所以
+              {shortName()}的服务器必须能访问到它。
             </FieldDescription>
           )}
         </Field>

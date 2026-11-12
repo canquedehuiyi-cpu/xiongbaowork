@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AgentActor } from "../agents/profile-types";
 import type { AppVariables } from "../auth/guards";
+import { hasBrowserMarker } from "../browser-request-marker";
 import type { ChannelStore } from "../channels/routes";
 import {
   parseVoiceSessionInput,
@@ -52,7 +53,7 @@ export function createVoiceSessionRoutes(services?: VoiceSessionServices) {
         context.json({ error: "Voice transcript is too large." }, 413),
     }),
     async (context) => {
-      if (context.req.header("x-openbot-voice") !== "1")
+      if (!hasBrowserMarker((name) => context.req.header(name), "voice"))
         return context.json({ error: "Invalid voice request." }, 403);
       if (!services)
         return context.json(

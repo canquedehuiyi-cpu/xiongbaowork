@@ -173,7 +173,7 @@ function draw(screen = <ThisBrowser />) {
 
 test("without the Recorder the row says so and offers no button or link", async () => {
   const view = draw();
-  await view.findByText("当前浏览器还没装 OpenBot 录制器。");
+  await view.findByText("当前浏览器还没装录制器。");
   expect(view.queryByRole("button")).toBeNull();
   expect(view.queryByRole("link")).toBeNull();
 });
@@ -185,7 +185,7 @@ test("Connect sends the code to the detected Recorder and asks for confirmation 
   };
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
-  await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
+  await view.findByText("请在刚打开的录制器标签页里确认。");
   expect(sent).toContainEqual({
     path: "/api/recorder/connect-codes",
     method: "POST",
@@ -205,7 +205,7 @@ test("once the person approves on the Connect page, the install id the Recorder 
   };
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
-  await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
+  await view.findByText("请在刚打开的录制器标签页里确认。");
   // The person clicks Connect on the Recorder's page: the connection is OpenBot's, and the Recorder's ping says which
   // copy made it.
   connections = [connection()];
@@ -215,8 +215,8 @@ test("once the person approves on the Connect page, the install id the Recorder 
 });
 
 for (const [how, sentence] of [
-  ["cancelled", "你在 OpenBot 录制器标签页里取消了，没有连接任何东西。"],
-  ["closed", "你确认之前 OpenBot 录制器标签页就关了，没有连接任何东西。"],
+  ["cancelled", "你在录制器标签页里取消了，没有连接任何东西。"],
+  ["closed", "你确认之前录制器标签页就关了，没有连接任何东西。"],
 ] as const)
   test(`once the person ${how === "cancelled" ? "cancels on" : "closes"} the Connect page, the row says so within a second, with Connect back`, async () => {
     // After a Cancel, Settings used to go on saying "请在刚打开的 OpenBot 录制器标签页里确认。" for up to five
@@ -229,7 +229,7 @@ for (const [how, sentence] of [
     fireEvent.click(
       await view.findByRole("button", { name: "连接当前浏览器" }),
     );
-    await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
+    await view.findByText("请在刚打开的录制器标签页里确认。");
     recorder.wait = how;
     const at = Date.now();
     await view.findByText(sentence, {}, { timeout: 1500 });
@@ -239,10 +239,10 @@ for (const [how, sentence] of [
     // Connect again starts afresh: the wait before it is not read for this one.
     recorder.wait = "waiting";
     fireEvent.click(again);
-    await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
+    await view.findByText("请在刚打开的录制器标签页里确认。");
     await new Promise((resolve) => setTimeout(resolve, 1200));
     expect(
-      view.getByText("请在刚打开的 OpenBot 录制器标签页里确认。"),
+      view.getByText("请在刚打开的录制器标签页里确认。"),
     ).toBeTruthy();
   });
 
@@ -270,7 +270,7 @@ test("a trusted OpenBot's connect, answered connected with no Connect page, read
   watch.disconnect();
   expect(
     said.some((text) =>
-      text.includes("请在刚打开的 OpenBot 录制器标签页里确认。"),
+      text.includes("请在刚打开的录制器标签页里确认。"),
     ),
   ).toBe(false);
   expect(view.queryByRole("button")).toBeNull();
@@ -284,11 +284,11 @@ test("a connection from another copy (Chrome connected, this is Edge) neither sh
   };
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
-  await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
+  await view.findByText("请在刚打开的录制器标签页里确认。");
   await new Promise((resolve) => setTimeout(resolve, 2500));
   expect(view.queryByText("已连接")).toBeNull();
   expect(
-    view.getByText("请在刚打开的 OpenBot 录制器标签页里确认。"),
+    view.getByText("请在刚打开的录制器标签页里确认。"),
   ).toBeTruthy();
 });
 
@@ -355,7 +355,9 @@ test("the OpenBot browser's connection says it is the person's OpenBot browser",
     }),
   ];
   const view = draw(<ConnectedBrowsers />);
-  await view.findByText("OpenBot browser");
+  // Stored under the upstream name before the rename; drawn under the name new connections get.
+  await view.findByText("XiongBao Work browser");
+  expect(view.queryByText("OpenBot browser")).toBeNull();
   const at = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -487,7 +489,7 @@ test("the Disconnect dialog says this browser only on this browser's row, and na
   expect(await said("断开Edge on Windows")).toStartWith(
     "熊宝会让Edge on Windows里的录制器退出登录。",
   );
-  expect(await said("断开OpenBot browser")).toStartWith(
+  expect(await said("断开XiongBao Work browser")).toStartWith(
     "熊宝会让你的熊宝浏览器里的录制器退出登录。",
   );
   expect(sent).toEqual([]);
@@ -562,7 +564,7 @@ test("in Chrome without the Recorder, This browser offers its store page in a ne
         <Toaster />
       </QueryClientProvider>,
     );
-    await view.findByText("当前浏览器还没装 OpenBot 录制器。");
+    await view.findByText("当前浏览器还没装录制器。");
     const link = view.getByRole("link", { name: "添加到 Chrome" });
     expect(link.getAttribute("href")).toBe(
       `https://chromewebstore.google.com/detail/${"s".repeat(32)}`,
@@ -623,7 +625,7 @@ test("in the personal edition Settings, Browsers says a recording goes to your o
   const view = await browsersPage("personal");
   const page = view.container.textContent ?? "";
   expect(page).toContain(
-    "What you record goes straight from your browser to your own Learning space in OpenBot's back end",
+    "What you record goes straight from your browser to your own Learning space in the back end",
   );
   expect(page).toContain(
     "Your recordings are used only for your own Skills, evaluations and insights.",
@@ -640,7 +642,7 @@ test("in the team edition Settings, Browsers still says a recording goes to your
   const view = await browsersPage("team");
   expect(view.getByText(RECORDER_DISCLOSURE)).toBeTruthy();
   expect(view.container.textContent).toContain(
-    "the learning part of your organization's OpenBot back end",
+    "the learning part of your organization's back end",
   );
 });
 
@@ -680,7 +682,7 @@ test("a connect request nobody confirms expires after five minutes and stops pol
     fireEvent.click(
       await view.findByRole("button", { name: "连接当前浏览器" }),
     );
-    await view.findByText("请在刚打开的 OpenBot 录制器标签页里确认。");
+    await view.findByText("请在刚打开的录制器标签页里确认。");
     expect(expiries.length).toBeGreaterThan(0);
     const polling = connectionsFetches;
     await new Promise((resolve) => realSetTimeout(resolve, 2500));

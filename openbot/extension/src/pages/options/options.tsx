@@ -1,4 +1,5 @@
 import type { RecorderConnectVia } from "@openbot/shared/recorder-api";
+import { RECORDER_NAME } from "../../shared/brand";
 import {
   IconBuildingSkyscraper,
   IconLink,
@@ -40,10 +41,11 @@ import { ask as askBackground } from "../ui/runtime";
 type OptionsDeps = { ask: typeof askBackground };
 
 const VIA: Record<RecorderConnectVia, string> = {
-  web: "Connected from OpenBot in your browser",
-  desktop: "Connected from OpenBot Desktop",
-  "openbot-browser": "Connected by OpenBot when it opened this browser",
-  "bot-browser": "Connected by OpenBot while you record in a Bot's browser",
+  web: "Connected from XiongBao Work in your browser",
+  desktop: "Connected from XiongBao Work Desktop",
+  "openbot-browser": "Connected by XiongBao Work when it opened this browser",
+  "bot-browser":
+    "Connected by XiongBao Work while you record in a Bot's browser",
 };
 
 function plural(count: number, one: string, many: string) {
@@ -106,7 +108,7 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
 
   if (!state) {
     return (
-      <Page title="OpenBot Recorder" width="prose">
+      <Page title={RECORDER_NAME} width="prose">
         {error ? (
           <p className="mt-4 text-destructive text-sm" role="alert">
             {error}
@@ -123,7 +125,7 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
   const recording = state.state.phase !== "idle";
   const sending = Math.max(0, state.state.draining - (kept?.recordings ?? 0));
   return (
-    <Page title="OpenBot Recorder" width="prose">
+    <Page title={RECORDER_NAME} width="prose">
       <PageSection title="Connection">
         {connection ? (
           <PageRows>
@@ -132,7 +134,7 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
                 <IconLink />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>OpenBot address</ItemTitle>
+                <ItemTitle>XiongBao Work address</ItemTitle>
                 <ItemDescription className="line-clamp-none">
                   {connection.openbotUrl}
                 </ItemDescription>
@@ -158,7 +160,7 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
               <ItemContent>
                 <ItemTitle>This browser</ItemTitle>
                 <ItemDescription>
-                  Disconnect this browser from OpenBot.
+                  Disconnect this browser from XiongBao Work.
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
@@ -170,8 +172,8 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
           </PageRows>
         ) : (
           <PageEmpty>
-            This browser is not connected to OpenBot. Open OpenBot, go to
-            Settings, Browsers, and choose Connect this browser.
+            This browser is not connected to XiongBao Work. Open XiongBao Work,
+            go to Settings, Browsers, and choose Connect this browser.
           </PageEmpty>
         )}
         {error ? (
@@ -257,7 +259,7 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
       {policy.openbotUrl ? (
         <PageSection
           title="Set by your organization"
-          description="Your organization chose which OpenBot this Recorder connects to."
+          description="Your organization chose which XiongBao Work this Recorder connects to."
         >
           <PageRows>
             <Item size="sm">
@@ -265,7 +267,7 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
                 <IconBuildingSkyscraper />
               </ItemMedia>
               <ItemContent>
-                <ItemTitle>OpenBot address</ItemTitle>
+                <ItemTitle>XiongBao Work address</ItemTitle>
               </ItemContent>
               <ItemActions>
                 <span className="text-muted-foreground text-sm">
@@ -285,14 +287,14 @@ export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
             <p>The Recorder records nothing until you connect it again.</p>
             {recording ? (
               <p className="mt-2">
-                The recording in progress stops, and what it has not sent to
-                OpenBot's back end yet is discarded.
+                The recording in progress stops, and what it has not sent to the
+                server yet is discarded.
               </p>
             ) : null}
             {sending > 0 ? (
               <p className="mt-2">
                 {plural(sending, "recording", "recordings")} still sending to
-                OpenBot's back end {sending === 1 ? "stops" : "stop"}, and what{" "}
+                the server {sending === 1 ? "stops" : "stop"}, and what{" "}
                 {sending === 1 ? "it has" : "they have"} not sent yet is
                 discarded.
               </p>

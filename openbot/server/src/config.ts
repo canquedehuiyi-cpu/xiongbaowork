@@ -1,3 +1,4 @@
+import { applyEnvironmentAliases } from "@openbot/shared/env-aliases";
 import { intelligenceApiKey } from "@openbot/shared/intelligence-key";
 import {
   isLearningContainerId,
@@ -486,9 +487,9 @@ export type DeploymentConfig = {
   /**
    * Whether the signed-in app shows the banner offering help self-hosting OpenBot.
    *
-   * On by default, because a fresh clone is somebody evaluating the template. A fork that runs
-   * OpenBot for its own organization turns it off with OPENBOT_SELF_HOST_BANNER=false or
-   * OPENBOT_SELF_HOST_BANNER=0, since its people have nothing to self-host. This is the operator's
+   * Off by default: the bar links to a support address, and a deployment that never set one has
+   * nowhere honest to send people. An operator turns it on with OPENBOT_SELF_HOST_BANNER=true, and
+   * the app still hides it unless the tenant package carries a support URL. This is the operator's
    * switch only; a deployment on a paid Intelligence plan hides the bar too (self-host-banner.ts).
    */
   selfHostBanner: boolean;
@@ -1697,10 +1698,9 @@ function generativeUiEnabled(environment: Environment): boolean {
   return value !== "false" && value !== "0";
 }
 
-/** Same rule as generated interfaces: on unless explicitly "false" or "0". */
+/** The opposite rule from generated interfaces: off unless explicitly "true". */
 function selfHostBannerEnabled(environment: Environment): boolean {
-  const value = optional(environment, "OPENBOT_SELF_HOST_BANNER");
-  return value !== "false" && value !== "0";
+  return optional(environment, "OPENBOT_SELF_HOST_BANNER") === "true";
 }
 
 /**
@@ -1776,9 +1776,18 @@ function serverPort(environment: Environment): number {
   return port ?? serverPort ?? DEFAULT_PORT;
 }
 
-export function loadConfig(
-  environment: Environment = process.env,
-): DeploymentConfig {
+export function loadConfig(given: Environment = process.env): DeploymentConfig {
+  /*
+   * Scripts call this without the server's entry, which is where the XIONGBAO_ names are otherwise copied onto the
+   * OPENBOT_ ones. The process environment is aliased in place so a script's own later reads see the same values; any
+   * other environment is aliased into a copy, so a caller's object is never written to.
+   */
+  const environment = given === process.env ? given : { ...given };
+  for (const name of applyEnvironmentAliases(environment).conflicts) {
+    console.warn(
+      `${name} is also set under its XIONGBAO_ name; using the XIONGBAO_ value.`,
+    );
+  }
   const google = oauthClient(environment, "GOOGLE");
   const auth = authConfig(environment, google);
   const organizationAuthValue = optional(
@@ -1838,7 +1847,7 @@ export function loadConfig(
     publicUrl,
     appUrl,
     tenantPackageDirectory:
-      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/qoderwake",
+      optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/xiongbao",
     runtime: runtimeCapabilities(environment),
     ...(intelligenceSettings(environment)
       ? { intelligence: intelligenceSettings(environment) }

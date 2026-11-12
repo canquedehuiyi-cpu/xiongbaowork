@@ -45,7 +45,7 @@ const ada = { id: "p1", name: "Ada", email: "ada@example.test" };
 const DEAL = "https://crm.example.test/deals/42";
 const NEXT_DEAL = "https://crm.example.test/deals/43";
 const SIGNED_OUT =
-  "This browser was disconnected from OpenBot. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
+  "This browser was disconnected from XiongBao Work. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
 const START_FAILED = "The recording could not start. Try again.";
 /** A card number typed into a sensitive field before the restart, and the digest the content script sent for it. */
 const SECRET = "4111111111111111";

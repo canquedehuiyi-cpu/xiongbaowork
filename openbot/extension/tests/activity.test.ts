@@ -48,7 +48,7 @@ const ORDER = "http://127.0.0.1:7420/orders/1043";
 const DESKTOP_TOKEN = "obr_desktop-connection";
 const LAUNCHER_TOKEN = "obr_openbot-browser";
 const SIGNED_OUT =
-  "This browser was disconnected from OpenBot. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
+  "This browser was disconnected from XiongBao Work. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
 
 type Globals = { indexedDB?: IDBFactory; IDBKeyRange?: unknown };
 const globals = globalThis as unknown as Globals;
@@ -83,7 +83,7 @@ let activityAnswer:
 const signedOut = () =>
   Response.json(
     {
-      error: "This browser is no longer connected to OpenBot.",
+      error: "This browser is no longer connected to XiongBao Work.",
       code: RECORDER_SIGNED_OUT,
       reason: "revoked",
     },
@@ -109,7 +109,7 @@ async function activity(request: Request, token: string): Promise<Response> {
       { status: 415 },
     );
   if (activityAnswer === "error")
-    return Response.json({ error: "OpenBot broke." }, { status: 500 });
+    return Response.json({ error: "XiongBao Work broke." }, { status: 500 });
   if (activityAnswer === "hang") await new Promise(() => {});
   return new Response(null, { status: 204 });
 }
@@ -498,7 +498,8 @@ test("a report OpenBot refuses as malformed (400, 415) is said in the worker's c
     await until(
       () =>
         said.some(
-          (args) => args[0] === "Recorder: OpenBot refused its activity report",
+          (args) =>
+            args[0] === "Recorder: XiongBao Work refused its activity report",
         ),
       "the refusal said",
     );
@@ -509,7 +510,8 @@ test("a report OpenBot refuses as malformed (400, 415) is said in the worker's c
     await until(
       () =>
         said.filter(
-          (args) => args[0] === "Recorder: OpenBot refused its activity report",
+          (args) =>
+            args[0] === "Recorder: XiongBao Work refused its activity report",
         ).length >= 2,
       "the second refusal said",
     );

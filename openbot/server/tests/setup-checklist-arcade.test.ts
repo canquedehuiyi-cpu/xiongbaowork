@@ -30,26 +30,26 @@ const appsRow = (apps: SetupFacts["apps"]): SetupRow | undefined =>
   );
 
 describe("the more-apps row names the broker the deployment would use", () => {
-  test("an Arcade deployment is told to set ARCADE_API_KEY, with Arcade's guide", () => {
-    expect(appsRow({ configured: false, provider: "arcade" })?.fix).toEqual({
+  test("an Arcade deployment is told to set ARCADE_API_KEY", () => {
+    const fix = appsRow({ configured: false, provider: "arcade" })?.fix;
+    expect(fix).toEqual({
       kind: "env",
       names: ["ARCADE_API_KEY"],
-      docsUrl:
-        "https://github.com/CopilotKit/openbot/blob/main/docs/plugins/arcade.md",
     });
+    expect((fix as { docsUrl?: string }).docsUrl).toBeUndefined();
   });
 
   test("a Composio deployment, and one that does not say, keep the Composio fix", () => {
     const composio: SetupFix = {
       kind: "env",
       names: ["COMPOSIO_API_KEY"],
-      docsUrl:
-        "https://github.com/CopilotKit/openbot/blob/main/docs/plugins/composio.md",
     };
-    expect(appsRow({ configured: false, provider: "composio" })?.fix).toEqual(
-      composio,
-    );
-    expect(appsRow({ configured: false })?.fix).toEqual(composio);
+    const explicit = appsRow({ configured: false, provider: "composio" })?.fix;
+    const unstated = appsRow({ configured: false })?.fix;
+    expect(explicit).toEqual(composio);
+    expect(unstated).toEqual(composio);
+    expect((explicit as { docsUrl?: string }).docsUrl).toBeUndefined();
+    expect((unstated as { docsUrl?: string }).docsUrl).toBeUndefined();
   });
 
   test("a configured broker is ready whichever it is, and offers no fix", () => {

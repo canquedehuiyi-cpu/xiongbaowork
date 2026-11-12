@@ -109,7 +109,12 @@ function card(
   return {
     key,
     title: server?.title ?? catalogue?.title ?? key,
-    vendor: server?.vendor || catalogue?.vendor || "",
+    // A reviewed row's vendor was copied from its entry when installed, so one installed before the rename still
+    // reads the upstream name; the entry is today's word for it. A row added by address keeps its own host.
+    vendor:
+      (catalogue && (!server || server.provenance === "first-party")
+        ? catalogue.vendor || server?.vendor
+        : server?.vendor || catalogue?.vendor) || "",
     summary: server?.summary || catalogue?.summary || "",
     docsUrl: server?.docsUrl || catalogue?.docsUrl || "",
     logo: server?.logo ?? null,

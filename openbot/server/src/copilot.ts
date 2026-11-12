@@ -55,7 +55,7 @@ import {
   CoworkerUnavailableError,
 } from "./agents/agent-resolver";
 import { attributeBotAnswers } from "./agents/bot-answers";
-import { frameworkOf } from "./agents/framework";
+import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
 import { takesModelChoice } from "./agents/harness-model";
 import {
@@ -89,6 +89,7 @@ import {
   watchDecisionWaits,
 } from "./approvals/decision-waits";
 import type { AuditInitiator } from "./audit";
+import { englishName, productName } from "./brand";
 import {
   attachmentIdsIn,
   newInlineBudget,
@@ -147,6 +148,10 @@ import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
+import {
+  disableRuntimeTelemetryByDefault,
+  runtimeTelemetryOptions,
+} from "./telemetry/runtime-telemetry";
 import {
   isPersonTenant,
   runAsTenant,
@@ -299,6 +304,11 @@ export function selfAddressGuidance(name: string): string {
   return `People call you "${name}" or "${named}". A request to ask, message or hand work to ${name} is a request to you, so answer it yourself.`;
 }
 
+/** The title the runtime shows assistive technology for the chat. */
+export function accessibilityTitle(): string {
+  return productName();
+}
+
 /**
  * The first thing a built-in Bot reads: its name, and the subtitle under it. A Bot's prompt is
  * whatever somebody wrote about its job, and the package's own Knowledge prompt never says what it
@@ -308,17 +318,17 @@ export function selfAddressGuidance(name: string): string {
  * (`standingRoleMessage`), and the framework it runs on, which is OpenBot's own whatever the
  * subtitle says (`frameworkOf`).
  */
-function identityGuidance(
+export function identityGuidance(
   name: string,
   title?: string,
   framework?: string,
 ): string {
   const subtitle = title?.trim();
   return [
-    `You are ${name}, a Bot in OpenBot.`,
+    `You are ${name}, a Bot in ${englishName()}.`,
     ...(subtitle ? [/[.!?]$/.test(subtitle) ? subtitle : `${subtitle}.`] : []),
     selfAddressGuidance(name),
-    ...(framework ? [frameworkGuidance(framework)] : []),
+    ...(framework ? [frameworkGuidance(frameworkLabel(framework))] : []),
   ].join(" ");
 }
 
@@ -364,7 +374,7 @@ export function standingRoleMessage(
         "identity",
         [
           `You are ${profile.name}, ${title}${titleEnd} ${selfAddressGuidance(profile.name)}`,
-          ...(framework ? [frameworkGuidance(framework)] : []),
+          ...(framework ? [frameworkGuidance(frameworkLabel(framework))] : []),
         ].join(" "),
       ),
       ...promptSection(
@@ -3796,12 +3806,17 @@ export function mountCopilotRuntime(
    */
   const runtimeRunner = patchableRunner(withQuotaRunErrors(runner));
 
+  // Before any runtime exists: its constructor logs a disclosure and records properties unless this is set.
+  disableRuntimeTelemetryByDefault();
+
   /**
    * Everything the runtime is configured with, apart from the one option that says where its threads
    * live. Kept separate because that one option is the difference between this deployment running a
    * turn and not.
    */
   const sharedRuntimeOptions = {
+    // No usage reports to the runtime vendor; see `silentRuntimeTelemetry`.
+    ...runtimeTelemetryOptions,
     // identifyUser is NOT optional in practice. Threads and memory are scoped to the user it
     // returns, so omitting it puts every person in the deployment in the same thread space and one
     // person's conversations become another's.
@@ -3811,7 +3826,9 @@ export function mountCopilotRuntime(
     telemetryProperties: {
       app_id: "openbot",
       ...options.productTelemetry?.deploymentProperties(),
-      ...(config.accessibility ? { accessibility_title: "OpenBot" } : {}),
+      ...(config.accessibility
+        ? { accessibility_title: accessibilityTitle() }
+        : {}),
       ...desktopTelemetryProperties(),
     },
     /*

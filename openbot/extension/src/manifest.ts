@@ -1,3 +1,4 @@
+import { PRODUCT_NAME, RECORDER_NAME } from "./shared/brand";
 export type BuildVariant = "release" | "e2e";
 // The highest floor of the APIs the Recorder uses: debugger flattened child sessions (sessionId) need 125.
 // The others sit lower: offscreen 109, externally_connectable 107, chrome.alarms (below the floor),
@@ -70,15 +71,14 @@ export function buildManifest(input: {
   };
   return {
     manifest_version: 3,
-    name: "OpenBot Recorder",
+    name: RECORDER_NAME,
     ...toChromeManifestVersion(input.version),
-    description:
-      "Record a task in your browser so an OpenBot Bot can learn to do it.",
+    description: `Record a task in your browser so a ${PRODUCT_NAME} Bot can learn to do it.`,
     minimum_chrome_version: MINIMUM_CHROME_VERSION,
     incognito: "not_allowed",
     icons,
     action: {
-      default_title: "OpenBot Recorder",
+      default_title: RECORDER_NAME,
       default_popup: "popup.html",
       default_icon: icons,
     },

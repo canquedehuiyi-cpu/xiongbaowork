@@ -326,8 +326,8 @@ async function startProxy(
 }
 
 test.each([
-  ["dictation", "/api/audio/transcriptions", "x-openbot-dictation"],
-  ["voice", "/api/voice/calls", "x-openbot-voice"],
+  ["dictation", "/api/audio/transcriptions", "x-xiongbao-dictation"],
+  ["voice", "/api/voice/calls", "x-xiongbao-voice"],
 ])(
   "%s can wait for a provider past Bun's default idle timeout",
   async (_name, path, header) => {

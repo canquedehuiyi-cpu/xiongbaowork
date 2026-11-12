@@ -175,7 +175,7 @@ describe("checkCapabilityChanges", () => {
       [],
     );
     expect(check.ok ? "" : check.error).toBe(
-      'Change 1: There\'s no group called "Contractors". OpenBot has no groups yet.',
+      'Change 1: There\'s no group called "Contractors". XiongBao Work has no groups yet.',
     );
   });
 

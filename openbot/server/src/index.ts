@@ -1,3 +1,5 @@
+// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+import "../../shared/apply-env-aliases";
 import type { AbstractAgent } from "@ag-ui/client";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -135,6 +137,7 @@ import {
   createAvatarSourceRoutes,
   createAvatarSourceStore,
 } from "./avatar-sources";
+import { englishName, setBrand } from "./brand";
 import { openbotAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
 import { personBrowserEgressPolicy } from "./browser/egress";
@@ -929,6 +932,13 @@ await startupLifecycle.run(async (startup) => {
   const tenantPackage = await startup.step(() =>
     loadTenantPackage(config.tenantPackageDirectory),
   );
+  setBrand({
+    productName: tenantPackage.productName,
+    shortName: tenantPackage.shortName,
+    englishName: tenantPackage.englishName,
+    companyName: tenantPackage.companyName,
+    supportUrl: tenantPackage.supportUrl,
+  });
   // The package's id unless DEPLOYMENT_ID says otherwise, and the id the deployment was set up under
   // if the package has since been renamed. See `deploymentNameOf`, which frames its own read.
   const deploymentId =
@@ -5342,5 +5352,5 @@ await startupLifecycle.run(async (startup) => {
     );
   }
 
-  console.info(`OpenBot server listening on http://127.0.0.1:${port}`);
+  console.info(`${englishName()} server listening on http://127.0.0.1:${port}`);
 });

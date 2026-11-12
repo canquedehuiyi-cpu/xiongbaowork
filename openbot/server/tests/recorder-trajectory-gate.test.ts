@@ -177,7 +177,7 @@ describe("createTrajectoryConnectHook", () => {
     expect(response?.status).toBe(401);
     expect(await bodyOf(response)).toEqual({
       code: "IDENTITY_REQUIRED",
-      message: "Connect this browser to OpenBot to record.",
+      message: "Connect this browser to record.",
     });
     expect(asked).toEqual([]);
     expect(refusals).toEqual([

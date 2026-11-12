@@ -50,6 +50,7 @@ import { Switch } from "@/components/ui/switch";
 import { grantRoster } from "@/lib/agents/grant-roster";
 import { grantSummary } from "@/lib/agents/grant-summary";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { shortName } from "@/lib/brand";
 import { ALWAYS_ON_APP } from "@/lib/connections/rows";
 import { storeMcpToken } from "@/lib/credentials/mutations";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
@@ -1008,7 +1009,7 @@ export function PluginPage({
             /* The personal edition has one person, so each sentence speaks to them and names nobody else. */
             auth === "user-oauth"
               ? personal
-                ? `通过熊宝连接你的 ${title} 账号。熊宝登记一个 OAuth 客户端，你的员工只看得到你能看到的东西。`
+                ? `通过${shortName()}连接你的 ${title} 账号。${shortName()}登记一个 OAuth 客户端，你的员工只看得到你能看到的东西。`
                 : "这个服务商按提问者的身份回应。部署登记一个 OAuth 客户端，每个人连接自己的账号，所以员工只能看到那个人能看到的东西。"
               : auth === "builtin"
                 ? `内置在${paths.deploymentName}里。没有要连的服务商，也没有要保管的凭据——${personal ? "调用以你的身份运行。" : "调用以提问者的身份运行。"}`
@@ -1018,7 +1019,7 @@ export function PluginPage({
                   : auth === "person-entra"
                     ? "这个服务器按提问者的身份回应。每次调用都带着 Microsoft Entra 为这个人签发的令牌，所以员工只能看到这个人能看到的东西。"
                     : personal
-                      ? `熊宝向 ${title} 出示的凭据。你的员工都用它。`
+                      ? `${shortName()}向 ${title} 出示的凭据。你的员工都用它。`
                       : `${paths.deploymentName}向服务商出示的凭据。一份凭据，所有人共用。`
           }
           title="连接"
@@ -1400,19 +1401,20 @@ export function PluginPage({
             <div className="mt-3 p-3">
               {server?.dynamicClient ? (
                 <p className="text-muted-foreground text-sm">
-                  {personal ? "熊宝" : "部署"}
+                  {personal ? shortName() : "部署"}
                   会自己登记回调地址，所以不需要在服务商那边添加什么。
                 </p>
               ) : (
                 <p className="text-muted-foreground text-sm">
-                  把这个地址原样加到服务商那边客户端的授权回调地址里。错一个字符都会失败，而且那边的报错不会提到熊宝。
+                  把这个地址原样加到服务商那边客户端的授权回调地址里。错一个字符都会失败，而且那边的报错不会提到
+                  {shortName()}。
                 </p>
               )}
               {!plugins.data?.redirectUri ? (
                 <p className="mt-3 text-destructive text-sm" role="alert">
                   {atStart(paths.deploymentName)}没有公网地址，所以
                   {personal ? "你" : "谁都"}完成不了连接。请设置
-                  OPENBOT_PUBLIC_URL。
+                  XIONGBAO_PUBLIC_URL（旧名 OPENBOT_PUBLIC_URL 仍可用）。
                 </p>
               ) : server?.dynamicClient ? null : (
                 /* Selectable and monospaced: it is copied by hand into somebody else's console. */

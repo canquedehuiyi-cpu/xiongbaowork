@@ -37,6 +37,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { shortName } from "@/lib/brand";
 
 export const Route = createFileRoute("/_authed/admin/")({
   component: RouteComponent,
@@ -185,8 +186,7 @@ const SECTIONS: {
       },
       {
         title: "动作推演",
-        description:
-          "问问员工做某个动作时熊宝会怎么处理，看是哪一道管控做的决定。",
+        description: `问问员工做某个动作时${shortName()}会怎么处理，看是哪一道管控做的决定。`,
         icon: IconZoomQuestion,
         linkOptions: { to: "/admin/what-if" },
       },

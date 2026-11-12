@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 //! 熊宝数字员工 设备端: a tray app that keeps the runner (`openbot/runner`, compiled into the
-//! `openbot-runner` sidecar) connected to a deployment, so a tenant's coworkers can use this
+//! `xiongbao-runner` sidecar) connected to a deployment, so a tenant's coworkers can use this
 //! computer (F2 stage 1, option A of docs/specs/2026-11-02-f2-runner-desktop-client.md).
 //!
 //! It is deliberately not `openbot/desktop`, which installs and runs a whole self-hosted stack.
@@ -407,9 +407,7 @@ fn build_tray(app: &AppHandle, browser_missing: bool, identifier: &str) -> tauri
         )?
     };
     TrayIconBuilder::with_id("device")
-        .icon(tauri::include_image!(
-            "../../desktop/src-tauri/icons/64x64.png"
-        ))
+        .icon(tauri::include_image!("icons/64x64.png"))
         .tooltip(PRODUCT)
         .menu(&menu)
         .on_menu_event(|app, event| chose(app, event.id().as_ref()))

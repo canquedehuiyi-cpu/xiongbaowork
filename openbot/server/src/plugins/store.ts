@@ -160,6 +160,7 @@ import { shareTargetOf } from "./share-target";
 import { connectAppRefusal } from "@openbot/shared/connect-prompt";
 import { withReadRetries } from "./transient";
 import { type TransportKind, transportFor } from "./transport";
+import { englishName } from "../brand";
 
 /**
  * Plugins: what this deployment has added, which Bots may use it, and the one path a call takes.
@@ -4627,7 +4628,7 @@ export function createPluginStore(options: PluginStoreOptions) {
        */
       if (input.id === MEMORY_TOOLS_SERVER) {
         throw new CustomServerRefusedError(
-          `${input.id} is the name of OpenBot's own memory tools. Choose another.`,
+          `${input.id} is the name of ${englishName()}'s own memory tools. Choose another.`,
         );
       }
 

@@ -100,7 +100,10 @@ export function saveVoiceSession(
         credentials: "include",
         signal: AbortSignal.timeout(30_000),
         keepalive: new TextEncoder().encode(payload).byteLength < 60_000,
-        headers: { "content-type": "application/json", "x-openbot-voice": "1" },
+        headers: {
+          "content-type": "application/json",
+          "x-xiongbao-voice": "1",
+        },
         body: payload,
       });
       // A proxy's error page is not JSON, and its parser message is no sentence for a person.

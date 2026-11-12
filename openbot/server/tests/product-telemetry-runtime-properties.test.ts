@@ -15,12 +15,12 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
- * CopilotKit's own runtime events, not OpenBot's product events, carry `app_id=openbot` always and
- * this deployment's ID only while OpenBot's product telemetry is on.
+ * CopilotKit's own runtime events, not OpenBot's product events, are silenced unconditionally
+ * (see runtime-telemetry.ts): whether product telemetry is off or on, none is handed to the runtime's
+ * telemetry transport.
  *
- * Through the real runtime: the handler `mountCopilotRuntime` returns, answering a run request,
- * which the runtime records as `oss.runtime.copilot_request_created` with the properties OpenBot set
- * on it. What the runtime hands its telemetry transport is captured in place of the network send,
+ * Through the real runtime: the handler `mountCopilotRuntime` returns, answering a run request.
+ * What the runtime hands its telemetry transport is captured in place of the network send,
  * so nothing leaves this machine. The Intelligence platform is a fake on 127.0.0.1 that refuses
  * everything; the event is recorded before the run reaches it.
  */
@@ -80,16 +80,8 @@ afterAll(async () => {
     else process.env[name] = value;
 });
 
-async function until(done: () => boolean, what: string) {
-  const deadline = Date.now() + 10_000;
-  while (!done()) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-    await Bun.sleep(10);
-  }
-}
-
-/** The global properties on the runtime event recorded for one run request of a deployment. */
-async function runtimeEventProperties(
+/** Every event the runtime handed its telemetry transport during one run request of a deployment. */
+async function runtimeEventsDuring(
   deploymentId: string,
   productEnv: Record<string, string>,
 ) {
@@ -143,24 +135,22 @@ async function runtimeEventProperties(
   );
   // Read to its end, so the run is over (and stored) before the next begins.
   await response.text();
-  const requested = () =>
-    captured
-      .slice(before)
-      .find((event) => event.event === "oss.runtime.copilot_request_created");
-  await until(() => requested() !== undefined, "the runtime's run event");
-  return requested()?.globalProperties ?? {};
+  // The runtime records its events while the run is handled, so a short grace period after the
+  // stream ends is enough; a bounded wait keeps the "nothing was sent" check from hanging.
+  await Bun.sleep(300);
+  return captured.slice(before);
 }
 
-test("with product telemetry off, the runtime's events name the app and not the deployment", async () => {
-  const properties = await runtimeEventProperties("dep_telemetry_off", {});
-  expect(properties.app_id).toBe("openbot");
-  expect(Object.values(properties)).not.toContain("dep_telemetry_off");
+test("with product telemetry off, no event reaches the runtime's telemetry transport", async () => {
+  expect(await runtimeEventsDuring("dep_telemetry_off", {})).toEqual([]);
 });
 
-test("with product telemetry on, they carry the deployment's ID as before", async () => {
-  const properties = await runtimeEventProperties("dep_telemetry_on", {
-    OPENBOT_PRODUCT_TELEMETRY: "1",
-  });
-  expect(properties.app_id).toBe("openbot");
-  expect(properties.deployment_id).toBe("dep_telemetry_on");
+// User decision 2026-11-12: our deliverables send no usage data to any third party, so product
+// telemetry being on does not reopen the runtime's own reports (runtime-telemetry.ts).
+test("with product telemetry on, still no event reaches the runtime's telemetry transport", async () => {
+  expect(
+    await runtimeEventsDuring("dep_telemetry_on", {
+      OPENBOT_PRODUCT_TELEMETRY: "1",
+    }),
+  ).toEqual([]);
 });

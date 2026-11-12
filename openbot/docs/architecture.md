@@ -380,7 +380,7 @@ memory (`features.memory` in its runtime entitlement), and in OpenBot's own tabl
 
 ## Tenant package and knowledge
 
-`TENANT_PACKAGE_DIR` points at the tenant package. The default is `../examples/qoderwake`, the 熊宝数字员工 package; `examples/fintech` is the upstream example and is loaded only when named.
+`TENANT_PACKAGE_DIR` points at the tenant package. The default is `../examples/xiongbao`, the 熊宝数字员工 package; `examples/fintech` is the upstream example and is loaded only when named.
 
 Required package files:
 

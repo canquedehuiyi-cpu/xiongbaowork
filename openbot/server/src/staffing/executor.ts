@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { and, eq, isNull } from "drizzle-orm";
 import { ZodError } from "zod";
 import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
@@ -250,9 +251,6 @@ const SUCCEEDED: ReadonlySet<ResultItem["outcome"]> = new Set([
   "needs_connection",
 ]);
 
-/** 开发模式的本人不是 `users` 里的一行，轨迹的外键会拒绝它（同 `agents/routes.ts`）。 */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
-
 const hasChinese = (text: string) => /\p{Script=Han}/u.test(text);
 
 /**
@@ -374,7 +372,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
     try {
       await recordAuditEvent(deps.auditStore, {
         ...event,
-        ...(actor.email === DEV_ACTOR_EMAIL ? {} : { actorUserId: actor.id }),
+        ...(isDevActorEmail(actor.email) ? {} : { actorUserId: actor.id }),
       });
     } catch (error) {
       // 改动已经做了；轨迹一时写不进不是说它没做的理由（同 `agents/routes.ts` 的 `record`）。

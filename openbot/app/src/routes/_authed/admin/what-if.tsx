@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/input-group";
 import { ActionChips } from "@/components/what-if/action-chips";
 import { WhatIfResultView } from "@/components/what-if/what-if-result";
+import { shortName } from "@/lib/brand";
 import { isComposing } from "@/lib/composing";
 import {
   askWhatIf,
@@ -159,7 +160,7 @@ function WhatIfPage() {
 
   return (
     <PageShell
-      description="问问员工做某个动作时熊宝会怎么处理。每一道管控按熊宝检查的顺序作答，你能看到是哪一道做的决定。"
+      description={`问问员工做某个动作时${shortName()}会怎么处理。每一道管控按${shortName()}检查的顺序作答，你能看到是哪一道做的决定。`}
       title="动作推演"
     >
       <form
@@ -218,7 +219,7 @@ function WhatIfPage() {
       <PageSection
         description={
           asked
-            ? "这是熊宝对你问题的理解。哪里不对就改掉，再检查。"
+            ? `这是${shortName()}对你问题的理解。哪里不对就改掉，再检查。`
             : "在上面提一个问题，或者自己设定这个动作。"
         }
         title="动作"
@@ -264,7 +265,7 @@ function WhatIfPage() {
 
       {checked ? (
         <PageSection
-          description="每一道管控，按熊宝检查的顺序排列。"
+          description={`每一道管控，按${shortName()}检查的顺序排列。`}
           title="会发生什么"
         >
           <WhatIfResultView result={checked.result} />

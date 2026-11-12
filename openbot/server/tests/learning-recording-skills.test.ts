@@ -164,7 +164,7 @@ describe("the skills learned from one recording", () => {
 
 describe("Learning with no model on OpenBot Desktop", () => {
   const unsupported =
-    "Learning can't run on the model you signed in with. To use it, sign OpenBot in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
+    "Learning can't run on the model you signed in with. To use it, sign XiongBao Work in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
 
   test("the person's review says why Learning can't run, before anyone presses Learn now", async () => {
     const { app } = routes({ modelUnavailable: "unsupported" });

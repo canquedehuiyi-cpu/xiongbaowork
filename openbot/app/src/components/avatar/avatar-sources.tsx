@@ -16,6 +16,7 @@ import {
   removeAvatarSourceMutationOptions,
   sourceLength,
 } from "@/lib/avatar/sources";
+import { productName } from "@/lib/brand";
 import {
   devicesQueryOptions,
   type RegisteredDevice,
@@ -438,8 +439,8 @@ function FolderPicker({
       <div className="flex flex-col gap-2 rounded-[12px] border border-border p-[12px] text-sm">
         <p className="font-medium">还没有配对的设备</p>
         <p className="text-muted-foreground">
-          本地文件夹放在你自己的电脑上。先在电脑上安装熊宝数字员工设备端，并在「设置
-          ›
+          本地文件夹放在你自己的电脑上。先在电脑上安装{productName()}
+          设备端，并在「设置 ›
           我的设备」里配对；然后在设备端添加要交给分身的文件夹，再回到这里选择。你可以先保存文字声明。
         </p>
         {pairingHref ? (

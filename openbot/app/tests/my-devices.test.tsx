@@ -127,6 +127,19 @@ test("pairing mints a code and shows the desktop app's two fields, with the comm
   expect(command.textContent).toContain("--server");
 });
 
+test("pairing names the desktop app by its window title, with the space between product and 设备端", async () => {
+  const { view } = draw([]);
+
+  await userEvent
+    .setup({ document: view.baseElement.ownerDocument })
+    .click(await view.findByRole("button", { name: /配对一台设备/ }));
+
+  // The desktop app's window is titled 「熊宝数字员工 设备端」 (tauri.conf.json productName); a person
+  // looks for that exact title, so the sentence must not run the two words together.
+  const sentence = await view.findByText(/里填写下面两项/);
+  expect(sentence.textContent).toContain("「熊宝数字员工 设备端」");
+});
+
 test("removing a device is a delete against that device alone", async () => {
   const { view } = draw([studio, laptop]);
 

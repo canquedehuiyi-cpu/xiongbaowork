@@ -20,6 +20,8 @@ egress.env
 node_modules
 **/dist/
 app/src/lib/generated/application-config.ts
+app/src/lib/generated/third-party-notices.json
+THIRD-PARTY-NOTICES.md
 .logs/
 .demo-logs/
 **/.impeccable

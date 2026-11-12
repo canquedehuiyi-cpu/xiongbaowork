@@ -162,7 +162,7 @@ export function createRecorderRoutes(deps: RecorderRouteDeps) {
         });
         return context.json(
           {
-            error: "Only the OpenBot Recorder extension can finish connecting.",
+            error: "Only the Recorder extension can finish connecting.",
           },
           403,
         );
@@ -212,7 +212,7 @@ export function createRecorderRoutes(deps: RecorderRouteDeps) {
         return context.json(
           {
             error:
-              "This connection code has expired or was already used. Choose Connect this browser in OpenBot again.",
+              "This connection code has expired or was already used. Choose Connect this browser again.",
           },
           400,
         );
@@ -381,8 +381,7 @@ export function createRecorderRoutes(deps: RecorderRouteDeps) {
       ) {
         return context.json(
           {
-            error:
-              "This browser is no longer connected to OpenBot. Connect it again.",
+            error: "This browser is no longer connected. Connect it again.",
             code: RECORDER_SIGNED_OUT,
             reason: "revoked",
           },

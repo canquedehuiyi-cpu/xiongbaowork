@@ -46,7 +46,7 @@ const CATALOGUE_BOT = "general-assistant";
 const GATES = ["bot-creator", "skill-creator"];
 const bobsSkill = `cat-grants-bob-${suite}`;
 
-const loaded = await loadTenantPackage("../examples/qoderwake");
+const loaded = await loadTenantPackage("../examples/xiongbao");
 
 const store = createPluginStore({
   database,

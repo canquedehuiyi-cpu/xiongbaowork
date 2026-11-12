@@ -17,14 +17,14 @@
 #                     itself uses, and see the device online on the server;
 #                  3. the server sends that device one command with no model involved:
 #                     `projects.branches`, which the runner answers with `git ls-remote --heads`;
-#                  4. stop the runner by PID: no openbot-runner is left, and the device goes offline;
+#                  4. stop the runner by PID: no xiongbao-runner is left, and the device goes offline;
 #                  5. start the installed app ($APP_BIN) on a virtual display: it starts its own
 #                     sidecar without re-pairing and the device comes back online (the stand-in for
 #                     "reboot, back online by itself": a fresh start of the app with no input);
-#                  6. SIGTERM the app, the same quit() as the tray's 「退出」: no openbot-runner is
+#                  6. SIGTERM the app, the same quit() as the tray's 「退出」: no xiongbao-runner is
 #                     left and the device goes offline; then start and quit it once more;
 #   stop-server  stop the server by its PID (run it under `if: always()`);
-#   uninstall    sudo apt-get remove: nothing of the package and no openbot-runner is left;
+#   uninstall    sudo apt-get remove: nothing of the package and no xiongbao-runner is left;
 #   result       no FAIL line in the evidence, then `RESULT: PASS` as its last line.
 #
 # Inputs (env): EVIDENCE (the evidence file, every phase); DIST (holds the deb and SHA256SUMS) and
@@ -38,7 +38,7 @@ set -euo pipefail
 : "${EVIDENCE:?EVIDENCE is the evidence file}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 openbot="$(cd "$here/../.." && pwd)"
-RUNNER_BIN=${RUNNER_BIN:-/usr/bin/openbot-runner}
+RUNNER_BIN=${RUNNER_BIN:-/usr/bin/xiongbao-runner}
 APP_BIN=${APP_BIN:-/usr/bin/xiongbao-device}
 GIT_PROBE_URL=${GIT_PROBE_URL:-https://github.com/octocat/Hello-World.git}
 GIT_PROBE_BRANCH=${GIT_PROBE_BRANCH:-master}
@@ -103,34 +103,34 @@ phase_files() {
   local status binary entry
   status="$(dpkg-query -W -f='${Status} ${Version}' xiongbao-device)"
   [ "$status" = "install ok installed ${VERSION:?VERSION is the deb version}" ] || fail "dpkg says: $status"
-  for binary in /usr/bin/xiongbao-device /usr/bin/openbot-runner; do
+  for binary in /usr/bin/xiongbao-device /usr/bin/xiongbao-runner; do
     [ -x "$binary" ] || fail "$binary is missing or not executable."
     echo "已安装 ${binary}，SHA256 $(sha256sum "$binary" | cut -d' ' -f1)" >> "$EVIDENCE"
   done
   entry=/usr/share/applications/xiongbao-device.desktop
   grep -qx 'Exec=xiongbao-device' "$entry" || fail "$entry does not run xiongbao-device."
   grep -qx 'Name=熊宝数字员工 设备端' "$entry" || fail "$entry is not named 熊宝数字员工 设备端."
-  pass "已安装 /usr/bin/xiongbao-device、/usr/bin/openbot-runner 与 ${entry}（dpkg：${status}）"
+  pass "已安装 /usr/bin/xiongbao-device、/usr/bin/xiongbao-runner 与 ${entry}（dpkg：${status}）"
 }
 
 phase_selfcheck() {
   local scratch code=0 data
   scratch="$(mktemp -d)"
-  /usr/bin/openbot-runner --help > "$scratch/help.txt" 2>&1 || code=$?
+  /usr/bin/xiongbao-runner --help > "$scratch/help.txt" 2>&1 || code=$?
   [ "$code" = 2 ] && grep -q -- '--pair CODE' "$scratch/help.txt" || fail "--help exited $code without the usage."
   mkdir "$scratch/folder"
   data="$scratch/data"
-  /usr/bin/openbot-runner --data-dir "$data" --add-root "selfcheck=$scratch/folder" | jq -e '.ok and (.roots | length) == 1' > /dev/null ||
+  /usr/bin/xiongbao-runner --data-dir "$data" --add-root "selfcheck=$scratch/folder" | jq -e '.ok and (.roots | length) == 1' > /dev/null ||
     fail "--add-root did not add the folder."
-  /usr/bin/openbot-runner --data-dir "$data" --list-roots | jq -e '.ok and .roots[0].name == "selfcheck"' > /dev/null ||
+  /usr/bin/xiongbao-runner --data-dir "$data" --list-roots | jq -e '.ok and .roots[0].name == "selfcheck"' > /dev/null ||
     fail "--list-roots did not list the folder."
-  /usr/bin/openbot-runner --data-dir "$data" --remove-root selfcheck | jq -e '.ok and (.roots | length) == 0' > /dev/null ||
+  /usr/bin/xiongbao-runner --data-dir "$data" --remove-root selfcheck | jq -e '.ok and (.roots | length) == 0' > /dev/null ||
     fail "--remove-root did not remove the folder."
-  if [ -n "$(ps -C openbot-runner -o pid= || true)" ]; then
-    fail "an openbot-runner is still running after the one-shot commands."
+  if [ -n "$(ps -C xiongbao-runner -o pid= || true)" ]; then
+    fail "an xiongbao-runner is still running after the one-shot commands."
   fi
   rm -rf "$scratch"
-  pass "已安装的 openbot-runner 自检：--help 退出码 2 并打印用法；--add-root / --list-roots / --remove-root 正常；之后没有残留进程"
+  pass "已安装的 xiongbao-runner 自检：--help 退出码 2 并打印用法；--add-root / --list-roots / --remove-root 正常；之后没有残留进程"
 }
 
 # The server side of 「我的设备」, from this checkout: only the server runs from source, the device
@@ -156,7 +156,7 @@ phase_server() {
     # Sign-in refuses to start without a named administrator (audit defect #3). Nobody signs in as
     # this address: the person under test is an ordinary sign-up, as a customer would be.
     export INITIAL_ADMIN_EMAILS=device-clean-admin@example.test
-    export NODE_ENV=test TENANT_PACKAGE_DIR=../examples/qoderwake INTELLIGENCE_MODE=local
+    export NODE_ENV=test TENANT_PACKAGE_DIR=../examples/xiongbao INTELLIGENCE_MODE=local
     export COPILOTKIT_TELEMETRY_DISABLED=true DO_NOT_TRACK=1
     nohup bun src/index.ts > "$LOG_DIR/server.log" 2>&1 &
     echo "$!" > "$pidfile"
@@ -184,13 +184,13 @@ phase_uninstall() {
     "" | "deinstall ok config-files" | "unknown ok not-installed" | "deinstall ok not-installed") ;;
     *) fail "xiongbao-device is still installed: $status" ;;
   esac
-  for file in /usr/bin/xiongbao-device /usr/bin/openbot-runner /usr/share/applications/xiongbao-device.desktop; do
+  for file in /usr/bin/xiongbao-device /usr/bin/xiongbao-runner /usr/share/applications/xiongbao-device.desktop; do
     if [ -e "$file" ]; then fail "$file is still there after apt-get remove."; fi
   done
-  if [ -n "$(ps -C openbot-runner -o pid= || true)" ]; then
-    fail "an openbot-runner is still running after uninstall."
+  if [ -n "$(ps -C xiongbao-runner -o pid= || true)" ]; then
+    fail "an xiongbao-runner is still running after uninstall."
   fi
-  pass "sudo apt-get remove -y xiongbao-device：应用、openbot-runner 与桌面入口都已删除，没有残留进程"
+  pass "sudo apt-get remove -y xiongbao-device：应用、xiongbao-runner 与桌面入口都已删除，没有残留进程"
   echo "说明：apt 不删除用户目录里的 ~/.local/share/com.xiongbao.device（配对信息），与普通 Linux 软件一致" >> "$EVIDENCE"
 }
 
@@ -222,8 +222,8 @@ cleanup() {
   rm -rf "$work"
 }
 
-# The PIDs of every process named openbot-runner on this machine (none, on a clean one at rest).
-runners() { ps -C openbot-runner -o pid= | tr -d ' ' || true; }
+# The PIDs of every process named xiongbao-runner on this machine (none, on a clean one at rest).
+runners() { ps -C xiongbao-runner -o pid= | tr -d ' ' || true; }
 no_runner() { [ -z "$(runners)" ]; }
 
 until_true() {
@@ -256,7 +256,7 @@ is_offline() { [ "$(device_online)" = false ]; }
 sidecar_of() {
   local app=$1 pid
   for pid in $(ps -o pid= --ppid "$app"); do
-    if [ "$(ps -o comm= -p "$pid")" = openbot-runner ] &&
+    if [ "$(ps -o comm= -p "$pid")" = xiongbao-runner ] &&
       ! tr '\0' '\n' < "/proc/$pid/cmdline" 2> /dev/null | grep -qx -- --list-roots; then
       echo "$pid"
       return 0
@@ -278,7 +278,7 @@ phase_lifecycle() {
   [ -x "$APP_BIN" ] || fail "no app at $APP_BIN"
   local app_data="${XDG_DATA_HOME:-$HOME/.local/share}/com.xiongbao.device"
   [ ! -e "$app_data" ] || fail "$app_data already exists: this is not a clean machine"
-  [ -z "$(runners)" ] || fail "an openbot-runner is already running"
+  [ -z "$(runners)" ] || fail "an xiongbao-runner is already running"
   # Test harness only, not the app's dependencies: a virtual display and a session bus for the tray app.
   sudo apt-get install -y xvfb dbus-daemon dbus-session-bus-common
 
@@ -320,9 +320,9 @@ phase_lifecycle() {
   # 4. Stop it by PID: nothing left, and the server notices.
   kill -TERM "$runner"
   wait "$runner" || fail "the runner exited $? on SIGTERM"
-  [ -z "$(runners)" ] || fail "openbot-runner still running after it was stopped: $(runners)"
+  [ -z "$(runners)" ] || fail "xiongbao-runner still running after it was stopped: $(runners)"
   until_true "the stopped device still shows online" "$OFFLINE_TIMEOUT" is_offline
-  pass "按 PID 停止 runner 后没有残留的 openbot-runner 进程，服务器显示设备离线"
+  pass "按 PID 停止 runner 后没有残留的 xiongbao-runner 进程，服务器显示设备离线"
 
   # 5 and 6. The installed app, twice: it starts its own sidecar without a pairing code, and quits clean.
   printf '{\n  "server": "%s",\n  "name": "%s"\n}\n' "$ORIGIN" "$NAME" > "$app_data/device.json"
@@ -341,7 +341,7 @@ phase_lifecycle() {
     "$APP_BIN" > "$LOG_DIR/app-$round.log" 2>&1 &
     app=$!
     started+=("$app")
-    until_true "the app (round $round) did not start openbot-runner" 60 has_sidecar "$app"
+    until_true "the app (round $round) did not start xiongbao-runner" 60 has_sidecar "$app"
     child=$(sidecar_of "$app")
     [ "$(readlink -f "/proc/$child/exe")" = "$(readlink -f "$RUNNER_BIN")" ] ||
       fail "the app started $(readlink -f "/proc/$child/exe"), not the installed $RUNNER_BIN"
@@ -349,7 +349,7 @@ phase_lifecycle() {
       fail "the app passed --pair again"
     fi
     until_true "the device is not back online after the app started (round $round)" 60 is_online
-    pass "第 $round 次启动已安装的 $APP_BIN：自动拉起安装目录里的 openbot-runner（PID $child，无需重新配对），设备重新在线"
+    pass "第 $round 次启动已安装的 $APP_BIN：自动拉起安装目录里的 xiongbao-runner（PID $child，无需重新配对），设备重新在线"
     # SIGTERM is routed to the same quit() as the tray's 「退出」 (main.rs route_signals_to_quit).
     kill -TERM "$app"
     for _ in $(seq 1 30); do kill -0 "$app" 2> /dev/null || break; sleep 1; done
@@ -358,9 +358,9 @@ phase_lifecycle() {
     # The supervised runner is gone with the app. A one-shot `--list-roots` the window may have asked
     # for just before (roots.rs) ends by itself, so the machine gets a few seconds to settle.
     kill -0 "$child" 2> /dev/null && fail "the app's runner (PID $child) outlived the app (round $round)"
-    until_true "openbot-runner left running after the app quit (round $round)" 10 no_runner
+    until_true "xiongbao-runner left running after the app quit (round $round)" 10 no_runner
     until_true "the device still shows online after the app quit (round $round)" "$OFFLINE_TIMEOUT" is_offline
-    pass "第 $round 次退出应用（与托盘「退出」同一路径）：没有残留的 openbot-runner 进程，服务器显示设备离线"
+    pass "第 $round 次退出应用（与托盘「退出」同一路径）：没有残留的 xiongbao-runner 进程，服务器显示设备离线"
   done
 }
 

@@ -433,7 +433,7 @@ describe("a ping", () => {
       "2 things need you",
       "• Inbox Bot: Reply to Dana about Friday. Dana asked about Friday. (from Mail)",
       "• Calendar Bot: Move the standup. The room is double-booked. (from Mail)",
-      "Start or hide them in OpenBot.",
+      "Start or hide them in XiongBao Work.",
     ]);
     expect(
       chatSends.find((send) => send.transport === "teams")?.sender,
@@ -467,7 +467,7 @@ describe("a ping", () => {
       expect(push).toMatchObject({
         title: "2 things need you",
         body: "Inbox Bot: Reply to Dana about Friday\nCalendar Bot: Move the standup",
-        data: { kind: "attention", url: "openbotmobile://needs-you" },
+        data: { kind: "attention", url: "xiongbao://needs-you" },
       });
     // The phone opens its Needs you list on a tap.
     expect(notificationDestination(pushSends[0]?.data)).toEqual({
@@ -503,12 +503,12 @@ describe("a ping", () => {
     await drain();
     expect(pushSends).toHaveLength(2);
     expect(pushSends[0]).toMatchObject({
-      title: "OpenBot",
+      title: "熊宝数字员工",
       body: "Drafted the reply to Dana.",
       data: {
         kind: "reply",
         channelId: inboxChannel,
-        url: `openbotmobile://conversation?channelId=${inboxChannel}`,
+        url: `xiongbao://conversation?channelId=${inboxChannel}`,
       },
     });
   });

@@ -2,7 +2,7 @@
 
 本手册面向交付部署。客户部署拉取发布镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork`，
 不需要源码、Git 或本机构建；只有[附录：从源码构建](#附录从源码构建)需要进入 `openbot/`。
-本机历史端口、迁移研发与测试经验在[开发环境笔记](development-environment-qoderwake.md)。
+本机历史端口、迁移研发与测试经验在[开发环境笔记](development-environment-xiongbao.md)。
 对外发布仍需 DoD-1/2/3/8 的证据，当前记录见[B 线交付验证](track-b-delivery-evidence.md)。
 全新 WSL、Windows PowerShell 与独立 Compose 的实际命令和耗时见
 [部署验收记录](delivery-acceptance-2026-10-09.md)。
@@ -140,9 +140,9 @@ SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
 
 ## 5. 品牌与模型配置
 
-发布镜像在构建期内置 `examples/qoderwake` 品牌包。SPA 首屏标题与主 JS 品牌在构建期注入，
+发布镜像在构建期内置 `examples/xiongbao` 品牌包。SPA 首屏标题与主 JS 品牌在构建期注入，
 只设置运行期 TENANT_PACKAGE_DIR 不会重写 bundle；换品牌包需要按附录从源码构建。
-上游推广条在运行期由 `OPENBOT_SELF_HOST_BANNER=false` 关闭。
+推广条默认关闭（只有 `OPENBOT_SELF_HOST_BANNER=true` 且租户包配了 `support_url` 才显示），这里保留 `=false` 只是显式声明。
 
 模型可在产品模型库接入并绑定到员工；部署默认的 OpenAI 兼容接口配置为：
 
@@ -274,7 +274,7 @@ runner 上、不登录 GHCR，原样执行 README 的 Linux 命令块，核对�
 不能作为交付验收证据。从仓库根进入 `openbot/`：
 
 ```bash
-docker build --build-arg TENANT_PACKAGE_DIR=../examples/qoderwake \
+docker build --build-arg TENANT_PACKAGE_DIR=../examples/xiongbao \
   -f Dockerfile -t xiongbao-digital-employee:local .
 ```
 

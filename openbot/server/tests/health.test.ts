@@ -112,8 +112,8 @@ describe("runtime capabilities", () => {
       generativeUi: true,
       // AUT3: off unless the WakerFlow automation target was registered (index.ts does).
       wakerflowAutomations: false,
-      // Default-on: a fresh clone is somebody evaluating the template.
-      selfHostBanner: true,
+      // Default-off: the banner is opt-in (OPENBOT_SELF_HOST_BANNER=true) and needs a tenant support URL.
+      selfHostBanner: false,
       // Off: this deployment has an identity provider, so it is not somebody's local trial.
       localEvaluation: false,
       // Which product this is. The app trims its screens for the personal edition.
@@ -181,18 +181,18 @@ describe("runtime capabilities", () => {
     expect((await response.json()).generativeUi).toBe(false);
   });
 
-  // A fork running OpenBot for its own people turns the banner off, and the browser has to hear it.
-  test("reports the self-host banner as off when the deployment opts out", async () => {
-    const disabled = createApp(
-      loadConfig(testEnvironment({ OPENBOT_SELF_HOST_BANNER: "false" })),
+  // The banner is opt-in, and the browser has to hear that an operator turned it on.
+  test("reports the self-host banner as on when the deployment opts in", async () => {
+    const enabled = createApp(
+      loadConfig(testEnvironment({ OPENBOT_SELF_HOST_BANNER: "true" })),
     );
 
-    const response = await disabled.request(
+    const response = await enabled.request(
       "http://openbot.local/api/capabilities",
     );
 
     expect(response.status).toBe(200);
-    expect((await response.json()).selfHostBanner).toBe(false);
+    expect((await response.json()).selfHostBanner).toBe(true);
   });
 
   // One person running it for themselves is not somebody to offer help running it for a company.

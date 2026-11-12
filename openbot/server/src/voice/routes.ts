@@ -2,6 +2,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AgentProfileStore } from "../agents/profile-store";
 import type { AppVariables } from "../auth/guards";
+import { hasBrowserMarker } from "../browser-request-marker";
 import type { ChannelStore } from "../channels/routes";
 import {
   isVoiceSdp,
@@ -44,7 +45,7 @@ export function createVoiceRoutes(
     async (context, next) => {
       context.header("Cache-Control", "no-store");
       // Cross-origin HTML forms cannot set this header; this route grants no CORS access.
-      if (context.req.header("x-openbot-voice") !== "1") {
+      if (!hasBrowserMarker((name) => context.req.header(name), "voice")) {
         return context.json({ error: "无效的语音请求。" }, 403);
       }
       if (!provider || !channels || !profiles)

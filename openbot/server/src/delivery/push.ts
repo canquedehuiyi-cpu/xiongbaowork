@@ -17,7 +17,7 @@ function pushData(input: {
   requestId?: string | null;
 }): Record<string, string> {
   if (input.kind === "attention")
-    return { kind: input.kind, url: "openbotmobile://needs-you" };
+    return { kind: input.kind, url: "xiongbao://needs-you" };
   const path = input.kind === "reply" ? "conversation" : "approvals";
   const query = new URLSearchParams({
     channelId: input.channelId,
@@ -27,7 +27,7 @@ function pushData(input: {
     channelId: input.channelId,
     kind: input.kind,
     ...(input.requestId ? { requestId: input.requestId } : {}),
-    url: `openbotmobile://${path}?${query}`,
+    url: `xiongbao://${path}?${query}`,
   };
 }
 export function createExpoPushTransport(

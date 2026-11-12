@@ -24,6 +24,7 @@ import {
   offersStandingRule,
   wantsTo,
 } from "../approvals/types";
+import { englishName, shortName } from "../brand";
 import {
   ingestSlackEvent,
   type SlackTriggerEvent,
@@ -201,14 +202,20 @@ async function cancelReachabilityCode(deps: OpenTagAgentDeps, code: string) {
   );
 }
 
-const CANCELLED_IN_SHARED =
-  "这个关联码发在了别人也看得到的地方，我已经把它作废了。请在熊宝里重新生成一个，用私信发给我。";
+// A function, not a constant: the brand is set after this module loads.
+const cancelledInShared = () =>
+  `这个关联码发在了别人也看得到的地方，我已经把它作废了。请在${shortName()}里重新生成一个，用私信发给我。`;
 
 const platformName = (transport: ChatTransport) =>
   transport === "teams" ? "Microsoft Teams" : "Slack";
 
 export function linkInstructions(transport: ChatTransport) {
-  return `我还不知道你在熊宝里是谁，所以什么都没有执行。请在熊宝的「触达方式」里选好对话和 ${platformName(transport)}，把页面上给出的 \`link <关联码>\` 消息发给我。`;
+  return `我还不知道你在${shortName()}里是谁，所以什么都没有执行。请在${shortName()}的「触达方式」里选好对话和 ${platformName(transport)}，把页面上给出的 \`link <关联码>\` 消息发给我。`;
+}
+
+/** What a person reads when a turn fails for a reason the Bot is not meant to explain. */
+export function turnFailureMessage(): string {
+  return `${englishName()} could not complete this turn. Try again, or open the conversation in ${englishName()}.`;
 }
 
 export async function handleOpenTagRun(
@@ -289,7 +296,7 @@ export async function handleOpenTagRun(
         message:
           error instanceof DeliveryRefusedError
             ? error.message
-            : "OpenBot could not complete this turn. Try again, or open the conversation in OpenBot.",
+            : turnFailureMessage(),
       });
     }
   });
@@ -319,7 +326,7 @@ async function answer(
   const sender = senderFromContext(input);
   if (!sender)
     return {
-      text: "OpenTag 没有告诉熊宝这条消息是谁发的，所以什么都没有执行。请把 OpenTag 升级到会转发发送者信息的版本。",
+      text: `OpenTag 没有告诉${shortName()}这条消息是谁发的，所以什么都没有执行。请把 OpenTag 升级到会转发发送者信息的版本。`,
     };
   // Something to watch, not to answer: feed the owner's Slack triggers and stay quiet.
   if (sender.observe) {
@@ -406,14 +413,12 @@ async function answerAsBinding(
     const card = await approvalCard(deps, result.binding, approvalId);
     if (result.extras.approvals.length > 1)
       parts.push(
-        `还有 ${result.extras.approvals.length - 1} 个审批在熊宝的员工页上等你处理。`,
+        `还有 ${result.extras.approvals.length - 1} 个审批在${shortName()}的员工页上等你处理。`,
       );
     if (card) return { text: parts.join("\n\n"), interrupt: card };
-    parts.push(
-      "你的员工在等一个审批。请到熊宝的员工页上查看。",
-    );
+    parts.push(`你的员工在等一个审批。请到${shortName()}的员工页上查看。`);
   } else if (result.kind === "waiting" && !parts.length) {
-    parts.push("你的员工在等人处理。请打开熊宝继续。");
+    parts.push(`你的员工在等人处理。请打开${shortName()}继续。`);
   }
   return {
     text: parts.join("\n\n") || "完成了。",
@@ -457,7 +462,7 @@ async function answerPrivately(
   for (const approvalId of result.extras.approvals)
     await deps.router.notify(scope, {
       id: approvalId,
-      text: `${bot?.name ?? YOUR_BOT} 在等你审批。请到熊宝的员工页上查看。`,
+      text: `${bot?.name ?? YOUR_BOT} 在等你审批。请到${shortName()}的员工页上查看。`,
       kind: "approval",
       requestId: approvalId,
     });
@@ -511,7 +516,7 @@ async function link(
       await runAsTenant(issuer, () =>
         deps.store.consumeChallenge(code, challenge.ownerUserId),
       );
-    return { text: CANCELLED_IN_SHARED };
+    return { text: cancelledInShared() };
   }
   if (!challenge && sender.transport === "slack" && deps.identity) {
     // Anyone else in a shared conversation has now seen the code and could send it first, binding
@@ -520,9 +525,9 @@ async function link(
     // `withoutLinkCodes`).
     if (!sender.private) {
       if (await deps.identity.discard(code))
-        return { text: CANCELLED_IN_SHARED };
+        return { text: cancelledInShared() };
       return {
-        text: "这个关联码已经过期、用过了，或者是别的应用的。请在熊宝里重新生成一个。",
+        text: `这个关联码已经过期、用过了，或者是别的应用的。请在${shortName()}里重新生成一个。`,
       };
     }
     const outcome = await deps.identity.redeem(code, {
@@ -531,11 +536,11 @@ async function link(
     });
     if (outcome === "linked")
       return {
-        text: "你的 Slack 账号已经关联到熊宝，可以在「已连接的账号」里看到。",
+        text: `你的 Slack 账号已经关联到${shortName()}，可以在「已连接的账号」里看到。`,
       };
     if (outcome === "conflict")
       return {
-        text: "这个 Slack 账号已经关联到熊宝的另一位用户。",
+        text: `这个 Slack 账号已经关联到${shortName()}的另一位用户。`,
       };
   }
   const tenant = challenge
@@ -543,7 +548,7 @@ async function link(
     : null;
   if (!challenge || !tenant || challenge.transport !== sender.transport)
     return {
-      text: "这个关联码已经过期、用过了，或者是别的应用的。请在熊宝里重新生成一个。",
+      text: `这个关联码已经过期、用过了，或者是别的应用的。请在${shortName()}里重新生成一个。`,
     };
   return runAsTenant(tenant, () => linkAs(deps, sender, code, challenge));
 }
@@ -565,7 +570,7 @@ async function linkAs(
     !(await deps.store.consumeChallenge(code, challenge.ownerUserId))
   )
     return {
-      text: "那个对话已经变了。请在熊宝里重新生成关联码。",
+      text: `那个对话已经变了。请在${shortName()}里重新生成关联码。`,
     };
   try {
     await deps.store.bind({
@@ -582,7 +587,7 @@ async function linkAs(
   }
   const bot = await deps.store.botIdentity(scope.agentId);
   return {
-    text: `关联好了。你在这里发给我的消息会转到熊宝里和 ${bot?.name ?? YOUR_BOT} 的对话，它的提问和审批也会发到这里。`,
+    text: `关联好了。你在这里发给我的消息会转到${shortName()}里和 ${bot?.name ?? YOUR_BOT} 的对话，它的提问和审批也会发到这里。`,
   };
 }
 
@@ -629,12 +634,12 @@ async function decideFromCard(
     };
   if (!deps.approvals)
     return {
-      text: "这个部署不能在聊天里审批。请到熊宝的员工页上决定。",
+      text: `这个部署不能在聊天里审批。请到${shortName()}的员工页上决定。`,
     };
   const person = parseChannelUser(resume.by);
   if (!person)
     return {
-      text: "这张审批卡片没有说明是谁回答的，所以什么都没有决定。请升级 OpenTag，或者到熊宝的员工页上决定。",
+      text: `这张审批卡片没有说明是谁回答的，所以什么都没有决定。请升级 OpenTag，或者到${shortName()}的员工页上决定。`,
     };
   // The clicker is mapped exactly like a message sender; OpenTag already refused anyone but the
   // named approver, and OpenBot then decides only as that binding's owner.
@@ -659,7 +664,7 @@ async function decideAsBinding(
 ): Promise<{ text: string }> {
   if (!deps.approvals)
     return {
-      text: "这个部署不能在聊天里审批。请到熊宝的「审批」里决定。",
+      text: `这个部署不能在聊天里审批。请到${shortName()}的「审批」里决定。`,
     };
   let record: Awaited<ReturnType<PairedApprovals["store"]["get"]>>;
   try {
@@ -678,7 +683,7 @@ async function decideAsBinding(
     };
   if (record.status !== "pending")
     return {
-      text: "这个审批已经决定过了。可以在熊宝里查看结果。",
+      text: `这个审批已经决定过了。可以在${shortName()}里查看结果。`,
     };
   // An older card may still offer "Always allow" on a check-in task's approval: that is once.
   // 删除类底线问的动作没有「总是允许」：旧卡片上按的 always 只当作这一次。

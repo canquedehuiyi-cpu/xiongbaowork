@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { shortName } from "@/lib/brand";
 import {
   approveLocalCandidateMutationOptions,
   rejectLocalCandidateMutationOptions,
@@ -59,8 +60,7 @@ import { relativeTime } from "@/lib/relative-time";
 import { skillFormSchema } from "@/lib/skills/form";
 import { queryClient } from "@/query-client";
 
-const DESCRIPTION =
-  "熊宝每天读一次你和员工最近的对话，把反复做的事整理成技能草案。你批准后才会交给员工，对话不会离开熊宝。";
+const DESCRIPTION = `${shortName()}每天读一次你和员工最近的对话，把反复做的事整理成技能草案。你批准后才会交给员工，对话不会离开${shortName()}。`;
 
 /** 已处理的草案显示最近几条。 */
 const REVIEWED_SHOWN = 5;
@@ -165,8 +165,8 @@ export function LocalLearningSection() {
               <ItemTitle>从对话中学习</ItemTitle>
               <ItemDescription>
                 {enabled
-                  ? "熊宝每天读一次你和员工最近的对话。"
-                  : "熊宝不会读你的对话来整理技能。"}
+                  ? `${shortName()}每天读一次你和员工最近的对话。`
+                  : `${shortName()}不会读你的对话来整理技能。`}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -227,7 +227,7 @@ export function LocalLearningSection() {
       >
         {data.pending.length === 0 ? (
           <PageEmpty icon={IconSparkles} title="没有等你批准的草案">
-            学完后，熊宝从对话里整理出的技能草案会出现在这里。
+            学完后，{shortName()}从对话里整理出的技能草案会出现在这里。
           </PageEmpty>
         ) : (
           <PageRows>

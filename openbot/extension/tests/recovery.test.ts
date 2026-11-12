@@ -39,7 +39,7 @@ const OFFSCREEN_SENDER = {
 const ada = { id: "p1", name: "Ada", email: "ada@example.test" };
 const bea = { id: "p2", name: "Bea", email: "bea@example.test" };
 const DEAL = "https://crm.example.test/deals/42";
-const KEPT_SIGNED_OUT = "This browser was disconnected from OpenBot.";
+const KEPT_SIGNED_OUT = "This browser was disconnected from XiongBao Work.";
 
 // ---- The fake OpenBot -------------------------------------------------------------------------
 //
@@ -593,7 +593,7 @@ test("a service-worker restart with the document still open finishes a discard i
   // The document holds its events, retrying them while it lives on.
   storeDiscardingDrain("rec-gone", {
     kept: {
-      reason: "OpenBot's back end could not take the events yet.",
+      reason: "The server could not take the events yet.",
       parked: false,
       events: 12,
       at: now - 1_000,

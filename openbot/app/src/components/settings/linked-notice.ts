@@ -1,3 +1,4 @@
+import { shortName } from "@/lib/brand";
 export type LinkedNotice = { tone: "success" | "error"; text: string };
 
 /**
@@ -17,7 +18,7 @@ export function linkedNotice(value: string | undefined): LinkedNotice | null {
   if (value === "github-taken") {
     return {
       tone: "error",
-      text: "这个 GitHub 账号已经关联到另一位熊宝用户。请在 GitHub 换一个账号登录后再连接，或联系熊宝管理员。",
+      text: `这个 GitHub 账号已经关联到另一位${shortName()}用户。请在 GitHub 换一个账号登录后再连接，或联系${shortName()}管理员。`,
     };
   }
   return null;

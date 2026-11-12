@@ -2,6 +2,7 @@ import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { shortName } from "@/lib/brand";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { componentListQueryOptions } from "@/lib/components/queries";
 import { wakerFlowsQueryOptions } from "@/lib/wakerflows";
@@ -59,7 +60,7 @@ export function WakerFlowsTab({ query, onQuery }: SearchProps) {
         {rows.length === 0 ? (
           <TabEmpty
             action={newButton}
-            description="说出你想要的流程，比如周会准备或工作周报，熊宝会帮你生成一份可编辑的计划。"
+            description={`说出你想要的流程，比如周会准备或工作周报，${shortName()}会帮你生成一份可编辑的计划。`}
             title="还没有 WakerFlow"
           />
         ) : visible.length === 0 ? (

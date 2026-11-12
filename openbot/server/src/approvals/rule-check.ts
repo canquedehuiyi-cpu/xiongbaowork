@@ -16,6 +16,7 @@ import {
   vocabularyTools,
 } from "./rule-vocabulary";
 import { type ApprovalRuleInput, RULE_BEHAVIOURS } from "./types";
+import { englishName } from "../brand";
 
 export type RuleRowProblem = {
   /** Which row, counted from 1 as the screen counts them. */
@@ -112,10 +113,10 @@ function rowProblems(
       rule.toolRef.startsWith("mcp/")
         ? `"${rule.toolRef}" matches no tool: no tool here starts with mcp/. An app's tool is <app id>/<tool>, such as ${example}/*.`
         : rule.toolRef.includes("*")
-          ? `"${rule.toolRef}" matches no tool OpenBot has.${apps.length ? ` Apps set up: ${list(apps)}.` : " No apps are set up."}`
+          ? `"${rule.toolRef}" matches no tool ${englishName()} has.${apps.length ? ` Apps set up: ${list(apps)}.` : " No apps are set up."}`
           : apps.includes(prefix) || rule.toolRef.includes("/")
-            ? `"${rule.toolRef}" is not a tool OpenBot has.${apps.includes(prefix) ? ` ${prefix} has: ${list(tools.filter((tool) => tool.scope.kind === "app" && tool.scope.app === prefix).map((tool) => tool.ref.slice(prefix.length + 1)))}.` : apps.length ? ` Apps set up: ${list(apps)}.` : " No apps are set up."}`
-            : `"${rule.toolRef}" is not a tool OpenBot has. Name an app's tool as <app id>/<tool>, or one of OpenBot's own, such as computer_click.`,
+            ? `"${rule.toolRef}" is not a tool ${englishName()} has.${apps.includes(prefix) ? ` ${prefix} has: ${list(tools.filter((tool) => tool.scope.kind === "app" && tool.scope.app === prefix).map((tool) => tool.ref.slice(prefix.length + 1)))}.` : apps.length ? ` Apps set up: ${list(apps)}.` : " No apps are set up."}`
+            : `"${rule.toolRef}" is not a tool ${englishName()} has. Name an app's tool as <app id>/<tool>, or one of ${englishName()}'s own, such as computer_click.`,
     );
     return problems;
   }

@@ -81,10 +81,10 @@ test("a recorded tab says OpenBot is recording it, with one button that leaves i
   const mark = show(RECORDING, (recorded) => choices.push(recorded));
   expect(document.querySelector(INDICATOR_TAG)).toBe(mark.host);
   expect(text(mark)).toBe(
-    "OpenBot is recording this tab Don't record example.test Stop",
+    "XiongBao Work is recording this tab Don't record example.test Stop",
   );
   expect(mark.root.querySelector("[role=status]")?.textContent).toContain(
-    "OpenBot is recording this tab",
+    "XiongBao Work is recording this tab",
   );
   buttonOf(mark).click();
   expect(choices).toEqual([false]);
@@ -93,11 +93,11 @@ test("a recorded tab says OpenBot is recording it, with one button that leaves i
 test("while the Recorder hears the person, the mark says so", () => {
   const mark = show({ ...RECORDING, narrating: true });
   expect(text(mark)).toBe(
-    "OpenBot is recording this tab · Listening to you Don't record example.test Stop",
+    "XiongBao Work is recording this tab · Listening to you Don't record example.test Stop",
   );
   mark.update({ ...RECORDING, narrating: false });
   expect(text(mark)).toBe(
-    "OpenBot is recording this tab Don't record example.test Stop",
+    "XiongBao Work is recording this tab Don't record example.test Stop",
   );
 });
 
@@ -112,7 +112,7 @@ test("a site left out says it is not recorded, and its button records it again",
   // The same mark turns back when the background says the site is recorded again.
   mark.update(RECORDING);
   expect(text(mark)).toBe(
-    "OpenBot is recording this tab Don't record example.test Stop",
+    "XiongBao Work is recording this tab Don't record example.test Stop",
   );
   buttonOf(mark).click();
   expect(choices).toEqual([true, false]);
@@ -158,7 +158,7 @@ test("Keep recording takes the question away, and the mark is as it was", () => 
   actionOf(mark, "stop").click();
   actionOf(mark, "back").click();
   expect(text(mark)).toBe(
-    "OpenBot is recording this tab Don't record example.test Stop",
+    "XiongBao Work is recording this tab Don't record example.test Stop",
   );
   expect(stops).toEqual([]);
 });
@@ -182,7 +182,7 @@ test("a page script clicking the mark does nothing", () => {
   // Nor can it stop the recording, or answer for the person.
   actionOf(mark, "stop").click();
   expect(text(mark)).toBe(
-    "OpenBot is recording this tab Don't record example.test Stop",
+    "XiongBao Work is recording this tab Don't record example.test Stop",
   );
   actionOf(mark, "discard").click();
   expect(stops).toEqual([]);
@@ -240,7 +240,7 @@ const OPENBOT_HOME: Record<
     page: { width: 1280, height: 860 },
     usable: [
       {
-        what: "OpenBot",
+        what: "XiongBao Work",
         tag: "a",
         box: { left: 8, top: 8, width: 285, height: 34 },
       },
@@ -305,7 +305,7 @@ const OPENBOT_HOME: Record<
     page: { width: 1920, height: 1080 },
     usable: [
       {
-        what: "OpenBot",
+        what: "XiongBao Work",
         tag: "a",
         box: { left: 8, top: 8, width: 285, height: 34 },
       },

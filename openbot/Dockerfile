@@ -97,7 +97,7 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
 FROM deps AS app-build
 
 # The SPA configuration is baked during prebuild, not read when the container starts.
-ARG TENANT_PACKAGE_DIR=../examples/qoderwake
+ARG TENANT_PACKAGE_DIR=../examples/xiongbao
 ENV TENANT_PACKAGE_DIR=${TENANT_PACKAGE_DIR}
 
 COPY app app
@@ -107,6 +107,8 @@ COPY toolkit toolkit
 # The server's source as well: the app's prebuild step reads the tenant package through
 # `server/src/tenant-package`, so the app cannot be built without it.
 COPY server server
+# The About page imports ../../../../../LICENSE?raw, so Vite needs the file at /src/LICENSE.
+COPY LICENSE LICENSE
 COPY examples examples
 RUN bun run --cwd app build
 
@@ -214,8 +216,14 @@ COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
 # The built app, served by the API on the same origin. There is no CORS in this server, so this is
 # not a convenience: two origins would simply fail.
 COPY --from=app-build /src/app/dist app/dist
+
+# MIT requires the copyright notice and license text to travel with the code. LICENSE and NOTICE are
+# ours; THIRD-PARTY-NOTICES.md is written by the app-build stage's prebuild (generate:app-config) from
+# the full install, before the prune above removes anything.
+COPY LICENSE NOTICE /licenses/
+COPY --from=app-build /src/THIRD-PARTY-NOTICES.md /licenses/THIRD-PARTY-NOTICES.md
 ENV APP_DIST_DIR=/app/app/dist
-ENV TENANT_PACKAGE_DIR=../examples/qoderwake
+ENV TENANT_PACKAGE_DIR=../examples/xiongbao
 ENV OPENBOT_SELF_HOST_BANNER=false
 
 COPY docker/s6 /etc/s6-overlay
@@ -391,6 +399,9 @@ ENV OPENBOT_BUILD_VERSION=${OPENBOT_BUILD_VERSION} \
 # server/src/config.ts.
 ENV OPENBOT_IN_CONTAINER=true
 ENV NODE_ENV=production
+# The CopilotKit runtime reports usage to its vendor unless this is set; the server also swaps its
+# capture scope for a silent one, so this covers any process that reads the variable directly.
+ENV COPILOTKIT_TELEMETRY_DISABLED=1
 ENV PORT=3001
 EXPOSE 3001
 

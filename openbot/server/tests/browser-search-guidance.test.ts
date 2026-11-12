@@ -140,7 +140,7 @@ describe("员工持有浏览器时的公开网页搜索引导", () => {
       "Do NOT browse to one of their websites instead",
       "that is a missing grant and not something to work around",
       "Do not reach for the browser, do not ask the person to sign in",
-      "OpenBot itself asks the person before you delete or archive anything",
+      "XiongBao Work itself asks the person before you delete or archive anything",
       "This deployment also connects to: gmail. You hold none of their tools.",
       "Do NOT browse to its website",
     ])
@@ -160,7 +160,7 @@ describe("员工持有浏览器时的公开网页搜索引导", () => {
 describe("员工没有浏览器时，引导与原来逐字一致", () => {
   // 改动前由当前代码生成的原文。
   const BEFORE =
-    "You can reach these systems directly, as the person asking, with their own access:\n- google-drive: search_files\n- parallel: web_search, web_fetch\nUse them for anything about those systems. Do NOT browse to one of their websites instead: your\nbrowser is signed in as nobody, so it sees less than these tools do and will meet a sign-in wall\nthat connecting an account has already solved.\nIf one of these systems is involved and no tool above covers the part you need, that is a\nmissing grant and not something to work around. Say so plainly, name the capability you would\nneed, and say an administrator can grant it on that connector. Do not reach for the browser, do\nnot ask the person to sign in, and do not ask them to fetch it for you: they already have the\naccess, and the thing that is missing is yours, not theirs.\nFor the tools of connected apps (their names start with mcp__), OpenBot itself asks the person before you delete or archive anything and before you use a tool marked destructive, on a card that shows exactly what you are about to do. So for those, do not ask them first: say what you are going to do and call the tool, and they are asked once, by OpenBot. This covers connected-app tools only: not your memory tools, and not commands or files on a computer.\nParallel provides public-web search and extraction: mcp__parallel__web_search and mcp__parallel__web_fetch discover sources and read selected pages.\nParallel searches the public web; it does not connect a person's private account. Send only the research objective, necessary search queries and requested URLs, not a full transcript or private documents. Generate one session_id for the conversation and reuse it on related search/fetch calls. Omit model_name unless the exact configured model identifier is known.\nCite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. Interactive browser work still uses the authorized computer tools when needed.\n\nThis deployment also connects to: gmail. You hold none of their tools.\nIf a question needs one of them, say plainly that you have not been granted it and that an\nadministrator can grant it on that connector. Do NOT browse to its website: that is not the\nsame thing, your browser is signed in as nobody, and it will meet a sign-in wall that the\nconnector exists to avoid. Do not ask the person to sign in there either.";
+    "You can reach these systems directly, as the person asking, with their own access:\n- google-drive: search_files\n- parallel: web_search, web_fetch\nUse them for anything about those systems. Do NOT browse to one of their websites instead: your\nbrowser is signed in as nobody, so it sees less than these tools do and will meet a sign-in wall\nthat connecting an account has already solved.\nIf one of these systems is involved and no tool above covers the part you need, that is a\nmissing grant and not something to work around. Say so plainly, name the capability you would\nneed, and say an administrator can grant it on that connector. Do not reach for the browser, do\nnot ask the person to sign in, and do not ask them to fetch it for you: they already have the\naccess, and the thing that is missing is yours, not theirs.\nFor the tools of connected apps (their names start with mcp__), XiongBao Work itself asks the person before you delete or archive anything and before you use a tool marked destructive, on a card that shows exactly what you are about to do. So for those, do not ask them first: say what you are going to do and call the tool, and they are asked once, by XiongBao Work. This covers connected-app tools only: not your memory tools, and not commands or files on a computer.\nParallel provides public-web search and extraction: mcp__parallel__web_search and mcp__parallel__web_fetch discover sources and read selected pages.\nParallel searches the public web; it does not connect a person's private account. Send only the research objective, necessary search queries and requested URLs, not a full transcript or private documents. Generate one session_id for the conversation and reuse it on related search/fetch calls. Omit model_name unless the exact configured model identifier is known.\nCite source URLs and distinguish excerpts from full-page reads. Report provider errors or missing sources; do not invent evidence or quietly bypass a denial. Interactive browser work still uses the authorized computer tools when needed.\n\nThis deployment also connects to: gmail. You hold none of their tools.\nIf a question needs one of them, say plainly that you have not been granted it and that an\nadministrator can grant it on that connector. Do NOT browse to its website: that is not the\nsame thing, your browser is signed in as nobody, and it will meet a sign-in wall that the\nconnector exists to avoid. Do not ask the person to sign in there either.";
   const tools = [...drive, ...parallel];
   const vendors = ["google-drive", "gmail"];
 
@@ -439,7 +439,7 @@ describe("后台只读调研没有浏览器，也不被告知有", () => {
 
 describe("技能 web-search-guide", () => {
   test("写明用浏览器搜百度、必应作备选，tools 仍为空", async () => {
-    const loaded = await loadTenantPackage("../examples/qoderwake");
+    const loaded = await loadTenantPackage("../examples/xiongbao");
     const skill = loaded.skills.find(
       (entry) => entry.slug === "web-search-guide",
     );
@@ -462,7 +462,7 @@ describe("技能 web-search-guide", () => {
 
   test("去掉了「待 MCP 实测拿到工具名后补 tools」这条过时注释", () => {
     const yaml = readFileSync(
-      new URL("../../examples/qoderwake/skills.yaml", import.meta.url),
+      new URL("../../examples/xiongbao/skills.yaml", import.meta.url),
       "utf8",
     );
     const lines = yaml.split("\n");

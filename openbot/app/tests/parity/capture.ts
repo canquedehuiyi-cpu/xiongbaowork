@@ -299,7 +299,7 @@ export async function newContext(
         window.localStorage.setItem(key, value);
       } catch {}
     },
-    ["openbot-theme", theme] as const,
+    ["xiongbao-theme", theme] as const,
   );
   await context.addInitScript((css: string) => {
     const inject = () => {

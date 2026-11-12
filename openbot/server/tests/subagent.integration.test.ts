@@ -653,7 +653,7 @@ describe("a Bot gives part of its work to a subagent", () => {
     expect(
       text(sub.messages[0] ?? { role: "system", content: "" }),
     ).toStartWith(
-      `<identity>\nYou are Notes, a Bot in OpenBot. ${selfAddressGuidance("Notes")}\n</identity>\n\n<role>\n${ROLE}`,
+      `<identity>\nYou are Notes, a Bot in XiongBao Work. ${selfAddressGuidance("Notes")}\n</identity>\n\n<role>\n${ROLE}`,
     );
     expect(offered(sub)).toContain(modelName(SEARCH));
     expect(offered(sub)).toContain(modelName(POST));

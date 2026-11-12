@@ -8,6 +8,7 @@ import {
   IconDevices,
   IconGauge,
   IconHistory,
+  IconInfoCircle,
   IconKey,
   IconLayoutGrid,
   IconListCheck,
@@ -114,6 +115,12 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     title: "组件展示",
     icon: IconLayoutGrid,
     linkOptions: { to: "/settings/components-gallery" },
+  },
+  {
+    /* 产品名、版本，以及用到的开源软件及其许可。 */
+    title: "关于",
+    icon: IconInfoCircle,
+    linkOptions: { to: "/settings/about" },
   },
 ];
 

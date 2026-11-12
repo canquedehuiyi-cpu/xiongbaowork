@@ -25,6 +25,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
+import { shortName } from "@/lib/brand";
 import {
   backtestReviewerGuidance,
   checkReviewerGuidance,
@@ -171,7 +172,7 @@ function ReviewerGuidancePage() {
                       : null
                   }
                   explanation={checked.reading.explanation}
-                  failed="熊宝不会保存这段指引。"
+                  failed={`${shortName()}不会保存这段指引。`}
                   heading="它改变什么"
                   passed="读起来是指引。内置的安全规则仍然优先。"
                   warning={null}

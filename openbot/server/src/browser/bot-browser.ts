@@ -75,9 +75,9 @@ const SENTENCES = {
   unreachable: "The Bot's browser could not be reached. Try again.",
   slow: "The Bot's browser is taking too long to answer. The page may still be loading.",
   notSetUp:
-    "The Bot's browser can't do that right now. Ask an admin to check OpenBot's setup.",
+    "The Bot's browser can't do that right now. Ask an admin to check the setup.",
   notSetUpSingleUser:
-    "The Bot's browser can't do that right now. Quit OpenBot, open it again, and try once more.",
+    "The Bot's browser can't do that right now. Quit the app, open it again, and try once more.",
   takeControl: "Take control of the Bot's browser first.",
   alreadyRecording: "A recording is already running in this Bot's browser.",
   nothingRecording: "Nothing is being recorded in this Bot's browser.",
@@ -90,7 +90,7 @@ const SENTENCES = {
   notWeb: "Only web addresses open here.",
   /** The profile is gone, and what goes with it on this side (its row, its snapshots and screenshots) did not all go. */
   clearedNotFinished:
-    "The Bot's browser was cleared, but OpenBot couldn't finish. Clear it again.",
+    "The Bot's browser was cleared, but the system couldn't finish. Clear it again.",
 } as const;
 
 /** Why a recording cannot start when this OpenBot has no address the Recorder would take: for the log, as for the

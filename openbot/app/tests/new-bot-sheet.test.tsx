@@ -252,10 +252,10 @@ test("Create fills in what was left blank, then hands over", async () => {
 
   expect(await view.findByText("Expense Review准备好了")).toBeTruthy();
   expect(creates).toHaveLength(1);
-  // Its subtitle says what runs it: OpenBot itself.
+  // Its subtitle says what runs it: this product itself.
   expect(creates[0]).toMatchObject({
     name: "Expense Review",
-    title: "由 OpenBot 驱动",
+    title: "由 XiongBao Work 驱动",
     visibility: "private",
     endpoint: "",
   });

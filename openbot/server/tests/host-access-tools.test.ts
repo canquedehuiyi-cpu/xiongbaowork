@@ -229,7 +229,7 @@ describe("host access tools", () => {
     const text = await list.execute({});
     // The team edition: an admin chooses a Bot's folders, on Admin → Computers.
     const reason =
-      "This Bot has no folders it can read right now. Folder access ends when OpenBot stops. An admin gives a Bot a folder with Choose folder in Admin → Computers.";
+      "This Bot has no folders it can read right now. Folder access ends when the system stops. An admin gives a Bot a folder with Choose folder in Admin → Computers.";
     expect(text).toBe(`${REFUSAL_MARKER} ${reason}`);
     expect(events.at(-1)).toMatchObject({
       eventType: "computer.action_refused",

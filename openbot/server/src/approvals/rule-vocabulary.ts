@@ -26,6 +26,7 @@ import { agents } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
 import { mcpServers, mcpTools } from "../db/schema/plugins";
 import { catalogueEntry, classifyTool } from "../plugins/catalogue";
+import { englishName } from "../brand";
 
 export type RuleVocabulary = {
   /** The apps set up in OpenBot, with every tool they list and the effect the gate sees for it. */
@@ -175,7 +176,7 @@ export function vocabularyText(vocabulary: RuleVocabulary): string {
     PRIVATE_SHARE_APPROVAL_TOOL,
   ];
   return [
-    "APPS SET UP IN OPENBOT. A tool is <app id>/<tool name>, and its target is the app id. Effect after each tool. An app not listed here is not set up, and no rule can name it.",
+    `APPS SET UP IN ${englishName().toUpperCase()}. A tool is <app id>/<tool name>, and its target is the app id. Effect after each tool. An app not listed here is not set up, and no rule can name it.`,
     ...(vocabulary.apps.length === 0
       ? ["(none)"]
       : vocabulary.apps.flatMap((app) => [
@@ -188,7 +189,7 @@ export function vocabularyText(vocabulary: RuleVocabulary): string {
             : []),
         ])),
     "",
-    "OPENBOT'S OWN TOOLS. Effect in brackets.",
+    `${englishName().toUpperCase()}'S OWN TOOLS. Effect in brackets.`,
     ...builtIn.map(
       (tool) => `- ${tool.ref} [${tool.effects.join(", ")}]: ${tool.about}`,
     ),

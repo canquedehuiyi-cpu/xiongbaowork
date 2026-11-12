@@ -37,12 +37,10 @@ const SIGNED_OUT_MESSAGES: Record<
   Exclude<RecorderRefusal, "forbidden">,
   string
 > = {
-  malformed:
-    "This browser is no longer connected to OpenBot. Connect it again.",
-  unknown: "This browser is no longer connected to OpenBot. Connect it again.",
-  removed: "This browser is no longer connected to OpenBot. Connect it again.",
-  organization:
-    "Your organization sign-in ended. Connect this browser to OpenBot again.",
+  malformed: "This browser is no longer connected. Connect it again.",
+  unknown: "This browser is no longer connected. Connect it again.",
+  removed: "This browser is no longer connected. Connect it again.",
+  organization: "Your organization sign-in ended. Connect this browser again.",
 };
 
 /** The pass's refusal about the trajectory's binding; the code is the one the Recorder already reads. */
@@ -110,7 +108,7 @@ export function createTrajectoryConnectHook(deps: {
         null,
         refuse(401, {
           code: "IDENTITY_REQUIRED",
-          message: "Connect this browser to OpenBot to record.",
+          message: "Connect this browser to record.",
         }),
       );
     }

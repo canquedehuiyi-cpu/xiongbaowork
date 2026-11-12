@@ -1,3 +1,4 @@
+import { englishName } from "../brand";
 /**
  * An app's read that failed for a reason that passes, tried again before the Bot hears of it.
  *
@@ -132,7 +133,7 @@ export function transientAnswer(answer: {
 function saysItWasTried(error: unknown, tries: number): unknown {
   if (error instanceof Error) {
     try {
-      error.message = `${error.message.trim().replace(/\.?$/, ".")} OpenBot tried it ${tries} times over a few seconds and it failed each time.`;
+      error.message = `${error.message.trim().replace(/\.?$/, ".")} ${englishName()} tried it ${tries} times over a few seconds and it failed each time.`;
     } catch {
       // A message that cannot be written is given back as it was.
     }

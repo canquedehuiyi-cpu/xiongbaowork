@@ -84,7 +84,7 @@ export default function Home() {
       <Text style={{ fontSize: 24, fontWeight: "600" }}>
         {session
           ? `Welcome, ${session.user.name ?? session.user.email}`
-          : "Sign in to OpenBot"}
+          : "Sign in to 熊宝"}
       </Text>
       <Text>{serverUrl}</Text>
       {(error || options.error || conversations.error) && (
@@ -193,7 +193,7 @@ export default function Home() {
           )}
           {allConversations.length === 0 && (
             <Text>
-              No conversations yet. Create one in OpenBot on your computer.
+              No conversations yet. Create one in 熊宝 on your computer.
             </Text>
           )}
           <Button

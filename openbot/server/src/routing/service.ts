@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { canAccessAgent } from "../agents/profile-policy";
 import type { AgentProfileStore } from "../agents/profile-store";
 import type { AgentActor, AgentProfile } from "../agents/profile-types";
@@ -42,7 +43,6 @@ export class CoworkerRoutingInputError extends Error {
   }
 }
 
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
 const WORD_CHARACTER = /[\p{L}\p{N}\p{M}_]/u;
 
 export type CoworkerRouteResult =
@@ -128,7 +128,7 @@ function occurrencesOf(
 }
 
 function actorId(actor: RoutingActor): string | undefined {
-  return actor.id && actor.email !== DEV_ACTOR_EMAIL ? actor.id : undefined;
+  return actor.id && !isDevActorEmail(actor.email) ? actor.id : undefined;
 }
 
 function displayName(name: string): string {

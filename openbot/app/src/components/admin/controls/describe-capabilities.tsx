@@ -31,6 +31,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { shortName } from "@/lib/brand";
 import type {
   CapabilityAnswer,
   CapabilityPreview,
@@ -192,7 +193,8 @@ function activityWords(
   days: number,
 ): string | null {
   if (!loses(capability)) return null;
-  if (unmapped.has(capability.capability)) return "熊宝不记录它的使用情况。";
+  if (unmapped.has(capability.capability))
+    return `${shortName()}不记录它的使用情况。`;
   const activity = capability.activity;
   if (!activity) return null;
   if (activity.count === 0) return `最近 ${days} 天没用过。`;
@@ -275,7 +277,8 @@ export function PermissionsPreview({
         <div>
           <p className="font-medium text-sm">{previewHeadline(data.counts)}</p>
           <FieldDescription className="mt-1">
-            按熊宝实际执行的规则，为全部 {data.counts.people} 个人逐一算过。
+            按{shortName()}实际执行的规则，为全部 {data.counts.people}{" "}
+            个人逐一算过。
             {data.counts.unchanged > 0
               ? `其中 ${data.counts.unchanged} 人不受影响。`
               : ""}
@@ -365,7 +368,7 @@ export function PermissionsPreview({
         ) : null}
         {data.activity.unmapped.length > 0 ? (
           <FieldDescription>
-            熊宝不记录
+            {shortName()}不记录
             {data.activity.unmapped.map((entry) => entry.title).join("、")}
             的使用情况，所以这里不显示它最近的使用。
           </FieldDescription>
