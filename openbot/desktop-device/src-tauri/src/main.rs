@@ -394,9 +394,14 @@ fn set_autostart_check(app: &AppHandle, on: bool) {
     }
 }
 
-/// Stop whatever is running, then supervise the runner for `settings`.
+/// Stop whatever is running, then supervise the runner for `settings`. Nothing while quitting
+/// (final review M5): a supervisor installed after Quit stopped the last one would be joined on the
+/// main thread at Exit while it waits for the main thread.
 fn start(app: &AppHandle, settings: Settings, pair_code: Option<String>) -> Result<(), String> {
     let device = app.state::<Device>();
+    if device.quitting.load(Ordering::SeqCst) {
+        return Ok(());
+    }
     stop(app);
     let program = sidecar::sidecar_path().map_err(|error| error.to_string())?;
     let pairing = pair_code.is_some();
@@ -1020,6 +1025,27 @@ mod tests {
         assert!(
             config["bundle"]["externalBin"].is_null(),
             "the sidecar is added by tauri.bundle.conf.json, so cargo test needs no runner binary"
+        );
+    }
+
+    /// Final review M5: a start (Restart, or pairing) that runs while Quit is under way must not
+    /// install a supervisor after Quit stopped the last one: the main thread would join it on Exit
+    /// while its thread waits for the main thread (menu and tray calls). `start` returns at once.
+    #[test]
+    fn start_returns_at_once_while_quitting() {
+        let source = include_str!("main.rs");
+        let at = source
+            .find("fn start(app: &AppHandle")
+            .expect("start is defined");
+        let body = &source[at..];
+        let quitting = body
+            .find("if device.quitting.load(Ordering::SeqCst)")
+            .expect("start checks quitting");
+        let stops = body.find("stop(app);").expect("start stops what runs");
+        assert!(quitting < stops, "the check comes before anything is done");
+        assert!(
+            body[quitting..stops].contains("return Ok(());"),
+            "and returns"
         );
     }
 }
