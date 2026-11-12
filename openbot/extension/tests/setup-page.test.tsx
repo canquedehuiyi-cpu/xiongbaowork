@@ -298,7 +298,7 @@ test("blocked: names the browser's own settings page, Chrome's or Edge's", async
       edge,
     });
     await findByText(
-      `Blocked. Open ${scheme}://settings/content/microphone, allow OpenBot Recorder, then choose Allow microphone.`,
+      `Blocked. Open ${scheme}://settings/content/microphone, allow XiongBao Work Recorder, then choose Allow microphone.`,
     );
     // A blocked microphone shows no prompt, so the page does not ask on its own, nor says how to answer one.
     expect(calls).toEqual([]);

@@ -108,7 +108,7 @@ test("the page says OpenBot signs the browser in, and that recordings go straigh
   await findByText(ORIGIN);
   expect(
     await findByText(
-      "Confirm this is your OpenBot. It signs this browser in. What you record goes straight from your browser to the learning part of your organization's back end, with a pass from the part of the system that runs your Bots. That part is told that you are recording, the task's name, when it started and how many steps it has, and when you record in a browser shown inside the app, your narration passes through it to the Recorder without being stored.",
+      "Confirm this is your XiongBao Work. It signs this browser in. What you record goes straight from your browser to the learning part of your organization's back end, with a pass from the part of the system that runs your Bots. That part is told that you are recording, the task's name, when it started and how many steps it has, and when you record in a browser shown inside the app, your narration passes through it to the Recorder without being stored.",
     ),
   ).toBeTruthy();
   expect(container.ownerDocument.body.textContent).toContain(
@@ -120,7 +120,7 @@ test("the page says OpenBot signs the browser in, and that recordings go straigh
     RECORDER_DISCLOSURE,
     container.ownerDocument.body.textContent,
   ])
-    expect(said).not.toMatch(/through (your organization's )?OpenBot/i);
+    expect(said).not.toMatch(/through (your organization's )?XiongBao Work/i);
   expect(container.ownerDocument.body.textContent).not.toMatch(
     /save (your )?recordings/i,
   );

@@ -54,11 +54,11 @@ const learning = (state: LearningSpaceState["state"]): LearningSpaceState => ({
   containerId: state === "unassigned" || state === "missing" ? null : "c1",
 });
 const UNASSIGNED_SENTENCE =
-  "Learning will not see this recording: Automatic Learning is off in this OpenBot. It still goes to OpenBot's back end.";
+  "Learning will not see this recording: Automatic Learning is off in this XiongBao Work. It still goes to the server.";
 const MISSING_SENTENCE =
-  "Learning will not see this recording: your Learning space could not be made. Ask an admin to check Admin, Automatic Learning. It still goes to OpenBot's back end.";
+  "Learning will not see this recording: your Learning space could not be made. Ask an admin to check Admin, Automatic Learning. It still goes to the server.";
 const UNREACHED_SENTENCE =
-  "Learning may not see this recording: OpenBot could not reach your Learning space just now. It still goes to OpenBot's back end.";
+  "Learning may not see this recording: XiongBao Work could not reach your Learning space just now. It still goes to the server.";
 const INTO_YOUR_SPACE =
   "It goes into your Learning space, and every Bot you use learns from it.";
 
@@ -139,9 +139,9 @@ const NOT_CONNECTED = { connection: null, me: null } as const;
 
 test("not connected shows the connect instructions and no buttons by default", async () => {
   const { findByText, queryByRole } = setup(stateResponse(NOT_CONNECTED));
-  await findByText("Connect the Recorder to OpenBot");
+  await findByText("Connect the Recorder to XiongBao Work");
   await findByText(
-    "Open OpenBot, go to Settings, Browsers, and choose Connect this browser.",
+    "Open XiongBao Work, go to Settings, Browsers, and choose Connect this browser.",
   );
   expect(queryByRole("button")).toBeNull();
 });
@@ -169,7 +169,7 @@ test("an invalid policy address shows the IT sentence and no button", async () =
     }),
   );
   await findByText(
-    "Your organization's Recorder policy names an OpenBot address the Recorder cannot use. Ask your IT team.",
+    "Your organization's Recorder policy names a XiongBao Work address the Recorder cannot use. Ask your IT team.",
   );
   expect(queryByRole("button")).toBeNull();
   expect(queryByText(/Open invalid/)).toBeNull();
@@ -177,16 +177,16 @@ test("an invalid policy address shows the IT sentence and no button", async () =
 
 test("Connect with OpenBot Desktop is hidden unless Desktop answers available", async () => {
   const hidden = setup(stateResponse(NOT_CONNECTED), { desktop: false });
-  await hidden.findByText("Connect the Recorder to OpenBot");
+  await hidden.findByText("Connect the Recorder to XiongBao Work");
   await waitFor(() =>
     expect(hidden.sent.some((m) => m.type === "page.desktop.available")).toBe(
       true,
     ),
   );
-  expect(hidden.queryByText("Connect with OpenBot Desktop")).toBeNull();
+  expect(hidden.queryByText("Connect with XiongBao Work Desktop")).toBeNull();
   cleanup();
   const shown = setup(stateResponse(NOT_CONNECTED), { desktop: true });
-  fireEvent.click(await shown.findByText("Connect with OpenBot Desktop"));
+  fireEvent.click(await shown.findByText("Connect with XiongBao Work Desktop"));
   await waitFor(() =>
     expect(shown.sent.some((m) => m.type === "page.connect.desktop")).toBe(
       true,
@@ -211,7 +211,7 @@ test("Connect with OpenBot Desktop connects this browser at once: no page opens,
         });
     },
   });
-  fireEvent.click(await view.findByText("Connect with OpenBot Desktop"));
+  fireEvent.click(await view.findByText("Connect with XiongBao Work Desktop"));
   await view.findByLabelText("What are you about to do?");
   expect(view.getByText("Ada Lovelace")).toBeTruthy();
   expect(fake.opened).toEqual([]);
@@ -229,9 +229,9 @@ test("a Desktop connect that fails after a good ping shows a plain sentence for 
       },
     },
   });
-  fireEvent.click(await findByText("Connect with OpenBot Desktop"));
+  fireEvent.click(await findByText("Connect with XiongBao Work Desktop"));
   expect((await findByRole("alert")).textContent).toBe(
-    "OpenBot Desktop is not signed in to your organization. Sign in again in OpenBot Desktop, then try again.",
+    "XiongBao Work Desktop is not signed in to your organization. Sign in again in XiongBao Work Desktop, then try again.",
   );
 });
 
@@ -271,15 +271,15 @@ test("a Desktop code the Recorder does not know gets the general sentence", asyn
       },
     },
   });
-  fireEvent.click(await findByText("Connect with OpenBot Desktop"));
+  fireEvent.click(await findByText("Connect with XiongBao Work Desktop"));
   expect((await findByRole("alert")).textContent).toBe(
-    "OpenBot Desktop could not connect this browser. Try again, or connect from OpenBot in your browser.",
+    "XiongBao Work Desktop could not connect this browser. Try again, or connect from XiongBao Work in your browser.",
   );
 });
 
 test("Connect with OpenBot Desktop is a secondary button even when it is the only action", async () => {
   const { findByText } = setup(stateResponse(NOT_CONNECTED), { desktop: true });
-  const button = await findByText("Connect with OpenBot Desktop");
+  const button = await findByText("Connect with XiongBao Work Desktop");
   expect(button.className).toContain("bg-secondary");
   expect(button.className).not.toContain("bg-primary");
 });
@@ -579,7 +579,7 @@ test("after Stop with Intelligence's Learning delivery off, the popup says the r
     }),
     { learning: off },
   );
-  await findByText("Sent to OpenBot's back end");
+  await findByText("Sent to the server");
   await findByText(INTO_YOUR_SPACE);
   expect(container.textContent).not.toContain("Recorded for");
   expect(container.textContent).not.toContain("Learning may not");
@@ -594,7 +594,7 @@ test("after Stop the Learning sentence shows once, in the sent row, not again un
     }),
     { learning: off },
   );
-  await findByText("Sent to OpenBot's back end");
+  await findByText("Sent to the server");
   await findByText(MISSING_SENTENCE);
   expect(container.textContent?.split(MISSING_SENTENCE).length).toBe(2);
 });
@@ -625,19 +625,19 @@ test("each notice renders its sentence and dismisses", async () => {
   const notices = [
     [
       { kind: "interrupted", at: 1 },
-      "Your last recording stopped when the browser closed. Everything recorded until then goes to OpenBot's back end.",
+      "Your last recording stopped when the browser closed. Everything recorded until then goes to the server.",
     ],
     [
       { kind: "signed-out", at: 1 },
-      "This browser was disconnected from OpenBot. Connect it again.",
+      "This browser was disconnected from XiongBao Work. Connect it again.",
     ],
     [
       { kind: "signed-out", at: 1, reason: "organization" },
-      "Your organization sign-in ended. Connect this browser to OpenBot again.",
+      "Your organization sign-in ended. Connect this browser to XiongBao Work again.",
     ],
     [
       { kind: "policy-moved", at: 1, origin: "https://moved.example.test" },
-      "Your organization moved the Recorder to https://moved.example.test. Connect it again from OpenBot.",
+      "Your organization moved the Recorder to https://moved.example.test. Connect it again from XiongBao Work.",
     ],
   ] as const;
   for (const [notice, sentence] of notices) {
@@ -704,7 +704,7 @@ test("the recording view shows the time, the action count and the Learning captu
   }
   for (const title of ["Screen", "Voice"])
     expect(queryByText(title)).toBeNull();
-  expect(getByText("Streaming to OpenBot's back end")).toBeTruthy();
+  expect(getByText("Streaming to the server")).toBeTruthy();
   expect(queryByRole("button", { name: "Record" })).toBeNull();
   expect(queryByRole("button", { name: "Record screen" })).toBeNull();
 });
@@ -1038,17 +1038,17 @@ test("held and parked capture say so, with the reason and the kept-events line",
         ...CAPTURE,
         intelligence: "held",
         intelligenceReason:
-          "Learning capture is paused: OpenBot's back end refused the capture pass (503).",
+          "Learning capture is paused: the server refused the capture pass (503).",
       },
     }),
   );
   await held.findByText("Learning capture is paused");
   expect(
-    held.getByText("OpenBot's back end refused the capture pass (503)."),
+    held.getByText("The server refused the capture pass (503)."),
   ).toBeTruthy();
   expect(
     held.getByText(
-      "Your events are kept in this browser and sent when OpenBot's back end accepts them; it tries again every 5 minutes.",
+      "Your events are kept in this browser and sent when the server accepts them; it tries again every 5 minutes.",
     ),
   ).toBeTruthy();
   cleanup();
@@ -1058,7 +1058,7 @@ test("held and parked capture say so, with the reason and the kept-events line",
         ...CAPTURE,
         intelligence: "parked",
         intelligenceReason:
-          "Learning capture is off: OpenBot's back end refused the capture pass.",
+          "Learning capture is off: the server refused the capture pass.",
       },
     }),
   );
@@ -1081,9 +1081,9 @@ test("a recording outside a Learning space says Not into a Learning space with t
 });
 
 const BUSY_REASON =
-  "OpenBot's back end is busy or unreachable. Retrying; nothing is lost.";
+  "The server is busy or unreachable. Retrying; nothing is lost.";
 const HELD_LINE =
-  "Your events are kept in this browser and sent when OpenBot's back end accepts them; it tries again every 5 minutes.";
+  "Your events are kept in this browser and sent when the server accepts them; it tries again every 5 minutes.";
 const PARKED_LINE =
   "Your events are kept in this browser. The Recorder tries again when the browser next starts.";
 
@@ -1103,7 +1103,9 @@ test("outside a Learning space the Learning capture row still says its status an
   expect(queryByText(/^Retrying\./)).toBeNull();
   expect(getByText("Learning capture")).toBeTruthy();
   expect(getByText("Not into a Learning space")).toBeTruthy();
-  expect(getByText(/Automatic Learning is off in this OpenBot/)).toBeTruthy();
+  expect(
+    getByText(/Automatic Learning is off in this XiongBao Work/),
+  ).toBeTruthy();
 });
 
 test("a retrying status whose reason does not say so keeps the status word", async () => {
@@ -1112,11 +1114,11 @@ test("a retrying status whose reason does not say so keeps the status word", asy
       capture: {
         ...CAPTURE,
         intelligence: "retrying",
-        intelligenceReason: "OpenBot's back end answered 502.",
+        intelligenceReason: "The server answered 502.",
       },
     }),
   );
-  await findByText("Retrying. OpenBot's back end answered 502.");
+  await findByText("Retrying. The server answered 502.");
 });
 
 test("while a recording is starting, the capture rows wait until it is live", async () => {
@@ -1142,11 +1144,13 @@ test("a held recording outside a Learning space keeps the pause, its reason and 
   );
   await findByText("Learning capture is paused");
   expect(
-    getByText("OpenBot could not tell its back end who you are."),
+    getByText("XiongBao Work could not tell its back end who you are."),
   ).toBeTruthy();
   expect(getByText(HELD_LINE)).toBeTruthy();
   expect(getByText("Not into a Learning space")).toBeTruthy();
-  expect(getByText(/Automatic Learning is off in this OpenBot/)).toBeTruthy();
+  expect(
+    getByText(/Automatic Learning is off in this XiongBao Work/),
+  ).toBeTruthy();
 });
 
 test("a parked recording outside a Learning space says Not into a Learning space too", async () => {
@@ -1162,7 +1166,7 @@ test("a parked recording outside a Learning space says Not into a Learning space
   );
   await findByText("Learning capture is off");
   expect(
-    getByText("OpenBot says this recording belongs to another person."),
+    getByText("XiongBao Work says this recording belongs to another person."),
   ).toBeTruthy();
   expect(getByText(PARKED_LINE)).toBeTruthy();
   expect(getByText("Not into a Learning space")).toBeTruthy();
@@ -1178,7 +1182,7 @@ test("a reason that goes on in lower case after its status reads as a sentence o
       },
     }),
   );
-  await findByText("This OpenBot is not connected to its back end.");
+  await findByText("This XiongBao Work is not connected to its back end.");
 });
 
 test("every pass sentence loses its status phrase and starts with a capital", () => {
@@ -1189,14 +1193,14 @@ test("every pass sentence loses its status phrase and starts with a capital", ()
     expect(hint.endsWith(line.slice(1))).toBe(true);
   }
   expect(
-    stripCaptureStatus("This browser was disconnected from OpenBot."),
-  ).toBe("This browser was disconnected from OpenBot.");
+    stripCaptureStatus("This browser was disconnected from XiongBao Work."),
+  ).toBe("This browser was disconnected from XiongBao Work.");
 });
 
 test("while streaming, a space OpenBot could not check warns nothing, since the pass joined the person's container", async () => {
   for (const state of ["learning-off", "unverified"] as const) {
     const view = setup(recording({ learning: { state, containerId: "c1" } }));
-    await view.findByText("Streaming to OpenBot's back end");
+    await view.findByText("Streaming to the server");
     expect(view.container.textContent).not.toContain("Learning may not");
     expect(view.queryByText("Not into a Learning space")).toBeNull();
     view.unmount();
@@ -1216,7 +1220,7 @@ test("refused and dropped events are counted in the Learning capture row", async
       },
     }),
   );
-  await findByText("3 events were refused by OpenBot's back end");
+  await findByText("3 events were refused by the server");
   expect(getByText("1 event could not be sent")).toBeTruthy();
 });
 
@@ -1230,12 +1234,12 @@ test("after stop with nothing still sending, the popup says the recording went t
       state: { ...STOPPED, learning: learning("assigned"), draining: 0 },
     }),
   );
-  await findByText("Sent to OpenBot's back end");
+  await findByText("Sent to the server");
   expect(getByText(INTO_YOUR_SPACE)).toBeTruthy();
   expect(queryByText(/Recorded for/)).toBeNull();
   expect(queryByText(SENDING)).toBeNull();
   // Nothing about OpenBot keeping it or drafting from it.
-  expect(queryByText(/Review it in OpenBot|Saved|draft/)).toBeNull();
+  expect(queryByText(/Review it in XiongBao Work|Saved|draft/)).toBeNull();
 });
 
 test("after sending, the popup links to Teach a Bot", async () => {
@@ -1244,7 +1248,7 @@ test("after sending, the popup links to Teach a Bot", async () => {
       state: { ...STOPPED, learning: learning("assigned"), draining: 1 },
     }),
   );
-  await findByText("Sending to OpenBot's back end");
+  await findByText("Sending to the server");
   expect(queryByRole("link")).toBeNull();
   cleanup();
   const sent = setup(
@@ -1287,7 +1291,7 @@ test("after stop with Automatic Learning off, the popup says Learning will not s
       },
     }),
   );
-  await findByText("Sent to OpenBot's back end");
+  await findByText("Sent to the server");
   expect(getByText(UNASSIGNED_SENTENCE)).toBeTruthy();
 });
 
@@ -1306,10 +1310,12 @@ test("after stop with nothing kept, what is still sending says it is sending to 
       },
     }),
   );
-  await findByText("Sending to OpenBot's back end");
+  await findByText("Sending to the server");
   expect(getByText(SENDING)).toBeTruthy();
-  expect(getByText(/Automatic Learning is off in this OpenBot/)).toBeTruthy();
-  expect(queryByText("Sent to OpenBot's back end")).toBeNull();
+  expect(
+    getByText(/Automatic Learning is off in this XiongBao Work/),
+  ).toBeTruthy();
+  expect(queryByText("Sent to the server")).toBeNull();
   expect(queryByText("Off")).toBeNull();
   expect(queryByText(/Learning capture is (off|paused)/)).toBeNull();
 });
@@ -1333,10 +1339,12 @@ test("after stop, a parked recording still to send says Learning capture is off,
   );
   await findByText("Learning capture is off");
   expect(
-    getByText("This OpenBot is not connected to its back end."),
+    getByText("This XiongBao Work is not connected to its back end."),
   ).toBeTruthy();
   expect(getByText(PARKED_LINE)).toBeTruthy();
-  expect(getByText(/Automatic Learning is off in this OpenBot/)).toBeTruthy();
+  expect(
+    getByText(/Automatic Learning is off in this XiongBao Work/),
+  ).toBeTruthy();
   expect(queryByText("Off")).toBeNull();
   // Every drain is kept: nothing is streaming right now.
   expect(queryByText(SENDING)).toBeNull();
@@ -1361,7 +1369,7 @@ test("after stop, a held recording still to send says Learning capture is paused
   await findByText("Learning capture is paused");
   expect(
     getByText(
-      "OpenBot's back end says this organization's licence does not include Product Trajectories, that its billing is blocked, or that it could not check right now.",
+      "The server says this organization's licence does not include Product Trajectories, that its billing is blocked, or that it could not check right now.",
     ),
   ).toBeTruthy();
   expect(getByText(HELD_LINE)).toBeTruthy();
@@ -1382,16 +1390,14 @@ test("kept events are discarded only after the dialog confirms, and Cancel sends
     stateResponse({ state: { ...STOPPED, kept: KEPT, draining: 2 } }),
   );
   await findByText(
-    "40 events from 2 recordings are kept in this browser: OpenBot's back end refused the capture pass (503).",
+    "40 events from 2 recordings are kept in this browser: the server refused the capture pass (503).",
   );
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
-  await findByText("OpenBot's back end will never receive them.");
+  await findByText("The server will never receive them.");
   expect(queryByText(/Discard them\?/)).toBeNull();
   fireEvent.click(getByRole("button", { name: "Cancel" }));
   await waitFor(() =>
-    expect(
-      queryByText(/OpenBot's back end will never receive them/),
-    ).toBeNull(),
+    expect(queryByText(/the server will never receive them/)).toBeNull(),
   );
   expect(sent.some((m) => m.type === "page.kept.discard")).toBe(false);
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
@@ -1416,14 +1422,14 @@ test("the kept sentence leaves out the status phrase and starts its reason with 
     }),
   );
   await findByText(
-    "1 event from 1 recording is kept in this browser: This OpenBot is not connected to its back end.",
+    "1 event from 1 recording is kept in this browser: This XiongBao Work is not connected to its back end.",
   );
 });
 
 const WAITING = (recordings: number, events: number) => ({
   recordings,
   events,
-  reason: "This browser was disconnected from OpenBot.",
+  reason: "This browser was disconnected from XiongBao Work.",
   parked: true,
   waitingFor: { name: "Ada Lovelace", recordings },
 });
@@ -1433,7 +1439,7 @@ test("kept events waiting on a sign-out name the person and how to send them", a
     stateResponse({ state: { kept: WAITING(2, 40), draining: 2 } }),
   );
   await findByText(
-    "40 events from 2 recordings by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to OpenBot again as Ada Lovelace to send them.",
+    "40 events from 2 recordings by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to XiongBao Work again as Ada Lovelace to send them.",
   );
 });
 
@@ -1441,15 +1447,15 @@ test("the waiting sentence agrees with one event, and leaves out an event count 
   const cases = [
     [
       WAITING(1, 1),
-      "1 event from 1 recording by Ada Lovelace is kept in this browser for up to 7 days. Connect this browser to OpenBot again as Ada Lovelace to send them.",
+      "1 event from 1 recording by Ada Lovelace is kept in this browser for up to 7 days. Connect this browser to XiongBao Work again as Ada Lovelace to send them.",
     ],
     [
       WAITING(1, 0),
-      "1 recording by Ada Lovelace is kept in this browser for up to 7 days. Connect this browser to OpenBot again as Ada Lovelace to send them.",
+      "1 recording by Ada Lovelace is kept in this browser for up to 7 days. Connect this browser to XiongBao Work again as Ada Lovelace to send them.",
     ],
     [
       WAITING(2, 0),
-      "2 recordings by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to OpenBot again as Ada Lovelace to send them.",
+      "2 recordings by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to XiongBao Work again as Ada Lovelace to send them.",
     ],
   ] as const;
   for (const [kept, sentence] of cases) {
@@ -1470,28 +1476,26 @@ test("signed out with recordings kept, the popup says how to send them and Disca
       state: {
         ...STOPPED,
         error:
-          "This browser was disconnected from OpenBot. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.",
+          "This browser was disconnected from XiongBao Work. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.",
         kept: WAITING(1, 12),
         draining: 1,
       },
     }),
   );
-  await findByText("Connect the Recorder to OpenBot");
+  await findByText("Connect the Recorder to XiongBao Work");
   await findByText(
-    "12 events from 1 recording by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to OpenBot again as Ada Lovelace to send them.",
+    "12 events from 1 recording by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to XiongBao Work again as Ada Lovelace to send them.",
   );
   // Nothing can send while signed out: no sent row, no sending row.
-  expect(queryByText("Sent to OpenBot's back end")).toBeNull();
-  expect(queryByText("Sending to OpenBot's back end")).toBeNull();
+  expect(queryByText("Sent to the server")).toBeNull();
+  expect(queryByText("Sending to the server")).toBeNull();
   expect(queryByRole("link")).toBeNull();
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
-  await findByText(/OpenBot's back end will never receive them/);
+  await findByText(/the server will never receive them/);
   expect(sent.some((m) => m.type === "page.kept.discard")).toBe(false);
   fireEvent.click(getByRole("button", { name: "Cancel" }));
   await waitFor(() =>
-    expect(
-      queryByText(/OpenBot's back end will never receive them/),
-    ).toBeNull(),
+    expect(queryByText(/the server will never receive them/)).toBeNull(),
   );
   expect(sent.some((m) => m.type === "page.kept.discard")).toBe(false);
   fireEvent.click(getByRole("button", { name: "Discard kept events" }));
@@ -1509,9 +1513,9 @@ test("signed out, a Start-over drain that is not kept shows only the kept row: n
     }),
   );
   await findByText(
-    "12 events from 1 recording by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to OpenBot again as Ada Lovelace to send them.",
+    "12 events from 1 recording by Ada Lovelace are kept in this browser for up to 7 days. Connect this browser to XiongBao Work again as Ada Lovelace to send them.",
   );
   expect(queryByText(SENDING)).toBeNull();
   expect(queryByText("Learning capture")).toBeNull();
-  expect(queryByText("Sending to OpenBot's back end")).toBeNull();
+  expect(queryByText("Sending to the server")).toBeNull();
 });

@@ -407,7 +407,7 @@ test("openbot.state, openbot.record and openbot.stop are answered for OpenBot's 
   ])
     expect(await fake.sendExternal(message, sender)).toEqual({
       ok: false,
-      error: "Connect this browser to OpenBot first.",
+      error: "Connect this browser to XiongBao Work first.",
     });
   // Malformed: answered invalid before anything reads it.
   for (const message of [

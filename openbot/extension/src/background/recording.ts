@@ -8,6 +8,7 @@
 // reducer (`reduceRecorder`), persisted to storage.session after every transition so a restarted service worker finds
 // it; what must survive a browser restart lives in storage.local (`activeRecording`, `drains`) and in the document's
 // IndexedDB outbox.
+import { RECORDER_NAME } from "../shared/brand";
 import {
   type LearningSpaceState,
   RECORDER_AUTHORITY_UNAVAILABLE,
@@ -242,11 +243,10 @@ export function heldEvents(
 }
 
 const SENTENCES = {
-  noConnection: "Connect this browser to OpenBot first.",
+  noConnection: "Connect this browser to XiongBao Work first.",
   badSite: "That is not a website the Recorder can leave out.",
   // The install grants website access; only the person's own Site access setting can withhold it afterwards.
-  noAccess:
-    "Site access is off for OpenBot Recorder. Open your browser's Extensions page, choose Details on OpenBot Recorder and set Site access to On all sites.",
+  noAccess: `Site access is off for ${RECORDER_NAME}. Open your browser's Extensions page, choose Details on ${RECORDER_NAME} and set Site access to On all sites.`,
   busy: "A recording is already running.",
   notRecording: "Nothing is being recorded.",
   noVoice: "This recording has no voice.",
@@ -257,18 +257,19 @@ const SENTENCES = {
   documentFailed: "The Recorder could not start recording. Try again.",
   restartUnreachable:
     "The Recorder could not start over just now. Your recording goes on; try again in a moment.",
-  signedOut: `This browser was disconnected from OpenBot. Your recording stopped, and everything in it is kept in this browser for ${KEPT_FOR_PERSON_DAYS} days, until you connect again.`,
+  signedOut: `This browser was disconnected from XiongBao Work. Your recording stopped, and everything in it is kept in this browser for ${KEPT_FOR_PERSON_DAYS} days, until you connect again.`,
   organizationSignedOut: `Your organization sign-in ended. Your recording stopped, and everything in it is kept in this browser for ${KEPT_FOR_PERSON_DAYS} days, until you connect again.`,
-  policyMoved: `Your organization moved the Recorder to another OpenBot. Your recording stopped, and everything in it is kept in this browser for ${KEPT_FOR_PERSON_DAYS} days.`,
+  policyMoved: `Your organization moved the Recorder to another XiongBao Work. Your recording stopped, and everything in it is kept in this browser for ${KEPT_FOR_PERSON_DAYS} days.`,
   policyRefused:
-    "Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.",
-  replaced: `This browser was connected to another OpenBot or person. Your recording stopped, and everything in it is kept in this browser for ${KEPT_FOR_PERSON_DAYS} days, until you connect again.`,
-  keptSignedOut: "This browser was disconnected from OpenBot.",
+    "Your organization's Recorder policy does not allow this XiongBao Work. Ask your IT team.",
+  replaced: `This browser was connected to another XiongBao Work or person. Your recording stopped, and everything in it is kept in this browser for ${KEPT_FOR_PERSON_DAYS} days, until you connect again.`,
+  keptSignedOut: "This browser was disconnected from XiongBao Work.",
   keptOrganization: "Your organization sign-in ended.",
-  keptPolicy: "Your organization moved the Recorder to another OpenBot.",
-  keptReplaced: "This browser was connected to another OpenBot or person.",
+  keptPolicy: "Your organization moved the Recorder to another XiongBao Work.",
+  keptReplaced:
+    "This browser was connected to another XiongBao Work or person.",
   authorityUnavailable: TRAJECTORY_GATE_REFUSALS.authorityUnavailable.message,
-  forbidden: "OpenBot does not let you record. Ask whoever runs it.",
+  forbidden: "XiongBao Work does not let you record. Ask whoever runs it.",
 } as const;
 
 type SignedOutReason = "revoked" | "removed" | "organization";
@@ -303,7 +304,9 @@ const keptSentence = (reason: LostReason): string =>
         : SENTENCES.keptSignedOut;
 
 /** Record found the policy no longer allows the connection's OpenBot (connection.ts forgets it in a moment). */
-const POLICY_REFUSED = new Error("The policy does not allow this OpenBot.");
+const POLICY_REFUSED = new Error(
+  "The policy does not allow this XiongBao Work.",
+);
 
 /** Record ended by a stop (Stop, Disconnect, a sign-out) before its recording was live: it rolls back. */
 const CANCELLED = new Error("Record was cancelled before it started.");
@@ -2697,7 +2700,7 @@ export function installRecording(
         );
       return {
         ok: false,
-        error: sentenceFor(error, "OpenBot did not answer. Try again."),
+        error: sentenceFor(error, "XiongBao Work did not answer. Try again."),
       };
     }
   }

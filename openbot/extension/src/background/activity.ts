@@ -85,7 +85,10 @@ export function createActivityReport(deps: ActivityDeps): ActivityReport {
         error instanceof OpenBotError &&
         (error.status === 400 || error.status === 415)
       )
-        console.error("Recorder: OpenBot refused its activity report", error);
+        console.error(
+          "Recorder: XiongBao Work refused its activity report",
+          error,
+        );
       // Anything else (OpenBot unreachable, slow, or one with no activity route yet) waits for the next report.
     }
   }

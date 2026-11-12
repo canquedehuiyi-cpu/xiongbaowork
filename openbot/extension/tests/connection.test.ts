@@ -333,18 +333,24 @@ test("a code OpenBot refuses shows the Recorder's own sentence on the Connect pa
   for (const [code, sentence] of [
     [
       "obc_expired",
-      "This connect request has expired or was already used. Choose Connect this browser in OpenBot again.",
+      "This connect request has expired or was already used. Choose Connect this browser in XiongBao Work again.",
     ],
     [
       "obc_refused_403",
-      "This OpenBot does not accept this copy of the Recorder. Ask whoever runs it to add it.",
+      "This XiongBao Work does not accept this copy of the Recorder. Ask whoever runs it to add it.",
     ],
     [
       "obc_refused_429",
-      "OpenBot is taking too many connect requests just now. Try again in a few minutes.",
+      "XiongBao Work is taking too many connect requests just now. Try again in a few minutes.",
     ],
-    ["obc_refused_500", "OpenBot could not connect this browser. Try again."],
-    ["obc_refused_418", "OpenBot could not connect this browser. Try again."],
+    [
+      "obc_refused_500",
+      "XiongBao Work could not connect this browser. Try again.",
+    ],
+    [
+      "obc_refused_418",
+      "XiongBao Work could not connect this browser. Try again.",
+    ],
   ] as const) {
     clock += 30 * 1000;
     await connect(code);
@@ -375,7 +381,7 @@ test("an approve that cannot reach OpenBot shows a plain sentence, not the brows
         label: "x",
         origin,
       }),
-    ).toEqual({ ok: false, error: "OpenBot did not answer. Try again." });
+    ).toEqual({ ok: false, error: "XiongBao Work did not answer. Try again." });
   } finally {
     unreachable.mockRestore();
   }
@@ -575,7 +581,7 @@ test("a Cancel is said only while a page could still be waiting on it: not after
 });
 
 const OUT_OF_DATE =
-  "This page is out of date. Close it and choose Connect this browser in OpenBot again.";
+  "This page is out of date. Close it and choose Connect this browser in XiongBao Work again.";
 
 test("a decide naming a site other than the pending one is refused, stores nothing, and keeps the pending connect", async () => {
   await connect("obc_abc");
@@ -1495,7 +1501,7 @@ test("a connect page opened before a pin elsewhere cannot connect once the polic
   ).toEqual({
     ok: false,
     error:
-      "Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.",
+      "Your organization's Recorder policy does not allow this XiongBao Work. Ask your IT team.",
   });
   expect(exchanges).toEqual([]);
   expect(await currentConnection()).toBeNull();

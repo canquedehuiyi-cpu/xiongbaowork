@@ -22,40 +22,40 @@ export class GrantError extends Error {
   }
 }
 
-const BUSY =
-  "OpenBot's back end is busy or unreachable. Retrying; nothing is lost.";
+const BUSY = "The server is busy or unreachable. Retrying; nothing is lost.";
 const AUTHORITY =
-  "OpenBot could not reach your organization's sign-in. Retrying; nothing is lost.";
+  "XiongBao Work could not reach your organization's sign-in. Retrying; nothing is lost.";
 const MARKETPLACE =
-  "OpenBot's back end needs its marketplace licence before it can capture. Retrying; nothing is lost.";
+  "The server needs its marketplace licence before it can capture. Retrying; nothing is lost.";
 
 /** Fixed sentences per code, never the server's text. `<status>` is replaced with the HTTP status. */
 export const PASS_HINTS: Record<string, string> = {
   INVALID_REQUEST:
-    "Learning capture is off: the Recorder sent OpenBot's back end a request it could not read.",
+    "Learning capture is off: the Recorder sent the server a request it could not read.",
   FORBIDDEN:
-    "Learning capture is off: your OpenBot account has no role that may record.",
+    "Learning capture is off: your XiongBao Work account has no role that may record.",
   NOT_FOUND:
-    "Learning capture is off: OpenBot says this recording belongs to another person.",
+    "Learning capture is off: XiongBao Work says this recording belongs to another person.",
   IDENTITY_REQUIRED:
-    "Learning capture is paused: OpenBot could not tell its back end who you are.",
+    "Learning capture is paused: XiongBao Work could not tell its back end who you are.",
   INTELLIGENCE_RUNTIME_REQUIRED:
-    "Learning capture is off: this OpenBot is not connected to its back end.",
+    "Learning capture is off: this XiongBao Work is not connected to its back end.",
   INVALID_GRANT:
-    "Learning capture is paused: OpenBot's back end answered the capture pass in a form the Recorder cannot use.",
+    "Learning capture is paused: the server answered the capture pass in a form the Recorder cannot use.",
   REFUSED:
-    "Learning capture is paused: OpenBot's back end refused the capture pass (<status>).",
+    "Learning capture is paused: the server refused the capture pass (<status>).",
   TRAJECTORIES_UNAVAILABLE:
-    "Learning capture is off: Product Trajectories are turned off in OpenBot's back end (FF_LEARNING_TRAJECTORIES).",
+    "Learning capture is off: Product Trajectories are turned off in the server (FF_LEARNING_TRAJECTORIES).",
   TRAJECTORIES_NOT_ENABLED:
-    "Learning capture is paused: OpenBot's back end says this organization's licence does not include Product Trajectories, that its billing is blocked, or that it could not check right now.",
+    "Learning capture is paused: the server says this organization's licence does not include Product Trajectories, that its billing is blocked, or that it could not check right now.",
   VALIDATION_ERROR:
-    "Learning capture is off: OpenBot's back end refused the recording's request.",
+    "Learning capture is off: the server refused the recording's request.",
   TRAJECTORY_APP_USER_CONFLICT:
-    "Learning capture is off: OpenBot's back end already holds this recording for someone else.",
+    "Learning capture is off: the server already holds this recording for someone else.",
   LEARNING_CONTAINER_NOT_FOUND:
-    "Learning capture is paused: OpenBot's back end could not find your Learning space.",
-  UNAUTHORIZED: "Learning capture is paused: OpenBot refused the capture pass.",
+    "Learning capture is paused: the server could not find your Learning space.",
+  UNAUTHORIZED:
+    "Learning capture is paused: XiongBao Work refused the capture pass.",
   GATEWAY_NOT_ALLOWED:
     "Learning capture is off: the capture pass pointed at a back end address your organization does not allow.",
   PROXY_AUTHENTICATION:

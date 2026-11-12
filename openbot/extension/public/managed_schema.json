@@ -2,8 +2,8 @@
   "type": "object",
   "properties": {
     "OpenBotUrl": {
-      "title": "OpenBot address",
-      "description": "The HTTPS address of your organization's OpenBot. The Recorder connects only to this address. Chrome ignores a value that is not a string, so check that chrome://policy shows it with no error.",
+      "title": "XiongBao Work address",
+      "description": "The HTTPS address of your organization's XiongBao Work. The Recorder connects only to this address. Chrome ignores a value that is not a string, so check that chrome://policy shows it with no error.",
       "type": "string"
     },
     "AllowedIntelligenceUrls": {

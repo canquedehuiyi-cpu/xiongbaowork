@@ -23,8 +23,8 @@ export type OpenBotPageControls = Pick<RouterHandlers, "page"> &
   Pick<LauncherSide, "current">;
 
 const SENTENCES = {
-  notConnected: "Connect this browser to OpenBot first.",
-  ownTab: "Record from OpenBot's own tab.",
+  notConnected: "Connect this browser to XiongBao Work first.",
+  ownTab: "Record from XiongBao Work's own tab.",
   failed: "The Recorder could not do that. Try again.",
 } as const;
 
@@ -107,7 +107,7 @@ export async function answerOpenBotPage(
       ),
     );
   } catch (error) {
-    console.error("Recorder: OpenBot's page's request failed", error);
+    console.error("Recorder: XiongBao Work's page's request failed", error);
     return refuse(SENTENCES.failed);
   }
 }

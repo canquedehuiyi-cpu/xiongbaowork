@@ -178,6 +178,10 @@ function scannedFiles(): string[] {
       .filter((name) => name.endsWith(".json"))
       .map((name) => join(REPO, "desktop-device/src-tauri", name)),
     join(REPO, "app/index.html"),
+    // The Recorder is installed by customers into their own browser: its manifest, pages and policy schema are
+    // customer-visible. (extension/src holds its HTML pages too; TEXT_FILE already covers .html.)
+    ...walk(join(REPO, "extension/src")),
+    join(REPO, "extension/public/managed_schema.json"),
   ];
   if (existsSync(join(REPO, "mobile")))
     files.push(...walk(join(REPO, "mobile")));

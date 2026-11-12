@@ -190,7 +190,7 @@ function keptCounts(kept: NonNullable<RecorderState["kept"]>) {
 function keptSentence(kept: NonNullable<RecorderState["kept"]>): string {
   const { counts, verb } = keptCounts(kept);
   return kept.waitingFor
-    ? `${counts} by ${kept.waitingFor.name} ${verb} kept in this browser for up to ${KEPT_FOR_PERSON_DAYS} days. Connect this browser to OpenBot again as ${kept.waitingFor.name} to send them.`
+    ? `${counts} by ${kept.waitingFor.name} ${verb} kept in this browser for up to ${KEPT_FOR_PERSON_DAYS} days. Connect this browser to XiongBao Work again as ${kept.waitingFor.name} to send them.`
     : `${counts} ${verb} kept in this browser: ${stripCaptureStatus(kept.reason)}`;
 }
 
@@ -270,9 +270,7 @@ export function AfterStop({
             </ItemMedia>
             <ItemContent>
               <ItemTitle>
-                {sent
-                  ? "Sent to OpenBot's back end"
-                  : "Sending to OpenBot's back end"}
+                {sent ? "Sent to the server" : "Sending to the server"}
               </ItemTitle>
               {sent ? null : (
                 <ItemDescription className="line-clamp-none">
@@ -335,7 +333,7 @@ export function AfterStop({
             <DialogTitle>Discard kept events?</DialogTitle>
           </DialogHeader>
           <DialogBody className="mt-4 text-sm">
-            OpenBot's back end will never receive them.
+            The server will never receive them.
           </DialogBody>
           <DialogFooter className="mt-4">
             <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>

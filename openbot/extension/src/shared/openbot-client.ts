@@ -32,7 +32,7 @@ export async function openbotRaw(
   const url = new URL(path, target.openbotUrl);
   if (url.origin !== new URL(target.openbotUrl).origin) {
     throw new Error(
-      `Refusing to send the OpenBot bearer to ${url.origin}; "${path}" leaves ${new URL(target.openbotUrl).origin}.`,
+      `Refusing to send the XiongBao Work bearer to ${url.origin}; "${path}" leaves ${new URL(target.openbotUrl).origin}.`,
     );
   }
   return fetch(url, {
@@ -84,7 +84,7 @@ export async function openbotJson<T>(
     const body = await readErrorBody(response);
     throw new OpenBotError(
       response.status,
-      body?.error ?? `OpenBot answered ${response.status}.`,
+      body?.error ?? `XiongBao Work answered ${response.status}.`,
       body,
     );
   }

@@ -843,5 +843,140 @@
     "file": "mobile/package-lock.json",
     "text": "\"name\": \"openbot-mobile\"",
     "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users"
+  },
+  {
+    "file": "extension/src/shared/database.ts",
+    "text": "\"openbot-recorder\"",
+    "reason": "persisted-identifier: IndexedDB name of the recorder's kept events; installed extensions keep their data under it"
+  },
+  {
+    "file": "extension/src/main-world/network-hook.ts",
+    "text": "\"openbot.recorder.configure\"",
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+  },
+  {
+    "file": "extension/src/main-world/network-hook.ts",
+    "text": "\"openbot.recorder.stop\"",
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+  },
+  {
+    "file": "extension/src/protocol/messages.ts",
+    "text": "\"openbot.ping\"",
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+  },
+  {
+    "file": "extension/src/protocol/messages.ts",
+    "text": "\"openbot.connect\"",
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+  },
+  {
+    "file": "extension/src/protocol/messages.ts",
+    "text": "\"openbot-unreachable\"",
+    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself"
+  },
+  {
+    "file": "extension/src/content/notice.ts",
+    "text": "\"openbot-recorder-notice\"",
+    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name"
+  },
+  {
+    "file": "extension/src/content/notice.ts",
+    "text": "\"data-copilotkit-ignore\"",
+    "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements"
+  },
+  {
+    "file": "extension/src/content/targeting.ts",
+    "text": "[data-copilotkit-action]",
+    "reason": "persisted-identifier: upstream agent client's action attribute, matched as a selector"
+  },
+  {
+    "file": "extension/src/content/indicator.ts",
+    "text": "\"openbot-recorder-mark\"",
+    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name"
+  },
+  {
+    "file": "extension/src/content/indicator.ts",
+    "text": "\"data-copilotkit-ignore\"",
+    "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements"
+  },
+  {
+    "file": "extension/src/background/setup.ts",
+    "text": "\"openbot-browser\"",
+    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back"
+  },
+  {
+    "file": "extension/src/background/launcher.ts",
+    "text": "\"openbot-browser\"",
+    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back"
+  },
+  {
+    "file": "extension/src/background/network/index.ts",
+    "text": "OPENBOT_AGENT_RUN",
+    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit agent route"
+  },
+  {
+    "file": "extension/src/background/network/index.ts",
+    "text": "OPENBOT_RUNTIME_INFO",
+    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit runtime route"
+  },
+  {
+    "file": "extension/src/background/network/index.ts",
+    "text": "(!openbot)",
+    "reason": "persisted-identifier: local variable holding the connected origin"
+  },
+  {
+    "file": "extension/src/background/network/index.ts",
+    "text": "new URL(openbot)",
+    "reason": "persisted-identifier: local variable holding the connected origin"
+  },
+  {
+    "file": "extension/src/background/network/fallback.ts",
+    "text": "\"openbot.recorder.configure\"",
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+  },
+  {
+    "file": "extension/src/background/network/fallback.ts",
+    "text": "\"openbot.recorder.stop\"",
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+  },
+  {
+    "file": "extension/src/background/connection.ts",
+    "text": "\"openbot.ping\"",
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+  },
+  {
+    "file": "extension/src/background/connection.ts",
+    "text": "\"openbot.connect\"",
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+  },
+  {
+    "file": "extension/src/background/connection.ts",
+    "text": "\"openbot-unreachable\"",
+    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself"
+  },
+  {
+    "file": "extension/src/background/connection.ts",
+    "text": "\"openbot-browser\"",
+    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back"
+  },
+  {
+    "file": "extension/src/pages/options/options.tsx",
+    "text": "\"openbot-browser\":",
+    "reason": "persisted-identifier: object key for the stored connection `via` value; the label beside it is already rebranded"
+  },
+  {
+    "file": "extension/src/pages/popup/desktop-sentence.ts",
+    "text": "\"openbot-unreachable\"",
+    "reason": "persisted-identifier: Desktop connect reason code used as an object key; its sentence is already rebranded"
+  },
+  {
+    "file": "extension/src/offscreen/streamer.ts",
+    "text": "\"openbot-recorder\"",
+    "reason": "persisted-identifier: `source` value on the capture channel that the server's gateway matches"
+  },
+  {
+    "file": "extension/src/offscreen/grant.ts",
+    "text": "Could not connect to OpenBot's back end",
+    "reason": "parsed-exact-text: matches the gateway's own error text verbatim to choose retry over hold; rewording stops the match"
   }
 ]
