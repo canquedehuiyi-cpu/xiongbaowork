@@ -1346,3 +1346,121 @@ describe("desktop writes: round 1", () => {
     expect(seen).toEqual([{ botId: BOT }]);
   });
 });
+
+describe("desktop writes: review fixes", () => {
+  test("two writes on the same snapshot run one after the other: the second ref is stale", async () => {
+    const t = setup("windows", { click: { delayMs: 300 } });
+    await t.start();
+    const { el } = await read(t);
+    const ref = el("Single line").ref;
+    const target = adRef(t, ref);
+    const [first, second] = await Promise.all([
+      t.write("desktop.click", { ref }),
+      t.write("desktop.click", { ref }),
+    ]);
+    expect(first).toMatchObject({ ok: true });
+    expect(second).toEqual(fail(desktopMessage("stale")));
+    expect(t.writes()).toEqual([["click", target]]);
+    // Each write's listing and action go together, never interleaved.
+    expect(
+      t
+        .log()
+        .map((args) => args[0])
+        .slice(-2),
+    ).toEqual(["list-windows", "click"]);
+  }, 20_000);
+
+  test("a write stopped while it waits for the one before runs nothing", async () => {
+    const t = setup("windows", { click: { delayMs: 500 } });
+    await t.start();
+    const { el, window } = await read(t);
+    const target = adRef(t, el("Single line").ref);
+    const controller = new AbortController();
+    const first = t.write("desktop.click", { ref: el("Single line").ref });
+    const second = t.write(
+      "desktop.focus",
+      { windowId: window.windowId },
+      controller.signal,
+    );
+    await waitFor(() => t.writes().length === 1);
+    controller.abort();
+    expect(await second).toEqual(fail("已在设备上停止。"));
+    expect(await first).toMatchObject({ ok: true });
+    expect(t.writes()).toEqual([["click", target]]);
+  }, 20_000);
+
+  test("action words are checked against the whole control name, not the 120 characters shown", async () => {
+    const name = `${"x".repeat(120)}删除`;
+    const data = structuredClone(sample("windows", "snapshot-password").data);
+    data.tree.children[4].name = name;
+    const t = setup("windows", {
+      snapshot: {
+        envelope: { version: "2.6", ok: true, command: "snapshot", data },
+      },
+    });
+    await t.start();
+    const { snap } = await read(t);
+    const send = snap.elements.find(
+      (e) => e.type === "button" && e.name.startsWith("x"),
+    );
+    if (!send) throw new Error("no long button");
+    // What is shown is cut as before.
+    expect(send.name).toBe("x".repeat(DESKTOP_LIMITS.nameMax));
+    expect(
+      await t.write("desktop.click", { ref: send.ref, approved: false }),
+    ).toEqual(fail(desktopMessage("needs_approval", "控件名含「删除」")));
+    expect(t.writes()).toEqual([]);
+    // Nor does the whole name reach the output.
+    const done = await t.write("desktop.click", {
+      ref: send.ref,
+      approved: true,
+    });
+    expect(output(done).control).toEqual({
+      type: "button",
+      name: "x".repeat(DESKTOP_LIMITS.nameMax),
+    });
+  });
+});
+
+describe("desktop writes: review fixes 2", () => {
+  test("a word added past the 200 characters shown still makes the title one that turned sensitive", async () => {
+    const before = "a".repeat(200);
+    const listing = structuredClone(sample("windows", "list-windows"));
+    listing.data[0].title = before;
+    const t = setup("windows", { "list-windows": { envelope: listing } });
+    await t.start();
+    const { el, window } = await read(t);
+    // What is shown is the same 200 characters before and after.
+    expect(window.title).toBe(before);
+    const turned = fail(
+      desktopMessage(
+        "needs_approval",
+        "窗口标题刚刚变成含「银行」，请重新列出窗口",
+      ),
+    );
+    const live = structuredClone(listing);
+    live.data[0].title = `${before}银行`;
+    t.set("list-windows", { envelope: live });
+    const ref = el("Single line").ref;
+    for (const approved of [true, false])
+      expect(await t.write("desktop.click", { ref, approved })).toEqual(turned);
+    // Approved for the title as shown (cut the same way), it is still the change that counts.
+    expect(
+      await t.write("desktop.focus", {
+        windowId: window.windowId,
+        approved: true,
+        approvedTitle: before,
+      }),
+    ).toEqual(turned);
+    expect(t.writes()).toEqual([]);
+
+    // Listed again, the read knows the whole title: approved, it goes through.
+    await t.reader.windows();
+    const done = await t.write("desktop.focus", {
+      windowId: window.windowId,
+      approved: true,
+      approvedTitle: before,
+    });
+    expect(output(done).window).toMatchObject({ title: before });
+  });
+});
