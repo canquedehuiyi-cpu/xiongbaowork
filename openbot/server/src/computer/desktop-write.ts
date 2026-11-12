@@ -426,21 +426,13 @@ export function createDesktopWriteGate(deps: {
       try {
         for (;;) {
           const before = opened.get(key) ?? 0;
-          /*
-           * Asked afresh every time, outside the tool call's action identity: under it the runner's
-           * journal would answer a second call of the same tool call (the run again after the owner
-           * approved, or a resend the device asked for) with the first answer, which it keeps without
-           * the session. An approval asked inside a session would then never match its own run.
-           */
-          status = await computerActionIdentity.exit(() =>
-            post<DesktopSessionStatus>(
-              botId,
-              "/desktop/session_status",
-              { botId, actorId: actor.id },
-              signal,
-              DESKTOP_BACKSTOP_MS,
-              address,
-            ),
+          status = await post<DesktopSessionStatus>(
+            botId,
+            "/desktop/session_status",
+            { botId, actorId: actor.id },
+            signal,
+            DESKTOP_BACKSTOP_MS,
+            address,
           );
           if (
             status?.writable !== true ||
@@ -645,6 +637,8 @@ export function createDesktopStoppedHandler(deps: {
  * sent again. A done write forgets its window's controls: the window may have changed.
  */
 
+/** What the approved resend's dispatch key adds to the first request's (see `carry`). */
+export const DESKTOP_APPROVED_RESEND = ":approved";
 /** The model's text is longer than a desktop write may type. */
 export const DESKTOP_TEXT_TOO_LONG = `文字太长，最多 ${DESKTOP_LIMITS.textMaxBytes} 字节。`;
 /** What a done write tells the model, when the device did not say. */
@@ -903,21 +897,22 @@ export function createDesktopWriteMethods(deps: {
       if (reason === undefined || approvedSent !== false || !facts)
         throw failed(error);
       /*
-       * Sent under an identity of its own: under the tool call's, the runner's journal would take the
-       * approved resend for the first send with other content and refuse it. Still the same for every
-       * run of this tool call, so an approved resend already carried out is answered, never repeated.
+       * The resend is another request (it says `approved: true`), so it goes under its own key. The
+       * runner's journal refuses a key it has seen with another payload ("This action id belongs to
+       * another request."), which would leave the approved resend never carried out. A fixed suffix
+       * keeps it stable, so the same call replayed meets the journal's own answer for each of the
+       * two, and it is never the first request's key. There is no third.
        */
-      const identity = computerActionIdentity.getStore();
-      const asked = { ...facts, deviceReason: reason };
+      const asked: DesktopWriteFacts = { ...facts, deviceReason: reason };
       const resend = () => run(asked);
+      const identity = computerActionIdentity.getStore();
       try {
-        output =
-          identity === undefined
-            ? await resend()
-            : await computerActionIdentity.run(
-                `${identity}/device-asked`,
-                resend,
-              );
+        output = identity
+          ? await computerActionIdentity.run(
+              `${identity}${DESKTOP_APPROVED_RESEND}`,
+              resend,
+            )
+          : await resend();
       } catch (again) {
         throw failed(again);
       }

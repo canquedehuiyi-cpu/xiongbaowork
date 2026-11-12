@@ -11,6 +11,7 @@ import { desktopActionReason } from "../src/approvals/desktop-policy";
 import { decideAction, refusedOutright } from "../src/approvals/policy";
 import { oneRowPerAction } from "../../shared/activity-rows";
 import { isApprovedExecution } from "../src/approvals/service";
+import { computerActionIdentity } from "../src/computer/action-identity";
 import {
   type ApprovalCandidate,
   type ApprovalContinuation,
@@ -153,6 +154,12 @@ function harness(
     now?: () => number;
     /** Rows the audit store fails to write (thrown), after keeping nothing. */
     auditFails?: (row: AuditEventInput) => boolean;
+    /**
+     * The runner's action journal (runner/src/journal.ts) in front of the device: a keyed request is
+     * carried out once and its outcome replayed for the same key and payload; the same key with a
+     * different payload is refused as it is there.
+     */
+    journal?: boolean;
   } = {},
 ) {
   const posts: Posted[] = [];
@@ -168,15 +175,49 @@ function harness(
   };
   let token: string | undefined = options.session ? "ab".repeat(32) : undefined;
   let writes = 0;
+  const keys: { path: string; key: string | undefined }[] = [];
+  const journal = new Map<
+    string,
+    { fingerprint: string; outcome: Promise<unknown> }
+  >();
   const transport: ComputerTransport = {
     async post<T>(
       address: string,
       botId: string,
       path: string,
       payload: unknown,
+      _caller?: AbortSignal,
+      _timeoutMs?: number,
+      key?: string,
     ): Promise<T> {
       expect(address).toBe(runnerAddress(MACHINE));
       expect(botId).toBe("bot");
+      keys.push({ path, key });
+      if (!options.journal || !key) return device<T>(path, payload);
+      const fingerprint = JSON.stringify([path, payload]);
+      const row = journal.get(key);
+      if (row && row.fingerprint !== fingerprint)
+        throw new DeviceActionError(
+          "This action id belongs to another request.",
+        );
+      if (row) return row.outcome as Promise<T>;
+      const outcome = device<T>(path, payload);
+      journal.set(key, { fingerprint, outcome });
+      return outcome;
+    },
+    call: async () => {
+      throw new Error("no GET expected");
+    },
+    navigate: async () => {
+      throw new Error("no navigation expected");
+    },
+    download: async () => {
+      throw new Error("no download expected");
+    },
+  };
+  /** The machine itself, behind the journal. */
+  async function device<T>(path: string, payload: unknown): Promise<T> {
+    {
       const body = (payload ?? {}) as Record<string, unknown>;
       posts.push({ path, payload: body });
       if (path === "/desktop/windows")
@@ -220,17 +261,8 @@ function harness(
         },
         note: "The window may have changed: read it again before the next step.",
       } as T;
-    },
-    call: async () => {
-      throw new Error("no GET expected");
-    },
-    navigate: async () => {
-      throw new Error("no navigation expected");
-    },
-    download: async () => {
-      throw new Error("no download expected");
-    },
-  };
+    }
+  }
   const gateway = createComputerGateway({
     provider: createDeviceComputerProvider(),
     auditStore: audit,
@@ -287,6 +319,12 @@ function harness(
     payloads,
     read,
     token: () => token,
+    /** The dispatch key each post carried (undefined: none, a fresh one per frame). */
+    keys,
+    /** The device's session replaced by another (stopped, then opened again for another write). */
+    renewSession: () => {
+      token = "ef".repeat(32);
+    },
     /** The owner stopped the session on the device, or it expired there. */
     endSession: () => {
       token = undefined;
@@ -904,6 +942,118 @@ describe("carried over from the session gate (Task 16)", () => {
         false,
       );
     });
+  });
+});
+
+describe("the approved resend through the runner's journal", () => {
+  test("a write approved inside a session is carried out with the session the device holds then", async () => {
+    await runAsTenant(OWNER, async () => {
+      const fixture = approvalFixture();
+      const h: ReturnType<typeof harness> = harness({
+        session: true,
+        journal: true,
+        gate: (candidate) => fixture.service.gate(candidate),
+        write: (_path, payload) => {
+          // The device knows only its current session.
+          if (payload.session !== h.token())
+            throw new DeviceActionError(desktopMessage("no_session"));
+          return {
+            physical: false,
+            durationMs: 3,
+            delivery: "verified",
+            window: {
+              windowId: WECHAT.windowId,
+              title: WECHAT.title,
+              process: "wechat",
+            },
+            note: "n",
+          };
+        },
+      });
+      await h.read(WECHAT.windowId);
+      const args = { ref: "abc123-2:0" };
+      const context = {
+        ...CONTINUATION(args),
+        toolName: "computer_desktop_click",
+      };
+      const click = () =>
+        withApprovalContext(context, () =>
+          computerActionIdentity.run("call-9", () =>
+            h.gateway.clickDesktop("bot", ACTOR, args),
+          ),
+        );
+      // Clicking 发送 in the session asks first: the run waits for the owner.
+      await expect(click()).rejects.toBeInstanceOf(HeadlessToolSuspension);
+      // Meanwhile the session on the device is replaced; the write is still one inside a session.
+      h.renewSession();
+      const answered = await approveAndResume(fixture, click);
+      // Carried out: a result with content and no error.
+      expect(answered.result).toEqual({ content: expect.any(String) });
+      expect(h.writesPosted()).toHaveLength(1);
+      expect(lastWrite(h)).toMatchObject({
+        session: h.token(),
+        approved: true,
+        ref: "abc123-2:0",
+      });
+      // Every question about the session went out afresh, never under the call's own key.
+      const asked = h.keys.filter(
+        (sent) => sent.path === "/desktop/session_status",
+      );
+      expect(asked.length).toBeGreaterThan(1);
+      expect(asked.filter((sent) => sent.key !== undefined)).toEqual([]);
+    });
+  });
+
+  test("the device asks, the owner approves, and the resend is carried out under its own key", async () => {
+    const needs = desktopMessage("needs_approval", "控件名含「发送」");
+    const h = harness({
+      session: true,
+      journal: true,
+      write: (_path, payload) => {
+        if (payload.approved !== true) throw new DeviceActionError(needs);
+        return {
+          physical: false,
+          durationMs: 3,
+          delivery: "verified",
+          window: {
+            windowId: NOTEPAD.windowId,
+            title: NOTEPAD.title,
+            process: "notepad",
+          },
+          note: "n",
+        };
+      },
+    });
+    await h.read();
+    const click = () =>
+      computerActionIdentity.run("call-7", () =>
+        h.gateway.clickDesktop("bot", ACTOR, { ref: "abc123-1:1" }),
+      );
+    const result = await click();
+    expect(result.ok).toBe(true);
+    expect(h.cards).toHaveLength(1);
+    const writeKeys = h.keys
+      .filter((sent) => sent.path === "/desktop/click")
+      .map((sent) => sent.key);
+    expect(h.writesPosted().map((post) => post.payload.approved)).toEqual([
+      false,
+      true,
+    ]);
+    const first = JSON.stringify(["bot", "/desktop/click", "call-7"]);
+    const resend = JSON.stringify(["bot", "/desktop/click", "call-7:approved"]);
+    expect(writeKeys).toEqual([first, resend]);
+    // The same call carried out again (a replay, with the window read again so it is the same
+    // request) uses the same two keys: the journal answers both, and the device does nothing more.
+    await h.read();
+    const before = h.writesPosted().length;
+    const replayed = await click();
+    expect(replayed.ok).toBe(true);
+    expect(h.writesPosted()).toHaveLength(before);
+    expect(
+      h.keys
+        .filter((sent) => sent.path === "/desktop/click")
+        .map((sent) => sent.key),
+    ).toEqual([first, resend, first, resend]);
   });
 });
 
