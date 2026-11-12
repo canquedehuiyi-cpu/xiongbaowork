@@ -7,6 +7,7 @@
  * and resetting it forgets what it knew about you. The Bot must be one the caller can reach, asked
  * of the profile store the way every other Bot route asks; a Bot they cannot see is "not found".
  */
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { ActivityStore } from "../activity/activity";
@@ -35,9 +36,6 @@ import {
 import type { BotReset } from "./lifecycle-reset";
 import type { AgentActor, AgentProfile } from "./profile-types";
 import type { WakeUpStore } from "./wake-up";
-
-/** The single-user developer's placeholder account, which has no users row to reference. */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
 
 const NOTIFY_VALUES: readonly BotNotify[] = ["all", "needs_input", "none"];
 
@@ -92,7 +90,7 @@ export function createBotLifecycleRoutes(
         eventType,
         targetType: "agent",
         targetId: agentId,
-        ...(actor?.id && actor.email !== DEV_ACTOR_EMAIL
+        ...(actor?.id && !isDevActorEmail(actor.email)
           ? { actorUserId: actor.id }
           : {}),
         payload: { bot: agentId, actor: actor?.email ?? "unknown", ...payload },

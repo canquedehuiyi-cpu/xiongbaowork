@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { declaredHarness } from "@openbot/shared/harnesses";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
@@ -472,14 +473,6 @@ export function parseConnectionHeaders(
   return { ok: true, value: entries.length === 0 ? undefined : headers };
 }
 
-/**
- * The local development actor, which is not a row in `users`.
- *
- * The audit table has a foreign key to that table, so writing this id would fail the constraint and
- * lose the row entirely. Who it was is in the payload either way.
- */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
-
 export function createAgentRoutes(
   store: AgentProfileStore,
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
@@ -739,7 +732,7 @@ export function createAgentRoutes(
         eventType: "bot.declined",
         targetType: "agent",
         targetId: agentId,
-        ...(actor?.id && actor.email !== DEV_ACTOR_EMAIL
+        ...(actor?.id && !isDevActorEmail(actor.email)
           ? { actorUserId: actor.id }
           : {}),
         payload: {
@@ -889,7 +882,7 @@ export function createAgentRoutes(
         eventType,
         targetType: "agent",
         ...(agentId ? { targetId: agentId } : {}),
-        ...(actor?.id && actor.email !== DEV_ACTOR_EMAIL
+        ...(actor?.id && !isDevActorEmail(actor.email)
           ? { actorUserId: actor.id }
           : {}),
         payload: {

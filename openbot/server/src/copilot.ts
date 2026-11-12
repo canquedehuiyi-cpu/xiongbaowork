@@ -1,3 +1,4 @@
+import { englishName, productName } from "./brand";
 import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/client";
 import { type AbstractAgent, HttpAgent } from "@ag-ui/client";
 import type {
@@ -315,7 +316,7 @@ function identityGuidance(
 ): string {
   const subtitle = title?.trim();
   return [
-    `You are ${name}, a Bot in OpenBot.`,
+    `You are ${name}, a Bot in ${englishName()}.`,
     ...(subtitle ? [/[.!?]$/.test(subtitle) ? subtitle : `${subtitle}.`] : []),
     selfAddressGuidance(name),
     ...(framework ? [frameworkGuidance(framework)] : []),
@@ -3811,7 +3812,7 @@ export function mountCopilotRuntime(
     telemetryProperties: {
       app_id: "openbot",
       ...options.productTelemetry?.deploymentProperties(),
-      ...(config.accessibility ? { accessibility_title: "OpenBot" } : {}),
+      ...(config.accessibility ? { accessibility_title: productName() } : {}),
       ...desktopTelemetryProperties(),
     },
     /*

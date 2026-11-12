@@ -186,6 +186,7 @@ tests/bot-lifecycle-routes.test.ts
 tests/bot-lifecycle-watcher.test.ts
 tests/bot-lifecycle.integration.test.ts
 tests/boundaries-replay.integration.test.ts
+tests/brand-server-copy.test.ts
 tests/brand.test.ts
 tests/brokered-accounts-schema.integration.test.ts
 tests/brokered-multiple-accounts.integration.test.ts
@@ -314,6 +315,7 @@ tests/deployment-route-bot-end-to-end.test.ts
 tests/desktop-connection-failure.test.ts
 tests/desktop-gateway.test.ts
 tests/desktop-tools.integration.test.ts
+tests/dev-actor-email.test.ts
 tests/dev-actor.integration.test.ts
 tests/device-apps.integration.test.ts
 tests/device-queue.test.ts

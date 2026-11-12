@@ -12,6 +12,7 @@
  * binding -- runs as the tenant the database stamped on that row, which may only agree with its
  * owner. A row stamped as nobody's is treated as no binding at all.
  */
+import { englishName } from "../brand";
 import { randomUUID } from "node:crypto";
 import { approvalPhrase } from "@openbot/shared/tool-name";
 import type { DrawnComponent } from "@openbot/toolkit/run-turn";
@@ -289,7 +290,7 @@ export async function handleOpenTagRun(
         message:
           error instanceof DeliveryRefusedError
             ? error.message
-            : "OpenBot could not complete this turn. Try again, or open the conversation in OpenBot.",
+            : `${englishName()} could not complete this turn. Try again, or open the conversation in ${englishName()}.`,
       });
     }
   });
@@ -332,8 +333,7 @@ async function answer(
     return { text: "" };
   }
   const message = latestUserMessage(input);
-  if (!message?.text)
-    return { text: "给我发消息，我会转给你的员工。" };
+  if (!message?.text) return { text: "给我发消息，我会转给你的员工。" };
 
   const code = LINK.exec(message.text)?.[1];
   if (code) return link(deps, sender, code.toLowerCase());
@@ -409,9 +409,7 @@ async function answerAsBinding(
         `还有 ${result.extras.approvals.length - 1} 个审批在熊宝的员工页上等你处理。`,
       );
     if (card) return { text: parts.join("\n\n"), interrupt: card };
-    parts.push(
-      "你的员工在等一个审批。请到熊宝的员工页上查看。",
-    );
+    parts.push("你的员工在等一个审批。请到熊宝的员工页上查看。");
   } else if (result.kind === "waiting" && !parts.length) {
     parts.push("你的员工在等人处理。请打开熊宝继续。");
   }

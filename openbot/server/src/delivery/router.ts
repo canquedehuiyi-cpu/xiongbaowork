@@ -1,3 +1,4 @@
+import { productName } from "../brand";
 import type { DrawnComponent } from "@openbot/toolkit/run-turn";
 import {
   resolveUpdateRoute,
@@ -679,7 +680,7 @@ export function createDeliveryRouter(deps: {
         const [title, body] =
           row.kind === "attention"
             ? headedText(row.text)
-            : ["OpenBot", row.text];
+            : [productName(), row.text];
         result = await deps.providers.push.send({
           token: device.token,
           title,

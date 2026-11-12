@@ -98,6 +98,50 @@ describe("development actor persistence", () => {
     ).rejects.toBe(rollback);
   });
 
+  test("an upgraded database's legacy address and default name become the current address", async () => {
+    const rollback = new Error("rollback legacy address test");
+    await expect(
+      runAsTenant(DEV_ACTOR.id, () =>
+        database.transaction(async (transaction) => {
+          await initializeDevActorUser(transaction, true);
+          await transaction
+            .update(users)
+            .set({ email: "dev@openbot.local", name: "dev@openbot.local" })
+            .where(eq(users.id, DEV_ACTOR.id));
+
+          await initializeDevActorUser(transaction, true);
+
+          const [row] = await transaction
+            .select({ email: users.email, name: users.name })
+            .from(users)
+            .where(eq(users.id, DEV_ACTOR.id));
+          expect(row).toEqual({
+            email: "admin@xiongbao.local",
+            name: "admin@xiongbao.local",
+          });
+          expect(
+            (await createProfileStore(transaction).read(DEV_ACTOR.id))
+              .needsName,
+          ).toBe(true);
+
+          // A name the person chose is not the old default and stays.
+          await transaction
+            .update(users)
+            .set({ email: "dev@openbot.local", name: "Sam" })
+            .where(eq(users.id, DEV_ACTOR.id));
+          await initializeDevActorUser(transaction, true);
+          const [kept] = await transaction
+            .select({ email: users.email, name: users.name })
+            .from(users)
+            .where(eq(users.id, DEV_ACTOR.id));
+          expect(kept).toEqual({ email: "admin@xiongbao.local", name: "Sam" });
+
+          throw rollback;
+        }),
+      ),
+    ).rejects.toBe(rollback);
+  });
+
   test("profile edits survive startup without changing identity or onboarding", async () => {
     const rollback = new Error("rollback profile test");
     await expect(

@@ -252,7 +252,7 @@ describe("a Bot on OpenBot's own harness, on an API key", () => {
       await builtInBot(model, catalogue, registered);
       const sent = wire.join("\n");
       expect(sent).toContain(
-        `You are Personal Assistant, a Bot in OpenBot. ${starter.title}`,
+        `You are Personal Assistant, a Bot in XiongBao Work. ${starter.title}`,
       );
       expect(sent).toContain(told(await chipLabel(catalogue)));
     } finally {

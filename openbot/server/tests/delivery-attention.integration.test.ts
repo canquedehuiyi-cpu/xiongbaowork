@@ -503,7 +503,7 @@ describe("a ping", () => {
     await drain();
     expect(pushSends).toHaveLength(2);
     expect(pushSends[0]).toMatchObject({
-      title: "OpenBot",
+      title: "熊宝数字员工",
       body: "Drafted the reply to Dana.",
       data: {
         kind: "reply",

@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { downloadHeaders } from "@openbot/shared/file-download";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import type { Context, MiddlewareHandler } from "hono";
@@ -374,7 +375,7 @@ export function createComputerRoutes(
         seat,
         {
           id: context.var.actor.id,
-          ...(context.var.actor.email === DEV_ACTOR_EMAIL
+          ...(isDevActorEmail(context.var.actor.email)
             ? {}
             : { userId: context.var.actor.id }),
         },
@@ -1316,14 +1317,6 @@ async function act(
   }
 }
 
-/**
- * The local actor's address, matched to decide whether the id is a real users row.
- *
- * Compared against rather than imported from `auth/dev-actor` because the computer must not depend on the
- * authentication module's internals; this is the one fact about it that matters here.
- */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
-
 /** The audit identity derived from the signed-in actor, with the same FK rule as every acting call. A Bot's browser's
  * routes, which sit under these, use it too (browser/bot-browser.ts). */
 export function actorOf(record: AppVariables["actor"]): ActionActor {
@@ -1332,7 +1325,7 @@ export function actorOf(record: AppVariables["actor"]): ActionActor {
     // Only a real users row may go in the audit table's foreign key column. The local development
     // actor is not one, so writing it there fails the constraint and loses the row entirely. Who
     // it was is recorded in the payload regardless. See gateway.ts.
-    ...(record.email === DEV_ACTOR_EMAIL ? {} : { userId: record.id }),
+    ...(isDevActorEmail(record.email) ? {} : { userId: record.id }),
   };
 }
 

@@ -137,7 +137,7 @@ import {
   createAvatarSourceRoutes,
   createAvatarSourceStore,
 } from "./avatar-sources";
-import { setBrand } from "./brand";
+import { englishName, setBrand } from "./brand";
 import { openbotAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
 import { personBrowserEgressPolicy } from "./browser/egress";
@@ -5351,5 +5351,5 @@ await startupLifecycle.run(async (startup) => {
     );
   }
 
-  console.info(`OpenBot server listening on http://127.0.0.1:${port}`);
+  console.info(`${englishName()} server listening on http://127.0.0.1:${port}`);
 });

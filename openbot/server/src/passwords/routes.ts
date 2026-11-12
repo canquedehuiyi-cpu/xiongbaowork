@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { Hono, type MiddlewareHandler } from "hono";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AppVariables } from "../auth/guards";
@@ -5,14 +6,11 @@ import type { ActionActor } from "../computer/gateway";
 import type { SignInService } from "./service";
 import { SignInRefusedError } from "./types";
 
-/** Same rule as the computer routes: the local development actor is not a users row. */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
-
 function actorOf(context: { var: AppVariables }): ActionActor {
   const record = context.var.actor;
   return {
     id: record.id,
-    ...(record.email === DEV_ACTOR_EMAIL ? {} : { userId: record.id }),
+    ...(isDevActorEmail(record.email) ? {} : { userId: record.id }),
     initiator: { kind: "person" },
   };
 }

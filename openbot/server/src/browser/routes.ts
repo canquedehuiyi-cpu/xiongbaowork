@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type BrowserApiState,
@@ -232,12 +233,6 @@ export async function inBudget<T>(
  * (the computer's SENDING_WAIT_MS, 20 s), the browser closed and given 2 s to finish writing, and its profile deleted.
  */
 const CLEAR_TIMEOUT_MS = 60_000;
-
-/**
- * The local actor's address, matched to decide whether the id is a real users row: the audit table's foreign key takes
- * no other (computer/routes.ts `actorOf` has the same rule).
- */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
 
 /**
  * How long a revoke waits for the person's browser to hear of it. The revoke has happened either way: a browser that
@@ -1512,7 +1507,7 @@ export function createBrowserRoutes(deps: BrowserRouteDeps) {
           eventType: "computer.browser_cleared",
           targetType: "computer",
           targetId: computerId,
-          ...(actor.email === DEV_ACTOR_EMAIL ? {} : { actorUserId: actor.id }),
+          ...(isDevActorEmail(actor.email) ? {} : { actorUserId: actor.id }),
           payload: {
             actor: actor.id,
             reason:

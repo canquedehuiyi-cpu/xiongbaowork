@@ -1,3 +1,4 @@
+import { englishName } from "../brand";
 import { validateRequest } from "twilio";
 import { cutAtCodeUnits } from "../channels/text";
 import { DELIVERY_REQUEST_TIMEOUT_MS } from "../timeouts";
@@ -120,7 +121,7 @@ export function createTwilioTransport(config: TwilioConfig) {
           Body:
             input.text.length <= 1500
               ? input.text
-              : `${cutAtCodeUnits(input.text, 1400)}…\nOpen OpenBot to read the full message.`,
+              : `${cutAtCodeUnits(input.text, 1400)}…\nOpen ${englishName()} to read the full message.`,
           ...(config.statusUrl ? { StatusCallback: config.statusUrl } : {}),
         },
       );

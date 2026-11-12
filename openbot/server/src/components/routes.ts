@@ -1,3 +1,4 @@
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { BotAccessCheck } from "../agents/profile-policy";
@@ -18,14 +19,6 @@ import {
   type ComponentStore,
   SandboxedPublicationRequiredError,
 } from "./store";
-
-/**
- * The local development actor, which is not a row in `users`.
- *
- * The audit table has a foreign key to that table, so writing this id would fail the constraint and
- * lose the row entirely. Who it was is in the payload either way.
- */
-const DEV_ACTOR_EMAIL = "dev@openbot.local";
 
 /** Who a component's data grant names when OpenBot Personal gave it, not a person. */
 export const PERSONAL_GRANTED_BY = "openbot:personal-defaults";
@@ -87,7 +80,7 @@ export function createComponentRoutes(
       targetType: "component",
       targetId,
       ...(initiator ? { initiator } : {}),
-      ...(actor?.id && actor.email !== DEV_ACTOR_EMAIL
+      ...(actor?.id && !isDevActorEmail(actor.email)
         ? { actorUserId: actor.id }
         : {}),
       payload: { actor: actor?.email ?? "unknown", ...payload },
