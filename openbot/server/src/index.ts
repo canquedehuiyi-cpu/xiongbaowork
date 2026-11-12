@@ -458,6 +458,12 @@ import {
 import { createSelfHostBanner } from "./self-host-banner";
 import { createSetupSources, modelKeyOf } from "./setup/checklist";
 import { createComputerCheck } from "./setup/computer-check";
+import { createStaffingExecutor } from "./staffing/executor";
+import {
+  createOwnerNameReader,
+  createThreadVisibility,
+} from "./staffing/routes";
+import { createStaffingProposalStore } from "./staffing/store";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
@@ -4080,6 +4086,7 @@ await startupLifecycle.run(async (startup) => {
    * own group thread, built exactly as a routine's is, so governance, learning and the computer tools
    * apply unchanged; Bots answering each other reuse the handoff desk's grant and caps.
    */
+  const staffingProposalStore = createStaffingProposalStore(database);
   const groupConversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
@@ -4155,6 +4162,11 @@ await startupLifecycle.run(async (startup) => {
     // A group is shared (`team`), so the people later added to it read it in their own frames.
     createChannel: async (ownerUserId, agentIds, options) =>
       channelStore.create(await actorFor(ownerUserId), agentIds, options),
+    // Adding a Bot to an existing group passes the same access filter as naming it at creation.
+    canUseBot: async (ownerUserId, agentId) =>
+      Boolean(
+        await agentProfileStore.get(await actorFor(ownerUserId), agentId),
+      ),
     // The owner says whether a Bot's words may reach the other people in a group.
     privateShare: createPrivateShareCheck({ approvals: approvalService.store }),
     // A Team Bot's consent card raised in a group turn is drawn in the shared transcript.
@@ -4843,6 +4855,29 @@ await startupLifecycle.run(async (startup) => {
         triggers: responsibilityTriggers,
       },
       groups: groupConversations,
+      staffing: {
+        store: staffingProposalStore,
+        executor: createStaffingExecutor({
+          database,
+          proposals: staffingProposalStore,
+          profiles: agentProfileStore,
+          quota,
+          plugins: pluginStore,
+          composioConfigured: Boolean(composioBroker),
+          ...(composioBroker
+            ? { directory: () => composioBroker.listApps() }
+            : {}),
+          routines: routineStore,
+          channels: channelStore,
+          groups: groupConversations,
+          portraits: createPortraitStore(database),
+          auditStore: bootAuditStore,
+          // Owner approvals of a Shared app are withdrawn with the owner's grants, as in `DELETE /give`.
+          shared: { store: sharedUseStore, audience: sharedAudience },
+        }),
+        canSeeThread: createThreadVisibility(database),
+        ownerName: createOwnerNameReader(database),
+      },
       teamBots,
       // AUT3: the WakerFlow target is registered above, so the form may offer it.
       wakerflowAutomations: true,

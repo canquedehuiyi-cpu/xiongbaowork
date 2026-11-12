@@ -353,6 +353,7 @@ tests/google-drive-rest.test.ts
 tests/google-oauth-transport.test.ts
 tests/granted-tools-destructive.test.ts
 tests/group-ask-person.integration.test.ts
+tests/group-bots-change.integration.test.ts
 tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
 tests/guards.test.ts
@@ -719,6 +720,12 @@ tests/skill-tools.integration.test.ts
 tests/skill-uninstall-grants.integration.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
+tests/staffing-draft.test.ts
+tests/staffing-executor.integration.test.ts
+tests/staffing-proposals-table.integration.test.ts
+tests/staffing-routes.integration.test.ts
+tests/staffing-settle.integration.test.ts
+tests/staffing-store.integration.test.ts
 tests/stall-guard.test.ts
 tests/starter-tour-routes.test.ts
 tests/subagent.integration.test.ts
