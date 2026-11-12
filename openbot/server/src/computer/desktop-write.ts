@@ -24,6 +24,7 @@ import {
   runnerAddress,
 } from "../devices/channel";
 import type { DesktopStoppedInfo } from "../devices/socket";
+import { computerActionIdentity } from "./action-identity";
 import {
   DESKTOP_BACKSTOP_MS,
   DESKTOP_UNAVAILABLE_RULE,
@@ -425,13 +426,21 @@ export function createDesktopWriteGate(deps: {
       try {
         for (;;) {
           const before = opened.get(key) ?? 0;
-          status = await post<DesktopSessionStatus>(
-            botId,
-            "/desktop/session_status",
-            { botId, actorId: actor.id },
-            signal,
-            DESKTOP_BACKSTOP_MS,
-            address,
+          /*
+           * Asked afresh every time, outside the tool call's action identity: under it the runner's
+           * journal would answer a second call of the same tool call (the run again after the owner
+           * approved, or a resend the device asked for) with the first answer, which it keeps without
+           * the session. An approval asked inside a session would then never match its own run.
+           */
+          status = await computerActionIdentity.exit(() =>
+            post<DesktopSessionStatus>(
+              botId,
+              "/desktop/session_status",
+              { botId, actorId: actor.id },
+              signal,
+              DESKTOP_BACKSTOP_MS,
+              address,
+            ),
           );
           if (
             status?.writable !== true ||
@@ -893,8 +902,22 @@ export function createDesktopWriteMethods(deps: {
       // Asked and approved already, or never sent: the device's answer (or ours) as it is.
       if (reason === undefined || approvedSent !== false || !facts)
         throw failed(error);
+      /*
+       * Sent under an identity of its own: under the tool call's, the runner's journal would take the
+       * approved resend for the first send with other content and refuse it. Still the same for every
+       * run of this tool call, so an approved resend already carried out is answered, never repeated.
+       */
+      const identity = computerActionIdentity.getStore();
+      const asked = { ...facts, deviceReason: reason };
+      const resend = () => run(asked);
       try {
-        output = await run({ ...facts, deviceReason: reason });
+        output =
+          identity === undefined
+            ? await resend()
+            : await computerActionIdentity.run(
+                `${identity}/device-asked`,
+                resend,
+              );
       } catch (again) {
         throw failed(again);
       }

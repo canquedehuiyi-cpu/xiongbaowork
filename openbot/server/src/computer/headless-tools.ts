@@ -384,7 +384,8 @@ function headlessComputerTools(options: {
       // --- end app discovery ---
     );
   // --- desktop control (sub-project 2) ---
-  // Read only, and on the same terms as the local apps: the owner's own run on their paired machine.
+  // The two read tools and the four write tools, on the same terms as the local apps: the owner's
+  // own run on their paired machine. With 操作桌面 disabled the writes are filtered out above.
   if (onDevice && options.apps)
     tools.push(...desktopTools(tool, { gateway, botId, actor }));
   // --- end desktop control ---
