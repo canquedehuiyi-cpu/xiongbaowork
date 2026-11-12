@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { CopilotRuntime, InMemoryAgentRunner } from "@copilotkit/runtime/v2";
 import { frameworkLabel } from "../src/agents/framework";
 import { resetBrand, setBrand } from "../src/brand";
 import { CATALOGUE } from "../src/plugins/catalogue";
 import { buildComposioClient } from "../src/plugins/composio-adapter";
 import { registerDynamicClient } from "../src/plugins/oauth";
-import { silentRuntimeTelemetry } from "../src/telemetry/runtime-telemetry";
+import {
+  disableRuntimeTelemetryByDefault,
+  runtimeTelemetryOptions,
+  silentRuntimeTelemetry,
+} from "../src/telemetry/runtime-telemetry";
 
 /*
  * What third parties and the model read about this deployment comes out of the brand exit, so a
@@ -144,21 +149,42 @@ describe("the framework the model is told", () => {
 });
 
 describe("runtime telemetry", () => {
-  test("the CopilotKit runtime gets a capture scope that sends nothing", async () => {
+  test("a runtime built with the deployment's options reports through the silent scope", async () => {
+    const runtime = new CopilotRuntime({
+      agents: {},
+      runner: new InMemoryAgentRunner(),
+      ...runtimeTelemetryOptions,
+    });
+    expect(runtime.telemetry).toBe(silentRuntimeTelemetry);
     await expect(
-      silentRuntimeTelemetry.capture(
+      runtime.telemetry?.capture(
         "oss.runtime.instance_created" as never,
         {} as never,
       ),
     ).resolves.toBeUndefined();
   });
 
-  test("is wired into the runtime options and switched off in the image", () => {
+  test("mountCopilotRuntime spreads those options into the runtime it builds", () => {
     const copilot = readFileSync(
       new URL("../src/copilot.ts", import.meta.url),
       "utf8",
     );
-    expect(copilot).toContain("ɵtelemetry: silentRuntimeTelemetry");
+    expect(copilot).toContain("...runtimeTelemetryOptions");
+    expect(copilot).toContain("disableRuntimeTelemetryByDefault();");
+  });
+
+  test("the vendor's opt-out variable defaults on and respects an explicit choice", () => {
+    const unset: Record<string, string | undefined> = {};
+    disableRuntimeTelemetryByDefault(unset);
+    expect(unset.COPILOTKIT_TELEMETRY_DISABLED).toBe("1");
+    const chosen: Record<string, string | undefined> = {
+      COPILOTKIT_TELEMETRY_DISABLED: "0",
+    };
+    disableRuntimeTelemetryByDefault(chosen);
+    expect(chosen.COPILOTKIT_TELEMETRY_DISABLED).toBe("0");
+  });
+
+  test("the image also sets the variable", () => {
     const dockerfile = readFileSync(
       new URL("../../Dockerfile", import.meta.url),
       "utf8",

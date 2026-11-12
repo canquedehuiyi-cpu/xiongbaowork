@@ -148,7 +148,10 @@ import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
-import { silentRuntimeTelemetry } from "./telemetry/runtime-telemetry";
+import {
+  disableRuntimeTelemetryByDefault,
+  runtimeTelemetryOptions,
+} from "./telemetry/runtime-telemetry";
 import {
   isPersonTenant,
   runAsTenant,
@@ -3803,6 +3806,9 @@ export function mountCopilotRuntime(
    */
   const runtimeRunner = patchableRunner(withQuotaRunErrors(runner));
 
+  // Before any runtime exists: its constructor logs a disclosure and records properties unless this is set.
+  disableRuntimeTelemetryByDefault();
+
   /**
    * Everything the runtime is configured with, apart from the one option that says where its threads
    * live. Kept separate because that one option is the difference between this deployment running a
@@ -3810,7 +3816,7 @@ export function mountCopilotRuntime(
    */
   const sharedRuntimeOptions = {
     // No usage reports to the runtime vendor; see `silentRuntimeTelemetry`.
-    ɵtelemetry: silentRuntimeTelemetry,
+    ...runtimeTelemetryOptions,
     // identifyUser is NOT optional in practice. Threads and memory are scoped to the user it
     // returns, so omitting it puts every person in the deployment in the same thread space and one
     // person's conversations become another's.

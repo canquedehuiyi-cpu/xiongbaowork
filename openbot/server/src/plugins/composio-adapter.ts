@@ -2401,11 +2401,11 @@ export type ComposioVendor = {
  * An auth config is visible in Composio's own dashboard beside any that were made by hand there,
  * and the two are otherwise indistinguishable. The name is the only field this deployment gets to
  * choose, so it is where the provenance goes.
- */
-/**
- * The suffix written into configs created before the product was renamed. Lookup is by NAME (see
- * above), so a deployment that already holds "Linear (OpenBot)" must keep finding it, or enabling the
- * app again would create the second config this provenance exists to prevent.
+ *
+ * This legacy one is what configs created before the product was renamed carry. Lookup is by NAME,
+ * so a deployment that already holds "Linear (OpenBot)" must keep finding it, or enabling the app
+ * again would create the second config this provenance exists to prevent. Renaming `englishName`
+ * later would orphan configs made under the earlier non-legacy suffix: only this one is remembered.
  */
 const LEGACY_CONFIG_SUFFIX = "(OpenBot)";
 
