@@ -158,7 +158,7 @@ export function normaliseOpenBotOrigin(raw: string): OriginCheck {
     return { ok: false, reason: "That is not a web address." };
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    return { ok: false, reason: "OpenBot's address must start with https://." };
+    return { ok: false, reason: "The address must start with https://." };
   }
   if (url.username || url.password)
     return {
@@ -168,14 +168,14 @@ export function normaliseOpenBotOrigin(raw: string): OriginCheck {
   if (url.pathname !== "/" || url.search || url.hash) {
     return {
       ok: false,
-      reason: "Use only the address, such as https://openbot.example.com.",
+      reason: "Use only the address, such as https://work.example.com.",
     };
   }
   if (
     url.protocol === "http:" &&
     !(LOOPBACK_HOSTS.has(url.hostname) && url.port)
   ) {
-    return { ok: false, reason: "OpenBot's address must use HTTPS." };
+    return { ok: false, reason: "The address must use HTTPS." };
   }
   return { ok: true, origin: url.origin };
 }

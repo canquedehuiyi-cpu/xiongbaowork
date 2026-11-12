@@ -235,17 +235,17 @@ function describe(
   connected: boolean,
   attempt: Attempt,
 ): string {
-  if (!detected) return "当前浏览器还没装 录制器。";
+  if (!detected) return "当前浏览器还没装录制器。";
   if (connected) return "已连接";
   switch (attempt.state) {
     case "awaiting":
-      return "请在刚打开的 录制器标签页里确认。";
+      return "请在刚打开的录制器标签页里确认。";
     case "expired":
       return "请求已过期。请再试一次。";
     case "cancelled":
-      return "你在 录制器标签页里取消了，没有连接任何东西。";
+      return "你在录制器标签页里取消了，没有连接任何东西。";
     case "closed":
-      return "你确认之前 录制器标签页就关了，没有连接任何东西。";
+      return "你确认之前录制器标签页就关了，没有连接任何东西。";
     case "failed":
       return attempt.message;
     default:

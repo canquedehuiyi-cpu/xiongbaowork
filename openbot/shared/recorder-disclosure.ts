@@ -90,7 +90,7 @@ export const RECORDER_COLLECTS: readonly {
     kind: "assistants",
     title: "AI assistant conversations",
     description:
-      "On a page whose AI assistant uses AG-UI, as OpenBot's own chat does, the conversation, including the messages you send.",
+      "On a page whose AI assistant uses AG-UI, as this app's own chat does, the conversation, including the messages you send.",
   },
   {
     kind: "narration",

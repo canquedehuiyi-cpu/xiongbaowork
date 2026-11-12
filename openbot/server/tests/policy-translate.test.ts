@@ -73,7 +73,7 @@ function serve(recording: Case) {
   if (first) mock.on({ userMessage: /<description>/ }, { content: first });
   if (recording.reader)
     mock.on(
-      { userMessage: /You explain one OpenBot boundary rule/ },
+      { userMessage: /You explain one XiongBao Work boundary rule/ },
       { content: recording.reader },
     );
 }

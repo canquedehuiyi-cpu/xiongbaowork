@@ -33,13 +33,15 @@ import {
   parseMemoryPatch,
   parseMemorySourceInput,
 } from "./types";
+import { productName } from "../brand";
 
 /**
  * The id a memory gets in OpenBot when only Intelligence holds it. Prefixed so the routes can tell
  * it from an OpenBot row id without a lookup, and so it can never collide with one.
  */
 const INTELLIGENCE_ID_PREFIX = "intelligence:";
-const INTELLIGENCE_PROVENANCE = "OpenBot memory";
+// Shown to the person on the memory screen ("来自 …"), so it is the product's name, read per call.
+const intelligenceProvenance = () => `${productName()}记忆`;
 
 const digestOf = (content: string) =>
   createHash("sha256").update(content).digest("hex");
@@ -72,7 +74,7 @@ function fromIntelligence(
     id: `${INTELLIGENCE_ID_PREFIX}${memory.id}`,
     ownerUserId,
     content: memory.content,
-    provenance: INTELLIGENCE_PROVENANCE,
+    provenance: intelligenceProvenance(),
     enabled: true,
     reviewState: "confirmed",
     formedBy: "intelligence",
@@ -80,7 +82,7 @@ function fromIntelligence(
     sourceId: null,
     externalId: null,
     importDigest: null,
-    sourceApp: INTELLIGENCE_PROVENANCE,
+    sourceApp: intelligenceProvenance(),
     sourceRef: null,
     sourceLink: null,
     observedAt: null,

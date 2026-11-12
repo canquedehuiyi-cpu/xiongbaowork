@@ -49,7 +49,10 @@ export type LearningContainerSpec = { id: string; name: string };
 /** The project's shared default, which Automatic Learning assigns. */
 export const OPENBOT_CONTAINER: LearningContainerSpec = {
   id: "openbot",
-  name: "OpenBot",
+  // The vendor's dashboard shows this name; read per use so a tenant's brand applies.
+  get name() {
+    return englishName();
+  },
 };
 
 export type CliResult = { exitCode: number; stdout: string };
