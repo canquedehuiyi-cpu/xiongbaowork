@@ -88,7 +88,7 @@ const tpl = (id: string, groupId: string): PipelineTemplate => ({
   steps: [],
 });
 
-function seed(crews: WakerGroup[]) {
+function seed(crews: WakerGroup[], withTemplates = true) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -102,11 +102,12 @@ function seed(crews: WakerGroup[]) {
   client.setQueryData(runningTasksQueryOptions().queryKey, []);
   client.setQueryData(deviceKeys.list(), []);
   client.setQueryData(monthTaskStatsQueryOptions().queryKey, []);
-  client.setQueryData(pipelineKeys.templates(), [
-    tpl("t1", "crew-1"),
-    tpl("t2", "crew-1"),
-    tpl("t3", "crew-2"),
-  ]);
+  if (withTemplates)
+    client.setQueryData(pipelineKeys.templates(), [
+      tpl("t1", "crew-1"),
+      tpl("t2", "crew-1"),
+      tpl("t3", "crew-2"),
+    ]);
   seedQuietNeedsYou(client);
   return client;
 }
@@ -234,4 +235,103 @@ test("dissolving names what goes with it", async () => {
   expect(text).toContain("解散「编程群组」");
   expect(text).toContain("它的 2 条组团流程和运行记录会一并删除");
   expect(text).toContain("看板上已有的任务卡保留");
+});
+
+const chatCrew = () => crewOf({ channelId: "ch-1", chatStatus: "chat" });
+
+test("while the count is still coming, 确认解散 waits", async () => {
+  globalThis.fetch = (async (_input: unknown) =>
+    new Promise<Response>(() => {})) as typeof fetch;
+  const { screen } = draw(seed([chatCrew()], false));
+  const card = await screen.findByTestId("crew-card");
+  await userEvent.click(within(card).getByRole("button", { name: "解散" }));
+  await within(card).findByText("正在统计…");
+  expect(
+    within(card)
+      .getByRole("button", { name: "确认解散「编程群组」" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+});
+
+test("when the count fails, dissolving is still allowed and the copy has no number", async () => {
+  globalThis.fetch = (async (_input: unknown) =>
+    Response.json({ error: "读不出来" }, { status: 500 })) as typeof fetch;
+  const { screen } = draw(seed([chatCrew()], false));
+  const card = await screen.findByTestId("crew-card");
+  await userEvent.click(within(card).getByRole("button", { name: "解散" }));
+  const text = (await within(card).findByText(/聊天记录不再显示/)).textContent;
+  expect(text).toContain("它的组团流程和运行记录会一并删除");
+  expect(text).toContain("看板上已有的任务卡保留");
+  expect(
+    within(card)
+      .getByRole("button", { name: "确认解散「编程群组」" })
+      .hasAttribute("disabled"),
+  ).toBe(false);
+});
+
+/** Open 管理成员 and add the third employee, with the members endpoint answering `reply`. */
+async function saveMembers(reply: () => Response) {
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    if (init?.method === "PUT") return reply();
+    return Response.json([]);
+  }) as typeof fetch;
+  const { screen } = draw(seed([chatCrew()]));
+  const card = await screen.findByTestId("crew-card");
+  await userEvent.click(within(card).getByRole("button", { name: "管理成员" }));
+  await userEvent.click(
+    await within(card).findByRole("button", { name: "员工c" }),
+  );
+  return screen;
+}
+
+test("a saved roster whose chat did not start shows the chatError", async () => {
+  const screen = await saveMembers(() =>
+    Response.json({ group: chatCrew(), chatError: "聊天没开成：成员不足" }),
+  );
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "聊天没开成：成员不足",
+  );
+});
+
+test("an owner-gone 409 shows the server's sentence", async () => {
+  const screen = await saveMembers(() =>
+    Response.json(
+      { error: "你已不在这个群聊里", code: "waker-group-owner-gone" },
+      { status: 409 },
+    ),
+  );
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "你已不在这个群聊里",
+  );
+});
+
+test("a part-way 409 shows the server's sentence", async () => {
+  const screen = await saveMembers(() =>
+    Response.json(
+      {
+        error: "名单改到一半停了",
+        done: [{ op: "add", agentIds: ["agent-c"] }],
+      },
+      { status: 409 },
+    ),
+  );
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "名单改到一半停了",
+  );
+});
+
+test("a chat that fails to start says why and stays on the wall", async () => {
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) =>
+    init?.method === "POST"
+      ? Response.json({ error: "聊天暂时开不了" }, { status: 500 })
+      : Response.json([])) as typeof fetch;
+  const { screen, router } = draw(
+    seed([crewOf({ channelId: null, chatStatus: "not_started" })]),
+  );
+  const card = await screen.findByTestId("crew-card");
+  await userEvent.click(within(card).getByRole("button", { name: "开始聊天" }));
+  expect((await within(card).findByRole("alert")).textContent).toBe(
+    "聊天暂时开不了",
+  );
+  expect(router.state.location.pathname).toBe("/bots");
 });

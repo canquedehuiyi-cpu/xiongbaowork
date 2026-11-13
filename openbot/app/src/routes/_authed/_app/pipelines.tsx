@@ -140,7 +140,14 @@ function RouteComponent() {
   const { run: runId, group: groupParam } = Route.useSearch();
   const navigate = useNavigate();
   const setRunId = (id: string | null) =>
-    navigate({ to: "/pipelines", search: id ? { run: id } : {} });
+    // Only `run` changes: `group` stays, so the address still says which group the page is on.
+    navigate({
+      to: "/pipelines",
+      search: (prev) => {
+        const { run: _dropped, ...rest } = prev;
+        return id ? { ...rest, run: id } : rest;
+      },
+    });
 
   /*
    * The group named in the address wins over the first one, but only when it exists: a stale or
@@ -153,11 +160,19 @@ function RouteComponent() {
   );
   const sectionRef = useRef<HTMLElement>(null);
   const sectionShown = templates.data !== undefined;
+  const scrolled = useRef(false);
   useEffect(() => {
-    // Only the arrival from a link scrolls; picking a group by hand is already where the eyes are.
+    // Only the arrival from a link scrolls, once; picking groups by hand is already where the eyes are.
     // The section exists once the group's templates have loaded, so that is when to look for it.
-    if (sectionShown && fromAddress && selected === fromAddress)
-      sectionRef.current?.scrollIntoView?.({ block: "start" });
+    if (
+      scrolled.current ||
+      !sectionShown ||
+      !fromAddress ||
+      selected !== fromAddress
+    )
+      return;
+    scrolled.current = true;
+    sectionRef.current?.scrollIntoView?.({ block: "start" });
   }, [sectionShown, fromAddress, selected]);
   const names = new Map(
     (coworkers.data ?? []).map((agent) => [agent.id, agent.name]),

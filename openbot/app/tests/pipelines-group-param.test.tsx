@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -9,6 +9,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
 import { type PipelineTemplate, pipelineKeys } from "@/lib/pipelines/queries";
 import { type WakerGroup, wakerGroupKeys } from "@/lib/waker-groups/queries";
@@ -28,7 +29,11 @@ afterAll(async () => {
   await settleReactWork();
   GlobalRegistrator.unregister();
 });
-afterEach(() => cleanup());
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  cleanup();
+  globalThis.fetch = originalFetch;
+});
 
 const crew = (id: string, name: string): WakerGroup => ({
   id,
@@ -66,11 +71,12 @@ function draw(entry: string) {
       } as never),
     ]),
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return Object.assign(view, { router });
 }
 
 test("?group=crew-2 opens that crew's section", async () => {
@@ -91,4 +97,62 @@ test("?group= pointing at nothing leaves the page as usual", async () => {
   expect(
     view.getByRole("button", { name: "第一组" }).getAttribute("aria-pressed"),
   ).toBe("true");
+  expect(
+    view.getByRole("button", { name: "第二组" }).getAttribute("aria-pressed"),
+  ).toBe("false");
+  expect(
+    view.container.querySelector("section[data-group=crew-1]"),
+  ).toBeTruthy();
+  expect(view.queryByRole("alert")).toBeNull();
+});
+
+function stubScroll() {
+  return spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+    () => {},
+  );
+}
+
+test("arriving by ?group= scrolls to the section once, and choosing groups by hand does not scroll again", async () => {
+  const scroll = stubScroll();
+  const view = draw("/pipelines?group=crew-2");
+  await view.findByText("流程-crew-2");
+  await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+  await userEvent.click(view.getByRole("button", { name: "第一组" }));
+  await view.findByText("流程-crew-1");
+  await userEvent.click(view.getByRole("button", { name: "第二组" }));
+  await view.findByText("流程-crew-2");
+  expect(scroll).toHaveBeenCalledTimes(1);
+  scroll.mockRestore();
+});
+
+test("starting a run keeps the group the page was opened on", async () => {
+  const scroll = stubScroll();
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    const path = String(input);
+    if (init?.method === "POST" && path.endsWith("/runs"))
+      return Response.json({
+        run: { runId: "run-9", parentTaskId: "task-parent" },
+      });
+    if (path.includes("/api/group-pipelines/runs/"))
+      return Response.json({
+        run: { status: "running", cursor: 0, parentTaskId: "p", steps: [] },
+      });
+    return Response.json([]);
+  }) as typeof fetch;
+  const view = draw("/pipelines?group=crew-2");
+  await userEvent.type(
+    await view.findByLabelText("交给流程-crew-2的任务"),
+    "做点事",
+  );
+  await userEvent.click(await view.findByRole("button", { name: "运行" }));
+  await waitFor(() =>
+    expect(view.router.state.location.search).toEqual({
+      group: "crew-2",
+      run: "run-9",
+    }),
+  );
+  expect(
+    view.getByRole("button", { name: "第二组" }).getAttribute("aria-pressed"),
+  ).toBe("true");
+  scroll.mockRestore();
 });

@@ -257,6 +257,8 @@ function CrewCard({
     ...pipelineTemplatesQueryOptions(),
     enabled: confirming,
   });
+  // A failed count must not block the dissolve; the copy then simply says it without the number.
+  const counting = confirming && pipelines.isPending;
   const pipelineCount = pipelines.data?.filter(
     (template) => template.groupId === crew.id,
   ).length;
@@ -447,7 +449,7 @@ function CrewCard({
         {confirming ? (
           <>
             <Button
-              disabled={retiring}
+              disabled={retiring || counting}
               onClick={() => {
                 setConfirming(false);
                 onRetire();
@@ -479,9 +481,11 @@ function CrewCard({
 
       {confirming ? (
         <p className="mb-[8px] text-[12px] text-muted-foreground leading-[18px]">
-          解散「{crew.name}」：聊天记录不再显示；它的
-          {pipelineCount === undefined ? "" : ` ${pipelineCount} 条`}
-          组团流程和运行记录会一并删除；看板上已有的任务卡保留。
+          {counting
+            ? "正在统计…"
+            : `解散「${crew.name}」：聊天记录不再显示；它的${
+                pipelineCount === undefined ? "" : ` ${pipelineCount} 条`
+              }组团流程和运行记录会一并删除；看板上已有的任务卡保留。`}
         </p>
       ) : null}
       {chatProblem ? (
