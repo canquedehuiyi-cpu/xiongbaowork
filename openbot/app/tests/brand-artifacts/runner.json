@@ -102,6 +102,18 @@
     "note": "遮罩属性，注入第三方网页；runner 与 agent-computer 两头一起改（Task 12、19，附录 A 第 9 行待批）"
   },
   {
+    "word": "openbot-desktop",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
+  },
+  {
+    "word": "openbot-runner",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
+  },
+  {
     "word": "openbot-snapshots.sqlite",
     "category": "persisted-data",
     "plan": "rewrite",
