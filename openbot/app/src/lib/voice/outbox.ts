@@ -1,15 +1,21 @@
 import type { SaveVoiceSessionInput } from "@openbot/shared/voice-session";
 import { type AuthenticatedUser, authKeys } from "@/lib/auth/queries";
+import { compatSuffixes, readCompat, removeCompat } from "@/lib/storage-compat";
 import { queryClient } from "@/query-client";
 
-const PREFIX = "openbot:voice-outbox:";
+const LEGACY_PREFIX = "openbot:voice-outbox:";
+const PREFIX = "xiongbao:voice-outbox:";
 export const voiceCallOwner = () =>
   queryClient.getQueryData<AuthenticatedUser>(authKeys.currentUser())?.id;
-const key = (
+const suffix = (
   call: Pick<SaveVoiceSessionInput, "channelId" | "id">,
   userId: string,
 ) =>
-  `${PREFIX}${encodeURIComponent(userId)}:${encodeURIComponent(call.channelId)}:${encodeURIComponent(call.id)}`;
+  `${encodeURIComponent(userId)}:${encodeURIComponent(call.channelId)}:${encodeURIComponent(call.id)}`;
+const key = (
+  call: Pick<SaveVoiceSessionInput, "channelId" | "id">,
+  userId: string,
+) => PREFIX + suffix(call, userId);
 
 /** Per-user recovery across reload/tab closure; confirmed saves are removed. No audio is stored. */
 export function rememberVoiceCall(
@@ -30,7 +36,8 @@ export function forgetVoiceCall(
   userId = voiceCallOwner(),
 ) {
   try {
-    if (userId) localStorage.removeItem(key(call, userId));
+    if (userId)
+      removeCompat(key(call, userId), LEGACY_PREFIX + suffix(call, userId));
   } catch {
     /* Storage can be disabled; the database already holds this call. */
   }
@@ -40,12 +47,11 @@ export function recoverVoiceCalls(channelId: string): SaveVoiceSessionInput[] {
   try {
     const userId = voiceCallOwner();
     if (!userId) return [];
-    const prefix = `${PREFIX}${encodeURIComponent(userId)}:${encodeURIComponent(channelId)}:`;
+    const prefix = `${encodeURIComponent(userId)}:${encodeURIComponent(channelId)}:`;
     const recovered: SaveVoiceSessionInput[] = [];
-    for (let index = 0; index < localStorage.length; index++) {
-      const name = localStorage.key(index);
-      if (!name?.startsWith(prefix)) continue;
-      const raw = localStorage.getItem(name);
+    for (const name of compatSuffixes(PREFIX, LEGACY_PREFIX)) {
+      if (!name.startsWith(prefix)) continue;
+      const raw = readCompat(PREFIX + name, LEGACY_PREFIX + name);
       if (!raw || raw.length > 400_000) continue;
       let value: unknown;
       try {

@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { client, RequestError } from "@/lib/client";
+import { readCompat, removeCompat, writeCompat } from "@/lib/storage-compat";
 import {
   type FlowModelChoice,
   isWorkerStep,
@@ -26,21 +27,6 @@ import {
   type WakerFlowWorkerStep,
 } from "../../../shared/wakerflows";
 
-export type {
-  FlowModelChoice,
-  WakerFlow,
-  WakerFlowBranch,
-  WakerFlowCandidate,
-  WakerFlowGenerationResult,
-  WakerFlowInput,
-  WakerFlowInputType,
-  WakerFlowPlan,
-  WakerFlowRequestStatus,
-  WakerFlowSaveInput,
-  WakerFlowStep,
-  WakerFlowStepKind,
-  WakerFlowWorkerStep,
-};
 export {
   isWorkerStep,
   stepAgentId,
@@ -56,6 +42,21 @@ export {
   WAKERFLOW_STEP_KINDS,
   WAKERFLOW_SUGGESTIONS,
 } from "../../../shared/wakerflows";
+export type {
+  FlowModelChoice,
+  WakerFlow,
+  WakerFlowBranch,
+  WakerFlowCandidate,
+  WakerFlowGenerationResult,
+  WakerFlowInput,
+  WakerFlowInputType,
+  WakerFlowPlan,
+  WakerFlowRequestStatus,
+  WakerFlowSaveInput,
+  WakerFlowStep,
+  WakerFlowStepKind,
+  WakerFlowWorkerStep,
+};
 
 /** How each step kind is named in the editor and the flowchart (WF7). */
 export const STEP_KIND_LABEL: Record<WakerFlowStepKind, string> = {
@@ -1312,14 +1313,15 @@ export function importWakerFlowShare(
  * survives a provider's redirect and back) and taken once. Only a token of the link's own shape is
  * ever held, so nothing else can be sent back to.
  */
-const RETURN_KEY = "openbot.wakerflow-share-return";
+const LEGACY_RETURN_KEY = "openbot.wakerflow-share-return";
+const RETURN_KEY = "xiongbao.wakerflow-share-return";
 const SHARE_PATH = /^\/wakerflows\/import\/([A-Za-z0-9_-]{43})$/;
 
 export function rememberShareImport(pathname: string) {
   const token = SHARE_PATH.exec(pathname)?.[1];
   if (!token) return;
   try {
-    sessionStorage.setItem(RETURN_KEY, token);
+    writeCompat(RETURN_KEY, token, sessionStorage);
   } catch {
     // Storage may be unavailable (a private window); the person opens the link again instead.
   }
@@ -1327,8 +1329,8 @@ export function rememberShareImport(pathname: string) {
 
 export function takeShareImport(): string | null {
   try {
-    const token = sessionStorage.getItem(RETURN_KEY);
-    sessionStorage.removeItem(RETURN_KEY);
+    const token = readCompat(RETURN_KEY, LEGACY_RETURN_KEY, sessionStorage);
+    removeCompat(RETURN_KEY, LEGACY_RETURN_KEY, sessionStorage);
     return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null;
   } catch {
     return null;

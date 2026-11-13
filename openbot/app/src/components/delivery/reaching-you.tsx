@@ -54,6 +54,7 @@ import {
   startChatLinkMutationOptions,
   startSmsMutationOptions,
 } from "@/lib/delivery";
+import { readCompat, removeCompat, writeCompat } from "@/lib/storage-compat";
 import { queryClient } from "@/query-client";
 
 /**
@@ -63,18 +64,19 @@ import { queryClient } from "@/query-client";
  * phone a moment after they may have looked away: leaving and coming back used to drop the box to
  * type it into, with no way to confirm the code they had just been sent.
  */
-const PENDING_SMS = "openbot.reachability.pendingSms";
+const LEGACY_PENDING_SMS = "openbot.reachability.pendingSms";
+const PENDING_SMS = "xiongbao.reachability.pendingSms";
 function readPending(): string {
   try {
-    return sessionStorage.getItem(PENDING_SMS) ?? "";
+    return readCompat(PENDING_SMS, LEGACY_PENDING_SMS, sessionStorage) ?? "";
   } catch {
     return "";
   }
 }
 function writePending(id: string) {
   try {
-    if (id) sessionStorage.setItem(PENDING_SMS, id);
-    else sessionStorage.removeItem(PENDING_SMS);
+    if (id) writeCompat(PENDING_SMS, id, sessionStorage);
+    else removeCompat(PENDING_SMS, LEGACY_PENDING_SMS, sessionStorage);
   } catch {
     /* A browser that keeps nothing still confirms within the visit. */
   }

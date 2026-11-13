@@ -20,6 +20,7 @@ import {
   proactiveAllowedQueryOptions,
   proactiveSettingsQueryOptions,
 } from "@/lib/proactive";
+import { readCompat, writeCompat } from "@/lib/storage-compat";
 import { queryClient } from "@/query-client";
 
 /**
@@ -47,11 +48,14 @@ const INTERVAL_ITEMS = INTERVALS.map((interval) => ({
   label: interval.label,
 }));
 
-const DECLINED = "openbot:check-in-declined:";
+const LEGACY_DECLINED = "openbot:check-in-declined:";
+const DECLINED = "xiongbao:check-in-declined:";
 
 function declinedBefore(toolCallId: string): boolean {
   try {
-    return window.localStorage.getItem(DECLINED + toolCallId) !== null;
+    return (
+      readCompat(DECLINED + toolCallId, LEGACY_DECLINED + toolCallId) !== null
+    );
   } catch {
     return false;
   }
@@ -59,7 +63,7 @@ function declinedBefore(toolCallId: string): boolean {
 
 function rememberDeclined(toolCallId: string) {
   try {
-    window.localStorage.setItem(DECLINED + toolCallId, "1");
+    writeCompat(DECLINED + toolCallId, "1");
   } catch {
     // A browser that refuses storage asks again after a reload, which is all it costs.
   }

@@ -41,16 +41,20 @@
   {
     "file": "app/src/components/delivery/reaching-you.tsx",
     "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao.reachability.pendingSms 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/components/reachability/link-conversation-dialog.tsx",
     "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao.reachability.pendingSms 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/components/browser/learning-next.tsx",
@@ -62,9 +66,11 @@
   {
     "file": "app/src/components/browser/teach-steps.tsx",
     "text": "\"openbot.teach-a-bot.introduced\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao.teach-a-bot.introduced 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/components/approvals/describe-rules.tsx",
@@ -166,14 +172,14 @@
   {
     "file": "app/src/skins/registry.ts",
     "text": "id: \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)",
+    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
     "category": "persisted-data",
     "plan": "rewrite"
   },
   {
     "file": "app/src/skins/registry.ts",
     "text": "openbot,",
-    "reason": "persisted-identifier: the default skin's module identifier (L1-2)",
+    "reason": "persisted-identifier: the default skin's module identifier (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
     "category": "persisted-data",
     "plan": "rewrite"
   },
@@ -189,23 +195,29 @@
   {
     "file": "app/src/lib/wakerflows.ts",
     "text": "\"openbot.wakerflow-share-return\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao.wakerflow-share-return 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/computers/handoff.ts",
     "text": "`openbot:pending-handoff:",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao:pending-handoff:<botId> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/computers/activity.ts",
     "text": "\"openbot:computer-activity-wiped:\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧前缀；新键 xiongbao:computer-activity-wiped:<id> 与旧键都在时取较晚的清除记录写回新键，storage 事件监听新旧两个前缀（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/desktop/speech.ts",
@@ -247,9 +259,11 @@
   {
     "file": "app/src/lib/voice/outbox.ts",
     "text": "\"openbot:voice-outbox:\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao:voice-outbox:<…> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/voice/transcript.ts",
@@ -324,23 +338,29 @@
   {
     "file": "app/src/lib/copilot/carry-on.ts",
     "text": "\"openbot:carried-on:\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao:carried-on:<id> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/copilot/check-in-offer-tool.tsx",
     "text": "\"openbot:check-in-declined:\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao:check-in-declined:<id> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/copilot/bot-thread.ts",
     "text": "\"openbot.bot-thread\"",
-    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧键；新键 xiongbao.bot-thread.<agentId> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/copilot/stopped-turn.ts",
@@ -373,7 +393,7 @@
   {
     "file": "app/index.html",
     "text": "skin !== \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)",
+    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
     "category": "persisted-data",
     "plan": "rewrite"
   },
@@ -1124,14 +1144,14 @@
   {
     "file": "shared/user-preferences.ts",
     "text": "\"openbot\",",
-    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)",
+    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
     "category": "persisted-data",
     "plan": "rewrite"
   },
   {
     "file": "shared/user-preferences.ts",
     "text": "DEFAULT_SKIN: SkinId = \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)",
+    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
     "category": "persisted-data",
     "plan": "rewrite"
   },
