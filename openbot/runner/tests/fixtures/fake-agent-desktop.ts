@@ -77,10 +77,14 @@ function alive(pid: number): boolean {
 if (process.env.FAKE_AD_LOG) {
   // Which earlier fakes (and their children) are still running as this one starts.
   const prevAlive: number[] = [];
-  if (existsSync(process.env.FAKE_AD_LOG))
-    for (const line of readFileSync(process.env.FAKE_AD_LOG, "utf8").split(
-      "\n",
-    )) {
+  // Another fake may still be appending its line: read only lines that already end in a newline.
+  const logText = existsSync(process.env.FAKE_AD_LOG)
+    ? readFileSync(process.env.FAKE_AD_LOG, "utf8")
+    : "";
+  if (logText)
+    for (const line of logText
+      .slice(0, logText.lastIndexOf("\n") + 1)
+      .split("\n")) {
       if (!line) continue;
       const earlier = JSON.parse(line);
       for (const pid of [earlier.pid, earlier.childPid])
