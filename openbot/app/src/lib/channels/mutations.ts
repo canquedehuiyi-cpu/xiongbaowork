@@ -6,6 +6,7 @@ import {
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { client, tryClient } from "@/lib/client";
 import { settingsKeys } from "@/lib/settings/queries";
+import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 import { type AgentChannel, type ChannelPage, channelKeys } from "./queries";
 
 /**
@@ -114,8 +115,12 @@ export function renameChannelMutationOptions(queryClient: QueryClient) {
         fallback: "无法重命名这段会话",
       });
     },
+    // A group chat's name is its group's name, so the group list is read again too.
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: channelKeys.list() }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: channelKeys.list() }),
+        queryClient.invalidateQueries({ queryKey: wakerGroupKeys.all }),
+      ]),
   });
 }
 

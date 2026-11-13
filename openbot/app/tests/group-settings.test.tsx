@@ -25,6 +25,7 @@ import {
   GroupSettingsPanel,
 } from "@/components/channels/group-settings";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 import { Route as GroupRoute } from "@/routes/_authed/_app/group/$channelId";
 import { settleReactWork } from "./settle-react-work";
 
@@ -820,4 +821,66 @@ test("opening the panel asks the server for the group once, even under StrictMod
   expect(
     sent.filter((call) => call.path === "/api/waker-groups/for-channel/ch-1"),
   ).toHaveLength(1);
+});
+
+test("a row menu reads the groups afresh each time it opens, so a chat just made is dissolved, not deleted", async () => {
+  reset({ crews: [crew()] });
+  const reads: string[] = [];
+  const serve = globalThis.fetch;
+  globalThis.fetch = ((
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit,
+  ) => {
+    const path = new URL(
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url,
+      "http://localhost",
+    ).pathname;
+    if (path === "/api/waker-groups" && (init?.method ?? "GET") === "GET")
+      reads.push(path);
+    return serve(input, init);
+  }) as typeof fetch;
+  // The list was read a moment ago, before the group existed: fresh by the clock, wrong by now.
+  const queryClient = client();
+  queryClient.setQueryData(wakerGroupKeys.list(), []);
+  const root = createRootRoute({
+    component: () => (
+      <SidebarProvider>
+        <Channel
+          canRename
+          channelId="ch-1"
+          busy={false}
+          emphasis="agent"
+          name="周报群"
+          participantIds={["agent-a", "agent-b"]}
+          pinned={false}
+          unread={false}
+        />
+      </SidebarProvider>
+    ),
+  });
+  const group = createRoute({
+    path: "group/$channelId",
+    getParentRoute: () => root,
+    component: () => <p>group</p>,
+  } as never);
+  const router = createRouter({
+    routeTree: root.addChildren([group, ...stubs(root)]),
+    history: createMemoryHistory({ initialEntries: ["/x"] }),
+  });
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
+  // Nothing reads the list until a menu opens.
+  await view.findByRole("link");
+  expect(reads).toHaveLength(0);
+  const menu = await menuOf(view);
+  expect(await menu.findByRole("menuitem", { name: /解散群组…/ })).toBeTruthy();
+  expect(menu.queryByRole("menuitem", { name: /删除会话…/ })).toBeNull();
+  expect(reads).toHaveLength(1);
 });

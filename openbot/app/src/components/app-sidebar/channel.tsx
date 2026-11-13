@@ -247,8 +247,14 @@ function DangerItem({
   onDissolve: (groupId: string) => void;
   onLeave: () => void;
 }) {
-  const groups = useQuery({ ...wakerGroupsQueryOptions(), enabled: group });
-  if (group && groups.isPending)
+  // The list is fresh for 30s everywhere else; a menu that decides between delete and dissolve must
+  // not read a stale one, so each opening asks again and waits for the answer.
+  const groups = useQuery({
+    ...wakerGroupsQueryOptions(),
+    enabled: group,
+    refetchOnMount: "always",
+  });
+  if (group && (groups.isPending || groups.isFetching))
     return (
       <ContextMenuItem disabled>
         <IconLoader2 />
