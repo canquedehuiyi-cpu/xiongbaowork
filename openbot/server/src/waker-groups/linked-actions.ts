@@ -45,8 +45,8 @@ import {
  * 装饰过的 channelStore，挂接经 WakerGroupLink（它自己定帧）。这里不开 platform 帧。
  */
 
-const MIN_MEMBERS = 2;
-const MAX_MEMBERS = 20;
+export const MIN_MEMBERS = 2;
+export const MAX_MEMBERS = 20;
 
 export class WakerGroupSizeError extends Error {
   constructor() {

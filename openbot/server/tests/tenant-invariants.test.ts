@@ -299,6 +299,9 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // 调用者的帧（开机任务、自愈），所以这一读不能在调用者帧里做。读到之后，建群组、写镜像、挂接、改名
   // 全在 `runAsTenant(所有者)` 里，所有者只认个人租户（`channelOwner`）。
   "src/waker-groups/channel-link.ts": { "asPlatform(": 1 },
+  // 群组与群聊合一 5.1、5.3：开机任务跨租户枚举群组、读名单、找孤儿，台账（0210）在 `platform` 帧写，戳的是
+  // 群组自己的所有者。建聊天在 `runAsTenant(所有者)` 里（只认个人租户），挂接交给 channel-link 自己定帧。
+  "src/waker-groups/upgrade.ts": { "asPlatform(": 6 },
   // WF8: the fourth finds retries a restart left `prepared`, across tenants; each is settled in its own.
   "src/wakerflows/recovery.ts": { 'runAsTenant("platform"': 4 },
   /*
