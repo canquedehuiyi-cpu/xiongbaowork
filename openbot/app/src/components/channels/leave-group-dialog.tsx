@@ -34,7 +34,7 @@ export function LeaveGroupDialog({
   const queryClient = useQueryClient();
   const me = useQuery(currentUserQueryOptions()).data;
   const remove = useMutation(
-    removeGroupMemberMutationOptions(queryClient, channelId),
+    removeGroupMemberMutationOptions(queryClient, channelId, () => leave?.()),
   );
   const { reset } = remove;
   useEffect(() => {
@@ -63,10 +63,7 @@ export function LeaveGroupDialog({
             disabled={remove.isPending || !me}
             onClick={() =>
               remove.mutate(me?.id ?? "", {
-                onSuccess: () => {
-                  onOpenChange(false);
-                  leave?.();
-                },
+                onSuccess: () => onOpenChange(false),
               })
             }
             size="sm"
