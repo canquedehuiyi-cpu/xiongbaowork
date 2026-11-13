@@ -512,6 +512,12 @@ import { createUserInstructionsStore } from "./user-instructions";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
+import {
+  createWakerGroupLink,
+  withChannelRenameLink,
+  withWakerGroupLink,
+} from "./waker-groups/channel-link";
+import { createWakerGroupActions } from "./waker-groups/linked-actions";
 import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
 import { createFlowGenerator } from "./wakerflows/generator";
@@ -946,6 +952,10 @@ await startupLifecycle.run(async (startup) => {
     config.deploymentId ??
     (await startup.step(() => deploymentNameOf(database, tenantPackage)));
   const threadIdentity = createThreadIdentity(deploymentId);
+  const wakerGroupLink = createWakerGroupLink({
+    database,
+    groupStore: createGroupStore(database, () => threadIdentity.mint()),
+  });
   const baseChannelStore = createChannelStore(
     database,
     agentProfileStore,
@@ -959,7 +969,7 @@ await startupLifecycle.run(async (startup) => {
     | ((ownerUserId: string, channelId: string) => void)
     | undefined;
   const channelStore: ChannelStore = {
-    ...baseChannelStore,
+    ...withChannelRenameLink(baseChannelStore, wakerGroupLink),
     async recordActivity(actor, channelId, activity, source) {
       await baseChannelStore.recordActivity(actor, channelId, activity, source);
       if (activity.agentId === null) personSpoke?.(actor.id, channelId);
@@ -4136,7 +4146,10 @@ await startupLifecycle.run(async (startup) => {
    * apply unchanged; Bots answering each other reuse the handoff desk's grant and caps.
    */
   const staffingProposalStore = createStaffingProposalStore(database);
-  const groupConversations = createGroupConversations({
+  /** Whether this person may run the Bot in a group; the crew routes ask the same (`canUse`). */
+  const canUseGroupBot = async (ownerUserId: string, agentId: string) =>
+    Boolean(await agentProfileStore.get(await actorFor(ownerUserId), agentId));
+  const baseGroupConversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
     owner: workOwner("group"),
@@ -4212,16 +4225,17 @@ await startupLifecycle.run(async (startup) => {
     createChannel: async (ownerUserId, agentIds, options) =>
       channelStore.create(await actorFor(ownerUserId), agentIds, options),
     // Adding a Bot to an existing group passes the same access filter as naming it at creation.
-    canUseBot: async (ownerUserId, agentId) =>
-      Boolean(
-        await agentProfileStore.get(await actorFor(ownerUserId), agentId),
-      ),
+    canUseBot: canUseGroupBot,
     // The owner says whether a Bot's words may reach the other people in a group.
     privateShare: createPrivateShareCheck({ approvals: approvalService.store }),
     // A Team Bot's consent card raised in a group turn is drawn in the shared transcript.
     listenForConsent: (ownerUserId, agentId) =>
       teamBots.listenForConsent(ownerUserId, agentId),
   });
+  const groupConversations = withWakerGroupLink(
+    baseGroupConversations,
+    wakerGroupLink,
+  );
   startup.acquireSync(
     () =>
       repeatAfterEach(async () => {
@@ -5230,13 +5244,28 @@ await startupLifecycle.run(async (startup) => {
     ),
   );
 
+  const wakerGroupStore = createWakerGroupStore(database);
   app.route(
     "/api/waker-groups",
     createWakerGroupRoutes(
-      createWakerGroupStore(database),
+      wakerGroupStore,
       config.singleUser
         ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
+      // A crew and its chat are one thing (group-unify 6.2-6.3). The undecorated groups service, so
+      // opening a crew's chat does not make it a second crew; the rename-decorated channel store.
+      createWakerGroupActions({
+        database,
+        store: wakerGroupStore,
+        link: wakerGroupLink,
+        groups: baseGroupConversations,
+        channels: channelStore,
+        actorFor,
+        // The groups service's own `canUseBot`.
+        canUse: canUseGroupBot,
+        // Dissolving hides the chat: the same `channel.deleted` row as DELETE /api/channels/:id.
+        auditStore: bootAuditStore,
+      }),
     ),
   );
 
