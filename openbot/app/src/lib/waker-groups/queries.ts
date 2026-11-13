@@ -4,12 +4,79 @@ import { client } from "@/lib/client";
 /** One coworker in a crew, with the order the person put it in. */
 export type CrewMember = { agentId: string; position: number };
 
+export type CrewStatus =
+  | "chat"
+  | "pending_members"
+  | "too_many"
+  | "not_started";
+
 export type WakerGroup = {
   id: string;
   name: string;
   description: string | null;
   members: CrewMember[];
+  /** The group's chat, when it has one the person can read; null or absent otherwise (older servers and fixtures omit it). */
+  channelId?: string | null;
+  /** Members the person can use right now; the server counts it, older servers omit it. */
+  usableMemberCount?: number;
+  /** The server's own reading of the group's state; older servers omit it. */
+  chatStatus?: CrewStatus;
 };
+
+/** What a group that is not chatting yet says about itself, in the words the screens share. */
+export const CREW_STATUS_WORDS: Record<Exclude<CrewStatus, "chat">, string> = {
+  pending_members: "待补成员",
+  too_many: "待调整成员（超过 20 位）",
+  not_started: "未开始聊天",
+};
+
+/**
+ * The state of a group. The server's `chatStatus` is the truth (it counts usable members); the
+ * fallback below is only for an older server or an old fixture, and reads the roster as it is.
+ */
+export function crewStatus(
+  group: Pick<WakerGroup, "members"> & {
+    channelId?: string | null;
+    chatStatus?: CrewStatus;
+  },
+): CrewStatus {
+  if (group.chatStatus) return group.chatStatus;
+  if (group.channelId) return "chat";
+  if (group.members.length < 2) return "pending_members";
+  if (group.members.length > 20) return "too_many";
+  return "not_started";
+}
+
+/** The one 409 that carries a `code`: the group's chat is one the person is no longer in. */
+export const OWNER_GONE = "waker-group-owner-gone";
+
+/** One step the server already took when a roster change stopped part-way. */
+export type MemberStep = {
+  op: "add" | "remove" | "reorder";
+  agentIds: string[];
+};
+
+/**
+ * A refusal from a group endpoint: the status, the server's own sentence, and the two extras only
+ * these endpoints send. Tell an owner-gone 409 by `code`, never by its wording.
+ */
+export class CrewRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly done?: MemberStep[];
+
+  constructor(
+    message: string,
+    status: number,
+    extra: { code?: string; done?: MemberStep[] } = {},
+  ) {
+    super(message);
+    this.name = "CrewRequestError";
+    this.status = status;
+    if (extra.code !== undefined) this.code = extra.code;
+    if (extra.done !== undefined) this.done = extra.done;
+  }
+}
 
 export const wakerGroupKeys = {
   all: ["waker-groups"] as const,

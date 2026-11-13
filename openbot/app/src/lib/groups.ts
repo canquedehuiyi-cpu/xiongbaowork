@@ -102,13 +102,19 @@ export function sendGroupMessageMutationOptions(
 /** Start a group; the Bots answer in the order given. */
 export function createGroupMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: async (agentIds: string[]): Promise<AgentChannel> => {
+    mutationFn: async (
+      agentIds: string[],
+    ): Promise<AgentChannel & { wakerGroupId?: string }> => {
       const response = await client("/api/groups", {
         method: "POST",
         body: { agentIds },
         fallback: "群聊没能开始。",
       });
-      return ((await response.json()) as { channel: AgentChannel }).channel;
+      return (
+        (await response.json()) as {
+          channel: AgentChannel & { wakerGroupId?: string };
+        }
+      ).channel;
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: channelKeys.all }),
