@@ -792,6 +792,7 @@ tests/tenant-package-legacy-path.test.ts
 tests/tenant-package-per-user-connectors.test.ts
 tests/tenant-package-personal.test.ts
 tests/tenant-package-skill-assets.test.ts
+tests/tenant-package-skill-runnable.test.ts
 tests/tenant-package-switch-retires.test.ts
 tests/tenant-package-teams.test.ts
 tests/tenant-package.test.ts
