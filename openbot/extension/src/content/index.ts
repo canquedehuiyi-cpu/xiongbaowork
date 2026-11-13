@@ -10,6 +10,8 @@ import { contentHello, createContentPort } from "./port";
  * properties anyone lists with `Object.keys`. An older build of the extension still on the same page used string
  * properties with the old names: those are read too (never written), so a page an older content script already
  * captures is not captured twice, and a frame an older service worker flagged still starts capturing at once.
+ *
+ * legacy-compat：introducedIn 0.2.11，removeIn 0.2.13，reads of the old flags __openbotRecorderContent and __openbotRecorderActive below
  */
 const CONTENT_FLAG = Symbol.for("xb.recorder.content");
 const ACTIVE_FLAG = Symbol.for("xb.recorder.active");
@@ -29,6 +31,7 @@ type RecorderGlobals = typeof globalThis & {
  */
 function startContentScript() {
   const flags = globalThis as RecorderGlobals;
+  // legacy-compat：introducedIn 0.2.11，removeIn 0.2.13，old flag __openbotRecorderContent
   if (flags[CONTENT_FLAG] || flags.__openbotRecorderContent) return;
   flags[CONTENT_FLAG] = true;
 
@@ -111,6 +114,7 @@ function startContentScript() {
     stopCapture();
     removeMark();
   });
+  // legacy-compat：introducedIn 0.2.11，removeIn 0.2.13，old flag __openbotRecorderActive
   if (flags[ACTIVE_FLAG] || flags.__openbotRecorderActive) startCapture();
   port.onMessage((message) => {
     if (message.type === "background.capture") {

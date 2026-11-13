@@ -572,14 +572,14 @@ test.each([
   20_000,
 );
 
-test("a harness refused the key is told to check the key, not to sign in, with the code kept", async () => {
+test("a harness refused the key is told to check the key, not to sign in, and the browser is sent the code under the new prefix", async () => {
   // Both Python harnesses send this for a 401, whether the credential is a key or a sign-in.
   const failure = await harnessRefusedWith({
     message: "Sign in to your model provider again.",
     code: "OPENBOT_MODEL_AUTH_REQUIRED",
   });
   expect(failure.message).toBe(said.key("OpenAI"));
-  // The desktop reads the code to ask for the credential again.
+  // The browser is sent the renamed code; the server's own readers saw the harness's old one before the rename.
   expect(failure.code).toBe("XIONGBAO_MODEL_AUTH_REQUIRED");
 }, 20_000);
 
