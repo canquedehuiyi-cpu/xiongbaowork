@@ -104,6 +104,10 @@ function memoryStore() {
     async listServers() {
       return [];
     },
+    // 页面响应带团队块（P4-4b）；这不是它要测的，桩回空名单即可。
+    async personTeams() {
+      return [];
+    },
     async listSkills(actor?: SkillActor): Promise<SkillRecord[]> {
       return [...rows.values()]
         .filter(
