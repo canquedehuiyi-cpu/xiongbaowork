@@ -409,7 +409,8 @@ ENV EMBEDDED_POSTGRES=off
 ENV OPENBOT_RLS_ENFORCE=refuse
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
-# Public, build-bound identity. Ordinary local builds leave it unknown; release CI supplies all five. The
+# Public, build-bound identity. A build that passes no --build-arg leaves it unknown (the root release
+# workflow passes none today, so its images report the same unknown identity they always did). The
 # names are XIONGBAO_*; the alias layer copies each back to its OPENBOT_* name, which the server reads.
 ARG XIONGBAO_BUILD_VERSION
 ARG XIONGBAO_BUILD_COMMIT
