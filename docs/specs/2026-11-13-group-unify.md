@@ -109,7 +109,7 @@
 | 写入口 | 谁调用 | 同步动作 |
 |---|---|---|
 | `create`（`POST /api/groups`，「新对话」多选，`propose_group`） | 前端、staffing 执行器 | 上游建完频道后，在创建者帧里开**一个事务**：建群组（名字按 4.4 节规则）、写镜像、挂接。返回的 `channel` 多带一个 `wakerGroupId` 字段（上游路由原样 `json` 返回，`group.ts:2132-2140`）。这一步失败只记日志 `waker-group-link-failed`，不让建群失败，留给自愈处理 |
-| `addBots` / `removeBots` / `reorder`（`POST/DELETE /api/groups/:id/bots`、`PUT /:id/order`，`propose_group_change`） | 目前只有 staffing 执行器调用；PR2 之后设置面板也走统一接口 | 上游事务提交后，读 `order()` ∩ `bots()`，整体改写镜像。频道没有挂接时什么也不做 |
+| `addBots` / `removeBots` / `reorder`（`POST/DELETE /api/groups/:id/bots`、`PUT /:id/order`，`propose_group_change`） | 目前只有 staffing 执行器调用；PR2 之后设置面板也走统一接口 | 上游事务提交后，按运行时顺序（全部 `bots()`，有排序行的按 `order()` 在前，没有的按 id 追加，同 `orderedRoster`）整体改写镜像。频道没有挂接时什么也不做 |
 | `PUT /api/waker-groups/:id/members`（旧接口） | 员工页卡片「管理成员」、设置面板 | **已挂接**：校验 2–20 位、不重复，跟现有成员比较得出要加的和要移的，按「先加后移、超过 20 位就分批：先加到 20，再移，再加剩下的」调用上游 `addBots`、`removeBots`，最后 `reorder(目标顺序)`，再改写镜像。只有创建者能做（沿用上游 `creatorOnly`）。**未挂接**：照旧 `setMembers`；如果结果是 2–20 位，紧接着自动开聊天并挂接（与 5.1 节同一个函数） |
 | 员工被删除（`channel_agents` 外键级联） | 数据库 | 镜像不会立即跟着变，靠自愈（4.5） |
 | WakerFlow 保存（`S/wakerflows/store.ts:1316-1360`） | WakerFlow | 不涉及：内部群组永远不会被挂接（3.3 节第 3 条），开机任务和列表接口都把它排除 |
@@ -155,7 +155,7 @@
 | 3 | `tenant_id` 是 `system`、`platform` 或 `team`，或者 `users` 里没有这个 id（人已删除） | 保留为群组，不转 | `no_owner` |
 | 4 | 按 `position` 排序后，筛掉所有者用不了的员工（判断方式与 `canUseBot` 相同，`index.ts:4206-4209`：所有者帧下 `agentProfileStore.get` 读得到），剩下的不足 2 位 | 保留，界面标「待补成员」；**不改动它的成员数据** | `pending_members` |
 | 5 | 筛完超过 20 位 | 保留，界面标「待调整成员（超过 20 位）」；不截断（Q3） | `too_many` |
-| 6 | 筛完 2–20 位 | 转换：① 写台账 `started`；② 所有者帧下调上游 `create(owner, {agentIds})`（顺序即 `position` 顺序，上游 `seedOrder` 会写进时间戳）；③ 台账写入 `channel_id`；④ 一个事务里挂接、把 title 改成群组名、改写镜像（被筛掉的员工 id 记进台账 `dropped_agent_ids`）；⑤ 台账改为 `converted` | `converted` |
+| 6 | 筛完 2–20 位 | 转换：① 写台账 `started`（被筛掉的员工 id 此时记进 `dropped_agent_ids`，供孤儿匹配）；② 所有者帧下调上游 `create(owner, {agentIds})`（顺序即 `position` 顺序，上游 `seedOrder` 会写进时间戳）；③ 台账写入 `channel_id`；④ 一个事务里挂接、把 title 改成群组名、改写镜像；⑤ 台账改为 `converted` | `converted` |
 
 - **创建者**：取 `users.id = waker_groups.tenant_id`。单人和多人部署相同（单用户安装下就是 `dev-local-user`）。新群聊的人员只有所有者自己，之后可以在群里邀请别人。
 - **团队租户与个人租户**：群组只存在于个人租户；转出来的群聊按上游规则戳 `team`、`created_by = 所有者`。没有「团队租户的群组」这种情况，真有的话（`tenant_id = 'team'`）按规则 3 处理。
@@ -182,7 +182,7 @@
 2. 补建只写熊宝自己的两张表和一列，可以放在**一个事务里**（建群组、写镜像、挂接），没有半截状态，比第一阶段简单。
 3. 撞名改「（2）」这类一次性的处理，集中在升级时做、集中记日志，比散落在用户每次点开设置时发生更可控。
 
-规则：对每个未删除、`channel_agents` 不少于 2 位、`waker_group_id` 为 NULL、能定出所有者（3.1 节）的频道，在所有者帧里建群组（名字按 4.4 节，成员和顺序取 `order()` ∩ `bots()`），挂接，台账记 `backfilled`。定不出所有者的计数后跳过（预期为 0）。
+规则：对每个未删除、`channel_agents` 不少于 2 位、`waker_group_id` 为 NULL、能定出所有者（3.1 节）的频道，在所有者帧里建群组（名字按 4.4 节，成员和顺序取运行时顺序，见 4.2），挂接，台账记 `backfilled`。定不出所有者的计数后跳过（预期为 0）。被未完成的转换占用的频道（台账 `started` 已记的 `channel_id`，或 5.3 的孤儿条件命中的频道）跳过，留给下一次第一阶段续做；打开设置时的兜底遇到这类频道，改为把原群组挂上。
 
 兜底：`POST /api/waker-groups/for-channel/:channelId` 由创建者调用时，如果还没挂接，就当场补建（同一个函数）。
 
@@ -204,7 +204,7 @@
 - **代码回滚**（换回上一版镜像 digest）：0205、0206 都是新增，旧代码不读新列、新表；守卫函数的新版本只多了针对新列的放行，旧代码不碰新列，所以行为不变。`scripts/migrate.ts` 的迁移守卫只拒绝「要跳过一个比库里戳更早的迁移」，旧镜像的迁移全部已经执行过，不会被拒。
 - **数据回滚**：写成运维手册（放进 `openbot/docs/deployment-xiongbao.md` 第 6 节），在 `platform` 帧里执行三步：
   1. 台账为 `converted`、并且对应频道至今没有任何 `group_messages` 的：软删频道，按 `dropped_agent_ids` 把成员补回镜像。
-  2. 台账为 `backfilled`、并且该群组没有模板、没有头像的：删除群组（外键自动解挂）。
+  2. 台账为 `backfilled`、并且该群组没有模板、没有头像、也没有任何运行记录的：删除群组（外键自动解挂）。删模板会保留运行，删群组却会级联删运行，所以要单独查运行。
   3. 清空台账。
 
   有消息或已经被用户用过的不回滚，手册里写明原因。手册里的 SQL 由 PR3 的集成测试执行一遍，证明可用。
@@ -228,8 +228,8 @@
 
 | 接口 | 改动 |
 |---|---|
-| `GET /api/waker-groups` | 每项多一个 `channelId: string \| null`：挂接中、未删除、当前用户读得到的频道。列表仍排除 WakerFlow 内部群组；顺序不变。前端据此分出三种状态：`channelId` 非空为「可聊天」；空且员工少于 2 位为「待补成员」；空且员工 2–20 位为「未开始聊天」（频道被旧路径删掉，或升级时转换失败） |
-| `POST /api/waker-groups` | 请求体可以带 `agentIds`（2–20 位）：先查重（409），再建群组、建频道、挂接、改写 title 和镜像，返回 `{ group, channel }`（201）。建频道失败时删掉刚建的群组。**不带 `agentIds` 时完全是旧行为**（建一个「待补成员」的群组），旧客户端和现有测试不受影响 |
+| `GET /api/waker-groups` | 每项多 `usableMemberCount` 与服务端算好的 `chatStatus`（`chat`、`pending_members`、`too_many`、`not_started`，按可用员工数判断，前端据此显示，不用 `members.length`），以及 `channelId: string \| null`：挂接中、未删除、当前用户读得到的频道。列表仍排除 WakerFlow 内部群组；顺序不变。前端据此分出三种状态：`channelId` 非空为「可聊天」；空且员工少于 2 位为「待补成员」；空且员工 2–20 位为「未开始聊天」（频道被旧路径删掉，或升级时转换失败） |
+| `POST /api/waker-groups` | 请求体可以带 `agentIds`（2–20 位）：先查重（409），再建群组、建频道、挂接、改写 title 和镜像，返回 `{ group, channel }`（201）。建频道失败时删掉刚建的群组；频道已建成但挂接失败时，先软删这个频道再删群组。**不带 `agentIds` 时完全是旧行为**（建一个「待补成员」的群组），旧客户端和现有测试不受影响 |
 | `PUT /api/waker-groups/:id/members` | 已挂接时按 4.2 节同步群聊，并施加 2–20 位的限制（不满足返回 409，文案「一个群组要有 2 到 20 位员工。」）；只有创建者能改。未挂接时照旧，结果在 2–20 位就自动开聊天 |
 | `DELETE /api/waker-groups/:id` | 已挂接时按 7.5 节解散：有流程在运行就返回 409；先软删频道，再删群组，最后删头像和视频。未挂接时照旧删群组，并顺手删头像（现在会留下孤立的头像行）。只有创建者能做 |
 

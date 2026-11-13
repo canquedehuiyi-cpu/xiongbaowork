@@ -6,7 +6,7 @@
 
 **架构**：
 - 两张表各管各的：消息、人员、回答顺序归群聊（`channels` 一族，上游）；名字、头像、组团流程、看板过滤归群组（`waker_groups`，熊宝自加）。一列 `channels.waker_group_id` 一对一挂上。
-- **群聊一侧是真相，群组一侧是镜像**：写入只走群聊；写完立即按 `order()` ∩ `bots()` 改写 `waker_group_members`；另有开机巡检和打开设置时的自愈。
+- **群聊一侧是真相，群组一侧是镜像**：写入只走群聊；写完立即按运行时顺序 `runtimeOrder(order(), bots())` 改写 `waker_group_members`（全部 `bots()`：有排序行的按 `order()` 在前，没有排序行的按 id 追加，同 `S/channels/group.ts:1118-1130` 的 `orderedRoster`）；另有开机巡检和打开设置时的自愈。
 - 上游 `S/channels/group.ts` 不改逻辑：在 `S/index.ts` 用两个熊宝装饰器包住 `groupConversations` 与 `channelStore.rename`；新列不进 Drizzle，用 `sql` 片段读写（同 `S/approvals/extra-columns.ts`）。
 - 数据库层：改写 `openbot_team_channel_guard` 认得新列，新增挂接校验触发器，故意借当前帧 RLS 判断「是不是你的群组」。
 - 现有数据的转换放在开机任务里（线程 id 只能由服务端生成），在所有者帧里沿用上游建群路径。
@@ -175,12 +175,14 @@ export function setChannelWakerGroup(executor: Executor, channelId: string, grou
 export function channelOwner(row: { tenantId: string; createdBy: string | null }): string | null;
 /** 4.4 取名：wanted 截 80 字；撞名依次「（2）」…「（99）」，再撞加 id 前 6 位；except 为自身 id（改名时不与自己撞）。 */
 export function pickGroupName(executor: Executor, wanted: string, options?: { except?: string; idForSuffix?: string }): Promise<string>;
+/** 运行时回答顺序（与 group.ts 的 orderedRoster 同一规则）：取全部 bots；在 order 里的按其位置在前，不在的排在后面，同名次按 id localeCompare。order 里已不在 bots 的 id 丢弃。 */
+export function runtimeOrder(order: string[], bots: string[]): string[];
 export type WakerGroupLink = {
   /** 未挂接时：所有者帧里一个事务建群组（名字 = title ?? name，经 pickGroupName）、写镜像、挂接；已挂接返回原 id；无所有者返回 null。 */
   linkChannel(channelId: string): Promise<string | null>;
   /** 把已有群组挂到频道：一个事务里挂接、title 改成群组名、改写镜像。 */
   adopt(groupId: string, channelId: string): Promise<void>;
-  /** 4.5：按 order() ∩ bots() 改写镜像，title ?? name 与群组名不同时改名（撞名保留原名并记日志）；未挂接返回 false。 */
+  /** 4.5：按 runtimeOrder(order(), bots()) 改写镜像，title ?? name 与群组名不同时改名（撞名保留原名并记日志）；未挂接返回 false。 */
   reconcile(channelId: string): Promise<boolean>;
   /** 频道改名后同步群组名；撞名保留原名，记 {"type":"waker-group-name-taken","channelId","groupId","name"}。 */
   syncName(channelId: string): Promise<void>;
@@ -195,7 +197,7 @@ export function createWakerGroupLink(deps: {
 }): WakerGroupLink;
 ```
 - 所有方法自己定帧：在 `platform` 帧读频道的 `tenant_id`、`created_by`、`title`、`name`、`waker_group_id`，用 `channelOwner` 定所有者，写入在 `runAsTenant(所有者)` 里。
-- 镜像 = `order()` 里出现且在 `bots()` 里的员工，按 `order()` 顺序；`position` 写 `"0"`、`"1"`…；整体 delete + insert，并更新 `waker_groups.updated_at`（复用 `store.setMembers` 的写法，但不走它的「员工可见」校验：真相已经由上游校验过）。
+- 镜像 = `runtimeOrder(order(), bots())`，**不是交集**：旧多员工频道里可能有员工在 `channel_agents` 却没有 `group_bot_threads` 排序行（`createChannelStore.create` 不建），运行时把它们按 id 追加在后，镜像也要包含；`position` 写 `"0"`、`"1"`…；整体 delete + insert，并更新 `waker_groups.updated_at`（复用 `store.setMembers` 的写法，但不走它的「员工可见」校验：真相已经由上游校验过）。
 - `store.ts`：`export type ListedWakerGroup = WakerGroup & { channelId: string | null }`；`list(): Promise<ListedWakerGroup[]>`，多一次读 `select id, waker_group_id from channels where waker_group_id in (...) and deleted_at is null`（调用者帧）。`create`、`setMembers` 返回值不变。
 
 - [ ] **Step 1：写失败测试**（追加到新文件，`describe("link core")`）：
@@ -203,6 +205,8 @@ export function createWakerGroupLink(deps: {
   - `pickGroupName adds （2） up to （99）, then the id prefix, within 80 characters`：已有「复盘」→ 得「复盘（2）」；预置「复盘」「复盘（2）」…「复盘（99）」→ 得 `复盘${id.slice(0,6)}`；81 字的名字 → 结果长度 ≤ 80；`except` 为自身 id 时同名不算撞。
   - `linkChannel makes the crew, mirrors the order and links, once`：共享群员工按 `[b2, b1]` 建 → 群组 `name` 等于频道 `name`，镜像 `[{b2,"0"},{b1,"1"}]`，频道 `waker_group_id` 等于返回值；再调一次返回同一 id，`waker_groups` 行数不变。
   - `linkChannel on a shared group with no creator makes nothing`：`platform` 帧把 `created_by` 置 NULL → 返回 `null`，没有新群组。
+  - `runtimeOrder puts unordered Bots after the ordered ones, by id`：`runtimeOrder(["b","x","a"], ["d","a","c","b"])` 等于 `["b","a","c","d"]`。
+  - `the mirror keeps a Bot that has no order row`：`platform` 帧插一个 `tenant_id = alice` 的三员工频道，只给其中两位写 `group_bot_threads`（`seedOrder`）→ `linkChannel` 后镜像 3 行，无排序行的那位排最后；`reconcile` 后不变。
   - `adopt links an existing crew, renames the channel to it and mirrors the chat`：title 变成群组名，镜像等于频道顺序。
   - `reconcile rewrites the mirror after a Bot is deleted`：`platform` 帧删一位员工（`channel_agents` 级联），`reconcile` 返回 `true`，镜像少了这位。
   - `reconcile keeps the crew's name when the title is taken, and says so`：另建同租户群组占用新 title；频道改 title 后 `reconcile` → 群组名不变，`log` 收到 `type: "waker-group-name-taken"`。
@@ -241,7 +245,7 @@ export function withChannelRenameLink(store: ChannelStore, link: WakerGroupLink)
 - [ ] **Step 1：写失败测试**：
   - `a group made through POST /api/groups comes back linked`：用 `createGroupRoutes(withWakerGroupLink(base, link), requireUser)` 发请求 → 201，`channel.wakerGroupId` 是 uuid；`store.list()` 含该群组且 `channelId === channel.id`。
   - `a staffing group proposal ends linked and named as the draft`：照 `tests/staffing-executor.integration.test.ts` 建 `createStaffingExecutor`，`groups` 传装饰后的对象、`channels` 传 `withChannelRenameLink(...)`；执行一条 `group` 提议（草稿名「周报群组」）→ 频道已挂接，群组 `name === "周报群组"`。
-  - `adding, removing and reordering Bots rewrites the mirror`：经装饰后的 `addBots`、`removeBots`、`reorder` 各一次，每次之后镜像等于 `order()` ∩ `bots()`。
+  - `adding, removing and reordering Bots rewrites the mirror`：经装饰后的 `addBots`、`removeBots`、`reorder` 各一次，每次之后镜像等于 `runtimeOrder(order(), bots())`。
   - `renaming a linked channel renames its crew; a taken name keeps the old one`：`channelStore.rename(actor, id, "新名")` → 群组名「新名」；改成已被别的群组占用的名字 → 群组名不变，日志 `waker-group-name-taken`，频道 title 是新名字。
   - `a failed link does not fail the create`：传一个 `linkChannel` 抛错的假 link → `create` 正常返回，无 `wakerGroupId`，日志 `waker-group-link-failed`。
   - `Bot changes on an unlinked channel touch no crew`：未挂接频道 `addBots` 后 `waker_groups` 行数不变。
@@ -269,8 +273,13 @@ export type WakerGroupActions = {
   rename(owner: string, groupId: string, patch: { name?: string; description?: string | null }): Promise<ListedWakerGroup | null>;
   startChat(owner: string, groupId: string): Promise<{ group: ListedWakerGroup; channel: AgentChannel & { wakerGroupId: string } } | null>;
   forChannel(owner: string, channelId: string): Promise<ListedWakerGroup | null>; // 非创建者抛 WakerGroupForbiddenError
+  list(owner: string): Promise<StatusedWakerGroup[]>;
   // Task 5 追加：setMembers、dissolve
 };
+/** 未完成的升级转换占用的频道（Task 14 用 createConversionClaims 实现；PR1 不传）。claimedBy 返回占用它的群组 id；finish 在所有者帧 adopt 并把台账改 converted。 */
+export type ConversionClaims = { claimedBy(channelId: string): Promise<string | null>; finish(groupId: string, channelId: string): Promise<void> };
+export type ChatStatus = "chat" | "pending_members" | "too_many" | "not_started";
+export type StatusedWakerGroup = ListedWakerGroup & { usableMemberCount: number; chatStatus: ChatStatus };
 export function createWakerGroupActions(deps: {
   database: Database;
   store: WakerGroupStore;
@@ -279,23 +288,28 @@ export function createWakerGroupActions(deps: {
   channels: Pick<ChannelStore, "get" | "rename" | "softDelete">;                   // 装饰后的 channelStore
   actorFor(userId: string): Promise<AgentActor>;
   portraits: Pick<PortraitStore, "remove" | "removeMedia">;
+  canUse(ownerUserId: string, agentId: string): Promise<boolean>; // 与 canUseBot 同一判断（S/index.ts:4206-4209）
+  conversions?: ConversionClaims; // Task 14 装配
 }): WakerGroupActions;
 export function createWakerGroupRoutes(store: WakerGroupStore, requireUser: MiddlewareHandler<Ctx>, actions?: WakerGroupActions): Hono<Ctx>;
 ```
 - 路由（只在传了 `actions` 时挂；不传时与现在完全一样）：
-  - `POST /`：带 `agentIds`（字符串数组）时走 `createWithChat`：去重后不足 2 或超过 20 → 400 `WakerGroupSizeError`；名字 400/409 同旧；顺序：建群组 → `groups.create(owner, { agentIds })`（未装饰，避免再建一个群组）→ `link.adopt`；建频道或收养失败时 `store.remove(group.id)` 再抛。返回 201 `{ group, channel }`。不带 `agentIds` 走旧逻辑。
+  - `POST /`：带 `agentIds`（字符串数组）时走 `createWithChat`：去重后不足 2 或超过 20 → 400 `WakerGroupSizeError`；名字 400/409 同旧；顺序：建群组 → `groups.create(owner, { agentIds })`（未装饰，避免再建一个群组）→ `link.adopt`；建频道失败：`store.remove(group.id)` 再抛；频道已建成但 `link.adopt` 失败：先 `channels.softDelete(actor, channel.id)`（创建者帧，0122 守卫允许），再 `store.remove(group.id)`，再抛原错误，不留下未挂接的空群聊。返回 201 `{ group, channel }`。不带 `agentIds` 走旧逻辑。
   - `PATCH /:id`：`{ name?, description? }`。名字 1–80 字（400），撞名 409（`WakerGroupNameTakenError`，`pickGroupName` 不用于用户改名）。已挂接：`channels.rename(actor, channelId, name)`（装饰器把群组名改过来），`description` 直接写群组；未挂接：只改群组。别人的 id 404。
-  - `POST /:id/chat`：已挂接 409（`WakerGroupLinkedError`）；员工不在 2–20 → 409（`WakerGroupSizeError`）；否则 `groups.create` + `adopt`，201 `{ group, channel }`。
-  - `POST /for-channel/:channelId`：`channels.get(actor, id)` 读不到 → 404；`created_by`（个人旧频道用 `tenant_id`）不是调用者 → 403 `{ error: "只有发起人能调整这个群组。" }`；否则 `linkChannel`（没挂就补）+ `reconcile`，200 `{ group }`。
-  - `GET /` 的 `channelId` 由 Task 2 的 `store.list()` 提供，路由不改。
+  - `POST /:id/chat`：已挂接 409（`WakerGroupLinkedError`）；`chatStatus` 不是 `not_started` → 409（`WakerGroupSizeError`）；否则用可用员工（按 `position`）`groups.create` + `adopt`，201 `{ group, channel }`；`adopt` 失败时 `channels.softDelete` 刚建的频道再抛，群组保持未挂接。
+  - `GET /`（传了 `actions` 时改走 `actions.list`）：每项在 `ListedWakerGroup` 之上多 `usableMemberCount`（成员里 `canUse(owner, id)` 为真的个数）与 `chatStatus`：`channelId` 非空 → `chat`；否则 `usableMemberCount < 2` → `pending_members`；`> 20` → `too_many`；其余 `not_started`。升级转换记成 `pending_members` 的群组保留了全部成员行，只看 `members.length` 会误判，所以状态由服务端给。
+  - `POST /for-channel/:channelId`：`channels.get(actor, id)` 读不到 → 404；`created_by`（个人旧频道用 `tenant_id`）不是调用者 → 403 `{ error: "只有发起人能调整这个群组。" }`；否则：传了 `conversions` 且 `claimedBy(channelId)` 非空 → `finish(那个群组, channelId)`；不然 `linkChannel`（没挂就补）；之后 `reconcile`，200 `{ group }`。
   - 注册顺序：`/for-channel/:channelId` 先于 `/:id/chat`，避免 `POST /for-channel/chat` 被后者截走。
-- `S/index.ts:5218`：`createWakerGroupRoutes(createWakerGroupStore(database), requireUser…, createWakerGroupActions({ database, store, link: wakerGroupLink, groups: baseGroupConversations, channels: channelStore, actorFor, portraits: createPortraitStore(database) }))`。
+- `S/index.ts:5218`：`createWakerGroupRoutes(createWakerGroupStore(database), requireUser…, createWakerGroupActions({ database, store, link: wakerGroupLink, groups: baseGroupConversations, channels: channelStore, actorFor, portraits: createPortraitStore(database), canUse: <与 canUseBot 同一 lambda> }))`。
 
 - [ ] **Step 1：写失败测试**（`requireUser` 照 `tests/waker-groups.test.ts:40-52`，按测试切换 alice/bob）：
   - `POST with agentIds makes the crew and its chat in one call`：201；`channel.title === group.name`；`group.channelId === channel.id`；`order(channel.id)` 等于提交顺序；镜像同序。
   - `POST with a taken name answers 409 and makes no channel`：频道数不变。
   - `POST with 1 or 21 agentIds answers 400 and makes nothing`：`error === "一个群组要有 2 到 20 位员工。"`，`waker_groups` 行数不变。
   - `POST whose chat cannot be made removes the crew it just made`：`agentIds` 含一位 alice 用不了的员工 → 非 2xx，同名群组不存在。
+  - `POST whose adopt fails after the chat was made hides that chat and removes the crew`：传一个 `adopt` 抛错的 link 包装 → 非 2xx；刚建的频道 `deleted_at` 非空；同名群组不存在。
+  - `POST chat whose adopt fails hides the chat it made and keeps the crew unlinked`：同样注入 → 频道已软删，群组仍在且 `channelId === null`。
+  - `the list states chatStatus from usable members, not the row count`：`platform` 帧给 alice 的群组写 3 行成员，其中 2 位是 bob 的私有员工 → `usableMemberCount: 1`、`chatStatus: "pending_members"`、`members.length === 3`；另造 `chat`、`too_many`（21 位可用）、`not_started`（2 位可用、无频道）各一例。
   - `POST without agentIds is the old behaviour`：201，`members` 为 `[]`，列表里 `channelId === null`。
   - `PATCH renames both sides and refuses a taken name`：已挂接群组改名 → 频道 title 与群组名都变；改成已占用名字 → 409，两边都不变；未挂接群组改名只改群组。
   - `POST chat opens a chat for a crew of 2–20 that has none, and refuses otherwise`：2 位未挂接 → 201；再调 → 409；1 位 → 409。
@@ -326,8 +340,8 @@ setMembers(owner: string, groupId: string, agentIds: string[]): Promise<ListedWa
 dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在或不是你的（404）
 ```
 - `PUT /:id/members`（传了 `actions` 时改走 `actions.setMembers`）：
-  - **已挂接**：去重后不在 2–20 → 409 `WakerGroupSizeError`。`current = order() ∩ bots()`，`toAdd = 目标 − current`（按目标顺序），`toRemove = current − 目标`。循环直到两者都空：先 `addBots`（取 `min(toAdd, 20 − 当前数)` 个），再 `removeBots`（取 `min(toRemove, 当前数 − 2)` 个）；一轮两步都没进展就抛错。这是设计稿「先加到 20，再移，再加剩下的」在 20 位全换时不踩 2 位下限的写法。最后 `reorder(目标)`，`reconcile`。任一步抛错：`reconcile` 后抛 `WakerGroupStepsError`，`done` 为已成功的步骤。调用未装饰的 `groups`（上游 `creatorOnly` 照常生效）。
-  - **未挂接**：`store.setMembers` 照旧；结果 2–20 位就 `startChat`，返回的 `group.channelId` 非空。
+  - **已挂接**：去重后不在 2–20 → 409 `WakerGroupSizeError`。`current = runtimeOrder(order(), bots())`，`toAdd = 目标 − current`（按目标顺序），`toRemove = current − 目标`。循环直到两者都空：先 `addBots`（取 `min(toAdd, 20 − 当前数)` 个），再 `removeBots`（取 `min(toRemove, 当前数 − 2)` 个）；一轮两步都没进展就抛错。这是设计稿「先加到 20，再移，再加剩下的」在 20 位全换时不踩 2 位下限的写法。最后 `reorder(目标)`，`reconcile`。任一步抛错：`reconcile` 后抛 `WakerGroupStepsError`，`done` 为已成功的步骤。调用未装饰的 `groups`（上游 `creatorOnly` 照常生效）。
+  - **未挂接**：`store.setMembers` 照旧；结果的 `chatStatus` 为 `not_started`（可用员工 2–20 位）就 `startChat`，返回的 `group.channelId` 非空。
 - `DELETE /:id`（传了 `actions` 时改走 `actions.dissolve`）：
   1. 群组有未结束的运行 → `WakerGroupRunningError`（409）。「未结束」= `group_task_runs.status IN ('running','awaiting_action')`：设计稿 7.5 写的 `queued` 在代码里不存在（`S/pipeline/store.ts:55` 的状态只有 running / awaiting_action / done / failed / aborted），`awaiting_action` 是唯一另一个未结束状态。
   2. 已挂接：`channels.softDelete(actor, channelId)`。
@@ -337,10 +351,10 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
 - `assert-tenants.mjs`：在 `businessPaths` 循环之后，A `POST /api/waker-groups { name }` 建一个群组；B 对它 `PATCH`（`{ name: "被他人改名" }`）、`DELETE` 各一次，`check(status === 404, "B renaming A group returns 404")`、`check(status === 404, "B dissolving A group returns 404")`；之后 A 的列表里该群组仍在、名字不变。
 
 - [ ] **Step 1：写失败测试**：
-  - `PUT members on a linked crew adds, removes and reorders the chat`：`[a,b,c]` → `[c,d,a]`：`order()` ∩ `bots()` 等于 `[c,d,a]`，镜像同序。
+  - `PUT members on a linked crew adds, removes and reorders the chat`：`[a,b,c]` → `[c,d,a]`：`runtimeOrder(order(), bots())` 等于 `[c,d,a]`，镜像同序。
   - `PUT members swaps all 20 for 20 others`：20 位全换成另 20 位 → 200，最终顺序等于目标。
   - `PUT members on a linked crew refuses 1 or 21 with 409`：`error === "一个群组要有 2 到 20 位员工。"`，频道成员不变。
-  - `a step that fails part-way answers 409 with what was done, and the mirror matches the chat`：目标含一位 alice 用不了的员工 → 409，`done` 只含已成功步骤，镜像等于 `order()` ∩ `bots()`。
+  - `a step that fails part-way answers 409 with what was done, and the mirror matches the chat`：目标含一位 alice 用不了的员工 → 409，`done` 只含已成功步骤，镜像等于 `runtimeOrder(order(), bots())`。
   - `PUT members on an unlinked crew that reaches two opens its chat`：0 位 → 2 位，返回 `group.channelId` 非空；0 → 1 位不开聊天。
   - `DELETE dissolves: chat hidden, crew gone with its flows, portrait gone, board cards kept`：挂接群组有一条模板、一条 `done` 运行、一条头像、一张看板任务卡 → 200；频道 `deleted_at` 非空；`waker_groups`、模板、运行、`portraits`、`portrait_media` 行都没了；任务卡仍在。
   - `DELETE refuses while a run is running or awaiting_action, and changes nothing`：两种状态各测一次 → 409「有组团流程正在运行，先停下再解散。」，频道未删、群组和头像都在。
@@ -366,10 +380,10 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
 **接口：**
 ```ts
 // queries.ts
-export type WakerGroup = { id: string; name: string; description: string | null; members: CrewMember[]; channelId: string | null };
+export type WakerGroup = { id: string; name: string; description: string | null; members: CrewMember[]; channelId: string | null; usableMemberCount?: number; chatStatus?: CrewStatus };
 export type CrewStatus = "chat" | "pending_members" | "too_many" | "not_started";
-/** channelId 非空 → chat；否则 <2 → pending_members；>20 → too_many；其余 not_started。channelId 缺省（旧服务端、旧夹具）按 null。 */
-export function crewStatus(group: Pick<WakerGroup, "members"> & { channelId?: string | null }): CrewStatus;
+/** 有 chatStatus（服务端给，Task 4）就直接用它；没有时（旧服务端、旧夹具）才退回：channelId 非空 → chat；否则 members <2 → pending_members；>20 → too_many；其余 not_started；channelId 缺省按 null。 */
+export function crewStatus(group: Pick<WakerGroup, "members"> & { channelId?: string | null; chatStatus?: CrewStatus }): CrewStatus;
 export const CREW_STATUS_WORDS: Record<Exclude<CrewStatus, "chat">, string>; // 「待补成员」「待调整成员（超过 20 位）」「未开始聊天」
 // mutations.ts（都在 onSuccess 里 invalidate wakerGroupKeys.all 与 channelKeys.all）
 export function createGroupWithChatMutationOptions(queryClient: QueryClient); // POST /api/waker-groups { name, description, agentIds } → { group, channel }
@@ -390,7 +404,7 @@ export async function startGroupWith(input: {
 - `useStartChannel` 的 `discard`：有 `wakerGroupId` 时 `retireCrew.mutateAsync(wakerGroupId)`；没有时照旧 `deleteChannel.mutateAsync(id)`。删掉 `A/lib/waker-groups/mutations.ts:5-11`「没有改名」的注释，改写为「改名走 PATCH，频道名是真相」。
 
 - [ ] **Step 1：写失败测试**：
-  - `waker-group-mutations.test.ts`：`crewStatus` 五种输入（`channelId:"c"`、0 位、1 位、21 位、2 位无 `channelId` 字段）分别得 `chat`、`pending_members`、`pending_members`、`too_many`、`not_started`；四个新变更各自发出的 `method`、`url`、`body` 精确等于上面的值（照 `app/tests/wakers-screen.test.tsx` 的 fetch 桩）。
+  - `waker-group-mutations.test.ts`：`crewStatus` 五种输入（`channelId:"c"`、0 位、1 位、21 位、2 位无 `channelId` 字段）分别得 `chat`、`pending_members`、`pending_members`、`too_many`、`not_started`；`crewStatus trusts the server's chatStatus`：3 位成员、`channelId: null`、`chatStatus: "pending_members"` → `pending_members`；四个新变更各自发出的 `method`、`url`、`body` 精确等于上面的值（照 `app/tests/wakers-screen.test.tsx` 的 fetch 桩）。
   - `group-start-discard.test.ts`：`a group whose first message failed is dissolved`：`create` 返回 `{ id: "c-1", wakerGroupId: "g-1" }`、`send` 抛错 → `discard` 收到 `{ id: "c-1", wakerGroupId: "g-1" }`，`open` 未调用，原错误抛出；`useStartChannel` 层面（渲染 hook）断言发出 `DELETE /api/waker-groups/g-1`；`create` 不带 `wakerGroupId` 时发出 `DELETE /api/channels/c-1`。
 - [ ] **Step 2：运行** `cd openbot/app && bun test tests/waker-group-mutations.test.ts tests/group-start-discard.test.ts`，预期失败。
 - [ ] **Step 3：实现。**
@@ -505,7 +519,7 @@ export function CreateGroupForm(props: {
 **已批准断言**：#31 `wakers-parity.test.tsx:704`（设计稿记 `:713`）→ `"/pipelines?group=crew-1"`。`:290`、`:312-315`、`:336-338`、`:717` 所在的页签、对话框、占位文字、`crew=` 断言不变。
 
 - [ ] **Step 1：写失败测试**：
-  - `crew-card-states.test.tsx`：`a chat crew offers 打开 and 设置`（href 精确）；`a crew short of members wears 待补成员`；`a crew over twenty wears 待调整成员（超过 20 位）`；`a crew without a chat starts one`（点「开始聊天」→ `POST /api/waker-groups/crew-1/chat`，地址变 `/group/<返回的 channel.id>`）；`dissolving names what goes with it`（确认框文字含「它的 2 条组团流程和运行记录会一并删除」与「看板上已有的任务卡保留」）。
+  - `crew-card-states.test.tsx`：`a chat crew offers 打开 and 设置`（href 精确）；`a crew short of members wears 待补成员`；`a converted crew kept as pending_members shows 待补成员, not 开始聊天`（夹具 3 位成员、`channelId: null`、`chatStatus: "pending_members"` → 有徽标「待补成员」，没有「开始聊天」按钮）；`a crew over twenty wears 待调整成员（超过 20 位）`；`a crew without a chat starts one`（点「开始聊天」→ `POST /api/waker-groups/crew-1/chat`，地址变 `/group/<返回的 channel.id>`）；`dissolving names what goes with it`（确认框文字含「它的 2 条组团流程和运行记录会一并删除」与「看板上已有的任务卡保留」）。
   - `pipelines-group-param.test.tsx`：`?group=crew-2 opens that crew's section`：该节处于展开状态；`?group=` 指向不存在的 id 时页面照常。
 - [ ] **Step 2：** 改 #31。
 - [ ] **Step 3：运行** `cd openbot/app && bun test tests/crew-card-states.test.tsx tests/pipelines-group-param.test.tsx tests/wakers-parity.test.tsx tests/wakers-screen.test.tsx`，预期失败。
@@ -651,8 +665,8 @@ export async function convertGroups(deps: GroupUpgradeDeps): Promise<PhaseOneCou
   3. `tenant_id IN ('system','platform','team')` 或 `users` 无此 id → 台账 `no_owner`。
   4. 按 `position` 排序，筛掉 `canUse(owner, id)` 为假的员工，剩下 < 2 → `pending_members`，**不改成员数据**。
   5. 剩下 > 20 → `too_many`，不截断（用户裁定 Q3）。
-  6. 2–20 → ① 台账 `started`（`platform` 帧，`started_at = now()`）；② `runAsTenant(owner, () => groups.create(owner, { agentIds }))`；③ 台账写 `channel_id`；④ `link.adopt(groupId, channelId)`（挂接、title = 群组名、镜像），被筛掉的 id 写 `dropped_agent_ids`；⑤ 台账 `converted`。
-- 台账已是 `pending_members`、`too_many`、`no_owner`、`converted`、`backfilled` 的跳过（终态）。台账 `started` 且 `channel_id` 为 NULL：先找孤儿（`created_by = owner`、`waker_group_id IS NULL`、`created_at >= started_at`、`deleted_at IS NULL`、`channel_agents` 集合与要转的集合完全相同），找到就从 ③ 继续，找不到就从 ② 重建。台账 `started` 且有 `channel_id`：从 ④ 继续。
+  6. 2–20 → ① 台账 `started`（`platform` 帧，`started_at = now()`，被筛掉的 id 此时就写进 `dropped_agent_ids`，供孤儿匹配用）；② `runAsTenant(owner, () => groups.create(owner, { agentIds }))`；③ 台账写 `channel_id`；④ `link.adopt(groupId, channelId)`（挂接、title = 群组名、镜像）；⑤ 台账 `converted`。
+- 台账已是 `pending_members`、`too_many`、`no_owner`、`converted`、`backfilled` 的跳过（终态）。台账 `started` 且 `channel_id` 为 NULL：先找孤儿（`created_by = owner`、`waker_group_id IS NULL`、`created_at >= started_at`、`deleted_at IS NULL`、`channel_agents` 集合等于该群组成员减去台账 `dropped_agent_ids`），找到就从 ③ 继续，找不到就从 ② 重建。台账 `started` 且有 `channel_id`：从 ④ 继续。
 - 单项异常：记 `{"type":"waker-group-upgrade-item-failed","groupId","error"}`，继续下一项。
 
 - [ ] **Step 1：写失败测试**（夹具：两个用户 alice、bob 和若干员工；`canUse` 用真实 `agentProfileStore.get` 判断，照 `S/index.ts:4206-4209`）：
@@ -690,15 +704,20 @@ export const GROUP_UPGRADE_LOCK = 20261113;
 export async function runGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string }, env?: Record<string, string | undefined>): Promise<GroupUpgradeSummary | { skipped: "off" | "locked" }>;
 export function startGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string }): { done: Promise<unknown>; stop(): Promise<void> };
 ```
-- 第二阶段：`platform` 帧枚举未删除、`channel_agents` ≥ 2、`waker_group_id IS NULL` 的频道；`channelOwner` 为 NULL 的计入 `ownerless` 跳过；否则 `link.linkChannel(channelId)`，台账写 `{ group_id, tenant_id: owner, channel_id, outcome: 'backfilled' }`。撞名按 `pickGroupName` 加「（2）」。
+- 未完成转换占用的频道：`export function createConversionClaims(deps: { database: Database; link: WakerGroupLink }): ConversionClaims`（类型见 Task 4）。`claimedBy` 返回占用该频道的群组 id：台账 `started` 且 `channel_id` = 该频道；或台账 `started`、`channel_id` 为 NULL，且该频道满足 Task 13 的孤儿条件（孤儿恢复窗口）。`finish` 在所有者帧 `link.adopt` 后把台账改 `converted`、写 `channel_id`（台账 `tenant_id` = 所有者，本人帧可写）。
+- 第二阶段：`platform` 帧枚举未删除、`channel_agents` ≥ 2、`waker_group_id IS NULL` 的频道；`claimedBy` 非空的**跳过**（留给下一次第一阶段续做，不补建新群组，否则原群组再也挂不上：守卫拒绝改已有挂接）；`channelOwner` 为 NULL 的计入 `ownerless` 跳过；否则 `link.linkChannel(channelId)`，台账写 `{ group_id, tenant_id: owner, channel_id, outcome: 'backfilled' }`。撞名按 `pickGroupName` 加「（2）」。
 - 第三阶段：遍历所有已挂接、未删除的频道，`link.reconcile`，返回 `true` 的计数。
 - `runGroupUpgrade`：`env.XIONGBAO_GROUP_UPGRADE === "off"` → `{ skipped: "off" }`，不连库。否则用独立连接 `postgres(databaseUrl, { max: 1 })` 执行 `select pg_try_advisory_lock(${GROUP_UPGRADE_LOCK})`（写法照 `S/audit-retention.ts:70-76`），没抢到 → `{ skipped: "locked" }`；抢到则依次第一、二、三阶段，`finally` 里 `pg_advisory_unlock` 并关连接；结束打一行 `console.error(JSON.stringify(summary))`（`pending` = 第一阶段 `pending`）。
+- `for-channel` 兜底同样不补建被占用的频道：`S/index.ts:5218` 给 `createWakerGroupActions` 补传 `conversions: createConversionClaims({ database, link: wakerGroupLink })`（Task 4 已写好分支）。
 - `startGroupUpgrade`：立即返回，后台跑 `runGroupUpgrade`，异常记日志不抛；`stop()` 等它结束（阶段之间、项之间检查停止标记）。
 - `S/index.ts`：`startup.acquireSync(() => startGroupUpgrade({ database, databaseUrl: config.databaseUrl, groups: baseGroupConversations, link: wakerGroupLink, canUse: <与 canUseBot 同一 lambda> }), (task) => task.stop())`。
 
 - [ ] **Step 1：写失败测试**：
   - `phase 2 links every unlinked chat of two or more, once`：两个旧群聊（一个共享群、一个 P11 前的个人多员工频道 `tenant_id = alice`）→ 各得一个群组，台账 `backfilled`，镜像等于频道顺序；再跑 → `backfilled: 0`。
   - `phase 2 adds （2） when the name is taken`：alice 已有群组「复盘」，旧群聊 title「复盘」→ 新群组名「复盘（2）」。
+  - `a conversion whose adopt failed keeps its chat out of phase 2, and the next run finishes it`：注入第一次 `adopt` 抛错 → 台账 `started` 且有 `channel_id`；跑 `backfillChannels` → `backfilled: 0`、该频道仍未挂接、群组数不变；再跑 `runGroupUpgrade`（`adopt` 正常）→ 台账 `converted`，频道挂的是原群组，群组数不变。
+  - `a chat in the orphan window is not backfilled`：台账 `started`、无 `channel_id`，另有一个满足孤儿条件的频道 → `backfillChannels` 跳过它。
+  - `for-channel on a chat claimed by an unfinished conversion finishes it with the original crew`：同上夹具，创建者调 `POST /api/waker-groups/for-channel/:channelId` → 返回原群组 id，台账 `converted`，没有新群组。
   - `phase 2 skips a shared chat with no creator`：`created_by` NULL → `ownerless: 1`，没有新群组。
   - `phase 3 rewrites a drifted mirror`：`platform` 帧删一位员工后 `reconcileLinked` → `reconciled: 1`，镜像对上。
   - `phase 1 runs before phase 2, so an orphan is not backfilled first`：造 `started` 台账 + 孤儿频道，`runGroupUpgrade` 后该频道挂的是原群组，没有额外群组。
@@ -724,13 +743,13 @@ export function startGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string
 - 升级须知照设计稿第 12 节 1–6 条，写明 Q4：转出来的空群组会出现在会话列表顶部；同名老群聊与转出来的群组同时存在，可自行解散一个；推迟转换用 `XIONGBAO_GROUP_UPGRADE=off`。
 - 回滚手册：一段 ```` ```sql ```` 代码块，前后用 `<!-- group-upgrade-rollback:start -->` / `<!-- group-upgrade-rollback:end -->` 标出，开头 `SELECT set_config('app.tenant_id', 'platform', true);`，在一个事务里三步（设计稿 5.6）：
   1. 台账 `converted` 且频道没有任何 `group_messages`：`UPDATE channels SET deleted_at = now()`；按 `dropped_agent_ids` 把员工追加回 `waker_group_members`（`position` 接在现有最大值之后）。
-  2. 台账 `backfilled` 且该群组没有 `group_task_templates`、没有 `portraits`（`subject_kind = 'group'`）：`DELETE FROM waker_groups`（外键自动解挂）。
+  2. 台账 `backfilled` 且该群组没有 `group_task_templates`、没有 `portraits`（`subject_kind = 'group'`）、**也没有任何 `group_task_runs`**（`deleteTemplate` 让运行的 `template_id` 置空而保留运行，`group_task_runs.group_id` 却随群组级联删除，所以「没有模板」不等于「没用过」）：`DELETE FROM waker_groups`（外键自动解挂）。
   3. `DELETE FROM waker_group_upgrades`。
   手册写明：有消息或已被用过的不回滚；全量回退仍是恢复备份。
 - CHANGELOG：「群组与群聊合一：侧边栏只剩「群组」，群组里可以直接聊天；升级时自动转换，见部署文档 §6」。
 
 - [ ] **Step 1：写失败测试**：
-  - `the runbook SQL undoes an untouched conversion and backfill`：读 `openbot/docs/deployment-xiongbao.md`，取两个标记之间的 SQL；造一次 `converted`（有 1 位被筛掉、无消息）、一次 `backfilled`（无模板无头像）、一次 `converted` 但有消息；在 `platform` 帧事务里执行后断言：第一个频道已软删、镜像补回那 1 位；第二个群组已删、频道 `waker_group_id` 为 NULL；有消息的那个不动；台账为空。事务最后回滚（照 `tests/team-group-bots-migration.integration.test.ts` 的 `Rollback` 写法）。
+  - `the runbook SQL undoes an untouched conversion and backfill`：读 `openbot/docs/deployment-xiongbao.md`，取两个标记之间的 SQL；造一次 `converted`（有 1 位被筛掉、无消息）、一次 `backfilled`（无模板无头像）、一次 `converted` 但有消息、一次 `backfilled` 但模板已删而运行保留（`template_id` 为 NULL 的 `group_task_runs` 一行）；在 `platform` 帧事务里执行后断言：第一个频道已软删、镜像补回那 1 位；第二个群组已删、频道 `waker_group_id` 为 NULL；有消息的那个不动；保留运行的那个群组和它的运行都还在；台账为空。事务最后回滚（照 `tests/team-group-bots-migration.integration.test.ts` 的 `Rollback` 写法）。
   - `the runbook is marked once`：两个标记各出现一次。
 - [ ] **Step 2：运行**，预期失败。
 - [ ] **Step 3：实现**文档、`.env.example`、CHANGELOG。
@@ -743,7 +762,7 @@ export function startGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string
 
 **设计稿覆盖**：第 0–1 节由架构与各任务落实（D1 → 1、2；D2 → 全局约束；D3 → 1、12；D4 → 2；D5 → 3、5；D6 → 3、6；D7 → 14、4；D8 → 13；D9 → 2、3、4；D10 → 3、4、5；D11 → 9；D12 → 7；D13 → 5、9、10；D14 → 10；D15 → 11）；其余各节见「任务一览」后的对应表。
 
-**接口一致性**：`WakerGroupLink`、`createWakerGroupLink`、`channelOwner`、`pickGroupName`、`channelWakerGroupId`、`channelCreatedBy`、`setChannelWakerGroup` 定义于 Task 2；`withWakerGroupLink`、`withChannelRenameLink` 定义于 Task 3；`WakerGroupActions`、`createWakerGroupActions`、`WakerGroupSizeError`、`WakerGroupLinkedError`、`WakerGroupForbiddenError` 定义于 Task 4，`MemberStep`、`WakerGroupStepsError`、`WakerGroupRunningError` 与 `setMembers`、`dissolve` 由 Task 5 追加；`ListedWakerGroup` 定义于 Task 2；`baseGroupConversations` 由 Task 3 引入，Task 4、14 使用；`GroupUpgradeDeps`、`convertGroups` 定义于 Task 13，`backfillChannels`、`reconcileLinked`、`runGroupUpgrade`、`startGroupUpgrade`、`GROUP_UPGRADE_LOCK` 定义于 Task 14；前端 `crewStatus`、`CREW_STATUS_WORDS` 与四个新变更定义于 Task 6，Task 7–10 使用；`CreateGroupForm` 定义于 Task 7；`GroupSettingsButton`、`GroupSettingsPanel` 定义于 Task 10。
+**接口一致性**：`WakerGroupLink`、`createWakerGroupLink`、`channelOwner`、`pickGroupName`、`channelWakerGroupId`、`channelCreatedBy`、`setChannelWakerGroup` 定义于 Task 2；`withWakerGroupLink`、`withChannelRenameLink` 定义于 Task 3；`WakerGroupActions`、`createWakerGroupActions`、`WakerGroupSizeError`、`WakerGroupLinkedError`、`WakerGroupForbiddenError` 定义于 Task 4，`MemberStep`、`WakerGroupStepsError`、`WakerGroupRunningError` 与 `setMembers`、`dissolve` 由 Task 5 追加；`ListedWakerGroup`、`runtimeOrder` 定义于 Task 2；`ChatStatus`、`StatusedWakerGroup`、`list` 定义于 Task 4；`ConversionClaims` 类型定义于 Task 4，实现 `createConversionClaims` 定义于 Task 14 并在 Task 14 装配；`baseGroupConversations` 由 Task 3 引入，Task 4、14 使用；`GroupUpgradeDeps`、`convertGroups` 定义于 Task 13，`backfillChannels`、`reconcileLinked`、`runGroupUpgrade`、`startGroupUpgrade`、`GROUP_UPGRADE_LOCK` 定义于 Task 14；前端 `crewStatus`、`CREW_STATUS_WORDS` 与四个新变更定义于 Task 6，Task 7–10 使用；`CreateGroupForm` 定义于 Task 7；`GroupSettingsButton`、`GroupSettingsPanel` 定义于 Task 10。
 
 **断言分配**：#1–#16、#18 → Task 8；#17 → Task 10；#19–#30 → Task 7；#31 → Task 9；#32–#34 → Task 11。共 34 条，无重复、无遗漏。
 
