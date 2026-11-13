@@ -819,6 +819,7 @@ tests/voice-session-store.integration.test.ts
 tests/voice-sessions.test.ts
 tests/voice-summary-model.test.ts
 tests/wake-up-settle.integration.test.ts
+tests/waker-group-channel-link-migration.integration.test.ts
 tests/waker-groups.test.ts
 tests/wakerflow-action-step.integration.test.ts
 tests/wakerflow-confirm-step.integration.test.ts
