@@ -615,6 +615,8 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 | 32 | `app/tests/staffing-proposal-card.test.tsx:419` | `getByRole("link", { name: "打开群聊" })` | `{ name: "打开群组" }` | 文案 |
 | 33 | `server/tests/group-bots-change.integration.test.ts:389` | `toBe("只有发起这个群聊的人才能调整群里的员工。")` | `toBe("只有发起这个群组的人才能调整群里的员工。")` | 服务端文案 |
 | 34 | `server/tests/channel-dispatch.test.ts:245` | `rejects.toThrow("群聊")` | `rejects.toThrow("群组")` | 服务端文案 |
+| 35 | `server/tests/waker-group-channel-link.integration.test.ts:2759` | `"成员已保存，但群聊没能开始，请稍后点「开始聊天」再试。"` | `"成员已保存，但群组没能开始，请稍后点「开始聊天」再试。"` | 服务端文案（Task 11 引出；用户 2026-11-13 批准） |
+| 36 | `scripts/e2e/staffing-lifecycle.ts:848,850` | `getByRole("link", { name: "打开群聊" })` 与对应说明 | `{ name: "打开群组" }` | 与 #32 同一处文案的端到端层（用户 2026-11-13 批准） |
 
 **断言不变、但步骤或夹具要动的**（一并请批准）：
 - `wakers-screen.test.tsx` 的「a new crew is created by name…」（`:565-603`）和「a name the workspace already used…」（`:605-633`）：点「创建」之前要先勾选两位员工，夹具要提供两位员工。
