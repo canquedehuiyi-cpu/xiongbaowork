@@ -1,0 +1,48 @@
+diff --git a/lib/coreBundle.js b/lib/coreBundle.js
+index d9041dd0f009072511a7d808dec83121ff29e127..6bb17dc16e03e65d1df6ceb139ebf28431144362 100644
+--- a/lib/coreBundle.js
++++ b/lib/coreBundle.js
+@@ -11083,7 +11083,7 @@ var init_package = __esm({
+     "use strict";
+     import_path9 = __toESM(require("path"));
+     packageRoot = import_path9.default.join(__dirname, "..");
+-    packageJSON = require(import_path9.default.join(packageRoot, "package.json"));
++    packageJSON = require("../package.json");
+     binPath = import_path9.default.join(packageRoot, "bin");
+   }
+ });
+@@ -33631,7 +33631,7 @@ ${e.stack}`);
+         return [...new Set(executables)];
+       }
+     };
+-    registry = new Registry(require(import_path20.default.join(packageRoot, "browsers.json")));
++    registry = new Registry(require("../browsers.json"));
+   }
+ });
+ 
+diff --git a/lib/package.js b/lib/package.js
+index 607f39ea91d75d70824ff14ac84f4d8ccfc92ea0..ec240a989c019fc437128d9e182526886f6f5867 100644
+--- a/lib/package.js
++++ b/lib/package.js
+@@ -36,7 +36,7 @@ __export(package_exports, {
+ module.exports = __toCommonJS(package_exports);
+ var import_path = __toESM(require("path"));
+ const packageRoot = import_path.default.join(__dirname, "..");
+-const packageJSON = require(import_path.default.join(packageRoot, "package.json"));
++const packageJSON = require("../package.json");
+ const binPath = import_path.default.join(packageRoot, "bin");
+ function libPath(...parts) {
+   return import_path.default.join(packageRoot, "lib", ...parts);
+diff --git a/lib/serverRegistry.js b/lib/serverRegistry.js
+index 0bdc2dd985859e232182d6656d08b0c8d8d8fb9f..794352bd358fa46321bad4c8bd65b72ccbdea960 100644
+--- a/lib/serverRegistry.js
++++ b/lib/serverRegistry.js
+@@ -7102,7 +7102,7 @@ var import_chokidar = __toESM(require_chokidar());
+ // packages/playwright-core/src/package.ts
+ var import_path = __toESM(require("path"));
+ var packageRoot = import_path.default.join(__dirname, "..");
+-var packageJSON = require(import_path.default.join(packageRoot, "package.json"));
++var packageJSON = require("../package.json");
+ var binPath = import_path.default.join(packageRoot, "bin");
+ 
+ // packages/playwright-core/src/serverRegistry.ts
