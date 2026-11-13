@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { type AgentChannel, channelKeys } from "@/lib/channels/queries";
-import { client } from "@/lib/client";
+import { client, RequestError } from "@/lib/client";
 import {
   CrewRequestError,
   type MemberStep,
@@ -24,13 +24,22 @@ function invalidateGroups(queryClient: QueryClient) {
   ]);
 }
 
+/** What a 404 from a group endpoint says, whatever English the server wrote: the group is gone. */
+const GROUP_NOT_FOUND = "找不到这个群组。";
+
 /**
  * The group endpoints' request: the JSON body on success, a `CrewRequestError` on a refusal, with
  * the `code` and `done` the shared client would drop.
  */
 async function crewRequest<T>(
   path: string,
-  options: { method: string; body?: unknown; fallback: string },
+  options: {
+    method: string;
+    body?: unknown;
+    fallback: string;
+    /** A 404 on this path is not "no such group" (making one has no group yet): keep the server's. */
+    keepNotFound?: boolean;
+  },
 ): Promise<T> {
   const response = await fetch(path, {
     method: options.method,
@@ -48,7 +57,11 @@ async function crewRequest<T>(
         ? (body as Record<string, unknown>)
         : {};
     throw new CrewRequestError(
-      typeof record.error === "string" ? record.error : options.fallback,
+      response.status === 404 && !options.keepNotFound
+        ? GROUP_NOT_FOUND
+        : typeof record.error === "string"
+          ? record.error
+          : options.fallback,
       response.status,
       {
         code: typeof record.code === "string" ? record.code : undefined,
@@ -78,6 +91,7 @@ export function createGroupWithChatMutationOptions(queryClient: QueryClient) {
           method: "POST",
           body: input,
           fallback: "群组没能建好，请再试一次。",
+          keepNotFound: true,
         },
       ),
     onSuccess: () => invalidateGroups(queryClient),
@@ -156,11 +170,18 @@ export function crewForChannelMutationOptions(queryClient: QueryClient) {
 
 export function retireCrewMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: async (groupId: string) =>
-      client(`/api/waker-groups/${groupId}`, "ok", {
-        method: "DELETE",
-        fallback: "没能解散这个群组，请再试一次。",
-      }),
+    mutationFn: async (groupId: string) => {
+      try {
+        return await client(`/api/waker-groups/${groupId}`, "ok", {
+          method: "DELETE",
+          fallback: "没能解散这个群组，请再试一次。",
+        });
+      } catch (error) {
+        if (error instanceof RequestError && error.status === 404)
+          throw new RequestError(GROUP_NOT_FOUND, 404);
+        throw error;
+      }
+    },
     onSuccess: () => invalidateGroups(queryClient),
   });
 }

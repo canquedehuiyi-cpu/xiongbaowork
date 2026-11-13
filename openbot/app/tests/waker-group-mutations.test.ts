@@ -284,3 +284,26 @@ test("when the server gives no sentence, the fallbacks are Chinese", async () =>
     .catch((caught: unknown) => caught);
   expect((listed as Error).message).toBe("群组列表没能读出来。");
 });
+
+test("a 404 from any group write says 找不到这个群组。, not the server's English", async () => {
+  const queryClient = new QueryClient();
+  const english = { error: "No such group." };
+  for (const [options, input] of [
+    [
+      renameCrewMutationOptions(queryClient),
+      { groupId: "g-1", name: "新名字" },
+    ],
+    [startCrewChatMutationOptions(queryClient), "g-1"],
+    [
+      setCrewMembersMutationOptions(queryClient),
+      { groupId: "g-1", agentIds: ["a", "b"] },
+    ],
+    [retireCrewMutationOptions(queryClient), "g-1"],
+  ] as const) {
+    serve(404, english);
+    const error = await run(options, queryClient, input).catch(
+      (caught: unknown) => caught,
+    );
+    expect((error as Error).message).toBe("找不到这个群组。");
+  }
+});

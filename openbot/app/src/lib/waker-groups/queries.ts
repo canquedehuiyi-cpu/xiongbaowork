@@ -125,7 +125,7 @@ export function runningTasksQueryOptions() {
      */
     queryFn: () =>
       client<RunningTask[]>("/api/tasks?period=month&status=running", "tasks", {
-        fallback: "Could not read which coworkers are answering right now.",
+        fallback: "读不到正在回复的员工。",
       }),
     refetchInterval: 5000,
   });
