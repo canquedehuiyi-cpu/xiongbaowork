@@ -1,0 +1,1646 @@
+# audit_rules_sha256: 9cbb849349cc794713c7434e3e05d1d4a28b216aff22b39c431eb62219e6426e ← 生成这些 runnable 的审计规则集指纹
+- kind: agent
+  slug: general-assistant
+  source: xiongbao-package
+  source_url: xiongbao-package/agents.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: f232c07b6b2da3dbe9b2f99dad204e6e7ea959c6dad47a9a6e91c3bbff6d4911
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: backend-engineer
+  source: xiongbao-package
+  source_url: xiongbao-package/agents.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 4fd719d9c7b364d4439a957f4e0b6af39bfef9865f6ed4ae777fbd9a23f437c6
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: code-reviewer
+  source: xiongbao-package
+  source_url: xiongbao-package/agents.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: d557b094beb92257011bea35f7fc61aad6579af2da8e9168dd86208052076711
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: qa-engineer
+  source: xiongbao-package
+  source_url: xiongbao-package/agents.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 2e7102bbe6e10999e48fd7ba8b68e0e5337ddf829751b2cd418fcb557dde9071
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: ops-assistant
+  source: xiongbao-package
+  source_url: xiongbao-package/agents.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 0061dd7eff0c1f43ed079be58b27195bc0f568b4681690eea3526303fe29d5f2
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: assign-work
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: e0bc3f11e24eb92d91f998d51ac06fc068e4c9a1f88eeb26a07b7670b6491ca5
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: review-diff
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 94866b47a58382f16c5d25ea7e876c1bdc81d0026780c591749fc343fbd22aac
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: run-on-my-machine
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 6227e0eb78c11f80215f27f9e307e532e85228850597c645dcd97deba069c365
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: bot-creator
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: ff91fa2c1efb702b5930bdd8ea83f9527a5d7bca65ccaa183e391c558b02cdf7
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: skill-creator
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 67eef7da7c55177e3fbb9d494ed110216d92067b2deacf8df95630914cf6db5a
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: work-report
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: cb5ed892e71ae62b57fd3f6a8300e411c072df1d2d12baf05b9482dff11bd732
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: meeting-minutes
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: ba6b3de5db751df8bd4c0f94be9db1d396edbd9b17eb5ecfc89cf5f889ed96d6
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: email-draft
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 0929a02d2c0a4c1ae233e7e914d8e03a08b647c7ab3a5a017d7657ef2c3d375a
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: spreadsheet-cleanup
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: fe2212f1aa6f07d9261155828bbc876399c068057dafe3af6a45fd75b051fd65
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: contract-key-points
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: c770b5eda1146715e3887a9600d20550f3d296327044fe2842264be8152f9f4c
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: competitor-research
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 6d1a19b319c9f65ebdf9a17c07cb14253bee3c73e7b7b0b629b866a66b053b16
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: doc-polish
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 9def1dab61074e0dc6f4c49219440ac623446769ba216dd04c1158ef48c60297
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: ppt-outline
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 558156de31596c319e6298b72a6a58efdd9b7e9d9b01c11438c857f56804a897
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: data-analysis-report
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: df9d7dc6ea3945c4e12c3df334ea9dd06a41cbd156a2e04c278cf96819fb4f72
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: translate-proofread
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: aaa79c1d20ae166e574d3b91018a7104d6fa7860c80e90075c603318a5f03b16
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: doc-coauthor
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 2a7b80ac84f9ad964cfc531447604043a9fda75142750af608c8ef5ae24490b6
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: xlsx-formulas
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 24de9a9b0aab891640522d3740ac392049a6bf827a750026c1bf3189969dfb0d
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: docx-edit
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: fdf18877c029b5bc03007f85165363f45e3887be5ac8e05076e31484972eec1c
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: pdf-extract-fill
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 9e402ce8a4aab0baf3555e22853b59ff7074bed653bd7d6824b790440a97e895
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: pptx-build
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: cd8775dc916a0678325f2b5f442db0cd54ac70b9a1eb11d94d6e459d620836ae
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: internal-comms-3p
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 1698473f5f099a8f872f3d5dd06379b230ed7cbd8ce429a47cf290971bfdbd49
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: amap-guide
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 045bacf45132944b8a214526c4c01b4c5496931641cda045d1b6e4b4dd28ff80
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: feishu-assistant
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 4939ba6ac60b82665443ed4d62f11f4d5c194c3d375fef38bb6d49e7097dc211
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: dingtalk-assistant
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 389c07a8b0f83c568651aac46e9fd963f07aa5445b70a81a93cc3c4516aa4d69
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: github-issue-pr
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 57a6f67d7260b7af63a0d9e46ea96122f8421090f0a7b6c0ffbdf15ef032cd85
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: context7-docs
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 51f02768564d2963fc74db6790b59ae504722666f0f66e17d88b962e3e68ef51
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: web-search-guide
+  slug_source: raw
+  source: xiongbao-package
+  source_url: xiongbao-package/skills.yaml
+  source_version: "1"
+  fetched_at: 2026-11-12T00:00:00Z
+  checksum_sha256: 498fb0b51a655422488b74a389e06c889e46efa214ff9fd2d43a1297fd8b7fc2
+  license: proprietary-xiongbao
+  redistributable: true
+  attribution: © 熊宝数字员工
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: code-architect-expert
+  source: workbuddy expert-marketplace:code-architect-expert@2.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/code-architect-expert/agents/code-architect-expert.md
+  source_version: 2.1.0
+  fetched_at: 2026-09-13T17:44:48.645Z
+  checksum_sha256: e329667320d5ad9d4fc920d2ccd9cfb10f4b974a09836adc483905ddec7396ee
+  license: unspecified
+  redistributable: false
+  attribution: © 孤独
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: engineering-workflow-coach
+  source: workbuddy expert-marketplace:engineering-workflow-skills@2.0.1
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/engineering-workflow-skills/agents/engineering-workflow-coach.md
+  source_version: 2.0.1
+  fetched_at: 2026-09-14T07:55:00.263Z
+  checksum_sha256: 84f6c6797e6a5f7a2a67cc2b22709a819fcd89c9f161afd0799243ad0d006f0e
+  license: MIT
+  redistributable: true
+  attribution: © Addy Osmani (original) / CodeBuddy Marketplace (port)
+  runnable: full
+  dropped:
+    - plugins/marketplaces/experts/plugins/ex_eqoqYRT1NIwb/.codebuddy-plugin/plugin.json — 与 engineering-workflow-skills 同名同版本且内容一致（按 plugin.json + agents/*.md 的 sha256 去重）
+- kind: agent
+  slug: frontend-developer
+  source: workbuddy expert-marketplace:frontend-developer@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/frontend-developer/agents/frontend-developer.md
+  source_version: 1.0.0
+  fetched_at: 2026-07-14T06:05:44.725Z
+  checksum_sha256: 22e4dd1f94114f44e217fda2fd3b57d52e2f550e9a8aeff4c90ec7ae054ff27f
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: frontend-slides-renderer
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/agents/frontend-slides-renderer.md
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: 0ffe865c5daf11ffee7a36b010d048ddc490d0782c7e863b31f6b802119d89a7
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: blocked
+  dropped: []
+- kind: agent
+  slug: gstack-designer
+  source: workbuddy expert-marketplace:gstack@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/agents/gstack-designer.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-16T14:54:10.596Z
+  checksum_sha256: 98803a4ff0d80725469d157bb596e240026d88aa648a265a95bd9239d0f3ce74
+  license: unspecified
+  redistributable: false
+  attribution: © gstack
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: gstack-investigator
+  source: workbuddy expert-marketplace:gstack@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/agents/gstack-investigator.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-16T14:54:10.596Z
+  checksum_sha256: a6c01b5f3489c6d74a12f49822b5fa2a0e63ca97ce29729c2aa1036e6d926768
+  license: unspecified
+  redistributable: false
+  attribution: © gstack
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: gstack-lead
+  source: workbuddy expert-marketplace:gstack@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/agents/gstack-lead.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-16T14:54:10.596Z
+  checksum_sha256: 1f454dafc6d7c9888bceb75d955fc3d412c7b8ee10d8481755ef16499e28113e
+  license: unspecified
+  redistributable: false
+  attribution: © gstack
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: gstack-product-reviewer
+  source: workbuddy expert-marketplace:gstack@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/agents/gstack-product-reviewer.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-16T14:54:10.596Z
+  checksum_sha256: ae2f58cfb4b8dc53837bbeb58fe877b0306d7809703f8c680faf0fc53059c8c9
+  license: unspecified
+  redistributable: false
+  attribution: © gstack
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: gstack-qa-lead
+  source: workbuddy expert-marketplace:gstack@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/agents/gstack-qa-lead.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-16T14:54:10.596Z
+  checksum_sha256: eb6bf0232f2cb8d77a01e2af9e261661788f20c2aeb41d17b311eee1bd0a7012
+  license: unspecified
+  redistributable: false
+  attribution: © gstack
+  runnable: degraded
+  dropped: []
+- kind: agent
+  slug: gstack-security-officer
+  source: workbuddy expert-marketplace:gstack@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/agents/gstack-security-officer.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-16T14:54:10.596Z
+  checksum_sha256: a43c00f85f68b71064ed08c2a01373e27e99ec346ab7f975f4c1727dc6992a54
+  license: unspecified
+  redistributable: false
+  attribution: © gstack
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: guizang-renderer
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/agents/guizang-renderer.md
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: 5eef597b89e0a984186caed8e667a65fde6402abadc902799491d60a63a706f8
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: html-ppt-presenter
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/agents/html-ppt-presenter.md
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: 535d21d0a3769cb2d7ebfaf60936401117116cc013e9eb2f2343caa9a855e5ee
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: humanize-ppt-team-lead
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/agents/humanize-ppt-team-lead.md
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: 6560d38207f70afcc85abde1fc054e15371dd5ac645cbfe9f8a72ed7c61d1e9d
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: outline-director
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/agents/outline-director.md
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: 268e2798a5713f65ff2030bafc1ecfff8f075a2762a021aef17e16ad97853122
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: qa
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/agents/qa.md
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: ffe4dc95c7986db6c941001ad13745524f0496b989b87090bcf4cee9d7ea58ea
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: senior-developer
+  source: workbuddy expert-marketplace:senior-developer@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/senior-developer/agents/senior-developer.md
+  source_version: 1.1.0
+  fetched_at: 2026-09-13T16:50:14.648Z
+  checksum_sha256: 715963bb54e4a1b1402729c95881084c7ed90fa23453aa671d3418b11cb15e87
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: software-architect
+  source: workbuddy expert-marketplace:software-company@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/software-company/agents/software-architect.md
+  source_version: 1.1.0
+  fetched_at: 2026-10-15T09:56:41.849Z
+  checksum_sha256: 2477277c2ca3c22df92481df71484c4b4da7985d55a0a05862ae0b6835596281
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: software-engineer
+  source: workbuddy expert-marketplace:software-company@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/software-company/agents/software-engineer.md
+  source_version: 1.1.0
+  fetched_at: 2026-10-15T09:56:41.849Z
+  checksum_sha256: 5da233c880ab22d02b5e4bcbf8161860ae0a734a89ebab1f668ce6c89836fabe
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: software-product-manager
+  source: workbuddy expert-marketplace:software-company@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/software-company/agents/software-product-manager.md
+  source_version: 1.1.0
+  fetched_at: 2026-10-15T09:56:41.849Z
+  checksum_sha256: c4fbb12e81c654d2273ad4ababb1f5c2507e3351beb5bba3ef7675201eb8506f
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: software-qa-engineer
+  source: workbuddy expert-marketplace:software-company@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/software-company/agents/software-qa-engineer.md
+  source_version: 1.1.0
+  fetched_at: 2026-10-15T09:56:41.849Z
+  checksum_sha256: a7d702ac28969991d2277a89062ef818043edd9c930478e4abca6fa7581ff4ae
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: software-team-lead
+  source: workbuddy expert-marketplace:software-company@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/software-company/agents/software-team-lead.md
+  source_version: 1.1.0
+  fetched_at: 2026-10-15T09:56:41.849Z
+  checksum_sha256: 92364f5a97abea59620e58f97496f38a4993c3888a689c78566e46671d2470af
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: video-motion-agent
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/agents/video-motion-agent.md
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: 4ee648a6405db972e921f7a0c3274e34a4f7514a3c98cb294846df8efde0eec2
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: full
+  dropped: []
+- kind: agent
+  slug: xtgxiso-windows-pc-care
+  source: workbuddy expert-marketplace:xtgxiso-windows-pc-care@1.6.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/xtgxiso-windows-pc-care/agents/xtgxiso-windows-pc-care.md
+  source_version: 1.6.0
+  fetched_at: 2026-10-13T07:46:15.958Z
+  checksum_sha256: 6960644c2ed9aaeaec4d53307ec1e9e3f84d96316b9ba7017f6a4fbbd6be1877
+  license: unspecified
+  redistributable: false
+  attribution: © xtgxiso
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: agent-team-orchestration
+  slug_source: raw
+  source: workbuddy skill-marketplace:agent-team-orchestration@1.0.1
+  source_url: ~/.workbuddy/skills/agent-team-orchestration/SKILL.md
+  source_version: 1.0.1
+  fetched_at: 2026-07-14T06:04:25.932Z
+  checksum_sha256: 09448b04324bf3db39e377917af4893cc23f6725b3c32139b732478e59084f18
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: awesome-design-md
+  slug_source: raw
+  source: workbuddy skill-marketplace:awesome-design-md@unspecified
+  source_url: ~/.workbuddy/skills/awesome-design-md/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-18T02:37:52.804Z
+  checksum_sha256: 0168c78fdb11f3f6f3706f74d68649f2f0d168d67af060bda91a0fc409c235b0
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: baseline-regression-triage
+  slug_source: raw
+  source: workbuddy skill-marketplace:baseline-regression-triage@unspecified
+  source_url: ~/.workbuddy/skills/baseline-regression-triage/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-19T19:42:54.814Z
+  checksum_sha256: 6a005bd6dc358a77302f72bb7761ee5e1b9dd0e074886996afebc9f3e4cccb9b
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: canvasflow-ppt
+  slug_source: raw
+  source: workbuddy skill-marketplace:canvasflow-ppt@unspecified
+  source_url: ~/.workbuddy/skills/canvasflow-ppt__skillhub/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:43:52.341Z
+  checksum_sha256: c27ec468cd088f1221343ede37f2d6d30c907a7249a957effd826eb7e0f8999b
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - assets/
+    - references/
+    - scripts/
+- kind: skill
+  slug: code
+  slug_source: raw
+  source: workbuddy skill-marketplace:code@unspecified
+  source_url: ~/.workbuddy/skills/code__skillhub/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-10-17T15:48:57.768Z
+  checksum_sha256: adc962d9957691cc95190af11abca73bbe358e51c9af4d97a09397709c8e0659
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: code-error-fixer
+  slug_source: raw
+  source: workbuddy skill-marketplace:code-error-fixer@1.0.0
+  source_url: ~/.workbuddy/skills/code-fix__skillhub/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-10-17T15:47:56.526Z
+  checksum_sha256: c49c211c605d4d487fa78c997509982e1f29c1f89087e6d18f555dde6317bc78
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: code-review-and-quality
+  slug_source: raw
+  source: workbuddy skill-marketplace:code-review-and-quality@1.0.0
+  source_url: ~/.workbuddy/skills/code-review-and-quality/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-15T16:47:38.853Z
+  checksum_sha256: ac2f02f074367bebdaa8c976992f9ba59c08ceb6aedc13182f80a79a0da2bb4f
+  license: MIT
+  redistributable: true
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: cursor-memory-backup
+  slug_source: raw
+  source: workbuddy skill-marketplace:cursor-memory-backup@unspecified
+  source_url: ~/.workbuddy/skills/cursor-memory-backup/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-18T13:25:05.244Z
+  checksum_sha256: 223d53d2d623529c2734ee6e6e0e16368bac84ca9ff664c5b463087868ccb9cb
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - scripts/
+- kind: skill
+  slug: darwin-skill
+  slug_source: raw
+  source: workbuddy skill-marketplace:darwin-skill@unspecified
+  source_url: ~/.workbuddy/skills/darwin-skill/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-07-14T06:04:08.836Z
+  checksum_sha256: 718978eb3288f2663b20d096b769621dda29354e86f5e525e890a941ffe53d5d
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - assets/
+    - docs/
+    - scripts/
+    - templates/
+- kind: skill
+  slug: design-token-forensics
+  slug_source: raw
+  source: workbuddy skill-marketplace:design-token-forensics@unspecified
+  source_url: ~/.workbuddy/skills/design-token-forensics/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-14T12:39:47.191Z
+  checksum_sha256: 9bff3778e95a511ba338166fa73d4e73ee5f8e236c0ce736b4ea4231a8d90fa1
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+  sanitized:
+    - local-user-path
+- kind: skill
+  slug: dev-expert--indiv-weishui
+  slug_source: dechannel
+  source: workbuddy skill-marketplace:dev-expert@2.2.3
+  source_url: ~/.workbuddy/skills/dev-expert__indiv-weishui__skillhub/SKILL.md
+  source_version: 2.2.3
+  fetched_at: 2026-11-01T10:42:19.299Z
+  checksum_sha256: ac8e7f56699bcac0a1c5b778347bd43ac002e0fe96cdd6d0b9d9908e53d47aed
+  license: GPL-3.0-or-later
+  redistributable: false
+  attribution: © 智慧&半岛-www.52yuer.cn
+  runnable: blocked
+  dropped:
+    - hooks/
+    - references/
+    - scripts/
+- kind: skill
+  slug: dev-expert--skillhub
+  slug_source: dechannel
+  source: workbuddy skill-marketplace:dev-expert@2.2.0
+  source_url: ~/.workbuddy/skills/dev-expert__skillhub/SKILL.md
+  source_version: 2.2.0
+  fetched_at: 2026-10-17T15:47:17.161Z
+  checksum_sha256: 746097f7d56451c19826b4c6f83a4ca7e6eb24232f7488270d3b53fd012b05b1
+  license: GPL-3.0-or-later
+  redistributable: false
+  attribution: © 智慧&半岛-www.52yuer.cn
+  runnable: blocked
+  dropped:
+    - hooks/
+    - references/
+    - scripts/
+- kind: skill
+  slug: dev-expert--user-814dbe54
+  slug_source: dechannel
+  source: workbuddy skill-marketplace:dev-expert@2.2.0
+  source_url: ~/.workbuddy/skills/dev-expert__user_814dbe54__skillhub/SKILL.md
+  source_version: 2.2.0
+  fetched_at: 2026-11-01T10:42:32.935Z
+  checksum_sha256: 4f0b016d43e55e726af7f667a83f839bdf4d34c24e3e54c78d354fe7f28e03ce
+  license: GPL-3.0-or-later
+  redistributable: false
+  attribution: © 智慧&半岛-www.52yuer.cn
+  runnable: blocked
+  dropped:
+    - hooks/
+    - references/
+    - scripts/
+- kind: skill
+  slug: dev-expert-pro
+  slug_source: raw
+  source: workbuddy skill-marketplace:dev-expert-pro@unspecified
+  source_url: ~/.workbuddy/skills/dev-expert-pro__skillhub/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-10-17T15:47:15.132Z
+  checksum_sha256: bc0869a6a555a3720040df0b56fbe0318abf7c2a8faabe304c79b7136787fa44
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - agents/
+    - hooks/
+    - licenses/
+    - references/
+    - scripts/
+- kind: skill
+  slug: dev-god
+  slug_source: raw
+  source: workbuddy skill-marketplace:dev-god@unspecified
+  source_url: ~/.workbuddy/skills/dev-god__skillhub/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-10-17T15:47:24.311Z
+  checksum_sha256: 47af3f4d9266401ad50c0e5dee7975e4566023be81459dd98aaf079ad4041b99
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - agents/
+    - references/
+    - scripts/
+- kind: skill
+  slug: engineering-workflow
+  slug_source: bare
+  source: workbuddy expert-marketplace:engineering-workflow-skills#skills/engineering-workflow@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/engineering-workflow-skills/skills/engineering-workflow/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-08-14T11:43:56.000Z
+  checksum_sha256: a1e0aeb5d64d9acb4e5afff400054095de05556ec1b9298e7337520b4b63312e
+  license: MIT
+  redistributable: true
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - plugins/marketplaces/experts/plugins/ex_eqoqYRT1NIwb/skills/engineering-workflow/SKILL.md — 所属专家包 ex_eqoqYRT1NIwb 是被丢弃的重复下载
+    - reference/
+- kind: skill
+  slug: fore-vip-pc-clear
+  slug_source: raw
+  source: workbuddy skill-marketplace:fore-vip-pc-clear@1.1.0
+  source_url: ~/.workbuddy/skills/fore-vip-pc-clear/SKILL.md
+  source_version: 1.1.0
+  fetched_at: 2026-10-13T07:46:44.876Z
+  checksum_sha256: fd2006f4387bd03ee22b9509bde8e91e6f4aacdd25f8a7f89b9cf31c4689b633
+  license: unspecified
+  redistributable: false
+  attribution: © fore.vip
+  runnable: blocked
+  dropped:
+    - references/
+    - scripts/
+- kind: skill
+  slug: frontend-artifact-contract-drift-triage
+  slug_source: raw
+  source: workbuddy skill-marketplace:frontend-artifact-contract-drift-triage@unspecified
+  source_url: ~/.workbuddy/skills/frontend-artifact-contract-drift-triage/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-19T11:53:36.288Z
+  checksum_sha256: 9505fb1699421d8f5ae19e80cac8de24d433dcaf5b46f5311f878eb0f610ba3f
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: frontend-build-verification
+  slug_source: raw
+  source: workbuddy skill-marketplace:frontend-build-verification@unspecified
+  source_url: ~/.workbuddy/skills/frontend-build-verification/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-15T04:31:31.834Z
+  checksum_sha256: cbaa3f1b5fd339eabc3783b99ad3cf537d0e6bc92abbd6c476f1f815d4426f28
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+  sanitized:
+    - local-user-path
+- kind: skill
+  slug: frontend-developer--brand-guidelines
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:frontend-developer#skills/brand-guidelines@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/frontend-developer/skills/brand-guidelines/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-07-14T06:05:44.711Z
+  checksum_sha256: 60dace1555871109e304971edbb4317b67edcee30743a223002914385e06e37c
+  license: Complete terms in LICENSE.txt
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: frontend-developer--browser-use
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:frontend-developer#skills/browser-use@2.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/frontend-developer/skills/browser-use/SKILL.md
+  source_version: 2.0.0
+  fetched_at: 2026-07-14T06:05:44.419Z
+  checksum_sha256: fb839ae844ae8c3aa16d07ed6f5d1db448718d0cea9ef3a30a8ed934796f1208
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - references/
+- kind: skill
+  slug: frontend-developer--frontend-dev
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:frontend-developer#skills/frontend-dev@0.1.1
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/frontend-developer/skills/frontend-dev/SKILL.md
+  source_version: 0.1.1
+  fetched_at: 2026-07-14T06:05:44.431Z
+  checksum_sha256: 6cc0f077f282b56b4fa666be6c7549f3176e88510eeda7becc271bf188a0444a
+  license: MIT
+  redistributable: true
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - canvas-fonts/
+    - references/
+    - scripts/
+    - templates/
+- kind: skill
+  slug: frontend-developer--fullstack-dev
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:frontend-developer#skills/fullstack-dev@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/frontend-developer/skills/fullstack-dev/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-07-14T06:05:44.275Z
+  checksum_sha256: 4623f28c19d330da2b55e4ebf547c0e541785736cdfbfca0be8c078f20d14a86
+  license: MIT
+  redistributable: true
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - references/
+- kind: skill
+  slug: frontend-developer--github
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:frontend-developer#skills/github@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/frontend-developer/skills/github/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-07-14T06:05:44.415Z
+  checksum_sha256: 4d34df6cc71c4feb494a36ef0bd15190fa8f7d44b8dcbfd11257b70bba8f6aaa
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: frontend-developer--impeccable
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:frontend-developer#skills/impeccable@2.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/frontend-developer/skills/impeccable/SKILL.md
+  source_version: 2.0.0
+  fetched_at: 2026-07-14T06:05:44.318Z
+  checksum_sha256: dc66284a2a16f49773eabe1b96a92ec88f9a5a7f39c1320a3c9b87940d679a7c
+  license: Apache 2.0. Based on Anthropic's frontend-design skill. See NOTICE.md for attribution.
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: fullstack-dev
+  slug_source: raw
+  source: workbuddy skill-marketplace:fullstack-dev@unspecified
+  source_url: ~/.workbuddy/skills/fullstack-dev/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-07-14T06:04:21.998Z
+  checksum_sha256: b38d20077220ae6268bd58fca633dbdd4036ac65f71d112c5a2ca1d93c61aa92
+  license: MIT
+  redistributable: true
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - references/
+- kind: skill
+  slug: github
+  slug_source: raw
+  source: workbuddy skill-marketplace:github@1.0.0
+  source_url: ~/.workbuddy/skills/github/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-07-14T06:04:11.862Z
+  checksum_sha256: f8b6f3b380d6d22eb4cefde352b6a8b8d0dd18925c3647ea42c71e5403cdf0fe
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: graphify
+  slug_source: raw
+  source: workbuddy skill-marketplace:graphify@1.1.22
+  source_url: ~/.workbuddy/skills/graphify/SKILL.md
+  source_version: 1.1.22
+  fetched_at: 2026-09-13T16:56:21.743Z
+  checksum_sha256: 0cdf2bad34bf8f8069d58f9b0af40be2403e7009fb7fefc7b9d04b19dba97be8
+  license: unspecified
+  redistributable: false
+  attribution: © LingGraph Studio
+  runnable: blocked
+  dropped:
+    - scripts/
+- kind: skill
+  slug: grill-me
+  slug_source: raw
+  source: workbuddy skill-marketplace:grill-me@1.0.0
+  source_url: ~/.workbuddy/skills/grill-me/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-07-14T06:03:59.470Z
+  checksum_sha256: 743b2a7a1748a34f5f4aba3417a9806458a55544e2945f1c1c6396d21c0e5d8f
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: gstack--design-html
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:gstack#skills/design-html@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/skills/design-html/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-16T14:54:10.518Z
+  checksum_sha256: 79570c8ba93ddb942e1fe5cb0684cfbeee32643e39d6de059354d3bde5b46eff
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - vendor/
+- kind: skill
+  slug: gstack--qa
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:gstack#skills/qa@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/skills/qa/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-16T14:54:10.527Z
+  checksum_sha256: bf33b48d603161d10d35b9f61793d4bf23ff4042e5d37edfa5b37e2836a95f62
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+    - templates/
+- kind: skill
+  slug: gstack--review
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:gstack#skills/review@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/skills/review/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-16T14:54:10.533Z
+  checksum_sha256: acc4d08df5f6aa2dc06c37e29d119706b99d0ac63f295d5faadd6a7923f9b31a
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - specialists/
+- kind: skill
+  slug: hash-bound-review-loop
+  slug_source: raw
+  source: workbuddy skill-marketplace:hash-bound-review-loop@unspecified
+  source_url: ~/.workbuddy/skills/hash-bound-review-loop/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-14T11:09:10.235Z
+  checksum_sha256: b82b85ec9d54644bf3293b254b4dee18ae4f787df9401d80184f48539dd784c0
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+  sanitized:
+    - local-user-path
+- kind: skill
+  slug: hostile-git-repo-recovery
+  slug_source: raw
+  source: workbuddy skill-marketplace:hostile-git-repo-recovery@unspecified
+  source_url: ~/.workbuddy/skills/hostile-git-repo-recovery/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-16T15:50:58.863Z
+  checksum_sha256: b2ef56da31c24359461bee009275c97f3fb8c9eea3997d2b4efc139574c7b628
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+  sanitized:
+    - local-user-path
+- kind: skill
+  slug: humanize-ppt-team--frontend-slides
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:humanize-ppt-team#skills/frontend-slides@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/skills/frontend-slides/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:42:39.640Z
+  checksum_sha256: 41fccbe44d4882f412e141028eb21395bb13327492a512abee6e55c672cb0c5a
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - scripts/
+  sanitized:
+    - local-user-path
+- kind: skill
+  slug: humanize-ppt-team--guizang-ppt-skill
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:humanize-ppt-team#skills/guizang-ppt-skill@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/skills/guizang-ppt-skill/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:42:39.483Z
+  checksum_sha256: 9b6339ae824ec011fe9f3518563d5d39d6cf7245da9019352a0092225b5ea59f
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - assets/
+    - references/
+- kind: skill
+  slug: humanize-ppt-team--html-ppt
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:humanize-ppt-team#skills/html-ppt@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/skills/html-ppt/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:42:39.722Z
+  checksum_sha256: a11df7758320782db64205c2b2d2c4496852a4b9588a7136a65767a2274669ea
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - assets/
+    - docs/
+    - examples/
+    - references/
+    - scripts/
+    - templates/
+- kind: skill
+  slug: humanize-ppt-team--humanize-ppt
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:humanize-ppt-team#skills/humanize-ppt@0.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/skills/humanize-ppt/SKILL.md
+  source_version: 0.1.0
+  fetched_at: 2026-09-17T09:42:39.654Z
+  checksum_sha256: d6216331b75b32f05cf821dfac6e98c65f2b3860a376576371492531cc96ac86
+  license: MIT
+  redistributable: true
+  attribution: © LearnPrompt
+  runnable: blocked
+  dropped:
+    - adapters/
+    - contracts/
+    - docs/
+    - examples/
+    - references/
+    - scripts/
+- kind: skill
+  slug: mutation-driver-engineering
+  slug_source: raw
+  source: workbuddy skill-marketplace:mutation-driver-engineering@unspecified
+  source_url: ~/.workbuddy/skills/mutation-driver-engineering/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:51:22.154Z
+  checksum_sha256: 727e22af8638e0e47e59ecc6261b7c4f0419f05704062d26541a94b432de6959
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: postgres-real-verification
+  slug_source: raw
+  source: workbuddy skill-marketplace:postgres-real-verification@unspecified
+  source_url: ~/.workbuddy/skills/postgres-real-verification/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-16T04:56:01.902Z
+  checksum_sha256: 2f651e5f9f70f322f922b0cb7d752e6b2d63b542c1f8aa0d8139f9ae95eda52c
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: ppt-craft-master
+  slug_source: raw
+  source: workbuddy skill-marketplace:ppt-craft-master@1.0.0
+  source_url: ~/.workbuddy/skills/ppt-craft-master__skillhub/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-17T09:43:07.120Z
+  checksum_sha256: 771f9b5c41b60ef2743cef1e53dd786d54c3267db6869e319943faf74531a5aa
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - scripts/
+- kind: skill
+  slug: ppt-designer
+  slug_source: raw
+  source: workbuddy skill-marketplace:ppt-designer@3.7.1
+  source_url: ~/.workbuddy/skills/ppt-designer__skillhub/SKILL.md
+  source_version: 3.7.1
+  fetched_at: 2026-09-17T09:43:59.365Z
+  checksum_sha256: d71fe9aad7f34e2ac8ccb00bdaac67e3f80163227d4e6c0d17b0ac9881d17081
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: ppt-generator
+  slug_source: raw
+  source: workbuddy skill-marketplace:ppt-generator@unspecified
+  source_url: ~/.workbuddy/skills/ppt-crate__skillhub/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:43:12.588Z
+  checksum_sha256: ccb5f7210040e5f1104e49b90b7545ac818358d24c85096bad04f1871e9c24af
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - agents/
+    - assets/
+    - references/
+- kind: skill
+  slug: ppt-logic-organizer
+  slug_source: raw
+  source: workbuddy skill-marketplace:ppt-logic-organizer@1.0.0
+  source_url: ~/.workbuddy/skills/ppt-logic-organizer__skillhub/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-17T09:43:37.989Z
+  checksum_sha256: 7d4869d2ec0dfe4ce8621d781f1d71b1213ab6b717312528453edb34cdbe85d9
+  license: unspecified
+  redistributable: false
+  attribution: © your-name
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: project-expert-orchestration
+  slug_source: raw
+  source: workbuddy skill-marketplace:project-expert-orchestration@unspecified
+  source_url: ~/.workbuddy/skills/project-expert-orchestration/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-15T13:28:06.656Z
+  checksum_sha256: b1143fb0b95c5d46e83ca559a00c017103a8b3bb8a1e1bb6b6304c1b64486051
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: prompt-engineering-expert
+  slug_source: raw
+  source: workbuddy skill-marketplace:prompt-engineering-expert@1.0.1
+  source_url: ~/.workbuddy/skills/prompt-engineering-expert/SKILL.md
+  source_version: 1.0.1
+  fetched_at: 2026-07-14T06:04:14.636Z
+  checksum_sha256: cd6112b16d00d3b36484a1426d6f8d1332f623b9941c2195210e7c1ac8e2010e
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - docs/
+    - examples/
+    - references/
+- kind: skill
+  slug: qqbrowser-skill
+  slug_source: raw
+  source: workbuddy skill-marketplace:qqbrowser-skill@1.0.7
+  source_url: ~/.workbuddy/skills/qqbrowser-skill/SKILL.md
+  source_version: 1.0.7
+  fetched_at: 2026-09-13T16:55:57.389Z
+  checksum_sha256: 03c7c47c5627e5780cbeca8ff2cb07361bdabd786fd86e3de512c18c19539194
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: remotion-video-toolkit
+  slug_source: bare
+  source: workbuddy expert-marketplace:humanize-ppt-team#skills/remotion-video-toolkit@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/skills/remotion-video-toolkit/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:42:39.523Z
+  checksum_sha256: eba7eef933d7088d504702f8f4bcd639d1a070e88ba46ccdee796be98a73d8bd
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - rules/
+- kind: skill
+  slug: reverse-engineering-fusion
+  slug_source: raw
+  source: workbuddy skill-marketplace:reverse-engineering-fusion@unspecified
+  source_url: ~/.workbuddy/skills/reverse-engineering-fusion__skillhub/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-10-17T15:47:55.625Z
+  checksum_sha256: 036404bbf744833b64b2cb67901e7ebd48d55164ba84f331947370168e5f7b84
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - references/
+    - scripts/
+    - src/
+- kind: skill
+  slug: senior-developer--frontend-dev
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:senior-developer#skills/frontend-dev@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/senior-developer/skills/frontend-dev/SKILL.md
+  source_version: 1.1.0
+  fetched_at: 2026-09-13T16:50:14.369Z
+  checksum_sha256: cb3831712739da6a1caedbe920e55cbbff28ba80ad51d1686e1457e83b113c3e
+  license: MIT
+  redistributable: true
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped:
+    - canvas-fonts/
+    - references/
+    - scripts/
+    - templates/
+- kind: skill
+  slug: senior-developer--fullstack-dev
+  slug_source: package_prefix
+  source: workbuddy expert-marketplace:senior-developer#skills/fullstack-dev@unspecified
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/senior-developer/skills/fullstack-dev/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-13T16:50:14.624Z
+  checksum_sha256: 9e734f87e06d23052d33bdbc972d559d9b57666492fbe355820a8321c651ac7d
+  license: MIT
+  redistributable: true
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: senior-developer--skillhub
+  slug_source: raw
+  source: workbuddy skill-marketplace:senior-developer@2.0.0
+  source_url: ~/.workbuddy/skills/senior-developer__skillhub/SKILL.md
+  source_version: 2.0.0
+  fetched_at: 2026-10-17T15:48:06.722Z
+  checksum_sha256: 15c79d4ca8f493173823c230b88df9231082287bab939af884ef0a1d424282f5
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: super-all-around-ppt-master
+  slug_source: raw
+  source: workbuddy skill-marketplace:super-all-around-ppt-master@unspecified
+  source_url: ~/.workbuddy/skills/super-all-around-ppt-master__skillhub/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T09:44:09.145Z
+  checksum_sha256: 21db7473af98fd96dbfaf4ea94aba3c6c51649f989017b5a845f14132f510d59
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - assets/
+    - references/
+- kind: skill
+  slug: superpowers
+  slug_source: raw
+  source: workbuddy skill-marketplace:superpowers@1.0.0
+  source_url: ~/.workbuddy/skills/superpowers/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-09-13T16:55:53.010Z
+  checksum_sha256: b984a5cb91f3392854eabf2ce573a896fdba6c0f8ce70cdb6d2bbe9de8c631e5
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - references/
+- kind: skill
+  slug: token-efficient-dev
+  slug_source: raw
+  source: workbuddy skill-marketplace:token-efficient-dev@1.0.0
+  source_url: ~/.workbuddy/skills/token-master__skillhub/SKILL.md
+  source_version: 1.0.0
+  fetched_at: 2026-10-17T15:48:15.898Z
+  checksum_sha256: d4135ec425db0b889bb97edf0f25bb308a08281905dfbef2c0a41d2c57f0e829
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - token-efficient-dev/
+- kind: skill
+  slug: video-content-forensics
+  slug_source: raw
+  source: workbuddy skill-marketplace:video-content-forensics@unspecified
+  source_url: ~/.workbuddy/skills/video-content-forensics/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-15T04:45:18.835Z
+  checksum_sha256: 94d977c3c162a44805393979fa61fff57d0d9ddfd5a3156ca9db01eb1ce47b15
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+  sanitized:
+    - local-user-path
+- kind: skill
+  slug: windows-pc-tuneup
+  slug_source: raw
+  source: workbuddy skill-marketplace:windows-pc-tuneup@1.5.0
+  source_url: ~/.workbuddy/skills/windows-pc-tuneup/SKILL.md
+  source_version: 1.5.0
+  fetched_at: 2026-10-13T07:46:45.259Z
+  checksum_sha256: df2ac5dc8b44f39c7681c2d11b5711e00788680a2e733c9ba6d5b7435ed41176
+  license: unspecified
+  redistributable: false
+  attribution: © 木夕
+  runnable: blocked
+  dropped:
+    - references/
+    - scripts/
+    - templates/
+- kind: skill
+  slug: wiring-and-coverage-audit
+  slug_source: raw
+  source: workbuddy skill-marketplace:wiring-and-coverage-audit@unspecified
+  source_url: ~/.workbuddy/skills/wiring-and-coverage-audit/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-15T02:25:51.537Z
+  checksum_sha256: 036762a24c6e236f52c77859509cb5885ebed7c145d6d068d8161154ef370267
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+- kind: skill
+  slug: workbuddy-market-export
+  slug_source: raw
+  source: workbuddy skill-marketplace:workbuddy-market-export@unspecified
+  source_url: ~/.workbuddy/skills/workbuddy-market-export/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-17T12:12:27.406Z
+  checksum_sha256: 4d29879a6470e513e5a6d7522c7861b0239b831026b69046b3d78aea6851a82d
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: skill
+  slug: workbuddy-safe-delete-guard
+  slug_source: raw
+  source: workbuddy skill-marketplace:workbuddy-safe-delete-guard@unspecified
+  source_url: ~/.workbuddy/skills/workbuddy-safe-delete-guard/SKILL.md
+  source_version: unspecified
+  fetched_at: 2026-09-16T04:55:44.721Z
+  checksum_sha256: ac11786ebeb57b7b9e31511313fd0415d4a4e9d641717035a149fe9c2cdd0fc1
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: blocked
+  dropped: []
+  sanitized:
+    - local-user-path
+- kind: team
+  slug: gstack
+  source: workbuddy expert-marketplace:gstack@1.0.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/gstack/.codebuddy-plugin/plugin.json
+  source_version: 1.0.0
+  fetched_at: 2026-09-16T14:54:10.596Z
+  checksum_sha256: 376970723c43d9da908762f5c73f853f148349c17054f6345f6aea163e3fd325
+  license: unspecified
+  redistributable: false
+  attribution: © gstack
+  runnable: degraded
+  dropped: []
+- kind: team
+  slug: humanize-ppt-team
+  source: workbuddy expert-marketplace:humanize-ppt-team@0.2.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/humanize-ppt-team/.codebuddy-plugin/plugin.json
+  source_version: 0.2.0
+  fetched_at: 2026-09-17T09:42:40.325Z
+  checksum_sha256: 4ca614f1cc6c054290a894fdb6d335545c61eeb78abcedd819af6ddcf40fe8ae
+  license: unspecified
+  redistributable: false
+  attribution: © 卡尔的AI沃茨
+  runnable: blocked
+  dropped: []
+- kind: team
+  slug: software-company
+  source: workbuddy expert-marketplace:software-company@1.1.0
+  source_url: ~/.workbuddy/plugins/marketplaces/experts/plugins/software-company/.codebuddy-plugin/plugin.json
+  source_version: 1.1.0
+  fetched_at: 2026-10-15T09:56:41.849Z
+  checksum_sha256: a3191e0f9ac036f4c777cbf588c8b15b29814775d876cbb2558aa99a808b1c57
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []
+- kind: connector
+  slug: github
+  source: workbuddy connector-marketplace:github
+  source_url: ~/.workbuddy/connectors-marketplace/connectors/github/mcp.json
+  source_version: unspecified
+  fetched_at: 2026-09-24T12:59:24.000Z
+  checksum_sha256: 34e11cfd852a9b026e1a77166a2fbcea285510d726b7201b73c4301b7bb65e05
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - WorkBuddy auth_mode=server-side 无 openbot 等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供
+    - connectors-marketplace/connectors/github/mcp.json — WorkBuddy auth_mode=server-side 无 openbot 等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供
+    - connectors-marketplace/connectors/github/skill/SKILL.md — 连接器附带的 SKILL.md 只是教模型如何安装该连接器
+    - skill/SKILL.md（连接器自带的安装说明，openbot 侧由 connectors.yaml 直接声明，不移植）
+- kind: connector
+  slug: tapd
+  source: workbuddy connector-marketplace:tapd
+  source_url: ~/.workbuddy/connectors-marketplace/connectors/tapd/mcp.json
+  source_version: unspecified
+  fetched_at: 2026-09-24T12:59:24.000Z
+  checksum_sha256: b54f0d3c6a559632bb62c20685880debbaf84369e4fed67b3aa2f587677714bf
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped:
+    - connectors-marketplace/connectors/tapd/skills/SKILL.md — 连接器附带的 SKILL.md 只是教模型如何安装该连接器
+    - skills/SKILL.md（连接器自带的安装说明，openbot 侧由 connectors.yaml 直接声明，不移植）
+- kind: connector
+  slug: tencent-docs
+  source: workbuddy connector-marketplace:tencent-docs
+  source_url: ~/.workbuddy/connectors-marketplace/connectors/tencent-docs/mcp.json
+  source_version: unspecified
+  fetched_at: 2026-09-24T12:59:24.000Z
+  checksum_sha256: 4a7344d046a9f9afa14ace8cc17251b2232348bba1c0031a7eb2a4b6c45c94f5
+  license: unspecified
+  redistributable: false
+  attribution: © WorkBuddy 能力市场
+  runnable: full
+  dropped: []

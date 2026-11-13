@@ -144,6 +144,34 @@ export function createDeliveryStore(database: Database) {
         );
     },
     async bind(input: Omit<DeliveryBinding, "id" | "enabled">) {
+      /*
+       * An identity already held by another person cannot be seen from the caller's frame: the
+       * holder's row is stamped with the holder's tenant, so the transaction below would upsert
+       * onto that invisible conflict row and die as a bare 42501 from row-level security before
+       * the refusal could answer. Who holds the identity is therefore read in the platform frame
+       * -- the only frame that sees every stamped row -- and a holder who is not the caller is
+       * refused here, with the sentence the transaction's `!bound` fallback gives. Nothing about
+       * the holder's row is written or returned here: the unique constraint and the `setWhere`
+       * guard below stay as the backstop behind this read. (The same shape as `registerDevice`'s
+       * holder lookup above.)
+       */
+      const [held] = await runAsTenant("platform", () =>
+        database
+          .select({ ownerUserId: deliveryBindings.ownerUserId })
+          .from(deliveryBindings)
+          .where(
+            and(
+              eq(deliveryBindings.transport, input.transport),
+              eq(deliveryBindings.realm, input.realm),
+              eq(deliveryBindings.identity, input.identity),
+            ),
+          )
+          .limit(1),
+      );
+      if (held && held.ownerUserId !== input.ownerUserId)
+        throw new DeliveryRefusedError(
+          "That identity is already connected to another person.",
+        );
       return database.transaction(async (tx) => {
         const existing = (
           await tx

@@ -1,4 +1,5 @@
 import type { OutboundPolicy } from "../net/outbound-guard";
+import * as builtinSkills from "../skills/read-tool";
 import * as arcade from "./arcade";
 import * as baiduNetdiskRest from "./baidu-netdisk-rest";
 import * as builtinRoutines from "./builtin-routines";
@@ -150,6 +151,7 @@ export type TransportKind =
   | "baidu-netdisk-rest"
   | "builtin-routines"
   | "builtin-staffing"
+  | "builtin-skills"
   | "composio"
   | "arcade";
 
@@ -182,6 +184,7 @@ const TRANSPORTS: Record<TransportKind, VendorTransport> = {
   "baidu-netdisk-rest": baiduNetdiskRest,
   "builtin-routines": builtinRoutines,
   "builtin-staffing": builtinStaffing,
+  "builtin-skills": builtinSkills,
   composio,
   arcade,
 };
