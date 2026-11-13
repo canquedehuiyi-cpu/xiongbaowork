@@ -18,6 +18,12 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ENTRY = join(import.meta.dir, "..", "..", "runner", "src", "index.ts");
+/**
+ * Where the compile runs, whatever directory the script is called from: Bun writes each bundled
+ * module's path into the binary as a comment, relative to this directory. Run from elsewhere those
+ * become `../home/<user>/<checkout>/openbot/...`, the build machine's layout.
+ */
+export const BUILD_CWD = join(import.meta.dir, "..", "..");
 const BINARIES = join(import.meta.dir, "..", "src-tauri", "binaries");
 
 /** Rust target triples this app is built for, and the Bun target that runs on each. */
@@ -63,30 +69,6 @@ export function compileArgs(
   ];
 }
 
-/**
- * What the shipped sidecar is built with: the stage 0 flags, plus fixed values for `__dirname` /
- * `__filename`. `--minify` is left out for now (it rewrites `openbotUrl:` in the artifact, which the
- * word lists cannot follow before plan appendix A row 35 is approved; Task 19 turns it on).
- * playwright-core's bundle reads both, Bun writes the real path of the file into the binary, and
- * that is the build machine's checkout path. Bun resolves symlinks before it writes the path, so a
- * link farm in a neutral directory does not help; `--define` does.
- *
- * Kept apart from `compileArgs`, which `tests/build-sidecar.test.ts` pins exactly.
- */
-export function sidecarArgs(
-  triple: string,
-  host: string,
-  outfile: string,
-): string[] {
-  return [
-    ...compileArgs(triple, host, outfile),
-    "--define",
-    '__dirname="/sidecar"',
-    "--define",
-    '__filename="/sidecar/runner.js"',
-  ];
-}
-
 export function hostTriple(rustcVersion: string): string {
   const host = rustcVersion.match(/^host: (\S+)$/m)?.[1];
   if (!host) throw new Error("rustc -vV did not name a host triple.");
@@ -106,8 +88,9 @@ if (import.meta.main) {
   mkdirSync(BINARIES, { recursive: true });
   const outfile = join(BINARIES, sidecarFile(triple));
   const build = Bun.spawnSync(
-    [process.execPath, ...sidecarArgs(triple, host, outfile)],
+    [process.execPath, ...compileArgs(triple, host, outfile)],
     {
+      cwd: BUILD_CWD,
       stdout: "inherit",
       stderr: "inherit",
     },

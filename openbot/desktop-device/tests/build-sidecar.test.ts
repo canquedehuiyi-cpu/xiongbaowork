@@ -4,11 +4,13 @@
  * runner/tests/runner-package.test.ts, with these same flags.
  */
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
+  BUILD_CWD,
   bunTargetFor,
   compileArgs,
   hostTriple,
-  sidecarArgs,
   sidecarFile,
 } from "../scripts/build-sidecar";
 
@@ -52,23 +54,20 @@ test("the stage 0 flags are used, and --target only when cross-compiling", () =>
   );
 });
 
-test("compile args fix __dirname and __filename", () => {
-  const host = "x86_64-unknown-linux-gnu";
-  const args = sidecarArgs(host, host, "/out/runner");
-  // Everything the stage 0 flags say stays, in the same order.
-  expect(args.slice(0, compileArgs(host, host, "/out/runner").length)).toEqual(
-    compileArgs(host, host, "/out/runner"),
+test("compile args do not define __dirname or __filename", () => {
+  // `--define __dirname=...` applies to the bundled playwright-core too, which then looks for its
+  // package.json at `/` and cannot launch a browser. Neither is `--minify` on yet (appendix A row 35).
+  const args = compileArgs(
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+    "/o",
   );
+  expect(args).not.toContain("--define");
   expect(args).not.toContain("--minify");
-  // playwright-core's __dirname/__filename would otherwise be written into the binary as the
-  // build machine's absolute path.
-  const defines = args.flatMap((arg, i) =>
-    args[i - 1] === "--define" ? [arg] : [],
-  );
-  expect(defines.map((d) => d.split("=")[0]).sort()).toEqual([
-    "__dirname",
-    "__filename",
-  ]);
+});
+
+test("the compile runs in the openbot directory, so module paths in the binary are relative", () => {
+  expect(existsSync(join(BUILD_CWD, "runner", "src", "index.ts"))).toBe(true);
 });
 
 test("the host triple is read from rustc -vV", () => {
