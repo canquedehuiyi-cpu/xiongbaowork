@@ -93,7 +93,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           <h2 className={museText.heading}>对话</h2>
           <MuseLinkButton
             icon={IconUsersGroup}
-            render={<Link onClick={onClose} to="/channel/new" />}
+            render={<Link onClick={onClose} to="/group/new" />}
             small
           >
             新建群组

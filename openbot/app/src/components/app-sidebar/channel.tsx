@@ -42,6 +42,7 @@ export const Channel = memo(function Channel({
   unread,
   busy,
   emphasis,
+  groupId,
 }: {
   channelId: string;
   participantIds: string[];
@@ -57,6 +58,8 @@ export const Channel = memo(function Channel({
   unread: boolean;
   busy: boolean;
   emphasis: MessageListEmphasis;
+  /** The group this conversation is the chat of, when it is one the person made. */
+  groupId?: string;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -104,6 +107,7 @@ export const Channel = memo(function Channel({
               busy={busy}
               displayedTitle={threadTitle}
               emphasis={emphasis}
+              groupId={groupId}
               lastMessageAt={lastMessageAt}
               name={name}
               participantIds={participantIds}

@@ -19,10 +19,12 @@ export function ChannelRow({
   channel,
   animateOrder,
   emphasis,
+  groupId,
 }: {
   channel: ChannelSummary;
   animateOrder: boolean;
   emphasis: MessageListEmphasis;
+  groupId?: string;
 }) {
   const shouldReduceMotion = useReducedMotion();
   // Whether this row is unread, as a boolean, for the same reason `Channel` computes `isOpen`
@@ -45,6 +47,7 @@ export function ChannelRow({
     >
       <Channel
         emphasis={emphasis}
+        groupId={groupId}
         channelId={channel.id}
         participantIds={channel.agentIds}
         name={channel.name}

@@ -28,6 +28,8 @@ import {
 import { useMessageListEmphasis } from "@/lib/settings/message-list";
 import { cn } from "@/lib/utils";
 import {
+  CREW_STATUS_WORDS,
+  crewStatus,
   type WakerGroup,
   wakerGroupsQueryOptions,
 } from "@/lib/waker-groups/queries";
@@ -448,14 +450,14 @@ function MemberStack({
 }
 
 /**
- * 群组: the 群聊 the person is in (every loaded conversation with two or more employees, drawn and
- * menued as in 会话), then the 群组 — the named crews from 员工 › 群组, faces stacked.
+ * 群组: one section. First the chats with two or more employees (every loaded one, drawn and menued
+ * as in 会话; a chat that is a crew I made wears the crew's portrait), then the crews I made that
+ * have no chat yet, by name, each saying what it lacks. A crew is managed in 员工 › 群组.
  *
- * 「新建群聊」 opens the page that makes an empty 群聊 with the employees in the order picked;
- * 「新建群组」 lands on 员工 › 群组, whose create dialog has no address of its own.
+ * 「新建群组」 opens the page that makes a crew and its chat in one go.
  *
- * Older 群聊 than the loaded pages are fetched on request only: paging on scroll here would walk the
- * whole history of 单聊 looking for the next 群聊.
+ * Older chats than the loaded pages are fetched on request only: paging on scroll here would walk
+ * the whole history of 单聊 looking for the next 群聊.
  */
 export function GroupList({
   scrollRoot,
@@ -474,124 +476,111 @@ export function GroupList({
   const chats = pinnedFirst(
     matchingChannels((channels.data ?? []).filter(isGroupChannel), query),
   );
-  const shownGroups = (groups.data ?? []).filter((group) =>
-    matches(query, group.name, group.description),
+  const groupOfChannel = new Map(
+    (groups.data ?? []).flatMap((group) =>
+      group.channelId ? [[group.channelId, group.id] as const] : [],
+    ),
   );
+  // Crews with a chat are that chat's row above; these are the ones still without.
+  const waiting = (groups.data ?? [])
+    .filter(
+      (group) =>
+        !group.channelId &&
+        crewStatus(group) !== "chat" &&
+        matches(query, group.name, group.description),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
   const searching = query.trim().length > 0;
+  const loading = channels.isPending || groups.isPending;
+  const failed =
+    (channels.isError && !channels.data) || (groups.isError && !groups.data);
+  const retrying = channels.isFetching || groups.isFetching;
+  const empty = chats.length === 0 && waiting.length === 0;
   return (
     <>
       <RosterToolbar
         actions={
-          <>
-            <Link className={newRowClassName} to="/group/new">
-              <IconPlus aria-hidden="true" />
-              新建群聊
-            </Link>
-            <Link
-              className={newRowClassName}
-              search={{ tab: "groups" }}
-              to="/bots"
-            >
-              <IconPlus aria-hidden="true" />
-              新建群组
-            </Link>
-          </>
+          <Link className={newRowClassName} to="/group/new">
+            <IconPlus aria-hidden="true" />
+            新建群组
+          </Link>
         }
-        fieldLabel="按名字搜索群聊和群组"
+        fieldLabel="按名字搜索群组"
         onQueryChange={setQuery}
         query={query}
-        searchLabel="搜索群聊和群组"
+        searchLabel="搜索群组"
       />
       <section aria-labelledby="sidebar-group-chats">
         <h3 className={sectionLabelClassName} id="sidebar-group-chats">
-          群聊
+          群组
         </h3>
-        {channels.isError && !channels.data ? (
+        {failed ? (
           <RosterNote>
-            <span role="alert">群聊加载失败。</span>
+            <span role="alert">群组加载失败。</span>
             <Button
               className="ml-1 h-auto px-1 py-0 text-[12px]"
-              disabled={channels.isFetching}
-              onClick={() => void channels.refetch()}
+              disabled={retrying}
+              onClick={() => {
+                if (channels.isError) void channels.refetch();
+                if (groups.isError) void groups.refetch();
+              }}
               variant="link"
             >
-              {channels.isFetching ? "正在重试…" : "重试"}
+              {retrying ? "正在重试…" : "重试"}
             </Button>
           </RosterNote>
-        ) : channels.isPending ? (
-          <RosterNote>正在加载群聊…</RosterNote>
-        ) : channels.data && chats.length === 0 ? (
+        ) : loading ? (
+          <RosterNote>正在加载群组…</RosterNote>
+        ) : empty ? (
           <RosterNote>
             {searching
-              ? "已加载的群聊里没有匹配的"
+              ? "已加载的群组里没有匹配的"
               : channels.hasNextPage
-                ? "已加载的会话里还没有群聊。"
-                : "还没有群聊。点「新建群聊」，选两位以上员工开始。"}
+                ? "已加载的会话里还没有群组。"
+                : "还没有群组。点「新建群组」，选两位以上员工开始。"}
           </RosterNote>
         ) : (
-          <ul aria-label="群聊" className="flex flex-col gap-px">
+          <ul aria-label="群组" className="flex flex-col gap-px">
             {chats.map((channel) => (
               <li key={channel.id}>
                 <ChannelRow
                   animateOrder={false}
                   channel={channel}
                   emphasis={emphasis}
+                  groupId={groupOfChannel.get(channel.id)}
                 />
               </li>
             ))}
+            {waiting.map((group) => {
+              const status = crewStatus(group);
+              return (
+                <li className="flex" key={group.id}>
+                  {/* No chat yet to open; 员工 › 群组 is where the crew is fixed or started. */}
+                  <Link
+                    activeProps={{}}
+                    className={rowClassName}
+                    search={{ tab: "groups" }}
+                    to="/bots"
+                  >
+                    <MemberStack agentsById={agentsById} group={group} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold text-[13px] leading-[18px]">
+                        {group.name}
+                      </span>
+                      <span className="block truncate text-[11px] text-faint leading-[16px]">
+                        {group.members.length} 名员工
+                        {status === "chat"
+                          ? ""
+                          : ` · ${CREW_STATUS_WORDS[status]}`}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
         <ChannelPagination query={channels} scrollRoot={scrollRoot} searching />
-      </section>
-      <section aria-labelledby="sidebar-crews">
-        <h3 className={sectionLabelClassName} id="sidebar-crews">
-          群组
-        </h3>
-        {groups.isPending ? (
-          <RosterNote>正在加载群组…</RosterNote>
-        ) : groups.isError && !groups.data ? (
-          <RosterNote>
-            <span role="alert">群组加载失败。</span>
-            <Button
-              className="ml-1 h-auto px-1 py-0 text-[12px]"
-              disabled={groups.isFetching}
-              onClick={() => void groups.refetch()}
-              variant="link"
-            >
-              {groups.isFetching ? "正在重试…" : "重试"}
-            </Button>
-          </RosterNote>
-        ) : (groups.data ?? []).length === 0 ? (
-          <RosterNote>
-            在员工的「群组」里把几位员工编成一组，它就会出现在这里。
-          </RosterNote>
-        ) : shownGroups.length === 0 ? (
-          <RosterNote>没有匹配的群组</RosterNote>
-        ) : (
-          <ul aria-label="群组" className="flex flex-col gap-px">
-            {shownGroups.map((group) => (
-              <li className="flex" key={group.id}>
-                {/* No group workspace exists to open; 员工 › 群组 is where a group is managed. */}
-                <Link
-                  activeProps={{}}
-                  className={rowClassName}
-                  search={{ tab: "groups" }}
-                  to="/bots"
-                >
-                  <MemberStack agentsById={agentsById} group={group} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-[13px] leading-[18px]">
-                      {group.name}
-                    </span>
-                    <span className="block truncate text-[11px] text-faint leading-[16px]">
-                      {group.members.length} 名员工
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
     </>
   );

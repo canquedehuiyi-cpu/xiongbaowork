@@ -765,7 +765,7 @@ describe("every OpenBot surface stays reachable", () => {
   const surfaces: [RegExp, string][] = [
     [/^主对话/, "/channel/c-muse"],
     [/^新对话$/, "/channel/new?agent=picked-harness"],
-    [/^新建群组$/, "/channel/new"],
+    [/^新建群组$/, "/group/new"],
     [/^首页$/, "/"],
     // OpenBot's own destinations, from the shared navigation list its sidebar draws.
     [/^员工$/, "/bots"],
