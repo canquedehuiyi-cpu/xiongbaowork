@@ -1094,6 +1094,127 @@ describe("desktop writes: stops, success and the queue", () => {
   });
 });
 
+describe("desktop writes: Windows under the engine switch (Task 28)", () => {
+  test("agent-desktop asked for: every write goes to the macOS writer, type replace through set-value; legacy: read-only, nothing run", async () => {
+    const t = setup("windows");
+    const context = { botId: BOT };
+    const payload = {
+      session: TOKEN,
+      actorId: ACTOR,
+      approved: false,
+      actionWords: [],
+    };
+    const switched = createDesktopActions({
+      platform: "win32",
+      engine: "agent-desktop",
+      cli: t.cli,
+      reader: t.reader,
+      control: t.control,
+      sessions: t.sessions,
+      selfOrTerminal: SAMPLE_RULE,
+    });
+    const legacy = createDesktopActions({
+      platform: "win32",
+      engine: "legacy",
+      control: t.control,
+      sessions: t.sessions,
+      host: createDesktopHost({
+        spec: () => {
+          throw new Error("must not start a helper");
+        },
+      }),
+    });
+    cleanup.push(() => legacy.close());
+    await t.start();
+
+    // The legacy engine first: the same session, the same channel, and still only reading.
+    const ran = t.log().length;
+    for (const [action, body] of [
+      ...FOUR,
+      ["desktop.launch", { app: "notepad" }],
+      ["desktop.clipboard_write", { text: "x" }],
+      ["desktop.clipboard_read", { approved: true }],
+    ] as Array<[string, Record<string, unknown>]>)
+      expect(
+        await legacy(action, { ...payload, ...body }, undefined, context),
+      ).toEqual(fail(desktopMessage("read_only_windows")));
+    expect(
+      await legacy(
+        "desktop.wait",
+        { windowId: "w123-45", name: "Send", timeoutSec: 3 },
+        undefined,
+        context,
+      ),
+    ).toEqual(fail(desktopMessage("unsupported")));
+    expect(t.log()).toHaveLength(ran);
+
+    // agent-desktop asked for: each write reaches the binary once, each on a fresh read.
+    let { window, el } = await read(t);
+    const maximize = adRef(t, el("Maximize").ref);
+    expect(
+      await switched(
+        "desktop.click",
+        { ...payload, ref: el("Maximize").ref },
+        undefined,
+        context,
+      ),
+    ).toMatchObject({ ok: true, output: { physical: false } });
+    ({ window, el } = await read(t));
+    const single = adRef(t, el("Single line").ref);
+    expect(
+      await switched(
+        "desktop.type",
+        {
+          ...payload,
+          ref: el("Single line").ref,
+          text: "熊宝",
+          mode: "replace",
+        },
+        undefined,
+        context,
+      ),
+    ).toMatchObject({ ok: true, output: { physical: false } });
+    expect(
+      await switched(
+        "desktop.key",
+        { ...payload, windowId: window.windowId, keys: "ctrl+s" },
+        undefined,
+        context,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      await switched(
+        "desktop.focus",
+        { ...payload, windowId: window.windowId },
+        undefined,
+        context,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(t.writes()).toEqual([
+      ["click", maximize],
+      ["set-value", single, "--stdin"],
+      ["press", "ctrl+s", "--window-id", "w-66058"],
+      ["focus-window", "--window-id", "w-66058"],
+    ]);
+    // Headless all the way: the device was never asked to pause its mouse check.
+    expect(t.trace).toEqual([]);
+
+    // wait is a read there, as on macOS: no session needed.
+    t.sessions.end(TOKEN);
+    expect(
+      await switched(
+        "desktop.wait",
+        { windowId: window.windowId, name: "Send", timeoutSec: 3 },
+        undefined,
+        context,
+      ),
+    ).toMatchObject({
+      ok: true,
+      output: { window: { windowId: window.windowId } },
+    });
+  });
+});
+
 describe("desktop writes: round 1", () => {
   /** The Windows sample form with a textarea, a searchfield and a combobox added, and `name` for Send. */
   function form(send = "Send") {
