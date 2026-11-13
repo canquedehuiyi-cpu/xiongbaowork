@@ -177,7 +177,7 @@ type ChannelFacts = {
 class AlreadyLinked extends Error {}
 
 /** The SQLSTATE drizzle wraps; Bun reports it as `errno` (see store.ts `create`). */
-const stateOf = (error: unknown) => {
+export const stateOf = (error: unknown) => {
   const failure = error as {
     errno?: string | number;
     cause?: { errno?: string | number };

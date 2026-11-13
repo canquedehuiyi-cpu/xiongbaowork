@@ -516,6 +516,7 @@ import {
   withChannelRenameLink,
   withWakerGroupLink,
 } from "./waker-groups/channel-link";
+import { createWakerGroupActions } from "./waker-groups/linked-actions";
 import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
 import { createFlowGenerator } from "./wakerflows/generator";
@@ -5227,13 +5228,30 @@ await startupLifecycle.run(async (startup) => {
     ),
   );
 
+  const wakerGroupStore = createWakerGroupStore(database);
   app.route(
     "/api/waker-groups",
     createWakerGroupRoutes(
-      createWakerGroupStore(database),
+      wakerGroupStore,
       config.singleUser
         ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
+      // A crew and its chat are one thing (group-unify 6.2-6.3). The undecorated groups service, so
+      // opening a crew's chat does not make it a second crew; the rename-decorated channel store.
+      createWakerGroupActions({
+        database,
+        store: wakerGroupStore,
+        link: wakerGroupLink,
+        groups: baseGroupConversations,
+        channels: channelStore,
+        actorFor,
+        portraits: createPortraitStore(database),
+        // The groups service's own `canUseBot`.
+        canUse: async (ownerUserId, agentId) =>
+          Boolean(
+            await agentProfileStore.get(await actorFor(ownerUserId), agentId),
+          ),
+      }),
     ),
   );
 
