@@ -562,6 +562,18 @@
    现状：它写进了前端产物（`tenantId:"openbot"`）和数据库；已有 `former_ids` 机制支持改名（`server/src/tenant-package.ts:241-249`）。但凭据加密的附加数据里有 `tenantId`（`server/src/credentials.ts:269-273`），**是否就是这个租户包 id 还没核实**；若是，改 id 会让已加密的凭据解不开。
    建议：**本阶段不改**，先核实 `credentials.tenantId` 的来源；核实为安全后再单独立项。
 
+   **核实结论（Task 6）**：**不是租户包 id，改 id 不影响凭据。**（核实于 2026-11-13，路径相对 `openbot/server/src/`。）
+
+   凭据附加数据里的 `tenantId` 是凭据行自己的 `credentials.tenant_id` 列，值是这一行所属的租户帧：登录用户的 id，或 `system`／`team`。租户包 id（`openbot`）只写进另一张表 `deployment_packages.tenant_id`。两列同名，但不是同一列；代码里没有任何一处把租户包 id 当作租户帧，或写进 `credentials.tenant_id`。调用链：
+
+   - 写入：`credentials.ts:272`（`credentialAad` 取 `binding.tenantId`）← `:310`（`sealCredential`）← 各写入方都只传 `seal` 回调，binding 由 store 给出（如 `credentials.ts:887`、`:967`，`agents/auth-header.ts:92`，`responsibilities/triggers.ts:502`，`models/routes.ts:313`）← `credentials.ts:563`（`sealedRow` 里的 `tenantId: tenant`，同一个值经 `:566` 写进该行的 `tenant_id` 列；`updateSecret` 则在 `:604` 用 `select credentials.tenantId` 读回的列值）← `:542`／`:628`（`credentialTenant(kind, target)`）← `:514`（`currentTenant()`；`target` 为 `team` 时取常量 `TEAM_TENANT`）← `tenant/context.ts:59-65`（AsyncLocalStorage 里的帧）← `tenant/context.ts:144`（`runAsTenant(tenantId)`）← 请求入口 `auth/guards.ts:101`（`runAsTenant(session.user.id, …)`，即 Better Auth 的用户 id）。后台任务由 `runAsClaimedTenant`（`tenant/context.ts:122`，取被认领行上已有的租户戳）进入，或用常量 `system`／`platform`。
+   - 解密：`credentials.ts:388`（`openCredential` 用 `requireBinding(row)` 重建附加数据；注释写明 binding 绝不从信封里读）← `row.tenantId` 来自 `readSecret`／`readModelSecret` 的 `select credentials.tenantId`（`credentials.ts:775-787`、`:789-821`），以及 `wakerflows/model.ts:95,163` 读的同一列 ← 也就是写入时那一列的值。
+   - 数据库列：`db/schema/core.ts:434`（`credentials.tenantId: tenantId()`）→ `db/schema/tenant.ts:44-47`（默认值 `current_setting('app.tenant_id', true)`，由 `db/client.ts:297`、`:441` 按上面的帧设置）。`db/schema/tenant.ts:4-11` 写明租户与用户一一对应，值等于用户 id，另有 `system`／`platform`／`team` 三个常量。迁移 `drizzle/0052_adorable_hannibal_king.sql:31` 加这一列时，给的也是同一个默认值。迁移里没有把 `'openbot'` 写进任何 `tenant_id`：所有 `drizzle/*.sql` 中，`'openbot'` 只出现在 `0054_app_role.sql:15`，是数据库角色的密码。
+   - 租户包 id 的去向：`brand.yaml` 的 `tenant.id` → `tenant-package.ts:759`（解析）→ `TenantPackage.tenantId`（`:239`）。它只用在三处：①`createApplicationConfiguration`（`:334`），即前端产物里的 `tenantId:"openbot"`；②`synchronizeTenantPackage` 写 `deployment_packages` 的一行（`:1171-1199`；表定义在 `db/schema/core.ts:262-270`，`tenant_id` 唯一，主键是随机 uuid；整个同步在 `system` 帧里跑，`:1146-1147`）；③`deploymentNameOf`（`:2255-2277`）→ `index.ts:944-947` 的 `deploymentId`，用于线程 id（`createThreadIdentity`）和 Shared 账号身份（`index.ts:1845`）。这三处都不碰 `credentials`，也不调用 `runAsTenant`。仓库里没有 `tenants` 表；所谓「租户行」就是各表的 `tenant_id` 列，值来自上面的帧。
+   - `former_ids`：`tenant-package.ts:1205-1239` 只把 `agents`、`channels`、`skills` 的 `package_id` 从旧 `deployment_packages` 行改指到新行，不改任何 `tenant_id`，也不碰 `credentials`。它和凭据无关，保住凭据也用不到它。
+
+   附带说明（不影响结论）：改租户包 id 的副作用都在 `deployment_packages` 和 `deploymentId`（线程 id、Shared 账号身份）这一侧，这正是 `former_ids` 设计要覆盖的范围，不属于本问。
+
 6. **Helm chart（`charts/openbot/`）交付给客户吗？**
    现状：整套是上游的，名字、描述、维护者、镜像地址都是 OpenBot/CopilotKit（2.4）；京东云用的是 compose。
    建议：**不交付**，护栏整目录豁免。以后要交付 K8s 版本，另做一个 fork 自有的 chart（新目录，零同步冲突），不改上游这份。
