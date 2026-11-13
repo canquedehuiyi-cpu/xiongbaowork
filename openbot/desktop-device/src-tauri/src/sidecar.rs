@@ -401,13 +401,20 @@ pub fn detect_browser(candidates: &[PathBuf], exists: &dyn Fn(&Path) -> bool) ->
     candidates.iter().find(|path| exists(path)).cloned()
 }
 
+/// A development override from the environment: the `new` name, and only when it is not set the
+/// `legacy` one (the name before the rename, still read so an existing shell setup keeps working).
+fn dev_override(new: &str, legacy: &str) -> Option<OsString> {
+    std::env::var_os(new).or_else(|| std::env::var_os(legacy))
+}
+
 /// The sidecar next to this executable, where Tauri's `externalBin` puts it in every bundle.
 ///
-/// A debug build also honours `OPENBOT_RUNNER_BINARY`, so the shell can be run with `cargo run`
-/// against a runner compiled by `scripts/build-sidecar.ts` without bundling.
+/// A debug build also honours `XIONGBAO_RUNNER_BINARY` (or else the old `OPENBOT_RUNNER_BINARY`),
+/// so the shell can be run with `cargo run` against a runner compiled by `scripts/build-sidecar.ts`
+/// without bundling.
 pub fn sidecar_path() -> io::Result<PathBuf> {
     if cfg!(debug_assertions) {
-        if let Some(path) = std::env::var_os("OPENBOT_RUNNER_BINARY") {
+        if let Some(path) = dev_override("XIONGBAO_RUNNER_BINARY", "OPENBOT_RUNNER_BINARY") {
             return Ok(PathBuf::from(path));
         }
     }
@@ -420,12 +427,15 @@ pub fn sidecar_path() -> io::Result<PathBuf> {
 
 /// The desktop helper next to this executable, where the sidecar is.
 ///
-/// A debug build also honours `OPENBOT_AGENT_DESKTOP_BINARY`, as `sidecar_path` does
-/// `OPENBOT_RUNNER_BINARY`. Whether the file is there is found out by the runner, when a desktop
-/// action first needs it.
+/// A debug build also honours `XIONGBAO_AGENT_DESKTOP_BINARY` (or else the old
+/// `OPENBOT_AGENT_DESKTOP_BINARY`), as `sidecar_path` does `XIONGBAO_RUNNER_BINARY`. Whether the
+/// file is there is found out by the runner, when a desktop action first needs it.
 pub fn agent_desktop_path() -> io::Result<PathBuf> {
     if cfg!(debug_assertions) {
-        if let Some(path) = std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY") {
+        if let Some(path) = dev_override(
+            "XIONGBAO_AGENT_DESKTOP_BINARY",
+            "OPENBOT_AGENT_DESKTOP_BINARY",
+        ) {
             return Ok(PathBuf::from(path));
         }
     }
@@ -1016,7 +1026,7 @@ mod tests {
 
     #[test]
     fn the_sidecar_sits_next_to_the_app() {
-        if std::env::var_os("OPENBOT_RUNNER_BINARY").is_some() {
+        if dev_override("XIONGBAO_RUNNER_BINARY", "OPENBOT_RUNNER_BINARY").is_some() {
             return;
         }
         let path = sidecar_path().unwrap();
@@ -1031,8 +1041,12 @@ mod tests {
     #[test]
     fn agent_desktop_path_is_next_to_the_app() {
         // Either override moves a path this test compares, as in `the_sidecar_sits_next_to_the_app`.
-        if std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY").is_some()
-            || std::env::var_os("OPENBOT_RUNNER_BINARY").is_some()
+        if dev_override(
+            "XIONGBAO_AGENT_DESKTOP_BINARY",
+            "OPENBOT_AGENT_DESKTOP_BINARY",
+        )
+        .is_some()
+            || dev_override("XIONGBAO_RUNNER_BINARY", "OPENBOT_RUNNER_BINARY").is_some()
         {
             return;
         }
@@ -1044,5 +1058,29 @@ mod tests {
         );
         assert_eq!(AGENT_DESKTOP, "agent-desktop");
         assert_eq!(path.parent(), sidecar_path().unwrap().parent());
+    }
+
+    // These two use names of their own: the process environment is shared by every test thread.
+    #[test]
+    fn dev_override_prefers_the_new_name() {
+        std::env::set_var("XB_TEST_OVERRIDE_NEW_A", "new");
+        std::env::set_var("XB_TEST_OVERRIDE_LEGACY_A", "old");
+        assert_eq!(
+            dev_override("XB_TEST_OVERRIDE_NEW_A", "XB_TEST_OVERRIDE_LEGACY_A"),
+            Some(OsString::from("new"))
+        );
+    }
+
+    #[test]
+    fn dev_override_falls_back_to_the_legacy_name() {
+        std::env::set_var("XB_TEST_OVERRIDE_LEGACY_B", "old");
+        assert_eq!(
+            dev_override("XB_TEST_OVERRIDE_NEW_B", "XB_TEST_OVERRIDE_LEGACY_B"),
+            Some(OsString::from("old"))
+        );
+        assert_eq!(
+            dev_override("XB_TEST_OVERRIDE_NEW_C", "XB_TEST_OVERRIDE_LEGACY_C"),
+            None
+        );
     }
 }

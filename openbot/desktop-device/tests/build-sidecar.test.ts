@@ -8,6 +8,7 @@ import {
   bunTargetFor,
   compileArgs,
   hostTriple,
+  sidecarArgs,
   sidecarFile,
 } from "../scripts/build-sidecar";
 
@@ -49,6 +50,25 @@ test("the stage 0 flags are used, and --target only when cross-compiling", () =>
   expect(compileArgs("x86_64-pc-windows-msvc", host, "/o")).toContain(
     "--target=bun-windows-x64",
   );
+});
+
+test("compile args minify", () => {
+  const host = "x86_64-unknown-linux-gnu";
+  const args = sidecarArgs(host, host, "/out/runner");
+  // Everything the stage 0 flags say stays, in the same order.
+  expect(args.slice(0, compileArgs(host, host, "/out/runner").length)).toEqual(
+    compileArgs(host, host, "/out/runner"),
+  );
+  expect(args).toContain("--minify");
+  // playwright-core's __dirname/__filename would otherwise be written into the binary as the
+  // build machine's absolute path.
+  const defines = args.flatMap((arg, i) =>
+    args[i - 1] === "--define" ? [arg] : [],
+  );
+  expect(defines.map((d) => d.split("=")[0]).sort()).toEqual([
+    "__dirname",
+    "__filename",
+  ]);
 });
 
 test("the host triple is read from rustc -vV", () => {

@@ -36,12 +36,6 @@
     "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
   },
   {
-    "word": "<build-path>",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "构建机绝对路径（playwright-core 的 __dirname/__filename 被 Bun 写进二进制，路径含 openbot）；Task 13 在无品牌的临时目录里构建后删除"
-  },
-  {
     "word": "OPENBOT_",
     "category": "operator-visible",
     "plan": "rewrite",
@@ -100,11 +94,5 @@
     "category": "peer-protocol",
     "plan": "keep",
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
-  },
-  {
-    "word": "shared/openbot-browser.ts",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "打包进二进制的模块路径注释；Task 13 加 --minify"
   }
 ]

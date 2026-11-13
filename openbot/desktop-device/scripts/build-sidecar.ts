@@ -63,6 +63,30 @@ export function compileArgs(
   ];
 }
 
+/**
+ * What the shipped sidecar is built with: the stage 0 flags, plus `--minify` (drops the comments and
+ * module-path banners Bun keeps otherwise), and fixed values for `__dirname` / `__filename`.
+ * playwright-core's bundle reads both, Bun writes the real path of the file into the binary, and
+ * that is the build machine's checkout path. Bun resolves symlinks before it writes the path, so a
+ * link farm in a neutral directory does not help; `--define` does.
+ *
+ * Kept apart from `compileArgs`, which `tests/build-sidecar.test.ts` pins exactly.
+ */
+export function sidecarArgs(
+  triple: string,
+  host: string,
+  outfile: string,
+): string[] {
+  return [
+    ...compileArgs(triple, host, outfile),
+    "--minify",
+    "--define",
+    '__dirname="/sidecar"',
+    "--define",
+    '__filename="/sidecar/runner.js"',
+  ];
+}
+
 export function hostTriple(rustcVersion: string): string {
   const host = rustcVersion.match(/^host: (\S+)$/m)?.[1];
   if (!host) throw new Error("rustc -vV did not name a host triple.");
@@ -82,7 +106,7 @@ if (import.meta.main) {
   mkdirSync(BINARIES, { recursive: true });
   const outfile = join(BINARIES, sidecarFile(triple));
   const build = Bun.spawnSync(
-    [process.execPath, ...compileArgs(triple, host, outfile)],
+    [process.execPath, ...sidecarArgs(triple, host, outfile)],
     {
       stdout: "inherit",
       stderr: "inherit",
