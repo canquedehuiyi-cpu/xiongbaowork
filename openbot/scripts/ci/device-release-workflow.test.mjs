@@ -1857,6 +1857,8 @@ test("our channel steps skip cleanly when unconfigured", () => {
     false,
   );
   const releaseIf = containerRelease.jobs["github-release"].if;
+  // Without a status function GitHub adds success(), which a skipped mirror would fail.
+  expect(releaseIf).toContain("!cancelled()");
   const upstream = ok(["tag-check", "image", "verify-digest", "promote"]);
   expect(
     when(releaseIf, {
@@ -1900,6 +1902,7 @@ test("our channel steps skip cleanly when unconfigured", () => {
   // Gate 7 follows github-release itself: the default success() would also look at the skipped
   // mirror upstream of it.
   const g7If = containerRelease.jobs["g7-linux"].if;
+  expect(g7If).toContain("!cancelled()");
   expect(
     when(g7If, {
       ...configuredNot,
