@@ -187,6 +187,16 @@ async function mirror(groupId: string) {
   );
 }
 
+/** Whether `work` threw. */
+async function refused(work: () => Promise<unknown>) {
+  try {
+    await work();
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function crewsOf(tenant: string) {
   const rows = await runAsTenant("platform", () =>
     database
@@ -197,11 +207,40 @@ async function crewsOf(tenant: string) {
   return rows.map((row) => row.id);
 }
 
+/**
+ * A multi-Bot channel written straight as `platform` with the given stamp, the way rows from before
+ * shared groups (a person's own) or from frameless old code (`system`) look.
+ */
+async function legacyChannel(tenantId: string, agentIds: string[]) {
+  const channelId = `${prefix}-legacy-${randomUUID()}`;
+  await runAsTenant("platform", async () => {
+    await database.insert(channels).values({
+      id: channelId,
+      tenantId,
+      name: "Ada、Grace、Linus",
+      description: "legacy",
+    });
+    await database
+      .insert(channelAgents)
+      .values(agentIds.map((agentId) => ({ channelId, agentId, tenantId })));
+  });
+  createdChannels.push(channelId);
+  return channelId;
+}
+
 describe("link core", () => {
   test("channelOwner follows the owner rule", () => {
     expect(channelOwner({ tenantId: "team", createdBy: "u1" })).toBe("u1");
     expect(channelOwner({ tenantId: "team", createdBy: null })).toBeNull();
     expect(channelOwner({ tenantId: "u2", createdBy: null })).toBe("u2");
+    // Only a person owns a crew: rows stamped by no person have no owner.
+    expect(channelOwner({ tenantId: "system", createdBy: null })).toBeNull();
+    expect(channelOwner({ tenantId: "platform", createdBy: null })).toBeNull();
+    expect(
+      channelOwner({ tenantId: "team", createdBy: "platform" }),
+    ).toBeNull();
+    expect(channelOwner({ tenantId: "team", createdBy: "system" })).toBeNull();
+    expect(channelOwner({ tenantId: "team", createdBy: "team" })).toBeNull();
   });
 
   test("pickGroupName adds （2） up to （99）, then the id prefix, within 80 characters", async () => {
@@ -307,21 +346,7 @@ describe("link core", () => {
       await bot(alice, "Linus"),
     ];
     // An old personal multi-Bot channel: three Bots linked, only two given order rows.
-    const channelId = `${prefix}-legacy-${randomUUID()}`;
-    await runAsTenant("platform", async () => {
-      await database.insert(channels).values({
-        id: channelId,
-        tenantId: alice.id,
-        name: "Ada、Grace、Linus",
-        description: "legacy",
-      });
-      await database
-        .insert(channelAgents)
-        .values(
-          ids.map((agentId) => ({ channelId, agentId, tenantId: alice.id })),
-        );
-    });
-    createdChannels.push(channelId);
+    const channelId = await legacyChannel(alice.id, ids);
     const unordered = ids[0] as string;
     const ordered = [ids[2] as string, ids[1] as string];
     await runAsTenant(alice.id, () =>
@@ -528,5 +553,171 @@ describe("link core", () => {
     const listed = await runAsTenant(bob.id, () => crewStore.list());
     expect(listed.some((item) => item.id === groupId)).toBe(false);
     expect(listed.some((item) => item.channelId === channel.id)).toBe(false);
+  });
+});
+
+describe("link core, fix round 1", () => {
+  test("three linkChannel calls at once all answer the one crew", async () => {
+    const alice = await person("alice");
+    const channel = await sharedGroup(alice, [
+      await bot(alice, "Ada"),
+      await bot(alice, "Grace"),
+    ]);
+    // Enough connections for the three transactions to really overlap (TEST_POOL holds two).
+    const wide = createDatabase(testDatabaseUrl(), { max: 6 });
+    try {
+      const link = createWakerGroupLink({ database: wide, groupStore });
+      const answers = await Promise.allSettled([
+        link.linkChannel(channel.id),
+        link.linkChannel(channel.id),
+        link.linkChannel(channel.id),
+      ]);
+      const groupId = (await channelRow(channel.id)).waker_group_id;
+      expect(groupId).not.toBeNull();
+      expect(answers).toEqual([
+        { status: "fulfilled", value: groupId },
+        { status: "fulfilled", value: groupId },
+        { status: "fulfilled", value: groupId },
+      ]);
+      expect(await crewsOf(alice.id)).toEqual([groupId as string]);
+    } finally {
+      await wide.$client.close();
+    }
+  });
+
+  test("a channel stamped system, or a shared group created by platform, gets no crew", async () => {
+    const alice = await person("alice");
+    const ids = [await bot(alice, "Ada"), await bot(alice, "Grace")];
+    const before = {
+      system: await crewsOf("system"),
+      platform: await crewsOf("platform"),
+    };
+
+    const orphan = await legacyChannel("system", ids);
+    expect(await linkCore().linkChannel(orphan)).toBeNull();
+    expect((await channelRow(orphan)).waker_group_id).toBeNull();
+
+    const channel = await sharedGroup(alice, ids);
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`update channels set created_by = 'platform' where id = ${channel.id}`,
+      ),
+    );
+    expect(await linkCore().linkChannel(channel.id)).toBeNull();
+    expect((await channelRow(channel.id)).waker_group_id).toBeNull();
+
+    expect(await crewsOf("system")).toEqual(before.system);
+    expect(await crewsOf("platform")).toEqual(before.platform);
+    expect(await crewsOf(alice.id)).toEqual([]);
+  });
+
+  test("a crew already named with a （2） is not reported as taken again", async () => {
+    const alice = await person("alice");
+    await crew(alice, "周报");
+    await crew(alice, "日报");
+    const channel = await sharedGroup(alice, [
+      await bot(alice, "Ada"),
+      await bot(alice, "Grace"),
+    ]);
+    await runAsTenant(alice.id, () =>
+      channelStore.rename(alice, channel.id, "周报"),
+    );
+    const lines: Record<string, unknown>[] = [];
+    const link = linkCore((line) => lines.push(line));
+    const groupId = await link.linkChannel(channel.id);
+    if (!groupId) throw new Error("not linked");
+    expect((await crewRow(groupId))?.name).toBe("周报（2）");
+    const taken = () =>
+      lines.filter((line) => line.type === "waker-group-name-taken");
+
+    // A real clash is said once per attempt...
+    await runAsTenant(alice.id, () =>
+      channelStore.rename(alice, channel.id, "日报"),
+    );
+    expect(await link.reconcile(channel.id)).toBe(true);
+    expect(taken()).toHaveLength(1);
+    expect((await crewRow(groupId))?.name).toBe("周报（2）");
+
+    // ...and a name that is already the clash-free form of the title is no clash at all.
+    await runAsTenant(alice.id, () =>
+      channelStore.rename(alice, channel.id, "周报"),
+    );
+    expect(await link.reconcile(channel.id)).toBe(true);
+    expect(await link.reconcile(channel.id)).toBe(true);
+    await link.syncName(channel.id);
+    expect(taken()).toHaveLength(1);
+    expect((await crewRow(groupId))?.name).toBe("周报（2）");
+  });
+
+  test("adopt refuses a channel linked to another crew, and keeps the link", async () => {
+    const alice = await person("alice");
+    const channelId = await legacyChannel(alice.id, [
+      await bot(alice, "Ada"),
+      await bot(alice, "Grace"),
+    ]);
+    const link = linkCore();
+    const first = await link.linkChannel(channelId);
+    if (!first) throw new Error("not linked");
+    // Cleaned up even if a wrong adopt unlinked it.
+    createdGroups.push(first);
+    const second = await crew(alice, "另一个");
+
+    expect(await refused(() => link.adopt(second, channelId))).toBe(true);
+    expect(await link.linkedGroupOf(channelId)).toBe(first);
+    // The same crew again is no change of mind.
+    await link.adopt(first, channelId);
+    expect(await link.linkedGroupOf(channelId)).toBe(first);
+  });
+
+  test("adopt refuses a deleted channel", async () => {
+    const alice = await person("alice");
+    const channel = await sharedGroup(alice, [
+      await bot(alice, "Ada"),
+      await bot(alice, "Grace"),
+    ]);
+    const groupId = await crew(alice, "已删");
+    await runAsTenant("platform", () =>
+      database
+        .update(channels)
+        .set({ deletedAt: new Date() })
+        .where(eq(channels.id, channel.id)),
+    );
+
+    expect(await refused(() => linkCore().adopt(groupId, channel.id))).toBe(
+      true,
+    );
+    expect((await channelRow(channel.id)).waker_group_id).toBeNull();
+    expect(await mirror(groupId)).toEqual([]);
+  });
+
+  test("a blank title falls back to the channel's name", async () => {
+    const alice = await person("alice");
+    const channel = await sharedGroup(alice, [
+      await bot(alice, "Ada"),
+      await bot(alice, "Grace"),
+    ]);
+    await runAsTenant("platform", () =>
+      database
+        .update(channels)
+        .set({ title: "   " })
+        .where(eq(channels.id, channel.id)),
+    );
+    const groupId = await linkCore().linkChannel(channel.id);
+    if (!groupId) throw new Error("not linked");
+    expect((await crewRow(groupId))?.name).toBe(
+      (await channelRow(channel.id)).name,
+    );
+  });
+
+  test("the 80-character cut never splits a surrogate pair", async () => {
+    const alice = await person("alice");
+    const wanted = `a${"😀".repeat(40)}`;
+    const name = await runAsTenant(alice.id, () =>
+      pickGroupName(database, wanted),
+    );
+    expect(name).toBe(`a${"😀".repeat(39)}`);
+    expect(name.length).toBe(79);
+    const last = name.charCodeAt(name.length - 1);
+    expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
   });
 });

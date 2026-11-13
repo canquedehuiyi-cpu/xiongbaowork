@@ -4,7 +4,7 @@ import type { GroupStore } from "../channels/group";
 import type { Database } from "../db/client";
 import { channels, wakerGroupMembers, wakerGroups } from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
-import { asPlatform, runAsTenant } from "../tenant/context";
+import { asPlatform, isPersonTenant, runAsTenant } from "../tenant/context";
 
 /*
  * 群聊与群组一对一挂接（设计稿 docs/specs/2026-11-13-group-unify.md 第 3.1、4.1、4.4、4.5 节）。
@@ -48,12 +48,18 @@ export async function setChannelWakerGroup(
   );
 }
 
-/** 3.1 归属规则：team → created_by（为 NULL 则无所有者）；否则 tenant_id。 */
+/**
+ * 3.1 归属规则：team → created_by（为 NULL 则无所有者）；否则 tenant_id。
+ *
+ * 只有个人租户才是所有者（设计稿 2.8「群组永远属于某个个人租户」）：`system`、`platform`、`team`
+ * 或空串一律无所有者。否则无帧旧代码戳成 `system` 的频道会建出一个所有租户都读得到的群组。
+ */
 export function channelOwner(row: {
   tenantId: string;
   createdBy: string | null;
 }): string | null {
-  return row.tenantId === TEAM_TENANT ? row.createdBy : row.tenantId;
+  const owner = row.tenantId === TEAM_TENANT ? row.createdBy : row.tenantId;
+  return isPersonTenant(owner) ? owner : null;
 }
 
 const NAME_LIMIT = 80;
@@ -116,14 +122,28 @@ export function runtimeOrder(order: string[], bots: string[]): string[] {
 }
 
 export type WakerGroupLink = {
-  /** 未挂接时：所有者帧里一个事务建群组（名字 = title ?? name，经 pickGroupName）、写镜像、挂接；已挂接返回原 id；无所有者返回 null。 */
+  /**
+   * 未挂接时：所有者帧里一个事务建群组（名字 = title ?? name，经 pickGroupName）、写镜像、挂接；已挂接返回原 id；无所有者返回 null。
+   *
+   * 频道已软删且未挂接时返回 null，不建群组。已挂接时即使频道已软删，也返回原 id。
+   * 同一频道并发调用时，输掉的一方返回赢家挂上的 id。
+   */
   linkChannel(channelId: string): Promise<string | null>;
-  /** 把已有群组挂到频道：一个事务里挂接、title 改成群组名、改写镜像。 */
+  /**
+   * 把已有群组挂到频道：一个事务里挂接、title 改成群组名、改写镜像。
+   *
+   * 挂接是原子条件写：频道未删除，且未挂接或已挂的就是这个群组（重复 adopt 幂等）。已挂别的群组、
+   * 已软删或没有这个频道时抛错，什么都不改。
+   */
   adopt(groupId: string, channelId: string): Promise<void>;
   /** 4.5：按 runtimeOrder(order(), bots()) 改写镜像，title ?? name 与群组名不同时改名（撞名保留原名并记日志）；未挂接返回 false。 */
   reconcile(channelId: string): Promise<boolean>;
   /** 频道改名后同步群组名；撞名保留原名，记 {"type":"waker-group-name-taken","channelId","groupId","name"}。 */
   syncName(channelId: string): Promise<void>;
+  /**
+   * 频道挂着的群组 id。在 `platform` 帧里读：只能用于调用方已经校验过读权限的频道 id，否则任何
+   * 人都能探出别人的频道挂没挂、挂的是哪个群组。
+   */
   linkedGroupOf(channelId: string): Promise<string | null>;
   /** 挂着它的未删除频道，调用者帧下读得到才返回。 */
   liveChannelOf(groupId: string): Promise<string | null>;
@@ -243,8 +263,13 @@ export function createWakerGroupLink(deps: {
     if (wanted.length === 0 || group.name === wanted) return;
     const taken = () =>
       log({ type: "waker-group-name-taken", channelId, groupId, name: wanted });
-    if ((await pickGroupName(database, wanted, { except: groupId })) !== wanted)
-      return taken();
+    const picked = await pickGroupName(database, wanted, {
+      except: groupId,
+      idForSuffix: groupId,
+    });
+    // Already the clash-free form of the title (say 「周报（2）」 for 「周报」): nothing to say or do.
+    if (picked === group.name) return;
+    if (picked !== wanted) return taken();
     try {
       await database
         .update(wakerGroups)
@@ -293,8 +318,17 @@ export function createWakerGroupLink(deps: {
           return groupId;
         });
       } catch (error) {
-        if (!(error instanceof AlreadyLinked)) throw error;
-        return (await facts(channelId))?.groupId ?? null;
+        /*
+         * Lost the race. Either the winner had committed before this one tried to link
+         * (AlreadyLinked), or both picked the same name at once and this insert waited on the
+         * winner's row in `waker_groups_tenant_name_idx` (23505). Either way the winner's crew is
+         * the answer; a 23505 with the channel still unlinked is a real clash and is thrown.
+         */
+        if (!(error instanceof AlreadyLinked) && stateOf(error) !== "23505")
+          throw error;
+        const linked = (await facts(channelId))?.groupId ?? null;
+        if (linked === null && !(error instanceof AlreadyLinked)) throw error;
+        return linked;
       }
     },
 
@@ -311,7 +345,16 @@ export function createWakerGroupLink(deps: {
             .where(eq(wakerGroups.id, groupId))
             .limit(1);
           if (!group) throw new Error(`crew ${groupId} is not the owner's`);
-          await setChannelWakerGroup(tx, channelId, groupId);
+          const linked = (await tx.execute(
+            sql`update ${channels} set "waker_group_id" = ${groupId}::uuid
+                 where ${channels.id} = ${channelId} and ${channels.deletedAt} is null
+                   and ("waker_group_id" is null or "waker_group_id" = ${groupId}::uuid)
+                 returning ${channels.id}`,
+          )) as unknown[];
+          if (linked.length === 0)
+            throw new Error(
+              `channel ${channelId} is deleted or linked to another crew`,
+            );
           await tx
             .update(channels)
             .set({ title: group.name, updatedAt: new Date() })
