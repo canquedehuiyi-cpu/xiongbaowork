@@ -23,6 +23,8 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot �
 - 上游新增的数据库迁移改编为 recovery overlay，按合入顺序续号（`when` 严格递增），新表补 `tenant_id` 与 RLS。
 - 界面文案保持中文与熊宝品牌。
 
+同步后同时更新 `upstream-sync.json` 的 `commit`。
+
 ## 已恢复的分叉时删除项
 
 - R0：CopilotKit Intelligence 改为**可选接入**（`INTELLIGENCE_API_KEY`），恢复自动学习的设置、
