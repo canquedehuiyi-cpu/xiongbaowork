@@ -20,8 +20,13 @@ import {
   agents,
   channelAgents,
   channels,
+  groupTaskRuns,
+  groupTaskTemplates,
   intelligenceChannelMappings,
+  portraitMedia,
+  portraits,
   staffingProposals,
+  tasks,
   users,
   wakerFlows,
   wakerGroupMembers,
@@ -2127,6 +2132,400 @@ describe("routes", () => {
       expect(opened.status).toBe(201);
       expect((opened.json as unknown as Made).channel.wakerGroupId).toBe(
         groupId,
+      );
+    });
+  });
+
+  describe("members and dissolve", () => {
+    const createdTasks: string[] = [];
+    const portrayed: string[] = [];
+
+    afterEach(async () => {
+      await runAsTenant("platform", async () => {
+        const ids = createdTasks.splice(0);
+        if (ids.length)
+          await database.delete(tasks).where(inArray(tasks.id, ids));
+        const subjects = portrayed.splice(0);
+        if (subjects.length) {
+          await database
+            .delete(portraits)
+            .where(inArray(portraits.subjectId, subjects));
+          await database
+            .delete(portraitMedia)
+            .where(inArray(portraitMedia.subjectId, subjects));
+        }
+      });
+    });
+
+    /** The conversation's Bots in the order they answer, as its owner reads them. */
+    async function answering(owner: AgentActor, channelId: string) {
+      return runAsTenant(owner.id, async () =>
+        runtimeOrder(
+          await groupStore.order(channelId),
+          await groupStore.bots(channelId),
+        ),
+      );
+    }
+
+    async function mirrored(groupId: string) {
+      return (await mirror(groupId)).map((entry) => entry.agentId);
+    }
+
+    async function bots(owner: AgentActor, count: number, label = "Bot") {
+      const made: string[] = [];
+      for (let n = 0; n < count; n++)
+        made.push(await bot(owner, `${label}${n}`));
+      return made;
+    }
+
+    async function linkedCrew(
+      api: ReturnType<typeof crewApi>,
+      owner: AgentActor,
+      name: string,
+      agentIds: string[],
+    ) {
+      const answer = await api(owner, "POST", "/", { name, agentIds });
+      if (answer.status !== 201) throw new Error(answer.text);
+      return answer.json as unknown as Made;
+    }
+
+    /** A picture and a video for the crew, written in its owner's frame. */
+    async function portray(owner: AgentActor, groupId: string) {
+      portrayed.push(groupId);
+      await runAsTenant(owner.id, async () => {
+        await database
+          .insert(portraits)
+          .values({ subjectKind: "group", subjectId: groupId, preset: "cute" });
+        await database.insert(portraitMedia).values({
+          subjectKind: "group",
+          subjectId: groupId,
+          contentType: "video/mp4",
+          bytes: Buffer.from([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]),
+        });
+      });
+    }
+
+    async function portraitsOf(groupId: string) {
+      return runAsTenant("platform", async () => ({
+        pictures: (
+          await database
+            .select({ id: portraits.subjectId })
+            .from(portraits)
+            .where(eq(portraits.subjectId, groupId))
+        ).length,
+        videos: (
+          await database
+            .select({ id: portraitMedia.subjectId })
+            .from(portraitMedia)
+            .where(eq(portraitMedia.subjectId, groupId))
+        ).length,
+      }));
+    }
+
+    /** A flow template for the crew and one run of it in `status`, with the run's board card. */
+    async function flowRun(owner: AgentActor, groupId: string, status: string) {
+      return runAsTenant(owner.id, async () => {
+        const [card] = await database
+          .insert(tasks)
+          .values({ title: "周报流程", source: "group_run", status: "done" })
+          .returning({ id: tasks.id });
+        if (!card) throw new Error("card not written");
+        createdTasks.push(card.id);
+        const [template] = await database
+          .insert(groupTaskTemplates)
+          .values({ groupId, name: "周报流程", steps: [] })
+          .returning({ id: groupTaskTemplates.id });
+        if (!template) throw new Error("template not written");
+        const [run] = await database
+          .insert(groupTaskRuns)
+          .values({
+            templateId: template.id,
+            groupId,
+            parentTaskId: card.id,
+            status,
+            steps: [],
+          })
+          .returning({ id: groupTaskRuns.id });
+        if (!run) throw new Error("run not written");
+        return { cardId: card.id, templateId: template.id, runId: run.id };
+      });
+    }
+
+    async function flowRows(ids: {
+      cardId: string;
+      templateId: string;
+      runId: string;
+    }) {
+      return runAsTenant("platform", async () => ({
+        cards: (
+          await database
+            .select({ id: tasks.id })
+            .from(tasks)
+            .where(eq(tasks.id, ids.cardId))
+        ).length,
+        templates: (
+          await database
+            .select({ id: groupTaskTemplates.id })
+            .from(groupTaskTemplates)
+            .where(eq(groupTaskTemplates.id, ids.templateId))
+        ).length,
+        runs: (
+          await database
+            .select({ id: groupTaskRuns.id })
+            .from(groupTaskRuns)
+            .where(eq(groupTaskRuns.id, ids.runId))
+        ).length,
+      }));
+    }
+
+    async function deleted(channelId: string) {
+      const [row] = (await runAsTenant("platform", () =>
+        database.execute(
+          sql`select deleted_at is not null as deleted from channels where id = ${channelId}`,
+        ),
+      )) as unknown as { deleted: boolean }[];
+      return row?.deleted ?? null;
+    }
+
+    test("PUT members on a linked crew adds, removes and reorders the chat", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const [a, b, c, d] = await bots(alice, 4);
+      const made = await linkedCrew(api, alice, "增删排序", [
+        a as string,
+        b as string,
+        c as string,
+      ]);
+      const target = [c, d, a] as string[];
+
+      const answer = await api(alice, "PUT", `/${made.group.id}/members`, {
+        agentIds: target,
+      });
+
+      expect(answer.status).toBe(200);
+      const group = answer.json.group as Listed;
+      expect(group.channelId).toBe(made.channel.id);
+      expect(group.members.map((member) => member.agentId)).toEqual(target);
+      expect(await answering(alice, made.channel.id)).toEqual(target);
+      expect(await mirrored(made.group.id)).toEqual(target);
+    });
+
+    test("PUT members swaps all 20 for 20 others", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const before = await bots(alice, 20, "Old");
+      const after = await bots(alice, 20, "New");
+      const made = await linkedCrew(api, alice, "整组换人", before);
+
+      const answer = await api(alice, "PUT", `/${made.group.id}/members`, {
+        agentIds: after,
+      });
+
+      expect(answer.status).toBe(200);
+      expect(await answering(alice, made.channel.id)).toEqual(after);
+      expect(await mirrored(made.group.id)).toEqual(after);
+    });
+
+    test("PUT members on a linked crew refuses 1 or 21 with 409", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const mine = await bots(alice, 21);
+      const [a, b] = mine as [string, string];
+      const made = await linkedCrew(api, alice, "人数限制", [a, b]);
+      const chatBefore = await answering(alice, made.channel.id);
+
+      for (const agentIds of [[a], [a, a], mine]) {
+        const answer = await api(alice, "PUT", `/${made.group.id}/members`, {
+          agentIds,
+        });
+        expect(answer.status).toBe(409);
+        expect(answer.json).toEqual({ error: "一个群组要有 2 到 20 位员工。" });
+      }
+      expect(await answering(alice, made.channel.id)).toEqual(chatBefore);
+      expect(await mirrored(made.group.id)).toEqual([a, b]);
+    });
+
+    test("a step that fails part-way answers 409 with what was done, and the mirror matches the chat", async () => {
+      const alice = await person("alice");
+      const bob = await person("bob");
+      const api = crewApi();
+      const first = await bots(alice, 3, "First");
+      const next = await bots(alice, 17, "Next");
+      const theirs = await bot(bob, "Linus");
+      const made = await linkedCrew(api, alice, "中途失败", first);
+
+      // 18 to add on top of 3: 17 fit under 20, then the 3 leave, then Bob's Bot is refused.
+      const answer = await api(alice, "PUT", `/${made.group.id}/members`, {
+        agentIds: [...next, theirs],
+      });
+
+      expect(answer.status).toBe(409);
+      expect(answer.json.error).toBe(
+        `你没有权限使用员工 ${theirs}，无法加进群里。`,
+      );
+      expect(answer.json.done).toEqual([
+        { op: "add", agentIds: next },
+        { op: "remove", agentIds: first },
+      ]);
+      const chat = await answering(alice, made.channel.id);
+      expect(chat).toEqual(next);
+      expect(await mirrored(made.group.id)).toEqual(chat);
+    });
+
+    test("PUT members on an unlinked crew that reaches two opens its chat", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const [a, b] = (await bots(alice, 2)) as [string, string];
+      const crewNamed = async (name: string) =>
+        ((await api(alice, "POST", "/", { name })).json.group as Listed).id;
+
+      const lone = await crewNamed("一位");
+      const one = await api(alice, "PUT", `/${lone}/members`, {
+        agentIds: [a],
+      });
+      expect(one.status).toBe(200);
+      expect((one.json.group as Listed).channelId).toBeNull();
+      expect(await chatsOf(alice.id)).toEqual([]);
+
+      const pair = await crewNamed("两位");
+      const two = await api(alice, "PUT", `/${pair}/members`, {
+        agentIds: [b, a],
+      });
+      expect(two.status).toBe(200);
+      const group = two.json.group as Listed;
+      expect(group.channelId).toBeString();
+      expect(group.members.map((member) => member.agentId)).toEqual([b, a]);
+      const channelId = group.channelId as string;
+      expect((await channelRow(channelId)).waker_group_id).toBe(pair);
+      expect(await answering(alice, channelId)).toEqual([b, a]);
+      expect(await mirrored(pair)).toEqual([b, a]);
+    });
+
+    test("DELETE dissolves: chat hidden, crew gone with its flows, portrait gone, board cards kept", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const made = await linkedCrew(api, alice, "解散", await bots(alice, 2));
+      const flow = await flowRun(alice, made.group.id, "done");
+      await portray(alice, made.group.id);
+
+      const answer = await api(alice, "DELETE", `/${made.group.id}`);
+
+      expect(answer.status).toBe(200);
+      expect(answer.json).toEqual({ ok: true });
+      expect(await deleted(made.channel.id)).toBe(true);
+      expect(await crewRow(made.group.id)).toBeNull();
+      expect(await mirror(made.group.id)).toEqual([]);
+      expect(await flowRows(flow)).toEqual({ cards: 1, templates: 0, runs: 0 });
+      expect(await portraitsOf(made.group.id)).toEqual({
+        pictures: 0,
+        videos: 0,
+      });
+    });
+
+    test("DELETE refuses while a run is running or awaiting_action, and changes nothing", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      for (const status of ["running", "awaiting_action"]) {
+        const made = await linkedCrew(
+          api,
+          alice,
+          `运行中-${status}`,
+          await bots(alice, 2, status),
+        );
+        const flow = await flowRun(alice, made.group.id, status);
+        await portray(alice, made.group.id);
+
+        const answer = await api(alice, "DELETE", `/${made.group.id}`);
+
+        expect(answer.status).toBe(409);
+        expect(answer.json).toEqual({
+          error: "有组团流程正在运行，先停下再解散。",
+        });
+        expect(await deleted(made.channel.id)).toBe(false);
+        expect((await channelRow(made.channel.id)).waker_group_id).toBe(
+          made.group.id,
+        );
+        expect(await crewRow(made.group.id)).not.toBeNull();
+        expect(await flowRows(flow)).toEqual({
+          cards: 1,
+          templates: 1,
+          runs: 1,
+        });
+        expect(await portraitsOf(made.group.id)).toEqual({
+          pictures: 1,
+          videos: 1,
+        });
+      }
+    });
+
+    test("DELETE on an unlinked crew also removes its portrait", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const groupId = (
+        (await api(alice, "POST", "/", { name: "未挂接" })).json.group as Listed
+      ).id;
+      await portray(alice, groupId);
+
+      const answer = await api(alice, "DELETE", `/${groupId}`);
+
+      expect(answer.status).toBe(200);
+      expect(await crewRow(groupId)).toBeNull();
+      expect(await portraitsOf(groupId)).toEqual({ pictures: 0, videos: 0 });
+    });
+
+    test("another tenant gets 404 from PUT members and DELETE", async () => {
+      const alice = await person("alice");
+      const bob = await person("bob");
+      const api = crewApi();
+      const mine = await bots(alice, 2);
+      const made = await linkedCrew(api, alice, "别人的", mine);
+      await portray(alice, made.group.id);
+      const chatBefore = await answering(alice, made.channel.id);
+
+      const put = await api(bob, "PUT", `/${made.group.id}/members`, {
+        agentIds: await bots(bob, 2),
+      });
+      const dissolve = await api(bob, "DELETE", `/${made.group.id}`);
+
+      expect(put.status).toBe(404);
+      expect(dissolve.status).toBe(404);
+      expect(put.text).not.toContain(made.channel.id);
+      expect(await crewRow(made.group.id)).not.toBeNull();
+      expect(await mirrored(made.group.id)).toEqual(mine);
+      expect(await deleted(made.channel.id)).toBe(false);
+      expect(await answering(alice, made.channel.id)).toEqual(chatBefore);
+      expect(await portraitsOf(made.group.id)).toEqual({
+        pictures: 1,
+        videos: 1,
+      });
+    });
+
+    test("a creator who has left their chat cannot change its crew's members, and is told why", async () => {
+      const alice = await person("alice");
+      const bob = await person("bob");
+      const api = crewApi();
+      const [a, b, c] = (await bots(alice, 3)) as [string, string, string];
+      const made = await linkedCrew(api, alice, "离开后改成员", [a, b]);
+      await runAsTenant(alice.id, () =>
+        conversations().addMember(alice.id, made.channel.id, {
+          email: `${bob.id}@example.test`,
+        }),
+      );
+      await runAsTenant(alice.id, () =>
+        groupStore.removeMember(made.channel.id, alice.id),
+      );
+
+      const answer = await api(alice, "PUT", `/${made.group.id}/members`, {
+        agentIds: [a, b, c],
+      });
+
+      // TODO(Task 5A): once leaving hands the crew over, this is a 404 from the ownership check.
+      expect(answer.status).toBe(409);
+      expect(answer.json.code).toBe("waker-group-owner-gone");
+      // The roster written before the chat was refused is put back: the mirror still follows the chat.
+      expect(await mirrored(made.group.id)).toEqual([a, b]);
+      expect((await channelRow(made.channel.id)).waker_group_id).toBe(
+        made.group.id,
       );
     });
   });

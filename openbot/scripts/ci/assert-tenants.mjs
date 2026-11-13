@@ -72,6 +72,34 @@ for (const path of businessPaths) {
     `anonymous ${path} 401`,
   );
 }
+// G2, no escalation: B cannot rename or dissolve A's crew (group-unify 6.4). The refusal is the
+// same 404 an unknown id gets, and afterwards A still lists it under its own name.
+const crewName = `交付隔离群组-${randomUUID().slice(0, 8)}`;
+const crew = await request("/api/waker-groups", a, { name: crewName });
+const crewId = crew.value?.group?.id;
+if (crew.response.status !== 201 || !crewId)
+  throw new Error("Group creation returned no id");
+const crewPath = `/api/waker-groups/${encodeURIComponent(crewId)}`;
+const foreignRename = await request(
+  crewPath,
+  b,
+  { name: "被他人改名" },
+  "PATCH",
+);
+check(foreignRename.response.status === 404, "B renaming A group returns 404");
+const foreignDissolve = await request(crewPath, b, undefined, "DELETE");
+check(
+  foreignDissolve.response.status === 404,
+  "B dissolving A group returns 404",
+);
+const crewsAfter = await request("/api/waker-groups", a);
+check(
+  crewsAfter.response.status === 200 &&
+    crewsAfter.value?.groups?.some(
+      (group) => group.id === crewId && group.name === crewName,
+    ) === true,
+  "A group still present and unchanged after B's attempts",
+);
 const input = {
   name: "交付隔离验证员工",
   title: "部署验证",

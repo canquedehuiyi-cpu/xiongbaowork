@@ -1,14 +1,21 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AgentActor } from "../agents/profile-types";
-import type { GroupConversations } from "../channels/group";
+import { type GroupConversations, GroupRefusedError } from "../channels/group";
 import type { AgentChannel, ChannelStore } from "../channels/routes";
 import type { Database } from "../db/client";
-import { botTasks, channelAgents, channels, wakerGroups } from "../db/schema";
+import {
+  botTasks,
+  channelAgents,
+  channels,
+  groupTaskRuns,
+  wakerGroups,
+} from "../db/schema";
 import type { PortraitStore } from "../portraits/store";
 import {
   channelCreatedBy,
   channelOwner,
   isGroupConversation,
+  runtimeOrder,
   stateOf,
   type WakerGroupLink,
 } from "./channel-link";
@@ -21,7 +28,8 @@ import {
 
 /*
  * 群组接口里要动到群聊的那几步（设计稿 docs/specs/2026-11-13-group-unify.md 第 6.2、6.3 节）：
- * 建群组即开聊天、改名、给未开始聊天的群组开聊天、打开设置时补挂，以及带状态的列表。
+ * 建群组即开聊天、改名、给未开始聊天的群组开聊天、打开设置时补挂，以及带状态的列表；
+ * 管理成员（翻译成群聊的增删排序）与解散（第 4.2、7.5 节）。
  *
  * 帧：全部在调用者自己的帧里跑（路由的 requireUser 已经开好）。群聊一侧的读写经未装饰的群聊服务和
  * 装饰过的 channelStore，挂接经 WakerGroupLink（它自己定帧）。这里不开 platform 帧。
@@ -66,6 +74,40 @@ export class WakerGroupOwnerGoneError extends Error {
   }
 }
 
+/** One write `PUT /:id/members` made to the chat, in the order it made them. */
+export type MemberStep = {
+  op: "add" | "remove" | "reorder";
+  agentIds: string[];
+};
+
+/**
+ * A roster change translated into chat writes stopped part-way (4.2: the steps are not one
+ * transaction). Each step that went through is still in force and listed in `done`; the mirror has
+ * been rewritten from the chat, so what the caller reads next is what the chat holds.
+ */
+export class WakerGroupStepsError extends Error {
+  readonly done: MemberStep[];
+  constructor(done: MemberStep[], cause: unknown) {
+    // The service's own refusal says why in words a person can act on; anything else is not shown.
+    super(
+      cause instanceof GroupRefusedError
+        ? cause.message
+        : "群组成员只改了一部分，请刷新后再试。",
+      { cause },
+    );
+    this.name = "WakerGroupStepsError";
+    this.done = done;
+  }
+}
+
+/** 7.5: a crew with a flow run still going is not dissolved under it. */
+export class WakerGroupRunningError extends Error {
+  constructor() {
+    super("有组团流程正在运行，先停下再解散。");
+    this.name = "WakerGroupRunningError";
+  }
+}
+
 export type ChatStatus =
   | "chat"
   | "pending_members"
@@ -98,7 +140,21 @@ export type WakerGroupActions = {
     channelId: string,
   ): Promise<ListedWakerGroup | null>;
   list(owner: string): Promise<StatusedWakerGroup[]>;
-  // Task 5 追加：setMembers、dissolve
+  /**
+   * The crew's roster, wholesale. Linked: 2–20 Bots (WakerGroupSizeError), written to the chat as
+   * adds, removals and a reorder (WakerGroupStepsError when one fails). Unlinked: the roster is
+   * written as before, and a crew that now has 2–20 usable Bots gets its chat. null: not the caller's.
+   */
+  setMembers(
+    owner: string,
+    groupId: string,
+    agentIds: string[],
+  ): Promise<ListedWakerGroup | null>;
+  /**
+   * 7.5: hide the chat, delete the crew (its flows and runs go with it), delete its portrait. false
+   * when there is no such crew of the caller's; WakerGroupRunningError while a run is unfinished.
+   */
+  dissolve(owner: string, groupId: string): Promise<boolean>;
 };
 
 /**
@@ -133,7 +189,7 @@ export function createWakerGroupActions(deps: {
   /** The undecorated service (`baseGroupConversations`): the crew is made here, not by its decorator. */
   groups: Pick<
     GroupConversations,
-    "create" | "addBots" | "removeBots" | "reorder"
+    "create" | "addBots" | "removeBots" | "reorder" | "store"
   >;
   /** The decorated channel store: its `rename` carries the name over to the crew. */
   channels: Pick<ChannelStore, "get" | "rename" | "softDelete">;
@@ -222,6 +278,102 @@ export function createWakerGroupActions(deps: {
     };
   }
 
+  /** Open a chat of `members` for an unlinked crew and link it; the chat is hidden again if that fails. */
+  async function openChat(
+    owner: string,
+    groupId: string,
+    members: string[],
+  ): Promise<{ group: ListedWakerGroup; channel: Chat }> {
+    const actor = await deps.actorFor(owner);
+    const channel = await groups.create(owner, { agentIds: members });
+    try {
+      await link.adopt(groupId, channel.id);
+    } catch (error) {
+      await undo("hide-chat", () =>
+        deps.channels.softDelete(actor, channel.id),
+      );
+      /*
+       * The crew already has a live chat (`channels_waker_group_live_idx`). One the caller can read
+       * was opened by a request racing this one; one they cannot is a chat they have left.
+       */
+      if (stateOf(error) === "23505") {
+        if (await link.liveChannelOf(groupId))
+          throw new WakerGroupLinkedError();
+        throw new WakerGroupOwnerGoneError();
+      }
+      throw error;
+    }
+    return made(actor, groupId, channel.id);
+  }
+
+  /**
+   * 4.2: a linked crew's new roster, written to the chat through the undecorated service (its
+   * `creatorOnly`, `canUseBot` and 2–20 checks all apply): adds first, at most up to 20, then
+   * removals, at most down to 2, round after round, so even twenty swapped for twenty others never
+   * crosses either bound; then the target order. The mirror is rewritten from the chat afterwards,
+   * and also when a step fails, before WakerGroupStepsError says which steps went through.
+   */
+  async function translate(owner: string, channelId: string, target: string[]) {
+    /** The mirror from the chat; a failure is logged and left to the self-heal (4.5), as 4.2 does. */
+    const mirrorChat = async () => {
+      try {
+        return await link.reconcile(channelId);
+      } catch (failure) {
+        log({
+          type: "waker-group-reconcile-failed",
+          channelId,
+          error: failure instanceof Error ? failure.message : String(failure),
+        });
+        return null;
+      }
+    };
+    const done: MemberStep[] = [];
+    try {
+      const current = runtimeOrder(
+        await groups.store.order(channelId),
+        await groups.store.bots(channelId),
+      );
+      let toAdd = target.filter((id) => !current.includes(id));
+      let toRemove = current.filter((id) => !target.includes(id));
+      let count = current.length;
+      while (toAdd.length > 0 || toRemove.length > 0) {
+        const adding = toAdd.slice(0, Math.max(0, MAX_MEMBERS - count));
+        if (adding.length > 0) {
+          await groups.addBots(owner, channelId, adding);
+          done.push({ op: "add", agentIds: adding });
+          toAdd = toAdd.slice(adding.length);
+          count += adding.length;
+        }
+        const removing = toRemove.slice(0, Math.max(0, count - MIN_MEMBERS));
+        if (removing.length > 0) {
+          await groups.removeBots(owner, channelId, removing);
+          done.push({ op: "remove", agentIds: removing });
+          toRemove = toRemove.slice(removing.length);
+          count -= removing.length;
+        }
+        if (adding.length === 0 && removing.length === 0)
+          throw new Error(
+            `roster of ${channelId} cannot move toward the target`,
+          );
+      }
+      await groups.reorder(owner, channelId, target);
+      done.push({ op: "reorder", agentIds: target });
+    } catch (error) {
+      await mirrorChat();
+      // A refusal is the caller's to read in the answer; anything else would otherwise go unseen.
+      if (!(error instanceof GroupRefusedError))
+        log({
+          type: "waker-group-members-failed",
+          channelId,
+          done: done.length,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      throw new WakerGroupStepsError(done, error);
+    }
+    // false: the owner's frame no longer reads the chat (they left it between the steps and now).
+    if ((await mirrorChat()) === false) throw new WakerGroupOwnerGoneError();
+  }
+
   return {
     async createWithChat(owner, input) {
       const agentIds = [...new Set(input.agentIds)];
@@ -308,26 +460,61 @@ export function createWakerGroupActions(deps: {
       const members = await usableMembers(group, usableBy(owner));
       if (chatStatusOf(null, members.length) !== "not_started")
         throw new WakerGroupSizeError();
-      const actor = await deps.actorFor(owner);
-      const channel = await groups.create(owner, { agentIds: members });
+      return openChat(owner, groupId, members);
+    },
+
+    async setMembers(owner, groupId, agentIds) {
+      const group = await own(owner, groupId);
+      if (!group) return null;
+      const target = [...new Set(agentIds)];
+      if (group.channelId) {
+        if (target.length < MIN_MEMBERS || target.length > MAX_MEMBERS)
+          throw new WakerGroupSizeError();
+        await translate(owner, group.channelId, target);
+        return listed(groupId);
+      }
+      const before = group.members.map((member) => member.agentId);
+      if (!(await store.setMembers(groupId, target))) return null;
+      const written = await listed(groupId);
+      const members = await usableMembers(written, usableBy(owner));
+      if (chatStatusOf(null, members.length) !== "not_started") return written;
       try {
-        await link.adopt(groupId, channel.id);
+        return (await openChat(owner, groupId, members)).group;
       } catch (error) {
-        await undo("hide-chat", () =>
-          deps.channels.softDelete(actor, channel.id),
-        );
-        /*
-         * The crew already has a live chat (`channels_waker_group_live_idx`). One the caller can read
-         * was opened by a request racing this one; one they cannot is a chat they have left.
-         */
-        if (stateOf(error) === "23505") {
-          if (await link.liveChannelOf(groupId))
-            throw new WakerGroupLinkedError();
-          throw new WakerGroupOwnerGoneError();
-        }
+        // A chat the caller has left still holds the crew: its roster is that chat's, put it back.
+        if (error instanceof WakerGroupOwnerGoneError)
+          await undo("restore-members", () =>
+            store.setMembers(groupId, before),
+          );
         throw error;
       }
-      return made(actor, groupId, channel.id);
+    },
+
+    async dissolve(owner, groupId) {
+      const group = await own(owner, groupId);
+      if (!group) return false;
+      const [unfinished] = await database
+        .select({ id: groupTaskRuns.id })
+        .from(groupTaskRuns)
+        .where(
+          and(
+            eq(groupTaskRuns.groupId, groupId),
+            inArray(groupTaskRuns.status, ["running", "awaiting_action"]),
+          ),
+        )
+        .limit(1);
+      if (unfinished) throw new WakerGroupRunningError();
+      // Hidden, not deleted: the conversation keeps upstream's own delete semantics (7.5).
+      if (group.channelId)
+        await deps.channels.softDelete(
+          await deps.actorFor(owner),
+          group.channelId,
+        );
+      // Templates and runs cascade (0075); the chat's link is cleared by its foreign key (0205 b).
+      if (!(await store.remove(groupId))) return false;
+      await deps.portraits.remove("group", groupId);
+      await deps.portraits.removeMedia("group", groupId);
+      return true;
     },
 
     async forChannel(owner, channelId) {

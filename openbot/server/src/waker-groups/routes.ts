@@ -9,7 +9,9 @@ import {
   WakerGroupForbiddenError,
   WakerGroupLinkedError,
   WakerGroupOwnerGoneError,
+  WakerGroupRunningError,
   WakerGroupSizeError,
+  WakerGroupStepsError,
 } from "./linked-actions";
 import {
   WakerGroupMemberError,
@@ -41,8 +43,10 @@ function coworkerIds(value: unknown): string[] | null {
  *
  * With `actions` (group-unify, spec 6.2-6.3) a crew and its chat are one thing: `POST /` with
  * `agentIds` opens both, `PATCH /:id` renames both, `POST /:id/chat` opens the chat a crew lacks,
- * `POST /for-channel/:channelId` links a chat when its settings open, and the list carries each
- * crew's chat status. Without it every route is exactly what it was.
+ * `POST /for-channel/:channelId` links a chat when its settings open, the list carries each
+ * crew's chat status, `PUT /:id/members` changes a linked crew through its chat (and opens the chat
+ * of an unlinked crew that reaches two) and `DELETE /:id` dissolves a crew with its chat. Without it
+ * every route is exactly what it was.
  */
 export function createWakerGroupRoutes(
   store: WakerGroupStore,
@@ -199,7 +203,13 @@ export function createWakerGroupRoutes(
       return context.json({ error: SEND_IDS }, 400);
     }
     try {
-      const group = await store.setMembers(context.req.param("id"), agentIds);
+      const group = actions
+        ? await actions.setMembers(
+            context.var.actor.id,
+            context.req.param("id"),
+            agentIds,
+          )
+        : await store.setMembers(context.req.param("id"), agentIds);
       return group
         ? context.json({ group })
         : context.json({ error: "No such group." }, 404);
@@ -209,15 +219,36 @@ export function createWakerGroupRoutes(
         // board filter is wrong and nobody was told.
         return context.json({ error: error.message }, 400);
       }
+      if (error instanceof WakerGroupSizeError)
+        return context.json({ error: error.message }, 409);
+      // Part-way: what went through stays, and the caller is told which steps those were.
+      if (error instanceof WakerGroupStepsError)
+        return context.json({ error: error.message, done: error.done }, 409);
+      if (error instanceof WakerGroupOwnerGoneError)
+        return context.json({ error: error.message, code: error.code }, 409);
+      // The chat a crew that reached two Bots asked for could not be made as asked.
+      if (
+        error instanceof GroupRefusedError ||
+        error instanceof AgentNotFoundError
+      )
+        return context.json({ error: error.message }, 400);
       throw error;
     }
   });
 
   routes.delete("/:id", requireUser, async (context) => {
-    const removed = await store.remove(context.req.param("id"));
-    return removed
-      ? context.json({ ok: true })
-      : context.json({ error: "No such group." }, 404);
+    try {
+      const removed = actions
+        ? await actions.dissolve(context.var.actor.id, context.req.param("id"))
+        : await store.remove(context.req.param("id"));
+      return removed
+        ? context.json({ ok: true })
+        : context.json({ error: "No such group." }, 404);
+    } catch (error) {
+      if (error instanceof WakerGroupRunningError)
+        return context.json({ error: error.message }, 409);
+      throw error;
+    }
   });
 
   return routes;
