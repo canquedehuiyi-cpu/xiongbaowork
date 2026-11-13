@@ -252,7 +252,11 @@ COPY LICENSE NOTICE /licenses/
 COPY --from=app-build /src/THIRD-PARTY-NOTICES.md /licenses/THIRD-PARTY-NOTICES.md
 ENV APP_DIST_DIR=/app/app/dist
 ENV TENANT_PACKAGE_DIR=../examples/xiongbao
-ENV OPENBOT_SELF_HOST_BANNER=false
+
+# The image's defaults (RLS_ENFORCE=refuse, SELF_HOST_BANNER=false, IN_CONTAINER=true) are not ENV. The
+# env-aliases oneshot writes each under its XIONGBAO_ name only when the deployment sets neither that
+# nor the legacy name, so whatever a customer sets, under either name, wins over the image.
+COPY docker/defaults.env /etc/xiongbao/defaults.env
 
 COPY docker/s6 /etc/s6-overlay
 
@@ -286,11 +290,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # /run/s6/container_environment, which holds BETTER_AUTH_SECRET, KEY_ENCRYPTION_KEY and the
 # database's password, and with those every credential, every session and the audit database.
 #
-# So of the package managers, sudo runs `openbot-apt` and nothing else (the only other sudo rule is
+# So of the package managers, sudo runs `xiongbao-apt` and nothing else (the only other sudo rule is
 # the per-employee helper's `ensure` and `run`, below). It takes `update`, or `install` and package
-# names, and refuses any other argument; `docker/openbot-apt` says what it refuses and why. Root's,
-# in a directory that is root's, so the Bot cannot change what sudo runs. `sudo openbot-apt install
-# jq` is what the tool description tells a model to run here, as pwuser. `sudo apt-get` is refused.
+# names, and refuses any other argument; `docker/xiongbao-apt` says what it refuses and why. Root's,
+# in a directory that is root's, so the Bot cannot change what sudo runs. `sudo xiongbao-apt install
+# jq` is what a model runs here, as pwuser. `sudo apt-get` is refused.
+#
+# THE OLD NAME STILL WORKS. A Bot's memory and the skills it has learned may say `sudo openbot-apt`,
+# so /usr/local/sbin/openbot-apt is a root-owned link to xiongbao-apt and sudoers names both paths
+# (sudo matches a command by its path, so the link needs a rule of its own). The link and its rule go
+# when the compatibility window ends (legacy-compat in the brand allowlist).
 #
 # The environment stays sudo's to reset (`env_reset` in Ubuntu's /etc/sudoers) and the helper
 # clears it again, so nothing the Bot exports reaches apt-get. DEBIAN_FRONTEND is set by the
@@ -304,13 +313,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # the helper that runs each employee as its own user (below). So use it only with
 # COMPUTER_PER_BOT_USERS=off and Bots that need not install anything. With the switch on (the
 # default below) /health would report the per-employee computer not ready.
-COPY docker/openbot-apt /usr/local/sbin/openbot-apt
+COPY docker/xiongbao-apt /usr/local/sbin/xiongbao-apt
 RUN apt-get update && apt-get install -y --no-install-recommends sudo \
   && rm -rf /var/lib/apt/lists/* \
-  && chown root:root /usr/local/sbin /usr/local/sbin/openbot-apt \
-  && chmod 0755 /usr/local/sbin /usr/local/sbin/openbot-apt \
+  && chown root:root /usr/local/sbin /usr/local/sbin/xiongbao-apt \
+  && chmod 0755 /usr/local/sbin /usr/local/sbin/xiongbao-apt \
+  && ln -s /usr/local/sbin/xiongbao-apt /usr/local/sbin/openbot-apt \
   && printf '%s\n' \
-    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/openbot-apt' \
+    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xiongbao-apt, /usr/local/sbin/openbot-apt' \
     > /etc/sudoers.d/pwuser \
   && chmod 0440 /etc/sudoers.d/pwuser \
   && visudo -cf /etc/sudoers.d/pwuser
@@ -323,7 +333,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
 # where free, hence the SYS_GID range) and `xbbots` beside it; pwuser is alone in `xbcomp`, the group
 # of every employee directory, so the file tools reach them all.
 #
-# EMPLOYEES DO NOT SUDO. Not even `openbot-apt`, which pwuser keeps above: no sudoers file names an
+# EMPLOYEES DO NOT SUDO. Not even `xiongbao-apt`, which pwuser keeps above: no sudoers file names an
 # employee user. Root reads every other employee's directory, the browser profiles and the container's
 # environment. An employee installs user-level tools in its own directory (npm install, bun add,
 # `python3 -m venv .venv` then `.venv/bin/pip install`); system packages it needs belong in this
@@ -405,33 +415,46 @@ RUN mkdir -p /workspace /profiles \
 # external database needs no special case: set DATABASE_URL and EMBEDDED_POSTGRES stays off.
 ENV EMBEDDED_POSTGRES=off
 # Embedded startup generates app/owner URLs. External deployments must provide
-# an app URL explicitly; no owner URL is a safe fallback for the API.
-ENV OPENBOT_RLS_ENFORCE=refuse
+# an app URL explicitly; no owner URL is a safe fallback for the API. The readiness gate refuses
+# that start: RLS_ENFORCE=refuse, from docker/defaults.env (above).
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 # Public, build-bound identity. A build that passes no --build-arg leaves it unknown (the root release
-# workflow passes none today, so its images report the same unknown identity they always did). The
-# build arguments are XIONGBAO_*; the ENV keeps the OPENBOT_* names the server reads, on purpose: an
-# unset argument still becomes an EMPTY variable, and an empty XIONGBAO_BUILD_* would be copied over
-# an OPENBOT_BUILD_* that an existing deployment supplies at run time (the alias layer lets an empty
-# new name win), erasing its release identity. A run-time XIONGBAO_BUILD_* still works through the
-# alias layer. Moving these to their new names waits for a lowest-priority defaults home (Task 11).
+# workflow passes none today, so its images report the same unknown identity they always did).
+#
+# NOT ENV: A LINE OF THE DEFAULTS FILE, AND ONLY WHEN SET. An unset argument still becomes an EMPTY
+# variable, and baked into ENV under either name it would stand in for, or be copied over, the
+# identity a deployment supplies at run time. So each argument that is set becomes `BUILD_<X>=<value>`
+# in /etc/xiongbao/defaults.env, which the env-aliases oneshot writes under the new name only when the
+# deployment sets the identity under neither name; an unset one writes nothing. A value is one line:
+# one holding a line break could add a key of its own to the file, so it fails the build instead.
+# The image's last RUN, so a new commit's arguments rebuild this layer and nothing before it.
+#
+# release.yml already labels its images with org.opencontainers.image.version and .revision, which is
+# what `docker inspect` shows of the identity; no second label is set here.
 ARG XIONGBAO_BUILD_VERSION
 ARG XIONGBAO_BUILD_COMMIT
 ARG XIONGBAO_BUILD_DISTRIBUTION_ID
 ARG XIONGBAO_BUILD_REPOSITORY
 ARG XIONGBAO_BUILD_CHANNEL
-ENV OPENBOT_BUILD_VERSION=${XIONGBAO_BUILD_VERSION} \
-    OPENBOT_BUILD_COMMIT=${XIONGBAO_BUILD_COMMIT} \
-    OPENBOT_BUILD_DISTRIBUTION_ID=${XIONGBAO_BUILD_DISTRIBUTION_ID} \
-    OPENBOT_BUILD_REPOSITORY=${XIONGBAO_BUILD_REPOSITORY} \
-    OPENBOT_BUILD_CHANNEL=${XIONGBAO_BUILD_CHANNEL}
+RUN set -eu; \
+    add() { \
+      [ -n "$2" ] || return 0; \
+      if [ "$(printf '%s' "$2" | wc -l)" -ne 0 ]; then \
+        echo "XIONGBAO_BUILD_$1 holds a line break; a build identity is one line" >&2; exit 1; \
+      fi; \
+      printf 'BUILD_%s=%s\n' "$1" "$2" >> /etc/xiongbao/defaults.env; \
+    }; \
+    add VERSION "${XIONGBAO_BUILD_VERSION:-}"; \
+    add COMMIT "${XIONGBAO_BUILD_COMMIT:-}"; \
+    add DISTRIBUTION_ID "${XIONGBAO_BUILD_DISTRIBUTION_ID:-}"; \
+    add REPOSITORY "${XIONGBAO_BUILD_REPOSITORY:-}"; \
+    add CHANNEL "${XIONGBAO_BUILD_CHANNEL:-}"
 
 # Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
 # container only callers on this machine are the administrator; in here every caller arrives through
 # the container engine's network, so that rule would refuse everybody. See `singleUserAccess` in
-# server/src/config.ts.
-ENV OPENBOT_IN_CONTAINER=true
+# server/src/config.ts. It is IN_CONTAINER=true in docker/defaults.env (above).
 ENV NODE_ENV=production
 # The CopilotKit runtime reports usage to its vendor unless this is set; the server also swaps its
 # capture scope for a silent one, so this covers any process that reads the variable directly.

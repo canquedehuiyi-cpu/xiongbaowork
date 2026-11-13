@@ -77,7 +77,7 @@
   {
     "rule": "env-name",
     "scope": "Dockerfile",
-    "lines": 9
+    "lines": 1
   },
   {
     "rule": "env-name",

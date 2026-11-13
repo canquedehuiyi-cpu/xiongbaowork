@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const dockerfile = readFileSync(
@@ -69,5 +71,67 @@ describe("the runtime image's tree", () => {
     // would copy that empty value over an OPENBOT_BUILD_* the deployment supplies at run time.
     expect(dockerfile).not.toMatch(/^ENV\s+XIONGBAO_BUILD_/m);
     expect(dockerfile).not.toMatch(/^\s+XIONGBAO_BUILD_\w+=\$\{/m);
+  });
+
+  test("no build identity is baked into ENV under its legacy name either", () => {
+    expect(dockerfile).not.toMatch(/^ENV\s+OPENBOT_BUILD_/m);
+    expect(dockerfile).not.toMatch(/^\s+OPENBOT_BUILD_\w+=/m);
+  });
+
+  test("one RUN writes the build arguments that are set into the defaults file, and refuses a line break", () => {
+    // The RUN as the shell sees it: continuation lines joined, the image's path swapped for a temp file.
+    const lines = runtime.split("\n");
+    const instructions: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^RUN\s/.test(lines[i] ?? "")) continue;
+      let text = "";
+      for (; i < lines.length; i++) {
+        const line = lines[i] ?? "";
+        if (!line.endsWith("\\")) {
+          text += line;
+          break;
+        }
+        text += `${line.slice(0, -1)}\n`;
+      }
+      instructions.push(text.replace(/^RUN\s+/, ""));
+    }
+    const writers = instructions.filter((r) =>
+      r.includes("/etc/xiongbao/defaults.env"),
+    );
+    expect(writers.length).toBe(1);
+    const dir = mkdtempSync(join(tmpdir(), "build-defaults-"));
+    try {
+      const file = join(dir, "defaults.env");
+      const script = (writers[0] ?? "").replaceAll(
+        "/etc/xiongbao/defaults.env",
+        file,
+      );
+      const run = (args: Record<string, string>) => {
+        writeFileSync(file, "RLS_ENFORCE=refuse\n");
+        const result = spawnSync("sh", ["-c", script], {
+          env: { PATH: process.env.PATH ?? "/usr/bin:/bin", ...args },
+          encoding: "utf8",
+        });
+        return { status: result.status, text: readFileSync(file, "utf8") };
+      };
+      expect(run({})).toEqual({ status: 0, text: "RLS_ENFORCE=refuse\n" });
+      expect(
+        run({
+          XIONGBAO_BUILD_VERSION: "0.2.11",
+          XIONGBAO_BUILD_COMMIT: "",
+          XIONGBAO_BUILD_CHANNEL: "stable",
+        }),
+      ).toEqual({
+        status: 0,
+        text: "RLS_ENFORCE=refuse\nBUILD_VERSION=0.2.11\nBUILD_CHANNEL=stable\n",
+      });
+      const broken = run({
+        XIONGBAO_BUILD_VERSION: "0.2.11\nRLS_ENFORCE=warn",
+      });
+      expect(broken.status).not.toBe(0);
+      expect(broken.text).toBe("RLS_ENFORCE=refuse\n");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

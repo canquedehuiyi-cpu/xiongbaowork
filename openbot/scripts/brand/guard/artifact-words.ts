@@ -11,6 +11,9 @@ export type ArtifactEntry = {
   category: Category;
   plan: Plan;
   note: string;
+  // A legacy-compat word's release window, as in the source allowlist.
+  introducedIn?: string;
+  removeIn?: string;
 };
 
 /**
