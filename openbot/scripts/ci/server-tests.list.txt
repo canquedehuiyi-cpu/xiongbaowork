@@ -565,6 +565,7 @@ tests/policy-fanout.integration.test.ts
 tests/policy-rule-check.test.ts
 tests/policy-store-tenant.integration.test.ts
 tests/policy-translate.test.ts
+tests/port-l0-endtoend.integration.test.ts
 tests/portrait-coworker-access.test.ts
 tests/portrait-image.test.ts
 tests/portrait-media.test.ts
