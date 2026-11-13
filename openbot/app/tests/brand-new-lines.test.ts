@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
   addedLines,
   baseRef,
@@ -54,6 +55,19 @@ test("a fork comment naming OpenBot is reported", () => {
   ]);
 });
 
+test("an added line that an allowlist entry of the same file covers is not reported", () => {
+  const allow = [{ file: "app/src/a.ts", text: '"openbot-theme"' }];
+  const line = 'const KEY = "openbot-theme";';
+  expect(
+    newLineFindings(addedLines(diffOf("app/src/a.ts", line)), allow),
+  ).toEqual([]);
+  expect(
+    newLineFindings(addedLines(diffOf("app/src/b.ts", line)), allow).map(
+      (f) => f.file,
+    ),
+  ).toEqual(["app/src/b.ts"]);
+});
+
 test("a test file is not checked", () => {
   const lines = addedLines(
     diffOf("server/tests/x.test.ts", "// OpenBot does this"),
@@ -98,6 +112,12 @@ test("this branch adds no unexplained upstream name", () => {
   const { base, head } = baseRef(process.env);
   const upstream = upstreamReader(readSyncPoint());
   const lines = diffAddedLines(base, head);
-  const found = forkIntroduced(newLineFindings(lines), upstream);
+  const allow = JSON.parse(
+    readFileSync(
+      new URL("./brand-leak-allowlist.json", import.meta.url),
+      "utf8",
+    ),
+  ) as { file: string; text: string }[];
+  const found = forkIntroduced(newLineFindings(lines, allow), upstream);
   expect(found).toEqual([]);
 });
