@@ -1,0 +1,488 @@
+# 群组与群聊合一设计稿（做法 A：先挂接再收口）
+
+状态：待用户审阅（第 11 节 4 个问题待定；第 9 节 34 条已有断言的改动待逐条批准）
+日期：2026-11-13
+依据：用户决定（2026-11-13，原话选项）：
+1. 做法 A「先挂接再收口」：每个群聊背后挂一个 `waker_groups` 记录（`channels` 加 `waker_group_id`）。成员、顺序、头像、组团流程、看板继续用现有那套；界面上只剩一个概念，设置都放在它上面；旧接口尽量不动。
+2. 现有群组「自动转成群聊」：每个有 2 位以上员工的群组，升级时自动生成一个同名的、可以聊天的群组，成员、顺序、头像、流程都带过去；不足 2 位的先保留，标「待补成员」。
+3. 界面统一叫「群组」：保留「群组」这个词，群组里可以直接聊天；侧边栏只剩「群组」一节（原来的「群聊」并进来）；新建入口统一为「新建群组」。
+
+前序：只读调查报告（基于 `origin/main` = `ac2e245e`，下称「报告」）。本稿的盘点基线相同：分支 `docs/group-unify-spec`，基于 `ac2e245e`。路径简写：S = `openbot/server/src`，A = `openbot/app/src`；仓库根的文件写作 `<根>/…`。
+
+---
+
+## 0. 一句话
+
+数据上保持两张表各管各的：消息、人员、回答顺序仍然由群聊（`channels` 一族，上游原生）负责；名字、头像、组团流程、看板过滤仍然由群组（`waker_groups`，熊宝自加）负责。两边用一列 `channels.waker_group_id` 一对一挂上。**群聊一侧是真相，群组一侧是镜像**：所有改员工、改顺序、改名的写入口，写完群聊都会立即把镜像改写一遍；另有开机巡检和打开设置时的自愈，兜住镜像偏差。界面只剩「群组」：侧边栏一节、员工页一个页签、一个「新建群组」表单、群组聊天页顶栏一个设置面板。
+
+---
+
+## 1. 已定决定一览
+
+| # | 问题 | 决定 | 章节 |
+|---|---|---|---|
+| D1 | `waker_group_id` 列 | `uuid`，可空，外键指向 `waker_groups(id)`，`ON DELETE SET NULL`；「未删除的频道」范围内唯一（部分唯一索引）；不写进 Drizzle 的 `core.ts`，按 `approvals/extra-columns.ts` 的做法用 `sql` 片段读写 | 3.1 |
+| D2 | 迁移放哪 | 恢复叠加目录 `openbot/server/recovery/recovery-20261018-v1/sql/`，编号 **0205**（PR3 的台账表用 **0206**）；`drizzle/` 不动 | 3.2 |
+| D3 | RLS 与守卫 | 不新增 RLS 策略（列跟着 `channels` 现有策略走）；改写 `openbot_team_channel_guard`，让它认得新列；新增一个挂接校验触发器；台账表照 `0072` 的形状建四条策略 | 3.3 |
+| D4 | 顺序谁是真相 | 群聊一侧：`channel_agents` 定成员，`group_bot_threads` 的最早时间戳定顺序（上游 `order()`）。`waker_group_members.position` 是镜像 | 4.1 |
+| D5 | 成员同步方向 | 写入只走群聊一侧，写完立即改写镜像。旧接口 `PUT /api/waker-groups/:id/members` 遇到已挂接的群组时，翻译成群聊的加人、移人、重排 | 4.2 |
+| D6 | 新建时挂接 | **建群即挂**：所有建群聊的路径（`POST /api/groups`、「新对话」多选、`propose_group`、新表单）建完立即建一条群组并挂上 | 4.3 |
+| D7 | 现有群聊补群组 | **升级时一并补**（开机任务第二阶段），并保留「打开设置时补建」作为自愈兜底 | 5.4 |
+| D8 | 现有群组转群聊 | 开机任务第一阶段，创建者 = `users.id = waker_groups.tenant_id`；可用员工 2–20 位才转；其余情况保留并标状态；不自动去重 | 5.1–5.3 |
+| D9 | 名字谁是真相 | 群聊的 `channels.title`；群组 `name` 跟着改，撞名时保留原名并记日志 | 4.4 |
+| D10 | 接口 | 新增 3 个路由、扩展 3 个；`/api/groups`、`/api/channels`、`/api/portraits`、`/api/group-pipelines`、`/api/tasks` 不改 | 6 |
+| D11 | 员工页「群组」页签 | **保留**，内容改为「我建的群组」卡片：已挂接的可以打开聊天，待补成员的可以补人，未开始聊天的可以开始聊天 | 7.2 |
+| D12 | 新建群组 | 一张表单（名称 + 按先后勾选员工，2–20 位），放在 `/group/new` 页和员工页对话框两处，一次调用 `POST /api/waker-groups` 建好。新建的群组不允许少于 2 位 | 7.3 |
+| D13 | 解散 | 只有创建者能解散：群聊软删（隐藏，不清消息），群组硬删（级联删流程模板和运行记录，与现在解散群组的效果一致），头像一并删，看板上的任务卡保留；有流程正在运行时拒绝。待用户确认，见 Q1 | 7.5 |
+| D14 | 看板链接 | 保持 `crew=<成员列表>`，与 `CONTEXT.md` 的口径一致，不改成 `group=` | 7.4 |
+| D15 | 术语 | 界面、服务端返回给人看的文字、给模型看的工具描述，一律把「群聊」改为「群组」；IM 接入（`reachability`）里的「群聊或私聊」指的是第三方 IM 的群，不在此列 | 8 |
+
+---
+
+## 2. 现状要点与对报告的更正
+
+报告的主体结论经核对成立。下面列出报告有误或漏掉、并且影响设计的地方，**以代码为准**：
+
+1. **群聊员工数上下限的位置**：报告写 `group.ts:104-107`，实际在 `S/channels/group.ts:125-128`（`MIN_GROUP_BOTS = 2`、`MAX_GROUP_BOTS = 20` 和两句拒绝文案）。
+2. **漏了 `channels.created_by`**：迁移 `0122_team_tenant.sql:40-42` 给 `channels` 加了 `created_by text`，默认值取写入帧（`current_setting('app.tenant_id')`），**没有写进 Drizzle schema**。数据库层判断「谁是共享群的创建者」用的是这一列（`openbot_team_channel_creator`），不是应用层 `creatorOnly` 用的 `people(channel)[0]`（`group.ts:1592-1597`）。0122 之前已有的行这一列为 NULL。
+3. **漏了「以后加的列一律冻住」**：`0128_team_group_bots.sql:204-250` 的 `openbot_team_channel_guard`（现行版本是 `0179_team_channel_guard_title_opening.sql`）规定：在 `platform` 帧以外，共享群（`tenant_id='team'`）的 `channels` 行只有活动列能改，名字类列只有创建者能改，**其余列（包括以后新加的列）谁也不能改**。0128 的注释还写明：以后的数据迁移要改共享群的行，必须在 `platform` 帧里做，迁移器的空帧也会被拒（超级用户同样拒，因为触发器不是 RLS）。所以新列必须同时改写这个守卫，否则创建者也写不进 `waker_group_id`，外键的 `SET NULL` 也会被拒。
+4. **迁移编号**：恢复目录现在最大是 `0204_bao_role_presets.sql`；日志 `meta/_journal.json` 共 185 条，中间有空号；快照只到 `0107_snapshot.json`，0108 以后的迁移不配快照。`drizzle/` 停在 0080，被叠加层测试按字节冻结（`openbot/server/scripts/migrate.ts:29-37` 的注释）。
+5. **线程 id 不能在 SQL 里生成**：`group_bot_threads.thread_id` 和 `intelligence_channel_mappings.thread_id` 由 `threadIdentity.mint()` 生成（`S/channels/thread-identity.ts`），里面带部署名的摘要。所以「群组转群聊」**只能在服务端 TypeScript 里做**，不能写成 SQL 数据迁移。这一点决定了第 5 节采用开机任务。
+6. **`system` 租户的群组只是理论上存在**：全仓库写 `waker_groups` 的只有 `S/waker-groups/store.ts:135` 和 WakerFlow（`S/wakerflows/store.ts:1336`），都在本人帧里写，没有任何种子或目录会写 `system` 群组。
+7. **路径**：报告里的 `development-environment-xiongbao.md` 实为 `openbot/docs/development-environment-xiongbao.md`；`scripts/ci/…` 实为 `openbot/scripts/ci/…`；`CONTEXT.md` 在仓库根。
+8. **租户和用户的关系**：`S/db/schema/tenant.ts:4-8` 和 `<根>/CONTEXT.md` 都写明「一个人即一个租户」，`tenant_id` 等于 `users.id`。单用户安装下那个人是 `dev-local-user`（`0200_single_user_identity.sql` 的注释）。`team` 只是共享行的戳，不是帧：没有人以 `team` 身份执行，`users.id` 也被约束为不能取 `system`、`platform`、`team`（0122:34）。因此**群组永远属于某个个人租户，群聊（共享群）永远戳 `team`、`created_by` 是创建者**。两者一挂接就跨了戳，这是 3.3 节守卫设计的出发点。
+
+---
+
+## 3. 数据
+
+### 3.1 新列 `channels.waker_group_id`
+
+| 属性 | 决定 | 理由 |
+|---|---|---|
+| 类型 | `uuid` | 与 `waker_groups.id` 一致 |
+| 可空 | 可空，无默认值 | 单聊永远为 NULL；群聊在挂上之前的极短窗口内为 NULL；外键 `SET NULL` 之后也是 NULL |
+| 外键 | `REFERENCES waker_groups(id) ON DELETE SET NULL` | 不用 `CASCADE`：删群组不能连带硬删频道（频道只做软删）。不用 `RESTRICT`：现有的 `DELETE /api/waker-groups/:id` 必须继续能删 |
+| 唯一 | 部分唯一索引：`waker_group_id IS NOT NULL AND deleted_at IS NULL` | 一个群组同一时刻只对应一个未删除的群聊；已软删的频道保留原值，之后可以给同一个群组重新开一个聊天（7.2「开始聊天」） |
+| 普通索引 | 部分索引：`waker_group_id IS NOT NULL` | 外键 `SET NULL` 动作和反查需要（包括已软删的行） |
+| Drizzle | **不写进** `S/db/schema/core.ts`（上游文件）。照 `S/approvals/extra-columns.ts` 的写法，在新文件 `S/waker-groups/channel-link.ts` 里声明 `sql` 读写片段，文件头登记「列、类型、迁移号」 | 与 `created_by` 的处理一致，同步上游零冲突。代价是 `drizzle-kit push` 会把它当多余的列删掉，部署库本来就禁止 push |
+
+挂接的**归属规则**（全文统一叫「所有者」）：
+
+- 共享群（`tenant_id = 'team'`）：所有者 = `created_by`；`created_by` 为 NULL 的共享群没有所有者，不挂接（0128 注释说 P11 之前没有代码写共享群，这类行应为零，开机任务会计数）。
+- 个人的多员工频道（P11 之前的旧行，`tenant_id` = 某个用户）：所有者 = `tenant_id`。
+- 被挂的群组必须满足：`waker_groups.tenant_id = 所有者`，并且不是 WakerFlow 内部群组（`waker_flows.group_id` 没有指向它）。
+
+### 3.2 迁移放在哪里、怎么编号
+
+- **放在** `openbot/server/recovery/recovery-20261018-v1/sql/`。原因：`drizzle/` 被测试冻结，叠加层「只能追加」（`scripts/migrate.ts:29-37, 57-63`）；0081 以后的迁移全部在这里。
+- **编号**：PR1 用 `0205_waker_group_channel_link.sql`，PR3 用 `0206_waker_group_upgrades.sql`。合入前如果别的 PR 先占了号，就顺延，并同步改日志。
+- **三件套**：SQL 文件；`meta/_journal.json` 追加一条，`idx` 为 205，`tag` 带四位数字前缀，`when` 取真实当前时间且晚于 0204 的 `1794502160837`；0108 以后不配快照（与 0108–0204 一致）。
+- **执行身份**：要替换守卫函数、建触发器，必须用 owner 或 BYPASSRLS 身份跑，与 0122/0128 一样，文件开头照 0122:27-31 加角色自检。所有部署路径（镜像、Helm Job、compose、CI、`db:migrate`）都已经走 `scripts/migrate.ts` 的 owner 串，不需要改流程。
+
+### 3.3 RLS、租户与守卫
+
+1. **列本身不加新策略**：`channels` 已有 0072 的四条 `tenant_isolation*` 和 0122 的 `team_*` 策略，读写新列都受它们约束。
+2. **改写 `openbot_team_channel_guard`**（`CREATE OR REPLACE`，以 0179 版为底，其余规则一字不动）。对 `waker_group_id` 增加两条放行，除此之外仍按「其余列谁也不能改」：
+   - (a) **补挂**：旧值为 NULL、新值非 NULL，并且当前帧 = `created_by`。用于建群后立即挂接、开机任务、打开设置时自愈，这三条路径都在创建者帧里执行。
+   - (b) **解挂**：新值为 NULL，并且旧值指向的群组已经不存在。这就是外键 `SET NULL` 的级联更新：它会触发 BEFORE UPDATE 触发器，帧是删除者。这条放行仿照 0122 对 `agent_profiles.owner_user_id` 的特例。
+   - 把已挂的群组改指到另一个群组，在 `platform` 帧以外一律拒绝。
+3. **新增触发器 `openbot_channel_waker_group_link`**（BEFORE INSERT OR UPDATE OF `waker_group_id`，对所有频道生效，`platform` 帧放行）：新值非 NULL 时，要求在**当前帧的 RLS 下**能读到这一行群组，且它的 `tenant_id` 等于 3.1 节的所有者，且没有 `waker_flows` 指向它。函数**不用** SECURITY DEFINER：故意借当前帧的 RLS，读不到就等于不是你的。这条挡住两种情况：外键检查绕过 RLS，可以拿别人的群组 id 去挂；也可以把 WakerFlow 内部群组挂进聊天。
+4. **群组一侧不改**：`waker_groups` 和 `waker_group_members` 的策略（0070、0072）保持原样。
+5. **台账表 `waker_group_upgrades`**（0206，见 5.5）带 `tenant_id`，照 0072 建 `ENABLE` + `FORCE` 和四条策略，`GRANT` 给 `openbot_app`。写法照抄 `0203_portrait_media.sql:37-49`。
+6. **已知限制（接受）**：被创建者拉进共享群的**其他人**读不到创建者租户里的 `waker_groups`、`portraits` 和流程模板。他们看到的仍是叠放的员工头像，设置面板对他们只读（显示员工与顺序，数据取自群聊）。要让其他人也看到自定义头像，需要把头像改成 `team` 戳，本期不做（Q2）。
+
+---
+
+## 4. 两边怎么同步
+
+### 4.1 顺序与成员的真相
+
+- **群聊一侧是真相**。运行时回答顺序由上游 `order()` 决定（`group.ts:531-546`：每位员工取 `group_bot_threads` 最早一行的时间戳排序）；成员是 `channel_agents`。这两处是上游代码，不改。
+- **`waker_group_members` 是镜像**，按真相的顺序整体改写，`position` 写成 `"0"`、`"1"`…，复用 `store.setMembers` 的写法。镜像给三处读：组团流程的「步骤负责人必须在组里」校验（`S/pipeline/store.ts:785-800`）、看板 `group=` 过滤（`S/tasks/routes.ts:395-420`）、`@群组` 展开和授权拆分（前端读 `/api/waker-groups`）。
+- 为什么不反过来让群组当真相：那样要改上游 `order()` 和 `writeOrder`，每次同步上游都会冲突；而且回答顺序必须以真正在跑的那份为准，界面上显示的顺序才不会骗人。
+
+### 4.2 写入口与同步时机
+
+实现方式：在 S/index.ts 装配 `groupConversations` 的地方（`S/index.ts:4130`）包一层熊宝自己的装饰器 `withWakerGroupLink(…)`（新文件 `S/waker-groups/channel-link.ts`）。路由（`app.ts:2245` 的 `coworker.groups`）、staffing 执行器（`index.ts:4247` 的 `deps.groups`）拿到的都是同一个对象，所以**上游的 `group.ts` 一行都不用改**（只改一句文案，见第 8 节）。
+
+| 写入口 | 谁调用 | 同步动作 |
+|---|---|---|
+| `create`（`POST /api/groups`，「新对话」多选，`propose_group`） | 前端、staffing 执行器 | 上游建完频道后，在创建者帧里开**一个事务**：建群组（名字按 4.4 节规则）、写镜像、挂接。返回的 `channel` 多带一个 `wakerGroupId` 字段（上游路由原样 `json` 返回，`group.ts:2132-2140`）。这一步失败只记日志 `waker-group-link-failed`，不让建群失败，留给自愈处理 |
+| `addBots` / `removeBots` / `reorder`（`POST/DELETE /api/groups/:id/bots`、`PUT /:id/order`，`propose_group_change`） | 目前只有 staffing 执行器调用；PR2 之后设置面板也走统一接口 | 上游事务提交后，读 `order()` ∩ `bots()`，整体改写镜像。频道没有挂接时什么也不做 |
+| `PUT /api/waker-groups/:id/members`（旧接口） | 员工页卡片「管理成员」、设置面板 | **已挂接**：校验 2–20 位、不重复，跟现有成员比较得出要加的和要移的，按「先加后移、超过 20 位就分批：先加到 20，再移，再加剩下的」调用上游 `addBots`、`removeBots`，最后 `reorder(目标顺序)`，再改写镜像。只有创建者能做（沿用上游 `creatorOnly`）。**未挂接**：照旧 `setMembers`；如果结果是 2–20 位，紧接着自动开聊天并挂接（与 5.1 节同一个函数） |
+| 员工被删除（`channel_agents` 外键级联） | 数据库 | 镜像不会立即跟着变，靠自愈（4.5） |
+| WakerFlow 保存（`S/wakerflows/store.ts:1316-1360`） | WakerFlow | 不涉及：内部群组永远不会被挂接（3.3 节第 3 条），开机任务和列表接口都把它排除 |
+
+多步写（旧接口翻译成加、移、重排）**不是原子的**：每一步都是上游各自的事务。中途失败时，返回 409 和已做的步骤，镜像按真相改写。这样界面看到的永远是实际状态。可接受的理由：每一步本身都有效，不会留下违反 2–20 约束的中间态。
+
+### 4.3 新建时就挂接（D6）
+
+所有建群聊的路径都会立即挂上群组，这是用户选项 1 原话「每个群聊背后挂一个」的直接落实。好处是 `/api/waker-groups` 就是「我建的群组」的完整清单（不分页），员工页、`@群组`、流程页、看板都只读这一份。
+
+唯一的副作用：「新对话」多选建群后，如果第一条消息发失败，前端会把刚建的频道删掉（`A/lib/channels/start.ts:67-73` 的 `discard`）。删掉频道会留下一个孤立的群组。处理办法：`discard` 改调 `DELETE /api/waker-groups/:wakerGroupId`（解散：软删频道并删群组）；返回里没有 `wakerGroupId` 时（服务端旧版本），照旧删频道。
+
+### 4.4 名字
+
+- **真相是 `channels.title`**（没有 title 时用 `channels.name`，也就是员工名拼起来的名字）。
+- 群组的 `name` 在租户内唯一（`waker_groups_tenant_name_idx`），新建或补建时按以下规则取名：先取 title，再取 `channels.name`，截到 80 字；如果撞名，依次加「（2）」「（3）」…「（99）」，还撞就加 id 的前 6 位。
+- **改名**：在 S/index.ts 构造 `channelStore` 处，同样用装饰器包住 `rename`。任何路径给已挂接的频道改名（会话的改名对话框 `PUT /api/channels/:id/title`、`propose_group_change` 的改名步骤 `executor.ts:1101-1106`、新接口 `PATCH`），都会顺手把群组的 `name` 改成同样的名字。新名字在租户内已被别的群组占用时，群组保留原名，记日志 `waker-group-name-taken`，界面以 title 为准。`PATCH /api/waker-groups/:id` 会先查重，撞名就直接返回 409，所以从设置面板改名不会走到这条分支。
+
+### 4.5 自愈
+
+镜像可能出现偏差，来源有三种：装饰器的后半步失败、员工被删除、绕过装饰器的写入。在三个时机按真相改写镜像（成员、顺序、名字）：
+
+1. 开机任务第三阶段：遍历所有已挂接的群组。
+2. `POST /api/waker-groups/for-channel/:channelId`：打开设置面板时调用，见第 6 节。
+3. 每次经统一接口写入之后。
+
+`GET /api/waker-groups` **保持只读**，不在读接口里写库。
+
+---
+
+## 5. 数据迁移（升级时自动转换）
+
+### 5.1 现有群组转成群聊（开机任务第一阶段）
+
+**为什么用开机任务而不是 SQL**：线程 id 必须由服务端生成（第 2 节第 5 条），而且要沿用上游的建群路径，权限检查、`team` 戳、成员行和线程行的写入才会和平时建群一模一样。任务在 `platform` 帧里枚举数据，在**所有者帧**（`runAsTenant(owner)`）里建群。
+
+规则（逐条可执行）：
+
+| # | 条件 | 处理 | 台账 `outcome` |
+|---|---|---|---|
+| 1 | 是 WakerFlow 内部群组 | 跳过，不记台账 | — |
+| 2 | 已有未删除的频道挂着它 | 跳过 | — |
+| 3 | `tenant_id` 是 `system`、`platform` 或 `team`，或者 `users` 里没有这个 id（人已删除） | 保留为群组，不转 | `no_owner` |
+| 4 | 按 `position` 排序后，筛掉所有者用不了的员工（判断方式与 `canUseBot` 相同，`index.ts:4206-4209`：所有者帧下 `agentProfileStore.get` 读得到），剩下的不足 2 位 | 保留，界面标「待补成员」；**不改动它的成员数据** | `pending_members` |
+| 5 | 筛完超过 20 位 | 保留，界面标「待调整成员（超过 20 位）」；不截断（Q3） | `too_many` |
+| 6 | 筛完 2–20 位 | 转换：① 写台账 `started`；② 所有者帧下调上游 `create(owner, {agentIds})`（顺序即 `position` 顺序，上游 `seedOrder` 会写进时间戳）；③ 台账写入 `channel_id`；④ 一个事务里挂接、把 title 改成群组名、改写镜像（被筛掉的员工 id 记进台账 `dropped_agent_ids`）；⑤ 台账改为 `converted` | `converted` |
+
+- **创建者**：取 `users.id = waker_groups.tenant_id`。单人和多人部署相同（单用户安装下就是 `dev-local-user`）。新群聊的人员只有所有者自己，之后可以在群里邀请别人。
+- **团队租户与个人租户**：群组只存在于个人租户；转出来的群聊按上游规则戳 `team`、`created_by = 所有者`。没有「团队租户的群组」这种情况，真有的话（`tenant_id = 'team'`）按规则 3 处理。
+- **头像、流程、看板**：群组 id 不变，`portraits`（`subject_kind='group'`）、`group_task_templates`、`group_task_runs`、`/api/tasks?group=` 都以群组 id 为键，挂接之后自然沿用，**不需要搬数据**。
+- **同名**：群组名租户内唯一，转出来的群聊 title = 群组名。如果所有者之前已有一个 title 相同的群聊，两者都保留，**不自动合并**（避免把成员不同的两个群误合），第二阶段给那个旧群聊补群组时，按 4.4 节规则加「（2）」。
+- **已有同成员群聊不复用**：同上，不去重。升级说明里告诉用户可以自行解散其中一个。
+
+### 5.2 0–1 位成员
+
+保留为群组，不生成聊天。侧边栏和员工页标「待补成员」。补到 2 位以上（员工页「管理成员」或设置对话框）时，`PUT …/members` 会自动开聊天并挂接（4.2 节）。
+
+### 5.3 幂等与崩溃恢复
+
+- 每次开机都跑，一个副本跑：用 `pg_try_advisory_lock` 抢锁，抢不到就跳过。任务挂在 `startup.acquireSync` 后台执行，不阻塞健康检查。
+- 已挂接的群组按规则 2 跳过；台账为 `pending_members`、`too_many`、`no_owner` 的不再重试（终态），用户补人走 4.2 节的路径。
+- 崩溃窗口：在步骤 ②（建频道）和 ③（记 `channel_id`）之间崩溃，会留下一个未挂接的新频道。重跑时，遇到台账为 `started` 且没有 `channel_id` 的行，先按以下条件找「孤儿」：`created_by` = 所有者、`waker_group_id` 为 NULL、`created_at ≥ started_at`、员工集合与要转的完全相同、未删除。找到就收养（继续 ④），找不到才重建。第一阶段排在第二阶段之前，所以孤儿不会被第二阶段先补上一个新群组。
+- 每一项单独处理，单项失败记 `waker-group-upgrade-item-failed`（附群组 id 和原因），不影响其余项；结束打一行汇总日志 `{"type":"waker-group-upgrade","converted":n,"pending":n,"tooMany":n,"noOwner":n,"backfilled":n,"reconciled":n}`。
+- **开关**：环境变量 `XIONGBAO_GROUP_UPGRADE=off` 跳过整个开机任务（默认开），登记进 `.env.example` 和部署文档。
+
+### 5.4 反向：现有群聊补群组（开机任务第二阶段，D7）
+
+**决定：升级时一并补，并保留「打开设置时补建」作为兜底。** 不采用纯惰性补建，理由有三：
+1. 用户选项 1 的原话是「每个群聊背后挂一个」，一并补才能让 `/api/waker-groups` 成为完整清单，员工页、`@群组`、流程页才不会漏掉没打开过设置的老群聊。
+2. 补建只写熊宝自己的两张表和一列，可以放在**一个事务里**（建群组、写镜像、挂接），没有半截状态，比第一阶段简单。
+3. 撞名改「（2）」这类一次性的处理，集中在升级时做、集中记日志，比散落在用户每次点开设置时发生更可控。
+
+规则：对每个未删除、`channel_agents` 不少于 2 位、`waker_group_id` 为 NULL、能定出所有者（3.1 节）的频道，在所有者帧里建群组（名字按 4.4 节，成员和顺序取 `order()` ∩ `bots()`），挂接，台账记 `backfilled`。定不出所有者的计数后跳过（预期为 0）。
+
+兜底：`POST /api/waker-groups/for-channel/:channelId` 由创建者调用时，如果还没挂接，就当场补建（同一个函数）。
+
+### 5.5 台账表 `waker_group_upgrades`（0206，随 PR3）
+
+| 列 | 说明 |
+|---|---|
+| `group_id uuid` | 主键，外键指向 `waker_groups`，级联删除 |
+| `tenant_id text` | 所有者，0072 四条策略 |
+| `channel_id text` | 可空；转出来的或补挂的频道 |
+| `outcome text` | `started`、`converted`、`backfilled`、`pending_members`、`too_many`、`no_owner`（CHECK 约束） |
+| `dropped_agent_ids text[]` | 转换时被筛掉的员工，默认空数组 |
+| `started_at`、`updated_at` | 时间戳 |
+
+这张表有三个用途：崩溃恢复、回滚、给运维看升级到底做了什么。
+
+### 5.6 回滚
+
+- **代码回滚**（换回上一版镜像 digest）：0205、0206 都是新增，旧代码不读新列、新表；守卫函数的新版本只多了针对新列的放行，旧代码不碰新列，所以行为不变。`scripts/migrate.ts` 的迁移守卫只拒绝「要跳过一个比库里戳更早的迁移」，旧镜像的迁移全部已经执行过，不会被拒。
+- **数据回滚**：写成运维手册（放进 `openbot/docs/deployment-xiongbao.md` 第 6 节），在 `platform` 帧里执行三步：
+  1. 台账为 `converted`、并且对应频道至今没有任何 `group_messages` 的：软删频道，按 `dropped_agent_ids` 把成员补回镜像。
+  2. 台账为 `backfilled`、并且该群组没有模板、没有头像的：删除群组（外键自动解挂）。
+  3. 清空台账。
+
+  有消息或已经被用户用过的不回滚，手册里写明原因。手册里的 SQL 由 PR3 的集成测试执行一遍，证明可用。
+- 全量回退仍然是「恢复备份」，与部署文档第 6 节的现有口径一致。
+
+---
+
+## 6. 接口
+
+### 6.1 保持不变
+
+| 接口 | 说明 |
+|---|---|
+| `/api/groups/*`（上游） | 路径、请求体、校验都不变。`POST /` 的返回里 `channel` 多一个可选字段 `wakerGroupId`，旧前端忽略它 |
+| `/api/channels/*`（上游） | 不变。`channelDto`（`S/channels/routes.ts:1877`）**不加** `wakerGroupId`：上游文件不碰，前端通过群组列表的 `channelId` 反查 |
+| `/api/portraits/group/:id` | 仍以群组 id 为键；`groupExists`（`S/portraits/store.ts:343`）不改 |
+| `/api/group-pipelines/*` | 仍以 `groupId`（群组 uuid）为键；模板校验读镜像 |
+| `/api/tasks?group=`、`?executors=` | 不变 |
+
+### 6.2 扩展
+
+| 接口 | 改动 |
+|---|---|
+| `GET /api/waker-groups` | 每项多一个 `channelId: string \| null`：挂接中、未删除、当前用户读得到的频道。列表仍排除 WakerFlow 内部群组；顺序不变。前端据此分出三种状态：`channelId` 非空为「可聊天」；空且员工少于 2 位为「待补成员」；空且员工 2–20 位为「未开始聊天」（频道被旧路径删掉，或升级时转换失败） |
+| `POST /api/waker-groups` | 请求体可以带 `agentIds`（2–20 位）：先查重（409），再建群组、建频道、挂接、改写 title 和镜像，返回 `{ group, channel }`（201）。建频道失败时删掉刚建的群组。**不带 `agentIds` 时完全是旧行为**（建一个「待补成员」的群组），旧客户端和现有测试不受影响 |
+| `PUT /api/waker-groups/:id/members` | 已挂接时按 4.2 节同步群聊，并施加 2–20 位的限制（不满足返回 409，文案「一个群组要有 2 到 20 位员工。」）；只有创建者能改。未挂接时照旧，结果在 2–20 位就自动开聊天 |
+| `DELETE /api/waker-groups/:id` | 已挂接时按 7.5 节解散：有流程在运行就返回 409；先软删频道，再删群组，最后删头像和视频。未挂接时照旧删群组，并顺手删头像（现在会留下孤立的头像行）。只有创建者能做 |
+
+### 6.3 新增
+
+| 接口 | 作用 |
+|---|---|
+| `PATCH /api/waker-groups/:id` | `{ name?, description? }`。改名先查重（409），再给挂接的频道改 title（经装饰器同步群组名），没挂接就只改群组。补上 `A/lib/waker-groups/mutations.ts:7-12` 明说不做的改名 |
+| `POST /api/waker-groups/:id/chat` | 给「未开始聊天」的群组开聊天：要求未挂接且员工在 2–20 位之间，否则返回 409；返回 `{ group, channel }` |
+| `POST /api/waker-groups/for-channel/:channelId` | 打开设置面板时调用：频道的创建者调用时，确保已挂接（没挂就补建），按真相做一次自愈，返回群组；非创建者返回 403 和只读提示；读不到这个频道返回 404。幂等 |
+
+路由由 `createWakerGroupRoutes(store, requireUser, link?)` 的**可选第三参数**启用。现有测试 `server/tests/waker-groups.test.ts` 只传两个参数，行为与现在完全一样。
+
+### 6.4 其他跟着改的
+
+- `openbot/scripts/ci/assert-tenants.mjs`：新增两条断言（属于新增，不是修改）：B 对 A 的群组 `PATCH`、`DELETE` 都返回 404。
+- staffing 的 `list_staff`（`S/plugins/builtin-staffing.ts:494`）仍然列「你发起的群组」及其 `channelId`；草稿和执行器的结构不变。
+
+---
+
+## 7. 前端
+
+### 7.1 侧边栏（`A/components/app-sidebar/sidebar-roster.tsx` 的 `GroupList`，`:460`）
+
+- 切换项仍是「会话 · 员工 · 群组」。「群组」下**只有一节、一个列表**（`aria-label="群组"`），标题为「群组」。
+- 列表内容分两部分：
+  - 先列所有多员工频道（`isGroupChannel`，`A/components/app-sidebar/roster.ts:95`），包括别人拉我进去的，置顶的在前，与现在相同。已挂接并且是我建的，显示群组头像（`usePortraitSrc("group", wakerGroupId)`），没有头像时仍显示叠放的员工头像。
+  - 再按名字列我建的、`channelId` 为空的群组：第二行写「N 名员工 · 待补成员」或「N 名员工 · 未开始聊天」，点击去 `/bots?tab=groups`。
+- 工具栏只留一个入口「新建群组」，指向 `/group/new`（原来的「新建群聊」和指向 `/bots?tab=groups` 的「新建群组」合成这一个）。搜索框的说明改为「搜索群组」「按名字搜索群组」。
+- 空列表：「还没有群组。点「新建群组」，选两位以上员工开始。」；已加载的页里还没有：「已加载的会话里还没有群组。」
+- `A/components/app-sidebar/app-sidebar.tsx:343-358`「新对话」旁边的按钮改为「新建群组」，仍指向 `/group/new`。
+- 皮肤 `A/skins/openmuse/menu-sheet.tsx:94-99`「新建群组」从 `/channel/new` 改指 `/group/new`。
+
+### 7.2 员工页「群组」页签（D11，`A/components/bots/bots-page.tsx`、`A/components/wakers/crews.tsx`）
+
+**决定：保留页签**，`/bots?tab=groups` 原样可用。理由：流程页的报错文案（`S/pipeline/store.ts:766, 795`「员工管理 › 群组」）、`CONTEXT.md`、旧链接 `/wakers?tab=groups`（`A/lib/agents/legacy-routes.ts`）都指向这里；这里也是「待补成员」群组唯一的落脚点。
+
+- 内容来自 `/api/waker-groups`，也就是「我建的群组」（不分页）。别人拉我进去的群组只出现在侧边栏，因为我管不了它们。
+- 卡片保留现有布局和操作（「管理成员」「更换头像」「解散」「组团流程」「在看板上看」）；**新增**三项：
+  - 可聊天的群组：「打开」，链到 `/group/$channelId`；「设置」，链到 `/group/$channelId?settings=1`。
+  - 待补成员：徽标「待补成员」。
+  - 未开始聊天：「开始聊天」按钮（`POST …/chat`）。
+- 「组团流程」链接带上群组：`/pipelines?group=<id>`；流程页新增可选地址参数 `group`，打开后滚动到该群组那一节并展开。
+- 「解散」走 7.5 节的语义，确认文案补一句后果（见 7.5）。
+- 页头和空状态的「新建群组」按钮、网格末尾的新建卡片，都打开统一的新建对话框（7.3 节）。
+
+### 7.3 新建群组（D12）
+
+- 抽出一个表单组件 `CreateGroupForm`（新文件 `A/components/wakers/create-group-form.tsx`），两处使用：
+  - `/group/new` 页（`A/routes/_authed/_app/group/new.tsx`）：标题「新建群组」。
+  - 员工页对话框（取代 `crews.tsx:50` 的 `CreateCrewDialog`）：标题「新建群组」。
+- 表单字段：
+  - 名称：占位「群组名称」，必填，默认填已选员工名用「、」连起来，可以改。
+  - 用途：可选，沿用现有的描述字段。
+  - 员工：按勾选先后决定回答顺序，沿用 `/group/new` 现有的勾选列表和「第 N 个回答」提示，2–20 位。
+- 按钮：页面上叫「创建群组」，对话框沿用「创建」。一次请求 `POST /api/waker-groups { name, description, agentIds }`。成功后用返回的 `channel` 预填缓存，然后 `replace` 跳转到 `/group/$channelId`。
+- 文案：「已选 N 位，至少还要 M 位」「已选 20 位，一个群组最多 20 位」「群组没能建好，请再试一次。」；撞名时显示服务端的 409 文案。
+- 「新对话」页（`A/routes/_authed/_app/channel/new.tsx`）的「发给」多选**保留**：选两位以上会建一个以员工名命名的群组，文案里的「群聊」改「群组」（如「选两位以上就是一个群组」）。
+
+### 7.4 群组聊天页顶栏与设置面板
+
+- 路由 `A/routes/_authed/_app/group/$channelId.tsx` 增加地址参数 `settings?: 1`。顶栏在 `GroupPeopleButton` 旁边加一个「群组设置」图标按钮，点击打开右侧抽屉，开关状态同步到地址参数。名字缺省时的回退文案从「群聊」（`:32`）改为「群组」。
+- 打开抽屉时调用 `POST /api/waker-groups/for-channel/:channelId`。按调用者区分两种视图：
+  - **创建者**（`group.people[0]` 是我；服务端用 `created_by` 复核）看到完整面板，分节如下：
+    1. **名称与用途**：行内编辑，调 `PATCH`。
+    2. **员工与顺序**：列表可以上下移动、移除，「添加员工」打开员工选择器（只列我能用的员工），保存时调 `PUT …/members`。前端同样拦住少于 2 位、多于 20 位。移除的员工如果负责某个流程步骤，提示「这位员工负责流程「X」的第 N 步」，但不拦。
+    3. **头像**：复用 `PortraitPicker kind="group" id={wakerGroupId}`。
+    4. **组团流程**：列出这个群组的模板（从 `pipelineTemplatesQueryOptions` 按 `groupId` 过滤），附「管理流程」链接 `/pipelines?group=<id>`。
+    5. **在看板上看**：`/tasks?crew=<成员 id 逗号连接>`（D14）。
+    6. **解散群组**：放在危险区，见 7.5。
+  - **其他人**：只读的「员工与顺序」（数据取自 `/api/groups/:id` 的 `bots`），加一句「只有发起人能调整」。退出群组仍在人员面板里操作。
+- 顶栏头像：已挂接并且是我建的，显示群组头像；否则仍是 `ChannelAvatar` 叠放。
+- **`@群组`**（`A/components/channels/group-chat.tsx:75-101`）：行为不变，仍然是一条模板一个选项；当前群组自己的模板排在最前面。单聊里的 `@群组` 展开成员（`channel-chat.tsx:432`）不变，已挂接的群组自然也在其中。
+- 会话列表里，已挂接群组那一行的「删除」菜单，创建者看到的是「解散群组」（走 7.5 节的流程）；其他人看到「退出群组」。
+
+### 7.5 解散（D13）
+
+- **只有创建者能解散**，入口在设置面板的危险区、员工页卡片和会话行菜单。
+- 确认对话框写明后果：「解散「X」：聊天记录不再显示；它的 N 条组团流程和运行记录会一并删除；看板上已有的任务卡保留。」
+- 服务端顺序：
+  1. 有 `running` 或 `queued` 的流程运行时，返回 409「有组团流程正在运行，先停下再解散。」。
+  2. 软删频道（上游 `softDelete`，创建者帧，0122 守卫允许）。
+  3. 删除群组：模板和运行记录按 0075 的外键级联删除；频道的挂接由外键 `SET NULL` 清空（3.3 节放行 b）。
+  4. 删除 `portraits`、`portrait_media` 里这个群组的行。
+- 这与「风险」一节的张力：群聊删除是软删，群组删除是硬删，两边的语义不同。本稿选择**沿用现在各自的语义**：聊天能恢复的那部分（软删）照旧，群组那部分（含流程历史）和现在「解散群组」一样硬删。要不要改成保留流程历史，见 Q1。
+- 通过旧路径 `DELETE /api/channels/:id` 删掉一个已挂接的频道（旧客户端、脚本），群组会保留下来，变成「未开始聊天」状态，可以重新开聊天或解散。不在上游的删除路由里加隐式的级联硬删。
+
+---
+
+## 8. 文案与术语
+
+### 8.1 改动范围
+
+- **界面**：`A/` 里「群聊」作为本概念的出现处一律改「群组」。代码类行共 38 行，分布在 20 个文件（统计命令：`grep -rn 群聊 openbot/app/src --include=*.ts --include=*.tsx`，去掉注释行）。主要文件：`sidebar-roster.tsx`、`app-sidebar.tsx`、`group/new.tsx`、`group/$channelId.tsx`、`group-people.tsx`（「群组成员」「发起了这个群组」「退出这个群组」）、`lib/groups.ts`、`channel/new.tsx`、staffing 卡片三件（`group-proposal.tsx`、`staffing-proposal-card.tsx`、`proposal-result.tsx` 的「打开群组」）。
+- **服务端返回给人看的文字**：`S/` 里代码类行共 30 行，分布在 9 个文件。包括 staffing 执行器（`executor.ts:305, 310, 1075-1124`）、草稿校验（`draft.ts:327-341`）、`routes.ts:276-277`（「组建群组」「调整群组」）、上游文件里熊宝加的两句中文：`group.ts:1596`「只有发起这个群组的人才能调整群里的员工。」和 `dispatch.ts:323`「多人对话里请直接在群组中 @ 员工。」。
+- **给模型看的工具描述**：`builtin-staffing.ts:115, 210, 298, 326-335, 418-419, 494, 920-961` 一并改「群组」。模型会原样复述给用户，两个词混用正是这次要消除的问题。
+- **不改**：`reachability`（`A/routes/_authed/_app/reachability.tsx:61`、`components/reachability/*`）里的「群聊」指第三方 IM 的群，保留；测试夹具里服务端回显的句子可以不改。
+- **`glossary-terms.test.ts` 不受影响**：它只锁「小组」和员工的同义词（`openbot/app/tests/glossary-terms.test.ts:43-62`），没有锁「群聊」。PR2 在同一个文件里**新增**一条用例：「界面和服务端不说群聊（IM 接入除外）」，例外清单列出上面那几处 `reachability` 文件。
+- **文档**：`<根>/CONTEXT.md` 的「群组」「群组会话」两行合成一行（群组 = `waker_groups` + 挂接的群聊；入口；不持有权限；「群聊」为已停用的旧称）；`docs/specs/2026-11-11-staffing-by-conversation.md` 里「群聊」与「群组」混用的地方统一，原来第 6 行的不一致就此消除。
+
+### 8.2 涉及上游文件的改动（同步上游时的冲突面）
+
+只有四处：`S/index.ts` 的装配（包两层装饰器、挂路由第三参数、注册开机任务）；`S/channels/group.ts:1596`、`S/channels/dispatch.ts:323` 各一句熊宝自己的中文；`A/` 下 `group-chat.tsx`、`$channelId.tsx` 顶栏的少量改动。其余都在熊宝自己的文件里。
+
+---
+
+## 9. 已有测试断言的改动（待用户逐条批准）
+
+按项目约定，改已有测试的断言要用户逐条批准。下表是预计要改的 **34 条**（文件路径相对 `openbot/`，行号以 `ac2e245e` 为准）。实现时如果 CI 暴露出表外的，再补报批准，不自行改。
+
+| # | 文件:行 | 现断言 | 要改成 | 原因 |
+|---|---|---|---|---|
+| 1 | `app/tests/sidebar-roster.test.tsx:291` | `getByRole("button", { name: "新建群聊" })` | `{ name: "新建群组" }`（`:292` 的 href `/group/new` 不变） | 7.1 顶部按钮改名 |
+| 2 | 同上 `:406` | `findByRole("list", { name: "群聊" })` | `{ name: "群组" }` | 两节合成一节 |
+| 3 | 同上 `:408` | `chatRows.map(hrefOf)` 等于 `["/group/c-crew"]` | 等于 `["/group/c-crew", "/bots?tab=groups"]` | 未挂接的「周报小队」并进同一列表，排在最后 |
+| 4 | 同上 `:411` | `getByRole("list", { name: "群组" })` 后 `within(crews).getByRole("link")` | 同一列表里 `getByRole("link", { name: /周报小队/ })`（`:412-418` 的 href、文字、头像断言不变） | 列表里不止一个链接 |
+| 5 | 同上 `:419-420` | 「新建群组」链接的 href 是 `"/bots?tab=groups"` | `"/group/new"` | 入口统一 |
+| 6 | 同上 `:435` | `"还没有群聊。点「新建群聊」，选两位以上员工开始。"` | `"还没有群组。点「新建群组」，选两位以上员工开始。"` | 文案 |
+| 7 | 同上 `:438` | `getByRole("link", { name: "新建群聊" })` | `{ name: "新建群组" }`（href 不变） | 入口统一 |
+| 8 | 同上 `:458` | `{ name: "搜索群聊和群组" }` | `{ name: "搜索群组" }` | 文案 |
+| 9 | 同上 `:461` | `{ name: "按名字搜索群聊和群组" }` | `{ name: "按名字搜索群组" }` | 文案 |
+| 10 | 同上 `:465-468` | `list "群聊"` 的 href 等于 `["/group/c-crew"]` | `list "群组"` 的 href 等于 `["/group/c-crew", "/bots?tab=groups"]` | 搜索「复盘」同时命中群聊和空群组「复盘组」 |
+| 11 | 同上 `:470-474` | `list "群组"` 的链接文字等于 `[含「复盘组」]` | 同一列表的文字等于 `[含「联合复盘」, 含「复盘组」]` | 两节合一 |
+| 12 | 同上 `:490` | `"已加载的会话里还没有群聊。"` | `"已加载的会话里还没有群组。"` | 文案 |
+| 13 | 同上 `:493` | `findByRole("list", { name: "群聊" })` | `{ name: "群组" }` | 两节合一 |
+| 14 | 同上 `:504-506` | `findByText("在员工的「群组」里把几位员工编成一组，它就会出现在这里。")` | `findByRole("list", { name: "群组" })` | 那句空状态文案随原「群组」节一起删除；默认夹具里有群聊，列表不为空 |
+| 15 | `app/tests/sidebar-roster-narrow.test.tsx:217` | `findByRole("list", { name: "群聊" })` | `{ name: "群组" }` | 两节合一 |
+| 16 | 同上 `:227` | `getByRole("button", { name: "新建群聊" })` | `{ name: "新建群组" }`（`:229` 路径不变） | 入口统一 |
+| 17 | `app/tests/skin-slots.test.tsx:267` | `["a group conversation", "/group/g-1", "群聊"]` | 第三项改为 `"群组"` | 顶栏回退文案 |
+| 18 | `app/tests/skins-openmuse.test.tsx:768` | `[/^新建群组$/, "/channel/new"]` | `[/^新建群组$/, "/group/new"]` | 7.1 皮肤入口改指 |
+| 19 | `app/tests/group-new-page.test.tsx:155` | `findByText("新建群聊")` | `findByText("新建群组")` | 页标题 |
+| 20 | 同上 `:159` | `getByRole("button", { name: "开始群聊" })` | `{ name: "创建群组" }` | 按钮名 |
+| 21 | 同上 `:176` | 同上 | 同上 | 同上 |
+| 22 | 同上 `:201` | 同上 | 同上 | 同上 |
+| 23 | 同上 `:224` | 同上 | 同上 | 同上 |
+| 24 | 同上 `:263` | 同上 | 同上 | 同上 |
+| 25 | 同上 `:293` | 同上 | 同上 | 同上 |
+| 26 | 同上 `:203-209` | POST 请求等于 `[{ url: "/api/groups", method: "POST", body: { agentIds: ["checker", "analyst"] } }]` | 等于 `[{ url: "/api/waker-groups", method: "POST", body: { name: "审稿、分析师", description: "", agentIds: ["checker", "analyst"] } }]`（`:210-213` 的缓存断言不变） | 7.3 一次调用建好 |
+| 27 | 同上 `:277` | `"已选 20 位，一个群聊最多 20 位"` | `"已选 20 位，一个群组最多 20 位"` | 文案 |
+| 28 | 同上 `:281` | 同上 | 同上 | 同上 |
+| 29 | 同上 `:295-297` | `"群聊没能开始，请再试一次。"` | `"群组没能建好，请再试一次。"` | 文案 |
+| 30 | `app/tests/wakers-screen.test.tsx:602` | `writes()[0]?.body` 等于 `{ name: "值班群组", description: "" }` | 等于 `{ name: "值班群组", description: "", agentIds: [<勾选的两位>] }` | 新建必须至少 2 位员工 |
+| 31 | `app/tests/wakers-parity.test.tsx:713` | 「组团流程」链接的 href 是 `"/pipelines"` | `"/pipelines?group=crew-1"` | 7.2 带上群组 |
+| 32 | `app/tests/staffing-proposal-card.test.tsx:419` | `getByRole("link", { name: "打开群聊" })` | `{ name: "打开群组" }` | 文案 |
+| 33 | `server/tests/group-bots-change.integration.test.ts:389` | `toBe("只有发起这个群聊的人才能调整群里的员工。")` | `toBe("只有发起这个群组的人才能调整群里的员工。")` | 服务端文案 |
+| 34 | `server/tests/channel-dispatch.test.ts:245` | `rejects.toThrow("群聊")` | `rejects.toThrow("群组")` | 服务端文案 |
+
+**断言不变、但步骤或夹具要动的**（一并请批准）：
+- `wakers-screen.test.tsx` 的「a new crew is created by name…」（`:565-603`）和「a name the workspace already used…」（`:605-633`）：点「创建」之前要先勾选两位员工，夹具要提供两位员工。
+- `group-new-page.test.tsx` 中 `:183-195` 和 `:246-258` 两处 `respond` 夹具：返回体改为 `{ group, channel }`。
+- 测试标题里的「群聊」字样（如 `sidebar-roster.test.tsx:288, 391, 428, 446, 476`）随文案一起改，不影响断言。
+
+**明确不用改的**：
+- `glossary-terms.test.ts`。
+- `legacy-agent-routes.test.ts`：`LEGACY_PAGES` 整张表和 `?tab=groups` 都不变。
+- `wakers-parity.test.tsx:290, 312-315, 336-338, 717`：页签、对话框、占位文字和 `crew=` 都保留。
+- `wakers-screen.test.tsx:547-562`：看板链接仍是 `crew=`；「管理成员」仍是整份名单 `PUT`。
+- `wakers-reference.test.tsx`、`archive-duplicate-pages.test.tsx`。
+- `server/tests/waker-groups.test.ts`：只按字段断言，返回体新增 `channelId` 不影响；路由第三参数可选。
+- staffing 卡片测试里服务端回显的夹具句子（如 `staffing-card-contents.test.tsx:299`）。
+
+---
+
+## 10. 分包
+
+三个 PR，按顺序合入，每个都能单独合入、单独上线。建议 PR2 和 PR3 进同一个正式版本。
+
+### PR1 数据与服务端（界面无变化）
+
+- **范围**：
+  - 迁移 0205（新列、两条索引、改写 `openbot_team_channel_guard`、挂接校验触发器）。
+  - `S/waker-groups/channel-link.ts`（列片段、建群组并挂接、镜像改写、自愈、取名规则）。
+  - `withWakerGroupLink` 装饰器和 `channelStore.rename` 装饰器。
+  - 第 6 节全部接口（路由第三参数）。
+  - `S/index.ts` 装配。
+  - `assert-tenants.mjs` 新增两条断言。
+- **验收**：
+  - 新增 `server/tests/waker-group-channel-link-migration.integration.test.ts`：守卫的放行 a 和 b；改指被拒；成员和别的租户都写不进；挂不了 WakerFlow 内部群组；挂不了别人的群组；删群组会自动解挂（含软删的共享群）；部分唯一索引生效。
+  - 新增 `server/tests/waker-group-channel-link.integration.test.ts`：建群即挂（staffing 路径也挂）；加、移、重排后镜像一致；旧 `PUT members` 的翻译与分批（含 20 位换人）；2–20 的 409；`PATCH` 改两边并查重；解散的四步，以及有运行时拒绝；`POST` 带 `agentIds`；补够人自动开聊天；`for-channel` 的补建与 403/404；列表的 `channelId`；跨租户 404。
+  - 两个文件都登记进 `openbot/scripts/ci/server-tests.list.txt`。
+  - CI 的 `server-test`（各分片）、`static`、`e2e-wakerflow`（G4，确认 WakerFlow 内部群组不受影响）全绿。必须保持原样通过：`waker-groups.test.ts`、`group-conversations*.test.ts`、`group-bots-change.integration.test.ts`、`team-group-bots-migration.integration.test.ts`（守卫的回归）、`portraits.test.ts`、`pipeline-*.test.ts`、`staffing-*.test.ts`、`migration-journal` 相关测试。
+- **风险**：
+  - 改写的是安全相关的守卫函数：要逐行比对 0179 版，并让 0128 的全部守卫测试保持绿。
+  - 装饰器的后半步失败会留下没挂接的频道，有自愈兜底。
+  - 多步翻译不是原子的（4.2）。
+  - PR1 上线后、PR3 上线前新建的群聊已经会挂接，这正是想要的；旧数据要等 PR3。
+
+### PR2 界面合一与文案
+
+- **范围**：
+  - 第 7 节全部：侧边栏、员工页页签、`CreateGroupForm`、设置面板、`?settings=1`、`/pipelines?group=`、`discard` 改走解散、会话行菜单、`@群组` 排序、皮肤入口。
+  - 第 8 节文案（前后端，含 staffing 工具描述）、新增的「不说群聊」用例、`CONTEXT.md`。
+  - 第 9 节的 34 条断言和步骤改动（**先拿到逐条批准再动**）。
+- **验收**：
+  - CI `app-test` 全量零失败（按 `<根>/CONTEXT.md`「判回归的口径」比较失败名字的多重集）；`server-test` 中第 9 节的 2 条服务端断言随文案改。
+  - 新增前端测试：`group-settings.test.tsx`（创建者和非创建者两种视图、保存顺序、2–20 拦截、解散确认文案）；`create-group-form.test.tsx`（页面和对话框两种用法）；侧边栏「待补成员」「未开始聊天」两种行。
+  - 手动在 `run` 起的应用里走一遍：新建、聊天、改顺序、换头像、建流程、看板、解散。
+- **风险**：
+  - 文案面广，测试会连锁变红。按表逐条改，表外的失败先停下补报。
+  - 侧边栏数据源从两份并成一份，注意分页时「待补成员」行的位置固定在末尾。
+
+### PR3 升级任务（自动转换与补挂）
+
+- **范围**：
+  - 迁移 0206（台账表）。
+  - `S/waker-groups/upgrade.ts`（三个阶段、咨询锁、汇总日志、开关 `XIONGBAO_GROUP_UPGRADE`）及装配。
+  - `.env.example` 登记开关。
+  - `openbot/docs/deployment-xiongbao.md` 写升级须知和回滚手册。
+  - `openbot/CHANGELOG.md`。
+- **验收**：
+  - 新增 `server/tests/waker-group-upgrade.integration.test.ts`，覆盖 5.1 节表格的六条规则逐条；单用户 `dev-local-user`；重复执行幂等；`started` 孤儿被收养；第二阶段撞名加「（2）」；P11 前的个人频道；`created_by` 为 NULL 时跳过；两个并发执行只有一个真正干活；开关关闭时什么也不做；回滚手册的 SQL 能执行并恢复镜像。
+  - 测试登记进清单；CI `server-test`、`e2e-wakerflow` 全绿。
+- **风险**：
+  - 升级后，转出来的空群组会一次性出现在「会话」列表顶部（Q4）。
+  - 大租户的转换时长：逐项执行，每项几次写入，千级群组在分钟以内，并且在后台执行，不阻塞健康检查。
+  - 外接库部署要先跑迁移再起服务，与现有流程一致。
+
+---
+
+## 11. 需要用户决定的问题（附建议）
+
+1. **Q1 解散时，流程模板和运行记录要不要一并删掉？**
+   现状：解散群组本来就级联硬删这两样（0075 外键）；群聊的删除是软删。
+   建议：**一并删**，与现在解散群组的效果一致。确认对话框写明条数，有流程在运行就拒绝解散，看板上的任务卡保留。如果要保留历史，就得给 `waker_groups` 加「已解散」状态列，并改造流程页、看板、`@` 列表的过滤，工作量明显变大。
+
+2. **Q2 被拉进共享群组的其他人看不到自定义头像和流程，本期是否接受？**
+   现状：头像和流程都存在创建者的个人租户里，RLS 不让别人读。
+   建议：**本期接受**。其他人看到叠放的员工头像，设置面板对他们只读。以后要做，单独立项，把群组头像改成 `team` 戳。
+
+3. **Q3 超过 20 位员工的旧群组怎么处理？**
+   现状：群组没有人数上限，群聊最多 20 位。
+   建议：**不截断**。保留为群组，标「待调整成员（超过 20 位）」，用户减到 20 位以内后会自动开聊天。截断等于替用户决定谁出局。
+
+4. **Q4 升级后转出来的空群组会出现在「会话」列表顶部，是否接受？**
+   现状：会话列表按时间排序，新建的频道排在前面。
+   建议：**接受**，并在升级说明里写明。伪造创建时间会让「最近」失真；也不建议专门为它们改会话列表的排序规则（那是上游文件）。
+
+---
+
+## 12. 升级须知（京东云等已部署实例）
+
+1. **迁移自动执行**：京东云是单容器内嵌库（`docs/acceptance/HUMAN-STEPS.md:20` 的部署记录），每次启动都会自动跑 `scripts/migrate.ts`，0205 和 0206 随新镜像自动应用。外接库部署照 `openbot/docs/deployment-xiongbao.md` 第 4 节，先用新 digest 跑迁移，再重建 API 容器。
+2. **升级前**按部署文档第 6 节备份。升级后首次启动，日志里会出现一行 `waker-group-upgrade` 汇总，记下转换和补挂的数量。如果要推迟转换，在 env 文件里设 `XIONGBAO_GROUP_UPGRADE=off`，之后去掉这个开关再重启即可。
+3. **用户能看到的变化**：
+   - 侧边栏「群组」里原来的群聊和群组合成一个列表。
+   - 原来有 2 位以上员工的群组变成可以聊天的群组，名字、员工、顺序、头像、流程都不变；会话列表里会多出这些空群组。
+   - 不足 2 位的标「待补成员」。
+   - 同名的老群聊和转出来的群组会同时存在，可以自行解散其中一个。
+4. **旧链接**：
+   - `/bots?tab=groups`：页签保留，**不需要跳转**，打开的就是「我建的群组」。
+   - `/wakers?tab=groups`：仍由 `legacyWakersTarget` 带到 `/bots?tab=groups`。
+   - `/group/new`：打开「新建群组」。
+   - `/group/<id>`：不变。
+   - `/pipelines`、`/tasks?crew=…`、`/tasks?group=…`：不变。
+5. **回滚**：换回上一版 digest 即可让代码回退，新列和新表留着无害。需要撤销自动转换的，按回滚手册执行（5.6），或者恢复备份。
+6. **设备端**：不涉及，设备端不读写群组。
