@@ -197,207 +197,37 @@
   {
     "rule": "import-close",
     "scope": "agent-computer/src",
-    "lines": 52
-  },
-  {
-    "rule": "import-close",
-    "scope": "app/src",
-    "lines": 1102
-  },
-  {
-    "rule": "import-close",
-    "scope": "extension/scripts",
-    "lines": 1
+    "lines": 11
   },
   {
     "rule": "import-close",
     "scope": "extension/src",
-    "lines": 88
-  },
-  {
-    "rule": "import-close",
-    "scope": "mobile/app",
-    "lines": 14
-  },
-  {
-    "rule": "import-close",
-    "scope": "mobile/src",
-    "lines": 2
-  },
-  {
-    "rule": "import-close",
-    "scope": "runner/src",
-    "lines": 33
-  },
-  {
-    "rule": "import-close",
-    "scope": "server/src",
-    "lines": 747
-  },
-  {
-    "rule": "import-close",
-    "scope": "shared/bot-browser.ts",
     "lines": 1
   },
   {
     "rule": "import-close",
-    "scope": "supervisor/src",
-    "lines": 3
-  },
-  {
-    "rule": "import-close",
-    "scope": "toolkit/src",
-    "lines": 15
-  },
-  {
-    "rule": "import-close",
-    "scope": "worker/src",
+    "scope": "shared/bot-browser.ts",
     "lines": 1
   },
   {
     "rule": "import-path",
     "scope": "agent-computer/src",
-    "lines": 152
-  },
-  {
-    "rule": "import-path",
-    "scope": "app/src",
-    "lines": 4489
-  },
-  {
-    "rule": "import-path",
-    "scope": "extension/scripts",
-    "lines": 6
-  },
-  {
-    "rule": "import-path",
-    "scope": "extension/src",
-    "lines": 206
-  },
-  {
-    "rule": "import-path",
-    "scope": "mobile/app",
-    "lines": 70
-  },
-  {
-    "rule": "import-path",
-    "scope": "mobile/app.config.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "mobile/src",
-    "lines": 20
-  },
-  {
-    "rule": "import-path",
-    "scope": "runner/src",
-    "lines": 107
-  },
-  {
-    "rule": "import-path",
-    "scope": "server/src",
-    "lines": 3042
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/apply-env-aliases.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/audit-words.ts",
     "lines": 2
   },
   {
     "rule": "import-path",
-    "scope": "shared/bot-browser.ts",
+    "scope": "app/src",
+    "lines": 3
+  },
+  {
+    "rule": "import-path",
+    "scope": "extension/src",
+    "lines": 5
+  },
+  {
+    "rule": "import-path",
+    "scope": "server/src",
     "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/bot-prompt.ts",
-    "lines": 4
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/computer-token.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/harnesses.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/local-tools.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/model-providers.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/openbot-browser.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/recorder-api.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/recorder-extension.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/recorder-page.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/role-profile.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/routine-checklist.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/runner-actions.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/tool-name.ts",
-    "lines": 6
-  },
-  {
-    "rule": "import-path",
-    "scope": "shared/work-owner.ts",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "supervisor/src",
-    "lines": 14
-  },
-  {
-    "rule": "import-path",
-    "scope": "toolkit/src",
-    "lines": 40
-  },
-  {
-    "rule": "import-path",
-    "scope": "worker/src",
-    "lines": 7
   },
   {
     "rule": "mit-attribution",
