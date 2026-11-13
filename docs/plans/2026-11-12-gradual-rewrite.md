@@ -444,7 +444,7 @@
   export function compatSuffixes(prefix: string, legacyPrefix: string, storage?: CompatStorage): string[];
   ```
 - 新键名：`xiongbao.reachability.pendingSms`、`xiongbao.wakerflow-share-return`、`xiongbao:pending-handoff:<botId>`、`xiongbao.teach-a-bot.introduced`、`xiongbao:computer-activity-wiped:<id>`、`xiongbao:voice-outbox:<…>`、`xiongbao:carried-on:<id>`、`xiongbao:check-in-declined:<id>`、`xiongbao.bot-thread.<agentId>`。
-- `activity.ts` 的 `storage` 事件监听两个前缀。
+- `activity.ts` 的 `storage` 事件监听两个前缀。清除标记不按「新键优先」：同一台电脑新旧两个键都在时取较新的那条并写回新键；`storage` 监听收到旧前缀事件时也把较新的值持久化到新键（否则没刷新的旧标签页再清除一次后，新标签页刷新会读到新键里较旧的记录，被清掉的活动又出现）。
 - 皮肤：新 id `xiongbao`。`shared/user-preferences.ts` 导出 `normalizeSkinId(id: string): SkinId`，把 `"openbot"` 映射成 `"xiongbao"`；读偏好（服务器、网页 store、`index.html` 内联脚本）都先经过它。写只写新 id。
 - 删除或改类的条目（15 条）：
   - 表二的 10 条，改为 `legacy-compat`；
@@ -461,6 +461,7 @@
   - `compatSuffixes lists both prefixes without duplicates`
   - `a throwing storage reads null and never throws`
   - 再加一条集成用例 `activity wipes under the old prefix are still honoured`：先写旧前缀的键，再触发 `storage` 事件，断言视图按「已清除」处理。
+  - 再加一条 `a later wipe from an old tab survives a reload`：新旧两个键都已存在，旧标签页再清除一次（只写旧键并触发 `storage` 事件），再模拟新标签页刷新重新读取，断言按最新那次清除处理。
 - [ ] **Step 2：写失败测试** `skin-compat.test.ts`：
   - `normalizeSkinId("openbot")` 为 `"xiongbao"`；`DEFAULT_SKIN` 为 `"xiongbao"`。
   - `index.html` 内联脚本在 `xiongbao-skin` 为 `"openbot"` 时不设 `data-skin`。
@@ -743,7 +744,7 @@
   - `github-release` 生成的 `container-images.json` 里，`images.xiongbao` 改为自有仓库的引用（变量未设时仍等于 `images.openbot`）。
   - 上传 `container-images.json`、`openbot/docker/delivery.env.example`、`openbot/docker/compose.delivery.yml` 到 `s3://<XB_DOWNLOAD_BUCKET>/<tag>/`（`aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT"`）。
 - 修改：`.github/workflows/device-release.yml`：发布安装包后，同样上传到 `s3://<bucket>/<tag>/device/`。
-- 修改：`.github/workflows/clean-deploy.yml:96,170`：变量已设时，`container-images.json` 和 `delivery.env.example` 从 `XB_DOWNLOAD_BASE_URL/<tag>/` 取，模拟客户；未设时照旧。
+- 修改：`.github/workflows/clean-deploy.yml:96,170`：变量已设时，`container-images.json` 和 `delivery.env.example` 从 `XB_DOWNLOAD_BASE_URL/<tag>/` 取，模拟客户；未设时照旧。同时把期望镜像的选取（现为第 97 行 `.images.openbot.reference`）和第 199–209 行「运行中的镜像及其仓库 digest 必须等于该引用」的核对改为：变量已设时读 `.images.xiongbao.reference`，并按自有仓库校验（不再要求是 GHCR）；未设时照旧读 `images.openbot`。否则镜像拷贝正确时验收也会因仓库不同而失败。
 - 修改：`openbot/scripts/ci/device-release-workflow.test.mjs`：加测试。
 
 **接口：**
@@ -837,7 +838,7 @@
 - 第 7 行：`COPILOTKIT_TELEMETRY_DISABLED=1` 挪进 `docker/defaults.env`（照 Task 11，第三方变量名不加前缀，`env-aliases.sh` 对它单独处理：没设才写）。
 - 第 8 行：`__openbot_prompt` → `__xiongbao_prompt`；`$openbotOut`、`$openbotErr`、`$openbotCommandSucceeded`、`$openbotCommandExit` → `$xbOut`、`$xbErr`、`$xbCommandSucceeded`、`$xbCommandExit`。
 - 第 9 行：runner `data-openbot-secret` → `data-xb-secret`（runner 自己写、自己读）。
-- 第 10 行：runner `openbot-snapshots.sqlite` → `xiongbao-snapshots.sqlite`，启动时一次性改名（照 Task 12 的 `migrateSessionCookiesFile` 写法）。条目改为 `legacy-compat`，并加 `"device": true`。
+- 第 10 行：runner `openbot-snapshots.sqlite` → `xiongbao-snapshots.sqlite`，启动时一次性改名。不能只照 `migrateSessionCookiesFile` 改主文件：`runner/src/browser.ts` 开了 WAL，上次非正常退出时已提交的计数可能还在 `-wal` 里。做法：新文件不存在且旧文件存在时，先以独占方式打开旧库执行 `PRAGMA wal_checkpoint(TRUNCATE)` 并关闭，确认没有残留的 `-wal`/`-shm` 后再改名；改名失败照旧读旧名。测试加一条「旧库带未 checkpoint 的 WAL 时升级不丢计数」，不只测干净关闭的库。条目改为 `legacy-compat`，并加 `"device": true`。
 - 第 11 行：扩展 `NOTICE_TAG` 改为 `xb-recorder-notice`。
 - 新追加的行：按该行「要改成」一列。
 
