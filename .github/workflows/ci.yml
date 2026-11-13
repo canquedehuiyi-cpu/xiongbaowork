@@ -100,7 +100,8 @@ jobs:
       PGPASSWORD: ci-owner
     steps:
       - name: Print database version
-        run: psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'select version()'
+        # Run psql inside the service container: the runner image need not ship a client.
+        run: docker exec ${{ job.services.postgres.id }} psql -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'select version()'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
