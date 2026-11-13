@@ -1517,13 +1517,6 @@
   },
   {
     "file": "agent-computer/src/egress.ts",
-    "text": "x-openbot-egress",
-    "reason": "persisted-identifier: wire header the egress filter sends (Global Constraints)",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "agent-computer/src/egress.ts",
     "text": "openbot-egress-credentials.invalid",
     "reason": "persisted-identifier: sentinel host name shared by the filter and its clients",
     "category": "peer-protocol",
