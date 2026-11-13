@@ -17,10 +17,10 @@ const ROOT = path.resolve(import.meta.dir, "..", "..");
 const BRANDED = /openbot|xiongbao|recorder/i;
 
 /**
- * The flag content.js sets so a second injection does nothing. content-port.test.ts expects it under this name, so it
- * keeps it until plan appendix A row 36 is approved; then this list becomes empty.
+ * What content.js may leave on its window under a branded name. The two flags it shares with the service worker are
+ * symbol keys (appendix A row 36), which `Object.keys` does not list, so nothing remains.
  */
-const PENDING_ROW_36 = ["__openbotRecorderContent"];
+const PENDING_ROW_36: string[] = [];
 
 let out: string;
 beforeAll(() => {

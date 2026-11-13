@@ -5,21 +5,32 @@ import { createSensitivityTracker } from "./masking-context";
 import { showNotice } from "./notice";
 import { contentHello, createContentPort } from "./port";
 
+/**
+ * The two flags the service worker and this script share in the page's isolated world. Symbol keys, so they are not
+ * properties anyone lists with `Object.keys`. An older build of the extension still on the same page used string
+ * properties with the old names: those are read too (never written), so a page an older content script already
+ * captures is not captured twice, and a frame an older service worker flagged still starts capturing at once.
+ */
+const CONTENT_FLAG = Symbol.for("xb.recorder.content");
+const ACTIVE_FLAG = Symbol.for("xb.recorder.active");
+
 type RecorderGlobals = typeof globalThis & {
+  [CONTENT_FLAG]?: boolean;
+  [ACTIVE_FLAG]?: string;
   __openbotRecorderContent?: boolean;
   __openbotRecorderActive?: string;
 };
 
 /**
  * Injected by the service worker into each committed frame of a followed tab. A frame the worker flagged
- * (`__openbotRecorderActive`, set just before this script) starts capturing at once, without waiting for its
+ * (`ACTIVE_FLAG`, set just before this script) starts capturing at once, without waiting for its
  * port, so nothing clicked or typed during the round trip is lost; any other frame starts on
  * `background.capture { active: true }`.
  */
 function startContentScript() {
   const flags = globalThis as RecorderGlobals;
-  if (flags.__openbotRecorderContent) return;
-  flags.__openbotRecorderContent = true;
+  if (flags[CONTENT_FLAG] || flags.__openbotRecorderContent) return;
+  flags[CONTENT_FLAG] = true;
 
   const port = createContentPort();
   port.post(contentHello());
@@ -100,7 +111,7 @@ function startContentScript() {
     stopCapture();
     removeMark();
   });
-  if (flags.__openbotRecorderActive) startCapture();
+  if (flags[ACTIVE_FLAG] || flags.__openbotRecorderActive) startCapture();
   port.onMessage((message) => {
     if (message.type === "background.capture") {
       if (message.active) startCapture();

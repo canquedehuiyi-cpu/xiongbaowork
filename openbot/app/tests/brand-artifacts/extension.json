@@ -59,15 +59,19 @@
   },
   {
     "word": "_.__openbotRecorderActive",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "扩展内容脚本在隔离环境里的全局标志（网页控制台看不到）；content-port.test.ts 断言旧名，待批：附录 A 第 36 行"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "旧全局标志的读取：新版本用 Symbol.for 作键（xb.recorder.*），仍读旧名活动标志（旧版本的 service worker 写、新内容脚本读），扩展更新期间同一页面上的老版本不被漏掉或重复（附录 A 第 36 行，Task 14 评审）；窗口期满（0.2.13）删"
   },
   {
     "word": "_.__openbotRecorderContent",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "扩展内容脚本在隔离环境里的全局标志（网页控制台看不到）；content-port.test.ts 断言旧名，待批：附录 A 第 36 行"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "旧全局标志的读取：新版本用 Symbol.for 作键（xb.recorder.*），仍读旧名已运行标志（旧版本的内容脚本写、新内容脚本读，免得同一页面重复捕获），扩展更新期间同一页面上的老版本不被漏掉或重复（附录 A 第 36 行，Task 14 评审）；窗口期满（0.2.13）删"
   },
   {
     "word": "_.openbotUrl",
@@ -134,12 +138,6 @@
     "category": "third-party-name",
     "plan": "keep",
     "note": "第三方库自带的 CopilotKit 字样"
-  },
-  {
-    "word": "globalThis.__openbotRecorderActive",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "扩展内容脚本在隔离环境里的全局标志（网页控制台看不到）；content-port.test.ts 断言旧名，待批：附录 A 第 36 行"
   },
   {
     "word": "invalid:_.openbotUrlInvalid",

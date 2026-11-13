@@ -122,7 +122,7 @@
   {
     "rule": "identifier",
     "scope": "extension/src",
-    "lines": 195
+    "lines": 193
   },
   {
     "rule": "identifier",
