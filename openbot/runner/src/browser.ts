@@ -545,10 +545,15 @@ const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
  * is then opened exactly as it always was, WAL recovery included. Nothing is thrown: a browser must still
  * start, and the refusals about a damaged counter come from opening it, as before.
  */
-export function counterFileIn(root: string, busyMs = 5000): string {
+export function counterFilesIn(
+  root: string,
+  busyMs = 5000,
+): { file: string; earlier?: string } {
   const file = join(root, COUNTER_FILE);
   const legacy = join(root, LEGACY_COUNTER_FILE);
-  if (existsSync(file) || !existsSync(legacy)) return file;
+  if (existsSync(file))
+    return existsSync(legacy) ? { file, earlier: legacy } : { file };
+  if (!existsSync(legacy)) return { file };
   const partial = `${file}.copying`;
   try {
     const old = new Database(legacy, { strict: true });
@@ -559,12 +564,12 @@ export function counterFileIn(root: string, busyMs = 5000): string {
       const done = old
         .query<{ busy: number }, []>("PRAGMA wal_checkpoint(TRUNCATE)")
         .get();
-      if (done?.busy !== 0) return legacy;
+      if (done?.busy !== 0) return { file: legacy };
     } finally {
       old.close();
     }
     if (existsSync(`${legacy}-wal`) || existsSync(`${legacy}-shm`))
-      return legacy;
+      return { file: legacy };
     copyFileSync(legacy, partial);
     try {
       chmodSync(partial, 0o600);
@@ -572,18 +577,35 @@ export function counterFileIn(root: string, busyMs = 5000): string {
       // A filesystem without modes: the copy is still private to the profile root.
     }
     renameSync(partial, file);
-    return file;
+    return { file, earlier: legacy };
   } catch {
     try {
       rmSync(partial, { force: true });
     } catch {
       // Whatever stands there is not ours to clear.
     }
-    return legacy;
+    return { file: legacy };
   }
 }
 
-function openCounterStore(file: string): CounterStore {
+/** The counter file to open in `root`; see `counterFilesIn`. */
+export const counterFileIn = (root: string, busyMs = 5000): string =>
+  counterFilesIn(root, busyMs).file;
+
+/**
+ * The counter store on `file`, and, while `earlier` is given, the same counters in the file this runner
+ * wrote them to before the rename, kept equal to it.
+ *
+ * A counter must never fall below a number already issued, or an old element list resolves to the wrong
+ * page. With two files that holds only if both are read and both written: on open each profile's number
+ * is the larger of the two, written back to both; every increment is one transaction over both files
+ * (`ATTACH`), so a runner rolled back to the version before the rename finds the latest number in the
+ * file it reads, and an upgrade after it never starts below what that runner issued. A damaged earlier
+ * file refuses to open exactly as a damaged current one does, and a failed write to it fails the
+ * increment: no number is issued that the other file does not hold. (Across two WAL files the commit is
+ * not one atomic step; a crash between them leaves one ahead, which the next open's larger-of-two undoes.)
+ */
+function openCounterStore(file: string, earlier?: string): CounterStore {
   mkdirSync(dirname(file) || ".", { recursive: true });
   // An owned, empty file with the mode set before anything is written into it: this holds a
   // coworker's browsing state reference, and the journal beside it is kept to the same rule.
@@ -609,28 +631,90 @@ function openCounterStore(file: string): CounterStore {
   const step = database.query<{ generation: number }, [string]>(
     "UPDATE snapshot_counters SET generation = generation + 1 WHERE profile = ? RETURNING generation",
   );
+  let readEarlier:
+    | ReturnType<
+        typeof database.query<{ kind: string; generation: number }, [string]>
+      >
+    | undefined;
+  let putEarlier: ReturnType<typeof database.query> | undefined;
+  if (earlier) {
+    try {
+      database.run("ATTACH DATABASE ? AS earlier", [earlier]);
+      database.exec(
+        "PRAGMA earlier.busy_timeout=5000; PRAGMA earlier.synchronous=FULL;",
+      );
+      database.exec(
+        "CREATE TABLE IF NOT EXISTS earlier.snapshot_counters (profile TEXT PRIMARY KEY, generation INTEGER NOT NULL);",
+      );
+      readEarlier = database.query<
+        { kind: string; generation: number },
+        [string]
+      >(
+        "SELECT typeof(generation) AS kind, generation FROM earlier.snapshot_counters WHERE profile = ?",
+      );
+      putEarlier = database.query(
+        "INSERT INTO earlier.snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = excluded.generation",
+      );
+    } catch {
+      database.close();
+      unusable(undefined, earlier);
+    }
+  }
+  const put = database.query(
+    "INSERT INTO snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = excluded.generation",
+  );
 
   return {
     open(profileKey, profileWasOnDisk) {
-      let row: { kind: string; generation: number } | null = null;
-      try {
-        row = read.get(profileKey);
-      } catch {
-        unusable(undefined, file);
+      const present: number[] = [];
+      for (const [reader, where] of [
+        [read, file],
+        [readEarlier, earlier ?? file],
+      ] as const) {
+        if (!reader) continue;
+        let row: { kind: string; generation: number } | null = null;
+        try {
+          row = reader.get(profileKey);
+        } catch {
+          unusable(undefined, where);
+        }
+        if (!row) continue;
+        if (row.kind !== "integer") unusable(undefined, where);
+        present.push(unusable(row.generation, where));
       }
-      if (!row) {
+      if (present.length === 0) {
         if (profileWasOnDisk) missingCounter(file);
         create.run(profileKey);
+        putEarlier?.run(profileKey, 0);
         return 0;
       }
-      if (row.kind !== "integer") unusable(undefined, file);
-      const held = unusable(row.generation, file);
+      const held = Math.max(...present);
       /*
        * Read at the ceiling is already past it: the list this profile would hand out next is the number
        * over the line. Refusing here, rather than in `next`, is what makes the answer cost no launch and
        * no action — a counter that has run out is a bookkeeping fact about a row, not about a page.
        */
       if (held >= MAX_SNAPSHOT_GENERATION) unusable(held + 1, file);
+      if (putEarlier && present.some((value) => value !== held)) {
+        // The two files disagree: the larger stands, and is written to both before anything is issued.
+        database.exec("BEGIN IMMEDIATE");
+        try {
+          put.run(profileKey, held);
+          putEarlier.run(profileKey, held);
+          database.exec("COMMIT");
+        } catch (error) {
+          try {
+            database.exec("ROLLBACK");
+          } catch {
+            // No transaction to undo.
+          }
+          throw error;
+        }
+      } else if (putEarlier && present.length === 1) {
+        // One file has no row for this profile yet: give it the same number.
+        put.run(profileKey, held);
+        putEarlier.run(profileKey, held);
+      }
       return held;
     },
     next(profileKey) {
@@ -638,6 +722,8 @@ function openCounterStore(file: string): CounterStore {
       try {
         const row = step.get(profileKey);
         const issued = unusable(row?.generation, file);
+        // The earlier file gets the same number in the same transaction; if it cannot, none is issued.
+        putEarlier?.run(profileKey, issued);
         database.exec("COMMIT");
         return issued;
       } catch (error) {
@@ -765,7 +851,10 @@ export function createRunnerBrowser(
     // One connection for the profile root, shared by every coworker's state, and opened only now:
     // constructing a browser must not create anything on disk, because a runner that is only being
     // asked to run a command has no business making a browser's files.
-    counters ??= openCounterStore(counterFileIn(profileRoot));
+    if (!counters) {
+      const { file, earlier } = counterFilesIn(profileRoot);
+      counters = openCounterStore(file, earlier);
+    }
     const counter = counters;
     const generation = counter.open(
       key,

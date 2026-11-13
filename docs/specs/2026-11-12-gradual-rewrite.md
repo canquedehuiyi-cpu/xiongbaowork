@@ -328,7 +328,7 @@
 | L1-15 | 客户文档与样例（`<根>/README.md` 部署段、`docs/deployment-xiongbao.md`、`docs/development-environment-xiongbao.md`、`docker/delivery.env.example`） | **改**：只写 `XIONGBAO_*`；不再写「旧名仍可用」（运维迁移说明单独一页，只给我们自己的运维） | 2.4、2.6 |
 | L1-16 | Bot 终端 `__openbot_prompt`、`.openbot-shell-*`、`$openbotOut`；`openbot-session-cookies.json` | 终端三项**改名**（每次启动终端重新生成，无持久化）；登录态文件**双认**（读新名，没有就读旧名并改名） | 2.4 |
 | L1-17 | 第三方网页里的属性 `data-openbot-secret` / `-person-filled` / `-login` | **改名**为中性名字（不带任何品牌，例如 `data-xb-secret`；第 9 节第 8 问）。写入和读取都在同一进程、同一页面生命周期内，无需双认；runner 与 agent-computer 各自独立发版也不冲突 | 2.9 |
-| L1-18 | 设备端 runner 文件 `openbot-snapshots.sqlite` | **双认**：启动时新文件不存在而旧文件存在，就复制过去（先 checkpoint，旧文件保留，供回退） | 2.5 |
+| L1-18 | 设备端 runner 文件 `openbot-snapshots.sqlite` | **双认**：启动时新文件不存在而旧文件存在，就复制过去（先 checkpoint，旧文件保留供回退；旧文件存在期间双写、打开取较大值，计数单调） | 2.5 |
 | L1-19 | runner 二进制 | 构建加 `--minify`；构建前把工作目录路径替换掉（或用 `--define`/打包后检查），保证二进制里没有构建机的 `…/openbot/…` 路径 | 2.5 |
 | L1-20 | 设备端开发变量 `OPENBOT_RUNNER_BINARY`、`OPENBOT_AGENT_DESKTOP_BINARY` | **双认**：Rust 侧先读 `XIONGBAO_*` | 2.5 |
 | L1-21 | 扩展 MAIN world 全局名、内容脚本全局名 | **改名**为不带品牌的名字；IIFE 改成不挂全局（Vite 库模式 `name` 只影响全局变量） | 2.8 |
@@ -394,7 +394,7 @@
 | 回退到 | 会发生什么 | 对策 |
 |---|---|---|
 | 同一窗口期内的上一个版本（N+1 → N） | 双方都还认旧名，无影响 | — |
-| 双认之前的版本（N → N−1） | ① 浏览器：只读旧键，若 N 已删旧键（现有 `readMigrated` 的做法）则偏好丢失，改成「复制不删」后无影响；② 组织登录 cookie：N−1 只认旧名，而 N 写新名并清旧名 → **组织登录用户要重新登录一次**；③ 设备端快照计数文件：N 把 `openbot-snapshots.sqlite` **复制**成 `xiongbao-snapshots.sqlite`（先 checkpoint，不删旧文件），N−1 仍读旧文件，文件在、浏览器照常打开，计数回到升级时的值（N−1 找不到文件会新建空库，对磁盘上已有 profile 的同事直接拒绝打开浏览器，所以不能改名了事） | ① 本稿 4.3 的「复制不删」；② 回退说明里写明；③ 回退时计数回到升级时的值；旧文件随 legacy-compat 条目到期一起清理 |
+| 双认之前的版本（N → N−1） | ① 浏览器：只读旧键，若 N 已删旧键（现有 `readMigrated` 的做法）则偏好丢失，改成「复制不删」后无影响；② 组织登录 cookie：N−1 只认旧名，而 N 写新名并清旧名 → **组织登录用户要重新登录一次**；③ 设备端快照计数文件：N 把 `openbot-snapshots.sqlite` **复制**成 `xiongbao-snapshots.sqlite`（先 checkpoint），旧文件保留，并且旧文件存在期间**每次发号都同时写进两个文件**（同一连接 ATTACH、同一个事务，旧文件写失败则不发号），打开时取两个文件里较大的数再写回两边。所以回退到 N−1 时旧文件里就是最新的号、浏览器照常打开，再升级回 N 也不会回到 N−1 已发出的号之下（计数必须单调不减）；旧文件损坏则拒绝打开，不单信新文件（N−1 找不到文件会新建空库，对磁盘上已有 profile 的同事直接拒绝打开浏览器，所以不能改名了事） | ① 本稿 4.3 的「复制不删」；② 回退说明里写明；③ 回退时计数回到升级时的值；旧文件随 legacy-compat 条目到期一起清理 |
 | 登录态文件改名之后的上一个版本（N → N−1，L1-16） | N−1 只认 `openbot-session-cookies.json`，而 N 已把它一次性改名为 `xiongbao-session-cookies.json` → Bot 浏览器的会话 cookie 丢一次，只靠会话 cookie 登录的网站要**重新登录一次**；带过期时间的 cookie 在 Chromium 自己的 profile 里，不受影响。再升级回 N 时两个文件都在，按修改时间取较新的那个，回退期间存下的会话不丢 | 回退说明里写明「Bot 登录过的网站可能要重新登录一次」；可接受 |
 | 别名机制之前的版本（v0.2.8 及更早） | 客户若已按新文档**只写** `XIONGBAO_*`，旧版本不认 → 起不来或行为不对 | 回退说明写明「不能回退到 v0.2.9 之前」；或者回退前把 `.env` 里的 `XIONGBAO_` 改回 `OPENBOT_`。镜像默认值文件（L1-10）同理 |
 | 镜像默认值从 ENV 挪到文件后回退 | 旧镜像自带 ENV，无影响 | — |
