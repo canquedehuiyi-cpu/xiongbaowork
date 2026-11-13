@@ -20,7 +20,7 @@
  * Imports Playwright's types only, so the rules here are testable without a browser installed.
  */
 
-import { existsSync, renameSync } from "node:fs";
+import { renameSync, statSync } from "node:fs";
 import { chmod, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserContext, Cookie } from "playwright";
@@ -29,26 +29,51 @@ import type { BrowserContext, Cookie } from "playwright";
 export const SESSION_COOKIES_FILE = "xiongbao-session-cookies.json";
 
 /**
- * The name the file had before L1-16, still on the volumes of computers that ran an earlier version.
- * Renamed to `SESSION_COOKIES_FILE` before the first read (`migrateSessionCookiesFile`), and read in
- * place where it cannot be renamed. Goes when the rename does (legacy-compat in the brand allowlist).
+ * The name the file had before L1-16, still on the volumes of computers that ran an earlier version,
+ * and written again by an earlier version a computer is rolled back to. Renamed to
+ * `SESSION_COOKIES_FILE` before the first read (`migrateSessionCookiesFile`), and read in place where
+ * it cannot be renamed. Goes when the rename does (legacy-compat in the brand allowlist).
  */
 export const LEGACY_SESSION_COOKIES_FILE = "openbot-session-cookies.json";
 
+function modifiedAt(path: string): number | undefined {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * Give a profile's session-cookie file its current name, once: only when the file under the earlier
- * name is there and none under the current name is. A file already under the current name is newer,
- * so it wins and the earlier one is left as it is. A volume that cannot be written keeps the earlier
- * name, and `restore` reads it there; nothing is thrown, because a Bot's browser must still start.
+ * Which of a profile's two names holds the cookies to restore: the one written last. Usually that is
+ * the current name. It is the earlier name when only that file is there (written before the upgrade),
+ * or when it was written after the current one: a computer upgraded, rolled back to a version that
+ * writes only the earlier name, and upgraded again, whose sessions saved while rolled back are in it.
+ * The current name wins a tie.
+ */
+function sessionCookiesSource(dir: string): string {
+  const file = join(dir, SESSION_COOKIES_FILE);
+  const legacy = join(dir, LEGACY_SESSION_COOKIES_FILE);
+  const legacyAt = modifiedAt(legacy);
+  if (legacyAt === undefined) return file;
+  const fileAt = modifiedAt(file);
+  return fileAt === undefined || legacyAt > fileAt ? legacy : file;
+}
+
+/**
+ * Give a profile's session-cookie file its current name, once: when the file under the earlier name is
+ * the one written last (`sessionCookiesSource`), it is renamed over the current name; otherwise both
+ * are left as they are. A rename keeps the file's 0600. A volume that cannot be written keeps the
+ * earlier name, and `restore` reads it there; nothing is thrown, because a Bot's browser must still start.
  */
 export function migrateSessionCookiesFile(dir: string): void {
   const file = join(dir, SESSION_COOKIES_FILE);
-  const legacy = join(dir, LEGACY_SESSION_COOKIES_FILE);
-  if (existsSync(file) || !existsSync(legacy)) return;
+  const source = sessionCookiesSource(dir);
+  if (source === file) return;
   try {
-    renameSync(legacy, file);
+    renameSync(source, file);
   } catch {
-    // Read-only, or gone in between: `restore` reads whichever name is there.
+    // Read-only, or gone in between: `restore` reads whichever name holds the newer file.
   }
 }
 
@@ -122,7 +147,6 @@ export function sessionCookieKeeper(
   context: BrowserContext,
 ) {
   const file = join(profileDir, SESSION_COOKIES_FILE);
-  const legacyFile = join(profileDir, LEGACY_SESSION_COOKIES_FILE);
   let lastWritten: string | undefined;
   let chain: Promise<void> = Promise.resolve();
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -157,16 +181,6 @@ export function sessionCookieKeeper(
     }
   };
 
-  /** The file under its current name, or under the earlier one where the rename could not be made. */
-  const readSaved = async (): Promise<string> => {
-    try {
-      return await readFile(file, "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      return await readFile(legacyFile, "utf8");
-    }
-  };
-
   const save = (): Promise<void> => {
     chain = chain.then(writeNow, writeNow);
     return chain;
@@ -181,7 +195,10 @@ export function sessionCookieKeeper(
       migrateSessionCookiesFile(profileDir);
       let saved: Cookie[];
       try {
-        saved = parseSaved(await readSaved());
+        // The current name, or the earlier one where it is newer and could not be renamed.
+        saved = parseSaved(
+          await readFile(sessionCookiesSource(profileDir), "utf8"),
+        );
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           report("computer-session-cookies-not-restored", botId, {

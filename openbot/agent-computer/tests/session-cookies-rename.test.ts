@@ -6,6 +6,8 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,8 +24,9 @@ import {
 /**
  * The session-cookie file is renamed once, on the first read after an upgrade (L1-16; spec 4.2: files on
  * disk are renamed once at start-up). A Bot's sign-ins saved under the old name are still there after the
- * upgrade, a file already under the new name wins, and a profile on a volume that cannot be written is
- * read under the old name rather than failing.
+ * upgrade; where both names are there, the one written last wins, so sessions saved while rolled back to
+ * an earlier version survive the next upgrade; a profile on a volume that cannot be written is read under
+ * the old name rather than failing; and the file stays 0600 throughout, as a credential must.
  */
 
 const cookie = (name: string, value: string): Cookie => ({
@@ -56,6 +59,15 @@ function profile(): string {
   return dir;
 }
 
+/** The permission bits of a file: the session cookies are credentials and must stay 0600. */
+const modeOf = (path: string) => statSync(path).mode & 0o777;
+
+/** Set a file's modification time to `secondsAgo` before now. */
+const writtenAgo = (path: string, secondsAgo: number) => {
+  const at = Date.now() / 1000 - secondsAgo;
+  utimesSync(path, at, at);
+};
+
 const quiet = () => spyOn(console, "info").mockImplementation(() => undefined);
 
 afterEach(() => {
@@ -81,6 +93,7 @@ describe("the session-cookie file is renamed once", () => {
     migrateSessionCookiesFile(dir);
     expect(existsSync(join(dir, LEGACY_SESSION_COOKIES_FILE))).toBe(false);
     expect(readFileSync(join(dir, SESSION_COOKIES_FILE), "utf8")).toBe(body);
+    expect(modeOf(join(dir, SESSION_COOKIES_FILE))).toBe(0o600);
 
     // And the keeper, which renames before its first read, puts them back.
     const again = profile();
@@ -90,25 +103,38 @@ describe("the session-cookie file is renamed once", () => {
     const { context, held } = fakeContext();
     const log = quiet();
     try {
-      expect(await sessionCookieKeeper("bot", again, context).restore()).toBe(
-        1,
+      const keeper = sessionCookieKeeper("bot", again, context);
+      expect(await keeper.restore()).toBe(1);
+      expect(held.map((c) => `${c.name}=${c.value}`)).toEqual([
+        "sid=from-before",
+      ]);
+      expect(existsSync(join(again, LEGACY_SESSION_COOKIES_FILE))).toBe(false);
+      expect(readFileSync(join(again, SESSION_COOKIES_FILE), "utf8")).toBe(
+        body,
       );
+      expect(modeOf(join(again, SESSION_COOKIES_FILE))).toBe(0o600);
+
+      // The next save writes under the new name only, still 0600.
+      held.push(cookie("cart", "two"));
+      await keeper.save();
+      expect(readFileSync(join(again, SESSION_COOKIES_FILE), "utf8")).toContain(
+        "cart",
+      );
+      expect(modeOf(join(again, SESSION_COOKIES_FILE))).toBe(0o600);
+      expect(existsSync(join(again, LEGACY_SESSION_COOKIES_FILE))).toBe(false);
     } finally {
       log.mockRestore();
     }
-    expect(held.map((c) => `${c.name}=${c.value}`)).toEqual([
-      "sid=from-before",
-    ]);
-    expect(existsSync(join(again, LEGACY_SESSION_COOKIES_FILE))).toBe(false);
-    expect(readFileSync(join(again, SESSION_COOKIES_FILE), "utf8")).toBe(body);
   });
 
-  test("both files: the new one is used and the old one is left alone", async () => {
+  test("both files, the new name written last: the new one is used and the old one is left alone", async () => {
     const dir = profile();
     const before = serialiseSessionCookies([cookie("sid", "old")]);
     const now = serialiseSessionCookies([cookie("sid", "new")]);
     writeFileSync(join(dir, LEGACY_SESSION_COOKIES_FILE), before);
     writeFileSync(join(dir, SESSION_COOKIES_FILE), now);
+    writtenAgo(join(dir, LEGACY_SESSION_COOKIES_FILE), 120);
+    writtenAgo(join(dir, SESSION_COOKIES_FILE), 60);
 
     migrateSessionCookiesFile(dir);
     expect(readFileSync(join(dir, LEGACY_SESSION_COOKIES_FILE), "utf8")).toBe(
@@ -127,6 +153,35 @@ describe("the session-cookie file is renamed once", () => {
     expect(readFileSync(join(dir, LEGACY_SESSION_COOKIES_FILE), "utf8")).toBe(
       before,
     );
+  });
+
+  test("both files, the old name written last (rolled back, then upgraded again): the old one is used", async () => {
+    const dir = profile();
+    const fromUpgrade = serialiseSessionCookies([cookie("sid", "upgrade")]);
+    const fromRollback = serialiseSessionCookies([cookie("sid", "rollback")]);
+    writeFileSync(join(dir, SESSION_COOKIES_FILE), fromUpgrade, {
+      mode: 0o600,
+    });
+    writeFileSync(join(dir, LEGACY_SESSION_COOKIES_FILE), fromRollback, {
+      mode: 0o600,
+    });
+    writtenAgo(join(dir, SESSION_COOKIES_FILE), 120);
+    writtenAgo(join(dir, LEGACY_SESSION_COOKIES_FILE), 60);
+
+    const { context, held } = fakeContext();
+    const log = quiet();
+    try {
+      expect(await sessionCookieKeeper("bot", dir, context).restore()).toBe(1);
+    } finally {
+      log.mockRestore();
+    }
+    expect(held.map((c) => `${c.name}=${c.value}`)).toEqual(["sid=rollback"]);
+    // Renamed over the older file under the new name, keeping its 0600.
+    expect(existsSync(join(dir, LEGACY_SESSION_COOKIES_FILE))).toBe(false);
+    expect(readFileSync(join(dir, SESSION_COOKIES_FILE), "utf8")).toBe(
+      fromRollback,
+    );
+    expect(modeOf(join(dir, SESSION_COOKIES_FILE))).toBe(0o600);
   });
 
   test("a directory that cannot be written: the old file is read, and nothing throws", async () => {
@@ -160,6 +215,39 @@ describe("the session-cookie file is renamed once", () => {
     expect(readFileSync(join(dir, LEGACY_SESSION_COOKIES_FILE), "utf8")).toBe(
       body,
     );
+  });
+
+  test("a directory that cannot be written, the old name written last: the old file is read in place", async () => {
+    const dir = profile();
+    writeFileSync(
+      join(dir, SESSION_COOKIES_FILE),
+      serialiseSessionCookies([cookie("sid", "upgrade")]),
+    );
+    writeFileSync(
+      join(dir, LEGACY_SESSION_COOKIES_FILE),
+      serialiseSessionCookies([cookie("sid", "rollback")]),
+    );
+    writtenAgo(join(dir, SESSION_COOKIES_FILE), 120);
+    writtenAgo(join(dir, LEGACY_SESSION_COOKIES_FILE), 60);
+    chmodSync(dir, 0o500);
+    const refuse =
+      process.getuid?.() === 0
+        ? spyOn(fs, "renameSync").mockImplementation(() => {
+            throw Object.assign(new Error("read-only file system"), {
+              code: "EROFS",
+            });
+          })
+        : undefined;
+    const { context, held } = fakeContext();
+    const log = quiet();
+    try {
+      expect(await sessionCookieKeeper("bot", dir, context).restore()).toBe(1);
+    } finally {
+      refuse?.mockRestore();
+      log.mockRestore();
+    }
+    expect(held.map((c) => `${c.name}=${c.value}`)).toEqual(["sid=rollback"]);
+    expect(existsSync(join(dir, LEGACY_SESSION_COOKIES_FILE))).toBe(true);
   });
 
   test("neither file: nothing to restore, and nothing is created", async () => {
