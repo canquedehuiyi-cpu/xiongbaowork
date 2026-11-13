@@ -956,6 +956,7 @@
 | 30 | Task 8 发现（原 C17） | `agent-computer/src/bot-browser-host.ts:87` | `agent-computer/tests/bot-browser-computer.test.ts:1017` `the OpenBot Recorder is not installed` | 新产品名 | 19 |
 | 31 | Task 8 发现（原 C18） | `agent-computer/src/egress.ts:449` | `agent-computer/tests/egress-policy.test.ts:712` `which OpenBot never opens` | 新产品名 | 19 |
 | 32 | Task 8 发现（原 C19） | `agent-computer/src/egress.ts:844,999`（`realm="OpenBot"`） | `agent-computer/tests/egress-policy.test.ts:291` `realm="openbot"` | `realm="xiongbao"` | 19 |
+| 33 | Task 9 发现：浏览器收到的模型认证错误码 | `server/src/wire-codes.ts`（`BROWSER_CODE_SUFFIXES` 暂不含 `MODEL_AUTH_REQUIRED`） | `server/tests/provider-refusal.test.ts:583` `expect(failure.code).toBe("OPENBOT_MODEL_AUTH_REQUIRED")`（读的是 runtime 发给浏览器的流） | `XIONGBAO_MODEL_AUTH_REQUIRED`，并把该后缀加回映射表、补回原名测试 `…carries XIONGBAO_MODEL_AUTH_REQUIRED…` | 19 |
 
 ## 附录 B：验证与切换记录
 
