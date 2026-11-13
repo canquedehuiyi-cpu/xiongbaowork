@@ -33,6 +33,7 @@
     "test:live-arcade": "bun -e \"if (!process.env.ARCADE_API_KEY?.trim()) { console.error('ARCADE_API_KEY is empty or unset, so every case in this suite would skip and this command would still exit 0. Run it as ARCADE_API_KEY=... bun run test:live-arcade.'); process.exit(1) }\" && OPENBOT_LIVE_ARCADE=1 bun test server/tests/arcade-live.test.ts",
     "test:live-composio": "bun -e \"if (!process.env.COMPOSIO_API_KEY?.trim()) { console.error('COMPOSIO_API_KEY is empty or unset, so every case in this suite would skip and this command would still exit 0. Run it as COMPOSIO_API_KEY=... bun run test:live-composio.'); process.exit(1) }\" && OPENBOT_LIVE_COMPOSIO=1 bun test server/tests/composio-live.test.ts",
     "port:capabilities": "bun tools/port-capabilities/index.ts",
+    "port:assemble": "bun tools/port-capabilities/assemble-package.ts",
     "diagram": "bun scripts/architecture-diagram.ts",
     "setup:composio": "bun scripts/setup-composio.ts",
     "composio:smoke": "bun scripts/composio-smoke.ts",
@@ -53,5 +54,8 @@
   },
   "overrides": {
     "lodash-es": "4.18.0"
+  },
+  "patchedDependencies": {
+    "playwright-core@1.62.1": "patches/playwright-core@1.62.1.patch"
   }
 }

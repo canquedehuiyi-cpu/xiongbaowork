@@ -163,6 +163,12 @@ export type PluginSkill = {
   instructions: string;
   origin: string;
   installedBy: string | null;
+  /**
+   * The port grade the package that brought this skill in claims: `full | degraded | blocked`
+   * （移植方案 R3）. Null on a skill nobody audited — a person's own row — and the badge reads
+   * null as "not graded", drawing nothing rather than guessing `full`.
+   */
+  runnable?: string | null;
   grantedTo: string[];
   /**
    * The tools this skill says it needs, as `<serverId>/<toolName>` refs.

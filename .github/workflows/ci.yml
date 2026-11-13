@@ -629,11 +629,30 @@ jobs:
           bun scripts/ci/runner-browser-probe.ts --run --executable "$chrome" --headless true 2>&1 | tee "$log"
           grep -q '^BROWSER_PROBE_PASS$' "$log"
           if grep -q '"passed":false' "$log"; then echo "::error::a probe check failed"; exit 1; fi
+      # The step above runs the runner from the checkout, where every path `bun build --compile` writes
+      # into the sidecar still exists. This one is the sidecar as a user gets it: compiled with the
+      # release flags, copied out, started from an empty directory, and the checkout covered by an
+      # empty tmpfs in a private mount namespace (sudo for the mount only; the sidecar runs as this
+      # user). playwright-core reading its own package.json from the build tree passed above and
+      # fails here.
+      - name: Compiled sidecar starts a browser in an isolated directory (checkout hidden)
+        run: |
+          set -euo pipefail
+          chrome=$(command -v google-chrome-stable || command -v google-chrome)
+          bun desktop-device/scripts/build-sidecar.ts
+          log="$RUNNER_TEMP/sidecar-browser.log"
+          bun scripts/ci/sidecar-browser-probe.ts \
+            --binary desktop-device/src-tauri/binaries/xiongbao-runner-x86_64-unknown-linux-gnu \
+            --executable "$chrome" --hide "$GITHUB_WORKSPACE" 2>&1 | tee "$log"
+          grep -q '^SIDECAR_BROWSER_PROBE_PASS$' "$log"
+          if grep -q '"passed":false' "$log"; then echo "::error::a sidecar probe check failed"; exit 1; fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: g5-browser-probe-log
-          path: ${{ runner.temp }}/g5-browser.log
+          path: |
+            ${{ runner.temp }}/g5-browser.log
+            ${{ runner.temp }}/sidecar-browser.log
 
   # The same G5 probe on a Windows machine, with Chrome headed (no --headless): the hosted
   # windows-latest image runs an interactive desktop session. Not a user's device; the real-hardware

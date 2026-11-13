@@ -1109,16 +1109,20 @@
   {
     "file": "extension/src/main-world/network-hook.ts",
     "text": "\"openbot.recorder.configure\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧 Symbol.for 键；页面钩子在新 Symbol 之外也用旧 Symbol 注册同一函数，回退到旧 service worker 时仍能调到（L1-22，Task 14）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/main-world/network-hook.ts",
     "text": "\"openbot.recorder.stop\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧 Symbol.for 键；页面钩子在新 Symbol 之外也用旧 Symbol 注册同一函数，回退到旧 service worker 时仍能调到（L1-22，Task 14）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/protocol/messages.ts",
@@ -1144,7 +1148,7 @@
   {
     "file": "extension/src/content/notice.ts",
     "text": "\"openbot-recorder-notice\"",
-    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name (L1-22)",
+    "reason": "persisted-identifier: 页面里的自定义元素标签；附录 A 第 11 行（已批）由 Task 19 落地前仍画这个名字，落地后只作旧名查找、移除（L1-22）",
     "category": "persisted-data",
     "plan": "rewrite"
   },
@@ -1165,9 +1169,11 @@
   {
     "file": "extension/src/content/indicator.ts",
     "text": "\"openbot-recorder-mark\"",
-    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name (L1-22)",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧标签名；新版本画 xb-recorder-mark，查找、移除时仍认旧名，扩展更新期间老内容脚本画的标记不重复、不残留（L1-22，Task 14）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/content/indicator.ts",
@@ -1221,16 +1227,20 @@
   {
     "file": "extension/src/background/network/fallback.ts",
     "text": "\"openbot.recorder.configure\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧 Symbol.for 键；fallback 先调 xb.recorder.* Symbol，没有再调旧 Symbol，更新前注入、还留在已打开页面里的老钩子仍能配置和停止（L1-22，Task 14）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/background/network/fallback.ts",
     "text": "\"openbot.recorder.stop\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧 Symbol.for 键；fallback 先调 xb.recorder.* Symbol，没有再调旧 Symbol，更新前注入、还留在已打开页面里的老钩子仍能配置和停止（L1-22，Task 14）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/background/connection.ts",
@@ -1504,13 +1514,6 @@
     "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/egress-policy.test.ts:291]",
     "category": "operator-visible",
     "plan": "rewrite"
-  },
-  {
-    "file": "agent-computer/src/egress.ts",
-    "text": "x-openbot-egress",
-    "reason": "persisted-identifier: wire header the egress filter sends (Global Constraints)",
-    "category": "peer-protocol",
-    "plan": "keep"
   },
   {
     "file": "agent-computer/src/egress.ts",

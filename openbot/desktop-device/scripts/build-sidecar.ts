@@ -18,6 +18,12 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ENTRY = join(import.meta.dir, "..", "..", "runner", "src", "index.ts");
+/**
+ * Where the compile runs, whatever directory the script is called from: Bun writes each bundled
+ * module's path into the binary as a comment, relative to this directory. Run from elsewhere those
+ * become `../home/<user>/<checkout>/openbot/...`, the build machine's layout.
+ */
+export const BUILD_CWD = join(import.meta.dir, "..", "..");
 const BINARIES = join(import.meta.dir, "..", "src-tauri", "binaries");
 
 /** Rust target triples this app is built for, and the Bun target that runs on each. */
@@ -44,16 +50,21 @@ export function sidecarFile(triple: string): string {
   return `xiongbao-runner-${triple}${triple.includes("windows") ? ".exe" : ""}`;
 }
 
+/**
+ * `entry` is the runner unless a test names another file to compile with exactly these flags
+ * (`runner/tests/sidecar-playwright.test.ts`).
+ */
 export function compileArgs(
   triple: string,
   host: string,
   outfile: string,
+  entry: string = ENTRY,
 ): string[] {
   return [
     "build",
     "--compile",
     ...(triple === host ? [] : [`--target=${bunTargetFor(triple)}`]),
-    ENTRY,
+    entry,
     "--external",
     "chromium-bidi",
     "--external",
@@ -84,6 +95,7 @@ if (import.meta.main) {
   const build = Bun.spawnSync(
     [process.execPath, ...compileArgs(triple, host, outfile)],
     {
+      cwd: BUILD_CWD,
       stdout: "inherit",
       stderr: "inherit",
     },

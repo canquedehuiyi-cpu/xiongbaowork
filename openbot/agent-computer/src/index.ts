@@ -110,6 +110,7 @@ import {
 } from "./terminal-socket";
 import { startVirtualDisplay } from "./virtual-display";
 import { applyWebBotAuthPush } from "./web-bot-auth";
+import { disagreeingWireHeader, readWireHeader } from "./wire-headers";
 import {
   WorkspaceFileError,
   WorkspaceFileNotFoundError,
@@ -267,11 +268,11 @@ function seatOf(
   query?: URLSearchParams,
 ): { bot: string; seat: string | undefined } {
   const bot =
-    request.headers.get("x-openbot-bot-id")?.trim() ||
+    readWireHeader(request.headers, "botId") ||
     query?.get("bot")?.trim() ||
     DEFAULT_BOT_ID;
   const person =
-    request.headers.get("x-openbot-person-id")?.trim() ||
+    readWireHeader(request.headers, "personId") ||
     query?.get("person")?.trim() ||
     undefined;
   try {
@@ -1261,6 +1262,15 @@ serve<StreamData & TerminalSocketData>({
       return json({ error: "Not authorised." }, 401);
     }
 
+    // The server's headers have two names while they are renamed (wire-headers.ts). A request that
+    // names one Bot or person under the new name and another under the old one is refused, not
+    // resolved: either answer would act for somebody the other name did not mean. Two token headers
+    // that disagree are already a 401 above (`offeredToken`) everywhere but `/stream` and `/terminal`,
+    // which take their token from the query; there this check is what refuses them, with a 400.
+    if (!isOpenPath(url.pathname) && disagreeingWireHeader(request.headers)) {
+      return json({ error: "Conflicting request headers." }, 400);
+    }
+
     // Resolved once per request. Everything below that touches a browser, a takeover or a snapshot
     // goes through this seat's session, so there is no path where one Bot's call reaches another's,
     // nor one person's call another person's seat on a computer they share.
@@ -1358,7 +1368,7 @@ serve<StreamData & TerminalSocketData>({
       if (url.pathname === "/stream") {
         /*
          * The socket carries the Bot in the query because it cannot do it in a header. Every other call here names
-         * its Bot in `x-openbot-bot-id`, but a websocket client sends no custom headers on the upgrade,
+         * its Bot in a header (wire-headers.ts), but a websocket client sends no custom headers on the upgrade,
          * so the stream, and only the stream, also accepts the Bot as a query parameter. The header
          * still wins where there is one.
          */

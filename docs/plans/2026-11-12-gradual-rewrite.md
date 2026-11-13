@@ -409,7 +409,7 @@
 
 - [ ] **Step 1（用户）**：选定镜像仓库（例如京东云容器镜像仓库）和下载页的存放位置。本计划假定下载页是兼容 S3 接口的对象存储（京东云对象存储兼容 S3）。如果选了别的，告诉执行者，Task 17 只改上传那一步。
 - [ ] **Step 2（用户）**：开通账号，建一个只给 CI 用的推送账号。在 GitHub 仓库里配置：
-  - Variables：`XB_REGISTRY`（如 `xxx.jcr.jdcloud.com`）、`XB_IMAGE_REPOSITORY`（如 `xiongbao/digital-employee`）、`XB_DOWNLOAD_ENDPOINT`、`XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_BASE_URL`（客户看到的下载页地址）。
+  - Variables：`XB_REGISTRY`（如 `xxx.jcr.jdcloud.com`）、`XB_IMAGE_REPOSITORY`（如 `xiongbao/digital-employee`）、`XB_DOWNLOAD_ENDPOINT`（`https://` 开头）、`XB_DOWNLOAD_REGION`（对象存储所在区域，如 `cn-north-1`，签名要用）、`XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_BASE_URL`（客户看到的下载页地址，`https://` 开头）。
   - Secrets：`XB_REGISTRY_USERNAME`、`XB_REGISTRY_PASSWORD`、`XB_DOWNLOAD_ACCESS_KEY_ID`、`XB_DOWNLOAD_SECRET_ACCESS_KEY`。
   - 凭据只进 Secrets，不发在对话里。
 - [ ] **Step 3（用户）**：决定客户拉镜像要不要登录。如果要，给客户发只读账号的方式由用户定，文档里只写「用我们发给你的账号登录」。
@@ -922,7 +922,7 @@
 
 执行者发现新的冲突时，在表尾追加一行，并在 PR 说明里列出。用户在 Task U2 里逐行批准。
 
-**批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）。
+**批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）；第 35 行，用户 2026-11-13 批准（原话「附录 A 第 35 行批准」）；第 36 行，用户 2026-11-13 批准（原话「附录 A 第 36 行批准」）。
 
 | # | 项 | 源码 | 已有断言（文件:行） | 要改成 | 处理任务 |
 |---|---|---|---|---|---|
@@ -960,6 +960,8 @@
 | 32 | Task 8 发现（原 C19） | `agent-computer/src/egress.ts:844,999`（`realm="OpenBot"`） | `agent-computer/tests/egress-policy.test.ts:291` `realm="openbot"` | `realm="xiongbao"` | 19 |
 | 33 | Task 9 发现：浏览器收到的模型认证错误码 | `server/src/wire-codes.ts`（`BROWSER_CODE_SUFFIXES` 暂不含 `MODEL_AUTH_REQUIRED`） | `server/tests/provider-refusal.test.ts:583` `expect(failure.code).toBe("OPENBOT_MODEL_AUTH_REQUIRED")`（读的是 runtime 发给浏览器的流） | `XIONGBAO_MODEL_AUTH_REQUIRED`，并把该后缀加回映射表、补回原名测试 `…carries XIONGBAO_MODEL_AUTH_REQUIRED…` | 19 |
 | 34 | Task 11 发现：apt 助手源文件改名 | `openbot/docker/xiongbao-apt`（原 `docker/openbot-apt`，已 `git mv`）；仓库里暂留 `docker/openbot-apt` → `xiongbao-apt` 的符号链接，只为让下列断言照常通过，镜像不复制它 | `app/tests/brand-rules-split.test.ts:55`「the new scopes are scanned」`expect(files).toContain("docker/openbot-apt")` | `toContain("docker/xiongbao-apt")`，并删掉仓库里的 `docker/openbot-apt` 符号链接（镜像里的 `/usr/local/sbin/openbot-apt` 兼容链接不受影响，按 legacy-compat 到期再删） | 19 |
+| 35 | Task 13 发现：`--minify` 暂不开（控制者裁定）。开启后产物里的 `openbotUrl:` 会变成 `openbotUrl:_` | `desktop-device/scripts/build-sidecar.ts`（`sidecarArgs`） | `app/tests/brand-ratchet.test.ts`「this branch does not grow any allowlist, budget or word list」：词表不许出现新词，`openbotUrl:_` 会被当成新词 | 开启 `--minify`，同时把 runner/deb 词表里的 `openbotUrl:` 改为 minify 后的写法 `openbotUrl:_`（棘轮会把它当新词）；同时删掉 `shared/openbot-browser.ts`（runner）、`openbot-browser.ts`（deb）两个注释词。Task 19 落地时，同一个提交里把词表的 `openbotUrl:` 换成 `openbotUrl:_`，这一处棘轮增长按已获批的本行放行，提交说明里注明。状态：已批准（2026-11-13） | 19 |
+| 36 | Task 14 发现：内容脚本在隔离环境里的两个全局标志。它们只在扩展的隔离环境里，网页控制台看不到（规格 R7 验收 ① 已满足），但扩展词表还登记着，`no-page-globals.test.ts` 跑 `content.js` 时也看得到 `__openbotRecorderContent`。两个标志都由同一版本的 service worker 和 `content.js` 读写，不跨版本，改名不需要双认（审查更正：「不跨版本」没有证据。Task 19 落地时，新内容脚本要同时读老标志，以防老版本扩展仍在同一页面） | `extension/src/content/index.ts:8-22,103`（`__openbotRecorderContent`、`__openbotRecorderActive`）、`extension/src/background/content-scripts.ts:8-11`（写 `__openbotRecorderActive`） | `extension/tests/content-port.test.ts:455` `expect(globals.__openbotRecorderContent).toBe(true)`；同文件 `:438,499,524` 把旧名 `__openbotRecorderActive` 当作「一加载就开始捕获」的信号写进去（`:425-426` 用旧名清理） | 两个标志改用 `Symbol.for("xb.recorder.content")`、`Symbol.for("xb.recorder.active")` 作键（`Object.keys(window)` 看不到），上面几处断言和输入改用新键；`no-page-globals.test.ts` 的 `PENDING_ROW_36` 改为 `[]`；扩展词表删掉 `_.__openbotRecorderActive`、`_.__openbotRecorderContent`、`globalThis.__openbotRecorderActive` | 19 |
 
 ## 附录 B：验证与切换记录
 

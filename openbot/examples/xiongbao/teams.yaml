@@ -1,0 +1,115 @@
+teams:
+  - id: gstack
+    name: 软件工坊
+    description: AI engineering workflow toolkit — product review, code review, security audit, QA testing, design system, debugging, and release automation
+    channel: gstack
+    lead: gstack-lead
+    members:
+      - id: gstack-lead
+        name: 沽思航
+        title: 软件工坊CEO
+        role: lead
+      - id: gstack-product-reviewer
+        name: 产品官
+        title: 多维产品评审
+        role: member
+      - id: gstack-security-officer
+        name: 安全卫士
+        title: OWASP+STRIDE安全审计
+        role: member
+      - id: gstack-qa-lead
+        name: 质量门神
+        title: QA测试与发布
+        role: member
+      - id: gstack-designer
+        name: 设计师
+        title: 设计系统与视觉审查
+        role: member
+      - id: gstack-investigator
+        name: 排障手
+        title: 调试与根因分析
+        role: member
+    address:
+      - from: gstack-lead
+        to:
+          - gstack-product-reviewer
+          - gstack-security-officer
+          - gstack-qa-lead
+          - gstack-designer
+          - gstack-investigator
+  - id: humanize-ppt-team
+    name: 卡尔的人感PPT专家团
+    description: "Humanize PPT WorkBuddy Team Agent: AST outline first, then one Skill per Agent for HTML PPT generation, video/motion, presenter mode, deploy/export, and QA."
+    channel: humanize-ppt-team
+    lead: humanize-ppt-team-lead
+    members:
+      - id: humanize-ppt-team-lead
+        name: 主理人
+        title: 主理人与调度官
+        role: lead
+      - id: outline-director
+        name: 大纲导演
+        title: AST大纲导演 / humanize-ppt
+        role: member
+      - id: guizang-renderer
+        name: 归藏生成师
+        title: 中文稳定版HTML PPT / guizang-ppt-skill
+        role: member
+      - id: frontend-slides-renderer
+        name: 风格探索生成师
+        title: 风格探索与可上线HTML Slides / frontend-slides
+        role: member
+      - id: video-motion-agent
+        name: 视频动效师
+        title: 视频与动效 / remotion-video-toolkit
+        role: member
+      - id: html-ppt-presenter
+        name: 演讲增强师
+        title: 演讲模式 / html-ppt
+        role: member
+      - id: qa
+        name: 质检官
+        title: 交付质检 / 无Skill
+        role: member
+    address:
+      - from: humanize-ppt-team-lead
+        to:
+          - outline-director
+          - guizang-renderer
+          - frontend-slides-renderer
+          - video-motion-agent
+          - html-ppt-presenter
+          - qa
+  - id: software-company
+    name: 软件公司
+    description: Software Development Team - Optimized multi-agent SOP workflow for fast software delivery
+    channel: software-company
+    lead: software-team-lead
+    members:
+      - id: software-team-lead
+        name: 齐活林
+        title: 交付总监
+        role: lead
+      - id: software-product-manager
+        name: 许清楚
+        title: 产品经理
+        role: member
+      - id: software-architect
+        name: 高见远
+        title: 架构师
+        role: member
+      - id: software-engineer
+        name: 寇豆码
+        title: 工程师
+        role: member
+      - id: software-qa-engineer
+        name: 严过关
+        title: QA工程师
+        role: member
+    address:
+      - from: software-team-lead
+        to:
+          - software-product-manager
+          - software-architect
+          - software-engineer
+          - software-qa-engineer

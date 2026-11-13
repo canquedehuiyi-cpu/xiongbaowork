@@ -401,13 +401,40 @@ pub fn detect_browser(candidates: &[PathBuf], exists: &dyn Fn(&Path) -> bool) ->
     candidates.iter().find(|path| exists(path)).cloned()
 }
 
+/// A development override from the environment: the `new` name, and only when it is not set the
+/// `legacy` one (the name before the rename, still read so an existing shell setup keeps working).
+fn dev_override(new: &str, legacy: &str) -> Option<OsString> {
+    dev_override_in(&|name| std::env::var_os(name), new, legacy)
+}
+
+/// `dev_override` against any environment. An empty value counts as not set, as a cleared
+/// `setx NAME ""` leaves it, so an empty new name falls back to the old one.
+fn dev_override_in(
+    env: &dyn Fn(&str) -> Option<OsString>,
+    new: &str,
+    legacy: &str,
+) -> Option<OsString> {
+    [new, legacy]
+        .iter()
+        .filter_map(|name| env(name))
+        .find(|value| !value.is_empty())
+}
+
+/// The development override names, new then old, for the runner and for the desktop helper.
+const RUNNER_BINARY_VARS: (&str, &str) = ("XIONGBAO_RUNNER_BINARY", "OPENBOT_RUNNER_BINARY");
+const AGENT_DESKTOP_BINARY_VARS: (&str, &str) = (
+    "XIONGBAO_AGENT_DESKTOP_BINARY",
+    "OPENBOT_AGENT_DESKTOP_BINARY",
+);
+
 /// The sidecar next to this executable, where Tauri's `externalBin` puts it in every bundle.
 ///
-/// A debug build also honours `OPENBOT_RUNNER_BINARY`, so the shell can be run with `cargo run`
-/// against a runner compiled by `scripts/build-sidecar.ts` without bundling.
+/// A debug build also honours `XIONGBAO_RUNNER_BINARY` (or else the old `OPENBOT_RUNNER_BINARY`),
+/// so the shell can be run with `cargo run` against a runner compiled by `scripts/build-sidecar.ts`
+/// without bundling.
 pub fn sidecar_path() -> io::Result<PathBuf> {
     if cfg!(debug_assertions) {
-        if let Some(path) = std::env::var_os("OPENBOT_RUNNER_BINARY") {
+        if let Some(path) = dev_override(RUNNER_BINARY_VARS.0, RUNNER_BINARY_VARS.1) {
             return Ok(PathBuf::from(path));
         }
     }
@@ -420,12 +447,12 @@ pub fn sidecar_path() -> io::Result<PathBuf> {
 
 /// The desktop helper next to this executable, where the sidecar is.
 ///
-/// A debug build also honours `OPENBOT_AGENT_DESKTOP_BINARY`, as `sidecar_path` does
-/// `OPENBOT_RUNNER_BINARY`. Whether the file is there is found out by the runner, when a desktop
-/// action first needs it.
+/// A debug build also honours `XIONGBAO_AGENT_DESKTOP_BINARY` (or else the old
+/// `OPENBOT_AGENT_DESKTOP_BINARY`), as `sidecar_path` does `XIONGBAO_RUNNER_BINARY`. Whether the
+/// file is there is found out by the runner, when a desktop action first needs it.
 pub fn agent_desktop_path() -> io::Result<PathBuf> {
     if cfg!(debug_assertions) {
-        if let Some(path) = std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY") {
+        if let Some(path) = dev_override(AGENT_DESKTOP_BINARY_VARS.0, AGENT_DESKTOP_BINARY_VARS.1) {
             return Ok(PathBuf::from(path));
         }
     }
@@ -1016,7 +1043,7 @@ mod tests {
 
     #[test]
     fn the_sidecar_sits_next_to_the_app() {
-        if std::env::var_os("OPENBOT_RUNNER_BINARY").is_some() {
+        if dev_override(RUNNER_BINARY_VARS.0, RUNNER_BINARY_VARS.1).is_some() {
             return;
         }
         let path = sidecar_path().unwrap();
@@ -1031,8 +1058,8 @@ mod tests {
     #[test]
     fn agent_desktop_path_is_next_to_the_app() {
         // Either override moves a path this test compares, as in `the_sidecar_sits_next_to_the_app`.
-        if std::env::var_os("OPENBOT_AGENT_DESKTOP_BINARY").is_some()
-            || std::env::var_os("OPENBOT_RUNNER_BINARY").is_some()
+        if dev_override(AGENT_DESKTOP_BINARY_VARS.0, AGENT_DESKTOP_BINARY_VARS.1).is_some()
+            || dev_override(RUNNER_BINARY_VARS.0, RUNNER_BINARY_VARS.1).is_some()
         {
             return;
         }
@@ -1044,5 +1071,78 @@ mod tests {
         );
         assert_eq!(AGENT_DESKTOP, "agent-desktop");
         assert_eq!(path.parent(), sidecar_path().unwrap().parent());
+    }
+
+    // These two use names of their own: the process environment is shared by every test thread.
+    #[test]
+    fn dev_override_prefers_the_new_name() {
+        std::env::set_var("XB_TEST_OVERRIDE_NEW_A", "new");
+        std::env::set_var("XB_TEST_OVERRIDE_LEGACY_A", "old");
+        assert_eq!(
+            dev_override("XB_TEST_OVERRIDE_NEW_A", "XB_TEST_OVERRIDE_LEGACY_A"),
+            Some(OsString::from("new"))
+        );
+    }
+
+    #[test]
+    fn dev_override_falls_back_to_the_legacy_name() {
+        std::env::set_var("XB_TEST_OVERRIDE_LEGACY_B", "old");
+        assert_eq!(
+            dev_override("XB_TEST_OVERRIDE_NEW_B", "XB_TEST_OVERRIDE_LEGACY_B"),
+            Some(OsString::from("old"))
+        );
+        assert_eq!(
+            dev_override("XB_TEST_OVERRIDE_NEW_C", "XB_TEST_OVERRIDE_LEGACY_C"),
+            None
+        );
+    }
+
+    #[test]
+    fn an_empty_name_counts_as_not_set() {
+        let env = |pairs: &'static [(&str, &str)]| {
+            move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| OsString::from(value))
+            }
+        };
+        assert_eq!(
+            dev_override_in(&env(&[("N", ""), ("L", "old")]), "N", "L"),
+            Some(OsString::from("old"))
+        );
+        assert_eq!(
+            dev_override_in(&env(&[("N", ""), ("L", "")]), "N", "L"),
+            None
+        );
+        assert_eq!(
+            dev_override_in(&env(&[("N", "new"), ("L", "")]), "N", "L"),
+            Some(OsString::from("new"))
+        );
+    }
+
+    #[test]
+    fn the_real_override_names_are_the_ones_documented() {
+        // `sidecar_path` and `agent_desktop_path` read exactly these.
+        assert_eq!(
+            RUNNER_BINARY_VARS,
+            ("XIONGBAO_RUNNER_BINARY", "OPENBOT_RUNNER_BINARY")
+        );
+        assert_eq!(
+            AGENT_DESKTOP_BINARY_VARS,
+            (
+                "XIONGBAO_AGENT_DESKTOP_BINARY",
+                "OPENBOT_AGENT_DESKTOP_BINARY"
+            )
+        );
+        let env = |name: &str| match name {
+            "XIONGBAO_RUNNER_BINARY" => Some(OsString::from("/new/runner")),
+            "OPENBOT_AGENT_DESKTOP_BINARY" => Some(OsString::from("/old/helper")),
+            _ => None,
+        };
+        let (new, old) = RUNNER_BINARY_VARS;
+        assert_eq!(dev_override_in(&env, new, old), Some("/new/runner".into()));
+        let (new, old) = AGENT_DESKTOP_BINARY_VARS;
+        assert_eq!(dev_override_in(&env, new, old), Some("/old/helper".into()));
     }
 }

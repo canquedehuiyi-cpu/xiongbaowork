@@ -74,6 +74,7 @@ import { Route as AuthedAppCapabilitiesIndexRouteImport } from './routes/_authed
 import { Route as AuthedAppCapabilitiesComponentsRouteImport } from './routes/_authed/_app/capabilities.components'
 import { Route as AuthedAppCapabilitiesKnowledgeRouteImport } from './routes/_authed/_app/capabilities.knowledge'
 import { Route as AuthedAppCapabilitiesMemoryRouteImport } from './routes/_authed/_app/capabilities.memory'
+import { Route as AuthedAppCapabilitiesMineRouteImport } from './routes/_authed/_app/capabilities.mine'
 import { Route as AuthedAppCapabilitiesModelsRouteImport } from './routes/_authed/_app/capabilities.models'
 import { Route as AuthedAppCapabilitiesPluginsRouteImport } from './routes/_authed/_app/capabilities.plugins'
 import { Route as AuthedAppCapabilitiesProjectsRouteImport } from './routes/_authed/_app/capabilities.projects'
@@ -466,6 +467,12 @@ const AuthedAppCapabilitiesMemoryRoute =
   AuthedAppCapabilitiesMemoryRouteImport.update({
     id: '/memory',
     path: '/memory',
+    getParentRoute: () => AuthedAppCapabilitiesRoute,
+  } as any)
+const AuthedAppCapabilitiesMineRoute =
+  AuthedAppCapabilitiesMineRouteImport.update({
+    id: '/mine',
+    path: '/mine',
     getParentRoute: () => AuthedAppCapabilitiesRoute,
   } as any)
 const AuthedAppCapabilitiesModelsRoute =
@@ -888,6 +895,7 @@ export interface FileRoutesByFullPath {
   '/capabilities/components': typeof AuthedAppCapabilitiesComponentsRoute
   '/capabilities/knowledge': typeof AuthedAppCapabilitiesKnowledgeRoute
   '/capabilities/memory': typeof AuthedAppCapabilitiesMemoryRoute
+  '/capabilities/mine': typeof AuthedAppCapabilitiesMineRoute
   '/capabilities/models': typeof AuthedAppCapabilitiesModelsRoute
   '/capabilities/plugins': typeof AuthedAppCapabilitiesPluginsRoute
   '/capabilities/projects': typeof AuthedAppCapabilitiesProjectsRoute
@@ -1011,6 +1019,7 @@ export interface FileRoutesByTo {
   '/capabilities/components': typeof AuthedAppCapabilitiesComponentsRoute
   '/capabilities/knowledge': typeof AuthedAppCapabilitiesKnowledgeRoute
   '/capabilities/memory': typeof AuthedAppCapabilitiesMemoryRoute
+  '/capabilities/mine': typeof AuthedAppCapabilitiesMineRoute
   '/capabilities/models': typeof AuthedAppCapabilitiesModelsRoute
   '/capabilities/plugins': typeof AuthedAppCapabilitiesPluginsRoute
   '/capabilities/projects': typeof AuthedAppCapabilitiesProjectsRoute
@@ -1141,6 +1150,7 @@ export interface FileRoutesById {
   '/_authed/_app/capabilities/components': typeof AuthedAppCapabilitiesComponentsRoute
   '/_authed/_app/capabilities/knowledge': typeof AuthedAppCapabilitiesKnowledgeRoute
   '/_authed/_app/capabilities/memory': typeof AuthedAppCapabilitiesMemoryRoute
+  '/_authed/_app/capabilities/mine': typeof AuthedAppCapabilitiesMineRoute
   '/_authed/_app/capabilities/models': typeof AuthedAppCapabilitiesModelsRoute
   '/_authed/_app/capabilities/plugins': typeof AuthedAppCapabilitiesPluginsRoute
   '/_authed/_app/capabilities/projects': typeof AuthedAppCapabilitiesProjectsRoute
@@ -1269,6 +1279,7 @@ export interface FileRouteTypes {
     | '/capabilities/components'
     | '/capabilities/knowledge'
     | '/capabilities/memory'
+    | '/capabilities/mine'
     | '/capabilities/models'
     | '/capabilities/plugins'
     | '/capabilities/projects'
@@ -1392,6 +1403,7 @@ export interface FileRouteTypes {
     | '/capabilities/components'
     | '/capabilities/knowledge'
     | '/capabilities/memory'
+    | '/capabilities/mine'
     | '/capabilities/models'
     | '/capabilities/plugins'
     | '/capabilities/projects'
@@ -1521,6 +1533,7 @@ export interface FileRouteTypes {
     | '/_authed/_app/capabilities/components'
     | '/_authed/_app/capabilities/knowledge'
     | '/_authed/_app/capabilities/memory'
+    | '/_authed/_app/capabilities/mine'
     | '/_authed/_app/capabilities/models'
     | '/_authed/_app/capabilities/plugins'
     | '/_authed/_app/capabilities/projects'
@@ -2048,6 +2061,13 @@ declare module '@tanstack/react-router' {
       path: '/memory'
       fullPath: '/capabilities/memory'
       preLoaderRoute: typeof AuthedAppCapabilitiesMemoryRouteImport
+      parentRoute: typeof AuthedAppCapabilitiesRoute
+    }
+    '/_authed/_app/capabilities/mine': {
+      id: '/_authed/_app/capabilities/mine'
+      path: '/mine'
+      fullPath: '/capabilities/mine'
+      preLoaderRoute: typeof AuthedAppCapabilitiesMineRouteImport
       parentRoute: typeof AuthedAppCapabilitiesRoute
     }
     '/_authed/_app/capabilities/models': {
@@ -2645,6 +2665,7 @@ interface AuthedAppCapabilitiesRouteChildren {
   AuthedAppCapabilitiesComponentsRoute: typeof AuthedAppCapabilitiesComponentsRoute
   AuthedAppCapabilitiesKnowledgeRoute: typeof AuthedAppCapabilitiesKnowledgeRoute
   AuthedAppCapabilitiesMemoryRoute: typeof AuthedAppCapabilitiesMemoryRoute
+  AuthedAppCapabilitiesMineRoute: typeof AuthedAppCapabilitiesMineRoute
   AuthedAppCapabilitiesModelsRoute: typeof AuthedAppCapabilitiesModelsRoute
   AuthedAppCapabilitiesPluginsRoute: typeof AuthedAppCapabilitiesPluginsRoute
   AuthedAppCapabilitiesProjectsRoute: typeof AuthedAppCapabilitiesProjectsRoute
@@ -2658,6 +2679,7 @@ const AuthedAppCapabilitiesRouteChildren: AuthedAppCapabilitiesRouteChildren = {
   AuthedAppCapabilitiesComponentsRoute: AuthedAppCapabilitiesComponentsRoute,
   AuthedAppCapabilitiesKnowledgeRoute: AuthedAppCapabilitiesKnowledgeRoute,
   AuthedAppCapabilitiesMemoryRoute: AuthedAppCapabilitiesMemoryRoute,
+  AuthedAppCapabilitiesMineRoute: AuthedAppCapabilitiesMineRoute,
   AuthedAppCapabilitiesModelsRoute: AuthedAppCapabilitiesModelsRoute,
   AuthedAppCapabilitiesPluginsRoute: AuthedAppCapabilitiesPluginsRoute,
   AuthedAppCapabilitiesProjectsRoute: AuthedAppCapabilitiesProjectsRoute,

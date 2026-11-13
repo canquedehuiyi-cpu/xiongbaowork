@@ -45,7 +45,7 @@ export type AllowEntry = {
 
 const VERSION = /^\d+\.\d+\.\d+$/;
 
-const compare = (a: string, b: string): number => {
+export const compare = (a: string, b: string): number => {
   const x = a.split(".").map(Number);
   const y = b.split(".").map(Number);
   for (let i = 0; i < 3; i++) {
