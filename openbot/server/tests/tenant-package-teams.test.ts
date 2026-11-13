@@ -242,6 +242,34 @@ describe("expert teams in a tenant package", () => {
     });
   });
 
+  test("the team's channel row carries kind=team and a plain channel kind=channel", async () => {
+    // 一支团 + 一条 channels.yaml 式的普通多员工频道：`engineering` 也挂三个人，不加 kind
+    // 资源页就分不清这两者——这正是 4b 加标记的原因。
+    const plainChannel = {
+      id: `plain-${suite}`,
+      name: "普通频道",
+      description: "channels.yaml 声明的对话，不是团队。",
+      permittedAgents: [`lead-${suite}`],
+      allowedGroups: [],
+    };
+    await applyPackage({
+      ...packageWith(roster(), [team()], "v1"),
+      channels: [...teamChannels([team()]), plainChannel],
+      checksum: `teams-v2-${suite}`,
+    });
+
+    const [teamRow] = await teamChannel();
+    expect(teamRow?.kind).toBe("team");
+    const [plainRow] = await runAsTenant("platform", () =>
+      database
+        .select()
+        .from(channels)
+        .where(eq(channels.id, `plain-${suite}`))
+        .limit(1),
+    );
+    expect(plainRow?.kind).toBe("channel");
+  });
+
   test("the lead's system prompt carries the team and the hand-off rule", async () => {
     await applyPackage(packageWith(roster(), [team()], "v1"));
     const configuration = (await leadPrompt()) as Record<string, unknown>;

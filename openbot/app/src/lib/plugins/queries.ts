@@ -153,6 +153,17 @@ export type PluginServer = {
   withdrawn: WithdrawnGrant[];
 };
 
+/**
+ * 一支被给的专家团（P4-4b）：团队物化为频道行，`agentIds` 是全团员工——lead 排第一，顺序就是
+ * 装包同步写入的声明顺序。卡片只画名字、说明与成员数，跳进频道即用团队，没有详情页可去。
+ */
+export type PluginTeam = {
+  id: string;
+  name: string;
+  description: string;
+  agentIds: string[];
+};
+
 export type PluginSkill = {
   id: string;
   slug: string;
@@ -268,6 +279,13 @@ export type PluginsPage = {
    * grant, the boundary or the audit trail, which is not something a grant switch can show.
    */
   botsMayCallBack: boolean;
+  /**
+   * 这个员工被给了哪些专家团（`/api/plugins` 页面响应，P4-4b）。
+   *
+   * 一支团队物化为带 `kind: "team"` 标记的频道行；这是员工自己那份副本，只列品牌包给到 TA 的。
+   * 老服务端不下发——缺省读作没有团队，页面的团队块退回空态，而不是崩。
+   */
+  teams?: PluginTeam[];
   /**
    * The redirect URI to register with a `user-oauth` vendor, exactly as this deployment will send it.
    *
