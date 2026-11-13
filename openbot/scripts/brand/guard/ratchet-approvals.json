@@ -1,0 +1,10 @@
+[
+  {
+    "appendixRow": 7,
+    "kind": "budget",
+    "key": "env-name/docker/defaults.env",
+    "from": 0,
+    "to": 1,
+    "note": "COPILOTKIT_TELEMETRY_DISABLED=1 从 Dockerfile 的 ENV 挪进 docker/defaults.env；env-name/Dockerfile 同时 1 -> 0，合计不变"
+  }
+]

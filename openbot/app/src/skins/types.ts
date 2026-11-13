@@ -7,6 +7,7 @@ import type { ComponentType, ReactNode } from "react";
  */
 export {
   DEFAULT_SKIN,
+  normalizeSkinId,
   SKIN_IDS,
   type SkinId,
 } from "@openbot/shared/user-preferences";

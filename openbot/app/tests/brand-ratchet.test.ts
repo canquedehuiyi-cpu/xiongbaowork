@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +15,7 @@ import {
 } from "../../scripts/brand/guard/new-lines";
 import {
   loadRatchetInput,
+  type RatchetApproval,
   type RatchetInput,
   ratchetBase,
   ratchetProblems,
@@ -326,4 +327,137 @@ test("ratchetBase: once the base has the ratchet, the base is the baseline", () 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe("approved exceptions (ratchet-approvals.json)", () => {
+  const grown = (over: Partial<RatchetInput> = {}) =>
+    input({
+      headBudget: [
+        { rule: "identifier", scope: "server/src", lines: 5 },
+        { rule: "env-name", scope: "docker/defaults.env", lines: 1 },
+      ],
+      ...over,
+    });
+  const approval = (over: Partial<RatchetApproval> = {}): RatchetApproval => ({
+    appendixRow: 7,
+    kind: "budget",
+    key: "env-name/docker/defaults.env",
+    from: 0,
+    to: 1,
+    note: "x",
+    ...over,
+  });
+
+  test("with no approvals the growth is reported as before", () => {
+    expect(ratchetProblems(grown()).join("\n")).toContain("预算增加");
+    expect(ratchetProblems(grown({ approvals: [] })).join("\n")).toContain(
+      "预算增加",
+    );
+  });
+
+  test("an exact match lets the growth through", () => {
+    expect(ratchetProblems(grown({ approvals: [approval()] }))).toEqual([]);
+  });
+
+  test("a different `to` stays red", () => {
+    expect(
+      ratchetProblems(grown({ approvals: [approval({ to: 2 })] })).join("\n"),
+    ).toContain("预算增加");
+  });
+
+  test("a different key stays red", () => {
+    const problems = ratchetProblems(
+      grown({ approvals: [approval({ key: "env-name/docker/s6" })] }),
+    ).join("\n");
+    expect(problems).toContain("预算增加：env-name/docker/defaults.env");
+  });
+
+  test("growth beyond the approved step stays red", () => {
+    const problems = ratchetProblems(
+      grown({
+        baseBudget: [
+          { rule: "identifier", scope: "server/src", lines: 5 },
+          { rule: "env-name", scope: "docker/defaults.env", lines: 1 },
+        ],
+        headBudget: [
+          { rule: "identifier", scope: "server/src", lines: 5 },
+          { rule: "env-name", scope: "docker/defaults.env", lines: 2 },
+        ],
+        approvals: [approval()],
+      }),
+    ).join("\n");
+    expect(problems).toContain("预算增加");
+    expect(problems).toContain("没有对上");
+  });
+
+  test("an approval that matches no change is reported as stale", () => {
+    const problems = ratchetProblems(input({ approvals: [approval()] })).join(
+      "\n",
+    );
+    expect(problems).toContain("ratchet-approvals.json");
+    expect(problems).toContain("第 7 行");
+  });
+
+  test("a new word is let through only by an exact from -> to for that list", () => {
+    const words = {
+      baseWords: { "runner.json": ["openbotUrl:"] },
+      headWords: { "runner.json": ["openbotUrl:_"] },
+    };
+    const swap = approval({
+      kind: "words",
+      key: "runner.json",
+      from: "openbotUrl:",
+      to: "openbotUrl:_",
+    });
+    expect(ratchetProblems(input({ ...words, approvals: [swap] }))).toEqual([]);
+    expect(ratchetProblems(input(words)).join("\n")).toContain("增加了");
+    expect(
+      ratchetProblems(
+        input({ ...words, approvals: [{ ...swap, key: "deb.json" }] }),
+      ).join("\n"),
+    ).toContain("增加了");
+    expect(
+      ratchetProblems(
+        input({ ...words, approvals: [{ ...swap, to: "other:_" }] }),
+      ).join("\n"),
+    ).toContain("增加了");
+  });
+
+  test("an approval the base already holds, with no change on this branch, is inert and not stale", () => {
+    expect(
+      ratchetProblems(
+        input({ approvals: [approval()], baseApprovals: [approval()] }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("an approval the base already holds cannot allow new growth", () => {
+    const problems = ratchetProblems(
+      grown({ approvals: [approval()], baseApprovals: [approval()] }),
+    ).join("\n");
+    expect(problems).toContain("预算增加：env-name/docker/defaults.env");
+  });
+
+  test("an approval new on this branch must match: matching is green, not matching is red", () => {
+    const other = approval({ key: "env-name/docker/s6" });
+    expect(
+      ratchetProblems(
+        grown({ approvals: [approval(), other], baseApprovals: [other] }),
+      ),
+    ).toEqual([]);
+    expect(
+      ratchetProblems(
+        grown({
+          approvals: [approval(), other],
+          baseApprovals: [approval()],
+        }),
+      ).join("\n"),
+    ).toContain("没有对上");
+  });
+
+  test("deleting approvals is not growth", () => {
+    expect(
+      ratchetProblems(input({ approvals: [], baseApprovals: [approval()] })),
+    ).toEqual([]);
+  });
 });

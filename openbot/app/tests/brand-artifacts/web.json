@@ -30,18 +30,6 @@
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
-    "word": ".openbot-breakdown",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
-  },
-  {
-    "word": ".openbot-markdown",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
-  },
-  {
     "word": ".openbotVersion",
     "category": "peer-protocol",
     "plan": "keep",
@@ -94,12 +82,6 @@
     "category": "third-party-name",
     "plan": "keep",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
-  },
-  {
-    "word": "OPENBOT_PUBLIC_URL",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "管理页「旧名仍可用」提示与环境变量名；Task 8（附录 A 第 5 行待批）"
   },
   {
     "word": "OpenBot",
@@ -285,25 +267,7 @@
     "word": "openbot",
     "category": "persisted-data",
     "plan": "rewrite",
-    "note": "租户 id（永久保留，Task 6 核实）、默认皮肤 id（Task 7）、data-orb（附录 A 第 2 行）；一词合并登记，按剩余工作计"
-  },
-  {
-    "word": "openbot-$",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot-attention-$",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "通知 tag；附录 A 第 3 行待批，Task 19"
-  },
-  {
-    "word": "openbot-breakdown",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
+    "note": "租户 id（永久保留，Task 6 核实）；默认皮肤 id、data-orb 已在附录 A 第 2、13 行改成 xiongbao，旧皮肤 id 只在 normalizeSkinId 里认"
   },
   {
     "word": "openbot-browser",
@@ -318,22 +282,10 @@
     "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
   },
   {
-    "word": "openbot-markdown",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
-  },
-  {
     "word": "openbot-notify-prompt-answered",
     "category": "persisted-data",
     "plan": "rewrite",
     "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot-ping-$",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "通知 tag；附录 A 第 3 行待批，Task 19"
   },
   {
     "word": "openbot-runner",
@@ -490,12 +442,6 @@
     "category": "upstream-shell-only",
     "plan": "keep",
     "note": "只在不交付的上游桌面里使用"
-  },
-  {
-    "word": "openbot:_",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键前缀；Task 7"
   },
   {
     "word": "openbot:app-access-request",

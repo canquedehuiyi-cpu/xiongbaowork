@@ -67,14 +67,14 @@ test("the mark goes by the neutral name and still knows the older one", () => {
   expect(INDICATOR_TAGS).toEqual(["xb-recorder-mark", "openbot-recorder-mark"]);
 });
 
-test("the notice knows both names; it draws the older one until appendix A row 11 lands", () => {
+test("the notice knows both names, and draws under the new one", () => {
   expect(XB_NOTICE_TAG).toBe("xb-recorder-notice");
   expect(LEGACY_NOTICE_TAG).toBe("openbot-recorder-notice");
   expect(NOTICE_TAGS).toEqual([
     "xb-recorder-notice",
     "openbot-recorder-notice",
   ]);
-  expect(NOTICE_TAG).toBe(LEGACY_NOTICE_TAG);
+  expect(NOTICE_TAG).toBe(XB_NOTICE_TAG);
 });
 
 test("with an older version's mark in the page, the new script does not draw a second", () => {

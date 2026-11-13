@@ -11,10 +11,13 @@ function memory(initial: Record<string, string> = {}) {
   };
 }
 
-test("only the legacy key present: the value is read, the new key written, the legacy key removed", () => {
+test("only the legacy key present: the value is read, the new key written, the legacy key kept", () => {
   const storage = memory({ "openbot-theme": "dark" });
   expect(readMigrated("xiongbao-theme", "openbot-theme", storage)).toBe("dark");
-  expect([...storage.data]).toEqual([["xiongbao-theme", "dark"]]);
+  expect([...storage.data]).toEqual([
+    ["openbot-theme", "dark"],
+    ["xiongbao-theme", "dark"],
+  ]);
 });
 
 test("both keys present: the new one wins and the legacy one is left alone", () => {

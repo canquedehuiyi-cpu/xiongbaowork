@@ -13,8 +13,8 @@
  */
 export const XB_NOTICE_TAG = "xb-recorder-notice";
 export const LEGACY_NOTICE_TAG = "openbot-recorder-notice";
-/** Drawn under the older name until plan appendix A row 11 is landed (Task 19), then under XB_NOTICE_TAG. */
-export const NOTICE_TAG = LEGACY_NOTICE_TAG;
+/** What a notice is drawn under now; the earlier name is only looked for, to take away what an older version drew. */
+export const NOTICE_TAG = XB_NOTICE_TAG;
 export const NOTICE_TAGS = [XB_NOTICE_TAG, LEGACY_NOTICE_TAG] as const;
 
 /** Takes every element under these tags out of the page. */

@@ -19,7 +19,7 @@ import { markdownComponents, markdownPlugins } from "@/lib/markdown";
  *
  * `a2ui-markdown` is the class the SDK's own `Markdown` wraps itself in, and the one its stylesheet
  * exempts from the surface's resets, which zero the margins of every paragraph, heading and `<pre>`.
- * Without it the spacing between paragraphs, lists and blocks would collapse. `openbot-markdown`
+ * Without it the spacing between paragraphs, lists and blocks would collapse. `xiongbao-markdown`
  * takes back the few properties the rest of that stylesheet still overrides; see styles.css.
  */
 function ReplyMarkdown({
@@ -30,7 +30,7 @@ function ReplyMarkdown({
   streaming: boolean;
 }) {
   return (
-    <div className="a2ui-markdown openbot-markdown">
+    <div className="a2ui-markdown xiongbao-markdown">
       <Streamdown
         components={markdownComponents}
         // As the transcript does for a message still arriving: half a list or an unclosed bold

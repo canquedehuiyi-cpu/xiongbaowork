@@ -479,13 +479,13 @@ describe("the content script entry", () => {
     const port = ports[0];
     port.postMessage({ type: "background.notice", show: true, actions: 50 });
     await new Promise((resolve) => setTimeout(resolve, 20));
-    const oldNotice = document.querySelector("openbot-recorder-notice");
+    const oldNotice = document.querySelector("xb-recorder-notice");
     expect(oldNotice).not.toBeNull();
 
     port.postMessage({ type: "background.capture", active: false });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(document.querySelector("openbot-recorder-notice")).toBeNull();
+    expect(document.querySelector("xb-recorder-notice")).toBeNull();
     expect(oldNotice?.isConnected).toBe(false);
   });
 

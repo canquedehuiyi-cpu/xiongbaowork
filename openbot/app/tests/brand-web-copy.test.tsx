@@ -40,10 +40,11 @@ test("the banner no longer links to the upstream vendor", () => {
   expect(banner).toContain("appConfig.brand.supportUrl");
 });
 
-test("admin hints show the XIONGBAO_ names and say the old ones still work", () => {
+test("admin hints show the XIONGBAO_ names and do not mention the old ones", () => {
   expect(read("components/manage/plugin-page.tsx")).toContain(
-    "XIONGBAO_PUBLIC_URL（旧名 OPENBOT_PUBLIC_URL 仍可用）",
+    "XIONGBAO_PUBLIC_URL",
   );
+  expect(read("components/manage/plugin-page.tsx")).not.toContain("旧名");
   expect(read("routes/_authed/_app/responsibilities.tsx")).toContain(
     "XIONGBAO_INBOUND_EMAIL_DOMAIN",
   );

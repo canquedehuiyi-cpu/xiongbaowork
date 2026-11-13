@@ -1,4 +1,8 @@
-import { SKIN_IDS } from "@openbot/shared/user-preferences";
+import {
+  isKnownSkinInput,
+  normalizeSkinId,
+  SKIN_IDS,
+} from "@openbot/shared/user-preferences";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "./auth/guards";
@@ -14,7 +18,12 @@ const preferencesPatch = z
     messageListEmphasis: z.enum(["agent", "thread"]).optional(),
     selfHostBannerDismissed: z.boolean().optional(),
     narration: z.enum(["on", "off"]).optional(),
-    skin: z.enum(SKIN_IDS).optional(),
+    // An older page may still send the old default's name; it is stored under the new one.
+    skin: z
+      .string()
+      .refine(isKnownSkinInput)
+      .transform(normalizeSkinId)
+      .optional(),
     proactive: z.enum(["on", "off"]).optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0);

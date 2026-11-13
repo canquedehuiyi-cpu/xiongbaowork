@@ -18,7 +18,7 @@ export type Notice = {
  * notice however it was raised.
  */
 export function conversationTag(channelId: string): string {
-  return `openbot-${channelId}`;
+  return `xiongbao-${channelId}`;
 }
 
 /** Whether the person can see OpenBot now, in which case what is on screen says it all. */

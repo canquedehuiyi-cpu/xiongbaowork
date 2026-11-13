@@ -610,7 +610,7 @@ function brokerProviderConfig(environment: Environment): {
   const raw = optional(environment, "OPENBOT_BROKER_PROVIDER");
   if (raw !== undefined && raw !== "composio" && raw !== "arcade") {
     throw new Error(
-      `OPENBOT_BROKER_PROVIDER 只能是 "composio" 或 "arcade"，现在是 "${raw}"。不设置时按配置了哪个 API key 来选。`,
+      `${envName("BROKER_PROVIDER")} 只能是 "composio" 或 "arcade"，现在是 "${raw}"。不设置时按配置了哪个 API key 来选。`,
     );
   }
   return {
@@ -739,7 +739,7 @@ function singleUserAllowed(
   const published = reachable.filter((value) => reachOf(value) === "public");
   if (published.length > 0) {
     throw new Error(
-      `OPENBOT_SINGLE_USER admits every request as one administrator with no sign-in, so it cannot be combined with an address the public internet reaches: ${published.join(", ")}. Configure GOOGLE_OAUTH_*, MICROSOFT_OAUTH_*, OKTA_OAUTH_* or GITHUB_OAUTH_* with BETTER_AUTH_SECRET and BETTER_AUTH_URL, or serve it somewhere only you reach.`,
+      `${envName("SINGLE_USER")} admits every request as one administrator with no sign-in, so it cannot be combined with an address the public internet reaches: ${published.join(", ")}. Configure GOOGLE_OAUTH_*, MICROSOFT_OAUTH_*, OKTA_OAUTH_* or GITHUB_OAUTH_* with BETTER_AUTH_SECRET and BETTER_AUTH_URL, or serve it somewhere only you reach.`,
     );
   }
 
@@ -1967,7 +1967,9 @@ function personalEditionRequirements(
     );
   }
   if (!resolved.singleUser) {
-    throw new Error("OPENBOT_EDITION=personal needs OPENBOT_SINGLE_USER=true.");
+    throw new Error(
+      `${envName("EDITION")}=personal needs ${envName("SINGLE_USER")}=true.`,
+    );
   }
   if (resolved.computer?.provider === "shared") return;
   const named = optional(environment, "COMPUTER_SANDBOX_NAMESPACE")

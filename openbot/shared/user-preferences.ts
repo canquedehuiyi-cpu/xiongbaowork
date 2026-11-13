@@ -4,14 +4,14 @@ export type NarrationPreference = "on" | "off";
 /** Whether this person's Bots check in on their behalf at all. */
 export type ProactivePreference = "on" | "off";
 /**
- * Every skin OpenBot ships. `openbot` is the default and is OpenBot exactly as it is without a
+ * Every skin this product ships. `xiongbao` is the default and is the product exactly as it is without a
  * skin: no frame of its own, no tokens of its own.
  *
  * Here rather than in the app because the choice is saved on the person's account, so the server
  * has to know which values it may store.
  */
 export const SKIN_IDS = [
-  "openbot",
+  "xiongbao",
   "openduet",
   "opendots",
   "openmuse",
@@ -19,10 +19,24 @@ export const SKIN_IDS = [
 
 export type SkinId = (typeof SKIN_IDS)[number];
 
-export const DEFAULT_SKIN: SkinId = "openbot";
+export const DEFAULT_SKIN: SkinId = "xiongbao";
 
 export function isSkinId(value: unknown): value is SkinId {
   return SKIN_IDS.some((id) => id === value);
+}
+
+/** What the default skin was called before the rename; still found in saved accounts and browser caches. */
+const LEGACY_DEFAULT_SKIN = "openbot";
+
+/** A skin id this build shipped now or before the rename, as opposed to any string at all. */
+export function isKnownSkinInput(value: unknown): value is string {
+  return isSkinId(value) || value === LEGACY_DEFAULT_SKIN;
+}
+
+/** The id this build draws for a saved one: the old default name reads as the new, anything unknown as the default. */
+export function normalizeSkinId(id: string): SkinId {
+  if (id === LEGACY_DEFAULT_SKIN) return DEFAULT_SKIN;
+  return isSkinId(id) ? id : DEFAULT_SKIN;
 }
 
 export type UserPreferences = {

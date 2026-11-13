@@ -622,7 +622,7 @@ describe("deployment configuration", () => {
   ])("refuses no sign-in combined with %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
-    ).toThrow("OPENBOT_SINGLE_USER");
+    ).toThrow("XIONGBAO_SINGLE_USER");
   });
 
   /*
@@ -652,7 +652,7 @@ describe("deployment configuration", () => {
   ])("refuses no sign-in on %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
-    ).toThrow("OPENBOT_SINGLE_USER");
+    ).toThrow("XIONGBAO_SINGLE_USER");
   });
 
   // A name that merely starts with 127. is a public name, not loopback. Only a whole 127.x.x.x
@@ -669,7 +669,7 @@ describe("deployment configuration", () => {
   ])("refuses no sign-in on %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
-    ).toThrow("OPENBOT_SINGLE_USER");
+    ).toThrow("XIONGBAO_SINGLE_USER");
   });
 
   // The local workflow the flag exists for, and the two addresses the quick start hands out.
@@ -1520,7 +1520,7 @@ describe("edition", () => {
 
   test("personal edition refuses without single-user mode", () => {
     const { OPENBOT_SINGLE_USER: _, ...environment } = personalEnvironment;
-    expect(() => loadConfig(environment)).toThrow("OPENBOT_SINGLE_USER=true");
+    expect(() => loadConfig(environment)).toThrow("XIONGBAO_SINGLE_USER=true");
   });
 
   test("personal edition refuses an identity provider", () => {

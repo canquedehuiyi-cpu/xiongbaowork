@@ -185,10 +185,10 @@ describe("runtime telemetry", () => {
   });
 
   test("the image also sets the variable", () => {
-    const dockerfile = readFileSync(
-      new URL("../../Dockerfile", import.meta.url),
+    const defaults = readFileSync(
+      new URL("../../docker/defaults.env", import.meta.url),
       "utf8",
     );
-    expect(dockerfile).toMatch(/^ENV COPILOTKIT_TELEMETRY_DISABLED=1$/m);
+    expect(defaults).toMatch(/^COPILOTKIT_TELEMETRY_DISABLED=1$/m);
   });
 });

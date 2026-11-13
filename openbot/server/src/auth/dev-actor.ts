@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
+import { envName } from "../../../shared/env-aliases";
 import type { SingleUserAccess } from "../config";
 import type { Database } from "../db/client";
 import { callerOf, singleUserRefusal } from "../request-trust";
@@ -155,7 +156,7 @@ export function singleUserEnabled(
   if (asked) return true;
 
   throw new Error(
-    "No identity provider is configured. Set GOOGLE_OAUTH_*, MICROSOFT_OAUTH_* or OKTA_OAUTH_* with BETTER_AUTH_SECRET and BETTER_AUTH_URL, or set OPENBOT_SINGLE_USER=true to run with one administrator and no sign-in. Refusing to start rather than serving a deployment where every visitor is an administrator.",
+    `No identity provider is configured. Set GOOGLE_OAUTH_*, MICROSOFT_OAUTH_* or OKTA_OAUTH_* with BETTER_AUTH_SECRET and BETTER_AUTH_URL, or set ${envName("SINGLE_USER")}=true to run with one administrator and no sign-in. Refusing to start rather than serving a deployment where every visitor is an administrator.`,
   );
 }
 
