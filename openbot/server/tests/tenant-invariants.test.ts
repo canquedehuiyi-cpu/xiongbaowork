@@ -281,12 +281,12 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/team-bots/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 5 },
   // The catalogue sync writes the deployment's own `system` rows (package-declared Bots).
   // M3: the second is `deploymentNameOf`, reading at boot which former package rows the sync keeps.
-  // The platform reads are the connector conflict precheck before the sync's transaction (4a-A1),
-  // `clearDanglingConnectorRefs` after its commit, and `agentConflicts` inside it — the agent
-  // conflict precheck, whose rows are stamped with their owners' tenants and so invisible to the
-  // sync's own `system` frame. Questions about rows stamped by other frames, nothing written in
-  // any of them; the sync refuses with the id before it writes. 用户已批准的补登：前两处在门清单
-  // 建档前就已存在，第三处是本轮产品修复新增的唯一门。
+  // The platform reads are the connector conflict precheck and the agent conflict precheck — both
+  // BEFORE the sync's transaction (4a-A1; the agent read also needs a pooled connection of its own,
+  // which inside the transaction deadlocked against the one the transaction pins) — and
+  // `clearDanglingConnectorRefs` after its commit. All three read rows stamped by other frames and
+  // write nothing in any of them; the sync refuses with the id before it writes. 用户已批准的补登：
+  // 前两处在门清单建档前就已存在（agent 预查从事务内移到事务旁不增减门的数量）。
   "src/tenant-package.ts": {
     'runAsTenant("platform"': 3,
     'runAsTenant("system"': 2,

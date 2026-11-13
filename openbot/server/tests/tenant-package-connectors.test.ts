@@ -252,6 +252,12 @@ describe("connectors in a tenant package", () => {
       // `skill_tools.skill_id` is a real foreign key, so this order is the only one
       // that loads. CI (run 43328257829) failed here with
       // `skill_tools_skill_id_skills_id_fk` when the declaration was written first.
+      // `origin` is `yours`, not `catalogue`: the sync's skill sweep takes back ownerless
+      // catalogue skills a package does not declare ("Mine, or nobody's"), and a package that
+      // declares no skills would cascade this row — and the tool declaration the test
+      // counts — away before the first assertion. An administrator-authored skill is the
+      // shape the sweep leaves alone, so the ref survives v1 and only the connector's
+      // recycle clears it.
       await database.insert(skillTable).values({
         id: `pkg-skill-${suite}`,
         tenantId: SYSTEM_TENANT,
@@ -260,7 +266,7 @@ describe("connectors in a tenant package", () => {
         title: "引用连接器的技能",
         summary: "为悬空 ref 清理而设。",
         instructions: "无关。",
-        origin: "catalogue",
+        origin: "yours",
       });
       await database.insert(skillTools).values({
         skillId: `pkg-skill-${suite}`,

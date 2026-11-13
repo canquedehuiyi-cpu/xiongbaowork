@@ -1231,45 +1231,65 @@ function personalStarterSeed(
  * user-created Bot or a person's own profile on a package coworker is stamped with its owner's
  * tenant, which the sync's `system` frame can neither see nor answer: the upserts below would hit
  * that invisible conflict row and die as a bare 42501 from row-level security before the `!row`
- * fallbacks could refuse. So who holds each declared id is asked once, in the platform frame — the
- * only frame that sees every stamped row — and the sync refuses before anything is written, with
- * the same sentence those fallbacks carry. The constraints and the `setWhere` guards below stay as
- * the backstop behind this read; nothing here writes or returns another frame's rows.
+ * fallbacks could refuse. So who holds each declared id is asked once, in the platform frame —
+ * the only frame that sees every stamped row — and the sync refuses before anything is written,
+ * with the same sentence those fallbacks carry. The constraints and the `setWhere` guards below
+ * stay as the backstop behind this read; nothing here writes or returns another frame's rows.
+ *
+ * Runs OUTSIDE the sync's transaction; its one caller wraps it in `runAsTenant("platform")`. Outside
+ * is where the connector precheck already sits, and for one reason of this suite's own making it is
+ * the only place that works: the transaction pins a pooled connection, and a platform-frame read
+ * needs a second one (`withTenant` reserves it), so asked INSIDE the transaction two concurrent
+ * initializers each pinned their own connection and each waited forever for a third — with the test
+ * pool's two connections that is not a load-dependent hang but every concurrent boot timing out.
+ * Before the transaction nothing has been written, so refusing here still refuses the whole
+ * deployment: nothing to roll back is also nothing half-synchronised.
  */
 async function agentConflicts(
   database: Database,
   /** The agents this sync will write, in declaration order. */
   agents: readonly { id: string }[],
-  /** The package row this sync writes against: a package-owned row is not a conflict. */
-  packageId: string,
+  /**
+   * The package rows whose agents are this sync's own to write: the row this brand synchronized
+   * before (a fresh deployment has none and owns nothing), plus the former ids an upgrade adopts —
+   * the transaction re-stamps those agents as this package's before the seeding, so they are not
+   * conflicts either. Asked inside the transaction the read saw them already re-stamped; naming the
+   * ids here answers the same question before anything has moved.
+   */
+  ownedPackageIds: readonly string[],
 ): Promise<{ agentIdConflicts: string[]; profileIdConflicts: string[] }> {
   const agentIds = agents.map(({ id }) => id);
-  const [canonical, owned] = await runAsTenant("platform", async () =>
-    Promise.all([
-      database
-        .select({ id: agentTable.id })
-        .from(agentTable)
-        .where(
-          and(
-            inArray(agentTable.id, agentIds),
-            // `package_id` is nullable on a row somebody created by hand: SQL `<>` answers UNKNOWN
-            // against NULL, which would let the conflict row slip past this read and blow up as a
-            // bare 42501 at the upsert below anyway. A row no package owns is every package's
-            // collision, which is what the `setWhere` guard answers too.
-            or(isNull(agentTable.packageId), ne(agentTable.packageId, packageId)),
-          ),
+  const unowned =
+    ownedPackageIds.length > 0
+      ? or(
+          isNull(agentTable.packageId),
+          notInArray(agentTable.packageId, [...ownedPackageIds]),
+        )
+      : undefined;
+  const [canonical, owned] = await Promise.all([
+    database
+      .select({ id: agentTable.id })
+      .from(agentTable)
+      .where(
+        and(
+          inArray(agentTable.id, agentIds),
+          // `package_id` is nullable on a row somebody created by hand: SQL `<>` answers UNKNOWN
+          // against NULL, which would let the conflict row slip past this read and blow up as a
+          // bare 42501 at the upsert below anyway. A row no package owns is every package's
+          // collision, which is what the `setWhere` guard answers too.
+          unowned,
         ),
-      database
-        .select({ agentId: agentProfiles.agentId })
-        .from(agentProfiles)
-        .where(
-          and(
-            inArray(agentProfiles.agentId, agentIds),
-            isNotNull(agentProfiles.ownerUserId),
-          ),
+      ),
+    database
+      .select({ agentId: agentProfiles.agentId })
+      .from(agentProfiles)
+      .where(
+        and(
+          inArray(agentProfiles.agentId, agentIds),
+          isNotNull(agentProfiles.ownerUserId),
         ),
-    ]),
-  );
+      ),
+  ]);
   return {
     agentIdConflicts: canonical.map(({ id }) => id),
     profileIdConflicts: owned.map(({ agentId }) => agentId),
@@ -1300,6 +1320,68 @@ export async function synchronizeTenantPackage(
     throw new Error(
       `Tenant package declares connector(s) ${named}, which already exist as servers this package did not add. Remove the connector from connectors.yaml, or delete the existing server on the Plugins page, before this deployment can start.`,
     );
+  }
+  // The bundled-personal shape decides what the sync writes (see `personalStarterSeed`), so both the
+  // precheck below and the seeding inside the transaction read it; computed once, here.
+  const bundledPersonal =
+    resolve(tenantPackage.sourcePath) === PERSONAL_PACKAGE_PATH;
+  /*
+   * A package agent may not fight a row somebody created either (4a-A1). Refused HERE, before the
+   * transaction, beside the connector precheck — the platform frame is the only one that sees rows
+   * stamped with their owners' tenants, and the transaction below pins a pooled connection the read
+   * cannot share (see `agentConflicts` for the deadlock asking inside it produced). Zero writes have
+   * happened, so the refusal is still the whole deployment's.
+   */
+  const agentPrecheck = await runAsTenant("platform", async () => {
+    const relatedPackages = await database
+      .select({
+        id: deploymentPackages.id,
+        tenantId: deploymentPackages.tenantId,
+      })
+      .from(deploymentPackages)
+      .where(
+        tenantPackage.formerTenantIds.length > 0
+          ? inArray(deploymentPackages.tenantId, [
+              tenantPackage.tenantId,
+              ...tenantPackage.formerTenantIds,
+            ])
+          : eq(deploymentPackages.tenantId, tenantPackage.tenantId),
+      );
+    /*
+     * The agents the sync will write, on the seed a fresh boot would lay. Estimated from the rows
+     * just read rather than decided inside the transaction, which the read cannot sit in: a
+     * concurrent initializer can still slip a row in between, and this estimate errs toward the
+     * superset — a fresh seed names the starter id an existing install's does not — so every id the
+     * transaction ends up writing has been checked.
+     */
+    const ownRow = relatedPackages.some(
+      ({ tenantId }) => tenantId === tenantPackage.tenantId,
+    );
+    const formerRow = relatedPackages.some(
+      ({ tenantId }) => tenantId !== tenantPackage.tenantId,
+    );
+    const seeded = bundledPersonal
+      ? personalStarterSeed(tenantPackage, !ownRow && !formerRow)
+      : undefined;
+    const declared = seeded?.agents ?? tenantPackage.agents;
+    return {
+      declared,
+      ...(await agentConflicts(
+        database,
+        declared,
+        relatedPackages.map(({ id }) => id),
+      )),
+    };
+  });
+  for (const agent of agentPrecheck.declared) {
+    if (agentPrecheck.agentIdConflicts.includes(agent.id))
+      throw new Error(
+        `Tenant package agent "${agent.id}" collides with a user-created agent`,
+      );
+    if (agentPrecheck.profileIdConflicts.includes(agent.id))
+      throw new Error(
+        `Tenant package agent "${agent.id}" collides with a user-owned profile`,
+      );
   }
   /*
    * THE CATALOGUE IS WRITTEN IN THE SYSTEM PARTITION, IN THIS FUNCTION'S OWN SCOPE.
@@ -1340,8 +1422,6 @@ export async function synchronizeTenantPackage(
           );
         }
 
-        const bundledPersonal =
-          resolve(tenantPackage.sourcePath) === PERSONAL_PACKAGE_PATH;
         const packageValues = {
           tenantId: tenantPackage.tenantId,
           sourcePath: tenantPackage.sourcePath,
@@ -1424,27 +1504,11 @@ export async function synchronizeTenantPackage(
           : tenantPackage.omittedAgentIds;
 
         /*
-         * Refused here, before any of the seeding writes: an agent id this sync will write that a
-         * user already created, or that already carries a person's own profile, throws the same
-         * sentence the upserts' `!row` fallbacks carry -- see `agentConflicts` for why the read
-         * must be the platform frame. The transaction rolls back, so the deployment comes up
-         * refused rather than half-synchronised.
+         * The agent-id conflicts were refused before this transaction opened (see `agentConflicts`
+         * and the precheck above it): the platform-frame read the refusal needs cannot sit inside
+         * the transaction that pins this connection. The constraints and the upserts' `setWhere`
+         * guards below stay as the backstop behind that precheck.
          */
-        const { agentIdConflicts, profileIdConflicts } = await agentConflicts(
-          database,
-          agents,
-          deploymentPackage.id,
-        );
-        for (const agent of agents) {
-          if (agentIdConflicts.includes(agent.id))
-            throw new Error(
-              `Tenant package agent "${agent.id}" collides with a user-created agent`,
-            );
-          if (profileIdConflicts.includes(agent.id))
-            throw new Error(
-              `Tenant package agent "${agent.id}" collides with a user-owned profile`,
-            );
-        }
 
         if (personal?.picked && !freshPersonal) {
           const { picked } = personal;
@@ -1949,6 +2013,25 @@ export async function synchronizeTenantPackage(
                   notInArray(channelTable.id, declaredChannelIds),
                 ),
               );
+          } else if (!bundledPersonal) {
+            /*
+             * A package that stopped declaring channels entirely still retires the ones it wrote —
+             * an empty declaration is "none", not "leave them": a team or channel the brand dropped
+             * is the same menu entry that opens on nothing, and the sweep above cannot run its set
+             * difference against an empty declaration. The bundled personal package is the exception
+             * its own shape demands: its loader drops the seeded conversation channel from the
+             * declaration on every re-sync (seeded once, kept after), so an empty list there means
+             * keep, and sweeping it would delete an existing installation's conversation out from
+             * under it.
+             */
+            await transaction
+              .delete(channelTable)
+              .where(
+                and(
+                  eq(channelTable.packageId, deploymentPackage.id),
+                  eq(channelTable.tenantId, SYSTEM_TENANT),
+                ),
+              );
           }
         } else {
           /*
@@ -2389,6 +2472,22 @@ export async function synchronizeTenantPackage(
               eq(channelTable.tenantId, userId),
               eq(channelTable.packageId, synced.deploymentPackage.id),
               notInArray(channelTable.id, kept),
+            ),
+          );
+      } else if (!bundledPersonal) {
+        /*
+         * The same empty-declaration rule the catalogue sweep carries: a package that stopped
+         * declaring channels retires this person's copies of the ones it wrote, rather than leaving
+         * a conversation that lists itself and opens on nothing. The bundled personal package's
+         * empty re-sync declaration means keep (its seeded conversation is dropped from the
+         * declaration on purpose), so the sweep stays out of its way here too.
+         */
+        await database
+          .delete(channelTable)
+          .where(
+            and(
+              eq(channelTable.tenantId, userId),
+              eq(channelTable.packageId, synced.deploymentPackage.id),
             ),
           );
       }
