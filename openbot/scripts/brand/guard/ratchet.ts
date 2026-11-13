@@ -47,6 +47,7 @@ export const WORD_LISTS = [
   "runner.json",
   "image-files.json",
   "image-config.json",
+  "image-logs.json",
   "deb.json",
 ];
 

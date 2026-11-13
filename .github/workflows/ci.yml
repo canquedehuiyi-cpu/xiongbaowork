@@ -189,6 +189,41 @@ jobs:
           name: app-logs
           path: ${{ runner.temp }}/*.log
 
+  # Scan what the customer is given (spec 5.1): the built web app, the recorder extension and the
+  # runner sidecar are checked against the word lists in openbot/app/tests/brand-artifacts, and the
+  # rewrite gauge goes into the job summary.
+  brand-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Build the web app
+        run: bun run generate:app-config && bun run --cwd app build
+      - name: Build the extension
+        run: bun run --cwd extension build
+      # Only to have the runner binary to scan below: this is not a package build. It never runs
+      # `tauri build`, so no installer ships from here, no third-party notices are needed, and the
+      # device bundle builds counted in desktop-device/tests/brand-icons.test.ts do not include it.
+      - name: Build the runner sidecar
+        run: |
+          bun desktop-device/scripts/build-sidecar.ts
+      - name: Scan the web app
+        run: bun scripts/brand/scan-artifact.ts --kind web --input app/dist --allowlist app/tests/brand-artifacts/web.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Scan the extension
+        run: bun scripts/brand/scan-artifact.ts --kind extension --input extension/dist --allowlist app/tests/brand-artifacts/extension.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Scan the runner
+        run: bun scripts/brand/scan-artifact.ts --kind runner --input desktop-device/src-tauri/binaries/xiongbao-runner-x86_64-unknown-linux-gnu --allowlist app/tests/brand-artifacts/runner.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Rewrite gauge
+        if: always()
+        run: bun scripts/brand/metrics.ts --base origin/main >> "$GITHUB_STEP_SUMMARY"
+
   # Gate G4: the WakerFlow basic lifecycle in a real browser (the runner's preinstalled Chrome, driven
   # by playwright-core) against the real server on its own PostgreSQL, serving the built app the way
   # the image does. The model is aimock: no secret, no provider call, nothing charged. Generate ->
@@ -335,6 +370,17 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: docker build -f Dockerfile -t openbot:trackb .
+      # Each scan runs to the end and the verdict comes after, so one CI round shows every word list.
+      - name: Brand scan - image files, env, labels
+        id: scan_image
+        continue-on-error: true
+        run: |
+          docker run --rm --entrypoint sh openbot:trackb -c 'find / -xdev \( -path /proc -o -path /sys \) -prune -o -print' > "$RUNNER_TEMP/image-files.txt"
+          docker inspect openbot:trackb > "$RUNNER_TEMP/image-config.json"
+          rc=0
+          bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
+          bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
+          exit "$rc"
       # The s6 oneshot that copies XIONGBAO_* onto OPENBOT_* runs on the host: it only reads and writes files.
       - name: env-aliases oneshot
         run: sh docker/tests/env-aliases.test.sh
@@ -350,6 +396,18 @@ jobs:
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
         run: bash scripts/ci/image-smoke.sh openbot:trackb
+      - name: Brand scan - startup log (words only)
+        id: scan_logs
+        continue-on-error: true
+        run: bun scripts/brand/scan-artifact.ts --kind web --input "$RUNNER_TEMP/delivery-evidence/startup.log" --allowlist app/tests/brand-artifacts/image-logs.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Brand scans verdict
+        if: always()
+        env:
+          IMAGE_SCAN: ${{ steps.scan_image.outcome }}
+          LOG_SCAN: ${{ steps.scan_logs.outcome }}
+        run: |
+          echo "image files/env/labels: $IMAGE_SCAN; startup log: $LOG_SCAN"
+          test "$IMAGE_SCAN" != failure && test "$LOG_SCAN" != failure
       - name: Print container logs (credentials masked)
         if: failure()
         run: |
@@ -851,6 +909,8 @@ jobs:
           grep -Eq 'usr/bin/xiongbao-runner$' <<<"$contents"
           grep -Eq 'usr/bin/agent-desktop$' <<<"$contents"
           sudo dpkg --dry-run -i "$deb"
+      - name: Brand scan - deb listing, fields and contents
+        run: bun scripts/brand/scan-artifact.ts --kind deb --input desktop-device/src-tauri/target/release/bundle/deb/*.deb --allowlist app/tests/brand-artifacts/deb.json --summary "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: xiongbao-device-unsigned-deb
