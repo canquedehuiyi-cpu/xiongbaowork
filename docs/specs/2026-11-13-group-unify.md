@@ -142,6 +142,7 @@ SCIM 停用之后还有一个 `setTimeout(…, 0)` 的善后（`scim.ts:88-112`�
 
 core 的判定顺序：
 1. `FOR UPDATE` 读频道。不是 `team` 或 `created_by` 为 NULL：返回 NULL。
+   - 频道已软删：原样返回 `created_by`，什么都不改。同一个群组可能已经挂着一个新开的聊天（部分唯一索引只管未删的频道），旧聊天的成员不能把群组从新聊天的所有者手里带走；不加这一条，创建者被停用时停用函数会对新旧两个聊天各调一次，群组可能落到旧聊天的成员名下，不再属于它活着的聊天的所有者。应用路径不受影响：退群只认未删的频道，`for-channel` 读不到已删的频道。
 2. `created_by` 是成员并且未停用：返回 `created_by`，什么都不改（幂等）。
 3. 接手人 = 第 1 条规则选出的人（成员、未停用，`ORDER BY created_at, email`）。
 4. 没有接手人：
@@ -233,7 +234,10 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 **Task 3 的窄窗口一并消除**：
 - `reconcile` 读名单仍走注入的 `groupStore`（`T/waker-group-channel-link.integration.test.ts` 的 `a 23505 with the channel still unlinked is thrown as it came` 依赖注入的名单）。
-- 写镜像的事务里，写完后在 owner 帧执行 `select … for share` 重读频道行：读不到就让整个事务回滚；读到了就持有共享锁到提交，退群事务的 `FOR UPDATE` 要等它提交。
+- 写镜像的事务里，先在 owner 帧执行 `select … for share` 重读频道行，再写镜像：读不到，或者锁到的那一行 `created_by` 已不是这一轮的所有者，就让整个事务回滚；读到了就持有共享锁到提交，之后来的退群事务的 `FOR UPDATE` 要等它提交。
+  - 先锁后写：退群事务先锁频道行（`FOR UPDATE`），再由写入函数改群组行。镜像事务若先写镜像（锁群组行）再锁频道行，两边顺序相反，并发时会死锁。
+  - 比对 `created_by`：退群正在进行时 `for share` 会等它提交，重新检查行时 RLS 里的成员判断仍用语句开始时的快照，可能放行；锁到的行是提交后的版本，看它的 `created_by` 才知道是否已经移交。
+  - 名单在事务之前读：读的时候所有者已经离开，`for share` 那条语句的新快照就读不到这一行，窗口照样关上。
 - 重读读不到时，先重新读一次所有者：换人了就在新所有者帧重做一次；没换才记一行 `owner-gone`。一次调用最多记一行。
 - `linkChannel` 和 `adopt` 用带 RLS 的条件 `UPDATE channels` 完成挂接，本来就关着这个窗口。
 

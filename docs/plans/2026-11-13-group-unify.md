@@ -415,7 +415,7 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
 3. `openbot_team_channel_hand_over_core(p_channel_id text) RETURNS text`
    - 属性：`SECURITY DEFINER`，固定 `search_path`；`REVOKE ALL FROM PUBLIC`，不授权。
    - 函数体：
-     1. `SELECT tenant_id, created_by, waker_group_id INTO c FROM channels WHERE id = p_channel_id FOR UPDATE`。没找到、`tenant_id IS DISTINCT FROM 'team'`、或 `created_by IS NULL`，返回 NULL。
+     1. `SELECT tenant_id, created_by, waker_group_id INTO c FROM channels WHERE id = p_channel_id FOR UPDATE`。没找到、`tenant_id IS DISTINCT FROM 'team'`、或 `created_by IS NULL`，返回 NULL。频道已软删（`deleted_at IS NOT NULL`）：返回 `c.created_by`，什么都不改（设计稿 3.1.1 第 4.1 条）。
      2. 定义「在籍」：`EXISTS (SELECT 1 FROM channel_memberships m WHERE m.channel_id = c.id AND m.tenant_id = 'team' AND m.user_id = X) AND NOT EXISTS (SELECT 1 FROM users u JOIN revoked_access r ON r.email = lower(u.email) WHERE u.id = X)`。`created_by` 在籍时返回 `c.created_by`。
      3. `heir := SELECT m.user_id FROM channel_memberships m JOIN users u ON u.id = m.user_id WHERE m.channel_id = c.id AND m.tenant_id = 'team' AND NOT EXISTS (SELECT 1 FROM revoked_access r WHERE r.email = lower(u.email)) ORDER BY m.created_at, u.email LIMIT 1`。不加 `COLLATE`。
      4. `heir IS NULL`：
@@ -475,7 +475,7 @@ export type WakerGroupLink = {
 ```
 - `reconcile`（签名不变）：
   - `truth()` 照旧在事务外经注入的 `groupStore` 读；
-  - 事务里先 `writeMirror`，再 `select 1 from channels where id = $1 for share`（owner 帧）。读不到就抛内部标记，让事务回滚；
+  - 事务里先 `select tenant_id, created_by from channels where id = $1 for share`（owner 帧），再 `writeMirror`。读不到，或锁到的行按 `channelOwner` 已不是这一轮的所有者，就抛内部标记，让事务回滚（先锁后写与退群的加锁顺序一致，免得死锁；比对 `created_by` 见设计稿 3.1.1 第 8 条）；
   - 回滚后重读 `facts`：所有者变了，就在新所有者帧重做一次；没变，就记**一行** `waker-group-owner-gone`，返回 false；
   - 开头的 `ownerSees` 读不到时同样先重读所有者；
   - 一次调用最多一行 `owner-gone`。
@@ -524,7 +524,7 @@ export type WakerGroupLink = {
   - `cards of another tenant or another crew stay put`：alice 另有一条不属于这个群组的运行和卡，bob 自己也有卡 → 都不变。
   - `a name the heir already uses gets （2）, and the chat keeps its title`。
   - `nothing moves while a crew run is still going`：`running` 和 `awaiting_action` 各一次 → 报 `55006`；事务回滚后 alice 仍是成员，`created_by === alice`，运行、卡、模板仍是 alice。
-  - `while the creator is in and active, a member's call changes nothing`：bob 帧调用 → 返回 alice，什么都没变。
+  - `while the creator is in and active, a member's call changes nothing`：群组有一条 `running` 运行时 bob 帧调用 → 返回 alice（不报 55006），什么都没变，群组 `updated_at` 不变。
   - `a stranger is refused the same way whether or not the group exists`：carol 对这个群和一个随机 id 各调一次 → 都报 `42501`，报错文字相同。
   - `the last one out leaves the chat deleted and the crew with them`：
     - 准备：alice 独自一人，删自己的成员行后调函数；
@@ -556,6 +556,7 @@ export type WakerGroupLink = {
     - 断言：接手人是 carol；bob 帧下 `people()` 为空（读不到）。
   - `a deactivated member who did not start the group just leaves it`：停用 carol → carol 不在成员里；`created_by`、群组都不变。
   - `a deactivated creator alone leaves the chat deleted and keeps the crew`：alice 独自一人被停用 → 频道软删，群组仍是 alice，状态 `not_started`（用 `actions.list`）。
+  - `a chat already deleted is not handed over, so the crew stays with whoever owns its new chat`：旧聊天经旧路径软删、群组开了新聊天（只有 alice）后停用 alice → 旧聊天 `created_by` 仍是 alice、群组仍是 alice，新聊天软删。
   - `a running flow does not block a deactivation; the hand-over waits for a heal`：
     - 准备：alice 的群组有一条 `running` 运行，停用 alice；
     - 断言：停用成功（拒绝名单有她）；alice 已离开；`created_by` 仍是 alice；
@@ -581,7 +582,7 @@ export type WakerGroupLink = {
   - `a member who is not the creator leaves the upstream way`。
   - `a hand-over and an addBots at once end consistent`：
     - 操作：`Promise.all([alice 退群, alice addBots(linus)])`；
-    - 断言：`addBots` 要么成功，要么抛 `GroupNotFoundError`；最终群组归 bob，镜像等于 bob 帧的 `runtimeOrder(order(), bots())`。
+    - 断言：`addBots` 要么成功，要么被拒（`GroupNotFoundError`，或退群落在上游 `roster` 与 `creatorOnly` 之间时的 `GroupRefusedError`）；最终群组归 bob，镜像等于 bob 帧的 `runtimeOrder(order(), bots())`。
   - `a reconcile that read the roster before the hand-over follows the new owner and logs no owner-gone`：
     - 准备：注入的 `groupStore.order()` 先等一个闸门，`reconcile` 停在闸门上；
     - 操作：alice 退群（提交），放开闸门；
@@ -615,7 +616,8 @@ export type WakerGroupLink = {
   - **变异验证**（每次只改一处，跑完恢复）：
     - 去掉 `u.email` 次序 → 「same moment」失败；
     - 去掉「排除已停用」→ 「deactivated is skipped」失败；
-    - 去掉 core 第 2 步 → 「a member's call changes nothing」失败；
+    - 去掉 core 第 2 步 → 「a member's call changes nothing」失败（这条用例同时有流程运行中，并断言群组 `updated_at` 不变：去掉第 2 步后接手人就是创建者自己，只有这两处看得出）；
+    - 去掉「已软删不移交」→ 「a chat already deleted is not handed over」失败；
     - 去掉 55006 检查 → 两条「run is still going」失败；
     - 写入函数不搬 `tasks` → 「everything moves」的看板断言失败；
     - 去掉触发器 → 三条停用用例失败；
