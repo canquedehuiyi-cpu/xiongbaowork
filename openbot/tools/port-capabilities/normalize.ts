@@ -29,7 +29,6 @@ import {
   TENANT_SLUG_MAX,
   UNSPECIFIED_LICENSE,
 } from "./mapping";
-import { SourceLayoutError } from "./read-workbuddy";
 import type {
   PluginJson,
   PluginMember,
@@ -39,6 +38,7 @@ import type {
   SkillTier,
   WorkBuddySnapshot,
 } from "./read-workbuddy";
+import { SourceLayoutError } from "./read-workbuddy";
 
 /** Prefix used for every emitted source URL, so the package is not tied to one machine's paths. */
 export const WORKBUDDY_HOME_TOKEN = "~/.workbuddy";
@@ -169,7 +169,12 @@ export interface DroppedItem {
 export type CapabilityKind = "agent" | "skill" | "team" | "connector";
 
 /** Fixed kind order, so `capability-manifest.yaml` sorts the same way every run. */
-export const KIND_ORDER: readonly CapabilityKind[] = ["agent", "skill", "team", "connector"];
+export const KIND_ORDER: readonly CapabilityKind[] = [
+  "agent",
+  "skill",
+  "team",
+  "connector",
+];
 
 /** Everything one normalisation produced. */
 export interface NormalizedCapabilities {
@@ -217,13 +222,20 @@ export const SANITIZED_LOCAL_USER_PATH = "local-user-path";
  * class that allowed CJK would have redacted `canqu，不认 MSYS 路径` — deleting the sentence along with the
  * account name.
  */
-const LOCAL_USER_PATH = /((?:[A-Za-z]:[\\/]|\/[A-Za-z]\/|\/)Users[\\/])([A-Za-z0-9._-]+)/gi;
+const LOCAL_USER_PATH =
+  /((?:[A-Za-z]:[\\/]|\/[A-Za-z]\/|\/)Users[\\/])([A-Za-z0-9._-]+)/gi;
 
 /**
  * Segments that are already placeholders. A source that ships `C:/Users/<user>/...` is correct as written,
  * and replacing `<user>` with `<user>` again would only make the redaction look like it did something.
  */
-const USER_PATH_PLACEHOLDERS: ReadonlySet<string> = new Set(["<user>", "<username>", "~", "$home", "%userprofile%"]);
+const USER_PATH_PLACEHOLDERS: ReadonlySet<string> = new Set([
+  "<user>",
+  "<username>",
+  "~",
+  "$home",
+  "%userprofile%",
+]);
 
 /**
  * Replace the author's home directory name with `<user>`, keeping the rest of the path.
@@ -236,15 +248,21 @@ const USER_PATH_PLACEHOLDERS: ReadonlySet<string> = new Set(["<user>", "<usernam
  * script path) is what makes the instruction useful, so it stays. Already-placeholder text is left alone,
  * which also makes the function idempotent — a second pass over its own output changes nothing.
  */
-export function sanitizeLocalUserPaths(text: string): { text: string; hits: number } {
+export function sanitizeLocalUserPaths(text: string): {
+  text: string;
+  hits: number;
+} {
   let hits = 0;
-  const sanitized = text.replace(LOCAL_USER_PATH, (match: string, prefix: string, name: string) => {
-    if (USER_PATH_PLACEHOLDERS.has(name.toLowerCase())) {
-      return match;
-    }
-    hits += 1;
-    return `${prefix}<user>`;
-  });
+  const sanitized = text.replace(
+    LOCAL_USER_PATH,
+    (match: string, prefix: string, name: string) => {
+      if (USER_PATH_PLACEHOLDERS.has(name.toLowerCase())) {
+        return match;
+      }
+      hits += 1;
+      return `${prefix}<user>`;
+    },
+  );
   return { text: sanitized, hits };
 }
 
@@ -325,7 +343,10 @@ export function kebab(input: string): string {
  * `skillhub` names the channel rather than the author, so the middle segment is what distinguishes it.
  * A plain directory keeps an empty label, meaning "no source suffix unless a conflict forces one".
  */
-export function splitDirectoryName(dirName: string): { base: string; sourceLabel: string } {
+export function splitDirectoryName(dirName: string): {
+  base: string;
+  sourceLabel: string;
+} {
   const parts = dirName.split("__").filter((part) => part !== "");
   if (parts.length === 0) {
     return { base: dirName, sourceLabel: "" };
@@ -338,7 +359,10 @@ export function splitDirectoryName(dirName: string): { base: string; sourceLabel
   if (middle.length === 0 && tail.toLowerCase() === "skillhub") {
     return { base: parts[0], sourceLabel: tail };
   }
-  return { base: parts[0], sourceLabel: middle.length > 0 ? middle.join("-") : tail };
+  return {
+    base: parts[0],
+    sourceLabel: middle.length > 0 ? middle.join("-") : tail,
+  };
 }
 
 /** Collapse whitespace to a single line and cut at `maxLength`, ellipsis included. */
@@ -354,7 +378,9 @@ export function oneLine(text: string, maxLength = 120): string {
 export function readDeclaredTools(data: Record<string, unknown>): string[] {
   const raw = data["allowed-tools"] ?? data.allowed_tools;
   if (Array.isArray(raw)) {
-    return raw.map((entry) => String(entry).trim()).filter((entry) => entry !== "");
+    return raw
+      .map((entry) => String(entry).trim())
+      .filter((entry) => entry !== "");
   }
   const text = asString(raw);
   if (!text) {
@@ -392,7 +418,9 @@ export function isPaidSkill(data: Record<string, unknown>): boolean {
 }
 
 /** Turn `plugin.json`'s author field, of either shape, into an attribution line. */
-function attributionFromAuthor(author: PluginJson["author"]): string | undefined {
+function attributionFromAuthor(
+  author: PluginJson["author"],
+): string | undefined {
   if (typeof author === "string") {
     return asString(author) ? `© ${author.trim()}` : undefined;
   }
@@ -414,7 +442,9 @@ function buildProvenance(input: {
   paid: boolean;
   attribution: string | undefined;
 }): Provenance {
-  const license = input.license?.trim() ? input.license.trim() : UNSPECIFIED_LICENSE;
+  const license = input.license?.trim()
+    ? input.license.trim()
+    : UNSPECIFIED_LICENSE;
   return {
     source: input.source,
     sourceUrl: `${WORKBUDDY_HOME_TOKEN}/${input.relativePath}`,
@@ -434,7 +464,12 @@ function buildProvenance(input: {
  * expert — the pair of things a human would compare before calling them duplicates.
  */
 function agentIdentityFingerprint(pkg: RawExpertPackage): string {
-  const parts = [pkg.pluginJson.text, ...[...pkg.agents].sort((a, b) => a.id.localeCompare(b.id)).map((a) => a.file.text)];
+  const parts = [
+    pkg.pluginJson.text,
+    ...[...pkg.agents]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((a) => a.file.text),
+  ];
   return sha256Hex(parts.join("\u0000"));
 }
 
@@ -454,7 +489,9 @@ export function packageFingerprint(pkg: RawExpertPackage): string {
   const skillParts = [...pkg.skills]
     .sort((a, b) => a.dirName.localeCompare(b.dirName))
     .map((skill) => `${skill.dirName}\u0000${skill.skillMd.text}`);
-  return sha256Hex([agentIdentityFingerprint(pkg), ...skillParts].join("\u0000"));
+  return sha256Hex(
+    [agentIdentityFingerprint(pkg), ...skillParts].join("\u0000"),
+  );
 }
 
 /** Prefer a readable directory name over an opaque download id when both hold the same package. */
@@ -471,7 +508,8 @@ function packageIdentitySlug(pkg: RawExpertPackage): string {
   if (isTeamPackage(plugin)) {
     return kebab(asString(plugin.name) ?? pkg.dirName) || pkg.dirName;
   }
-  const agentId = asString(plugin.agentName) ?? asString(plugin.name) ?? pkg.dirName;
+  const agentId =
+    asString(plugin.agentName) ?? asString(plugin.name) ?? pkg.dirName;
   return kebab(agentId) || kebab(pkg.dirName) || agentId;
 }
 
@@ -521,7 +559,8 @@ function toCandidate(raw: RawSkill, order: number): SkillCandidate {
   const declaredName = asString(frontmatter.data.name);
   const nameSlug = kebab(declaredName ?? dirNameParts.base);
   const dirSlug = directorySlug(raw.dirName) || nameSlug;
-  const baseSlug = nameSlug || kebab(dirNameParts.base) || dirSlug || "unnamed-skill";
+  const baseSlug =
+    nameSlug || kebab(dirNameParts.base) || dirSlug || "unnamed-skill";
   return {
     raw,
     data: frontmatter.data,
@@ -559,7 +598,10 @@ export function ensureTenantSlug(slug: string, seed: string): string {
   if (isTenantSlug(slug)) {
     return slug;
   }
-  const cleaned = slug.replace(/[^a-z0-9-]+/g, "-").replace(/-{3,}/g, "--").replace(/^-+|-+$/g, "");
+  const cleaned = slug
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-{3,}/g, "--")
+    .replace(/^-+|-+$/g, "");
   if (isTenantSlug(cleaned)) {
     return cleaned;
   }
@@ -570,7 +612,11 @@ export function ensureTenantSlug(slug: string, seed: string): string {
 function skillTitle(candidate: SkillCandidate): string {
   const displayName = localizedText(candidate.data.display_name);
   const declaredName = asString(candidate.data.name);
-  return displayName ?? declaredName ?? splitDirectoryName(candidate.raw.dirName).base;
+  return (
+    displayName ??
+    declaredName ??
+    splitDirectoryName(candidate.raw.dirName).base
+  );
 }
 
 /** First meaningful prose line of a `SKILL.md` body, ignoring markdown furniture. */
@@ -609,7 +655,10 @@ function frontmatterVersion(data: Record<string, unknown>): string | undefined {
 }
 
 /** Build the provenance for one skill candidate. */
-function skillProvenance(candidate: SkillCandidate, packageLicense: string | undefined): Provenance {
+function skillProvenance(
+  candidate: SkillCandidate,
+  packageLicense: string | undefined,
+): Provenance {
   const version = frontmatterVersion(candidate.data);
   const source =
     candidate.tier === "package"
@@ -623,7 +672,9 @@ function skillProvenance(candidate: SkillCandidate, packageLicense: string | und
     checksum: candidate.checksum,
     license: asString(candidate.data.license) ?? packageLicense,
     paid: isPaidSkill(candidate.data),
-    attribution: attributionFromAuthor(candidate.data.author as PluginJson["author"]),
+    attribution: attributionFromAuthor(
+      candidate.data.author as PluginJson["author"],
+    ),
   });
 }
 
@@ -644,7 +695,12 @@ function droppedAttachments(raw: RawSkill): string[] {
  * - `hashed` — the last resort: {@link shortenSlug}. It has never fired on real input; if it does, the
  *   input changed rather than the rules, and the hash is the receipt.
  */
-export type SlugSource = "raw" | "dechannel" | "package_prefix" | "bare" | "hashed";
+export type SlugSource =
+  | "raw"
+  | "dechannel"
+  | "package_prefix"
+  | "bare"
+  | "hashed";
 
 /** A slug and the rule that produced it. */
 interface SlugAssignment {
@@ -714,19 +770,29 @@ function resolveSlugs(candidates: SkillCandidate[]): {
   const nameClaims = new Map<string, number>();
   for (const candidate of candidates) {
     if (candidate.tier === "user") {
-      nameClaims.set(candidate.nameSlug, (nameClaims.get(candidate.nameSlug) ?? 0) + 1);
+      nameClaims.set(
+        candidate.nameSlug,
+        (nameClaims.get(candidate.nameSlug) ?? 0) + 1,
+      );
     }
   }
 
   const ordered = [...candidates].sort(
-    (a, b) => tierRank(a.tier) - tierRank(b.tier) || a.raw.dirName.localeCompare(b.raw.dirName) || a.order - b.order,
+    (a, b) =>
+      tierRank(a.tier) - tierRank(b.tier) ||
+      a.raw.dirName.localeCompare(b.raw.dirName) ||
+      a.order - b.order,
   );
   const taken = new Set<string>();
   for (const candidate of ordered) {
     const seed = slugSeed(candidate);
     const prefixed =
-      candidate.tier === "package" ? `${directorySlug(candidate.packageDirName ?? "")}--${candidate.dirSlug}` : null;
-    const named = candidate.tier === "user" && (nameClaims.get(candidate.nameSlug) ?? 0) === 1;
+      candidate.tier === "package"
+        ? `${directorySlug(candidate.packageDirName ?? "")}--${candidate.dirSlug}`
+        : null;
+    const named =
+      candidate.tier === "user" &&
+      (nameClaims.get(candidate.nameSlug) ?? 0) === 1;
 
     let assignment: SlugAssignment;
     if (named) {
@@ -737,7 +803,10 @@ function resolveSlugs(candidates: SkillCandidate[]): {
       // practice length is the only case that lands here.
       assignment = isTenantSlug(candidate.nameSlug)
         ? { slug: candidate.nameSlug, source: "raw" }
-        : { slug: ensureTenantSlug(candidate.nameSlug, seed), source: "hashed" };
+        : {
+            slug: ensureTenantSlug(candidate.nameSlug, seed),
+            source: "hashed",
+          };
     } else if (prefixed !== null && isTenantSlug(prefixed)) {
       assignment = { slug: prefixed, source: "package_prefix" };
     } else if (isTenantSlug(candidate.dirSlug)) {
@@ -749,15 +818,24 @@ function resolveSlugs(candidates: SkillCandidate[]): {
         source: candidate.tier === "package" ? "bare" : "dechannel",
       };
     } else {
-      assignment = { slug: ensureTenantSlug(candidate.dirSlug, seed), source: "hashed" };
+      assignment = {
+        slug: ensureTenantSlug(candidate.dirSlug, seed),
+        source: "hashed",
+      };
     }
 
     // Uniqueness is the last word: two sources must never share one slug, whatever the rules produced.
     if (taken.has(assignment.slug)) {
-      assignment = { slug: shortenSlug(assignment.slug, seed), source: "hashed" };
+      assignment = {
+        slug: shortenSlug(assignment.slug, seed),
+        source: "hashed",
+      };
       let index = 2;
       while (taken.has(assignment.slug)) {
-        assignment = { slug: shortenSlug(`${assignment.slug}-${index}`, `${seed}#${index}`), source: "hashed" };
+        assignment = {
+          slug: shortenSlug(`${assignment.slug}-${index}`, `${seed}#${index}`),
+          source: "hashed",
+        };
         index += 1;
       }
     }
@@ -799,7 +877,9 @@ function packageMembers(plugin: PluginJson): PluginMember[] {
   }
   const fromTeamInfo = plugin.teamInfo?.memberAgents ?? [];
   const leadId = plugin.teamInfo?.leadAgent;
-  const ids = leadId ? [leadId, ...fromTeamInfo.filter((id) => id !== leadId)] : [...fromTeamInfo];
+  const ids = leadId
+    ? [leadId, ...fromTeamInfo.filter((id) => id !== leadId)]
+    : [...fromTeamInfo];
   return ids.map((id) => ({ id, role: id === leadId ? "lead" : "member" }));
 }
 
@@ -812,9 +892,15 @@ export function isTeamPackage(plugin: PluginJson): boolean {
 }
 
 /** The prompt text appended to a team lead's persona, naming every member and the handoff rule. */
-export function buildTeamSection(teamName: string, members: NormalizedTeamMember[], leadId: string): string {
+export function buildTeamSection(
+  teamName: string,
+  members: NormalizedTeamMember[],
+  leadId: string,
+): string {
   const others = members.filter((member) => member.id !== leadId);
-  const rows = others.map((member) => `- ${member.id}（${member.name}，${member.title}）`);
+  const rows = others.map(
+    (member) => `- ${member.id}（${member.name}，${member.title}）`,
+  );
   return [
     "",
     "## 你的团队",
@@ -830,8 +916,18 @@ export function buildTeamSection(teamName: string, members: NormalizedTeamMember
 }
 
 /** Build a metadata-derived prompt when a package lists an agent whose `.md` is missing. */
-function fallbackPrompt(name: string, title: string, roleDescription: string): string {
-  return [`# ${name}`, "", `你是${name}，岗位是${title}。`, "", roleDescription].join("\n");
+function fallbackPrompt(
+  name: string,
+  title: string,
+  roleDescription: string,
+): string {
+  return [
+    `# ${name}`,
+    "",
+    `你是${name}，岗位是${title}。`,
+    "",
+    roleDescription,
+  ].join("\n");
 }
 
 /** Assemble the normalised skill list, its provenance, and the package→skill slug map agents need. */
@@ -887,7 +983,8 @@ function normalizeSkills(
       if (tierDelta !== 0) {
         return tierDelta;
       }
-      const readable = readabilityRank(a.raw.dirName) - readabilityRank(b.raw.dirName);
+      const readable =
+        readabilityRank(a.raw.dirName) - readabilityRank(b.raw.dirName);
       if (readable !== 0) {
         return readable;
       }
@@ -923,7 +1020,10 @@ function normalizeSkills(
   const skills: NormalizedSkill[] = [];
   const slugBySkillPath = new Map<string, string>();
   for (const candidate of survivors) {
-    const assignment = assignments.get(candidate) ?? { slug: candidate.baseSlug, source: "raw" as SlugSource };
+    const assignment = assignments.get(candidate) ?? {
+      slug: candidate.baseSlug,
+      source: "raw" as SlugSource,
+    };
     const slug = assignment.slug;
     // A `SKILL.md` with an empty body is a broken source, not a skill with no content: shipped, it
     // becomes a capability whose `instructions` are zero bytes, which reads downstream as "the model
@@ -970,7 +1070,9 @@ function normalizeSkills(
     }
   }
 
-  for (const [packageDirName, raws] of [...droppedPackageSkills.entries()].sort()) {
+  for (const [packageDirName, raws] of [
+    ...droppedPackageSkills.entries(),
+  ].sort()) {
     for (const raw of raws) {
       dropped.push({
         kind: "skill",
@@ -1009,10 +1111,17 @@ function normalizePackage(
       paid: false,
       attribution: packageAttribution,
     });
-  const promptFor = (id: string, name: string, title: string, roleDescription: string): string => {
+  const promptFor = (
+    id: string,
+    name: string,
+    title: string,
+    roleDescription: string,
+  ): string => {
     const doc = agentDocById.get(id);
     if (!doc) {
-      warnings.push(`${pkg.dirName}: 成员 ${id} 没有 agents/${id}.md，system_prompt 用元数据兜底`);
+      warnings.push(
+        `${pkg.dirName}: 成员 ${id} 没有 agents/${id}.md，system_prompt 用元数据兜底`,
+      );
       return fallbackPrompt(name, title, roleDescription);
     }
     const { body } = splitFrontmatter(doc.file.text);
@@ -1020,12 +1129,15 @@ function normalizePackage(
   };
 
   if (!isTeamPackage(plugin)) {
-    const agentId = asString(plugin.agentName) ?? asString(plugin.name) ?? pkg.dirName;
+    const agentId =
+      asString(plugin.agentName) ?? asString(plugin.name) ?? pkg.dirName;
     const name = localizedText(plugin.displayName) ?? agentId;
     const title = localizedText(plugin.profession) ?? "";
     const roleDescription =
       localizedText(plugin.displayDescription) ??
-      (title === "" ? `${name} 是 WorkBuddy 专家市场里的独立专家。` : `${name} 是${title}。`);
+      (title === ""
+        ? `${name} 是 WorkBuddy 专家市场里的独立专家。`
+        : `${name} 是${title}。`);
     const doc = agentDocById.get(agentId);
     const provenance = provenanceFor(
       doc?.file.relativePath ?? pkg.pluginJson.relativePath,
@@ -1052,9 +1164,13 @@ function normalizePackage(
     };
   }
 
-  const teamId = kebab(asString(plugin.name) ?? pkg.dirName) || kebab(pkg.dirName);
+  const teamId =
+    kebab(asString(plugin.name) ?? pkg.dirName) || kebab(pkg.dirName);
   const teamName =
-    TEAM_NAME_OVERRIDES[teamId] ?? localizedText(plugin.displayName) ?? asString(plugin.name) ?? pkg.dirName;
+    TEAM_NAME_OVERRIDES[teamId] ??
+    localizedText(plugin.displayName) ??
+    asString(plugin.name) ??
+    pkg.dirName;
   const members = packageMembers(plugin);
   const leadId =
     asString(plugin.teamInfo?.leadAgent) ??
@@ -1074,13 +1190,23 @@ function normalizePackage(
   // by the normalized value silently misses the document and the persona degrades to metadata. Keep the
   // original id for every document/provenance lookup; the normalized id is output-only.
   const originalIdOfMember = new Map(
-    members.map((member) => [kebab(member.id) || member.id, member.id] as const),
+    members.map(
+      (member) => [kebab(member.id) || member.id, member.id] as const,
+    ),
   );
   const normalizedLeadId = kebab(leadId) || leadId;
   const teamDescription =
-    asString(plugin.description) ?? localizedText(plugin.displayDescription) ?? `${teamName}（WorkBuddy 专家团）`;
-  const leadMember = normalizedMembers.find((member) => member.id === normalizedLeadId);
-  const teamSection = buildTeamSection(teamName, normalizedMembers, normalizedLeadId);
+    asString(plugin.description) ??
+    localizedText(plugin.displayDescription) ??
+    `${teamName}（WorkBuddy 专家团）`;
+  const leadMember = normalizedMembers.find(
+    (member) => member.id === normalizedLeadId,
+  );
+  const teamSection = buildTeamSection(
+    teamName,
+    normalizedMembers,
+    normalizedLeadId,
+  );
 
   const agents: NormalizedAgent[] = normalizedMembers.map((member) => {
     const isLead = member.id === normalizedLeadId;
@@ -1088,7 +1214,12 @@ function normalizePackage(
       ? `${teamName}的负责人，负责调度与交付。专业方向：${member.title}。`
       : `${teamName}成员。专业方向：${member.title}。团队角色：${member.role}。`;
     const originalId = originalIdOfMember.get(member.id) ?? member.id;
-    const prompt = promptFor(originalId, member.name, member.title, roleDescription);
+    const prompt = promptFor(
+      originalId,
+      member.name,
+      member.title,
+      roleDescription,
+    );
     const doc = agentDocById.get(originalId);
     return {
       id: member.id,
@@ -1119,37 +1250,81 @@ function normalizePackage(
     address: [
       {
         from: normalizedLeadId,
-        to: normalizedMembers.filter((member) => member.id !== normalizedLeadId).map((member) => member.id),
+        to: normalizedMembers
+          .filter((member) => member.id !== normalizedLeadId)
+          .map((member) => member.id),
       },
     ],
-    provenance: provenanceFor(pkg.pluginJson.relativePath, sha256Hex(pkg.pluginJson.text)),
+    provenance: provenanceFor(
+      pkg.pluginJson.relativePath,
+      sha256Hex(pkg.pluginJson.text),
+    ),
   };
   if (!leadMember) {
-    warnings.push(`${pkg.dirName}: 团队负责人 ${normalizedLeadId} 不在 members[] 里`);
+    warnings.push(
+      `${pkg.dirName}: 团队负责人 ${normalizedLeadId} 不在 members[] 里`,
+    );
   }
   return { agents, team };
 }
 
-/** Build one connector, resolving `host` from `url` instead of trusting a copied field. */
-function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): NormalizedConnector {
+/** Build one connector, resolving `host` from `url` instead of trusting a copied field.
+ *
+ * `survey` is the L1 full-marketplace mode (`--connectors=all`): a connector with no reviewed preset in
+ * `mapping.ts` gets a survey fallback instead of a refusal — vendor and title from its own catalogue
+ * row, `auth` mapped from the row's `auth_mode` and `unknown` whenever it does not map (§4a-4: 推导不出
+ * 的写 unknown，不猜), `credentialEnv` from the standard derivation. The reviewed presets stay the only
+ * path an L0 brand package can take: the default (`survey: false`) still refuses, because a preset is
+ * a human decision and a missing one must be filled in, not improvised.
+ */
+function normalizeConnector(
+  raw: RawConnector,
+  dropped: DroppedItem[],
+  survey = false,
+): NormalizedConnector | null {
   const preset = CONNECTOR_PRESETS[raw.id];
-  if (!preset) {
+  if (!preset && !survey) {
     throw new Error(
       `connector ${raw.id} has no preset in mapping.ts: add vendor/auth/credentialEnv before porting it`,
     );
   }
+  const vendor =
+    preset?.vendor ??
+    raw.marketplace?.name ??
+    raw.marketplace?.nameEn ??
+    raw.id;
+  const auth =
+    preset?.auth ??
+    openbotAuthFor(raw.marketplace?.authMode ?? "") ??
+    "unknown";
+  const credentialEnv = preset?.credentialEnv || deriveCredentialEnv(raw.id);
   const url = raw.server.url;
   if (!url) {
-    throw new Error(`connector ${raw.id} has no url; only remote MCP servers are portable`);
+    throw new Error(
+      `connector ${raw.id} has no url; only remote MCP servers are portable`,
+    );
   }
   let host: string;
   try {
     host = new URL(url).host;
   } catch {
+    // Survey mode reads the whole marketplace, so one connector whose url is a shell-style template
+    // (measured: tdengine ships `${SCHEMA}://${HOST}:…`) must be dropped with a reason rather than
+    // stop the survey. L0 keeps the hard throw — a preset-approved connector with a bad url is a bug.
+    if (survey) {
+      dropped.push({
+        kind: "connector",
+        slug: raw.id,
+        origin: raw.mcpJson.relativePath,
+        reason: `mcp.json 的 url 不是可解析的端点（疑似模板变量）：${url}`,
+      });
+      return null;
+    }
     throw new Error(`connector ${raw.id} has an unparsable url: ${url}`);
   }
   const connectorDropped: string[] = raw.attachedSkillPaths.map(
-    (path) => `${path}（连接器自带的安装说明，openbot 侧由 connectors.yaml 直接声明，不移植）`,
+    (path) =>
+      `${path}（连接器自带的安装说明，openbot 侧由 connectors.yaml 直接声明，不移植）`,
   );
   const connectorDir = raw.mcpJson.relativePath.replace(/\/mcp\.json$/, "");
   for (const path of raw.attachedSkillPaths) {
@@ -1165,7 +1340,7 @@ function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): Normaliz
   // that the platform used to hold it has to be written down where a reviewer will see it.
   const marketAuthMode = raw.marketplace?.authMode;
   if (marketAuthMode !== undefined && openbotAuthFor(marketAuthMode) === null) {
-    const note = `WorkBuddy auth_mode=${marketAuthMode} 无 openbot 等价物（平台代持凭证），本包按 ${preset.auth} 声明，凭证需自行提供`;
+    const note = `WorkBuddy auth_mode=${marketAuthMode} 无 openbot 等价物（平台代持凭证），本包按 ${auth} 声明，凭证需自行提供`;
     connectorDropped.push(note);
     dropped.push({
       kind: "connector",
@@ -1185,11 +1360,11 @@ function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): Normaliz
   return {
     id: raw.id,
     title: raw.marketplace?.name ?? raw.marketplace?.nameEn ?? raw.id,
-    vendor: preset.vendor,
+    vendor,
     url,
     host,
-    auth: preset.auth,
-    credentialEnv: preset.credentialEnv || deriveCredentialEnv(raw.id),
+    auth,
+    credentialEnv,
     dropped: connectorDropped,
     provenance: buildProvenance({
       source: `workbuddy connector-marketplace:${raw.id}`,
@@ -1211,7 +1386,10 @@ function normalizeConnector(raw: RawConnector, dropped: DroppedItem[]): Normaliz
  * does not present its skills as conflict candidates; slugs are resolved before agents are built,
  * because an agent's `skills[]` holds the resolved slugs.
  */
-export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCapabilities {
+export function normalizeCapabilities(
+  snapshot: WorkBuddySnapshot,
+  options: { connectorSurvey?: boolean } = {},
+): NormalizedCapabilities {
   const warnings: string[] = [];
   const dropped: DroppedItem[] = [];
 
@@ -1275,7 +1453,10 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
       byAgentIdentity.set(identity, [pkg]);
     }
   }
-  const rankPackageDirs = (a: RawExpertPackage, b: RawExpertPackage): number => {
+  const rankPackageDirs = (
+    a: RawExpertPackage,
+    b: RawExpertPackage,
+  ): number => {
     const readable = readabilityRank(a.dirName) - readabilityRank(b.dirName);
     if (readable !== 0) {
       return readable;
@@ -1306,7 +1487,12 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
 
   // Step 2: skills, including slug conflict resolution. Twin downloads contribute their skills too,
   // so differing payloads are compared at the content level instead of being discarded.
-  const skillResult = normalizeSkills(agentPackages, snapshot.userSkills, droppedPackageSkills, twinPackages);
+  const skillResult = normalizeSkills(
+    agentPackages,
+    snapshot.userSkills,
+    droppedPackageSkills,
+    twinPackages,
+  );
   dropped.push(...skillResult.dropped);
 
   // Step 3: agents and teams, which need the resolved skill slugs. Twin downloads emit nothing here:
@@ -1326,10 +1512,20 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
     // manifest row a reviewer is looking at is the row that says what vanished beside it.
     for (const item of packageDrops.get(pkg.dirName) ?? []) {
       for (const agent of built.agents) {
-        dropped.push({ kind: "agent", slug: agent.id, origin: item.origin, reason: item.reason });
+        dropped.push({
+          kind: "agent",
+          slug: agent.id,
+          origin: item.origin,
+          reason: item.reason,
+        });
       }
       if (built.team) {
-        dropped.push({ kind: "team", slug: built.team.id, origin: item.origin, reason: item.reason });
+        dropped.push({
+          kind: "team",
+          slug: built.team.id,
+          origin: item.origin,
+          reason: item.reason,
+        });
       }
     }
   }
@@ -1346,7 +1542,14 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
       });
       continue;
     }
-    connectors.push(normalizeConnector(raw, dropped));
+    const connector = normalizeConnector(
+      raw,
+      dropped,
+      options.connectorSurvey === true,
+    );
+    if (connector !== null) {
+      connectors.push(connector);
+    }
   }
 
   // Step 5: uniqueness. An agent id is a primary key in openbot, so a clash must stop the run.
@@ -1368,7 +1571,11 @@ export function normalizeCapabilities(snapshot: WorkBuddySnapshot): NormalizedCa
   agents.sort((a, b) => a.id.localeCompare(b.id));
   teams.sort((a, b) => a.id.localeCompare(b.id));
   connectors.sort((a, b) => a.id.localeCompare(b.id));
-  dropped.sort((a, b) => `${a.kind}:${a.slug}:${a.origin}`.localeCompare(`${b.kind}:${b.slug}:${b.origin}`));
+  dropped.sort((a, b) =>
+    `${a.kind}:${a.slug}:${a.origin}`.localeCompare(
+      `${b.kind}:${b.slug}:${b.origin}`,
+    ),
+  );
 
   // Step 6: redaction, after every body has been assembled and before anything leaves this function.
   // Instruction text ships to customers verbatim, and several sources quote the author's own machine.

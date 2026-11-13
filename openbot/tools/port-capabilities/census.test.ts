@@ -20,10 +20,13 @@ import {
   assertCensusConsistent,
   buildCensus,
   type Census,
-  type CensusRow,
   CensusError,
+  type CensusRow,
   formatCensusCounts,
+  formatCensusTiers,
   judgeConnector,
+  judgeReasonCode,
+  judgeTier,
   mapAuthMode,
   renderCensus,
 } from "./census";
@@ -38,7 +41,11 @@ function write(relativePath: string, content: string): void {
 }
 
 /** One catalogue row, with only the fields the survey reads. */
-function catalogueRow(id: string, type: string | undefined, authMode: string | undefined): Record<string, unknown> {
+function catalogueRow(
+  id: string,
+  type: string | undefined,
+  authMode: string | undefined,
+): Record<string, unknown> {
   const row: Record<string, unknown> = { id, name: id };
   if (type !== undefined) {
     row.type = type;
@@ -70,31 +77,47 @@ function writeFixture(): void {
   );
   write(
     "connectors-marketplace/connectors/remote-open/mcp.json",
-    JSON.stringify({ mcpServers: { "remote-open": { url: "https://example.test/mcp" } } }),
+    JSON.stringify({
+      mcpServers: { "remote-open": { url: "https://example.test/mcp" } },
+    }),
   );
   write(
     "connectors-marketplace/connectors/remote-token/mcp.json",
-    JSON.stringify({ mcpServers: { "remote-token": { url: "https://example.test/token" } } }),
+    JSON.stringify({
+      mcpServers: { "remote-token": { url: "https://example.test/token" } },
+    }),
   );
   write(
     "connectors-marketplace/connectors/remote-oneid/mcp.json",
-    JSON.stringify({ mcpServers: { "remote-oneid": { url: "https://example.test/oneid" } } }),
+    JSON.stringify({
+      mcpServers: { "remote-oneid": { url: "https://example.test/oneid" } },
+    }),
   );
   write(
     "connectors-marketplace/connectors/remote-server-side/mcp.json",
-    JSON.stringify({ mcpServers: { "remote-server-side": { url: "https://example.test/ss" } } }),
+    JSON.stringify({
+      mcpServers: { "remote-server-side": { url: "https://example.test/ss" } },
+    }),
   );
   write(
     "connectors-marketplace/connectors/remote-bare/mcp.json",
-    JSON.stringify({ mcpServers: { "remote-bare": { url: "https://example.test/bare" } } }),
+    JSON.stringify({
+      mcpServers: { "remote-bare": { url: "https://example.test/bare" } },
+    }),
   );
   write(
     "connectors-marketplace/connectors/remote-anomaly/mcp.json",
-    JSON.stringify({ mcpServers: { "remote-anomaly": { url: "https://example.test/anomaly" } } }),
+    JSON.stringify({
+      mcpServers: { "remote-anomaly": { url: "https://example.test/anomaly" } },
+    }),
   );
   write(
     "connectors-marketplace/connectors/local-stdio/mcp.json",
-    JSON.stringify({ mcpServers: { "local-stdio": { command: "npx", args: ["-y", "some-server"] } } }),
+    JSON.stringify({
+      mcpServers: {
+        "local-stdio": { command: "npx", args: ["-y", "some-server"] },
+      },
+    }),
   );
   write(
     "connectors-marketplace/connectors/cli-only/cli.json",
@@ -103,7 +126,10 @@ function writeFixture(): void {
   // remote-bom 的 mcp.json 带 UTF-8 BOM：JSON.parse 拒绝 BOM，剥掉之前会被误判成无法解析的 stdio。
   write(
     "connectors-marketplace/connectors/remote-bom/mcp.json",
-    BOM + JSON.stringify({ mcpServers: { "remote-bom": { url: "https://example.test/bom" } } }),
+    BOM +
+      JSON.stringify({
+        mcpServers: { "remote-bom": { url: "https://example.test/bom" } },
+      }),
   );
   // `orphan` deliberately has no directory: the index claims a connector the disk does not have.
 }
@@ -129,7 +155,9 @@ function row(id: string): CensusRow {
 describe("auth_mode mapping", () => {
   test("every mapping in the table is one of openbot's three models or the explicit unknown", () => {
     for (const [raw, mapped] of Object.entries(AUTH_MODE_MAP)) {
-      expect(["none", "user-oauth", "deployment-bearer", "unknown"]).toContain(mapped);
+      expect(["none", "user-oauth", "deployment-bearer", "unknown"]).toContain(
+        mapped,
+      );
       // `tenant-credential` is the name this repo used to invent; it must not come back as a second name
       // for the same concept.
       expect(raw).not.toBe("tenant-credential");
@@ -175,7 +203,9 @@ describe("transport is decided by the files, not by the index", () => {
   });
 
   test("the directory cell points at the spec file, and never at an absolute path", () => {
-    expect(row("remote-open").directory).toBe("connectors/remote-open/mcp.json");
+    expect(row("remote-open").directory).toBe(
+      "connectors/remote-open/mcp.json",
+    );
     expect(row("cli-only").directory).toBe("connectors/cli-only/cli.json");
     expect(row("orphan").directory).toContain("connectors/orphan");
     for (const entry of census.rows) {
@@ -217,8 +247,18 @@ describe("verdict", () => {
   });
 
   test("judgeConnector is total: every transport yields one of the three levels", () => {
-    for (const transport of ["mcp-url", "mcp-command", "cli", "missing"] as const) {
-      for (const auth of ["none", "user-oauth", "deployment-bearer", "unknown"] as const) {
+    for (const transport of [
+      "mcp-url",
+      "mcp-command",
+      "cli",
+      "missing",
+    ] as const) {
+      for (const auth of [
+        "none",
+        "user-oauth",
+        "deployment-bearer",
+        "unknown",
+      ] as const) {
         const { verdict, reason } = judgeConnector(transport, auth);
         expect(["full", "degraded", "blocked"]).toContain(verdict);
         expect(reason.length).toBeGreaterThan(0);
@@ -230,10 +270,14 @@ describe("verdict", () => {
 describe("counts", () => {
   test("the cross table and the summary are both tallied from the same rows", () => {
     expect(census.counts.total).toBe(census.rows.length);
-    expect(census.counts.by_verdict.full + census.counts.by_verdict.degraded + census.counts.by_verdict.blocked).toBe(
-      census.counts.total,
-    );
-    expect(census.cross_table.reduce((sum, bucket) => sum + bucket.total, 0)).toBe(census.counts.total);
+    expect(
+      census.counts.by_verdict.full +
+        census.counts.by_verdict.degraded +
+        census.counts.by_verdict.blocked,
+    ).toBe(census.counts.total);
+    expect(
+      census.cross_table.reduce((sum, bucket) => sum + bucket.total, 0),
+    ).toBe(census.counts.total);
   });
 
   test("a summary that disagrees with its rows is a hard failure", () => {
@@ -241,7 +285,13 @@ describe("counts", () => {
     // no report, because it is believed.
     const tampered: Census = {
       ...census,
-      counts: { ...census.counts, by_verdict: { ...census.counts.by_verdict, blocked: census.counts.by_verdict.blocked - 1 } },
+      counts: {
+        ...census.counts,
+        by_verdict: {
+          ...census.counts.by_verdict,
+          blocked: census.counts.by_verdict.blocked - 1,
+        },
+      },
     };
     expect(() => assertCensusConsistent(tampered)).toThrow(CensusError);
   });
@@ -257,7 +307,9 @@ describe("counts", () => {
   });
 
   test("the summary line names all three levels", () => {
-    expect(formatCensusCounts(census)).toMatch(/^full \d+ \/ degraded \d+ \/ blocked \d+$/);
+    expect(formatCensusCounts(census)).toMatch(
+      /^full \d+ \/ degraded \d+ \/ blocked \d+$/,
+    );
   });
 });
 
@@ -272,19 +324,167 @@ describe("renderCensus", () => {
   });
 
   test("the header says what generated_at means, because it is not the run time", () => {
-    expect(renderCensus(census)).toContain("generated_at 取清单文件自身的写入时间");
+    expect(renderCensus(census)).toContain(
+      "generated_at 取清单文件自身的写入时间",
+    );
   });
 
   test("the checksum changes when the catalogue changes", () => {
-    write("connectors-marketplace/connectors/extra/mcp.json", JSON.stringify({ url: "https://example.test/x" }));
+    write(
+      "connectors-marketplace/connectors/extra/mcp.json",
+      JSON.stringify({ url: "https://example.test/x" }),
+    );
     write(
       "connectors-marketplace/.codebuddy-connector/connectors.json",
-      JSON.stringify({ connectors: [...JSON.parse(JSON.stringify(census.rows)), catalogueRow("extra", "mcp", "token")] }),
+      JSON.stringify({
+        connectors: [
+          ...JSON.parse(JSON.stringify(census.rows)),
+          catalogueRow("extra", "mcp", "token"),
+        ],
+      }),
     );
     const changed = buildCensus(root);
-    expect(changed.source_index_checksum).not.toBe(census.source_index_checksum);
+    expect(changed.source_index_checksum).not.toBe(
+      census.source_index_checksum,
+    );
     expect(changed.counts.total).toBe(census.counts.total + 1);
     // Restore the fixture so the order of the file's tests cannot matter.
     writeFixture();
+  });
+});
+
+describe("the §4a-3 three tiers", () => {
+  test("a remote endpoint with a self-serviceable credential model is tier A with reason ok", () => {
+    expect(row("remote-open")).toMatchObject({ tier: "A", reason_code: "ok" });
+    expect(row("remote-token")).toMatchObject({ tier: "A", reason_code: "ok" });
+    expect(row("remote-oneid")).toMatchObject({ tier: "A", reason_code: "ok" });
+    // auth_mode "mcp" is unmapped, but it is still an endpoint with a bringable credential: tier A.
+    expect(row("remote-anomaly")).toMatchObject({
+      tier: "A",
+      reason_code: "ok",
+    });
+  });
+
+  test("an absent auth_mode on a remote endpoint is tier A but auth-undeclared, never folded into ok", () => {
+    expect(row("remote-bare")).toMatchObject({
+      tier: "A",
+      reason_code: "auth-undeclared",
+    });
+  });
+
+  test("server-side is tier B with its own reason code, not blocked and not silently usable", () => {
+    expect(row("remote-server-side")).toMatchObject({
+      tier: "B",
+      reason_code: "platform-held-credential",
+    });
+  });
+
+  test("anything without a remote endpoint is tier C, whichever transport shape it takes", () => {
+    expect(row("local-stdio")).toMatchObject({
+      tier: "C",
+      reason_code: "no-remote-endpoint",
+    });
+    expect(row("cli-only")).toMatchObject({
+      tier: "C",
+      reason_code: "no-remote-endpoint",
+    });
+    expect(row("orphan")).toMatchObject({
+      tier: "C",
+      reason_code: "no-remote-endpoint",
+    });
+  });
+
+  test("the counts carry the three tiers, the standalone auth-undeclared number and the reason codes", () => {
+    // Fixture arithmetic: 7 remote rows (6 A + 1 B) and 3 no-endpoint rows（remote-bom 来自主线 BOM 用例，tier A / ok）.
+    expect(census.counts.by_tier).toEqual({ A: 6, B: 1, C: 3 });
+    expect(census.counts.auth_undeclared).toBe(1);
+    expect(census.counts.by_reason_code).toEqual({
+      ok: 5,
+      "auth-undeclared": 1,
+      "platform-held-credential": 1,
+      "no-remote-endpoint": 3,
+    });
+  });
+
+  test("the plan's arithmetic is enforced: A+B = remote url total, C = no-endpoint total", () => {
+    expect(census.counts.by_tier.A + census.counts.by_tier.B).toBe(
+      census.counts.by_transport["mcp-url"],
+    );
+    expect(census.counts.by_tier.C).toBe(
+      census.counts.by_transport["mcp-command"] +
+        census.counts.by_transport.cli +
+        census.counts.by_transport.missing,
+    );
+    expect(
+      census.counts.by_tier.A +
+        census.counts.by_tier.B +
+        census.counts.by_tier.C,
+    ).toBe(census.counts.total);
+  });
+
+  test("a tampered tier or reason-code summary is a hard failure", () => {
+    const tamperedTier: Census = {
+      ...census,
+      counts: {
+        ...census.counts,
+        by_tier: { ...census.counts.by_tier, C: census.counts.by_tier.C - 1 },
+      },
+    };
+    expect(() => assertCensusConsistent(tamperedTier)).toThrow(CensusError);
+    const tamperedUndeclared: Census = {
+      ...census,
+      counts: {
+        ...census.counts,
+        auth_undeclared: census.counts.auth_undeclared + 1,
+      },
+    };
+    expect(() => assertCensusConsistent(tamperedUndeclared)).toThrow(
+      CensusError,
+    );
+    const tamperedReason: Census = {
+      ...census,
+      counts: {
+        ...census.counts,
+        by_reason_code: {
+          ...census.counts.by_reason_code,
+          ok: census.counts.by_reason_code.ok + 1,
+        },
+      },
+    };
+    expect(() => assertCensusConsistent(tamperedReason)).toThrow(CensusError);
+  });
+
+  test("judgeTier is total: every transport × raw auth mode lands in exactly one tier", () => {
+    const rawModes = [
+      "(absent)",
+      "server-side",
+      "token",
+      "oneid-token",
+      "oauth",
+      "mcp",
+      "something-new",
+    ];
+    for (const transport of [
+      "mcp-url",
+      "mcp-command",
+      "cli",
+      "missing",
+    ] as const) {
+      for (const raw of rawModes) {
+        const tier = judgeTier(transport, raw);
+        expect(["A", "B", "C"]).toContain(tier);
+        expect(judgeReasonCode(tier, raw)).not.toBe("");
+        // Tier B is server-side on a remote endpoint, and nothing else.
+        expect(tier === "B").toBe(
+          transport === "mcp-url" && raw === "server-side",
+        );
+      }
+    }
+  });
+
+  test("the CLI tier line names all three tiers with auth-undeclared standing alone", () => {
+    expect(formatCensusTiers(census)).toBe(
+      `A ${census.counts.by_tier.A}（其中 auth-undeclared ${census.counts.auth_undeclared}）/ B ${census.counts.by_tier.B} / C ${census.counts.by_tier.C}`,
+    );
   });
 });
