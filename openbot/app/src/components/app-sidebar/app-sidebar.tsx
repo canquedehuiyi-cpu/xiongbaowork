@@ -103,7 +103,7 @@ function writeMoreOpen(open: boolean) {
 
 /**
  * Which list the sidebar shows: upstream's 会话 (every conversation, newest first), or 熊宝 v0.2.7's
- * 员工 / 群组 roster, where a 单聊 is reached from its employee and the 群聊 sit with the 群组.
+ * 员工 / 群组 roster, where a 单聊 is reached from its employee and every group chat is a row in the single 群组 section.
  * 会话 is the default; the choice is remembered per browser.
  */
 export type SidebarView = "chats" | "wakers" | "groups";
@@ -366,7 +366,7 @@ function SidebarBrand() {
  * The app's sidebar, in upstream's shape with 熊宝's roster back in it: the brand, 「新对话」 and
  * 「新建群组」 at the top, then the 「会话 · 员工 · 群组」 switch over one list — 会话 is upstream's
  * search over every conversation and the conversations themselves (a 群聊 is a row like any other,
- * its faces stacked); 员工 and 群组 are v0.2.7's roster, 单聊 by employee and 群聊 with the 群组 —
+ * its faces stacked); 员工 and 群组 are v0.2.7's roster, 单聊 by employee, and one 群组 section for the group chats —
  * and at the foot the destinations from `lib/navigation.ts`, 「更多」, and the account menu.
  */
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

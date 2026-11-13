@@ -48,7 +48,7 @@ import { useConversationFocus } from "./use-conversation-focus";
 
 /*
  * 熊宝 v0.2.7 的侧栏名册（「员工 / 群组」），#452 换成上游的单一会话列表时去掉了，用户要回来：单聊从员工
- * 进，群聊和群组在另一边。和上游的「会话」列表并存，由 app-sidebar.tsx 顶上的切换选看哪一边。
+ * 进，群组（有聊天的群组即原来的群聊）合成单独一节。和上游的「会话」列表并存，由 app-sidebar.tsx 顶上的切换选看哪一边。
  */
 
 /*
