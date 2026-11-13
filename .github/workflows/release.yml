@@ -376,12 +376,12 @@ jobs:
 
   # Our own registry (Task U3): the verified image is copied there as its linux/amd64 manifest alone,
   # under the release tag. The index around it and its provenance and SBOM attestations stay on GHCR:
-  # they name this repository and the upstream package. Every step is skipped until XB_REGISTRY is
-  # set (own-channel says so in the summary); the job itself always runs, so github-release still
-  # follows it.
+  # they name this repository and the upstream package. Until XB_REGISTRY is set the whole job is
+  # skipped, so its environment asks for no approval (own-channel says so in the summary), and
+  # github-release accepts that skip.
   mirror:
     needs: [tag-check, image, promote]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !inputs.dry_run && vars.XB_REGISTRY != '' }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -483,13 +483,21 @@ jobs:
             printf 'digest=%s\n' "$got"
           } >> "$GITHUB_OUTPUT"
           printf -- '- 自有仓库：`%s:%s` → `%s`（只有 linux/amd64 平台清单）\n' "$target" "$TAG" "$got" >> "$GITHUB_STEP_SUMMARY"
-      - name: Remove the registry sign-in
-        if: ${{ vars.XB_REGISTRY != '' }}
+      # Also after a failed step: the file holds the push credentials.
+      - id: logout
+        name: Remove the registry sign-in
+        if: ${{ always() && vars.XB_REGISTRY != '' }}
         run: rm -rf "$RUNNER_TEMP/own-channel-docker"
 
+  # Not the default success(): mirror is skipped while our registry is not configured, and only then
+  # is its skip accepted.
   github-release:
     needs: [tag-check, image, verify-digest, promote, mirror]
-    if: ${{ !inputs.dry_run }}
+    if: >-
+      ${{ !cancelled() && !inputs.dry_run && needs.tag-check.result == 'success' &&
+      needs.image.result == 'success' && needs.verify-digest.result == 'success' &&
+      needs.promote.result == 'success' && (needs.mirror.result == 'success' ||
+      (needs.mirror.result == 'skipped' && vars.XB_REGISTRY == '')) }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -558,6 +566,7 @@ jobs:
           TAG: ${{ needs.tag-check.outputs.tag }}
           XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
           XB_DOWNLOAD_ENDPOINT: ${{ vars.XB_DOWNLOAD_ENDPOINT }}
+          AWS_DEFAULT_REGION: ${{ vars.XB_DOWNLOAD_REGION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.XB_DOWNLOAD_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.XB_DOWNLOAD_SECRET_ACCESS_KEY }}
           AWS_EC2_METADATA_DISABLED: "true"
@@ -565,12 +574,20 @@ jobs:
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
         run: |
           set -euo pipefail
-          for name in XB_DOWNLOAD_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
-            if [ -z "${!name}" ]; then
-              echo "::error::XB_DOWNLOAD_BUCKET is set but ${name/#AWS_/XB_DOWNLOAD_} is not."
+          # Each setting by the name it is configured under; the region signs every request, so there
+          # is no default to fall back on.
+          for pair in XB_DOWNLOAD_ENDPOINT:XB_DOWNLOAD_ENDPOINT XB_DOWNLOAD_REGION:AWS_DEFAULT_REGION \
+            XB_DOWNLOAD_ACCESS_KEY_ID:AWS_ACCESS_KEY_ID XB_DOWNLOAD_SECRET_ACCESS_KEY:AWS_SECRET_ACCESS_KEY; do
+            variable="${pair#*:}"
+            if [ -z "${!variable}" ]; then
+              echo "::error::XB_DOWNLOAD_BUCKET is set but ${pair%%:*} is not."
               exit 1
             fi
           done
+          if [[ "$XB_DOWNLOAD_ENDPOINT" != https://* ]]; then
+            echo "::error::XB_DOWNLOAD_ENDPOINT must start with https://: '$XB_DOWNLOAD_ENDPOINT'"
+            exit 1
+          fi
           aws --version
           for file in container-images.json source/openbot/docker/delivery.env.example source/openbot/docker/compose.delivery.yml; do
             aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT" --only-show-errors \
@@ -594,9 +611,12 @@ jobs:
   # to, without any registry login, and checks it runs the digest recorded above; once with the
   # embedded database and once against a separate PostgreSQL migrated by the deployment manual's
   # section 4 commands. It fails until the GHCR package has been made public, which is a human step.
+  # Not the default success() either: mirror, upstream of github-release, may have been skipped.
   g7-linux:
     needs: [tag-check, github-release]
-    if: ${{ !inputs.dry_run }}
+    if: >-
+      ${{ !cancelled() && !inputs.dry_run && needs.tag-check.result == 'success' &&
+      needs.github-release.result == 'success' }}
     uses: ./.github/workflows/clean-deploy.yml
     with:
       tag: ${{ needs.tag-check.outputs.tag }}

@@ -973,21 +973,22 @@ jobs:
           done
           gh release create "$TAG" release/dist/* "${evidence[@]}" \
             --verify-tag --title "$TITLE" --notes-file release/notes.md "${flags[@]}"
+      - name: Our download page is not configured
+        if: ${{ vars.XB_DOWNLOAD_BUCKET == '' }}
+        run: echo "未配置自有渠道（XB_DOWNLOAD_BUCKET 未设）：安装包只在 GitHub Release 上，不上传自有下载页。" >> "$GITHUB_STEP_SUMMARY"
 
   # Our download page (Task U3): once the GitHub Release is out, the same installers and their
   # SHA256SUMS go to s3://<XB_DOWNLOAD_BUCKET>/<tag>/device/. A job of its own, so a failed upload
-  # can be re-run without re-publishing. Skipped, and the summary says so, until the bucket is set.
+  # can be re-run without re-publishing. Until the bucket is set the whole job is skipped, so its
+  # environment asks for no approval; publish's summary says so.
   download-page:
     needs: [tag-check, publish]
-    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    if: ${{ !cancelled() && needs.publish.result == 'success' && vars.XB_DOWNLOAD_BUCKET != '' }}
     runs-on: ubuntu-latest
     environment: device-release
     permissions:
       contents: read
     steps:
-      - name: Our download page is not configured
-        if: ${{ vars.XB_DOWNLOAD_BUCKET == '' }}
-        run: echo "未配置自有渠道（XB_DOWNLOAD_BUCKET 未设）：安装包只在 GitHub Release 上，不上传自有下载页。" >> "$GITHUB_STEP_SUMMARY"
       - if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1000,6 +1001,7 @@ jobs:
           TAG: ${{ needs.tag-check.outputs.tag }}
           XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
           XB_DOWNLOAD_ENDPOINT: ${{ vars.XB_DOWNLOAD_ENDPOINT }}
+          AWS_DEFAULT_REGION: ${{ vars.XB_DOWNLOAD_REGION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.XB_DOWNLOAD_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.XB_DOWNLOAD_SECRET_ACCESS_KEY }}
           AWS_EC2_METADATA_DISABLED: "true"
@@ -1007,12 +1009,20 @@ jobs:
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
         run: |
           set -euo pipefail
-          for name in XB_DOWNLOAD_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
-            if [ -z "${!name}" ]; then
-              echo "::error::XB_DOWNLOAD_BUCKET is set but ${name/#AWS_/XB_DOWNLOAD_} is not."
+          # Each setting by the name it is configured under; the region signs every request, so there
+          # is no default to fall back on.
+          for pair in XB_DOWNLOAD_ENDPOINT:XB_DOWNLOAD_ENDPOINT XB_DOWNLOAD_REGION:AWS_DEFAULT_REGION \
+            XB_DOWNLOAD_ACCESS_KEY_ID:AWS_ACCESS_KEY_ID XB_DOWNLOAD_SECRET_ACCESS_KEY:AWS_SECRET_ACCESS_KEY; do
+            variable="${pair#*:}"
+            if [ -z "${!variable}" ]; then
+              echo "::error::XB_DOWNLOAD_BUCKET is set but ${pair%%:*} is not."
               exit 1
             fi
           done
+          if [[ "$XB_DOWNLOAD_ENDPOINT" != https://* ]]; then
+            echo "::error::XB_DOWNLOAD_ENDPOINT must start with https://: '$XB_DOWNLOAD_ENDPOINT'"
+            exit 1
+          fi
           # The files the release carries: SHA256SUMS and every installer it names, still matching.
           (cd release/dist && sha256sum -c SHA256SUMS)
           aws --version

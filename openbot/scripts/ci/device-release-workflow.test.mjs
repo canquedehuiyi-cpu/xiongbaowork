@@ -13,6 +13,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1139,9 +1140,7 @@ test("the desktop probe runs on three platforms, fetches the pinned binary and m
 test("device jobs and the server side both use Bun 1.4.4", () => {
   const bunOf = (doc, name) =>
     doc.jobs[name].steps
-      .filter((step) =>
-        String(step.uses ?? "").startsWith("oven-sh/setup-bun@"),
-      )
+      .filter((step) => String(step.uses ?? "").startsWith("oven-sh/setup-bun@"))
       .map((step) => String(step.with["bun-version"]));
   for (const name of [
     "win1-windows",
@@ -1201,9 +1200,10 @@ test("every device bundle fetches and verifies agent-desktop before tauri build"
     if (job === "device-bundle-linux" || job === "linux") {
       const check = runs.find((r) => r.includes("dpkg-deb -c"));
       expect(check, `${job} lists the deb contents`).toBeDefined();
-      expect(check, `${job} checks the deb carries agent-desktop`).toContain(
-        "usr/bin/agent-desktop$",
-      );
+      expect(
+        check,
+        `${job} checks the deb carries agent-desktop`,
+      ).toContain("usr/bin/agent-desktop$");
     }
   }
 });
@@ -1262,10 +1262,7 @@ test("image and deb are brand-scanned", () => {
 const containerRelease = Bun.YAML.parse(
   readFileSync(join(workflows, "release.yml"), "utf8"),
 );
-const containerReleaseText = readFileSync(
-  join(workflows, "release.yml"),
-  "utf8",
-);
+const containerReleaseText = readFileSync(join(workflows, "release.yml"), "utf8");
 
 test("release labels carry title and vendor, not the repository", () => {
   const labels = containerReleaseText
@@ -1321,9 +1318,43 @@ const CREDENTIALS = {
 const DOWNLOAD = {
   XB_DOWNLOAD_BUCKET: "downloads",
   XB_DOWNLOAD_ENDPOINT: "https://s3.example.com",
+  AWS_DEFAULT_REGION: "cn-north-1",
   AWS_ACCESS_KEY_ID: "access-key-g7h8",
   AWS_SECRET_ACCESS_KEY: "secret-key-i9j0",
 };
+
+/** The upload's environment, by the name each setting is configured under (Task U3 Step 2). */
+const DOWNLOAD_SETTINGS = {
+  XB_DOWNLOAD_ENDPOINT: "XB_DOWNLOAD_ENDPOINT",
+  AWS_DEFAULT_REGION: "XB_DOWNLOAD_REGION",
+  AWS_ACCESS_KEY_ID: "XB_DOWNLOAD_ACCESS_KEY_ID",
+  AWS_SECRET_ACCESS_KEY: "XB_DOWNLOAD_SECRET_ACCESS_KEY",
+};
+
+/**
+ * Evaluates a job's `if:` the way GitHub does for the few forms used here: `needs.<job>.result`,
+ * `vars.X`, `inputs.X`, `!cancelled()`, string literals, ==, !=, &&, ||, !.
+ */
+function when(condition, { needs = {}, vars = {}, inputs = {} } = {}) {
+  const inner = condition
+    .trim()
+    .replace(/^\$\{\{\s*/, "")
+    .replace(/\s*\}\}$/, "");
+  const js = inner
+    .replace(/'([^']*)'/g, (_, text) => JSON.stringify(text))
+    .replace(/needs\.([\w-]+)\.result/g, (_, job) => {
+      if (!(job in needs)) throw new Error(`no result for ${job}`);
+      return `needs[${JSON.stringify(job)}]`;
+    })
+    .replace(/vars\.(\w+)/g, (_, name) => JSON.stringify(vars[name] ?? ""))
+    .replace(/==/g, "===")
+    .replace(/!=(?!=)/g, "!==");
+  return new Function("needs", "inputs", "cancelled", `return (${js});`)(
+    needs,
+    inputs,
+    () => false,
+  );
+}
 
 /** A directory of stub commands; each records its arguments, one call per line, in `calls`. */
 function stubs(scripts) {
@@ -1344,8 +1375,18 @@ function stubs(scripts) {
   };
 }
 
-/** A registry with one release index (the image and its attestation) behind a stub crane. */
-function registry({ index, existing } = {}) {
+/**
+ * A registry with one release index (the image and its attestation) behind a stub crane. `copiedAs`
+ * is what the target tag names after a copy (a registry that stored something else), `readBack` the
+ * manifest read back from the target, `missing` what `crane digest` says for a tag it cannot resolve.
+ */
+function registry({
+  index,
+  existing,
+  copiedAs,
+  readBack,
+  missing = "GET $2: MANIFEST_UNKNOWN: manifest unknown; unknown tag",
+} = {}) {
   const state = scratch();
   writeFileSync(
     join(state, "index.json"),
@@ -1376,24 +1417,27 @@ function registry({ index, existing } = {}) {
   );
   writeFileSync(
     join(state, "platform.json"),
-    JSON.stringify({
-      schemaVersion: 2,
-      mediaType: "application/vnd.oci.image.manifest.v1+json",
-    }),
+    JSON.stringify(
+      readBack ?? {
+        schemaVersion: 2,
+        mediaType: "application/vnd.oci.image.manifest.v1+json",
+      },
+    ),
   );
   if (existing) writeFileSync(join(state, "existing"), existing);
+  const copied = copiedAs ? JSON.stringify(copiedAs) : `"\${2##*@}"`;
   const s = JSON.stringify(state);
   return stubs({
     crane: `case "$1" in
   manifest)
     case "$2" in
       *@${INDEX}) cat ${s}/index.json ;;
-      *@${PLATFORM}) cat ${s}/platform.json ;;
+      *@${PLATFORM} | ${OWN_REPOSITORY}@*) cat ${s}/platform.json ;;
       *) echo "MANIFEST_UNKNOWN: manifest unknown" >&2; exit 1 ;;
     esac ;;
   digest)
-    if [ -f ${s}/existing ]; then cat ${s}/existing; echo; else echo "GET $2: MANIFEST_UNKNOWN: manifest unknown; unknown tag" >&2; exit 1; fi ;;
-  copy) printf '%s' "\${2##*@}" > ${s}/existing ;;
+    if [ -f ${s}/existing ]; then cat ${s}/existing; echo; else echo "${missing}" >&2; exit 1; fi ;;
+  copy) printf '%s' ${copied} > ${s}/existing ;;
   *) exit 2 ;;
 esac`,
   });
@@ -1428,7 +1472,7 @@ function mirror(env = {}, crane = registry()) {
 test("mirror copies only the platform manifest to our registry", () => {
   const job = containerRelease.jobs.mirror;
   expect(job.needs).toEqual(["tag-check", "image", "promote"]);
-  expect(job.if).toBe(expression("!inputs.dry_run"));
+  expect(job.if).toBe(expression("!inputs.dry_run && vars.XB_REGISTRY != ''"));
   expect(job.environment).toBe("release");
   expect(job.permissions).toEqual({ contents: "read", packages: "read" });
   expect(job.outputs).toEqual({
@@ -1479,6 +1523,29 @@ test("mirror copies only the platform manifest to our registry", () => {
     const refused = mirror({}, registry({ index }));
     expect(refused.status).not.toBe(0);
     expect(refused.calls.some((c) => c.startsWith("crane copy"))).toBe(false);
+  }
+  // A tag whose existence cannot be told (a refused sign-in, say) is not taken for "absent".
+  const unknown = mirror(
+    {},
+    registry({ missing: "GET $2: UNAUTHORIZED: authentication required" }),
+  );
+  expect(unknown.status).not.toBe(0);
+  expect(unknown.calls.some((c) => c.startsWith("crane copy"))).toBe(false);
+  expect(unknown.log).toContain("UNAUTHORIZED");
+  // Read back after the copy: the tag must name the platform manifest, and that must be an image,
+  // not an index; otherwise no digest is reported.
+  for (const crane of [
+    registry({ copiedAs: OTHER }),
+    registry({
+      readBack: {
+        schemaVersion: 2,
+        mediaType: "application/vnd.oci.image.index.v1+json",
+      },
+    }),
+  ]) {
+    const wrong = mirror({}, crane);
+    expect(wrong.status).not.toBe(0);
+    expect(wrong.outputs).toEqual({});
   }
   // crane is installed by a pinned action at a pinned release.
   const setup = job.steps.find((s) =>
@@ -1592,25 +1659,41 @@ test("the record and the samples go up to our download page before the GitHub Re
     `aws s3 cp ${flags} source/openbot/docker/delivery.env.example ${s3}/delivery.env.example`,
     `aws s3 cp ${flags} source/openbot/docker/compose.delivery.yml ${s3}/compose.delivery.yml`,
   ]);
-  // Half-configured: it names what is missing and uploads nothing.
-  for (const missing of [
-    "XB_DOWNLOAD_ENDPOINT",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-  ]) {
+  // Half-configured (the region included: it signs every request, there is no default), or a
+  // plain-http endpoint: it names what is wrong and uploads nothing.
+  for (const [name, configured] of Object.entries(DOWNLOAD_SETTINGS)) {
     const none = stubs({ aws: "" });
     const refused = run(
       "github-release",
       "upload",
-      { TAG: "v0.2.0", ...DOWNLOAD, [missing]: "" },
+      { TAG: "v0.2.0", ...DOWNLOAD, [name]: "" },
       cwd,
       none.path,
       containerRelease,
     );
     expect(refused.status).not.toBe(0);
-    expect(refused.log).toContain(missing.replace(/^AWS_/, "XB_DOWNLOAD_"));
+    expect(refused.log).toContain(`but ${configured} is not`);
     expect(none.calls()).toEqual([]);
   }
+  const plain = stubs({ aws: "" });
+  const http = run(
+    "github-release",
+    "upload",
+    {
+      TAG: "v0.2.0",
+      ...DOWNLOAD,
+      XB_DOWNLOAD_ENDPOINT: "http://s3.example.com",
+    },
+    cwd,
+    plain.path,
+    containerRelease,
+  );
+  expect(http.status).not.toBe(0);
+  expect(http.log).toContain("must start with https://");
+  expect(plain.calls()).toEqual([]);
+  expect(upload.env.AWS_DEFAULT_REGION).toBe(
+    expression("vars.XB_DOWNLOAD_REGION"),
+  );
   // The samples come from the tagged commit, without a stored credential.
   const checkout = job.steps.find((s) =>
     s.uses?.startsWith("actions/checkout@"),
@@ -1628,6 +1711,7 @@ test("the device installers go up to our download page after they are published"
   expect(job.needs).toEqual(["tag-check", "publish"]);
   expect(job.if).toContain("needs.publish.result == 'success'");
   expect(job.if).toContain("!cancelled()");
+  expect(job.if).toContain("vars.XB_DOWNLOAD_BUCKET != ''");
   expect(job.environment).toBe("device-release");
   expect(job.permissions).toEqual({ contents: "read" });
   const download = job.steps.find((s) =>
@@ -1682,11 +1766,18 @@ test("the device installers go up to our download page after they are published"
   // An installer that no longer matches SHA256SUMS, or a missing key: nothing goes up.
   expect(upload({ CHANGE: "1" }).calls).toEqual([]);
   expect(upload({ CHANGE: "1" }).status).not.toBe(0);
-  for (const missing of ["XB_DOWNLOAD_ENDPOINT", "AWS_SECRET_ACCESS_KEY"]) {
-    const refused = upload({ [missing]: "" });
+  for (const [name, configured] of Object.entries(DOWNLOAD_SETTINGS)) {
+    const refused = upload({ [name]: "" });
     expect(refused.status).not.toBe(0);
+    expect(refused.log).toContain(`but ${configured} is not`);
     expect(refused.calls).toEqual([]);
   }
+  const http = upload({ XB_DOWNLOAD_ENDPOINT: "http://s3.example.com" });
+  expect(http.status).not.toBe(0);
+  expect(http.calls).toEqual([]);
+  expect(step("download-page", "upload").env.AWS_DEFAULT_REGION).toBe(
+    expression("vars.XB_DOWNLOAD_REGION"),
+  );
 });
 
 /** Steps that reach our channel: they name its variables or secrets, or run crane or aws. */
@@ -1707,6 +1798,9 @@ function channelSteps(doc) {
 test("our channel steps skip cleanly when unconfigured", () => {
   const registryGate = expression("vars.XB_REGISTRY != ''");
   const downloadGate = expression("vars.XB_DOWNLOAD_BUCKET != ''");
+  // Removing the sign-in runs after a failed step too: the file holds the push credentials.
+  const CLEANUP = "mirror/logout";
+  const cleanupGate = expression("always() && vars.XB_REGISTRY != ''");
   // Every step that does something with the channel is gated on its variable; the record step and
   // the summary only read the variables, and must run either way.
   const ungated = new Set(["github-release/record", "own-channel/summary"]);
@@ -1718,19 +1812,106 @@ test("our channel steps skip cleanly when unconfigured", () => {
       expect([label, s.if]).toEqual([label, undefined]);
       continue;
     }
-    const gate = job === "mirror" ? registryGate : downloadGate;
+    const gate =
+      label === CLEANUP
+        ? cleanupGate
+        : job === "mirror"
+          ? registryGate
+          : downloadGate;
     expect([label, s.if]).toEqual([label, gate]);
   }
   // Steps of the channel's jobs that do not mention it are gated too (crane's install, a checkout).
-  for (const s of containerRelease.jobs.mirror.steps)
-    expect([s.id ?? s.uses, s.if]).toEqual([s.id ?? s.uses, registryGate]);
+  for (const s of containerRelease.jobs.mirror.steps) {
+    const label = `mirror/${s.id ?? s.uses ?? s.name}`;
+    const gate = label === CLEANUP ? cleanupGate : registryGate;
+    expect([label, s.if]).toEqual([label, gate]);
+  }
   for (const s of containerRelease.jobs["github-release"].steps.filter((s) =>
     s.uses?.startsWith("actions/checkout@"),
   ))
     expect(s.if).toBe(downloadGate);
   const device = workflow.jobs["download-page"].steps;
-  for (const s of device.filter((s) => !String(s.if).includes("== ''")))
+  for (const s of device)
     expect([s.id ?? s.uses, s.if]).toEqual([s.id ?? s.uses, downloadGate]);
+  // Unconfigured, mirror and download-page are skipped whole, so their environments ask for no
+  // approval, and what follows mirror still runs.
+  const ok = (jobs) =>
+    Object.fromEntries(jobs.map((name) => [name, "success"]));
+  const configuredNot = { vars: {}, inputs: {} };
+  const configured = {
+    vars: { ...OWN, XB_DOWNLOAD_BUCKET: "downloads" },
+    inputs: {},
+  };
+  const mirrorIf = containerRelease.jobs.mirror.if;
+  expect(when(mirrorIf, configuredNot)).toBe(false);
+  expect(when(mirrorIf, configured)).toBe(true);
+  expect(when(mirrorIf, { ...configured, inputs: { dry_run: true } })).toBe(
+    false,
+  );
+  const pageIf = workflow.jobs["download-page"].if;
+  expect(when(pageIf, { ...configuredNot, needs: ok(["publish"]) })).toBe(
+    false,
+  );
+  expect(when(pageIf, { ...configured, needs: ok(["publish"]) })).toBe(true);
+  expect(when(pageIf, { ...configured, needs: { publish: "skipped" } })).toBe(
+    false,
+  );
+  const releaseIf = containerRelease.jobs["github-release"].if;
+  const upstream = ok(["tag-check", "image", "verify-digest", "promote"]);
+  expect(
+    when(releaseIf, {
+      ...configuredNot,
+      needs: { ...upstream, mirror: "skipped" },
+    }),
+  ).toBe(true);
+  expect(
+    when(releaseIf, {
+      ...configured,
+      needs: { ...upstream, mirror: "success" },
+    }),
+  ).toBe(true);
+  // A mirror that failed, or was skipped although configured, stops the release; so does any other
+  // job before it, and a dry run.
+  for (const mirror of ["failure", "cancelled"])
+    expect(
+      when(releaseIf, { ...configured, needs: { ...upstream, mirror } }),
+    ).toBe(false);
+  expect(
+    when(releaseIf, {
+      ...configured,
+      needs: { ...upstream, mirror: "skipped" },
+    }),
+  ).toBe(false);
+  for (const name of Object.keys(upstream))
+    for (const result of ["failure", "skipped"])
+      expect(
+        when(releaseIf, {
+          ...configuredNot,
+          needs: { ...upstream, [name]: result, mirror: "skipped" },
+        }),
+      ).toBe(false);
+  expect(
+    when(releaseIf, {
+      vars: {},
+      inputs: { dry_run: true },
+      needs: { ...upstream, mirror: "skipped" },
+    }),
+  ).toBe(false);
+  // Gate 7 follows github-release itself: the default success() would also look at the skipped
+  // mirror upstream of it.
+  const g7If = containerRelease.jobs["g7-linux"].if;
+  expect(
+    when(g7If, {
+      ...configuredNot,
+      needs: ok(["tag-check", "github-release"]),
+    }),
+  ).toBe(true);
+  expect(
+    when(g7If, {
+      ...configuredNot,
+      needs: { "tag-check": "success", "github-release": "failure" },
+    }),
+  ).toBe(false);
   // Unconfigured, the run says so: release.yml in every mode (dry runs included), the device release
   // once it has published.
   const summary = (env) => {
@@ -1769,8 +1950,13 @@ test("our channel steps skip cleanly when unconfigured", () => {
   expect(set.text).not.toContain("未配置自有渠道");
   expect(set.text).toContain(`${OWN_REPOSITORY}:v0.2.0`);
   expect(set.text).toContain("s3://downloads/v0.2.0/");
-  const notice = device.find(
+  // The device release says it in publish, which runs either way, after the GitHub Release.
+  const publishSteps = workflow.jobs.publish.steps;
+  const notice = publishSteps.find(
     (s) => s.if === expression("vars.XB_DOWNLOAD_BUCKET == ''"),
+  );
+  expect(publishSteps.indexOf(notice)).toBeGreaterThan(
+    publishSteps.indexOf(step("publish", "publish")),
   );
   expect(notice.run).toContain("未配置自有渠道");
   expect(notice.run).toContain("GITHUB_STEP_SUMMARY");
@@ -1811,20 +1997,26 @@ test("credentials never appear on a command line", () => {
   // is given a credential as an argument, and nothing it prints contains one.
   const config = scratch();
   const traced = stubs({ jq: 'exec /usr/bin/env -S "$REAL_JQ" "$@"' });
-  const login = run(
-    "mirror",
-    "login",
-    {
-      ...OWN,
-      ...CREDENTIALS,
-      RUNNER_TEMP: config,
-      REAL_JQ: Bun.which("jq"),
-      GITHUB_ENV: join(config, "github-env"),
-    },
-    scratch(),
-    traced.path,
-    containerRelease,
-  );
+  const umask = process.umask(0o022);
+  let login;
+  try {
+    login = run(
+      "mirror",
+      "login",
+      {
+        ...OWN,
+        ...CREDENTIALS,
+        RUNNER_TEMP: config,
+        REAL_JQ: Bun.which("jq"),
+        GITHUB_ENV: join(config, "github-env"),
+      },
+      scratch(),
+      traced.path,
+      containerRelease,
+    );
+  } finally {
+    process.umask(umask);
+  }
   expect(login.status).toBe(0);
   const secretValues = Object.values(CREDENTIALS).filter(
     (v) => v !== "someone",
@@ -1845,6 +2037,23 @@ test("credentials never appear on a command line", () => {
     "push-user-a1b2:push-password-c3d4",
   );
   expect(decode(auths["ghcr.io"])).toBe("someone:ghcr-token-e5f6");
+  // Readable by this user only, whatever the runner's umask (the run above started under 022), and
+  // removed again by the logout step, which runs even after a failed step.
+  expect(statSync(dockerConfig).mode & 0o777).toBe(0o700);
+  expect(statSync(join(dockerConfig, "config.json")).mode & 0o777).toBe(0o600);
+  const logout = step("mirror", "logout", containerRelease);
+  expect(logout.if).toBe(expression("always() && vars.XB_REGISTRY != ''"));
+  expect(
+    run(
+      "mirror",
+      "logout",
+      { RUNNER_TEMP: config },
+      scratch(),
+      process.env.PATH,
+      containerRelease,
+    ).status,
+  ).toBe(0);
+  expect(existsSync(dockerConfig)).toBe(false);
   // A registry without its repository or credentials stops before anything is written.
   for (const missing of [
     "XB_IMAGE_REPOSITORY",
@@ -2010,6 +2219,17 @@ test("clean-deploy fetches from our download page when configured", () => {
       { xiongbao: ghcr, openbot: ghcr },
     ).status,
   ).not.toBe(0);
+  // A plain-http page fails too: nothing is fetched from it.
+  const http = cleanRecord(
+    {
+      XB_DOWNLOAD_BUCKET: "downloads",
+      XB_DOWNLOAD_BASE_URL: "http://d.example.com",
+    },
+    { xiongbao: ghcr, openbot: ghcr },
+  );
+  expect(http.status).not.toBe(0);
+  expect(http.calls).toEqual([]);
+  expect(http.log).toContain("must start with https://");
   const recordEnv = step("linux", "record", cleanDeploy).env;
   for (const name of [
     "XB_REGISTRY",
@@ -2019,17 +2239,86 @@ test("clean-deploy fetches from our download page when configured", () => {
   ])
     expect(recordEnv[name]).toBe(expression(`vars.${name}`));
   // delivery.env.example (external database) comes from the same place; the customer run starts our
-  // registry's copy through the README's OPENBOT_IMAGE when it is configured.
-  const roles = step("linux", "roles", cleanDeploy);
-  expect(roles.run).toContain(
-    '"$XB_DOWNLOAD_BASE_URL/$TAG/delivery.env.example"',
+  // registry's copy through the README's OPENBOT_IMAGE when it is configured. Both run as written.
+  const roles = (env) => {
+    const customer = scratch();
+    const evidence = scratch();
+    writeFileSync(
+      join(evidence, "g7-external-roles.sql"),
+      "ALTER ROLE a PASSWORD '<app随机口令>';\nALTER ROLE b PASSWORD '<role_writer随机口令>';\n",
+    );
+    const tools = stubs({
+      curl: `out=""; prev=""; for a in "$@"; do [ "$prev" = -o ] && out="$a"; prev="$a"; done; printf 'EMBEDDED_POSTGRES=on\\n' > "$out"`,
+      docker:
+        "cat > /dev/null; printf 'openbot_app|f|f\\nopenbot_role_writer|f|f\\n'",
+    });
+    const result = run(
+      "linux",
+      "roles",
+      {
+        TAG: "v0.2.0",
+        CUSTOMER: customer,
+        EVIDENCE: evidence,
+        RUNNER_TEMP: scratch(),
+        EXTERNAL_DB_HOST: "172.17.0.2",
+        GITHUB_REPOSITORY: "o/r",
+        XB_DOWNLOAD_BUCKET: "",
+        XB_DOWNLOAD_BASE_URL: "",
+        ...env,
+      },
+      scratch(),
+      tools.path,
+      cleanDeploy,
+    );
+    const delivery = readFileSync(join(customer, ".env.delivery"), "utf8");
+    return {
+      ...result,
+      curl: tools.calls().filter((c) => c.startsWith("curl ")),
+      env: delivery,
+    };
+  };
+  const rolesBefore = roles({});
+  expect(rolesBefore.status).toBe(0);
+  expect(rolesBefore.curl.length).toBe(1);
+  expect(rolesBefore.curl[0]).toEndWith(
+    " https://raw.githubusercontent.com/o/r/v0.2.0/openbot/docker/delivery.env.example",
   );
-  expect(roles.run).toContain("raw.githubusercontent.com");
-  expect(roles.env.XB_DOWNLOAD_BUCKET).toBe(
+  expect(rolesBefore.env).toContain("EMBEDDED_POSTGRES=off");
+  const rolesAfter = roles({
+    XB_DOWNLOAD_BUCKET: "downloads",
+    XB_DOWNLOAD_BASE_URL: "https://download.example.com/xb/",
+  });
+  expect(rolesAfter.status).toBe(0);
+  expect(rolesAfter.curl.length).toBe(1);
+  expect(rolesAfter.curl[0]).toEndWith(
+    " https://download.example.com/xb/v0.2.0/delivery.env.example",
+  );
+  expect(step("linux", "roles", cleanDeploy).env.XB_DOWNLOAD_BUCKET).toBe(
     expression("vars.XB_DOWNLOAD_BUCKET"),
   );
-  const customer = step("linux", "customer", cleanDeploy);
-  expect(customer.run).toContain("OPENBOT_IMAGE=$CUSTOMER_IMAGE");
+  const customer = (env) => {
+    const dir = scratch();
+    const evidence = scratch();
+    // Stands in for the README block: records the image it was told to run.
+    writeFileSync(
+      join(evidence, "g7-linux.sh"),
+      `printf '%s' "\${OPENBOT_IMAGE-unset}" > "$EVIDENCE/image.txt"\nprintf 'A=1\\n' > .env.delivery\n`,
+    );
+    const result = run(
+      "linux",
+      "customer",
+      { CUSTOMER: dir, EVIDENCE: evidence, RUNNER_TEMP: scratch(), ...env },
+      scratch(),
+      process.env.PATH,
+      cleanDeploy,
+    );
+    expect(result.status).toBe(0);
+    return readFileSync(join(evidence, "image.txt"), "utf8");
+  };
+  expect(customer({})).toBe("unset");
+  expect(customer({ CUSTOMER_IMAGE: `${OWN_REPOSITORY}:v0.2.0` })).toBe(
+    `${OWN_REPOSITORY}:v0.2.0`,
+  );
   const check = step("linux", "digest", cleanDeploy);
   expect(check.run).toContain(`"\${expected%@*}:$TAG"`);
 });

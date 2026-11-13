@@ -106,6 +106,10 @@ jobs:
               echo "::error::XB_DOWNLOAD_BUCKET is set but XB_DOWNLOAD_BASE_URL is not."
               exit 1
             fi
+            if [[ "$XB_DOWNLOAD_BASE_URL" != https://* ]]; then
+              echo "::error::XB_DOWNLOAD_BASE_URL must start with https://: '$XB_DOWNLOAD_BASE_URL'"
+              exit 1
+            fi
             curl --fail --silent --show-error --location -o "$EVIDENCE/container-images.json" \
               "${XB_DOWNLOAD_BASE_URL%/}/$TAG/container-images.json"
           else
