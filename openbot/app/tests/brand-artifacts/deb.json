@@ -90,6 +90,12 @@
     "note": "遮罩属性，注入第三方网页；runner 与 agent-computer 两头一起改（Task 12、19，附录 A 第 9 行待批）"
   },
   {
+    "word": "openbot-browser.ts",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "打包进二进制的模块路径注释（路径已按段切开，只剩文件名）；Task 13 加 --minify"
+  },
+  {
     "word": "openbot-desktop",
     "category": "persisted-data",
     "plan": "rewrite",

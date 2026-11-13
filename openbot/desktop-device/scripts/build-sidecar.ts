@@ -64,8 +64,9 @@ export function compileArgs(
 }
 
 /**
- * What the shipped sidecar is built with: the stage 0 flags, plus `--minify` (drops the comments and
- * module-path banners Bun keeps otherwise), and fixed values for `__dirname` / `__filename`.
+ * What the shipped sidecar is built with: the stage 0 flags, plus fixed values for `__dirname` /
+ * `__filename`. `--minify` is left out for now (it rewrites `openbotUrl:` in the artifact, which the
+ * word lists cannot follow before plan appendix A row 35 is approved; Task 19 turns it on).
  * playwright-core's bundle reads both, Bun writes the real path of the file into the binary, and
  * that is the build machine's checkout path. Bun resolves symlinks before it writes the path, so a
  * link farm in a neutral directory does not help; `--define` does.
@@ -79,7 +80,6 @@ export function sidecarArgs(
 ): string[] {
   return [
     ...compileArgs(triple, host, outfile),
-    "--minify",
     "--define",
     '__dirname="/sidecar"',
     "--define",

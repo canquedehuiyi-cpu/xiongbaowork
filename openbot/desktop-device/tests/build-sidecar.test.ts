@@ -52,14 +52,14 @@ test("the stage 0 flags are used, and --target only when cross-compiling", () =>
   );
 });
 
-test("compile args minify", () => {
+test("compile args fix __dirname and __filename", () => {
   const host = "x86_64-unknown-linux-gnu";
   const args = sidecarArgs(host, host, "/out/runner");
   // Everything the stage 0 flags say stays, in the same order.
   expect(args.slice(0, compileArgs(host, host, "/out/runner").length)).toEqual(
     compileArgs(host, host, "/out/runner"),
   );
-  expect(args).toContain("--minify");
+  expect(args).not.toContain("--minify");
   // playwright-core's __dirname/__filename would otherwise be written into the binary as the
   // build machine's absolute path.
   const defines = args.flatMap((arg, i) =>
