@@ -4,6 +4,7 @@ import { SQL } from "bun";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import { type AuditStore, createAuditStore } from "../src/audit";
 import {
   createGroupConversations,
   createGroupRoutes,
@@ -46,6 +47,7 @@ import {
   isGroupConversation,
   pickGroupName,
   runtimeOrder,
+  stateOf,
   type WakerGroupLink,
   withChannelRenameLink,
   withWakerGroupLink,
@@ -122,8 +124,41 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
+  for (const named of namedClients.splice(0)) await named.$client.close();
   await database.$client.close();
 });
+
+const namedClients: ReturnType<typeof createDatabase>[] = [];
+
+/**
+ * A pool of its own, named in `pg_stat_activity`, so a test can tell when work running on it waits on
+ * a lock without counting every other session on the server (the hand-over tests' `sideClient`).
+ */
+function namedClient() {
+  const name = `wgcore_${randomUUID().replaceAll("-", "")}`;
+  const url = new URL(testDatabaseUrl());
+  url.searchParams.set("application_name", name);
+  const client = createDatabase(url.toString(), TEST_POOL);
+  namedClients.push(client);
+  return { name, client };
+}
+
+/** Until a session of `name` waits on a lock another session holds: true, or false after ten seconds. */
+async function waitsOnALock(name: string) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const rows = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`select 1 from pg_stat_activity
+             where application_name = ${name} and cardinality(pg_blocking_pids(pid)) > 0
+             limit 1`,
+      ),
+    )) as unknown[];
+    if (rows.length > 0) return true;
+    await Bun.sleep(10);
+  }
+  return false;
+}
 
 async function person(name: string): Promise<AgentActor> {
   const id = `${prefix}-${name}-${randomUUID()}`;
@@ -515,7 +550,7 @@ describe("link core", () => {
     expect((await crewRow(groupId))?.name).toBe("月会");
   });
 
-  test("linkedGroupOf and liveChannelOf answer for a linked channel", async () => {
+  test("liveChannelOf answers for a linked channel", async () => {
     const alice = await person("alice");
     const bob = await person("bob");
     const channel = await sharedGroup(alice, [
@@ -523,11 +558,9 @@ describe("link core", () => {
       await bot(alice, "Grace"),
     ]);
     const link = linkCore();
-    expect(await link.linkedGroupOf(channel.id)).toBeNull();
     const groupId = await link.linkChannel(channel.id);
     if (!groupId) throw new Error("not linked");
 
-    expect(await link.linkedGroupOf(channel.id)).toBe(groupId);
     expect(await runAsTenant(alice.id, () => link.liveChannelOf(groupId))).toBe(
       channel.id,
     );
@@ -698,10 +731,10 @@ describe("link core, fix round 1", () => {
     const second = await crew(alice, "另一个");
 
     expect(await refused(() => link.adopt(second, channelId))).toBe(true);
-    expect(await link.linkedGroupOf(channelId)).toBe(first);
+    expect((await channelRow(channelId)).waker_group_id).toBe(first);
     // The same crew again is no change of mind.
     await link.adopt(first, channelId);
-    expect(await link.linkedGroupOf(channelId)).toBe(first);
+    expect((await channelRow(channelId)).waker_group_id).toBe(first);
   });
 
   test("adopt refuses a deleted channel", async () => {
@@ -744,16 +777,29 @@ describe("link core, fix round 1", () => {
     );
   });
 
-  test("the 80-character cut never splits a surrogate pair", async () => {
+  test("the 80-character cut counts code points and never splits a surrogate pair", async () => {
     const alice = await person("alice");
-    const wanted = `a${"😀".repeat(40)}`;
+    // 81 characters, 161 UTF-16 units: cut to 80 characters as 0207's `left()` counts them.
+    const wanted = `a${"😀".repeat(80)}`;
     const name = await runAsTenant(alice.id, () =>
       pickGroupName(database, wanted),
     );
-    expect(name).toBe(`a${"😀".repeat(39)}`);
-    expect(name.length).toBe(79);
+    expect(name).toBe(`a${"😀".repeat(79)}`);
+    expect(Array.from(name)).toHaveLength(80);
     const last = name.charCodeAt(name.length - 1);
     expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+    // 40 emoji fit whole: what used to be cut at 80 UTF-16 units is now kept.
+    const short = `a${"😀".repeat(40)}`;
+    expect(
+      await runAsTenant(alice.id, () => pickGroupName(database, short)),
+    ).toBe(short);
+    // A clash cuts the body by the suffix's characters, not its UTF-16 units.
+    await crew(alice, `a${"😀".repeat(79)}`);
+    const second = await runAsTenant(alice.id, () =>
+      pickGroupName(database, wanted),
+    );
+    expect(second).toBe(`a${"😀".repeat(76)}（2）`);
+    expect(Array.from(second)).toHaveLength(80);
   });
 });
 
@@ -1336,13 +1382,16 @@ describe("routes", () => {
       service: ReturnType<typeof conversations>,
     ) => Parameters<typeof createWakerGroupActions>[0]["groups"];
     canUse?: (owner: string, agentId: string) => Promise<boolean>;
+    /** The actions' own pool, say a named one a test watches for lock waits. */
+    database?: typeof database;
+    auditStore?: AuditStore;
   };
 
   function crewActions(options: CrewOptions = {}) {
     const link = options.link ?? linkCore();
     const renaming = withChannelRenameLink(channelStore, link);
     return createWakerGroupActions({
-      database,
+      database: options.database ?? database,
       store: options.store ?? crewStore,
       link,
       groups: options.groups
@@ -1357,6 +1406,7 @@ describe("routes", () => {
             await profileStore.get({ id: owner, role: "user" }, agentId),
           )),
       ...(options.log ? { log: options.log } : {}),
+      ...(options.auditStore ? { auditStore: options.auditStore } : {}),
     });
   }
 
@@ -2625,7 +2675,9 @@ describe("routes", () => {
       test("a run inserted while the dissolve runs is not deleted under it", async () => {
         const alice = await person("alice");
         const { lines, log } = collected();
-        const api = crewApi({ log });
+        // The dissolve's transaction runs on a pool of its own, so the probe below finds it by name.
+        const watched = namedClient();
+        const api = crewApi({ log, database: watched.client });
         const made = await linkedCrew(api, alice, "并发", await bots(alice, 2));
         await portray(alice, made.group.id);
         // A second pool, so the run's open transaction and the probe below do not starve the first.
@@ -2653,20 +2705,10 @@ describe("routes", () => {
           );
           await insertion;
           const dissolving = api(alice, "DELETE", `/${made.group.id}`);
-          // Wait until the dissolve is held on the crew's row by the uncommitted run.
-          const deadline = Date.now() + 10_000;
-          for (;;) {
-            const [row] = (await runAsTenant("platform", () =>
-              side.execute(
-                sql`select count(*)::int as waiting from pg_stat_activity
-                     where wait_event_type = 'Lock' and query ilike '%waker_groups%'`,
-              ),
-            )) as unknown as { waiting: number }[];
-            if (Number(row?.waiting) > 0) break;
-            if (Date.now() > deadline)
-              throw new Error("the dissolve never waited on the run");
-            await new Promise((resolve) => setTimeout(resolve, 20));
-          }
+          // Wait until the dissolve is held on the crew's row by the uncommitted run: only the
+          // dissolve's own sessions count, not any other test's waiting on the server.
+          if (!(await waitsOnALock(watched.name)))
+            throw new Error("the dissolve never waited on the run");
           release();
           await starting;
 
@@ -2898,6 +2940,103 @@ describe("routes", () => {
         expect(group.channelId).toBeNull();
         expect(group.members).toHaveLength(21);
         expect(await chatsOf(alice.id)).toEqual([]);
+      });
+    });
+
+    describe("final review", () => {
+      /** The `channel.deleted` rows about a channel, as its creator's own trail reads them. */
+      async function deletionsOf(who: AgentActor, channelId: string) {
+        return (await runAsTenant(who.id, () =>
+          database.execute(
+            sql`select actor_user_id, payload from audit_events
+                 where event_type = 'channel.deleted' and target_type = 'channel'
+                   and target_id = ${channelId}`,
+          ),
+        )) as unknown as {
+          actor_user_id: string;
+          payload: Record<string, unknown>;
+        }[];
+      }
+
+      test("dissolving a linked crew leaves the channel.deleted row upstream's delete leaves", async () => {
+        const alice = await person("alice");
+        const api = crewApi({ auditStore: createAuditStore(database) });
+        const made = await linkedCrew(api, alice, "留痕", await bots(alice, 2));
+
+        const answer = await api(alice, "DELETE", `/${made.group.id}`);
+
+        expect(answer.status).toBe(200);
+        expect(await deleted(made.channel.id)).toBe(true);
+        expect(await deletionsOf(alice, made.channel.id)).toEqual([
+          { actor_user_id: alice.id, payload: { mechanism: "soft" } },
+        ]);
+      });
+
+      test("a dissolve refused for a running flow hides nothing and writes no channel.deleted row", async () => {
+        const alice = await person("alice");
+        const api = crewApi({ auditStore: createAuditStore(database) });
+        const made = await linkedCrew(api, alice, "未删", await bots(alice, 2));
+        await flowRun(alice, made.group.id, "running");
+
+        const answer = await api(alice, "DELETE", `/${made.group.id}`);
+
+        expect(answer.status).toBe(409);
+        expect(await deleted(made.channel.id)).toBe(false);
+        expect(await deletionsOf(alice, made.channel.id)).toEqual([]);
+      });
+
+      test("dissolving locks the chat's row before the crew's, the order every other path takes", async () => {
+        const alice = await person("alice");
+        // The dissolve's transaction on a pool of its own, so its lock wait is found by name.
+        const watched = namedClient();
+        const api = crewApi({ database: watched.client });
+        const made = await linkedCrew(api, alice, "加锁", await bots(alice, 2));
+        const holder = namedClient();
+        let open = () => {};
+        const shut = new Promise<void>((resolve) => {
+          open = resolve;
+        });
+        let locked = () => {};
+        const holds = new Promise<void>((resolve) => {
+          locked = resolve;
+        });
+        // Somebody holds the crew's row, so the dissolve stops where it asks for it.
+        const holding = runAsTenant(alice.id, () =>
+          holder.client.transaction(async (tx) => {
+            await tx.execute(
+              sql`select id from waker_groups where id = ${made.group.id}::uuid for update`,
+            );
+            locked();
+            await shut;
+          }),
+        );
+        await holds;
+        try {
+          const dissolving = api(alice, "DELETE", `/${made.group.id}`);
+          const waited = await waitsOnALock(watched.name);
+          // While it waits for the crew's row, the chat's row is already its own.
+          const probe = await runAsTenant(alice.id, () =>
+            database.transaction((tx) =>
+              tx.execute(
+                sql`select id from channels where id = ${made.channel.id} for update nowait`,
+              ),
+            ),
+          ).then(
+            (rows) => `not locked (${(rows as unknown[]).length} row)`,
+            (error: unknown) => stateOf(error),
+          );
+          open();
+          await holding;
+          const answer = await dissolving;
+
+          expect(waited).toBe(true);
+          expect(probe).toBe("55P03");
+          expect(answer.status).toBe(200);
+        } finally {
+          open();
+        }
+        expect(await crewRow(made.group.id)).toBeNull();
+        expect(await deleted(made.channel.id)).toBe(true);
       });
     });
   });

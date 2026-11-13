@@ -297,8 +297,7 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // 群组挂接（设计稿 group-unify 3.1、4.5）：`facts()` 以 `platform` 读一行频道的 tenant_id、
   // created_by、title、name、waker_group_id、是否软删，用来定所有者。共享群的所有者是创建者，不一定是
   // 调用者的帧（开机任务、自愈），所以这一读不能在调用者帧里做。读到之后，建群组、写镜像、挂接、改名
-  // 全在 `runAsTenant(所有者)` 里，所有者只认个人租户（`channelOwner`）。`linkedGroupOf` 只用于调用方
-  // 已校验过读权限的频道 id。
+  // 全在 `runAsTenant(所有者)` 里，所有者只认个人租户（`channelOwner`）。
   "src/waker-groups/channel-link.ts": { "asPlatform(": 1 },
   // WF8: the fourth finds retries a restart left `prepared`, across tenants; each is settled in its own.
   "src/wakerflows/recovery.ts": { 'runAsTenant("platform"': 4 },

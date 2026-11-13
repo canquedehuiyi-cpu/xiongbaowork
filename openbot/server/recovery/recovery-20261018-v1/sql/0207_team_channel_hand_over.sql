@@ -41,11 +41,17 @@
  * 恢复（删 `revoked_access` 行）没有触发器：不还群组，也不把人加回群。
  *
  * 搬什么（设计稿 3.1.1 第 5 条，全部跟走，每条都限原主的 tenant_id）：`channels.created_by`；`waker_groups`
- * （撞名按 4.4 加「（2）」…「（99）」，再撞加 id 前 6 位）；群组的 `portraits`、`portrait_media`（先删接手人
+ * （名字按 4.4 以聊天的 title 为准，没有 title 用 name，截 80 字（按码点）；撞名加「（2）」…「（99）」，再撞加
+ * id 前 6 位）；群组的 `portraits`、`portrait_media`（先删接手人
  * 名下同键的残行）；`group_task_templates`；`group_task_runs` 以及它们的父卡、步骤卡（`tasks`）、卡的
  * `task_archives`、`group_pipeline_start_receipts`、`flow_confirmations`、`flow_run_events`、`flow_run_retries`。
  * 不搬：`usage_counters`（已消耗的额度记在当时发起的人名下）、审批、`audit_events`、`group_bot_threads`、
  * `waker_group_members`（随父行）。
+ *
+ * 留痕：每次移交成功，写入函数 `RAISE LOG` 一行（频道、原主、接手人、群组、搬走的运行数），停用路径也有；
+ * 同样的内容以事务级设置 `xiongbao.hand_over` 留给应用，应用在退群或自愈提交后记一行
+ * `waker-group-handed-over` 日志，与其余 `waker-group-*` 日志同一处。不写 `audit_events`：那里的事件类型由
+ * 应用登记、按人归档，而停用路径没有发起移交的人。
  *
  * 已软删的频道不移交（core 原样返回 `created_by`）：同一个群组可能还挂着一个新开的聊天，旧聊天的成员不能
  * 把群组从新聊天的所有者手里带走。
@@ -74,10 +80,12 @@ CREATE FUNCTION public.openbot_team_channel_hand_over_write(p_channel_id text, p
   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public SET app.tenant_id = 'platform' AS $f$
 DECLARE
   original text;
+  base text;
   candidate text;
   suffix text;
   attempt int := 1;
-  runs uuid[];
+  moved boolean := false;
+  runs uuid[] := '{}';
   cards uuid[];
 BEGIN
   IF p_heir IS NULL THEN
@@ -85,58 +93,78 @@ BEGIN
     RETURN;
   END IF;
   UPDATE public.channels SET created_by = p_heir WHERE id = p_channel_id;
-  IF p_group_id IS NULL THEN RETURN; END IF;
-  SELECT name INTO original FROM public.waker_groups WHERE id = p_group_id AND tenant_id = p_from FOR UPDATE;
-  IF NOT FOUND THEN RETURN; END IF;
+  IF p_group_id IS NOT NULL THEN
+    SELECT name INTO original FROM public.waker_groups WHERE id = p_group_id AND tenant_id = p_from FOR UPDATE;
+    moved := FOUND;
+  END IF;
 
-  LOOP
-    IF attempt = 1 THEN
-      candidate := original;
-    ELSIF attempt <= 99 THEN
-      suffix := '（' || attempt || '）';
-      candidate := left(original, 80 - length(suffix)) || suffix;
-    ELSE
-      candidate := left(original, 74) || left(p_group_id::text, 6);
-    END IF;
-    BEGIN
-      UPDATE public.waker_groups SET tenant_id = p_heir, name = candidate, updated_at = now()
-       WHERE id = p_group_id AND tenant_id = p_from;
-      EXIT;
-    EXCEPTION WHEN unique_violation THEN
-      IF attempt >= 100 THEN RAISE; END IF;
-    END;
-    attempt := attempt + 1;
-  END LOOP;
+  IF moved THEN
+    -- 4.4: the chat's title is the name's truth (its name when it has none), trimmed and cut to 80
+    -- characters, so a crew already called 「周报（2）」 is not handed over as 「周报（2）（2）」. Counted in
+    -- code points, as the app's `pickGroupName` counts them.
+    SELECT left(btrim(coalesce(nullif(btrim(title, E' \t\r\n\u3000'), ''), name), E' \t\r\n\u3000'), 80)
+      INTO base FROM public.channels WHERE id = p_channel_id;
+    IF coalesce(base, '') = '' THEN base := original; END IF;
+    LOOP
+      IF attempt = 1 THEN
+        candidate := base;
+      ELSIF attempt <= 99 THEN
+        suffix := '（' || attempt || '）';
+        candidate := left(base, 80 - length(suffix)) || suffix;
+      ELSE
+        candidate := left(base, 74) || left(p_group_id::text, 6);
+      END IF;
+      BEGIN
+        UPDATE public.waker_groups SET tenant_id = p_heir, name = candidate, updated_at = now()
+         WHERE id = p_group_id AND tenant_id = p_from;
+        EXIT;
+      EXCEPTION WHEN unique_violation THEN
+        IF attempt >= 100 THEN RAISE; END IF;
+      END;
+      attempt := attempt + 1;
+    END LOOP;
 
-  DELETE FROM public.portraits WHERE tenant_id = p_heir AND subject_kind = 'group' AND subject_id = p_group_id::text;
-  UPDATE public.portraits SET tenant_id = p_heir
-   WHERE tenant_id = p_from AND subject_kind = 'group' AND subject_id = p_group_id::text;
-  DELETE FROM public.portrait_media WHERE tenant_id = p_heir AND subject_kind = 'group' AND subject_id = p_group_id::text;
-  UPDATE public.portrait_media SET tenant_id = p_heir
-   WHERE tenant_id = p_from AND subject_kind = 'group' AND subject_id = p_group_id::text;
+    DELETE FROM public.portraits WHERE tenant_id = p_heir AND subject_kind = 'group' AND subject_id = p_group_id::text;
+    UPDATE public.portraits SET tenant_id = p_heir
+     WHERE tenant_id = p_from AND subject_kind = 'group' AND subject_id = p_group_id::text;
+    DELETE FROM public.portrait_media WHERE tenant_id = p_heir AND subject_kind = 'group' AND subject_id = p_group_id::text;
+    UPDATE public.portrait_media SET tenant_id = p_heir
+     WHERE tenant_id = p_from AND subject_kind = 'group' AND subject_id = p_group_id::text;
 
-  UPDATE public.group_task_templates SET tenant_id = p_heir WHERE group_id = p_group_id AND tenant_id = p_from;
+    UPDATE public.group_task_templates SET tenant_id = p_heir WHERE group_id = p_group_id AND tenant_id = p_from;
 
-  runs := ARRAY(SELECT id FROM public.group_task_runs WHERE group_id = p_group_id AND tenant_id = p_from);
-  -- The parent cards, the step cards filed under them, and any step card a run points at by id.
-  cards := ARRAY(
-    SELECT t.id FROM public.tasks t
-     WHERE t.tenant_id = p_from
-       AND (t.id IN (SELECT r.parent_task_id FROM public.group_task_runs r WHERE r.id = ANY (runs))
-            OR t.parent_task_id IN (SELECT r.parent_task_id FROM public.group_task_runs r WHERE r.id = ANY (runs))
-            OR t.id IN (SELECT (s->>'taskId')::uuid
-                          FROM public.group_task_runs r,
-                               jsonb_array_elements(CASE WHEN jsonb_typeof(r.steps) = 'array' THEN r.steps ELSE '[]'::jsonb END) s
-                         WHERE r.id = ANY (runs)
-                           AND s->>'taskId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')));
-  UPDATE public.group_task_runs SET tenant_id = p_heir WHERE id = ANY (runs) AND tenant_id = p_from;
-  UPDATE public.tasks SET tenant_id = p_heir WHERE id = ANY (cards) AND tenant_id = p_from;
-  UPDATE public.task_archives SET tenant_id = p_heir WHERE task_id = ANY (cards) AND tenant_id = p_from;
-  UPDATE public.group_pipeline_start_receipts SET tenant_id = p_heir WHERE run_id = ANY (runs) AND tenant_id = p_from;
-  UPDATE public.flow_confirmations SET tenant_id = p_heir WHERE run_id = ANY (runs) AND tenant_id = p_from;
-  UPDATE public.flow_run_events SET tenant_id = p_heir WHERE run_id = ANY (runs) AND tenant_id = p_from;
-  UPDATE public.flow_run_retries SET tenant_id = p_heir
-   WHERE (source_run_id = ANY (runs) OR new_run_id = ANY (runs)) AND tenant_id = p_from;
+    runs := ARRAY(SELECT id FROM public.group_task_runs WHERE group_id = p_group_id AND tenant_id = p_from);
+    -- The parent cards, the step cards filed under them, and any step card a run points at by id.
+    cards := ARRAY(
+      SELECT t.id FROM public.tasks t
+       WHERE t.tenant_id = p_from
+         AND (t.id IN (SELECT r.parent_task_id FROM public.group_task_runs r WHERE r.id = ANY (runs))
+              OR t.parent_task_id IN (SELECT r.parent_task_id FROM public.group_task_runs r WHERE r.id = ANY (runs))
+              OR t.id IN (SELECT (s->>'taskId')::uuid
+                            FROM public.group_task_runs r,
+                                 jsonb_array_elements(CASE WHEN jsonb_typeof(r.steps) = 'array' THEN r.steps ELSE '[]'::jsonb END) s
+                           WHERE r.id = ANY (runs)
+                             AND s->>'taskId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')));
+    UPDATE public.group_task_runs SET tenant_id = p_heir WHERE id = ANY (runs) AND tenant_id = p_from;
+    UPDATE public.tasks SET tenant_id = p_heir WHERE id = ANY (cards) AND tenant_id = p_from;
+    UPDATE public.task_archives SET tenant_id = p_heir WHERE task_id = ANY (cards) AND tenant_id = p_from;
+    UPDATE public.group_pipeline_start_receipts SET tenant_id = p_heir WHERE run_id = ANY (runs) AND tenant_id = p_from;
+    UPDATE public.flow_confirmations SET tenant_id = p_heir WHERE run_id = ANY (runs) AND tenant_id = p_from;
+    UPDATE public.flow_run_events SET tenant_id = p_heir WHERE run_id = ANY (runs) AND tenant_id = p_from;
+    UPDATE public.flow_run_retries SET tenant_id = p_heir
+     WHERE (source_run_id = ANY (runs) OR new_run_id = ANY (runs)) AND tenant_id = p_from;
+  END IF;
+
+  /*
+   * The trail of a hand-over (the trail does not move, and no audit row names who took a group over):
+   * one line in the server log on every path, a deactivation's included; and the same facts, local to
+   * this transaction, for the app to log once its leave or heal commits (S/waker-groups/channel-link.ts).
+   */
+  RAISE LOG 'xiongbao_team_channel_hand_over: channel % handed over from % to %, crew %, % run(s) moved',
+    p_channel_id, p_from, p_heir, CASE WHEN moved THEN p_group_id END, cardinality(runs);
+  PERFORM set_config('xiongbao.hand_over', json_build_object(
+    'channelId', p_channel_id, 'from', p_from, 'to', p_heir,
+    'groupId', CASE WHEN moved THEN p_group_id END, 'runs', cardinality(runs))::text, true);
 END $f$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.openbot_team_channel_hand_over_write(text, text, text, uuid) FROM PUBLIC;

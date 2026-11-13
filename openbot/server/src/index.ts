@@ -5263,6 +5263,8 @@ await startupLifecycle.run(async (startup) => {
         actorFor,
         // The groups service's own `canUseBot`.
         canUse: canUseGroupBot,
+        // Dissolving hides the chat: the same `channel.deleted` row as DELETE /api/channels/:id.
+        auditStore: bootAuditStore,
       }),
     ),
   );

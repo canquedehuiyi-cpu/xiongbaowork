@@ -1,8 +1,13 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { AgentNotFoundError } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
+import type { AuditStore } from "../audit";
 import { type GroupConversations, GroupRefusedError } from "../channels/group";
-import type { AgentChannel, ChannelStore } from "../channels/routes";
+import {
+  type AgentChannel,
+  type ChannelStore,
+  recordChannelDeleted,
+} from "../channels/routes";
 import type { Database } from "../db/client";
 import {
   botTasks,
@@ -18,6 +23,7 @@ import { TEAM_TENANT } from "../db/schema/tenant";
 import {
   channelCreatedBy,
   channelOwner,
+  channelWakerGroupId,
   isGroupConversation,
   runtimeOrder,
   stateOf,
@@ -168,8 +174,9 @@ export type WakerGroupActions = {
   /**
    * 7.5: hide the chat, delete the crew (its flows and runs go with it), delete its portrait. false
    * when there is no such crew of the caller's; WakerGroupRunningError while a run is unfinished.
-   * The crew, its portrait and the run check are one transaction holding the crew's row; the chat is
-   * hidden by upstream's own transaction just before it (see `dissolve`).
+   * The chat is hidden by upstream's own transaction first, and leaves the `channel.deleted` row
+   * upstream's `DELETE /api/channels/:id` leaves. Then one transaction locks the chats that hold the
+   * crew, then the crew's row, checks for runs and deletes the crew and its portrait (see `dissolve`).
    */
   dissolve(owner: string, groupId: string): Promise<boolean>;
 };
@@ -232,6 +239,8 @@ export function createWakerGroupActions(deps: {
   /** The groups service's own `canUseBot` (S/index.ts). */
   canUse(ownerUserId: string, agentId: string): Promise<boolean>;
   conversions?: ConversionClaims;
+  /** Where a chat hidden by dissolving is written down, as upstream's delete route does. */
+  auditStore?: AuditStore;
   log?: Log;
 }): WakerGroupActions {
   const { database, store, link, groups } = deps;
@@ -561,13 +570,27 @@ export function createWakerGroupActions(deps: {
        * for a second (S/db/client.ts). Should the transaction below fail, the chat stays hidden and
        * the crew whole, reading "not started": dissolving again finishes the job.
        */
-      if (group.channelId)
-        await deps.channels.softDelete(
-          await deps.actorFor(owner),
-          group.channelId,
-        );
+      if (group.channelId) {
+        const actor = await deps.actorFor(owner);
+        const hidden = await deps.channels.softDelete(actor, group.channelId);
+        // Who ended the conversation for everybody in it, as upstream's delete route records it.
+        if (hidden !== false && deps.auditStore)
+          await recordChannelDeleted(deps.auditStore, actor, group.channelId);
+      }
       try {
         return await database.transaction(async (tx) => {
+          /*
+           * The chats that hold the crew first, then the crew's row: the order every other path takes
+           * them in (channel row, then crew row; 3.1.1 第 4.1 条), so a mirror write or a hand-over
+           * queues behind this rather than deadlocking with it. Deleting the crew clears their link
+           * through the foreign key, which would otherwise take these locks last. Only the ones the
+           * caller reads: a chat the creator has left past the service is not theirs to lock.
+           */
+          await tx.execute(
+            sql`select ${channels.id} from ${channels}
+                 where ${channelWakerGroupId} = ${groupId}::uuid
+                 order by ${channels.id} for update`,
+          );
           /*
            * The crew's row, locked. A run being inserted holds a key-share lock on it (the foreign
            * key), so the two take turns: a run that got there first is seen by the check below and

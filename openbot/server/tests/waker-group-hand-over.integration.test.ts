@@ -735,6 +735,55 @@ describe("hand-over function (0207)", () => {
     expect((await channelRow(channelId)).title).toBe(title);
   });
 
+  test("a crew already suffixed is named from the chat's title, not given a second suffix", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    const title = `周报-${randomUUID().slice(0, 8)}`;
+    // The chat is called 「周报」 and its crew 「周报（2）」, as 4.4 names one whose title was taken.
+    await runAsTenant(alice.id, async () => {
+      await database.execute(
+        sql`update channels set title = ${title} where id = ${channelId}`,
+      );
+      await database
+        .update(wakerGroups)
+        .set({ name: `${title}（2）` })
+        .where(eq(wakerGroups.id, groupId));
+    });
+    await crew(bob, title);
+    await crew(bob, `${title}（2）`);
+
+    expect(await leaveAndHandOver(alice, channelId)).toBe(bob.id);
+
+    expect(await crewRow(groupId)).toEqual({
+      name: `${title}（3）`,
+      tenantId: bob.id,
+    });
+  });
+
+  test("the 80-character cut counts code points on both sides, so the heir's heal keeps the name", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    const title = "😀".repeat(80);
+    await runAsTenant(alice.id, () =>
+      database.execute(
+        sql`update channels set title = ${title} where id = ${channelId}`,
+      ),
+    );
+    await crew(bob, title);
+
+    expect(await leaveAndHandOver(alice, channelId)).toBe(bob.id);
+
+    const handed = `${"😀".repeat(77)}（2）`;
+    expect((await crewRow(groupId))?.name).toBe(handed);
+    // The heal in the heir's frame picks the same name for the same title, so nothing changes.
+    const { lines, log } = collected();
+    expect(await linkCore(log).reconcile(channelId)).toBe(true);
+    expect((await crewRow(groupId))?.name).toBe(handed);
+    expect(lines).toEqual([]);
+  });
+
   for (const status of ["running", "awaiting_action"] as const) {
     test(`nothing moves while a crew run is still going (${status})`, async () => {
       const alice = await person("alice");
@@ -1082,6 +1131,31 @@ describe("deactivation (0207 trigger)", () => {
       made.carol.id,
     ]);
     expect((await crewRow(made.groupId))?.tenantId).toBe(made.alice.id);
+  });
+
+  test("a deactivation's hand-over leaves its trail: who had it, who has it, the runs that moved", async () => {
+    const made = await threeWithAFlow();
+
+    const note = await runAsTenant(`${prefix}-admin`, () =>
+      database.transaction(async (tx) => {
+        await tx
+          .insert(revokedAccess)
+          .values({ email: emailOf(made.alice), revokedBy: `${prefix}-admin` });
+        const [row] = (await tx.execute(
+          sql`select current_setting('xiongbao.hand_over', true) as moved`,
+        )) as unknown as { moved: string | null }[];
+        return row?.moved ?? null;
+      }),
+    );
+
+    expect(JSON.parse(note ?? "null")).toEqual({
+      channelId: made.channelId,
+      from: made.alice.id,
+      to: made.bob.id,
+      groupId: made.groupId,
+      runs: 1,
+    });
+    await expectHandedToBob(made);
   });
 
   test("an operator's tenant suspension does the same", async () => {
@@ -1754,6 +1828,48 @@ describe("leaving through the service", () => {
     expect((await api(alice, "GET", `/${channelId}`)).status).toBe(404);
   });
 
+  test("a leave that hands the group over says so in the log once it commits", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    await runWithCards(alice, groupId, "done");
+    await runWithCards(alice, groupId, "done");
+    const { lines, log } = collected();
+    const api = groupApi(linkCore(log), log);
+
+    expect(
+      (await api(alice, "DELETE", `/${channelId}/members/${alice.id}`)).status,
+    ).toBe(204);
+
+    expect(
+      lines.filter((line) => line.type === "waker-group-handed-over"),
+    ).toEqual([
+      {
+        type: "waker-group-handed-over",
+        channelId,
+        from: alice.id,
+        to: bob.id,
+        groupId,
+        runs: 2,
+      },
+    ]);
+  });
+
+  test("a leave refused for a running flow logs no hand-over", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    await runWithCards(alice, groupId, "running");
+    const { lines, log } = collected();
+    const api = groupApi(linkCore(log), log);
+
+    expect(
+      (await api(alice, "DELETE", `/${channelId}/members/${alice.id}`)).status,
+    ).toBe(400);
+
+    expect(lines).toEqual([]);
+  });
+
   test("the upstream service on its own still refuses a creator who leaves while others are in", async () => {
     const alice = await person("alice");
     const bob = await person("bob");
@@ -2246,5 +2362,39 @@ describe("for-channel hand-over", () => {
     });
     expect((await channelRow(made.channelId)).created_by).toBe(made.alice.id);
     expect((await crewRow(made.groupId))?.tenantId).toBe(made.alice.id);
+  });
+
+  test("a stranger in another tenant gets 404 and hands nothing over, even with the creator gone", async () => {
+    const made = await leftPastTheService();
+    const dave = await person("dave");
+    const { lines, log } = collected();
+    const api = crewApi(linkCore(log));
+
+    const answer = await api(dave, "POST", `/for-channel/${made.channelId}`);
+
+    expect(answer.status).toBe(404);
+    expect((await channelRow(made.channelId)).created_by).toBe(made.alice.id);
+    expect((await crewRow(made.groupId))?.tenantId).toBe(made.alice.id);
+    expect(lines).toEqual([]);
+  });
+
+  test("a hand-over made by opening settings is logged", async () => {
+    const made = await leftPastTheService();
+    await runWithCards(made.alice, made.groupId, "done");
+    const { lines, log } = collected();
+    const api = crewApi(linkCore(log));
+
+    expect(
+      (await api(made.bob, "POST", `/for-channel/${made.channelId}`)).status,
+    ).toBe(200);
+
+    expect(lines).toContainEqual({
+      type: "waker-group-handed-over",
+      channelId: made.channelId,
+      from: made.alice.id,
+      to: made.bob.id,
+      groupId: made.groupId,
+      runs: 1,
+    });
   });
 });

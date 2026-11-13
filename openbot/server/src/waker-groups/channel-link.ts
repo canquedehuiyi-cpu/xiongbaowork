@@ -97,12 +97,13 @@ export function isGroupConversation(row: {
 
 const NAME_LIMIT = 80;
 
-/** At most `limit` UTF-16 units, never ending in half of a surrogate pair. */
+/**
+ * At most `limit` characters, counted in code points: what 0207's `left()` and `length()` count when
+ * a hand-over picks the name, so both sides agree on 80 for a name with emoji in it (4.4).
+ */
 function clip(text: string, limit: number) {
-  if (text.length <= limit) return text;
-  const cut = text.slice(0, limit);
-  const last = cut.charCodeAt(cut.length - 1);
-  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+  const points = Array.from(text);
+  return points.length <= limit ? text : points.slice(0, limit).join("");
 }
 
 /** The name a crew would take for `wanted` before any clash: trimmed, within 80 characters. */
@@ -110,7 +111,7 @@ const baseName = (wanted: string) => clip(wanted.trim(), NAME_LIMIT);
 
 /** `body` with `suffix` after it, the body cut so the whole stays within 80 characters. */
 const suffixed = (body: string, suffix: string) =>
-  `${clip(body, NAME_LIMIT - suffix.length)}${suffix}`;
+  `${clip(body, NAME_LIMIT - Array.from(suffix).length)}${suffix}`;
 
 /**
  * 4.4 取名：wanted 截 80 字；撞名依次「（2）」…「（99）」，再撞加 id 前 6 位；except 为自身 id
@@ -185,11 +186,6 @@ export type WakerGroupLink = {
    * 所有者帧读不到这个频道时同 reconcile：不改名，记 waker-group-owner-gone。
    */
   syncName(channelId: string): Promise<void>;
-  /**
-   * 频道挂着的群组 id。在 `platform` 帧里读：只能用于调用方已经校验过读权限的频道 id，否则任何
-   * 人都能探出别人的频道挂没挂、挂的是哪个群组。
-   */
-  linkedGroupOf(channelId: string): Promise<string | null>;
   /** 挂着它的未删除频道，调用者帧下读得到才返回。 */
   liveChannelOf(groupId: string): Promise<string | null>;
   /**
@@ -234,15 +230,33 @@ class OwnerLeft extends Error {}
 /** 3.1.1: what the person who started a group is told when a crew run stops them leaving. */
 const RUN_STILL_GOING = "有组团流程正在运行，先停下再退群。";
 
+/** What 0207's write function leaves for the app when it hands a group over (`xiongbao.hand_over`). */
+type HandedOver = {
+  channelId: string;
+  from: string;
+  to: string;
+  groupId: string | null;
+  runs: number;
+};
+
 /**
  * 0207's one function the app may call: in the executor's frame, it hands a shared group whose creator
- * has left or been deactivated to its earliest member, and answers who owns it afterwards.
+ * has left or been deactivated to its earliest member, and answers who owns it afterwards. `moved` is
+ * the hand-over this call made, read back from the transaction it ran in; null when nothing moved.
+ * The executor must be a transaction: the note is local to it.
  */
 async function handOverIn(executor: Executor, channelId: string) {
   const [row] = (await executor.execute(
     sql`select public.xiongbao_team_channel_hand_over(${channelId}) as owner`,
   )) as { owner: string | null }[];
-  return row?.owner ?? null;
+  const [note] = (await executor.execute(
+    sql`select current_setting('xiongbao.hand_over', true) as moved`,
+  )) as { moved: string | null }[];
+  const moved = note?.moved ? (JSON.parse(note.moved) as HandedOver) : null;
+  return {
+    owner: row?.owner ?? null,
+    moved: moved?.channelId === channelId ? moved : null,
+  };
 }
 
 /** The SQLSTATE drizzle wraps; Bun reports it as `errno` (see store.ts `create`). */
@@ -444,6 +458,14 @@ export function createWakerGroupLink(deps: {
     });
   }
 
+  /**
+   * A hand-over that committed, in the log: whose the group was, whose it is, how many runs went with
+   * it (3.1.1 第 5 条). A deactivation's hand-over has only 0207's server-log line.
+   */
+  function handedOver(moved: HandedOver | null) {
+    if (moved) log({ type: "waker-group-handed-over", ...moved });
+  }
+
   /** The channel's facts and its owner, when it has one. */
   async function owned(channelId: string) {
     const channel = await facts(channelId);
@@ -561,10 +583,6 @@ export function createWakerGroupLink(deps: {
       });
     },
 
-    async linkedGroupOf(channelId) {
-      return (await facts(channelId))?.groupId ?? null;
-    },
-
     async liveChannelOf(groupId) {
       const rows = (await database.execute(
         sql`select ${channels.id} as id from ${channels}
@@ -603,10 +621,14 @@ export function createWakerGroupLink(deps: {
               .where(
                 sql`${intelligenceChannelMappings.channelId} = ${channelId} and ${intelligenceChannelMappings.userId} = ${owner}`,
               );
-            const now = await handOverIn(tx, channelId);
-            return { heir: now && now !== owner ? now : null };
+            const { owner: now, moved } = await handOverIn(tx, channelId);
+            return { heir: now && now !== owner ? now : null, moved };
           }),
-        );
+        ).then((left) => {
+          if (!left) return null;
+          handedOver(left.moved);
+          return { heir: left.heir };
+        });
       } catch (error) {
         if (stateOf(error) === "55006")
           throw new GroupRefusedError(RUN_STILL_GOING);
@@ -616,10 +638,11 @@ export function createWakerGroupLink(deps: {
 
     async handOver(channelId) {
       try {
-        return {
-          owner: await handOverIn(database, channelId),
-          deferred: false,
-        };
+        const { owner, moved } = await database.transaction((tx) =>
+          handOverIn(tx, channelId),
+        );
+        handedOver(moved);
+        return { owner, deferred: false };
       } catch (error) {
         if (stateOf(error) !== "55006") throw error;
         log({ type: "waker-group-hand-over-deferred", channelId });
@@ -727,7 +750,7 @@ export function withWakerGroupLink<T extends LinkedGroupWrites>(
 
 /**
  * 4.4 改名：经 channelStore.rename 给频道改名的路径（改名对话框 PUT /api/channels/:id/title、
- * propose_group_change 的改名步骤；PATCH /api/waker-groups/:id 由后续任务接入，届时也走这里），上游成功
+ * propose_group_change 的改名步骤；PATCH /api/waker-groups/:id 已在 Task 4 接入，也走这里），上游成功
  * 之后 link.syncName(channelId)，挂接的群组跟着改名；没挂接的什么都不做。上游的「只有发起人能改」照旧先跑。
  * 同步失败只记 {"type":"waker-group-name-sync-failed","channelId","error"}，不让改名失败。
  */
