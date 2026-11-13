@@ -1,7 +1,8 @@
 # Tag-triggered release (phase 6, R1). A person pushes a tag; this workflow never creates or moves
 # one. The image is built once, pushed to GHCR by digest only, smoke-tested (Gate 1) on exactly that
-# pulled digest, and only then given human-readable tags and a GitHub Release. The only credential
-# is the workflow's own GITHUB_TOKEN.
+# pulled digest, and only then given human-readable tags and a GitHub Release. Besides the
+# workflow's own GITHUB_TOKEN, the only credentials are those of our own channel (Task U3: the
+# registry mirror pushes to, the download page github-release uploads to), and only once configured.
 name: 熊宝发布
 
 on:
@@ -101,6 +102,41 @@ jobs:
       skip_image: true
     permissions:
       contents: read
+
+  # Our own channel (Task U3) in one place, in every run, dry runs included: where the image and the
+  # downloads go, or 「未配置自有渠道」 while the variables are unset and those steps are skipped.
+  own-channel:
+    needs: tag-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - id: summary
+        name: Our own channel
+        env:
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
+          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### 自有渠道"
+            if [ -n "$XB_REGISTRY" ]; then
+              printf -- '- 镜像：只拷 linux/amd64 平台清单到 `%s/%s:%s`\n' "$XB_REGISTRY" "$XB_IMAGE_REPOSITORY" "$TAG"
+            else
+              echo "- 未配置自有渠道（XB_REGISTRY 未设）：镜像不拷到自有仓库，container-images.json 的 images.xiongbao 仍指向 GHCR。"
+            fi
+            if [ -n "$XB_DOWNLOAD_BUCKET" ]; then
+              printf -- '- 下载页：container-images.json、delivery.env.example、compose.delivery.yml 上传到 `s3://%s/%s/`\n' "$XB_DOWNLOAD_BUCKET" "$TAG"
+            else
+              echo "- 未配置自有渠道（XB_DOWNLOAD_BUCKET 未设）：清单和样例不上传自有下载页。"
+            fi
+            if [ "$DRY_RUN" = true ]; then
+              echo "- 试运行：不推送、不上传。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   image:
     needs: [tag-check, checks]
@@ -338,8 +374,121 @@ jobs:
             echo "$t -> $got"
           done
 
+  # Our own registry (Task U3): the verified image is copied there as its linux/amd64 manifest alone,
+  # under the release tag. The index around it and its provenance and SBOM attestations stay on GHCR:
+  # they name this repository and the upstream package. Every step is skipped until XB_REGISTRY is
+  # set (own-channel says so in the summary); the job itself always runs, so github-release still
+  # follows it.
+  mirror:
+    needs: [tag-check, image, promote]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      repository: ${{ steps.copy.outputs.repository }}
+      digest: ${{ steps.copy.outputs.digest }}
+    steps:
+      - if: ${{ vars.XB_REGISTRY != '' }}
+        uses: imjasonh/setup-crane@feee3b6bb0d4c68370f256a4502498c9227e5c6b # v0.7
+        with:
+          version: v0.22.1
+      # crane reads a Docker config of its own. The credentials go from the environment into that
+      # file through jq's env, never as an argument to any command, and nothing prints them.
+      - id: login
+        name: Sign in to GHCR and our registry
+        if: ${{ vars.XB_REGISTRY != '' }}
+        env:
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
+          XB_REGISTRY_USERNAME: ${{ secrets.XB_REGISTRY_USERNAME }}
+          XB_REGISTRY_PASSWORD: ${{ secrets.XB_REGISTRY_PASSWORD }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for name in XB_IMAGE_REPOSITORY XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::XB_REGISTRY is set but $name is not."
+              exit 1
+            fi
+          done
+          if [[ ! "$XB_REGISTRY" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$ ]]; then
+            echo "::error::XB_REGISTRY must be a registry host (no scheme, no path): '$XB_REGISTRY'"
+            exit 1
+          fi
+          if [[ ! "$XB_IMAGE_REPOSITORY" =~ ^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]; then
+            echo "::error::XB_IMAGE_REPOSITORY is not a lowercase repository path: '$XB_IMAGE_REPOSITORY'"
+            exit 1
+          fi
+          config="$RUNNER_TEMP/own-channel-docker"
+          mkdir -p "$config"
+          chmod 700 "$config"
+          umask 077
+          jq -n --arg registry "$XB_REGISTRY" '{auths: {
+            ($registry): {auth: ("\(env.XB_REGISTRY_USERNAME):\(env.XB_REGISTRY_PASSWORD)" | @base64)},
+            "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
+          }}' > "$config/config.json"
+          printf 'DOCKER_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
+      - id: copy
+        name: Copy the linux/amd64 manifest to our registry
+        if: ${{ vars.XB_REGISTRY != '' }}
+        env:
+          REPOSITORY: ${{ needs.image.outputs.repository }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          # The pushed digest is an index: the linux/amd64 image, plus attestation manifests whose
+          # platform is unknown/unknown. Exactly one image manifest for linux/amd64 is expected.
+          platforms="$(crane manifest "$REPOSITORY@$DIGEST" | jq -c '[.manifests[]? | select(
+            .platform.os == "linux" and .platform.architecture == "amd64" and
+            (.mediaType == "application/vnd.oci.image.manifest.v1+json" or
+             .mediaType == "application/vnd.docker.distribution.manifest.v2+json")
+          ) | .digest]')"
+          if [ "$(jq length <<< "$platforms")" != 1 ]; then
+            echo "::error::$REPOSITORY@$DIGEST does not hold exactly one linux/amd64 image manifest: $platforms"
+            exit 1
+          fi
+          PLATFORM_DIGEST="$(jq -r '.[0]' <<< "$platforms")"
+          [[ "$PLATFORM_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          target="$XB_REGISTRY/$XB_IMAGE_REPOSITORY"
+          # The version tag is immutable here too (as in promote): a re-run may find its own copy,
+          # never another image. Only "not found" counts as absent.
+          if existing="$(crane digest "$target:$TAG" 2>"$RUNNER_TEMP/crane-digest.err")"; then
+            if [ "$existing" != "$PLATFORM_DIGEST" ]; then
+              echo "::error::$target:$TAG already names $existing; refusing to move it to $PLATFORM_DIGEST"
+              exit 1
+            fi
+          elif ! grep -Eqi 'MANIFEST_UNKNOWN|NAME_UNKNOWN|not found' "$RUNNER_TEMP/crane-digest.err"; then
+            cat "$RUNNER_TEMP/crane-digest.err" >&2
+            echo "::error::could not tell whether $target:$TAG exists"
+            exit 1
+          fi
+          crane copy "$REPOSITORY@$PLATFORM_DIGEST" "$target:$TAG"
+          # Read it back: the tag names that one manifest, and it is an image, not an index.
+          got="$(crane digest "$target:$TAG")"
+          if [ "$got" != "$PLATFORM_DIGEST" ]; then
+            echo "::error::$target:$TAG resolves to $got, expected $PLATFORM_DIGEST"
+            exit 1
+          fi
+          crane manifest "$target@$got" | jq -e '.mediaType | test("manifest") and (test("index|list") | not)' >/dev/null
+          {
+            printf 'repository=%s\n' "$target"
+            printf 'digest=%s\n' "$got"
+          } >> "$GITHUB_OUTPUT"
+          printf -- '- 自有仓库：`%s:%s` → `%s`（只有 linux/amd64 平台清单）\n' "$target" "$TAG" "$got" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the registry sign-in
+        if: ${{ vars.XB_REGISTRY != '' }}
+        run: rm -rf "$RUNNER_TEMP/own-channel-docker"
+
   github-release:
-    needs: [tag-check, image, verify-digest, promote]
+    needs: [tag-check, image, verify-digest, promote, mirror]
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     environment: release
@@ -350,31 +499,83 @@ jobs:
         with:
           name: release-notes
           path: notes
-      - name: Write container-images.json
+      # The delivery samples for our download page, from the tagged commit.
+      - if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: source
+          sparse-checkout: openbot/docker
+      - id: record
+        name: Write container-images.json
         env:
           VERSION: ${{ needs.tag-check.outputs.version }}
           REPOSITORY: ${{ needs.image.outputs.repository }}
           DIGEST: ${{ needs.image.outputs.digest }}
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          OWN_REPOSITORY: ${{ needs.mirror.outputs.repository }}
+          OWN_DIGEST: ${{ needs.mirror.outputs.digest }}
         run: |
           set -euo pipefail
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          # images.xiongbao is our registry's copy once XB_REGISTRY is set (mirror made and read it
+          # back); until then it is the GHCR image, the same as images.openbot.
+          if [ -n "$XB_REGISTRY" ]; then
+            if [ -z "$OWN_REPOSITORY" ] || [[ ! "$OWN_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::XB_REGISTRY is set but mirror reported no copy: '$OWN_REPOSITORY' '$OWN_DIGEST'"
+              exit 1
+            fi
+          else
+            OWN_REPOSITORY="$REPOSITORY"
+            OWN_DIGEST="$DIGEST"
+          fi
           jq -n \
             --arg version "$VERSION" \
             --arg commit "$GITHUB_SHA" \
             --arg repository "$REPOSITORY" \
             --arg digest "$DIGEST" \
-            '{
-              repository: $repository,
-              digest: $digest,
-              reference: ($repository + "@" + $digest)
-            } as $image | {
+            --arg own_repository "$OWN_REPOSITORY" \
+            --arg own_digest "$OWN_DIGEST" \
+            'def image($r; $d): { repository: $r, digest: $d, reference: ($r + "@" + $d) };
+            {
               version: $version,
               commit: $commit,
-              # Same image under both keys. `openbot` is read by the promote step and the installers
-              # already out; `xiongbao` is the new name, and moves to its own repository later.
-              images: { xiongbao: $image, openbot: $image }
+              # `openbot` is read by the promote step and the installers already out, and stays on
+              # GHCR; `xiongbao` is the new name.
+              images: {
+                xiongbao: image($own_repository; $own_digest),
+                openbot: image($repository; $digest)
+              }
             }' > container-images.json
           cat container-images.json
+      # Our download page (Task U3), before the GitHub Release: a failed upload leaves nothing
+      # published, and the job can simply be re-run. clean-deploy reads these back as a customer.
+      - id: upload
+        name: Upload the record and the delivery samples to our download page
+        if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        env:
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
+          XB_DOWNLOAD_ENDPOINT: ${{ vars.XB_DOWNLOAD_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.XB_DOWNLOAD_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.XB_DOWNLOAD_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          set -euo pipefail
+          for name in XB_DOWNLOAD_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::XB_DOWNLOAD_BUCKET is set but ${name/#AWS_/XB_DOWNLOAD_} is not."
+              exit 1
+            fi
+          done
+          aws --version
+          for file in container-images.json source/openbot/docker/delivery.env.example source/openbot/docker/compose.delivery.yml; do
+            aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT" --only-show-errors \
+              "$file" "s3://$XB_DOWNLOAD_BUCKET/$TAG/${file##*/}"
+          done
       - name: Publish the GitHub Release (existing tag only)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -144,7 +144,12 @@ test("the tag must be device-vX.Y.Z[-rc.N] for the version package.json builds",
 });
 
 test("every action is pinned to a commit SHA, as in the repository's other workflows", () => {
-  for (const file of ["device-release.yml", "ci.yml"]) {
+  for (const file of [
+    "device-release.yml",
+    "ci.yml",
+    "release.yml",
+    "clean-deploy.yml",
+  ]) {
     const doc = Bun.YAML.parse(readFileSync(join(workflows, file), "utf8"));
     const uses = [
       ...allSteps(doc).map((s) => s.uses),
@@ -195,15 +200,22 @@ test("no run script interpolates an expression, and secrets reach steps only thr
     "DEVICE_APPLE_CERTIFICATE",
     "DEVICE_APPLE_CERTIFICATE_PASSWORD",
     "GITHUB_TOKEN",
+    "XB_DOWNLOAD_ACCESS_KEY_ID",
+    "XB_DOWNLOAD_SECRET_ACCESS_KEY",
   ]);
   const paths = secretPaths(workflow.jobs);
   expect(paths.length).toBeGreaterThan(0);
   for (const path of paths) {
     expect(path).toMatch(/^[\w-]+\.steps\.\d+\.env\.\w+$/);
   }
-  // The Apple secrets go only to the macOS job.
-  for (const path of paths.filter((p) => !p.startsWith("publish."))) {
+  // The Apple secrets go only to the macOS job, the download page's keys only to its upload.
+  for (const path of paths.filter(
+    (p) => !p.startsWith("publish.") && !p.startsWith("download-page."),
+  )) {
     expect(path.startsWith("macos.")).toBe(true);
+  }
+  for (const path of paths.filter((p) => p.startsWith("download-page."))) {
+    expect(path).toMatch(/^download-page\.steps\.\d+\.env\.AWS_\w+$/);
   }
   // CI's throwaway rehearsal certificate can never sign a release.
   expect(text).not.toContain("test-certificate");
@@ -1127,7 +1139,9 @@ test("the desktop probe runs on three platforms, fetches the pinned binary and m
 test("device jobs and the server side both use Bun 1.4.4", () => {
   const bunOf = (doc, name) =>
     doc.jobs[name].steps
-      .filter((step) => String(step.uses ?? "").startsWith("oven-sh/setup-bun@"))
+      .filter((step) =>
+        String(step.uses ?? "").startsWith("oven-sh/setup-bun@"),
+      )
       .map((step) => String(step.with["bun-version"]));
   for (const name of [
     "win1-windows",
@@ -1187,10 +1201,9 @@ test("every device bundle fetches and verifies agent-desktop before tauri build"
     if (job === "device-bundle-linux" || job === "linux") {
       const check = runs.find((r) => r.includes("dpkg-deb -c"));
       expect(check, `${job} lists the deb contents`).toBeDefined();
-      expect(
-        check,
-        `${job} checks the deb carries agent-desktop`,
-      ).toContain("usr/bin/agent-desktop$");
+      expect(check, `${job} checks the deb carries agent-desktop`).toContain(
+        "usr/bin/agent-desktop$",
+      );
     }
   }
 });
@@ -1249,7 +1262,10 @@ test("image and deb are brand-scanned", () => {
 const containerRelease = Bun.YAML.parse(
   readFileSync(join(workflows, "release.yml"), "utf8"),
 );
-const containerReleaseText = readFileSync(join(workflows, "release.yml"), "utf8");
+const containerReleaseText = readFileSync(
+  join(workflows, "release.yml"),
+  "utf8",
+);
 
 test("release labels carry title and vendor, not the repository", () => {
   const labels = containerReleaseText
@@ -1277,12 +1293,743 @@ test("release labels carry title and vendor, not the repository", () => {
   expect(brandStep.run).toContain("company_name");
 });
 
-test("container-images.json carries images.xiongbao alongside images.openbot", () => {
-  const step = Object.values(containerRelease.jobs)
-    .flatMap((j) => j.steps ?? [])
-    .find((s) => s.name === "Write container-images.json");
-  expect(step).toBeDefined();
-  expect(step.run).toMatch(
-    /images:\s*\{\s*xiongbao:\s*\$image,\s*openbot:\s*\$image\s*\}/,
+// Task 17: our own channel (Task U3's variables and secrets). The image goes to our registry as its
+// linux/amd64 manifest alone, the record and the samples to our download page, the device installers
+// beside them; clean-deploy then fetches them the way a customer does. Until the variables are set,
+// every one of those steps is skipped and the run says 「未配置自有渠道」.
+const cleanDeployText = readFileSync(
+  join(workflows, "clean-deploy.yml"),
+  "utf8",
+);
+const cleanDeploy = Bun.YAML.parse(cleanDeployText);
+
+const INDEX = `sha256:${"1".repeat(64)}`;
+const PLATFORM = `sha256:${"2".repeat(64)}`;
+const ATTESTATION = `sha256:${"3".repeat(64)}`;
+const OTHER = `sha256:${"4".repeat(64)}`;
+const OWN = {
+  XB_REGISTRY: "registry.example.com",
+  XB_IMAGE_REPOSITORY: "xb/app",
+};
+const OWN_REPOSITORY = "registry.example.com/xb/app";
+const CREDENTIALS = {
+  XB_REGISTRY_USERNAME: "push-user-a1b2",
+  XB_REGISTRY_PASSWORD: "push-password-c3d4",
+  GHCR_USERNAME: "someone",
+  GHCR_TOKEN: "ghcr-token-e5f6",
+};
+const DOWNLOAD = {
+  XB_DOWNLOAD_BUCKET: "downloads",
+  XB_DOWNLOAD_ENDPOINT: "https://s3.example.com",
+  AWS_ACCESS_KEY_ID: "access-key-g7h8",
+  AWS_SECRET_ACCESS_KEY: "secret-key-i9j0",
+};
+
+/** A directory of stub commands; each records its arguments, one call per line, in `calls`. */
+function stubs(scripts) {
+  const bin = join(scratch(), "bin");
+  mkdirSync(bin);
+  const calls = join(scratch(), "calls");
+  writeFileSync(calls, "");
+  for (const [name, body] of Object.entries(scripts)) {
+    writeFileSync(
+      join(bin, name),
+      `#!/usr/bin/env bash\nprintf '${name} %s\\n' "$*" >> ${JSON.stringify(calls)}\n${body}\n`,
+    );
+    chmodSync(join(bin, name), 0o755);
+  }
+  return {
+    path: `${bin}:${process.env.PATH}`,
+    calls: () => readFileSync(calls, "utf8").trim().split("\n").filter(Boolean),
+  };
+}
+
+/** A registry with one release index (the image and its attestation) behind a stub crane. */
+function registry({ index, existing } = {}) {
+  const state = scratch();
+  writeFileSync(
+    join(state, "index.json"),
+    JSON.stringify(
+      index ?? {
+        schemaVersion: 2,
+        mediaType: "application/vnd.oci.image.index.v1+json",
+        manifests: [
+          {
+            mediaType: "application/vnd.oci.image.manifest.v1+json",
+            digest: PLATFORM,
+            size: 1,
+            platform: { architecture: "amd64", os: "linux" },
+          },
+          {
+            mediaType: "application/vnd.oci.image.manifest.v1+json",
+            digest: ATTESTATION,
+            size: 1,
+            annotations: {
+              "vnd.docker.reference.digest": PLATFORM,
+              "vnd.docker.reference.type": "attestation-manifest",
+            },
+            platform: { architecture: "unknown", os: "unknown" },
+          },
+        ],
+      },
+    ),
   );
+  writeFileSync(
+    join(state, "platform.json"),
+    JSON.stringify({
+      schemaVersion: 2,
+      mediaType: "application/vnd.oci.image.manifest.v1+json",
+    }),
+  );
+  if (existing) writeFileSync(join(state, "existing"), existing);
+  const s = JSON.stringify(state);
+  return stubs({
+    crane: `case "$1" in
+  manifest)
+    case "$2" in
+      *@${INDEX}) cat ${s}/index.json ;;
+      *@${PLATFORM}) cat ${s}/platform.json ;;
+      *) echo "MANIFEST_UNKNOWN: manifest unknown" >&2; exit 1 ;;
+    esac ;;
+  digest)
+    if [ -f ${s}/existing ]; then cat ${s}/existing; echo; else echo "GET $2: MANIFEST_UNKNOWN: manifest unknown; unknown tag" >&2; exit 1; fi ;;
+  copy) printf '%s' "\${2##*@}" > ${s}/existing ;;
+  *) exit 2 ;;
+esac`,
+  });
+}
+
+function mirror(env = {}, crane = registry()) {
+  const summary = join(scratch(), "summary");
+  writeFileSync(summary, "");
+  const result = run(
+    "mirror",
+    "copy",
+    {
+      REPOSITORY: "ghcr.io/o/r",
+      DIGEST: INDEX,
+      TAG: "v0.2.0",
+      RUNNER_TEMP: scratch(),
+      GITHUB_STEP_SUMMARY: summary,
+      ...OWN,
+      ...env,
+    },
+    scratch(),
+    crane.path,
+    containerRelease,
+  );
+  return {
+    ...result,
+    calls: crane.calls(),
+    summary: readFileSync(summary, "utf8"),
+  };
+}
+
+test("mirror copies only the platform manifest to our registry", () => {
+  const job = containerRelease.jobs.mirror;
+  expect(job.needs).toEqual(["tag-check", "image", "promote"]);
+  expect(job.if).toBe(expression("!inputs.dry_run"));
+  expect(job.environment).toBe("release");
+  expect(job.permissions).toEqual({ contents: "read", packages: "read" });
+  expect(job.outputs).toEqual({
+    repository: expression("steps.copy.outputs.repository"),
+    digest: expression("steps.copy.outputs.digest"),
+  });
+  const copy = step("mirror", "copy", containerRelease);
+  // As written: the copy names the platform manifest's digest, never the index's, and one tag.
+  const lines = copy.run.split("\n").filter((l) => l.includes("crane copy"));
+  expect(lines.length).toBe(1);
+  expect(lines[0]).toContain('"$REPOSITORY@$PLATFORM_DIGEST"');
+  expect(lines[0]).not.toContain("@$DIGEST");
+  expect(copy.run).not.toContain("--all-tags");
+  expect(copy.run).not.toContain("--platform");
+  expect(copy.env.DIGEST).toBe(expression("needs.image.outputs.digest"));
+  // As run: the linux/amd64 manifest is copied under the release tag, the attestation is not.
+  const ok = mirror();
+  expect(ok.status).toBe(0);
+  const copies = ok.calls.filter((c) => c.startsWith("crane copy"));
+  expect(copies).toEqual([
+    `crane copy ghcr.io/o/r@${PLATFORM} ${OWN_REPOSITORY}:v0.2.0`,
+  ]);
+  expect(ok.calls.join("\n")).not.toContain(ATTESTATION);
+  expect(ok.outputs).toEqual({ repository: OWN_REPOSITORY, digest: PLATFORM });
+  expect(ok.summary).toContain(`${OWN_REPOSITORY}:v0.2.0`);
+  expect(ok.summary).toContain(PLATFORM);
+  // A re-run over the same copy is fine; a tag that already names another image is never moved.
+  expect(mirror({}, registry({ existing: PLATFORM })).status).toBe(0);
+  const moved = mirror({}, registry({ existing: OTHER }));
+  expect(moved.status).not.toBe(0);
+  expect(moved.calls.some((c) => c.startsWith("crane copy"))).toBe(false);
+  expect(moved.outputs).toEqual({});
+  // Not exactly one linux/amd64 image manifest (none, two, or a plain manifest): nothing is copied.
+  const amd64 = (digest) => ({
+    mediaType: "application/vnd.oci.image.manifest.v1+json",
+    digest,
+    size: 1,
+    platform: { architecture: "amd64", os: "linux" },
+  });
+  for (const index of [
+    { mediaType: "application/vnd.oci.image.index.v1+json", manifests: [] },
+    {
+      mediaType: "application/vnd.oci.image.index.v1+json",
+      manifests: [amd64(PLATFORM), amd64(OTHER)],
+    },
+    { mediaType: "application/vnd.oci.image.manifest.v1+json", layers: [] },
+  ]) {
+    const refused = mirror({}, registry({ index }));
+    expect(refused.status).not.toBe(0);
+    expect(refused.calls.some((c) => c.startsWith("crane copy"))).toBe(false);
+  }
+  // crane is installed by a pinned action at a pinned release.
+  const setup = job.steps.find((s) =>
+    s.uses?.startsWith("imjasonh/setup-crane@"),
+  );
+  expect(setup.uses).toMatch(/^imjasonh\/setup-crane@[0-9a-f]{40}$/);
+  expect(setup.with.version).toMatch(/^v\d+\.\d+\.\d+$/);
+});
+
+test("container-images.json names our registry's copy as images.xiongbao once it exists", () => {
+  const record = (env) => {
+    const cwd = scratch();
+    const result = run(
+      "github-release",
+      "record",
+      {
+        VERSION: "0.2.0",
+        GITHUB_SHA: "abc",
+        REPOSITORY: "ghcr.io/o/r",
+        DIGEST: INDEX,
+        XB_REGISTRY: "",
+        OWN_REPOSITORY: "",
+        OWN_DIGEST: "",
+        ...env,
+      },
+      cwd,
+      process.env.PATH,
+      containerRelease,
+    );
+    const file = join(cwd, "container-images.json");
+    return {
+      ...result,
+      json: existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null,
+    };
+  };
+  const ghcr = {
+    repository: "ghcr.io/o/r",
+    digest: INDEX,
+    reference: `ghcr.io/o/r@${INDEX}`,
+  };
+  // Not configured: the same image under both keys, as before.
+  const unset = record({});
+  expect(unset.status).toBe(0);
+  expect(unset.json).toEqual({
+    version: "0.2.0",
+    commit: "abc",
+    images: { xiongbao: ghcr, openbot: ghcr },
+  });
+  // Configured: images.xiongbao is the platform manifest mirror copied; images.openbot stays GHCR.
+  const own = record({
+    XB_REGISTRY: OWN.XB_REGISTRY,
+    OWN_REPOSITORY,
+    OWN_DIGEST: PLATFORM,
+  });
+  expect(own.status).toBe(0);
+  expect(own.json.images).toEqual({
+    xiongbao: {
+      repository: OWN_REPOSITORY,
+      digest: PLATFORM,
+      reference: `${OWN_REPOSITORY}@${PLATFORM}`,
+    },
+    openbot: ghcr,
+  });
+  // Configured but no copy reported: no record is written.
+  for (const env of [
+    { XB_REGISTRY: OWN.XB_REGISTRY },
+    { XB_REGISTRY: OWN.XB_REGISTRY, OWN_REPOSITORY, OWN_DIGEST: "sha256:x" },
+  ]) {
+    const refused = record(env);
+    expect(refused.status).not.toBe(0);
+    expect(refused.json).toBeNull();
+  }
+  const env = step("github-release", "record", containerRelease).env;
+  expect(env.OWN_REPOSITORY).toBe(
+    expression("needs.mirror.outputs.repository"),
+  );
+  expect(env.OWN_DIGEST).toBe(expression("needs.mirror.outputs.digest"));
+  expect(env.XB_REGISTRY).toBe(expression("vars.XB_REGISTRY"));
+  expect(containerRelease.jobs["github-release"].needs).toContain("mirror");
+});
+
+test("the record and the samples go up to our download page before the GitHub Release", () => {
+  const job = containerRelease.jobs["github-release"];
+  const upload = step("github-release", "upload", containerRelease);
+  const publish = job.steps.findIndex((s) =>
+    s.run?.includes("gh release create"),
+  );
+  expect(job.steps.indexOf(upload)).toBeLessThan(publish);
+  expect(job.steps.indexOf(upload)).toBeGreaterThan(
+    job.steps.indexOf(step("github-release", "record", containerRelease)),
+  );
+  const cwd = scratch();
+  writeFileSync(join(cwd, "container-images.json"), "{}");
+  mkdirSync(join(cwd, "source", "openbot", "docker"), { recursive: true });
+  for (const f of ["delivery.env.example", "compose.delivery.yml"])
+    writeFileSync(join(cwd, "source", "openbot", "docker", f), f);
+  const aws = stubs({ aws: "" });
+  const ok = run(
+    "github-release",
+    "upload",
+    { TAG: "v0.2.0", ...DOWNLOAD },
+    cwd,
+    aws.path,
+    containerRelease,
+  );
+  expect(ok.status).toBe(0);
+  const s3 = "s3://downloads/v0.2.0";
+  const flags = "--endpoint-url https://s3.example.com --only-show-errors";
+  expect(aws.calls().filter((c) => c.startsWith("aws s3"))).toEqual([
+    `aws s3 cp ${flags} container-images.json ${s3}/container-images.json`,
+    `aws s3 cp ${flags} source/openbot/docker/delivery.env.example ${s3}/delivery.env.example`,
+    `aws s3 cp ${flags} source/openbot/docker/compose.delivery.yml ${s3}/compose.delivery.yml`,
+  ]);
+  // Half-configured: it names what is missing and uploads nothing.
+  for (const missing of [
+    "XB_DOWNLOAD_ENDPOINT",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+  ]) {
+    const none = stubs({ aws: "" });
+    const refused = run(
+      "github-release",
+      "upload",
+      { TAG: "v0.2.0", ...DOWNLOAD, [missing]: "" },
+      cwd,
+      none.path,
+      containerRelease,
+    );
+    expect(refused.status).not.toBe(0);
+    expect(refused.log).toContain(missing.replace(/^AWS_/, "XB_DOWNLOAD_"));
+    expect(none.calls()).toEqual([]);
+  }
+  // The samples come from the tagged commit, without a stored credential.
+  const checkout = job.steps.find((s) =>
+    s.uses?.startsWith("actions/checkout@"),
+  );
+  expect(checkout.with).toMatchObject({
+    ref: expression("github.sha"),
+    "persist-credentials": false,
+    path: "source",
+    "sparse-checkout": "openbot/docker",
+  });
+});
+
+test("the device installers go up to our download page after they are published", () => {
+  const job = workflow.jobs["download-page"];
+  expect(job.needs).toEqual(["tag-check", "publish"]);
+  expect(job.if).toContain("needs.publish.result == 'success'");
+  expect(job.if).toContain("!cancelled()");
+  expect(job.environment).toBe("device-release");
+  expect(job.permissions).toEqual({ contents: "read" });
+  const download = job.steps.find((s) =>
+    s.uses?.startsWith("actions/download-artifact@"),
+  );
+  expect(download.with).toEqual({
+    name: "device-release-dist",
+    path: "release",
+  });
+  const upload = (env, files = { "a.deb": "deb", "b.exe": "exe" }) => {
+    const cwd = scratch();
+    const dist = join(cwd, "release", "dist");
+    mkdirSync(dist, { recursive: true });
+    for (const [name, content] of Object.entries(files))
+      writeFileSync(join(dist, name), content);
+    const sums = spawnSync("sha256sum", Object.keys(files), {
+      cwd: dist,
+      encoding: "utf8",
+    });
+    writeFileSync(join(dist, "SHA256SUMS"), sums.stdout);
+    writeFileSync(join(cwd, "release", "notes.md"), "notes");
+    if (env.CHANGE) writeFileSync(join(dist, "a.deb"), "changed");
+    const aws = stubs({ aws: "" });
+    const summary = join(scratch(), "summary");
+    writeFileSync(summary, "");
+    const result = run(
+      "download-page",
+      "upload",
+      {
+        TAG: "device-v0.1.0",
+        GITHUB_STEP_SUMMARY: summary,
+        ...DOWNLOAD,
+        ...env,
+      },
+      cwd,
+      aws.path,
+    );
+    return {
+      ...result,
+      calls: aws.calls().filter((c) => c.startsWith("aws s3")),
+    };
+  };
+  const ok = upload({});
+  expect(ok.status).toBe(0);
+  const flags = "--endpoint-url https://s3.example.com --only-show-errors";
+  const s3 = "s3://downloads/device-v0.1.0/device";
+  expect(ok.calls).toEqual([
+    `aws s3 cp ${flags} release/dist/SHA256SUMS ${s3}/SHA256SUMS`,
+    `aws s3 cp ${flags} release/dist/a.deb ${s3}/a.deb`,
+    `aws s3 cp ${flags} release/dist/b.exe ${s3}/b.exe`,
+  ]);
+  // An installer that no longer matches SHA256SUMS, or a missing key: nothing goes up.
+  expect(upload({ CHANGE: "1" }).calls).toEqual([]);
+  expect(upload({ CHANGE: "1" }).status).not.toBe(0);
+  for (const missing of ["XB_DOWNLOAD_ENDPOINT", "AWS_SECRET_ACCESS_KEY"]) {
+    const refused = upload({ [missing]: "" });
+    expect(refused.status).not.toBe(0);
+    expect(refused.calls).toEqual([]);
+  }
+});
+
+/** Steps that reach our channel: they name its variables or secrets, or run crane or aws. */
+function channelSteps(doc) {
+  return Object.entries(doc.jobs).flatMap(([job, j]) =>
+    (j.steps ?? [])
+      .filter((s) => {
+        const text = JSON.stringify(s);
+        return (
+          /secrets\.XB_|vars\.XB_|crane|aws /.test(text) &&
+          !String(s.if ?? "").includes("== ''")
+        );
+      })
+      .map((s) => ({ job, step: s })),
+  );
+}
+
+test("our channel steps skip cleanly when unconfigured", () => {
+  const registryGate = expression("vars.XB_REGISTRY != ''");
+  const downloadGate = expression("vars.XB_DOWNLOAD_BUCKET != ''");
+  // Every step that does something with the channel is gated on its variable; the record step and
+  // the summary only read the variables, and must run either way.
+  const ungated = new Set(["github-release/record", "own-channel/summary"]);
+  const release = channelSteps(containerRelease);
+  expect(release.length).toBeGreaterThan(5);
+  for (const { job, step: s } of release) {
+    const label = `${job}/${s.id ?? s.uses ?? s.name}`;
+    if (ungated.has(label)) {
+      expect([label, s.if]).toEqual([label, undefined]);
+      continue;
+    }
+    const gate = job === "mirror" ? registryGate : downloadGate;
+    expect([label, s.if]).toEqual([label, gate]);
+  }
+  // Steps of the channel's jobs that do not mention it are gated too (crane's install, a checkout).
+  for (const s of containerRelease.jobs.mirror.steps)
+    expect([s.id ?? s.uses, s.if]).toEqual([s.id ?? s.uses, registryGate]);
+  for (const s of containerRelease.jobs["github-release"].steps.filter((s) =>
+    s.uses?.startsWith("actions/checkout@"),
+  ))
+    expect(s.if).toBe(downloadGate);
+  const device = workflow.jobs["download-page"].steps;
+  for (const s of device.filter((s) => !String(s.if).includes("== ''")))
+    expect([s.id ?? s.uses, s.if]).toEqual([s.id ?? s.uses, downloadGate]);
+  // Unconfigured, the run says so: release.yml in every mode (dry runs included), the device release
+  // once it has published.
+  const summary = (env) => {
+    const file = join(scratch(), "summary");
+    writeFileSync(file, "");
+    const result = run(
+      "own-channel",
+      "summary",
+      {
+        TAG: "v0.2.0",
+        XB_REGISTRY: "",
+        XB_IMAGE_REPOSITORY: "",
+        XB_DOWNLOAD_BUCKET: "",
+        DRY_RUN: "",
+        GITHUB_STEP_SUMMARY: file,
+        ...env,
+      },
+      scratch(),
+      process.env.PATH,
+      containerRelease,
+    );
+    return { status: result.status, text: readFileSync(file, "utf8") };
+  };
+  const own = containerRelease.jobs["own-channel"];
+  expect(own.needs).toBe("tag-check");
+  expect(own.if).toBeUndefined();
+  expect(own.environment).toBeUndefined();
+  expect(own.permissions).toEqual({ contents: "read" });
+  expect(secretPaths(own)).toEqual([]);
+  const none = summary({ DRY_RUN: "true" });
+  expect(none.status).toBe(0);
+  expect(none.text.match(/未配置自有渠道/g)?.length).toBe(2);
+  expect(none.text).toContain("XB_REGISTRY");
+  expect(none.text).toContain("XB_DOWNLOAD_BUCKET");
+  const set = summary({ ...OWN, XB_DOWNLOAD_BUCKET: "downloads" });
+  expect(set.text).not.toContain("未配置自有渠道");
+  expect(set.text).toContain(`${OWN_REPOSITORY}:v0.2.0`);
+  expect(set.text).toContain("s3://downloads/v0.2.0/");
+  const notice = device.find(
+    (s) => s.if === expression("vars.XB_DOWNLOAD_BUCKET == ''"),
+  );
+  expect(notice.run).toContain("未配置自有渠道");
+  expect(notice.run).toContain("GITHUB_STEP_SUMMARY");
+});
+
+test("credentials never appear on a command line", () => {
+  // As written: no run script names a secret or interpolates an expression; secrets come in by env.
+  for (const doc of [containerRelease, workflow, cleanDeploy]) {
+    for (const { step: s } of channelSteps(doc)) {
+      if (s.run) {
+        expect(s.run).not.toContain("secrets.");
+        expect(s.run).not.toContain(expression("").slice(0, 3));
+        expect(s.run).not.toMatch(/\bset -x|xtrace/);
+      }
+      for (const [key, value] of Object.entries(s.with ?? {}))
+        expect([key, String(value)]).not.toEqual([
+          key,
+          expect.stringContaining("secrets."),
+        ]);
+    }
+  }
+  const xbSecrets = (doc) =>
+    secretPaths(doc.jobs).filter((p) =>
+      /secrets\.XB_/.test(
+        p.split(".").reduce((node, key) => node[key], doc.jobs),
+      ),
+    );
+  expect(xbSecrets(containerRelease).sort()).toEqual([
+    "github-release.steps.3.env.AWS_ACCESS_KEY_ID",
+    "github-release.steps.3.env.AWS_SECRET_ACCESS_KEY",
+    "mirror.steps.1.env.XB_REGISTRY_PASSWORD",
+    "mirror.steps.1.env.XB_REGISTRY_USERNAME",
+  ]);
+  expect(secretPaths(cleanDeploy.jobs).every((p) => !p.includes("XB_"))).toBe(
+    true,
+  );
+  // As run: the sign-in writes a Docker config for crane from the environment; no command it starts
+  // is given a credential as an argument, and nothing it prints contains one.
+  const config = scratch();
+  const traced = stubs({ jq: 'exec /usr/bin/env -S "$REAL_JQ" "$@"' });
+  const login = run(
+    "mirror",
+    "login",
+    {
+      ...OWN,
+      ...CREDENTIALS,
+      RUNNER_TEMP: config,
+      REAL_JQ: Bun.which("jq"),
+      GITHUB_ENV: join(config, "github-env"),
+    },
+    scratch(),
+    traced.path,
+    containerRelease,
+  );
+  expect(login.status).toBe(0);
+  const secretValues = Object.values(CREDENTIALS).filter(
+    (v) => v !== "someone",
+  );
+  for (const value of secretValues) {
+    expect(login.log).not.toContain(value);
+    expect(traced.calls().join("\n")).not.toContain(value);
+  }
+  const dockerConfig = join(config, "own-channel-docker");
+  expect(readFileSync(join(config, "github-env"), "utf8")).toBe(
+    `DOCKER_CONFIG=${dockerConfig}\n`,
+  );
+  const auths = JSON.parse(
+    readFileSync(join(dockerConfig, "config.json"), "utf8"),
+  ).auths;
+  const decode = (entry) => Buffer.from(entry.auth, "base64").toString();
+  expect(decode(auths[OWN.XB_REGISTRY])).toBe(
+    "push-user-a1b2:push-password-c3d4",
+  );
+  expect(decode(auths["ghcr.io"])).toBe("someone:ghcr-token-e5f6");
+  // A registry without its repository or credentials stops before anything is written.
+  for (const missing of [
+    "XB_IMAGE_REPOSITORY",
+    "XB_REGISTRY_USERNAME",
+    "XB_REGISTRY_PASSWORD",
+  ]) {
+    const dir = scratch();
+    const refused = run(
+      "mirror",
+      "login",
+      {
+        ...OWN,
+        ...CREDENTIALS,
+        [missing]: "",
+        RUNNER_TEMP: dir,
+        GITHUB_ENV: join(dir, "github-env"),
+      },
+      scratch(),
+      process.env.PATH,
+      containerRelease,
+    );
+    expect(refused.status).not.toBe(0);
+    expect(refused.log).toContain(missing);
+    expect(existsSync(join(dir, "own-channel-docker", "config.json"))).toBe(
+      false,
+    );
+  }
+  // The upload hands its keys to aws through the environment only.
+  const cwd = scratch();
+  writeFileSync(join(cwd, "container-images.json"), "{}");
+  mkdirSync(join(cwd, "source", "openbot", "docker"), { recursive: true });
+  for (const f of ["delivery.env.example", "compose.delivery.yml"])
+    writeFileSync(join(cwd, "source", "openbot", "docker", f), f);
+  const aws = stubs({
+    aws: `[ "$1" != s3 ] || printf '%s|%s\\n' "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" >> ${JSON.stringify(join(cwd, "keys"))}`,
+  });
+  const upload = run(
+    "github-release",
+    "upload",
+    { TAG: "v0.2.0", ...DOWNLOAD },
+    cwd,
+    aws.path,
+    containerRelease,
+  );
+  expect(upload.status).toBe(0);
+  for (const value of [
+    DOWNLOAD.AWS_ACCESS_KEY_ID,
+    DOWNLOAD.AWS_SECRET_ACCESS_KEY,
+  ]) {
+    expect(upload.log).not.toContain(value);
+    expect(aws.calls().join("\n")).not.toContain(value);
+  }
+  expect(readFileSync(join(cwd, "keys"), "utf8").trim().split("\n")).toEqual(
+    Array(3).fill("access-key-g7h8|secret-key-i9j0"),
+  );
+});
+
+function cleanRecord(env, files) {
+  const evidence = scratch();
+  const githubEnv = join(scratch(), "github-env");
+  writeFileSync(githubEnv, "");
+  const record = JSON.stringify({
+    images: {
+      xiongbao: { reference: files.xiongbao },
+      openbot: { reference: files.openbot },
+    },
+  });
+  const fixture = join(scratch(), "container-images.json");
+  writeFileSync(fixture, record);
+  const tools = stubs({
+    curl: `out=""; prev=""; for a in "$@"; do [ "$prev" = -o ] && out="$a"; prev="$a"; done; cp ${JSON.stringify(fixture)} "$out"`,
+    gh: `cp ${JSON.stringify(fixture)} "\${@: -1}/container-images.json"`,
+  });
+  const result = run(
+    "linux",
+    "record",
+    {
+      TAG: "v0.2.0",
+      EVIDENCE: evidence,
+      GITHUB_ENV: githubEnv,
+      GH_TOKEN: "x",
+      GH_REPO: "o/r",
+      XB_REGISTRY: "",
+      XB_IMAGE_REPOSITORY: "",
+      XB_DOWNLOAD_BUCKET: "",
+      XB_DOWNLOAD_BASE_URL: "",
+      ...env,
+    },
+    scratch(),
+    tools.path,
+    cleanDeploy,
+  );
+  return {
+    ...result,
+    calls: tools.calls(),
+    env: readFileSync(githubEnv, "utf8"),
+  };
+}
+
+test("clean-deploy fetches from our download page when configured", () => {
+  const ghcr = `ghcr.io/o/r@${INDEX}`;
+  const own = `${OWN_REPOSITORY}@${PLATFORM}`;
+  // Not configured: the GitHub Release's record and its images.openbot, as before.
+  const before = cleanRecord({}, { xiongbao: ghcr, openbot: ghcr });
+  expect(before.status).toBe(0);
+  expect(before.calls).toEqual([
+    `gh release download v0.2.0 --pattern container-images.json --dir ${before.calls[0].split(" ").at(-1)}`,
+  ]);
+  expect(before.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
+  expect(
+    cleanRecord(
+      {},
+      { xiongbao: ghcr, openbot: `registry.example.com/x@${INDEX}` },
+    ).status,
+  ).not.toBe(0);
+  // Configured: the record comes from our download page as a customer reaches it, and the image to
+  // run and check is images.xiongbao, in our registry.
+  const configured = {
+    ...OWN,
+    XB_DOWNLOAD_BUCKET: "downloads",
+    XB_DOWNLOAD_BASE_URL: "https://download.example.com/xb/",
+  };
+  const after = cleanRecord(configured, { xiongbao: own, openbot: ghcr });
+  expect(after.status).toBe(0);
+  expect(after.calls.length).toBe(1);
+  expect(after.calls[0]).toStartWith("curl ");
+  expect(after.calls[0]).toEndWith(
+    " https://download.example.com/xb/v0.2.0/container-images.json",
+  );
+  expect(after.env).toBe(
+    `CUSTOMER_IMAGE=${OWN_REPOSITORY}:v0.2.0\nEXPECTED_REFERENCE=${own}\n`,
+  );
+  // images.xiongbao must be our registry's copy, by digest; GHCR no longer passes.
+  for (const xiongbao of [
+    ghcr,
+    `${OWN_REPOSITORY}:v0.2.0`,
+    `registry.example.com/other@${PLATFORM}`,
+  ]) {
+    const refused = cleanRecord(configured, { xiongbao, openbot: ghcr });
+    expect(refused.status).not.toBe(0);
+    expect(refused.env).toBe("");
+  }
+  // Only one half configured: the download page alone keeps GHCR's image, our registry alone keeps
+  // the GitHub Release's record.
+  const pageOnly = cleanRecord(
+    {
+      XB_DOWNLOAD_BUCKET: "downloads",
+      XB_DOWNLOAD_BASE_URL: "https://d.example.com",
+    },
+    { xiongbao: ghcr, openbot: ghcr },
+  );
+  expect(pageOnly.calls[0]).toEndWith(
+    " https://d.example.com/v0.2.0/container-images.json",
+  );
+  expect(pageOnly.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
+  const registryOnly = cleanRecord(OWN, { xiongbao: own, openbot: ghcr });
+  expect(registryOnly.calls[0]).toStartWith("gh release download");
+  expect(registryOnly.env).toContain(`EXPECTED_REFERENCE=${own}\n`);
+  // A bucket without the page's address fails rather than fetch from GitHub.
+  expect(
+    cleanRecord(
+      { XB_DOWNLOAD_BUCKET: "downloads" },
+      { xiongbao: ghcr, openbot: ghcr },
+    ).status,
+  ).not.toBe(0);
+  const recordEnv = step("linux", "record", cleanDeploy).env;
+  for (const name of [
+    "XB_REGISTRY",
+    "XB_IMAGE_REPOSITORY",
+    "XB_DOWNLOAD_BUCKET",
+    "XB_DOWNLOAD_BASE_URL",
+  ])
+    expect(recordEnv[name]).toBe(expression(`vars.${name}`));
+  // delivery.env.example (external database) comes from the same place; the customer run starts our
+  // registry's copy through the README's OPENBOT_IMAGE when it is configured.
+  const roles = step("linux", "roles", cleanDeploy);
+  expect(roles.run).toContain(
+    '"$XB_DOWNLOAD_BASE_URL/$TAG/delivery.env.example"',
+  );
+  expect(roles.run).toContain("raw.githubusercontent.com");
+  expect(roles.env.XB_DOWNLOAD_BUCKET).toBe(
+    expression("vars.XB_DOWNLOAD_BUCKET"),
+  );
+  const customer = step("linux", "customer", cleanDeploy);
+  expect(customer.run).toContain("OPENBOT_IMAGE=$CUSTOMER_IMAGE");
+  const check = step("linux", "digest", cleanDeploy);
+  expect(check.run).toContain(`"\${expected%@*}:$TAG"`);
 });

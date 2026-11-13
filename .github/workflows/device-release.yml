@@ -973,3 +973,51 @@ jobs:
           done
           gh release create "$TAG" release/dist/* "${evidence[@]}" \
             --verify-tag --title "$TITLE" --notes-file release/notes.md "${flags[@]}"
+
+  # Our download page (Task U3): once the GitHub Release is out, the same installers and their
+  # SHA256SUMS go to s3://<XB_DOWNLOAD_BUCKET>/<tag>/device/. A job of its own, so a failed upload
+  # can be re-run without re-publishing. Skipped, and the summary says so, until the bucket is set.
+  download-page:
+    needs: [tag-check, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: device-release
+    permissions:
+      contents: read
+    steps:
+      - name: Our download page is not configured
+        if: ${{ vars.XB_DOWNLOAD_BUCKET == '' }}
+        run: echo "未配置自有渠道（XB_DOWNLOAD_BUCKET 未设）：安装包只在 GitHub Release 上，不上传自有下载页。" >> "$GITHUB_STEP_SUMMARY"
+      - if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-release-dist
+          path: release
+      - id: upload
+        name: Upload the installers to our download page
+        if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        env:
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
+          XB_DOWNLOAD_ENDPOINT: ${{ vars.XB_DOWNLOAD_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.XB_DOWNLOAD_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.XB_DOWNLOAD_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          set -euo pipefail
+          for name in XB_DOWNLOAD_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::XB_DOWNLOAD_BUCKET is set but ${name/#AWS_/XB_DOWNLOAD_} is not."
+              exit 1
+            fi
+          done
+          # The files the release carries: SHA256SUMS and every installer it names, still matching.
+          (cd release/dist && sha256sum -c SHA256SUMS)
+          aws --version
+          for file in release/dist/*; do
+            aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT" --only-show-errors \
+              "$file" "s3://$XB_DOWNLOAD_BUCKET/$TAG/device/${file##*/}"
+          done
+          printf -- '- 自有下载页：`s3://%s/%s/device/`\n' "$XB_DOWNLOAD_BUCKET" "$TAG" >> "$GITHUB_STEP_SUMMARY"
