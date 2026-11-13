@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -301,7 +301,15 @@ test("synchronising twice leaves one row per declaration, not two", async () => 
     database
       .select({ agentId: pluginGrants.agentId, ref: pluginGrants.ref })
       .from(pluginGrants)
-      .where(eq(pluginGrants.grantedBy, "tenant-package")),
+      // Bot grants only: the package's skill grants (kind "skill") are a coworker's own toolbox and
+      // vary with every skill a coworker carries; this count is the teams' lead-to-member edges.
+      // Approved by the user 2026-11-13 (`只数派活授权`).
+      .where(
+        and(
+          eq(pluginGrants.grantedBy, "tenant-package"),
+          eq(pluginGrants.kind, "bot"),
+        ),
+      ),
   );
   expect(botGrants.length).toBe(BOT_GRANT_EDGE_COUNT);
 

@@ -36,7 +36,8 @@ describe("a clone that has only run bun install", () => {
       "channels.yaml",
       "model.yaml",
       "knowledge.yaml",
-      "skills.yaml",
+      // Not skills.yaml: the loader reads it as written (no `${NAME}` expansion), so a `${...}` in a
+      // skill is a quoted example, not a setting. Approved by the user 2026-11-13 (`批准去掉`).
     ]) {
       const text = readFileSync(join(root, "examples/xiongbao", file), "utf8");
       for (const [, name, rest] of text.matchAll(
