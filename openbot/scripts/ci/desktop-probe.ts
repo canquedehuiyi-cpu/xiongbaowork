@@ -177,6 +177,7 @@ const FOCUS_WAIT_MS = 10_000;
 const NO_SCREEN_RECORDING = "没有屏幕录制权限，截不到图。";
 /** How long an editor window may take to show up in the list (Windows needs about 8 s). */
 const WINDOW_WAIT_MS = 30_000;
+const TEXT_WAIT_MS = 10_000;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /**
@@ -631,13 +632,21 @@ async function readChecks(
   if (!listed.window) return { worked: false };
   const firstId = listed.window.windowId;
 
-  // 2. Its text, read back, with every ref in the runner's own form.
-  const one = await run("desktop.snapshot", { windowId: firstId });
-  const first = one.ok ? (one.output as DesktopSnapshot) : undefined;
-  const textAt =
-    first?.elements.findIndex((element) =>
+  // 2. Its text, read back, with every ref in the runner's own form. The window can be listed before
+  // the editor has loaded the file (TextEdit on a cold runner), so read again until the text is there.
+  const textIn = (snapshot: DesktopSnapshot | undefined) =>
+    snapshot?.elements.findIndex((element) =>
       (element.value ?? "").includes(TEXT),
     ) ?? -1;
+  const textDeadline = Date.now() + TEXT_WAIT_MS;
+  let one = await run("desktop.snapshot", { windowId: firstId });
+  let first = one.ok ? (one.output as DesktopSnapshot) : undefined;
+  while (first && textIn(first) < 0 && Date.now() < textDeadline) {
+    await Bun.sleep(500);
+    one = await run("desktop.snapshot", { windowId: firstId });
+    first = one.ok ? (one.output as DesktopSnapshot) : undefined;
+  }
+  const textAt = textIn(first);
   assert(
     first &&
       first.elements.length > 0 &&
