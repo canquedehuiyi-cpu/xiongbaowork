@@ -213,6 +213,77 @@ export function sha256Hex(text: string): string {
 /** Recorded in `_porting.sanitized` when the author's own home directory was replaced. */
 export const SANITIZED_LOCAL_USER_PATH = "local-user-path";
 
+/** Recorded in `sanitized`/warnings when WorkBuddy-brand references were cleaned out of a body. */
+export const SANITIZED_WORKBUDDY_REFS = "workbuddy-brand-refs";
+
+/**
+ * A line that points at the authoring platform's own install tree: `~/.workbuddy/...` or
+ * `~/.codebuddy/...`. In an openbot deployment the condition the line hedges on ("if WorkBuddy is
+ * installed") is never true, so the line is dead prose that still leaks the brand into a prompt.
+ */
+const AUTHOR_PLATFORM_PATH_LINE = /(^|\s)~\/\.(workbuddy|codebuddy)\//;
+
+/**
+ * The conditional fallback clause one ported agent prompt used: a valid instruction ("read this
+ * SKILL.md") followed by `；如果 WorkBuddy 已安装到 marketplace，也可读取 ~/.workbuddy/...`.
+ * Clause-level, not line-level: the same line usually leads with an instruction that must survive.
+ */
+const BRAND_FALLBACK_CLAUSE_SOURCE =
+  "[；;]?\\s*如果\\s*(?:WorkBuddy|CodeBuddy)\\s*已安装[^。\\n]*~\\/\\.(?:workbuddy|codebuddy)\\/[^。\\n]*[。.]?";
+
+/**
+ * The self-naming pattern one ported team used in its user-visible description.
+ * Narrow by design: broad "WorkBuddy → neutral" swaps would edit teaching prose without a human
+ * ruling on whether the mention is meaningful. New shapes get their own narrow rule plus a test.
+ */
+const BRAND_SELF_NAMING = "WorkBuddy Team Agent\\b";
+
+/**
+ * Line-level brand cleanup for ported agent prompts and team descriptions (L4-4 acceptance finding).
+ *
+ * Three narrow, idempotent rules: strip the conditional `~/.workbuddy|codebuddy/…` fallback clause
+ * (keeping the instruction that shares its line), drop a line that is *only* such a pointer, and
+ * reduce the "WorkBuddy Team Agent" self-naming to "Team Agent". Everything else — a skill body that
+ * mentions the platform meaningfully, a connector name — is left to the audit layer or a human
+ * ruling, not to a broad find-and-replace.
+ */
+export function sanitizeWorkbuddyRefs(text: string): {
+  text: string;
+  hits: number;
+} {
+  let hits = 0;
+  const withoutClauses = text
+    .split("\n")
+    .map((line) => {
+      const stripped = line.replace(
+        new RegExp(BRAND_FALLBACK_CLAUSE_SOURCE, "g"),
+        () => {
+          hits += 1;
+          return "";
+        },
+      );
+      if (stripped !== line) {
+        return stripped.trimEnd();
+      }
+      if (AUTHOR_PLATFORM_PATH_LINE.test(line)) {
+        hits += 1;
+        return null;
+      }
+      return line;
+    })
+    .filter((line): line is string => line !== null)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+  const sanitized = withoutClauses.replace(
+    new RegExp(BRAND_SELF_NAMING, "g"),
+    () => {
+      hits += 1;
+      return "Team Agent";
+    },
+  );
+  return { text: sanitized, hits };
+}
+
 /**
  * A user home directory inside prose: `C:/Users/<name>`, `C:\Users\<name>`, `/c/Users/<name>` (git bash)
  * or `/Users/<name>` (macOS). Group 1 is the prefix including the separator, group 2 the user name.
@@ -1592,6 +1663,33 @@ export function normalizeCapabilities(
       agent.systemPrompt = text;
       agent.sanitized = [SANITIZED_LOCAL_USER_PATH];
     }
+  }
+
+  // Step 6b: brand cleanup, same shape as the redaction above (L4-4 acceptance finding: one agent
+  // prompt hedged on `~/.workbuddy/…` and one team description called itself a "WorkBuddy Team
+  // Agent"). Agents record into `sanitized`; teams have no `_porting` block to record into, so a
+  // hit lands in `warnings` — the disclosure channel reviewers already read.
+  let teamBrandHits = 0;
+  for (const agent of agents) {
+    const { text, hits } = sanitizeWorkbuddyRefs(agent.systemPrompt);
+    if (hits > 0) {
+      agent.systemPrompt = text;
+      if (!agent.sanitized.includes(SANITIZED_WORKBUDDY_REFS)) {
+        agent.sanitized = [...agent.sanitized, SANITIZED_WORKBUDDY_REFS];
+      }
+    }
+  }
+  for (const team of teams) {
+    const { text, hits } = sanitizeWorkbuddyRefs(team.description);
+    if (hits > 0) {
+      team.description = text;
+      teamBrandHits += hits;
+    }
+  }
+  if (teamBrandHits > 0) {
+    warnings.push(
+      `品牌清洗：${teamBrandHits} 处团队描述含原平台自我称呼/安装路径，已按窄规则清洗（workbuddy-brand-refs）`,
+    );
   }
 
   return {

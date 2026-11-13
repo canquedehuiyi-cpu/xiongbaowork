@@ -22,6 +22,7 @@ import {
   packageFingerprint,
   readDeclaredTools,
   sanitizeLocalUserPaths,
+  sanitizeWorkbuddyRefs,
   sha256Hex,
   shortenSlug,
   splitDirectoryName,
@@ -982,5 +983,40 @@ describe("没有 description 的技能仍得到非空 summary", () => {
       }),
     );
     expect(result.skills[0].summary).toBe("声明的摘要。");
+  });
+});
+
+describe("品牌清洗（L4-4）：只动品牌 fallback 与自我称呼，教学指令保留", () => {
+  test("从句形态：删 fallback，保同行有效指令", () => {
+    const line =
+      "  1. 必须读取并遵循 `skills/frontend-slides/SKILL.md`；如果 WorkBuddy 已安装到 marketplace，也可读取 `~/.workbuddy/skills-marketplace/skills/frontend-slides/SKILL.md`。";
+    const { text, hits } = sanitizeWorkbuddyRefs(line);
+    expect(hits).toBe(1);
+    expect(text).toBe("  1. 必须读取并遵循 `skills/frontend-slides/SKILL.md`");
+  });
+
+  test("整行 fallback：整行删除，不留空洞", () => {
+    const { text, hits } = sanitizeWorkbuddyRefs(
+      "先看正文。\n也可读取 ~/.workbuddy/skills/extra/SKILL.md\n再继续。",
+    );
+    expect(hits).toBe(1);
+    expect(text).toBe("先看正文。\n再继续。");
+  });
+
+  test("团队描述自我称呼收窄为 Team Agent", () => {
+    const { text, hits } = sanitizeWorkbuddyRefs(
+      "Humanize PPT WorkBuddy Team Agent: AST outline first.",
+    );
+    expect(hits).toBe(1);
+    expect(text).toBe("Humanize PPT Team Agent: AST outline first.");
+  });
+
+  test("有意义的教学提及不动，且函数幂等", () => {
+    const body =
+      "WorkBuddy 产品本体的设计系统在这里；交付物写到 .workbuddy/artifacts/。";
+    const first = sanitizeWorkbuddyRefs(body);
+    expect(first.hits).toBe(0);
+    expect(first.text).toBe(body);
+    expect(sanitizeWorkbuddyRefs(first.text).hits).toBe(0);
   });
 });

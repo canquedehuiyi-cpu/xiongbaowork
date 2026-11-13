@@ -112,3 +112,59 @@ describe("tenant package skill runnable grades", () => {
     ).toThrow(/runnable/);
   });
 });
+
+/*
+ * R18 的另一半：blocked 不只给徽章，还要给"缺什么"。`_porting.reason`（规则 id）与
+ * `_porting.reason_ref`（规则理由 ← 最强命中引文）随档位一起被带出来，同步落库、下发、
+ * 徽章点开即读。full 不读这两个字段——null 是"没缺"，不是"没写"。
+ */
+describe("tenant package skill blocked reasons (R18)", () => {
+  const blockedWithReason = [
+    "skills:",
+    "  - slug: sample-skill",
+    "    title: 样例技能",
+    "    summary: 一行说明。",
+    "    instructions: 做事的方法。",
+    "    tools: []",
+    "    _porting:",
+    "      source: xiongbao-package",
+    "      runnable: blocked",
+    "      reason: shell-command-prose",
+    '      reason_ref: "正文给出可执行的 shell 命令；openbot 员工没有本地运行时。 ← \\"git init -q t\\"（共 1 处）"',
+  ].join("\n");
+
+  test("reason and citation ride along with a blocked grade", () => {
+    const loaded = packageWithSkills(blockedWithReason);
+    expect(loaded.skills[0]?.runnable).toBe("blocked");
+    expect(loaded.skills[0]?.blockedReason).toBe("shell-command-prose");
+    expect(loaded.skills[0]?.blockedReasonRef).toContain("git init -q t");
+  });
+
+  test("a full row carries no reason even if the package ships one", () => {
+    const loaded = packageWithSkills(
+      blockedWithReason
+        .replace("runnable: blocked", "runnable: full")
+        .replace("reason: shell-command-prose", "reason: shell-command-prose"),
+    );
+    expect(loaded.skills[0]?.runnable).toBe("full");
+    expect(loaded.skills[0]?.blockedReason).toBeUndefined();
+    expect(loaded.skills[0]?.blockedReasonRef).toBeUndefined();
+  });
+
+  test("an old package without the fields stays honest (undefined, not empty strings)", () => {
+    const loaded = packageWithSkills(
+      [
+        "skills:",
+        "  - slug: sample-skill",
+        "    title: 样例技能",
+        "    summary: 一行说明。",
+        "    instructions: 做事的方法。",
+        "    _porting:",
+        "      runnable: blocked",
+      ].join("\n"),
+    );
+    expect(loaded.skills[0]?.runnable).toBe("blocked");
+    expect(loaded.skills[0]?.blockedReason).toBeUndefined();
+    expect(loaded.skills[0]?.blockedReasonRef).toBeUndefined();
+  });
+});

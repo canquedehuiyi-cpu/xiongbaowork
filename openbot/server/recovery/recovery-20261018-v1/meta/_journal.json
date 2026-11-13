@@ -1331,6 +1331,13 @@
       "when": 1794546000000,
       "tag": "0209_channel_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 210,
+      "version": "7",
+      "when": 1794566826452,
+      "tag": "0210_skill_blocked_reason",
+      "breakpoints": true
     }
   ]
 }
