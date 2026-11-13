@@ -20,12 +20,37 @@
  * Imports Playwright's types only, so the rules here are testable without a browser installed.
  */
 
+import { existsSync, renameSync } from "node:fs";
 import { chmod, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserContext, Cookie } from "playwright";
 
 /** In the profile directory, beside the Cookies database Chromium keeps there itself. */
-export const SESSION_COOKIES_FILE = "openbot-session-cookies.json";
+export const SESSION_COOKIES_FILE = "xiongbao-session-cookies.json";
+
+/**
+ * The name the file had before L1-16, still on the volumes of computers that ran an earlier version.
+ * Renamed to `SESSION_COOKIES_FILE` before the first read (`migrateSessionCookiesFile`), and read in
+ * place where it cannot be renamed. Goes when the rename does (legacy-compat in the brand allowlist).
+ */
+export const LEGACY_SESSION_COOKIES_FILE = "openbot-session-cookies.json";
+
+/**
+ * Give a profile's session-cookie file its current name, once: only when the file under the earlier
+ * name is there and none under the current name is. A file already under the current name is newer,
+ * so it wins and the earlier one is left as it is. A volume that cannot be written keeps the earlier
+ * name, and `restore` reads it there; nothing is thrown, because a Bot's browser must still start.
+ */
+export function migrateSessionCookiesFile(dir: string): void {
+  const file = join(dir, SESSION_COOKIES_FILE);
+  const legacy = join(dir, LEGACY_SESSION_COOKIES_FILE);
+  if (existsSync(file) || !existsSync(legacy)) return;
+  try {
+    renameSync(legacy, file);
+  } catch {
+    // Read-only, or gone in between: `restore` reads whichever name is there.
+  }
+}
 
 /** How often a running browser's session cookies are checked and, when they changed, written. */
 export const SESSION_COOKIE_SAVE_MS = 30_000;
@@ -97,6 +122,7 @@ export function sessionCookieKeeper(
   context: BrowserContext,
 ) {
   const file = join(profileDir, SESSION_COOKIES_FILE);
+  const legacyFile = join(profileDir, LEGACY_SESSION_COOKIES_FILE);
   let lastWritten: string | undefined;
   let chain: Promise<void> = Promise.resolve();
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -131,6 +157,16 @@ export function sessionCookieKeeper(
     }
   };
 
+  /** The file under its current name, or under the earlier one where the rename could not be made. */
+  const readSaved = async (): Promise<string> => {
+    try {
+      return await readFile(file, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      return await readFile(legacyFile, "utf8");
+    }
+  };
+
   const save = (): Promise<void> => {
     chain = chain.then(writeNow, writeNow);
     return chain;
@@ -142,9 +178,10 @@ export function sessionCookieKeeper(
      * a site sees from this launch already carries them.
      */
     async restore(): Promise<number> {
+      migrateSessionCookiesFile(profileDir);
       let saved: Cookie[];
       try {
-        saved = parseSaved(await readFile(file, "utf8"));
+        saved = parseSaved(await readSaved());
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           report("computer-session-cookies-not-restored", botId, {

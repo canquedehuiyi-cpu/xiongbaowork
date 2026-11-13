@@ -307,7 +307,7 @@
   {
     "rule": "wire-dom",
     "scope": "agent-computer/src",
-    "lines": 7
+    "lines": 4
   },
   {
     "rule": "wire-dom",
