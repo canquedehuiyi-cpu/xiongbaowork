@@ -39,7 +39,7 @@ jobs:
     services:
       # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
       postgres:
-        image: pgvector/pgvector:pg17
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: e2e-owner
@@ -86,7 +86,7 @@ jobs:
     services:
       # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
       postgres:
-        image: pgvector/pgvector:pg17
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: e2e-owner
