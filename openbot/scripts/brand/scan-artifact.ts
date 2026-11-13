@@ -9,7 +9,17 @@
  * (stale: the list must shrink with the artifact). Each failure is one line:
  * `<kind>: <word> （多出来的｜已经没了）`.
  */
-import { appendFileSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  appendFileSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import {
   ALWAYS_REPORT,
@@ -78,16 +88,79 @@ export function scanExtension(dir: string): Scan {
 
 export const BUILD_PATH = "<build-path>";
 
-export function scanRunner(file: string, cwd = process.cwd()): Scan {
-  let text = printableStrings(new Uint8Array(readFileSync(file)));
-  // The build machine's path is a word of its own, so a list that does not name it fails and one that
-  // does goes stale once the build stops writing it (Task 13). Longest path first.
+/**
+ * The build machine's path is a word of its own, so a list that does not name it fails and one that
+ * does goes stale once the build stops writing it (Task 13). Longest path first.
+ */
+function scanBuildText(text: string, cwd: string): Scan {
+  let out = text;
   for (const path of [cwd, repoRoot(cwd), "/home/runner/work/"])
-    if (path.length > 1) text = text.split(path).join(BUILD_PATH);
-  const scan = finish(text, []);
-  const paths = text.split(BUILD_PATH).length - 1;
+    if (path.length > 1) out = out.split(path).join(BUILD_PATH);
+  const scan = finish(out, []);
+  const paths = out.split(BUILD_PATH).length - 1;
   if (paths > 0) scan.found.set(BUILD_PATH, paths);
   return scan;
+}
+
+export function scanRunner(file: string, cwd = process.cwd()): Scan {
+  return scanBuildText(
+    printableStrings(new Uint8Array(readFileSync(file))),
+    cwd,
+  );
+}
+
+/** `image-files`: the file list `docker run ... find /` prints, one path per line. Paths only. */
+export function scanImageFiles(file: string): Scan {
+  return finish(readFileSync(file, "utf8"), []);
+}
+
+/** `image-config`: `docker inspect` JSON; only Config.Env and Config.Labels. */
+export function scanImageConfig(file: string): Scan {
+  const parsed = JSON.parse(readFileSync(file, "utf8"));
+  const inspect = Array.isArray(parsed) ? parsed[0] : parsed;
+  const env: string[] = inspect?.Config?.Env ?? [];
+  const labels: Record<string, string> = inspect?.Config?.Labels ?? {};
+  const text = [
+    ...env,
+    ...Object.entries(labels).map(([k, v]) => `${k}=${v}`),
+  ].join("\n");
+  return finish(text, []);
+}
+
+/** A text log (the startup log): words only. Source maps are a build-output check, not a log's. */
+export function scanLog(file: string): Scan {
+  return finish(readFileSync(file, "utf8"), []);
+}
+
+/** Regular files under a folder; symlinks are not followed (an extracted package may point at the host). */
+function regularFilesUnder(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir).sort()) {
+    const path = join(dir, name);
+    const st = lstatSync(path);
+    if (st.isDirectory()) out.push(...regularFilesUnder(path));
+    else if (st.isFile()) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * `deb`: the package as delivered. The listing (`dpkg-deb -c`), every control field (`dpkg-deb -f`) and
+ * the printable strings of every extracted file are scanned.
+ */
+export function scanDeb(file: string, cwd = process.cwd()): Scan {
+  const listing = execFileSync("dpkg-deb", ["-c", file], { encoding: "utf8" });
+  const fields = execFileSync("dpkg-deb", ["-f", file], { encoding: "utf8" });
+  const tree = mkdtempSync(join(tmpdir(), "deb-scan-"));
+  try {
+    execFileSync("dpkg-deb", ["-x", file, tree], { stdio: "ignore" });
+    const contents = regularFilesUnder(tree)
+      .map((f) => printableStrings(new Uint8Array(readFileSync(f))))
+      .join("\n");
+    return scanBuildText([listing, fields, contents].join("\n"), cwd);
+  } finally {
+    rmSync(tree, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -168,13 +241,13 @@ if (import.meta.main) {
   );
   const target = resolve(input);
   let scan: Scan;
-  if (kind === "web") scan = scanWeb(target);
+  if (kind === "web")
+    scan = statSync(target).isFile() ? scanLog(target) : scanWeb(target);
   else if (kind === "extension") scan = scanExtension(target);
   else if (kind === "runner") scan = scanRunner(target);
-  else {
-    console.error(`${kind}: 由 Task 5 实现`);
-    process.exit(2);
-  }
+  else if (kind === "image-files") scan = scanImageFiles(target);
+  else if (kind === "image-config") scan = scanImageConfig(target);
+  else scan = scanDeb(target);
   const failures = verdict(kind, scan, allow);
   const summary = arg("summary");
   if (summary) appendFileSync(summary, summaryOf(kind, scan, failures));
