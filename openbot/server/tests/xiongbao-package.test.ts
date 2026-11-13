@@ -41,8 +41,8 @@ const seedIds = [
 ];
 const PORTED_AGENT_COUNT = 23;
 const PORTED_SKILL_COUNT = 82;
-const PORTED_ASSET_FILE_COUNT = 470;
-const PORTED_SKILLS_WITH_ASSETS = 29;
+const PORTED_ASSET_FILE_COUNT = 473;
+const PORTED_SKILLS_WITH_ASSETS = 30;
 const BOT_GRANT_EDGE_COUNT = 15;
 
 const loaded = await loadTenantPackage("../examples/xiongbao");

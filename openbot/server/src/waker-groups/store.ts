@@ -2,11 +2,13 @@ import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   agents,
+  channels,
   wakerFlows,
   wakerGroupMembers,
   wakerGroups,
 } from "../db/schema";
 import { currentTenant } from "../tenant/context";
+import { channelWakerGroupId } from "./channel-link";
 
 /**
  * The tenant's crews (ticket 023, spec D4).
@@ -24,8 +26,14 @@ export type WakerGroup = {
   members: WakerGroupMember[];
 };
 
+/**
+ * A listed crew and the live conversation linked to it (spec group-unify 3.1), or null when there is
+ * none — or none the caller may read.
+ */
+export type ListedWakerGroup = WakerGroup & { channelId: string | null };
+
 export type WakerGroupStore = {
-  list: () => Promise<WakerGroup[]>;
+  list: () => Promise<ListedWakerGroup[]>;
   create: (input: {
     name: string;
     description?: string | null;
@@ -106,21 +114,26 @@ export function createWakerGroupStore(database: Database): WakerGroupStore {
       if (rows.length === 0) return [];
       // One extra read rather than one read per group: a workspace with thirty crews would
       // otherwise ask thirty-two times for a screen that is meant to be glanced at.
+      const ids = rows.map((row) => row.id);
       const memberships = await database
         .select()
         .from(wakerGroupMembers)
-        .where(
-          inArray(
-            wakerGroupMembers.groupId,
-            rows.map((row) => row.id),
-          ),
-        );
-      return rows.map((row) =>
-        shape(
+        .where(inArray(wakerGroupMembers.groupId, ids));
+      // And one more for the conversations: read in the caller's frame, so a channel they may not
+      // read is no channel of this list's. A soft-deleted one is no longer the crew's chat.
+      const linked = (await database.execute(
+        sql`select ${channels.id} as id, ${channelWakerGroupId} as waker_group_id
+              from ${channels}
+             where ${channelWakerGroupId} in ${ids} and ${channels.deletedAt} is null`,
+      )) as unknown as { id: string; waker_group_id: string }[];
+      const chatOf = new Map(linked.map((row) => [row.waker_group_id, row.id]));
+      return rows.map((row) => ({
+        ...shape(
           row,
           memberships.filter((entry) => entry.groupId === row.id),
         ),
-      );
+        channelId: chatOf.get(row.id) ?? null,
+      }));
     },
 
     async create(input) {
