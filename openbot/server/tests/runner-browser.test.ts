@@ -794,9 +794,12 @@ describe("numbers that outlive the browser", () => {
     await a.close();
     mkdirSync(profileDir, { recursive: true });
     writeFileSync(join(profileDir, "Preferences"), "{}");
-    const counters = new Database(join(root, COUNTER_FILE));
-    counters.exec("DELETE FROM snapshot_counters");
-    counters.close();
+    // Both files hold the row for the whole window, so a row is missing only when it is missing from both.
+    for (const name of [COUNTER_FILE, LEGACY_COUNTER_FILE]) {
+      const counters = new Database(join(root, name));
+      counters.exec("DELETE FROM snapshot_counters");
+      counters.close();
+    }
 
     const second = fakeBrowser();
     const b = browserOf(root, second);
@@ -1025,6 +1028,26 @@ describe("numbers that outlive the browser", () => {
       expect(generationUnderEarlierName(root)).toBe(i);
     }
     await browser.close();
+  });
+
+  test("on a fresh root the earlier file is created too, so a rolled-back runner opens every profile with the latest number and never meets a missing counter", async () => {
+    const root = profileRoot();
+    const first = fakeBrowser();
+    const browser = browserOf(root, first);
+    for (let i = 1; i <= 3; i++)
+      expect(asRecord(await drive(browser, "snapshot")).snapshotId).toBe(i);
+    await browser.close();
+    expect(existsSync(join(root, LEGACY_COUNTER_FILE))).toBe(true);
+    // The profile is on disk (the browser launched in it), as it is for any coworker already using this root.
+    const profileDir = first.launches[0]?.profileDir ?? "";
+    mkdirSync(profileDir, { recursive: true });
+    writeFileSync(join(profileDir, "Preferences"), "{}");
+
+    // N-1 opens the earlier name the way it always did, with the profile on disk.
+    const rolledBack = openCounterStore(join(root, LEGACY_COUNTER_FILE));
+    const key = profileDir.split("/").pop() ?? "";
+    expect(rolledBack.open(key, true)).toBe(3);
+    rolledBack.close();
   });
 
   test("numbers an N-1 runner issued in the earlier file are not gone back over when N opens again: the larger stands", async () => {
