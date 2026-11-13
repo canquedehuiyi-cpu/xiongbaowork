@@ -39,9 +39,9 @@
 
 **数值与命名**
 - 人数：一个可聊天的群组 2–20 位员工（`S/channels/group.ts:125-126` 的 `MIN_GROUP_BOTS`/`MAX_GROUP_BOTS`）。不满足时文案统一为「一个群组要有 2 到 20 位员工。」。
-- 名称：1–80 字，租户内唯一；撞名后缀「（2）」…「（99）」，再撞加群组 id 前 6 位；后缀计入 80 字（先截本体再加后缀）。
+- 名称：1–80 字，租户内唯一；撞名后缀「（2）」…「（99）」，再撞加群组 id 前 6 位；后缀计入 80 字（先截本体再加后缀）。取名的截断按码点计（`channel-link.ts` 的 `clip` 与 0207 的 `left()`/`length()` 一致，含 emoji 的名字两边判断相同）。
 - 界面、服务端给人看的文字、给模型看的工具描述一律叫「**群组**」；`reachability` 里指第三方 IM 群的「群聊」不改。
-- 日志 `type`：`waker-group-link-failed`、`waker-group-name-taken`、`waker-group-upgrade-item-failed`、`waker-group-upgrade`（汇总）。
+- 日志 `type`：`waker-group-link-failed`、`waker-group-name-taken`、`waker-group-upgrade-item-failed`、`waker-group-upgrade`（汇总）、`waker-group-handed-over`（移交成功，Task 5A 最终审查修复）。
 - 开关：`XIONGBAO_GROUP_UPGRADE=off` 跳过开机任务，默认开。
 
 **已有测试**
@@ -108,6 +108,8 @@
 | 15 | 升级须知、回滚手册与其 SQL 测试、`.env.example`、`CHANGELOG.md` | PR3 | 14 | opus | 完整评审 |
 
 依赖：1 → 2 → 3 → 4 → 5 → 5A（PR1，串行；1–5 在同一个测试文件逐步追加，5A 另建测试文件）。PR1 合入后，PR2 与 PR3 可以并行开发：6 → {7, 8, 9, 10 并行} → 11；12 → 13 → 14 → 15。PR2、PR3 建议进同一个正式版本（设计稿第 10 节）。
+
+**发版提醒：PR1 不单独发版。PR1 合入 main 之后、PR2（界面）合入之前，不得打发版标签。** PR1 至少与 PR2 的 Task 6 进同一个正式版本。旧界面下 PR1 单独上线的风险（设计稿第 10 节 PR1「风险」）：新建群聊会多出群组并出现在员工页、`@群组`、流程页；「新对话」首条失败的 `discard` 与从旧侧边栏删群聊都会留下孤儿群组；员工页「退役群组」会顺带隐藏聊天；「管理成员」对已挂接的群组改走群聊增删并多了 2–20 位的 409，未挂接的补够 2 位会自动开聊天。
 
 设计稿章节与任务的对应：第 2 节更正 → 全局约束与 Task 1、2；3.1 → 1、2；3.1.1 → 5A、10、12、14；3.2 → 全局约束、1、12；3.3 → 1、12；4.1 → 2；4.2 → 3、5；4.3 → 3、6；4.4 → 2、3、4；4.5 → 2、4、14；5.1–5.3 → 13、14；5.4 → 14、4（`for-channel` 兜底）；5.5 → 12；5.6 → 15；6.1 → 3（`wakerGroupId`）、其余不改；6.2–6.3 → 2、4、5；6.4 → 5、11；7.1 → 8；7.2 → 9；7.3 → 7、11（「新对话」文案）；7.4 → 10；7.5 → 5、9、10；8.1 → 11（各任务里各自页面的文案随任务改）；8.2 → 3、4、10、11；第 9 节 → 7–11；第 10 节 → 本表；第 11 节与用户裁定 → Task 5（Q1）、10（Q2）、13（Q3）、15（Q4）、5A（Q5–Q8）；第 12 节 → 15。
 
@@ -190,7 +192,7 @@ export type WakerGroupLink = {
   reconcile(channelId: string): Promise<boolean>;
   /** 频道改名后同步群组名；撞名保留原名，记 {"type":"waker-group-name-taken","channelId","groupId","name"}。 */
   syncName(channelId: string): Promise<void>;
-  linkedGroupOf(channelId: string): Promise<string | null>;
+  // linkedGroupOf：最终审查 M9 删除（没有生产调用方，platform 帧读接口不留）。
   /** 挂着它的未删除频道，调用者帧下读得到才返回。 */
   liveChannelOf(groupId: string): Promise<string | null>;
 };
@@ -291,20 +293,22 @@ export function createWakerGroupActions(deps: {
   groups: Pick<GroupConversations, "create" | "addBots" | "removeBots" | "reorder">; // 未装饰的 baseGroupConversations
   channels: Pick<ChannelStore, "get" | "rename" | "softDelete">;                   // 装饰后的 channelStore
   actorFor(userId: string): Promise<AgentActor>;
-  portraits: Pick<PortraitStore, "remove" | "removeMedia">;
   canUse(ownerUserId: string, agentId: string): Promise<boolean>; // 与 canUseBot 同一判断（S/index.ts:4206-4209）
   conversions?: ConversionClaims; // Task 14 装配
+  auditStore?: AuditStore;        // 最终审查修复：解散隐藏聊天时写 channel.deleted
+  log?: (line: Record<string, unknown>) => void;
 }): WakerGroupActions;
+// 不注入 portraits：解散在自己的事务里直接删 portraits、portrait_media 的行（Task 5 修复轮）。
 export function createWakerGroupRoutes(store: WakerGroupStore, requireUser: MiddlewareHandler<Ctx>, actions?: WakerGroupActions): Hono<Ctx>;
 ```
 - 路由（只在传了 `actions` 时挂；不传时与现在完全一样）：
   - `POST /`：带 `agentIds`（字符串数组）时走 `createWithChat`：去重后不足 2 或超过 20 → 400 `WakerGroupSizeError`；名字 400/409 同旧；顺序：建群组 → `groups.create(owner, { agentIds })`（未装饰，避免再建一个群组）→ `link.adopt`；建频道失败：`store.remove(group.id)` 再抛；频道已建成但 `link.adopt` 失败：先 `channels.softDelete(actor, channel.id)`（创建者帧，0122 守卫允许），再 `store.remove(group.id)`，再抛原错误，不留下未挂接的空群聊。返回 201 `{ group, channel }`。不带 `agentIds` 走旧逻辑。
-  - `PATCH /:id`：`{ name?, description? }`。名字 1–80 字（400），撞名 409（`WakerGroupNameTakenError`，`pickGroupName` 不用于用户改名）。已挂接：`channels.rename(actor, channelId, name)`（装饰器把群组名改过来），`description` 直接写群组；未挂接：只改群组。别人的 id 404。
+  - `PATCH /:id`：`{ name?, description? }`。名字 1–80 字（400），撞名 409（`WakerGroupNameTakenError`，`pickGroupName` 不用于用户改名）。已挂接：`channels.rename(actor, channelId, name)`（装饰器把群组名改过来），`description` 直接写群组；未挂接：只改群组。上游拒绝改 title（`ChannelNotOwnerError`，调用者已不是聊天的发起人）→ 403「只有发起人能调整这个群组。」。别人的 id 404。
   - `POST /:id/chat`：已挂接 409（`WakerGroupLinkedError`）；`chatStatus` 不是 `not_started` → 409（`WakerGroupSizeError`）；否则用可用员工（按 `position`）`groups.create` + `adopt`，201 `{ group, channel }`；`adopt` 失败时 `channels.softDelete` 刚建的频道再抛，群组保持未挂接。
   - `GET /`（传了 `actions` 时改走 `actions.list`）：每项在 `ListedWakerGroup` 之上多 `usableMemberCount`（成员里 `canUse(owner, id)` 为真的个数）与 `chatStatus`：`channelId` 非空 → `chat`；否则 `usableMemberCount < 2` → `pending_members`；`> 20` → `too_many`；其余 `not_started`。升级转换记成 `pending_members` 的群组保留了全部成员行，只看 `members.length` 会误判，所以状态由服务端给。
-  - `POST /for-channel/:channelId`：`channels.get(actor, id)` 读不到 → 404；`created_by`（个人旧频道用 `tenant_id`）不是调用者 → 403 `{ error: "只有发起人能调整这个群组。" }`；否则：传了 `conversions` 且 `claimedBy(channelId)` 非空 → `finish(那个群组, channelId)`；不然 `linkChannel`（没挂就补）；之后 `reconcile`，200 `{ group }`。
+  - `POST /for-channel/:channelId`：`channels.get(actor, id)` 读不到 → 404；单聊或任务会话（`isGroupConversation` 为假）同样 404；`created_by`（个人旧频道用 `tenant_id`）不是调用者 → 403 `{ error: "只有发起人能调整这个群组。" }`（Task 5A 起先移交再判断）；`reconcile` 返回 false（所有者帧读不到聊天）→ 409 `{ error, code: "waker-group-owner-gone" }`；否则：传了 `conversions` 且 `claimedBy(channelId)` 非空 → `finish(那个群组, channelId)`；不然 `linkChannel`（没挂就补）；之后 `reconcile`，200 `{ group }`。
   - 注册顺序：`/for-channel/:channelId` 先于 `/:id/chat`，避免 `POST /for-channel/chat` 被后者截走。
-- `S/index.ts:5218`：`createWakerGroupRoutes(createWakerGroupStore(database), requireUser…, createWakerGroupActions({ database, store, link: wakerGroupLink, groups: baseGroupConversations, channels: channelStore, actorFor, portraits: createPortraitStore(database), canUse: <与 canUseBot 同一 lambda> }))`。
+- `S/index.ts:5218`：`createWakerGroupRoutes(createWakerGroupStore(database), requireUser…, createWakerGroupActions({ database, store, link: wakerGroupLink, groups: baseGroupConversations, channels: channelStore, actorFor, canUse: <与 canUseBot 同一 lambda>, auditStore: bootAuditStore }))`。
 
 - [ ] **Step 1：写失败测试**（`requireUser` 照 `tests/waker-groups.test.ts:40-52`，按测试切换 alice/bob）：
   - `POST with agentIds makes the crew and its chat in one call`：201；`channel.title === group.name`；`group.channelId === channel.id`；`order(channel.id)` 等于提交顺序；镜像同序。
@@ -340,18 +344,18 @@ export type MemberStep = { op: "add" | "remove" | "reorder"; agentIds: string[] 
 export class WakerGroupStepsError extends Error { done: MemberStep[] } // 409 { error, done }
 export class WakerGroupRunningError extends Error {}                    // message「有组团流程正在运行，先停下再解散。」
 // WakerGroupActions 追加：
-setMembers(owner: string, groupId: string, agentIds: string[]): Promise<ListedWakerGroup | null>;
+setMembers(owner: string, groupId: string, agentIds: string[]): Promise<{ group: ListedWakerGroup; chatError?: string } | null>; // chatError：名单已存、聊天没开成（修复轮 1）
 dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在或不是你的（404）
 ```
 - `PUT /:id/members`（传了 `actions` 时改走 `actions.setMembers`）：
   - **已挂接**：去重后不在 2–20 → 409 `WakerGroupSizeError`。`current = runtimeOrder(order(), bots())`，`toAdd = 目标 − current`（按目标顺序），`toRemove = current − 目标`。循环直到两者都空：先 `addBots`（取 `min(toAdd, 20 − 当前数)` 个），再 `removeBots`（取 `min(toRemove, 当前数 − 2)` 个）；一轮两步都没进展就抛错。这是设计稿「先加到 20，再移，再加剩下的」在 20 位全换时不踩 2 位下限的写法。最后 `reorder(目标)`，`reconcile`。任一步抛错：`reconcile` 后抛 `WakerGroupStepsError`，`done` 为已成功的步骤。调用未装饰的 `groups`（上游 `creatorOnly` 照常生效）。
   - **未挂接**：`store.setMembers` 照旧；结果的 `chatStatus` 为 `not_started`（可用员工 2–20 位）就 `startChat`，返回的 `group.channelId` 非空。
-- `DELETE /:id`（传了 `actions` 时改走 `actions.dissolve`）：
-  1. 群组有未结束的运行 → `WakerGroupRunningError`（409）。「未结束」= `group_task_runs.status IN ('running','awaiting_action')`：设计稿 7.5 写的 `queued` 在代码里不存在（`S/pipeline/store.ts:55` 的状态只有 running / awaiting_action / done / failed / aborted），`awaiting_action` 是唯一另一个未结束状态。
-  2. 已挂接：`channels.softDelete(actor, channelId)`。
-  3. `store.remove(groupId)`（模板、运行记录按 0075 外键级联；频道挂接由外键 `SET NULL` 清空，走守卫放行 b）。
-  4. `portraits.remove("group", id)`、`portraits.removeMedia("group", id)`。未挂接的群组同样执行 3、4。
-  看板任务卡不删。
+- `DELETE /:id`（传了 `actions` 时改走 `actions.dissolve`；以下为修复轮 1 与最终审查修复之后的实现）：
+  1. 群组有未结束的运行 → `WakerGroupRunningError`（409），什么都不改。「未结束」= `group_task_runs.status IN ('running','awaiting_action')`：设计稿 7.5 写的 `queued` 在代码里不存在（`S/pipeline/store.ts:55` 的状态只有 running / awaiting_action / done / failed / aborted），`awaiting_action` 是唯一另一个未结束状态。
+  2. 已挂接：`channels.softDelete(actor, channelId)`（上游自己的事务，不能并进下一步）；返回不是 `false` 时照上游删除路由写一条 `channel.deleted` 审计（复用 `S/channels/routes.ts` 导出的 `recordChannelDeleted`，注入 `auditStore`）。
+  3. 一个事务里，按设计稿 3.1.1 第 4.1 条的加锁顺序：先 `FOR UPDATE` 锁挂着这个群组、调用者读得到的频道行（按 id，含已软删的）→ 再 `FOR UPDATE` 锁群组行（WakerFlow 的群组锁不到，回 404）→ 重查运行（有就 409）→ 删 `portraits`、`portrait_media` 里这个群组的行（直接删表行，不注入 `PortraitStore`）→ 删群组（模板、运行记录按 0075 外键级联；频道挂接由外键 `SET NULL` 清空，走守卫放行 b）。先删头像再删群组，同一事务，结果与「删群组、再删头像」等价。
+  4. 第 3 步失败：聊天已隐藏、群组完整保留，记 `waker-group-dissolve-incomplete`，再解散一次即可。
+  未挂接的群组执行 1、3。看板任务卡不删。
 - `assert-tenants.mjs`：在 `businessPaths` 循环之后，A `POST /api/waker-groups { name }` 建一个群组；B 对它 `PATCH`（`{ name: "被他人改名" }`）、`DELETE` 各一次，`check(status === 404, "B renaming A group returns 404")`、`check(status === 404, "B dissolving A group returns 404")`；之后 A 的列表里该群组仍在、名字不变。
 
 - [ ] **Step 1：写失败测试**：
@@ -402,7 +406,7 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
    - 属性：`LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public SET app.tenant_id = 'platform'`；只 `REVOKE ALL … FROM PUBLIC`，不授权。
    - `p_heir IS NULL`：`UPDATE channels SET deleted_at = now() WHERE id = p_channel_id AND deleted_at IS NULL`，然后返回。
    - 否则 `UPDATE channels SET created_by = p_heir WHERE id = p_channel_id`。`p_group_id` 为空，或 `waker_groups.tenant_id <> p_from`，到此返回。
-   - 群组：循环改 `tenant_id = p_heir, name = 候选名, updated_at = now()`。候选名依次为：原名；`left(原名, 80 - 后缀长度) || '（n）'`（n = 2…99）；`left(原名, 74) || left(p_group_id::text, 6)`。每次 `EXCEPTION WHEN unique_violation` 就试下一个，最后一个也撞就 `RAISE`。
+   - 群组：循环改 `tenant_id = p_heir, name = 候选名, updated_at = now()`。底名 = 聊天的 title（去首尾空白后为空就用 `channels.name`），去首尾空白、`left(…, 80)`；两者都空时退回群组原名（最终审查 M13 修复：以 title 为底，不用群组现名，免得「（2）（2）」）。候选名依次为：底名；`left(底名, 80 - 后缀长度) || '（n）'`（n = 2…99）；`left(底名, 74) || left(p_group_id::text, 6)`。`left()`、`length()` 按码点计，与应用侧 `clip` 一致。每次 `EXCEPTION WHEN unique_violation` 就试下一个，最后一个也撞就 `RAISE`。
    - 头像：`DELETE FROM portraits WHERE tenant_id = p_heir AND subject_kind = 'group' AND subject_id = p_group_id::text`，再把 `tenant_id = p_from` 的同键行改为 `p_heir`。`portrait_media` 照做。
    - 模板：`group_task_templates`（`group_id = p_group_id AND tenant_id = p_from`）的 `tenant_id` 改为 `p_heir`。
    - 运行与附属行：先建临时集合 `runs := SELECT id, parent_task_id, steps FROM group_task_runs WHERE group_id = p_group_id AND tenant_id = p_from`（用 CTE 或临时数组），再依次：
@@ -412,6 +416,7 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
      - `group_pipeline_start_receipts`：`run_id IN runs AND tenant_id = p_from` → `p_heir`；
      - `flow_confirmations`、`flow_run_events`（`run_id IN runs`）以及 `flow_run_retries`（`source_run_id IN runs OR new_run_id IN runs`），都限 `tenant_id = p_from` → `p_heir`。
    - **不动**：`usage_counters`、审批、`audit_events`、`group_bot_threads`、`waker_group_members`。
+   - **留痕**（最终审查 M4 修复，有接手人时）：`RAISE LOG` 一行（频道、原主、接手人、群组、搬走的运行数）；同样内容 `set_config('xiongbao.hand_over', json, true)` 留在本事务里。应用的 `leave`、`handOver`（`handOver` 为此包进一个事务）读回它，提交后记 `{"type":"waker-group-handed-over","channelId","from","to","groupId","runs"}`。停用路径只有服务器日志那一行。
 3. `openbot_team_channel_hand_over_core(p_channel_id text, p_leaving boolean DEFAULT true) RETURNS text`（修复轮 1 加 `p_leaving`：真 = 退群，假 = 停用）
    - 属性：`SECURITY DEFINER`，固定 `search_path`；`REVOKE ALL FROM PUBLIC`，不授权。
    - 函数体：
@@ -667,9 +672,25 @@ export async function startGroupWith(input: {
 }): Promise<void>;
 ```
 - `useStartChannel` 的 `discard`：有 `wakerGroupId` 时 `retireCrew.mutateAsync(wakerGroupId)`；没有时照旧 `deleteChannel.mutateAsync(id)`。删掉 `A/lib/waker-groups/mutations.ts:5-11`「没有改名」的注释，改写为「改名走 PATCH，频道名是真相」。
+- **服务端接口的返回与错误**（PR1 已实现，以设计稿 6.2、6.3 为准；前端要按这些处理，不能只看 2xx）：
+  ```ts
+  // queries.ts / mutations.ts 追加
+  export const OWNER_GONE = "waker-group-owner-gone";
+  export type MemberStep = { op: "add" | "remove" | "reorder"; agentIds: string[] };
+  /** 非 2xx 的群组接口错误：status、服务端原文 error，以及可选的 code（owner-gone）与 done（分步失败）。 */
+  export class CrewRequestError extends Error { status: number; code?: string; done?: MemberStep[] }
+  export function setCrewMembersMutationOptions(queryClient: QueryClient); // PUT /api/waker-groups/:id/members { agentIds } → { group, chatError?: string }
+  ```
+  - `PUT /:id/members` 回 200 也可能带 `chatError`：名单已保存，聊天没开成（群组状态「未开始聊天」）。不能当完全成功：调用方拿到 `chatError` 要显示它（Task 9 的「管理成员」、Task 10 的设置面板）。
+  - 409 带 `code: "waker-group-owner-gone"`（`for-channel`、`POST /:id/chat`、`PUT /:id/members`）：以 `code` 判断，不靠文案；界面显示服务端文案「这个群组的聊天你已经不在里面了，暂时不能调整。」，不重试、不再开聊天。
+  - `PUT /:id/members` 的 409 带 `done`：已经生效的步骤；显示服务端 `error`，并失效 `wakerGroupKeys.all`、`channelKeys.all` 重读（镜像已按聊天改写）。
+  - `PATCH /:id` 回 403：调用者已不是聊天的发起人，显示服务端文案。
+  - `for-channel` 回 404 的情况包括单聊和任务会话：设置面板只对群聊调它，404 时不显示群组设置。
+  - 退群 `DELETE /api/groups/:id/members/<我>` 在流程运行中回 400「有组团流程正在运行，先停下再退群。」，原样显示（Task 10）。
 
 - [ ] **Step 1：写失败测试**：
   - `waker-group-mutations.test.ts`：`crewStatus` 五种输入（`channelId:"c"`、0 位、1 位、21 位、2 位无 `channelId` 字段）分别得 `chat`、`pending_members`、`pending_members`、`too_many`、`not_started`；`crewStatus trusts the server's chatStatus`：3 位成员、`channelId: null`、`chatStatus: "pending_members"` → `pending_members`；四个新变更各自发出的 `method`、`url`、`body` 精确等于上面的值（照 `app/tests/wakers-screen.test.tsx` 的 fetch 桩）。
+  - `waker-group-mutations.test.ts` 追加：`setCrewMembers returns chatError with the group`（200 `{ group, chatError: "…" }` → `mutateAsync` 结果带 `chatError`）；`an owner-gone 409 is told by its code`（409 `{ error, code: "waker-group-owner-gone" }` → 抛 `CrewRequestError`，`code === OWNER_GONE`、`status === 409`）；`a part-way 409 carries done`（409 `{ error, done: [{ op: "add", agentIds: ["a"] }] }` → `error.done` 原样）；`a 403 from PATCH keeps the server's words`。
   - `group-start-discard.test.ts`：`a group whose first message failed is dissolved`：`create` 返回 `{ id: "c-1", wakerGroupId: "g-1" }`、`send` 抛错 → `discard` 收到 `{ id: "c-1", wakerGroupId: "g-1" }`，`open` 未调用，原错误抛出；`useStartChannel` 层面（渲染 hook）断言发出 `DELETE /api/waker-groups/g-1`；`create` 不带 `wakerGroupId` 时发出 `DELETE /api/channels/c-1`。
 - [ ] **Step 2：运行** `cd openbot/app && bun test tests/waker-group-mutations.test.ts tests/group-start-discard.test.ts`，预期失败。
 - [ ] **Step 3：实现。**
@@ -779,6 +800,7 @@ export function CreateGroupForm(props: {
 - 卡片按 `crewStatus`：`chat` → 「打开」（`/group/$channelId`）、「设置」（`/group/$channelId?settings=1`）；`pending_members`、`too_many` → 徽标「待补成员」/「待调整成员（超过 20 位）」；`not_started` → 「开始聊天」按钮（`startCrewChatMutationOptions`，成功后跳 `/group/$channelId`）。原有「管理成员」「更换头像」「解散」「组团流程」「在看板上看」保留。
 - 「组团流程」链接 → `to="/pipelines" search={{ group: crew.id }}`，删掉 `crews.tsx:453` 附近「不带参数」的注释。
 - 「解散」确认文案：「解散「X」：聊天记录不再显示；它的 N 条组团流程和运行记录会一并删除；看板上已有的任务卡保留。」，N 取 `pipelineTemplatesQueryOptions` 里 `groupId === crew.id` 的条数；409 时显示服务端文案。
+- 「管理成员」保存走 Task 6 的 `setCrewMembersMutationOptions`：返回带 `chatError` 时显示它（名单已保存、聊天没开成，卡片随后显示「开始聊天」）；409 owner-gone（按 `code`）与 409 `done` 显示服务端文案。
 - `pipelines.tsx` `validateSearch` 返回 `{ run?: string; group?: string }`；有 `group` 时初始 `selected = group`，该群组一节 `scrollIntoView` 并展开。
 
 **已批准断言**：#31 `wakers-parity.test.tsx:704`（设计稿记 `:713`）→ `"/pipelines?group=crew-1"`。`:290`、`:312-315`、`:336-338`、`:717` 所在的页签、对话框、占位文字、`crew=` 断言不变。
@@ -812,6 +834,7 @@ export function GroupSettingsPanel(props: { channelId: string }): JSX.Element;
 - 面板打开时调 `crewForChannelMutationOptions`：
   - 200（创建者）：分节「名称与用途」（行内编辑 → `renameCrew`）；「员工与顺序」（上移、下移、移除、「添加员工」只列 `agentListQueryOptions` 里我能用的；少于 2 或多于 20 禁用保存并提示「一个群组要有 2 到 20 位员工。」；移除的员工负责某个模板步骤时提示「这位员工负责流程「X」的第 N 步」，不拦；保存 → `PUT …/members`，409 显示服务端文案）；「头像」`PortraitPicker kind="group" id={group.id}`；「组团流程」该群组模板列表 + 「管理流程」`/pipelines?group=<id>`；「在看板上看」`/tasks?crew=<成员 id 逗号连接>`；危险区「解散群组」（确认文案同 Task 9，成功后跳 `/`）。
   - 403（其他人）：只读「员工与顺序」（数据取 `groupQueryOptions(channelId)` 的 `bots`）+ 一句「只有发起人能调整」。
+  - 409 带 `code: "waker-group-owner-gone"`：只读视图 + 服务端文案；保存成员时的 `chatError`、409 `done`、改名的 403 都显示服务端给的文字（Task 6）。
 - `@群组`：选项构造不变，当前频道挂接的群组的模板排在最前（从 `wakerGroupsQueryOptions` 找 `channelId === 当前频道`）。
 - 人员面板（设计稿 3.1.1 第 11 条）：`A/components/channels/group-people.tsx:79` 改为 `const removable = self || iCreated;`。创建者点「退出」先弹确认：
   - 有接手人：「退出后，这个群组和它的头像、组团流程、运行记录、看板任务卡都归「{people[1]}」。」；
@@ -890,6 +913,7 @@ test("the app and the server say 群组, never 群聊 (IM chats aside)", () => {
 CREATE TABLE public.waker_group_upgrades (
   group_id uuid PRIMARY KEY REFERENCES public.waker_groups(id) ON DELETE CASCADE,
   tenant_id text NOT NULL,
+  original_owner text NOT NULL, -- 写台账时的所有者；之后不改，移交不搬（回滚手册第 1 步用它排除已被移交的转换群组）
   channel_id text,
   outcome text NOT NULL CONSTRAINT waker_group_upgrades_outcome
     CHECK (outcome IN ('started','converted','backfilled','pending_members','too_many','no_owner')),
@@ -907,7 +931,7 @@ CREATE TABLE public.waker_group_upgrades (
   - `a tenant reads and writes only its own ledger rows; platform reads all`：alice 帧插 `tenant_id = alice` 成功、插 `tenant_id = bob` 被拒；bob 帧读不到 alice 的行；`platform` 帧两行都读到。
   - `an unknown outcome is refused`：`outcome = 'done'` → `23514`。
   - `deleting the crew deletes its ledger row`。
-  - `a hand-over moves the crew's ledger row too`。
+  - `a hand-over moves the crew's ledger row too`：`tenant_id` 改为接手人，`original_owner` 仍是原主。
 - [ ] **Step 2：运行**，预期失败。
 - [ ] **Step 3：实现。**
 - [ ] **Step 4：运行** 迁移测试库（两次，第二次无报错），再跑同文件与 `tests/migration-journal.test.ts`、`tests/recovery-overlay-journal.test.ts`。
@@ -939,7 +963,7 @@ export async function convertGroups(deps: GroupUpgradeDeps): Promise<PhaseOneCou
   3. `tenant_id IN ('system','platform','team')` 或 `users` 无此 id → 台账 `no_owner`。
   4. 按 `position` 排序，筛掉 `canUse(owner, id)` 为假的员工，剩下 < 2 → `pending_members`，**不改成员数据**。
   5. 剩下 > 20 → `too_many`，不截断（用户裁定 Q3）。
-  6. 2–20 → ① 台账 `started`（`platform` 帧，`started_at = now()`，被筛掉的 id 此时就写进 `dropped_agent_ids`，供孤儿匹配用）；② `runAsTenant(owner, () => groups.create(owner, { agentIds }))`；③ 台账写 `channel_id`；④ `link.adopt(groupId, channelId)`（挂接、title = 群组名、镜像）；⑤ 台账 `converted`。
+  6. 2–20 → ① 台账 `started`（`platform` 帧，`started_at = now()`，`original_owner = tenant_id = owner`，被筛掉的 id 此时就写进 `dropped_agent_ids`，供孤儿匹配用）；② `runAsTenant(owner, () => groups.create(owner, { agentIds }))`；③ 台账写 `channel_id`；④ `link.adopt(groupId, channelId)`（挂接、title = 群组名、镜像）；⑤ 台账 `converted`。
 - 台账已是 `pending_members`、`too_many`、`no_owner`、`converted`、`backfilled` 的跳过（终态）。台账 `started` 且 `channel_id` 为 NULL：先找孤儿（`created_by = owner`、`waker_group_id IS NULL`、`created_at >= started_at`、`deleted_at IS NULL`、`channel_agents` 集合等于该群组成员减去台账 `dropped_agent_ids`），找到就从 ③ 继续，找不到就从 ② 重建。台账 `started` 且有 `channel_id`：从 ④ 继续。
 - 单项异常：记 `{"type":"waker-group-upgrade-item-failed","groupId","error"}`，继续下一项。
 
@@ -979,7 +1003,7 @@ export async function runGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: st
 export function startGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string }): { done: Promise<unknown>; stop(): Promise<void> };
 ```
 - 未完成转换占用的频道：`export function createConversionClaims(deps: { database: Database; link: WakerGroupLink }): ConversionClaims`（类型见 Task 4）。`claimedBy` 返回占用该频道的群组 id：台账 `started` 且 `channel_id` = 该频道；或台账 `started`、`channel_id` 为 NULL，且该频道满足 Task 13 的孤儿条件（孤儿恢复窗口）。`finish` 在所有者帧 `link.adopt` 后把台账改 `converted`、写 `channel_id`（台账 `tenant_id` = 所有者，本人帧可写）。
-- 第二阶段：`platform` 帧枚举未删除、`channel_agents` ≥ 2、`waker_group_id IS NULL` 的频道；`claimedBy` 非空的**跳过**（留给下一次第一阶段续做，不补建新群组，否则原群组再也挂不上：守卫拒绝改已有挂接）；`channelOwner` 为 NULL 的计入 `ownerless` 跳过；否则 `link.linkChannel(channelId)`，台账写 `{ group_id, tenant_id: owner, channel_id, outcome: 'backfilled' }`。撞名按 `pickGroupName` 加「（2）」。
+- 第二阶段：`platform` 帧枚举未删除、`channel_agents` ≥ 2、`waker_group_id IS NULL` 的频道；`claimedBy` 非空的**跳过**（留给下一次第一阶段续做，不补建新群组，否则原群组再也挂不上：守卫拒绝改已有挂接）；`channelOwner` 为 NULL 的计入 `ownerless` 跳过；否则 `link.linkChannel(channelId)`，台账写 `{ group_id, tenant_id: owner, original_owner: owner, channel_id, outcome: 'backfilled' }`。撞名按 `pickGroupName` 加「（2）」。
 - 第三阶段：遍历所有已挂接、未删除的频道，`link.reconcile`，返回 `true` 的计数。
 - 移交（设计稿 3.1.1 第 4.4 条）：第二阶段对每个候选的 `team` 频道、第三阶段对每个已挂接的 `team` 频道，在 `linkChannel` / `reconcile` 之前先 `link.handOver(channelId)`（`platform` 帧）。汇总日志加 `handedOver`。
 - `runGroupUpgrade`：`env.XIONGBAO_GROUP_UPGRADE === "off"` → `{ skipped: "off" }`，不连库。否则用独立连接 `postgres(databaseUrl, { max: 1 })` 执行 `select pg_try_advisory_lock(${GROUP_UPGRADE_LOCK})`（写法照 `S/audit-retention.ts:70-76`），没抢到 → `{ skipped: "locked" }`；抢到则依次第一、二、三阶段，`finally` 里 `pg_advisory_unlock` 并关连接；结束打一行 `console.error(JSON.stringify(summary))`（`pending` = 第一阶段 `pending`）。
@@ -1018,15 +1042,18 @@ export function startGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string
 
 **内容：**
 - 升级须知照设计稿第 12 节 1–6 条，写明 Q4：转出来的空群组会出现在会话列表顶部；同名老群聊与转出来的群组同时存在，可自行解散一个；推迟转换用 `XIONGBAO_GROUP_UPGRADE=off`。
-- 回滚手册：一段 ```` ```sql ```` 代码块，前后用 `<!-- group-upgrade-rollback:start -->` / `<!-- group-upgrade-rollback:end -->` 标出，开头 `SELECT set_config('app.tenant_id', 'platform', true);`，在一个事务里三步（设计稿 5.6）：
-  1. 台账 `converted` 且频道没有任何 `group_messages`：`UPDATE channels SET deleted_at = now()`；按 `dropped_agent_ids` 把员工追加回 `waker_group_members`（`position` 接在现有最大值之后）。
+- 升级须知另写一条（设计稿 5.6、12.5）：**0207 的停用触发器换回旧镜像后仍然有效**，停用照样移人、照样移交，移交没有数据回滚手段。
+- 回滚手册的「停用触发器」一步（单独一段，与下面的数据回滚无关，换回旧镜像时就做）：用迁移属主账号执行 `ALTER TABLE public.revoked_access DISABLE TRIGGER openbot_team_revoked_leaves;`；写明停用期间停用的人不离开共享群、他建的群不移交；重新升级后由属主 `ENABLE TRIGGER`，再执行一次 0207 末尾的补做语句（幂等）。
+- 回滚手册：一段 ```` ```sql ```` 代码块，前后用 `<!-- group-upgrade-rollback:start -->` / `<!-- group-upgrade-rollback:end -->` 标出，开头 `SELECT set_config('app.tenant_id', 'platform', true);`，先一条查询列出**已经被移交过的转换群组**（台账 `converted`，群组的 `tenant_id <> original_owner`：群组 id、原所有者、现所有者、频道 id），运维把输出存档；然后在一个事务里三步（设计稿 5.6）：
+  1. 台账 `converted`、频道没有任何 `group_messages`、**并且群组的 `tenant_id = original_owner`**（没被移交过）：`UPDATE channels SET deleted_at = now()`；按 `dropped_agent_ids` 把员工追加回 `waker_group_members`（`position` 接在现有最大值之后）。被移交过的不回滚，只由开头那条查询记录。
   2. 台账 `backfilled` 且该群组没有 `group_task_templates`、没有 `portraits`（`subject_kind = 'group'`）、**也没有任何 `group_task_runs`**（`deleteTemplate` 让运行的 `template_id` 置空而保留运行，`group_task_runs.group_id` 却随群组级联删除，所以「没有模板」不等于「没用过」）：`DELETE FROM waker_groups`（外键自动解挂）。
   3. `DELETE FROM waker_group_upgrades`。
-  手册写明：有消息或已被用过的不回滚；全量回退仍是恢复备份；被移交过的群组照常按这三条判断（三步都在 `platform` 帧按 `group_id`、`subject_id`、`channel_id` 判断，不看 `tenant_id`，设计稿 3.1.1 第 5 条）。
-- CHANGELOG：「群组与群聊合一：侧边栏只剩「群组」，群组里可以直接聊天；升级时自动转换，见部署文档 §6」。
+  手册写明：有消息或已被用过的不回滚；已被移交过的转换群组不回滚、只记录（第 1 步的排除条件，设计稿 3.1.1 第 5 条）；第 2、3 步对被移交过的群组照常判断（按 `group_id`、`subject_id`、`channel_id`，不看 `tenant_id`）；全量回退仍是恢复备份。
+- CHANGELOG：「群组与群聊合一：侧边栏只剩「群组」，群组里可以直接聊天；升级时自动转换，见部署文档 §6」。这一条写在 PR1、PR2 同一个正式版本下：PR1 不单独发版（PR1 合入 main 后、PR2 合入前不得打发版标签，见「任务一览」后的发版提醒）。
 
 - [ ] **Step 1：写失败测试**：
-  - `the runbook SQL undoes an untouched conversion and backfill`：读 `openbot/docs/deployment-xiongbao.md`，取两个标记之间的 SQL；造一次 `converted`（有 1 位被筛掉、无消息）、一次 `backfilled`（无模板无头像）、一次 `converted` 但有消息、一次 `backfilled` 但模板已删而运行保留（`template_id` 为 NULL 的 `group_task_runs` 一行）；在 `platform` 帧事务里执行后断言：第一个频道已软删、镜像补回那 1 位；第二个群组已删、频道 `waker_group_id` 为 NULL；有消息的那个不动；保留运行的那个群组和它的运行都还在；台账为空。事务最后回滚（照 `tests/team-group-bots-migration.integration.test.ts` 的 `Rollback` 写法）。
+  - `the runbook SQL undoes an untouched conversion and backfill`：读 `openbot/docs/deployment-xiongbao.md`，取两个标记之间的 SQL；造一次 `converted`（有 1 位被筛掉、无消息）、一次 `backfilled`（无模板无头像）、一次 `converted` 但有消息、一次 `backfilled` 但模板已删而运行保留（`template_id` 为 NULL 的 `group_task_runs` 一行）；另造一次 `converted`、无消息但已被移交（群组 `tenant_id` = 接手人，`original_owner` = 原主）；在 `platform` 帧事务里执行后断言：第一个频道已软删、镜像补回那 1 位；第二个群组已删、频道 `waker_group_id` 为 NULL；有消息的那个不动；保留运行的那个群组和它的运行都还在；被移交过的那个频道未删、群组仍在接手人名下，且出现在开头那条查询的结果里；台账为空。
+  - `the runbook disables the hand-over trigger in its own step`：取手册里停用触发器的那条语句，在事务里用属主连接执行后，`pg_trigger.tgenabled = 'D'`；插入 `revoked_access` 不再移交；回滚。事务最后回滚（照 `tests/team-group-bots-migration.integration.test.ts` 的 `Rollback` 写法）。
   - `the runbook is marked once`：两个标记各出现一次。
 - [ ] **Step 2：运行**，预期失败。
 - [ ] **Step 3：实现**文档、`.env.example`、CHANGELOG。

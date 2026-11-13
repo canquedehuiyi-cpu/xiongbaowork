@@ -149,7 +149,7 @@ core 的判定顺序：
    - 这一步放在「没有接手人」之前：用户裁定 Q7「流程正在运行时创建者不能退群」一律适用，最后一人退群、只剩停用成员时退群都回 400，聊天和群组原样不动。
    - 停用（`p_leaving = false`）维持原样：有人接手时只推迟移交；没有接手人时不查运行，最后一人被停用照样软删聊天（这时什么都不搬，运行留在原主名下）。
    - 先锁后查，与解散相同（`S/waker-groups/linked-actions.ts` 的 `dissolve`）：插入运行时外键对群组行持有 KEY SHARE 锁，先插入的运行一定在锁到之后被看见，不会被当成已结束的运行搬走。加锁顺序仍是先频道后群组。
-   - 残余窗口（接受）：启动方在移交前读了模板、移交提交后才插入运行，外键照样通过，这条运行落在原主租户、指向已归接手人的群组。它只在「流程启动」与「创建者退群或被停用」落在同一瞬间时出现；要关掉得在启动运行时校验群组归属，留给后续。
+   - 残余窗口（接受）：启动方在移交前读了模板、移交提交后才插入运行，外键照样通过，这条运行落在原主租户、指向已归接手人的群组。它只在「流程启动」与「创建者退群或被停用」落在同一瞬间时出现；要关掉得在启动运行时校验群组归属：**已登记后续任务**（台账停放任务①）。
 5. 没有接手人：
    - 一个成员都没有了：软删聊天，返回 NULL；
    - 还剩成员，但全是停用的（只有停用后又被重新拉进群才会出现）：什么都不改，返回 `created_by`。
@@ -158,6 +158,8 @@ core 的判定顺序：
 公开函数的身份校验：当前帧必须是 `platform`、`created_by` 本人，或现任成员；否则报 42501，频道不存在时报同一个错。校验之前不加锁。
 
 **加锁顺序**：频道行 → 成员行 → 群组行。退群（`leave`：`FOR UPDATE` 频道行，删自己的成员行，再由写入函数改群组行）、镜像自愈（`for share` 频道行再写镜像，第 8 条）、上游 `lockedBots` 都先锁频道行。停用也照这个顺序：先锁他创建的频道行，再删他的成员行。反过来（先删成员行再锁频道行）会和同一个人正在进行的退群互相等待，死锁时被回滚的可能是停用。
+
+解散也照这个顺序（最终审查 M1 修复，`S/waker-groups/linked-actions.ts` 的 `dissolve`）：上游软删频道的事务提交之后，在一个事务里先按 id `FOR UPDATE` 锁挂着这个群组、调用者读得到的频道行（含已软删的，删群组时外键 `SET NULL` 要改的就是它们），再锁群组行，再查运行、删头像和群组。用例 `dissolving locks the chat's row before the crew's, the order every other path takes` 锁定这一顺序。剩下的边角：owner-gone 状态下（创建者已绕过服务离开）调用者读不到那条活着的频道行，锁不到它，这时解散与 `for-channel` 移交、停用触发器、镜像自愈仍可能互相等待成环。PostgreSQL 的死锁检测会打断其中一方（40P01）：解散或 `for-channel` 回 500，再试一次即可；停用由逐群子事务捕获，只记 WARNING。不写坏数据。
 
 **停用时的错误处理**（原则：停用本身不能因为移交失败而失败）：
 - 每个群的移交各在一个子事务里。55006 跳过；其他任何错误（比如接手人名下已有同一群组同名的模板，`group_task_templates_group_name_idx` 报 23505；子事务里的死锁）只回滚那一个群，记一条 `WARNING`（服务器日志），停用照常提交。频道的 `created_by` 仍是停用的人，属于第 8 条的 owner-gone 情形，由自愈点补上；不另设标记，`created_by` 不在籍或已停用本身就是待自愈的标记。
@@ -201,7 +203,7 @@ core 的判定顺序：
 | 数据 | 改法 | 说明 |
 |---|---|---|
 | `channels.created_by` | 改为接手人 | 共享群的所有者（3.1） |
-| `waker_groups` | `tenant_id` 改为接手人；撞名时按 4.4 的规则改 `name`（「（2）」…「（99）」，再撞加 id 前 6 位，后缀计入 80 字），循环里捕获 `unique_violation` | 0206 的挂接触发器要求群组属于所有者，两者同一事务改 |
+| `waker_groups` | `tenant_id` 改为接手人；`name` 按 4.4 以**聊天的 title** 为准（没有 title 用 `channels.name`；去首尾空白，截 80 字），撞名再依次加「（2）」…「（99）」，再撞加 id 前 6 位，后缀计入 80 字；循环里捕获 `unique_violation`。80 字按码点计，与应用侧 `pickGroupName` 一致（含 emoji 的名字两边判断相同） | 0206 的挂接触发器要求群组属于所有者，两者同一事务改。以 title 而不是群组现在的名字为底：群组名本来就带「（2）」时不会变成「…（2）（2）」，接手人帧的自愈算出的名字与移交时相同，不会再改名或记 `name-taken`（最终审查 M13 修复） |
 | `waker_group_members` | 不动，随父行 | 没有 `tenant_id`，RLS 看父行（`openbot/server/drizzle/0072_rls_command_scopes.sql:39-50`） |
 | `portraits`、`portrait_media`（`subject_kind='group'`） | `tenant_id` 改为接手人；先删接手人名下同键的残行 | 主键含 `tenant_id`（`R/0144`、`R/0203`） |
 | `group_task_templates`（`group_id`=群组，`tenant_id`=原主） | `tenant_id` 改为接手人 | 0075 |
@@ -215,12 +217,16 @@ core 的判定顺序：
 | **不搬**：审批记录、`audit_events` | 不动 | 审批是当事人的决定记录，审计只追加、不改写。没有未结束的运行，也就没有挂在卡上的待批审批 |
 | `waker_group_upgrades`（PR3 台账） | Task 12 的 0208 改写写入函数，多搬这一行 | — |
 
+**留痕**（最终审查 M4 修复）：审计只追加、不改写，移交也不往 `audit_events` 里写（那里的事件类型由应用登记、按人归档，停用路径没有发起移交的人）。改为两处日志，内容相同：频道 id、原主、接手人、群组 id、搬走的运行数。
+- 写入函数每次移交成功 `RAISE LOG` 一行（服务器日志，`xiongbao_team_channel_hand_over: channel … handed over from … to …, crew …, N run(s) moved`），退群、`for-channel`、停用触发器、存量补做四条路径都有。
+- 同样的内容以事务级设置 `xiongbao.hand_over`（JSON）留在本事务里。应用的 `leave`、`handOver` 在事务里读回它，提交后记一行 `{"type":"waker-group-handed-over","channelId","from","to","groupId","runs"}`，与其余 `waker-group-*` 日志在同一处。停用路径没有应用代码参与，只有服务器日志那一行。
+
 已知的小缺口（接受）：步骤卡上的会话链接指向步骤当时运行的线程，在原主租户里，接手人打不开那段对话记录。步骤的产出已经存在运行的 `steps[].output` 里，跟着搬了。
 
-**对 Task 15 回滚手册的影响：没有。**
-- 手册第 2 步「补建群组没有模板、没有头像、也没有任何 `group_task_runs`」是在 `platform` 帧里按 `group_id` 或 `subject_id` 查，不看 `tenant_id`。移交只改 `tenant_id`，不改 `group_id`，所以判断结果不变。
-- 第 1 步按频道和 `dropped_agent_ids` 操作，同样与租户无关。
-- 被移交过的群组，台账行由 0208 跟着搬，手册清空台账时照样清掉。
+**对 Task 15 回滚手册的影响：第 2 步没有，第 1 步要加一个排除条件。**
+- 手册第 2 步「补建群组没有模板、没有头像、也没有任何 `group_task_runs`」是在 `platform` 帧里按 `group_id` 或 `subject_id` 查，不看 `tenant_id`。移交只改 `tenant_id`，不改 `group_id`，也不新建运行记录，所以判断结果不变。
+- 第 1 步的边角：转换出来的群组如果在还没有任何消息时就被移交了（例如创建者拉人进群后被停用），按「频道没有消息」它会被当成未被使用的转换回滚：聊天被软删，群组却留在接手人租户里；0208 又把台账的 `tenant_id` 一起搬走，原主再也找不回这个群组。所以第 1 步排除**已经被移交过的转换群组**：群组当前的 `tenant_id` 不等于台账上的原所有者（0208 的 `original_owner` 列，写入后不随移交改）。这些行不回滚，只由手册开头的查询列出来记录（5.6）。
+- 被移交过的群组，台账行由 0208 跟着搬（`tenant_id` 改为接手人，`original_owner` 不变），手册清空台账时照样清掉。
 
 #### 6. 最后一人离开
 
@@ -341,6 +347,8 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 所有建群聊的路径都会立即挂上群组，这是用户选项 1 原话「每个群聊背后挂一个」的直接落实。好处是 `/api/waker-groups` 就是「我建的群组」的完整清单（不分页），员工页、`@群组`、流程页、看板都只读这一份。
 
+**一个例外**：`POST /api/channels` 建出的多员工个人频道（上游频道路由，`tenant_id` 是创建者本人）不在建频道时挂接。它不经过群聊服务的 `create`，也就不经过装饰器；前端已经不用这条路径建多员工会话。它靠两处兜底挂上：创建者打开设置时由 `POST /api/waker-groups/for-channel/:channelId` 懒挂接（5.4 的兜底），或者由 PR3 开机任务第二阶段补建。不为它在上游频道路由上再包一层装饰（Task 3 裁定）。
+
 唯一的副作用：「新对话」多选建群后，如果第一条消息发失败，前端会把刚建的频道删掉（`A/lib/channels/start.ts:67-73` 的 `discard`）。删掉频道会留下一个孤立的群组。处理办法：`discard` 改调 `DELETE /api/waker-groups/:wakerGroupId`（解散：软删频道并删群组）；返回里没有 `wakerGroupId` 时（服务端旧版本），照旧删频道。
 
 ### 4.4 名字
@@ -360,6 +368,8 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 打开设置和开机巡检时，先对创建者已离开或已停用的共享群做移交（3.1.1 第 4.4 条），再改写镜像。
 
 `GET /api/waker-groups` **保持只读**，不在读接口里写库。
+
+已知遗留（**已登记后续任务**，台账停放任务②）：两次改写镜像并发时（比如 staffing 的增删与打开设置同时发生），镜像是「先删全部成员行、再插入」，后到的插入可能撞主键报 23505。影响：`for-channel` 里的 `reconcile` 没有捕获它，会回 500；`adopt` 撞上时，建群组的请求按 4.2 的补偿收尾后失败；装饰器里的 `reconcile` 只记 `waker-group-reconcile-failed`。再试一次即可，不写坏数据。修法是先更新群组行（取得行锁）再删插成员行。
 
 ---
 
@@ -414,7 +424,8 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 | 列 | 说明 |
 |---|---|
 | `group_id uuid` | 主键，外键指向 `waker_groups`，级联删除 |
-| `tenant_id text` | 所有者，0072 四条策略 |
+| `tenant_id text` | 所有者，0072 四条策略；移交时由 0208 改写的写入函数跟着改为接手人 |
+| `original_owner text` | 写台账时的所有者，之后不改，移交也不搬。回滚手册用它认出「已经被移交过」的转换群组（3.1.1 第 5 条） |
 | `channel_id text` | 可空；转出来的或补挂的频道 |
 | `outcome text` | `started`、`converted`、`backfilled`、`pending_members`、`too_many`、`no_owner`（CHECK 约束） |
 | `dropped_agent_ids text[]` | 转换时被筛掉的员工，默认空数组 |
@@ -424,9 +435,11 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 ### 5.6 回滚
 
-- **代码回滚**（换回上一版镜像 digest）：0206、0207、0208 都是新增，旧代码不读新列、新表、新函数；守卫函数的新版本只多了针对新列的放行，旧代码不碰新列，所以行为不变。`scripts/migrate.ts` 的迁移守卫只拒绝「要跳过一个比库里戳更早的迁移」，旧镜像的迁移全部已经执行过，不会被拒。
+- **代码回滚**（换回上一版镜像 digest）：0206、0207、0208 都是新增，旧代码不读新列、新表、新函数；守卫函数的新版本只多了针对新列的放行，旧代码不碰新列，所以这部分行为不变。`scripts/migrate.ts` 的迁移守卫只拒绝「要跳过一个比库里戳更早的迁移」，旧镜像的迁移全部已经执行过，不会被拒。
+  - **例外：0207 的停用触发器换回旧镜像后仍然有效。** `revoked_access` 上的 `openbot_team_revoked_leaves` 是数据库对象，不随代码回退：停用照样会把人移出他所在的所有共享群，照样把他创建的群（连同群组、头像、流程、运行记录、看板卡）移交给最早的在籍成员，旧代码对此一无所知。移交没有数据回滚手段（不记原主，不会还回去）。要在回滚期间停掉这一行为，执行回滚手册里单独的「停用触发器」一步（见下）。
+- **停用 0207 的触发器**（回滚手册单独一步，与下面的数据回滚无关，换回旧镜像时就做）：用迁移属主账号（应用账号没有权限）执行 `ALTER TABLE public.revoked_access DISABLE TRIGGER openbot_team_revoked_leaves;`。停用期间，被停用的人不再离开共享群，他创建的群也不移交，回到 0207 之前的行为。之后再升级到含 0207 的版本时，迁移不会重跑，要由属主手动 `ALTER TABLE public.revoked_access ENABLE TRIGGER openbot_team_revoked_leaves;`，再执行一次 0207 末尾的补做语句（对每个已停用的人调 `openbot_team_person_leaves_groups`，幂等），把停用期间停用的人补做。
 - **数据回滚**：写成运维手册（放进 `openbot/docs/deployment-xiongbao.md` 第 6 节），在 `platform` 帧里执行三步：
-  1. 台账为 `converted`、并且对应频道至今没有任何 `group_messages` 的：软删频道，按 `dropped_agent_ids` 把成员补回镜像。
+  1. 台账为 `converted`、对应频道至今没有任何 `group_messages`、**并且群组当前的 `tenant_id` 仍等于台账的 `original_owner`** 的：软删频道，按 `dropped_agent_ids` 把成员补回镜像。已经被移交过的转换群组（`tenant_id` 不等于 `original_owner`）不回滚，只由手册开头的一条查询列出来记录（群组 id、原所有者、现所有者、频道 id），理由见 3.1.1 第 5 条。
   2. 台账为 `backfilled`、并且该群组没有模板、没有头像、也没有任何运行记录的：删除群组（外键自动解挂）。删模板会保留运行，删群组却会级联删运行，所以要单独查运行。
   3. 清空台账。
 
@@ -453,16 +466,19 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 |---|---|
 | `GET /api/waker-groups` | 每项多 `usableMemberCount` 与服务端算好的 `chatStatus`（`chat`、`pending_members`、`too_many`、`not_started`，按可用员工数判断，前端据此显示，不用 `members.length`），以及 `channelId: string \| null`：挂接中、未删除、当前用户读得到的频道。列表仍排除 WakerFlow 内部群组；顺序不变。前端据此分出三种状态：`channelId` 非空为「可聊天」；空且员工少于 2 位为「待补成员」；空且员工 2–20 位为「未开始聊天」（频道被旧路径删掉，或升级时转换失败） |
 | `POST /api/waker-groups` | 请求体可以带 `agentIds`（2–20 位）：先查重（409），再建群组、建频道、挂接、改写 title 和镜像，返回 `{ group, channel }`（201）。建频道失败时删掉刚建的群组；频道已建成但挂接失败时，先软删这个频道再删群组。**不带 `agentIds` 时完全是旧行为**（建一个「待补成员」的群组），旧客户端和现有测试不受影响 |
-| `PUT /api/waker-groups/:id/members` | 已挂接时按 4.2 节同步群聊，并施加 2–20 位的限制（不满足返回 409，文案「一个群组要有 2 到 20 位员工。」）；只有创建者能改。未挂接时照旧，结果在 2–20 位就自动开聊天 |
-| `DELETE /api/waker-groups/:id` | 已挂接时按 7.5 节解散：有流程在运行就返回 409；先软删频道，再删群组，最后删头像和视频。未挂接时照旧删群组，并顺手删头像（现在会留下孤立的头像行）。只有创建者能做 |
+| `PUT /api/waker-groups/:id/members` | 返回 `{ group }`（200），或下面几种。<br>**已挂接**：按 4.2 节同步群聊，施加 2–20 位的限制（不满足 409，文案「一个群组要有 2 到 20 位员工。」）；只有创建者能改。分步翻译中途失败回 **409 `{ error, done }`**：`done` 是已经生效的步骤 `{ op: "add" \| "remove" \| "reorder", agentIds: string[] }[]`，按执行顺序，一步都没做时为 `[]`；镜像已按聊天的真相改写，前端重读列表即可；`error` 在上游拒绝（员工不可用、人数）时是上游的原话，否则是「群组成员只改了一部分，请刷新后再试。」或「群组成员没有做任何改动，请刷新后再试。」。翻译做完但调用者已读不到聊天（他刚离开）时回 409 带 `code: "waker-group-owner-gone"`。<br>**未挂接**：照旧写名单；可用员工在 2–20 位就自动开聊天。开聊天失败时**仍回 200 `{ group, chatError }`**：名单已保存，聊天没开成，`chatError` 是给人看的原因（上游拒绝的原话，或「成员已保存，但群聊没能开始，请稍后点「开始聊天」再试。」），群组状态是「未开始聊天」，可以再点「开始聊天」。聊天刚被另一个请求开了回 409「这个群组已经可以聊天了。」；群组挂着一个调用者已不在里面的聊天时回 409 带 `code: "waker-group-owner-gone"`，名单还原。<br>别人的、平台的或 WakerFlow 的群组 404；员工 id 里有调用者看不到的 400 |
+| `DELETE /api/waker-groups/:id` | 已挂接时按 7.5 节解散：有流程在运行就返回 409「有组团流程正在运行，先停下再解散。」；先软删频道（并照上游 `DELETE /api/channels/:id` 写一条 `channel.deleted` 审计），再在一个事务里锁频道行、锁群组行、重查运行、删头像和视频、删群组。未挂接时照旧删群组，并顺手删头像（现在会留下孤立的头像行）。只有创建者能做；别人的群组 404。返回 `{ ok: true }` |
 
 ### 6.3 新增
 
 | 接口 | 作用 |
 |---|---|
-| `PATCH /api/waker-groups/:id` | `{ name?, description? }`。改名先查重（409），再给挂接的频道改 title（经装饰器同步群组名），没挂接就只改群组。补上 `A/lib/waker-groups/mutations.ts:7-12` 明说不做的改名 |
-| `POST /api/waker-groups/:id/chat` | 给「未开始聊天」的群组开聊天：要求未挂接且员工在 2–20 位之间，否则返回 409；返回 `{ group, channel }` |
-| `POST /api/waker-groups/for-channel/:channelId` | 打开设置面板时调用：频道的创建者调用时，确保已挂接（没挂就补建），按真相做一次自愈，返回群组；非创建者返回 403 和只读提示；读不到这个频道返回 404。幂等 |
+| `PATCH /api/waker-groups/:id` | `{ name?, description? }`，返回 `{ group }`。名字 1–80 字（400）；改名先查重（409），再给挂接的频道改 title（经装饰器同步群组名），没挂接就只改群组。上游拒绝改聊天的 title（调用者已不是这个聊天的发起人，`ChannelNotOwnerError`）时回 **403**「只有发起人能调整这个群组。」，两边都不改。别人的群组 404。补上 `A/lib/waker-groups/mutations.ts:7-12` 明说不做的改名 |
+| `POST /api/waker-groups/:id/chat` | 给「未开始聊天」的群组开聊天：要求未挂接且可用员工在 2–20 位之间，否则返回 409（「这个群组已经可以聊天了。」或「一个群组要有 2 到 20 位员工。」）；群组挂着一个调用者已不在里面的聊天时回 409 带 `code: "waker-group-owner-gone"`；上游拒绝（员工不可用）回 400；返回 `{ group, channel }`（201） |
+| `POST /api/waker-groups/for-channel/:channelId` | 打开设置面板时调用：频道的创建者调用时，确保已挂接（没挂就补建），按真相做一次自愈，返回 `{ group }`；共享群的创建者已离开时先移交（3.1.1 第 4.4 条），最早的在籍成员调用时就成了所有者。非创建者返回 403 和只读提示（移交被运行中的流程推迟时也是 403）；读不到这个频道返回 404，**单聊和任务会话也返回 404**（不是群聊，与读不到同一个回答，防止探测会话类型）。所有者帧读不到聊天、又没有人接手时回 409 带 `code: "waker-group-owner-gone"`。幂等 |
+| `DELETE /api/groups/:channelId/members/:self`（上游路由，装饰器接管） | 共享群的创建者本人退群：在一个事务里退群并把群组移交给最早的在籍成员（3.1.1），204。群组有流程在运行（`running`、`awaiting_action`）时回 **400**「有组团流程正在运行，先停下再退群。」，什么都不改；最后一人退群、只剩停用成员时也一样 |
+
+409 的 `code`：只有 owner-gone 这一种 409 带 `code: "waker-group-owner-gone"`（`for-channel`、`POST /:id/chat`、`PUT /:id/members` 三处），前端以 `code` 区分它，不靠文案；文案是「这个群组的聊天你已经不在里面了，暂时不能调整。」。其余 409 只有 `error`，分步失败另带 `done`。
 
 路由由 `createWakerGroupRoutes(store, requireUser, link?)` 的**可选第三参数**启用。现有测试 `server/tests/waker-groups.test.ts` 只传两个参数，行为与现在完全一样。
 
@@ -534,9 +550,9 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 - 确认对话框写明后果：「解散「X」：聊天记录不再显示；它的 N 条组团流程和运行记录会一并删除；看板上已有的任务卡保留。」
 - 服务端顺序：
   1. 有 `running` 或 `queued` 的流程运行时，返回 409「有组团流程正在运行，先停下再解散。」。
-  2. 软删频道（上游 `softDelete`，创建者帧，0122 守卫允许）。
-  3. 删除群组：模板和运行记录按 0075 的外键级联删除；频道的挂接由外键 `SET NULL` 清空（3.3 节放行 b）。
-  4. 删除 `portraits`、`portrait_media` 里这个群组的行。
+  2. 软删频道（上游 `softDelete`，创建者帧，0122 守卫允许），并照上游 `DELETE /api/channels/:id`（`S/channels/routes.ts` 的 `recordChannelDeleted`，同一个函数）写一条 `channel.deleted` 审计：谁删了这个会话。软删没有改动（已经删过）时不写。
+  3. 一个事务里：先锁挂着这个群组、调用者读得到的频道行，再锁群组行（3.1.1 第 4.1 条的加锁顺序），重查运行（有就 409）；删除 `portraits`、`portrait_media` 里这个群组的行；删除群组：模板和运行记录按 0075 的外键级联删除，频道的挂接由外键 `SET NULL` 清空（3.3 节放行 b）。
+  4. 第 3 步失败时，聊天已经隐藏，群组完整保留（「未开始聊天」），记 `waker-group-dissolve-incomplete`，再解散一次即可（上游软删自开事务，不能并进第 3 步）。
 - 这与「风险」一节的张力：群聊删除是软删，群组删除是硬删，两边的语义不同。本稿选择**沿用现在各自的语义**：聊天能恢复的那部分（软删）照旧，群组那部分（含流程历史）和现在「解散群组」一样硬删。要不要改成保留流程历史，见 Q1。
 - 通过旧路径 `DELETE /api/channels/:id` 删掉一个已挂接的频道（旧客户端、脚本），群组会保留下来，变成「未开始聊天」状态，可以重新开聊天或解散。不在上游的删除路由里加隐式的级联硬删。
 
@@ -555,7 +571,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 ### 8.2 涉及上游文件的改动（同步上游时的冲突面）
 
-只有四处：`S/index.ts` 的装配（包两层装饰器、挂路由第三参数、注册开机任务）；`S/channels/group.ts:1596`、`S/channels/dispatch.ts:323` 各一句熊宝自己的中文；`A/` 下 `group-chat.tsx`、`$channelId.tsx` 顶栏的少量改动。其余都在熊宝自己的文件里。
+只有五处：`S/index.ts` 的装配（包两层装饰器、挂路由第三参数、注册开机任务）；`S/channels/routes.ts` 把删除路由写 `channel.deleted` 审计的闭包提成导出函数 `recordChannelDeleted`（内容不变，解散复用它）；`S/channels/group.ts:1596`、`S/channels/dispatch.ts:323` 各一句熊宝自己的中文；`A/` 下 `group-chat.tsx`、`$channelId.tsx` 顶栏的少量改动。其余都在熊宝自己的文件里。
 
 ---
 
@@ -618,9 +634,9 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 ## 10. 分包
 
-三个 PR，按顺序合入，每个都能单独合入、单独上线。建议 PR2 和 PR3 进同一个正式版本。
+三个 PR，按顺序合入，每个都能单独合入。**PR1 不单独发版：PR1 合入 main 之后、PR2（界面）合入之前，不得打发版标签。** PR1 至少与 PR2 的 Task 6 进同一个正式版本；建议 PR2 和 PR3 也进同一个正式版本。原因见下面 PR1 的「风险」：PR1 不改界面，但旧界面下的几处行为会变。
 
-### PR1 数据与服务端（界面无变化）
+### PR1 数据与服务端（界面不改，不单独发版）
 
 - **范围**：
   - 迁移 0206（新列、两条索引、改写 `openbot_team_channel_guard`、挂接校验触发器）。
@@ -642,6 +658,12 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
   - 多步翻译不是原子的（4.2）。
   - PR1 上线后、PR3 上线前新建的群聊已经会挂接，这正是想要的；旧数据要等 PR3。
   - 停用会让人离开他所在的所有共享群（恢复后要重新被邀请）。
+  - **PR1 单独上线、旧前端不动时，旧界面的行为会变**（所以不单独发版，见本节开头）：
+    - 每个新建的群聊都会自动多出一个群组，出现在员工页「群组」页签、`@群组`、流程页里；
+    - 「新对话」首条消息失败时，旧的 `discard` 走 `DELETE /api/channels/:id`，会留下一个孤儿群组（修法在 PR2 的 Task 6，4.3）；
+    - 从旧侧边栏删群聊，同样留下孤儿群组（7.5 末条）；
+    - 员工页「退役群组」现在会顺带隐藏它的聊天；
+    - 员工页「管理成员」对已挂接的群组改为翻译成群聊的增删排序，多了 2–20 位的 409 限制；未挂接的群组补够 2 位时会自动开聊天。
 
 ### PR2 界面合一与文案
 
@@ -733,5 +755,5 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
    - `/group/new`：打开「新建群组」。
    - `/group/<id>`：不变。
    - `/pipelines`、`/tasks?crew=…`、`/tasks?group=…`：不变。
-5. **回滚**：换回上一版 digest 即可让代码回退，新列和新表留着无害。需要撤销自动转换的，按回滚手册执行（5.6），或者恢复备份。
+5. **回滚**：换回上一版 digest 即可让代码回退，新列和新表留着无害。**但 0207 的停用触发器换回旧镜像后仍然有效**：停用照样会把人移出共享群，照样把他创建的群组连同流程、运行记录、看板卡移交给最早的在籍成员，而且移交没有数据回滚手段。回滚期间要停掉它，按回滚手册单独的一步用迁移属主账号执行 `ALTER TABLE public.revoked_access DISABLE TRIGGER openbot_team_revoked_leaves;`；重新升级后再 `ENABLE` 并补做（5.6）。需要撤销自动转换的，按回滚手册执行（5.6，已被移交过的转换群组不回滚、只记录），或者恢复备份。
 6. **设备端**：不涉及，设备端不读写群组。
