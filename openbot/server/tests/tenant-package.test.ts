@@ -1357,6 +1357,30 @@ describe("skills a package ships", () => {
     }
   });
 
+  test("skills.yaml is read as written: ${...} in a skill's instructions stays literal", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openbot-skills-literal-"));
+    try {
+      await cp(
+        fileURLToPath(new URL("../../examples/fintech", import.meta.url)),
+        directory,
+        { recursive: true },
+      );
+      const skillsPath = join(directory, "skills.yaml");
+      const original = await readFile(skillsPath, "utf8");
+      // An unset name and a set one: neither is a deployment setting, both are part of the example.
+      const instructions = 'awk "flag" "$P/${lbl}_raw.txt" and echo ${HOME}';
+      await writeFile(
+        skillsPath,
+        `${original}\n  - slug: literal-fixture\n    title: Literal fixture\n    summary: Quotes shell.\n    instructions: '${instructions}'\n`,
+        "utf8",
+      );
+      const loaded = await loadTenantPackage(directory);
+      expect(loaded.skills.at(-1)?.instructions).toBe(instructions);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   const base = {
     brand: "tenant: { id: fintech, product_name: Ledgerline }",
     agents:

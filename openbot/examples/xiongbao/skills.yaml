@@ -1315,7 +1315,7 @@ skills:
       refs_bytes: 0
   - slug: canvasflow-ppt
     title: canvasflow-ppt
-    summary: ""
+    summary: "用 CanvasFlow 生成演示文稿（PPT）。"
     instructions: |-
       # CanvasFlow PPT Skill
     
@@ -1536,7 +1536,7 @@ skills:
       refs_bytes: 51295
   - slug: code
     title: code
-    summary: ""
+    summary: "中文交互的编程与工作流辅助。"
     instructions: |-
       > **功能说明**: 本技能涵盖 中文交互、化工作流场景 等核心能力。
     
@@ -8856,7 +8856,7 @@ skills:
         - local-user-path
   - slug: hostile-git-repo-recovery
     title: hostile-git-repo-recovery
-    summary: ""
+    summary: "在受限或敌意环境下恢复 Git 仓库。"
     instructions: |-
       # 敌意环境下的 Git 仓库恢复
     

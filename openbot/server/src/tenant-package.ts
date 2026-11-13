@@ -1013,8 +1013,14 @@ export async function loadTenantPackage(
    * on loading. Missing is a deployment with no skills of its own; present and malformed is still
    * refused.
    */
+  /*
+   * Read as written, not through `expandEnvironment`. A skill is prose and worked examples for a
+   * coworker to follow, not a deployment setting: its instructions quote shell and JavaScript such as
+   * `"$P/${lbl}_raw.txt"` or `` `${name}` ``, which are part of the lesson. Expanding them refused a
+   * whole package over a variable nobody meant to set, and would have rewritten an example whose name
+   * happened to be set. No package's skills reach the environment (fintech and personal have none).
+   */
   const skills = await readFile(join(sourcePath, "skills.yaml"), "utf8")
-    .then((file) => expandEnvironment(file, "skills.yaml"))
     .catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return "";
       throw error;
