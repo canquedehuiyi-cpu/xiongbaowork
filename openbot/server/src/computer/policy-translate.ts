@@ -64,7 +64,7 @@ const INTENTS: Record<Intent, string> = {
     "pressing something: computer_click, computer_key with Enter or Space, or computer_type that ends by pressing Enter",
   type: "typing into a field, or any other keypress: computer_type, computer_key",
   navigate: "opening a page: computer_navigate",
-  read: "scrolling the page: computer_scroll",
+  read: "scrolling the page, or reading the owner's own desktop: computer_scroll, computer_desktop_windows, computer_desktop_snapshot, computer_desktop_wait, computer_desktop_clipboard_read",
   read_file: "reading a file in the Bot's workspace: computer_read_file",
   download_file: "downloading a file: computer_download_file",
   write_file: "saving a file in the Bot's workspace: computer_write_file",
@@ -76,7 +76,7 @@ const INTENTS: Record<Intent, string> = {
   app_call:
     "any call to a connected app's tool, whether it reads or changes something",
   write:
-    "operating the owner's own desktop: computer_desktop_click, computer_desktop_type, computer_desktop_key, computer_desktop_focus",
+    "operating the owner's own desktop: computer_desktop_click, computer_desktop_type, computer_desktop_key, computer_desktop_focus, computer_desktop_launch, computer_desktop_clipboard_write",
 };
 
 /**

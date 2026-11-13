@@ -4,21 +4,30 @@ import {
   DEFAULT_DESKTOP_ACTION_WORDS,
   DESKTOP_ACTIONS,
   DESKTOP_APP_NAME,
+  DESKTOP_APPROVAL_WORDS,
   DESKTOP_KEYS,
   DESKTOP_LIMITS,
   DESKTOP_REF,
+  DESKTOP_SELF_PROCESSES,
+  DESKTOP_SELF_WINDOW_REASON,
+  DESKTOP_TERMINAL_PROCESSES,
   DESKTOP_TEXT_ROLES,
   DESKTOP_WINDOW_ID,
   DESKTOP_WINDOW_WORDS,
   type DesktopWritePayload,
   type DesktopWriteRequest,
+  desktopActionWordHit,
   desktopActionWordsOf,
   desktopActivationKey,
   desktopMessage,
   desktopPlatformOf,
+  desktopSelfOrTerminalProcess,
+  desktopSelfWindowReason,
   desktopTextNeedsApproval,
   desktopWindowWordHit,
+  desktopWindowWordHits,
   desktopWordHit,
+  desktopWordHits,
   isAgentWindowId,
   parseWindowId,
   sensitiveWord,
@@ -581,5 +590,352 @@ describe("desktop-control protocol", () => {
       "searchfield",
       "combobox",
     ]);
+  });
+});
+
+/*
+ * The final whole-branch review (final-fix-brief.md): C1, I1, I3 and M2. Every one only asks more.
+ */
+describe("desktop-control: the final review's fixes", () => {
+  test("C1: the device app, the runner, the desktop client and terminals are told apart by process", () => {
+    // The packaged names: desktop-device/src-tauri/tauri.conf.json (productName, mainBinaryName),
+    // sidecar.rs (SIDECAR, LEGACY_SIDECAR), desktop/src-tauri (productName, the Cargo bin).
+    expect([...DESKTOP_SELF_PROCESSES]).toEqual([
+      "xiongbao-device",
+      "熊宝数字员工 设备端",
+      "xiongbao-runner",
+      "openbot-runner",
+      "openbot-desktop",
+      "XiongBao",
+    ]);
+    expect([...DESKTOP_TERMINAL_PROCESSES]).toEqual([
+      "Terminal",
+      "iTerm2",
+      "cmd.exe",
+      "powershell.exe",
+      "pwsh.exe",
+      "WindowsTerminal.exe",
+      "conhost.exe",
+      "gnome-terminal",
+      "gnome-terminal-server",
+      "konsole",
+      "xterm",
+      // Round 2 (Important-3): the Chinese macOS name, more terminals, and the 15-character name
+      // /proc/<pid>/comm keeps for gnome-terminal-server.
+      "终端",
+      "Warp",
+      "Ghostty",
+      "Alacritty",
+      "kitty",
+      "WezTerm",
+      "Tabby",
+      "Hyper",
+      "xfce4-terminal",
+      "tilix",
+      "terminator",
+      "mintty",
+      "OpenConsole.exe",
+      "gnome-terminal-",
+      // Their Linux process names where the app's is not one: WezTerm's and Warp's.
+      "wezterm-gui",
+      "warp-terminal",
+    ]);
+    for (const process of [
+      ...DESKTOP_SELF_PROCESSES,
+      ...DESKTOP_TERMINAL_PROCESSES,
+      "xiongbao-device.exe",
+      "XIONGBAO-RUNNER.EXE",
+      "openbot-desktop.exe",
+      "XiongBao.app",
+      "/Applications/XiongBao.app",
+      "C:\\Program Files\\Xiongbao Device\\xiongbao-device.exe",
+      "/opt/xiongbao-device/xiongbao-runner",
+      "POWERSHELL.EXE",
+      "cmd",
+      " Terminal ",
+      "WindowsTerminal",
+    ])
+      expect({ process, hit: desktopSelfOrTerminalProcess(process) }).toEqual({
+        process,
+        hit: true,
+      });
+    for (const process of [
+      "notepad.exe",
+      "TextEdit",
+      "WeChat",
+      "Google Chrome",
+      "terminal-notes",
+      "my-xterm-theme",
+      "",
+      "   ",
+    ])
+      expect({ process, hit: desktopSelfOrTerminalProcess(process) }).toEqual({
+        process,
+        hit: false,
+      });
+    expect(desktopSelfOrTerminalProcess(undefined as unknown as string)).toBe(
+      false,
+    );
+  });
+
+  test("C1: the product's names count as window words when given, on top of the sensitive words", () => {
+    const self = ["熊宝数字员工", "熊宝", "XiongBao Work"];
+    expect(desktopWindowWordHit("待审批 - 熊宝数字员工 - Google Chrome")).toBe(
+      undefined,
+    );
+    expect(
+      desktopWindowWordHit("待审批 - 熊宝数字员工 - Google Chrome", self),
+    ).toBe("熊宝数字员工");
+    expect(desktopWindowWordHit("熊宝", self)).toBe("熊宝");
+    expect(desktopWindowWordHit("Approvals · xiongbao work", self)).toBe(
+      "XiongBao Work",
+    );
+    // The sensitive words come first; blank names never match.
+    expect(desktopWindowWordHit("网上银行 - 熊宝", self)).toBe("银行");
+    expect(desktopWindowWordHit("无标题 - 记事本", ["", "  ", "\u200b"])).toBe(
+      undefined,
+    );
+    expect(desktopWindowWordHits("网上银行 - 熊宝数字员工", self)).toEqual([
+      "银行",
+      "熊宝数字员工",
+      "熊宝",
+    ]);
+    expect(desktopWindowWordHits("无标题 - 记事本", self)).toEqual([]);
+    expect(desktopSelfWindowReason("熊宝")).toBe(
+      "这是熊宝自己的界面或命令行窗口，操作前需要你先确认",
+    );
+    expect(DESKTOP_SELF_WINDOW_REASON).toBe(desktopSelfWindowReason("熊宝"));
+  });
+
+  test("C1: approving and refusing are action words whatever the team's list", () => {
+    expect([...DESKTOP_APPROVAL_WORDS]).toEqual([
+      "批准",
+      "允许",
+      "同意",
+      "拒绝",
+      "approve",
+      "allow",
+      "deny",
+      "reject",
+    ]);
+    for (const [name, word] of [
+      ["允许一次", "允许"],
+      ["批准", "批准"],
+      ["同意并继续", "同意"],
+      ["拒绝", "拒绝"],
+      ["Allow once", "allow"],
+      ["Approve", "approve"],
+      ["Deny", "deny"],
+      ["Reject all", "reject"],
+    ])
+      for (const team of [undefined, ["zzz"], ["归档"]])
+        expect({
+          name,
+          team,
+          hit: desktopActionWordHit(name, desktopActionWordsOf(team)),
+        }).toEqual({ name, team, hit: word });
+    // The team's own words first; whole words for ASCII as before.
+    expect(desktopActionWordHit("发送", ["发送"])).toBe("发送");
+    expect(desktopActionWordHit("Allowance", ["zzz"])).toBeUndefined();
+    expect(desktopActionWordHit("保存词表", ["zzz"])).toBeUndefined();
+    expect(desktopWordHits("拒绝并删除", ["删除", "发送"])).toEqual(["删除"]);
+    expect(
+      desktopWordHits("删除 send", [...DEFAULT_DESKTOP_ACTION_WORDS]),
+    ).toEqual(["删除", "send"]);
+  });
+
+  test("M2: a zero-width character, a full-width letter or a space does not hide a word", () => {
+    const words = DEFAULT_DESKTOP_ACTION_WORDS;
+    for (const [name, word] of [
+      ["删\u200b除", "删除"],
+      ["删 除", "删除"],
+      ["删\u3000除", "删除"],
+      ["付\u200d款", "付款"],
+      ["ｓｅｎｄ", "send"],
+      ["Ｓｅｎｄ now", "send"],
+      ["se\u00adnd", "send"],
+      ["确认 支付", "支付"],
+    ])
+      expect({ name, hit: desktopWordHit(name, words) }).toEqual({
+        name,
+        hit: word,
+      });
+    // Whole words for ASCII still: no word is made by joining two.
+    for (const name of ["Display", "Displ\u200bay", "Ｄｉｓｐｌａｙ"])
+      expect({ name, hit: desktopWordHit(name, words) }).toEqual({
+        name,
+        hit: undefined,
+      });
+    for (const [title, word] of [
+      ["网上银\u200b行", "银行"],
+      ["密 码", "密码"],
+      ["ＰａｙＰａｌ", "paypal"],
+      ["pass\u200bword", "password"],
+    ])
+      expect({ title, hit: desktopWindowWordHit(title) }).toEqual({
+        title,
+        hit: word,
+      });
+    expect(sensitiveWord("网上银\u200b行", ["银行"])).toBe("银行");
+    // A word that is only a space or an invisible character still never matches anything.
+    expect(desktopWordHit("a b", [" ", "\u200b"])).toBeUndefined();
+    // Matching only: what is shown is left as it is.
+    expect(desktopWordHit("删\u200b除", ["删除"])).toBe("删除");
+  });
+
+  test("I3: deleting at once is asked about, like closing a program, with more modifiers too", () => {
+    for (const keys of [
+      "shift+delete",
+      "Shift+Delete",
+      "shift+forwarddelete",
+      "cmd+backspace",
+      "cmd+alt+backspace",
+      "ctrl+shift+delete",
+      "cmd+shift+backspace",
+      "meta+backspace",
+    ])
+      expect({ keys, out: classifyDesktopKeys(keys) }).toEqual({
+        keys,
+        out: expect.objectContaining({ kind: "delete", force: false }),
+      });
+    expect(classifyDesktopKeys("shift+delete")?.normalized).toBe(
+      "shift+delete",
+    );
+    for (const keys of [
+      "delete",
+      "backspace",
+      "ctrl+backspace",
+      "alt+backspace",
+      "shift+backspace",
+    ])
+      expect({ keys, kind: classifyDesktopKeys(keys)?.kind }).toEqual({
+        keys,
+        kind: "plain",
+      });
+  });
+
+  test("I3: alt with a letter or a digit may press a button on Windows and Linux, not on a Mac", () => {
+    for (const platform of ["windows", "linux"] as const) {
+      for (const keys of ["alt+s", "ALT+S", "alt+y", "alt+1", "alt+shift+s"])
+        expect({
+          platform,
+          keys,
+          hit: desktopActivationKey(keys, platform),
+        }).toEqual({
+          platform,
+          keys,
+          hit: true,
+        });
+      for (const keys of [
+        "alt+f4",
+        "alt+tab",
+        "alt+enter",
+        "ctrl+alt+s",
+        "alt+-",
+        "s",
+      ])
+        expect({
+          platform,
+          keys,
+          hit: desktopActivationKey(keys, platform),
+        }).toEqual({
+          platform,
+          keys,
+          hit: false,
+        });
+      // Space as before.
+      expect(desktopActivationKey("space", platform)).toBe(true);
+    }
+    for (const keys of ["alt+s", "alt+1"]) {
+      expect(desktopActivationKey(keys, "macos")).toBe(false);
+      // No platform: as before, Space alone or with Shift only.
+      expect(desktopActivationKey(keys)).toBe(false);
+    }
+    expect(desktopActivationKey("shift+space", "macos")).toBe(true);
+  });
+});
+
+describe("desktop-control: the product's own processes are its packaged names", () => {
+  test("C1: the device app's binary, product name and sidecars, and the desktop client's, are all listed", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const read = (path: string) =>
+      readFileSync(join(import.meta.dir, "..", path), "utf8");
+    const device = JSON.parse(read("desktop-device/src-tauri/tauri.conf.json"));
+    const deviceLinux = JSON.parse(
+      read("desktop-device/src-tauri/tauri.linux.conf.json"),
+    );
+    const sidecar = read("desktop-device/src-tauri/src/sidecar.rs");
+    const client = JSON.parse(read("desktop/src-tauri/tauri.conf.json"));
+    const clientCargo = read("desktop/src-tauri/Cargo.toml");
+    const constant = (name: string) =>
+      new RegExp(`pub const ${name}: &str = "([^"]+)";`).exec(sidecar)?.[1];
+    const bin = /\[\[bin\]\]\s*name = "([^"]+)"/.exec(clientCargo)?.[1];
+    for (const name of [
+      device.mainBinaryName,
+      device.productName,
+      deviceLinux.productName,
+      constant("SIDECAR"),
+      constant("LEGACY_SIDECAR"),
+      client.productName,
+      bin,
+    ])
+      expect({
+        name,
+        listed: desktopSelfOrTerminalProcess(String(name)),
+      }).toEqual({
+        name,
+        listed: true,
+      });
+  });
+});
+
+describe("desktop-control: the final review, round 2", () => {
+  test("Important-3: more terminals, by their names as listed", () => {
+    for (const process of [
+      "终端",
+      "Warp",
+      "ghostty",
+      "alacritty",
+      "kitty",
+      "wezterm-gui",
+      "WezTerm",
+      "Tabby",
+      "Hyper",
+      "xfce4-terminal",
+      "tilix",
+      "terminator",
+      "mintty.exe",
+      "OpenConsole.exe",
+      "gnome-terminal-",
+      "gnome-terminal-server",
+      "warp-terminal",
+    ])
+      expect({ process, hit: desktopSelfOrTerminalProcess(process) }).toEqual({
+        process,
+        hit: true,
+      });
+    for (const process of ["kitty-notes", "Hyperion", "终端机", "Warpinator"])
+      expect({ process, hit: desktopSelfOrTerminalProcess(process) }).toEqual({
+        process,
+        hit: false,
+      });
+  });
+
+  test("Minor-3: a product name of one character is ignored; an ASCII one matches only as a whole word", () => {
+    expect(desktopWindowWordHits("甲 - Chrome", ["甲"])).toEqual([]);
+    expect(desktopWindowWordHits("甲乙 - Chrome", ["甲", "甲乙"])).toEqual([
+      "甲乙",
+    ]);
+    expect(desktopWindowWordHits("Jiangsu notes", ["Jia"])).toEqual([]);
+    expect(desktopWindowWordHits("Approvals - Jia", ["Jia"])).toEqual(["Jia"]);
+    expect(
+      desktopWindowWordHits("XiongBao Workspace", ["XiongBao Work"]),
+    ).toEqual([]);
+    expect(
+      desktopWindowWordHits("Approvals · XiongBao Work", ["XiongBao Work"]),
+    ).toEqual(["XiongBao Work"]);
+    // The sensitive words keep their substring reading.
+    expect(desktopWindowWordHits("1Password", [])).toEqual(["password"]);
   });
 });

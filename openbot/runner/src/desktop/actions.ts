@@ -252,6 +252,8 @@ export function createDesktopActions(
     /** The device's desktop session; built on `control` when absent. */
     sessions?: DesktopSessions;
     now?: () => number;
+    /** The writer's process rule (final review C1); a test hook, the shared rule when absent. */
+    selfOrTerminal?: (process: string) => boolean;
   } = {},
 ): DesktopActions {
   const platform = opts.platform ?? process.platform;
@@ -305,6 +307,7 @@ export function createDesktopActions(
       control,
       platform: desktopPlatform,
       now,
+      ...(opts.selfOrTerminal ? { selfOrTerminal: opts.selfOrTerminal } : {}),
     });
     return writer;
   };

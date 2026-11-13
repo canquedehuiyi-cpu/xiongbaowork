@@ -946,6 +946,9 @@ test("a click only the device sees is sensitive is asked once, then carried out 
     "设备端核对后认为这一步需要你批准",
   );
   expect(card.action.policy?.reason).toContain("「发送」");
+  // Kept with the request in the database (round 4): what the approved resend is sent, and all.
+  expect(card.action.policy?.deviceReasons).toHaveLength(1);
+  expect(card.action.policy?.deviceReasons?.[0]).toContain("「发送」");
   // Approved, the same tool call runs again: the device's earlier answer, then the approved resend.
   const done = await device.call("computer_desktop_click", args, toolCallId);
   expect(done).toMatchObject({ ok: true, control: { type: "button" } });
@@ -953,6 +956,11 @@ test("a click only the device sees is sensitive is asked once, then carried out 
     .sent("desktop.click")
     .map((frame) => (frame.payload as { approved?: boolean }).approved);
   expect(clicks.slice(1)).toEqual([false, false, true]);
+  // The approved resend carries what the request kept, word for word (round 4).
+  const resent = device.sent("desktop.click").at(-1)?.payload as
+    | { approvedReason?: unknown }
+    | undefined;
+  expect(resent?.approvedReason).toBe(card.action.policy?.deviceReasons?.[0]);
   // The binary clicked once for the opening and once, approved, for this.
   expect(device.adWrites()).toHaveLength(2);
   const forThisCall = (await device.requests()).filter(
