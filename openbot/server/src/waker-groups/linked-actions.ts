@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { AgentNotFoundError } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
 import { type GroupConversations, GroupRefusedError } from "../channels/group";
 import type { AgentChannel, ChannelStore } from "../channels/routes";
@@ -8,9 +9,11 @@ import {
   channelAgents,
   channels,
   groupTaskRuns,
+  portraitMedia,
+  portraits,
+  wakerFlows,
   wakerGroups,
 } from "../db/schema";
-import type { PortraitStore } from "../portraits/store";
 import {
   channelCreatedBy,
   channelOwner,
@@ -92,7 +95,9 @@ export class WakerGroupStepsError extends Error {
     super(
       cause instanceof GroupRefusedError
         ? cause.message
-        : "群组成员只改了一部分，请刷新后再试。",
+        : done.length === 0
+          ? "群组成员没有做任何改动，请刷新后再试。"
+          : "群组成员只改了一部分，请刷新后再试。",
       { cause },
     );
     this.name = "WakerGroupStepsError";
@@ -143,16 +148,20 @@ export type WakerGroupActions = {
   /**
    * The crew's roster, wholesale. Linked: 2–20 Bots (WakerGroupSizeError), written to the chat as
    * adds, removals and a reorder (WakerGroupStepsError when one fails). Unlinked: the roster is
-   * written as before, and a crew that now has 2–20 usable Bots gets its chat. null: not the caller's.
+   * written as before, and a crew that now has 2–20 usable Bots gets its chat; when that chat cannot
+   * be opened the roster stays written and `chatError` says why (the crew reads "not started").
+   * null: not the caller's.
    */
   setMembers(
     owner: string,
     groupId: string,
     agentIds: string[],
-  ): Promise<ListedWakerGroup | null>;
+  ): Promise<{ group: ListedWakerGroup; chatError?: string } | null>;
   /**
    * 7.5: hide the chat, delete the crew (its flows and runs go with it), delete its portrait. false
    * when there is no such crew of the caller's; WakerGroupRunningError while a run is unfinished.
+   * The crew, its portrait and the run check are one transaction holding the crew's row; the chat is
+   * hidden by upstream's own transaction just before it (see `dissolve`).
    */
   dissolve(owner: string, groupId: string): Promise<boolean>;
 };
@@ -170,6 +179,24 @@ type Log = (line: Record<string, unknown>) => void;
 const logToStderr: Log = (line) => console.error(JSON.stringify(line));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Whether the crew has a flow run that has not finished (`S/pipeline/store.ts` RunOutcome). */
+async function unfinishedRun(
+  executor: Pick<Database, "select">,
+  groupId: string,
+): Promise<boolean> {
+  const [run] = await executor
+    .select({ id: groupTaskRuns.id })
+    .from(groupTaskRuns)
+    .where(
+      and(
+        eq(groupTaskRuns.groupId, groupId),
+        inArray(groupTaskRuns.status, ["running", "awaiting_action"]),
+      ),
+    )
+    .limit(1);
+  return Boolean(run);
+}
 
 /**
  * 6.2：`channelId` 非空 → chat；否则按可用员工数：< 2 待补成员，> 20 太多，其余未开始聊天。
@@ -194,7 +221,6 @@ export function createWakerGroupActions(deps: {
   /** The decorated channel store: its `rename` carries the name over to the crew. */
   channels: Pick<ChannelStore, "get" | "rename" | "softDelete">;
   actorFor(userId: string): Promise<AgentActor>;
-  portraits: Pick<PortraitStore, "remove" | "removeMedia">;
   /** The groups service's own `canUseBot` (S/index.ts). */
   canUse(ownerUserId: string, agentId: string): Promise<boolean>;
   conversions?: ConversionClaims;
@@ -471,50 +497,118 @@ export function createWakerGroupActions(deps: {
         if (target.length < MIN_MEMBERS || target.length > MAX_MEMBERS)
           throw new WakerGroupSizeError();
         await translate(owner, group.channelId, target);
-        return listed(groupId);
+        return { group: await listed(groupId) };
       }
       const before = group.members.map((member) => member.agentId);
       if (!(await store.setMembers(groupId, target))) return null;
       const written = await listed(groupId);
       const members = await usableMembers(written, usableBy(owner));
-      if (chatStatusOf(null, members.length) !== "not_started") return written;
+      if (chatStatusOf(null, members.length) !== "not_started")
+        return { group: written };
       try {
-        return (await openChat(owner, groupId, members)).group;
+        return { group: (await openChat(owner, groupId, members)).group };
       } catch (error) {
         // A chat the caller has left still holds the crew: its roster is that chat's, put it back.
-        if (error instanceof WakerGroupOwnerGoneError)
+        if (error instanceof WakerGroupOwnerGoneError) {
           await undo("restore-members", () =>
             store.setMembers(groupId, before),
           );
-        throw error;
+          throw error;
+        }
+        // Another request opened it a moment ago: the same 409 `POST /:id/chat` gives.
+        if (error instanceof WakerGroupLinkedError) throw error;
+        /*
+         * The roster was asked for and is written; the chat is a step on top of it. The crew reads
+         * "not started" and `POST /:id/chat` can try again, so the answer says the roster is saved and
+         * why the chat is not open, rather than failing a write that went through.
+         */
+        const refusal =
+          error instanceof GroupRefusedError ||
+          error instanceof AgentNotFoundError;
+        if (!refusal)
+          log({
+            type: "waker-group-chat-open-failed",
+            groupId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        return {
+          group: await listed(groupId),
+          chatError: refusal
+            ? (error as Error).message
+            : "成员已保存，但群聊没能开始，请稍后点「开始聊天」再试。",
+        };
       }
     },
 
     async dissolve(owner, groupId) {
       const group = await own(owner, groupId);
       if (!group) return false;
-      const [unfinished] = await database
-        .select({ id: groupTaskRuns.id })
-        .from(groupTaskRuns)
-        .where(
-          and(
-            eq(groupTaskRuns.groupId, groupId),
-            inArray(groupTaskRuns.status, ["running", "awaiting_action"]),
-          ),
-        )
-        .limit(1);
-      if (unfinished) throw new WakerGroupRunningError();
-      // Hidden, not deleted: the conversation keeps upstream's own delete semantics (7.5).
+      // Asked before anything changes, so a refusal leaves the chat as it was; asked again under the lock.
+      if (await unfinishedRun(database, groupId))
+        throw new WakerGroupRunningError();
+      /*
+       * Hidden, not deleted: the conversation keeps upstream's own delete semantics (7.5). It is
+       * upstream's transaction, with its own notification, so it cannot join the one below; and it
+       * is not called from inside it either, which would hold one pooled connection while waiting
+       * for a second (S/db/client.ts). Should the transaction below fail, the chat stays hidden and
+       * the crew whole, reading "not started": dissolving again finishes the job.
+       */
       if (group.channelId)
         await deps.channels.softDelete(
           await deps.actorFor(owner),
           group.channelId,
         );
-      // Templates and runs cascade (0075); the chat's link is cleared by its foreign key (0205 b).
-      if (!(await store.remove(groupId))) return false;
-      await deps.portraits.remove("group", groupId);
-      await deps.portraits.removeMedia("group", groupId);
-      return true;
+      try {
+        return await database.transaction(async (tx) => {
+          /*
+           * The crew's row, locked. A run being inserted holds a key-share lock on it (the foreign
+           * key), so the two take turns: a run that got there first is seen by the check below and
+           * refuses this; one that comes after waits, then fails its foreign key.
+           */
+          const [held] = await tx
+            .select({ id: wakerGroups.id })
+            .from(wakerGroups)
+            .where(
+              sql`${wakerGroups.id} = ${groupId}::uuid and not exists (
+                select 1 from ${wakerFlows} where ${wakerFlows.groupId} = ${wakerGroups.id})`,
+            )
+            .for("update");
+          if (!held) return false;
+          if (await unfinishedRun(tx, groupId))
+            throw new WakerGroupRunningError();
+          await tx
+            .delete(portraits)
+            .where(
+              and(
+                eq(portraits.subjectKind, "group"),
+                eq(portraits.subjectId, groupId),
+              ),
+            );
+          await tx
+            .delete(portraitMedia)
+            .where(
+              and(
+                eq(portraitMedia.subjectKind, "group"),
+                eq(portraitMedia.subjectId, groupId),
+              ),
+            );
+          // Templates and runs cascade (0075); the chat's link is cleared by its foreign key (0205 b).
+          const removed = await tx
+            .delete(wakerGroups)
+            .where(eq(wakerGroups.id, groupId))
+            .returning({ id: wakerGroups.id });
+          return removed.length > 0;
+        });
+      } catch (error) {
+        if (group.channelId)
+          log({
+            type: "waker-group-dissolve-incomplete",
+            groupId,
+            channelId: group.channelId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        throw error;
+      }
     },
 
     async forChannel(owner, channelId) {

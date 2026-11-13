@@ -5245,7 +5245,6 @@ await startupLifecycle.run(async (startup) => {
         groups: baseGroupConversations,
         channels: channelStore,
         actorFor,
-        portraits: createPortraitStore(database),
         // The groups service's own `canUseBot`.
         canUse: canUseGroupBot,
       }),

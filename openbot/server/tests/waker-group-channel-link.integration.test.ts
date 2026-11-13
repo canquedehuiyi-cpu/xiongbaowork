@@ -1,5 +1,6 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { SQL } from "bun";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
@@ -32,7 +33,6 @@ import {
   wakerGroupMembers,
   wakerGroups,
 } from "../src/db/schema";
-import { createPortraitStore } from "../src/portraits/store";
 import { parseDraft } from "../src/staffing/draft";
 import {
   createStaffingExecutor,
@@ -1332,6 +1332,10 @@ describe("routes", () => {
     ) => Parameters<typeof createWakerGroupActions>[0]["channels"];
     store?: typeof crewStore;
     log?: (line: Record<string, unknown>) => void;
+    groups?: (
+      service: ReturnType<typeof conversations>,
+    ) => Parameters<typeof createWakerGroupActions>[0]["groups"];
+    canUse?: (owner: string, agentId: string) => Promise<boolean>;
   };
 
   function crewActions(options: CrewOptions = {}) {
@@ -1341,12 +1345,17 @@ describe("routes", () => {
       database,
       store: options.store ?? crewStore,
       link,
-      groups: conversations(),
+      groups: options.groups
+        ? options.groups(conversations())
+        : conversations(),
       channels: options.channels ? options.channels(renaming) : renaming,
       actorFor: async (id) => ({ id, role: "user" }),
-      portraits: createPortraitStore(database),
-      canUse: async (owner, agentId) =>
-        Boolean(await profileStore.get({ id: owner, role: "user" }, agentId)),
+      canUse:
+        options.canUse ??
+        (async (owner, agentId) =>
+          Boolean(
+            await profileStore.get({ id: owner, role: "user" }, agentId),
+          )),
       ...(options.log ? { log: options.log } : {}),
     });
   }
@@ -2527,6 +2536,370 @@ describe("routes", () => {
       expect((await channelRow(made.channel.id)).waker_group_id).toBe(
         made.group.id,
       );
+    });
+
+    describe("fix round 1", () => {
+      /** A log the test reads, so expected lines stay out of the output. */
+      function collected() {
+        const lines: Record<string, unknown>[] = [];
+        return {
+          lines,
+          log: (line: Record<string, unknown>) => lines.push(line),
+        };
+      }
+
+      /** The database owner, for the one test that needs a trigger to make a delete fail. */
+      function ownerConnection(): SQL {
+        const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
+        if (!raw)
+          throw new Error(
+            "TEST_DATABASE_ADMIN_URL must name the database owner: only the owner adds a trigger.",
+          );
+        const admin = new URL(raw);
+        const target = new URL(testDatabaseUrl());
+        if (admin.hostname !== target.hostname || admin.port !== target.port)
+          throw new Error(
+            "TEST_DATABASE_ADMIN_URL must reach the same server as TEST_DATABASE_URL.",
+          );
+        return new SQL({
+          adapter: "postgres",
+          hostname: admin.hostname,
+          port: admin.port ? Number(admin.port) : 5432,
+          username: decodeURIComponent(admin.username),
+          password: decodeURIComponent(admin.password),
+          database: decodeURIComponent(target.pathname.replace(/^\//, "")),
+          max: 1,
+        });
+      }
+
+      async function runsOf(groupId: string) {
+        return (
+          await runAsTenant("platform", () =>
+            database
+              .select({ id: groupTaskRuns.id })
+              .from(groupTaskRuns)
+              .where(eq(groupTaskRuns.groupId, groupId)),
+          )
+        ).length;
+      }
+
+      test("a dissolve whose crew delete fails deletes nothing: portrait and crew stay", async () => {
+        const alice = await person("alice");
+        const { lines, log } = collected();
+        const api = crewApi({ log });
+        const groupId = (
+          (await api(alice, "POST", "/", { name: "删不掉" })).json
+            .group as Listed
+        ).id;
+        await portray(alice, groupId);
+        const owner = ownerConnection();
+        const name = `wg_test_refuse_${randomUUID().replaceAll("-", "")}`;
+        await owner.unsafe(
+          `create function public.${name}() returns trigger language plpgsql as $$
+             begin raise exception 'crew delete refused for the test'; end $$`,
+        );
+        await owner.unsafe(
+          `grant execute on function public.${name}() to public`,
+        );
+        await owner.unsafe(
+          `create trigger ${name} before delete on public.waker_groups for each row
+             when (old.id = '${groupId}'::uuid) execute function public.${name}()`,
+        );
+        try {
+          const answer = await quietly(() =>
+            api(alice, "DELETE", `/${groupId}`),
+          );
+          expect(answer.status).toBe(500);
+        } finally {
+          await owner.unsafe(
+            `drop trigger if exists ${name} on public.waker_groups`,
+          );
+          await owner.unsafe(`drop function if exists public.${name}()`);
+          await owner.close();
+        }
+        expect(await crewRow(groupId)).not.toBeNull();
+        expect(await portraitsOf(groupId)).toEqual({ pictures: 1, videos: 1 });
+        // Unlinked: no chat was hidden, so nothing is left half-done to report.
+        expect(lines).toEqual([]);
+      });
+
+      test("a run inserted while the dissolve runs is not deleted under it", async () => {
+        const alice = await person("alice");
+        const { lines, log } = collected();
+        const api = crewApi({ log });
+        const made = await linkedCrew(api, alice, "并发", await bots(alice, 2));
+        await portray(alice, made.group.id);
+        // A second pool, so the run's open transaction and the probe below do not starve the first.
+        const side = createDatabase(testDatabaseUrl(), TEST_POOL);
+        let release = () => {};
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        let inserted = () => {};
+        const insertion = new Promise<void>((resolve) => {
+          inserted = resolve;
+        });
+        try {
+          // A flow starting: its run row is written, not yet committed.
+          const starting = runAsTenant(alice.id, () =>
+            side.transaction(async (tx) => {
+              await tx.insert(groupTaskRuns).values({
+                groupId: made.group.id,
+                status: "running",
+                steps: [],
+              });
+              inserted();
+              await gate;
+            }),
+          );
+          await insertion;
+          const dissolving = api(alice, "DELETE", `/${made.group.id}`);
+          // Wait until the dissolve is held on the crew's row by the uncommitted run.
+          const deadline = Date.now() + 10_000;
+          for (;;) {
+            const [row] = (await runAsTenant("platform", () =>
+              side.execute(
+                sql`select count(*)::int as waiting from pg_stat_activity
+                     where wait_event_type = 'Lock' and query ilike '%waker_groups%'`,
+              ),
+            )) as unknown as { waiting: number }[];
+            if (Number(row?.waiting) > 0) break;
+            if (Date.now() > deadline)
+              throw new Error("the dissolve never waited on the run");
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          release();
+          await starting;
+
+          const answer = await dissolving;
+
+          expect(answer.status).toBe(409);
+          expect(answer.json).toEqual({
+            error: "有组团流程正在运行，先停下再解散。",
+          });
+        } finally {
+          release();
+          await side.$client.close();
+        }
+        expect(await runsOf(made.group.id)).toBe(1);
+        expect(await crewRow(made.group.id)).not.toBeNull();
+        expect(await portraitsOf(made.group.id)).toEqual({
+          pictures: 1,
+          videos: 1,
+        });
+        // The chat was hidden before the run became visible: the crew stays, reading "not started",
+        // and the line says so.
+        expect(await deleted(made.channel.id)).toBe(true);
+        expect(lines).toEqual([
+          expect.objectContaining({
+            type: "waker-group-dissolve-incomplete",
+            groupId: made.group.id,
+            channelId: made.channel.id,
+          }),
+        ]);
+      });
+
+      test("an unlinked crew whose chat cannot be opened keeps the roster and says why", async () => {
+        const alice = await person("alice");
+        const { lines, log } = collected();
+        const api = crewApi({ link: broken(), log });
+        const [a, b] = (await bots(alice, 2)) as [string, string];
+        const groupId = (
+          (await api(alice, "POST", "/", { name: "开不起来" })).json
+            .group as Listed
+        ).id;
+
+        const answer = await api(alice, "PUT", `/${groupId}/members`, {
+          agentIds: [a, b],
+        });
+
+        expect(answer.status).toBe(200);
+        expect(answer.json.chatError).toBe(
+          "成员已保存，但群聊没能开始，请稍后点「开始聊天」再试。",
+        );
+        const group = answer.json.group as Listed;
+        expect(group.channelId).toBeNull();
+        expect(group.members.map((member) => member.agentId)).toEqual([a, b]);
+        expect(await mirrored(groupId)).toEqual([a, b]);
+        // The chat it made is hidden again, as `POST /:id/chat` leaves it.
+        expect((await chatsOf(alice.id)).map((chat) => chat.deleted)).toEqual([
+          true,
+        ]);
+        expect(lines).toEqual([
+          {
+            type: "waker-group-chat-open-failed",
+            groupId,
+            error: "adopt unavailable",
+          },
+        ]);
+
+        // A crew whose roster opened its chat says nothing of the kind.
+        const fine = await crewApi()(alice, "PUT", `/${groupId}/members`, {
+          agentIds: [b, a],
+        });
+        expect(fine.status).toBe(200);
+        expect("chatError" in fine.json).toBe(false);
+        expect((fine.json.group as Listed).channelId).toBeString();
+      });
+
+      test("a chat another request opened first answers 409, as POST chat does", async () => {
+        const alice = await person("alice");
+        const racing: WakerGroupLink = {
+          ...linkCore(),
+          adopt: async () => {
+            throw Object.assign(new Error("duplicate key"), { errno: "23505" });
+          },
+          liveChannelOf: async () => "opened-by-the-other-request",
+        };
+        const api = crewApi({ link: racing });
+        const groupId = (
+          (await api(alice, "POST", "/", { name: "并发开聊天" })).json
+            .group as Listed
+        ).id;
+
+        const answer = await api(alice, "PUT", `/${groupId}/members`, {
+          agentIds: await bots(alice, 2),
+        });
+
+        expect(answer.status).toBe(409);
+        expect(answer.json).toEqual({ error: "这个群组已经可以聊天了。" });
+      });
+
+      test("a step that fails before anything changed says nothing changed", async () => {
+        const alice = await person("alice");
+        const [a, b, c] = (await bots(alice, 3)) as [string, string, string];
+        const failing = (step: "addBots" | "removeBots") => {
+          const { lines, log } = collected();
+          const api = crewApi({
+            log,
+            groups: (service) => ({
+              ...service,
+              [step]: async () => {
+                throw new Error("database went away");
+              },
+            }),
+          });
+          return { api, lines };
+        };
+
+        const first = failing("addBots");
+        const untouched = await linkedCrew(first.api, alice, "一步没做", [
+          a,
+          b,
+        ]);
+        const nothing = await first.api(
+          alice,
+          "PUT",
+          `/${untouched.group.id}/members`,
+          { agentIds: [a, b, c] },
+        );
+        expect(nothing.status).toBe(409);
+        expect(nothing.json).toEqual({
+          error: "群组成员没有做任何改动，请刷新后再试。",
+          done: [],
+        });
+        expect(await answering(alice, untouched.channel.id)).toEqual([a, b]);
+        expect(first.lines).toEqual([
+          expect.objectContaining({
+            type: "waker-group-members-failed",
+            done: 0,
+          }),
+        ]);
+
+        const second = failing("removeBots");
+        const halfway = await linkedCrew(second.api, alice, "做了一半", [a, b]);
+        const part = await second.api(
+          alice,
+          "PUT",
+          `/${halfway.group.id}/members`,
+          { agentIds: [a, c] },
+        );
+        expect(part.status).toBe(409);
+        expect(part.json).toEqual({
+          error: "群组成员只改了一部分，请刷新后再试。",
+          done: [{ op: "add", agentIds: [c] }],
+        });
+        const chat = await answering(alice, halfway.channel.id);
+        expect(chat).toEqual([a, b, c]);
+        expect(await mirrored(halfway.group.id)).toEqual(chat);
+      });
+
+      test("a member of the shared chat who did not start it gets 404 from PUT members and DELETE", async () => {
+        const alice = await person("alice");
+        const bob = await person("bob");
+        const api = crewApi();
+        const mine = await bots(alice, 2);
+        const made = await linkedCrew(api, alice, "共享群", mine);
+        await portray(alice, made.group.id);
+        await runAsTenant(alice.id, () =>
+          conversations().addMember(alice.id, made.channel.id, {
+            email: `${bob.id}@example.test`,
+          }),
+        );
+        const chatBefore = await answering(alice, made.channel.id);
+
+        const put = await api(bob, "PUT", `/${made.group.id}/members`, {
+          agentIds: [...mine].reverse(),
+        });
+        const dissolve = await api(bob, "DELETE", `/${made.group.id}`);
+
+        expect(put.status).toBe(404);
+        expect(put.json).toEqual({ error: "No such group." });
+        expect(dissolve.status).toBe(404);
+        expect(dissolve.json).toEqual({ error: "No such group." });
+        expect(await deleted(made.channel.id)).toBe(false);
+        expect(await crewRow(made.group.id)).not.toBeNull();
+        expect(await mirrored(made.group.id)).toEqual(mine);
+        expect(await answering(alice, made.channel.id)).toEqual(chatBefore);
+        expect(await portraitsOf(made.group.id)).toEqual({
+          pictures: 1,
+          videos: 1,
+        });
+      });
+
+      test("an unlinked crew opens no chat with fewer than two usable Bots, however many rows", async () => {
+        const alice = await person("alice");
+        const [a, b, c] = (await bots(alice, 3)) as [string, string, string];
+        const unusable = new Set([b, c]);
+        const api = crewApi({
+          canUse: async (_owner, agentId) => !unusable.has(agentId),
+        });
+        const groupId = (
+          (await api(alice, "POST", "/", { name: "可用不足" })).json
+            .group as Listed
+        ).id;
+
+        const answer = await api(alice, "PUT", `/${groupId}/members`, {
+          agentIds: [a, b, c],
+        });
+
+        expect(answer.status).toBe(200);
+        expect("chatError" in answer.json).toBe(false);
+        const group = answer.json.group as Listed;
+        expect(group.channelId).toBeNull();
+        expect(group.members).toHaveLength(3);
+        expect(await chatsOf(alice.id)).toEqual([]);
+      });
+
+      test("an unlinked crew opens no chat with more than twenty usable Bots", async () => {
+        const alice = await person("alice");
+        const api = crewApi();
+        const many = await bots(alice, 21);
+        const groupId = (
+          (await api(alice, "POST", "/", { name: "超过二十" })).json
+            .group as Listed
+        ).id;
+
+        const answer = await api(alice, "PUT", `/${groupId}/members`, {
+          agentIds: many,
+        });
+
+        expect(answer.status).toBe(200);
+        const group = answer.json.group as Listed;
+        expect(group.channelId).toBeNull();
+        expect(group.members).toHaveLength(21);
+        expect(await chatsOf(alice.id)).toEqual([]);
+      });
     });
   });
 });

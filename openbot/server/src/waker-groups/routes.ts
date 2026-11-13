@@ -203,13 +203,18 @@ export function createWakerGroupRoutes(
       return context.json({ error: SEND_IDS }, 400);
     }
     try {
-      const group = actions
-        ? await actions.setMembers(
-            context.var.actor.id,
-            context.req.param("id"),
-            agentIds,
-          )
-        : await store.setMembers(context.req.param("id"), agentIds);
+      if (actions) {
+        const set = await actions.setMembers(
+          context.var.actor.id,
+          context.req.param("id"),
+          agentIds,
+        );
+        // `chatError`: the roster is saved, the chat it qualified for could not be opened.
+        return set
+          ? context.json(set)
+          : context.json({ error: "No such group." }, 404);
+      }
+      const group = await store.setMembers(context.req.param("id"), agentIds);
       return group
         ? context.json({ group })
         : context.json({ error: "No such group." }, 404);
@@ -219,19 +224,16 @@ export function createWakerGroupRoutes(
         // board filter is wrong and nobody was told.
         return context.json({ error: error.message }, 400);
       }
-      if (error instanceof WakerGroupSizeError)
+      if (
+        error instanceof WakerGroupSizeError ||
+        error instanceof WakerGroupLinkedError
+      )
         return context.json({ error: error.message }, 409);
       // Part-way: what went through stays, and the caller is told which steps those were.
       if (error instanceof WakerGroupStepsError)
         return context.json({ error: error.message, done: error.done }, 409);
       if (error instanceof WakerGroupOwnerGoneError)
         return context.json({ error: error.message, code: error.code }, 409);
-      // The chat a crew that reached two Bots asked for could not be made as asked.
-      if (
-        error instanceof GroupRefusedError ||
-        error instanceof AgentNotFoundError
-      )
-        return context.json({ error: error.message }, 400);
       throw error;
     }
   });

@@ -86,10 +86,15 @@ const foreignRename = await request(
   { name: "被他人改名" },
   "PATCH",
 );
-check(foreignRename.response.status === 404, "B renaming A group returns 404");
+check(
+  foreignRename.response.status === 404 &&
+    foreignRename.value?.error === "No such group.",
+  "B renaming A group returns 404",
+);
 const foreignDissolve = await request(crewPath, b, undefined, "DELETE");
 check(
-  foreignDissolve.response.status === 404,
+  foreignDissolve.response.status === 404 &&
+    foreignDissolve.value?.error === "No such group.",
   "B dissolving A group returns 404",
 );
 const crewsAfter = await request("/api/waker-groups", a);
