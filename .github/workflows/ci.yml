@@ -366,6 +366,12 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: docker build -f Dockerfile -t openbot:trackb .
+      - name: Brand scan - image files, env, labels
+        run: |
+          docker run --rm --entrypoint sh openbot:trackb -c 'find / -xdev \( -path /proc -o -path /sys \) -prune -o -print' > "$RUNNER_TEMP/image-files.txt"
+          docker inspect openbot:trackb > "$RUNNER_TEMP/image-config.json"
+          bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY"
+          bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY"
       # The s6 oneshot that copies XIONGBAO_* onto OPENBOT_* runs on the host: it only reads and writes files.
       - name: env-aliases oneshot
         run: sh docker/tests/env-aliases.test.sh
@@ -381,6 +387,8 @@ jobs:
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
         run: bash scripts/ci/image-smoke.sh openbot:trackb
+      - name: Brand scan - startup log (words only)
+        run: bun scripts/brand/scan-artifact.ts --kind web --input "$RUNNER_TEMP/delivery-evidence/startup.log" --allowlist app/tests/brand-artifacts/image-logs.json --summary "$GITHUB_STEP_SUMMARY"
       - name: Print container logs (credentials masked)
         if: failure()
         run: |
@@ -882,6 +890,8 @@ jobs:
           grep -Eq 'usr/bin/xiongbao-runner$' <<<"$contents"
           grep -Eq 'usr/bin/agent-desktop$' <<<"$contents"
           sudo dpkg --dry-run -i "$deb"
+      - name: Brand scan - deb listing, fields and contents
+        run: bun scripts/brand/scan-artifact.ts --kind deb --input desktop-device/src-tauri/target/release/bundle/deb/*.deb --allowlist app/tests/brand-artifacts/deb.json --summary "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: xiongbao-device-unsigned-deb

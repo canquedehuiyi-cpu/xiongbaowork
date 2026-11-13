@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AllowEntry } from "../../scripts/brand/guard/allowlist";
@@ -7,6 +14,10 @@ import { metricsTable } from "../../scripts/brand/metrics";
 import {
   BUILD_PATH,
   canonical,
+  scanDeb,
+  scanImageConfig,
+  scanImageFiles,
+  scanLog,
   scanRunner,
   scanWeb,
   summaryOf,
@@ -125,5 +136,94 @@ describe("metrics", () => {
     expect(table).toContain("| 永久残留（keep） | 1 | +1 |");
     expect(table).toContain("| identifier | 3 | -2 |");
     expect(table).toContain("| web | 1 | -1 | - | 1 |");
+  });
+});
+
+describe("image and deb scans (Task 5)", () => {
+  test("image-files: only the paths are words", () => {
+    const root = dir();
+    const list = join(root, "files.txt");
+    writeFileSync(
+      list,
+      "/etc/hosts\n/usr/src/openbot/x.js\n/usr/share/doc/copilotkit\n",
+    );
+    const found = scanImageFiles(list).found;
+    expect(found.has("/usr/src/openbot/x.js")).toBe(true);
+    expect(found.has("/usr/share/doc/copilotkit")).toBe(true);
+    expect(found.has("/etc/hosts")).toBe(false);
+  });
+
+  test("image-config: Config.Env and Config.Labels, nothing else", () => {
+    const root = dir();
+    const file = join(root, "inspect.json");
+    writeFileSync(
+      file,
+      JSON.stringify([
+        {
+          Name: "/openbot-trackb",
+          Config: {
+            Env: ["OPENBOT_X=1", "PATH=/usr/bin"],
+            Labels: { "ai.copilotkit.openbot.recorder": "v1" },
+          },
+        },
+      ]),
+    );
+    const found = scanImageConfig(file).found;
+    expect(found.has("OPENBOT_X")).toBe(true);
+    expect(found.has("ai.copilotkit.openbot.recorder")).toBe(true);
+    expect(found.has("/openbot-trackb")).toBe(false);
+  });
+
+  test("deb: the listing, every control field and the extracted files are scanned", () => {
+    const root = dir();
+    const tree = join(root, "pkg");
+    mkdirSync(join(tree, "DEBIAN"), { recursive: true });
+    mkdirSync(join(tree, "usr", "bin"), { recursive: true });
+    mkdirSync(join(tree, "usr", "share", "doc"), { recursive: true });
+    writeFileSync(
+      join(tree, "DEBIAN", "control"),
+      "Package: openbot-device\nVersion: 1.0.0\nArchitecture: amd64\nMaintainer: x <x@example.com>\nDescription: openbot-desc\n",
+    );
+    writeFileSync(
+      join(tree, "usr", "bin", "xiongbao-runner"),
+      Buffer.from(
+        "\0/home/runner/work/x/x/openbot/node_modules/a\0copilotkit-inside\0",
+      ),
+    );
+    writeFileSync(join(tree, "usr", "share", "doc", "openbot-doc.txt"), "hi\n");
+    const deb = join(root, "out.deb");
+    execFileSync("dpkg-deb", ["--build", "-Znone", tree, deb], {
+      stdio: "ignore",
+    });
+    const scan = scanDeb(deb, "/home/runner/work/x/x/openbot");
+    expect(scan.found.has("openbot-device")).toBe(true);
+    expect(scan.found.has("openbot-desc")).toBe(true);
+    expect(scan.found.has("copilotkit-inside")).toBe(true);
+    expect(
+      [...scan.found.keys()].some((w) => w.endsWith("openbot-doc.txt")),
+    ).toBe(true);
+    expect(scan.found.get(BUILD_PATH)).toBe(1);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("web on a log file: words only, no source map check", () => {
+    const root = dir();
+    const log = join(root, "startup.log");
+    writeFileSync(log, "boot openbot\n//# sourceMappingURL=x.map\n");
+    const scan = scanLog(log);
+    expect(scan.problems).toEqual([]);
+    expect(scan.found.has("openbot")).toBe(true);
+  });
+
+  test("the new baselines are committed as JSON lists", () => {
+    for (const name of ["image-files", "image-config", "image-logs", "deb"]) {
+      const list: unknown = JSON.parse(
+        readFileSync(
+          new URL(`./brand-artifacts/${name}.json`, import.meta.url),
+          "utf8",
+        ),
+      );
+      expect(Array.isArray(list), name).toBe(true);
+    }
   });
 });
