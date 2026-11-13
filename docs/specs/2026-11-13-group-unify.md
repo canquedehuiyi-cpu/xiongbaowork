@@ -203,7 +203,7 @@ core 的判定顺序：
 | 数据 | 改法 | 说明 |
 |---|---|---|
 | `channels.created_by` | 改为接手人 | 共享群的所有者（3.1） |
-| `waker_groups` | `tenant_id` 改为接手人；`name` 按 4.4 以**聊天的 title** 为准（没有 title 用 `channels.name`；去首尾空白，截 80 字），撞名再依次加「（2）」…「（99）」，再撞加 id 前 6 位，后缀计入 80 字；循环里捕获 `unique_violation`。80 字按码点计，与应用侧 `pickGroupName` 一致（含 emoji 的名字两边判断相同） | 0206 的挂接触发器要求群组属于所有者，两者同一事务改。以 title 而不是群组现在的名字为底：群组名本来就带「（2）」时不会变成「…（2）（2）」，接手人帧的自愈算出的名字与移交时相同，不会再改名或记 `name-taken`（最终审查 M13 修复） |
+| `waker_groups` | `tenant_id` 改为接手人；`name` 按 4.4 以**聊天的 title** 为准（没有 title 用 `channels.name`；去首尾空白，截 80 字），撞名再依次加「（2）」…「（99）」，再撞加 id 前 6 位，后缀计入 80 字；循环里捕获 `unique_violation`。80 字按码点计，与应用侧 `pickGroupName` 一致（含 emoji 的名字两边判断相同）。镜像内置库是 SQL_ASCII（initdb 不带区域设置），那里 `left()`、`length()`、`btrim()` 按字节计、`\u` 转义无法转换：0207 不写 Unicode 转义，全角空格按整个序列裁，SQL_ASCII 库里按整个 UTF-8 序列截断，两种编码结果相同（`tests/waker-group-hand-over-sql-ascii.integration.test.ts`） | 0206 的挂接触发器要求群组属于所有者，两者同一事务改。以 title 而不是群组现在的名字为底：群组名本来就带「（2）」时不会变成「…（2）（2）」，接手人帧的自愈算出的名字与移交时相同，不会再改名或记 `name-taken`（最终审查 M13 修复） |
 | `waker_group_members` | 不动，随父行 | 没有 `tenant_id`，RLS 看父行（`openbot/server/drizzle/0072_rls_command_scopes.sql:39-50`） |
 | `portraits`、`portrait_media`（`subject_kind='group'`） | `tenant_id` 改为接手人；先删接手人名下同键的残行 | 主键含 `tenant_id`（`R/0144`、`R/0203`） |
 | `group_task_templates`（`group_id`=群组，`tenant_id`=原主） | `tenant_id` 改为接手人 | 0075 |

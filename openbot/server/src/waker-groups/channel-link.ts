@@ -98,8 +98,9 @@ export function isGroupConversation(row: {
 const NAME_LIMIT = 80;
 
 /**
- * At most `limit` characters, counted in code points: what 0207's `left()` and `length()` count when
- * a hand-over picks the name, so both sides agree on 80 for a name with emoji in it (4.4).
+ * At most `limit` characters, counted in code points: what 0207 counts when a hand-over picks the
+ * name (`left()` in a UTF8 database, whole UTF-8 sequences in a SQL_ASCII one), so both sides agree
+ * on 80 for a name with emoji or Chinese in it (4.4).
  */
 function clip(text: string, limit: number) {
   const points = Array.from(text);

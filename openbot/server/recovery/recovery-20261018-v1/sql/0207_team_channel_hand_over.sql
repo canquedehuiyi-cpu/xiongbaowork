@@ -42,7 +42,8 @@
  *
  * 搬什么（设计稿 3.1.1 第 5 条，全部跟走，每条都限原主的 tenant_id）：`channels.created_by`；`waker_groups`
  * （名字按 4.4 以聊天的 title 为准，没有 title 用 name，截 80 字（按码点）；撞名加「（2）」…「（99）」，再撞加
- * id 前 6 位）；群组的 `portraits`、`portrait_media`（先删接手人
+ * id 前 6 位；SQL_ASCII 库（镜像内置库）里文本函数按字节计，取名改按整个 UTF-8 序列截，结果与 UTF8 库相同，
+ * 见函数内注释）；群组的 `portraits`、`portrait_media`（先删接手人
  * 名下同键的残行）；`group_task_templates`；`group_task_runs` 以及它们的父卡、步骤卡（`tasks`）、卡的
  * `task_archives`、`group_pipeline_start_receipts`、`flow_confirmations`、`flow_run_events`、`flow_run_retries`。
  * 不搬：`usage_counters`（已消耗的额度记在当时发起的人名下）、审批、`audit_events`、`group_bot_threads`、
@@ -83,7 +84,10 @@ DECLARE
   base text;
   candidate text;
   suffix text;
+  room int;
   attempt int := 1;
+  -- A SQL_ASCII database (the image's embedded cluster: initdb with no locale) counts text in bytes.
+  bytewise boolean := current_setting('server_encoding') = 'SQL_ASCII';
   moved boolean := false;
   runs uuid[] := '{}';
   cards uuid[];
@@ -102,17 +106,33 @@ BEGIN
     -- 4.4: the chat's title is the name's truth (its name when it has none), trimmed and cut to 80
     -- characters, so a crew already called 「周报（2）」 is not handed over as 「周报（2）（2）」. Counted in
     -- code points, as the app's `pickGroupName` counts them.
-    SELECT left(btrim(coalesce(nullif(btrim(title, E' \t\r\n\u3000'), ''), name), E' \t\r\n\u3000'), 80)
+    --
+    -- Written to come out the same in a UTF8 and a SQL_ASCII database. There `left()` and `length()`
+    -- count bytes and `btrim()` trims bytes, so: no Unicode escape in a literal (nothing converts one
+    -- into SQL_ASCII, and the whole file fails), the ideographic space written as itself and trimmed as a
+    -- whole sequence (in UTF-8 it can only start at a character boundary), the suffix's length
+    -- counted without looking at its full-width brackets, and the cut, in SQL_ASCII, made by
+    -- whole UTF-8 sequences: a lead or ASCII byte with the continuation bytes after it.
+    SELECT coalesce(nullif(regexp_replace(title, '^(?:[ \t\r\n]|　)+|(?:[ \t\r\n]|　)+$', '', 'g'), ''),
+                    regexp_replace(name, '^(?:[ \t\r\n]|　)+|(?:[ \t\r\n]|　)+$', '', 'g'))
       INTO base FROM public.channels WHERE id = p_channel_id;
     IF coalesce(base, '') = '' THEN base := original; END IF;
     LOOP
       IF attempt = 1 THEN
-        candidate := base;
+        suffix := '';
+        room := 80;
       ELSIF attempt <= 99 THEN
         suffix := '（' || attempt || '）';
-        candidate := left(base, 80 - length(suffix)) || suffix;
+        room := 78 - length(attempt::text);
       ELSE
-        candidate := left(base, 74) || left(p_group_id::text, 6);
+        suffix := left(p_group_id::text, 6);
+        room := 74;
+      END IF;
+      -- Two statements, not one CASE: the byte pattern is only ever parsed in a SQL_ASCII database.
+      IF bytewise THEN
+        candidate := substring(base FROM '^(?:[^\x80-\xBF][\x80-\xBF]*){0,' || room || '}') || suffix;
+      ELSE
+        candidate := left(base, room) || suffix;
       END IF;
       BEGIN
         UPDATE public.waker_groups SET tenant_id = p_heir, name = candidate, updated_at = now()
