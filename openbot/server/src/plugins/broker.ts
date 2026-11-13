@@ -1,3 +1,4 @@
+import { envName } from "../../../shared/env-aliases";
 import type { BrokerProvider } from "./access";
 import type { DeploymentClient } from "./deployment-clients";
 import type { AccountRef } from "./shared-accounts";
@@ -754,7 +755,7 @@ export class BrokerReturnUrlError extends BrokerRefusalError {
 export function brokerReturnUrl(returnUrl: string): string {
   if (returnUrl.trim() === "") {
     throw new BrokerReturnUrlError(
-      "This deployment built no address for Composio to send you back to, so the connection was not begun rather than begun with nowhere to land. Set OPENBOT_APP_URL to the address this deployment's pages are served from, and connecting an app will have a return leg.",
+      `This deployment built no address for Composio to send you back to, so the connection was not begun rather than begun with nowhere to land. Set ${envName("APP_URL")} to the address this deployment's pages are served from, and connecting an app will have a return leg.`,
     );
   }
   const address = webAddress(returnUrl);

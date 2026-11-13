@@ -719,6 +719,44 @@ export const skillTools = pgTable(
 );
 
 /**
+ * One file a skill ships beside its instructions.
+ *
+ * WHY THIS EXISTS (4c-C2, progressive disclosure). A skill's `instructions` is prepended to the run
+ * whole, so a skill that carried its reference material in prose would spend every run's context on
+ * steps the current turn never needs. An asset is the same material held one step away: the
+ * instructions say what the skill does and name the files, and the Bot reads a file only when the
+ * turn actually needs it, through the `skills` builtin server (`skills/read-tool.ts`). Rows live
+ * beside the skill row rather than in a package directory so a running deployment reads what its
+ * database holds, and so a brand switch that deletes a skill takes its files with it — the foreign
+ * key is `cascade` for exactly that reason, and no sweep re-deletes them by hand.
+ *
+ * Keyed `(skill_id, path)` because a path is the file's name inside the skill, the same name the
+ * instructions and the manifest quote; a skill cannot ship two files that answer to one name.
+ * `content` is text, not bytes: the assets a skill ships are documents a model reads, and a binary
+ * belongs behind a connector, not inside an instruction file.
+ */
+export const skillAssets = pgTable(
+  "skill_assets",
+  {
+    tenantId: tenantId(),
+    /** The skill the file belongs to; deleting the skill takes the file with it (see above). */
+    skillId: text("skill_id")
+      .notNull()
+      .references(() => skills.id, { onDelete: "cascade" }),
+    /** The file's name inside the skill, e.g. `references/step-3.md`. Never escapes the skill. */
+    path: text("path").notNull(),
+    mediaType: text("media_type").notNull(),
+    content: text("content").notNull(),
+    /** UTF-8 byte length, so a manifest can say how big a read will be before making it. */
+    bytes: integer("bytes").notNull(),
+    /** SHA-256 of `content`, so a redeploy can tell an unchanged file from a rewritten one. */
+    checksum: text("checksum").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [primaryKey({ columns: [table.skillId, table.path] })],
+);
+
+/**
  * One Bot's hold on one plugin, whether that plugin is an MCP tool or a skill. A row is the grant.
  *
  * Absence is the refusal, the same shape component grants use and for the same reason. A Bot

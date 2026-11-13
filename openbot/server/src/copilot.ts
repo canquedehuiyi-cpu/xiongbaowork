@@ -160,6 +160,7 @@ import {
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
+import { withBrowserWireCodeRunner } from "./wire-codes";
 
 /**
  * The CopilotKit runtime, in one of two thread backends.
@@ -3801,10 +3802,13 @@ export function mountCopilotRuntime(
 
   /*
    * The runner as the runtime is handed it. A turn refused for quota is said on its stream, not
-   * dropped with it (story K4), and the watchers below patch their own layer on top. See
+   * dropped with it (story K4); every error code the browser is sent, live or replayed, carries the
+   * new prefix (`wire-codes.ts`); and the watchers below patch their own layer on top. See
    * {@link patchableRunner}.
    */
-  const runtimeRunner = patchableRunner(withQuotaRunErrors(runner));
+  const runtimeRunner = patchableRunner(
+    withBrowserWireCodeRunner(withQuotaRunErrors(runner)),
+  );
 
   // Before any runtime exists: its constructor logs a disclosure and records properties unless this is set.
   disableRuntimeTelemetryByDefault();

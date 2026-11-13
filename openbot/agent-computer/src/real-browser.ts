@@ -72,9 +72,9 @@ const LINUX_LAUNCHERS: Record<RealBrowser, string> = {
   msedge: "microsoft-edge",
 };
 
-/** Why these routes are refused here: they act on a person's own desktop, which only OpenBot Desktop's computer is on. */
+/** Why these routes are refused here: they act on a person's own desktop, which only the desktop app's computer is on. */
 export const ONLY_ON_THE_PERSONS_DESKTOP =
-  "The person's own browser is reached only by the computer on their own desktop (OpenBot Desktop).";
+  "The person's own browser is reached only by the computer on their own desktop (the desktop app).";
 
 /** What the person is told when their browser was found and did not do what was asked. The reason goes to the log. */
 const NOT_BROUGHT_FORWARD =
@@ -403,7 +403,7 @@ export function createRealBrowserHost(options: RealBrowserHostOptions) {
       return json(
         {
           error:
-            "The person's own browser is for a person: send their browser id (person- and 32 hex digits) in x-openbot-bot-id.",
+            "The person's own browser is for a person: send their browser id (person- and 32 hex digits) in the request headers.",
         },
         400,
       );

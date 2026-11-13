@@ -1,4 +1,4 @@
-import { applyEnvironmentAliases } from "@openbot/shared/env-aliases";
+import { applyEnvironmentAliases, envName } from "@openbot/shared/env-aliases";
 import { intelligenceApiKey } from "@openbot/shared/intelligence-key";
 import {
   isLearningContainerId,
@@ -751,7 +751,7 @@ function singleUserAllowed(
   const shared = reachable.filter((value) => reachOf(value) === "private");
   if (shared.length > 0) {
     console.warn(
-      `OPENBOT_SINGLE_USER admits every request as one administrator with no sign-in, and this deployment answers on an address beyond this machine: ${shared.join(", ")}. Anybody on that network is that administrator. Configure a sign-in provider before anybody else is on it.`,
+      `${envName("SINGLE_USER")} admits every request as one administrator with no sign-in, and this deployment answers on an address beyond this machine: ${shared.join(", ")}. Anybody on that network is that administrator. Configure a sign-in provider before anybody else is on it.`,
     );
   }
 
@@ -762,8 +762,10 @@ function singleUserAllowed(
  * Which requests single-user mode admits. See {@link SingleUserAccess}.
  *
  * WHERE THE SERVER RUNS IS SAID BY THE IMAGE, NOT GUESSED. `OPENBOT_IN_CONTAINER=true` is set by both
- * Dockerfiles that run this server (`server/Dockerfile`, used by Compose and the chart, and the
- * one-container `Dockerfile`), so every container gets it without anybody writing it down, and every
+ * images that run this server: `server/Dockerfile` (Compose and the chart) as an ENV, and the
+ * one-container `Dockerfile` through its defaults file (`docker/defaults.env`, which the s6
+ * env-aliases oneshot writes into every service's environment unless the deployment set the name
+ * itself). So every container gets it without anybody writing it down, and every
  * other way of starting the server (OpenBot Desktop, `scripts/start.sh`, `bun run dev`) does not.
  * The default is the strict one: a server nobody said is in a container admits only this machine.
  * Inside a container that would refuse everybody, because the engine's proxy is the peer of every
@@ -1956,12 +1958,12 @@ function personalEditionRequirements(
   const providers = configuredAuthProviders(resolved.auth);
   if (providers.length > 0) {
     throw new Error(
-      `OPENBOT_EDITION=personal has nobody signing in, so remove ${providers.map((provider) => PROVIDER_VARIABLE[provider]).join(", ")} and the rest of that provider's settings.`,
+      `${envName("EDITION")}=personal has nobody signing in, so remove ${providers.map((provider) => PROVIDER_VARIABLE[provider]).join(", ")} and the rest of that provider's settings.`,
     );
   }
   if (resolved.organizationAuthUrl) {
     throw new Error(
-      "OPENBOT_EDITION=personal has nobody signing in, so remove OPENBOT_ORGANIZATION_AUTH_URL.",
+      `${envName("EDITION")}=personal has nobody signing in, so remove ${envName("ORGANIZATION_AUTH_URL")}.`,
     );
   }
   if (!resolved.singleUser) {
@@ -1975,8 +1977,8 @@ function personalEditionRequirements(
       : undefined;
   throw new Error(
     named
-      ? `OPENBOT_EDITION=personal runs one computer, so remove ${named} and set AGENT_COMPUTER_URL instead.`
-      : "OPENBOT_EDITION=personal runs one computer. Set AGENT_COMPUTER_URL to its address.",
+      ? `${envName("EDITION")}=personal runs one computer, so remove ${named} and set AGENT_COMPUTER_URL instead.`
+      : `${envName("EDITION")}=personal runs one computer. Set AGENT_COMPUTER_URL to its address.`,
   );
 }
 
@@ -1998,7 +2000,7 @@ function recorderExtraExtensionIds(environment: Environment): string[] {
   for (const id of ids) {
     if (!/^[a-p]{32}$/.test(id))
       throw new Error(
-        `OPENBOT_RECORDER_EXTRA_EXTENSION_IDS lists "${id}", which is not an extension id. An id is 32 letters from a to p; separate several with commas.`,
+        `${envName("RECORDER_EXTRA_EXTENSION_IDS")} lists "${id}", which is not an extension id. An id is 32 letters from a to p; separate several with commas.`,
       );
   }
   return ids;

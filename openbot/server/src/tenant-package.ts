@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { resolveTenantPackageDirectory } from "./tenant-package-path";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESSES, type Harness } from "@openbot/shared/harnesses";
@@ -10,6 +9,7 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   ne,
   notInArray,
@@ -36,6 +36,26 @@ import {
 import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { runAsTenant } from "./tenant/context";
 import { avatarAgentId, packageChannelId } from "./tenant/provisioning";
+import {
+  clearDanglingConnectorRefs,
+  connectorConflicts,
+  loadSkillAssetFiles,
+  type PackageConnector,
+  type PackageTeam,
+  type PackageVault,
+  parseConnectors,
+  parseSkillAssetPaths,
+  parseTeams,
+  type SkillAssetFile,
+  skillInstructions,
+  synchronizePackageConnectors,
+  synchronizeTeamGrants,
+  teamChannels,
+  teamLeadPrompts,
+  validateTeamAgentRefs,
+  writeSkillAssets,
+} from "./tenant-package-capabilities";
+import { resolveTenantPackageDirectory } from "./tenant-package-path";
 
 const approvedThemeVariables = new Set([
   "--background",
@@ -138,6 +158,16 @@ type PackageFiles = {
    */
   skills?: string;
   /**
+   * Optional, like `skills.yaml`: `connectors.yaml`, the connectors the package declares. Absent is a
+   * package that declares none, which is every package written before this contract shipped.
+   */
+  connectors?: string;
+  /**
+   * Optional, like `connectors.yaml`: `teams.yaml`, the expert teams the package declares. Absent is
+   * a package that declares none.
+   */
+  teams?: string;
+  /**
    * A coworker per file, from `agents/` beside `agents.yaml`, in the order they should be read.
    *
    * `agents.yaml` holds every coworker in one file, so adding one means editing a file somebody
@@ -183,6 +213,13 @@ export type TenantSkill = {
    * which is none of them.
    */
   tools: string[];
+  /**
+   * Files the skill ships beside its instructions (`assets:` in `skills.yaml`), as paths relative to
+   * `skills/<slug>/` in the package. Optional, because every skill written before attachments shipped
+   * declares none. Validated by {@link parseSkillAssetPaths}: a path that would escape the skill's own
+   * directory refuses the whole package, with the slug in the sentence.
+   */
+  assets?: string[];
 };
 
 /**
@@ -290,6 +327,21 @@ export type TenantPackage = {
   }[];
   /** What `skills.yaml` ships, or empty for a package that has none. */
   skills: TenantSkill[];
+  /**
+   * What `connectors.yaml` declares (4a-A1), or empty for a package that declares none. The sync
+   * writes `mcp_servers` rows for these — never grants — and takes back only its own on a redeploy.
+   */
+  connectors?: PackageConnector[];
+  /** What `teams.yaml` declares (4b-B1), or empty for a package that declares none. */
+  teams?: PackageTeam[];
+  /**
+   * The files those skills ship, read off disk at load, keyed by slug (`assets:` in `skills.yaml`).
+   *
+   * Loaded here rather than re-read at sync so the checksum below covers the CONTENTS — an edited
+   * attachment is a package change the deployment notices on the next boot, exactly like an edited
+   * instruction. Absent on a package assembled in code with no attachments.
+   */
+  skillAssets?: Record<string, SkillAssetFile[]>;
   themeCss: string;
 };
 
@@ -645,6 +697,12 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
   const skillsYaml = files.skills?.trim()
     ? yaml(files.skills, "skills.yaml")
     : {};
+  // Absent is a package with no connectors of its own, not a malformed one (same rule as skills).
+  const connectorsYaml = files.connectors?.trim()
+    ? yaml(files.connectors, "connectors.yaml")
+    : {};
+  const teamsYaml = files.teams?.trim() ? yaml(files.teams, "teams.yaml") : {};
+  const packageTeams = parseTeams(teamsYaml);
   const tenant = asRecord(brand.tenant, "brand.tenant");
   const skin =
     brand.skin === undefined ? undefined : asRecord(brand.skin, "brand.skin");
@@ -736,6 +794,20 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
       };
     },
   );
+  /*
+   * A team that also answers to a channels.yaml id is two declarations of one channel, and which one
+   * a deployment would get would depend on which file the sync happened to read last — refused, the
+   * way a repeated id inside either file is.
+   */
+  for (const team of packageTeams) {
+    if (channelIds.has(team.id)) {
+      throw new Error(
+        `team "${team.id}" is declared in both teams.yaml and channels.yaml`,
+      );
+    }
+  }
+  validateTeamAgentRefs(packageTeams, agentIds);
+
   const model = asRecord(modelYaml.model, "model");
   if (model.provider !== "openai" && model.provider !== "anthropic") {
     throw new Error("model.provider must be openai or anthropic");
@@ -799,9 +871,12 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     stylesheet: skin
       ? requiredString(skin.stylesheet, "skin.stylesheet")
       : null,
-    agents,
+    // The leads' prompts carry their teams, so a seeded lead already knows who it leads.
+    agents: teamLeadPrompts(agents, packageTeams),
     omittedAgentIds: [...omittedAgentIds],
-    channels,
+    // A team IS a channel plus two grants (see teamChannels): it rides the ordinary channel paths.
+    channels: [...channels, ...teamChannels(packageTeams)],
+    teams: packageTeams,
     avatarSkills,
     model: {
       provider: model.provider,
@@ -813,6 +888,7 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
     },
     knowledgeSources: sources,
     skills: packageSkills,
+    connectors: parseConnectors(connectorsYaml),
     themeCss: files.themeCss,
   };
 }
@@ -863,6 +939,7 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
       summary: requiredString(skill.summary, "skill.summary"),
       instructions: requiredString(skill.instructions, "skill.instructions"),
       tools,
+      assets: parseSkillAssetPaths(skill.assets, slug),
     };
   });
 }
@@ -942,6 +1019,18 @@ export async function loadTenantPackage(
       if (error.code === "ENOENT") return "";
       throw error;
     });
+  const connectors = await readFile(join(sourcePath, "connectors.yaml"), "utf8")
+    .then((file) => expandEnvironment(file, "connectors.yaml"))
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "";
+      throw error;
+    });
+  const teams = await readFile(join(sourcePath, "teams.yaml"), "utf8")
+    .then((file) => expandEnvironment(file, "teams.yaml"))
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "";
+      throw error;
+    });
   const agentFiles = await readAgentFiles(sourcePath);
   const tenantPackage = validateTenantPackage({
     brand,
@@ -950,24 +1039,40 @@ export async function loadTenantPackage(
     model,
     knowledge,
     skills,
+    connectors,
+    teams,
     agentFiles,
     themeCss,
   });
+  // The files the skills ship, after validation (which has already refused a path that would escape
+  // its skill), so the contents are in the package and in its checksum.
+  const skillAssets = await loadSkillAssetFiles(
+    sourcePath,
+    tenantPackage.skills,
+  );
 
   return {
     ...tenantPackage,
+    skillAssets,
     sourcePath,
     // `skills` is in the checksum, so editing it is a package change like any other and the
     // deployment notices on the next boot rather than reporting itself unchanged.
     // `agents/` is in the checksum for the reason `skills` is: a coworker added, edited or removed
     // there is a package change, and a deployment that did not notice would go on running the
     // roster it booted with while the repository said otherwise.
+    // Skill attachments are in it for the same reason, by CONTENT: an attachment edited in place is
+    // a package change even though `skills.yaml` did not move.
     checksum: createHash("sha256")
       .update(
         [
           ...contents,
           skills,
+          connectors,
+          teams,
           ...agentFiles.map((file) => `${file.filename}\n${file.contents}`),
+          ...Object.entries(skillAssets).flatMap(([slug, files]) =>
+            files.map((file) => `${slug}/${file.path}\n${file.content}`),
+          ),
         ].join("\n"),
       )
       .digest("hex"),
@@ -1121,12 +1226,163 @@ function personalStarterSeed(
   return { agents, channels, picked };
 }
 
+/*
+ * A package agent may not take a row somebody created — the same 4a-A1 rule as the connectors. A
+ * user-created Bot or a person's own profile on a package coworker is stamped with its owner's
+ * tenant, which the sync's `system` frame can neither see nor answer: the upserts below would hit
+ * that invisible conflict row and die as a bare 42501 from row-level security before the `!row`
+ * fallbacks could refuse. So who holds each declared id is asked once, in the platform frame —
+ * the only frame that sees every stamped row — and the sync refuses before anything is written,
+ * with the same sentence those fallbacks carry. The constraints and the `setWhere` guards below
+ * stay as the backstop behind this read; nothing here writes or returns another frame's rows.
+ *
+ * Runs OUTSIDE the sync's transaction; its one caller wraps it in `runAsTenant("platform")`. Outside
+ * is where the connector precheck already sits, and for one reason of this suite's own making it is
+ * the only place that works: the transaction pins a pooled connection, and a platform-frame read
+ * needs a second one (`withTenant` reserves it), so asked INSIDE the transaction two concurrent
+ * initializers each pinned their own connection and each waited forever for a third — with the test
+ * pool's two connections that is not a load-dependent hang but every concurrent boot timing out.
+ * Before the transaction nothing has been written, so refusing here still refuses the whole
+ * deployment: nothing to roll back is also nothing half-synchronised.
+ */
+async function agentConflicts(
+  database: Database,
+  /** The agents this sync will write, in declaration order. */
+  agents: readonly { id: string }[],
+  /**
+   * The package rows whose agents are this sync's own to write: the row this brand synchronized
+   * before (a fresh deployment has none and owns nothing), plus the former ids an upgrade adopts —
+   * the transaction re-stamps those agents as this package's before the seeding, so they are not
+   * conflicts either. Asked inside the transaction the read saw them already re-stamped; naming the
+   * ids here answers the same question before anything has moved.
+   */
+  ownedPackageIds: readonly string[],
+): Promise<{ agentIdConflicts: string[]; profileIdConflicts: string[] }> {
+  const agentIds = agents.map(({ id }) => id);
+  const unowned =
+    ownedPackageIds.length > 0
+      ? or(
+          isNull(agentTable.packageId),
+          notInArray(agentTable.packageId, [...ownedPackageIds]),
+        )
+      : undefined;
+  const [canonical, owned] = await Promise.all([
+    database
+      .select({ id: agentTable.id })
+      .from(agentTable)
+      .where(
+        and(
+          inArray(agentTable.id, agentIds),
+          // `package_id` is nullable on a row somebody created by hand: SQL `<>` answers UNKNOWN
+          // against NULL, which would let the conflict row slip past this read and blow up as a
+          // bare 42501 at the upsert below anyway. A row no package owns is every package's
+          // collision, which is what the `setWhere` guard answers too.
+          unowned,
+        ),
+      ),
+    database
+      .select({ agentId: agentProfiles.agentId })
+      .from(agentProfiles)
+      .where(
+        and(
+          inArray(agentProfiles.agentId, agentIds),
+          isNotNull(agentProfiles.ownerUserId),
+        ),
+      ),
+  ]);
+  return {
+    agentIdConflicts: canonical.map(({ id }) => id),
+    profileIdConflicts: owned.map(({ agentId }) => agentId),
+  };
+}
+
 export async function synchronizeTenantPackage(
   database: Database,
   tenantPackage: LoadedTenantPackage,
   /** Who to put inside every channel this package declares. See the note where it is written. */
   memberUserIds: readonly string[] = [],
+  /** The vault, needed only when the package declares a connector whose credential is set. */
+  vault?: PackageVault,
 ) {
+  /*
+   * A package connector may not fight a row somebody added by hand (4a-A1). Refused HERE, before the
+   * transaction, in the platform frame — the only frame that can see an administrator's own stamped
+   * rows — so the deployment refuses to load with the id and a way out in the sentence, rather than
+   * coming up half-synchronised or silently skipping the connector. See `connectorConflicts`.
+   */
+  const conflicts = await runAsTenant("platform", () =>
+    connectorConflicts(database, tenantPackage.connectors ?? []),
+  );
+  if (conflicts.length > 0) {
+    const named = conflicts
+      .map(({ id, addedBy }) => `"${id}" (added by ${addedBy ?? "unknown"})`)
+      .join(", ");
+    throw new Error(
+      `Tenant package declares connector(s) ${named}, which already exist as servers this package did not add. Remove the connector from connectors.yaml, or delete the existing server on the Plugins page, before this deployment can start.`,
+    );
+  }
+  // The bundled-personal shape decides what the sync writes (see `personalStarterSeed`), so both the
+  // precheck below and the seeding inside the transaction read it; computed once, here.
+  const bundledPersonal =
+    resolve(tenantPackage.sourcePath) === PERSONAL_PACKAGE_PATH;
+  /*
+   * A package agent may not fight a row somebody created either (4a-A1). Refused HERE, before the
+   * transaction, beside the connector precheck — the platform frame is the only one that sees rows
+   * stamped with their owners' tenants, and the transaction below pins a pooled connection the read
+   * cannot share (see `agentConflicts` for the deadlock asking inside it produced). Zero writes have
+   * happened, so the refusal is still the whole deployment's.
+   */
+  const agentPrecheck = await runAsTenant("platform", async () => {
+    const relatedPackages = await database
+      .select({
+        id: deploymentPackages.id,
+        tenantId: deploymentPackages.tenantId,
+      })
+      .from(deploymentPackages)
+      .where(
+        tenantPackage.formerTenantIds.length > 0
+          ? inArray(deploymentPackages.tenantId, [
+              tenantPackage.tenantId,
+              ...tenantPackage.formerTenantIds,
+            ])
+          : eq(deploymentPackages.tenantId, tenantPackage.tenantId),
+      );
+    /*
+     * The agents the sync will write, on the seed a fresh boot would lay. Estimated from the rows
+     * just read rather than decided inside the transaction, which the read cannot sit in: a
+     * concurrent initializer can still slip a row in between, and this estimate errs toward the
+     * superset — a fresh seed names the starter id an existing install's does not — so every id the
+     * transaction ends up writing has been checked.
+     */
+    const ownRow = relatedPackages.some(
+      ({ tenantId }) => tenantId === tenantPackage.tenantId,
+    );
+    const formerRow = relatedPackages.some(
+      ({ tenantId }) => tenantId !== tenantPackage.tenantId,
+    );
+    const seeded = bundledPersonal
+      ? personalStarterSeed(tenantPackage, !ownRow && !formerRow)
+      : undefined;
+    const declared = seeded?.agents ?? tenantPackage.agents;
+    return {
+      declared,
+      ...(await agentConflicts(
+        database,
+        declared,
+        relatedPackages.map(({ id }) => id),
+      )),
+    };
+  });
+  for (const agent of agentPrecheck.declared) {
+    if (agentPrecheck.agentIdConflicts.includes(agent.id))
+      throw new Error(
+        `Tenant package agent "${agent.id}" collides with a user-created agent`,
+      );
+    if (agentPrecheck.profileIdConflicts.includes(agent.id))
+      throw new Error(
+        `Tenant package agent "${agent.id}" collides with a user-owned profile`,
+      );
+  }
   /*
    * THE CATALOGUE IS WRITTEN IN THE SYSTEM PARTITION, IN THIS FUNCTION'S OWN SCOPE.
    *
@@ -1166,8 +1422,6 @@ export async function synchronizeTenantPackage(
           );
         }
 
-        const bundledPersonal =
-          resolve(tenantPackage.sourcePath) === PERSONAL_PACKAGE_PATH;
         const packageValues = {
           tenantId: tenantPackage.tenantId,
           sourcePath: tenantPackage.sourcePath,
@@ -1248,6 +1502,13 @@ export async function synchronizeTenantPackage(
         const omittedAgentIds = bundledPersonal
           ? tenantPackage.omittedAgentIds.filter((id) => id !== PICKED_HARNESS)
           : tenantPackage.omittedAgentIds;
+
+        /*
+         * The agent-id conflicts were refused before this transaction opened (see `agentConflicts`
+         * and the precheck above it): the platform-frame read the refusal needs cannot sit inside
+         * the transaction that pins this connection. The constraints and the upserts' `setWhere`
+         * guards below stay as the backstop behind that precheck.
+         */
 
         if (personal?.picked && !freshPersonal) {
           const { picked } = personal;
@@ -1359,7 +1620,8 @@ export async function synchronizeTenantPackage(
                   isNull(agentProfiles.ownerUserId),
                 ),
               );
-            const title = profile && attributionFollowing(profile.title, selected);
+            const title =
+              profile && attributionFollowing(profile.title, selected);
             if (profile && title !== profile.title) {
               await transaction
                 .update(agentProfiles)
@@ -1751,6 +2013,25 @@ export async function synchronizeTenantPackage(
                   notInArray(channelTable.id, declaredChannelIds),
                 ),
               );
+          } else if (!bundledPersonal) {
+            /*
+             * A package that stopped declaring channels entirely still retires the ones it wrote —
+             * an empty declaration is "none", not "leave them": a team or channel the brand dropped
+             * is the same menu entry that opens on nothing, and the sweep above cannot run its set
+             * difference against an empty declaration. The bundled personal package is the exception
+             * its own shape demands: its loader drops the seeded conversation channel from the
+             * declaration on every re-sync (seeded once, kept after), so an empty list there means
+             * keep, and sweeping it would delete an existing installation's conversation out from
+             * under it.
+             */
+            await transaction
+              .delete(channelTable)
+              .where(
+                and(
+                  eq(channelTable.packageId, deploymentPackage.id),
+                  eq(channelTable.tenantId, SYSTEM_TENANT),
+                ),
+              );
           }
         } else {
           /*
@@ -1871,6 +2152,9 @@ export async function synchronizeTenantPackage(
          */
         const ownedSkills = new Map<string, string>();
         for (const skill of tenantPackage.skills) {
+          // The files this skill ships, if any. The instructions below carry their manifest, so a Bot
+          // reading the skill learns the files exist and how to read them one step at a time.
+          const assets = tenantPackage.skillAssets?.[skill.slug] ?? [];
           const [seeded] = await transaction
             .insert(skillTable)
             .values({
@@ -1885,7 +2169,7 @@ export async function synchronizeTenantPackage(
               slug: skill.slug,
               title: skill.title,
               summary: skill.summary,
-              instructions: skill.instructions,
+              instructions: skillInstructions(skill.instructions, assets),
               origin: "catalogue",
               installedBy: null,
               // Which brand brought it in — what makes the sweep below this package's business.
@@ -1907,7 +2191,7 @@ export async function synchronizeTenantPackage(
               set: {
                 title: skill.title,
                 summary: skill.summary,
-                instructions: skill.instructions,
+                instructions: skillInstructions(skill.instructions, assets),
                 // Re-stated with the rest of the identity, so a re-claim is not a row with no brand.
                 packageId: deploymentPackage.id,
                 updatedAt: new Date(),
@@ -1927,6 +2211,11 @@ export async function synchronizeTenantPackage(
             continue;
           }
           ownedSkills.set(skill.slug, seeded.id);
+
+          // The files the skill ships, replaced wholesale with what this package declares (see
+          // `writeSkillAssets`): a resync clears attachments the package stopped declaring, and a
+          // package switch retires the other brand's skill rows, whose files cascade away with them.
+          await writeSkillAssets(transaction, seeded.id, assets);
 
           // Replaced wholesale, so a tool the package stopped declaring stops being declared. The same
           // rule the API path applies, and the reason the table is keyed on (skill, ref).
@@ -2049,10 +2338,26 @@ export async function synchronizeTenantPackage(
           );
         }
 
+        /*
+         * The connectors the package declares (4a-A1), written in this transaction like every other
+         * catalogue row. Server rows only — never a grant — and what the package stopped declaring
+         * comes back, with the plain-text refs cleared after the commit (see below).
+         */
+        const recycledConnectorIds = await synchronizePackageConnectors(
+          transaction,
+          tenantPackage.connectors ?? [],
+          vault,
+        );
+
+        // The teams' bot-to-bot grants, replaced wholesale under the package's mark (4b-B1). The
+        // channels themselves needed no team-specific code: teams are ordinary declared channels.
+        await synchronizeTeamGrants(transaction, tenantPackage.teams ?? []);
+
         return {
           deploymentPackage,
           members,
           formerPackageIds,
+          recycledConnectorIds,
           // What to write this boot, and everything the package declares (which a person's copies
           // are kept against): the personal starter's channel is declared but seeded only once.
           channels,
@@ -2066,6 +2371,18 @@ export async function synchronizeTenantPackage(
         };
       }),
   );
+
+  /*
+   * A connector the package stopped declaring leaves its plain-text refs behind (4a-A1): grants and
+   * skill-tool declarations are text, so the server row's delete cascades nothing, and they are
+   * stamped with whichever frame granted them. Cleared in the platform frame, after the commit —
+   * the same reason the per-person writes below run there.
+   */
+  if (synced.recycledConnectorIds.length > 0) {
+    await runAsTenant("platform", () =>
+      clearDanglingConnectorRefs(database, synced.recycledConnectorIds),
+    );
+  }
 
   /*
    * The person's half of the channel, written in the person's own scope.
@@ -2155,6 +2472,22 @@ export async function synchronizeTenantPackage(
               eq(channelTable.tenantId, userId),
               eq(channelTable.packageId, synced.deploymentPackage.id),
               notInArray(channelTable.id, kept),
+            ),
+          );
+      } else if (!bundledPersonal) {
+        /*
+         * The same empty-declaration rule the catalogue sweep carries: a package that stopped
+         * declaring channels retires this person's copies of the ones it wrote, rather than leaving
+         * a conversation that lists itself and opens on nothing. The bundled personal package's
+         * empty re-sync declaration means keep (its seeded conversation is dropped from the
+         * declaration on purpose), so the sweep stays out of its way here too.
+         */
+        await database
+          .delete(channelTable)
+          .where(
+            and(
+              eq(channelTable.tenantId, userId),
+              eq(channelTable.packageId, synced.deploymentPackage.id),
             ),
           );
       }
@@ -2275,7 +2608,6 @@ export async function synchronizeTenantPackage(
 
   return synced.deploymentPackage;
 }
-
 
 /**
  * What this deployment calls itself when `DEPLOYMENT_ID` is unset: the package's tenant id, unless

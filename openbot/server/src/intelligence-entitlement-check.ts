@@ -37,7 +37,7 @@ const FIXES: ReadonlyMap<string, string> = new Map([
     "RUNTIME_ENTITLEMENTS_SELF_HOSTED_MISCONFIGURED",
     "Intelligence has no valid licence. Give Intelligence's own deployment a COPILOTKIT_LICENSE_TOKEN " +
       "(its Helm chart takes it as appApi.licenseSecret, or externalSecrets.secrets.license); setting it " +
-      "on OpenBot alone is not enough. Until then memory and other licensed features are refused.",
+      "on this server alone is not enough. Until then memory and other licensed features are refused.",
   ],
   [
     "RUNTIME_ENTITLEMENTS_SELF_HOSTED_EXPIRED",
@@ -163,7 +163,7 @@ export async function reportIntelligenceEntitlement(
             JSON.stringify({
               type: "intelligence-entitlement-waiting",
               ...(answer.kind === "failed" ? { reason: answer.reason } : {}),
-              message: `Waiting for Intelligence to finish starting. OpenBot asks again for up to ${minutes} minutes before reporting it.`,
+              message: `Waiting for Intelligence to finish starting. This server asks again for up to ${minutes} minutes before reporting it.`,
             }),
           ),
       },

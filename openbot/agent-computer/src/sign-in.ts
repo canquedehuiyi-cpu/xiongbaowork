@@ -50,7 +50,8 @@ export type SignInCodeResult = {
   error?: string;
 };
 
-const LOGIN_ATTRIBUTE = "data-openbot-login";
+/** What the login form's fields are marked with in the site's page: a neutral name, as the masking marks are (secret-masking.ts). */
+export const LOGIN_ATTRIBUTE = "data-xb-login";
 const STEP_TIMEOUT_MS = 15_000;
 
 /** The origin of a URL, or empty for one that has none (`about:blank`). */

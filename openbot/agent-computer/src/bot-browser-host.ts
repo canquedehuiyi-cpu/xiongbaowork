@@ -76,7 +76,7 @@ export type BotBrowserHostOptions = {
 /** Said to the person, through the server, for each refusal. */
 const SENTENCES = {
   personsBrowser:
-    "These routes are for a Bot's browser. A person's own browser has its own: send a Bot's id in x-openbot-bot-id.",
+    "These routes are for a Bot's browser. A person's own browser has its own: send the Bot's id in the request headers.",
   onlyTheHolder:
     "Only the person holding control of this Bot's browser can record in it. Take control first.",
   onlyTheHolderClears:

@@ -31,9 +31,11 @@
   },
   {
     "word": "openbot-apt",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "镜像里的 /usr/local/sbin/openbot-apt；Task 11 改成指向 xiongbao-apt 的兼容链接后改登记为 legacy-compat"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "镜像里的 /usr/local/sbin/openbot-apt：指向 xiongbao-apt 的兼容链接（L1-9），sudoers 也单列这条路径；Bot 的记忆、已学技能里可能写着 sudo openbot-apt，窗口期满（0.2.13）与 Dockerfile 里的链接和 sudoers 规则一起删"
   },
   {
     "word": "openbot-browser.ts",

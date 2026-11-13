@@ -1,11 +1,5 @@
 [
   {
-    "word": "OpenBot",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "启动日志里的上游名；Task 8（网页与运维可见文字）改写"
-  },
-  {
     "word": "openbot_app",
     "category": "persisted-data",
     "plan": "keep",

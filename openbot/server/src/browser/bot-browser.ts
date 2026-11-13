@@ -18,8 +18,10 @@ import type { RecorderConnection } from "@openbot/shared/recorder-api";
 import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
 import { Hono } from "hono";
 import type { z } from "zod";
+import { envName } from "../../../shared/env-aliases";
 import type { AuditStore } from "../audit";
 import type { AppVariables, AuthenticatedActor } from "../auth/guards";
+import { productName } from "../brand";
 import type { ComputerSeat } from "../computer/computer-key";
 import type { ComputerGateway } from "../computer/gateway";
 import type { EgressPolicy } from "../computer/policy-network";
@@ -95,8 +97,8 @@ const SENTENCES = {
 
 /** Why a recording cannot start when this OpenBot has no address the Recorder would take: for the log, as for the
  * person's own browser (browser/routes.ts). */
-const NO_ADDRESS =
-  "This OpenBot has no address a browser can reach it at, so the Recorder in a Bot's browser cannot be connected. Set OPENBOT_PUBLIC_URL to this OpenBot's https address.";
+const noAddress = () =>
+  `This ${productName()} has no address a browser can reach it at, so the Recorder in a Bot's browser cannot be connected. Set ${envName("PUBLIC_URL")} to this ${productName()}'s https address.`;
 
 /** The computer's own route for who holds the wheel (`ComputerControlState`). */
 const CONTROL_PATH = "/control";
@@ -699,7 +701,7 @@ export function createBotBrowser(deps: BotBrowserRouteDeps): BotBrowser {
       console.warn(
         JSON.stringify({
           type: "bot-browser-record-no-address",
-          error: NO_ADDRESS,
+          error: noAddress(),
         }),
       );
       return Response.json({ error: notSetUp }, { status: 503 });

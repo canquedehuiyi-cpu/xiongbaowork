@@ -241,7 +241,7 @@ function useSkillNotice(title: string, next: LearningNext) {
             next.kind === "learned"
               ? "打开「教员工做事」试一试。"
               : "到「设置 → 学习」里审核。",
-          tag: `openbot-learned-${skill}`,
+          tag: `xiongbao-learned-${skill}`,
         },
       );
     } catch {

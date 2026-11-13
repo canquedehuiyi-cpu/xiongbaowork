@@ -334,6 +334,7 @@ tests/device-takeover.test.ts
 tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
+tests/dockerfile-runtime-tree.test.ts
 tests/duplicate-run.test.ts
 tests/edition-routes.test.ts
 tests/egress-policy-delivery.integration.test.ts
@@ -356,6 +357,7 @@ tests/entra-obo.integration.test.ts
 tests/entra-profile.test.ts
 tests/env-alias-dockerfiles.test.ts
 tests/env-aliases.test.ts
+tests/env-name.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
 tests/goal-run-busy-conversation.integration.test.ts
@@ -727,6 +729,8 @@ tests/shipped-bot-instructions.test.ts
 tests/single-user-identity-store.integration.test.ts
 tests/single-user-identity.integration.test.ts
 tests/single-user.test.ts
+tests/skill-asset-read-helpers.test.ts
+tests/skill-assets-tool.test.ts
 tests/skill-ownership.integration.test.ts
 tests/skill-tenant-slugs.integration.test.ts
 tests/skill-tools.integration.test.ts
@@ -781,10 +785,15 @@ tests/tenant-package-agent-files.test.ts
 tests/tenant-package-avatar-channel.test.ts
 tests/tenant-package-brand-fields.test.ts
 tests/tenant-package-channel-membership.test.ts
+tests/tenant-package-clear-refs.test.ts
+tests/tenant-package-connectors.test.ts
 tests/tenant-package-duplicates.test.ts
 tests/tenant-package-legacy-path.test.ts
+tests/tenant-package-per-user-connectors.test.ts
 tests/tenant-package-personal.test.ts
+tests/tenant-package-skill-assets.test.ts
 tests/tenant-package-switch-retires.test.ts
+tests/tenant-package-teams.test.ts
 tests/tenant-package.test.ts
 tests/tenant-rls.test.ts
 tests/tenant-transaction-frame.integration.test.ts
@@ -846,6 +855,7 @@ tests/what-if-boundary-words.test.ts
 tests/what-if.integration.test.ts
 tests/who-can-check.test.ts
 tests/who-can.integration.test.ts
+tests/wire-codes.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
 tests/xiongbao-package.test.ts

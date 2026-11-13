@@ -18,7 +18,7 @@ import { asPlatform, isPersonTenant, runAsTenant } from "../tenant/context";
  *
  * `channels` 上熊宝自加、未进 Drizzle 的列，用 `sql` 片段读写（同 approvals/extra-columns.ts）：
  *
- *   channels.waker_group_id  uuid，可空，FK waker_groups ON DELETE SET NULL  0205
+ *   channels.waker_group_id  uuid，可空，FK waker_groups ON DELETE SET NULL  0206
  *   channels.created_by      text，可空（0122 加，未进 Drizzle），只读
  *
  * 不写进 db/schema/core.ts（上游文件），同步上游零冲突。DRIZZLE 不知道这两列：任何对照真实数据库
@@ -28,7 +28,7 @@ import { asPlatform, isPersonTenant, runAsTenant } from "../tenant/context";
  * 镜像：按运行时回答顺序整体改写。名字的真相是频道的 `title ?? name`。
  *
  * 帧：每个方法先在 `platform` 帧读频道，按 `channelOwner` 定所有者，读真相、写群组与挂接都在
- * `runAsTenant(所有者)` 里。挂接触发器借这个帧的 RLS 判断群组是不是所有者的（0205）。
+ * `runAsTenant(所有者)` 里。挂接触发器借这个帧的 RLS 判断群组是不是所有者的（0206）。
  */
 
 type Log = (line: Record<string, unknown>) => void;

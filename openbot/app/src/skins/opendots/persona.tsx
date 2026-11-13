@@ -23,7 +23,12 @@ export function CoworkerPersona({ botId }: { botId: string }) {
       <div className="flex max-w-[420px] flex-col items-center text-center">
         {/* OpenBot's own avatar for the Bot; the name below is its label. */}
         <span aria-hidden className="mb-2">
-          <AbstractAvatar name={bot.name} seed={bot.avatarSeed} size={64} />
+          <AbstractAvatar
+            name={bot.name}
+            seed={bot.avatarSeed}
+            portrait={{ kind: "coworker", id: bot.id }}
+            size={64}
+          />
         </span>
         <h2 className="mb-1.5 text-[17px] font-[550] tracking-[-0.2px] text-foreground">
           {bot.name}

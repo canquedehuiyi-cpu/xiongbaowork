@@ -233,6 +233,7 @@ function BotsSection({
                     <AbstractAvatar
                       name={agent.name}
                       seed={agent.avatarSeed}
+                      portrait={{ kind: "coworker", id: agent.id }}
                       size={30}
                     />
                   </span>

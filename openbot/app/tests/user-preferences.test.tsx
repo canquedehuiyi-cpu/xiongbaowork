@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { MessageListPreference } from "@/components/settings/message-list-preference";
 import { authKeys } from "@/lib/auth/queries";
+import { portraitKeys } from "@/lib/portraits/queries";
 import {
   saveUserPreferencesMutationOptions,
   userPreferencesQueryOptions,
@@ -60,6 +61,8 @@ function setup() {
     role: "user",
     onboarding: null,
   });
+  // The preview's avatars read the chosen portraits; seeded so only the preferences are fetched.
+  client.setQueryData(portraitKeys.all, []);
   const view = render(
     <QueryClientProvider client={client}>
       <MessageListPreference />

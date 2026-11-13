@@ -417,7 +417,7 @@ export function createLiveShell(options: LiveShellOptions) {
   }
 
   function spawnShell(): Running {
-    const directory = mkdtempSync(join(tmpdir(), ".openbot-shell-"));
+    const directory = mkdtempSync(join(tmpdir(), ".xiongbao-shell-"));
     const turnFile = join(directory, "turn");
     const rcFile = join(directory, "bashrc");
     const inputrc = join(directory, "inputrc");

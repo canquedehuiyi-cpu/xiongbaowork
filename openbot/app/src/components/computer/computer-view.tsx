@@ -928,13 +928,13 @@ export function ComputerView({
               await refreshControl?.();
             }}
           >
-            <label className="block" htmlFor="openbot-secret">
+            <label className="block" htmlFor="xiongbao-secret">
               <span className="font-medium">员工需要 </span>
               <span>{control.secretWanted}</span>
             </label>
             <div className="mt-1.5 flex gap-2">
               <input
-                id="openbot-secret"
+                id="xiongbao-secret"
                 type="password"
                 value={secret}
                 onChange={(event) => setSecret(event.target.value)}

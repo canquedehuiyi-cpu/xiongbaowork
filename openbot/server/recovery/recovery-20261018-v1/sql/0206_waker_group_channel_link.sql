@@ -22,7 +22,7 @@
  */
 DO $$ BEGIN
   IF NOT (SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user) THEN
-    RAISE EXCEPTION '0205 must run as a role with BYPASSRLS (owner of the openbot_team_* functions)';
+    RAISE EXCEPTION '0206 must run as a role with BYPASSRLS (owner of the openbot_team_* functions)';
   END IF;
 END $$;
 --> statement-breakpoint

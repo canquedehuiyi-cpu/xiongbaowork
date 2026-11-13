@@ -592,7 +592,7 @@ export function createWakerGroupActions(deps: {
                 eq(portraitMedia.subjectId, groupId),
               ),
             );
-          // Templates and runs cascade (0075); the chat's link is cleared by its foreign key (0205 b).
+          // Templates and runs cascade (0075); the chat's link is cleared by its foreign key (0206 b).
           const removed = await tx
             .delete(wakerGroups)
             .where(eq(wakerGroups.id, groupId))

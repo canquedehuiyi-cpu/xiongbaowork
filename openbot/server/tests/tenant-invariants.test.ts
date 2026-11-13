@@ -135,9 +135,11 @@ function doorCounts(files: Parsed[]): Record<string, Record<string, number>> {
  *
  * Beside the identity layer (`auth/guards.ts`, `index.ts`'s runtime actor lookup, `app.ts`'s auth
  * handler) and the refusal rows `app.ts` files as nobody's for a bad worker secret or callback token,
- * four doors are reachable by a member's or a signed-out request on purpose, each one narrow read:
+ * five doors are reachable by a member's or a signed-out request on purpose, each one narrow read:
  * `delivery/store.ts` (`registerDevice`'s platform lookup of who already holds a device token, plan
- * (d)) and `agents/profile-store.ts` (the callback route's `asPlatform` read of {id, tenantId} by
+ * (d), and `bind`'s lookup of who already holds a delivery identity — a row stamped with the
+ * holder's tenant that the caller's frame cannot see, so the refusal is answered instead of a bare
+ * 42501) and `agents/profile-store.ts` (the callback route's `asPlatform` read of {id, tenantId} by
  * token hash, PCB), which both hand the work back to a person's frame; `app.ts`'s
  * `/api/capabilities` count of identity providers, which signed-out requests reach too (P16a): it
  * reads deployment rows and only the count leaves; and `automations/ingress-routes.ts`'s public
@@ -191,7 +193,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // M3: the third finds the binding a chat sender names, then checked against its own tenant.
   "src/delivery/opentag-agent.ts": { 'runAsTenant("platform"': 3 },
   "src/delivery/router.ts": { 'runAsTenant("platform"': 3 },
-  "src/delivery/store.ts": { 'runAsTenant("platform"': 3 },
+  // `bind`'s fourth: who already holds a delivery identity. The holder's row is stamped with the
+  // holder's tenant and so invisible to the caller's frame; it is read as `platform`, a holder who
+  // is not the caller is refused there, and the write stays in the caller's own frame.
+  "src/delivery/store.ts": { 'runAsTenant("platform"': 4 },
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
   // The third is the background translator (migration 0145): it reads and writes only
   // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
@@ -276,7 +281,16 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/team-bots/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 5 },
   // The catalogue sync writes the deployment's own `system` rows (package-declared Bots).
   // M3: the second is `deploymentNameOf`, reading at boot which former package rows the sync keeps.
-  "src/tenant-package.ts": { 'runAsTenant("system"': 2 },
+  // The platform reads are the connector conflict precheck and the agent conflict precheck — both
+  // BEFORE the sync's transaction (4a-A1; the agent read also needs a pooled connection of its own,
+  // which inside the transaction deadlocked against the one the transaction pins) — and
+  // `clearDanglingConnectorRefs` after its commit. All three read rows stamped by other frames and
+  // write nothing in any of them; the sync refuses with the id before it writes. 用户已批准的补登：
+  // 前两处在门清单建档前就已存在（agent 预查从事务内移到事务旁不增减门的数量）。
+  "src/tenant-package.ts": {
+    'runAsTenant("platform"': 3,
+    'runAsTenant("system"': 2,
+  },
   "src/tenant/access.ts": { 'runAsTenant("platform"': 1 },
   // `asPlatform` itself.
   "src/tenant/context.ts": { 'runAsTenant("platform"': 1 },
@@ -478,7 +492,7 @@ describe("the catalogue (I1–I4, I8)", () => {
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public'
         and (p.proname like 'openbot\\_team\\_%' or p.proname like 'openbot\\_flow\\_share\\_%'
-             -- 0205: the crew link's two functions sit beside the shared-group guard.
+             -- 0206: the crew link's two functions sit beside the shared-group guard.
              or p.proname in ('openbot_waker_group_absent', 'openbot_channel_waker_group_link'))
       order by 1
     `);
@@ -512,13 +526,13 @@ describe("the catalogue (I1–I4, I8)", () => {
         "openbot_team_server_secret",
         // WF9 (0141): what a share link may become in a frame that is not its owner's.
         "openbot_flow_share_guard",
-        // 0205: whether a linked crew is gone (read past row security), and the link check.
+        // 0206: whether a linked crew is gone (read past row security), and the link check.
         "openbot_waker_group_absent",
         "openbot_channel_waker_group_link",
       ]),
     );
     /*
-     * 0205's link check reads the crew through the writer's own row security on purpose (a crew the
+     * 0206's link check reads the crew through the writer's own row security on purpose (a crew the
      * frame cannot see is not the owner's), so it must never become SECURITY DEFINER; the guard's
      * "is the crew gone" question must read past it, or a member could unlink a crew they cannot see.
      */

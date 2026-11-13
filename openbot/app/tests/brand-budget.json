@@ -77,7 +77,7 @@
   {
     "rule": "env-name",
     "scope": "Dockerfile",
-    "lines": 14
+    "lines": 1
   },
   {
     "rule": "env-name",
@@ -107,7 +107,7 @@
   {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 80
+    "lines": 79
   },
   {
     "rule": "identifier",
@@ -307,7 +307,7 @@
   {
     "rule": "wire-dom",
     "scope": "agent-computer/src",
-    "lines": 10
+    "lines": 4
   },
   {
     "rule": "wire-dom",

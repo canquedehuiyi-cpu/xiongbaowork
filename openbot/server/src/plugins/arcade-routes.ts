@@ -1,3 +1,4 @@
+import { envName } from "../../../shared/env-aliases";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
 import { reasonWithoutStatement } from "../db/query-failure";
@@ -921,8 +922,7 @@ export function mountArcadeRoutes(
     if (!current.appUrl) {
       return context.json(
         {
-          error:
-            "连接应用还没有配置好：这个部署不知道自己页面的地址。请管理员设置 OPENBOT_APP_URL。",
+          error: `连接应用还没有配置好：这个部署不知道自己页面的地址。请管理员设置 ${envName("APP_URL")}。`,
         },
         503,
       );
@@ -937,8 +937,7 @@ export function mountArcadeRoutes(
     } catch {
       return context.json(
         {
-          error:
-            "没能生成带你回来的地址，所以没有开始授权。请管理员检查 OPENBOT_APP_URL。",
+          error: `没能生成带你回来的地址，所以没有开始授权。请管理员检查 ${envName("APP_URL")}。`,
         },
         503,
       );

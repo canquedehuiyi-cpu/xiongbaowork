@@ -7,6 +7,7 @@ import {
 import { component, createSignature } from "http-message-sig";
 import { generateNonce, HTTP_MESSAGE_SIGNATURES_DIRECTORY } from "web-bot-auth";
 import { signerFromJWK } from "web-bot-auth/crypto";
+import { envName } from "../../shared/env-aliases";
 
 /**
  * Web Bot Auth: a Bot's browser says, cryptographically, which deployment it browses for.
@@ -150,7 +151,7 @@ export function webBotAuthFromEnv(
   const agent = httpsOrigin(options.publicUrl);
   if (!agent) {
     throw new Error(
-      "WEB_BOT_AUTH=on needs an HTTPS address in OPENBOT_PUBLIC_URL (or BETTER_AUTH_URL) other than this machine, where verifiers fetch the signing key.",
+      `WEB_BOT_AUTH=on needs an HTTPS address in ${envName("PUBLIC_URL")} (or BETTER_AUTH_URL) other than this machine, where verifiers fetch the signing key.`,
     );
   }
   const explicit = environment.WEB_BOT_AUTH_KEY?.trim();

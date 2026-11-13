@@ -14,10 +14,10 @@ import {
 } from "@/components/channels/chat-transcript";
 import {
   type AgentOption,
-  type CrewOption,
   type CommandOption,
   Composer,
   type ComposerDraft,
+  type CrewOption,
   type DroppedAttachments,
   type QueueAction,
   type QueuedMessage,
@@ -48,6 +48,7 @@ export function ConversationView({
   restoring = false,
   empty,
   intro,
+  introBar,
   starterSuggestions,
   onSubmit,
   onStop,
@@ -125,6 +126,8 @@ export function ConversationView({
    * where Bots are orbs (`useBotLook`); elsewhere the transcript starts at its first message.
    */
   intro?: ReactNode;
+  /** The intro folded to one line, over the top of the pane once the intro has scrolled away. */
+  introBar?: (away: boolean) => ReactNode;
   /**
    * One-time starter tasks, separate from the Bot introduction and its attribution. Directly above
    * the composer, and not drawn while `attached` is out.
@@ -471,6 +474,7 @@ export function ConversationView({
           commandLabels={skillLabels(commands ?? [])}
           empty={empty}
           {...(orbs && intro ? { intro } : {})}
+          {...(orbs && intro && introBar ? { introBar } : {})}
           messages={messages}
           onRemoveQueued={(id) => {
             apply({ id, type: "remove" });

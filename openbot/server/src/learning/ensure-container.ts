@@ -789,7 +789,7 @@ async function jobMain() {
   console.log(
     result === "skipped"
       ? `Automatic Learning: no credential here could create the openbot container. ${learningSetupInstructions(apiUrl)}`
-      : `Automatic Learning: the openbot container is ${result === "created" ? "created" : "present"}; OpenBot assigns it as the default unless Admin → Automatic Learning has a saved setting.`,
+      : `Automatic Learning: the openbot container is ${result === "created" ? "created" : "present"}; the server assigns it as the default unless Admin → Automatic Learning has a saved setting.`,
   );
 }
 
