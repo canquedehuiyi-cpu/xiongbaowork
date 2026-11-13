@@ -32,6 +32,7 @@ import {
   countByLevel,
   indexFindings,
 } from "./audit-toolrefs";
+import { rewriteInstructions } from "./rewrite-toolrefs";
 import {
   buildCensus,
   type Census,
@@ -785,7 +786,7 @@ export function main(argv: readonly string[]): number {
     const connectorIds = new Set(
       capabilities.connectors.map((connector) => connector.id),
     );
-    const skillFindings = auditCapabilities(
+    let skillFindings = auditCapabilities(
       capabilities.skills.map((skill) => ({
         slug: skill.slug,
         instructions: skill.instructions,
@@ -793,6 +794,51 @@ export function main(argv: readonly string[]): number {
       })),
       connectorIds,
     );
+
+    // P3 改写层（§5.2）：只作用于 skill 的 instructions。agent 的 system_prompt 有 1000 字符
+    // 上限（shipped-bot 合同，P2 的 persona 短指针版就贴着这条线），插入环境事实段会把它顶爆；
+    // agent 侧的降级说明由 persona 技能承载——改写层改的正是那份技能正文。
+    const skillFindingIndex0 = indexFindings(skillFindings);
+    let rewrittenSkillCount = 0;
+    capabilities.skills = capabilities.skills.map((skill) => {
+      const finding = skillFindingIndex0.get(skill.slug);
+      if (!finding || finding.level === "full") return skill;
+      const result = rewriteInstructions(skill, finding.level);
+      if (result.changed) rewrittenSkillCount += 1;
+      return { ...skill, instructions: result.instructions };
+    });
+    // 改写后重审计：manifest.runnable 以改写后的正文为准（G3——档位变动必须可全文证明）。
+    // 契约：blocked 不许变好（改写保留原调用、只插散文段）；degraded 升 full 仅当 file-tool-call
+    // 的命中全部被映射改写（§「degraded 为 0 是改写层完成度的标志位」）。
+    const rewrittenFindings = auditCapabilities(
+      capabilities.skills.map((skill) => ({
+        slug: skill.slug,
+        instructions: skill.instructions,
+        hasBundledReferences: skill.hasBundledReferences,
+      })),
+      connectorIds,
+    );
+    const SEVERITY = { full: 0, degraded: 1, blocked: 2 } as const;
+    const rewrittenIndex = indexFindings(rewrittenFindings);
+    for (const before of skillFindings) {
+      const after = rewrittenIndex.get(before.slug);
+      if (!after) throw new Error(`改写后丢失审计条目：${before.slug}`);
+      if (SEVERITY[after.level] < SEVERITY[before.level]) {
+        throw new Error(
+          `改写层契约违约：${before.slug} ${before.level}→${after.level}，blocked/degraded 不许被改写成更好的档位`,
+        );
+      }
+    }
+    if (rewrittenSkillCount > 0) {
+      const beforeCounts = formatCounts(countByLevel(skillFindings));
+      const afterCounts = formatCounts(countByLevel(rewrittenFindings));
+      console.log(
+        `[port:capabilities] 改写层：${rewrittenSkillCount} 条技能正文已插入环境事实段/映射改写（审计 ${beforeCounts} → ${afterCounts}）`,
+      );
+    }
+    // manifest/emit 的审计口径 = 改写后的正文（档位以最终形态计，G3）。
+    skillFindings = rewrittenFindings;
+
     const agentFindings = auditCapabilities(
       capabilities.agents.map((agent) => ({
         slug: agent.id,
