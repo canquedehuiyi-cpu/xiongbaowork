@@ -409,7 +409,7 @@
 
 - [ ] **Step 1（用户）**：选定镜像仓库（例如京东云容器镜像仓库）和下载页的存放位置。本计划假定下载页是兼容 S3 接口的对象存储（京东云对象存储兼容 S3）。如果选了别的，告诉执行者，Task 17 只改上传那一步。
 - [ ] **Step 2（用户）**：开通账号，建一个只给 CI 用的推送账号。在 GitHub 仓库里配置：
-  - Variables：`XB_REGISTRY`（如 `xxx.jcr.jdcloud.com`）、`XB_IMAGE_REPOSITORY`（如 `xiongbao/digital-employee`）、`XB_DOWNLOAD_ENDPOINT`、`XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_BASE_URL`（客户看到的下载页地址）。
+  - Variables：`XB_REGISTRY`（如 `xxx.jcr.jdcloud.com`）、`XB_IMAGE_REPOSITORY`（如 `xiongbao/digital-employee`）、`XB_DOWNLOAD_ENDPOINT`（`https://` 开头）、`XB_DOWNLOAD_REGION`（对象存储所在区域，如 `cn-north-1`，签名要用）、`XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_BASE_URL`（客户看到的下载页地址，`https://` 开头）。
   - Secrets：`XB_REGISTRY_USERNAME`、`XB_REGISTRY_PASSWORD`、`XB_DOWNLOAD_ACCESS_KEY_ID`、`XB_DOWNLOAD_SECRET_ACCESS_KEY`。
   - 凭据只进 Secrets，不发在对话里。
 - [ ] **Step 3（用户）**：决定客户拉镜像要不要登录。如果要，给客户发只读账号的方式由用户定，文档里只写「用我们发给你的账号登录」。
