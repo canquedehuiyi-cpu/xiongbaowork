@@ -90,7 +90,7 @@ export function wakerGroupsQueryOptions() {
     queryKey: wakerGroupKeys.list(),
     queryFn: () =>
       client<WakerGroup[]>("/api/waker-groups", "groups", {
-        fallback: "Could not load the workspace's groups.",
+        fallback: "群组列表没能读出来。",
       }),
     // A row menu reads this list each time it opens; fresh for 30s means it does not refetch every time.
     staleTime: 30_000,

@@ -884,3 +884,14 @@ test("a row menu reads the groups afresh each time it opens, so a chat just made
   expect(menu.queryByRole("menuitem", { name: /删除会话…/ })).toBeNull();
   expect(reads).toHaveLength(1);
 });
+
+test("the rename box stops at 80 characters, as the server does", async () => {
+  reset();
+  const { view } = drawer();
+  const panel = await panelOf(view);
+  fireEvent.click(await panel.findByRole("button", { name: "修改名称与用途" }));
+  const name = panel.getByRole("textbox", {
+    name: "群组名称",
+  }) as HTMLInputElement;
+  expect(name.maxLength).toBe(80);
+});

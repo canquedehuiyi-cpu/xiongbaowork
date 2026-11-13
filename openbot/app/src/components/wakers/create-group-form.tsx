@@ -70,6 +70,7 @@ export function CreateGroupForm({
       <Input
         aria-label="群组名称"
         autoFocus={variant === "dialog"}
+        maxLength={80}
         onChange={(event) => setTypedName(event.target.value)}
         placeholder="群组名称"
         required

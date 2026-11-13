@@ -15,6 +15,7 @@ import {
   type MemberStep,
   OWNER_GONE,
   type WakerGroup,
+  wakerGroupsQueryOptions,
 } from "@/lib/waker-groups/queries";
 
 const originalFetch = globalThis.fetch;
@@ -261,4 +262,25 @@ test("a 403 from PATCH keeps the server's words", async () => {
   expect((error as CrewRequestError).message).toBe(
     "只有发起人能调整这个群组。",
   );
+});
+
+test("when the server gives no sentence, the fallbacks are Chinese", async () => {
+  const queryClient = new QueryClient();
+  serve(502, {});
+  const changed = await run(
+    setCrewMembersMutationOptions(queryClient),
+    queryClient,
+    { groupId: "g-1", agentIds: ["a", "b"] },
+  ).catch((caught: unknown) => caught);
+  expect((changed as Error).message).toBe("没能保存群组的成员，请再试一次。");
+  const retired = await run(
+    retireCrewMutationOptions(queryClient),
+    queryClient,
+    "g-1",
+  ).catch((caught: unknown) => caught);
+  expect((retired as Error).message).toBe("没能解散这个群组，请再试一次。");
+  const listed = await queryClient
+    .fetchQuery({ ...wakerGroupsQueryOptions(), retry: false })
+    .catch((caught: unknown) => caught);
+  expect((listed as Error).message).toBe("群组列表没能读出来。");
 });

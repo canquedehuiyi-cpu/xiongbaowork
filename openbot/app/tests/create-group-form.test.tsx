@@ -308,3 +308,11 @@ test("the dialog variant says 创建 and closes on success", async () => {
     expect(router.state.location.pathname).toBe("/group/g-1"),
   );
 });
+
+test("the name box stops at 80 characters, as the server does", async () => {
+  const { view } = renderPage();
+  const name = (await view.findByPlaceholderText(
+    "群组名称",
+  )) as HTMLInputElement;
+  expect(name.maxLength).toBe(80);
+});

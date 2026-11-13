@@ -275,6 +275,7 @@ function CrewEditor({ initial }: { initial: WakerGroup }) {
           >
             <Input
               aria-label="群组名称"
+              maxLength={80}
               onChange={(event) => setName(event.target.value)}
               value={name}
             />

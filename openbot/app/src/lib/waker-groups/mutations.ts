@@ -99,7 +99,7 @@ export function setCrewMembersMutationOptions(queryClient: QueryClient) {
         {
           method: "PUT",
           body: { agentIds: input.agentIds },
-          fallback: "That group's members could not be changed.",
+          fallback: "没能保存群组的成员，请再试一次。",
         },
       ),
     onSuccess: () => invalidateGroups(queryClient),
@@ -159,7 +159,7 @@ export function retireCrewMutationOptions(queryClient: QueryClient) {
     mutationFn: async (groupId: string) =>
       client(`/api/waker-groups/${groupId}`, "ok", {
         method: "DELETE",
-        fallback: "That group could not be retired.",
+        fallback: "没能解散这个群组，请再试一次。",
       }),
     onSuccess: () => invalidateGroups(queryClient),
   });
