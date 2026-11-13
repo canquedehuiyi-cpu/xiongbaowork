@@ -1,6 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import {
   type AnyRoute,
   createMemoryHistory,
@@ -19,6 +23,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode, useState } from "react";
+import { flushSync } from "react-dom";
 import { Channel } from "@/components/app-sidebar/channel";
 import {
   GroupSettingsButton,
@@ -1033,4 +1038,119 @@ test("retrying after a failure asks the server again", async () => {
   expect(lookupsOf("ch-1")).toHaveLength(1);
   fireEvent.click(panel.getByRole("button", { name: "重试" }));
   await waitFor(() => expect(lookupsOf("ch-1")).toHaveLength(2));
+});
+
+/**
+ * A sidebar row on the page of its own chat, drawn only while the channel list still holds it, as
+ * the real roster does: once a write refreshes the list and the row is gone, so is its dialog.
+ */
+function openRow(props: { groupId?: string; canRename: boolean }) {
+  reset({ crews: props.groupId ? [crew()] : [] });
+  let gone = false;
+  let hideRow: (() => void) | undefined;
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit,
+  ) => {
+    const path = new URL(
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url,
+      "http://localhost",
+    ).pathname;
+    if (path === "/api/test-roster")
+      return NativeResponse.json({ present: !gone });
+    const response = await real(input, init);
+    if (init?.method === "DELETE") gone = true;
+    return response;
+  }) as typeof fetch;
+  function Roster() {
+    const roster = useQuery({
+      queryKey: ["channels", "test-roster"],
+      queryFn: async () =>
+        (await (await fetch("/api/test-roster")).json()) as {
+          present: boolean;
+        },
+    });
+    const [hidden, setHidden] = useState(false);
+    hideRow = () => setHidden(true);
+    return roster.data?.present && !hidden ? (
+      <Channel
+        busy={false}
+        canRename={props.canRename}
+        channelId="ch-1"
+        emphasis="agent"
+        groupId={props.groupId}
+        name="周报群"
+        participantIds={["agent-a", "agent-b"]}
+        pinned={false}
+        unread={false}
+      />
+    ) : (
+      <p>roster without the row</p>
+    );
+  }
+  const root = createRootRoute({
+    component: () => (
+      <SidebarProvider>
+        <Roster />
+      </SidebarProvider>
+    ),
+  });
+  const group = createRoute({
+    path: "group/$channelId",
+    getParentRoute: () => root,
+    component: () => <p>group</p>,
+  } as never);
+  const router = createRouter({
+    routeTree: root.addChildren([group, ...stubs(root)]),
+    history: createMemoryHistory({ initialEntries: ["/group/ch-1"] }),
+  });
+  const queryClient = client();
+  // The channel list is read again and the row is gone on that very turn, not a render later.
+  const invalidate = queryClient.invalidateQueries.bind(queryClient);
+  queryClient.invalidateQueries = ((filters?: {
+    queryKey?: readonly unknown[];
+  }) => {
+    if (filters?.queryKey?.[0] === "channels")
+      flushSync(() => {
+        gone = true;
+        hideRow?.();
+      });
+    return invalidate(filters as never);
+  }) as typeof queryClient.invalidateQueries;
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
+  return { view, router };
+}
+
+test("dissolving the open group from its row menu leaves for the home page", async () => {
+  const { view, router } = openRow({ groupId: "g-1", canRename: true });
+  const menu = await menuOf(view);
+  fireEvent.click(menu.getByRole("menuitem", { name: /解散群组…/ }));
+  fireEvent.click(
+    await within(document.body).findByRole("button", {
+      name: "确认解散「周报群」",
+    }),
+  );
+  // The refresh took the row away, and the person went with it.
+  await view.findByText("roster without the row");
+  await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+});
+
+test("leaving the open group from its row menu goes to the home page", async () => {
+  const { view, router } = openRow({ canRename: false });
+  const menu = await menuOf(view);
+  fireEvent.click(menu.getByRole("menuitem", { name: /退出群组…/ }));
+  fireEvent.click(
+    await within(document.body).findByRole("button", { name: "确认退出" }),
+  );
+  await view.findByText("roster without the row");
+  await waitFor(() => expect(router.state.location.pathname).toBe("/"));
 });

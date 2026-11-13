@@ -44,7 +44,7 @@ export function useDissolveCopy(crew: Crew, active: boolean) {
 
 /**
  * The confirmation behind every 「解散群组」 that is not on the employees card: ask once, then retire
- * the group. `onDissolved` runs after the server has said yes; a refusal is shown in the dialog.
+ * the group. `onDissolved` runs after the server has said yes, ahead of the lists refreshing (which can unmount this dialog); a refusal is shown in the dialog.
  */
 export function DissolveCrewDialog({
   crew,
@@ -58,7 +58,9 @@ export function DissolveCrewDialog({
   onDissolved?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const retire = useMutation(retireCrewMutationOptions(queryClient));
+  const retire = useMutation(
+    retireCrewMutationOptions(queryClient, onDissolved),
+  );
   const { reset } = retire;
   // A refusal from a previous attempt is not news about this one.
   useEffect(() => {
@@ -85,10 +87,7 @@ export function DissolveCrewDialog({
             disabled={retire.isPending || counting}
             onClick={() =>
               retire.mutate(crew.id, {
-                onSuccess: () => {
-                  onOpenChange(false);
-                  onDissolved?.();
-                },
+                onSuccess: () => onOpenChange(false),
               })
             }
             variant="destructive"

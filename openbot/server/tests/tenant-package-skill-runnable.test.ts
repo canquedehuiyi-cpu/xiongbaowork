@@ -56,4 +56,59 @@ describe("tenant package skill runnable grades", () => {
     expect(() => packageWithSkills(oneSkill("1"))).toThrow(/runnable/);
     expect(() => packageWithSkills(oneSkill("true"))).toThrow(/runnable/);
   });
+
+  /*
+   * The ported package's shape: the assembler writes the grade under `_porting` (mirroring the
+   * manifest row), not at the top level. Reading only the top level silently upgraded every
+   * audited-blocked skill to `full` — found by the port-l0 end-to-end chain, not by these
+   * fixtures, which is exactly why the chain exists (P5).
+   */
+  test("the assembler's _porting.runnable is carried through", () => {
+    const loaded = packageWithSkills(
+      [
+        "skills:",
+        "  - slug: sample-skill",
+        "    title: 样例技能",
+        "    summary: 一行说明。",
+        "    instructions: 做事的方法。",
+        "    tools: []",
+        "    _porting:",
+        "      source: xiongbao-package",
+        "      runnable: blocked",
+      ].join("\n"),
+    );
+    expect(loaded.skills[0]?.runnable).toBe("blocked");
+  });
+
+  test("an explicit top-level grade overrides the audit block", () => {
+    const loaded = packageWithSkills(
+      [
+        "skills:",
+        "  - slug: sample-skill",
+        "    title: 样例技能",
+        "    summary: 一行说明。",
+        "    instructions: 做事的方法。",
+        "    runnable: full",
+        "    _porting:",
+        "      runnable: blocked",
+      ].join("\n"),
+    );
+    expect(loaded.skills[0]?.runnable).toBe("full");
+  });
+
+  test("an unknown grade under _porting refuses the package too", () => {
+    expect(() =>
+      packageWithSkills(
+        [
+          "skills:",
+          "  - slug: sample-skill",
+          "    title: 样例技能",
+          "    summary: 一行说明。",
+          "    instructions: 做事的方法。",
+          "    _porting:",
+          "      runnable: probably-fine",
+        ].join("\n"),
+      ),
+    ).toThrow(/runnable/);
+  });
 });

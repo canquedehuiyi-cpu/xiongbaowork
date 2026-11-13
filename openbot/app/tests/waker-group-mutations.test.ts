@@ -307,3 +307,62 @@ test("a 404 from any group write says 找不到这个群组。, not the server's
     expect((error as Error).message).toBe("找不到这个群组。");
   }
 });
+
+/** A client that records every query key it is asked to read again. */
+function recording() {
+  const queryClient = new QueryClient();
+  const invalidated: unknown[] = [];
+  queryClient.invalidateQueries = (async (filters?: { queryKey?: unknown }) => {
+    invalidated.push(filters?.queryKey);
+  }) as typeof queryClient.invalidateQueries;
+  return { queryClient, invalidated };
+}
+
+test("every roster-changing write reads the open group conversation again", async () => {
+  // Its `bots` are the composer's @ options; an idle chat neither polls nor gets an event.
+  const cases: [string, Loose, unknown][] = [
+    ["create", createGroupWithChatMutationOptions, { name: "n", agentIds: [] }],
+    [
+      "members",
+      setCrewMembersMutationOptions,
+      { groupId: "g-1", agentIds: ["a", "b"] },
+    ],
+    ["rename", renameCrewMutationOptions, { groupId: "g-1", name: "n" }],
+    ["start chat", startCrewChatMutationOptions, "g-1"],
+    ["dissolve", retireCrewMutationOptions, "g-1"],
+  ];
+  for (const [label, options, variables] of cases) {
+    const { queryClient, invalidated } = recording();
+    serve(200, { group, channel: { id: "c-1" }, ok: true });
+    await run(options(queryClient), queryClient, variables);
+    expect([label, invalidated]).toEqual([
+      label,
+      expect.arrayContaining([["groups"]]),
+    ]);
+  }
+});
+
+test("a 409 from setCrewMembers reads the open group conversation again", async () => {
+  const { queryClient, invalidated } = recording();
+  const done: MemberStep[] = [{ op: "add", agentIds: ["a"] }];
+  serve(409, { error: "只改了一部分。", done });
+  await run(setCrewMembersMutationOptions(queryClient), queryClient, {
+    groupId: "g-1",
+    agentIds: ["a", "b"],
+  }).catch(() => undefined);
+  expect(invalidated).toContainEqual(["groups"]);
+});
+
+test("dissolving calls onRetired before the lists are read again", async () => {
+  const { queryClient, invalidated } = recording();
+  const order: string[] = [];
+  serve(200, { ok: true });
+  await run(
+    retireCrewMutationOptions(queryClient, () =>
+      order.push(`retired after ${invalidated.length} reads`),
+    ),
+    queryClient,
+    "g-1",
+  );
+  expect(order).toEqual(["retired after 0 reads"]);
+});

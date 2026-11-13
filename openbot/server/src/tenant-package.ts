@@ -946,11 +946,24 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
             }
             return ref;
           });
+    /*
+     * The grade, from the audit the package carries. The assembler writes it under `_porting`
+     * (mirroring the manifest row, §6.4), so reading only a top-level `runnable` silently upgraded
+     * every audited-blocked skill of a ported package to `full` — the one mistake R3 exists to
+     * catch, invisible to fixtures that declare the field top-level and real only in the whole
+     * chain the port-l0 test walks. An explicit top-level `runnable` still wins: it is an author's
+     * word about THIS package, where `_porting` is the pipeline's.
+     */
+    const porting =
+      skill._porting === undefined || skill._porting === null
+        ? undefined
+        : asRecord(skill._porting, "skill._porting");
+    const declared = skill.runnable ?? porting?.runnable;
     let runnable: string;
-    if (skill.runnable === undefined || skill.runnable === null) {
+    if (declared === undefined || declared === null) {
       runnable = "full";
     } else {
-      runnable = requiredString(skill.runnable, "skill.runnable");
+      runnable = requiredString(declared, "skill.runnable");
       if (runnable !== "full" && runnable !== "degraded" && runnable !== "blocked") {
         throw new Error(
           `skill.runnable must be one of full, degraded, blocked; got "${runnable}"`,

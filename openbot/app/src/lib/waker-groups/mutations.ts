@@ -1,6 +1,7 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { type AgentChannel, channelKeys } from "@/lib/channels/queries";
 import { client, RequestError } from "@/lib/client";
+import { groupKeys } from "@/lib/groups";
 import {
   CrewRequestError,
   type MemberStep,
@@ -16,11 +17,16 @@ export { CrewRequestError, type MemberStep, OWNER_GONE };
  * 改名走 PATCH，频道名是真相 (the title and the group's name change together).
  */
 
-/** A group write changes the group and its chat's mirror, so both families are read again. */
+/**
+ * A group write changes the group and its chat's mirror, so both families are read again. The open
+ * conversation (`["groups", channelId]`) too: its `bots` are the composer's @ options, an idle chat
+ * does not poll, and the server emits no activity event for a roster write.
+ */
 function invalidateGroups(queryClient: QueryClient) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: wakerGroupKeys.all }),
     queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+    queryClient.invalidateQueries({ queryKey: groupKeys.all }),
   ]);
 }
 
@@ -164,11 +170,22 @@ export function crewForChannelMutationOptions(queryClient: QueryClient) {
         `/api/waker-groups/for-channel/${encodeURIComponent(channelId)}`,
         { method: "POST", fallback: "读不到这个群组的设置。" },
       ),
-    onSuccess: () => invalidateGroups(queryClient),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: wakerGroupKeys.all }),
+        queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+      ]),
   });
 }
 
-export function retireCrewMutationOptions(queryClient: QueryClient) {
+/**
+ * Dissolve a group. `onRetired` runs once the server has said yes, before the lists are read again:
+ * that refresh drops the sidebar row and its dialog, and a callback given to `mutate` goes with it.
+ */
+export function retireCrewMutationOptions(
+  queryClient: QueryClient,
+  onRetired?: () => void,
+) {
   return mutationOptions({
     mutationFn: async (groupId: string) => {
       try {
@@ -182,6 +199,9 @@ export function retireCrewMutationOptions(queryClient: QueryClient) {
         throw error;
       }
     },
-    onSuccess: () => invalidateGroups(queryClient),
+    onSuccess: () => {
+      onRetired?.();
+      return invalidateGroups(queryClient);
+    },
   });
 }

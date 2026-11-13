@@ -39,6 +39,8 @@ export type GroupConversation = {
 };
 
 export const groupKeys = {
+  /** Every group conversation, to refetch them together. */
+  all: ["groups"] as const,
   detail: (channelId: string) => ["groups", channelId] as const,
 };
 
@@ -149,6 +151,12 @@ export function addGroupMemberMutationOptions(
 export function removeGroupMemberMutationOptions(
   queryClient: QueryClient,
   channelId: string,
+  /**
+   * Runs once the server has said yes, before the lists are read again. Passed here and not to
+   * `mutate`, because the refresh can drop the row that drew the dialog, and a per-call callback of
+   * an unmounted component is discarded.
+   */
+  onRemoved?: (userId: string) => void,
 ) {
   return mutationOptions({
     mutationFn: async (userId: string) => {
@@ -157,6 +165,7 @@ export function removeGroupMemberMutationOptions(
         { method: "DELETE", fallback: "没能移除这个人。" },
       );
     },
+    onSuccess: (_data, userId) => onRemoved?.(userId),
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({
