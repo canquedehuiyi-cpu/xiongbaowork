@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   type AllowEntry,
   entryProblems,
@@ -268,4 +272,58 @@ test("a changed repository is untrusted", () => {
   expect(() =>
     verifySyncPoint(OLD, { ...NEW, repository: "https://evil/x.git" }, git),
   ).toThrow("同步点不可信");
+});
+
+/** A scratch repository whose commits add the named files, one commit per list. */
+function scratchHistory(commits: string[][]): { dir: string; shas: string[] } {
+  const dir = mkdtempSync(join(tmpdir(), "ratchet-base-"));
+  const run = (...args: string[]) =>
+    execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+  run("init", "-q");
+  run("config", "user.email", "test@example.invalid");
+  run("config", "user.name", "test");
+  const shas: string[] = [];
+  for (const [i, files] of commits.entries()) {
+    for (const file of files) {
+      mkdirSync(join(dir, dirname(file)), { recursive: true });
+      writeFileSync(join(dir, file), "[]\n");
+    }
+    run("commit", "-q", "--allow-empty", "-m", `c${i}`);
+    if (files.length) {
+      run("add", ...files);
+      run("commit", "-q", "--amend", "--no-edit");
+    }
+    shas.push(run("rev-parse", "HEAD"));
+  }
+  return { dir, shas };
+}
+
+const RATCHET = "openbot/scripts/brand/guard/ratchet.ts";
+const BUDGET = "openbot/app/tests/brand-budget.json";
+
+test("ratchetBase: setup in separate commits binds from the parent of the ratchet commit", () => {
+  const { dir, shas } = scratchHistory([[], [BUDGET], [RATCHET]]);
+  try {
+    expect(ratchetBase(shas[0], shas[2], dir)).toBe(`${shas[2]}^`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("ratchetBase: budget and ratchet squashed into one commit bind from that commit", () => {
+  const { dir, shas } = scratchHistory([[], [BUDGET, RATCHET], []]);
+  try {
+    expect(ratchetBase(shas[0], shas[2], dir)).toBe(shas[1]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("ratchetBase: once the base has the ratchet, the base is the baseline", () => {
+  const { dir, shas } = scratchHistory([[BUDGET, RATCHET], []]);
+  try {
+    expect(ratchetBase(shas[0], shas[1], dir)).toBe(shas[0]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
