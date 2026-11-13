@@ -6,5 +6,21 @@
     "from": 0,
     "to": 1,
     "note": "COPILOTKIT_TELEMETRY_DISABLED=1 从 Dockerfile 的 ENV 挪进 docker/defaults.env；env-name/Dockerfile 同时 1 -> 0，合计不变"
+  },
+  {
+    "appendixRow": 35,
+    "kind": "words",
+    "key": "runner.json",
+    "from": "openbotUrl:",
+    "to": "openbotUrl:_",
+    "note": "desktop-device 的 sidecar 编译开启 --minify：产物里的 openbotUrl: 变成 openbotUrl:_（附录 A 第 35 行明文放行）；同时删掉模块路径注释词"
+  },
+  {
+    "appendixRow": 35,
+    "kind": "words",
+    "key": "deb.json",
+    "from": "openbotUrl:",
+    "to": "openbotUrl:_",
+    "note": "desktop-device 的 sidecar 编译开启 --minify：产物里的 openbotUrl: 变成 openbotUrl:_（附录 A 第 35 行明文放行）；同时删掉模块路径注释词"
   }
 ]

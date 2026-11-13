@@ -48,6 +48,7 @@ test("the stage 0 flags are used, and --target only when cross-compiling", () =>
     "chromium-bidi/*",
     "--outfile",
     "/out/runner",
+    "--minify",
   ]);
   expect(compileArgs("x86_64-pc-windows-msvc", host, "/o")).toContain(
     "--target=bun-windows-x64",
@@ -56,14 +57,14 @@ test("the stage 0 flags are used, and --target only when cross-compiling", () =>
 
 test("compile args do not define __dirname or __filename", () => {
   // `--define __dirname=...` applies to the bundled playwright-core too, which then looks for its
-  // package.json at `/` and cannot launch a browser. Neither is `--minify` on yet (appendix A row 35).
+  // package.json at `/` and cannot launch a browser. `--minify` is on (appendix A row 35).
   const args = compileArgs(
     "x86_64-unknown-linux-gnu",
     "x86_64-unknown-linux-gnu",
     "/o",
   );
   expect(args).not.toContain("--define");
-  expect(args).not.toContain("--minify");
+  expect(args).toContain("--minify");
 });
 
 test("the compile runs in the openbot directory, so module paths in the binary are relative", () => {
