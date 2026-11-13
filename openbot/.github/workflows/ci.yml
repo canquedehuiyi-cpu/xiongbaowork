@@ -940,6 +940,11 @@ jobs:
             echo "::error::A pwuser shell can write under /app/server, which the API runs."
             failed=1
           fi
+          # The code the API runs is server/dist now; server/src holds only shims.
+          if bot 'touch /app/server/dist/probe.js' 2>/dev/null; then
+            echo "::error::A pwuser shell can write /app/server/dist, which is the API's code."
+            failed=1
+          fi
           writable="$(bot 'find /app /usr/local/sbin /etc/sudoers.d \( -writable -o -user pwuser \) -print 2>/dev/null | head -5')"
           if [ -n "$writable" ]; then
             echo "::error::pwuser owns or can write: $writable"

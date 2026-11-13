@@ -30,6 +30,9 @@ async function pageFor(composio?: {
   const store = {
     listServers: async () => [],
     listSkills: async () => [],
+    // The page response carries the team block too (P4-4b); these tests are about the broker
+    // shape, so an empty team list is all the stub owes.
+    personTeams: async () => [],
   } as unknown as PluginStore;
   const signedIn: MiddlewareHandler<{ Variables: AppVariables }> = async (
     context,
@@ -111,6 +114,8 @@ describe("the Plugins page names the active provider", () => {
         "redirectUri",
         "servers",
         "skills",
+        // P4-4b 起页面响应带团队块；键集锁定随之演进，多一个都是错。
+        "teams",
       ].sort(),
     );
     const body = JSON.stringify(page);

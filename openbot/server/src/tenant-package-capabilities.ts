@@ -803,6 +803,13 @@ export function teamChannels(teams: readonly PackageTeam[]): {
   description: string;
   permittedAgents: string[];
   allowedGroups: string[];
+  /**
+   * `team`, always, by construction. Rides the channel row (`channels.kind`, 能力资源移植方案
+   * P4-4b) so the 资源 page can tell a team from a plain multi-员工 conversation — `engineering`
+   * names three 员工 and is not one. The sync writes the stamp wherever the channel is written;
+   * this is its only source.
+   */
+  kind: "team";
 }[] {
   return teams.map((team) => ({
     id: team.id,
@@ -812,6 +819,7 @@ export function teamChannels(teams: readonly PackageTeam[]): {
       ...new Set([team.lead, ...team.members.map(({ id }) => id)]),
     ],
     allowedGroups: [],
+    kind: "team" as const,
   }));
 }
 

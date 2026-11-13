@@ -73,6 +73,9 @@ function appFor(role: "admin" | "user", held: string[] = []) {
   const store = {
     serverUrls: async () => [],
     listSkills: async () => [],
+    // The page response carries the team block (P4-4b); this suite is about canConnect roles, so
+    // the stub owes an empty team list.
+    personTeams: async () => [],
     deploymentClientToolkits: async () => new Set(held),
     listServers: async () => [
       { id: "composio-shopify", title: "Shopify", adminConnectOnly: true },

@@ -10,7 +10,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
-import type { PluginsPage } from "@/lib/plugins/queries";
+import type { PluginTeam, PluginsPage } from "@/lib/plugins/queries";
 import { MineScreen } from "@/components/resources/mine-screen";
 import { settleReactWork } from "./settle-react-work";
 
@@ -89,13 +89,26 @@ const server = (
   withdrawn: [],
 });
 
+const team = (
+  id: string,
+  name: string,
+  memberCount: number,
+): PluginTeam => ({
+  id,
+  name,
+  description: `${name}的说明。`,
+  agentIds: Array.from({ length: memberCount }, (_, i) => `${id}-m${i}`),
+});
+
 const page = (
   skills: ReturnType<typeof skill>[],
   servers: ReturnType<typeof server>[],
+  teams: ReturnType<typeof team>[] = [],
 ): PluginsPage => ({
   catalogue: [],
   servers,
   skills,
+  teams,
   botsMayCallBack: true,
   redirectUri: "https://app.example/oauth/callback",
   composioConfigured: false,
@@ -197,7 +210,30 @@ test("the read failing is the page's own alert with a retry, drawing neither blo
   expect(view.queryByText("待绑定")).toBeNull();
 });
 
-test("a person with neither skills nor connectors sees each block say so rather than a blank", async () => {
+test("a person with neither skills nor teams nor connectors sees each block say so rather than a blank", async () => {
   const view = await renderMine(page([], []));
-  await waitFor(() => expect(view.getAllByText(/还没有/).length).toBe(2));
+  // 4b 起是三块：技能、团队、连接器各说各话，谁也不许画成空白。
+  await waitFor(() => expect(view.getAllByText(/还没有/).length).toBe(3));
 });
+
+test("each team the package gave draws a card with its member count", async () => {
+  const view = await renderMine(
+    page(
+      [],
+      [],
+      [team("gstack", "软件工坊", 6), team("software-company", "软件公司", 3)],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+  expect(view.getByText("6 名员工")).toBeTruthy();
+  expect(view.getByText("软件公司")).toBeTruthy();
+  expect(view.getByText("3 名员工")).toBeTruthy();
+});
+
+test("a person given no teams sees the team block say so, not a blank", async () => {
+  const view = await renderMine(page([], []));
+  await waitFor(() => expect(view.getByText("还没有被给的团队")).toBeTruthy());
+  // 空态数从两变三：技能、团队、连接器各说各话。
+  await waitFor(() => expect(view.getAllByText(/还没有/).length).toBe(3));
+});
+

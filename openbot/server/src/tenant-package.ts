@@ -277,6 +277,12 @@ type TenantChannel = {
    */
   avatar?: true;
   allowedGroups: string[];
+  /**
+   * `team` when the row came from `teams.yaml` (`teamChannels`), absent for a plain
+   * `channels.yaml` conversation. The sync writes the stamp onto the channel row so the 资源 page
+   * can tell the two apart — `engineering` names three 员工 and is not a team.
+   */
+  kind?: "team";
 };
 
 export type TenantPackage = {
@@ -1970,6 +1976,7 @@ export async function synchronizeTenantPackage(
                 name: channel.name,
                 description: channel.description,
                 allowedGroups: channel.allowedGroups,
+                kind: channel.kind ?? "channel",
                 packageId: deploymentPackage.id,
               })
               .onConflictDoNothing({ target: channelTable.id })
@@ -1983,6 +1990,7 @@ export async function synchronizeTenantPackage(
                     name: channel.name,
                     description: channel.description,
                     allowedGroups: channel.allowedGroups,
+                    kind: channel.kind ?? "channel",
                     packageId: deploymentPackage.id,
                     updatedAt: new Date(),
                   })
@@ -2529,6 +2537,7 @@ export async function synchronizeTenantPackage(
             name: channel.name,
             description: channel.description,
             allowedGroups: channel.allowedGroups,
+            kind: channel.kind ?? "channel",
             packageId: synced.deploymentPackage.id,
           })
           .onConflictDoUpdate({
@@ -2538,6 +2547,7 @@ export async function synchronizeTenantPackage(
               name: channel.name,
               description: channel.description,
               allowedGroups: channel.allowedGroups,
+              kind: channel.kind ?? "channel",
               updatedAt: new Date(),
             },
           })

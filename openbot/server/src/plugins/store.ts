@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from "drizzle-orm";
 import { ownerTenantOfBot } from "../agents/bot-owner";
 import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
 import {
@@ -41,6 +41,10 @@ import {
   agents,
   appAccessRequests,
   brokeredAccounts,
+  channelAgents,
+  // Aliased: `channels` names the sidebar's own store elsewhere; here it is the row list the
+  // 资源 page's team block reads, and the alias keeps the two apart at a glance.
+  channels as channelRows,
   composioConnections,
   // Aliased: `credentials` is already the injected vault interface in this module, and the table and
   // the interface are two different things to reach for.
@@ -414,6 +418,22 @@ export type SkillRecord = {
    * See the comment on `skillTools` in the schema for why that separation is load-bearing.
    */
   tools: string[];
+};
+
+/**
+ * One expert team this person was given, for the 资源 page's team block（移植方案 P4-4b）.
+ *
+ * A team materializes as a `channels` row stamped `kind: "team"` by the package sync — its own
+ * per-person copy carries the name and description the package declared, and its members ride
+ * `channel_agents`. Only rows the package wrote are listed, so a conversation the person started
+ * never dresses up as a team.
+ */
+export type PersonTeamRecord = {
+  id: string;
+  name: string;
+  description: string;
+      /** The 员工 who answer here, in the order the sync wrote them: the lead is first. */
+      agentIds: string[];
 };
 
 /**
@@ -7072,6 +7092,54 @@ export function createPluginStore(options: PluginStoreOptions) {
         runnable: row.runnable,
         grantedTo: grants.get(row.slug) ?? [],
         tools: declared.get(row.id) ?? [],
+      }));
+    },
+
+    /**
+     * The expert teams this person was given, for the 资源 page's team block（P4-4b）.
+     *
+     * A team is a `channels` row the package sync stamped `kind: "team"` — this person's own copy,
+     * under their tenant key, the same rows the sidebar already rides. Read with the members in one
+     * second query rather than a join per row, so a deployment with several teams answers in two
+     * reads; ordered by name, so two readings of an unchanged package answer alike. A row the
+     * package has not re-stamped since the column shipped reads `channel` and stays off this list
+     * until the next sync writes the truth — the sidebar shows it meanwhile, nothing is lost.
+     */
+    async personTeams(): Promise<PersonTeamRecord[]> {
+      const rows = await database
+        .select({
+          id: channelRows.id,
+          name: channelRows.name,
+          description: channelRows.description,
+        })
+        .from(channelRows)
+        .where(and(isNotNull(channelRows.packageId), eq(channelRows.kind, "team")))
+        .orderBy(asc(channelRows.name));
+      if (rows.length === 0) return [];
+      const members = await database
+        .select({
+          channelId: channelAgents.channelId,
+          agentId: channelAgents.agentId,
+        })
+        .from(channelAgents)
+        .where(
+          inArray(
+            channelAgents.channelId,
+            rows.map((row) => row.id),
+          ),
+        );
+      const byChannel = new Map<string, string[]>();
+      for (const member of members) {
+        byChannel.set(member.channelId, [
+          ...(byChannel.get(member.channelId) ?? []),
+          member.agentId,
+        ]);
+      }
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        agentIds: byChannel.get(row.id) ?? [],
       }));
     },
 
