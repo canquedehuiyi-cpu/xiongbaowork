@@ -969,6 +969,7 @@
 | 39 | Task 19 发现（行 11 的衍生）：`NOTICE_TAG` 改为新名后，常量比较的断言。用户 2026-11-13 已批准 | `extension/src/content/notice.ts:17` | `extension/tests/recorder-marks-compat.test.ts:77` `expect(NOTICE_TAG).toBe(LEGACY_NOTICE_TAG)` | `toBe(XB_NOTICE_TAG)` | 19（代码已改，提交 0b4c2474；待批准后合并） |
 | 40 | Task 19 发现（行 8 的衍生）：`shell.test.ts:128` 的另一半。用户 2026-11-13 已批准 | `agent-computer/src/shell.ts:1030` | `agent-computer/tests/shell.test.ts:129` `toContain("[Console]::SetError($openbotErr)")` | `toContain("[Console]::SetError($xbErr)")` | 19（代码已改，提交 4165a2b3；待批准后合并） |
 | 41 | Task 19 发现（行 35 的衍生）：开 `--minify` 后，现有断言要求不含它。用户 2026-11-13 已批准 | `desktop-device/scripts/build-sidecar.ts`（`compileArgs`） | `desktop-device/tests/build-sidecar.test.ts:66` `expect(args).not.toContain("--minify")` | `expect(args).toContain("--minify")` | 19（行 35 尚未做，随行 35 一起落地） |
+| 42 | Task 19 发现（行 25、28 的衍生）：行 25 的两句报错改名后，同一用例里的另一半和相邻用例；行 28 的反向断言。待用户批准 | `openbot/server/src/plugins/provider-wiring.ts:87,81`（`selectProviderWiring` 两个 key 都设、指明了 composio 却没有 key）、`openbot/server/src/plugins/routes.ts`（行 28 的 `Set ${envName("APP_URL")}`） | `server/tests/provider-selection.test.ts:241` `toContain("OPENBOT_BROKER_PROVIDER")`（两个 key 的拒绝句）；同文件 `:301` `/OPENBOT_BROKER_PROVIDER=composio.*COMPOSIO_API_KEY/`（`:295` 的另一半）；`server/tests/plugin-routes.test.ts:2819` `expect(refusal).not.toContain("OPENBOT_APP_URL")`（不改它也绿，但改名后就成了永远通过的空断言） | `XIONGBAO_BROKER_PROVIDER`；`/XIONGBAO_BROKER_PROVIDER=composio.*COMPOSIO_API_KEY/`；`not.toContain("XIONGBAO_APP_URL")` | 19（代码已改，提交见 task-19b 报告；待用户批准） |
 
 ## 附录 B：验证与切换记录
 
