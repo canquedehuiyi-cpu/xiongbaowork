@@ -7,6 +7,7 @@ import { GroupPeopleButton } from "@/components/channels/group-people";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { channelQueryOptions } from "@/lib/channels/queries";
+import { groupQueryOptions } from "@/lib/groups";
 
 /** A conversation with several employees. The channel is an ordinary channel with more than one. */
 export const Route = createFileRoute("/_authed/_app/group/$channelId")({
@@ -16,6 +17,15 @@ export const Route = createFileRoute("/_authed/_app/group/$channelId")({
 function RouteComponent() {
   const { channelId } = Route.useParams();
   const channel = useQuery(channelQueryOptions(channelId));
+  const group = useQuery(groupQueryOptions(channelId));
+  // Only whoever is speaking moves; the rest of the group stays a still picture.
+  const speaking = (group.data?.messages ?? [])
+    .filter(
+      (message) =>
+        message.agentId &&
+        (message.status === "running" || message.status === "queued"),
+    )
+    .map((message) => message.agentId as string);
   useMarkOpenChannelRead(channelId);
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -25,6 +35,8 @@ function RouteComponent() {
       >
         <SidebarToggle />
         <ChannelAvatar
+          motion="working"
+          motionIds={speaking}
           participantIds={channel.data?.agentIds ?? []}
           size={24}
         />

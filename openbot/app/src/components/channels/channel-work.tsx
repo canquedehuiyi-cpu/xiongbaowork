@@ -40,6 +40,7 @@ export function ChannelWorkRows({
               <AbstractAvatar
                 name={name ?? "Bot"}
                 seed={known?.avatarSeed ?? entry.botId}
+                portrait={{ kind: "coworker", id: entry.botId }}
                 size={20}
               />
             }

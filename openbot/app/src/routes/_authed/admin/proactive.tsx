@@ -333,7 +333,12 @@ function BotRow({
   return (
     <Item render={<button onClick={onOpen} type="button" />} size="sm">
       <ItemMedia>
-        <AbstractAvatar name={bot.name} seed={bot.avatarSeed} size={28} />
+        <AbstractAvatar
+          name={bot.name}
+          seed={bot.avatarSeed}
+          portrait={{ kind: "coworker", id: bot.agentId }}
+          size={28}
+        />
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{bot.name}</ItemTitle>
@@ -377,7 +382,12 @@ function BotDialog({
       <DialogContent>
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <AbstractAvatar name={bot.name} seed={bot.avatarSeed} size={32} />
+            <AbstractAvatar
+              name={bot.name}
+              seed={bot.avatarSeed}
+              portrait={{ kind: "coworker", id: bot.agentId }}
+              size={32}
+            />
             <div className="flex min-w-0 flex-col gap-0.5">
               <DialogTitle>{bot.name}</DialogTitle>
               <DialogDescription>

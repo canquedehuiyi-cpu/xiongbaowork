@@ -1,8 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { QueryClientContext, useQuery } from "@tanstack/react-query";
 import Avatar from "boring-avatars";
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, useContext } from "react";
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { useBotLook } from "@/components/agents/bot-look";
 import { BotOrb } from "@/components/agents/bot-orb";
+import type { AvatarMotionState } from "@/components/portraits/preset-animations";
+import { usePortraitSrc } from "@/components/portraits/use-portrait";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { cn } from "@/lib/utils";
 
@@ -25,13 +28,29 @@ export const ChannelAvatar = memo(function ChannelAvatar({
   participantIds,
   size = 32,
   typing = false,
+  motion,
+  motionIds,
 }: {
   participantIds: string[];
   size?: number;
   typing?: boolean;
+  /**
+   * Play the chosen portrait's animation or video in this state. Without it the face is still, as
+   * every list draws it. It reaches only a participant who has a portrait (and, with reduced motion
+   * or no video, falls back to the still picture).
+   */
+  motion?: AvatarMotionState;
+  /** Limit `motion` to these participants, so a group animates only whoever is speaking. */
+  motionIds?: readonly string[];
 }) {
   const orbs = useBotLook() === "orb";
-  const face = orbs ? orbFace : boringFace;
+  const draw = orbs ? orbFace : boringFace;
+  const face = (id: string, faceSize: number) =>
+    draw(
+      id,
+      faceSize,
+      motionIds && !motionIds.includes(id) ? undefined : motion,
+    );
   const avatar =
     participantIds.length === 1 ? (
       face(participantIds[0], size)
@@ -85,12 +104,72 @@ const ORB_PAIR: Layout = {
   ],
 };
 
-function boringFace(id: string, size: number) {
-  return <Avatar className="size-full" name={id} size={size} />;
+function boringFace(id: string, size: number, motion?: AvatarMotionState) {
+  return (
+    <ChosenPortrait id={id} motion={motion} size={size}>
+      <Avatar className="size-full" name={id} size={size} />
+    </ChosenPortrait>
+  );
 }
 
-function orbFace(id: string, size: number) {
-  return <OrbFace id={id} size={size} />;
+function orbFace(id: string, size: number, motion?: AvatarMotionState) {
+  return (
+    <ChosenPortrait id={id} motion={motion} size={size}>
+      <OrbFace id={id} size={size} />
+    </ChosenPortrait>
+  );
+}
+
+/**
+ * A portrait somebody chose (头像) for this participant wins over the seed's drawing, so a
+ * coworker looks the same in a conversation's header and list as in the roster. A participant with
+ * none, or a face drawn where there is no query client to read portraits with, keeps `children`.
+ */
+export function ChosenPortrait({
+  id,
+  motion,
+  size,
+  children,
+}: {
+  id: string;
+  motion?: AvatarMotionState;
+  size: number;
+  children: ReactNode;
+}) {
+  const queryClient = useContext(QueryClientContext);
+  if (!queryClient) return children;
+  return (
+    <ChosenPortraitFace id={id} motion={motion} size={size}>
+      {children}
+    </ChosenPortraitFace>
+  );
+}
+
+function ChosenPortraitFace({
+  id,
+  motion,
+  size,
+  children,
+}: {
+  id: string;
+  motion?: AvatarMotionState;
+  size: number;
+  children: ReactNode;
+}) {
+  const chosen = usePortraitSrc("coworker", id);
+  if (!chosen) return children;
+  return (
+    <span className="block size-full overflow-hidden rounded-full">
+      <AbstractAvatar
+        decorative
+        motion={motion}
+        name=""
+        portrait={{ kind: "coworker", id }}
+        seed={id}
+        size={size}
+      />
+    </span>
+  );
 }
 
 /**

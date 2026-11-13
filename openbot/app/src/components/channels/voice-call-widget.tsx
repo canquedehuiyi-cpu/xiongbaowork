@@ -29,11 +29,14 @@ export function VoiceCallWidget({
   call,
   name,
   avatarSeed,
+  agentId,
   taskRunning,
 }: {
   call: ReturnType<typeof useVoiceCall>;
   name: string;
   avatarSeed: string;
+  /** The coworker on the call, so a portrait somebody chose for them is drawn. */
+  agentId?: string;
   taskRunning: boolean;
 }) {
   const { state, session, minimized, setMinimized } = call;
@@ -98,7 +101,12 @@ export function VoiceCallWidget({
       </div>
       {minimized ? (
         <div className="flex items-center gap-3">
-          <AbstractAvatar name={name} seed={avatarSeed} size={32} />
+          <AbstractAvatar
+            name={name}
+            seed={avatarSeed}
+            portrait={agentId ? { kind: "coworker", id: agentId } : undefined}
+            size={32}
+          />
           <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
           <Button
             aria-label="展开语音通话"
@@ -130,7 +138,14 @@ export function VoiceCallWidget({
                 state.speaking && "ring-primary/40",
               )}
             >
-              <AbstractAvatar name={name} seed={avatarSeed} size={40} />
+              <AbstractAvatar
+                name={name}
+                seed={avatarSeed}
+                portrait={
+                  agentId ? { kind: "coworker", id: agentId } : undefined
+                }
+                size={40}
+              />
             </div>
             <div className="min-w-0 flex-1">
               {connecting ? (

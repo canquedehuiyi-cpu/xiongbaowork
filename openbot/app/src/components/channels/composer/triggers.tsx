@@ -195,7 +195,12 @@ function toSuggestion(agent: AgentOption): TriggerSuggestion {
   // Hidden: the option is already announced by the Bot's name.
   const icon = (
     <span aria-hidden="true" className="contents">
-      <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={28} />
+      <AbstractAvatar
+        name={agent.name}
+        seed={agent.avatarSeed}
+        portrait={{ kind: "coworker", id: agent.id }}
+        size={28}
+      />
     </span>
   );
   if (!agent.group) {

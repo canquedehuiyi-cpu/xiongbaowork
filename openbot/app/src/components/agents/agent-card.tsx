@@ -19,7 +19,12 @@ export function AgentCard({
        */
       <div className="flex h-16 min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 transition-colors hover:border-ring dark:border-transparent">
         <div aria-hidden="true" className="flex shrink-0">
-          <AbstractAvatar name={agent.name} seed={agent.avatarSeed} size={32} />
+          <AbstractAvatar
+            name={agent.name}
+            seed={agent.avatarSeed}
+            portrait={{ kind: "coworker", id: agent.id }}
+            size={32}
+          />
         </div>
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-medium" title={agent.name}>
