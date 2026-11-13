@@ -410,6 +410,13 @@ export type SkillRecord = {
    * a row predating the grade (or a fixture written before it) does not.
    */
   runnable?: string | null;
+  /**
+   * Why the grade is not `full`: the audit rule id and the reviewer-facing citation（R18 ——
+   * 「每一条点进去都能看到缺什么」）. Null on a `full` row or a skill nobody audited; a
+   * badged-but-unexplained row (grade below full, no reason) is a bug, not a state.
+   */
+  blockedReason?: string | null;
+  blockedReasonRef?: string | null;
   grantedTo: string[];
   /**
    * The tools this skill says it needs, as `<serverId>/<toolName>` refs.
@@ -7090,6 +7097,8 @@ export function createPluginStore(options: PluginStoreOptions) {
         origin: row.origin,
         installedBy: row.installedBy,
         runnable: row.runnable,
+        blockedReason: row.blockedReason,
+        blockedReasonRef: row.blockedReasonRef,
         grantedTo: grants.get(row.slug) ?? [],
         tools: declared.get(row.id) ?? [],
       }));

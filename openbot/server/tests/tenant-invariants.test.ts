@@ -299,7 +299,7 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // 调用者的帧（开机任务、自愈），所以这一读不能在调用者帧里做。读到之后，建群组、写镜像、挂接、改名
   // 全在 `runAsTenant(所有者)` 里，所有者只认个人租户（`channelOwner`）。
   "src/waker-groups/channel-link.ts": { "asPlatform(": 1 },
-  // 群组与群聊合一 5.1、5.3：开机任务跨租户枚举群组、读名单、找孤儿，台账（0210）在 `platform` 帧写，戳的是
+  // 群组与群聊合一 5.1、5.3：开机任务跨租户枚举群组、读名单、找孤儿，台账（0211）在 `platform` 帧写，戳的是
   // 群组自己的所有者。建聊天在 `runAsTenant(所有者)` 里（只认个人租户），挂接交给 channel-link 自己定帧。
   // Task 14 加 5 处：第一阶段收尾时找群组已挂着的别的聊天，第二、三阶段跨租户枚举频道、查是否被未完成的转换
   // 占用、调移交函数（3.1.1 第 4.4 条，0207 只认 `platform` 或成员）、写 `backfilled` 台账。软删这次转换建的

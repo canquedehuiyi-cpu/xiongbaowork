@@ -221,6 +221,15 @@ export type TenantSkill = {
    */
   runnable: "full" | "degraded" | "blocked";
   /**
+   * Why the grade is not `full`, from the audit the package carries: `_porting.reason`（规则 id）
+   * and `_porting.reason_ref`（给人读的一句话：规则理由 ← 最强命中引文）。Optional — a `full`
+   * row carries neither, and a package written before this field shipped stays honest with a null:
+   * the UI shows a badged-but-unexplained skill exactly as it saw before, and R18's reader-facing
+   * promise attaches only to packages that ship the fields.
+   */
+  blockedReason?: string;
+  blockedReasonRef?: string;
+  /**
    * Files the skill ships beside its instructions (`assets:` in `skills.yaml`), as paths relative to
    * `skills/<slug>/` in the package. Optional, because every skill written before attachments shipped
    * declares none. Validated by {@link parseSkillAssetPaths}: a path that would escape the skill's own
@@ -419,6 +428,15 @@ function asRecord(value: unknown, name: string): Record<string, unknown> {
     throw new Error(`${name} must be an object`);
   }
   return value as Record<string, unknown>;
+}
+
+/**
+ * A string or nothing. Reasons are descriptive prose the reader sees verbatim; a package that
+ * writes a number there is not answered by coercing it to text — the field simply counts as
+ * absent, the same honesty a pre-R18 package gets.
+ */
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /**
@@ -977,6 +995,16 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
       instructions: requiredString(skill.instructions, "skill.instructions"),
       tools,
       runnable: runnable as TenantSkill["runnable"],
+      ...(runnable === "full"
+        ? {}
+        : {
+            blockedReason: optionalString(
+              skill.blockedReason ?? porting?.reason,
+            ),
+            blockedReasonRef: optionalString(
+              skill.blockedReasonRef ?? porting?.reason_ref,
+            ),
+          }),
       assets: parseSkillAssetPaths(skill.assets, slug),
     };
   });
@@ -2215,6 +2243,10 @@ export async function synchronizeTenantPackage(
               // The port grade (R3): what the page's badge reads. Written with the rest of the
               // identity so a redeploy re-grades the skill the package now claims.
               runnable: skill.runnable,
+              // R18: why the grade is not full — rule id plus the citation, shown when the badge
+              // is tapped. Null on a full row, so null stays "not graded" or "nothing missing".
+              blockedReason: skill.blockedReason ?? null,
+              blockedReasonRef: skill.blockedReasonRef ?? null,
               // Which brand brought it in — what makes the sweep below this package's business.
               packageId: deploymentPackage.id,
             })
@@ -2238,6 +2270,10 @@ export async function synchronizeTenantPackage(
                 // Re-graded with the rest of the identity: a redeploy answers for the grade the
                 // package claims now, the same way it re-claims the row.
                 runnable: skill.runnable,
+                // Re-stated together with the grade: an upgraded package that now ships reasons
+                // must not leave the old row badged-but-unexplained.
+                blockedReason: skill.blockedReason ?? null,
+                blockedReasonRef: skill.blockedReasonRef ?? null,
                 // Re-stated with the rest of the identity, so a re-claim is not a row with no brand.
                 packageId: deploymentPackage.id,
                 updatedAt: new Date(),

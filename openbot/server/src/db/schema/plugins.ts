@@ -670,6 +670,16 @@ export const skills = pgTable(
      * null as "not graded" and draws nothing.
      */
     runnable: text("runnable"),
+    /**
+     * Why the grade is not `full`: the audit rule id (`shell-command-prose`, `executable-scripts`,
+     * `unknown-mcp-server`, …) and the reviewer-facing citation, written by the package sync from the
+     * package's `_porting.reason` / `_porting.reason_ref`（移植方案 R18 ——「每一条点进去都能看到缺
+     * 什么」）. Null on a `full` row or one nobody audited — a null here with a non-null `runnable`
+     * below `full` is exactly the "badged but unexplained" state R18 forbids, so the reader may treat
+     * it as a bug.
+     */
+    blockedReason: text("blocked_reason"),
+    blockedReasonRef: text("blocked_reason_ref"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

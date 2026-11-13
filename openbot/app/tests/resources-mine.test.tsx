@@ -49,6 +49,7 @@ const skill = (
   slug: string,
   title: string,
   runnable: string | null,
+  reason?: { blockedReason: string; blockedReasonRef: string },
 ) => ({
   id: `s-${slug}`,
   slug,
@@ -59,6 +60,8 @@ const skill = (
   origin: "catalogue",
   installedBy: null,
   runnable,
+  blockedReason: reason?.blockedReason ?? null,
+  blockedReasonRef: reason?.blockedReasonRef ?? null,
   grantedTo: [] as string[],
   tools: [] as string[],
 });
@@ -181,6 +184,33 @@ test("each skill is drawn with the grade the package claims, and a hand-written 
     "暂不可用",
   );
   expect(row("手写技能").queryByRole("status")).toBeNull();
+});
+
+test("a badged row answers 缺什么 under the badge; full and hand-written rows stay clean", async () => {
+  const view = await renderMine(
+    page(
+      [
+        skill("dead-skill", "阻断技能", "blocked", {
+          blockedReason: "shell-command-prose",
+          blockedReasonRef:
+            '正文给出可执行的 shell 命令；openbot 员工没有本地运行时。 ← "git init -q t"（共 2 处）',
+        }),
+        skill("full-skill", "完整技能", "full"),
+        skill("hand-written", "手写技能", null),
+      ],
+      [],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("阻断技能")).toBeTruthy());
+  const row = (title: string) =>
+    within(view.getByText(title).closest("li") as HTMLElement);
+  expect(row("阻断技能").getByText(/openbot 员工没有本地运行时/)).toBeTruthy();
+  expect(
+    (row("阻断技能").getByText(/shell 命令/).closest("p") as HTMLElement)
+      .title,
+  ).toBe("shell-command-prose");
+  expect(row("完整技能").queryByText(/shell/)).toBeNull();
+  expect(row("手写技能").queryByText(/缺/)).toBeNull();
 });
 
 test("a connector with nothing connected reads 待绑定, a connected one does not", async () => {

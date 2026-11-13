@@ -2,7 +2,7 @@
  * 群组与群聊合一（PR3，设计稿 5.5）：升级台账表 `waker_group_upgrades`。
  *
  * 编号：设计稿与计划起草时用 0208；合入前 main 已有 `0208_skill_runnable`、`0209_channel_kind`，按 3.2 的
- * 「再被占号就顺延」改为 0210，日志 `when` 晚于 0209。
+ * 「再被占号就顺延」改为 0210；合入前 0210 又被 `0210_skill_blocked_reason` 占用，再顺延为 0211，日志 `when` 晚于 0210。
  *
  * 一个群组一行，记开机升级任务（S/waker-groups/upgrade.ts）对它做了什么：
  * - `outcome`：`started`（转换已开始，还没挂上聊天）、`converted`（已有群组转成了群聊）、`backfilled`（已有
@@ -32,7 +32,7 @@
  */
 DO $$ BEGIN
   IF NOT (SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user) THEN
-    RAISE EXCEPTION '0210 must run as a role with BYPASSRLS (owner of the openbot_team_* functions)';
+    RAISE EXCEPTION '0211 must run as a role with BYPASSRLS (owner of the openbot_team_* functions)';
   END IF;
 END $$;
 --> statement-breakpoint

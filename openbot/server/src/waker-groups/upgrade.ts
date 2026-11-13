@@ -15,10 +15,10 @@ import {
 /*
  * 开机升级任务（设计稿 docs/specs/2026-11-13-group-unify.md 第 5 节）。第一阶段：已有群组转成可以聊天的群组。
  *
- * 在 `platform` 帧枚举 `waker_groups`，逐项按 5.1 的表格处理，台账 `waker_group_upgrades`（0210）记下每一项的
+ * 在 `platform` 帧枚举 `waker_groups`，逐项按 5.1 的表格处理，台账 `waker_group_upgrades`（0211）记下每一项的
  * 结果。聊天沿用上游的建群路径，在所有者帧（`runAsTenant(owner)`）里建，权限检查、`team` 戳、成员行和线程行
  * 都与平时建群一样；挂接、改名、写镜像交给 `link.adopt`。台账一律在 `platform` 帧写，`tenant_id` 与
- * `original_owner` 都是群组当时的所有者；`original_owner` 之后不改（0211 收回了这一列的 UPDATE 权限）。
+ * `original_owner` 都是群组当时的所有者；`original_owner` 之后不改（0212 收回了这一列的 UPDATE 权限）。
  *
  * 转换分五步（5.1 规则 6）：① 台账 `started`（被筛掉的员工记进 `dropped_agent_ids`）；② 建聊天；③ 台账记
  * `channel_id`；④ `adopt`；⑤ 台账 `converted`。每一步之间都可能崩溃，下次开机从台账续做（5.3）：

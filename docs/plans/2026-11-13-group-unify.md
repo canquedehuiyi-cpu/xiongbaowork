@@ -31,8 +31,8 @@
 
 **迁移**（设计稿 3.2）
 - 目录：`openbot/server/recovery/recovery-20261018-v1/sql/`。`openbot/server/drizzle/` 一字不动。
-- PR1：`0206_waker_group_channel_link.sql`（Task 1）、`0207_team_channel_hand_over.sql`（Task 5A）；PR3：`0210_waker_group_upgrades.sql`（起草时为 0208；PR3 动工时 main 已有 `0208_skill_runnable`、`0209_channel_kind`，按「再被占号就顺延」改为 0210，控制方 2026-11-13 裁定）。原定的 0205 合入 main 时已被 `0205_skill_assets` 占用，依次顺延。合入前再被别的 PR 占号就再顺延，并同步改日志与本计划引用。
-- 日志 `openbot/server/recovery/recovery-20261018-v1/meta/_journal.json` 追加：`idx` 206 / 207 / 210，`version` `"7"`，`tag` 带四位前缀（`0206_waker_group_channel_link`、`0207_team_channel_hand_over`、`0210_waker_group_upgrades`），`when` 取真实当前毫秒且依次递增：0206 晚于 0205 的 `1794527335046`（已写 `1794537806196`），0207 晚于 0206，0210 晚于 0209 的 `1794546000000`，`breakpoints: true`。0108 以后不配快照。
+- PR1：`0206_waker_group_channel_link.sql`（Task 1）、`0207_team_channel_hand_over.sql`（Task 5A）；PR3：`0211_waker_group_upgrades.sql`（起草时为 0208；PR3 动工时 main 已有 `0208_skill_runnable`、`0209_channel_kind`，按「再被占号就顺延」改为 0210；合入前 0210 又被 main 的 `0210_skill_blocked_reason` 占用，再顺延为 0211（列级权限为 0212），控制方 2026-11-13 裁定）。原定的 0205 合入 main 时已被 `0205_skill_assets` 占用，依次顺延。合入前再被别的 PR 占号就再顺延，并同步改日志与本计划引用。
+- 日志 `openbot/server/recovery/recovery-20261018-v1/meta/_journal.json` 追加：`idx` 206 / 207 / 211 / 212，`version` `"7"`，`tag` 带四位前缀（`0206_waker_group_channel_link`、`0207_team_channel_hand_over`、`0211_waker_group_upgrades`、`0212_waker_group_upgrades_original_owner`），`when` 取真实当前毫秒且依次递增：0206 晚于 0205 的 `1794527335046`（已写 `1794537806196`），0207 晚于 0206，0211 晚于 0210 的 `1794566826452`，0212 晚于 0211，`breakpoints: true`。0108 以后不配快照。
 - 文件开头照 `0122_team_tenant.sql:27-31` 加角色自检（`rolsuper OR rolbypassrls`，报错文字写本迁移号）。语句之间用 `--> statement-breakpoint`。
 - 守卫改写以 `0179_team_channel_guard_title_opening.sql` 为底，**原有规则一字不动**，只加针对 `waker_group_id` 的两条放行（3.3）。
 - 必须保持绿：`tests/migration-journal.test.ts`、`tests/recovery-overlay-journal.test.ts`、`tests/team-group-bots-migration.integration.test.ts`、`tests/team-tenant-rls.integration.test.ts`。
@@ -80,7 +80,7 @@
 | `S/waker-groups/linked-actions.ts` | 统一接口背后的动作：建群组并开聊天、翻译成员、改名、开聊天、`for-channel`（含移交）、解散 | Task 4、5、5A |
 | `S/waker-groups/routes.ts`（已有） | 第三参数 `actions?` 启用新路由与扩展 | Task 4、5 |
 | `S/waker-groups/store.ts`（已有） | `list()` 带 `channelId` | Task 2 |
-| `openbot/server/recovery/recovery-20261018-v1/sql/0210_waker_group_upgrades.sql` | 台账表；改写移交写入函数多搬台账行 | Task 12 |
+| `openbot/server/recovery/recovery-20261018-v1/sql/0211_waker_group_upgrades.sql` | 台账表；改写移交写入函数多搬台账行 | Task 12 |
 | `S/waker-groups/upgrade.ts` | 开机任务三阶段、咨询锁、汇总日志、开关 | Task 13、14 |
 | `A/components/wakers/create-group-form.tsx` | `CreateGroupForm` | Task 7 |
 | `A/components/channels/group-settings.tsx` | 设置抽屉（创建者 / 其他人两种视图） | Task 10 |
@@ -102,7 +102,7 @@
 | 9 | 员工页群组卡片三种状态、流程页 `?group=`（设计稿 #31） | PR2 | 6 | sonnet | sonnet 一轮 |
 | 10 | 聊天页顶栏、设置抽屉、会话行菜单、`@群组` 排序（设计稿 #17） | PR2 | 6 | sonnet | sonnet 一轮 |
 | 11 | 文案全量、「不说群聊」用例、`CONTEXT.md`、staffing 规格；手动走查（设计稿 #32–#34） | PR2 | 7、8、9、10 | haiku | 无需单独评审 |
-| 12 | 迁移 0210：台账表与 RLS | PR3 | PR1 合入 | opus | 完整评审 |
+| 12 | 迁移 0211：台账表与 RLS | PR3 | PR1 合入 | opus | 完整评审 |
 | 13 | 开机任务第一阶段：群组转群聊、孤儿收养 | PR3 | 12 | opus | 完整评审 |
 | 14 | 第二、三阶段、咨询锁、开关、汇总日志、装配 | PR3 | 13 | opus | 完整评审 |
 | 15 | 升级须知、回滚手册与其 SQL 测试、`.env.example`、`CHANGELOG.md` | PR3 | 14 | opus | 完整评审 |
@@ -899,12 +899,12 @@ test("the app and the server say 群组, never 群聊 (IM chats aside)", () => {
 
 ## PR3：升级任务（自动转换与补挂）
 
-### Task 12：迁移 0210 台账表
+### Task 12：迁移 0211 台账表
 
 **建议执行模型**：opus　**评审方式**：完整评审
 
 **文件：**
-- 新建：`openbot/server/recovery/recovery-20261018-v1/sql/0210_waker_group_upgrades.sql`（起草时为 0208；PR3 动工时 main 已有 `0208_skill_runnable`、`0209_channel_kind`，按「再被占号就顺延」改为 0210，控制方 2026-11-13 裁定）
+- 新建：`openbot/server/recovery/recovery-20261018-v1/sql/0211_waker_group_upgrades.sql`（起草时为 0208；PR3 动工时 main 已有 `0208_skill_runnable`、`0209_channel_kind`，按「再被占号就顺延」改为 0210；合入前 0210 又被 main 的 `0210_skill_blocked_reason` 占用，再顺延为 0211（列级权限为 0212），控制方 2026-11-13 裁定）
 - 修改：`openbot/server/recovery/recovery-20261018-v1/meta/_journal.json`（idx 210，`when` 晚于 0209）
 - 测试（新建）：`openbot/server/tests/waker-group-upgrade.integration.test.ts`（本任务建文件，Task 13–15 追加）；登记清单
 
@@ -927,7 +927,7 @@ CREATE TABLE public.waker_group_upgrades (
 末尾 `CREATE OR REPLACE FUNCTION public.openbot_team_channel_hand_over_write(...)`（设计稿 3.1.1 第 5 条）：在 0207 的函数体上多一句 `UPDATE waker_group_upgrades SET tenant_id = p_heir WHERE group_id = p_group_id AND tenant_id = p_from`，其余逐字不变，`REVOKE` 照旧。
 
 - [ ] **Step 1：写失败测试**（`describe("ledger")`）：
-  - `the journal registers 0210 after 0209`。
+  - `the journal registers 0211 after 0210`。
   - `a tenant reads and writes only its own ledger rows; platform reads all`：alice 帧插 `tenant_id = alice` 成功、插 `tenant_id = bob` 被拒；bob 帧读不到 alice 的行；`platform` 帧两行都读到。
   - `an unknown outcome is refused`：`outcome = 'done'` → `23514`。
   - `deleting the crew deletes its ledger row`。
@@ -935,7 +935,7 @@ CREATE TABLE public.waker_group_upgrades (
 - [ ] **Step 2：运行**，预期失败。
 - [ ] **Step 3：实现。**
 - [ ] **Step 4：运行** 迁移测试库（两次，第二次无报错），再跑同文件与 `tests/migration-journal.test.ts`、`tests/recovery-overlay-journal.test.ts`。
-- [ ] **Step 5：登记**清单，提交 `迁移 0210：群组升级台账表`。
+- [ ] **Step 5：登记**清单，提交 `迁移 0211：群组升级台账表`。
 
 ### Task 13：开机任务第一阶段（群组转群聊）
 
@@ -1037,7 +1037,7 @@ export function startGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string
 **建议执行模型**：opus　**评审方式**：完整评审
 
 **文件：**
-- 修改：`openbot/docs/deployment-xiongbao.md`（§4 末尾加「0206、0207、0210 随镜像迁移」一句；§6 加「群组合一升级须知」与「回滚手册」）
+- 修改：`openbot/docs/deployment-xiongbao.md`（§4 末尾加「0206、0207、0211 随镜像迁移」一句；§6 加「群组合一升级须知」与「回滚手册」）
 - 修改：`openbot/.env.example`（加 `# XIONGBAO_GROUP_UPGRADE=off  # 跳过群组合一的开机转换（默认开）`，带一行中文说明）
 - 修改：`openbot/CHANGELOG.md`（`## Unreleased` 下一条）
 - 测试：追加到 `waker-group-upgrade.integration.test.ts`（`describe("rollback runbook")`）

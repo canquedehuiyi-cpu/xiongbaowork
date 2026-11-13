@@ -65,14 +65,14 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
  * The upgrade that turns crews into chats and gives old chats a crew (spec 2026-11-13 group-unify,
- * section 5; migrations 0210, 0211).
+ * section 5; migrations 0211, 0212).
  *
  * Its ledger, `waker_group_upgrades`, is one row per crew the upgrade touched: what it did, the chat
  * it made or linked, the coworkers it left out. It is the owner's row like any tenant row (0072's
  * four policies, FORCE), it goes with the crew when the crew is deleted, and it follows the crew to
  * the heir when a shared group is handed over, while `original_owner` keeps who it was written for
  * (the rollback runbook leaves alone a converted crew that has changed hands). The app may never
- * change `original_owner` once written (0211).
+ * change `original_owner` once written (0212).
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const profileStore = createAgentProfileStore(
@@ -205,7 +205,7 @@ function reason(error: unknown) {
 }
 
 describe("ledger", () => {
-  test("the journal registers 0210 after 0209", async () => {
+  test("the journal registers 0211 after 0210", async () => {
     const journal = (await Bun.file(
       new URL(
         "../recovery/recovery-20261018-v1/meta/_journal.json",
@@ -214,10 +214,10 @@ describe("ledger", () => {
     ).json()) as {
       entries: { idx: number; tag: string; when: number }[];
     };
-    const previous = journal.entries.find((item) => item.idx === 209);
-    const entry = journal.entries.find((item) => item.idx === 210);
-    expect(previous?.tag).toBe("0209_channel_kind");
-    expect(entry?.tag).toBe("0210_waker_group_upgrades");
+    const previous = journal.entries.find((item) => item.idx === 210);
+    const entry = journal.entries.find((item) => item.idx === 211);
+    expect(previous?.tag).toBe("0210_skill_blocked_reason");
+    expect(entry?.tag).toBe("0211_waker_group_upgrades");
     expect(entry?.when ?? 0).toBeGreaterThan(previous?.when ?? Infinity);
   });
 
@@ -260,7 +260,7 @@ describe("ledger", () => {
     expect(kept?.outcome).toBe("converted");
   });
 
-  test("the journal registers 0211 after 0210", async () => {
+  test("the journal registers 0212 after 0211", async () => {
     const journal = (await Bun.file(
       new URL(
         "../recovery/recovery-20261018-v1/meta/_journal.json",
@@ -269,9 +269,9 @@ describe("ledger", () => {
     ).json()) as {
       entries: { idx: number; tag: string; when: number }[];
     };
-    const previous = journal.entries.find((item) => item.idx === 210);
-    const entry = journal.entries.find((item) => item.idx === 211);
-    expect(entry?.tag).toBe("0211_waker_group_upgrades_original_owner");
+    const previous = journal.entries.find((item) => item.idx === 211);
+    const entry = journal.entries.find((item) => item.idx === 212);
+    expect(entry?.tag).toBe("0212_waker_group_upgrades_original_owner");
     expect(entry?.when ?? 0).toBeGreaterThan(previous?.when ?? Infinity);
   });
 
@@ -325,7 +325,7 @@ describe("ledger", () => {
     const ours = await crew(alice, "周报");
     await record(alice, ours, alice);
 
-    // Not even the platform frame may change it: the app has no UPDATE on the column (0211).
+    // Not even the platform frame may change it: the app has no UPDATE on the column (0212).
     for (const frame of [alice, "platform"]) {
       const refused = await runAsTenant(frame, () =>
         database.execute(
