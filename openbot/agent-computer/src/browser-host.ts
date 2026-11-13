@@ -457,7 +457,7 @@ export function createBrowserHost(options: BrowserHostOptions) {
       return json(
         {
           error:
-            "The browser routes are for a person's browser: send its id (person- and 32 hex digits) in x-openbot-bot-id.",
+            "The browser routes are for a person's browser: send its id (person- and 32 hex digits) in the request headers.",
         },
         400,
       );

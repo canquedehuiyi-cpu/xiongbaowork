@@ -107,7 +107,7 @@
   {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 80
+    "lines": 79
   },
   {
     "rule": "identifier",
@@ -307,7 +307,7 @@
   {
     "rule": "wire-dom",
     "scope": "agent-computer/src",
-    "lines": 10
+    "lines": 7
   },
   {
     "rule": "wire-dom",

@@ -1637,7 +1637,7 @@ await startupLifecycle.run(async (startup) => {
       return ensureAlwaysOnApp(pluginStore, personalDeps);
     })().catch((error: unknown) => {
       console.warn(
-        "[plugins] OpenBot's own apps' tools could not be brought up to date:",
+        "[plugins] The built-in apps' tools could not be brought up to date:",
         error instanceof Error ? error.message : error,
       );
     });

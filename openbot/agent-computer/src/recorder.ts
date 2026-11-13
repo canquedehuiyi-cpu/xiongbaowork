@@ -66,7 +66,7 @@ export async function findRecorder(
   if (!dir) {
     return {
       ok: false,
-      error: `This computer has no OpenBot Recorder, so it cannot open a person's browser: set ${RECORDER_DIR_ENV} to the built Recorder (extension/dist).`,
+      error: `This computer has no Recorder, so it cannot open a person's browser: set ${RECORDER_DIR_ENV} to the built Recorder (extension/dist).`,
     };
   }
   if (!isAbsolute(dir)) {

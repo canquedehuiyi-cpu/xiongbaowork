@@ -366,9 +366,9 @@ export function deliverEgressPolicies(
     },
     {
       waiting:
-        "A computer has not taken its network policy yet, which usually means it is still starting. OpenBot pushes again within seconds, and a computer refuses its network connections until its policy arrives.",
+        "A computer has not taken its network policy yet, which usually means it is still starting. The server pushes again within seconds, and a computer refuses its network connections until its policy arrives.",
       failed:
-        "Computers have still not taken their network policies. OpenBot keeps pushing every 30 seconds, and a computer refuses its network connections until its policy arrives.",
+        "Computers have still not taken their network policies. The server keeps pushing every 30 seconds, and a computer refuses its network connections until its policy arrives.",
     },
     clock,
   );

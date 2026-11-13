@@ -409,7 +409,7 @@ export function createLearningAutoAssign(options: {
   const sayUnavailable = () =>
     once("unavailable", {
       message:
-        "Intelligence could not be asked about the Learning container. OpenBot tries again.",
+        "Intelligence could not be asked about the Learning container. The server tries again.",
     });
 
   const absent = (): LearningAutoAssignState => ({
@@ -435,7 +435,7 @@ export function createLearningAutoAssign(options: {
     once("configured_absent", {
       containerId: target.containerId,
       variable: "CPK_INTELLIGENCE_LEARNING_CONTAINER_ID",
-      message: `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID is "${target.containerId}", but this Intelligence has no Learning container with that ID, so OpenBot ignores it${options.enabled ? ` and assigns "${containerId}" instead` : ""}. Remove it from the environment, or set it to a container this Intelligence has.`,
+      message: `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID is "${target.containerId}", but this Intelligence has no Learning container with that ID, so the server ignores it${options.enabled ? ` and assigns "${containerId}" instead` : ""}. Remove it from the environment, or set it to a container this Intelligence has.`,
     });
     return "forgotten";
   };
@@ -462,7 +462,7 @@ export function createLearningAutoAssign(options: {
     options.store.setAside(saved.containerId);
     once("saved_absent", {
       containerId: saved.containerId,
-      message: `The saved default Learning container is "${saved.containerId}", but this Intelligence has no Learning container with that ID, so OpenBot ignores it here${options.enabled ? ` and uses "${containerId}" instead` : ""}. The saved choice is kept, for an Intelligence that has it. Saving another default container replaces it.`,
+      message: `The saved default Learning container is "${saved.containerId}", but this Intelligence has no Learning container with that ID, so the server ignores it here${options.enabled ? ` and uses "${containerId}" instead` : ""}. The saved choice is kept, for an Intelligence that has it. Saving another default container replaces it.`,
     });
     return { checked: "set_aside", containerId: saved.containerId };
   };
@@ -515,7 +515,7 @@ export function createLearningAutoAssign(options: {
     if (found === "learning_off") {
       once("learning_off", {
         message:
-          "Learning is switched off in this Intelligence, so Automatic Learning collects nothing. Turn it on in Intelligence (learning.enabled in its Helm chart); OpenBot checks again.",
+          "Learning is switched off in this Intelligence, so Automatic Learning collects nothing. Turn it on in Intelligence (learning.enabled in its Helm chart); the server checks again.",
       });
       return { state: "learning_off" };
     }
@@ -566,7 +566,7 @@ export function createLearningAutoAssign(options: {
         once("error", {
           errorType: error instanceof Error ? error.name : typeof error,
           message:
-            "Automatic Learning container assignment failed. OpenBot tries again.",
+            "Automatic Learning container assignment failed. The server tries again.",
         });
         return { state: "unavailable" } as LearningAutoAssignState;
       })

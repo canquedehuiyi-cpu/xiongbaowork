@@ -14,7 +14,7 @@ export function OpenBotVersion({ className }: { className?: string }) {
   return (
     <span
       className={cn("block truncate tabular-nums", className)}
-      data-slot="openbot-version"
+      data-slot="xiongbao-version"
     >
       {/^\d/.test(version) ? `v${version}` : version}
     </span>

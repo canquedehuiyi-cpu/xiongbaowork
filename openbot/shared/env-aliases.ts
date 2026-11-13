@@ -1,5 +1,5 @@
-const NEW_PREFIX = "XIONGBAO_";
-const LEGACY_PREFIX = "OPENBOT_";
+export const NEW_PREFIX = "XIONGBAO_";
+export const LEGACY_PREFIX = "OPENBOT_";
 
 /**
  * Lets a deployment spell its settings `XIONGBAO_<X>` while the code keeps reading `OPENBOT_<X>`.
@@ -27,4 +27,15 @@ export function applyEnvironmentAliases(
     environment[legacy] = value;
   }
   return { conflicts };
+}
+
+/**
+ * The name a message shows for a setting: `envName("PUBLIC_URL")` is `XIONGBAO_PUBLIC_URL`.
+ *
+ * Every sentence that tells an operator which variable to set goes through here, so a deployment
+ * that spells it either way is told the new name. The old name keeps working
+ * ({@link applyEnvironmentAliases}); it is just never advertised.
+ */
+export function envName(suffix: string): string {
+  return `${NEW_PREFIX}${suffix}`;
 }

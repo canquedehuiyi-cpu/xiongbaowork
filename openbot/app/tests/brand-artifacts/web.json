@@ -96,12 +96,6 @@
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
-    "word": "OPENBOT_",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "环境变量名前缀，随报错文字出现；Task 13"
-  },
-  {
     "word": "OPENBOT_PUBLIC_URL",
     "category": "operator-visible",
     "plan": "rewrite",
@@ -324,12 +318,6 @@
     "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
   },
   {
-    "word": "openbot-learned-$",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
     "word": "openbot-markdown",
     "category": "operator-visible",
     "plan": "rewrite",
@@ -352,12 +340,6 @@
     "category": "persisted-data",
     "plan": "rewrite",
     "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
-  },
-  {
-    "word": "openbot-secret",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
   },
   {
     "word": "openbot-sidebar",
@@ -400,12 +382,6 @@
     "category": "peer-protocol",
     "plan": "rewrite",
     "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot-version",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
   },
   {
     "word": "openbot-voice-chat",
