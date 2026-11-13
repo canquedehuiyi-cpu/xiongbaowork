@@ -13,10 +13,19 @@ export type ArtifactEntry = {
   note: string;
 };
 
+/**
+ * A release tag inside a word (`OPENBOT_TAG:-v0.2.9`) changes every release and is not a brand word:
+ * word lists hold it as `v<version>`, and the ratchet compares lists in this form.
+ */
+export const versionless = (word: string): string =>
+  word.replace(/\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?/g, "v<version>");
+
 export function wordsIn(text: string): Map<string, number> {
   const found = new Map<string, number>();
-  for (const [word] of text.matchAll(WORD))
+  for (const [raw] of text.matchAll(WORD)) {
+    const word = versionless(raw);
     found.set(word, (found.get(word) ?? 0) + 1);
+  }
   return found;
 }
 

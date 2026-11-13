@@ -29,6 +29,16 @@ const entry = (e: Partial<ArtifactEntry>): ArtifactEntry => ({
 });
 
 describe("artifact words", () => {
+  test("wordsIn writes a release tag as v<version>, so a release does not change the list", () => {
+    const one = wordsIn("tag OPENBOT_TAG:-v0.2.9 here");
+    const two = wordsIn("tag OPENBOT_TAG:-v0.2.10-rc.1 here");
+    expect([...one.keys()]).toEqual(["OPENBOT_TAG:-v<version>"]);
+    expect([...two.keys()]).toEqual([...one.keys()]);
+    expect([...wordsIn("postgres://openbot@127.0.0.1:5433").keys()]).toEqual([
+      "postgres://openbot@127.0.0.1:5433",
+    ]);
+  });
+
   test("wordsIn counts each word", () => {
     const found = wordsIn(`a="openbot.ping";console.warn("OpenBot couldn't")`);
     expect(found.get("openbot.ping")).toBe(1);
