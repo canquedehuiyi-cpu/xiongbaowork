@@ -20,6 +20,30 @@ export function wordsIn(text: string): Map<string, number> {
   return found;
 }
 
+/**
+ * Words of text where `/` always ends a word, for file lists and for compiled binaries.
+ *
+ * A path is not one word: one `/app/shared/openbot-actor.ts` says `openbot-actor.ts`, and
+ * `.../node_modules/@copilotkit/shared/package.json` says `@copilotkit`. A word also starts at the brand
+ * name unless a separator (`_ . : @ $ -`) comes right before it. A Rust binary packs its string
+ * literals back to back with nothing between them (`...chromium` + `openbot-runner` + `/proc.config`
+ * ...), so the glue in front of the name belongs to another literal. A version (`@1.85.0`) is dropped
+ * from the end, and a bun store directory (`@copilotkit+shared@1.85.0+232c2669fb60c3cc`) loses its
+ * version and hash, so the list does not change when a dependency is upgraded.
+ */
+export const SEGMENT_WORD =
+  /(?:[A-Za-z0-9_.:@$-]*[_.:@$-])?(?:openbot|copilotkit|qoder)[A-Za-z0-9_.:@$-]*/gi;
+const VERSION_TAIL = /@v?\d+\.\d+[\w.-]*$/;
+
+export function segmentWords(text: string): Map<string, number> {
+  const found = new Map<string, number>();
+  for (const [raw] of text.matchAll(SEGMENT_WORD)) {
+    const word = raw.replace(VERSION_TAIL, "");
+    found.set(word, (found.get(word) ?? 0) + 1);
+  }
+  return found;
+}
+
 export function compareWords(
   found: Map<string, number>,
   allow: ArtifactEntry[],

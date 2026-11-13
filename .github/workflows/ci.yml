@@ -208,8 +208,12 @@ jobs:
         run: bun run generate:app-config && bun run --cwd app build
       - name: Build the extension
         run: bun run --cwd extension build
+      # Only to have the runner binary to scan below: this is not a package build. It never runs
+      # `tauri build`, so no installer ships from here, no third-party notices are needed, and the
+      # device bundle builds counted in desktop-device/tests/brand-icons.test.ts do not include it.
       - name: Build the runner sidecar
-        run: bun desktop-device/scripts/build-sidecar.ts
+        run: |
+          bun desktop-device/scripts/build-sidecar.ts
       - name: Scan the web app
         run: bun scripts/brand/scan-artifact.ts --kind web --input app/dist --allowlist app/tests/brand-artifacts/web.json --summary "$GITHUB_STEP_SUMMARY"
       - name: Scan the extension
@@ -366,12 +370,17 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: docker build -f Dockerfile -t openbot:trackb .
+      # Each scan runs to the end and the verdict comes after, so one CI round shows every word list.
       - name: Brand scan - image files, env, labels
+        id: scan_image
+        continue-on-error: true
         run: |
           docker run --rm --entrypoint sh openbot:trackb -c 'find / -xdev \( -path /proc -o -path /sys \) -prune -o -print' > "$RUNNER_TEMP/image-files.txt"
           docker inspect openbot:trackb > "$RUNNER_TEMP/image-config.json"
-          bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY"
-          bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY"
+          rc=0
+          bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
+          bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
+          exit "$rc"
       # The s6 oneshot that copies XIONGBAO_* onto OPENBOT_* runs on the host: it only reads and writes files.
       - name: env-aliases oneshot
         run: sh docker/tests/env-aliases.test.sh
@@ -388,7 +397,17 @@ jobs:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
         run: bash scripts/ci/image-smoke.sh openbot:trackb
       - name: Brand scan - startup log (words only)
+        id: scan_logs
+        continue-on-error: true
         run: bun scripts/brand/scan-artifact.ts --kind web --input "$RUNNER_TEMP/delivery-evidence/startup.log" --allowlist app/tests/brand-artifacts/image-logs.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Brand scans verdict
+        if: always()
+        env:
+          IMAGE_SCAN: ${{ steps.scan_image.outcome }}
+          LOG_SCAN: ${{ steps.scan_logs.outcome }}
+        run: |
+          echo "image files/env/labels: $IMAGE_SCAN; startup log: $LOG_SCAN"
+          test "$IMAGE_SCAN" != failure && test "$LOG_SCAN" != failure
       - name: Print container logs (credentials masked)
         if: failure()
         run: |

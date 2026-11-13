@@ -1227,6 +1227,14 @@ test("image and deb are brand-scanned", () => {
     ),
     "image job scans the startup log",
   ).toBe(true);
+  // One round must show every word list: the scans do not stop the job, a last step judges them.
+  const verdictAt = image.findIndex((s) => s.name === "Brand scans verdict");
+  expect(verdictAt, "image job judges the scans at the end").toBeGreaterThan(
+    -1,
+  );
+  expect(image[verdictAt].if).toBe("always()");
+  for (const s of image.filter((s) => s.run?.includes("scan-artifact.ts")))
+    expect(s["continue-on-error"], s.name).toBe(true);
 
   const deb = steps("device-bundle-linux");
   const checkAt = deb.findIndex(

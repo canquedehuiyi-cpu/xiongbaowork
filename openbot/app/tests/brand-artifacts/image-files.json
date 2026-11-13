@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "prefix": "@copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方包名（依赖目录与 bun 存储目录；版本与哈希已按段规整掉，随依赖升级不变）"
+  },
+  {
+    "prefix": "copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方包自带的 copilotkit-* 文件（含带哈希的构建产物名）与 toolkit 里的 copilotkit 目录"
+  },
+  {
+    "prefix": "integrations-agentic-ui-copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "@mastra/core 自带的文档文件名"
+  },
+  {
+    "word": "@openbot",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "workspace 包名 @openbot/*，规格 1.2 节不改；只出现在镜像的 node_modules 里"
+  },
+  {
+    "word": "openbot-actor.ts",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像 /app/shared 里的上游源文件名；是否改名待定"
+  },
+  {
+    "word": "openbot-apt",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像里的 /usr/local/sbin/openbot-apt；Task 11 改成指向 xiongbao-apt 的兼容链接后改登记为 legacy-compat"
+  },
+  {
+    "word": "openbot-browser.ts",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像 /app/shared 里的上游源文件名；是否改名待定"
+  }
+]

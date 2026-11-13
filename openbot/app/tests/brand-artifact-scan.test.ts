@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AllowEntry } from "../../scripts/brand/guard/allowlist";
+import { segmentWords } from "../../scripts/brand/guard/artifact-words";
 import { metricsTable } from "../../scripts/brand/metrics";
 import {
   BUILD_PATH,
@@ -140,17 +141,59 @@ describe("metrics", () => {
 });
 
 describe("image and deb scans (Task 5)", () => {
-  test("image-files: only the paths are words", () => {
+  test("image-files: a word per path segment, own files found", () => {
     const root = dir();
     const list = join(root, "files.txt");
     writeFileSync(
       list,
-      "/etc/hosts\n/usr/src/openbot/x.js\n/usr/share/doc/copilotkit\n",
+      [
+        "/etc/hosts",
+        "/app/shared/openbot-actor.ts",
+        "/usr/src/openbot/x.js",
+        "/app/toolkit/src/copilotkit/agents.ts",
+        "/usr/local/sbin/openbot-apt",
+        "",
+      ].join("\n"),
     );
     const found = scanImageFiles(list).found;
-    expect(found.has("/usr/src/openbot/x.js")).toBe(true);
-    expect(found.has("/usr/share/doc/copilotkit")).toBe(true);
-    expect(found.has("/etc/hosts")).toBe(false);
+    expect([...found.keys()].sort()).toEqual([
+      "copilotkit",
+      "openbot",
+      "openbot-actor.ts",
+      "openbot-apt",
+    ]);
+  });
+
+  test("image-files: a new version or hash of the same package says the same words", () => {
+    const store = (version: string, hash: string) =>
+      [
+        `/app/node_modules/.bun/@copilotkit+shared@${version}+${hash}`,
+        `/app/node_modules/.bun/@copilotkit+shared@${version}+${hash}/node_modules/@copilotkit/shared/package.json`,
+        `/app/node_modules/.bun/copilotkit-cli@${version}+${hash}/node_modules/copilotkit-cli@${version}`,
+        `/app/node_modules/.bun/@openbot+shared@${version}/node_modules/@openbot/shared`,
+        `${hash}/node_modules/@copilotkit/runtime/dist/index.d.mts`,
+      ].join("\n");
+    const root = dir();
+    const one = join(root, "one.txt");
+    const two = join(root, "two.txt");
+    writeFileSync(one, store("1.85.0", "232c2669fb60c3cc"));
+    writeFileSync(two, store("1.86.0-next.3", "e95e36fcb715f04e"));
+    const first = [...scanImageFiles(one).found.keys()].sort();
+    expect(first).toEqual([...scanImageFiles(two).found.keys()].sort());
+    expect(first).toEqual(["@copilotkit", "@openbot", "copilotkit-cli"]);
+  });
+
+  test("deb: string literals packed back to back are cut at the brand word and at `/`", () => {
+    const text =
+      "agent-desktop/opt/google/chrome/chrome/usr/bin/chromiumopenbot-runner/proc.configautostartxiongbao-device\n" +
+      "shared/openbot-browser.ts\n@copilotkit/core@1.85.0\ndata-openbot-secret\n$openbotOut.AutoFlush\n";
+    expect([...segmentWords(text).keys()]).toEqual([
+      "openbot-runner",
+      "openbot-browser.ts",
+      "@copilotkit",
+      "data-openbot-secret",
+      "$openbotOut.AutoFlush",
+    ]);
   });
 
   test("image-config: Config.Env and Config.Labels, nothing else", () => {
@@ -187,7 +230,7 @@ describe("image and deb scans (Task 5)", () => {
     writeFileSync(
       join(tree, "usr", "bin", "xiongbao-runner"),
       Buffer.from(
-        "\0/home/runner/work/x/x/openbot/node_modules/a\0copilotkit-inside\0",
+        "\0/home/runner/work/x/x/openbot/node_modules/a\0copilotkit-inside\0/usr/bin/chromiumopenbot-runner/proc.configautostart\0@copilotkit/core@1.85.0\0",
       ),
     );
     writeFileSync(join(tree, "usr", "share", "doc", "openbot-doc.txt"), "hi\n");
@@ -199,6 +242,10 @@ describe("image and deb scans (Task 5)", () => {
     expect(scan.found.has("openbot-device")).toBe(true);
     expect(scan.found.has("openbot-desc")).toBe(true);
     expect(scan.found.has("copilotkit-inside")).toBe(true);
+    // Rust packs its literals with nothing between them: only the name and its own segment are the word.
+    expect(scan.found.has("openbot-runner")).toBe(true);
+    expect(scan.found.has("@copilotkit")).toBe(true);
+    expect([...scan.found.keys()].filter((w) => w.length > 40)).toEqual([]);
     expect(
       [...scan.found.keys()].some((w) => w.endsWith("openbot-doc.txt")),
     ).toBe(true);

@@ -26,6 +26,7 @@ import {
   type ArtifactEntry,
   compareWords,
   printableStrings,
+  segmentWords,
   wordsIn,
 } from "./guard/artifact-words";
 
@@ -92,11 +93,11 @@ export const BUILD_PATH = "<build-path>";
  * The build machine's path is a word of its own, so a list that does not name it fails and one that
  * does goes stale once the build stops writing it (Task 13). Longest path first.
  */
-function scanBuildText(text: string, cwd: string): Scan {
+function scanBuildText(text: string, cwd: string, segments = false): Scan {
   let out = text;
   for (const path of [cwd, repoRoot(cwd), "/home/runner/work/"])
     if (path.length > 1) out = out.split(path).join(BUILD_PATH);
-  const scan = finish(out, []);
+  const scan = finish(out, [], segments);
   const paths = out.split(BUILD_PATH).length - 1;
   if (paths > 0) scan.found.set(BUILD_PATH, paths);
   return scan;
@@ -109,9 +110,18 @@ export function scanRunner(file: string, cwd = process.cwd()): Scan {
   );
 }
 
-/** `image-files`: the file list `docker run ... find /` prints, one path per line. Paths only. */
+/**
+ * `image-files`: the file list `docker run ... find /` prints, one path per line. Paths only, a word
+ * per path segment with bun's version and hash dropped (see `segmentWords`). Names are not minified
+ * here, so no `canonical`.
+ */
 export function scanImageFiles(file: string): Scan {
-  return finish(readFileSync(file, "utf8"), []);
+  const text = readFileSync(file, "utf8");
+  return {
+    found: segmentWords(text),
+    problems: [],
+    reported: ALWAYS_REPORT.filter((phrase) => text.includes(phrase)),
+  };
 }
 
 /** `image-config`: `docker inspect` JSON; only Config.Env and Config.Labels. */
@@ -157,7 +167,7 @@ export function scanDeb(file: string, cwd = process.cwd()): Scan {
     const contents = regularFilesUnder(tree)
       .map((f) => printableStrings(new Uint8Array(readFileSync(f))))
       .join("\n");
-    return scanBuildText([listing, fields, contents].join("\n"), cwd);
+    return scanBuildText([listing, fields, contents].join("\n"), cwd, true);
   } finally {
     rmSync(tree, { recursive: true, force: true });
   }
@@ -174,18 +184,21 @@ export function canonical(word: string): string {
   return word.replace(MINIFIED, "_");
 }
 
-export function canonicalWords(text: string): Map<string, number> {
+export function canonicalWords(
+  text: string,
+  segments = false,
+): Map<string, number> {
   const found = new Map<string, number>();
-  for (const [word, n] of wordsIn(text)) {
+  for (const [word, n] of segments ? segmentWords(text) : wordsIn(text)) {
     const key = canonical(word);
     found.set(key, (found.get(key) ?? 0) + n);
   }
   return found;
 }
 
-function finish(text: string, problems: string[]): Scan {
+function finish(text: string, problems: string[], segments = false): Scan {
   return {
-    found: canonicalWords(text),
+    found: canonicalWords(text, segments),
     problems,
     reported: ALWAYS_REPORT.filter((phrase) => text.includes(phrase)),
   };
