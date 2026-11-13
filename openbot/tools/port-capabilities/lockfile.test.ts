@@ -140,7 +140,11 @@ describe("rendering is idempotent", () => {
     const after = renderLockDocument(changed).split("\n");
     expect(before.length).toBe(after.length);
     const changedLines = before
-      .map((line, index) => ({ line, changed: line !== after[index], after: after[index] }))
+      .map((line, index) => ({
+        line,
+        changed: line !== after[index],
+        after: after[index],
+      }))
       .filter((entry) => entry.changed);
     expect(changedLines.length).toBe(1);
     expect(changedLines[0].line).toContain("github");
@@ -151,7 +155,9 @@ describe("rendering is idempotent", () => {
 
 describe("checksums are content-only", () => {
   test("sha256Hex matches the published vector for 'abc'", () => {
-    expect(sha256Hex("abc")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    expect(sha256Hex("abc")).toBe(
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    );
   });
 
   test("directorySha256 ignores mtime and is stable across re-reads", () => {
@@ -159,13 +165,21 @@ describe("checksums are content-only", () => {
     try {
       mkdirSync(join(root, "pkg/skills/inner"), { recursive: true });
       writeFileSync(join(root, "pkg/SKILL.md"), "# hello\n", "utf8");
-      writeFileSync(join(root, "pkg/skills/inner/SKILL.md"), "nested\n", "utf8");
+      writeFileSync(
+        join(root, "pkg/skills/inner/SKILL.md"),
+        "nested\n",
+        "utf8",
+      );
       const first = directorySha256(join(root, "pkg"));
       // Rewrite the same content: a fresh mtime must not change the hash.
       writeFileSync(join(root, "pkg/SKILL.md"), "# hello\n", "utf8");
       expect(directorySha256(join(root, "pkg"))).toBe(first);
       // Changing one file's content changes the hash.
-      writeFileSync(join(root, "pkg/skills/inner/SKILL.md"), "nested v2\n", "utf8");
+      writeFileSync(
+        join(root, "pkg/skills/inner/SKILL.md"),
+        "nested v2\n",
+        "utf8",
+      );
       expect(directorySha256(join(root, "pkg"))).not.toBe(first);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -205,13 +219,17 @@ describe("the nine §6.4 fields are fail-closed", () => {
       const broken = validEntry();
       delete (broken as unknown as Record<string, unknown>)[field];
       const violations = validateLockEntries([broken]);
-      expect(violations.some((violation) => violation.field === field)).toBe(true);
+      expect(violations.some((violation) => violation.field === field)).toBe(
+        true,
+      );
     }
   });
 
   test("an empty-string field counts as missing, not as present", () => {
     const violations = validateLockEntries([validEntry({ license: "  " })]);
-    expect(violations.some((violation) => violation.field === "license")).toBe(true);
+    expect(violations.some((violation) => violation.field === "license")).toBe(
+      true,
+    );
   });
 
   test("a malformed checksum or timestamp is refused, not tolerated", () => {
@@ -226,15 +244,17 @@ describe("the nine §6.4 fields are fail-closed", () => {
       ),
     ).toBe(true);
     expect(
-      validateLockEntries([validEntry({ redistributable: "false" as unknown as boolean })]).some(
-        (violation) => violation.field === "redistributable",
-      ),
+      validateLockEntries([
+        validEntry({ redistributable: "false" as unknown as boolean }),
+      ]).some((violation) => violation.field === "redistributable"),
     ).toBe(true);
   });
 
   test("duplicate kind:slug rows are refused", () => {
     const violations = validateLockEntries([validEntry(), validEntry()]);
-    expect(violations.some((violation) => violation.field === "slug")).toBe(true);
+    expect(violations.some((violation) => violation.field === "slug")).toBe(
+      true,
+    );
   });
 });
 
@@ -277,14 +297,23 @@ describe("the AGPL / Commons-Clause exclusion holds", () => {
       redistributable: true,
     });
     const violations = validateLockEntries([forged]);
-    expect(violations.some((violation) => violation.field === "redistributable")).toBe(true);
-    expect(violations.some((violation) => violation.field === "license")).toBe(true);
-    expect(() => assertValidLockEntries([forged])).toThrow(/不得标记为可再分发/);
+    expect(
+      violations.some((violation) => violation.field === "redistributable"),
+    ).toBe(true);
+    expect(violations.some((violation) => violation.field === "license")).toBe(
+      true,
+    );
+    expect(() => assertValidLockEntries([forged])).toThrow(
+      /不得标记为可再分发/,
+    );
   });
 
   test("the exclusion table still names both decided slugs", () => {
     // If a future edit drops a row from the table, this fails before the rule silently stops holding.
-    expect(Object.keys(LICENSE_EXCLUSIONS).sort()).toEqual(["guizang-ppt-skill", "taskmaster"]);
+    expect(Object.keys(LICENSE_EXCLUSIONS).sort()).toEqual([
+      "guizang-ppt-skill",
+      "taskmaster",
+    ]);
   });
 
   test("a non-excluded entry passes through the applier untouched", () => {
@@ -293,10 +322,22 @@ describe("the AGPL / Commons-Clause exclusion holds", () => {
   });
 
   test("isPermissiveLockLicense says yes for exactly the short allowlist", () => {
-    for (const license of ["mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc"]) {
+    for (const license of [
+      "mit",
+      "apache-2.0",
+      "bsd-2-clause",
+      "bsd-3-clause",
+      "isc",
+    ]) {
       expect(isPermissiveLockLicense(license)).toBe(true);
     }
-    for (const license of ["unspecified", "GPL-3.0-or-later", "AGPL-3.0", "MIT WITH Commons-Clause", ""]) {
+    for (const license of [
+      "unspecified",
+      "GPL-3.0-or-later",
+      "AGPL-3.0",
+      "MIT WITH Commons-Clause",
+      "",
+    ]) {
       expect(isPermissiveLockLicense(license)).toBe(false);
     }
   });

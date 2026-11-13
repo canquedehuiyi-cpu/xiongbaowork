@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 /**
  * `bun run port:capabilities` — converts the WorkBuddy capabilities installed on this machine into the
  * fragments an openbot tenant package needs, plus the two reports a reviewer signs off on.
@@ -16,26 +17,40 @@
  * spending an hour on the regexes.
  */
 import { homedir } from "node:os";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import {
-  auditCapabilities,
   type AuditFinding,
+  auditCapabilities,
   countByLevel,
   indexFindings,
 } from "./audit-toolrefs";
-import { buildCensus, type Census, CensusError, formatCensusCounts, formatCensusTiers, renderCensus } from "./census";
-import { EMITTED_REPORT_FILES, EMITTED_YAML_FILES, emitPackage } from "./emit-package";
-import { CONNECTOR_ALLOWLIST, type RunnableLevel } from "./mapping";
+import {
+  buildCensus,
+  type Census,
+  CensusError,
+  formatCensusCounts,
+  formatCensusTiers,
+  renderCensus,
+} from "./census";
+import {
+  EMITTED_REPORT_FILES,
+  EMITTED_YAML_FILES,
+  emitPackage,
+} from "./emit-package";
 import {
   assertValidManifest,
   buildManifest,
   validateManifest,
 } from "./manifest";
+import { CONNECTOR_ALLOWLIST, type RunnableLevel } from "./mapping";
 import { normalizeCapabilities } from "./normalize";
-import { readConnectorIndex, readWorkBuddy, SourceLayoutError } from "./read-workbuddy";
+import {
+  readConnectorIndex,
+  readWorkBuddy,
+  SourceLayoutError,
+} from "./read-workbuddy";
 
 /** CLI exit codes. `usage` is distinct so a script can tell a typo from a failed conversion. */
 const EXIT_OK = 0;
@@ -68,7 +83,12 @@ export interface CliOptions {
 }
 
 /** Default location of the census, anchored to the repo rather than to the caller's working directory. */
-export const DEFAULT_CENSUS_PATH = resolve(import.meta.dir, "..", "..", "capability-census.yaml");
+export const DEFAULT_CENSUS_PATH = resolve(
+  import.meta.dir,
+  "..",
+  "..",
+  "capability-census.yaml",
+);
 
 /** Thrown for a malformed command line; `main` turns it into exit code 2. */
 export class UsageError extends Error {
@@ -94,7 +114,12 @@ const USAGE = `用法：
 
 /** Expand a leading `~` and make the path absolute. */
 export function expandPath(input: string): string {
-  const expanded = input === "~" ? homedir() : input.startsWith("~/") ? join(homedir(), input.slice(2)) : input;
+  const expanded =
+    input === "~"
+      ? homedir()
+      : input.startsWith("~/")
+        ? join(homedir(), input.slice(2))
+        : input;
   return resolve(expanded);
 }
 
@@ -190,11 +215,15 @@ export function parseArgs(argv: readonly string[]): CliOptions {
   }
   const scope = (only ?? "l0").trim();
   if (!SUPPORTED_SCOPES.includes(scope as Scope)) {
-    throw new UsageError(`--only=${scope} 不受支持；P0 只实现 ${SUPPORTED_SCOPES.join(" / ")}`);
+    throw new UsageError(
+      `--only=${scope} 不受支持；P0 只实现 ${SUPPORTED_SCOPES.join(" / ")}`,
+    );
   }
   const connectorScope = (connectors ?? "l0").trim();
   if (connectorScope !== "l0" && connectorScope !== "all") {
-    throw new UsageError(`--connectors=${connectorScope} 不受支持；只支持 l0 / all`);
+    throw new UsageError(
+      `--connectors=${connectorScope} 不受支持；只支持 l0 / all`,
+    );
   }
   return {
     sourceRoot: expandPath(source ?? join(homedir(), ".workbuddy")),
@@ -204,7 +233,8 @@ export function parseArgs(argv: readonly string[]): CliOptions {
     verify,
     verifyOnly,
     census,
-    censusPath: censusPath === undefined ? DEFAULT_CENSUS_PATH : expandPath(censusPath),
+    censusPath:
+      censusPath === undefined ? DEFAULT_CENSUS_PATH : expandPath(censusPath),
     help: false,
   };
 }
@@ -217,7 +247,9 @@ export interface VerifyProblem {
 
 /** Cast a parsed YAML value to a record, or an empty one. */
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 /** Cast a parsed YAML value to a list of records. */
@@ -226,7 +258,10 @@ function asRecordList(value: unknown): Record<string, unknown>[] {
 }
 
 /** Read `agents.yaml` and return the ids and skill grants. */
-function readAgents(filePath: string, problems: VerifyProblem[]): { ids: string[]; grantCount: number; skills: string[] } {
+function readAgents(
+  filePath: string,
+  problems: VerifyProblem[],
+): { ids: string[]; grantCount: number; skills: string[] } {
   const doc = asRecord(parseYaml(readFileSync(filePath, "utf8")));
   const rows = asRecordList(doc.agents);
   // 空列表不算问题：只带技能或只带连接器的合法包，agents 就是空的。三类全空的判定在 verifyOutDir。
@@ -240,8 +275,14 @@ function readAgents(filePath: string, problems: VerifyProblem[]): { ids: string[
       continue;
     }
     ids.push(id);
-    if (typeof row.system_prompt !== "string" || row.system_prompt.trim() === "") {
-      problems.push({ file: "agents.yaml", detail: `${id} 的 system_prompt 为空` });
+    if (
+      typeof row.system_prompt !== "string" ||
+      row.system_prompt.trim() === ""
+    ) {
+      problems.push({
+        file: "agents.yaml",
+        detail: `${id} 的 system_prompt 为空`,
+      });
     }
     for (const skill of Array.isArray(row.skills) ? row.skills : []) {
       skills.push(String(skill));
@@ -252,7 +293,10 @@ function readAgents(filePath: string, problems: VerifyProblem[]): { ids: string[
 }
 
 /** Read `skills.yaml` and return the slugs plus any row whose `_porting` block is incomplete. */
-function readSkills(filePath: string, problems: VerifyProblem[]): { slugs: string[] } {
+function readSkills(
+  filePath: string,
+  problems: VerifyProblem[],
+): { slugs: string[] } {
   const doc = asRecord(parseYaml(readFileSync(filePath, "utf8")));
   const rows = asRecordList(doc.skills);
   // 空列表不算问题：只带专家的合法包，skills 就是空的。三类全空的判定在 verifyOutDir。
@@ -264,20 +308,42 @@ function readSkills(filePath: string, problems: VerifyProblem[]): { slugs: strin
       continue;
     }
     slugs.push(slug);
-    if (typeof row.instructions !== "string" || row.instructions.trim() === "") {
-      problems.push({ file: "skills.yaml", detail: `${slug} 的 instructions 为空` });
+    if (
+      typeof row.instructions !== "string" ||
+      row.instructions.trim() === ""
+    ) {
+      problems.push({
+        file: "skills.yaml",
+        detail: `${slug} 的 instructions 为空`,
+      });
     }
     if (!Array.isArray(row.tools) || (row.tools as unknown[]).length !== 0) {
-      problems.push({ file: "skills.yaml", detail: `${slug} 的 tools 在 P0 必须是空数组` });
+      problems.push({
+        file: "skills.yaml",
+        detail: `${slug} 的 tools 在 P0 必须是空数组`,
+      });
     }
     const porting = asRecord(row._porting);
     const runnable = porting.runnable;
-    if (runnable !== "full" && runnable !== "degraded" && runnable !== "blocked") {
-      problems.push({ file: "skills.yaml", detail: `${slug} 的 _porting.runnable 非法：${String(runnable)}` });
+    if (
+      runnable !== "full" &&
+      runnable !== "degraded" &&
+      runnable !== "blocked"
+    ) {
+      problems.push({
+        file: "skills.yaml",
+        detail: `${slug} 的 _porting.runnable 非法：${String(runnable)}`,
+      });
     }
     for (const field of ["source", "source_url", "checksum_sha256"]) {
-      if (typeof porting[field] !== "string" || String(porting[field]).trim() === "") {
-        problems.push({ file: "skills.yaml", detail: `${slug} 的 _porting.${field} 缺失` });
+      if (
+        typeof porting[field] !== "string" ||
+        String(porting[field]).trim() === ""
+      ) {
+        problems.push({
+          file: "skills.yaml",
+          detail: `${slug} 的 _porting.${field} 缺失`,
+        });
       }
     }
   }
@@ -285,14 +351,21 @@ function readSkills(filePath: string, problems: VerifyProblem[]): { slugs: strin
 }
 
 /** Read `teams.yaml` and check every referenced agent exists. */
-function readTeams(filePath: string, agentIds: ReadonlySet<string>, problems: VerifyProblem[]): number {
+function readTeams(
+  filePath: string,
+  agentIds: ReadonlySet<string>,
+  problems: VerifyProblem[],
+): number {
   const doc = asRecord(parseYaml(readFileSync(filePath, "utf8")));
   const rows = asRecordList(doc.teams);
   for (const row of rows) {
     const id = typeof row.id === "string" ? row.id : "";
     const lead = typeof row.lead === "string" ? row.lead : "";
     if (lead === "" || !agentIds.has(lead)) {
-      problems.push({ file: "teams.yaml", detail: `${id} 的 lead "${lead}" 不在 agents.yaml 里` });
+      problems.push({
+        file: "teams.yaml",
+        detail: `${id} 的 lead "${lead}" 不在 agents.yaml 里`,
+      });
     }
     const members = asRecordList(row.members);
     if (members.length === 0) {
@@ -301,17 +374,26 @@ function readTeams(filePath: string, agentIds: ReadonlySet<string>, problems: Ve
     for (const member of members) {
       const memberId = typeof member.id === "string" ? member.id : "";
       if (!agentIds.has(memberId)) {
-        problems.push({ file: "teams.yaml", detail: `${id} 的成员 "${memberId}" 不在 agents.yaml 里` });
+        problems.push({
+          file: "teams.yaml",
+          detail: `${id} 的成员 "${memberId}" 不在 agents.yaml 里`,
+        });
       }
     }
     for (const grant of asRecordList(row.address)) {
       const from = typeof grant.from === "string" ? grant.from : "";
       if (!agentIds.has(from)) {
-        problems.push({ file: "teams.yaml", detail: `${id} 的 address.from "${from}" 不在 agents.yaml 里` });
+        problems.push({
+          file: "teams.yaml",
+          detail: `${id} 的 address.from "${from}" 不在 agents.yaml 里`,
+        });
       }
       for (const to of Array.isArray(grant.to) ? grant.to : []) {
         if (!agentIds.has(String(to))) {
-          problems.push({ file: "teams.yaml", detail: `${id} 的 address.to "${String(to)}" 不在 agents.yaml 里` });
+          problems.push({
+            file: "teams.yaml",
+            detail: `${id} 的 address.to "${String(to)}" 不在 agents.yaml 里`,
+          });
         }
       }
     }
@@ -333,15 +415,30 @@ function readConnectors(filePath: string, problems: VerifyProblem[]): string[] {
     try {
       parsedHost = new URL(url).host;
     } catch {
-      problems.push({ file: "connectors.yaml", detail: `${id} 的 url 无法解析：${url}` });
+      problems.push({
+        file: "connectors.yaml",
+        detail: `${id} 的 url 无法解析：${url}`,
+      });
       continue;
     }
     if (parsedHost !== host) {
-      problems.push({ file: "connectors.yaml", detail: `${id} 的 host "${host}" 与 url 的 "${parsedHost}" 不一致` });
+      problems.push({
+        file: "connectors.yaml",
+        detail: `${id} 的 host "${host}" 与 url 的 "${parsedHost}" 不一致`,
+      });
     }
-    for (const field of ["title", "vendor", "auth", "credential_env", "source_url"]) {
+    for (const field of [
+      "title",
+      "vendor",
+      "auth",
+      "credential_env",
+      "source_url",
+    ]) {
       if (typeof row[field] !== "string" || String(row[field]).trim() === "") {
-        problems.push({ file: "connectors.yaml", detail: `${id} 的 ${field} 缺失` });
+        problems.push({
+          file: "connectors.yaml",
+          detail: `${id} 的 ${field} 缺失`,
+        });
       }
     }
   }
@@ -367,32 +464,54 @@ export function verifyOutDir(outDir: string): VerifyProblem[] {
   }
   const agents = readAgents(join(outDir, "agents.yaml"), problems);
   const skills = readSkills(join(outDir, "skills.yaml"), problems);
-  const teamCount = readTeams(join(outDir, "teams.yaml"), new Set(agents.ids), problems);
-  const connectorIds = readConnectors(join(outDir, "connectors.yaml"), problems);
+  const teamCount = readTeams(
+    join(outDir, "teams.yaml"),
+    new Set(agents.ids),
+    problems,
+  );
+  const connectorIds = readConnectors(
+    join(outDir, "connectors.yaml"),
+    problems,
+  );
 
   // 只要求“三类不全空”：读取端（readWorkBuddy）本来就允许任何一类缺席，只带专家或只带技能的
   // 包是合法产物；三类全空才说明这份输出什么能力都没有，等于什么都没移植。
-  if (agents.ids.length === 0 && skills.slugs.length === 0 && connectorIds.length === 0) {
+  if (
+    agents.ids.length === 0 &&
+    skills.slugs.length === 0 &&
+    connectorIds.length === 0
+  ) {
     problems.push({
       file: "agents.yaml",
-      detail: "agents/skills/connectors 三类条目全空——这份输出没有任何能力，等于什么都没移植",
+      detail:
+        "agents/skills/connectors 三类条目全空——这份输出没有任何能力，等于什么都没移植",
     });
   }
 
   const skillSlugs = new Set(skills.slugs);
   for (const slug of agents.skills) {
     if (!skillSlugs.has(slug)) {
-      problems.push({ file: "agents.yaml", detail: `skills[] 引用了不存在的技能：${slug}` });
+      problems.push({
+        file: "agents.yaml",
+        detail: `skills[] 引用了不存在的技能：${slug}`,
+      });
     }
   }
 
-  const manifestDoc = parseYaml(readFileSync(join(outDir, "capability-manifest.yaml"), "utf8"));
+  const manifestDoc = parseYaml(
+    readFileSync(join(outDir, "capability-manifest.yaml"), "utf8"),
+  );
   const manifestRows = asRecordList(manifestDoc);
   if (!Array.isArray(manifestDoc)) {
-    problems.push({ file: "capability-manifest.yaml", detail: "根节点必须是序列" });
+    problems.push({
+      file: "capability-manifest.yaml",
+      detail: "根节点必须是序列",
+    });
   }
   const violations = validateManifest(
-    manifestRows.map((row) => row as unknown as Parameters<typeof validateManifest>[0][number]),
+    manifestRows.map(
+      (row) => row as unknown as Parameters<typeof validateManifest>[0][number],
+    ),
   );
   for (const violation of violations) {
     problems.push({
@@ -400,7 +519,8 @@ export function verifyOutDir(outDir: string): VerifyProblem[] {
       detail: `第 ${violation.index + 1} 行 ${violation.slug}.${violation.field}：${violation.problem}`,
     });
   }
-  const expectedRows = agents.ids.length + skills.slugs.length + teamCount + connectorIds.length;
+  const expectedRows =
+    agents.ids.length + skills.slugs.length + teamCount + connectorIds.length;
   if (manifestRows.length !== expectedRows) {
     problems.push({
       file: "capability-manifest.yaml",
@@ -446,11 +566,11 @@ function runCensus(options: CliOptions): number {
     const census = buildCensus(options.sourceRoot);
     mkdirSync(dirname(options.censusPath), { recursive: true });
     writeFileSync(options.censusPath, renderCensus(census), "utf8");
-    console.log(`[port:capabilities] 普查 ${census.counts.total} 条：${formatCensusCounts(census)}`);
-    console.log(`[port:capabilities] 三档 ${formatCensusTiers(census)}`);
     console.log(
-      `[port:capabilities] transport ${TRANSPORT_SUMMARY(census)}`,
+      `[port:capabilities] 普查 ${census.counts.total} 条：${formatCensusCounts(census)}`,
     );
+    console.log(`[port:capabilities] 三档 ${formatCensusTiers(census)}`);
+    console.log(`[port:capabilities] transport ${TRANSPORT_SUMMARY(census)}`);
     console.log(`[port:capabilities] 写出 ${options.censusPath}`);
     return EXIT_OK;
   } catch (error) {
@@ -493,7 +613,9 @@ export function main(argv: readonly string[]): number {
   if (options.verifyOnly) {
     const problems = verifyOutDir(options.outDir);
     if (problems.length > 0) {
-      console.error(`[port:capabilities] verify 失败（${problems.length} 处）：`);
+      console.error(
+        `[port:capabilities] verify 失败（${problems.length} 处）：`,
+      );
       for (const problem of problems) {
         console.error(`  - ${problem.file}: ${problem.detail}`);
       }
@@ -526,7 +648,9 @@ export function main(argv: readonly string[]): number {
       `[port:capabilities] 读取 专家包 ${snapshot.packages.length} / 用户技能 ${snapshot.userSkills.length} / 连接器 ${snapshot.connectors.length}`,
     );
 
-    const capabilities = normalizeCapabilities(snapshot, { connectorSurvey: options.connectors === "all" });
+    const capabilities = normalizeCapabilities(snapshot, {
+      connectorSurvey: options.connectors === "all",
+    });
     console.log(
       `[port:capabilities] 归一 agent ${capabilities.agents.length} / team ${capabilities.teams.length} / skill ${capabilities.skills.length} / connector ${capabilities.connectors.length}`,
     );
@@ -538,10 +662,14 @@ export function main(argv: readonly string[]): number {
       );
     }
     if (capabilities.dropped.length > 0) {
-      console.log(`[port:capabilities] 丢弃 ${capabilities.dropped.length} 项（见 slug-conflicts.md）`);
+      console.log(
+        `[port:capabilities] 丢弃 ${capabilities.dropped.length} 项（见 slug-conflicts.md）`,
+      );
     }
 
-    const connectorIds = new Set(capabilities.connectors.map((connector) => connector.id));
+    const connectorIds = new Set(
+      capabilities.connectors.map((connector) => connector.id),
+    );
     const skillFindings = auditCapabilities(
       capabilities.skills.map((skill) => ({
         slug: skill.slug,
@@ -558,17 +686,24 @@ export function main(argv: readonly string[]): number {
       })),
       connectorIds,
     );
-    console.log(`[port:capabilities] 审计 skill ${formatCounts(countByLevel(skillFindings))}`);
-    console.log(`[port:capabilities] 审计 agent ${formatCounts(countByLevel(agentFindings))}`);
+    console.log(
+      `[port:capabilities] 审计 skill ${formatCounts(countByLevel(skillFindings))}`,
+    );
+    console.log(
+      `[port:capabilities] 审计 agent ${formatCounts(countByLevel(agentFindings))}`,
+    );
 
     const skillFindingIndex = indexFindings(skillFindings);
-    const agentFindingIndex: Map<string, AuditFinding> = indexFindings(agentFindings);
+    const agentFindingIndex: Map<string, AuditFinding> =
+      indexFindings(agentFindings);
     const manifest = buildManifest(capabilities, {
       skillFindings: skillFindingIndex,
       agentFindings: agentFindingIndex,
     });
     assertValidManifest(manifest);
-    console.log(`[port:capabilities] manifest ${manifest.length} 条，9 字段齐备`);
+    console.log(
+      `[port:capabilities] manifest ${manifest.length} 条，9 字段齐备`,
+    );
 
     const emitted = emitPackage({
       outDir: options.outDir,
@@ -577,12 +712,16 @@ export function main(argv: readonly string[]): number {
       skillFindings,
       agentFindings,
     });
-    console.log(`[port:capabilities] 写出 ${emitted.files.length} 个文件 → ${emitted.outDir}`);
+    console.log(
+      `[port:capabilities] 写出 ${emitted.files.length} 个文件 → ${emitted.outDir}`,
+    );
 
     if (options.verify) {
       const problems = verifyOutDir(options.outDir);
       if (problems.length > 0) {
-        console.error(`[port:capabilities] verify 失败（${problems.length} 处）：`);
+        console.error(
+          `[port:capabilities] verify 失败（${problems.length} 处）：`,
+        );
         for (const problem of problems) {
           console.error(`  - ${problem.file}: ${problem.detail}`);
         }

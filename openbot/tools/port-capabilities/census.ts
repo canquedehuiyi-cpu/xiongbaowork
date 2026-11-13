@@ -22,7 +22,11 @@ import { stripBom } from "./read-workbuddy";
 export type CensusTransport = "mcp-url" | "mcp-command" | "cli" | "missing";
 
 /** openbot's three credential models, plus `unknown` for a row whose source value maps to none of them. */
-export type CensusAuth = "none" | "user-oauth" | "deployment-bearer" | "unknown";
+export type CensusAuth =
+  | "none"
+  | "user-oauth"
+  | "deployment-bearer"
+  | "unknown";
 
 /**
  * The three dispositions of §4a-3, which the plan makes the *only* accepted summary shape: "declarable /
@@ -41,7 +45,11 @@ export type CensusTier = "A" | "B" | "C";
  * connector can be declared; the reason code says what to do next, and each code maps to exactly one
  * action.
  */
-export type CensusReasonCode = "ok" | "auth-undeclared" | "platform-held-credential" | "no-remote-endpoint";
+export type CensusReasonCode =
+  | "ok"
+  | "auth-undeclared"
+  | "platform-held-credential"
+  | "no-remote-endpoint";
 
 /** One catalogue row, after the survey. */
 export interface CensusRow {
@@ -84,7 +92,14 @@ export interface Census {
     by_reason_code: Record<CensusReasonCode, number>;
   };
   /** transport × auth_mode, the table that makes "what is left to do" arguable. */
-  cross_table: { transport: CensusTransport; none: number; "user-oauth": number; "deployment-bearer": number; unknown: number; total: number }[];
+  cross_table: {
+    transport: CensusTransport;
+    none: number;
+    "user-oauth": number;
+    "deployment-bearer": number;
+    unknown: number;
+    total: number;
+  }[];
   rows: CensusRow[];
 }
 
@@ -120,10 +135,20 @@ export const AUTH_MODE_MAP: Readonly<Record<string, CensusAuth>> = {
 };
 
 /** Every transport in report order; also the key order of `counts.by_transport`. */
-const TRANSPORTS: readonly CensusTransport[] = ["mcp-url", "mcp-command", "cli", "missing"];
+const TRANSPORTS: readonly CensusTransport[] = [
+  "mcp-url",
+  "mcp-command",
+  "cli",
+  "missing",
+];
 
 /** Every auth model in report order; also the key order of `counts.by_auth_mode`. */
-const AUTHS: readonly CensusAuth[] = ["none", "user-oauth", "deployment-bearer", "unknown"];
+const AUTHS: readonly CensusAuth[] = [
+  "none",
+  "user-oauth",
+  "deployment-bearer",
+  "unknown",
+];
 
 /** Every verdict in severity order, matching `SEVERITY_ORDER`. */
 const VERDICTS: readonly RunnableLevel[] = ["full", "degraded", "blocked"];
@@ -209,7 +234,10 @@ export function mapAuthMode(raw: string): CensusAuth {
  * `server-side` is "the vendor holds the credential" (tier B). Everything that is not a remote URL is
  * tier C regardless of auth mode — a credential model cannot rescue a spec with no endpoint.
  */
-export function judgeTier(transport: CensusTransport, rawAuthMode: string): CensusTier {
+export function judgeTier(
+  transport: CensusTransport,
+  rawAuthMode: string,
+): CensusTier {
   if (transport !== "mcp-url") {
     return "C";
   }
@@ -225,7 +253,10 @@ export function judgeTier(transport: CensusTransport, rawAuthMode: string): Cens
  *   platform-held-credential → declare + ask the user to bring a token
  *   no-remote-endpoint     → drop, and record why, until upstream ships a remote endpoint
  */
-export function judgeReasonCode(tier: CensusTier, rawAuthMode: string): CensusReasonCode {
+export function judgeReasonCode(
+  tier: CensusTier,
+  rawAuthMode: string,
+): CensusReasonCode {
   if (tier === "C") {
     return "no-remote-endpoint";
   }
@@ -256,14 +287,29 @@ export function judgeConnector(
 ): { verdict: RunnableLevel; reason: string } {
   switch (transport) {
     case "missing":
-      return { verdict: "blocked", reason: "目录里没有 mcp.json 也没有 cli.json，无 server 规格可移植" };
+      return {
+        verdict: "blocked",
+        reason: "目录里没有 mcp.json 也没有 cli.json，无 server 规格可移植",
+      };
     case "cli":
-      return { verdict: "blocked", reason: "cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时" };
+      return {
+        verdict: "blocked",
+        reason:
+          "cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时",
+      };
     case "mcp-command":
-      return { verdict: "blocked", reason: "mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时" };
+      return {
+        verdict: "blocked",
+        reason:
+          "mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时",
+      };
     case "mcp-url":
       if (auth === "unknown") {
-        return { verdict: "degraded", reason: "远端 server 可直连，但 auth_mode 无法映射到 openbot 的三种凭据模型，需人工定夺" };
+        return {
+          verdict: "degraded",
+          reason:
+            "远端 server 可直连，但 auth_mode 无法映射到 openbot 的三种凭据模型，需人工定夺",
+        };
       }
       if (rawAuthMode === "server-side") {
         return {
@@ -272,7 +318,10 @@ export function judgeConnector(
             "远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用",
         };
       }
-      return { verdict: "full", reason: `远端 server + 凭据模型 ${auth}，openbot 可直接托管` };
+      return {
+        verdict: "full",
+        reason: `远端 server + 凭据模型 ${auth}，openbot 可直接托管`,
+      };
     default:
       return { verdict: "blocked", reason: "未知 transport" };
   }
@@ -298,15 +347,24 @@ interface Catalogue {
  */
 function readCatalogue(sourceRoot: string): Catalogue {
   const marketplaceRoot = join(sourceRoot, CATALOGUE_DIR);
-  const indexPath = join(marketplaceRoot, ".codebuddy-connector", "connectors.json");
+  const indexPath = join(
+    marketplaceRoot,
+    ".codebuddy-connector",
+    "connectors.json",
+  );
   if (!existsSync(indexPath)) {
     throw new CensusError(`找不到连接器清单：${indexPath}`);
   }
   const bytes = readFileSync(indexPath, "utf8");
   const parsed: unknown = JSON.parse(stripBom(bytes));
-  const list = isRecord(parsed) && Array.isArray(parsed.connectors) ? parsed.connectors : null;
+  const list =
+    isRecord(parsed) && Array.isArray(parsed.connectors)
+      ? parsed.connectors
+      : null;
   if (list === null) {
-    throw new CensusError(`连接器清单结构不符合预期（缺少 connectors 数组）：${indexPath}`);
+    throw new CensusError(
+      `连接器清单结构不符合预期（缺少 connectors 数组）：${indexPath}`,
+    );
   }
   const seen = new Set<string>();
   const rows: CensusRow[] = [];
@@ -321,15 +379,24 @@ function readCatalogue(sourceRoot: string): Catalogue {
     }
     seen.add(id);
     const shipped = readShippedSpec(marketplaceRoot, id);
-    const raw = typeof entry.auth_mode === "string" && entry.auth_mode !== "" ? entry.auth_mode : "(absent)";
+    const raw =
+      typeof entry.auth_mode === "string" && entry.auth_mode !== ""
+        ? entry.auth_mode
+        : "(absent)";
     const mapped = mapAuthMode(raw);
     const { verdict, reason } = judgeConnector(shipped.transport, mapped, raw);
     const tier = judgeTier(shipped.transport, raw);
     rows.push({
       id,
-      directory: shipped.file === "" ? `${CONNECTOR_DIR}/${id}（缺规格文件）` : `${CONNECTOR_DIR}/${id}/${shipped.file}`,
+      directory:
+        shipped.file === ""
+          ? `${CONNECTOR_DIR}/${id}（缺规格文件）`
+          : `${CONNECTOR_DIR}/${id}/${shipped.file}`,
       transport: shipped.transport,
-      declared_type: typeof entry.type === "string" && entry.type !== "" ? entry.type : "(absent)",
+      declared_type:
+        typeof entry.type === "string" && entry.type !== ""
+          ? entry.type
+          : "(absent)",
       auth_mode_raw: raw,
       auth_mode_mapped: mapped,
       tier,
@@ -351,9 +418,23 @@ function readCatalogue(sourceRoot: string): Catalogue {
 /** Survey the marketplace under `sourceRoot` and return the census document. */
 export function buildCensus(sourceRoot: string): Census {
   const catalogue = readCatalogue(sourceRoot);
-  const by_transport: Record<CensusTransport, number> = { "mcp-url": 0, "mcp-command": 0, cli: 0, missing: 0 };
-  const by_auth_mode: Record<CensusAuth, number> = { none: 0, "user-oauth": 0, "deployment-bearer": 0, unknown: 0 };
-  const by_verdict: Record<RunnableLevel, number> = { full: 0, degraded: 0, blocked: 0 };
+  const by_transport: Record<CensusTransport, number> = {
+    "mcp-url": 0,
+    "mcp-command": 0,
+    cli: 0,
+    missing: 0,
+  };
+  const by_auth_mode: Record<CensusAuth, number> = {
+    none: 0,
+    "user-oauth": 0,
+    "deployment-bearer": 0,
+    unknown: 0,
+  };
+  const by_verdict: Record<RunnableLevel, number> = {
+    full: 0,
+    degraded: 0,
+    blocked: 0,
+  };
   const by_tier: Record<CensusTier, number> = { A: 0, B: 0, C: 0 };
   const by_reason_code: Record<CensusReasonCode, number> = {
     ok: 0,
@@ -374,7 +455,14 @@ export function buildCensus(sourceRoot: string): Census {
     (row) => row.tier === "A" && row.auth_mode_raw === "(absent)",
   ).length;
   const cross_table = TRANSPORTS.map((transport) => {
-    const bucket = { transport, none: 0, "user-oauth": 0, "deployment-bearer": 0, unknown: 0, total: 0 };
+    const bucket = {
+      transport,
+      none: 0,
+      "user-oauth": 0,
+      "deployment-bearer": 0,
+      unknown: 0,
+      total: 0,
+    };
     for (const row of catalogue.rows) {
       if (row.transport !== transport) {
         continue;
@@ -387,7 +475,15 @@ export function buildCensus(sourceRoot: string): Census {
   const census: Census = {
     generated_at: catalogue.updatedAt,
     source_index_checksum: catalogue.checksum,
-    counts: { total: catalogue.rows.length, by_transport, by_auth_mode, by_verdict, by_tier, auth_undeclared, by_reason_code },
+    counts: {
+      total: catalogue.rows.length,
+      by_transport,
+      by_auth_mode,
+      by_verdict,
+      by_tier,
+      auth_undeclared,
+      by_reason_code,
+    },
     cross_table,
     rows: catalogue.rows,
   };
@@ -403,9 +499,23 @@ export function buildCensus(sourceRoot: string): Census {
  * number in front of a reviewer with no way to notice, so an inconsistency is a hard failure, not a warning.
  */
 export function assertCensusConsistent(census: Census): void {
-  const tally: Record<RunnableLevel, number> = { full: 0, degraded: 0, blocked: 0 };
-  const transportTally: Record<CensusTransport, number> = { "mcp-url": 0, "mcp-command": 0, cli: 0, missing: 0 };
-  const authTally: Record<CensusAuth, number> = { none: 0, "user-oauth": 0, "deployment-bearer": 0, unknown: 0 };
+  const tally: Record<RunnableLevel, number> = {
+    full: 0,
+    degraded: 0,
+    blocked: 0,
+  };
+  const transportTally: Record<CensusTransport, number> = {
+    "mcp-url": 0,
+    "mcp-command": 0,
+    cli: 0,
+    missing: 0,
+  };
+  const authTally: Record<CensusAuth, number> = {
+    none: 0,
+    "user-oauth": 0,
+    "deployment-bearer": 0,
+    unknown: 0,
+  };
   const tierTally: Record<CensusTier, number> = { A: 0, B: 0, C: 0 };
   const reasonTally: Record<CensusReasonCode, number> = {
     ok: 0,
@@ -447,7 +557,9 @@ export function assertCensusConsistent(census: Census): void {
   }
   for (const tier of TIERS) {
     if (census.counts.by_tier[tier] !== tierTally[tier]) {
-      throw new CensusError(`counts.by_tier.${tier} = ${census.counts.by_tier[tier]}，但逐行统计是 ${tierTally[tier]}`);
+      throw new CensusError(
+        `counts.by_tier.${tier} = ${census.counts.by_tier[tier]}，但逐行统计是 ${tierTally[tier]}`,
+      );
     }
   }
   for (const code of REASON_CODES) {
@@ -473,25 +585,45 @@ export function assertCensusConsistent(census: Census): void {
       `tier A(${tierTally.A}) + B(${tierTally.B}) = ${tierTally.A + tierTally.B} ≠ mcp-url ${transportTally["mcp-url"]}`,
     );
   }
-  if (tierTally.C !== transportTally["mcp-command"] + transportTally.cli + transportTally.missing) {
+  if (
+    tierTally.C !==
+    transportTally["mcp-command"] + transportTally.cli + transportTally.missing
+  ) {
     throw new CensusError(
       `tier C(${tierTally.C}) ≠ 无远程端点全体 ${transportTally["mcp-command"] + transportTally.cli + transportTally.missing}`,
     );
   }
-  const rowTotal = VERDICTS.reduce((sum, level) => sum + census.counts.by_verdict[level], 0);
-  if (census.counts.total !== census.rows.length || census.counts.total !== rowTotal) {
+  const rowTotal = VERDICTS.reduce(
+    (sum, level) => sum + census.counts.by_verdict[level],
+    0,
+  );
+  if (
+    census.counts.total !== census.rows.length ||
+    census.counts.total !== rowTotal
+  ) {
     throw new CensusError(
       `counts.total = ${census.counts.total}，rows = ${census.rows.length}，by_verdict 合计 = ${rowTotal}`,
     );
   }
-  const crossTotal = census.cross_table.reduce((sum, bucket) => sum + bucket.total, 0);
+  const crossTotal = census.cross_table.reduce(
+    (sum, bucket) => sum + bucket.total,
+    0,
+  );
   if (crossTotal !== census.counts.total) {
-    throw new CensusError(`cross_table 合计 ${crossTotal} ≠ counts.total ${census.counts.total}`);
+    throw new CensusError(
+      `cross_table 合计 ${crossTotal} ≠ counts.total ${census.counts.total}`,
+    );
   }
   for (const bucket of census.cross_table) {
-    const rowSum = bucket.none + bucket["user-oauth"] + bucket["deployment-bearer"] + bucket.unknown;
+    const rowSum =
+      bucket.none +
+      bucket["user-oauth"] +
+      bucket["deployment-bearer"] +
+      bucket.unknown;
     if (rowSum !== bucket.total) {
-      throw new CensusError(`cross_table 的 ${bucket.transport} 行分项合计 ${rowSum} ≠ total ${bucket.total}`);
+      throw new CensusError(
+        `cross_table 的 ${bucket.transport} 行分项合计 ${rowSum} ≠ total ${bucket.total}`,
+      );
     }
     if (bucket.total !== census.counts.by_transport[bucket.transport]) {
       throw new CensusError(
@@ -503,7 +635,9 @@ export function assertCensusConsistent(census: Census): void {
 
 /** One line per verdict with its count, for the CLI summary. */
 export function formatCensusCounts(census: Census): string {
-  return VERDICTS.map((level) => `${level} ${census.counts.by_verdict[level]}`).join(" / ");
+  return VERDICTS.map(
+    (level) => `${level} ${census.counts.by_verdict[level]}`,
+  ).join(" / ");
 }
 
 /**

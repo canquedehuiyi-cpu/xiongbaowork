@@ -27,7 +27,15 @@
  *   bun scripts/fetch-capabilities.ts --download          # probes the official URLs, refuses on 404
  *   bun scripts/fetch-capabilities.ts --from-local        # cache + capability-lock.yaml
  */
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import {
@@ -101,11 +109,21 @@ export const CHANNELS: readonly ChannelLocation[] = [
 ];
 
 /** The URLs the plan cites for the L1 bundles. `--download` probes them; all three measured 404. */
-export const OFFICIAL_BUNDLE_URLS: readonly { id: LockChannel; url: string }[] = [
-  { id: "official-plugins", url: "https://download.codebuddy.cn/workbuddy/skill-marketplace.zip" },
-  { id: "experts", url: "https://download.codebuddy.cn/workbuddy/expert-marketplace.zip" },
-  { id: "connectors", url: "https://download.codebuddy.cn/workbuddy/connector-marketplace.zip" },
-];
+export const OFFICIAL_BUNDLE_URLS: readonly { id: LockChannel; url: string }[] =
+  [
+    {
+      id: "official-plugins",
+      url: "https://download.codebuddy.cn/workbuddy/skill-marketplace.zip",
+    },
+    {
+      id: "experts",
+      url: "https://download.codebuddy.cn/workbuddy/expert-marketplace.zip",
+    },
+    {
+      id: "connectors",
+      url: "https://download.codebuddy.cn/workbuddy/connector-marketplace.zip",
+    },
+  ];
 
 /** Thrown when the local snapshot does not look like the layout this script measures. */
 export class SnapshotError extends Error {
@@ -152,7 +170,9 @@ function listDirectories(path: string): string[] {
     if (code === "ENOENT" || code === "ENOTDIR") {
       return [];
     }
-    throw new SnapshotError(`读取目录失败：${toPosix(resolve(path))}（${code}）`);
+    throw new SnapshotError(
+      `读取目录失败：${toPosix(resolve(path))}（${code}）`,
+    );
   }
 }
 
@@ -204,7 +224,9 @@ function readDownloadedAt(packageRoot: string, fallbackPath: string): string {
  * Missing or empty yields `undefined`, and the caller falls through to the LICENSE file, then to
  * `unspecified`. The pipeline never guesses a licence id it did not read.
  */
-export function readFrontMatterLicense(skillMdPath: string): string | undefined {
+export function readFrontMatterLicense(
+  skillMdPath: string,
+): string | undefined {
   const text = readFileSync(skillMdPath, "utf8");
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
   if (!match) {
@@ -257,7 +279,11 @@ function findLicenseFile(directory: string): string | undefined {
 }
 
 /** The licence a unit declares: plugin.json first, then front matter, then a LICENSE file, then unspecified. */
-function declaredLicense(meta: PluginJsonMeta, frontMatterPath: string | undefined, directory: string): string {
+function declaredLicense(
+  meta: PluginJsonMeta,
+  frontMatterPath: string | undefined,
+  directory: string,
+): string {
   const fromMeta = metaString(meta, "license");
   if (fromMeta !== undefined) {
     return fromMeta;
@@ -294,7 +320,9 @@ function attributionFromAuthor(author: unknown): string {
 
 /** The single base every entry's `source` prose is built on. */
 function sourceDescription(channel: ChannelLocation): string {
-  return channel.url !== "" ? channel.url : `local snapshot ~/.workbuddy/${channel.homePath}`;
+  return channel.url !== ""
+    ? channel.url
+    : `local snapshot ~/.workbuddy/${channel.homePath}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +364,10 @@ function readPluginMeta(packageRoot: string): PluginJsonMeta {
 }
 
 /** A string field of a metadata record, or `undefined`. */
-function metaString(meta: PluginJsonMeta, key: keyof PluginJsonMeta): string | undefined {
+function metaString(
+  meta: PluginJsonMeta,
+  key: keyof PluginJsonMeta,
+): string | undefined {
   const value = meta[key];
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
@@ -350,14 +381,21 @@ function metaString(meta: PluginJsonMeta, key: keyof PluginJsonMeta): string | u
  * channel-wide override: every package that declares no licence hashes to `unspecified`, which is not
  * permissive — the only entries that end up `true` are ones whose authors wrote a licence id down.
  */
-export function collectExpertChannel(expertsRoot: string, channel: ChannelLocation): ChannelCollection {
+export function collectExpertChannel(
+  expertsRoot: string,
+  channel: ChannelLocation,
+): ChannelCollection {
   const pluginsRoot = join(expertsRoot, "plugins");
   if (!isDirectory(pluginsRoot)) {
-    throw new SnapshotError(`专家市场快照缺少 plugins/：${toPosix(resolve(pluginsRoot))}`);
+    throw new SnapshotError(
+      `专家市场快照缺少 plugins/：${toPosix(resolve(pluginsRoot))}`,
+    );
   }
   const entries: LockEntry[] = [];
   const indexFile = join(expertsRoot, ".codebuddy-plugin", "marketplace.json");
-  const indexChecksum = isFile(indexFile) ? fileSha256(indexFile) : sha256Hex("(absent)");
+  const indexChecksum = isFile(indexFile)
+    ? fileSha256(indexFile)
+    : sha256Hex("(absent)");
   let latestFetchedAt = "";
   /** First pass: count skill directory names, so collisions get a package prefix deterministically. */
   const skillNameCounts = new Map<string, number>();
@@ -377,7 +415,10 @@ export function collectExpertChannel(expertsRoot: string, channel: ChannelLocati
     if (!isFile(join(packageRoot, ".codebuddy-plugin", "plugin.json"))) {
       continue;
     }
-    const fetchedAt = readDownloadedAt(packageRoot, join(packageRoot, ".codebuddy-plugin", "plugin.json"));
+    const fetchedAt = readDownloadedAt(
+      packageRoot,
+      join(packageRoot, ".codebuddy-plugin", "plugin.json"),
+    );
     latestFetchedAt = latestFetchedAt > fetchedAt ? latestFetchedAt : fetchedAt;
     const license = declaredLicense(meta, undefined, packageRoot);
     entries.push({
@@ -395,7 +436,9 @@ export function collectExpertChannel(expertsRoot: string, channel: ChannelLocati
       attribution: attributionFromAuthor(meta.author),
       fetched_at: fetchedAt,
     });
-    const declaredSkills = Array.isArray(meta.skills) ? meta.skills.map((entry) => String(entry)) : [];
+    const declaredSkills = Array.isArray(meta.skills)
+      ? meta.skills.map((entry) => String(entry))
+      : [];
     for (const reference of declaredSkills) {
       const skillRoot = join(packageRoot, reference.replace(/^\.\//, ""));
       if (!isFile(join(skillRoot, "SKILL.md"))) {
@@ -419,7 +462,11 @@ export function collectExpertChannel(expertsRoot: string, channel: ChannelLocati
       (skillNameCounts.get(pending.slugBase) ?? 0) > 1
         ? `${pending.packageDir}--${pending.slugBase}`
         : pending.slugBase;
-    const license = declaredLicense({}, join(pending.skillRoot, "SKILL.md"), pending.skillRoot);
+    const license = declaredLicense(
+      {},
+      join(pending.skillRoot, "SKILL.md"),
+      pending.skillRoot,
+    );
     entries.push({
       slug,
       kind: "skill",
@@ -463,17 +510,24 @@ export function collectOfficialPluginChannel(
       `官方插件市场快照缺少 .codebuddy-plugin/marketplace.json：${toPosix(resolve(channelRoot))}`,
     );
   }
-  const index = readJson<{ plugins?: { name?: unknown; version?: unknown; source?: unknown }[] }>(indexFile);
+  const index = readJson<{
+    plugins?: { name?: unknown; version?: unknown; source?: unknown }[];
+  }>(indexFile);
   const rows = index.plugins ?? [];
   if (rows.length === 0) {
-    throw new SnapshotError(`官方插件市场索引没有 plugins 行：${toPosix(resolve(indexFile))}`);
+    throw new SnapshotError(
+      `官方插件市场索引没有 plugins 行：${toPosix(resolve(indexFile))}`,
+    );
   }
   // The channel's own download record: the one place a bundle URL and etag exist as observed facts.
   const zipMetaPath = join(channelRoot, ".zip-metadata.json");
   const zipMeta = isFile(zipMetaPath)
-    ? readJson<{ url?: unknown; etag?: unknown; downloadedAt?: unknown }>(zipMetaPath)
+    ? readJson<{ url?: unknown; etag?: unknown; downloadedAt?: unknown }>(
+        zipMetaPath,
+      )
     : {};
-  const recordedUrl = typeof zipMeta.url === "string" && zipMeta.url !== "" ? zipMeta.url : "";
+  const recordedUrl =
+    typeof zipMeta.url === "string" && zipMeta.url !== "" ? zipMeta.url : "";
   const versionFile = join(channelRoot, ".marketplace-version");
   const recordedVersion =
     typeof zipMeta.etag === "string" && zipMeta.etag !== ""
@@ -482,15 +536,20 @@ export function collectOfficialPluginChannel(
         ? readFileSync(versionFile, "utf8").trim()
         : "unspecified";
   const channelFetchedAt =
-    typeof zipMeta.downloadedAt === "string" && !Number.isNaN(Date.parse(zipMeta.downloadedAt))
+    typeof zipMeta.downloadedAt === "string" &&
+    !Number.isNaN(Date.parse(zipMeta.downloadedAt))
       ? new Date(Date.parse(zipMeta.downloadedAt)).toISOString()
       : isoFromMtime(indexFile);
   const entries: LockEntry[] = [];
   for (const row of rows) {
-    const name = typeof row.name === "string" && row.name !== "" ? row.name : null;
-    const source = typeof row.source === "string" && row.source !== "" ? row.source : null;
+    const name =
+      typeof row.name === "string" && row.name !== "" ? row.name : null;
+    const source =
+      typeof row.source === "string" && row.source !== "" ? row.source : null;
     if (name === null || source === null) {
-      throw new SnapshotError(`官方插件市场索引存在缺 name/source 的行（共 ${rows.length} 行）`);
+      throw new SnapshotError(
+        `官方插件市场索引存在缺 name/source 的行（共 ${rows.length} 行）`,
+      );
     }
     const pluginRoot = join(channelRoot, source.replace(/^\.\//, ""));
     const meta = readPluginMeta(pluginRoot);
@@ -502,8 +561,12 @@ export function collectOfficialPluginChannel(
       origin: source.replace(/^\.\//, ""),
       source: sourceDescription(channel),
       source_url: channel.url !== "" ? channel.url : recordedUrl,
-      source_version: metaString(meta, "version") ?? (typeof row.version === "string" ? row.version : "unspecified"),
-      checksum_sha256: isDirectory(pluginRoot) ? directorySha256(pluginRoot) : sha256Hex("(missing)"),
+      source_version:
+        metaString(meta, "version") ??
+        (typeof row.version === "string" ? row.version : "unspecified"),
+      checksum_sha256: isDirectory(pluginRoot)
+        ? directorySha256(pluginRoot)
+        : sha256Hex("(missing)"),
       license,
       // 官方通道默认 false（再分发权未声明，部署时抓取）；许可原文照录，不推导授权。
       redistributable: false,
@@ -533,7 +596,11 @@ export function collectConnectorChannel(
   channelRoot: string,
   channel: ChannelLocation,
 ): ChannelCollection {
-  const indexFile = join(channelRoot, ".codebuddy-connector", "connectors.json");
+  const indexFile = join(
+    channelRoot,
+    ".codebuddy-connector",
+    "connectors.json",
+  );
   if (!isFile(indexFile)) {
     throw new SnapshotError(
       `连接器市场快照缺少 .codebuddy-connector/connectors.json：${toPosix(resolve(channelRoot))}`,
@@ -542,14 +609,18 @@ export function collectConnectorChannel(
   const index = readJson<{ connectors?: { id?: unknown }[] }>(indexFile);
   const rows = index.connectors ?? [];
   if (rows.length === 0) {
-    throw new SnapshotError(`连接器清单没有 connectors 行：${toPosix(resolve(indexFile))}`);
+    throw new SnapshotError(
+      `连接器清单没有 connectors 行：${toPosix(resolve(indexFile))}`,
+    );
   }
   const fetchedAt = isoFromMtime(indexFile);
   const entries: LockEntry[] = [];
   for (const row of rows) {
     const id = typeof row.id === "string" && row.id !== "" ? row.id : null;
     if (id === null) {
-      throw new SnapshotError(`连接器清单存在没有 id 的行：${toPosix(resolve(indexFile))}`);
+      throw new SnapshotError(
+        `连接器清单存在没有 id 的行：${toPosix(resolve(indexFile))}`,
+      );
     }
     const mcpJson = join(channelRoot, "connectors", id, "mcp.json");
     const cliJson = join(channelRoot, "connectors", id, "cli.json");
@@ -558,11 +629,15 @@ export function collectConnectorChannel(
       slug: id,
       kind: "connector",
       channel: "connectors",
-      origin: spec === null ? `connectors/${id}` : `connectors/${id}/${spec.slice(spec.lastIndexOf(sep) + 1)}`,
+      origin:
+        spec === null
+          ? `connectors/${id}`
+          : `connectors/${id}/${spec.slice(spec.lastIndexOf(sep) + 1)}`,
       source: sourceDescription(channel),
       source_url: channel.url,
       source_version: "unspecified",
-      checksum_sha256: spec === null ? sha256Hex("(missing)") : fileSha256(spec),
+      checksum_sha256:
+        spec === null ? sha256Hex("(missing)") : fileSha256(spec),
       license: "unspecified",
       // mcp.json 是描述性配置（§6.2），声明与收录不需要再分发权；正文内容不随锁入仓。
       redistributable: false,
@@ -590,14 +665,19 @@ export function repoRoot(): string {
 }
 
 /** The parsed `.zip-metadata.json` URL of a channel, when its snapshot records one. */
-export function readRecordedUrl(home: string, channel: ChannelLocation): string {
+export function readRecordedUrl(
+  home: string,
+  channel: ChannelLocation,
+): string {
   const zipMetaPath = join(home, channel.homePath, ".zip-metadata.json");
   if (!isFile(zipMetaPath)) {
     return channel.url;
   }
   try {
     const meta = readJson<{ url?: unknown }>(zipMetaPath);
-    return typeof meta.url === "string" && meta.url !== "" ? meta.url : channel.url;
+    return typeof meta.url === "string" && meta.url !== ""
+      ? meta.url
+      : channel.url;
   } catch {
     return channel.url;
   }
@@ -612,14 +692,22 @@ export function readRecordedUrl(home: string, channel: ChannelLocation): string 
  * document; `renderLockDocument` re-validates for the same reason a second lock on the same door is not
  * paranoia.
  */
-export function buildLockFromLocal(home: string): { lock: LockDocument; collections: ChannelCollection[] } {
+export function buildLockFromLocal(home: string): {
+  lock: LockDocument;
+  collections: ChannelCollection[];
+} {
   const collections: ChannelCollection[] = [];
   for (const channel of CHANNELS) {
     const channelRoot = join(home, channel.homePath);
     if (!isDirectory(channelRoot)) {
-      throw new SnapshotError(`通道快照不存在：${toPosix(resolve(channelRoot))}（${channel.id}）`);
+      throw new SnapshotError(
+        `通道快照不存在：${toPosix(resolve(channelRoot))}（${channel.id}）`,
+      );
     }
-    const located: ChannelLocation = { ...channel, url: readRecordedUrl(home, channel) };
+    const located: ChannelLocation = {
+      ...channel,
+      url: readRecordedUrl(home, channel),
+    };
     if (channel.id === "official-plugins") {
       collections.push(collectOfficialPluginChannel(channelRoot, located));
     } else if (channel.id === "experts") {
@@ -628,14 +716,22 @@ export function buildLockFromLocal(home: string): { lock: LockDocument; collecti
       collections.push(collectConnectorChannel(channelRoot, located));
     }
   }
-  const entries = collections.flatMap((collection) => collection.entries).sort(compareLockEntries);
+  const entries = collections
+    .flatMap((collection) => collection.entries)
+    .sort(compareLockEntries);
   assertValidLockEntries(entries);
   const channels: LockChannelProvenance[] = collections.map((collection) => {
-    const channel = CHANNELS.find((candidate) => candidate.id === collection.id) as ChannelLocation;
-    const locatedUrl = collection.recordedUrl !== "" ? collection.recordedUrl : channel.url;
+    const channel = CHANNELS.find(
+      (candidate) => candidate.id === collection.id,
+    ) as ChannelLocation;
+    const locatedUrl =
+      collection.recordedUrl !== "" ? collection.recordedUrl : channel.url;
     return {
       id: collection.id,
-      source: locatedUrl !== "" ? locatedUrl : `local snapshot ~/.workbuddy/${channel.homePath}`,
+      source:
+        locatedUrl !== ""
+          ? locatedUrl
+          : `local snapshot ~/.workbuddy/${channel.homePath}`,
       url: locatedUrl,
       url_verified: locatedUrl !== "" && channel.url_verified,
       version: collection.recordedVersion,
@@ -679,12 +775,25 @@ export interface OfficialSkillUnit {
  * sibling. Names keep the plugin prefix so a unit from `all-skills` cannot collide with a user skill of
  * the same name.
  */
-export function discoverOfficialSkillUnits(channelRoot: string): OfficialSkillUnit[] {
+export function discoverOfficialSkillUnits(
+  channelRoot: string,
+): OfficialSkillUnit[] {
   const units: OfficialSkillUnit[] = [];
-  const walkSkills = (absolute: string, relativeToPlugin: string, pluginName: string, group: string): void => {
+  const walkSkills = (
+    absolute: string,
+    relativeToPlugin: string,
+    pluginName: string,
+    group: string,
+  ): void => {
     if (isFile(join(absolute, "SKILL.md"))) {
-      const suffix = relativeToPlugin === "" ? "" : `--${relativeToPlugin.split("/").join("--")}`;
-      units.push({ unitName: `${pluginName}${suffix}`, origin: `${group}/${pluginName}/${relativeToPlugin}` });
+      const suffix =
+        relativeToPlugin === ""
+          ? ""
+          : `--${relativeToPlugin.split("/").join("--")}`;
+      units.push({
+        unitName: `${pluginName}${suffix}`,
+        origin: `${group}/${pluginName}/${relativeToPlugin}`,
+      });
       return;
     }
     for (const child of listDirectories(absolute)) {
@@ -729,25 +838,40 @@ export function discoverOfficialSkillUnits(channelRoot: string): OfficialSkillUn
  * official skill units are flattened into `skills/` with provenance-preserving names. A stale cache is
  * removed first: a cache is a snapshot of one run, not an accumulator of several.
  */
-export function writeCacheFromLocal(home: string, cacheRoot: string): { skillUnits: number } {
+export function writeCacheFromLocal(
+  home: string,
+  cacheRoot: string,
+): { skillUnits: number } {
   rmSync(cacheRoot, { recursive: true, force: true });
   mkdirSync(cacheRoot, { recursive: true });
-  const officialRoot = join(home, "plugins/marketplaces/codebuddy-plugins-official");
+  const officialRoot = join(
+    home,
+    "plugins/marketplaces/codebuddy-plugins-official",
+  );
   const expertsRoot = join(home, "plugins/marketplaces/experts");
   const connectorsRoot = join(home, "connectors-marketplace");
   for (const [from, to] of [
-    [officialRoot, join(cacheRoot, "plugins/marketplaces/codebuddy-plugins-official")],
+    [
+      officialRoot,
+      join(cacheRoot, "plugins/marketplaces/codebuddy-plugins-official"),
+    ],
     [expertsRoot, join(cacheRoot, "plugins/marketplaces/experts")],
     [connectorsRoot, join(cacheRoot, "connectors-marketplace")],
   ] as const) {
     if (!isDirectory(from)) {
-      throw new SnapshotError(`通道快照不存在，缓存不完整：${toPosix(resolve(from))}`);
+      throw new SnapshotError(
+        `通道快照不存在，缓存不完整：${toPosix(resolve(from))}`,
+      );
     }
     cpSync(from, to, { recursive: true });
   }
   const units = discoverOfficialSkillUnits(officialRoot);
   for (const unit of units) {
-    cpSync(join(officialRoot, unit.origin), join(cacheRoot, "skills", unit.unitName), { recursive: true });
+    cpSync(
+      join(officialRoot, unit.origin),
+      join(cacheRoot, "skills", unit.unitName),
+      { recursive: true },
+    );
   }
   return { skillUnits: units.length };
 }
@@ -789,7 +913,13 @@ export function parseArgs(argv: readonly string[]): FetchCliOptions {
       if (next === undefined || next.startsWith("--")) {
         throw new Error("--home 缺少取值");
       }
-      options.home = resolve(next === "~" ? homedir() : next.startsWith("~/") ? join(homedir(), next.slice(2)) : next);
+      options.home = resolve(
+        next === "~"
+          ? homedir()
+          : next.startsWith("~/")
+            ? join(homedir(), next.slice(2))
+            : next,
+      );
       index += 1;
     } else if (arg === "--help" || arg === "-h") {
       options.dryRun = true;
@@ -797,14 +927,22 @@ export function parseArgs(argv: readonly string[]): FetchCliOptions {
       throw new Error(`无法识别的参数：${arg}`);
     }
   }
-  if (!options.dryRun && !options.fromLocal && !options.writeLock && !options.download) {
+  if (
+    !options.dryRun &&
+    !options.fromLocal &&
+    !options.writeLock &&
+    !options.download
+  ) {
     options.dryRun = true;
   }
   return options;
 }
 
 /** Render the human-readable plan `--dry-run` prints. No hashing, no network. */
-export function renderPlan(home: string, recordedUrls: ReadonlyMap<LockChannel, string>): string {
+export function renderPlan(
+  home: string,
+  recordedUrls: ReadonlyMap<LockChannel, string>,
+): string {
   const lines: string[] = [
     "fetch-capabilities 计划（L1：本机快照普查）",
     "",
@@ -831,14 +969,19 @@ export function renderPlan(home: string, recordedUrls: ReadonlyMap<LockChannel, 
 }
 
 /** Probe the official bundle URLs; returns one measured status per URL. */
-export async function probeOfficialUrls(): Promise<{ url: string; status: number | string }[]> {
+export async function probeOfficialUrls(): Promise<
+  { url: string; status: number | string }[]
+> {
   const results: { url: string; status: number | string }[] = [];
   for (const entry of OFFICIAL_BUNDLE_URLS) {
     try {
       const response = await fetch(entry.url, { method: "HEAD" });
       results.push({ url: entry.url, status: response.status });
     } catch (error) {
-      results.push({ url: entry.url, status: error instanceof Error ? error.message : String(error) });
+      results.push({
+        url: entry.url,
+        status: error instanceof Error ? error.message : String(error),
+      });
     }
   }
   return results;
@@ -919,14 +1062,20 @@ export async function main(argv: readonly string[]): Promise<number> {
       for (const entry of collection.entries) {
         kinds.set(entry.kind, (kinds.get(entry.kind) ?? 0) + 1);
       }
-      const breakdown = [...kinds.entries()].map(([kind, count]) => `${kind} ${count}`).join(" / ");
-      console.log(`[fetch] ${collection.id}: ${collection.entries.length} 条（${breakdown}）`);
+      const breakdown = [...kinds.entries()]
+        .map(([kind, count]) => `${kind} ${count}`)
+        .join(" / ");
+      console.log(
+        `[fetch] ${collection.id}: ${collection.entries.length} 条（${breakdown}）`,
+      );
     }
     console.log(
       `[fetch] 合计 ${lock.entries.length} 条，redistributable ${lock.entries.filter((entry) => entry.redistributable).length} 条；fetched_at ${lock.fetched_at}`,
     );
     if (options.fromLocal) {
-      console.log(`[fetch] 缓存已物化：${cacheRoot}（官方技能单元 ${skillUnits} 个）`);
+      console.log(
+        `[fetch] 缓存已物化：${cacheRoot}（官方技能单元 ${skillUnits} 个）`,
+      );
     }
     return 0;
   } catch (error) {
@@ -934,7 +1083,9 @@ export async function main(argv: readonly string[]): Promise<number> {
       console.error(`[fetch] 本机快照不符合预期：${error.message}`);
       return 2;
     }
-    console.error(`[fetch] 失败：${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `[fetch] 失败：${error instanceof Error ? error.message : String(error)}`,
+    );
     return 1;
   }
 }

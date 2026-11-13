@@ -23,11 +23,15 @@
  * byte-identical, and the renderer never reads a clock, a hostname, or a platform path separator.
  */
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** The granularity a lock entry talks about. */
-export type LockKind = "expert-package" | "official-plugin" | "skill" | "connector";
+export type LockKind =
+  | "expert-package"
+  | "official-plugin"
+  | "skill"
+  | "connector";
 
 /** Which L1 channel an entry was found in. Also the directory name under the fetch cache. */
 export type LockChannel = "official-plugins" | "experts" | "connectors";
@@ -140,9 +144,12 @@ export function fileSha256(absolutePath: string): string {
 export function directorySha256(root: string, prefix = ""): string {
   const lines: string[] = [];
   const walk = (absolute: string, relative: string): void => {
-    for (const entry of readdirSync(absolute, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of readdirSync(absolute, { withFileTypes: true }).sort(
+      (a, b) => a.name.localeCompare(b.name),
+    )) {
       const childAbsolute = join(absolute, entry.name);
-      const childRelative = relative === "" ? entry.name : `${relative}/${entry.name}`;
+      const childRelative =
+        relative === "" ? entry.name : `${relative}/${entry.name}`;
       if (entry.isDirectory()) {
         walk(childAbsolute, childRelative);
         continue;
@@ -173,7 +180,9 @@ export function applyLicenseExclusions(entry: LockEntry): LockEntry {
     return entry;
   }
   const marker = EXCLUSION_LICENSE_MARKERS[entry.slug];
-  const license = entry.license.toLowerCase().includes(marker) ? entry.license : excludedLicense;
+  const license = entry.license.toLowerCase().includes(marker)
+    ? entry.license
+    : excludedLicense;
   return { ...entry, license, redistributable: false };
 }
 
@@ -194,29 +203,59 @@ export function isPermissiveLockLicense(license: string): boolean {
  * - the exclusion invariant: a slug in {@link LICENSE_EXCLUSIONS} must carry the exclusion's licence id
  *   and must not be `redistributable: true` — whatever upstream pipeline produced the entry.
  */
-export function validateLockEntries(entries: readonly LockEntry[]): LockViolation[] {
+export function validateLockEntries(
+  entries: readonly LockEntry[],
+): LockViolation[] {
   const violations: LockViolation[] = [];
-  const push = (index: number, slug: string, field: string, problem: string) => {
+  const push = (
+    index: number,
+    slug: string,
+    field: string,
+    problem: string,
+  ) => {
     violations.push({ index, slug, field, problem });
   };
-  const kinds: readonly LockKind[] = ["expert-package", "official-plugin", "skill", "connector"];
-  const channels: readonly LockChannel[] = ["official-plugins", "experts", "connectors"];
+  const kinds: readonly LockKind[] = [
+    "expert-package",
+    "official-plugin",
+    "skill",
+    "connector",
+  ];
+  const channels: readonly LockChannel[] = [
+    "official-plugins",
+    "experts",
+    "connectors",
+  ];
   entries.forEach((entry, index) => {
-    if (entry.slug === undefined || entry.slug === null || String(entry.slug).trim() === "") {
+    if (
+      entry.slug === undefined ||
+      entry.slug === null ||
+      String(entry.slug).trim() === ""
+    ) {
       push(index, String(entry.slug), "slug", "缺失或为空");
     }
     if (!kinds.includes(entry.kind)) {
       push(index, entry.slug, "kind", `未知 kind: ${String(entry.kind)}`);
     }
     if (!channels.includes(entry.channel)) {
-      push(index, entry.slug, "channel", `未知 channel: ${String(entry.channel)}`);
+      push(
+        index,
+        entry.slug,
+        "channel",
+        `未知 channel: ${String(entry.channel)}`,
+      );
     }
     if (typeof entry.origin !== "string" || entry.origin.trim() === "") {
       push(index, entry.slug, "origin", "缺失或为空");
     } else if (entry.origin.startsWith("/") || entry.origin.includes("\\")) {
       // Emitted origins are always posix relative, on every platform: an absolute path or a backslash
       // means an absolute path leaked into the lock, which is exactly what the format exists to prevent.
-      push(index, entry.slug, "origin", `必须是通道内 posix 相对路径: ${entry.origin}`);
+      push(
+        index,
+        entry.slug,
+        "origin",
+        `必须是通道内 posix 相对路径: ${entry.origin}`,
+      );
     }
     for (const field of REQUIRED_LOCK_FIELDS) {
       const value = (entry as unknown as Record<string, unknown>)[field];
@@ -231,20 +270,44 @@ export function validateLockEntries(entries: readonly LockEntry[]): LockViolatio
     if (typeof entry.redistributable !== "boolean") {
       push(index, entry.slug, "redistributable", "必须是布尔值");
     }
-    if (typeof entry.fetched_at === "string" && !ISO_INSTANT.test(entry.fetched_at)) {
-      push(index, entry.slug, "fetched_at", `不是 ISO8601 时刻: ${entry.fetched_at}`);
+    if (
+      typeof entry.fetched_at === "string" &&
+      !ISO_INSTANT.test(entry.fetched_at)
+    ) {
+      push(
+        index,
+        entry.slug,
+        "fetched_at",
+        `不是 ISO8601 时刻: ${entry.fetched_at}`,
+      );
     }
-    if (typeof entry.checksum_sha256 === "string" && !SHA256_HEX.test(entry.checksum_sha256)) {
+    if (
+      typeof entry.checksum_sha256 === "string" &&
+      !SHA256_HEX.test(entry.checksum_sha256)
+    ) {
       push(index, entry.slug, "checksum_sha256", "必须是 64 位小写十六进制");
     }
     const excludedLicense = LICENSE_EXCLUSIONS[entry.slug];
     if (excludedLicense !== undefined) {
       const marker = EXCLUSION_LICENSE_MARKERS[entry.slug];
-      if (typeof entry.license === "string" && !entry.license.toLowerCase().includes(marker)) {
-        push(index, entry.slug, "license", `被排除条目必须记录排除依据的许可 ${excludedLicense}，当前是 ${entry.license}`);
+      if (
+        typeof entry.license === "string" &&
+        !entry.license.toLowerCase().includes(marker)
+      ) {
+        push(
+          index,
+          entry.slug,
+          "license",
+          `被排除条目必须记录排除依据的许可 ${excludedLicense}，当前是 ${entry.license}`,
+        );
       }
       if (entry.redistributable === true) {
-        push(index, entry.slug, "redistributable", `被排除条目（${excludedLicense}）不得标记为可再分发`);
+        push(
+          index,
+          entry.slug,
+          "redistributable",
+          `被排除条目（${excludedLicense}）不得标记为可再分发`,
+        );
       }
     }
   });
@@ -262,9 +325,14 @@ export function validateLockEntries(entries: readonly LockEntry[]): LockViolatio
 }
 
 /** Format violations for a fatal CLI message. */
-export function formatLockViolations(violations: readonly LockViolation[]): string {
+export function formatLockViolations(
+  violations: readonly LockViolation[],
+): string {
   return violations
-    .map((violation) => `  - 第 ${violation.index + 1} 行 ${violation.slug}: ${violation.field} — ${violation.problem}`)
+    .map(
+      (violation) =>
+        `  - 第 ${violation.index + 1} 行 ${violation.slug}: ${violation.field} — ${violation.problem}`,
+    )
     .join("\n");
 }
 
@@ -272,7 +340,9 @@ export function formatLockViolations(violations: readonly LockViolation[]): stri
 export function assertValidLockEntries(entries: readonly LockEntry[]): void {
   const violations = validateLockEntries(entries);
   if (violations.length > 0) {
-    throw new Error(`capability-lock 校验失败（${violations.length} 处）：\n${formatLockViolations(violations)}`);
+    throw new Error(
+      `capability-lock 校验失败（${violations.length} 处）：\n${formatLockViolations(violations)}`,
+    );
   }
 }
 
@@ -326,7 +396,9 @@ export function compareLockEntries(a: LockEntry, b: LockEntry): number {
 function renderEntryLine(entry: LockEntry): string {
   const parts: string[] = [];
   const push = (key: string, value: string | boolean) => {
-    parts.push(`${key}: ${typeof value === "boolean" ? String(value) : JSON.stringify(value)}`);
+    parts.push(
+      `${key}: ${typeof value === "boolean" ? String(value) : JSON.stringify(value)}`,
+    );
   };
   push("slug", entry.slug);
   push("kind", entry.kind);
