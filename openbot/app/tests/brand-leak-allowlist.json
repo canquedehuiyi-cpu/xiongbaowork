@@ -1319,58 +1319,58 @@
   {
     "file": "server/src/agents/provider-refusal.ts",
     "text": "\"OPENBOT_MODEL_",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "server/src/agents/plan-model.ts",
     "text": "\"OPENBOT_MODEL_AUTH_REQUIRED\"",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "server/src/desktop-connection-failure.ts",
     "text": "\"OPENBOT_MODEL_AUTH_REQUIRED\"",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "server/src/provider-error.ts",
     "text": "\"OPENBOT_PROVIDER_REQUEST_REFUSED\"",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "server/src/threads/postgres-runner.ts",
     "text": "\"OPENBOT_AP_LOCAL_",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/remote.ts",
     "text": "\"OPENBOT_LEARNED_SKILLS_ERROR\"",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "toolkit/src/copilotkit/agents.ts",
     "text": "\"OPENBOT_TOOL_LIMIT_EXCEEDED\"",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "toolkit/src/headless-tools.ts",
     "text": "\"OPENBOT_HEADLESS_TOOL_ERROR\"",
-    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
-    "plan": "rewrite"
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/dev-actor.ts",
