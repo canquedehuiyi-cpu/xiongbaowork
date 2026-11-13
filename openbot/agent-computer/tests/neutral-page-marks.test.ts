@@ -32,6 +32,7 @@ const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
 const PASSWORD = "hunter2-not-for-the-model";
 const TOKEN = "tok_live_abc123";
 const TELEPHONE = "555-0100";
+const BROWSER_HOOK_MS = 30_000;
 const SRC = join(import.meta.dir, "..", "src");
 
 test("the page mark names carry no product name", () => {
@@ -77,11 +78,13 @@ describe.skipIf(!asked)(
     beforeAll(async () => {
       const { chromium } = await import("playwright");
       browser = await chromium.launch({ channel: "chromium" });
-    });
+      // One launch for the whole describe, and it cannot be cut: a cold Chromium start on a CI runner
+      // can pass bun's 5000ms default (it did on PR #565), so the hooks get an explicit budget.
+    }, BROWSER_HOOK_MS);
 
     afterAll(async () => {
       await browser?.close();
-    });
+    }, BROWSER_HOOK_MS);
 
     /** The same page as sign-in.test.ts's masking test, with a field a person filled added. */
     async function markedPage(): Promise<Page> {
