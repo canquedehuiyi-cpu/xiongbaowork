@@ -409,7 +409,15 @@ function GroupLine({
   return (
     <MessageRow align="start" data-speaker={message.agentId}>
       <div className="shrink-0 pt-0.5">
-        <ChannelAvatar participantIds={[message.agentId]} size={24} />
+        <ChannelAvatar
+          motion={
+            message.status === "running" || message.status === "queued"
+              ? "working"
+              : undefined
+          }
+          participantIds={[message.agentId]}
+          size={24}
+        />
       </div>
       <MessageContent>
         <MessageHeader className="px-0 font-medium text-[12px] text-muted-foreground">

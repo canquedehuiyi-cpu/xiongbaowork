@@ -25,7 +25,10 @@ import {
   withGroupMembers,
 } from "@/components/channels/composer";
 import { ModelPicker } from "@/components/channels/composer/model-picker";
-import { ConversationIntro } from "@/components/channels/conversation-intro";
+import {
+  ConversationIntro,
+  ConversationIntroBar,
+} from "@/components/channels/conversation-intro";
 import { ConversationView } from "@/components/channels/conversation-view";
 import { ProgressRow } from "@/components/channels/progress-row";
 import {
@@ -1473,7 +1476,31 @@ export function ChannelChat({
             }
             intro={
               /* From the roster this screen already reads; nothing while it loads. */
-              botProfile ? <ConversationIntro agent={botProfile} /> : undefined
+              botProfile ? (
+                <ConversationIntro
+                  agent={botProfile}
+                  motion={
+                    agent.isRunning || turnsInFlight > 0 || carryingOn
+                      ? "working"
+                      : "idle"
+                  }
+                />
+              ) : undefined
+            }
+            introBar={
+              botProfile
+                ? (away) => (
+                    <ConversationIntroBar
+                      agent={botProfile}
+                      motion={
+                        agent.isRunning || turnsInFlight > 0 || carryingOn
+                          ? "working"
+                          : "idle"
+                      }
+                      visible={away}
+                    />
+                  )
+                : undefined
             }
             /*
              * THE TURN, not the run. `say` waits for the runtime agent and the join before a run starts,
