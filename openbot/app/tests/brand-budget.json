@@ -1,0 +1,492 @@
+[
+  {
+    "rule": "copilotkit-handle",
+    "scope": "app/src",
+    "lines": 25
+  },
+  {
+    "rule": "copilotkit-handle",
+    "scope": "desktop-device/src-tauri",
+    "lines": 1
+  },
+  {
+    "rule": "copilotkit-handle",
+    "scope": "server/src",
+    "lines": 8
+  },
+  {
+    "rule": "copilotkit-handle",
+    "scope": "shared/recorder-extension.json",
+    "lines": 1
+  },
+  {
+    "rule": "copilotkit-package",
+    "scope": "app/src",
+    "lines": 37
+  },
+  {
+    "rule": "copilotkit-package",
+    "scope": "extension/src",
+    "lines": 2
+  },
+  {
+    "rule": "copilotkit-package",
+    "scope": "server/src",
+    "lines": 26
+  },
+  {
+    "rule": "copilotkit-package",
+    "scope": "toolkit/src",
+    "lines": 4
+  },
+  {
+    "rule": "crypto-name",
+    "scope": "server/src",
+    "lines": 14
+  },
+  {
+    "rule": "declaration",
+    "scope": "app/src",
+    "lines": 1
+  },
+  {
+    "rule": "declaration",
+    "scope": "extension/src",
+    "lines": 1
+  },
+  {
+    "rule": "env-name",
+    "scope": "agent-computer/src",
+    "lines": 1
+  },
+  {
+    "rule": "env-name",
+    "scope": "app/src",
+    "lines": 1
+  },
+  {
+    "rule": "env-name",
+    "scope": "docker/delivery.env.example",
+    "lines": 2
+  },
+  {
+    "rule": "env-name",
+    "scope": "Dockerfile",
+    "lines": 14
+  },
+  {
+    "rule": "env-name",
+    "scope": "runner/src",
+    "lines": 3
+  },
+  {
+    "rule": "env-name",
+    "scope": "server/src",
+    "lines": 59
+  },
+  {
+    "rule": "env-name",
+    "scope": "shared/openbot-browser.ts",
+    "lines": 2
+  },
+  {
+    "rule": "env-name",
+    "scope": "shared/this-machine.ts",
+    "lines": 2
+  },
+  {
+    "rule": "identifier",
+    "scope": "agent-computer/src",
+    "lines": 10
+  },
+  {
+    "rule": "identifier",
+    "scope": "app/src",
+    "lines": 80
+  },
+  {
+    "rule": "identifier",
+    "scope": "docker/compose.delivery.yml",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "docker/delivery.env.example",
+    "lines": 7
+  },
+  {
+    "rule": "identifier",
+    "scope": "docker/s6",
+    "lines": 8
+  },
+  {
+    "rule": "identifier",
+    "scope": "extension/public",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "extension/scripts",
+    "lines": 2
+  },
+  {
+    "rule": "identifier",
+    "scope": "extension/src",
+    "lines": 195
+  },
+  {
+    "rule": "identifier",
+    "scope": "server/src",
+    "lines": 176
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/activity-rows.ts",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/bot-prompt.ts",
+    "lines": 3
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/harnesses.ts",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/openbot-actor.ts",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/openbot-browser.ts",
+    "lines": 4
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/person-time-zone.ts",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/recorder-api.ts",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/tool-name.ts",
+    "lines": 2
+  },
+  {
+    "rule": "identifier",
+    "scope": "shared/waiting.ts",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
+    "scope": "toolkit/src",
+    "lines": 30
+  },
+  {
+    "rule": "import-close",
+    "scope": "agent-computer/src",
+    "lines": 52
+  },
+  {
+    "rule": "import-close",
+    "scope": "app/src",
+    "lines": 1101
+  },
+  {
+    "rule": "import-close",
+    "scope": "extension/scripts",
+    "lines": 1
+  },
+  {
+    "rule": "import-close",
+    "scope": "extension/src",
+    "lines": 88
+  },
+  {
+    "rule": "import-close",
+    "scope": "mobile/app",
+    "lines": 14
+  },
+  {
+    "rule": "import-close",
+    "scope": "mobile/src",
+    "lines": 2
+  },
+  {
+    "rule": "import-close",
+    "scope": "runner/src",
+    "lines": 32
+  },
+  {
+    "rule": "import-close",
+    "scope": "server/src",
+    "lines": 744
+  },
+  {
+    "rule": "import-close",
+    "scope": "shared/bot-browser.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-close",
+    "scope": "supervisor/src",
+    "lines": 3
+  },
+  {
+    "rule": "import-close",
+    "scope": "toolkit/src",
+    "lines": 15
+  },
+  {
+    "rule": "import-close",
+    "scope": "worker/src",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "agent-computer/src",
+    "lines": 152
+  },
+  {
+    "rule": "import-path",
+    "scope": "app/src",
+    "lines": 4409
+  },
+  {
+    "rule": "import-path",
+    "scope": "extension/scripts",
+    "lines": 6
+  },
+  {
+    "rule": "import-path",
+    "scope": "extension/src",
+    "lines": 206
+  },
+  {
+    "rule": "import-path",
+    "scope": "mobile/app",
+    "lines": 70
+  },
+  {
+    "rule": "import-path",
+    "scope": "mobile/app.config.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "mobile/src",
+    "lines": 20
+  },
+  {
+    "rule": "import-path",
+    "scope": "runner/src",
+    "lines": 108
+  },
+  {
+    "rule": "import-path",
+    "scope": "server/src",
+    "lines": 3044
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/apply-env-aliases.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/audit-words.ts",
+    "lines": 2
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/bot-browser.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/bot-prompt.ts",
+    "lines": 4
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/computer-token.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/harnesses.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/local-tools.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/model-providers.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/openbot-browser.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/recorder-api.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/recorder-extension.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/recorder-page.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/role-profile.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/routine-checklist.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/runner-actions.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/tool-name.ts",
+    "lines": 6
+  },
+  {
+    "rule": "import-path",
+    "scope": "shared/work-owner.ts",
+    "lines": 1
+  },
+  {
+    "rule": "import-path",
+    "scope": "supervisor/src",
+    "lines": 14
+  },
+  {
+    "rule": "import-path",
+    "scope": "toolkit/src",
+    "lines": 40
+  },
+  {
+    "rule": "import-path",
+    "scope": "worker/src",
+    "lines": 7
+  },
+  {
+    "rule": "mit-attribution",
+    "scope": "desktop-device/src-tauri",
+    "lines": 1
+  },
+  {
+    "rule": "never-change",
+    "scope": "server/src",
+    "lines": 12
+  },
+  {
+    "rule": "never-change",
+    "scope": "shared/app-access-request.ts",
+    "lines": 1
+  },
+  {
+    "rule": "never-change",
+    "scope": "shared/computer-token.ts",
+    "lines": 1
+  },
+  {
+    "rule": "never-change",
+    "scope": "toolkit/src",
+    "lines": 3
+  },
+  {
+    "rule": "openbot-camel",
+    "scope": "app/src",
+    "lines": 2
+  },
+  {
+    "rule": "openbot-package",
+    "scope": "app/src",
+    "lines": 127
+  },
+  {
+    "rule": "openbot-package",
+    "scope": "extension/src",
+    "lines": 48
+  },
+  {
+    "rule": "openbot-package",
+    "scope": "server/src",
+    "lines": 212
+  },
+  {
+    "rule": "openbot-package",
+    "scope": "shared/package.json",
+    "lines": 1
+  },
+  {
+    "rule": "openbot-package",
+    "scope": "toolkit/src",
+    "lines": 9
+  },
+  {
+    "rule": "openbot-package",
+    "scope": "worker/src",
+    "lines": 1
+  },
+  {
+    "rule": "runtime-path",
+    "scope": "app/src",
+    "lines": 2
+  },
+  {
+    "rule": "runtime-path",
+    "scope": "server/src",
+    "lines": 5
+  },
+  {
+    "rule": "runtime-path",
+    "scope": "shared/recorder-api.ts",
+    "lines": 1
+  },
+  {
+    "rule": "wire-dom",
+    "scope": "agent-computer/src",
+    "lines": 10
+  },
+  {
+    "rule": "wire-dom",
+    "scope": "runner/src",
+    "lines": 1
+  },
+  {
+    "rule": "wire-dom",
+    "scope": "server/src",
+    "lines": 21
+  },
+  {
+    "rule": "wire-dom",
+    "scope": "shared/agent-authorisation.ts",
+    "lines": 1
+  }
+]
