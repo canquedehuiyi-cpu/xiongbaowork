@@ -13,6 +13,8 @@ FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7
 FROM bun-toolchain AS recorder-build
 WORKDIR /src
 COPY package.json bun.lock ./
+# `patchedDependencies` in package.json names these files, and `bun install` refuses to run without them.
+COPY patches patches
 COPY tsconfig.base.json bunfig.toml ./
 COPY app/package.json app/package.json
 COPY server/package.json server/package.json

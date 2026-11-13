@@ -54,5 +54,8 @@
   },
   "overrides": {
     "lodash-es": "4.18.0"
+  },
+  "patchedDependencies": {
+    "playwright-core@1.62.1": "patches/playwright-core@1.62.1.patch"
   }
 }
