@@ -35,9 +35,10 @@ import {
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { z } from "zod";
+import { envName } from "../../../shared/env-aliases";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { AppVariables, AuthenticatedActor } from "../auth/guards";
-import { englishName } from "../brand";
+import { englishName, productName } from "../brand";
 import { type SeatAddress, seatHeaders } from "../computer/client";
 import { checkComputerAddress } from "../computer/target";
 import { reasonWithoutStatement } from "../db/query-failure";
@@ -282,8 +283,8 @@ const SENTENCES = {
  * OpenBot: it goes to the log, and the person is told their browser cannot open and who can see to it (`notSetUp`), as
  * for the computer's own setup failures. The fourth end-to-end run showed sentences like this one on the Browser page.
  */
-const NO_ADDRESS =
-  "This OpenBot has no address a person's browser can reach it at, so the Recorder in it cannot be connected. Set OPENBOT_PUBLIC_URL to this OpenBot's https address.";
+const noAddress = () =>
+  `This ${productName()} has no address a person's browser can reach it at, so the Recorder in it cannot be connected. Set ${envName("PUBLIC_URL")} to this ${productName()}'s https address.`;
 
 /** OpenBot did not get the computer's answer: 502 when nothing answered, 504 when it took too long to. */
 export class BrowserCallError extends Error {
@@ -1233,7 +1234,7 @@ export function createBrowserRoutes(deps: BrowserRouteDeps) {
     const openbotUrl = deps.openbotUrl(asker.origin);
     if (!openbotUrl) {
       console.warn(
-        JSON.stringify({ type: "browser-open-no-address", error: NO_ADDRESS }),
+        JSON.stringify({ type: "browser-open-no-address", error: noAddress() }),
       );
       return refuse(notSetUp, 503);
     }

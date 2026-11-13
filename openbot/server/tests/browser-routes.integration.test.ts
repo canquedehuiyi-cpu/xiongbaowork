@@ -2736,7 +2736,7 @@ describe("where the browser reaches this OpenBot", () => {
       {
         type: "browser-open-no-address",
         error:
-          "This OpenBot has no address a person's browser can reach it at, so the Recorder in it cannot be connected. Set OPENBOT_PUBLIC_URL to this OpenBot's https address.",
+          "This 熊宝数字员工 has no address a person's browser can reach it at, so the Recorder in it cannot be connected. Set XIONGBAO_PUBLIC_URL to this 熊宝数字员工's https address.",
       },
     ]);
   });

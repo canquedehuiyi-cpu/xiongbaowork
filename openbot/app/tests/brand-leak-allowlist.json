@@ -466,13 +466,6 @@
   },
   {
     "file": "server/src/browser/routes.ts",
-    "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
-    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL [待批：附录 A 第 6 行；server/tests/browser-routes.integration.test.ts:2739]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/browser/routes.ts",
     "text": "\"openbot-browser\"",
     "reason": "persisted-identifier: recorder connection `via` value stored in the database",
     "category": "peer-protocol",
@@ -1317,13 +1310,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/auth/dev-actor.ts",
-    "text": "OPENBOT_SINGLE_USER=true",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1523]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "server/src/auth/role-writer-lifecycle.ts",
     "text": "OPENBOT_RLS_ENFORCE must",
     "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/server-readiness-gates.test.ts:375]",
@@ -1339,20 +1325,6 @@
   },
   {
     "file": "server/src/config.ts",
-    "text": "OPENBOT_BROKER_PROVIDER 只能",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：附录 A 第 6 行；server/tests/arcade-config.test.ts:35]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "OPENBOT_SINGLE_USER admits",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:625,655,672]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
     "text": "OPENBOT_THIS_MACHINE_HOST \"",
     "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/agent-on-this-machine.test.ts:376]",
     "category": "operator-visible",
@@ -1362,13 +1334,6 @@
     "file": "server/src/config.ts",
     "text": "needs OPENBOT_PUBLIC_URL",
     "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config-github-app.test.ts:81]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "OPENBOT_EDITION=personal",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1523]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
