@@ -2,981 +2,1395 @@
   {
     "file": "app/index.html",
     "text": "\"openbot-theme\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "app/index.html",
     "text": "\"openbot-skin\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/components/desktop/desktop-return.tsx",
     "text": "\"openbot://open\"",
-    "reason": "persisted-identifier: URL scheme the upstream desktop app registers"
+    "reason": "persisted-identifier: URL scheme the upstream desktop app registers",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/components/admin/controls/recording-section.tsx",
     "text": "They are tagged openbot.surface.",
-    "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)"
+    "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/routes/_authed/admin/enterprise.tsx",
     "text": "openbot.surface 标签",
-    "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)"
+    "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/components/delivery/reaching-you.tsx",
     "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/reachability/link-conversation-dialog.tsx",
     "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/browser/learning-next.tsx",
     "text": "`openbot-learned-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice"
+    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/browser/teach-steps.tsx",
     "text": "\"openbot.teach-a-bot.introduced\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/approvals/describe-rules.tsx",
     "text": "startsWith(\"openbot/\")",
-    "reason": "persisted-identifier: prefix of built-in tool refs stored in rules"
+    "reason": "persisted-identifier: prefix of built-in tool refs stored in rules",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/components/layout/openbot-version.tsx",
     "text": "data-slot=\"openbot-version\"",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text"
+    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/notifications/notify-prompt.tsx",
     "text": "\"openbot-notify-prompt-answered\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/components/settings/browsers/connected-browsers.tsx",
     "text": "\"openbot-browser\"",
-    "reason": "persisted-identifier: recorder connection `via` value stored in the database"
+    "reason": "persisted-identifier: recorder connection `via` value stored in the database",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "app/src/components/settings/usage-data.tsx",
     "text": "github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
-    "reason": "upstream-shell-only: upstream desktop's own telemetry doc; the section is drawn only inside upstream OpenBot Desktop"
+    "reason": "upstream-shell-only: upstream desktop's own telemetry doc; the section is drawn only inside upstream OpenBot Desktop",
+    "category": "upstream-shell-only",
+    "plan": "keep"
   },
   {
     "file": "app/src/components/settings/usage-data.tsx",
     "text": "向 CopilotKit 发送使用数据",
-    "reason": "upstream-shell-only: truthful disclosure of who receives upstream desktop's usage data; drawn only inside upstream OpenBot Desktop"
+    "reason": "upstream-shell-only: truthful disclosure of who receives upstream desktop's usage data; drawn only inside upstream OpenBot Desktop",
+    "category": "upstream-shell-only",
+    "plan": "keep"
   },
   {
     "file": "app/src/components/app-sidebar/app-sidebar.tsx",
     "text": "\"openbot-sidebar-",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/components/computer/computer-view.tsx",
     "text": "\"openbot-secret\"",
-    "reason": "persisted-identifier: DOM id pairing a label with its input, never rendered as text"
+    "reason": "persisted-identifier: DOM id pairing a label with its input, never rendered as text (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/onboarding/demo-orb.tsx",
     "text": "\"openbot\"}",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text"
+    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/bot-profile/attention.tsx",
     "text": "`openbot-attention-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice"
+    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/components/bot-profile/attention.tsx",
     "text": "`openbot-ping-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice"
+    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/styles.css",
     "text": ".openbot-markdown, .openbot-breakdown",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text"
+    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/skins/store.ts",
     "text": "\"openbot-skin\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/skins/registry.ts",
     "text": "id: \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage"
+    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/skins/registry.ts",
     "text": "openbot,",
-    "reason": "persisted-identifier: the default skin's module identifier"
+    "reason": "persisted-identifier: the default skin's module identifier (L1-2)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/theme.ts",
     "text": "\"openbot-theme\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: legacy browser storage key, read once through the storage-migrate helper that its consumer calls, to carry a saved choice to its xiongbao- name",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/lib/wakerflows.ts",
     "text": "\"openbot.wakerflow-share-return\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/computers/handoff.ts",
     "text": "`openbot:pending-handoff:",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/computers/activity.ts",
     "text": "\"openbot:computer-activity-wiped:\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/desktop/speech.ts",
     "text": "\"plugin:openbot-desktop\"",
-    "reason": "persisted-identifier: Tauri plugin name the upstream desktop registers"
+    "reason": "persisted-identifier: Tauri plugin name the upstream desktop registers",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/desktop/queries.ts",
     "text": "\"plugin:openbot-desktop\"",
-    "reason": "persisted-identifier: Tauri plugin name the upstream desktop registers"
+    "reason": "persisted-identifier: Tauri plugin name the upstream desktop registers",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/desktop/part-names.ts",
     "text": "bots: \"OpenBot service\"",
-    "reason": "upstream-shell-only: upstream Desktop shell only, kept in sync with desktop/src/partNames.ts (desktop-part-names.test.ts holds the two equal)"
+    "reason": "upstream-shell-only: upstream Desktop shell only, kept in sync with desktop/src/partNames.ts (desktop-part-names.test.ts holds the two equal)",
+    "category": "upstream-shell-only",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/desktop/open-requests.ts",
     "text": "\"openbot:open\"",
-    "reason": "persisted-identifier: event name the upstream desktop emits"
+    "reason": "persisted-identifier: event name the upstream desktop emits",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/sidebar.ts",
     "text": "\"openbot-sidebar",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: legacy browser storage key, read once through the storage-migrate helper that its consumer calls, to carry a saved choice to its xiongbao- name",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/lib/voice/outbox.ts",
     "text": "\"openbot:voice-outbox:\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/voice/transcript.ts",
     "text": "\"openbot-voice-context\"",
-    "reason": "persisted-identifier: context item id the agent side matches"
+    "reason": "persisted-identifier: context item id the agent side matches",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/voice/archive.ts",
     "text": "\"openbot-voice-chat\"",
-    "reason": "persisted-identifier: activity type id stored with archived voice chats"
+    "reason": "persisted-identifier: activity type id stored with archived voice chats",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/notifications/show.ts",
     "text": "`openbot-${channelId}`",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice"
+    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/notifications/show.ts",
     "text": "\"plugin:openbot-desktop|notify\"",
-    "reason": "persisted-identifier: Tauri plugin command the upstream desktop registers"
+    "reason": "persisted-identifier: Tauri plugin command the upstream desktop registers",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/recorder/bridge.ts",
     "text": "type: \"openbot.",
-    "reason": "persisted-identifier: message type in the Recorder extension protocol"
+    "reason": "persisted-identifier: message type in the Recorder extension protocol",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/recorder/bridge.ts",
     "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: error code the Recorder extension sends"
+    "reason": "persisted-identifier: error code the Recorder extension sends",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/openbot-for-business.ts",
     "text": "calendly.com/d/dwfr-k64-8d2/openbot-for-business",
-    "reason": "external-name: upstream booking link in a module nothing imports; delete with the module"
+    "reason": "external-name: upstream booking link in a module nothing imports; delete with the module",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/copilot/a2ui.ts",
     "text": "\"openbot/ui@1\"",
-    "reason": "persisted-identifier: A2UI catalogue id shared with the agents"
+    "reason": "persisted-identifier: A2UI catalogue id shared with the agents",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "app/src/lib/copilot/a2ui-breakdown.tsx",
     "text": "openbot-breakdown flex",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text"
+    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/copilot/a2ui-markdown.tsx",
     "text": "a2ui-markdown openbot-markdown",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text"
+    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/copilot/carry-on.ts",
     "text": "\"openbot:carried-on:\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/copilot/check-in-offer-tool.tsx",
     "text": "\"openbot:check-in-declined:\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/copilot/bot-thread.ts",
     "text": "\"openbot.bot-thread\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name"
+    "reason": "persisted-identifier: 仍用旧键读写，L1-1 待双认（Task 7）",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/copilot/stopped-turn.ts",
     "text": "console.warn(\"OpenBot couldn't reach its back end.\"",
-    "reason": "internal-log: browser console warning for developers"
+    "reason": "internal-log: browser console warning for developers",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "app/src/routes/_authed/admin/learning.tsx",
     "text": "需要接入 CopilotKit Intelligence",
-    "reason": "external-name: names the third-party service an admin must sign up for"
+    "reason": "external-name: names the third-party service an admin must sign up for",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "app/src/routes/_authed/admin/learning.tsx",
     "text": "名为 openbot 的容器",
-    "reason": "persisted-identifier: the Learning container id that is actually created"
+    "reason": "persisted-identifier: the Learning container id that is actually created",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "app/src/routes/_authed/settings/about.tsx",
     "text": "OpenBot（MIT）",
-    "reason": "external-name: MIT attribution on the open-source notices page, required by the licence"
+    "reason": "external-name: MIT attribution on the open-source notices page, required by the licence",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "app/index.html",
     "text": "skin !== \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage"
+    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/components/routes.ts",
     "text": "\"openbot:personal-defaults\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants"
+    "reason": "persisted-identifier: granted_by marker stored on grants",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/tenant/provisioning.ts",
     "text": "\"openbot:staffing-default\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants"
+    "reason": "persisted-identifier: granted_by marker stored on grants",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/intelligence-entitlement-check.ts",
     "text": "on OpenBot alone is not enough",
-    "reason": "internal-log: boot-time licence advice written to the server log"
+    "reason": "internal-log: boot-time licence advice written to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/intelligence-entitlement-check.ts",
     "text": "OpenBot asks again for up to",
-    "reason": "internal-log: boot-time note written to the server log"
+    "reason": "internal-log: boot-time note written to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/index.ts",
     "text": "eq(recorderConnections.via, \"openbot-browser\")",
-    "reason": "persisted-identifier: recorder connection `via` value stored in the database"
+    "reason": "persisted-identifier: recorder connection `via` value stored in the database",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "server/src/index.ts",
     "text": "granted_by 以 openbot: 开头",
-    "reason": "internal-log: start-up warning in the server log naming the stored marker"
+    "reason": "internal-log: start-up warning in the server log naming the stored marker",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/index.ts",
     "text": "OpenBot's own apps' tools could not be brought up to date",
-    "reason": "internal-log: start-up warning in the server log"
+    "reason": "internal-log: start-up warning in the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/agents/connection-test.ts",
     "text": "`openbot-connection-test-",
-    "reason": "persisted-identifier: thread/run id of a throwaway probe; never shown"
+    "reason": "persisted-identifier: thread/run id of a throwaway probe; never shown",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/agents/tool-search.ts",
     "text": "ref: `openbot/${SEARCH_TOOLS}`",
-    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows"
+    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/agents/harness-model.ts",
     "text": "(?:openbot-)?agent-",
-    "reason": "persisted-identifier: matches published container image names"
+    "reason": "persisted-identifier: matches published container image names",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/agents/tool-limit.ts",
     "text": "OPENBOT_TOOL_LIMIT = \"OpenBot\"",
-    "reason": "persisted-identifier: provider value written into audit rows"
+    "reason": "persisted-identifier: provider value written into audit rows",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/agents/plan-model.ts",
     "text": "(?:openbot-)?${harness}",
-    "reason": "persisted-identifier: matches published container image names"
+    "reason": "persisted-identifier: matches published container image names",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/agents/plan-model.ts",
     "text": "`openbot-${config.provider}-plan`",
-    "reason": "persisted-identifier: internal provider id"
+    "reason": "persisted-identifier: internal provider id",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/routing/model.ts",
     "text": "\"openbot-model-call\"",
-    "reason": "persisted-identifier: internal span/run name"
+    "reason": "persisted-identifier: internal span/run name",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/native-browser.ts",
     "text": "client_id:'openbot-desktop'",
-    "reason": "persisted-identifier: OAuth client id the upstream desktop app is registered under"
+    "reason": "persisted-identifier: OAuth client id the upstream desktop app is registered under",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/index.ts",
     "text": "clientID: \"openbot-desktop\"",
-    "reason": "persisted-identifier: OAuth client id the upstream desktop app is registered under"
+    "reason": "persisted-identifier: OAuth client id the upstream desktop app is registered under",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/dev-actor-email.ts",
     "text": "\"dev@openbot.local\"",
-    "reason": "persisted-identifier: old demo address still recognised in upgraded databases (Task 8)"
+    "reason": "persisted-identifier: old demo address still recognised in upgraded databases (Task 8)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/roles.ts",
     "text": "openbot.role-authority:",
-    "reason": "persisted-identifier: advisory lock key"
+    "reason": "persisted-identifier: advisory lock key",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/role-writer-lifecycle.ts",
     "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
-    "reason": "persisted-identifier: database password of the public default setup"
+    "reason": "persisted-identifier: database password of the public default setup",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/organization.ts",
     "text": "\"openbot.organization-session\"",
-    "reason": "persisted-identifier: legacy cookie name, still read (and cleared on sign-in/out) so a session started before the rename keeps working"
+    "reason": "persisted-identifier: legacy cookie name, still read (and cleared on sign-in/out) so a session started before the rename keeps working",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.9",
+    "removeIn": "0.2.11"
   },
   {
     "file": "server/src/delivery/opentag.ts",
     "text": "\"openbot.sender\"",
-    "reason": "persisted-identifier: OpenTag context key the peer reads"
+    "reason": "persisted-identifier: OpenTag context key the peer reads",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/delivery/opentag.ts",
     "text": "\"openbot.working\"",
-    "reason": "persisted-identifier: AG-UI custom event name the peer reads"
+    "reason": "persisted-identifier: AG-UI custom event name the peer reads",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/delivery/opentag.ts",
     "text": "\"openbot-component-\"",
-    "reason": "persisted-identifier: tool-call id prefix the peer reads"
+    "reason": "persisted-identifier: tool-call id prefix the peer reads",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/proactive/private-share.ts",
     "text": "\"openbot/share_private_information\"",
-    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows"
+    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/approvals/rule-vocabulary.ts",
     "text": "\"openbot/share_private_information\"",
-    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows"
+    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/browser/bot-browser.ts",
     "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
-    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL"
+    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/browser/routes.ts",
     "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
-    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL"
+    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/browser/routes.ts",
     "text": "\"openbot-browser\"",
-    "reason": "persisted-identifier: recorder connection `via` value stored in the database"
+    "reason": "persisted-identifier: recorder connection `via` value stored in the database",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "server/src/pipeline/action-step.ts",
     "text": "RESERVED_SERVERS = new Set([\"bot\", \"host\", \"openbot\", \"computer\"])",
-    "reason": "persisted-identifier: reserved MCP server name"
+    "reason": "persisted-identifier: reserved MCP server name",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/tenant-package.ts",
     "text": "is the shape of a person's OpenBot browser",
-    "reason": "internal-error: tenant package loader error read by the operator at start-up"
+    "reason": "internal-error: tenant package loader error read by the operator at start-up",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/tenant-package.ts",
     "text": "say exactly what you are doing; OpenBot asks the person before it happens",
-    "reason": "parsed-exact-text: EARLIER_STARTER_INSTRUCTIONS: matched verbatim to recognise unedited old starters"
+    "reason": "parsed-exact-text: EARLIER_STARTER_INSTRUCTIONS: matched verbatim to recognise unedited old starters",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/config.ts",
     "text": "MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有 OpenBot",
-    "reason": "internal-error: configuration error that stops start-up; read by the operator"
+    "reason": "internal-error: configuration error that stops start-up; read by the operator",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "CopilotKit Intelligence is optional, and is half configured",
-    "reason": "internal-error: configuration error that stops start-up; read by the operator"
+    "reason": "internal-error: configuration error that stops start-up; read by the operator",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "\"/etc/openbot/sandbox-template.json\"",
-    "reason": "persisted-identifier: file path mounted by the Helm chart"
+    "reason": "persisted-identifier: file path mounted by the Helm chart",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/config.ts",
     "text": "creates the openbot Learning container",
-    "reason": "internal-error: configuration error that stops start-up; names the container id"
+    "reason": "internal-error: configuration error that stops start-up; names the container id",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/computer/policy-network.ts",
     "text": "OpenBot pushes again within seconds",
-    "reason": "internal-log: egress push status written to the server log"
+    "reason": "internal-log: egress push status written to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/computer/policy-network.ts",
     "text": "OpenBot keeps pushing every 30 seconds",
-    "reason": "internal-log: egress push status written to the server log"
+    "reason": "internal-log: egress push status written to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/audit-retention.ts",
     "text": "openbot.audit_retention_days",
-    "reason": "persisted-identifier: Postgres setting the RLS/retention SQL reads"
+    "reason": "persisted-identifier: Postgres setting the RLS/retention SQL reads",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/app.ts",
     "text": "没有接入 CopilotKit Intelligence",
-    "reason": "external-name: admin-only API reply naming the third-party service to sign up for"
+    "reason": "external-name: admin-only API reply naming the third-party service to sign up for",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/request-actor.ts",
     "text": "A CopilotKit run requires",
-    "reason": "internal-error: guard error caught by the runtime, not shown to a person"
+    "reason": "internal-error: guard error caught by the runtime, not shown to a person",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/db/apply-migrations.ts",
     "text": "\"openbot:apply-migrations\"",
-    "reason": "persisted-identifier: advisory lock key"
+    "reason": "persisted-identifier: advisory lock key",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/model-endpoint.ts",
     "text": "\"openbot-learning\"",
-    "reason": "persisted-identifier: internal client id of the Learning model endpoint"
+    "reason": "persisted-identifier: internal client id of the Learning model endpoint",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/remote.ts",
     "text": "\"openbot:learned-skills\"",
-    "reason": "persisted-identifier: catalogue id stored in Intelligence"
+    "reason": "persisted-identifier: catalogue id stored in Intelligence",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/remote.ts",
     "text": "\"OpenBot learned skills\"",
-    "reason": "parsed-exact-text: context heading copilot.ts and the agents match verbatim"
+    "reason": "parsed-exact-text: context heading copilot.ts and the agents match verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/auto-assign.ts",
     "text": "Intelligence could not be asked about the Learning container. OpenBot tries again.",
-    "reason": "internal-log: written once to the server log"
+    "reason": "internal-log: written once to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/learning/auto-assign.ts",
     "text": "so OpenBot ignores it${options.enabled",
-    "reason": "internal-log: written once to the server log"
+    "reason": "internal-log: written once to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/learning/auto-assign.ts",
     "text": "so OpenBot ignores it here",
-    "reason": "internal-log: written once to the server log"
+    "reason": "internal-log: written once to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/learning/auto-assign.ts",
     "text": "OpenBot checks again.",
-    "reason": "internal-log: written once to the server log"
+    "reason": "internal-log: written once to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/learning/auto-assign.ts",
     "text": "Automatic Learning container assignment failed. OpenBot tries again.",
-    "reason": "internal-log: written once to the server log"
+    "reason": "internal-log: written once to the server log",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/plugins/composio-adapter.ts",
     "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
-    "reason": "persisted-identifier: suffix of auth configs already created at Composio, still matched (Task 9)"
+    "reason": "persisted-identifier: suffix of auth configs already created at Composio, still matched (Task 9)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/plugins/personal-defaults.ts",
     "text": "\"openbot:personal-defaults\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants"
+    "reason": "persisted-identifier: granted_by marker stored on grants",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/plugins/personal-defaults.ts",
     "text": "\"openbot:always-on\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants"
+    "reason": "persisted-identifier: granted_by marker stored on grants",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/plugins/personal-defaults.ts",
     "text": "\"openbot:%\"",
-    "reason": "persisted-identifier: LIKE pattern over stored granted_by markers"
+    "reason": "persisted-identifier: LIKE pattern over stored granted_by markers",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/plugins/store.ts",
     "text": "by.startsWith(\"openbot:\")",
-    "reason": "persisted-identifier: stored granted_by marker prefix"
+    "reason": "persisted-identifier: stored granted_by marker prefix",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/plugins/shared-accounts.ts",
     "text": "\"openbot-deployment:\"",
-    "reason": "persisted-identifier: vendor-side account prefix already stored at the broker"
+    "reason": "persisted-identifier: vendor-side account prefix already stored at the broker",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/memory/defaults.ts",
     "text": "`openbot:defaults:",
-    "reason": "persisted-identifier: advisory lock key"
+    "reason": "persisted-identifier: advisory lock key",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/memory/tools.ts",
     "text": "\"OpenBot personal memory\"",
-    "reason": "parsed-exact-text: memory context entry the agents match verbatim"
+    "reason": "parsed-exact-text: memory context entry the agents match verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/host-access/tools.ts",
     "text": "\"Declined in OpenBot Desktop.\"",
-    "reason": "parsed-exact-text: reply an older desktop sends; matched verbatim"
+    "reason": "parsed-exact-text: reply an older desktop sends; matched verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/telemetry/product.ts",
     "text": "app_id: \"openbot\"",
-    "reason": "persisted-identifier: telemetry schema value; consumers key on it"
+    "reason": "persisted-identifier: telemetry schema value; consumers key on it",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/telemetry/product.ts",
     "text": "z.literal(\"openbot\")",
-    "reason": "persisted-identifier: telemetry schema value; consumers key on it"
+    "reason": "persisted-identifier: telemetry schema value; consumers key on it",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/telemetry/product.ts",
     "text": "oss.runtime.openbot.",
-    "reason": "persisted-identifier: telemetry event name"
+    "reason": "persisted-identifier: telemetry event name",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/telemetry/otel.ts",
     "text": "\"openbot.",
-    "reason": "persisted-identifier: OTel logger and attribute names admins filter on (Task 9 keeps them)"
+    "reason": "persisted-identifier: OTel logger and attribute names admins filter on (Task 9 keeps them)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/telemetry/otel.ts",
     "text": "`openbot.payload.",
-    "reason": "persisted-identifier: OTel attribute names admins filter on (Task 9 keeps them)"
+    "reason": "persisted-identifier: OTel attribute names admins filter on (Task 9 keeps them)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/computer/sandbox.ts",
     "text": "openbot.dev/",
-    "reason": "persisted-identifier: Kubernetes labels/annotations on live sandboxes"
+    "reason": "persisted-identifier: Kubernetes labels/annotations on live sandboxes",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/computer/sandbox.ts",
     "text": "\"app.kubernetes.io/managed-by\": \"openbot\"",
-    "reason": "persisted-identifier: Kubernetes label on live sandboxes"
+    "reason": "persisted-identifier: Kubernetes label on live sandboxes",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/copilot.ts",
     "text": "\"OpenBot standing role\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim"
+    "reason": "parsed-exact-text: context heading the agents parse verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/copilot.ts",
     "text": "\"OpenBot granted tools guidance\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim"
+    "reason": "parsed-exact-text: context heading the agents parse verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/copilot.ts",
     "text": "\"OpenBot Bot id\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim"
+    "reason": "parsed-exact-text: context heading the agents parse verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/copilot.ts",
     "text": "\"OpenBot deployment tools\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim"
+    "reason": "parsed-exact-text: context heading the agents parse verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/copilot.ts",
     "text": "\"OpenBot signed run assertion\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim"
+    "reason": "parsed-exact-text: context heading the agents parse verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/copilot.ts",
     "text": "\"OpenBot learned skills\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim"
+    "reason": "parsed-exact-text: context heading the agents parse verbatim",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "server/src/copilot.ts",
     "text": "app_id: \"openbot\"",
-    "reason": "persisted-identifier: telemetry schema value; consumers key on it"
+    "reason": "persisted-identifier: telemetry schema value; consumers key on it",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "api.intelligence.copilotkit.ai",
-    "reason": "external-name: the third-party Intelligence API host"
+    "reason": "external-name: the third-party Intelligence API host",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "\"x-copilotkit-ei-service-token\"",
-    "reason": "persisted-identifier: header the third-party Intelligence API reads"
+    "reason": "persisted-identifier: header the third-party Intelligence API reads",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "id: \"openbot\",",
-    "reason": "persisted-identifier: Learning container id already created in Intelligence projects"
+    "reason": "persisted-identifier: Learning container id already created in Intelligence projects",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "CopilotKit returned an invalid setup response",
-    "reason": "external-name: names the vendor whose API answered"
+    "reason": "external-name: names the vendor whose API answered",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "copilotkit-auth-nodejs",
-    "reason": "external-name: the vendor CLI's own config path"
+    "reason": "external-name: the vendor CLI's own config path",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "Learning container with ID \"openbot\"",
-    "reason": "persisted-identifier: the container id an admin must create"
+    "reason": "persisted-identifier: the container id an admin must create",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "sign in to CopilotKit in the browser it opens",
-    "reason": "external-name: the vendor CLI's sign-in an operator must do"
+    "reason": "external-name: the vendor CLI's sign-in an operator must do",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "only on a CopilotKit local evaluation install",
-    "reason": "external-name: names the vendor's install type"
+    "reason": "external-name: names the vendor's install type",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": ".copilotkit/project.json",
-    "reason": "external-name: the vendor CLI's project file"
+    "reason": "external-name: the vendor CLI's project file",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "The CopilotKit CLI's selected project",
-    "reason": "external-name: names the vendor CLI"
+    "reason": "external-name: names the vendor CLI",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "no CopilotKit CLI login is here",
-    "reason": "external-name: names the vendor CLI"
+    "reason": "external-name: names the vendor CLI",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "this CopilotKit CLI login can see",
-    "reason": "external-name: names the vendor CLI"
+    "reason": "external-name: names the vendor CLI",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "\"openbot-learning-\"",
-    "reason": "persisted-identifier: temp directory prefix"
+    "reason": "persisted-identifier: temp directory prefix",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "the openbot Learning container with the configured runtime key",
-    "reason": "persisted-identifier: names the container id"
+    "reason": "persisted-identifier: names the container id",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "The openbot container exists",
-    "reason": "persisted-identifier: names the container id"
+    "reason": "persisted-identifier: names the container id",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "Created an openbot container",
-    "reason": "persisted-identifier: names the container id"
+    "reason": "persisted-identifier: names the container id",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "Automatic Learning: no credential here could create the openbot container",
-    "reason": "internal-log: setup job log line"
+    "reason": "internal-log: setup job log line",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "Automatic Learning: the openbot container is",
-    "reason": "internal-log: setup job log line"
+    "reason": "internal-log: setup job log line",
+    "category": "operator-visible",
+    "plan": "rewrite"
   },
   {
     "file": "runner/src/browser.ts",
     "text": "\"openbot-snapshots.sqlite\"",
-    "reason": "persisted-identifier: snapshot database file in existing profiles"
+    "reason": "persisted-identifier: snapshot database file in existing profiles (L1-18)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "desktop-device/src-tauri/src/main.rs",
     "text": "\"would collide with openbot/desktop\"",
-    "reason": "developer-only: assertion message in a Rust unit test"
+    "reason": "developer-only: assertion message in a Rust unit test",
+    "category": "developer-only",
+    "plan": "keep"
   },
   {
     "file": "desktop-device/src-tauri/src/sidecar.rs",
     "text": "LEGACY_SIDECAR: &str = \"openbot-runner\"",
-    "reason": "persisted-identifier: old sidecar name the cleanup looks for on upgraded machines"
+    "reason": "persisted-identifier: old sidecar name the cleanup looks for on upgraded machines",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "desktop-device/src-tauri/src/sidecar.rs",
     "text": "openbot-runner",
-    "reason": "developer-only: Rust unit-test fixtures for the legacy openbot-runner cleanup"
+    "reason": "developer-only: Rust unit-test fixtures for the legacy openbot-runner cleanup",
+    "category": "developer-only",
+    "plan": "keep"
   },
   {
     "file": "desktop-device/src-tauri/src/sidecar.rs",
     "text": "OPENBOT-RUNNER",
-    "reason": "developer-only: Rust unit-test fixtures: the cleanup matches the old name case-insensitively"
+    "reason": "developer-only: Rust unit-test fixtures: the cleanup matches the old name case-insensitively",
+    "category": "developer-only",
+    "plan": "keep"
   },
   {
     "file": "server/src/auth/index.ts",
     "text": "\"openbotmobile://\"",
-    "reason": "persisted-identifier: legacy mobile URL scheme the server still accepts for sign-in return (dual-accept with xiongbao://)"
+    "reason": "persisted-identifier: legacy mobile URL scheme the server still accepts for sign-in return (dual-accept with xiongbao: //)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "copilotkit@latest",
-    "reason": "external-name: the vendor CLI's npm package an operator runs"
+    "reason": "external-name: the vendor CLI's npm package an operator runs",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "shared/harnesses.ts",
     "text": "OPENBOT_HARNESS_NAME = \"OpenBot\"",
-    "reason": "persisted-identifier: AgentProfile.framework value the app compares; readers see englishName() (Task 9)"
+    "reason": "persisted-identifier: AgentProfile.framework value the app compares; readers see englishName() (Task 9)",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "shared/harnesses.ts",
     "text": "(?:openbot-)?(agent-",
-    "reason": "persisted-identifier: matches published container image names"
+    "reason": "persisted-identifier: matches published container image names",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "shared/release-policy.schema.json",
     "text": "\"OpenBot release policy\"",
-    "reason": "developer-only: JSON Schema title read only by the release tooling"
+    "reason": "developer-only: JSON Schema title read only by the release tooling",
+    "category": "developer-only",
+    "plan": "keep"
   },
   {
     "file": "shared/release-manifest.schema.json",
     "text": "\"OpenBot release manifest v1\"",
-    "reason": "developer-only: JSON Schema title read only by the release tooling"
+    "reason": "developer-only: JSON Schema title read only by the release tooling",
+    "category": "developer-only",
+    "plan": "keep"
   },
   {
     "file": "shared/harnesses.json",
     "text": "the agent harnesses OpenBot knows by name",
-    "reason": "developer-only: `_readme` key for developers; no program reads it"
+    "reason": "developer-only: `_readme` key for developers; no program reads it",
+    "category": "developer-only",
+    "plan": "keep"
   },
   {
     "file": "shared/recorder-api.ts",
     "text": "\"openbot-browser\"",
-    "reason": "persisted-identifier: recorder connection `via` value stored in the database"
+    "reason": "persisted-identifier: recorder connection `via` value stored in the database",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "shared/recorder-extension.json",
     "text": "\"ai.copilotkit.openbot.recorder\"",
-    "reason": "persisted-identifier: native messaging host id the installed extension and host register"
+    "reason": "persisted-identifier: native messaging host id the installed extension and host register",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "shared/desktop-updates.ts",
     "text": "This version of OpenBot doesn't update itself.",
-    "reason": "upstream-shell-only: drawn only inside upstream Desktop; desktop/src/App.test.tsx (never touched) pins the exact words"
+    "reason": "upstream-shell-only: drawn only inside upstream Desktop; desktop/src/App.test.tsx (never touched) pins the exact words",
+    "category": "upstream-shell-only",
+    "plan": "keep"
   },
   {
     "file": "shared/learning.ts",
     "text": "AUTOMATIC_LEARNING_CONTAINER_ID = \"openbot\"",
-    "reason": "persisted-identifier: Learning container id already created in Intelligence projects"
+    "reason": "persisted-identifier: Learning container id already created in Intelligence projects",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "shared/user-preferences.ts",
     "text": "\"openbot\",",
-    "reason": "persisted-identifier: default skin id saved in user preferences"
+    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "shared/user-preferences.ts",
     "text": "DEFAULT_SKIN: SkinId = \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in user preferences"
+    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "shared/openbot-actor.ts",
     "text": "actor.startsWith(\"openbot:\")",
-    "reason": "persisted-identifier: stored actor id prefix"
+    "reason": "persisted-identifier: stored actor id prefix",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "shared/staffing-proposal.ts",
     "text": "\"<<openbot:staffing-proposal>>\"",
-    "reason": "persisted-identifier: marker stored in conversation text and matched verbatim"
+    "reason": "persisted-identifier: marker stored in conversation text and matched verbatim",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "shared/audit-words.ts",
     "text": "\"openbot/share_private_information\"",
-    "reason": "persisted-identifier: built-in tool ref used as a lookup key"
+    "reason": "persisted-identifier: built-in tool ref used as a lookup key",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "shared/recorder-page.ts",
     "text": "\"openbot.",
-    "reason": "persisted-identifier: message type in the Recorder page protocol"
+    "reason": "persisted-identifier: message type in the Recorder page protocol",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "server/src/tenant-package-path.ts",
     "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
-    "reason": "persisted-identifier: the pre-rename tenant package directory name, matched only to redirect old TENANT_PACKAGE_DIR values"
+    "reason": "persisted-identifier: the pre-rename tenant package directory name, matched only to redirect old TENANT_PACKAGE_DIR values",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "mobile/package.json",
     "text": "\"name\": \"openbot-mobile\"",
-    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users"
+    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "mobile/package-lock.json",
     "text": "\"name\": \"openbot-mobile\"",
-    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users"
+    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "extension/src/shared/database.ts",
     "text": "\"openbot-recorder\"",
-    "reason": "persisted-identifier: IndexedDB name of the recorder's kept events; installed extensions keep their data under it"
+    "reason": "persisted-identifier: IndexedDB name of the recorder's kept events; installed extensions keep their data under it",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "extension/src/main-world/network-hook.ts",
     "text": "\"openbot.recorder.configure\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "extension/src/main-world/network-hook.ts",
     "text": "\"openbot.recorder.stop\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "extension/src/protocol/messages.ts",
     "text": "\"openbot.ping\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/protocol/messages.ts",
     "text": "\"openbot.connect\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/protocol/messages.ts",
     "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself"
+    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/content/notice.ts",
     "text": "\"openbot-recorder-notice\"",
-    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name"
+    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name (L1-22)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "extension/src/content/notice.ts",
     "text": "\"data-copilotkit-ignore\"",
-    "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements"
+    "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/content/targeting.ts",
     "text": "[data-copilotkit-action]",
-    "reason": "persisted-identifier: upstream agent client's action attribute, matched as a selector"
+    "reason": "persisted-identifier: upstream agent client's action attribute, matched as a selector",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/content/indicator.ts",
     "text": "\"openbot-recorder-mark\"",
-    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name"
+    "reason": "persisted-identifier: custom element tag in page DOM; content scripts of installed versions look it up by name (L1-22)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "extension/src/content/indicator.ts",
     "text": "\"data-copilotkit-ignore\"",
-    "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements"
+    "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/setup.ts",
     "text": "\"openbot-browser\"",
-    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back"
+    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/launcher.ts",
     "text": "\"openbot-browser\"",
-    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back"
+    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/network/index.ts",
     "text": "OPENBOT_AGENT_RUN",
-    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit agent route"
+    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit agent route",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/network/index.ts",
     "text": "OPENBOT_RUNTIME_INFO",
-    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit runtime route"
+    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit runtime route",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/network/index.ts",
     "text": "(!openbot)",
-    "reason": "persisted-identifier: local variable holding the connected origin"
+    "reason": "persisted-identifier: local variable holding the connected origin",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/network/index.ts",
     "text": "new URL(openbot)",
-    "reason": "persisted-identifier: local variable holding the connected origin"
+    "reason": "persisted-identifier: local variable holding the connected origin",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/network/fallback.ts",
     "text": "\"openbot.recorder.configure\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "extension/src/background/network/fallback.ts",
     "text": "\"openbot.recorder.stop\"",
-    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them"
+    "reason": "persisted-identifier: Symbol.for key shared between the page hook and the service worker fallback; a rename splits them (L1-22)",
+    "category": "persisted-data",
+    "plan": "rewrite"
   },
   {
     "file": "extension/src/background/connection.ts",
     "text": "\"openbot.ping\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/connection.ts",
     "text": "\"openbot.connect\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)"
+    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/connection.ts",
     "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself"
+    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/background/connection.ts",
     "text": "\"openbot-browser\"",
-    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back"
+    "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/pages/options/options.tsx",
     "text": "\"openbot-browser\":",
-    "reason": "persisted-identifier: object key for the stored connection `via` value; the label beside it is already rebranded"
+    "reason": "persisted-identifier: object key for the stored connection `via` value; the label beside it is already rebranded",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/pages/popup/desktop-sentence.ts",
     "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: Desktop connect reason code used as an object key; its sentence is already rebranded"
+    "reason": "persisted-identifier: Desktop connect reason code used as an object key; its sentence is already rebranded",
+    "category": "peer-protocol",
+    "plan": "keep"
   },
   {
     "file": "extension/src/offscreen/streamer.ts",
     "text": "\"openbot-recorder\"",
-    "reason": "persisted-identifier: `source` value on the capture channel that the server's gateway matches"
+    "reason": "persisted-identifier: `source` value on the capture channel that the server's gateway matches",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "extension/src/offscreen/grant.ts",
     "text": "Could not connect to OpenBot's back end",
-    "reason": "parsed-exact-text: matches the gateway's own error text verbatim to choose retry over hold; rewording stops the match"
+    "reason": "parsed-exact-text: matches the gateway's own error text verbatim to choose retry over hold; rewording stops the match",
+    "category": "parsed-exact-text",
+    "plan": "keep"
   },
   {
     "file": "shared/desktop-control.ts",
     "text": "\"openbot-runner\",",
-    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1）"
+    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1），把旧版设备端自己的窗口也当成本机界面挡住",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.10",
+    "removeIn": "0.2.12",
+    "device": true
   },
   {
     "file": "shared/desktop-control.ts",
     "text": "\"openbot-desktop\",",
-    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1）"
+    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1），把旧版设备端自己的窗口也当成本机界面挡住",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.10",
+    "removeIn": "0.2.12",
+    "device": true
   }
 ]
