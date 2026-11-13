@@ -52,7 +52,7 @@ describe("OPENBOT_ rules split by use", () => {
     for (const path of [
       "Dockerfile",
       "agent-computer/src/index.ts",
-      "docker/openbot-apt",
+      "docker/xiongbao-apt",
       "extension/scripts/build.ts",
     ])
       expect(files).toContain(path);
