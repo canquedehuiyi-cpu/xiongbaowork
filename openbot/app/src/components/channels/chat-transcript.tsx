@@ -125,6 +125,7 @@ import {
 } from "./chat-messages";
 import { splitChatOrigin } from "./chat-origin";
 import type { QueuedMessage } from "./composer";
+import { useIntroScrolledAway } from "./conversation-intro";
 import { FollowScroll, RESUME_PX, useFollowIntent } from "./follow-intent";
 import { LateRenderersContext, LateRenderersWatch } from "./late-renderers";
 import { usePacedReveal } from "./paced-reveal";
@@ -165,6 +166,11 @@ type ChatTranscriptProps = {
    * with the conversation. Only once the earliest page is drawn: see where it is rendered.
    */
   intro?: React.ReactNode;
+  /**
+   * The intro folded to one line (`ConversationIntroBar`), laid over the top of the pane once the
+   * intro has scrolled out of view. Given `away`, whether it has.
+   */
+  introBar?: (away: boolean) => React.ReactNode;
   /**
    * What an empty conversation shows instead of a blank pane — a welcome on the compose screen.
    * Drawn only while there is nothing at all to draw: no turns, nothing restoring, queued, working
@@ -2109,6 +2115,7 @@ export function ChatTranscript({
   commandLabels = "",
   empty,
   intro,
+  introBar,
   messages,
   onRemoveQueued,
   queued = EMPTY_QUEUE,
@@ -2263,6 +2270,11 @@ export function ChatTranscript({
     restoring,
   );
   const { drawEarlier, drawTo, from: pagesFrom } = pages;
+  const introPin = useIntroScrolledAway(viewportRef);
+  const updateIntroPin = introPin.update;
+  const hasIntro = Boolean(intro) && pages.from === 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure when the intro appears or goes
+  useEffect(() => updateIntroPin(), [updateIntroPin, hasIntro]);
   const drawEarlierNearTop = useCallback(
     (from: number) => {
       const element = viewportRef.current;
@@ -2557,6 +2569,7 @@ export function ChatTranscript({
                   follow.viewportHandlers.onScroll?.(event);
                   drawEarlierNearTop(pagesFrom);
                   readActiveTurn();
+                  if (introBar) updateIntroPin();
                 }}
                 ref={viewportRef}
               >
@@ -2573,7 +2586,9 @@ export function ChatTranscript({
                    * first child and every page drawn under it would be read as appended rows instead.
                    * Drawn in the same commit as the earliest page, it is the prepend.
                    */}
-                  {pages.from === 0 ? intro : null}
+                  {pages.from === 0 && intro ? (
+                    <div ref={introPin.introRef}>{intro}</div>
+                  ) : null}
                   {/*
                    * DRAWN LAST, WRITTEN FIRST, AND THE SCROLLER IS WHY. Three reviewers have now arrived
                    * at this block, worked the mechanism out from the library's bundle, and reached the
@@ -2671,6 +2686,13 @@ export function ChatTranscript({
                     )}
                 </MessageScrollerContent>
               </MessageScrollerViewport>
+              {/*
+               * The full intro sits above the earliest page. While earlier pages are not mounted it is
+               * above the visible history by definition, so the compact bar shows.
+               */}
+              {introBar && intro
+                ? introBar(pages.from > 0 ? true : introPin.away)
+                : null}
               <MessageScrollerButton
                 onClick={(event) => {
                   // Ours, not the scroller's: it would scroll before it had been told to follow again.

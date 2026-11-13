@@ -83,6 +83,7 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
                   <AbstractAvatar
                     name={agent.name}
                     seed={agent.avatarSeed}
+                    portrait={{ kind: "coworker", id: agent.id }}
                     size={44}
                   />
                   <ItemContent className="min-w-0 gap-0.5">

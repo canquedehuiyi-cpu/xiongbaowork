@@ -6,6 +6,7 @@ import { z } from "zod";
 import { AgentProfile } from "@/components/agents/agent-profile";
 import { ConversationApprovals } from "@/components/approvals/inline-approval";
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
+import { useProfileStatus } from "@/components/bot-profile/waker-detail-sections";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { ChannelChat } from "@/components/channels/channel-chat";
 import { ConversationActions } from "@/components/channels/conversation-actions";
@@ -137,10 +138,14 @@ function RouteComponent() {
                 ease: EASE_OUT,
               }}
             >
-              <ChannelAvatar
-                participantIds={channel.data?.agentIds ?? []}
-                size={24}
-              />
+              {agentId ? (
+                <HeaderFace
+                  agentId={agentId}
+                  participantIds={channel.data?.agentIds ?? []}
+                />
+              ) : (
+                <ChannelAvatar participantIds={[]} size={24} />
+              )}
             </motion.div>
             <motion.span
               animate={
@@ -244,6 +249,27 @@ function ChannelBody({
       channel={channel}
       key={channel.id}
       runtimeAgentId={runtimeAgentId}
+    />
+  );
+}
+
+/**
+ * The conversation title's face, playing its animation in the state the employee is in: the same
+ * read the 员工 detail page's face follows (working while it has running work, idling otherwise).
+ */
+function HeaderFace({
+  agentId,
+  participantIds,
+}: {
+  agentId: string;
+  participantIds: string[];
+}) {
+  const status = useProfileStatus(agentId);
+  return (
+    <ChannelAvatar
+      motion={status === "working" ? "working" : "idle"}
+      participantIds={participantIds}
+      size={24}
     />
   );
 }

@@ -216,6 +216,7 @@ export function NewRoutinePage({
                                 <AbstractAvatar
                                   name={agent.name}
                                   seed={agent.avatarSeed}
+                                  portrait={{ kind: "coworker", id: agent.id }}
                                   size={18}
                                 />
                               </span>
