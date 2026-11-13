@@ -26,7 +26,11 @@ import {
   renameCrewMutationOptions,
   setCrewMembersMutationOptions,
 } from "@/lib/waker-groups/mutations";
-import { CrewRequestError, type WakerGroup } from "@/lib/waker-groups/queries";
+import {
+  CrewRequestError,
+  OWNER_GONE,
+  type WakerGroup,
+} from "@/lib/waker-groups/queries";
 
 const MIN_MEMBERS = 2;
 const MAX_MEMBERS = 20;
@@ -96,19 +100,27 @@ export function GroupSettingsPanel({ channelId }: { channelId: string }) {
   let body = <p className="text-muted-foreground text-sm">正在读取…</p>;
   if (lookup.isError) {
     const error = lookup.error;
-    const status = error instanceof CrewRequestError ? error.status : 0;
-    const gone = status === 409;
+    const crewError = error instanceof CrewRequestError ? error : null;
+    // The owner-gone refusal is told by its `code`, never by its status or wording. A 403 and a 404
+    // carry no code, so those two are the status; neither gets better by asking again.
+    const gone = crewError?.code === OWNER_GONE;
+    const notOwner = crewError?.status === 403;
+    const notAGroup = crewError?.status === 404;
     body = (
       <ReadOnlyRoster
         channelId={channelId}
         note={
-          status === 403
+          notOwner
             ? "只有发起人能调整"
             : gone
               ? error.message
-              : "群组信息加载失败。"
+              : notAGroup
+                ? "这段对话没有群组设置。"
+                : "群组信息加载失败。"
         }
-        onRetry={status === 403 || gone ? undefined : () => mutate(channelId)}
+        onRetry={
+          notOwner || gone || notAGroup ? undefined : () => mutate(channelId)
+        }
       />
     );
   } else if (lookup.data) {

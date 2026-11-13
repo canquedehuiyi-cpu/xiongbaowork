@@ -18,7 +18,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { Channel } from "@/components/app-sidebar/channel";
 import {
   GroupSettingsButton,
@@ -153,7 +153,7 @@ function reset(patch: Partial<World> = {}) {
     if (path === "/api/agents") return NativeResponse.json({ agents: ROSTER });
     if (path === "/api/waker-groups" && method === "GET")
       return NativeResponse.json({ groups: world.crews });
-    if (path === "/api/waker-groups/for-channel/ch-1")
+    if (path.startsWith("/api/waker-groups/for-channel/"))
       return NativeResponse.json(world.forChannel.body, {
         status: world.forChannel.status,
       });
@@ -894,4 +894,95 @@ test("the rename box stops at 80 characters, as the server does", async () => {
     name: "群组名称",
   }) as HTMLInputElement;
   expect(name.maxLength).toBe(80);
+});
+
+const lookupsOf = (channelId: string) =>
+  sent.filter(
+    (call) => call.path === `/api/waker-groups/for-channel/${channelId}`,
+  );
+
+test("a chat that is not a group says so and offers no retry", async () => {
+  reset({ forChannel: { status: 404, body: { error: "No such group." } } });
+  const { view } = drawer();
+  const panel = await panelOf(view);
+  expect(await panel.findByText("这段对话没有群组设置。")).toBeTruthy();
+  expect(panel.queryByRole("button", { name: "重试" })).toBeNull();
+  expect(panel.queryByText("群组信息加载失败。")).toBeNull();
+});
+
+test("a 409 without the owner-gone code is an ordinary failure, with a retry", async () => {
+  reset({
+    forChannel: { status: 409, body: { error: "Some other conflict." } },
+  });
+  const { view } = drawer();
+  const panel = await panelOf(view);
+  expect(await panel.findByText("群组信息加载失败。")).toBeTruthy();
+  expect(panel.queryByText("Some other conflict.")).toBeNull();
+  expect(panel.getByRole("button", { name: "重试" })).toBeTruthy();
+});
+
+/** The panel under a parent that can change its chat, or close and open it again. */
+function holder() {
+  function Holder() {
+    const [channelId, setChannelId] = useState("ch-1");
+    const [open, setOpen] = useState(true);
+    return (
+      <>
+        <button onClick={() => setChannelId("ch-2")} type="button">
+          next chat
+        </button>
+        <button onClick={() => setOpen((was) => !was)} type="button">
+          toggle drawer
+        </button>
+        <GroupSettingsButton
+          channelId={channelId}
+          onOpenChange={setOpen}
+          open={open}
+        />
+      </>
+    );
+  }
+  const root = createRootRoute({ component: Holder });
+  const router = createRouter({
+    routeTree: root.addChildren(stubs(root)),
+    history: createMemoryHistory({ initialEntries: ["/x"] }),
+  });
+  return render(
+    <QueryClientProvider client={client()}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
+}
+
+test("the once-only guard still asks again for another chat, after closing and reopening, and on retry", async () => {
+  reset();
+  const view = holder();
+  await panelOf(view);
+  await waitFor(() => expect(lookupsOf("ch-1")).toHaveLength(1));
+
+  // Another chat is another group: asked afresh.
+  fireEvent.click(view.getByText("next chat"));
+  await waitFor(() => expect(lookupsOf("ch-2")).toHaveLength(1));
+  expect(lookupsOf("ch-1")).toHaveLength(1);
+
+  // Closed and opened again, the panel is new and asks again.
+  fireEvent.click(view.getByText("toggle drawer"));
+  await waitFor(() =>
+    expect(
+      document.querySelector('[data-slot="group-settings-panel"]'),
+    ).toBeNull(),
+  );
+  fireEvent.click(view.getByText("toggle drawer"));
+  await panelOf(view);
+  await waitFor(() => expect(lookupsOf("ch-2")).toHaveLength(2));
+});
+
+test("retrying after a failure asks the server again", async () => {
+  reset({ forChannel: { status: 500, body: { error: "boom" } } });
+  const { view } = drawer();
+  const panel = await panelOf(view);
+  expect(await panel.findByText("群组信息加载失败。")).toBeTruthy();
+  expect(lookupsOf("ch-1")).toHaveLength(1);
+  fireEvent.click(panel.getByRole("button", { name: "重试" }));
+  await waitFor(() => expect(lookupsOf("ch-1")).toHaveLength(2));
 });
