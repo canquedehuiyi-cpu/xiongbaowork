@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Item, ItemContent, ItemMedia } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { openBrowserMutationOptions } from "@/lib/browser/mutations";
+import { readCompat, writeCompat } from "@/lib/storage-compat";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
 import {
@@ -28,7 +29,8 @@ import {
 } from "./recording";
 
 /** Kept once the person has saved a recording: from then on the page opens on naming the task, past the introduction. */
-export const INTRODUCED_KEY = "openbot.teach-a-bot.introduced";
+const LEGACY_INTRODUCED_KEY = "openbot.teach-a-bot.introduced";
+export const INTRODUCED_KEY = "xiongbao.teach-a-bot.introduced";
 
 export const OPEN_AND_RECORD = "打开浏览器并录制";
 
@@ -36,7 +38,7 @@ type Step = 1 | 2 | 3;
 
 function introduced(): boolean {
   try {
-    return localStorage.getItem(INTRODUCED_KEY) === "1";
+    return readCompat(INTRODUCED_KEY, LEGACY_INTRODUCED_KEY) === "1";
   } catch {
     return false;
   }
@@ -44,7 +46,7 @@ function introduced(): boolean {
 
 function rememberIntroduced() {
   try {
-    localStorage.setItem(INTRODUCED_KEY, "1");
+    writeCompat(INTRODUCED_KEY, "1");
   } catch {
     // Storage refused (a private window): the introduction shows again next time, which is harmless.
   }

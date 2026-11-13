@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tryClient } from "@/lib/client";
+import { readCompat, writeCompat } from "@/lib/storage-compat";
 import { newId } from "../new-id";
 
 /**
@@ -22,7 +23,8 @@ import { newId } from "../new-id";
  * says it is.
  */
 
-const KEY = "openbot.bot-thread";
+const LEGACY_KEY = "openbot.bot-thread";
+const KEY = "xiongbao.bot-thread";
 
 /** The one place the storage key is built, so the getter and the setter can never drift apart. */
 export function botThreadKey(agentId: string): string {
@@ -31,7 +33,7 @@ export function botThreadKey(agentId: string): string {
 
 function remembered(agentId: string): string | null {
   try {
-    return window.localStorage.getItem(botThreadKey(agentId));
+    return readCompat(botThreadKey(agentId), `${LEGACY_KEY}.${agentId}`);
   } catch {
     // Storage can be unavailable or full. A thread for this visit is better than no chat at all.
     return null;
@@ -40,7 +42,7 @@ function remembered(agentId: string): string | null {
 
 function remember(agentId: string, threadId: string): void {
   try {
-    window.localStorage.setItem(botThreadKey(agentId), threadId);
+    writeCompat(botThreadKey(agentId), threadId);
   } catch {
     // As above: the conversation still works, it just will not be here next time.
   }

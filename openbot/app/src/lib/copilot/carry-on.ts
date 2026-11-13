@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { readCompat, writeCompat } from "@/lib/storage-compat";
 import { useConversation } from "./conversation";
 
 /**
@@ -37,7 +38,8 @@ export type CardPlace = {
   latest: boolean;
 };
 
-const MARK = "openbot:carried-on:";
+const LEGACY_MARK = "openbot:carried-on:";
+const MARK = "xiongbao:carried-on:";
 
 /** Marks kept here as well, for a browser that refuses `localStorage` (a private window, a policy). */
 const carriedHere = new Set<string>();
@@ -45,7 +47,7 @@ const carriedHere = new Set<string>();
 function hasCarriedOn(toolCallId: string): boolean {
   if (carriedHere.has(toolCallId)) return true;
   try {
-    return window.localStorage.getItem(MARK + toolCallId) !== null;
+    return readCompat(MARK + toolCallId, LEGACY_MARK + toolCallId) !== null;
   } catch {
     return false;
   }
@@ -56,7 +58,7 @@ function markCarriedOn(toolCallId: string): boolean {
   if (hasCarriedOn(toolCallId)) return false;
   carriedHere.add(toolCallId);
   try {
-    window.localStorage.setItem(MARK + toolCallId, new Date().toISOString());
+    writeCompat(MARK + toolCallId, new Date().toISOString());
   } catch {
     // The in-memory mark still holds for this tab.
   }
