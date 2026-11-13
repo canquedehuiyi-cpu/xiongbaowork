@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AllowEntry, Category } from "./allowlist";
+import { versionless } from "./artifact-words";
 import type { BudgetRow } from "./budget";
 import {
   readSyncPoint,
@@ -164,7 +165,7 @@ export function ratchetBase(base: string, head: string, repo = REPO): string {
 const WORDS_DIR = "app/tests/brand-artifacts";
 const wordKeys = (text: string): ArtifactEntryKey[] =>
   (JSON.parse(text) as { word?: string; prefix?: string }[]).map((e) =>
-    e.word !== undefined ? e.word : `prefix:${e.prefix}`,
+    e.word !== undefined ? versionless(e.word) : `prefix:${e.prefix}`,
   );
 
 /** The work-tree files against `base`, read with `git show <base>:openbot/<path>`. */
