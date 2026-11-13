@@ -411,17 +411,21 @@ ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 # Public, build-bound identity. A build that passes no --build-arg leaves it unknown (the root release
 # workflow passes none today, so its images report the same unknown identity they always did). The
-# names are XIONGBAO_*; the alias layer copies each back to its OPENBOT_* name, which the server reads.
+# build arguments are XIONGBAO_*; the ENV keeps the OPENBOT_* names the server reads, on purpose: an
+# unset argument still becomes an EMPTY variable, and an empty XIONGBAO_BUILD_* would be copied over
+# an OPENBOT_BUILD_* that an existing deployment supplies at run time (the alias layer lets an empty
+# new name win), erasing its release identity. A run-time XIONGBAO_BUILD_* still works through the
+# alias layer. Moving these to their new names waits for a lowest-priority defaults home (Task 11).
 ARG XIONGBAO_BUILD_VERSION
 ARG XIONGBAO_BUILD_COMMIT
 ARG XIONGBAO_BUILD_DISTRIBUTION_ID
 ARG XIONGBAO_BUILD_REPOSITORY
 ARG XIONGBAO_BUILD_CHANNEL
-ENV XIONGBAO_BUILD_VERSION=${XIONGBAO_BUILD_VERSION} \
-    XIONGBAO_BUILD_COMMIT=${XIONGBAO_BUILD_COMMIT} \
-    XIONGBAO_BUILD_DISTRIBUTION_ID=${XIONGBAO_BUILD_DISTRIBUTION_ID} \
-    XIONGBAO_BUILD_REPOSITORY=${XIONGBAO_BUILD_REPOSITORY} \
-    XIONGBAO_BUILD_CHANNEL=${XIONGBAO_BUILD_CHANNEL}
+ENV OPENBOT_BUILD_VERSION=${XIONGBAO_BUILD_VERSION} \
+    OPENBOT_BUILD_COMMIT=${XIONGBAO_BUILD_COMMIT} \
+    OPENBOT_BUILD_DISTRIBUTION_ID=${XIONGBAO_BUILD_DISTRIBUTION_ID} \
+    OPENBOT_BUILD_REPOSITORY=${XIONGBAO_BUILD_REPOSITORY} \
+    OPENBOT_BUILD_CHANNEL=${XIONGBAO_BUILD_CHANNEL}
 
 # Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
 # container only callers on this machine are the administrator; in here every caller arrives through

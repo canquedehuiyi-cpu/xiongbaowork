@@ -63,4 +63,20 @@ describe("the runtime image's tree", () => {
     expect(dockerfile).toContain("ARG XIONGBAO_BUILD_VERSION");
     expect(dockerfile).not.toContain("ARG OPENBOT_BUILD_");
   });
+
+  test("an unset build argument cannot erase a run-time OPENBOT_BUILD_* (ENV keeps the name the server reads)", () => {
+    // An unset ARG still becomes an EMPTY variable. Baked under its XIONGBAO_ name, the alias layer
+    // would copy that empty value over an OPENBOT_BUILD_* the deployment supplies at run time.
+    expect(dockerfile).not.toMatch(/^ENV XIONGBAO_BUILD_/m);
+    for (const part of [
+      "VERSION",
+      "COMMIT",
+      "DISTRIBUTION_ID",
+      "REPOSITORY",
+      "CHANNEL",
+    ])
+      expect(dockerfile, part).toContain(
+        `OPENBOT_BUILD_${part}=\${XIONGBAO_BUILD_${part}}`,
+      );
+  });
 });
