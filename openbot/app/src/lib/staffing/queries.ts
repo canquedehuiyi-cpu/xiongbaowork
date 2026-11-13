@@ -10,6 +10,7 @@ import { channelKeys } from "@/lib/channels/queries";
 import { client, RequestError } from "@/lib/client";
 import { quotaKeys, quotaQueryOptions } from "@/lib/quota/queries";
 import { routineKeys } from "@/lib/routines/queries";
+import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 import type { Persona } from "../../../../shared/persona";
 import type { StaffingProposalKind } from "../../../../shared/staffing-proposal";
 
@@ -199,6 +200,7 @@ function afterRun(cache: QueryClient, proposal: Proposal) {
   keep(cache, proposal);
   void cache.invalidateQueries({ queryKey: agentKeys.all });
   void cache.invalidateQueries({ queryKey: channelKeys.all });
+  void cache.invalidateQueries({ queryKey: wakerGroupKeys.all });
   void cache.invalidateQueries({ queryKey: routineKeys.all });
   void cache.invalidateQueries({ queryKey: quotaKeys.all });
 }

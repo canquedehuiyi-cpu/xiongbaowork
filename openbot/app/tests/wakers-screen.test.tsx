@@ -188,6 +188,12 @@ function draw() {
         path: "/bots/$agentId",
         component: () => null,
       } as never),
+      // A made group opens its chat.
+      createRoute({
+        getParentRoute: () => root,
+        path: "/group/$channelId",
+        component: () => null,
+      } as never),
       // Spec D7: each card links to the coworker's assembly, now its page's 设置 tab.
       createRoute({
         getParentRoute: () => root,
@@ -562,8 +568,21 @@ test("the groups tab edits a crew by sending the whole roster", async () => {
   });
 });
 
+/** In the 新建群组 dialog: tick the two coworkers the fixture offers, in this order. */
+async function pickTwo(screen: ReturnType<typeof draw>) {
+  for (const name of [base.name, reviewer.name]) {
+    await screen.findAllByRole("checkbox");
+    // By the aria-label attribute: the row's label also reads the coworker's title.
+    const found = screen
+      .getAllByRole("checkbox")
+      .find((candidate) => candidate.getAttribute("aria-label") === name);
+    if (!found) throw new Error(`no checkbox for ${name}`);
+    await userEvent.click(found);
+  }
+}
+
 test("a new crew is created by name, and its purpose is optional", async () => {
-  queryClientForDraw = seed([base], [], []);
+  queryClientForDraw = seed([base, reviewer], [], []);
   globalThis.fetch = (async (
     input: string | URL | Request,
     init?: RequestInit,
@@ -578,7 +597,20 @@ test("a new crew is created by name, and its purpose is optional", async () => {
         String(input).includes("/api/tasks") ? { tasks: [] } : { groups: [] },
       );
     return Response.json({
-      group: { id: "crew-2", name: "值班群组", members: [] },
+      group: {
+        id: "crew-2",
+        name: "值班群组",
+        members: [],
+        channelId: "chat-2",
+      },
+      channel: {
+        id: "chat-2",
+        name: "值班群组",
+        agentIds: ["agent-1", "agent-2"],
+        threadId: "t-2",
+        active: true,
+        lastMessageAt: null,
+      },
     });
   }) as typeof fetch;
 
@@ -594,16 +626,21 @@ test("a new crew is created by name, and its purpose is optional", async () => {
     await screen.findByPlaceholderText("群组名称"),
     "值班群组",
   );
+  await pickTwo(screen);
   await userEvent.click(screen.getByRole("button", { name: "创建" }));
 
   await waitFor(() => expect(writes()).toHaveLength(1));
   expect(writes()[0]?.method).toBe("POST");
   expect(writes()[0]?.path).toBe("/api/waker-groups");
-  expect(writes()[0]?.body).toEqual({ name: "值班群组", description: "" });
+  expect(writes()[0]?.body).toEqual({
+    name: "值班群组",
+    description: "",
+    agentIds: ["agent-1", "agent-2"],
+  });
 });
 
 test("a name the workspace already used comes back as the server's own sentence", async () => {
-  queryClientForDraw = seed([base], [crew], []);
+  queryClientForDraw = seed([base, reviewer], [crew], []);
   globalThis.fetch = (async (
     _input: string | URL | Request,
     _init?: RequestInit,
@@ -625,6 +662,7 @@ test("a name the workspace already used comes back as the server's own sentence"
     await screen.findByPlaceholderText("群组名称"),
     "编程群组",
   );
+  await pickTwo(screen);
   await userEvent.click(screen.getByRole("button", { name: "创建" }));
 
   expect(

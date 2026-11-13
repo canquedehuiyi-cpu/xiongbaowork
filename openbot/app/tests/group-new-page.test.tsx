@@ -1,6 +1,6 @@
 /*
- * 「新建群聊」页（熊宝 v0.2.7 的页面，#452 曾把它改成跳到新对话页，用户找不到入口后恢复）：勾选员工，
- * 勾的先后就是回答顺序，至少两位才能开始；开始就先建一个空群聊（POST /api/groups，按勾选顺序定成员
+ * 「新建群组」页（熊宝 v0.2.7 的页面，#452 曾把它改成跳到新对话页，用户找不到入口后恢复）：勾选员工，
+ * 勾的先后就是回答顺序，至少两位才能开始；创建就建好群组和它的聊天（POST /api/waker-groups，按勾选顺序定成员
  * 顺序），再打开它。
  */
 import {
@@ -123,7 +123,7 @@ function renderPage(agents: AgentProfile[] = AGENTS) {
     routeTree: rootRoute.addChildren([
       groupNew,
       opened,
-      // Where the person was before opening 新建群聊.
+      // Where the person was before opening 新建群组.
       createRoute({
         getParentRoute: () => rootRoute,
         path: "/start",
@@ -152,11 +152,11 @@ async function box(view: ReturnType<typeof renderPage>["view"], name: string) {
 
 test("the page lists every employee to pick, and says how many more it needs", async () => {
   const { view } = renderPage();
-  expect(await view.findByText("新建群聊")).toBeTruthy();
+  expect(await view.findByText("新建群组")).toBeTruthy();
   expect(
     view.getAllByRole("checkbox").map((box) => box.getAttribute("aria-label")),
   ).toEqual(["分析师", "写手", "审稿"]);
-  const start = view.getByRole("button", { name: "开始群聊" });
+  const start = view.getByRole("button", { name: "创建群组" });
   expect(start).toHaveProperty("disabled", true);
   expect(view.getByText("已选 0 位，至少还要 2 位")).toBeTruthy();
 });
@@ -173,16 +173,23 @@ test("the order employees are picked in is the order they answer, said on each r
   // Unpicking the first moves the other up.
   await userEvent.click(await box(view, "审稿"));
   expect(within(await rowOf("分析师")).getByText("第 1 个回答")).toBeTruthy();
-  expect(view.getByRole("button", { name: "开始群聊" })).toHaveProperty(
+  expect(view.getByRole("button", { name: "创建群组" })).toHaveProperty(
     "disabled",
     true,
   );
 });
 
-test("开始群聊 makes an empty 群聊 in the picked order and opens it", async () => {
+test("创建群组 makes the 群组 and its chat in the picked order and opens it", async () => {
   respond = async () =>
     Response.json(
       {
+        group: {
+          id: "wg-1",
+          name: "审稿、分析师",
+          description: null,
+          members: [],
+          channelId: "g-1",
+        },
         channel: {
           id: "g-1",
           name: "审稿、分析师",
@@ -198,15 +205,19 @@ test("开始群聊 makes an empty 群聊 in the picked order and opens it", asyn
   await userEvent.click(await box(view, "审稿"));
   await userEvent.click(await box(view, "分析师"));
   expect(view.getByText("已选 2 位")).toBeTruthy();
-  await userEvent.click(view.getByRole("button", { name: "开始群聊" }));
+  await userEvent.click(view.getByRole("button", { name: "创建群组" }));
   expect(await view.findByText("群聊已打开")).toBeTruthy();
   expect(router.state.location.pathname).toBe("/group/g-1");
-  // Made on its own, with no first message: the 群聊 exists before anybody speaks in it.
+  // Made on its own, with no first message: the 群组 exists before anybody speaks in it.
   expect(sent.filter((request) => request.method === "POST")).toEqual([
     {
-      url: "/api/groups",
+      url: "/api/waker-groups",
       method: "POST",
-      body: { agentIds: ["checker", "analyst"] },
+      body: {
+        name: "审稿、分析师",
+        description: "",
+        agentIds: ["checker", "analyst"],
+      },
     },
   ]);
   expect(queryClient.getQueryData(channelKeys.detail("g-1"))).toMatchObject({
@@ -215,13 +226,13 @@ test("开始群聊 makes an empty 群聊 in the picked order and opens it", asyn
   });
 });
 
-test("a 群聊 the server refuses stays on the page and says why", async () => {
+test("a 群组 the server refuses stays on the page and says why", async () => {
   respond = async () =>
     Response.json({ error: "你用不了其中一位员工。" }, { status: 403 });
   const { view, router } = renderPage();
   await userEvent.click(await box(view, "写手"));
   await userEvent.click(await box(view, "分析师"));
-  await userEvent.click(view.getByRole("button", { name: "开始群聊" }));
+  await userEvent.click(view.getByRole("button", { name: "创建群组" }));
   await waitFor(() =>
     expect(view.getByRole("alert").textContent).toBe("你用不了其中一位员工。"),
   );
@@ -242,10 +253,17 @@ test("each picked employee's place in the order is read with its name", async ()
   expect(await describedBy("分析师")).toBeNull();
 });
 
-test("opening the new 群聊 replaces this page, so Back does not return to the picker", async () => {
+test("opening the new 群组 replaces this page, so Back does not return to the picker", async () => {
   respond = async () =>
     Response.json(
       {
+        group: {
+          id: "wg-2",
+          name: "写手、审稿",
+          description: null,
+          members: [],
+          channelId: "g-2",
+        },
         channel: {
           id: "g-2",
           name: "写手、审稿",
@@ -260,13 +278,13 @@ test("opening the new 群聊 replaces this page, so Back does not return to the 
   const { view, router } = renderPage();
   await userEvent.click(await box(view, "写手"));
   await userEvent.click(await box(view, "审稿"));
-  await userEvent.click(view.getByRole("button", { name: "开始群聊" }));
+  await userEvent.click(view.getByRole("button", { name: "创建群组" }));
   expect(await view.findByText("群聊已打开")).toBeTruthy();
   router.history.back();
   await waitFor(() => expect(router.state.location.pathname).toBe("/start"));
 });
 
-test("twenty employees is as many as one 群聊 takes; the rest wait", async () => {
+test("twenty employees is as many as one 群组 takes; the rest wait", async () => {
   const many = Array.from({ length: 21 }, (_, index) =>
     agent(`bot-${index + 1}`, `员工${index + 1}`),
   );
@@ -274,11 +292,11 @@ test("twenty employees is as many as one 群聊 takes; the rest wait", async () 
   for (let index = 1; index <= 20; index++) {
     await userEvent.click(await box(view, `员工${index}`));
   }
-  expect(view.getByText("已选 20 位，一个群聊最多 20 位")).toBeTruthy();
+  expect(view.getByText("已选 20 位，一个群组最多 20 位")).toBeTruthy();
   const last = await box(view, "员工21");
   expect(last.getAttribute("aria-disabled")).toBe("true");
   await userEvent.click(last);
-  expect(view.getByText("已选 20 位，一个群聊最多 20 位")).toBeTruthy();
+  expect(view.getByText("已选 20 位，一个群组最多 20 位")).toBeTruthy();
   // A picked one can still be taken out, which frees a place.
   await userEvent.click(await box(view, "员工1"));
   expect((await box(view, "员工21")).getAttribute("aria-disabled")).toBeNull();
@@ -290,10 +308,10 @@ test("a refusal the server words in English reads as the page's own sentence", a
   const { view } = renderPage();
   await userEvent.click(await box(view, "写手"));
   await userEvent.click(await box(view, "分析师"));
-  await userEvent.click(view.getByRole("button", { name: "开始群聊" }));
+  await userEvent.click(view.getByRole("button", { name: "创建群组" }));
   await waitFor(() =>
     expect(view.getByRole("alert").textContent).toBe(
-      "群聊没能开始，请再试一次。",
+      "群组没能建好，请再试一次。",
     ),
   );
 });

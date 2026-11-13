@@ -8,7 +8,6 @@ import {
   IconPinnedOff,
   IconPlus,
   IconSearch,
-  IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
@@ -21,7 +20,12 @@ import {
   pinnedFirst,
 } from "@/components/app-sidebar/app-sidebar";
 import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
+import {
+  DangerItem,
+  DissolveRowDialog,
+} from "@/components/app-sidebar/row-danger";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
+import { LeaveGroupDialog } from "@/components/channels/leave-group-dialog";
 import { NavigationTarget } from "@/components/layout/navigation-target";
 import { OpenBotVersion } from "@/components/layout/openbot-version";
 import { Button } from "@/components/ui/button";
@@ -288,6 +292,8 @@ function ThreadRow({
   const navigate = useNavigate();
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
+  const [dissolving, setDissolving] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const [pinProblem, setPinProblem] = useState<string | null>(null);
   const unread = isUnread(channel, open ? channel.id : undefined);
   const title = channel.summary || untitledLine(channel) || channel.name;
@@ -345,13 +351,15 @@ function ThreadRow({
             {channel.pinned ? <IconPinnedOff /> : <IconPin />}
             {channel.pinned ? "取消置顶" : "置顶对话"}
           </ContextMenuItem>
-          <ContextMenuItem
-            onClick={() => setConfirming(true)}
-            variant="destructive"
-          >
-            <IconTrash />
-            删除对话…
-          </ContextMenuItem>
+          <DangerItem
+            canRename={channel.canRename ?? false}
+            channelId={channel.id}
+            deleteLabel="删除对话…"
+            group={channel.agentIds.length > 1}
+            onDelete={() => setConfirming(true)}
+            onDissolve={setDissolving}
+            onLeave={() => setLeaving(true)}
+          />
         </ContextMenuContent>
       </ContextMenu>
       {pinProblem ? (
@@ -359,6 +367,21 @@ function ThreadRow({
           {pinProblem}
         </p>
       ) : null}
+      {dissolving ? (
+        <DissolveRowDialog
+          fallbackName={channel.name}
+          groupId={dissolving}
+          onDissolved={open ? () => navigate({ to: "/" }) : undefined}
+          onOpenChange={(next) => setDissolving(next ? dissolving : null)}
+        />
+      ) : null}
+      <LeaveGroupDialog
+        channelId={channel.id}
+        leave={open ? () => navigate({ to: "/" }) : undefined}
+        name={channel.name}
+        onOpenChange={setLeaving}
+        open={leaving}
+      />
       <DeleteConversationDialog
         channelId={channel.id}
         leave={open ? () => navigate({ to: "/" }) : undefined}

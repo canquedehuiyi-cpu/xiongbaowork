@@ -8,8 +8,7 @@
 | 平台作用域 | `runAsTenant("platform")`、`tenant_id = 'system'` | 目录与内置内容的写入口；策略里"读得到 `system` 行"是给所有人的目录 | 不是"超管租户"。**读与写自迁移 `0072` 起是两条策略**：`FOR SELECT` 允许 `system`（人人看得懂目录），`FOR INSERT/UPDATE/DELETE` 只认"本租户，或当前处于 `platform` 作用域"——所以"能看见不等于能改"由**数据库**守，应用层比对 `currentTenant()` 是副防线（`waker-groups/store.ts` 仍留着，理由见工单 026）。`deployment_packages` 是唯一豁免表（`0062`） |
 | 员工 | `agents` + `agent_profiles` | 有名字、角色、人设、模型绑定与授权的数字同事；界面入口是侧栏主导航「员工」（`/bots`，旧地址 `/wakers` 重定向过来），每位员工的详情在 `/bots/$agentId` 及其分页 | 不是 Bot 的口语别名混用：代码与接口里它叫 Bot/agent/waker，界面上一律叫员工。**已归档的同义词**：唤醒者、数字员工、Waker（「Waker 管理」已改为「员工管理」），界面与服务端文案不再使用（`app/tests/glossary-terms.test.ts` 守着）。品牌名「熊宝数字员工」和功能名 @Waker、WakerFlow 不在此列 |
 | 分身 | `avatarAgentId(tenantId)` = `avatar-<tenant>` | 注册时自动配给每个人的"我自己那位"同事 | **不计入座位配额**：它是本人的声音，不是买的一个席位 |
-| 群组 | `waker_groups` + `waker_group_members` | 一组员工排好顺序之后的名字；界面入口是「员工 › 群组」页签（`/bots?tab=groups`） | 不是 `users.groups`（那是人的组织成员关系，员工不是人）；群组**不持有权限**，也不是可被授权的对象。旧称「小组」已停用，代码与文案统一写「群组」（`app/tests/glossary-terms.test.ts` 守着） |
-| 群组会话 | `/group/$channelId`：`agentIds` 有两位及以上员工的频道 | 多位员工同在的一段对话。侧栏里和单聊分开显示：「群组」页签的「群聊」一节只列它们（单聊从「员工」页签里的员工进）；「会话」页签是全部会话、头像叠放的那几行就是它。新建入口叫「新建群聊」（侧栏顶部和「群组」页签，`/group/new`，先建空群聊、按挑选顺序定回答顺序）；在「新对话」的「发给」里选两位以上员工也开一段 | 不是群组本身：一段群组会话的成员是建会话时挑的员工，不读 `waker_groups`；群组暂时也不能一键变成会话 |
+| 群组 | `waker_groups` + `waker_group_members`，挂接的群聊（`channels.waker_group_id`） | 一组员工排好顺序之后的名字，2–20 位员工；有聊天的群组即挂接了一段多员工的对话（`/group/$channelId`）。界面入口：侧边栏「群组」、员工页「群组」页签（`/bots?tab=groups`）、「新建群组」（`/group/new`）、聊天页「群组设置」 | 不是 `users.groups`（那是人的组织成员关系，员工不是人）；群组**不持有权限**，也不是可被授权的对象。「群聊」「小组」是已停用的旧称，代码与文案统一写「群组」（`app/tests/glossary-terms.test.ts` 守着） |
 | 装配 | `agent_profiles`（模型绑定 `modelRef`、人设 `persona`、技能/连接器授权） | 给某个员工挑它能用什么 | 不是安装：平台控制目录，租户控制装配（D11） |
 | 授权 | grants（技能/连接器/交接 `mayAddress`） | 一道一次一行、每次读都算的闸 | 不是一次性的开关；也不因入组而扩权 |
 | 任务卡 | `tasks`，唯一写入口 `src/tasks/projector.ts` | 看板上的那一行；只有投影器写它，所以它能被重放 | 不是工作队列（`work_items`）；不是运行记录（`thread_runs` / `routine_runs`） |

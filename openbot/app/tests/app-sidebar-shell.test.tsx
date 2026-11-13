@@ -20,7 +20,13 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { act, cleanup, render, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   AppSidebar,
@@ -37,6 +43,7 @@ import { deploymentKeys } from "@/lib/deployment/queries";
 import { portraitKeys } from "@/lib/portraits/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
+import { type WakerGroup, wakerGroupKeys } from "@/lib/waker-groups/queries";
 
 // Keep the sidebar's live-update socket offline; these tests exercise HTTP pagination.
 class OfflineWebSocket extends EventTarget implements WebSocket {
@@ -181,6 +188,7 @@ function renderSidebar(
     role = "user",
     avatar = "avatar-user",
     signIn = true,
+    groups = [],
   }: {
     nextCursor?: string | null;
     agents?: unknown[];
@@ -189,6 +197,8 @@ function renderSidebar(
     avatar?: string | null;
     /** Whether there is a sign-in to end (false on a single-person install). */
     signIn?: boolean;
+    /** The groups the person made, as `/api/waker-groups` lists them. */
+    groups?: WakerGroup[] | null;
   } = {},
 ) {
   const queryClient = new QueryClient({
@@ -246,6 +256,7 @@ function renderSidebar(
   });
   // Nobody has chosen a 头像 here; seeded so the faces draw without a read the test did not plan.
   queryClient.setQueryData(portraitKeys.all, []);
+  if (groups) queryClient.setQueryData(wakerGroupKeys.list(), groups);
   queryClient.setQueryData(channelKeys.list(), {
     pages: [{ channels: rows, nextCursor }],
     pageParams: [""],
@@ -505,4 +516,71 @@ test("a conversation's time is short and in Chinese: today's as a clock, this ye
     "2025/10/6",
   );
   expect(conversationStamp("not a date", now)).toBe("");
+});
+
+test("a linked chat the person made offers 解散群组… in the list", async () => {
+  const view = renderSidebar(
+    "/",
+    [
+      channel("solo", ["a"], { summary: "退货流程" }),
+      channel("crew", ["a", "b"], { summary: "联合复盘", canRename: true }),
+    ],
+    {
+      groups: [
+        {
+          id: "wg-1",
+          name: "复盘群",
+          description: null,
+          members: [],
+          channelId: "crew",
+        },
+      ],
+    },
+  );
+  const list = await view.findByRole("navigation", { name: "会话" });
+  fireEvent.contextMenu(within(list).getByRole("link", { name: /联合复盘/ }));
+  expect(
+    await within(document.body).findByRole("menuitem", { name: /解散群组…/ }),
+  ).toBeTruthy();
+  expect(
+    within(document.body).queryByRole("menuitem", { name: /删除会话…/ }),
+  ).toBeNull();
+});
+
+test("a package's multi-employee channel has no group, so its menu never offers 解散群组…", async () => {
+  const view = renderSidebar(
+    "/",
+    [channel("pkg", ["a", "b"], { summary: "工程团队", canRename: true })],
+    { groups: [] },
+  );
+  const list = await view.findByRole("navigation", { name: "会话" });
+  fireEvent.contextMenu(within(list).getByRole("link", { name: /工程团队/ }));
+  expect(
+    await within(document.body).findByRole("menuitem", { name: /删除会话…/ }),
+  ).toBeTruthy();
+  expect(
+    within(document.body).queryByRole("menuitem", { name: /解散群组…/ }),
+  ).toBeNull();
+});
+
+test("the groups are asked for only when a row's menu opens, and a disabled placeholder stands in until they arrive", async () => {
+  const view = renderSidebar(
+    "/",
+    [channel("crew", ["a", "b"], { summary: "联合复盘", canRename: true })],
+    { groups: null },
+  );
+  respond = () => new Promise<Response>(() => {});
+  const list = await view.findByRole("navigation", { name: "会话" });
+  expect(requests.filter((url) => url.includes("waker-groups"))).toEqual([]);
+  fireEvent.contextMenu(within(list).getByRole("link", { name: /联合复盘/ }));
+  const waiting = await within(document.body).findByRole("menuitem", {
+    name: /正在读取…/,
+  });
+  expect(waiting.getAttribute("aria-disabled")).toBe("true");
+  expect(
+    within(document.body).queryByRole("menuitem", { name: /删除会话…/ }),
+  ).toBeNull();
+  expect(requests.filter((url) => url.includes("waker-groups"))).toHaveLength(
+    1,
+  );
 });

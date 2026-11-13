@@ -1,5 +1,5 @@
 /*
- * 手机宽度下侧栏是盖在页面上的一层：「会话 · 员工 · 群组」的切换、「新建群聊」和名册里的行都在这层里能用，
+ * 手机宽度下侧栏是盖在页面上的一层：「会话 · 员工 · 群组」的切换、「新建群组」和名册里的行都在这层里能用，
  * 切换不关这层，点进一位员工或一段群聊就关上并打开那一页。
  */
 import {
@@ -210,21 +210,21 @@ test("switching to 员工 keeps the sheet open; an employee closes it and opens 
   expect(app.router.state.location.pathname).toBe("/channel/solo");
 });
 
-test("a 群聊 under 群组 closes the sheet and opens it", async () => {
+test("a 群组 under 群组 closes the sheet and opens it", async () => {
   const app = renderPhone();
   const sheet = await app.openSheet();
   await app.user.click(within(sheet).getByRole("button", { name: /^群组/ }));
-  const chats = await within(sheet).findByRole("list", { name: "群聊" });
+  const chats = await within(sheet).findByRole("list", { name: "群组" });
   expect(within(chats).getAllByRole("link")).toHaveLength(1);
   await app.user.click(within(chats).getByRole("link"));
   await app.sheetCloses();
   expect(app.router.state.location.pathname).toBe("/group/crew");
 });
 
-test("「新建群聊」 at the top of the sheet closes it and opens the 新建群聊 page", async () => {
+test("「新建群组」 at the top of the sheet closes it and opens the 新建群组 page", async () => {
   const app = renderPhone();
   const sheet = await app.openSheet();
-  await app.user.click(within(sheet).getByRole("button", { name: "新建群聊" }));
+  await app.user.click(within(sheet).getByRole("button", { name: "新建群组" }));
   await app.sheetCloses();
   expect(app.router.state.location.pathname).toBe("/group/new");
 });

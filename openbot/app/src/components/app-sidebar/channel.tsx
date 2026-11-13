@@ -1,13 +1,9 @@
-import {
-  IconPencil,
-  IconPin,
-  IconPinnedOff,
-  IconTrash,
-} from "@tabler/icons-react";
+import { IconPencil, IconPin, IconPinnedOff } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useState } from "react";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
+import { LeaveGroupDialog } from "@/components/channels/leave-group-dialog";
 import { RenameConversationDialog } from "@/components/channels/rename-conversation-dialog";
 import {
   ContextMenu,
@@ -19,6 +15,7 @@ import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import type { MessageListEmphasis } from "@/lib/settings/message-list";
 import { useTypedReveal } from "@/lib/typed-reveal";
 import { ChannelItemContent } from "./channel-item-content";
+import { DangerItem, DissolveRowDialog } from "./row-danger";
 
 /**
  * One conversation in the sidebar's list: the faces of whoever is in it (two or more stack, which is
@@ -42,6 +39,7 @@ export const Channel = memo(function Channel({
   unread,
   busy,
   emphasis,
+  groupId,
 }: {
   channelId: string;
   participantIds: string[];
@@ -57,6 +55,8 @@ export const Channel = memo(function Channel({
   unread: boolean;
   busy: boolean;
   emphasis: MessageListEmphasis;
+  /** The group this conversation is the chat of, when it is one the person made. */
+  groupId?: string;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -75,6 +75,8 @@ export const Channel = memo(function Channel({
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [dissolving, setDissolving] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
   /**
    * Why a pin did not take, said on the row it was asked of.
    *
@@ -104,6 +106,7 @@ export const Channel = memo(function Channel({
               busy={busy}
               displayedTitle={threadTitle}
               emphasis={emphasis}
+              groupId={groupId}
               lastMessageAt={lastMessageAt}
               name={name}
               participantIds={participantIds}
@@ -133,13 +136,15 @@ export const Channel = memo(function Channel({
               重命名会话…
             </ContextMenuItem>
           ) : null}
-          <ContextMenuItem
-            variant="destructive"
-            onClick={() => setConfirming(true)}
-          >
-            <IconTrash />
-            删除会话…
-          </ContextMenuItem>
+          <DangerItem
+            canRename={canRename}
+            channelId={channelId}
+            group={group}
+            groupId={groupId}
+            onDelete={() => setConfirming(true)}
+            onDissolve={setDissolving}
+            onLeave={() => setLeaving(true)}
+          />
         </ContextMenuContent>
       </ContextMenu>
       {pinProblem ? (
@@ -152,6 +157,21 @@ export const Channel = memo(function Channel({
         onOpenChange={setRenaming}
         open={renaming}
         title={summary || untitled || ""}
+      />
+      {dissolving ? (
+        <DissolveRowDialog
+          fallbackName={name}
+          groupId={dissolving}
+          onDissolved={isOpen ? () => navigate({ to: "/" }) : undefined}
+          onOpenChange={(open) => setDissolving(open ? dissolving : null)}
+        />
+      ) : null}
+      <LeaveGroupDialog
+        channelId={channelId}
+        leave={isOpen ? () => navigate({ to: "/" }) : undefined}
+        name={name}
+        onOpenChange={setLeaving}
+        open={leaving}
       />
       <DeleteConversationDialog
         channelId={channelId}

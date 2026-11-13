@@ -339,6 +339,82 @@ async function openMenu(view: ReturnType<typeof render>) {
   return menu;
 }
 
+describe("a conversation row's last action", () => {
+  /** The frame as the person sees it, with `GET /api/waker-groups` answering `groups`. */
+  function renderWithGroups(groups: unknown[]) {
+    const sent = api("user");
+    const served = global.fetch;
+    global.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === "/api/waker-groups" && (init?.method ?? "GET") === "GET"
+        ? Promise.resolve(Response.json({ groups }))
+        : served(input, init)) as typeof fetch;
+    return { sent, view: renderApp("/") };
+  }
+  const rowMenu = async (view: ReturnType<typeof render>, title: string) => {
+    const menu = await view
+      .findByRole("navigation", { name: "菜单" })
+      .catch(async () => {
+        fireEvent.click(await view.findByRole("button", { name: "菜单" }));
+        return view.findByRole("navigation", { name: "菜单" });
+      });
+    const row = (await within(menu).findByText(title)).closest("a");
+    if (!row) throw new Error(`no row for ${title}`);
+    fireEvent.contextMenu(row);
+    return within(document.body);
+  };
+
+  test("a group chat offers 解散群组… to its creator and 退出群组… to others; a single chat keeps 删除对话…", async () => {
+    const { sent, view } = renderWithGroups([
+      {
+        id: "wg-1",
+        name: "运营群",
+        description: null,
+        members: [
+          { agentId: "b-1", position: 0 },
+          { agentId: "b-2", position: 1 },
+        ],
+        channelId: "g-1",
+        chatStatus: "chat",
+      },
+    ]);
+    const menu = await rowMenu(view, "Kiln repair plan");
+    fireEvent.click(await menu.findByRole("menuitem", { name: /解散群组…/ }));
+    expect(menu.queryByRole("menuitem", { name: /删除对话…/ })).toBeNull();
+    const confirm = await menu.findByRole("button", {
+      name: "确认解散「运营群」",
+    });
+    await waitFor(() =>
+      expect((confirm as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(sent).toContainEqual({
+        method: "DELETE",
+        path: "/api/waker-groups/wg-1",
+        body: null,
+      }),
+    );
+    cleanup();
+
+    // Not linked to a group of mine, and not mine to rename: leave it.
+    const others = renderWithGroups([]);
+    const theirs = await rowMenu(others.view, "Kiln repair plan");
+    expect(
+      await theirs.findByRole("menuitem", { name: /退出群组…/ }),
+    ).toBeTruthy();
+    expect(theirs.queryByRole("menuitem", { name: /删除对话…/ })).toBeNull();
+    expect(theirs.queryByRole("menuitem", { name: /解散群组…/ })).toBeNull();
+    cleanup();
+
+    const single = renderWithGroups([]);
+    const one = await rowMenu(single.view, "Renewal for the studio policy");
+    expect(
+      await one.findByRole("menuitem", { name: /删除对话…/ }),
+    ).toBeTruthy();
+    expect(one.queryByRole("menuitem", { name: /退出群组…/ })).toBeNull();
+  });
+});
+
 describe("the frame reaches every OpenBot surface", () => {
   test("Chat, each conversation, and every page OpenBot's sidebar reached are one menu away", async () => {
     api("admin");

@@ -30,9 +30,12 @@ export const ChannelAvatar = memo(function ChannelAvatar({
   typing = false,
   motion,
   motionIds,
+  groupId,
 }: {
   participantIds: string[];
   size?: number;
+  /** The group this chat belongs to: a portrait chosen for it stands in for the stacked faces. */
+  groupId?: string;
   typing?: boolean;
   /**
    * Play the chosen portrait's animation or video in this state. Without it the face is still, as
@@ -65,11 +68,43 @@ export const ChannelAvatar = memo(function ChannelAvatar({
 
   return (
     <div className="relative" style={{ height: size, width: size }}>
-      {avatar}
+      {groupId ? (
+        <GroupPortrait groupId={groupId} size={size}>
+          {avatar}
+        </GroupPortrait>
+      ) : (
+        avatar
+      )}
       {typing ? <TypingBadge /> : null}
     </div>
   );
 });
+
+/** The picture somebody chose for the group, filling the avatar's square; `children` when none. */
+function GroupPortrait({
+  groupId,
+  size,
+  children,
+}: {
+  groupId: string;
+  size: number;
+  children: ReactNode;
+}) {
+  const src = usePortraitSrc("group", groupId);
+  if (!src) return children;
+  return (
+    <span className="block size-full overflow-hidden rounded-[8px]">
+      <img
+        alt=""
+        className="size-full object-cover"
+        data-portrait=""
+        height={size}
+        src={src}
+        width={size}
+      />
+    </span>
+  );
+}
 
 /** Where each face sits in a group's avatar, as fractions of its size, back to front. */
 const LAYOUTS = {

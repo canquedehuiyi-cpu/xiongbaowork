@@ -552,7 +552,7 @@ export function createWakerGroupActions(deps: {
           group: await listed(groupId),
           chatError: refusal
             ? (error as Error).message
-            : "成员已保存，但群聊没能开始，请稍后点「开始聊天」再试。",
+            : "成员已保存，但群组没能开始，请稍后点「开始聊天」再试。",
         };
       }
     },
@@ -652,13 +652,15 @@ export function createWakerGroupActions(deps: {
                    (select count(*)::int from ${channelAgents}
                      where ${channelAgents.channelId} = ${channels.id}) as agent_count,
                    exists (select 1 from ${botTasks}
-                            where ${botTasks.channelId} = ${channels.id}) as task
+                            where ${botTasks.channelId} = ${channels.id}) as task,
+                   ${channels.packageId} as package_id
               from ${channels} where ${channels.id} = ${channelId}`,
       )) as unknown as {
         tenant_id: string;
         created_by: string | null;
         agent_count: number;
         task: boolean;
+        package_id: string | null;
       }[];
       // A one-on-one chat or a task's conversation has no group settings: answered as unreadable,
       // so what kind of conversation an id names cannot be probed either (3.1).
@@ -668,6 +670,7 @@ export function createWakerGroupActions(deps: {
           tenantId: row.tenant_id,
           agentCount: Number(row.agent_count),
           task: row.task,
+          packageId: row.package_id,
         })
       )
         return null;

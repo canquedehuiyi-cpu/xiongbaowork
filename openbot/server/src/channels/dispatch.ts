@@ -320,7 +320,7 @@ export function createChannelDispatch(deps: ChannelDispatchDeps) {
       if (!channel) throw new ChannelDispatchNotFoundError();
       if (channel.agentIds.length !== 1)
         throw new ChannelDispatchRefusedError(
-          "多人对话里请直接在群聊中 @ 员工。",
+          "多人对话里请直接在群组中 @ 员工。",
         );
       const bot = await deps.bot(actor, body.agentId);
       if (!bot) throw new ChannelDispatchNotFoundError();

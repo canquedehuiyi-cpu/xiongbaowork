@@ -86,12 +86,18 @@ export function channelOwner(row: {
 /**
  * 3.1：只有群聊挂群组，单聊永远为 NULL。群聊 = 共享群（`team`），或员工至少 2 位、且不是任务会话
  * （tasks/runner.ts 给一件工作开的会话，只有一位员工）的个人旧频道。
+ *
+ * 装包物化的频道（`package_id` 非空，如专家团队 `kind='team'` 或包里带的多员工频道）永远不是群聊
+ * （用户 2026-11-13 拍板）：只有用户自己建的群聊才是群组。优先于上面两条。
  */
 export function isGroupConversation(row: {
   tenantId: string;
   agentCount: number;
   task: boolean;
+  /** `channels.package_id`: non-null when an installed package materialized the channel. */
+  packageId?: string | null;
 }): boolean {
+  if (row.packageId) return false;
   return row.tenantId === TEAM_TENANT || (row.agentCount >= 2 && !row.task);
 }
 
@@ -220,6 +226,8 @@ type ChannelFacts = {
   /** Bots on the channel, and whether it is a task's own conversation: see isGroupConversation. */
   agentCount: number;
   task: boolean;
+  /** Set when an installed package materialized the channel: never a group, see isGroupConversation. */
+  packageId: string | null;
 };
 
 /** Thrown inside the link transaction when another writer linked the channel first. */
@@ -283,6 +291,7 @@ export function createWakerGroupLink(deps: {
       database.execute(
         sql`select ${channels.tenantId} as tenant_id, ${channelCreatedBy} as created_by,
                    ${channels.title} as title, ${channels.name} as name,
+                   ${channels.packageId} as package_id,
                    ${channelWakerGroupId} as waker_group_id,
                    ${channels.deletedAt} is not null as deleted,
                    (select count(*)::int from ${channelAgents}
@@ -300,6 +309,7 @@ export function createWakerGroupLink(deps: {
       deleted: boolean;
       agent_count: number;
       task: boolean;
+      package_id: string | null;
     }[];
     const [row] = rows;
     if (!row) return null;
@@ -311,6 +321,7 @@ export function createWakerGroupLink(deps: {
       deleted: row.deleted,
       agentCount: Number(row.agent_count),
       task: row.task,
+      packageId: row.package_id,
     };
   }
 
@@ -328,10 +339,16 @@ export function createWakerGroupLink(deps: {
    * its visibility check: the conversation already vouched for every Bot in it.
    */
   async function writeMirror(
-    tx: Pick<Database, "delete" | "insert" | "update">,
+    tx: Pick<Database, "delete" | "insert" | "update" | "execute">,
     groupId: string,
     agentIds: string[],
   ) {
+    // Two writers delete-then-insert the same roster: without the group row's lock the later insert
+    // hits the primary key (23505). Every caller holds or has just written the channel row first
+    // (or the group is brand new), so this keeps the order channel -> group.
+    await tx.execute(
+      sql`select ${wakerGroups.id} from ${wakerGroups} where ${wakerGroups.id} = ${groupId}::uuid for update`,
+    );
     await tx
       .delete(wakerGroupMembers)
       .where(eq(wakerGroupMembers.groupId, groupId));
@@ -523,6 +540,9 @@ export function createWakerGroupLink(deps: {
       const found = await owned(channelId);
       if (!found)
         throw new Error(`channel ${channelId} has no owner to adopt a crew`);
+      // A package's channel is never a crew's, however it is asked for (user decision 2026-11-13).
+      if (found.channel.packageId)
+        throw new Error(`channel ${channelId} comes from a package`);
       await runAsTenant(found.owner, async () => {
         const members = await truth(channelId);
         await database.transaction(async (tx) => {
