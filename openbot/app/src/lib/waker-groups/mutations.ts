@@ -101,8 +101,8 @@ export function createGroupWithChatMutationOptions(queryClient: QueryClient) {
  * Replace the roster in one write: a crew is edited as a set, and a half-applied edit is wrong.
  *
  * A 200 can still carry `chatError`: the roster is saved but the chat did not start, so the caller
- * must show it. A 409 with `done` stopped part-way; the chat's truth is already mirrored, so the
- * lists are read again whether or not the write finished.
+ * must show it. A 409 (part-way with `done`, or owner-gone) comes after the roster may have changed
+ * and the chat's truth is already mirrored, so the lists are read again whether or not it finished.
  */
 export function setCrewMembersMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
@@ -117,7 +117,9 @@ export function setCrewMembersMutationOptions(queryClient: QueryClient) {
       ),
     onSuccess: () => invalidateGroups(queryClient),
     onError: (error) => {
-      if (error instanceof CrewRequestError && error.done !== undefined)
+      // Any 409 comes after the roster may have changed: part-way (`done`), or owner-gone, which is
+      // raised once the translation has already run.
+      if (error instanceof CrewRequestError && error.status === 409)
         return invalidateGroups(queryClient);
     },
   });

@@ -1,6 +1,6 @@
 import { IconPlus, IconUsersGroup } from "@tabler/icons-react";
 import { useMutation, type useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
@@ -11,16 +11,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
+import { channelKeys } from "@/lib/channels/queries";
 import { cn } from "@/lib/utils";
 import {
-  createCrewMutationOptions,
   retireCrewMutationOptions,
   setCrewMembersMutationOptions,
 } from "@/lib/waker-groups/mutations";
@@ -35,6 +33,7 @@ import {
   GRID,
   ordinal,
 } from "./card-chrome";
+import { CreateGroupForm } from "./create-group-form";
 
 type QueryClient = ReturnType<typeof useQueryClient>;
 
@@ -43,9 +42,10 @@ const CREW_MEANING =
   "群组是一串排好顺序的员工的名字，可以一起被叫来干活。它不授予任何权限——每位员工仍然只对它自己已获授权的那件事负责。";
 
 /**
- * Making a group: a name and an optional purpose (`POST /api/waker-groups`). One dialog behind the
- * header's 新建群组, the grid's create card and the empty state's button, so all three are the same
- * flow and a refused name comes back as the server's own sentence in the same place.
+ * Making a group (`POST /api/waker-groups`): the same form as the 新建群组 page, in a dialog. One
+ * dialog behind the header's 新建群组, the grid's create card and the empty state's button, so all
+ * three are the same flow and a refused name comes back as the server's own sentence in the same
+ * place. A made group opens its chat.
  */
 export function CreateCrewDialog({
   open,
@@ -56,67 +56,26 @@ export function CreateCrewDialog({
   onOpenChange: (open: boolean) => void;
   queryClient: QueryClient;
 }) {
-  const [name, setName] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  const create = useMutation(createCrewMutationOptions(queryClient));
-  const close = (next: boolean) => {
-    if (!next) setProblem(null);
-    onOpenChange(next);
-  };
+  const navigate = useNavigate();
   return (
-    <Dialog onOpenChange={close} open={open}>
+    <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!name.trim() || create.isPending) return;
-            setProblem(null);
-            create.mutate(
-              { name, description: purpose },
-              {
-                onSuccess: () => {
-                  setName("");
-                  setPurpose("");
-                  close(false);
-                },
-                onError: (thrown: Error) => setProblem(thrown.message),
-              },
-            );
+        <DialogHeader>
+          <DialogTitle>新建群组</DialogTitle>
+          <DialogDescription>{CREW_MEANING}</DialogDescription>
+        </DialogHeader>
+        <CreateGroupForm
+          onCancel={() => onOpenChange(false)}
+          onCreated={({ channel }) => {
+            queryClient.setQueryData(channelKeys.detail(channel.id), channel);
+            onOpenChange(false);
+            void navigate({
+              to: "/group/$channelId",
+              params: { channelId: channel.id },
+            });
           }}
-        >
-          <DialogHeader>
-            <DialogTitle>新建群组</DialogTitle>
-            <DialogDescription>{CREW_MEANING}</DialogDescription>
-          </DialogHeader>
-          <Input
-            aria-label="群组名称"
-            autoFocus
-            onChange={(event) => setName(event.target.value)}
-            placeholder="群组名称"
-            value={name}
-          />
-          <Input
-            aria-label="这个群组是做什么的（可选）"
-            onChange={(event) => setPurpose(event.target.value)}
-            placeholder="这个群组是做什么的（可选）"
-            value={purpose}
-          />
-          {problem ? (
-            <p className="text-destructive text-sm" role="alert">
-              {problem}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button onClick={() => close(false)} type="button" variant="ghost">
-              取消
-            </Button>
-            <Button disabled={!name.trim() || create.isPending} type="submit">
-              {create.isPending ? "正在创建…" : "创建"}
-            </Button>
-          </DialogFooter>
-        </form>
+          variant="dialog"
+        />
       </DialogContent>
     </Dialog>
   );

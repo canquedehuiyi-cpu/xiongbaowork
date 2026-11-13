@@ -208,6 +208,28 @@ test("a part-way 409 carries done, and the lists are read again", async () => {
   expect(invalidated).toContainEqual(["channels"]);
 });
 
+test("an owner-gone 409 from setCrewMembers also reads the lists again", async () => {
+  // The translation had already run, so the roster changed even though the body carries no `done`.
+  const queryClient = new QueryClient();
+  const invalidated: unknown[] = [];
+  queryClient.invalidateQueries = (async (filters?: { queryKey?: unknown }) => {
+    invalidated.push(filters?.queryKey);
+  }) as typeof queryClient.invalidateQueries;
+  serve(409, {
+    error: "这个群组的聊天你已经不在里面了，暂时不能调整。",
+    code: OWNER_GONE,
+  });
+  const error = await run(
+    setCrewMembersMutationOptions(queryClient),
+    queryClient,
+    { groupId: "g-1", agentIds: ["a", "b"] },
+  ).catch((caught: unknown) => caught);
+  expect((error as CrewRequestError).code).toBe(OWNER_GONE);
+  expect((error as CrewRequestError).done).toBeUndefined();
+  expect(invalidated).toContainEqual(["waker-groups"]);
+  expect(invalidated).toContainEqual(["channels"]);
+});
+
 test("a 403 from PATCH keeps the server's words", async () => {
   const queryClient = new QueryClient();
   serve(403, { error: "只有发起人能调整这个群组。" });
