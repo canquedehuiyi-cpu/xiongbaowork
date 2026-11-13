@@ -567,6 +567,10 @@ const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
  * left behind, a volume that cannot be written, a file that is no database) keeps the earlier name, which
  * is then opened exactly as it always was, WAL recovery included. Nothing is thrown: a browser must still
  * start, and the refusals about a damaged counter come from opening it, as before.
+ *
+ * `earlier` names the earlier file for the whole window, a fresh root included (it is created there): the
+ * counter keeps both files equal (see `openCounterStore`) so a runner rolled back at any time finds a file
+ * holding every profile and the latest number. It is deleted when its legacy-compat entry expires.
  */
 export function counterFilesIn(
   root: string,
@@ -574,9 +578,11 @@ export function counterFilesIn(
 ): { file: string; earlier?: string } {
   const file = join(root, COUNTER_FILE);
   const legacy = join(root, LEGACY_COUNTER_FILE);
-  if (existsSync(file))
-    return existsSync(legacy) ? { file, earlier: legacy } : { file };
-  if (!existsSync(legacy)) return { file };
+  // The earlier file is kept in every case for the whole window, a fresh root included: a root first used
+  // by this version would otherwise get an empty earlier file from a rolled-back runner, which then
+  // refuses every profile already on disk (`missingCounter`).
+  if (existsSync(file)) return { file, earlier: legacy };
+  if (!existsSync(legacy)) return { file, earlier: legacy };
   // Per process and per attempt: two runners starting together must not write one temporary file.
   const partial = `${file}.${process.pid}.${randomUUID().slice(0, 8)}.copying`;
   try {
@@ -679,6 +685,13 @@ export function openCounterStore(
   let putEarlier: ReturnType<typeof database.query> | undefined;
   if (earlier) {
     try {
+      // Created private like the current file when it is not there yet (a fresh root).
+      writeFileSync(earlier, "", { flag: "a", mode: 0o600 });
+      try {
+        chmodSync(earlier, 0o600);
+      } catch {
+        // A filesystem without modes still got a file it created private.
+      }
       database.run("ATTACH DATABASE ? AS earlier", [earlier]);
       database.exec("PRAGMA earlier.synchronous=FULL;");
       database.exec(
