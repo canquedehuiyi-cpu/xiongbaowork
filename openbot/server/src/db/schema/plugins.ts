@@ -663,6 +663,13 @@ export const skills = pgTable(
     packageId: uuid("package_id").references(() => deploymentPackages.id, {
       onDelete: "set null",
     }),
+    /**
+     * How completely the package this skill came from ports: `full | degraded | blocked`（移植方案
+     * R3 ——「manifest.runnable 必填 + UI 徽章」）. Written only by the package sync; a skill a person
+     * wrote here was never audited, so its null is honest rather than an omission — the badge reads
+     * null as "not graded" and draws nothing.
+     */
+    runnable: text("runnable"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

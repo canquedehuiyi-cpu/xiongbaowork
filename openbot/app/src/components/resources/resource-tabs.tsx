@@ -67,6 +67,8 @@ export const MORE_CAPABILITY_TABS = [
   { to: "/capabilities/components", label: "组件" },
   { to: "/capabilities/memory", label: "记忆与信息源" },
   { to: "/capabilities/roles", label: "角色模板" },
+  // P4：员工级「被给了什么」一览（技能档位徽章、待绑定连接器、团队 4b 接入）。
+  { to: "/capabilities/mine", label: "我的" },
 ] as const satisfies readonly { to: string; label: string }[];
 
 export type CapabilityTab =

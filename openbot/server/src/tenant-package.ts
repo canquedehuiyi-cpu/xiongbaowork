@@ -214,6 +214,13 @@ export type TenantSkill = {
    */
   tools: string[];
   /**
+   * How completely this skill ports: `full | degraded | blocked`（移植方案 R3 ——
+   * 「manifest.runnable 必填 + UI 徽章」）。Absence is `full`, so a package written before the
+   * grade shipped behaves exactly as it did; anything else refuses the whole package, because a
+   * skill that lies about running is the one thing this grade exists to prevent.
+   */
+  runnable: "full" | "degraded" | "blocked";
+  /**
    * Files the skill ships beside its instructions (`assets:` in `skills.yaml`), as paths relative to
    * `skills/<slug>/` in the package. Optional, because every skill written before attachments shipped
    * declares none. Validated by {@link parseSkillAssetPaths}: a path that would escape the skill's own
@@ -933,12 +940,24 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
             }
             return ref;
           });
+    let runnable: string;
+    if (skill.runnable === undefined || skill.runnable === null) {
+      runnable = "full";
+    } else {
+      runnable = requiredString(skill.runnable, "skill.runnable");
+      if (runnable !== "full" && runnable !== "degraded" && runnable !== "blocked") {
+        throw new Error(
+          `skill.runnable must be one of full, degraded, blocked; got "${runnable}"`,
+        );
+      }
+    }
     return {
       slug,
       title: requiredString(skill.title, "skill.title"),
       summary: requiredString(skill.summary, "skill.summary"),
       instructions: requiredString(skill.instructions, "skill.instructions"),
       tools,
+      runnable: runnable as TenantSkill["runnable"],
       assets: parseSkillAssetPaths(skill.assets, slug),
     };
   });
@@ -2172,6 +2191,9 @@ export async function synchronizeTenantPackage(
               instructions: skillInstructions(skill.instructions, assets),
               origin: "catalogue",
               installedBy: null,
+              // The port grade (R3): what the page's badge reads. Written with the rest of the
+              // identity so a redeploy re-grades the skill the package now claims.
+              runnable: skill.runnable,
               // Which brand brought it in — what makes the sweep below this package's business.
               packageId: deploymentPackage.id,
             })
@@ -2192,6 +2214,9 @@ export async function synchronizeTenantPackage(
                 title: skill.title,
                 summary: skill.summary,
                 instructions: skillInstructions(skill.instructions, assets),
+                // Re-graded with the rest of the identity: a redeploy answers for the grade the
+                // package claims now, the same way it re-claims the row.
+                runnable: skill.runnable,
                 // Re-stated with the rest of the identity, so a re-claim is not a row with no brand.
                 packageId: deploymentPackage.id,
                 updatedAt: new Date(),

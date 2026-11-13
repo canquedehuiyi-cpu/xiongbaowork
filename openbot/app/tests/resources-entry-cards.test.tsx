@@ -282,7 +282,7 @@ test("six entry cells in one panel are the first links of the navigation; the op
   expect(skills.getAttribute("data-state")).toBe("idle");
 });
 
-test("组件, 记忆与信息源 and 角色模板 are the secondary links of the 资源入口 section, each to its own address", async () => {
+test("组件, 记忆与信息源, 角色模板 and 我的 are the secondary links of the 资源入口 section, each to its own address", async () => {
   const { view, router, user } = draw();
   const nav = await view.findByRole("navigation", { name: "能力" });
   const more = nav.querySelector("[data-slot='resource-more-tabs']");
@@ -299,7 +299,7 @@ test("组件, 记忆与信息源 and 角色模板 are the secondary links of the
   const moreScope = within(more as HTMLElement);
   expect(
     moreScope.getAllByRole("link").map((link) => link.textContent),
-  ).toEqual(["组件", "记忆与信息源", "角色模板"]);
+  ).toEqual(["组件", "记忆与信息源", "角色模板", "我的"]);
 
   await user.click(moreScope.getByRole("link", { name: "组件" }));
   await waitFor(() =>

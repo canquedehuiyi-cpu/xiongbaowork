@@ -260,6 +260,8 @@ const ORDER = [
   "组件",
   "记忆与信息源",
   "角色模板",
+  // P4：员工级「被给了什么」一览（`/capabilities/mine`）。
+  "我的",
 ];
 
 /** The capability tab links, by name; a card's name is its label, not its description. */
@@ -296,7 +298,7 @@ test("the six entry cards come first in order, then the three secondary links; /
     within(more as HTMLElement)
       .getAllByRole("link")
       .map((link) => link.textContent),
-  ).toEqual(["组件", "记忆与信息源", "角色模板"]);
+  ).toEqual(["组件", "记忆与信息源", "角色模板", "我的"]);
 
   // Each tab is a real address, and the open tab's content is a region named for it.
   expect(links.map((link) => link.getAttribute("href"))).toEqual([
@@ -309,6 +311,8 @@ test("the six entry cards come first in order, then the three secondary links; /
     "/capabilities/components",
     "/capabilities/memory",
     "/capabilities/roles",
+    // P4：员工级「被给了什么」一览（`/capabilities/mine`）。
+    "/capabilities/mine",
   ]);
   expect(view.getByRole("region", { name: "插件" })).toBeTruthy();
 });
