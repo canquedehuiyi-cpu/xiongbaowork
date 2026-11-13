@@ -125,11 +125,13 @@ const show = (ref: string, path: string): string | undefined => {
 
 /**
  * The ratchet binds from the commit that introduces it: before that commit the baseline files were being
- * built (Tasks 1, 2), so a PR that adds ratchet.ts compares against that commit's parent.
+ * built (Tasks 1, 2), so a PR that adds ratchet.ts compares against that commit's parent. When the budget
+ * arrived in that same commit (the setup was squashed into one), the parent has no baseline at all and the
+ * introducing commit itself is the baseline; later commits are still held to it.
  */
-export function ratchetBase(base: string, head: string): string {
+export function ratchetBase(base: string, head: string, repo = REPO): string {
   const path = "openbot/scripts/brand/guard/ratchet.ts";
-  const top = git(["rev-parse", "--show-toplevel"], REPO).trim();
+  const top = git(["rev-parse", "--show-toplevel"], repo).trim();
   try {
     git(["cat-file", "-e", `${base}:${path}`], top);
     return base;
@@ -148,7 +150,15 @@ export function ratchetBase(base: string, head: string): string {
     throw new Error(
       `cannot find the commit that introduces ${path} between ${base} and ${head}; the ratchet has no baseline to compare with`,
     );
-  return `${added}^`;
+  try {
+    git(
+      ["cat-file", "-e", `${added}^:openbot/app/tests/brand-budget.json`],
+      top,
+    );
+    return `${added}^`;
+  } catch {
+    return added;
+  }
 }
 
 const WORDS_DIR = "app/tests/brand-artifacts";
