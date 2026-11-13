@@ -142,6 +142,9 @@ afterEach(() => {
   delete (globalThis as { chrome?: unknown }).chrome;
   delete globals[hookKey("configure")];
   delete globals[hookKey("stop")];
+  // The hook also answers to its neutral symbols (L1-22); a later file must not find this copy under them.
+  delete globals[Symbol.for("xb.recorder.configure")];
+  delete globals[Symbol.for("xb.recorder.stop")];
 });
 
 const pathOf = (url: string) => {

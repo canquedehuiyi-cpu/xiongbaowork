@@ -71,6 +71,7 @@ test("the managed schema keeps to what Chrome loads: an object root, and exactly
   expect(Object.keys(schema.properties).sort()).toEqual([
     "AllowedIntelligenceUrls",
     "OpenBotUrl",
+    "XiongbaoUrl",
   ]);
   expect(schema.properties.OpenBotUrl?.type).toBe("string");
   expect(schema.properties.AllowedIntelligenceUrls?.type).toBe("array");

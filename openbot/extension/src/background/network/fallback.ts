@@ -12,16 +12,29 @@ export type PageFallback = {
   active(): boolean;
 };
 
-/** The hook (main-world/network-hook.ts) defines the symbols openbot.recorder.configure and openbot.recorder.stop on globalThis. */
+/**
+ * The hook (main-world/network-hook.ts) defines its configure and stop functions on globalThis under the xb.recorder
+ * symbols, and under the older names too. A page left open across an update may still hold the hook of the version
+ * before, which answers to the older names alone (L1-22), so each call tries the new symbol, then the older one. Chrome
+ * sends only a function's source into the page: both names stay inside each function.
+ */
 
 type Hook = Record<symbol, ((id?: string) => void) | undefined>;
 
-const configureHook = (id: string): void =>
-  (globalThis as unknown as Hook)[Symbol.for("openbot.recorder.configure")]?.(
-    id,
-  );
-const stopHook = (): void =>
-  (globalThis as unknown as Hook)[Symbol.for("openbot.recorder.stop")]?.();
+const configureHook = (id: string): void => {
+  const hook = globalThis as unknown as Hook;
+  (
+    hook[Symbol.for("xb.recorder.configure")] ??
+    hook[Symbol.for("openbot.recorder.configure")]
+  )?.(id);
+};
+const stopHook = (): void => {
+  const hook = globalThis as unknown as Hook;
+  (
+    hook[Symbol.for("xb.recorder.stop")] ??
+    hook[Symbol.for("openbot.recorder.stop")]
+  )?.();
+};
 
 /**
  * Injects the page-network hook into the MAIN world of the recorded tabs only: never registerContentScripts, so an

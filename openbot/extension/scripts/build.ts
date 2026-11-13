@@ -39,7 +39,13 @@ export function viteConfigs(input: {
     },
     resolve: { alias: { "@": path.join(root, "app", "src") } },
   } satisfies InlineConfig;
-  const script = (entry: string, name: string, file: string): InlineConfig => ({
+  /*
+   * The content script and the MAIN-world hook run inside the pages a recording follows, so neither may leave a name
+   * on their window. Vite's library mode will not build an IIFE without `lib.name`, but Rollup uses that name only to
+   * hold the entry's exports; with `exports: "none"` it never writes one, and an entry that starts exporting something
+   * fails the build instead of putting a global on every page.
+   */
+  const script = (entry: string, file: string): InlineConfig => ({
     ...shared,
     define: {
       ...shared.define,
@@ -52,10 +58,12 @@ export function viteConfigs(input: {
       lib: {
         entry: path.join(source, entry),
         formats: ["iife"],
-        name,
+        name: "unused",
         fileName: () => file,
       },
-      rollupOptions: { output: { inlineDynamicImports: true } },
+      rollupOptions: {
+        output: { inlineDynamicImports: true, exports: "none" },
+      },
     },
   });
   return [
@@ -87,12 +95,8 @@ export function viteConfigs(input: {
         },
       },
     },
-    script("content/index.ts", "OpenBotRecorderContent", "content.js"),
-    script(
-      "main-world/network-hook.ts",
-      "OpenBotRecorderPageNetwork",
-      "page-network.js",
-    ),
+    script("content/index.ts", "content.js"),
+    script("main-world/network-hook.ts", "page-network.js"),
   ];
 }
 

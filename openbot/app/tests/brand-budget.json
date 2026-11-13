@@ -131,11 +131,6 @@
   },
   {
     "rule": "identifier",
-    "scope": "extension/scripts",
-    "lines": 2
-  },
-  {
-    "rule": "identifier",
     "scope": "extension/src",
     "lines": 195
   },
