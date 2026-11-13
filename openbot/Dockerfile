@@ -453,13 +453,16 @@ RUN set -eu; \
     add REPOSITORY "${XIONGBAO_BUILD_REPOSITORY:-}"; \
     add CHANNEL "${XIONGBAO_BUILD_CHANNEL:-}"
 
+# The usage-reporting switch of the agent runtime library is not an ENV here: it is in docker/defaults.env,
+# which the env-aliases step reads and writes under its own name, only when the deployment has not set it.
+# So it reaches the s6 services (the server among them, which also silences it itself), not a process
+# started by hand with `docker exec`.
+
 # Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
 # container only callers on this machine are the administrator; in here every caller arrives through
 # the container engine's network, so that rule would refuse everybody. See `singleUserAccess` in
 # server/src/config.ts. It is IN_CONTAINER=true in docker/defaults.env (above).
 ENV NODE_ENV=production
-# The usage-reporting switch of the agent runtime library is in docker/defaults.env, which the env-aliases
-# step reads: it is written under its own name, and only when the deployment has not set it.
 ENV PORT=3001
 EXPOSE 3001
 

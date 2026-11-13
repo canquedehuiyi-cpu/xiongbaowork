@@ -838,7 +838,7 @@
 - 第 7 行：`COPILOTKIT_TELEMETRY_DISABLED=1` 挪进 `docker/defaults.env`（照 Task 11，第三方变量名不加前缀，`env-aliases.sh` 对它单独处理：没设才写）。
 - 第 8 行：`__openbot_prompt` → `__xiongbao_prompt`；`$openbotOut`、`$openbotErr`、`$openbotCommandSucceeded`、`$openbotCommandExit` → `$xbOut`、`$xbErr`、`$xbCommandSucceeded`、`$xbCommandExit`。
 - 第 9 行：runner `data-openbot-secret` → `data-xb-secret`（runner 自己写、自己读）。
-- 第 10 行：runner `openbot-snapshots.sqlite` → `xiongbao-snapshots.sqlite`，启动时一次性改名。不能只照 `migrateSessionCookiesFile` 改主文件：`runner/src/browser.ts` 开了 WAL，上次非正常退出时已提交的计数可能还在 `-wal` 里。做法：新文件不存在且旧文件存在时，先以独占方式打开旧库执行 `PRAGMA wal_checkpoint(TRUNCATE)` 并关闭，确认没有残留的 `-wal`/`-shm` 后再改名；改名失败照旧读旧名。测试加一条「旧库带未 checkpoint 的 WAL 时升级不丢计数」，不只测干净关闭的库。条目改为 `legacy-compat`，并加 `"device": true`。
+- 第 10 行：runner `openbot-snapshots.sqlite` → `xiongbao-snapshots.sqlite`，启动时一次性改名。不能只照 `migrateSessionCookiesFile` 改主文件：`runner/src/browser.ts` 开了 WAL，上次非正常退出时已提交的计数可能还在 `-wal` 里。做法：新文件不存在且旧文件存在时，先以独占方式打开旧库执行 `PRAGMA wal_checkpoint(TRUNCATE)` 并关闭，确认没有残留的 `-wal`/`-shm` 后再改名；改名失败照旧读旧名。测试加一条「旧库带未 checkpoint 的 WAL 时升级不丢计数」，不只测干净关闭的库。条目改为 `legacy-compat`，并加 `"device": true`。（控制者裁定：旧库先 checkpoint 后改为「复制」而不是改名，旧文件保留，N−1 回退时仍能读到；见规格 4.4）
 - 第 11 行：扩展 `NOTICE_TAG` 改为 `xb-recorder-notice`。
 - 新追加的行：按该行「要改成」一列。
 
@@ -924,7 +924,7 @@
 
 **批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）；第 35 行，用户 2026-11-13 批准（原话「附录 A 第 35 行批准」）；第 36 行，用户 2026-11-13 批准（原话「附录 A 第 36 行批准」）。
 
-**棘轮放行**：第 7、35 行获准的棘轮增长（预算新增一行、词表换词）以机器可读的形式记在 `openbot/scripts/brand/guard/ratchet-approvals.json`，每条必须写明所依据的已批准行（`appendixRow`），并且要与本分支的真实改动逐项相符（kind、key、from、to），对不上的条目算过期，棘轮报红。
+**棘轮放行**：第 7、35 行获准的棘轮增长（预算新增一行、词表换词）以机器可读的形式记在 `openbot/scripts/brand/guard/ratchet-approvals.json`，每条必须写明所依据的已批准行（`appendixRow`），并且要与本分支的真实改动逐项相符（kind、key、from、to），对不上的条目算过期，棘轮报红。只有相对 ratchet base 新增的条目才生效；base 里已有的条目是惰性历史，既不放行也不算过期，由之后的清理 PR 一次性删除（删条目不算增长）。改 `ratchet-approvals.json` 必须在 PR 说明里列出新增的条目。
 
 | # | 项 | 源码 | 已有断言（文件:行） | 要改成 | 处理任务 |
 |---|---|---|---|---|---|

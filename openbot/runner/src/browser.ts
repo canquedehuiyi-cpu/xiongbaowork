@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -527,22 +529,33 @@ const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
 /**
  * The counter file to open in `root`, giving it its current name first when only the earlier one exists.
  *
- * The earlier file is a WAL database: after an unclean exit the counts that were committed last can still
- * sit in its `-wal`, and a rename of the main file alone would leave them behind under a name nothing
- * reads. So the earlier file is opened exclusively and checkpointed (TRUNCATE) first, and closed; only
- * when no `-wal` or `-shm` is left beside it is it renamed. Anything that stops that (another process
- * holds it, the checkpoint could not finish, a volume that cannot be written, a file that is no database)
- * keeps the earlier name, which is then opened exactly as it always was. Nothing is thrown: a browser must
- * still start, and the refusals about a damaged counter come from opening it, as before.
+ * COPIED, not moved, the way `readMigrated` copies a browser key: the earlier file stays, so a runner
+ * rolled back to the version before the rename still finds its counter (at the value it had when this
+ * copy was made) and still opens the browsers of profiles already on disk. Without it that runner would
+ * start an empty counter, meet `missingCounter` for every such profile and refuse them all. Hard links
+ * are no way round it: SQLite's journals are keyed by path. The earlier file is cleaned up with its
+ * legacy-compat entry when that expires.
+ *
+ * The earlier file is a WAL database: after an unclean exit the counts committed last can still sit in
+ * its `-wal`, and a copy of the main file alone would leave them behind. So it is opened exclusively and
+ * checkpointed (TRUNCATE) first, and closed; only when no `-wal` or `-shm` is left beside it is it copied,
+ * to a temporary name and then renamed into place, so the current name never holds half a file. Anything
+ * that stops that (another process holds it, the checkpoint could not finish, a stale `-shm` that a crash
+ * left behind, a volume that cannot be written, a file that is no database) keeps the earlier name, which
+ * is then opened exactly as it always was, WAL recovery included. Nothing is thrown: a browser must still
+ * start, and the refusals about a damaged counter come from opening it, as before.
  */
-export function counterFileIn(root: string): string {
+export function counterFileIn(root: string, busyMs = 5000): string {
   const file = join(root, COUNTER_FILE);
   const legacy = join(root, LEGACY_COUNTER_FILE);
   if (existsSync(file) || !existsSync(legacy)) return file;
+  const partial = `${file}.copying`;
   try {
     const old = new Database(legacy, { strict: true });
     try {
-      old.exec("PRAGMA locking_mode=EXCLUSIVE; PRAGMA busy_timeout=5000;");
+      old.exec(
+        `PRAGMA locking_mode=EXCLUSIVE; PRAGMA busy_timeout=${Math.trunc(busyMs)};`,
+      );
       const done = old
         .query<{ busy: number }, []>("PRAGMA wal_checkpoint(TRUNCATE)")
         .get();
@@ -552,9 +565,20 @@ export function counterFileIn(root: string): string {
     }
     if (existsSync(`${legacy}-wal`) || existsSync(`${legacy}-shm`))
       return legacy;
-    renameSync(legacy, file);
+    copyFileSync(legacy, partial);
+    try {
+      chmodSync(partial, 0o600);
+    } catch {
+      // A filesystem without modes: the copy is still private to the profile root.
+    }
+    renameSync(partial, file);
     return file;
   } catch {
+    try {
+      rmSync(partial, { force: true });
+    } catch {
+      // Whatever stands there is not ours to clear.
+    }
     return legacy;
   }
 }

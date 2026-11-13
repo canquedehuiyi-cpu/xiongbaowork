@@ -17,6 +17,7 @@ import {
   BrowserFailure,
   type BrowserLaunchOptions,
   browserIdentityOf,
+  counterFileIn,
   createRunnerBrowser,
   DEFAULT_BROWSER_CHANNEL,
   MAX_SNAPSHOT_GENERATION,
@@ -874,19 +875,32 @@ describe("numbers that outlive the browser", () => {
     return root;
   }
 
-  test("a counter file under its earlier name is renamed on start and the numbers carry on", async () => {
+  /** The counter an N-1 runner would read: the earlier name, opened as it always was. */
+  function generationUnderEarlierName(root: string): number {
+    const earlier = new Database(join(root, LEGACY_COUNTER_FILE));
+    const row = earlier
+      .query("SELECT generation FROM snapshot_counters")
+      .get() as { generation: number };
+    earlier.close();
+    return row.generation;
+  }
+
+  test("a counter file under its earlier name is copied on start, the numbers carry on, and the earlier file stays for a rollback", async () => {
     const root = await countedRoot(3);
     renameSync(join(root, COUNTER_FILE), join(root, LEGACY_COUNTER_FILE));
 
     const browser = browserOf(root, fakeBrowser());
     const next = asRecord(await drive(browser, "snapshot"));
     expect(next.snapshotId).toBe(4);
-    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
-    expect(existsSync(join(root, LEGACY_COUNTER_FILE))).toBe(false);
     await browser.close();
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
+    expect(existsSync(join(root, LEGACY_COUNTER_FILE))).toBe(true);
+    expect(existsSync(`${join(root, COUNTER_FILE)}.copying`)).toBe(false);
+    // Rolled back to the runner before the rename: the file is there and holds the value at upgrade time.
+    expect(generationUnderEarlierName(root)).toBe(3);
   });
 
-  test("an earlier counter that died with counts still in its WAL is checkpointed before the rename, so the counts are not lost", async () => {
+  test("an earlier counter that died with counts still in its WAL is checkpointed before the copy, so the counts are not lost", async () => {
     const source = await countedRoot(3);
     const root = profileRoot();
     // The state an unclean exit leaves: a commit that only the `-wal` holds. The copies are taken while
@@ -903,10 +917,70 @@ describe("numbers that outlive the browser", () => {
     const browser = browserOf(root, fakeBrowser());
     const next = asRecord(await drive(browser, "snapshot"));
     expect(next.snapshotId).toBe(14);
-    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
-    for (const leftover of [legacy, `${legacy}-wal`, `${legacy}-shm`])
-      expect(existsSync(leftover)).toBe(false);
     await browser.close();
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
+    for (const leftover of [`${legacy}-wal`, `${legacy}-shm`])
+      expect(existsSync(leftover)).toBe(false);
+    // The earlier file was checkpointed, so a rollback reads the counts too.
+    expect(generationUnderEarlierName(root)).toBe(13);
+  });
+
+  test("a real crash scene, with the -wal and the -shm both left behind, is not copied and the earlier name is used, counts kept", async () => {
+    const source = await countedRoot(3);
+    const root = profileRoot();
+    const writer = new Database(join(source, COUNTER_FILE));
+    writer.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;");
+    writer.exec("UPDATE snapshot_counters SET generation = generation + 10");
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    copyFileSync(join(source, COUNTER_FILE), legacy);
+    copyFileSync(`${join(source, COUNTER_FILE)}-wal`, `${legacy}-wal`);
+    copyFileSync(`${join(source, COUNTER_FILE)}-shm`, `${legacy}-shm`);
+    writer.close();
+
+    expect(counterFileIn(root)).toBe(legacy);
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(false);
+    const browser = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(browser, "snapshot"));
+    expect(next.snapshotId).toBe(14);
+    await browser.close();
+  });
+
+  test("an earlier counter another process holds is not copied, and its name is kept", async () => {
+    const root = await countedRoot(2);
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    renameSync(join(root, COUNTER_FILE), legacy);
+    const holder = new Database(legacy);
+    holder.exec("PRAGMA locking_mode=EXCLUSIVE; BEGIN IMMEDIATE;");
+    try {
+      expect(counterFileIn(root, 20)).toBe(legacy);
+    } finally {
+      holder.exec("ROLLBACK");
+      holder.close();
+    }
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(false);
+    expect(existsSync(legacy)).toBe(true);
+  });
+
+  test("an earlier file that is no database is not copied, and its name is kept", () => {
+    const root = profileRoot();
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    writeFileSync(legacy, "this is not a database, only text".repeat(20));
+    expect(counterFileIn(root)).toBe(legacy);
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(false);
+    expect(statSync(legacy).size).toBe(
+      "this is not a database, only text".length * 20,
+    );
+  });
+
+  test("a copy that cannot be written leaves the earlier name in use and nothing half-made under the current one", async () => {
+    const root = await countedRoot(2);
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    renameSync(join(root, COUNTER_FILE), legacy);
+    // Where the copy is written first, a directory stands: the copy fails, whatever the reason in real life.
+    mkdirSync(`${join(root, COUNTER_FILE)}.copying`);
+    expect(counterFileIn(root)).toBe(legacy);
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(false);
+    expect(generationUnderEarlierName(root)).toBe(2);
   });
 
   test("a counter under the current name is used as it is, and an earlier one beside it is left alone", async () => {
