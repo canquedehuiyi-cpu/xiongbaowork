@@ -1517,7 +1517,10 @@ export async function synchronizeTenantPackage(
 
         for (const agent of agents) {
           const updatedAt = new Date();
-          const [canonicalAgent] = await transaction
+          // Two steps, not `ON CONFLICT DO UPDATE ... WHERE`: PostgreSQL 17.12 (CVE-2026-120154) checks
+          // the conflicting row against the UPDATE row-security policy before that WHERE, so a user
+          // agent in another tenant partition raised 42501. A plain UPDATE filters such a row out.
+          const [insertedAgent] = await transaction
             .insert(agentTable)
             .values({
               id: agent.id,
@@ -1526,18 +1529,28 @@ export async function synchronizeTenantPackage(
               configuration: agent.configuration,
               packageId: deploymentPackage.id,
             })
-            .onConflictDoUpdate({
-              target: agentTable.id,
-              setWhere: eq(agentTable.packageId, deploymentPackage.id),
-              set: {
-                name: agent.name,
-                type: agent.type,
-                configuration: agent.configuration,
-                packageId: deploymentPackage.id,
-                updatedAt,
-              },
-            })
+            .onConflictDoNothing({ target: agentTable.id })
             .returning({ id: agentTable.id });
+          const canonicalAgent =
+            insertedAgent ??
+            (
+              await transaction
+                .update(agentTable)
+                .set({
+                  name: agent.name,
+                  type: agent.type,
+                  configuration: agent.configuration,
+                  packageId: deploymentPackage.id,
+                  updatedAt,
+                })
+                .where(
+                  and(
+                    eq(agentTable.id, agent.id),
+                    eq(agentTable.packageId, deploymentPackage.id),
+                  ),
+                )
+                .returning({ id: agentTable.id })
+            )[0];
 
           if (!canonicalAgent) {
             throw new Error(
@@ -1550,7 +1563,7 @@ export async function synchronizeTenantPackage(
             bundledPersonal && agent.configuration.personalStarter === true
               ? "private"
               : "public";
-          const [profile] = await transaction
+          const [insertedProfile] = await transaction
             .insert(agentProfiles)
             .values({
               agentId: canonicalAgent.id,
@@ -1562,20 +1575,30 @@ export async function synchronizeTenantPackage(
               deletedAt: null,
               updatedAt,
             })
-            .onConflictDoUpdate({
-              target: agentProfiles.agentId,
-              setWhere: isNull(agentProfiles.ownerUserId),
-              set: {
-                ownerUserId: null,
-                title: agent.title,
-                roleDescription: agent.roleDescription,
-                avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
-                visibility,
-                deletedAt: null,
-                updatedAt,
-              },
-            })
+            .onConflictDoNothing({ target: agentProfiles.agentId })
             .returning({ agentId: agentProfiles.agentId });
+          const profile =
+            insertedProfile ??
+            (
+              await transaction
+                .update(agentProfiles)
+                .set({
+                  ownerUserId: null,
+                  title: agent.title,
+                  roleDescription: agent.roleDescription,
+                  avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
+                  visibility,
+                  deletedAt: null,
+                  updatedAt,
+                })
+                .where(
+                  and(
+                    eq(agentProfiles.agentId, canonicalAgent.id),
+                    isNull(agentProfiles.ownerUserId),
+                  ),
+                )
+                .returning({ agentId: agentProfiles.agentId })
+            )[0];
 
           if (!profile) {
             throw new Error(
@@ -1657,7 +1680,9 @@ export async function synchronizeTenantPackage(
 
         if (members.length === 0) {
           for (const channel of channels) {
-            const [ownedChannel] = await transaction
+            // Two steps for the same reason as the agents above: a user channel with this id lives
+            // in another tenant partition, and PostgreSQL 17.12 would raise 42501 on the conflict.
+            const [insertedChannel] = await transaction
               .insert(channelTable)
               .values({
                 id: channel.id,
@@ -1666,18 +1691,28 @@ export async function synchronizeTenantPackage(
                 allowedGroups: channel.allowedGroups,
                 packageId: deploymentPackage.id,
               })
-              .onConflictDoUpdate({
-                target: channelTable.id,
-                setWhere: eq(channelTable.packageId, deploymentPackage.id),
-                set: {
-                  name: channel.name,
-                  description: channel.description,
-                  allowedGroups: channel.allowedGroups,
-                  packageId: deploymentPackage.id,
-                  updatedAt: new Date(),
-                },
-              })
+              .onConflictDoNothing({ target: channelTable.id })
               .returning({ id: channelTable.id });
+            const ownedChannel =
+              insertedChannel ??
+              (
+                await transaction
+                  .update(channelTable)
+                  .set({
+                    name: channel.name,
+                    description: channel.description,
+                    allowedGroups: channel.allowedGroups,
+                    packageId: deploymentPackage.id,
+                    updatedAt: new Date(),
+                  })
+                  .where(
+                    and(
+                      eq(channelTable.id, channel.id),
+                      eq(channelTable.packageId, deploymentPackage.id),
+                    ),
+                  )
+                  .returning({ id: channelTable.id })
+              )[0];
 
             if (!ownedChannel) {
               throw new Error(

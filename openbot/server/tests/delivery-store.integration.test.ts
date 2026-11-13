@@ -103,6 +103,78 @@ test("verified provider identity cannot transfer between actors and disabled sou
     await asPlatform(() => store.findBinding("slack", prefix, "U", "D")),
   ).toBeNull();
 });
+test("a refused stranger leaves the bound row untouched, and the owner can relink it", async () => {
+  const otherChannel = `${prefix}-channel-2`;
+  await asOwner(() =>
+    db
+      .insert(channels)
+      .values({ id: otherChannel, name: "Delivery test 2", description: "" }),
+  );
+  const input = {
+    ...scope,
+    transport: "slack" as const,
+    identity: "U-relink",
+    realm: prefix,
+    address: "D-original",
+  };
+  const read = () =>
+    asPlatform(() =>
+      db
+        .select()
+        .from(deliveryBindings)
+        .where(
+          and(
+            eq(deliveryBindings.transport, "slack"),
+            eq(deliveryBindings.realm, prefix),
+            eq(deliveryBindings.identity, "U-relink"),
+          ),
+        ),
+    );
+  try {
+    const first = await asOwner(() => store.bind(input));
+    await expect(
+      asStranger(() =>
+        store.bind({
+          ...input,
+          ownerUserId: stranger,
+          channelId: otherChannel,
+          address: "D-stranger",
+        }),
+      ),
+    ).rejects.toThrow("another person");
+    const afterRefusal = await read();
+    expect(afterRefusal).toHaveLength(1);
+    expect(afterRefusal[0]).toMatchObject({
+      id: first.id,
+      tenantId: owner,
+      ownerUserId: owner,
+      channelId: channel,
+      address: "D-original",
+    });
+
+    const relinked = await asOwner(() =>
+      store.bind({ ...input, channelId: otherChannel, address: "D-new" }),
+    );
+    expect(relinked.id).toBe(first.id);
+    const afterRelink = await read();
+    expect(afterRelink).toHaveLength(1);
+    expect(afterRelink[0]).toMatchObject({
+      id: first.id,
+      tenantId: owner,
+      ownerUserId: owner,
+      channelId: otherChannel,
+      address: "D-new",
+      enabled: true,
+    });
+  } finally {
+    await asPlatform(async () => {
+      await db
+        .delete(deliveryBindings)
+        .where(eq(deliveryBindings.identity, "U-relink"));
+      await db.delete(channels).where(eq(channels.id, otherChannel));
+    });
+  }
+});
 test("one-use challenges compare expiry against database clock and refuse a different owner", async () => {
   const id = await asOwner(() => store.challenge(scope, "sms", "+15551234567"));
   expect(await asStranger(() => store.readChallenge(id, stranger))).toBeNull();
