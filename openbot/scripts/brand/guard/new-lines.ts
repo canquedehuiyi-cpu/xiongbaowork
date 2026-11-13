@@ -3,7 +3,8 @@
  * included, unless the upstream already has the same line at the same path (a sync brings those in).
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BRAND,
@@ -17,28 +18,81 @@ import {
 export type AddedLine = { file: string; number: number; line: string }; // file relative to openbot/
 export type SyncPoint = { commit: string; repository: string };
 
-const git = (args: string[], cwd = REPO): string =>
-  execFileSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    maxBuffer: 1 << 30,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+const PROXY_VARS = [
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+];
+
+/**
+ * The environment a git child that dials the upstream runs with. The app test preload
+ * (server/scripts/test-network-guard.ts) points this process's proxy variables at a refusing listener so no
+ * test dials a vendor; a child process is documented as outside that guard, but it would inherit the refusing
+ * proxy. So the proxy variables come from the process's initial environment (/proc/self/environ, Linux) and
+ * are dropped where that cannot be read, which is how a runner with no proxy looks anyway.
+ */
+function networkEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of PROXY_VARS) delete env[name];
+  try {
+    for (const entry of readFileSync("/proc/self/environ", "utf8").split(
+      "\0",
+    )) {
+      const at = entry.indexOf("=");
+      if (at > 0 && PROXY_VARS.includes(entry.slice(0, at)))
+        env[entry.slice(0, at)] = entry.slice(at + 1);
+    }
+  } catch {
+    // no /proc: no proxy
+  }
+  return env;
+}
+
+const git = (args: string[], cwd = REPO): string => {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      env: networkEnv(),
+      timeout: 300_000,
+      encoding: "utf8",
+      maxBuffer: 1 << 30,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const stderr = (error as { stderr?: string }).stderr;
+    throw new Error(`${error}${stderr ? `\n${stderr}` : ""}`);
+  }
+};
 
 /** Parses the output of `git diff -U0 <base>...<head> -- openbot/`. */
 export function addedLines(diff: string): AddedLine[] {
   const out: AddedLine[] = [];
   let file: string | undefined;
   let number = 0;
+  // Only between `diff --git` and the first hunk is a `+++` line a file header; inside a hunk it is content.
+  let header = false;
   for (const raw of diff.split("\n")) {
-    if (raw.startsWith("+++ ")) {
-      const path = raw.slice(4).replace(/^b\//, "");
-      file = path.startsWith("openbot/")
-        ? path.slice("openbot/".length)
-        : undefined;
+    if (raw.startsWith("diff --git ")) {
+      file = undefined;
+      header = true;
       continue;
     }
-    if (raw.startsWith("--- ") || raw.startsWith("diff --git")) continue;
+    if (header) {
+      if (raw.startsWith("+++ ")) {
+        const path = raw.slice(4).split("\t")[0].replace(/^b\//, "");
+        file = path.startsWith("openbot/")
+          ? path.slice("openbot/".length)
+          : undefined;
+        continue;
+      }
+      if (!raw.startsWith("@@")) continue;
+      header = false;
+    }
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
     if (hunk) {
       number = Number(hunk[1]);
@@ -69,7 +123,21 @@ export function baseRef(env: Record<string, string | undefined>): {
 export function diffAddedLines(base: string, head: string): AddedLine[] {
   const top = git(["rev-parse", "--show-toplevel"]).trim();
   return addedLines(
-    git(["diff", "-U0", `${base}...${head}`, "--", "openbot/"], top),
+    git(
+      [
+        "-c",
+        "core.quotepath=off",
+        "diff",
+        "--no-color",
+        "--src-prefix=a/",
+        "--dst-prefix=b/",
+        "-U0",
+        `${base}...${head}`,
+        "--",
+        "openbot/",
+      ],
+      top,
+    ),
   );
 }
 
@@ -145,35 +213,83 @@ export function readSyncPoint(): SyncPoint {
   ) as SyncPoint;
 }
 
+export type Git = (args: string[]) => string; // throws when git fails
+
 /**
- * Reads files of the sync-point commit (`openbot/<p>` here is `<p>` there). The commit is fetched when the
- * repository does not have it; if it cannot be had, this throws: a check that cannot compare must not pass.
+ * A git that runs in a scratch bare repository, made on first use: fetched upstream commits land there,
+ * never in this repository, so a shallow fetch cannot cut its history.
+ */
+export function scratchGit(): Git {
+  let dir: string | undefined;
+  return (args) => {
+    if (dir === undefined) {
+      dir = mkdtempSync(join(tmpdir(), "brand-upstream-"));
+      git(["init", "--bare", "-q"], dir);
+    }
+    return git(args, dir);
+  };
+}
+
+const fetchError = (sync: SyncPoint, why: unknown) =>
+  new Error(
+    `同步点不可信：upstream-sync.json 的提交 ${sync.commit} 不能从 ${sync.repository} 取得（${why}）；新增行检查无法区分上游行与熊宝自己的行`,
+  );
+
+/**
+ * Whether this PR is an upstream sync. A sync point that changed must come from the same repository as at
+ * base, be fetchable from it, and descend from the base's commit; anything else throws, it never falls back
+ * to "an ordinary PR". `base` is undefined when upstream-sync.json is being introduced.
+ */
+export function verifySyncPoint(
+  base: SyncPoint | undefined,
+  head: SyncPoint,
+  run: Git,
+): boolean {
+  if (base === undefined) return false;
+  if (head.repository !== base.repository)
+    throw new Error(
+      `同步点不可信：upstream-sync.json 的 repository 由 ${base.repository} 改成了 ${head.repository}；同步 PR 不能改 repository`,
+    );
+  if (head.commit === base.commit) return false;
+  let last: unknown;
+  for (const depth of [50, 500, 5000]) {
+    try {
+      run([
+        "fetch",
+        `--depth=${depth}`,
+        head.repository,
+        head.commit,
+        base.commit,
+      ]);
+      run(["merge-base", "--is-ancestor", base.commit, head.commit]);
+      return true;
+    } catch (error) {
+      last = error;
+    }
+  }
+  throw new Error(
+    `同步点不可信：${head.commit} 取不到，或不是 ${base.commit} 的后代（${last}）`,
+  );
+}
+
+/**
+ * Reads files of the sync-point commit (`openbot/<p>` here is `<p>` there). The commit is always fetched from
+ * `repository`, whatever this repository already holds; if that fails this throws: a check that cannot
+ * compare must not pass.
  */
 export function upstreamReader(
   sync: SyncPoint,
+  run: Git = scratchGit(),
 ): (file: string) => string | undefined {
-  const have = () => {
-    try {
-      git(["cat-file", "-e", `${sync.commit}^{commit}`]);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  if (!have()) {
-    try {
-      git(["fetch", "--depth=1", sync.repository, sync.commit]);
-    } catch {
-      // handled below
-    }
-    if (!have())
-      throw new Error(
-        `upstream-sync.json names ${sync.commit} (${sync.repository}), which this repository does not have and could not fetch; the new-lines check cannot tell upstream lines from the fork's`,
-      );
+  try {
+    run(["fetch", "--depth=1", sync.repository, sync.commit]);
+    run(["cat-file", "-e", `${sync.commit}^{commit}`]);
+  } catch (error) {
+    throw fetchError(sync, error);
   }
   return (file) => {
     try {
-      return git(["show", `${sync.commit}:${file}`]);
+      return run(["show", `${sync.commit}:${file}`]);
     } catch {
       return undefined;
     }

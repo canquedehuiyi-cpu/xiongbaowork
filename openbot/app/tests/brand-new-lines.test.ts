@@ -37,6 +37,21 @@ test("added lines carry the file relative to openbot/ and their line numbers", (
   expect(addedLines(deleted)).toEqual([]);
 });
 
+test("a content line starting with ++ is not taken for a file header", () => {
+  const diff = [
+    diffOf("server/src/x.ts", "++ OpenBot", "b"),
+    "diff --git a/openbot/app/src/y.ts b/openbot/app/src/y.ts",
+    "+++ b/openbot/app/src/y.ts",
+    "@@ -1,0 +2,1 @@",
+    "+++ b/openbot/server/src/z.ts",
+  ].join("\n");
+  expect(addedLines(diff)).toEqual([
+    { file: "server/src/x.ts", number: 11, line: "++ OpenBot" },
+    { file: "server/src/x.ts", number: 12, line: "b" },
+    { file: "app/src/y.ts", number: 2, line: "++ b/openbot/server/src/z.ts" },
+  ]);
+});
+
 test("baseRef reads the replay variables first, then the event", () => {
   expect(baseRef({ BRAND_BASE: "abc^1", BRAND_HEAD: "abc" })).toEqual({
     base: "abc^1",
@@ -105,7 +120,7 @@ test("the sync point maps openbot/<p> to <p> in the upstream commit", () => {
   const upstream = upstreamReader(sync);
   expect(upstream("package.json")).toBeDefined();
   expect(upstream("no/such/file.ts")).toBeUndefined();
-});
+}, 120_000);
 
 // Not skipped when the sync point cannot be fetched: that is a failure.
 test("this branch adds no unexplained upstream name", () => {
@@ -120,4 +135,4 @@ test("this branch adds no unexplained upstream name", () => {
   ) as { file: string; text: string }[];
   const found = forkIntroduced(newLineFindings(lines, allow), upstream);
   expect(found).toEqual([]);
-});
+}, 120_000);
