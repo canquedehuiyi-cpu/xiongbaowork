@@ -216,7 +216,7 @@ function NewConversation({ composition }: { composition: string }) {
           draft.agentId,
         );
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "群聊没能开始。");
+        setError(caught instanceof Error ? caught.message : "群组没能建好。");
         throw caught;
       }
       return;
@@ -298,7 +298,7 @@ function NewConversation({ composition }: { composition: string }) {
               // already chosen means the composer takes focus instead.
               autoFocus={!chosen}
               placeholder={
-                selected.length ? "再加一位员工，开个群聊…" : "选择一位员工…"
+                selected.length ? "再加一位员工，建个群组…" : "选择一位员工…"
               }
             />
           </ComboboxChips>
@@ -397,7 +397,7 @@ function NewConversation({ composition }: { composition: string }) {
               className="mt-[12vh]"
               description="每位员工都会依次回答；想只问其中一位，就 @它的名字。"
               mood="happy"
-              title={`跟${selected.map((bot) => bot.name).join("、")}开个群聊`}
+              title={`跟${selected.map((bot) => bot.name).join("、")}建个群组`}
             />
           ) : (
             <WorkbenchEmpty
@@ -405,7 +405,7 @@ function NewConversation({ composition }: { composition: string }) {
               description={
                 selected[0]
                   ? selected[0].title || "说说要做的事，附件和 @ 都可以用。"
-                  : "在上面的「发给」里选一位员工，再写下要做的事；选两位以上就是群聊。"
+                  : "在上面的「发给」里选一位员工，再写下要做的事；选两位以上就是群组。"
               }
               mood={selected[0] ? "happy" : "cute"}
               title={

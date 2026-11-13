@@ -1,5 +1,6 @@
 import { IconUser, IconUsers } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ import {
   groupQueryOptions,
   removeGroupMemberMutationOptions,
 } from "@/lib/groups";
+import { useGroupOfChannel } from "@/lib/waker-groups/use-group-of-channel";
 
 /**
  * Who is in a group, from its top bar: how many people, and a dialog listing them where the creator
@@ -44,14 +46,32 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
   const remove = useMutation(
     removeGroupMemberMutationOptions(queryClient, channelId),
   );
+  const navigate = useNavigate();
+  const onScreen = useParams({
+    strict: false,
+    select: (params) =>
+      (params as { channelId?: string }).channelId === channelId,
+  });
+  // Only a chat that is a group's has someone to hand it to; the creator of any other cannot leave.
+  const linked = useGroupOfChannel().has(channelId);
+  // Away once out, so nobody is left looking at a chat they are no longer in.
+  const leave = onScreen ? () => void navigate({ to: "/" }) : undefined;
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  // The creator's leaving hands the group on (or ends the chat), so it is asked before it is done.
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
   const people = group.data?.people ?? [];
   if (!group.data) return null;
   const iCreated = people.some(
     (person) => person.creator && person.userId === me?.id,
   );
   const count = `${people.length} 人`;
+  // The server's people come in the order they joined, and the earliest one left takes the group
+  // over (`channel_memberships.created_at`), so the first person who is not me is who gets it.
+  const successor = people.find((person) => person.userId !== me?.id);
+  const leaveWords = successor
+    ? `退出后，这个群组和它的头像、组团流程、运行记录、看板任务卡都归「${successor.name ?? successor.email}」。`
+    : "你是最后一个人。退出后这个聊天会删除，群组留在你的「群组」里，可以重新开始聊天。";
 
   return (
     <>
@@ -67,7 +87,7 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>群聊成员</DialogTitle>
+            <DialogTitle>群组成员</DialogTitle>
             <DialogDescription>
               群里的每个人都能看到完整的对话，群里的每位员工都会回答他们。
             </DialogDescription>
@@ -76,7 +96,7 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
             <div className="overflow-hidden rounded-lg">
               {people.map((person, index) => {
                 const self = person.userId === me?.id;
-                const removable = self ? !person.creator : iCreated;
+                const removable = self ? !person.creator || linked : iCreated;
                 return (
                   <Fragment key={person.userId}>
                     {index > 0 ? <Separator /> : null}
@@ -89,17 +109,23 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                           {self ? "你" : (person.name ?? person.email)}
                         </ItemTitle>
                         <ItemDescription>
-                          {person.creator ? "发起了这个群聊" : person.email}
+                          {person.creator ? "发起了这个群组" : person.email}
                         </ItemDescription>
                       </ItemContent>
                       {removable ? (
                         <ItemActions>
                           <Button
                             aria-label={
-                              self ? "退出这个群聊" : `移除 ${person.email}`
+                              self ? "退出这个群组" : `移除 ${person.email}`
                             }
                             disabled={remove.isPending}
-                            onClick={() => remove.mutate(person.userId)}
+                            onClick={() =>
+                              self && iCreated
+                                ? setConfirmingLeave(true)
+                                : remove.mutate(person.userId, {
+                                    onSuccess: () => self && leave?.(),
+                                  })
+                            }
                             size="sm"
                             variant="outline"
                           >
@@ -112,6 +138,35 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                 );
               })}
             </div>
+            {confirmingLeave ? (
+              <div className="grid gap-2 rounded-lg border p-3">
+                <p className="text-sm">{leaveWords}</p>
+                <div className="flex gap-2">
+                  <Button
+                    disabled={remove.isPending}
+                    onClick={() =>
+                      remove.mutate(me?.id ?? "", {
+                        onSuccess: () => {
+                          setConfirmingLeave(false);
+                          leave?.();
+                        },
+                      })
+                    }
+                    size="sm"
+                    variant="destructive"
+                  >
+                    确认退出
+                  </Button>
+                  <Button
+                    onClick={() => setConfirmingLeave(false)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    取消
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <form
               className="flex items-center gap-2"
               onSubmit={(event) => {

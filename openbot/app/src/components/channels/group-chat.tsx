@@ -48,6 +48,19 @@ import {
 } from "./composer";
 import { TeamBotConsentCard } from "./team-bot-consent";
 
+/** Whether `groupId` is the group this channel is the chat of. */
+function isThisChat(
+  crews: readonly { id: string; channelId?: string | null }[] | undefined,
+  groupId: string,
+  channelId: string,
+) {
+  return (
+    crews?.some(
+      (crew) => crew.id === groupId && crew.channelId === channelId,
+    ) ?? false
+  );
+}
+
 /**
  * One conversation with several Bots, read from the server's shared transcript.
  *
@@ -85,8 +98,14 @@ export function GroupChat({ channelId }: { channelId: string }) {
     label: string;
     runId: string;
   } | null>(null);
-  const crewOptions: CrewOption[] = (templates.data ?? []).flatMap(
-    (template) => {
+  const crewOptions: CrewOption[] = [...(templates.data ?? [])]
+    // This chat's own group first: it is the one a person here means by 「@组」.
+    .sort(
+      (a, b) =>
+        Number(isThisChat(crews.data, b.groupId, channelId)) -
+        Number(isThisChat(crews.data, a.groupId, channelId)),
+    )
+    .flatMap((template) => {
       const crew = (crews.data ?? []).find(
         (entry) => entry.id === template.groupId,
       );
@@ -101,8 +120,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
           description: `启动流程 · ${template.steps.length} 步`,
         },
       ];
-    },
-  );
+    });
   const send = useMutation(
     sendGroupMessageMutationOptions(queryClient, channelId),
   );

@@ -1,6 +1,6 @@
 /*
  * 侧栏的「会话 · 员工 · 群组」：上游的全部会话列表照旧（默认），熊宝 v0.2.7 的员工 / 群组名册找回来——单聊从
- * 员工进，群聊和群组在「群组」里——顶部「新对话」旁边有「新建群聊」。
+ * 员工进，群聊和群组合成「群组」一节——顶部「新对话」旁边有「新建群组」。
  */
 import {
   afterAll,
@@ -164,6 +164,7 @@ function renderSidebar(
     bots = [],
     groups,
     details = [],
+    portraits = [],
   }: {
     channels?: ChannelSummary[];
     nextCursor?: string | null;
@@ -172,6 +173,7 @@ function renderSidebar(
     groups?: unknown[];
     /** Channels read on their own (`GET /api/channels/:id`), for one not among the loaded pages. */
     details?: { id: string; agentIds: string[] }[];
+    portraits?: unknown[];
   } = {},
 ) {
   const queryClient = new QueryClient({
@@ -223,7 +225,7 @@ function renderSidebar(
     open: false,
     tabs: [],
   });
-  queryClient.setQueryData(portraitKeys.all, []);
+  queryClient.setQueryData(portraitKeys.all, portraits);
   if (groups) queryClient.setQueryData(wakerGroupKeys.list(), groups);
   for (const detail of details) {
     queryClient.setQueryData(channelKeys.detail(detail.id), {
@@ -285,10 +287,10 @@ async function chooseView(
   await userEvent.click(within(switcher).getByRole("button", { name }));
 }
 
-test("「新建群聊」 sits beside 「新对话」 at the top and opens the 新建群聊 page", async () => {
+test("「新建群组」 sits beside 「新对话」 at the top and opens the 新建群组 page", async () => {
   const { view, router } = renderSidebar();
   const start = await view.findByRole("button", { name: "新对话" });
-  const group = view.getByRole("button", { name: "新建群聊" });
+  const group = view.getByRole("button", { name: "新建群组" });
   expect(hrefOf(group)).toBe("/group/new");
   expect(start.parentElement).toBe(group.parentElement);
   await userEvent.click(group);
@@ -388,7 +390,7 @@ test("员工 has 新建员工 and a search by name", async () => {
   expect(within(list).getAllByRole("link").map(textOf)).toEqual(["写手文案"]);
 });
 
-test("群组 holds the 群聊 apart from the 单聊, then the 群组 with their faces stacked", async () => {
+test("群组 holds the 群组 apart from the 单聊, chats first, then the crews not chatting yet with their faces stacked", async () => {
   const { view, router } = renderSidebar("/bots", {
     groups: [
       {
@@ -403,12 +405,11 @@ test("群组 holds the 群聊 apart from the 单聊, then the 群组 with their 
     ],
   });
   await chooseView(view, /^群组/);
-  const chats = await view.findByRole("list", { name: "群聊" });
+  const chats = await view.findByRole("list", { name: "群组" });
   const chatRows = within(chats).getAllByRole("link");
-  expect(chatRows.map(hrefOf)).toEqual(["/group/c-crew"]);
+  expect(chatRows.map(hrefOf)).toEqual(["/group/c-crew", "/bots?tab=groups"]);
   expect(textOf(chatRows[0])).toContain("联合复盘");
-  const crews = view.getByRole("list", { name: "群组" });
-  const crew = within(crews).getByRole("link");
+  const crew = within(chats).getByRole("link", { name: /周报小队/ });
   expect(hrefOf(crew)).toBe("/bots?tab=groups");
   expect(textOf(crew)).toContain("周报小队");
   expect(textOf(crew)).toContain("2 名员工");
@@ -417,7 +418,7 @@ test("群组 holds the 群聊 apart from the 单聊, then the 群组 with their 
     within(crew).getByRole("img", { name: "成员：分析师、写手" }),
   ).toBeTruthy();
   expect(hrefOf(view.getByRole("link", { name: "新建群组" }))).toBe(
-    "/bots?tab=groups",
+    "/group/new",
   );
   await userEvent.click(chatRows[0] as HTMLElement);
   await waitFor(() =>
@@ -425,17 +426,17 @@ test("群组 holds the 群聊 apart from the 单聊, then the 群组 with their 
   );
 });
 
-test("群组 offers 新建群聊, and says how to start when there is no 群聊 yet", async () => {
+test("群组 offers 新建群组, and says how to start when there is no 群组 yet", async () => {
   const { view, router } = renderSidebar("/bots", {
     channels: [CHANNELS[0] as ChannelSummary],
     groups: [],
   });
   await chooseView(view, /^群组/);
   expect(
-    await view.findByText("还没有群聊。点「新建群聊」，选两位以上员工开始。"),
+    await view.findByText("还没有群组。点「新建群组」，选两位以上员工开始。"),
   ).toBeTruthy();
   // The 群组 toolbar's own entry, besides the one at the top of the sidebar.
-  const create = view.getByRole("link", { name: "新建群聊" });
+  const create = view.getByRole("link", { name: "新建群组" });
   expect(hrefOf(create)).toBe("/group/new");
   await userEvent.click(create);
   await waitFor(() =>
@@ -443,7 +444,7 @@ test("群组 offers 新建群聊, and says how to start when there is no 群聊 
   );
 });
 
-test("the 群组 search narrows 群聊 and 群组 together", async () => {
+test("the 群组 search narrows chats and crews together", async () => {
   const { view } = renderSidebar("/bots", {
     channels: [
       ...CHANNELS,
@@ -454,26 +455,23 @@ test("the 群组 search narrows 群聊 and 群组 together", async () => {
     groups: [{ id: "crew-1", name: "复盘组", description: null, members: [] }],
   });
   await chooseView(view, /^群组/);
-  await userEvent.click(
-    await view.findByRole("button", { name: "搜索群聊和群组" }),
-  );
+  await userEvent.click(await view.findByRole("button", { name: "搜索群组" }));
   await userEvent.type(
-    view.getByRole("searchbox", { name: "按名字搜索群聊和群组" }),
+    view.getByRole("searchbox", { name: "按名字搜索群组" }),
     "复盘",
   );
-  expect(
-    within(view.getByRole("list", { name: "群聊" }))
-      .getAllByRole("link")
-      .map(hrefOf),
-  ).toEqual(["/group/c-crew"]);
-  expect(
-    within(view.getByRole("list", { name: "群组" }))
-      .getAllByRole("link")
-      .map(textOf),
-  ).toEqual([expect.stringContaining("复盘组")]);
+  const list = view.getByRole("list", { name: "群组" });
+  expect(within(list).getAllByRole("link").map(hrefOf)).toEqual([
+    "/group/c-crew",
+    "/bots?tab=groups",
+  ]);
+  expect(within(list).getAllByRole("link").map(textOf)).toEqual([
+    expect.stringContaining("联合复盘"),
+    expect.stringContaining("复盘组"),
+  ]);
 });
 
-test("older 群聊 load when asked, never by scrolling through 单聊 history", async () => {
+test("older 群组 load when asked, never by scrolling through 单聊 history", async () => {
   respond = async (request) =>
     request.url === "/api/channels?cursor=older"
       ? Response.json({
@@ -487,10 +485,10 @@ test("older 群聊 load when asked, never by scrolling through 单聊 history", 
     groups: [],
   });
   await chooseView(view, /^群组/);
-  expect(await view.findByText("已加载的会话里还没有群聊。")).toBeTruthy();
+  expect(await view.findByText("已加载的会话里还没有群组。")).toBeTruthy();
   expect(sent).toEqual([]);
   await userEvent.click(view.getByRole("button", { name: "加载更早的会话" }));
-  const chats = await view.findByRole("list", { name: "群聊" });
+  const chats = await view.findByRole("list", { name: "群组" });
   expect(within(chats).getAllByRole("link").map(hrefOf)).toEqual([
     "/group/c-old-crew",
   ]);
@@ -500,11 +498,7 @@ test("the list chosen is remembered for the next visit", async () => {
   const first = renderSidebar("/bots", { groups: [] });
   await chooseView(first.view, /^群组/);
   // The 群组 view is drawn before the sidebar goes away, so the choice was made, not just clicked.
-  expect(
-    await first.view.findByText(
-      "在员工的「群组」里把几位员工编成一组，它就会出现在这里。",
-    ),
-  ).toBeTruthy();
+  expect(await first.view.findByRole("list", { name: "群组" })).toBeTruthy();
   cleanup();
   const { view } = renderSidebar("/bots", { groups: [] });
   const switcher = await view.findByRole("group", { name: "侧栏列表" });
@@ -604,4 +598,100 @@ test("the switch names each count with what it counts", async () => {
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label")),
   ).toEqual(["会话", "员工，2 位", "群组，0 个"]);
+});
+
+test("a crew short of members reads 待补成员 and opens 员工 › 群组", async () => {
+  const { view } = renderSidebar("/bots", {
+    channels: [CHANNELS[0] as ChannelSummary],
+    groups: [
+      {
+        id: "crew-short",
+        name: "单人组",
+        description: null,
+        members: [{ agentId: "agent-writer", position: 0 }],
+      },
+    ],
+  });
+  await chooseView(view, /^群组/);
+  const list = await view.findByRole("list", { name: "群组" });
+  const row = within(list).getByRole("link", { name: /单人组/ });
+  expect(textOf(row)).toContain("1 名员工 · 待补成员");
+  expect(hrefOf(row)).toBe("/bots?tab=groups");
+});
+
+test("a crew without a chat reads 未开始聊天, after every chat row", async () => {
+  respond = async (request) =>
+    request.url === "/api/channels?cursor=older"
+      ? Response.json({
+          channels: [channel("c-old-crew", ["agent-writer", "agent-analyst"])],
+          nextCursor: null,
+        })
+      : Promise.reject(new Error(`Unexpected request ${request.url}`));
+  const { view } = renderSidebar("/bots", {
+    nextCursor: "older",
+    groups: [
+      {
+        id: "crew-idle",
+        name: "待命组",
+        description: null,
+        members: [
+          { agentId: "agent-analyst", position: 0 },
+          { agentId: "agent-writer", position: 1 },
+        ],
+      },
+    ],
+  });
+  await chooseView(view, /^群组/);
+  const list = await view.findByRole("list", { name: "群组" });
+  expect(within(list).getAllByRole("link").map(hrefOf)).toEqual([
+    "/group/c-crew",
+    "/bots?tab=groups",
+  ]);
+  expect(textOf(within(list).getByRole("link", { name: /待命组/ }))).toContain(
+    "2 名员工 · 未开始聊天",
+  );
+  await userEvent.click(view.getByRole("button", { name: "加载更早的会话" }));
+  await waitFor(() =>
+    expect(within(list).getAllByRole("link").map(hrefOf)).toEqual([
+      "/group/c-crew",
+      "/group/c-old-crew",
+      "/bots?tab=groups",
+    ]),
+  );
+});
+
+test("a linked chat I started shows the crew's portrait", async () => {
+  const { view } = renderSidebar("/bots", {
+    groups: [
+      {
+        id: "crew-linked",
+        name: "周报小队",
+        description: null,
+        channelId: "c-crew",
+        members: [
+          { agentId: "agent-analyst", position: 0 },
+          { agentId: "agent-writer", position: 1 },
+        ],
+      },
+    ],
+    portraits: [
+      {
+        kind: "group",
+        id: "crew-linked",
+        preset: null,
+        imageUrl: "/api/portraits/group/crew-linked/image",
+        videoUrl: null,
+      },
+    ],
+  });
+  await chooseView(view, /^群组/);
+  const list = await view.findByRole("list", { name: "群组" });
+  const row = within(list)
+    .getAllByRole("link")
+    .find((link) => hrefOf(link) === "/group/c-crew") as HTMLElement;
+  expect(row.querySelector("img")?.getAttribute("src")).toBe(
+    "/api/portraits/group/crew-linked/image",
+  );
+  // A linked crew is its chat's row, not a second 未开始聊天 row.
+  expect(within(list).getAllByRole("link")).toHaveLength(1);
 });

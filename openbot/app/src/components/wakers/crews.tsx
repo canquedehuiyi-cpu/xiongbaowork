@@ -1,6 +1,6 @@
 import { IconPlus, IconUsersGroup } from "@tabler/icons-react";
 import { useMutation, type useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
@@ -11,20 +11,23 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
+import { channelKeys } from "@/lib/channels/queries";
 import { cn } from "@/lib/utils";
 import {
-  createCrewMutationOptions,
   retireCrewMutationOptions,
   setCrewMembersMutationOptions,
+  startCrewChatMutationOptions,
 } from "@/lib/waker-groups/mutations";
-import type { WakerGroup } from "@/lib/waker-groups/queries";
+import {
+  CREW_STATUS_WORDS,
+  crewStatus,
+  type WakerGroup,
+} from "@/lib/waker-groups/queries";
 import {
   CARD_SURFACE,
   CardFooter,
@@ -35,17 +38,24 @@ import {
   GRID,
   ordinal,
 } from "./card-chrome";
+import { CreateGroupForm } from "./create-group-form";
+import { useDissolveCopy } from "./dissolve-crew";
+
+/** A text link in a card's action row, sized like the ghost buttons beside it. */
+const CARD_LINK =
+  "inline-flex h-6 items-center rounded-md px-2 font-medium text-[12px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60";
 
 type QueryClient = ReturnType<typeof useQueryClient>;
 
 /** Why a group exists and what it does not do, said wherever a person is about to make one. */
 const CREW_MEANING =
-  "群组是一串排好顺序的员工的名字，可以一起被叫来干活。它不授予任何权限——每位员工仍然只对它自己已获授权的那件事负责。";
+  "新建群组会同时建一个聊天，群里的员工在里面一起干活。群组不授予任何权限——每位员工仍然只对它自己已获授权的那件事负责。";
 
 /**
- * Making a group: a name and an optional purpose (`POST /api/waker-groups`). One dialog behind the
- * header's 新建群组, the grid's create card and the empty state's button, so all three are the same
- * flow and a refused name comes back as the server's own sentence in the same place.
+ * Making a group (`POST /api/waker-groups`): the same form as the 新建群组 page, in a dialog. One
+ * dialog behind the header's 新建群组, the grid's create card and the empty state's button, so all
+ * three are the same flow and a refused name comes back as the server's own sentence in the same
+ * place. A made group opens its chat.
  */
 export function CreateCrewDialog({
   open,
@@ -56,67 +66,26 @@ export function CreateCrewDialog({
   onOpenChange: (open: boolean) => void;
   queryClient: QueryClient;
 }) {
-  const [name, setName] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  const create = useMutation(createCrewMutationOptions(queryClient));
-  const close = (next: boolean) => {
-    if (!next) setProblem(null);
-    onOpenChange(next);
-  };
+  const navigate = useNavigate();
   return (
-    <Dialog onOpenChange={close} open={open}>
+    <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!name.trim() || create.isPending) return;
-            setProblem(null);
-            create.mutate(
-              { name, description: purpose },
-              {
-                onSuccess: () => {
-                  setName("");
-                  setPurpose("");
-                  close(false);
-                },
-                onError: (thrown: Error) => setProblem(thrown.message),
-              },
-            );
+        <DialogHeader>
+          <DialogTitle>新建群组</DialogTitle>
+          <DialogDescription>{CREW_MEANING}</DialogDescription>
+        </DialogHeader>
+        <CreateGroupForm
+          onCancel={() => onOpenChange(false)}
+          onCreated={({ channel }) => {
+            queryClient.setQueryData(channelKeys.detail(channel.id), channel);
+            onOpenChange(false);
+            void navigate({
+              to: "/group/$channelId",
+              params: { channelId: channel.id },
+            });
           }}
-        >
-          <DialogHeader>
-            <DialogTitle>新建群组</DialogTitle>
-            <DialogDescription>{CREW_MEANING}</DialogDescription>
-          </DialogHeader>
-          <Input
-            aria-label="群组名称"
-            autoFocus
-            onChange={(event) => setName(event.target.value)}
-            placeholder="群组名称"
-            value={name}
-          />
-          <Input
-            aria-label="这个群组是做什么的（可选）"
-            onChange={(event) => setPurpose(event.target.value)}
-            placeholder="这个群组是做什么的（可选）"
-            value={purpose}
-          />
-          {problem ? (
-            <p className="text-destructive text-sm" role="alert">
-              {problem}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button onClick={() => close(false)} type="button" variant="ghost">
-              取消
-            </Button>
-            <Button disabled={!name.trim() || create.isPending} type="submit">
-              {create.isPending ? "正在创建…" : "创建"}
-            </Button>
-          </DialogFooter>
-        </form>
+          variant="dialog"
+        />
       </DialogContent>
     </Dialog>
   );
@@ -154,9 +123,17 @@ export function CrewTab({
           .filter((member) => member.agentId !== agentId)
           .map((member) => member.agentId)
       : [...crew.members.map((member) => member.agentId), agentId];
+    setProblem(null);
     members.mutate(
       { groupId: crew.id, agentIds: next },
-      { onError: (thrown: Error) => setProblem(thrown.message) },
+      {
+        // The roster is saved even when the chat did not start; the card then offers 开始聊天.
+        onSuccess: ({ chatError }) => {
+          if (chatError) setProblem(chatError);
+        },
+        // A 409 (part-way, or owner-gone) carries the server's own sentence.
+        onError: (thrown: Error) => setProblem(thrown.message),
+      },
     );
   };
 
@@ -208,6 +185,7 @@ export function CrewTab({
               });
             }}
             onToggle={(agentId) => toggle(crew, agentId)}
+            queryClient={queryClient}
             retiring={retire.isPending}
             roster={roster}
             rosterLoading={rosterLoading}
@@ -242,6 +220,7 @@ function CrewCard({
   index,
   onRetire,
   onToggle,
+  queryClient,
   retiring,
   roster,
   rosterLoading,
@@ -252,6 +231,7 @@ function CrewCard({
   index: string;
   onRetire: () => void;
   onToggle: (agentId: string) => void;
+  queryClient: QueryClient;
   retiring: boolean;
   roster: AgentProfile[];
   rosterLoading: boolean;
@@ -264,6 +244,11 @@ function CrewCard({
    * the button that does it asks once before it does it.
    */
   const [confirming, setConfirming] = useState(false);
+  const navigate = useNavigate();
+  const startChat = useMutation(startCrewChatMutationOptions(queryClient));
+  const [chatProblem, setChatProblem] = useState<string | null>(null);
+  const status = crewStatus(crew);
+  const { counting, copy: dissolveCopy } = useDissolveCopy(crew, confirming);
   const nameOf = (agentId: string) =>
     roster.find((agent) => agent.id === agentId)?.name ?? agentId;
   const ordered = [...crew.members].sort((a, b) => a.position - b.position);
@@ -406,10 +391,52 @@ function CrewCard({
             seed={crew.id}
           />
         ) : null}
+        {status === "chat" && crew.channelId ? (
+          <>
+            <Link
+              className={CARD_LINK}
+              params={{ channelId: crew.channelId }}
+              to="/group/$channelId"
+            >
+              打开
+            </Link>
+            <Link
+              className={CARD_LINK}
+              params={{ channelId: crew.channelId }}
+              search={{ settings: 1 }}
+              to="/group/$channelId"
+            >
+              设置
+            </Link>
+          </>
+        ) : status === "not_started" ? (
+          <Button
+            disabled={startChat.isPending}
+            onClick={() => {
+              setChatProblem(null);
+              startChat.mutate(crew.id, {
+                onSuccess: ({ channel }) =>
+                  void navigate({
+                    to: "/group/$channelId",
+                    params: { channelId: channel.id },
+                  }),
+                onError: (thrown: Error) => setChatProblem(thrown.message),
+              });
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            开始聊天
+          </Button>
+        ) : status === "pending_members" || status === "too_many" ? (
+          <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+            {CREW_STATUS_WORDS[status]}
+          </span>
+        ) : null}
         {confirming ? (
           <>
             <Button
-              disabled={retiring}
+              disabled={retiring || counting}
               onClick={() => {
                 setConfirming(false);
                 onRetire();
@@ -439,6 +466,17 @@ function CrewCard({
         )}
       </div>
 
+      {confirming ? (
+        <p className="mb-[8px] text-[12px] text-muted-foreground leading-[18px]">
+          {dissolveCopy}
+        </p>
+      ) : null}
+      {chatProblem ? (
+        <p className="mb-[8px] text-[12px] text-destructive" role="alert">
+          {chatProblem}
+        </p>
+      ) : null}
+
       <CardFooter
         left={<span>{crew.members.length} 名员工</span>}
         right={
@@ -450,10 +488,11 @@ function CrewCard({
           crew.members.length > 0 ? (
             <span className="flex items-center gap-[10px]">
               {/*
-               * 组团流程：给这个群组排好顺序的工作。流程页按群组列出，所以这里只带人过去，不带参数。
+               * 组团流程：给这个群组排好顺序的工作。带上群组 id，流程页直接停在这个群组那一节。
                */}
               <Link
                 className="rounded-sm font-semibold text-foreground/90 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+                search={{ group: crew.id }}
                 to="/pipelines"
               >
                 组团流程

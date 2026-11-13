@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { stringify } from "yaml";
 
 import type { AuditFinding } from "./audit-toolrefs";
-import { auditRulesSha256 } from "./mapping";
+import { auditRule, auditRulesSha256 } from "./mapping";
 import { countByLevel, countMarginal } from "./audit-toolrefs";
 import type { ManifestEntry } from "./manifest";
 import type { NormalizedCapabilities } from "./normalize";
@@ -109,41 +109,86 @@ export function renderAgentsYaml(capabilities: NormalizedCapabilities): string {
  * reference that resolves to nothing at turn time. The raw declarations are preserved under
  * `_porting.declared_tools` so P3's mapping layer has the input it needs.
  */
+/**
+ * One rule group's human-readable "why not full" line: the rule's own reviewer-facing reason plus the
+ * strongest citation and how many hits back it up. Grouped and ordered exactly like the audit report's
+ * per-rule table, so the package and the report never disagree about what a skill is missing.
+ */
+export interface ReasonRef {
+  ruleId: string;
+  text: string;
+}
+
+/** Build the `reason`/`reason_ref` payload for a finding; empty for full or hit-less findings. */
+export function buildReasonRefs(finding: AuditFinding | undefined): ReasonRef[] {
+  if (!finding || finding.level === "full" || finding.hits.length === 0) {
+    return [];
+  }
+  const byRule = new Map<string, typeof finding.hits>();
+  for (const hit of finding.hits) {
+    byRule.set(hit.ruleId, [...(byRule.get(hit.ruleId) ?? []), hit]);
+  }
+  return [...byRule.entries()].map(([ruleId, group]) => {
+    const best = group[0];
+    const total = group.length > 1 ? `（共 ${group.length} 处）` : "";
+    return {
+      ruleId,
+      text: `${auditRule(ruleId).reason} ← "${best.sample}"${total}`,
+    };
+  });
+}
+
 export function renderSkillsYaml(
   capabilities: NormalizedCapabilities,
   skillFindings: ReadonlyMap<string, AuditFinding>,
 ): string {
-  const skills = capabilities.skills.map((skill) => ({
-    slug: skill.slug,
-    title: skill.title,
-    summary: skill.summary,
-    instructions: skill.instructions,
-    tools: [] as string[],
-    _porting: {
-      source: skill.provenance.source,
-      source_url: skill.provenance.sourceUrl,
-      source_version: skill.provenance.sourceVersion,
-      fetched_at: skill.provenance.fetchedAt,
-      checksum_sha256: skill.provenance.checksum,
-      license: skill.provenance.license,
-      redistributable: skill.provenance.redistributable,
-      attribution: skill.provenance.attribution,
-      declared_tools: [...skill.declaredTools],
-      runnable: skillFindings.get(skill.slug)?.level ?? "full",
-      dropped: [...skill.dropped],
-      /**
-       * Bytes under `references/`. Not an openbot field: it is the number that decides whether P2 can
-       * inline the references into `instructions` (the 24KB threshold in §4c) or has to ship the
-       * `skill_assets` + `skills/read` channel first.
-       */
-      refs_bytes: skill.refsBytes,
-      /**
-       * Which redactions touched `instructions`. Absent on a clean row, so a reviewer can grep for the key
-       * and get exactly the entries whose text was rewritten rather than every row in the file.
-       */
-      ...(skill.sanitized.length === 0 ? {} : { sanitized: [...skill.sanitized] }),
-    },
-  }));
+  const skills = capabilities.skills.map((skill) => {
+    const finding = skillFindings.get(skill.slug);
+    const runnable = finding?.level ?? "full";
+    // R18：blocked/degraded 必须能答"为什么不是 full"。数据形态分两层：`reason` 是规则 id
+    // （稳定契约，测试与运维按它 grep）；`reason_ref` 是给人读的一句话——规则的中文理由
+    // 加最强命中引文与总数，与 tool-ref-audit.md 同源同措辞。full 不写字段：缺字段即 clean。
+    const reasonRefs = buildReasonRefs(finding);
+    return {
+      slug: skill.slug,
+      title: skill.title,
+      summary: skill.summary,
+      instructions: skill.instructions,
+      tools: [] as string[],
+      _porting: {
+        source: skill.provenance.source,
+        source_url: skill.provenance.sourceUrl,
+        source_version: skill.provenance.sourceVersion,
+        fetched_at: skill.provenance.fetchedAt,
+        checksum_sha256: skill.provenance.checksum,
+        license: skill.provenance.license,
+        redistributable: skill.provenance.redistributable,
+        attribution: skill.provenance.attribution,
+        declared_tools: [...skill.declaredTools],
+        runnable,
+        ...(reasonRefs.length > 0
+          ? {
+              reason: reasonRefs.map((entry) => entry.ruleId).join("+"),
+              reason_ref: reasonRefs
+                .map((entry) => entry.text)
+                .join("；"),
+            }
+          : {}),
+        dropped: [...skill.dropped],
+        /**
+         * Bytes under `references/`. Not an openbot field: it is the number that decides whether P2 can
+         * inline the references into `instructions` (the 24KB threshold in §4c) or has to ship the
+         * `skill_assets` + `skills/read` channel first.
+         */
+        refs_bytes: skill.refsBytes,
+        /**
+         * Which redactions touched `instructions`. Absent on a clean row, so a reviewer can grep for the key
+         * and get exactly the entries whose text was rewritten rather than every row in the file.
+         */
+        ...(skill.sanitized.length === 0 ? {} : { sanitized: [...skill.sanitized] }),
+      },
+    };
+  });
   return toYaml({ skills });
 }
 

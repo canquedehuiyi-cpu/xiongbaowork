@@ -252,6 +252,24 @@ test("one workspace does not get to name two crews the same thing", async () => 
   ).rejects.toBeInstanceOf(WakerGroupNameError);
 });
 
+test("a refused name is said in Chinese by the route", async () => {
+  await runAsTenant(tenantA, () => store.create({ name: "中文重名群组" }));
+  const taken = await runAsTenant(tenantA, () =>
+    routes.request(post({ name: "中文重名群组" })),
+  );
+  expect(taken.status).toBe(409);
+  expect(await taken.json()).toEqual({
+    error: "已经有同名的群组了，换个名字吧。",
+  });
+  const empty = await runAsTenant(tenantA, () =>
+    routes.request(post({ name: "   " })),
+  );
+  expect(empty.status).toBe(400);
+  expect(await empty.json()).toEqual({
+    error: "群组名称不能为空，最多 80 个字。",
+  });
+});
+
 test("the routes carry the same rules as the store", async () => {
   const created = await runAsTenant(tenantA, () =>
     routes.request(post({ name: "路线群组", description: "  " })),

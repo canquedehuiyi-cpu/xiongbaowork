@@ -1593,7 +1593,7 @@ export function createGroupConversations(deps: {
     await roster(owner, channel);
     const creator = (await deps.store.people(channel))[0]?.userId;
     if (owner !== creator)
-      throw new GroupRefusedError("只有发起这个群聊的人才能调整群里的员工。");
+      throw new GroupRefusedError("只有发起这个群组的人才能调整群里的员工。");
   };
   const botList = (input: unknown) => {
     const agentIds = z

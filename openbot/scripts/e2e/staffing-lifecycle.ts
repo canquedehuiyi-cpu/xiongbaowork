@@ -845,9 +845,9 @@ try {
         "API: the group's employees are in the drafted order [A, B]",
       );
       await card(p, groupProposal)
-        .getByRole("link", { name: "打开群聊" })
+        .getByRole("link", { name: "打开群组" })
         .waitFor();
-      check(true, "the result offers 打开群聊");
+      check(true, "the result offers 打开群组");
     },
   );
 

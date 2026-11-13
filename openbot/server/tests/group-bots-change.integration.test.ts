@@ -386,7 +386,7 @@ describe("changing the bots of an existing group", () => {
       () => null,
       (error: Error) => error,
     );
-    expect(refusal?.message).toBe("只有发起这个群聊的人才能调整群里的员工。");
+    expect(refusal?.message).toBe("只有发起这个群组的人才能调整群里的员工。");
   });
 
   describe("with another member's own thread rows in the group", () => {

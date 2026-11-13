@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { type AgentChannel, channelKeys } from "@/lib/channels/queries";
 import { client } from "@/lib/client";
+import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
 /** One line of a group conversation: a person's message (`agentId` null) or one Bot's reply. */
 export type GroupMessage = {
@@ -38,6 +39,8 @@ export type GroupConversation = {
 };
 
 export const groupKeys = {
+  /** Every group conversation, to refetch them together. */
+  all: ["groups"] as const,
   detail: (channelId: string) => ["groups", channelId] as const,
 };
 
@@ -51,7 +54,7 @@ export function groupQueryOptions(channelId: string) {
     queryFn: async (): Promise<GroupConversation> => {
       const response = await client(
         `/api/groups/${encodeURIComponent(channelId)}`,
-        { fallback: "读不到这个群聊。" },
+        { fallback: "读不到这个群组。" },
       );
       return (await response.json()) as GroupConversation;
     },
@@ -102,16 +105,26 @@ export function sendGroupMessageMutationOptions(
 /** Start a group; the Bots answer in the order given. */
 export function createGroupMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: async (agentIds: string[]): Promise<AgentChannel> => {
+    mutationFn: async (
+      agentIds: string[],
+    ): Promise<AgentChannel & { wakerGroupId?: string }> => {
       const response = await client("/api/groups", {
         method: "POST",
         body: { agentIds },
-        fallback: "群聊没能开始。",
+        fallback: "群组没能建好。",
       });
-      return ((await response.json()) as { channel: AgentChannel }).channel;
+      return (
+        (await response.json()) as {
+          channel: AgentChannel & { wakerGroupId?: string };
+        }
+      ).channel;
     },
+    // The server also made and linked the group, so its list is read again too.
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+        queryClient.invalidateQueries({ queryKey: wakerGroupKeys.all }),
+      ]),
   });
 }
 
@@ -138,6 +151,12 @@ export function addGroupMemberMutationOptions(
 export function removeGroupMemberMutationOptions(
   queryClient: QueryClient,
   channelId: string,
+  /**
+   * Runs once the server has said yes, before the lists are read again. Passed here and not to
+   * `mutate`, because the refresh can drop the row that drew the dialog, and a per-call callback of
+   * an unmounted component is discarded.
+   */
+  onRemoved?: (userId: string) => void,
 ) {
   return mutationOptions({
     mutationFn: async (userId: string) => {
@@ -146,12 +165,15 @@ export function removeGroupMemberMutationOptions(
         { method: "DELETE", fallback: "没能移除这个人。" },
       );
     },
+    onSuccess: (_data, userId) => onRemoved?.(userId),
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({
           queryKey: groupKeys.detail(channelId),
         }),
         queryClient.invalidateQueries({ queryKey: channelKeys.all }),
+        // Leaving can hand the group over, or leave it without a chat.
+        queryClient.invalidateQueries({ queryKey: wakerGroupKeys.all }),
       ]),
   });
 }

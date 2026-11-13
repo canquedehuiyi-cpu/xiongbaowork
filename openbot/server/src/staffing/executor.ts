@@ -302,12 +302,12 @@ function reasonOf(error: unknown): string {
   )
     return "你不能修改这位员工。";
   if (error instanceof ChannelNotOwnerError)
-    return "只有发起这个群聊的人才能改名。";
+    return "只有发起这个群组的人才能改名。";
   if (
     error instanceof ChannelNotFoundError ||
     error instanceof GroupNotFoundError
   )
-    return "找不到这个群聊。";
+    return "找不到这个群组。";
   if (error instanceof ZodError) return "员工名单不合格。";
   if (error instanceof PluginRefusedError)
     return hasChinese(error.message)
@@ -1072,22 +1072,22 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
           }
           if (gone.length > 0)
             return failed(
-              `员工 ${gone.join("、")} 已经不能用了（可能改成了私有或被删除），群聊没有建。`,
+              `员工 ${gone.join("、")} 已经不能用了（可能改成了私有或被删除），群组没有建。`,
             );
           const channel = await deps.groups.create(run.actor.id, {
             agentIds: draft.members,
           });
           channelId = channel.id;
-          return done("已建好群聊。", channel.id);
+          return done("已建好群组。", channel.id);
         },
       },
       {
         step: "rename",
         target: draft.name,
         run: async () => {
-          if (!channelId) return failed("群聊没有建成，所以没有改名。");
+          if (!channelId) return failed("群组没有建成，所以没有改名。");
           await deps.channels.rename(run.agentActor, channelId, draft.name);
-          return done(`群聊已命名为「${draft.name}」。`);
+          return done(`群组已命名为「${draft.name}」。`);
         },
       },
     ];
@@ -1103,7 +1103,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         target: name,
         run: async () => {
           await deps.channels.rename(run.agentActor, channelId, name);
-          return done(`群聊已改名为「${name}」。`);
+          return done(`群组已改名为「${name}」。`);
         },
       });
     if (draft.add.length > 0)
@@ -1121,7 +1121,7 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
         target: draft.remove.join(","),
         run: async () => {
           await deps.groups.removeBots(run.actor.id, channelId, draft.remove);
-          return done("已把员工移出群聊。");
+          return done("已把员工移出群组。");
         },
       });
     const order = draft.order;

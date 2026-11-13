@@ -138,6 +138,8 @@ SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
 生产数据库依运营方的备份和 TLS 策略配置；
 若 API 日志出现 `rls-not-enforced`，容器会拒绝启动。不要通过关闭 refuse 绕过配置错误。
 
+群组合一（第 6.1 节）的 0206、0207、0211、0212 随镜像迁移：内嵌库启动时自动执行，外接库照本节先用新 digest 跑迁移、再重建 API 容器。
+
 ## 5. 品牌与模型配置
 
 发布镜像在构建期内置 `examples/xiongbao` 品牌包。SPA 首屏标题与主 JS 品牌在构建期注入，
@@ -194,6 +196,31 @@ BOT_MODEL=<供应商当前支持的准确模型名>
      - 已有的人下次打开就会补上；旧的那段对话和群聊会按员工的当前名字改名（例如「通用助手」），员工和历史都不变。
      - 单用户部署由品牌包同步在启动时处理。两种部署都不需要手工迁移。
 
+### 5.2 能力资源与其降级说明
+
+镜像内置的品牌包随带 28 名员工、3 支专家团和 109 条技能，外加 3 个连接器声明（github / TAPD /
+腾讯文档）。**技能分三档，徽章在「能力与资源 → 我的」页上**：
+
+| 档位 | 徽章 | 运维含义 |
+| --- | --- | --- |
+| `full` | 完整可用 | 正文没有引用本环境不可执行的工具形态，声明即可用。 |
+| `degraded` | 部分可用 | 引用了 file-tool 类工具，装载时已改写到 `computer_read_file` / `computer_write_file` 或插入环境事实段；功能可用，走法不同。 |
+| `blocked` | 暂不可用 | 正文真的要跑本地命令 / 调脚本 / 引用平台私有身份。**这不是故障，也不需要运维动作**：openbot 员工没有本地 shell，系统不做 shim，只在正文保留调用证据并插入降级说明。有人问"这个技能为什么用不了"时，答案在这里。 |
+
+每条 blocked 的判定原因（原文 + 行号 + 规则）见品牌包随带的
+`docs/porting/tool-ref-audit.md`——那是对外解释"为什么 109 条里只有 74 条开箱即用"的唯一可信答案。
+**不要把"暂不可用"当成待修故障上报**：档位由静态审计判定，修复它意味着改写技能正文或给员工接上
+对应连接器，而不是重启或重装。
+
+**连接器的「待绑定」状态**：品牌包只声明连接器（服务行 + `credential_env` 名），**从不携带凭据，
+也从不自动授予**。装包后连接器显示「待绑定」是预期状态；管理员在连接页绑定凭据、刷新工具清单、
+再给员工授予之后，对应工具才可用。github 声明为逐用户 OAuth（每人自己授权），TAPD / 腾讯文档为
+部署级共享凭据（环境变量 `TAPD_MCP_CREDENTIAL_ID` / `TENCENT_DOCS_MCP_CREDENTIAL_ID` 指向凭据，
+由同步在启动时绑定）。包内技能不因声明了工具而多给任何授权——能调什么始终由员工的授予决定。
+
+升级换包时，同步只回收本包声明集合内的行（技能、频道、团队、连接器服务行），管理员手工添加的
+连接器与授予不受影响。
+
 ## 6. 备份、恢复与升级
 
 至少备份数据库、两个同卷口令文件、workspace、profiles，以及原有 KEY_ENCRYPTION_KEY 和登录 secret。
@@ -219,6 +246,126 @@ PowerShell 通过管道重定向二进制可能改变内容；使用 `docker exe
 Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
 内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
 一旦有 schema 迁移，回滚镜像不一定足够，必要时恢复备份；不要把只回滚代码当成数据库回滚。
+
+### 6.1 群组合一升级须知
+
+这一版把「群组」和「群聊」合成一个：侧边栏只剩「群组」，群组里可以直接聊天。已有数据由开机任务自动转换。
+
+1. **迁移自动执行**：0206、0207、0211、0212 随新镜像应用。内嵌库每次启动自动跑迁移；外接库照第 4 节先用新 digest 跑迁移，再重建 API 容器。
+2. **先备份**，照本节上面的做法。升级后首次启动，服务端日志里会出现一行 `{"type":"waker-group-upgrade",…}` 汇总，记下转换（`converted`）和补挂（`backfilled`）的数量。
+   - 开机任务在后台执行，不挡健康检查；多副本时只有一个副本真正执行；已经处理过的不再重做。
+   - 单项失败记一行 `waker-group-upgrade-item-failed`（附群组或频道 id 和原因），其余项照常处理。
+3. **推迟转换**：在 env 文件里设 `XIONGBAO_GROUP_UPGRADE=off` 再启动，开机任务整个跳过（默认开）。之后去掉这一行再重启即可。
+4. **用户能看到的变化**：
+   - 侧边栏「群组」里，原来的群聊和群组合成一个列表。
+   - 原来有 2–20 位员工的群组变成可以聊天的群组，名字、员工、顺序、头像、流程都不变。转出来的聊天是空的，会一次性出现在「会话」列表顶部。
+   - 所有者已经用不了的员工不算在内。剩下不足 2 位的标「待补成员」，超过 20 位的标「待调整成员（超过 20 位）」，这两种群组的成员名单都不改动；补够或减到 2–20 位后自动开始聊天。转换出来的群组里，所有者用不了的员工不进聊天，群组自己的成员名单不变。所有者已被停用或没有任何角色的群组不转换（`no_owner`）。
+   - 原来有 2 位以上员工的群聊各补挂一个群组。没有任何人类成员的老共享群聊没有人可以接手，补挂时会被软删，并记一行 `waker-group-upgrade-chat-dropped`；回滚手册不还原它。所有者已有同名群组时，补挂的名字加「（2）」。
+   - 同名的老群聊和转出来的群组会同时存在，不自动合并，可以自行解散其中一个。
+   - 装包带来的频道（`package_id` 非空，如专家团队）不是群组：不挂群组，也不补建。
+   - 已经停用的人会离开他所在的共享群组，他创建的群组连同头像、流程、运行记录、看板任务卡交给群里最早加入的在籍成员。之后再停用的人也一样，账号恢复后不还，要重新邀请。
+5. **0207 建三个索引**：`channel_memberships (user_id)`、`channels (created_by)`（共享群）、`users (lower(email))`。建索引期间这三张表的写入会短暂等待。表很大的外接库，可以在升级前先用 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` 以同样的名字建好，0207 会跳过。
+6. **旧链接**照旧可用：`/bots?tab=groups` 打开「我建的群组」；`/wakers?tab=groups` 仍带到这里；`/group/new` 打开「新建群组」；`/group/<id>`、`/pipelines`、`/tasks?crew=…`、`/tasks?group=…` 不变。
+7. **0207 的停用触发器换回旧镜像后仍然有效。** 它是数据库对象，不随代码回退。停用照样会把人移出他所在的所有共享群，照样把他创建的群组连同流程、运行记录、看板卡移交给最早的在籍成员，旧代码对此一无所知；移交没有数据回滚手段。回滚期间要停掉它，按第 6.2 节第一步执行。
+8. **回滚**：换回上一版 digest 即可让代码回退，见第 6.2 节。需要撤销自动转换的，按第 6.2 节第二步执行，或者恢复备份。
+9. **设备端**：不涉及，设备端不读写群组。
+
+### 6.2 群组合一回滚手册
+
+**代码回退**：换回上一版 digest（第 7 节）。0206、0207、0211 都是新增，旧代码不读新列、新表、新函数，留在库里无害。0212 只收紧台账表的列权限，不需要数据回滚：换回不含 0211、0212 的镜像后，台账表和它的权限留在库里，无害。唯一的例外是 0207 的停用触发器，见第一步。
+
+以下语句都用迁移属主账号执行（应用账号没有权限）。单容器内嵌库这样进入：
+
+```bash
+docker exec -it xiongbao-local sh -c \
+  'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url"'
+```
+
+外接库用第 4 节 `.env.migration` 里的 owner 串连接。
+
+**第一步：停用 0207 的停用触发器。** 这一步单独做，与第二步的数据回滚无关，换回旧镜像时就做。下面这段先自动核对这张表上只有 0207 建的那一个触发器，多出别的就报错停下，不会停用任何东西；核对通过才停用：
+
+```sql
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'public.revoked_access'::regclass AND NOT tgisinternal) <> 1 THEN
+    RAISE EXCEPTION 'public.revoked_access 上的用户触发器不是恰好一个，先查清楚再停用';
+  END IF;
+  EXECUTE 'ALTER TABLE public.revoked_access DISABLE TRIGGER USER';
+END
+$$;
+```
+
+- 停用期间，被停用的人不再离开共享群，他创建的群也不移交，回到 0207 之前的行为。
+- 之后重新升级到含 0207 的版本时，迁移不会重跑，要由属主手动恢复：先把上面那段 `DO` 里的 `DISABLE` 换成 `ENABLE` 执行一次（同样先核对只有一个触发器），再把 0207 迁移文件（镜像内 `/app/server/recovery/recovery-20261018-v1/sql/0207_team_channel_hand_over.sql`）最后一段 `DO $$ … $$` 原样执行一次。这一段对每个已停用的人补做一次离开与移交，可以重复执行，用来补上停用期间停用的人。
+
+**第二步：撤销自动转换（需要时才做）。** 整段原样执行，它自己开、关事务：
+
+- 开头那条查询列出**已经被移交过的转换群组**：群组 id、原所有者、现所有者、频道 id。这些不回滚，把输出存档。
+- 后面在同一个事务里做三件事：
+  1. 软删转换出来、至今没人用过的聊天，并把转换时被筛掉的员工补回群组的成员名单（接在现有成员后面）。
+  2. 删除补挂出来、至今没人用过的群组。老群聊随之解挂，聊天本身不动。
+  3. 清空台账。
+
+<!-- group-upgrade-rollback:start -->
+```sql
+BEGIN;
+SELECT set_config('app.tenant_id', 'platform', true);
+
+-- 已经被移交过的转换群组：不回滚，只记录。把这条查询的输出存档。
+SELECT l.group_id, l.original_owner, g.tenant_id AS current_owner, l.channel_id
+  FROM waker_group_upgrades l
+  JOIN waker_groups g ON g.id = l.group_id
+ WHERE l.outcome = 'converted' AND g.tenant_id <> l.original_owner
+ ORDER BY l.group_id;
+
+-- 1. 转换出来的聊天：台账记的频道仍未删除、仍挂着这个群组、没有任何消息，群组也没被移交过。
+--    软删它，并把被筛掉的员工补回成员名单。
+WITH undone AS (
+  UPDATE channels c SET deleted_at = now(), updated_at = now()
+    FROM waker_group_upgrades l
+    JOIN waker_groups g ON g.id = l.group_id
+   WHERE l.outcome = 'converted'
+     AND c.id = l.channel_id
+     AND c.deleted_at IS NULL
+     AND c.waker_group_id = l.group_id
+     AND g.tenant_id = l.original_owner
+     AND NOT EXISTS (SELECT 1 FROM group_messages m WHERE m.channel_id = c.id)
+  RETURNING l.group_id, l.dropped_agent_ids
+)
+INSERT INTO waker_group_members (group_id, agent_id, position)
+SELECT u.group_id, d.agent_id,
+       ((SELECT coalesce(max(CASE WHEN p.position ~ '^[0-9]{1,9}$' THEN p.position::int END), -1)
+           FROM waker_group_members p WHERE p.group_id = u.group_id) + d.n)::text
+  FROM undone u
+ CROSS JOIN LATERAL unnest(u.dropped_agent_ids) WITH ORDINALITY AS d(agent_id, n)
+ON CONFLICT (group_id, agent_id) DO NOTHING;
+
+-- 2. 补挂出来的群组：没有组团流程模板、没有头像、也没有任何运行记录。删除它，老群聊随外键解挂。
+DELETE FROM waker_groups g
+ USING waker_group_upgrades l
+ WHERE l.group_id = g.id
+   AND l.outcome = 'backfilled'
+   AND NOT EXISTS (SELECT 1 FROM group_task_templates t WHERE t.group_id = g.id)
+   AND NOT EXISTS (SELECT 1 FROM portraits p WHERE p.subject_kind = 'group' AND p.subject_id = g.id::text)
+   AND NOT EXISTS (SELECT 1 FROM group_task_runs r WHERE r.group_id = g.id);
+
+-- 3. 清空台账。
+DELETE FROM waker_group_upgrades;
+COMMIT;
+```
+<!-- group-upgrade-rollback:end -->
+
+不回滚的情况和原因：
+
+- **有消息或已经被用过的不回滚**：转换出来的聊天有了消息，补挂的群组有了流程模板、头像或运行记录，都说明用户已经在用，回滚会丢掉他的东西。删模板会保留运行记录（运行的模板 id 置空），删群组却会连运行记录一起删，所以第 2 步单独查运行记录，「没有模板」不等于「没用过」。
+- **已经被移交过的转换群组不回滚，只由开头的查询记录**：群组现在的所有者不是台账上的原所有者。这种群组的聊天即使没有消息，软删之后群组也会留在接手人名下，原所有者再也找不回它。
+- **台账记的聊天已经删除、不再挂着这个群组，或者台账没记聊天的，第 1 步都跳过**：转换途中用户自己给群组开了聊天时，群组挂着用户的聊天，台账记的是转换建的那个（已软删或留着）或者空，用户的聊天不能当成转换建的删掉。
+- 第 2、3 步对被移交过的群组照常判断：按群组 id 查模板、头像、运行记录，不看所有者。
+- 未完成的转换（台账 `started`）和保留为群组的（`pending_members`、`too_many`、`no_owner`）只清台账，群组和聊天都不动。
+- 回滚之后再升级：第 1 步软删的聊天仍挂着原群组，开机任务不会再转换这些群组，它们显示为「未开始聊天」，用户可以自己开始聊天；第 2 步删掉群组的老群聊会被重新补挂。
+
+全量回退仍然是恢复备份（本节开头）。
 
 ## 7. 版本固定与来源校验
 

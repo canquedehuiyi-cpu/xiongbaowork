@@ -416,7 +416,7 @@ test("group members can be reordered before confirming", async () => {
 
   await view.findByText("已建好群聊。");
   expect(
-    view.getByRole("link", { name: "打开群聊" }).getAttribute("href"),
+    view.getByRole("link", { name: "打开群组" }).getAttribute("href"),
   ).toBe("/group/c1");
   const patch = proposalCalls().find((call) => call.method === "PATCH");
   expect(patch?.body).toEqual({

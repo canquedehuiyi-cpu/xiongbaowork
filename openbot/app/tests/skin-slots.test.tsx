@@ -264,7 +264,7 @@ function conversationRoutes(path: string) {
 
 test.each([
   ["a conversation with one Bot", "/channel/c-1", "会话"],
-  ["a group conversation", "/group/g-1", "群聊"],
+  ["a group conversation", "/group/g-1", "群组"],
   ["a new conversation", "/channel/new", "发给："],
 ])("%s has its conversation header", async (_name, path, heading) => {
   const view = conversationRoutes(path);

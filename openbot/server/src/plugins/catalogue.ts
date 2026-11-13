@@ -1740,7 +1740,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       return companyName();
     },
     summary:
-      "员工替本人起草新员工、员工改动和群聊的提议；本人在卡片上确认之后，才以本人的身份执行。",
+      "员工替本人起草新员工、员工改动和群组的提议；本人在卡片上确认之后，才以本人的身份执行。",
     /*
      * 和 Routines 一样是本部署自己的代码，没有要拨的主机、没有凭据。仍然放进目录，因为哪位员工能替人起草
      * 招人提议，是管理员与主人要像授予应用一样明确授予的能力（授予写成 `staffing/<工具名>`）。

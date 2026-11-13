@@ -9,6 +9,7 @@ import {
   IconSearch,
   IconTrash,
   IconUsersGroup,
+  IconUsersMinus,
 } from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
@@ -19,8 +20,13 @@ import {
   pinnedFirst,
 } from "@/components/app-sidebar/app-sidebar";
 import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
+import {
+  DissolveRowDialog,
+  useRowDanger,
+} from "@/components/app-sidebar/row-danger";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
+import { LeaveGroupDialog } from "@/components/channels/leave-group-dialog";
 import { navigationRender } from "@/components/layout/navigation-target";
 import { Item, ItemContent, ItemTitle } from "@/components/ui/item";
 import { agentListQueryOptions } from "@/lib/agents/queries";
@@ -93,7 +99,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           <h2 className={museText.heading}>对话</h2>
           <MuseLinkButton
             icon={IconUsersGroup}
-            render={<Link onClick={onClose} to="/channel/new" />}
+            render={<Link onClick={onClose} to="/group/new" />}
             small
           >
             新建群组
@@ -199,7 +205,15 @@ function ConversationRow({
   });
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
+  const [dissolving, setDissolving] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const group = channel.agentIds.length > 1;
+  // The same decision as the main sidebar's row menu: dissolve my group, leave one that is not mine.
+  const danger = useRowDanger({
+    canRename: channel.canRename ?? false,
+    channelId: channel.id,
+    group,
+  });
   const unread = isUnread(channel, openId);
   const busy = channel.busy || (channel.work?.length ?? 0) > 0;
   const title = channel.summary?.trim() || untitledLine(channel) || "新对话";
@@ -281,11 +295,50 @@ function ConversationRow({
         >
           {channel.pinned ? "取消置顶" : "置顶"}
         </MuseButton>
-        <MuseButton icon={IconTrash} onClick={() => setConfirming(true)} small>
-          删除
-        </MuseButton>
+        {danger.kind === "pending" ? (
+          <MuseButton disabled small>
+            正在读取…
+          </MuseButton>
+        ) : danger.kind === "dissolve" ? (
+          <MuseButton
+            icon={IconUsersMinus}
+            onClick={() => setDissolving(danger.groupId)}
+            small
+          >
+            解散群组…
+          </MuseButton>
+        ) : danger.kind === "leave" ? (
+          <MuseButton icon={IconLogout} onClick={() => setLeaving(true)} small>
+            退出群组…
+          </MuseButton>
+        ) : (
+          <MuseButton
+            icon={IconTrash}
+            onClick={() => setConfirming(true)}
+            small
+          >
+            删除
+          </MuseButton>
+        )}
       </div>
       <ErrorNotice error={setPinned.error?.message} />
+      {dissolving ? (
+        <DissolveRowDialog
+          fallbackName={channel.name}
+          groupId={dissolving}
+          onDissolved={
+            channel.id === openId ? () => navigate({ to: "/" }) : undefined
+          }
+          onOpenChange={(next) => setDissolving(next ? dissolving : null)}
+        />
+      ) : null}
+      <LeaveGroupDialog
+        channelId={channel.id}
+        leave={channel.id === openId ? () => navigate({ to: "/" }) : undefined}
+        name={channel.name}
+        onOpenChange={setLeaving}
+        open={leaving}
+      />
       <DeleteConversationDialog
         channelId={channel.id}
         leave={channel.id === openId ? () => navigate({ to: "/" }) : undefined}

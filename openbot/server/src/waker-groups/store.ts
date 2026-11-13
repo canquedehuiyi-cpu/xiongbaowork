@@ -48,7 +48,7 @@ export type WakerGroupStore = {
 
 export class WakerGroupNameError extends Error {
   constructor() {
-    super("Give the group a name between 1 and 80 characters.");
+    super("群组名称不能为空，最多 80 个字。");
     this.name = "WakerGroupNameError";
   }
 }
@@ -63,7 +63,7 @@ export class WakerGroupMemberError extends Error {
 
 export class WakerGroupNameTakenError extends Error {
   constructor() {
-    super("This workspace already has a group by that name.");
+    super("已经有同名的群组了，换个名字吧。");
     this.name = "WakerGroupNameTakenError";
   }
 }

@@ -14,6 +14,7 @@ export function ChannelItemContent({
   unread = false,
   pinned = false,
   revealing = false,
+  groupId,
 }: {
   participantIds: string[];
   name: string;
@@ -25,6 +26,7 @@ export function ChannelItemContent({
   unread?: boolean;
   pinned?: boolean;
   revealing?: boolean;
+  groupId?: string;
 }) {
   const primaryText = `text-sm leading-5 tracking-[-1%] ${unread ? "font-semibold" : "font-medium"}`;
   const secondaryText = "text-[12px] leading-4 text-muted-foreground";
@@ -33,6 +35,7 @@ export function ChannelItemContent({
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <div className="shrink-0">
         <ChannelAvatar
+          groupId={groupId}
           participantIds={participantIds}
           size={32}
           typing={busy}

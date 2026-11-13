@@ -12,6 +12,7 @@ import {
 import { saveConversationModel } from "@/lib/models/mutations";
 import type { ConversationModel } from "@/lib/models/queries";
 import { newId } from "@/lib/new-id";
+import { retireCrewMutationOptions } from "@/lib/waker-groups/mutations";
 import {
   createChannelMutationOptions,
   deleteChannelMutationOptions,
@@ -52,23 +53,28 @@ export async function startWithChosen(input: {
  * opened when the group could not be made.
  *
  * A group exists to hold that first message, so one whose message did not send is discarded rather
- * than left in everybody's roster as an empty conversation. The send's own error is what the caller
+ * than left in everybody's roster as an empty conversation. A group with a `wakerGroupId` is
+ * dissolved through the group (which takes its chat with it); one without is just a channel. The send's own error is what the caller
  * sees (the composer keeps the draft for another try); a failed discard is swallowed, because the
  * person's problem is the message, and an empty group is the lesser leftover.
  */
 export async function startGroupWith(input: {
   agentIds: string[];
   text: string;
-  create: (agentIds: string[]) => Promise<{ id: string }>;
+  create: (
+    agentIds: string[],
+  ) => Promise<{ id: string; wakerGroupId?: string }>;
   send: (channelId: string, text: string) => Promise<void>;
-  discard: (channelId: string) => Promise<void>;
+  discard: (group: { id: string; wakerGroupId?: string }) => Promise<void>;
   open: (channelId: string) => Promise<void>;
 }): Promise<void> {
   const group = await input.create(input.agentIds);
   try {
     await input.send(group.id, input.text);
   } catch (error) {
-    await input.discard(group.id).catch(() => undefined);
+    await input
+      .discard({ id: group.id, wakerGroupId: group.wakerGroupId })
+      .catch(() => undefined);
     throw error;
   }
   await input.open(group.id);
@@ -124,6 +130,7 @@ export function useStartChannel() {
   const createChannel = useMutation(createChannelMutationOptions(queryClient));
   const createGroup = useMutation(createGroupMutationOptions(queryClient));
   const deleteChannel = useMutation(deleteChannelMutationOptions(queryClient));
+  const retireCrew = useMutation(retireCrewMutationOptions(queryClient));
   const discardFailedStart = useMutation(
     deleteChannelMutationOptions(queryClient, true),
   );
@@ -184,8 +191,10 @@ export function useStartChannel() {
           queryClient,
           sendGroupMessageMutationOptions(queryClient, channelId),
         ).mutate({ id: newId(), text: message, agentId }),
-      discard: async (channelId) => {
-        await deleteChannel.mutateAsync(channelId);
+      discard: async (group) => {
+        if (group.wakerGroupId)
+          await retireCrew.mutateAsync(group.wakerGroupId);
+        else await deleteChannel.mutateAsync(group.id);
       },
       open: (channelId) =>
         navigate({

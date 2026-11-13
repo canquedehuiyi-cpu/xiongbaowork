@@ -565,6 +565,7 @@ tests/policy-fanout.integration.test.ts
 tests/policy-rule-check.test.ts
 tests/policy-store-tenant.integration.test.ts
 tests/policy-translate.test.ts
+tests/port-l0-endtoend.integration.test.ts
 tests/portrait-coworker-access.test.ts
 tests/portrait-image.test.ts
 tests/portrait-media.test.ts
@@ -834,6 +835,7 @@ tests/waker-group-channel-link-migration.integration.test.ts
 tests/waker-group-channel-link.integration.test.ts
 tests/waker-group-hand-over-sql-ascii.integration.test.ts
 tests/waker-group-hand-over.integration.test.ts
+tests/waker-group-upgrade.integration.test.ts
 tests/waker-groups.test.ts
 tests/wakerflow-action-step.integration.test.ts
 tests/wakerflow-confirm-step.integration.test.ts

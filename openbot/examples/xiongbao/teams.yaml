@@ -39,7 +39,7 @@ teams:
           - gstack-investigator
   - id: humanize-ppt-team
     name: 卡尔的人感PPT专家团
-    description: "Humanize PPT WorkBuddy Team Agent: AST outline first, then one Skill per Agent for HTML PPT generation, video/motion, presenter mode, deploy/export, and QA."
+    description: "Humanize PPT Team Agent: AST outline first, then one Skill per Agent for HTML PPT generation, video/motion, presenter mode, deploy/export, and QA."
     channel: humanize-ppt-team
     lead: humanize-ppt-team-lead
     members:

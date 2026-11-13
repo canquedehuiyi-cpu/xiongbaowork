@@ -102,6 +102,7 @@ import { createRequireUser, createRoleRepository } from "./auth/guards";
 import { createIdentityProviderStore } from "./auth/identity-provider-store";
 import { createOrganizationAuth } from "./auth/organization";
 import { organizationUserStore } from "./auth/organization-store";
+import { createRoleOf } from "./auth/role-of";
 import {
   checkDatabaseCredential,
   checkServerReadiness,
@@ -520,6 +521,10 @@ import {
 import { createWakerGroupActions } from "./waker-groups/linked-actions";
 import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
+import {
+  createConversionClaims,
+  startGroupUpgrade,
+} from "./waker-groups/upgrade";
 import { createFlowGenerator } from "./wakerflows/generator";
 import { createFlowModelResolver } from "./wakerflows/model";
 import { recoverInterruptedFlowRuns } from "./wakerflows/recovery";
@@ -2931,19 +2936,18 @@ await startupLifecycle.run(async (startup) => {
    * sitting in front of them in chat. This asks the same repository the request path asks, so a routine
    * sees exactly the coworkers its owner sees.
    */
+  /** Who acts in which role with nobody at the keyboard; `actorFor` and the group upgrade both ask it. */
+  const roleOf = createRoleOf({
+    singleUser: config.singleUser,
+    roles: roleRepository,
+  });
   const actorFor = async (ownerUserId: string): Promise<AgentActor> => {
-    // One person, and they are an administrator. The id stays the routine owner's rather than being
-    // rewritten to DEV_ACTOR's: in this mode they are the same person, and if they ever were not,
-    // silently borrowing the dev actor's identity would be worse than finding nothing.
-    if (config.singleUser) return { id: ownerUserId, role: DEV_ACTOR.role };
-    const roles = await roleRepository.rolesForUser(ownerUserId);
-    if (!roles.includes("admin") && !roles.includes("user")) {
-      throw new Error("A routine requires an authorized owner.");
-    }
-    return {
-      id: ownerUserId,
-      role: roles.includes("admin") ? "admin" : "user",
-    };
+    // One person, and they are an administrator (`roleOf`). The id stays the routine owner's rather
+    // than being rewritten to DEV_ACTOR's: in this mode they are the same person, and if they ever
+    // were not, silently borrowing the dev actor's identity would be worse than finding nothing.
+    const role = await roleOf(ownerUserId);
+    if (!role) throw new Error("A routine requires an authorized owner.");
+    return { id: ownerUserId, role };
   };
 
   /*
@@ -4253,6 +4257,24 @@ await startupLifecycle.run(async (startup) => {
       }, 1_000),
     (resource) => resource.stop(),
   );
+  /*
+   * 群组与群聊合一的开机升级（设计稿 group-unify 第 5 节）：在后台把已有群组转成群聊、给已有群聊补群组、自愈已挂接
+   * 的镜像，不挡健康检查。一个副本跑（咨询锁），`XIONGBAO_GROUP_UPGRADE=off` 跳过。员工能不能用，与群聊服务的
+   * `canUseBot` 同一个判断；一个角色都没有的所有者 `actorFor` 会拒绝，先问 `hasRole`，记 `no_owner`。
+   */
+  startup.acquireSync(
+    () =>
+      startGroupUpgrade({
+        database,
+        databaseUrl: config.databaseUrl,
+        groups: baseGroupConversations,
+        link: wakerGroupLink,
+        canUse: canUseGroupBot,
+        // The same answer `actorFor` acts on: no role is `no_owner`, not a failure every boot.
+        hasRole: async (userId) => (await roleOf(userId)) !== null,
+      }),
+    (task) => task.stop(),
+  );
 
   /*
    * 「招聘与组群」：员工替本人起草提议的工具，与 Routines 一样是按模块解析的内置传输，所以依赖在这里交一次。
@@ -5263,6 +5285,12 @@ await startupLifecycle.run(async (startup) => {
         actorFor,
         // The groups service's own `canUseBot`.
         canUse: canUseGroupBot,
+        // A chat an unfinished upgrade conversion holds is finished with the original crew (5.4).
+        conversions: createConversionClaims({
+          database,
+          link: wakerGroupLink,
+          groupStore: baseGroupConversations.store,
+        }),
         // Dissolving hides the chat: the same `channel.deleted` row as DELETE /api/channels/:id.
         auditStore: bootAuditStore,
       }),
