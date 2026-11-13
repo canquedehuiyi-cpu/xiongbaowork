@@ -249,6 +249,10 @@ describe("migration 0205: a conversation links to a crew", () => {
     expect(await outcome(() => linkAs(bob.id, channelId, bobsCrew))).toBe(
       "42501",
     );
+    // Refused by the link trigger (it fires before the guard): Bob's crew is not the owner's.
+    expect(await refusal(() => linkAs(bob.id, channelId, bobsCrew))).toContain(
+      "a conversation links only to a crew of its owner",
+    );
     expect(await linkOf(channelId)).toBeNull();
 
     await linkAs(alice.id, channelId, alicesCrew);
@@ -280,6 +284,32 @@ describe("migration 0205: a conversation links to a crew", () => {
       "42501",
     );
     expect(await linkOf(channelId)).toBeNull();
+  });
+
+  test("a new channel cannot be written already linked to another tenant's crew", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const bobsCrew = await crew(bob, "Bob");
+    const insertAs = (channelId: string, tenant: string) => {
+      createdChannels.push(channelId);
+      return runAsTenant(alice.id, () =>
+        database.execute(
+          sql`insert into channels (id, name, description, tenant_id, waker_group_id) values (${channelId}, 'Linked', '', ${tenant}, ${bobsCrew}::uuid)`,
+        ),
+      );
+    };
+    const exists = async (channelId: string) => {
+      const rows = (await runAsTenant("platform", () =>
+        database.execute(sql`select 1 from channels where id = ${channelId}`),
+      )) as unknown as unknown[];
+      return rows.length > 0;
+    };
+
+    for (const tenant of [alice.id, "team"]) {
+      const channelId = `${prefix}-insert-${randomUUID()}`;
+      expect(await outcome(() => insertAs(channelId, tenant))).toBe("42501");
+      expect(await exists(channelId)).toBe(false);
+    }
   });
 
   test("a WakerFlow's internal crew cannot be linked", async () => {

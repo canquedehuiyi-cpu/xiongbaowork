@@ -471,7 +471,9 @@ describe("the catalogue (I1–I4, I8)", () => {
              p.prorettype::regtype::text as "returns"
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public'
-        and (p.proname like 'openbot\\_team\\_%' or p.proname like 'openbot\\_flow\\_share\\_%')
+        and (p.proname like 'openbot\\_team\\_%' or p.proname like 'openbot\\_flow\\_share\\_%'
+             -- 0205: the crew link's two functions sit beside the shared-group guard.
+             or p.proname in ('openbot_waker_group_absent', 'openbot_channel_waker_group_link'))
       order by 1
     `);
     expect(functions.length).toBeGreaterThan(0);
@@ -504,8 +506,20 @@ describe("the catalogue (I1–I4, I8)", () => {
         "openbot_team_server_secret",
         // WF9 (0141): what a share link may become in a frame that is not its owner's.
         "openbot_flow_share_guard",
+        // 0205: whether a linked crew is gone (read past row security), and the link check.
+        "openbot_waker_group_absent",
+        "openbot_channel_waker_group_link",
       ]),
     );
+    /*
+     * 0205's link check reads the crew through the writer's own row security on purpose (a crew the
+     * frame cannot see is not the owner's), so it must never become SECURITY DEFINER; the guard's
+     * "is the crew gone" question must read past it, or a member could unlink a crew they cannot see.
+     */
+    const definer = (name: string) =>
+      functions.find((fn) => fn.name === name)?.definer;
+    expect(definer("openbot_channel_waker_group_link")).toBe(false);
+    expect(definer("openbot_waker_group_absent")).toBe(true);
   });
 
   test("(f) the share link guard is a BEFORE UPDATE row trigger on flow_share_links, and only there", async () => {
