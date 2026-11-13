@@ -3,6 +3,8 @@
  * what is to happen to it (plan), and for a compatibility alias, the release window it lives in.
  */
 
+import { BRAND } from "./scan";
+
 export const CATEGORIES = [
   "legacy-compat",
   "persisted-data",
@@ -56,6 +58,9 @@ const compare = (a: string, b: string): number => {
 export function entryProblems(entry: AllowEntry): string[] {
   const where = `${entry.file}: ${entry.text}`;
   const problems: string[] = [];
+  if (entry.text === "") problems.push(`${entry.file}: text is empty`);
+  else if (!BRAND.test(entry.text))
+    problems.push(`${where}: text must itself carry a brand word`);
   const allowed = PLANS[entry.category];
   if (!allowed) {
     problems.push(

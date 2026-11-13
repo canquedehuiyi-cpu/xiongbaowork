@@ -7,7 +7,13 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AllowEntry, Category } from "./allowlist";
 import type { BudgetRow } from "./budget";
-import { readSyncPoint, upstreamReader } from "./new-lines";
+import {
+  readSyncPoint,
+  type SyncPoint,
+  scratchGit,
+  upstreamReader,
+  verifySyncPoint,
+} from "./new-lines";
 import { REPO } from "./scan";
 
 export type ArtifactEntryKey = string; // `word` or `prefix:<prefix>`
@@ -43,6 +49,8 @@ export const WORD_LISTS = [
   "deb.json",
 ];
 
+const trimmed = (text: string) =>
+  text.replace(/^[\s"'`,;:()[\]{}]+|[\s"'`,;:()[\]{}]+$/g, "");
 const key = (r: BudgetRow) => `${r.rule}/${r.scope}`;
 const same = (a: AllowEntry, b: AllowEntry) =>
   a.file === b.file && a.text === b.text;
@@ -64,7 +72,10 @@ export function ratchetProblems(input: RatchetInput): string[] {
       problems.push(`白名单条数增加：${base.length} -> ${head.length}`);
     for (const entry of head) {
       if (
-        !base.some((b) => b.text === entry.text || b.text.includes(entry.text))
+        !base.some(
+          (b) =>
+            b.text === entry.text || trimmed(b.text) === trimmed(entry.text),
+        )
       )
         problems.push(
           `白名单条目的 text 在 base 里没有：${entry.file}: ${entry.text}`,
@@ -132,7 +143,11 @@ export function ratchetBase(base: string, head: string): string {
     .split("\n")
     .filter(Boolean)
     .pop();
-  return added ? `${added}^` : head;
+  if (!added)
+    throw new Error(
+      `cannot find the commit that introduces ${path} between ${base} and ${head}; the ratchet has no baseline to compare with`,
+    );
+  return `${added}^`;
 }
 
 const WORDS_DIR = "app/tests/brand-artifacts";
@@ -164,7 +179,12 @@ export function loadRatchetInput(base: string): RatchetInput {
     undefined,
   );
   // No sync file at base: the file is being introduced, which is not a sync.
-  const syncPr = baseSync !== undefined && baseSync.commit !== sync.commit;
+  const baseSyncPoint =
+    baseSync?.commit === undefined
+      ? undefined
+      : json<SyncPoint>(show(base, "upstream-sync.json"), sync);
+  const syncGit = scratchGit();
+  const syncPr = verifySyncPoint(baseSyncPoint, sync, syncGit);
   let upstream: ((file: string) => string | undefined) | undefined;
   return {
     base: json(show(base, "app/tests/brand-leak-allowlist.json"), []),
@@ -177,7 +197,7 @@ export function loadRatchetInput(base: string): RatchetInput {
     headWords,
     syncPr,
     inUpstream: (entry) => {
-      upstream ??= upstreamReader(sync);
+      upstream ??= upstreamReader(sync, syncGit);
       return upstream(entry.file)?.includes(entry.text) ?? false;
     },
   };
