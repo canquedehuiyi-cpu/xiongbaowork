@@ -1,5 +1,11 @@
 #!/usr/bin/env bun
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 /**
  * `bun run port:capabilities` — converts the WorkBuddy capabilities installed on this machine into the
  * fragments an openbot tenant package needs, plus the two reports a reviewer signs off on.
@@ -44,7 +50,11 @@ import {
   buildManifest,
   validateManifest,
 } from "./manifest";
-import { CONNECTOR_ALLOWLIST, type RunnableLevel } from "./mapping";
+import {
+  auditRulesSha256,
+  CONNECTOR_ALLOWLIST,
+  type RunnableLevel,
+} from "./mapping";
 import { normalizeCapabilities } from "./normalize";
 import {
   readConnectorIndex,
@@ -446,11 +456,110 @@ function readConnectors(filePath: string, problems: VerifyProblem[]): string[] {
 }
 
 /**
+ * Read the `agents/` directory beside `agents.yaml` (the PackageAgentFile convention P2 uses) and
+ * return the ids and skill grants declared there.
+ *
+ * A file may hold one coworker on its own or a list under `agents:`; only `.yaml`/`.yml` are read,
+ * sorted by filename so a refusal names the same file on every machine. Absent directory is a
+ * package that keeps every coworker in `agents.yaml`.
+ */
+function readAgentDirectory(
+  outDir: string,
+  problems: VerifyProblem[],
+): { ids: string[]; skills: string[] } {
+  const directory = join(outDir, "agents");
+  if (!existsSync(directory)) {
+    return { ids: [], skills: [] };
+  }
+  const ids: string[] = [];
+  const skills: string[] = [];
+  const filenames = readdirSync(directory)
+    .filter((entry) => entry.endsWith(".yaml") || entry.endsWith(".yml"))
+    .sort();
+  for (const filename of filenames) {
+    const source = `agents/${filename}`;
+    const doc = asRecord(
+      parseYaml(readFileSync(join(directory, filename), "utf8")),
+    );
+    const rows = doc.agents === undefined ? [doc] : asRecordList(doc.agents);
+    for (const row of rows) {
+      const id = typeof row.id === "string" ? row.id : "";
+      if (id === "") {
+        problems.push({ file: source, detail: "存在没有 id 的 agent" });
+        continue;
+      }
+      ids.push(id);
+      if (
+        typeof row.system_prompt !== "string" ||
+        row.system_prompt.trim() === ""
+      ) {
+        problems.push({ file: source, detail: `${id} 的 system_prompt 为空` });
+      }
+      for (const skill of Array.isArray(row.skills) ? row.skills : []) {
+        skills.push(String(skill));
+      }
+    }
+  }
+  return { ids, skills };
+}
+
+/**
+ * The §6.4.1 stamp: `capability-manifest.yaml`'s first line and `tool-ref-audit.md`'s header must
+ * both carry the same `audit_rules_sha256`.
+ *
+ * Both checks read RAW TEXT — `parseYaml` drops comments, so a parsed check would silently pass a
+ * file whose stamp was stripped by a formatter. The manifest's check anchors to the first line
+ * (fail-closed: optional metadata equals no metadata), the report's to its own header line. A BOM
+ * is stripped first; the sources already have that precedent.
+ */
+function verifyAuditRulesStamps(
+  outDir: string,
+  problems: VerifyProblem[],
+): void {
+  const expected = auditRulesSha256();
+  const manifestRaw = readFileSync(
+    join(outDir, "capability-manifest.yaml"),
+    "utf8",
+  ).replace(/^\uFEFF/, "");
+  const manifestFirstLine = manifestRaw.split(/\r?\n/, 1)[0] ?? "";
+  const manifestMatch = /^# audit_rules_sha256: ([0-9a-f]{64})/.exec(
+    manifestFirstLine,
+  );
+  if (!manifestMatch) {
+    problems.push({
+      file: "capability-manifest.yaml",
+      detail: "首行缺少 audit_rules_sha256 注释（可选的元数据等于没有元数据）",
+    });
+  } else if (manifestMatch[1] !== expected) {
+    problems.push({
+      file: "capability-manifest.yaml",
+      detail: `首行 audit_rules_sha256 ${manifestMatch[1]} 与当前规则集 ${expected} 不一致`,
+    });
+  }
+  const auditRaw = readFileSync(
+    join(outDir, "tool-ref-audit.md"),
+    "utf8",
+  ).replace(/^\uFEFF/, "");
+  const auditMatch = /^audit_rules_sha256: ([0-9a-f]{64})$/m.exec(auditRaw);
+  if (!auditMatch) {
+    problems.push({
+      file: "tool-ref-audit.md",
+      detail: "头部缺少 audit_rules_sha256 行",
+    });
+  } else if (auditMatch[1] !== expected) {
+    problems.push({
+      file: "tool-ref-audit.md",
+      detail: `头部 audit_rules_sha256 ${auditMatch[1]} 与当前规则集 ${expected} 不一致`,
+    });
+  }
+}
+
+/**
  * Re-read an emitted directory and check it against the contract.
  *
  * Checks the things a schema cannot: that an agent's skill grants resolve, that a team's members exist,
- * that a connector's host matches its url, and that the manifest row count equals what the four lists
- * actually contain.
+ * that a connector's host matches its url, that the manifest row count equals what the four lists
+ * actually contain, and that the audit-rule stamps (§6.4.1) survive in both files that carry them.
  */
 export function verifyOutDir(outDir: string): VerifyProblem[] {
   const problems: VerifyProblem[] = [];
@@ -463,16 +572,22 @@ export function verifyOutDir(outDir: string): VerifyProblem[] {
     return problems;
   }
   const agents = readAgents(join(outDir, "agents.yaml"), problems);
+  // Coworkers may also live one per file under `agents/` (P2's package layout); every check below
+  // sees the union, so a team naming a directory-declared agent verifies the same way.
+  const directoryAgents = readAgentDirectory(outDir, problems);
+  const agentIds = [...agents.ids, ...directoryAgents.ids];
+  const agentSkillGrants = [...agents.skills, ...directoryAgents.skills];
   const skills = readSkills(join(outDir, "skills.yaml"), problems);
   const teamCount = readTeams(
     join(outDir, "teams.yaml"),
-    new Set(agents.ids),
+    new Set(agentIds),
     problems,
   );
   const connectorIds = readConnectors(
     join(outDir, "connectors.yaml"),
     problems,
   );
+  verifyAuditRulesStamps(outDir, problems);
 
   // 只要求“三类不全空”：读取端（readWorkBuddy）本来就允许任何一类缺席，只带专家或只带技能的
   // 包是合法产物；三类全空才说明这份输出什么能力都没有，等于什么都没移植。
@@ -489,7 +604,7 @@ export function verifyOutDir(outDir: string): VerifyProblem[] {
   }
 
   const skillSlugs = new Set(skills.slugs);
-  for (const slug of agents.skills) {
+  for (const slug of agentSkillGrants) {
     if (!skillSlugs.has(slug)) {
       problems.push({
         file: "agents.yaml",
@@ -520,7 +635,7 @@ export function verifyOutDir(outDir: string): VerifyProblem[] {
     });
   }
   const expectedRows =
-    agents.ids.length + skills.slugs.length + teamCount + connectorIds.length;
+    agentIds.length + skills.slugs.length + teamCount + connectorIds.length;
   if (manifestRows.length !== expectedRows) {
     problems.push({
       file: "capability-manifest.yaml",
@@ -533,7 +648,7 @@ export function verifyOutDir(outDir: string): VerifyProblem[] {
     kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
   }
   const expectation: [string, number][] = [
-    ["agent", agents.ids.length],
+    ["agent", agentIds.length],
     ["skill", skills.slugs.length],
     ["team", teamCount],
     ["connector", connectorIds.length],
