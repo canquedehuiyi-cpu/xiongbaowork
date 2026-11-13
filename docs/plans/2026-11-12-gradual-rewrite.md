@@ -937,6 +937,25 @@
 | 11 | 扩展提示元素 | `extension/src/content/notice.ts:9` | `extension/tests/content-port.test.ts:482,488` `querySelector("openbot-recorder-notice")` | `xb-recorder-notice` | 19 |
 | 12 | 交付文档、样例、compose 的旧名与仓库地址 | `<根>/README.md`、`docs/deployment-xiongbao.md`、`docker/delivery.env.example`、`docker/compose.delivery.yml` | `scripts/ci/manual-blocks.test.mjs:243-283,312,430-452`（`$OPENBOT_TAG`、`$OPENBOT_IMAGE`、`raw.githubusercontent.com/…`、`.images.openbot.reference`、`gh attestation verify … -R canquedehuiyi-cpu/xiongbaowork`、`image: ${OPENBOT_IMAGE:-`、`IMAGE = "ghcr.io/…"`） | Task 18 列出的新名与自有渠道地址 | 18 |
 | 13 | 默认皮肤 id `openbot` 改为 `xiongbao`（L1-2，Task 7 发现） | `shared/user-preferences.ts`（`SKIN_IDS`、`DEFAULT_SKIN`，经 `DEFAULT_USER_PREFERENCES` 成为服务器应答的默认值）、`server/src/user-preferences.ts`、`server/src/user-preferences-routes.ts`、`app/src/skins/registry.ts:12-21`、`app/index.html:30` | `server/tests/user-preferences-routes.test.ts:58,72,81,140,149,170,214`（GET/PATCH 应答 `toEqual` 含默认 `skin: "openbot"`）；`server/tests/user-preferences.integration.test.ts:53,60,67,76,122,153`（`store.read`/`patch` 的默认 `skin: "openbot"`；「a stored skin this build does not ship reads as the default」`toBe("openbot")`） | 默认值改为 `"xiongbao"`；另加「库里存的 `openbot` 读出为 `xiongbao`」「PATCH `skin: "openbot"` 存为 `xiongbao`」用例；然后落地 Task 7 简报的皮肤部分（`normalizeSkinId`、`skin-compat.test.ts`、白名单皮肤 5 条：4 条删除、1 条缩成 `"openbot"` 进映射） | 19 |
+| 14 | Task 8 发现（原 C1） | `app/src/lib/notifications/show.ts:21`（`conversationTag`） | `app/tests/component-reply-notice.test.tsx:579,592,612,647` `tag: \`openbot-${channel.id}\`` | `xiongbao-${channel.id}` | 19 |
+| 15 | Task 8 发现（原 C2） | `server/src/config.ts:742`（单用户 + 公网地址） | `server/tests/config.test.ts:625,655,672` `toThrow("OPENBOT_SINGLE_USER")` | `toThrow("XIONGBAO_SINGLE_USER")` | 19 |
+| 16 | Task 8 发现（原 C3） | `server/src/auth/dev-actor.ts:158`、`config.ts:1968`（个人版缺单用户） | `server/tests/config.test.ts:1523` `toThrow("OPENBOT_SINGLE_USER=true")` | `XIONGBAO_SINGLE_USER=true` | 19 |
+| 17 | Task 8 发现（原 C4） | `server/src/edition.ts:79` | `server/tests/config.test.ts:1518` `/OPENBOT_EDITION.*"team".*"personal"/` | `/XIONGBAO_EDITION.*…/` | 19 |
+| 18 | Task 8 发现（原 C5） | `server/src/config.ts:1266` | `server/tests/entra-obo-config.test.ts:100` `…里有 OpenBot 自己的 client id` | 新产品名 | 19 |
+| 19 | Task 8 发现（原 C6） | `server/src/config.ts:1476` | `server/tests/agent-on-this-machine.test.ts:38,376` `SETTING = "OPENBOT_THIS_MACHINE_HOST"`，`toThrow(SETTING)` | `XIONGBAO_THIS_MACHINE_HOST` | 19 |
+| 20 | Task 8 发现（原 C7） | `server/src/config.ts:1809` | `server/tests/config-github-app.test.ts:81` 整句含 `OPENBOT_PUBLIC_URL` | `XIONGBAO_PUBLIC_URL` | 19 |
+| 21 | Task 8 发现（原 C8） | `server/src/auth/role-writer-lifecycle.ts:27` | `server/tests/server-readiness-gates.test.ts:375` `toThrow("OPENBOT_RLS_ENFORCE")` | `XIONGBAO_RLS_ENFORCE` | 19 |
+| 22 | Task 8 发现（原 C9） | `server/src/tenant-package.ts:497` | `server/tests/tenant-package.test.ts:433` `/person's OpenBot browser/` | 新文字 | 19 |
+| 23 | Task 8 发现（原 C10） | `server/src/plugins/broker.ts:763` | `server/tests/composio-broker-seam.test.ts:99` `toContain("OPENBOT_APP_URL")` | `XIONGBAO_APP_URL` | 19 |
+| 24 | Task 8 发现（原 C11） | `server/src/plugins/broker.ts:883` | `server/tests/provider-selection.test.ts:107,157` `OPENBOT_BROKER_PROVIDER=composio` / `=arcade` | `XIONGBAO_BROKER_PROVIDER=…` | 19 |
+| 25 | Task 8 发现（原 C12） | `server/src/plugins/provider-wiring.ts:81` | `server/tests/provider-selection.test.ts:295` `/OPENBOT_BROKER_PROVIDER=arcade.*ARCADE_API_KEY/` | `XIONGBAO_BROKER_PROVIDER=…` | 19 |
+| 26 | Task 8 发现（原 C13） | `server/src/plugins/provider-wiring.ts:160,162`（`storedProvider`） | `server/tests/provider-undecided.test.ts:71` `/OPENBOT_BROKER_PROVIDER/`；同函数 86 行（两把 key 都设）见 `provider-selection.test.ts` 同名用例 | `/XIONGBAO_BROKER_PROVIDER/` | 19 |
+| 27 | Task 8 发现（原 C14） | `server/src/plugins/provider-wiring.ts:196` | `server/tests/arcade-verifier-notice.test.ts:57` `toContain("OPENBOT_PUBLIC_URL")` | `XIONGBAO_PUBLIC_URL` | 19 |
+| 28 | Task 8 发现（原 C15） | `server/src/plugins/routes.ts:2344` | `server/tests/plugin-routes.test.ts:2186` `toContain("OPENBOT_APP_URL")` | `XIONGBAO_APP_URL` | 19 |
+| 29 | Task 8 发现（原 C16） | `agent-computer/src/recorder.ts:53` | `agent-computer/tests/person-browser-rules.test.ts:101`、`person-browser.test.ts:349` `not a built OpenBot Recorder` | 新产品名 | 19 |
+| 30 | Task 8 发现（原 C17） | `agent-computer/src/bot-browser-host.ts:87` | `agent-computer/tests/bot-browser-computer.test.ts:1017` `the OpenBot Recorder is not installed` | 新产品名 | 19 |
+| 31 | Task 8 发现（原 C18） | `agent-computer/src/egress.ts:449` | `agent-computer/tests/egress-policy.test.ts:712` `which OpenBot never opens` | 新产品名 | 19 |
+| 32 | Task 8 发现（原 C19） | `agent-computer/src/egress.ts:844,999`（`realm="OpenBot"`） | `agent-computer/tests/egress-policy.test.ts:291` `realm="openbot"` | `realm="xiongbao"` | 19 |
 
 ## 附录 B：验证与切换记录
 
