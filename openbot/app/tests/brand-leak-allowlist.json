@@ -1527,13 +1527,6 @@
     "plan": "keep"
   },
   {
-    "file": "agent-computer/src/live-shell.ts",
-    "text": ".openbot-shell-",
-    "reason": "developer-only: temporary directory name, removed after use",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
     "file": "agent-computer/src/real-browser.ts",
     "text": "startsWith(\"OPENBOT_\")",
     "reason": "developer-only: env-var prefix filter and temporary profile directory name",
@@ -1550,9 +1543,11 @@
   {
     "file": "agent-computer/src/session-cookies.ts",
     "text": "openbot-session-cookies.json",
-    "reason": "persisted-identifier: file name already written on customers' computers",
-    "category": "persisted-data",
-    "plan": "keep"
+    "reason": "persisted-identifier: 旧文件名（LEGACY_SESSION_COOKIES_FILE），已写在客户电脑的 Bot 配置目录里；第一次读之前一次性改名为 xiongbao-session-cookies.json，两个都在时取修改时间较新的那个，改不了名（只读卷）时就地读旧文件；到期清理时同时删除磁盘上的旧名文件，不能只删改名代码（L1-16，Task 12）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "supervisor/src/docker.ts",

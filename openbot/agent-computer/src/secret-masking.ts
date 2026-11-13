@@ -31,14 +31,21 @@ import type { ElementHandle, Frame, Page } from "playwright";
 import type { SnapshotElement } from "./aria-snapshot";
 import type { InputMessage } from "./screencast";
 
-/** The attribute a field gets once a secret has been typed into it. */
-export const SECRET_ATTRIBUTE = "data-openbot-secret";
+/**
+ * The attribute a field gets once a secret has been typed into it.
+ *
+ * The marks are written into a third-party page, which can read them, so they carry no product name
+ * (L1-17). Every reader builds its selector from these constants. A mark is written and read by this
+ * process within one page's life, and no page outlives the process that marked it (a Bot's browser
+ * goes with it), so a mark under an earlier name is never there to be read and needs no second name.
+ */
+export const SECRET_ATTRIBUTE = "data-xb-secret";
 
 /** What a sensitive value is replaced with. Says a value is there without saying what it is. */
 export const MASKED_VALUE = "[hidden: sensitive field]";
 
 /** The attribute a field gets once a person typed into it, or chose in it, while they held the wheel. */
-export const PERSON_FILLED_ATTRIBUTE = "data-openbot-person-filled";
+export const PERSON_FILLED_ATTRIBUTE = "data-xb-person-filled";
 
 /** What a value a person filled in during a takeover is replaced with: filled, and not what with. */
 export const PERSON_FILLED_VALUE = "[hidden: filled in by the person]";

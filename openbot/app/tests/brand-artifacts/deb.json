@@ -36,12 +36,6 @@
     "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
   },
   {
-    "word": ".openbot-shell-",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
-  },
-  {
     "word": "<build-path>",
     "category": "operator-visible",
     "plan": "rewrite",
