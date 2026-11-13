@@ -4,5 +4,35 @@
     "category": "third-party-name",
     "plan": "keep",
     "note": "第三方运行时自己的变量名；附录 A 第 7 行获批后挪进 docker/defaults.env，届时从镜像 ENV 消失、从本词表删除"
+  },
+  {
+    "word": "OPENBOT_BUILD_CHANNEL",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像 ENV 仍用旧名：空构建参数若以新名写进 ENV，会经别名层盖掉部署运行时给的 OPENBOT_BUILD_*（Codex #542）；Task 11 有最低优先级默认值位置后改新名"
+  },
+  {
+    "word": "OPENBOT_BUILD_COMMIT",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像 ENV 仍用旧名：空构建参数若以新名写进 ENV，会经别名层盖掉部署运行时给的 OPENBOT_BUILD_*（Codex #542）；Task 11 有最低优先级默认值位置后改新名"
+  },
+  {
+    "word": "OPENBOT_BUILD_DISTRIBUTION_ID",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像 ENV 仍用旧名：空构建参数若以新名写进 ENV，会经别名层盖掉部署运行时给的 OPENBOT_BUILD_*（Codex #542）；Task 11 有最低优先级默认值位置后改新名"
+  },
+  {
+    "word": "OPENBOT_BUILD_REPOSITORY",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像 ENV 仍用旧名：空构建参数若以新名写进 ENV，会经别名层盖掉部署运行时给的 OPENBOT_BUILD_*（Codex #542）；Task 11 有最低优先级默认值位置后改新名"
+  },
+  {
+    "word": "OPENBOT_BUILD_VERSION",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "镜像 ENV 仍用旧名：空构建参数若以新名写进 ENV，会经别名层盖掉部署运行时给的 OPENBOT_BUILD_*（Codex #542）；Task 11 有最低优先级默认值位置后改新名"
   }
 ]
