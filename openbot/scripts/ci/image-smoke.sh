@@ -74,6 +74,8 @@ if [ "$healthy" = true ]; then
   # Bot's can rewrite the code the API runs or the app it serves.
   check docker exec "$name" sh -c 'test -z "$(find /app ! -user root -print -quit)" && test -z "$(find /app -perm /022 ! -type l -print -quit)"'
   check docker exec -u pwuser "$name" sh -c 'test ! -w /app/server/src/index.ts && test ! -w /app/app/dist/index.html'
+  # The API's code is server/dist (bundled); server/src and server/scripts hold only one-line shims.
+  check docker exec -u pwuser "$name" sh -c 'test -f /app/server/dist/server.js && test ! -w /app/server/dist/server.js && test ! -w /app/server/dist'
   # Recreate against the same volume: both credentials and stored data survive.
   check docker exec "$name" sh -c '
     sha256sum /var/lib/postgresql/pgpassword /var/lib/postgresql/pgpassword-app > /var/lib/postgresql/.trackb-hashes

@@ -712,6 +712,7 @@ tests/self-host-banner.test.ts
 tests/server-readiness-gates.test.ts
 tests/server-row-recorded-values.integration.test.ts
 tests/server-row-upstream-shape.integration.test.ts
+tests/server-shims.test.ts
 tests/server-side-tools.integration.test.ts
 tests/settings-instructions-routes.test.ts
 tests/setup-checklist-arcade.test.ts
