@@ -399,6 +399,13 @@ export type SkillRecord = {
   instructions: string;
   origin: string;
   installedBy: string | null;
+  /**
+   * How completely the package this skill came from ports: `full | degraded | blocked`（移植方案
+   * R3）. Null is a skill nobody audited — a person's own row here — and the page reads null as
+   * "not graded" rather than guessing `full`. Optional because listSkills always carries it, but
+   * a row predating the grade (or a fixture written before it) does not.
+   */
+  runnable?: string | null;
   grantedTo: string[];
   /**
    * The tools this skill says it needs, as `<serverId>/<toolName>` refs.
@@ -7062,6 +7069,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         instructions: row.instructions,
         origin: row.origin,
         installedBy: row.installedBy,
+        runnable: row.runnable,
         grantedTo: grants.get(row.slug) ?? [],
         tools: declared.get(row.id) ?? [],
       }));
