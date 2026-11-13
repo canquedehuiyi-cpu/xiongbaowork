@@ -851,6 +851,70 @@ describe("tenant package agent profile synchronization", () => {
       );
     }));
 
+  test("a second sync updates the existing package agent and profile and moves updatedAt forward", () =>
+    inCatalogue(async () => {
+      const agent = packageAgent({ avatarSeed: "first-avatar" });
+      const tenantPackage = loadedPackage(agent);
+      const deploymentPackage = await synchronizeTenantPackage(
+        database,
+        tenantPackage,
+      );
+      createdAgentIds.push(agent.id);
+      createdPackageIds.push(deploymentPackage.id);
+      const [firstAgent] = await database
+        .select()
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      const [firstProfile] = await database
+        .select()
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, agent.id));
+      expect(firstAgent).toBeDefined();
+      expect(firstProfile).toBeDefined();
+
+      // `updatedAt` is stamped by the application clock, so let it tick before the second write.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const changed = {
+        ...agent,
+        name: "Second Sync Assistant",
+        title: "Second Sync Work",
+        roleDescription: "Handle the second sync.",
+        avatarSeed: "second-avatar",
+      };
+      await synchronizeTenantPackage(database, {
+        ...tenantPackage,
+        agents: [changed],
+        checksum: randomUUID(),
+      });
+
+      const [secondAgent] = await database
+        .select()
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      const [secondProfile] = await database
+        .select()
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, agent.id));
+      expect(secondAgent).toMatchObject({
+        id: agent.id,
+        name: changed.name,
+        packageId: deploymentPackage.id,
+      });
+      expect(secondProfile).toMatchObject({
+        ownerUserId: null,
+        title: changed.title,
+        roleDescription: changed.roleDescription,
+        avatarSeed: changed.avatarSeed,
+        deletedAt: null,
+      });
+      expect(secondAgent?.updatedAt.getTime()).toBeGreaterThan(
+        firstAgent?.updatedAt.getTime() ?? Number.POSITIVE_INFINITY,
+      );
+      expect(secondProfile?.updatedAt.getTime()).toBeGreaterThan(
+        firstProfile?.updatedAt.getTime() ?? Number.POSITIVE_INFINITY,
+      );
+    }));
+
   test("rejects a user-created canonical and profile collision without changing them", () =>
     inCatalogue(async () => {
       const ownerUserId = await createUser();

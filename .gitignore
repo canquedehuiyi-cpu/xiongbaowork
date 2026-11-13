@@ -4,7 +4,9 @@ node_modules/
 !.env.example
 dist/
 build/
-tools/
+# Root-level scratch tools only. Without the leading slash this also ignored openbot/tools/, which holds
+# checked-in conversion tooling (openbot/tools/port-capabilities) that has to be reviewable in the repo.
+/tools/
 .scratch/openbot-git-backup/
 *.log
 .DS_Store

@@ -31,6 +31,7 @@ export * from "./pipeline";
 export * from "./plans";
 export * from "./plugins";
 export * from "./portraits";
+export * from "./portrait-media";
 export * from "./proactive";
 export * from "./recorder";
 export * from "./responsibilities";

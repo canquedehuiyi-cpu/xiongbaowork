@@ -221,21 +221,30 @@ export async function runDesktopCompare(
 
 /**
  * The desktop engine's settings. The flag wins over the environment; an engine that is neither is
- * refused rather than guessed at. Without `--desktop-helper` the binary is the one shipped next to
- * the runner's own executable. Whether it exists is found out when a desktop action first needs it.
+ * never guessed at. With somewhere to say so (`warn`: the runner itself, on stderr), it is taken as
+ * not set, the default engine, and said once (final review M7): a misspelt setting must not take the
+ * whole device offline. With nowhere to say so, it is refused. Without `--desktop-helper` the binary
+ * is the one shipped next to the runner's own executable. Whether it exists is found out when a
+ * desktop action first needs it.
  */
 function desktopOptions(
   args: Map<string, string>,
   env: Record<string, string | undefined>,
   cwd: string,
   dataDir: string,
+  warn?: (line: string) => void,
 ): Options["desktop"] | string {
   const engineFlag = args.has("desktop-engine")
     ? (args.get("desktop-engine")?.trim() ?? "")
     : undefined;
-  const engine = engineFlag ?? env[DESKTOP_ENGINE_ENV]?.trim() ?? "";
-  if ((engineFlag !== undefined || engine) && !DESKTOP_ENGINES.has(engine))
-    return "--desktop-engine must be legacy or agent-desktop.";
+  let engine = engineFlag ?? env[DESKTOP_ENGINE_ENV]?.trim() ?? "";
+  if ((engineFlag !== undefined || engine) && !DESKTOP_ENGINES.has(engine)) {
+    if (!warn) return "--desktop-engine must be legacy or agent-desktop.";
+    warn(
+      `runner: 桌面引擎「${engine.slice(0, 64)}」不认识（只能是 legacy 或 agent-desktop），按未设置处理。`,
+    );
+    engine = "";
+  }
   const helper = desktopHelperPath(args, env, cwd);
   if (helper === undefined) return "--desktop-helper needs a path.";
   const control = args.has("desktop-control")
@@ -829,6 +838,8 @@ export function parseArgs(
   argv: string[],
   env: Record<string, string | undefined> = process.env,
   cwd: string = process.cwd(),
+  /** Where a setting taken as not set is said (an unknown desktop engine); refused without it. */
+  warn?: (line: string) => void,
 ): Options | string {
   const args = new Map<string, string>();
   for (let index = 0; index < argv.length; index += 1) {
@@ -851,7 +862,7 @@ export function parseArgs(
   const browser = browserOptions(args, paths);
   if (typeof browser === "string") return browser;
   // --- desktop control (sub-project 2) ---
-  const desktop = desktopOptions(args, env, cwd, paths.dataDir);
+  const desktop = desktopOptions(args, env, cwd, paths.dataDir, warn);
   if (typeof desktop === "string") return desktop;
   // --- end desktop control ---
   return {
@@ -1066,7 +1077,10 @@ export async function main(
     return 2;
   }
   if (appCommand) return runAppCommand(appCommand);
-  const parsed = parseArgs(argv);
+  // The runner itself can say what it did not recognise, so a misspelt engine does not stop it.
+  const parsed = parseArgs(argv, process.env, process.cwd(), (line) =>
+    console.error(line),
+  );
   if (typeof parsed === "string") {
     console.error(parsed);
     return 2;

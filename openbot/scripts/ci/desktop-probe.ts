@@ -862,8 +862,14 @@ async function saveDialogCheck(
   let untitled: DesktopWindow | undefined;
   for (;;) {
     const listed = await run("desktop.windows", {});
+    // A new document's window, not one of the hidden helper windows macOS also lists for the app
+    // (seen on CI: title equal to the app name, bounds 0,268 500x500, invisible): those cannot be
+    // brought forward, so the check waited on a window no one can see.
     untitled = windowsOf(listed).find(
-      (w) => !known.has(w.windowId) && w.process === editor.process,
+      (w) =>
+        !known.has(w.windowId) &&
+        w.process === editor.process &&
+        w.title !== editor.process,
     );
     if (untitled || !listed.ok || Date.now() > deadline) break;
     await Bun.sleep(250);

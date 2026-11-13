@@ -28,6 +28,20 @@ export const PORTRAIT_PRESETS = [
 
 export type PortraitPreset = (typeof PORTRAIT_PRESETS)[number]["value"];
 
+/** 宝小熊的五套服装。第一批只留字段（见 0203 迁移）；按服装出图是第二批。 */
+export const PORTRAIT_OUTFITS = [
+  { value: "street", label: "潮酷街头" },
+  { value: "guofeng", label: "华贵国风" },
+  { value: "casual", label: "休闲萌趣" },
+  { value: "tech", label: "酷炫科技" },
+  { value: "lion", label: "喜庆舞狮" },
+] as const;
+
+export type PortraitOutfit = (typeof PORTRAIT_OUTFITS)[number]["value"];
+
+/** A video a person uploaded must fit in this; it has to match the server's limit. */
+export const PORTRAIT_VIDEO_MAX_BYTES = 2 * 1024 * 1024;
+
 export type Portrait = {
   kind: PortraitKind;
   id: string;
@@ -35,6 +49,10 @@ export type Portrait = {
   preset: PortraitPreset | null;
   /** Where the uploaded picture is served, versioned so a replaced one is fetched again. */
   imageUrl: string | null;
+  /** Where an uploaded video is served, or null when there is none; the picture is its poster. */
+  videoUrl: string | null;
+  /** The 宝小熊 outfit this portrait wears, or null when none was picked (second batch). */
+  outfit: PortraitOutfit | null;
   updatedAt: string;
 };
 
@@ -69,7 +87,9 @@ export function portraitIndex(
 export type PortraitChoice =
   | { preset: PortraitPreset }
   /** The picture, already squared and re-encoded in the browser, as base64. */
-  | { image: string };
+  | { image: string }
+  /** A video, sent as it was picked (the browser does not re-encode video), as base64. */
+  | { video: string };
 
 export function setPortraitMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
@@ -77,15 +97,22 @@ export function setPortraitMutationOptions(queryClient: QueryClient) {
       kind,
       id,
       choice,
+      outfit,
     }: {
       kind: PortraitKind;
       id: string;
       choice: PortraitChoice;
+      /** The outfit worn with this choice; only the server's known outfits are accepted. */
+      outfit?: PortraitOutfit;
     }) =>
       client<Portrait>(
         `/api/portraits/${kind}/${encodeURIComponent(id)}`,
         "portrait",
-        { method: "PUT", body: choice, fallback: "头像没有保存成功。" },
+        {
+          method: "PUT",
+          body: { ...choice, ...(outfit ? { outfit } : {}) },
+          fallback: "头像没有保存成功。",
+        },
       ),
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: portraitKeys.all }),

@@ -1,8 +1,11 @@
 import {
   classifyDesktopKeys,
   DESKTOP_APP_NAME,
+  DESKTOP_APPROVAL_WORDS,
   DESKTOP_LIMITS,
+  DESKTOP_SELF_WINDOW_REASON,
   DESKTOP_TEXT_ROLES,
+  DESKTOP_WINDOW_WORDS,
   DESKTOP_WRITE_ACTIONS,
   type DesktopClipboardReadOutput,
   type DesktopClipboardWriteOutput,
@@ -13,15 +16,17 @@ import {
   desktopActionWordsOf,
   desktopActivationKey,
   desktopMessage,
+  desktopSelfOrTerminalProcess,
   desktopTextNeedsApproval,
-  desktopWindowWordHit,
-  desktopWordHit,
+  desktopWindowWordHits,
+  desktopWordHits,
 } from "../../../shared/desktop-control";
 import type { ActionOutcome } from "../execute";
 import {
   type AgentDesktopReader,
   type DesktopControl,
   toReadError,
+  toWriteError,
 } from "./ad-read";
 import {
   type AdRunOptions,
@@ -59,6 +64,21 @@ import type { DesktopSessions } from "./session";
  *     headless route was not delivered because it is unavailable, and only if nothing was stopped
  *     meanwhile (no headed-begin is sent then).
  *
+ * THE FINAL REVIEW (final-fix-brief.md), each only asking more:
+ *  - C1: a window of the product itself or of a terminal (`desktopSelfOrTerminalProcess`, by its
+ *    process), or whose title holds one of the product's names the server sends (`selfWindowWords`),
+ *    is asked about like a sensitive title; approving and refusing words (`DESKTOP_APPROVAL_WORDS`)
+ *    are action words whatever the team's list.
+ *  - I1: `approved` is no longer a pass for everything. Approved, the whole title and the whole
+ *    control name (click) are still checked; a window or action word the owner did not see (not in
+ *    `approvedTitle`, `approvedControlName`, or the device's own reason they approved,
+ *    `approvedReason`) is asked about, every such word named at once.
+ *  - I2: text with a new line that only a real keyboard would type (`--headed`) is asked about
+ *    unless approved, before anything is cleared or typed: on a real keyboard a new line is Enter.
+ *  - I3: deleting at once (`delete` keys) is asked about like closing; on Windows and Linux so is
+ *    Alt with a letter or a digit (a button's mnemonic).
+ *  - M3: a write that fails says agent-desktop's code and our words, never its message.
+ *
  * OUTCOMES. Success voids the window's refs (the model reads again), renews the session and says so
  * in `note`. A failure agent-desktop marks `not_delivered`, or one before anything was sent, is mapped
  * to its copy as a read's is; so is INVALID_ARGS, refused while the arguments are parsed. A
@@ -80,6 +100,14 @@ import type { DesktopSessions } from "./session";
  * No window's refs are voided by these.
  */
 
+/**
+ * What a write that hands agent-desktop the typed text on stdin (`type`, `set-value`,
+ * `clipboard-set`, each with `--stdin`) says when agent-desktop refuses its arguments (INVALID_ARGS,
+ * final review round 4): our own words in place of its message, which may repeat what it read.
+ */
+export const DESKTOP_STDIN_INVALID_ARGS =
+  "参数没有通过检查；这条命令带着要输入的文字，原始说明不显示";
+
 export const DESKTOP_WRITE_NOTE =
   "The window may have changed: read it again before the next step.";
 
@@ -88,6 +116,11 @@ export const DESKTOP_LAUNCH_NOTE =
 
 const BAD_APP = "应用名只能是应用的名字，不能带路径或参数";
 const CLIPBOARD_READ_REASON = "读取剪贴板，里面可能有刚复制的密码或验证码";
+/** I2: on a real keyboard a new line is Enter, which sends in a chat box and runs in a terminal. */
+const HEADED_NEWLINE_REASON =
+  "用真实键盘输入带换行的文字可能会直接发送，需要你先确认";
+/** I1: how much of a control's whole name a reason shows, in code points. */
+const REASON_NAME_MAX = 200;
 
 export type AgentDesktopWriter = (
   action: string,
@@ -122,8 +155,9 @@ const FALL_BACK = Symbol("fall back to --headed");
 const KIND_RANK: Record<DesktopKeyClass["kind"], number> = {
   plain: 0,
   submit: 1,
-  close: 2,
-  system: 3,
+  delete: 2,
+  close: 3,
+  system: 4,
 };
 
 /** The shared names (design decision 10) as agent-desktop's `press` reads them (FACTS (g)). */
@@ -149,6 +183,47 @@ function text(value: unknown): string {
 function clip(value: unknown, max: number): string {
   const s = text(value);
   return s.length > max ? s.slice(0, max) : s;
+}
+
+/** The strings in `value`, when it is a list; nothing otherwise. */
+function strings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+/**
+ * What a reason this device gave says the owner saw (round 2, Minor-2), read by its own grammar:
+ * the product's own window or a terminal (the reason starts with that sentence), the window's words
+ * (between the marks of `窗口标题含「…」`), and the control's words (between the marks of
+ * `控件名含「…」`, up to its `：`, after which the control's name is free text and never read). Only
+ * words between the marks count, and only where the reason put them.
+ */
+function seenInReason(reason: string): {
+  self: boolean;
+  title: string[];
+  control: string[];
+} {
+  const marked = (list: string) =>
+    [...list.matchAll(/「([^「」]*)」/g)].map((match) => match[1] as string);
+  const control = reason.search(/(?:^|；)控件名含「/);
+  const head = control < 0 ? reason : reason.slice(0, control);
+  const tail = control < 0 ? "" : reason.slice(control);
+  const title = /(?:^|；)窗口标题含((?:「[^「」]*」)+)(?=；|$)/.exec(head);
+  const words = /^；?控件名含((?:「[^「」]*」)+)(?=：|；|$)/.exec(tail);
+  return {
+    self: reason.startsWith(DESKTOP_SELF_WINDOW_REASON),
+    title: title ? marked(title[1] as string) : [],
+    control: words ? marked(words[1] as string) : [],
+  };
+}
+
+/** A name as a reason shows it: at most `REASON_NAME_MAX` code points, an ellipsis when cut. */
+function shownName(name: string): string {
+  const chars = Array.from(name);
+  return chars.length > REASON_NAME_MAX
+    ? `${chars.slice(0, REASON_NAME_MAX).join("")}…`
+    : name;
 }
 
 function isAbort(error: unknown): boolean {
@@ -211,6 +286,26 @@ function saysNotSent(error: AgentDesktopError): boolean {
   return error.notDelivered || error.delivery === undefined;
 }
 
+/**
+ * A command that read the typed text on stdin, refused as agent-desktop read its arguments
+ * (INVALID_ARGS, final review round 4): the same refusal (its code, whether it was delivered), in our
+ * own words instead of its message, which may repeat what it read. Anything else as it is.
+ */
+function withoutInput(error: unknown): unknown {
+  if (!(error instanceof AgentDesktopError) || error.code !== "INVALID_ARGS")
+    return error;
+  return new AgentDesktopError(
+    {
+      code: error.code,
+      message: DESKTOP_STDIN_INVALID_ARGS,
+      ...(error.delivery !== undefined
+        ? { disposition: { delivery: error.delivery } }
+        : {}),
+    },
+    error.exitCode,
+  );
+}
+
 /** Whether a write that failed this way may have changed something. */
 function mayHaveChanged(error: unknown): boolean {
   // INVALID_ARGS is agent-desktop refusing its arguments as it parses them, before any action
@@ -241,9 +336,15 @@ export function createAgentDesktopWriter(opts: {
   control: ControlChannel;
   platform: DesktopPlatform;
   now?: () => number;
+  /**
+   * Whether a window's process is the product itself or a terminal (final review C1). Always
+   * `desktopSelfOrTerminalProcess` in the product; a test of something else may stand in for it.
+   */
+  selfOrTerminal?: (process: string) => boolean;
 }): AgentDesktopWriter {
   const { cli, reader, sessions, control, platform } = opts;
   const now = opts.now ?? Date.now;
+  const selfOrTerminal = opts.selfOrTerminal ?? desktopSelfOrTerminalProcess;
 
   const write: AgentDesktopWriter = async (action, body, signal, context) => {
     const started = now();
@@ -274,8 +375,16 @@ export function createAgentDesktopWriter(opts: {
         : signals.length === 1
           ? signals[0]
           : AbortSignal.any(signals);
-    const run = (args: string[], o: AdRunOptions = {}) =>
-      cli.run(args, { ...o, ...(runSignal ? { signal: runSignal } : {}) });
+    const run = async (args: string[], o: AdRunOptions = {}) => {
+      try {
+        return await cli.run(args, {
+          ...o,
+          ...(runSignal ? { signal: runSignal } : {}),
+        });
+      } catch (error) {
+        throw o.stdin === undefined ? error : withoutInput(error);
+      }
+    };
 
     /**
      * A failure as the owner and the model read it; `changed` once something may have been done,
@@ -285,6 +394,7 @@ export function createAgentDesktopWriter(opts: {
       error: unknown,
       changed: boolean,
       windowId?: string,
+      asRead = false,
     ): ActionOutcome => {
       if (changed) {
         if (windowId !== undefined) reader.invalidate(windowId);
@@ -300,7 +410,7 @@ export function createAgentDesktopWriter(opts: {
             ? desktopMessage("stopped")
             : "已在设备上停止。",
         );
-      const mapped = toReadError(error, platform);
+      const mapped = (asRead ? toReadError : toWriteError)(error, platform);
       if (mapped instanceof DesktopHelperError) {
         if (mapped.code === "mac_permission")
           control.emit({ event: "permission-needed" });
@@ -345,8 +455,8 @@ export function createAgentDesktopWriter(opts: {
       try {
         data = await run(["clipboard-get", "--format", "text"]);
       } catch (error) {
-        // Reading changes nothing.
-        return failureIn(error, false);
+        // Reading changes nothing; and it fails as a read does (its wording pinned since Task 24).
+        return failureIn(error, false, undefined, true);
       }
       const whole = clipboardTextOf(data);
       if (whole === undefined)
@@ -441,9 +551,53 @@ export function createAgentDesktopWriter(opts: {
     if (!live) return fail(desktopMessage("no_window"));
     const liveTitle = text(live.title);
     const title = clip(liveTitle, DESKTOP_LIMITS.titleMax);
-    const titleWord = desktopWindowWordHit(liveTitle);
+    // The product's own names (C1), from the server's brand, count as window words too.
+    const selfWords = strings(body.selfWindowWords);
+    const titleWords = desktopWindowWordHits(liveTitle, selfWords);
+    const titleWord = titleWords[0];
+    // The product itself or a terminal (C1), by its process or by its title.
+    const selfWindow =
+      selfOrTerminal(text(live.app_name)) ||
+      titleWords.some((word) => !DESKTOP_WINDOW_WORDS.includes(word));
     const approvedTitle =
       typeof body.approvedTitle === "string" ? body.approvedTitle : undefined;
+    // The device's own reason the owner approved, read by its words, title and control apart.
+    // One reason, or (round 3) a list of them: each read on its own, what they say together.
+    const reasonSeen = (
+      typeof body.approvedReason === "string"
+        ? [body.approvedReason]
+        : strings(body.approvedReason)
+    )
+      .map(seenInReason)
+      .reduce(
+        (all, one) => ({
+          self: all.self || one.self,
+          title: [...all.title, ...one.title],
+          control: [...all.control, ...one.control],
+        }),
+        { self: false, title: [] as string[], control: [] as string[] },
+      );
+    /*
+     * I1 checks a name the card showed, and the process it showed, only when the server says which
+     * (null: none). A server from before says nothing, and could not ask again after an approval:
+     * the device then checks as it did, rather than refusing every such approved write.
+     */
+    const namesShown = "approvedControlName" in body;
+    const approvedControlName =
+      typeof body.approvedControlName === "string"
+        ? body.approvedControlName
+        : "";
+    const processShown = "approvedProcess" in body;
+    const approvedProcess =
+      typeof body.approvedProcess === "string" ? body.approvedProcess : "";
+    const liveProcess = text(live.app_name);
+    const words = desktopActionWordsOf(strings(body.actionWords));
+    const allWords = [...words, ...DESKTOP_APPROVAL_WORDS];
+    // The whole name: the one shown is cut to `nameMax`, and a word past that must not go unseen.
+    const name =
+      action === "desktop.click"
+        ? (reader.fullName?.(body.ref as string) ?? target.control?.name ?? "")
+        : "";
     // Compared whole: a word added past the `titleMax` characters shown still changes the title.
     // A stand-in reader without whole titles falls back to the cut ones.
     const readFull = reader.readFullTitle?.(windowId);
@@ -460,45 +614,97 @@ export function createAgentDesktopWriter(opts: {
         (approvedTitle !== undefined && approvedTitle !== title))
     )
       return needs(`窗口标题刚刚变成含「${titleWord}」，请重新列出窗口`);
-    if (!approved) {
-      if (liveTitle.trim() === "") return needs("没能确认窗口的标题");
-      if (titleWord !== undefined) return needs(`窗口标题含「${titleWord}」`);
-      if (action === "desktop.click") {
-        const words = desktopActionWordsOf(
-          Array.isArray(body.actionWords)
-            ? body.actionWords.filter(
-                (word): word is string => typeof word === "string",
-              )
-            : undefined,
+    /*
+     * Every finding at once (round 2, Minor-1), approved or not, in one order: the product's own
+     * window or a terminal, the window's words, the rest, and the control's words last (on the
+     * approved path with its whole name, the only free text in a reason).
+     */
+    const findings: string[] = [];
+    if (approved) {
+      /*
+       * I1: approved for what the owner saw. The product's own window or a terminal the card did
+       * not show (round 2, Important-2), a window word in the whole title, or an action word in the
+       * whole name, that was not on the card (the title, the process, the control's name, or the
+       * device's own reason approved) is asked about.
+       */
+      if (
+        processShown &&
+        selfOrTerminal(liveProcess) &&
+        !selfOrTerminal(approvedProcess) &&
+        !reasonSeen.self
+      )
+        findings.push(DESKTOP_SELF_WINDOW_REASON);
+      const titleSeen = [
+        ...desktopWindowWordHits(approvedTitle ?? "", selfWords),
+        ...reasonSeen.title,
+      ];
+      const unseenTitle =
+        approvedTitle === undefined
+          ? []
+          : titleWords.filter(
+              (word) =>
+                !titleSeen.includes(word) &&
+                // The product's own names are what the reason for its own window says.
+                !(reasonSeen.self && !DESKTOP_WINDOW_WORDS.includes(word)),
+            );
+      if (unseenTitle.length > 0)
+        findings.push(`窗口标题含「${unseenTitle.join("」「")}」`);
+      const nameSeen = [
+        ...desktopWordHits(approvedControlName, allWords),
+        ...reasonSeen.control,
+      ];
+      const unseenName = namesShown
+        ? desktopWordHits(name, allWords).filter(
+            (word) => !nameSeen.includes(word),
+          )
+        : [];
+      if (unseenName.length > 0)
+        findings.push(
+          `控件名含「${unseenName.join("」「")}」：「${shownName(name)}」`,
         );
-        // The whole name: the one shown is cut to `nameMax`, and a word past that must not go unseen.
-        const name =
-          reader.fullName?.(body.ref as string) ?? target.control?.name ?? "";
-        // A control with no name cannot be told apart from any other (round 1).
-        if (name.trim() === "") return needs("没能确认要操作的控件");
-        const word = desktopWordHit(name, words);
-        if (word !== undefined) return needs(`控件名含「${word}」`);
-      }
+    } else {
+      if (liveTitle.trim() === "") findings.push("没能确认窗口的标题");
+      // C1: the product's own window or a terminal, every time.
+      if (selfWindow) findings.push(DESKTOP_SELF_WINDOW_REASON);
+      const sensitive = titleWords.filter((word) =>
+        DESKTOP_WINDOW_WORDS.includes(word),
+      );
+      if (sensitive.length > 0)
+        findings.push(`窗口标题含「${sensitive.join("」「")}」`);
       if (keys?.kind === "submit")
-        return needs(`按 ${keysText} 可能会把内容提交或发送出去`);
-      if (keys?.kind === "close") return needs(`按 ${keysText} 会关闭程序`);
-      // Tab to a button and Space presses it: as good as an unasked click (round 1).
-      if (action === "desktop.key" && desktopActivationKey(keysText))
-        return needs("这个按键可能会按下当前选中的按钮，需要你先确认");
+        findings.push(`按 ${keysText} 可能会把内容提交或发送出去`);
+      if (keys?.kind === "close") findings.push(`按 ${keysText} 会关闭程序`);
+      if (keys?.kind === "delete")
+        findings.push(`按 ${keysText} 可能会直接删除文件或内容`);
+      // Tab to a button and Space presses it: as good as an unasked click (round 1). On Windows and
+      // Linux, Alt with a letter presses the button it names (I3).
+      if (action === "desktop.key" && desktopActivationKey(keysText, platform))
+        findings.push("这个按键可能会按下当前选中的按钮，需要你先确认");
       if (action === "desktop.type") {
         const role = target.control?.type ?? "";
         if (!DESKTOP_TEXT_ROLES.has(role))
-          return needs("目标不是输入框，需要你先确认");
+          findings.push("目标不是输入框，需要你先确认");
         // FACTS (b) and round 1: a textarea, or a textfield inside a scrollarea, is multi-line.
         const multiline =
           role === "textarea" ||
           (role === "textfield" && target.control?.singleLine !== true);
-        if (!multiline && /[\r\n]/.test(typed))
-          return needs("往单行输入框里输入带换行的文字");
-        if (desktopTextNeedsApproval(typed, multiline))
-          return needs("输入的文字含控制字符或特殊的换行符");
+        const newline = !multiline && /[\r\n]/.test(typed);
+        if (newline) findings.push("往单行输入框里输入带换行的文字");
+        // A new line already named is not named again as a control character.
+        if (desktopTextNeedsApproval(typed, multiline || newline))
+          findings.push("输入的文字含控制字符或特殊的换行符");
+      }
+      if (action === "desktop.click") {
+        // A control with no name cannot be told apart from any other (round 1).
+        if (name.trim() === "") findings.push("没能确认要操作的控件");
+        const hits = [
+          ...desktopWordHits(name, words),
+          ...desktopWordHits(name, DESKTOP_APPROVAL_WORDS),
+        ].filter((word, index, all) => all.indexOf(word) === index);
+        if (hits.length > 0) findings.push(`控件名含「${hits.join("」「")}」`);
       }
     }
+    if (findings.length > 0) return needs(findings.join("；"));
     // A key press goes to the window in front, and only there.
     if (action === "desktop.key" && live.is_focused !== true)
       return fail(desktopMessage("not_foreground"));
@@ -532,6 +738,8 @@ export function createAgentDesktopWriter(opts: {
     };
 
     const adRef = target.adRef as string;
+    // I2: only a real keyboard is left, and on it a new line is Enter.
+    const keyboardNewline = !approved && /[\r\n]/.test(typed);
     let data: unknown;
     try {
       switch (action) {
@@ -543,14 +751,18 @@ export function createAgentDesktopWriter(opts: {
           if (mode === "replace") {
             data = await semantic(["set-value", adRef, "--stdin"], typed);
             if (data === FALL_BACK) {
+              // Asked before the box is cleared: nothing has changed yet.
+              if (keyboardNewline) return needs(HEADED_NEWLINE_REASON);
               await run(["clear", adRef]);
               partial = true;
               data = await headed(["type", adRef, "--stdin"], typed);
             }
           } else {
             data = await semantic(["type", adRef, "--stdin"], typed);
-            if (data === FALL_BACK)
+            if (data === FALL_BACK) {
+              if (keyboardNewline) return needs(HEADED_NEWLINE_REASON);
               data = await headed(["type", adRef, "--stdin"], typed);
+            }
           }
           break;
         case "desktop.key": {
