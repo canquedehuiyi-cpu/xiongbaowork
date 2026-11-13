@@ -84,7 +84,7 @@ const SENTENCES = {
   alreadyRecording: "A recording is already running in this Bot's browser.",
   notRecording: "Nothing is being recorded in this Bot's browser.",
   noRecorder:
-    "This Bot's browser cannot record: the OpenBot Recorder is not installed on its computer.",
+    "This Bot's browser cannot record: the XiongBao Recorder is not installed on its computer.",
   recorderDidNotStart:
     "The Recorder in this Bot's browser did not start, so it cannot record. Stop the Bot's computer and try again.",
   notStarted: "This Bot's browser could not be started. Try again.",

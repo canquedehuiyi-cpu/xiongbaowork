@@ -346,7 +346,7 @@ for (const variant of VARIANTS) {
       const { createBrowserHost } = await import("../src/browser-host");
       for (const [dir, says] of [
         [undefined, "OPENBOT_RECORDER_DIR"],
-        [join(REPO, "extension"), "not a built OpenBot Recorder"],
+        [join(REPO, "extension"), "not a built XiongBao Recorder"],
       ] as const) {
         const refusing = serve(
           createBrowserHost({

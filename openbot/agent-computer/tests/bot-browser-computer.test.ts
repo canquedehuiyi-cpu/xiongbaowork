@@ -1014,7 +1014,7 @@ describe.skipIf(!asked)(
         status: 503,
         json: {
           error:
-            "This Bot's browser cannot record: the OpenBot Recorder is not installed on its computer.",
+            "This Bot's browser cannot record: the XiongBao Recorder is not installed on its computer.",
         },
       });
     }, 60_000);

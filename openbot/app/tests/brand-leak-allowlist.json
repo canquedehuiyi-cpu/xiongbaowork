@@ -1315,34 +1315,6 @@
     "plan": "keep"
   },
   {
-    "file": "agent-computer/src/recorder.ts",
-    "text": "OpenBot Recorder",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/person-browser-rules.test.ts:101；agent-computer/tests/person-browser.test.ts:349]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "agent-computer/src/bot-browser-host.ts",
-    "text": "OpenBot Recorder",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/bot-browser-computer.test.ts:1017]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "agent-computer/src/egress.ts",
-    "text": "which OpenBot never opens",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/egress-policy.test.ts:712]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "agent-computer/src/egress.ts",
-    "text": "realm=\"OpenBot\"",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/egress-policy.test.ts:291]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "agent-computer/src/egress.ts",
     "text": "openbot-egress-credentials.invalid",
     "reason": "persisted-identifier: sentinel host name shared by the filter and its clients",

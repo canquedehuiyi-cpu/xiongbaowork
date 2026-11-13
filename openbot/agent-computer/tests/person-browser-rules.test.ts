@@ -98,7 +98,7 @@ describe("finding the built Recorder", () => {
     const source = await findRecorder(join(REPO, "extension"));
     expect(source.ok).toBe(false);
     if (!source.ok) {
-      expect(source.error).toContain("not a built OpenBot Recorder");
+      expect(source.error).toContain("not a built XiongBao Recorder");
       expect(source.error).toContain("manifest.json");
     }
   });
