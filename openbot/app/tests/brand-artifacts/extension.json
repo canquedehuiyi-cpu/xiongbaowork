@@ -175,9 +175,11 @@
   },
   {
     "word": "openbot-recorder-notice",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "注入第三方网页的自定义元素；新版本仍画这个名字，同时查找、移除 xb-recorder-notice；附录 A 第 11 行（已批）由 Task 19 落地后改画新名，本条改 legacy-compat"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "note": "旧标签名；新版本画 xb-recorder-notice，查找、移除时仍认旧名，扩展更新期间老内容脚本画的提示不重复、不残留（附录 A 第 11 行，Task 19）",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "word": "openbot-unreachable",

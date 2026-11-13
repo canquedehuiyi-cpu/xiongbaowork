@@ -133,7 +133,7 @@ const EXPENSES_NEEDS_YOU = {
   body: "1 个提问",
   // The page a click opens (`open_notice_page` in the shell).
   path: "/bots/expenses",
-  tag: "openbot-attention-expenses",
+  tag: "xiongbao-attention-expenses",
 };
 
 test("in OpenBot Desktop a Bot that starts needing the person is shown by the desktop app, naming the page a click opens", async () => {
@@ -193,7 +193,7 @@ test("in OpenBot Desktop a notice about a Bot waiting in a conversation opens th
       {
         ...EXPENSES_NEEDS_YOU,
         path: "/channel/channel-plan",
-        tag: "openbot-channel-plan",
+        tag: "xiongbao-channel-plan",
       },
     ]),
   );
@@ -210,7 +210,7 @@ test("a desktop app without its own notify opens the waiting conversation too", 
       {
         ...EXPENSES_NEEDS_YOU,
         path: "/channel/channel-plan",
-        tag: "openbot-channel-plan",
+        tag: "xiongbao-channel-plan",
       },
     ]),
   );

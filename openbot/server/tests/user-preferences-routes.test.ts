@@ -55,7 +55,7 @@ test("preferences default to thread and persist separately for each authenticate
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     },
   });
@@ -69,7 +69,7 @@ test("preferences default to thread and persist separately for each authenticate
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     },
   });
@@ -78,7 +78,7 @@ test("preferences default to thread and persist separately for each authenticate
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     },
   });
@@ -137,7 +137,7 @@ test("saves the self-host banner dismissal without touching message list emphasi
       messageListEmphasis: "agent",
       selfHostBannerDismissed: true,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     },
   });
@@ -146,7 +146,7 @@ test("saves the self-host banner dismissal without touching message list emphasi
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     },
   });
@@ -167,7 +167,7 @@ test("keeps the person's narration choice without touching the others, and start
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
       narration: "on",
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     },
   });
@@ -211,7 +211,7 @@ test("saves the skin on the account without touching the other preferences", asy
         preferences: UserPreferences;
       }
     ).preferences.skin,
-  ).toBe("openbot");
+  ).toBe("xiongbao");
 });
 
 test("a skin OpenBot does not ship is refused with the skins it does", async () => {
@@ -222,7 +222,7 @@ test("a skin OpenBot does not ship is refused with the skins it does", async () 
   );
   expect(refused.status).toBe(400);
   expect(((await refused.json()) as { error: string }).error).toContain(
-    "openbot, openduet, opendots, openmuse",
+    "xiongbao, openduet, opendots, openmuse",
   );
 });
 
@@ -252,4 +252,14 @@ test("check-ins start on, and a person's off is kept without touching the others
   expect(
     (await (await appFor("alice").request(path)).json()).preferences.proactive,
   ).toBe("on");
+});
+
+test("a page that still sends the old default skin name has it stored under the new one", async () => {
+  const { appFor, state } = fixture();
+  const saved = await appFor("alice").request(path, patch({ skin: "openbot" }));
+  expect(saved.status).toBe(200);
+  expect(
+    ((await saved.json()) as { preferences: UserPreferences }).preferences.skin,
+  ).toBe("xiongbao");
+  expect(state.get("alice")?.skin).toBe("xiongbao");
 });

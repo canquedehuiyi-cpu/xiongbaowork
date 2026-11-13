@@ -576,7 +576,7 @@ test("a turn whose whole answer is an interface the Bot drew raises one notice w
     {
       title: "Trip Planner回复了",
       body: "Weekend trip budget",
-      tag: `openbot-${channel.id}`,
+      tag: `xiongbao-${channel.id}`,
     },
   ]);
 });
@@ -589,7 +589,7 @@ test("a turn whose whole answer is an interface drawn from the A2UI catalog rais
     {
       title: "Trip Planner回复了",
       body: "Weekend trip budget",
-      tag: `openbot-${channel.id}`,
+      tag: `xiongbao-${channel.id}`,
     },
   ]);
 });
@@ -609,7 +609,7 @@ test("a turn whose whole answer is a card raises one notice, over the card's tit
     {
       title: "Trip Planner回复了",
       body: "Northwind Traders",
-      tag: `openbot-${channel.id}`,
+      tag: `xiongbao-${channel.id}`,
     },
   ]);
 });
@@ -644,7 +644,7 @@ test("a turn that draws and then says something raises one notice, over what it 
     {
       title: "Trip Planner回复了",
       body: "Change any cost and the total updates.",
-      tag: `openbot-${channel.id}`,
+      tag: `xiongbao-${channel.id}`,
     },
   ]);
 });

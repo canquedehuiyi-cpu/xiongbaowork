@@ -154,7 +154,7 @@ function renderSettings() {
 test("picking a skin draws it at once and saves it on the account", async () => {
   signedIn();
   serve("GET /api/settings/preferences", {
-    preferences: preferences("openbot"),
+    preferences: preferences("xiongbao"),
   });
   const save = Promise.withResolvers<Response>();
   answers.set("PATCH /api/settings/preferences", () => save.promise);
@@ -267,7 +267,7 @@ test("signing out forgets the cached skin, so the next person starts from the de
 
   expect(cachedSkin()).toBeNull();
   expect(document.documentElement.dataset.skin).toBeUndefined();
-  expect(getSkinId()).toBe("openbot");
+  expect(getSkinId()).toBe("xiongbao");
   expect(queryClient.getQueryData(authKeys.currentUser())).toBeUndefined();
 });
 

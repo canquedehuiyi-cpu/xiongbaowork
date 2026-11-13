@@ -96,12 +96,47 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ && cp -R patches /prod/pat
   && bun install --frozen-lockfile --production
 
 
+# THE SERVER AS BUNDLED FILES. Each entry point becomes one file in /out/server/dist, with the npm
+# packages left external (they resolve from /app/node_modules as before) and everything of ours inlined.
+#
+# DIST, NOT /app/server ITSELF. tenant-package.ts finds `examples/personal` with
+# `new URL("../../examples/personal", import.meta.url)`; from `server/src/` that is /app/examples, and
+# `server/dist/` is the same depth. One level up it would be /examples. For the same reason
+# `scripts/migrate.ts` can say `join(import.meta.dir, "..")` and still find `server/drizzle`.
+#
+# `import.meta.main` is DEFINED true for the three scripts that guard their work with it. A shim
+# imports the bundle, and an imported module is never `main`, so without this `bun scripts/migrate.ts`
+# would load, do nothing and exit 0.
+FROM deps AS server-bundle
+COPY shared shared
+COPY toolkit toolkit
+# policy-network imports agent-computer/src/egress by relative path.
+COPY agent-computer/src agent-computer/src
+COPY server server
+COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
+RUN set -eu; mkdir -p /out/server/dist; \
+    bundle() { \
+      bun build "$1" --target=bun --minify --packages=external ${3:+--define import.meta.main=true} \
+        --outfile "/out/server/dist/$2.js"; \
+    }; \
+    bundle server/src/index.ts server; \
+    bundle server/scripts/migrate.ts migrate main; \
+    bundle server/scripts/fire-routines.ts fire-routines; \
+    bundle server/scripts/cull-idle-computers.ts cull-idle-computers; \
+    bundle server/scripts/cull-staged-attachments.ts cull-staged-attachments main; \
+    bundle server/src/learning/ensure-container.ts ensure-container main; \
+    bundle scripts/composio-smoke.ts composio-smoke
+
 # The source half of the runtime tree, with what a running container never reads taken out. The
 # runtime stage copies from here instead of from the build context, so the image carries the code that
 # runs and not the checks on it. Each deletion below has its reason; the ones that stay stay because
 # the server reads them at start (migrations, recovery, the tenant packages).
 FROM ubuntu:24.04 AS runtime-src
 COPY server /out/server
+# The server as bundled files (stage server-bundle), and the one-line shims that keep every path an
+# operator, a chart or a manual names pointing at them. See docker/server-shims.
+COPY --from=server-bundle /out/server/dist /out/server/dist
+COPY docker/server-shims /shims
 COPY shared /out/shared
 COPY toolkit /out/toolkit
 COPY examples /out/examples
@@ -111,6 +146,12 @@ RUN cd /out \
   # server/tests is the server's own test suite and server/tsconfig.tests.json only configures it;
   # nothing under src imports either. Most of the lines this image carried that do not belong to it.
   && find server/tests server/tsconfig.tests.json -delete \
+  # The TypeScript source of the server and its scripts does not ship: server/dist carries the code
+  # that runs. What stays at the old paths are the shims copied in below, one `import` line each, so
+  # `bun scripts/migrate.ts` from /app/server (the Helm jobs, the compose file, the operator manual)
+  # still means what it always did.
+  && find server/src server/scripts -delete \
+  && cp -R /shims/. /out/ \
   # server/docs is documentation for people who read the repository. The server serves none of it.
   && find server/docs -delete \
   # toolkit/tests is the toolkit's suite, and it is not a package export.
@@ -233,15 +274,15 @@ COPY --from=runtime-src /out/agent-computer/package.json agent-computer/package.
 # `bun run composio:smoke`, because the manifest copied above carries that entry and the question it
 # answers belongs here rather than on a laptop: it asks what THIS deployment's Composio key can see,
 # and that key is the one in this container's environment. It reads `server/src/plugins/composio*`,
-# which is already in the image, so the file itself was the only thing missing and the entry was an
-# instruction that could not be followed where it shipped.
+# which is bundled into server/dist/composio-smoke.js now that the source does not ship, so
+# scripts/composio-smoke.ts in the image is a one-line shim (docker/server-shims).
 #
-# ONE FILE, NOT `scripts/`. The others there are the laptop's. `diagram` and `mock:knowledge` reach
+# ONE SHIM, NOT `scripts/`. The others there are the laptop's. `diagram` and `mock:knowledge` reach
 # for `roughjs` and `@copilotkit/aimock`, which the prune above removes; `test:ci` runs a suite that
 # is not in the image; `generate:app-config` writes a file the build has already baked into
 # `app/dist`. Copying the directory ships four more entries with nothing to do here, to fix one that
 # has something to do.
-COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
+COPY --from=runtime-src /out/scripts scripts
 
 # The built app, served by the API on the same origin. There is no CORS in this server, so this is
 # not a convenience: two origins would simply fail.
@@ -453,14 +494,16 @@ RUN set -eu; \
     add REPOSITORY "${XIONGBAO_BUILD_REPOSITORY:-}"; \
     add CHANNEL "${XIONGBAO_BUILD_CHANNEL:-}"
 
+# The usage-reporting switch of the agent runtime library is not an ENV here: it is in docker/defaults.env,
+# which the env-aliases step reads and writes under its own name, only when the deployment has not set it.
+# So it reaches the s6 services (the server among them, which also silences it itself), not a process
+# started by hand with `docker exec`.
+
 # Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
 # container only callers on this machine are the administrator; in here every caller arrives through
 # the container engine's network, so that rule would refuse everybody. See `singleUserAccess` in
 # server/src/config.ts. It is IN_CONTAINER=true in docker/defaults.env (above).
 ENV NODE_ENV=production
-# The CopilotKit runtime reports usage to its vendor unless this is set; the server also swaps its
-# capture scope for a silent one, so this covers any process that reads the variable directly.
-ENV COPILOTKIT_TELEMETRY_DISABLED=1
 ENV PORT=3001
 EXPOSE 3001
 

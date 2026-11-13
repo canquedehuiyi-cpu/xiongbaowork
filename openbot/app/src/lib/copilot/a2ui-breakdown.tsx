@@ -193,7 +193,7 @@ export function A2UIBreakdown({
 
   return (
     <div
-      className="openbot-breakdown flex w-full min-w-0 flex-col gap-4"
+      className="xiongbao-breakdown flex w-full min-w-0 flex-col gap-4"
       data-slot="breakdown"
     >
       <div className="flex flex-col gap-2.5">

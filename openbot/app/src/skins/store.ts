@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { readMigrated } from "@/lib/storage-migrate";
-import { DEFAULT_SKIN, SKIN_IDS, type SkinId } from "./types";
+import { DEFAULT_SKIN, normalizeSkinId, type SkinId } from "./types";
 
 /*
  * The skin is saved on the person's account (`skin` in their preferences), so it follows them to
@@ -20,7 +20,7 @@ export const LEGACY_SKIN_STORAGE_KEY = "openbot-skin";
 export { DEFAULT_SKIN };
 
 export function parseStoredSkin(value: string | null | undefined): SkinId {
-  return SKIN_IDS.find((id) => id === value) ?? DEFAULT_SKIN;
+  return normalizeSkinId(value ?? "");
 }
 
 type SkinEffects = {

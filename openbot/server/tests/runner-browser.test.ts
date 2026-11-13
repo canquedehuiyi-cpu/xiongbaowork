@@ -1,10 +1,15 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  renameSync,
   rmSync,
+  statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,10 +18,14 @@ import {
   BROWSER_ACTIONS,
   BrowserFailure,
   type BrowserLaunchOptions,
+  type CounterStore,
   browserIdentityOf,
+  counterFileIn,
+  counterFilesIn,
   createRunnerBrowser,
   DEFAULT_BROWSER_CHANNEL,
   MAX_SNAPSHOT_GENERATION,
+  openCounterStore,
   ownedContextOf,
   playwrightLaunchOptions,
   type RunnerBrowser,
@@ -34,7 +43,9 @@ import {
  */
 
 /** The counter file's name, restated: the recovery advice in the refusals has to name this. */
-const COUNTER_FILE = "openbot-snapshots.sqlite";
+const COUNTER_FILE = "xiongbao-snapshots.sqlite";
+/** The name the counter file had before the rename, restated for the same reason. */
+const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
 const OWNER = { tenantId: "t-1", botId: "bot-a" };
 const COLLEAGUE = { tenantId: "t-1", botId: "bot-b" };
 const OTHER_TENANT = { tenantId: "t-2", botId: "bot-a" };
@@ -447,7 +458,7 @@ describe("what one browser action is answered with", () => {
         'input[autocomplete~="new-password"]',
         'input[autocomplete~="cc-number"]',
         'input[autocomplete~="cc-csc"]',
-        "[data-openbot-secret]",
+        "[data-xb-secret]",
       ].join(", "),
     );
     await browser.close();
@@ -783,9 +794,12 @@ describe("numbers that outlive the browser", () => {
     await a.close();
     mkdirSync(profileDir, { recursive: true });
     writeFileSync(join(profileDir, "Preferences"), "{}");
-    const counters = new Database(join(root, COUNTER_FILE));
-    counters.exec("DELETE FROM snapshot_counters");
-    counters.close();
+    // Both files hold the row for the whole window, so a row is missing only when it is missing from both.
+    for (const name of [COUNTER_FILE, LEGACY_COUNTER_FILE]) {
+      const counters = new Database(join(root, name));
+      counters.exec("DELETE FROM snapshot_counters");
+      counters.close();
+    }
 
     const second = fakeBrowser();
     const b = browserOf(root, second);
@@ -858,6 +872,398 @@ describe("numbers that outlive the browser", () => {
     const after = asRecord(await drive(browser, "snapshot"));
     expect(after.snapshotId).toBe(Number(before.snapshotId) + 1);
     await browser.close();
+  });
+
+  /** A root whose counter has been advanced to `snapshots` lists, and the file under the current name. */
+  async function countedRoot(snapshots: number): Promise<string> {
+    const root = profileRoot();
+    const browser = browserOf(root, fakeBrowser());
+    for (let i = 0; i < snapshots; i++) await drive(browser, "snapshot");
+    await browser.close();
+    return root;
+  }
+
+  function generationIn(path: string): number {
+    const counters = new Database(path);
+    const row = counters
+      .query("SELECT generation FROM snapshot_counters")
+      .get() as { generation: number };
+    counters.close();
+    return row.generation;
+  }
+  /** The counter an N-1 runner would read: the earlier name, opened as it always was. */
+  const generationUnderEarlierName = (root: string): number =>
+    generationIn(join(root, LEGACY_COUNTER_FILE));
+
+  test("a counter file under its earlier name is copied on start, the numbers carry on, and the earlier file stays for a rollback", async () => {
+    const root = await countedRoot(3);
+    renameSync(join(root, COUNTER_FILE), join(root, LEGACY_COUNTER_FILE));
+
+    const browser = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(browser, "snapshot"));
+    expect(next.snapshotId).toBe(4);
+    await browser.close();
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
+    expect(existsSync(join(root, LEGACY_COUNTER_FILE))).toBe(true);
+    expect(existsSync(`${join(root, COUNTER_FILE)}.copying`)).toBe(false);
+    // Rolled back to the runner before the rename: the file is there and holds the latest number issued.
+    expect(generationUnderEarlierName(root)).toBe(4);
+  });
+
+  test("an earlier counter that died with counts still in its WAL is checkpointed before the copy, so the counts are not lost", async () => {
+    const source = await countedRoot(3);
+    const root = profileRoot();
+    // The state an unclean exit leaves: a commit that only the `-wal` holds. The copies are taken while
+    // the writing connection is still open, which is what a crash leaves behind.
+    const writer = new Database(join(source, COUNTER_FILE));
+    writer.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;");
+    writer.exec("UPDATE snapshot_counters SET generation = generation + 10");
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    copyFileSync(join(source, COUNTER_FILE), legacy);
+    copyFileSync(`${join(source, COUNTER_FILE)}-wal`, `${legacy}-wal`);
+    writer.close();
+    expect(statSync(`${legacy}-wal`).size).toBeGreaterThan(0);
+
+    const browser = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(browser, "snapshot"));
+    expect(next.snapshotId).toBe(14);
+    await browser.close();
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
+    for (const leftover of [`${legacy}-wal`, `${legacy}-shm`])
+      expect(existsSync(leftover)).toBe(false);
+    // The earlier file was checkpointed before the copy, so it holds the counts too, and the number just issued.
+    expect(generationUnderEarlierName(root)).toBe(14);
+  });
+
+  test("a real crash scene, with the -wal and the -shm both left behind, is not copied and the earlier name is used, counts kept", async () => {
+    const source = await countedRoot(3);
+    const root = profileRoot();
+    const writer = new Database(join(source, COUNTER_FILE));
+    writer.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;");
+    writer.exec("UPDATE snapshot_counters SET generation = generation + 10");
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    copyFileSync(join(source, COUNTER_FILE), legacy);
+    copyFileSync(`${join(source, COUNTER_FILE)}-wal`, `${legacy}-wal`);
+    copyFileSync(`${join(source, COUNTER_FILE)}-shm`, `${legacy}-shm`);
+    writer.close();
+
+    expect(counterFileIn(root)).toBe(legacy);
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(false);
+    const browser = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(browser, "snapshot"));
+    expect(next.snapshotId).toBe(14);
+    await browser.close();
+  });
+
+  test("an earlier counter another process holds is not copied and not used alone: the open is refused as busy, not damaged", async () => {
+    const root = await countedRoot(2);
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    renameSync(join(root, COUNTER_FILE), legacy);
+    const holder = new Database(legacy);
+    holder.exec("PRAGMA locking_mode=EXCLUSIVE; BEGIN IMMEDIATE;");
+    try {
+      let message = "";
+      try {
+        counterFilesIn(root, 20);
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain("in use by another runner");
+      expect(message).toContain("try again");
+      expect(message).not.toContain("damaged");
+    } finally {
+      holder.exec("ROLLBACK");
+      holder.close();
+    }
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(false);
+    expect(existsSync(legacy)).toBe(true);
+  });
+
+  test("an earlier file that is no database is not copied, and its name is kept", () => {
+    const root = profileRoot();
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    writeFileSync(legacy, "this is not a database, only text".repeat(20));
+    expect(counterFileIn(root)).toBe(legacy);
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(false);
+    expect(statSync(legacy).size).toBe(
+      "this is not a database, only text".length * 20,
+    );
+  });
+
+  test("a copy that cannot be put in place leaves the earlier name in use and nothing half-made behind", async () => {
+    const root = await countedRoot(2);
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    renameSync(join(root, COUNTER_FILE), legacy);
+    // A dangling link stands where the current file would go: it does not "exist", and nothing can replace it.
+    symlinkSync(join(root, "nowhere"), join(root, COUNTER_FILE));
+    expect(counterFileIn(root)).toBe(legacy);
+    expect(readdirSync(root).filter((n) => n.endsWith(".copying"))).toEqual([]);
+    expect(generationUnderEarlierName(root)).toBe(2);
+  });
+
+  test("a current file that is already there is used as it is, never replaced by a copy of an earlier one", async () => {
+    const root = await countedRoot(9);
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    const older = await countedRoot(3);
+    copyFileSync(join(older, COUNTER_FILE), legacy);
+    const before = statSync(join(root, COUNTER_FILE)).mtimeMs;
+    expect(counterFilesIn(root)).toEqual({
+      file: join(root, COUNTER_FILE),
+      earlier: legacy,
+    });
+    expect(generationIn(join(root, COUNTER_FILE))).toBe(9);
+    expect(statSync(join(root, COUNTER_FILE)).mtimeMs).toBe(before);
+    expect(readdirSync(root).filter((n) => n.endsWith(".copying"))).toEqual([]);
+  });
+
+  test("while the earlier file exists every number issued is written to both files", async () => {
+    const root = await countedRoot(2);
+    renameSync(join(root, COUNTER_FILE), join(root, LEGACY_COUNTER_FILE));
+    const browser = browserOf(root, fakeBrowser());
+    for (let i = 3; i <= 6; i++) {
+      const next = asRecord(await drive(browser, "snapshot"));
+      expect(next.snapshotId).toBe(i);
+      expect(generationIn(join(root, COUNTER_FILE))).toBe(i);
+      // An N-1 runner reading the earlier name now sees the latest number.
+      expect(generationUnderEarlierName(root)).toBe(i);
+    }
+    await browser.close();
+  });
+
+  test("on a fresh root the earlier file is created too, so a rolled-back runner opens every profile with the latest number and never meets a missing counter", async () => {
+    const root = profileRoot();
+    const first = fakeBrowser();
+    const browser = browserOf(root, first);
+    for (let i = 1; i <= 3; i++)
+      expect(asRecord(await drive(browser, "snapshot")).snapshotId).toBe(i);
+    await browser.close();
+    expect(existsSync(join(root, LEGACY_COUNTER_FILE))).toBe(true);
+    // The profile is on disk (the browser launched in it), as it is for any coworker already using this root.
+    const profileDir = first.launches[0]?.profileDir ?? "";
+    mkdirSync(profileDir, { recursive: true });
+    writeFileSync(join(profileDir, "Preferences"), "{}");
+
+    // N-1 opens the earlier name the way it always did, with the profile on disk.
+    const rolledBack = openCounterStore(join(root, LEGACY_COUNTER_FILE));
+    const key = profileDir.split("/").pop() ?? "";
+    expect(rolledBack.open(key, true)).toBe(3);
+    rolledBack.close();
+  });
+
+  test("numbers an N-1 runner issued in the earlier file are not gone back over when N opens again: the larger stands", async () => {
+    const root = await countedRoot(2);
+    renameSync(join(root, COUNTER_FILE), join(root, LEGACY_COUNTER_FILE));
+    const first = browserOf(root, fakeBrowser());
+    await drive(first, "snapshot");
+    await first.close();
+    // N-1 issues more: it writes a larger number into the file it reads.
+    const earlier = new Database(join(root, LEGACY_COUNTER_FILE));
+    earlier.exec("UPDATE snapshot_counters SET generation = 20");
+    earlier.close();
+
+    const again = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(again, "snapshot"));
+    expect(next.snapshotId).toBe(21);
+    await again.close();
+    expect(generationIn(join(root, COUNTER_FILE))).toBe(21);
+    expect(generationUnderEarlierName(root)).toBe(21);
+  });
+
+  test("a larger number in the current file than in the earlier one stands, and the earlier file is brought up to it", async () => {
+    const root = await countedRoot(2);
+    renameSync(join(root, COUNTER_FILE), join(root, LEGACY_COUNTER_FILE));
+    const first = browserOf(root, fakeBrowser());
+    await drive(first, "snapshot");
+    await first.close();
+    const earlier = new Database(join(root, LEGACY_COUNTER_FILE));
+    earlier.exec("UPDATE snapshot_counters SET generation = 1");
+    earlier.close();
+
+    const again = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(again, "snapshot"));
+    expect(next.snapshotId).toBe(4);
+    await again.close();
+    expect(generationUnderEarlierName(root)).toBe(4);
+  });
+
+  test("a damaged earlier file beside the current one refuses to open, and the current file alone is not trusted", async () => {
+    const root = await countedRoot(2);
+    writeFileSync(
+      join(root, LEGACY_COUNTER_FILE),
+      "left alone, and no database",
+    );
+
+    const fake = fakeBrowser();
+    const browser = browserOf(root, fake);
+    const error = await refusal(drive(browser, "snapshot"));
+    expect(error.message).toContain("damaged");
+    expect(error.message).toContain(LEGACY_COUNTER_FILE);
+    expect(fake.launches).toHaveLength(0);
+    expect(generationIn(join(root, COUNTER_FILE))).toBe(2);
+    await browser.close();
+  });
+
+  test("when the earlier file cannot be written the increment fails and no number is issued", async () => {
+    const root = await countedRoot(2);
+    renameSync(join(root, COUNTER_FILE), join(root, LEGACY_COUNTER_FILE));
+    const first = browserOf(root, fakeBrowser());
+    await drive(first, "snapshot");
+    await first.close();
+    // A write to the earlier file that fails: a trigger that refuses every update to it.
+    const earlier = new Database(join(root, LEGACY_COUNTER_FILE));
+    earlier.exec(
+      "CREATE TRIGGER no_more BEFORE UPDATE ON snapshot_counters BEGIN SELECT RAISE(ABORT, 'read only'); END",
+    );
+    earlier.close();
+
+    const browser = browserOf(root, fakeBrowser());
+    let failed = false;
+    try {
+      await drive(browser, "snapshot");
+    } catch {
+      failed = true;
+    }
+    expect(failed).toBe(true);
+    await browser.close();
+    // Nothing was issued: the current file still holds the last number handed out before.
+    expect(generationIn(join(root, COUNTER_FILE))).toBe(3);
+
+    const repaired = new Database(join(root, LEGACY_COUNTER_FILE));
+    repaired.exec("DROP TRIGGER no_more");
+    repaired.close();
+    const again = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(again, "snapshot"));
+    expect(next.snapshotId).toBe(4);
+    await again.close();
+  });
+
+  describe("two runners on one profile root", () => {
+    /** Two stores over the same pair of files, as two runners pointed at one profile root would hold. */
+    function pair(between?: (self: "a" | "b") => void): {
+      a: CounterStore;
+      b: CounterStore;
+      files: [string, string];
+    } {
+      const root = profileRoot();
+      const files: [string, string] = [
+        join(root, COUNTER_FILE),
+        join(root, LEGACY_COUNTER_FILE),
+      ];
+      const a = openCounterStore(files[0], files[1], {
+        busyMs: 30,
+        between: () => between?.("a"),
+      });
+      const b = openCounterStore(files[0], files[1], {
+        busyMs: 30,
+        between: () => between?.("b"),
+      });
+      return { a, b, files };
+    }
+    const both = (files: [string, string]) =>
+      files.map((f) => generationIn(f)) as [number, number];
+    /** What another runner's attempt does while this one is mid-transaction: it must not get through. */
+    function attempt(work: () => number): { got?: number; blocked: boolean } {
+      try {
+        return { got: work(), blocked: false };
+      } catch (error) {
+        expect((error as Error).message).toContain("in use by another runner");
+        return { blocked: true };
+      }
+    }
+
+    test("an open that has read the numbers holds the lock until it has written them: the other runner cannot issue in between", () => {
+      let inside: { got?: number; blocked: boolean } | undefined;
+      let armed = false;
+      const { a, b, files } = pair((self) => {
+        if (self === "b" && armed) inside = attempt(() => a.next("p"));
+      });
+      a.open("p", false);
+      expect([a.next("p"), a.next("p"), a.next("p")]).toEqual([1, 2, 3]);
+      armed = true;
+      expect(b.open("p", true)).toBe(3);
+      expect(inside).toEqual({ blocked: true });
+      expect(a.next("p")).toBe(4);
+      expect(both(files)).toEqual([4, 4]);
+      a.close();
+      b.close();
+    });
+
+    test("two next() calls overlapping never issue the same number or go backwards", () => {
+      const issued: number[] = [];
+      let inside: { got?: number; blocked: boolean } | undefined;
+      let armed = false;
+      const { a, b, files } = pair((self) => {
+        if (self === "b" && armed) inside = attempt(() => a.next("p"));
+      });
+      a.open("p", false);
+      issued.push(a.next("p"), a.next("p"));
+      armed = true;
+      issued.push(b.next("p"));
+      armed = false;
+      expect(inside).toEqual({ blocked: true });
+      issued.push(a.next("p"), b.next("p"), a.next("p"));
+      expect(issued).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(both(files)).toEqual([6, 6]);
+      a.close();
+      b.close();
+    });
+
+    test("a number another runner wrote into the earlier file meanwhile is seen: the next one is above it", () => {
+      const { a, files } = pair();
+      a.open("p", false);
+      a.next("p");
+      const other = new Database(files[1]);
+      other.exec("UPDATE snapshot_counters SET generation = 20");
+      other.close();
+      expect(a.next("p")).toBe(21);
+      expect(both(files)).toEqual([21, 21]);
+      a.close();
+    });
+
+    test("opening a profile no file has a row for writes both, and never over a row that is there", () => {
+      const { a, b, files } = pair();
+      expect(a.open("fresh", false)).toBe(0);
+      a.next("fresh");
+      a.next("fresh");
+      // The second store opens the same profile afterwards: it finds 2 in both and writes nothing smaller.
+      expect(b.open("fresh", true)).toBe(2);
+      expect(both(files)).toEqual([2, 2]);
+      a.close();
+      b.close();
+    });
+
+    test("the earlier file locked by someone else is refused as busy, a file that is not a database as damaged", () => {
+      const root = profileRoot();
+      const main = join(root, COUNTER_FILE);
+      const earlier = join(root, LEGACY_COUNTER_FILE);
+      const maker = new Database(earlier);
+      maker.exec(
+        "PRAGMA journal_mode=WAL; CREATE TABLE snapshot_counters (profile TEXT PRIMARY KEY, generation INTEGER NOT NULL)",
+      );
+      maker.close();
+      const holder = new Database(earlier);
+      holder.exec("PRAGMA locking_mode=EXCLUSIVE; BEGIN IMMEDIATE;");
+      let busy = "";
+      try {
+        openCounterStore(main, earlier, { busyMs: 20 });
+      } catch (error) {
+        busy = (error as Error).message;
+      }
+      holder.exec("ROLLBACK");
+      holder.close();
+      expect(busy).toContain("in use by another runner");
+      expect(busy).not.toContain("damaged");
+
+      const junk = join(root, "junk.sqlite");
+      writeFileSync(junk, "no database here, only text".repeat(10));
+      let damaged = "";
+      try {
+        openCounterStore(join(root, "other.sqlite"), junk, { busyMs: 20 });
+      } catch (error) {
+        damaged = (error as Error).message;
+      }
+      expect(damaged).toContain("damaged");
+    });
   });
 });
 

@@ -32,7 +32,7 @@ test("an Arcade key and a broker provider are read, and an unknown provider is r
   expect(set.brokerProvider).toBe("arcade");
   expect(() =>
     loadConfig({ ...baseEnvironment, OPENBOT_BROKER_PROVIDER: "zapier" }),
-  ).toThrow(/OPENBOT_BROKER_PROVIDER 只能是 "composio" 或 "arcade"/);
+  ).toThrow(/XIONGBAO_BROKER_PROVIDER 只能是 "composio" 或 "arcade"/);
 });
 
 test("neither variable set leaves the config exactly as it was: no Arcade fields at all", () => {

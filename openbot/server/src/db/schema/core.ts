@@ -302,6 +302,15 @@ export const channels = pgTable(
      * from the identity provider before this one can decide anything.
      */
     allowedGroups: text("allowed_groups").array().notNull().default([]),
+    /**
+     * What the package declared here: `team`（能力资源移植方案 P4-4b）or `channel`. Written by
+     * `synchronizeTenantPackage` from whether the row came from `teams.yaml` (`teamChannels`) or
+     * `channels.yaml` — the two land in the same table on purpose, and without this stamp the 资源
+     * page cannot tell a team from a plain conversation, because `engineering` names three 员工 too.
+     * Default `channel`, so rows a package has not re-stamped since the column shipped read as what
+     * they are, and the next sync writes the truth over it.
+     */
+    kind: text("kind").notNull().default("channel"),
     packageId: uuid("package_id").references(() => deploymentPackages.id, {
       onDelete: "set null",
     }),

@@ -54,7 +54,7 @@ function serving() {
       messageListEmphasis: "thread",
       selfHostBannerDismissed: true,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive,
     });
     if (path === "/api/settings/preferences" && method === "PATCH") {

@@ -1,8 +1,1 @@
-[
-  {
-    "word": "COPILOTKIT_TELEMETRY_DISABLED",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "第三方运行时自己的变量名；附录 A 第 7 行获批后挪进 docker/defaults.env，届时从镜像 ENV 消失、从本词表删除"
-  }
-]
+[]

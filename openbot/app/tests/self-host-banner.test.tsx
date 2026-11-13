@@ -33,7 +33,7 @@ beforeEach(() => {
         messageListEmphasis: "thread",
         selfHostBannerDismissed: true,
         narration: null,
-        skin: "openbot",
+        skin: "xiongbao",
         proactive: "on",
       },
     });
@@ -91,7 +91,7 @@ function setup({
     messageListEmphasis: "thread",
     selfHostBannerDismissed: dismissed,
     narration: null,
-    skin: "openbot",
+    skin: "xiongbao",
     proactive: "on",
   };
   client.setQueryData(

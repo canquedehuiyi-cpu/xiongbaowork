@@ -206,18 +206,18 @@ unset HISTFILE MAILCHECK MAILPATH
 HISTSIZE=2000
 shopt -s checkwinsize
 stty -ixon 2>/dev/null
-__openbot_prompt() {
+__xiongbao_prompt() {
   local status=$?
   local turn=
   IFS= read -r turn < '${turnFile}' 2>/dev/null
   printf '\\033]${MARK_OSC};D;%s;%s\\007' "$turn" "$status"
 }
-PROMPT_COMMAND=__openbot_prompt
+PROMPT_COMMAND=__xiongbao_prompt
 PS0='${STARTED.replace("\x1b", "\\033").replace("\x07", "\\007")}'
 PS1='\\[\\033[38;5;147m\\]\\w\\[\\033[0m\\] \\$ '
 PS2='\\[${CONTINUED.replace("\x1b", "\\033").replace("\x07", "\\007")}\\]> '
 readonly PROMPT_COMMAND PS0 PS2
-readonly -f __openbot_prompt
+readonly -f __xiongbao_prompt
 `;
 }
 

@@ -1324,6 +1324,13 @@
       "when": 1794545581183,
       "tag": "0208_skill_runnable",
       "breakpoints": true
+    },
+    {
+      "idx": 209,
+      "version": "7",
+      "when": 1794546000000,
+      "tag": "0209_channel_kind",
+      "breakpoints": true
     }
   ]
 }

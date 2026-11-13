@@ -176,7 +176,7 @@ function renderSidebar() {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
     narration: null,
-    skin: "openbot",
+    skin: "xiongbao",
     proactive: "on",
   });
   queryClient.setQueryData(authKeys.currentUser(), {
@@ -262,7 +262,7 @@ test("message emphasis updates mounted rows from the account preferences cache",
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     }),
   );

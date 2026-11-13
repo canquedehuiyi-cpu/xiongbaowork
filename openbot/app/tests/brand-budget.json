@@ -46,11 +46,6 @@
   },
   {
     "rule": "declaration",
-    "scope": "app/src",
-    "lines": 1
-  },
-  {
-    "rule": "declaration",
     "scope": "extension/src",
     "lines": 1
   },
@@ -61,23 +56,18 @@
   },
   {
     "rule": "env-name",
-    "scope": "app/src",
-    "lines": 1
-  },
-  {
-    "rule": "env-name",
     "scope": "desktop-device/src-tauri",
     "lines": 5
   },
   {
     "rule": "env-name",
-    "scope": "docker/delivery.env.example",
-    "lines": 2
+    "scope": "docker/defaults.env",
+    "lines": 1
   },
   {
     "rule": "env-name",
-    "scope": "Dockerfile",
-    "lines": 1
+    "scope": "docker/delivery.env.example",
+    "lines": 2
   },
   {
     "rule": "env-name",
@@ -102,7 +92,7 @@
   {
     "rule": "identifier",
     "scope": "agent-computer/src",
-    "lines": 10
+    "lines": 6
   },
   {
     "rule": "identifier",
@@ -303,11 +293,6 @@
     "rule": "wire-dom",
     "scope": "agent-computer/src",
     "lines": 4
-  },
-  {
-    "rule": "wire-dom",
-    "scope": "runner/src",
-    "lines": 1
   },
   {
     "rule": "wire-dom",

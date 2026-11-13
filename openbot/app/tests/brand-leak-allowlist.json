@@ -112,34 +112,6 @@
     "removeIn": "0.2.11"
   },
   {
-    "file": "app/src/components/onboarding/demo-orb.tsx",
-    "text": "\"openbot\"}",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/components/bot-profile/attention.tsx",
-    "text": "`openbot-attention-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/components/bot-profile/attention.tsx",
-    "text": "`openbot-ping-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/styles.css",
-    "text": ".openbot-markdown, .openbot-breakdown",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
     "file": "app/src/skins/store.ts",
     "text": "\"openbot-skin\"",
     "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
@@ -147,20 +119,6 @@
     "plan": "remove",
     "introducedIn": "0.2.9",
     "removeIn": "0.2.11"
-  },
-  {
-    "file": "app/src/skins/registry.ts",
-    "text": "id: \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/skins/registry.ts",
-    "text": "openbot,",
-    "reason": "persisted-identifier: the default skin's module identifier (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/theme.ts",
@@ -260,13 +218,6 @@
   },
   {
     "file": "app/src/lib/notifications/show.ts",
-    "text": "`openbot-${channelId}`",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3) [待批：待批：附录 A 新增行（Task 8 报告）；app/tests/component-reply-notice.test.tsx:579,592,612,647]",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/lib/notifications/show.ts",
     "text": "\"plugin:openbot-desktop|notify\"",
     "reason": "persisted-identifier: Tauri plugin command the upstream desktop registers",
     "category": "persisted-data",
@@ -299,20 +250,6 @@
     "reason": "persisted-identifier: A2UI catalogue id shared with the agents",
     "category": "peer-protocol",
     "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/copilot/a2ui-breakdown.tsx",
-    "text": "openbot-breakdown flex",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/lib/copilot/a2ui-markdown.tsx",
-    "text": "a2ui-markdown openbot-markdown",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/copilot/carry-on.ts",
@@ -365,9 +302,11 @@
   {
     "file": "app/index.html",
     "text": "skin !== \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 默认皮肤改名前的 id，预绘脚本把缓存里的旧值也当默认、不设 data-skin（L1-2，附录 A 第 13 行；index.html 不能 import，所以不删这一行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "server/src/components/routes.ts",
@@ -524,13 +463,6 @@
     "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "server/src/browser/routes.ts",
-    "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
-    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL [待批：附录 A 第 6 行；server/tests/browser-routes.integration.test.ts:2739]",
-    "category": "operator-visible",
-    "plan": "rewrite"
   },
   {
     "file": "server/src/browser/routes.ts",
@@ -927,9 +859,12 @@
   {
     "file": "runner/src/browser.ts",
     "text": "\"openbot-snapshots.sqlite\"",
-    "reason": "persisted-identifier: snapshot database file in existing profiles (L1-18)",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（L1-18，附录 A 第 10 行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "device": true
   },
   {
     "file": "desktop-device/src-tauri/src/main.rs",
@@ -1038,17 +973,12 @@
   },
   {
     "file": "shared/user-preferences.ts",
-    "text": "\"openbot\",",
-    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "shared/user-preferences.ts",
-    "text": "DEFAULT_SKIN: SkinId = \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "text": "\"openbot\"",
+    "reason": "persisted-identifier: 默认皮肤改名前的 id，只在 normalizeSkinId 的映射里认，把已存的账号偏好和浏览器缓存里的旧值读成 xiongbao（L1-2，附录 A 第 13 行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "shared/openbot-actor.ts",
@@ -1148,9 +1078,11 @@
   {
     "file": "extension/src/content/notice.ts",
     "text": "\"openbot-recorder-notice\"",
-    "reason": "persisted-identifier: 页面里的自定义元素标签；附录 A 第 11 行（已批）由 Task 19 落地前仍画这个名字，落地后只作旧名查找、移除（L1-22）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧标签名；新版本画 xb-recorder-notice，查找、移除时仍认旧名，扩展更新期间老内容脚本画的提示不重复、不残留（L1-22，Task 14，附录 A 第 11 行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/content/notice.ts",
@@ -1383,13 +1315,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/auth/dev-actor.ts",
-    "text": "OPENBOT_SINGLE_USER=true",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1523]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "server/src/auth/role-writer-lifecycle.ts",
     "text": "OPENBOT_RLS_ENFORCE must",
     "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/server-readiness-gates.test.ts:375]",
@@ -1405,20 +1330,6 @@
   },
   {
     "file": "server/src/config.ts",
-    "text": "OPENBOT_BROKER_PROVIDER 只能",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：附录 A 第 6 行；server/tests/arcade-config.test.ts:35]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "OPENBOT_SINGLE_USER admits",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:625,655,672]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
     "text": "OPENBOT_THIS_MACHINE_HOST \"",
     "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/agent-on-this-machine.test.ts:376]",
     "category": "operator-visible",
@@ -1428,13 +1339,6 @@
     "file": "server/src/config.ts",
     "text": "needs OPENBOT_PUBLIC_URL",
     "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config-github-app.test.ts:81]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "OPENBOT_EDITION=personal",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1523]",
     "category": "operator-visible",
     "plan": "rewrite"
   },

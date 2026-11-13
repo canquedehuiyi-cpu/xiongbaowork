@@ -209,7 +209,7 @@ function renderSidebar(
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
     narration: null,
-    skin: "openbot",
+    skin: "xiongbao",
     proactive: "on",
   });
   queryClient.setQueryData(deploymentKeys.capabilities(), {
