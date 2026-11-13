@@ -50,16 +50,21 @@ export function sidecarFile(triple: string): string {
   return `xiongbao-runner-${triple}${triple.includes("windows") ? ".exe" : ""}`;
 }
 
+/**
+ * `entry` is the runner unless a test names another file to compile with exactly these flags
+ * (`runner/tests/sidecar-playwright.test.ts`).
+ */
 export function compileArgs(
   triple: string,
   host: string,
   outfile: string,
+  entry: string = ENTRY,
 ): string[] {
   return [
     "build",
     "--compile",
     ...(triple === host ? [] : [`--target=${bunTargetFor(triple)}`]),
-    ENTRY,
+    entry,
     "--external",
     "chromium-bidi",
     "--external",
