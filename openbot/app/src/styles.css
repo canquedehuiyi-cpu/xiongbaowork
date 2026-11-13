@@ -435,7 +435,7 @@ body {
  * take back their type size the same way.
  */
 .a2ui-surface
-  :is(.openbot-markdown, .openbot-breakdown)
+  :is(.xiongbao-markdown, .xiongbao-breakdown)
   :is(h1, h2, h3, h4, h5, h6, button, input, select, textarea) {
   font: revert-layer;
   color: revert-layer;

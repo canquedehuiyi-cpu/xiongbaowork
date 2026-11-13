@@ -19,7 +19,6 @@
           if (old === null) return null;
           try {
             window.localStorage.setItem(key, old);
-            window.localStorage.removeItem(legacy);
           } catch {}
           return old;
         };

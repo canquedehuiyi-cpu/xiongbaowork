@@ -189,7 +189,7 @@ test("the orb is OpenBot's own, listening, and settles into done when onboarding
   const view = render(<NameOrb />);
   const orb = () =>
     view.container.querySelector<HTMLElement>("[data-orb]") as HTMLElement;
-  expect(orb().getAttribute("data-orb")).toBe("openbot");
+  expect(orb().getAttribute("data-orb")).toBe("xiongbao");
   expect(orb().getAttribute("data-state")).toBe("listening");
   expect(view.container.querySelector("[data-onboarding-finish]")).toBeNull();
 

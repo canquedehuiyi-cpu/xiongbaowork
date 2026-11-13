@@ -162,7 +162,7 @@ export function useAttentionNotifications(bots: BotAttention[] | undefined) {
           // The conversation's tag when it waits in one: its reply notice, if any, is replaced by this.
           tag: bot.waitingIn
             ? conversationTag(bot.waitingIn)
-            : `openbot-attention-${bot.agentId}`,
+            : `xiongbao-attention-${bot.agentId}`,
           path: noticePath(bot),
         });
     });
@@ -209,7 +209,7 @@ function usePingNotifications(
       showNotice({
         title: notice.title,
         body: notice.body,
-        tag: `openbot-ping-${lastPingId}`,
+        tag: `xiongbao-ping-${lastPingId}`,
         path: "/bots",
       });
     })();

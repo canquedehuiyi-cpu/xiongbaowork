@@ -61,11 +61,6 @@
   },
   {
     "rule": "env-name",
-    "scope": "app/src",
-    "lines": 1
-  },
-  {
-    "rule": "env-name",
     "scope": "desktop-device/src-tauri",
     "lines": 5
   },

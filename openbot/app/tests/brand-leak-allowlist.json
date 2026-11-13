@@ -112,34 +112,6 @@
     "removeIn": "0.2.11"
   },
   {
-    "file": "app/src/components/onboarding/demo-orb.tsx",
-    "text": "\"openbot\"}",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/components/bot-profile/attention.tsx",
-    "text": "`openbot-attention-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/components/bot-profile/attention.tsx",
-    "text": "`openbot-ping-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/styles.css",
-    "text": ".openbot-markdown, .openbot-breakdown",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
     "file": "app/src/skins/store.ts",
     "text": "\"openbot-skin\"",
     "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
@@ -246,13 +218,6 @@
   },
   {
     "file": "app/src/lib/notifications/show.ts",
-    "text": "`openbot-${channelId}`",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3) [待批：待批：附录 A 新增行（Task 8 报告）；app/tests/component-reply-notice.test.tsx:579,592,612,647]",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/lib/notifications/show.ts",
     "text": "\"plugin:openbot-desktop|notify\"",
     "reason": "persisted-identifier: Tauri plugin command the upstream desktop registers",
     "category": "persisted-data",
@@ -285,20 +250,6 @@
     "reason": "persisted-identifier: A2UI catalogue id shared with the agents",
     "category": "peer-protocol",
     "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/copilot/a2ui-breakdown.tsx",
-    "text": "openbot-breakdown flex",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/lib/copilot/a2ui-markdown.tsx",
-    "text": "a2ui-markdown openbot-markdown",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
   },
   {
     "file": "app/src/lib/copilot/carry-on.ts",

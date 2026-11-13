@@ -24,7 +24,7 @@ export function DemoOrb({
   return (
     <span
       aria-hidden="true"
-      data-orb={seed ? "bot" : "openbot"}
+      data-orb={seed ? "bot" : "xiongbao"}
       data-state={state}
       className={`inline-flex shrink-0 rounded-full ${seed ? "bot-orb-live ring-1 ring-foreground/10" : ""}`}
       style={{ height: size, width: size }}

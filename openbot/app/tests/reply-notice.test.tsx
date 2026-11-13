@@ -277,7 +277,7 @@ test("a Bot's reply while OpenBot is out of sight shows one notice, naming the B
       title: "Expenses回复了",
       body: "Categorized three expenses.",
       // The conversation's tag, which its "needs you" notice shares: one notice per conversation.
-      tag: "openbot-march-receipts",
+      tag: "xiongbao-march-receipts",
       extra: { path: "/channel/march-receipts" },
     },
   ]);
@@ -390,7 +390,7 @@ const DESKTOP_REPLY = {
   // The page a click opens, from the notification centre too.
   path: "/channel/march-receipts",
   // The conversation's: Windows replaces a toast of the same tag rather than stacking another.
-  tag: "openbot-march-receipts",
+  tag: "xiongbao-march-receipts",
 };
 
 test("in OpenBot Desktop the desktop app shows it, naming the conversation a click opens", async () => {
@@ -475,7 +475,7 @@ test("a turn that ends in a question gives exactly one notice, and it is the que
 
   await waitFor(() =>
     expect(shown.map(({ title, options }) => [title, options.tag])).toEqual([
-      ["Expenses 需要你", "openbot-march-receipts"],
+      ["Expenses 需要你", "xiongbao-march-receipts"],
     ]),
   );
   await settle();

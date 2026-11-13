@@ -193,7 +193,7 @@ test("a task that starts waiting on the person sends a browser notification, tho
       {
         title: "Expenses 需要你",
         body: "1 个任务等你处理",
-        tag: "openbot-attention-expenses",
+        tag: "xiongbao-attention-expenses",
         path: "/bots/expenses",
       },
     ]),
@@ -220,7 +220,7 @@ test("a Bot that starts waiting in a conversation sends a notice that opens that
         title: "Expenses 需要你",
         body: "1 个提问",
         // The conversation's tag: its reply notice, if any, is replaced by this one.
-        tag: "openbot-channel-plan",
+        tag: "xiongbao-channel-plan",
         path: "/channel/channel-plan",
       },
     ]),
@@ -286,7 +286,7 @@ test("a ping of three items sends one browser notification, and nothing more unt
       "Expenses: Reply to Dana",
       "Knowledge: Fix the stale onboarding page",
     ].join("\n"),
-    tag: "openbot-ping-ping-1",
+    tag: "xiongbao-ping-ping-1",
     path: "/bots",
   });
 
@@ -311,7 +311,7 @@ test("a ping of three items sends one browser notification, and nothing more unt
   expect(sent[1]).toEqual({
     title: "有一件事需要你",
     body: "Expenses: Book the venue",
-    tag: "openbot-ping-ping-2",
+    tag: "xiongbao-ping-ping-2",
     path: "/bots",
   });
 });
@@ -346,7 +346,7 @@ test("a ping that carried one thing twice, from two Bots, lists it once, labelle
       "Expenses: Approve the Q4 budget by Friday",
       "Expenses: Confirm November offsite headcount",
     ].join("\n"),
-    tag: "openbot-ping-ping-1",
+    tag: "xiongbao-ping-ping-1",
     path: "/bots",
   });
 });

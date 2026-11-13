@@ -393,7 +393,7 @@ test("everything the SDK's stylesheet sets on headings and buttons is handed bac
 
   const ours = rules(
     readFileSync(new URL("../src/styles.css", import.meta.url), "utf8"),
-  ).find(({ selector }) => selector.includes(".openbot-markdown"));
+  ).find(({ selector }) => selector.includes(".xiongbao-markdown"));
   expect(ours?.selector ?? "").toContain(":is(h1, h2, h3, h4, h5, h6, button");
   const reverted = new Set(
     ours?.properties
