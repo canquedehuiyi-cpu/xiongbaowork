@@ -8,8 +8,8 @@
  *   legacy-compat：introducedIn 0.2.11，removeIn 0.2.13，<what it covers>
  *
  * and this check fails once the current version reaches `removeIn`, the way the allowlist's own
- * expiry does for its entries. A line that names `legacy-compat` with a colon but does not fit the
- * format is reported too: a window nobody can read is a window nobody enforces.
+ * expiry does for its entries. A line that names `legacy-compat` with a colon, or directly followed by `introducedIn`
+ * or `removeIn`, but does not fit the format is reported too: a window nobody can read is a window nobody enforces.
  */
 
 import { execFileSync } from "node:child_process";
@@ -18,8 +18,13 @@ import { join } from "node:path";
 import { compare } from "./allowlist";
 import { REPO } from "./scan";
 
-/** Any line that means to record a window: the word and a colon, full- or half-width. */
-const TRIGGER = /legacy-compat\s*[：:]/;
+/**
+ * Any line that means to record a window: the word and a colon, full- or half-width, or the word
+ * followed directly by `introducedIn` or `removeIn` — a window whose colon was dropped is
+ * still a window, and skipping it would leave the old name with no expiry at all.
+ */
+const TRIGGER =
+  /legacy-compat\s*[：:]|legacy-compat\s*[，,]?\s*(?:introducedIn|removeIn)\b/;
 
 /** The agreed format. Full- or half-width colon and commas; anything after a further comma is a note. */
 export const COMPAT_COMMENT =
