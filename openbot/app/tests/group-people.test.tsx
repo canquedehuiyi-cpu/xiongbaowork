@@ -1,6 +1,13 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { GroupPeopleButton } from "@/components/channels/group-people";
@@ -24,9 +31,12 @@ afterEach(() => {
 });
 
 let people: Record<string, unknown>[] = [];
+/** Whether the chat is a group's: the groups the person made, one of which has this chat. */
+let linked = true;
 const requests: string[] = [];
-function serving(initial: Record<string, unknown>[]) {
+function serving(initial: Record<string, unknown>[], isLinked = true) {
   people = initial;
+  linked = isLinked;
   requests.length = 0;
   global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -46,6 +56,21 @@ function serving(initial: Record<string, unknown>[]) {
       }
       return Response.json({ ok: true });
     }
+    if (url === "/api/waker-groups") {
+      return Response.json({
+        groups: linked
+          ? [
+              {
+                id: "wg-1",
+                name: "群",
+                description: null,
+                members: [],
+                channelId: "group-1",
+              },
+            ]
+          : [],
+      });
+    }
     if (url === "/api/me") {
       return Response.json({
         user: { id: "me", role: "user", email: "me@example.test" },
@@ -55,14 +80,33 @@ function serving(initial: Record<string, unknown>[]) {
   }) as unknown as typeof fetch;
 }
 
+/** In the group's own route, so leaving can be seen to take the person home. */
 function draw() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>
-      <GroupPeopleButton channelId="group-1" />
-    </QueryClientProvider>,
+  const root = createRootRoute();
+  const group = createRoute({
+    getParentRoute: () => root,
+    path: "/group/$channelId",
+    component: () => <GroupPeopleButton channelId="group-1" />,
+  });
+  const home = createRoute({
+    getParentRoute: () => root,
+    path: "/",
+    component: () => <p>home</p>,
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([group, home]),
+    history: createMemoryHistory({ initialEntries: ["/group/group-1"] }),
+  });
+  return Object.assign(
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    ),
+    { router },
   );
 }
 
@@ -163,4 +207,25 @@ test("the server's refusal to leave is shown as it was sent", async () => {
   expect((await view.findByRole("alert")).textContent).toBe(
     "有组团流程正在运行，先停下再退群。",
   );
+});
+
+test("the creator of a chat that is no group's has no way to leave it", async () => {
+  serving([ME, ALEX], false);
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "2 人" }));
+  await view.findByText("Alex");
+  expect(view.queryByRole("button", { name: "退出这个群聊" })).toBeNull();
+  // Taking someone else out is still theirs to do.
+  expect(
+    view.getByRole("button", { name: "移除 alex@example.test" }),
+  ).toBeTruthy();
+});
+
+test("after the creator leaves, the person is taken home", async () => {
+  serving([ME, ALEX]);
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "2 人" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  fireEvent.click(await view.findByRole("button", { name: "确认退出" }));
+  await waitFor(() => expect(view.router.state.location.pathname).toBe("/"));
 });

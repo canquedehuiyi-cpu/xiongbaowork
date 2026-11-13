@@ -642,7 +642,8 @@ function row(props: {
   canRename: boolean;
   people: string[];
 }) {
-  reset();
+  // Only a chat that is one of the person's own groups is in the list the menu reads.
+  reset({ crews: props.groupId ? [crew()] : [] });
   const root = createRootRoute({
     component: () => (
       <SidebarProvider>
@@ -694,7 +695,7 @@ test("a linked chat's row menu offers 解散群组 to its creator and 退出群�
     people: ["agent-a", "agent-b"],
   });
   let menu = await menuOf(mine);
-  expect(menu.getByRole("menuitem", { name: /解散群组…/ })).toBeTruthy();
+  expect(await menu.findByRole("menuitem", { name: /解散群组…/ })).toBeTruthy();
   expect(menu.queryByRole("menuitem", { name: /退出群组…/ })).toBeNull();
   expect(menu.queryByRole("menuitem", { name: /删除会话…/ })).toBeNull();
   fireEvent.click(menu.getByRole("menuitem", { name: /解散群组…/ }));
@@ -720,6 +721,7 @@ test("a linked chat's row menu offers 解散群组 to its creator and 退出群�
 
   const theirs = row({ canRename: false, people: ["agent-a", "agent-b"] });
   menu = await menuOf(theirs);
+  expect(await menu.findByRole("menuitem", { name: /退出群组…/ })).toBeTruthy();
   expect(menu.queryByRole("menuitem", { name: /解散群组…/ })).toBeNull();
   expect(menu.queryByRole("menuitem", { name: /删除会话…/ })).toBeNull();
   fireEvent.click(menu.getByRole("menuitem", { name: /退出群组…/ }));
@@ -757,4 +759,42 @@ test("the panel can be drawn on its own", async () => {
     </QueryClientProvider>,
   );
   expect(await view.findByText("员工与顺序")).toBeTruthy();
+});
+
+test("a refused dissolve is shown, and gone when the dialog is opened again", async () => {
+  reset();
+  const base = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
+    init?.method === "DELETE"
+      ? NativeResponse.json(
+          { error: "有组团流程正在运行，先停下再解散。" },
+          { status: 409 },
+        )
+      : base(input, init)) as typeof fetch;
+  const { view } = drawer();
+  const panel = await panelOf(view);
+  fireEvent.click(await panel.findByRole("button", { name: "解散群组" }));
+  const body = within(document.body);
+  fireEvent.click(
+    await body.findByRole("button", { name: "确认解散「周报群」" }),
+  );
+  expect((await body.findByRole("alert")).textContent).toContain(
+    "有组团流程正在运行，先停下再解散。",
+  );
+  fireEvent.click(body.getByRole("button", { name: "取消" }));
+  await waitFor(() => expect(body.queryByRole("alert")).toBeNull());
+  fireEvent.click(await panel.findByRole("button", { name: "解散群组" }));
+  await body.findByRole("button", { name: "确认解散「周报群」" });
+  expect(body.queryByRole("alert")).toBeNull();
+});
+
+test("any other failure says so and can be retried", async () => {
+  reset({ forChannel: { status: 500, body: { error: "boom" } } });
+  const { view } = drawer();
+  const panel = await panelOf(view);
+  expect(await panel.findByText("群组信息加载失败。")).toBeTruthy();
+  expect(panel.queryByText("boom")).toBeNull();
+  world.forChannel = { status: 200, body: { group: crew() } };
+  fireEvent.click(panel.getByRole("button", { name: "重试" }));
+  expect(await panel.findByText("名称与用途")).toBeTruthy();
 });

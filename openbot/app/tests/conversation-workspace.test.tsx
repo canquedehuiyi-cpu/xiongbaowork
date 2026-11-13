@@ -21,7 +21,13 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "@/components/app-sidebar/app-shell";
 import { ConversationWorkspace } from "@/components/app-sidebar/conversation-workspace";
@@ -37,6 +43,7 @@ import { deploymentKeys } from "@/lib/deployment/queries";
 import { portraitKeys } from "@/lib/portraits/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
+import { type WakerGroup, wakerGroupKeys } from "@/lib/waker-groups/queries";
 import { settleReactWork } from "./settle-react-work";
 
 class OfflineWebSocket extends EventTarget {
@@ -181,7 +188,12 @@ function renderApp(
   {
     channels = CHANNELS,
     nextCursor = null,
-  }: { channels?: ChannelSummary[]; nextCursor?: string | null } = {},
+    groups = [],
+  }: {
+    channels?: ChannelSummary[];
+    nextCursor?: string | null;
+    groups?: WakerGroup[];
+  } = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -292,6 +304,7 @@ function renderApp(
     ],
     lastActivityAt: null,
   });
+  queryClient.setQueryData(wakerGroupKeys.list(), groups);
   queryClient.setQueryData(channelKeys.list(), {
     pages: [{ channels, nextCursor }],
     pageParams: [""],
@@ -526,5 +539,29 @@ test("an employee the roster does not list is named from its own record", async 
   });
   expect(
     await view.findByRole("complementary", { name: "隐身员工的对话" }),
+  ).toBeTruthy();
+});
+
+test("a linked chat the person made offers 解散群组… in the employee's list", async () => {
+  const { view } = renderApp("/channel/c-analyst-new", {
+    channels: CHANNELS.map((row) =>
+      row.id === "c-crew" ? { ...row, canRename: true } : row,
+    ),
+    groups: [
+      {
+        id: "wg-1",
+        name: "复盘群",
+        description: null,
+        members: [],
+        channelId: "c-crew",
+      },
+    ],
+  });
+  const column = await view.findByRole("complementary", {
+    name: "分析师的对话",
+  });
+  fireEvent.contextMenu(within(column).getByRole("link", { name: /联合复盘/ }));
+  expect(
+    await within(document.body).findByRole("menuitem", { name: /解散群组…/ }),
   ).toBeTruthy();
 });

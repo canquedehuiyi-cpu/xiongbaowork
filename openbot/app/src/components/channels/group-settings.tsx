@@ -91,11 +91,19 @@ export function GroupSettingsPanel({ channelId }: { channelId: string }) {
   let body = <p className="text-muted-foreground text-sm">正在读取…</p>;
   if (lookup.isError) {
     const error = lookup.error;
-    const refused = error instanceof CrewRequestError && error.status === 403;
+    const status = error instanceof CrewRequestError ? error.status : 0;
+    const gone = status === 409;
     body = (
       <ReadOnlyRoster
         channelId={channelId}
-        note={refused ? "只有发起人能调整" : error.message}
+        note={
+          status === 403
+            ? "只有发起人能调整"
+            : gone
+              ? error.message
+              : "群组信息加载失败。"
+        }
+        onRetry={status === 403 || gone ? undefined : () => mutate(channelId)}
       />
     );
   } else if (lookup.data) {
@@ -127,9 +135,11 @@ function Section({
 function ReadOnlyRoster({
   channelId,
   note,
+  onRetry,
 }: {
   channelId: string;
   note: string;
+  onRetry?: () => void;
 }) {
   const conversation = useQuery(groupQueryOptions(channelId));
   return (
@@ -140,6 +150,13 @@ function ReadOnlyRoster({
         ))}
       </ol>
       <p className="text-muted-foreground text-xs">{note}</p>
+      {onRetry ? (
+        <div>
+          <Button onClick={onRetry} size="sm" variant="outline">
+            重试
+          </Button>
+        </div>
+      ) : null}
     </Section>
   );
 }

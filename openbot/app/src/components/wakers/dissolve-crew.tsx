@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,6 +59,11 @@ export function DissolveCrewDialog({
 }) {
   const queryClient = useQueryClient();
   const retire = useMutation(retireCrewMutationOptions(queryClient));
+  const { reset } = retire;
+  // A refusal from a previous attempt is not news about this one.
+  useEffect(() => {
+    if (!open) reset();
+  }, [open, reset]);
   const { counting, copy } = useDissolveCopy(crew, open);
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>

@@ -1,4 +1,5 @@
 import {
+  IconLoader2,
   IconLogout,
   IconPencil,
   IconPin,
@@ -83,7 +84,7 @@ export const Channel = memo(function Channel({
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const [dissolving, setDissolving] = useState(false);
+  const [dissolving, setDissolving] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   /**
    * Why a pin did not take, said on the row it was asked of.
@@ -144,32 +145,15 @@ export const Channel = memo(function Channel({
               重命名会话…
             </ContextMenuItem>
           ) : null}
-          {groupId ? (
-            // A chat the person's own group is the other face of: deleting it would orphan the group.
-            <ContextMenuItem
-              variant="destructive"
-              onClick={() => setDissolving(true)}
-            >
-              <IconUsersMinus />
-              解散群组…
-            </ContextMenuItem>
-          ) : group && !canRename ? (
-            <ContextMenuItem
-              variant="destructive"
-              onClick={() => setLeaving(true)}
-            >
-              <IconLogout />
-              退出群组…
-            </ContextMenuItem>
-          ) : (
-            <ContextMenuItem
-              variant="destructive"
-              onClick={() => setConfirming(true)}
-            >
-              <IconTrash />
-              删除会话…
-            </ContextMenuItem>
-          )}
+          <DangerItem
+            canRename={canRename}
+            channelId={channelId}
+            group={group}
+            groupId={groupId}
+            onDelete={() => setConfirming(true)}
+            onDissolve={setDissolving}
+            onLeave={() => setLeaving(true)}
+          />
         </ContextMenuContent>
       </ContextMenu>
       {pinProblem ? (
@@ -183,12 +167,12 @@ export const Channel = memo(function Channel({
         open={renaming}
         title={summary || untitled || ""}
       />
-      {dissolving && groupId ? (
+      {dissolving ? (
         <DissolveRowDialog
           fallbackName={name}
-          groupId={groupId}
+          groupId={dissolving}
           onDissolved={isOpen ? () => navigate({ to: "/" }) : undefined}
-          onOpenChange={setDissolving}
+          onOpenChange={(open) => setDissolving(open ? dissolving : null)}
         />
       ) : null}
       <LeaveGroupDialog
@@ -235,5 +219,62 @@ function DissolveRowDialog({
       onOpenChange={onOpenChange}
       open
     />
+  );
+}
+
+/**
+ * The menu's last item, which depends on whether the chat is a group's the person made. That is
+ * read from the groups list, and the list is read only here: the menu's content mounts when the menu
+ * opens, so a roster whose menus are never opened asks for nothing. Until the answer is in a disabled
+ * placeholder stands in, so 删除会话 never shows first and then turns into something else. If the
+ * read fails, a multi-employee chat falls back to what the row knew: not mine to rename → leave,
+ * mine → delete.
+ */
+function DangerItem({
+  canRename,
+  channelId,
+  group,
+  groupId,
+  onDelete,
+  onDissolve,
+  onLeave,
+}: {
+  canRename: boolean;
+  channelId: string;
+  group: boolean;
+  groupId?: string;
+  onDelete: () => void;
+  onDissolve: (groupId: string) => void;
+  onLeave: () => void;
+}) {
+  const groups = useQuery({ ...wakerGroupsQueryOptions(), enabled: group });
+  if (group && groups.isPending)
+    return (
+      <ContextMenuItem disabled>
+        <IconLoader2 />
+        正在读取…
+      </ContextMenuItem>
+    );
+  const linked =
+    groupId ?? groups.data?.find((entry) => entry.channelId === channelId)?.id;
+  if (linked)
+    return (
+      <ContextMenuItem variant="destructive" onClick={() => onDissolve(linked)}>
+        <IconUsersMinus />
+        解散群组…
+      </ContextMenuItem>
+    );
+  if (group && !canRename)
+    return (
+      <ContextMenuItem variant="destructive" onClick={onLeave}>
+        <IconLogout />
+        退出群组…
+      </ContextMenuItem>
+    );
+  return (
+    <ContextMenuItem variant="destructive" onClick={onDelete}>
+      <IconTrash />
+      删除会话…
+    </ContextMenuItem>
   );
 }

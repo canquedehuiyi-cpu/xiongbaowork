@@ -1,5 +1,6 @@
 import { IconUser, IconUsers } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ import {
   groupQueryOptions,
   removeGroupMemberMutationOptions,
 } from "@/lib/groups";
+import { useGroupOfChannel } from "@/lib/waker-groups/use-group-of-channel";
 
 /**
  * Who is in a group, from its top bar: how many people, and a dialog listing them where the creator
@@ -44,6 +46,16 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
   const remove = useMutation(
     removeGroupMemberMutationOptions(queryClient, channelId),
   );
+  const navigate = useNavigate();
+  const onScreen = useParams({
+    strict: false,
+    select: (params) =>
+      (params as { channelId?: string }).channelId === channelId,
+  });
+  // Only a chat that is a group's has someone to hand it to; the creator of any other cannot leave.
+  const linked = useGroupOfChannel().has(channelId);
+  // Away once out, so nobody is left looking at a chat they are no longer in.
+  const leave = onScreen ? () => void navigate({ to: "/" }) : undefined;
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   // The creator's leaving hands the group on (or ends the chat), so it is asked before it is done.
@@ -84,7 +96,7 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
             <div className="overflow-hidden rounded-lg">
               {people.map((person, index) => {
                 const self = person.userId === me?.id;
-                const removable = self || iCreated;
+                const removable = self ? !person.creator || linked : iCreated;
                 return (
                   <Fragment key={person.userId}>
                     {index > 0 ? <Separator /> : null}
@@ -110,7 +122,9 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                             onClick={() =>
                               self && iCreated
                                 ? setConfirmingLeave(true)
-                                : remove.mutate(person.userId)
+                                : remove.mutate(person.userId, {
+                                    onSuccess: () => self && leave?.(),
+                                  })
                             }
                             size="sm"
                             variant="outline"
@@ -132,7 +146,10 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                     disabled={remove.isPending}
                     onClick={() =>
                       remove.mutate(me?.id ?? "", {
-                        onSuccess: () => setConfirmingLeave(false),
+                        onSuccess: () => {
+                          setConfirmingLeave(false);
+                          leave?.();
+                        },
                       })
                     }
                     size="sm"
