@@ -111,7 +111,7 @@ describe("which servers this deployment will talk to", () => {
         // https requirement below does not apply. Asserted positively instead, so this branch
         // cannot quietly become a loophole for a future entry that DOES dial a real host.
         // An explicit allow-list (user-approved change, 2026-11-12): each in-process builtin is named here.
-        expect(["builtin://routines", "builtin://staffing"]).toContain(entry.host);
+        expect(["builtin://routines", "builtin://staffing", "builtin://skills"]).toContain(entry.host);
       } else {
         expect(entry.host.startsWith("https://")).toBe(true);
       }
