@@ -922,7 +922,7 @@
 
 执行者发现新的冲突时，在表尾追加一行，并在 PR 说明里列出。用户在 Task U2 里逐行批准。
 
-**批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）。
+**批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）；第 35 行，用户 2026-11-13 批准（原话「附录 A 第 35 行批准」）。
 
 | # | 项 | 源码 | 已有断言（文件:行） | 要改成 | 处理任务 |
 |---|---|---|---|---|---|
@@ -960,6 +960,7 @@
 | 32 | Task 8 发现（原 C19） | `agent-computer/src/egress.ts:844,999`（`realm="OpenBot"`） | `agent-computer/tests/egress-policy.test.ts:291` `realm="openbot"` | `realm="xiongbao"` | 19 |
 | 33 | Task 9 发现：浏览器收到的模型认证错误码 | `server/src/wire-codes.ts`（`BROWSER_CODE_SUFFIXES` 暂不含 `MODEL_AUTH_REQUIRED`） | `server/tests/provider-refusal.test.ts:583` `expect(failure.code).toBe("OPENBOT_MODEL_AUTH_REQUIRED")`（读的是 runtime 发给浏览器的流） | `XIONGBAO_MODEL_AUTH_REQUIRED`，并把该后缀加回映射表、补回原名测试 `…carries XIONGBAO_MODEL_AUTH_REQUIRED…` | 19 |
 | 34 | Task 11 发现：apt 助手源文件改名 | `openbot/docker/xiongbao-apt`（原 `docker/openbot-apt`，已 `git mv`）；仓库里暂留 `docker/openbot-apt` → `xiongbao-apt` 的符号链接，只为让下列断言照常通过，镜像不复制它 | `app/tests/brand-rules-split.test.ts:55`「the new scopes are scanned」`expect(files).toContain("docker/openbot-apt")` | `toContain("docker/xiongbao-apt")`，并删掉仓库里的 `docker/openbot-apt` 符号链接（镜像里的 `/usr/local/sbin/openbot-apt` 兼容链接不受影响，按 legacy-compat 到期再删） | 19 |
+| 35 | Task 13 发现：`--minify` 暂不开（控制者裁定）。开启后产物里的 `openbotUrl:` 会变成 `openbotUrl:_` | `desktop-device/scripts/build-sidecar.ts`（`sidecarArgs`） | `app/tests/brand-ratchet.test.ts`「this branch does not grow any allowlist, budget or word list」：词表不许出现新词，`openbotUrl:_` 会被当成新词 | 开启 `--minify`，同时把 runner/deb 词表里的 `openbotUrl:` 改为 minify 后的写法 `openbotUrl:_`（棘轮会把它当新词）；同时删掉 `shared/openbot-browser.ts`（runner）、`openbot-browser.ts`（deb）两个注释词。Task 19 落地时，同一个提交里把词表的 `openbotUrl:` 换成 `openbotUrl:_`，这一处棘轮增长按已获批的本行放行，提交说明里注明。状态：已批准（2026-11-13） | 19 |
 
 ## 附录 B：验证与切换记录
 
