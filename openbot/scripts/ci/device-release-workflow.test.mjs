@@ -1201,3 +1201,46 @@ test("release notes name macOS 13+ as the floor", () => {
   expect(text).toContain("macOS 13+，Apple 芯片");
   expect(text).not.toContain("macOS 11+");
 });
+
+// Task 5: the image and the deb are scanned for the upstream's names, before anything else in the job
+// can pass them through (ci.yml; the word lists live in openbot/app/tests/brand-artifacts).
+test("image and deb are brand-scanned", () => {
+  const ci = Bun.YAML.parse(readFileSync(join(workflows, "ci.yml"), "utf8"));
+  const steps = (job) => ci.jobs[job].steps;
+  const image = steps("image");
+  const scanAt = image.findIndex((s) => s.run?.includes("--kind image-files"));
+  const smokeAt = image.findIndex((s) =>
+    s.run?.includes("per-bot-users-smoke.sh"),
+  );
+  expect(scanAt, "image job scans the file list").toBeGreaterThan(-1);
+  expect(smokeAt, "image job runs the per-employee smoke").toBeGreaterThan(-1);
+  expect(scanAt, "file scan runs before the smoke").toBeLessThan(smokeAt);
+  expect(
+    image.some((s) => s.run?.includes("--kind image-config")),
+    "image job scans env and labels",
+  ).toBe(true);
+  expect(
+    image.some(
+      (s) =>
+        s.run?.includes("--kind web") &&
+        s.run.includes("app/tests/brand-artifacts/image-logs.json"),
+    ),
+    "image job scans the startup log",
+  ).toBe(true);
+  // One round must show every word list: the scans do not stop the job, a last step judges them.
+  const verdictAt = image.findIndex((s) => s.name === "Brand scans verdict");
+  expect(verdictAt, "image job judges the scans at the end").toBeGreaterThan(
+    -1,
+  );
+  expect(image[verdictAt].if).toBe("always()");
+  for (const s of image.filter((s) => s.run?.includes("scan-artifact.ts")))
+    expect(s["continue-on-error"], s.name).toBe(true);
+
+  const deb = steps("device-bundle-linux");
+  const checkAt = deb.findIndex(
+    (s) => s.name === "Check the package installs and carries the runner",
+  );
+  const debAt = deb.findIndex((s) => s.run?.includes("--kind deb"));
+  expect(checkAt, "deb job checks the package").toBeGreaterThan(-1);
+  expect(debAt, "deb job scans the package").toBeGreaterThan(checkAt);
+});

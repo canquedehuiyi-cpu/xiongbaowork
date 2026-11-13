@@ -228,6 +228,8 @@ export default defineConfig({
   server: serving,
   preview: serving,
   build: {
+    // Source maps would hand the customer the upstream's file names and source (L1-25); off, explicitly.
+    sourcemap: false,
     rollupOptions: {
       output: routeBuildRollupOutputOptions,
     },
