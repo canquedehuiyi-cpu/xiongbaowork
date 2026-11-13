@@ -96,6 +96,35 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ && cp -R patches /prod/pat
   && bun install --frozen-lockfile --production
 
 
+# THE SERVER AS BUNDLED FILES. Each entry point becomes one file in /out/server/dist, with the npm
+# packages left external (they resolve from /app/node_modules as before) and everything of ours inlined.
+#
+# DIST, NOT /app/server ITSELF. tenant-package.ts finds `examples/personal` with
+# `new URL("../../examples/personal", import.meta.url)`; from `server/src/` that is /app/examples, and
+# `server/dist/` is the same depth. One level up it would be /examples. For the same reason
+# `scripts/migrate.ts` can say `join(import.meta.dir, "..")` and still find `server/drizzle`.
+#
+# `import.meta.main` is DEFINED true for the three scripts that guard their work with it. A shim
+# imports the bundle, and an imported module is never `main`, so without this `bun scripts/migrate.ts`
+# would load, do nothing and exit 0.
+FROM deps AS server-bundle
+COPY shared shared
+COPY toolkit toolkit
+COPY server server
+COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
+RUN set -eu; mkdir -p /out/server/dist; \
+    bundle() { \
+      bun build "$1" --target=bun --minify --packages=external ${3:+--define import.meta.main=true} \
+        --outfile "/out/server/dist/$2.js"; \
+    }; \
+    bundle server/src/index.ts server; \
+    bundle server/scripts/migrate.ts migrate main; \
+    bundle server/scripts/fire-routines.ts fire-routines; \
+    bundle server/scripts/cull-idle-computers.ts cull-idle-computers; \
+    bundle server/scripts/cull-staged-attachments.ts cull-staged-attachments main; \
+    bundle server/src/learning/ensure-container.ts ensure-container main; \
+    bundle scripts/composio-smoke.ts composio-smoke
+
 # The source half of the runtime tree, with what a running container never reads taken out. The
 # runtime stage copies from here instead of from the build context, so the image carries the code that
 # runs and not the checks on it. Each deletion below has its reason; the ones that stay stay because
@@ -151,36 +180,6 @@ COPY server server
 COPY LICENSE LICENSE
 COPY examples examples
 RUN bun run --cwd app build
-
-
-# THE SERVER AS BUNDLED FILES. Each entry point becomes one file in /out/server/dist, with the npm
-# packages left external (they resolve from /app/node_modules as before) and everything of ours inlined.
-#
-# DIST, NOT /app/server ITSELF. tenant-package.ts finds `examples/personal` with
-# `new URL("../../examples/personal", import.meta.url)`; from `server/src/` that is /app/examples, and
-# `server/dist/` is the same depth. One level up it would be /examples. For the same reason
-# `scripts/migrate.ts` can say `join(import.meta.dir, "..")` and still find `server/drizzle`.
-#
-# `import.meta.main` is DEFINED true for the three scripts that guard their work with it. A shim
-# imports the bundle, and an imported module is never `main`, so without this `bun scripts/migrate.ts`
-# would load, do nothing and exit 0.
-FROM deps AS server-bundle
-COPY shared shared
-COPY toolkit toolkit
-COPY server server
-COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
-RUN set -eu; mkdir -p /out/server/dist; \
-    bundle() { \
-      bun build "$1" --target=bun --minify --packages=external ${3:+--define import.meta.main=true} \
-        --outfile "/out/server/dist/$2.js"; \
-    }; \
-    bundle server/src/index.ts server; \
-    bundle server/scripts/migrate.ts migrate main; \
-    bundle server/scripts/fire-routines.ts fire-routines; \
-    bundle server/scripts/cull-idle-computers.ts cull-idle-computers; \
-    bundle server/scripts/cull-staged-attachments.ts cull-staged-attachments main; \
-    bundle server/src/learning/ensure-container.ts ensure-container main; \
-    bundle scripts/composio-smoke.ts composio-smoke
 
 
 FROM base AS runtime
