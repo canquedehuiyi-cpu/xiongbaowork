@@ -147,8 +147,10 @@ describe("tenant package skill blocked reasons (R18)", () => {
         .replace("reason: shell-command-prose", "reason: shell-command-prose"),
     );
     expect(loaded.skills[0]?.runnable).toBe("full");
-    expect(loaded.skills[0]?.blockedReason).toBeUndefined();
-    expect(loaded.skills[0]?.blockedReasonRef).toBeUndefined();
+    // Explicit reads, not `?.` chains: a `?.` under toBeUndefined passes on a missing row too
+    // (assertion-shape (b)), and the loader always returns a skill for a declared one.
+    expect(loaded.skills[0].blockedReason).toBeUndefined();
+    expect(loaded.skills[0].blockedReasonRef).toBeUndefined();
   });
 
   test("an old package without the fields stays honest (undefined, not empty strings)", () => {
@@ -164,7 +166,7 @@ describe("tenant package skill blocked reasons (R18)", () => {
       ].join("\n"),
     );
     expect(loaded.skills[0]?.runnable).toBe("blocked");
-    expect(loaded.skills[0]?.blockedReason).toBeUndefined();
-    expect(loaded.skills[0]?.blockedReasonRef).toBeUndefined();
+    expect(loaded.skills[0].blockedReason).toBeUndefined();
+    expect(loaded.skills[0].blockedReasonRef).toBeUndefined();
   });
 });
