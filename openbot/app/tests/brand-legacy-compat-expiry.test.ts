@@ -54,12 +54,24 @@ describe("judging one file", () => {
       `// ${TAG}：introducedIn 0.2，removeIn 0.2.13`,
       `// ${TAG}：introducedIn <N>，removeIn <N+2>`,
       `// ${TAG}: x`,
+      `// ${TAG} introducedIn 0.2.11，removeIn 0.2.13`,
+      `// ${TAG}，removeIn 0.2.13`,
     ]) {
       const problems = compatProblems("b.ts", line, "0.2.10");
       expect(problems).toHaveLength(1);
       expect(problems[0]).toContain("格式不对");
       expect(problems[0]).toContain("b.ts:1");
     }
+  });
+
+  test("prose that only names the category is not a window", () => {
+    expect(
+      compatProblems(
+        "d.ts",
+        `// deleted when its ${TAG} entry expires`,
+        "0.2.10",
+      ),
+    ).toEqual([]);
   });
 
   test("removeIn not after introducedIn is reported", () => {
