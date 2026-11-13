@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, type SQL, sql } from "drizzle-orm";
-import type { GroupStore } from "../channels/group";
+import type { GroupConversations, GroupStore } from "../channels/group";
+import type { ChannelStore } from "../channels/routes";
 import type { Database } from "../db/client";
 import { channels, wakerGroupMembers, wakerGroups } from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
@@ -23,6 +24,10 @@ import { asPlatform, isPersonTenant, runAsTenant } from "../tenant/context";
  * 帧：每个方法先在 `platform` 帧读频道，按 `channelOwner` 定所有者，读真相、写群组与挂接都在
  * `runAsTenant(所有者)` 里。挂接触发器借这个帧的 RLS 判断群组是不是所有者的（0205）。
  */
+
+type Log = (line: Record<string, unknown>) => void;
+
+const logToStderr: Log = (line) => console.error(JSON.stringify(line));
 
 /** Anything that can run one statement: the tenant-bound database or a transaction on it. */
 type Executor = { execute: (query: SQL) => PromiseLike<unknown> };
@@ -173,12 +178,10 @@ const stateOf = (error: unknown) => {
 export function createWakerGroupLink(deps: {
   database: Database;
   groupStore: Pick<GroupStore, "order" | "bots">;
-  log?: (line: Record<string, unknown>) => void;
+  log?: Log;
 }): WakerGroupLink {
   const { database, groupStore } = deps;
-  const log =
-    deps.log ??
-    ((line: Record<string, unknown>) => console.error(JSON.stringify(line)));
+  const log = deps.log ?? logToStderr;
 
   /** The channel as `platform` reads it, or null when there is no such row. */
   async function facts(channelId: string): Promise<ChannelFacts | null> {
@@ -396,6 +399,104 @@ export function createWakerGroupLink(deps: {
              limit 1`,
       )) as unknown as { id: string }[];
       return rows[0]?.id ?? null;
+    },
+  };
+}
+
+const messageOf = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+/** The four group writes that change who is in a conversation, or the order they answer in. */
+type LinkedGroupWrites = Pick<
+  GroupConversations,
+  "create" | "addBots" | "removeBots" | "reorder"
+>;
+
+/**
+ * 4.2 写入口：群聊服务的四个写操作在上游成功之后同步群组。上游的校验（创建者、可用员工、2–20 位）
+ * 一条不少地先跑，上游抛错就原样抛出，什么都不同步。同步失败只记日志，不让写操作失败：镜像与名字
+ * 由 4.5 自愈补齐。
+ *
+ * create：上游建完后 linkChannel，失败记 {"type":"waker-group-link-failed","channelId","error"}；
+ * 返回 { ...channel, wakerGroupId?: string }。
+ * addBots/removeBots/reorder：上游成功后 reconcile(channel)，失败记
+ * {"type":"waker-group-reconcile-failed","channelId","error"}。其余成员原样透传。
+ */
+export function withWakerGroupLink<T extends LinkedGroupWrites>(
+  groups: T,
+  link: WakerGroupLink,
+  log: Log = logToStderr,
+): T & {
+  create(
+    owner: string,
+    input: unknown,
+  ): Promise<Awaited<ReturnType<T["create"]>> & { wakerGroupId?: string }>;
+} {
+  type Made = Awaited<ReturnType<T["create"]>> & { wakerGroupId?: string };
+
+  async function reconciled<R>(channelId: string, write: Promise<R>) {
+    const result = await write;
+    try {
+      await link.reconcile(channelId);
+    } catch (error) {
+      log({
+        type: "waker-group-reconcile-failed",
+        channelId,
+        error: messageOf(error),
+      });
+    }
+    return result;
+  }
+
+  return {
+    ...groups,
+    async create(owner: string, input: unknown): Promise<Made> {
+      const channel = (await groups.create(owner, input)) as Made;
+      try {
+        const wakerGroupId = await link.linkChannel(channel.id);
+        return wakerGroupId ? { ...channel, wakerGroupId } : channel;
+      } catch (error) {
+        log({
+          type: "waker-group-link-failed",
+          channelId: channel.id,
+          error: messageOf(error),
+        });
+        return channel;
+      }
+    },
+    addBots: (owner: string, channel: string, input: string[]) =>
+      reconciled(channel, groups.addBots(owner, channel, input)),
+    removeBots: (owner: string, channel: string, input: string[]) =>
+      reconciled(channel, groups.removeBots(owner, channel, input)),
+    reorder: (owner: string, channel: string, input: string[]) =>
+      reconciled(channel, groups.reorder(owner, channel, input)),
+  };
+}
+
+/**
+ * 4.4 改名：任何路径给频道改名（改名对话框、propose_group_change、PATCH），上游成功之后
+ * link.syncName(channelId)，挂接的群组跟着改名；没挂接的什么都不做。上游的「只有发起人能改」照旧先跑。
+ * 同步失败只记 {"type":"waker-group-name-sync-failed","channelId","error"}，不让改名失败。
+ */
+export function withChannelRenameLink(
+  store: ChannelStore,
+  link: WakerGroupLink,
+  log: Log = logToStderr,
+): ChannelStore {
+  return {
+    ...store,
+    async rename(actor, channelId, title) {
+      const called = await store.rename(actor, channelId, title);
+      try {
+        await link.syncName(channelId);
+      } catch (error) {
+        log({
+          type: "waker-group-name-sync-failed",
+          channelId,
+          error: messageOf(error),
+        });
+      }
+      return called;
     },
   };
 }

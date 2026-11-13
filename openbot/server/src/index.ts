@@ -511,6 +511,11 @@ import { createUserInstructionsStore } from "./user-instructions";
 import { createUserPreferencesStore } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
+import {
+  createWakerGroupLink,
+  withChannelRenameLink,
+  withWakerGroupLink,
+} from "./waker-groups/channel-link";
 import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
 import { createFlowGenerator } from "./wakerflows/generator";
@@ -945,6 +950,10 @@ await startupLifecycle.run(async (startup) => {
     config.deploymentId ??
     (await startup.step(() => deploymentNameOf(database, tenantPackage)));
   const threadIdentity = createThreadIdentity(deploymentId);
+  const wakerGroupLink = createWakerGroupLink({
+    database,
+    groupStore: createGroupStore(database, () => threadIdentity.mint()),
+  });
   const baseChannelStore = createChannelStore(
     database,
     agentProfileStore,
@@ -958,7 +967,7 @@ await startupLifecycle.run(async (startup) => {
     | ((ownerUserId: string, channelId: string) => void)
     | undefined;
   const channelStore: ChannelStore = {
-    ...baseChannelStore,
+    ...withChannelRenameLink(baseChannelStore, wakerGroupLink),
     async recordActivity(actor, channelId, activity, source) {
       await baseChannelStore.recordActivity(actor, channelId, activity, source);
       if (activity.agentId === null) personSpoke?.(actor.id, channelId);
@@ -4127,7 +4136,7 @@ await startupLifecycle.run(async (startup) => {
    * apply unchanged; Bots answering each other reuse the handoff desk's grant and caps.
    */
   const staffingProposalStore = createStaffingProposalStore(database);
-  const groupConversations = createGroupConversations({
+  const baseGroupConversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
     owner: workOwner("group"),
@@ -4213,6 +4222,10 @@ await startupLifecycle.run(async (startup) => {
     listenForConsent: (ownerUserId, agentId) =>
       teamBots.listenForConsent(ownerUserId, agentId),
   });
+  const groupConversations = withWakerGroupLink(
+    baseGroupConversations,
+    wakerGroupLink,
+  );
   startup.acquireSync(
     () =>
       repeatAfterEach(async () => {
