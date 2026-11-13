@@ -9,7 +9,10 @@ import {
   createGroupStore,
   GroupRefusedError,
 } from "../src/channels/group";
-import { createChannelStore } from "../src/channels/routes";
+import {
+  ChannelNotOwnerError,
+  createChannelStore,
+} from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
 import {
@@ -1140,5 +1143,153 @@ describe("link core, review round 2", () => {
     expect(await linkCore().linkChannel(channel.id)).toBeNull();
     expect((await channelRow(channel.id)).waker_group_id).toBeNull();
     expect(await crewsOf(alice.id)).toEqual([]);
+  });
+});
+
+describe("decorators, fix round 1", () => {
+  /** What a write threw, or null. */
+  const thrown = (work: Promise<unknown>) =>
+    work.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  test("when the creator has left a shared group, a Bot change and a name sync leave the crew alone", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const lines: Record<string, unknown>[] = [];
+    const log = (line: Record<string, unknown>) => lines.push(line);
+    const link = linkCore(log);
+    const groups = withWakerGroupLink(conversations(), link, log);
+    const [ada, grace] = [await bot(alice, "Ada"), await bot(alice, "Grace")];
+    const channel = await runAsTenant(alice.id, () =>
+      groups.create(alice.id, { agentIds: [ada, grace] }),
+    );
+    const groupId = channel.wakerGroupId;
+    if (!groupId) throw new Error("not linked");
+    await runAsTenant(alice.id, () =>
+      groups.addMember(alice.id, channel.id, {
+        email: `${bob.id}@example.test`,
+      }),
+    );
+    // The service keeps a creator in while others are; row security still lets them delete their own
+    // membership, and then the crew's owner can no longer read the conversation.
+    await runAsTenant(alice.id, () =>
+      groupStore.removeMember(channel.id, alice.id),
+    );
+    const before = {
+      mirror: await mirror(groupId),
+      name: (await crewRow(groupId))?.name,
+    };
+    expect(before.mirror.map((entry) => entry.agentId)).toEqual([ada, grace]);
+    const linus = await bot(bob, "Linus");
+    lines.length = 0;
+
+    expect(
+      await runAsTenant(bob.id, () =>
+        groups.addBots(bob.id, channel.id, [linus]),
+      ),
+    ).toEqual({ added: [linus] });
+    expect(await mirror(groupId)).toEqual(before.mirror);
+
+    // Nobody can rename it any more (only its creator may, 0122), so the name is followed the way
+    // the self-heal would: from a title written past the store.
+    await runAsTenant("platform", () =>
+      database
+        .update(channels)
+        .set({ title: "新名" })
+        .where(eq(channels.id, channel.id)),
+    );
+    await link.syncName(channel.id);
+    expect((await crewRow(groupId))?.name).toBe(before.name);
+
+    expect(lines).toEqual([
+      { type: "waker-group-owner-gone", channelId: channel.id },
+      { type: "waker-group-owner-gone", channelId: channel.id },
+    ]);
+  });
+
+  test("a create that links nothing says so", async () => {
+    const alice = await person("alice");
+    const lines: Record<string, unknown>[] = [];
+    const ownerless: WakerGroupLink = {
+      ...linkCore(),
+      linkChannel: async () => null,
+    };
+    const channel = await runAsTenant(alice.id, async () =>
+      withWakerGroupLink(conversations(), ownerless, (line) =>
+        lines.push(line),
+      ).create(alice.id, {
+        agentIds: [await bot(alice, "Ada"), await bot(alice, "Grace")],
+      }),
+    );
+
+    expect("wakerGroupId" in channel).toBe(false);
+    expect(lines).toEqual([
+      { type: "waker-group-link-skipped", channelId: channel.id },
+    ]);
+  });
+
+  test("a refused rename syncs no name", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const calls: string[] = [];
+    const watched: WakerGroupLink = {
+      ...linkCore(),
+      syncName: async (channelId) => {
+        calls.push(channelId);
+      },
+    };
+    const groups = withWakerGroupLink(conversations(), linkCore());
+    const channel = await runAsTenant(alice.id, async () =>
+      groups.create(alice.id, {
+        agentIds: [await bot(alice, "Ada"), await bot(alice, "Grace")],
+      }),
+    );
+    await runAsTenant(alice.id, () =>
+      groups.addMember(alice.id, channel.id, {
+        email: `${bob.id}@example.test`,
+      }),
+    );
+
+    // Bob is in the group but did not start it: only Alice may name it.
+    expect(
+      await thrown(
+        runAsTenant(bob.id, () =>
+          withChannelRenameLink(channelStore, watched).rename(
+            bob,
+            channel.id,
+            "鲍勃的名字",
+          ),
+        ),
+      ),
+    ).toBeInstanceOf(ChannelNotOwnerError);
+    expect(calls).toEqual([]);
+  });
+
+  test("a refused create links nothing", async () => {
+    const alice = await person("alice");
+    const calls: string[] = [];
+    const watched: WakerGroupLink = {
+      ...linkCore(),
+      linkChannel: async (channelId) => {
+        calls.push(channelId);
+        return null;
+      },
+    };
+    const before = await crewsOf(alice.id);
+
+    // A group needs at least two Bots.
+    const refusal = await thrown(
+      runAsTenant(alice.id, async () =>
+        withWakerGroupLink(conversations(), watched).create(alice.id, {
+          agentIds: [await bot(alice, "Ada")],
+        }),
+      ),
+    );
+
+    expect(refusal).toBeInstanceOf(Error);
+    expect(calls).toEqual([]);
+    expect(await crewsOf(alice.id)).toEqual(before);
   });
 });

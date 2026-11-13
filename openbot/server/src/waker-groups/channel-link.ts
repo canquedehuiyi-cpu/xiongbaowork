@@ -132,6 +132,8 @@ export type WakerGroupLink = {
    *
    * 频道已软删且未挂接时返回 null，不建群组。已挂接时即使频道已软删，也返回原 id。
    * 同一频道并发调用时，输掉的一方返回赢家挂上的 id。
+   * 未挂接而所有者帧读不到这个频道（创建者已不是成员）时，记 waker-group-owner-gone 并返回 null。
+   * 已挂接时只返回原 id，不重算镜像，也就不受这条规则影响。
    */
   linkChannel(channelId: string): Promise<string | null>;
   /**
@@ -141,9 +143,17 @@ export type WakerGroupLink = {
    * 已软删或没有这个频道时抛错，什么都不改。
    */
   adopt(groupId: string, channelId: string): Promise<void>;
-  /** 4.5：按 runtimeOrder(order(), bots()) 改写镜像，title ?? name 与群组名不同时改名（撞名保留原名并记日志）；未挂接返回 false。 */
+  /**
+   * 4.5：按 runtimeOrder(order(), bots()) 改写镜像，title ?? name 与群组名不同时改名（撞名保留原名并记日志）；未挂接返回 false。
+   *
+   * 所有者帧读不到这个频道（共享群的创建者已不是成员）时，什么都不改，记
+   * {"type":"waker-group-owner-gone","channelId"} 并返回 false。
+   */
   reconcile(channelId: string): Promise<boolean>;
-  /** 频道改名后同步群组名；撞名保留原名，记 {"type":"waker-group-name-taken","channelId","groupId","name"}。 */
+  /**
+   * 频道改名后同步群组名；撞名保留原名，记 {"type":"waker-group-name-taken","channelId","groupId","name"}。
+   * 所有者帧读不到这个频道时同 reconcile：不改名，记 waker-group-owner-gone。
+   */
   syncName(channelId: string): Promise<void>;
   /**
    * 频道挂着的群组 id。在 `platform` 帧里读：只能用于调用方已经校验过读权限的频道 id，否则任何
@@ -285,6 +295,23 @@ export function createWakerGroupLink(deps: {
     }
   }
 
+  /**
+   * Whether the owner's own frame can read the channel row: false once the creator of a shared group
+   * is no longer a member of it (`team_read`). In that frame the conversation's Bots and order read
+   * as empty, and a mirror written from them would wipe the crew, so nothing is written and the line
+   * is logged instead. Who owns the crew then is not decided yet (spec 3.1). Owner's frame.
+   *
+   * Asked of the row itself, not of an empty roster: an empty roster can be the truth.
+   */
+  async function ownerSees(channelId: string) {
+    const rows = (await database.execute(
+      sql`select 1 as seen from ${channels} where ${channels.id} = ${channelId}`,
+    )) as unknown[];
+    if (rows.length > 0) return true;
+    log({ type: "waker-group-owner-gone", channelId });
+    return false;
+  }
+
   /** The channel's facts and its owner, when it has one. */
   async function owned(channelId: string) {
     const channel = await facts(channelId);
@@ -302,6 +329,7 @@ export function createWakerGroupLink(deps: {
       if (channel.deleted) return null;
       try {
         return await runAsTenant(owner, async () => {
+          if (!(await ownerSees(channelId))) return null;
           const members = await truth(channelId);
           const groupId = randomUUID();
           await database.transaction(async (tx) => {
@@ -371,21 +399,23 @@ export function createWakerGroupLink(deps: {
       const found = await owned(channelId);
       const groupId = found?.channel.groupId;
       if (!found || !groupId) return false;
-      await runAsTenant(found.owner, async () => {
+      return runAsTenant(found.owner, async () => {
+        if (!(await ownerSees(channelId))) return false;
         const members = await truth(channelId);
         await database.transaction((tx) => writeMirror(tx, groupId, members));
         await followName(channelId, groupId, found.channel.called);
+        return true;
       });
-      return true;
     },
 
     async syncName(channelId) {
       const found = await owned(channelId);
       const groupId = found?.channel.groupId;
       if (!found || !groupId) return;
-      await runAsTenant(found.owner, () =>
-        followName(channelId, groupId, found.channel.called),
-      );
+      await runAsTenant(found.owner, async () => {
+        if (await ownerSees(channelId))
+          await followName(channelId, groupId, found.channel.called);
+      });
     },
 
     async linkedGroupOf(channelId) {
@@ -417,7 +447,8 @@ type LinkedGroupWrites = Pick<
  * 一条不少地先跑，上游抛错就原样抛出，什么都不同步。同步失败只记日志，不让写操作失败：镜像与名字
  * 由 4.5 自愈补齐。
  *
- * create：上游建完后 linkChannel，失败记 {"type":"waker-group-link-failed","channelId","error"}；
+ * create：上游建完后 linkChannel，失败记 {"type":"waker-group-link-failed","channelId","error"}，
+ * 返回 null（没有所有者、频道已删或所有者已不是成员）记 {"type":"waker-group-link-skipped","channelId"}；
  * 返回 { ...channel, wakerGroupId?: string }。
  * addBots/removeBots/reorder：上游成功后 reconcile(channel)，失败记
  * {"type":"waker-group-reconcile-failed","channelId","error"}。其余成员原样透传。
@@ -454,7 +485,10 @@ export function withWakerGroupLink<T extends LinkedGroupWrites>(
       const channel = (await groups.create(owner, input)) as Made;
       try {
         const wakerGroupId = await link.linkChannel(channel.id);
-        return wakerGroupId ? { ...channel, wakerGroupId } : channel;
+        if (wakerGroupId) return { ...channel, wakerGroupId };
+        // No owner to give it a crew, or already deleted: it stays unlinked, and says so.
+        log({ type: "waker-group-link-skipped", channelId: channel.id });
+        return channel;
       } catch (error) {
         log({
           type: "waker-group-link-failed",
@@ -474,8 +508,9 @@ export function withWakerGroupLink<T extends LinkedGroupWrites>(
 }
 
 /**
- * 4.4 改名：任何路径给频道改名（改名对话框、propose_group_change、PATCH），上游成功之后
- * link.syncName(channelId)，挂接的群组跟着改名；没挂接的什么都不做。上游的「只有发起人能改」照旧先跑。
+ * 4.4 改名：经 channelStore.rename 给频道改名的路径（改名对话框 PUT /api/channels/:id/title、
+ * propose_group_change 的改名步骤；PATCH /api/waker-groups/:id 由后续任务接入，届时也走这里），上游成功
+ * 之后 link.syncName(channelId)，挂接的群组跟着改名；没挂接的什么都不做。上游的「只有发起人能改」照旧先跑。
  * 同步失败只记 {"type":"waker-group-name-sync-failed","channelId","error"}，不让改名失败。
  */
 export function withChannelRenameLink(
