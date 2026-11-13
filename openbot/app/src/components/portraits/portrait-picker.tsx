@@ -5,6 +5,7 @@ import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -17,6 +18,8 @@ import {
 } from "@/components/portraits/preset-animations";
 import { shortName } from "@/lib/brand";
 import {
+  BAO_ROLE_GROUPS,
+  BAO_ROLE_PRESETS,
   blobToBase64,
   PORTRAIT_PRESETS,
   PORTRAIT_VIDEO_MAX_BYTES,
@@ -153,10 +156,10 @@ export function PortraitPicker({
           <DialogDescription>
             为{KIND_LABEL[kind]}「{name}
             」选一个{shortName()}
-            表情，或上传一张自己的图片、一段 6 秒以内的短视频。工作区里的每个人都会看到这个头像。
+            表情或角色形象，或上传一张自己的图片、一段 6 秒以内的短视频。工作区里的每个人都会看到这个头像。
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col items-center gap-4">
+        <DialogBody className="items-center">
           <AbstractAvatar
             decorative
             motion={previewMotion ?? undefined}
@@ -227,6 +230,58 @@ export function PortraitPicker({
               })}
             </div>
           </fieldset>
+          <fieldset className="w-full">
+            <legend className="mb-2 text-[12px] text-muted-foreground">
+              角色形象
+            </legend>
+            {BAO_ROLE_GROUPS.map((group) => (
+              <div className="mb-3" key={group}>
+                <p className="mb-1 text-[12px] font-medium text-foreground">
+                  {group}
+                </p>
+                <div className="grid grid-cols-5 gap-2">
+                  {BAO_ROLE_PRESETS.filter((role) => role.group === group).map(
+                    (role) => {
+                      const selected = current?.preset === role.value;
+                      return (
+                        <button
+                          aria-pressed={selected}
+                          className={cn(
+                            "flex flex-col items-center gap-1 rounded-[12px] p-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50",
+                            selected
+                              ? "bg-accent text-foreground ring-1 ring-signal"
+                              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                          )}
+                          disabled={busy}
+                          key={role.value}
+                          onClick={() => {
+                            setProblem(null);
+                            save.mutate(
+                              { kind, id, choice: { preset: role.value } },
+                              { onError: fail },
+                            );
+                          }}
+                          type="button"
+                        >
+                          <img
+                            alt=""
+                            className="size-[48px] rounded-full"
+                            height={48}
+                            src={PRESET_IMAGES[role.value]}
+                            width={48}
+                          />
+                          {role.label}
+                          <span className="text-[11px] text-muted-foreground">
+                            {role.subtitle}
+                          </span>
+                        </button>
+                      );
+                    },
+                  )}
+                </div>
+              </div>
+            ))}
+          </fieldset>
           <input
             accept={PORTRAIT_ACCEPT}
             aria-label="选择头像图片"
@@ -241,7 +296,7 @@ export function PortraitPicker({
               {problem}
             </p>
           ) : null}
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button
             disabled={busy || !current}
