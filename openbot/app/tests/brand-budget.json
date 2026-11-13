@@ -92,7 +92,7 @@
   {
     "rule": "identifier",
     "scope": "agent-computer/src",
-    "lines": 10
+    "lines": 6
   },
   {
     "rule": "identifier",

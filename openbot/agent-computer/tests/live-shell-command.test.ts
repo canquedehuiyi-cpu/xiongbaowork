@@ -52,7 +52,7 @@ test("a shell started through a command is given its startup file and environmen
     const deadline = Date.now() + 10_000;
     while (!given && Date.now() < deadline) await Bun.sleep(50);
     // The prompt marks, as this process's own shell gets them.
-    expect(given?.rc).toContain("__openbot_prompt");
+    expect(given?.rc).toContain("__xiongbao_prompt");
     expect(given?.env.XB_SEEN).toBe("yes");
     expect(given?.env.TERM).toBe("xterm-256color");
     // A value that would split into two NAME=VALUE arguments is not handed over at all.

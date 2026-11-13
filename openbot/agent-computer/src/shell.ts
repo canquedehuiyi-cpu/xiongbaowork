@@ -1027,7 +1027,7 @@ export function commandShell(
    * that is the command's last step bypasses PowerShell and writes its code page straight into the
    * pipe; `windowsOutputDecoder` reads those lines.
    */
-  const script = `$ProgressPreference = 'SilentlyContinue'; $OutputEncoding = [System.Text.UTF8Encoding]::new($false); $openbotOut = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), [System.Text.UTF8Encoding]::new($false)); $openbotOut.AutoFlush = $true; [Console]::SetOut($openbotOut); $openbotErr = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), [System.Text.UTF8Encoding]::new($false)); $openbotErr.AutoFlush = $true; [Console]::SetError($openbotErr); ${command}\n$openbotCommandSucceeded = $?; $openbotCommandExit = $LASTEXITCODE; if ($openbotCommandExit) { exit $openbotCommandExit }; if (-not $openbotCommandSucceeded) { exit 1 }`;
+  const script = `$ProgressPreference = 'SilentlyContinue'; $OutputEncoding = [System.Text.UTF8Encoding]::new($false); $xbOut = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), [System.Text.UTF8Encoding]::new($false)); $xbOut.AutoFlush = $true; [Console]::SetOut($xbOut); $xbErr = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), [System.Text.UTF8Encoding]::new($false)); $xbErr.AutoFlush = $true; [Console]::SetError($xbErr); ${command}\n$xbCommandSucceeded = $?; $xbCommandExit = $LASTEXITCODE; if ($xbCommandExit) { exit $xbCommandExit }; if (-not $xbCommandSucceeded) { exit 1 }`;
   return {
     executable: win32.join(
       root,

@@ -125,8 +125,8 @@ describe("what a command inherits", () => {
     ).toString("utf16le");
     // Setting it to UTF-8 made PowerShell decode hostname.exe's GBK as UTF-8: U+FFFD, seen on a device.
     expect(script).not.toContain("[Console]::OutputEncoding =");
-    expect(script).toContain("[Console]::SetOut($openbotOut)");
-    expect(script).toContain("[Console]::SetError($openbotErr)");
+    expect(script).toContain("[Console]::SetOut($xbOut)");
+    expect(script).toContain("[Console]::SetError($xbErr)");
     expect(script.indexOf("SetError")).toBeLessThan(script.indexOf("hostname"));
   });
   test("PATH, locale, terminal and proxy variables pass", () => {
