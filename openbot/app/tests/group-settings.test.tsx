@@ -506,6 +506,35 @@ test("dissolving waits for the count while it is loading", async () => {
   await within(document.body).findByText(/它的 1 条组团流程/);
 });
 
+/**
+ * The real group route's page, under the same pathless layouts the app puts it in.
+ *
+ * The page asks for its own route by id (`Route.useParams()`), and that id depends on whether any
+ * earlier test file in the same process has already imported the router: until then the route has
+ * no id and the nearest match answers; after, it is `/_authed/_app/group/$channelId`, and a test
+ * route with any other id throws "Could not find an active match". Giving the test route that id
+ * works in both states.
+ */
+function groupRouteIn(root: AnyRoute) {
+  const authed = createRoute({
+    id: "_authed",
+    getParentRoute: () => root,
+    component: Outlet,
+  } as never);
+  const layout = createRoute({
+    id: "_app",
+    getParentRoute: () => authed,
+    component: Outlet,
+  } as never);
+  const group = createRoute({
+    path: "group/$channelId",
+    getParentRoute: () => layout,
+    component: GroupRoute.options.component,
+    validateSearch: GroupRoute.options.validateSearch,
+  } as never);
+  return authed.addChildren([layout.addChildren([group])]) as never;
+}
+
 test("?settings=1 opens the drawer, closing it clears the parameter", async () => {
   reset();
   const root = createRootRoute({
@@ -515,14 +544,8 @@ test("?settings=1 opens the drawer, closing it clears the parameter", async () =
       </SidebarProvider>
     ),
   });
-  const group = createRoute({
-    path: "group/$channelId",
-    getParentRoute: () => root,
-    component: GroupRoute.options.component,
-    validateSearch: GroupRoute.options.validateSearch,
-  } as never);
   const router = createRouter({
-    routeTree: root.addChildren([group, ...stubs(root)]),
+    routeTree: root.addChildren([groupRouteIn(root), ...stubs(root)]),
     history: createMemoryHistory({
       initialEntries: ["/group/ch-1?settings=1"],
     }),
@@ -540,11 +563,11 @@ test("?settings=1 opens the drawer, closing it clears the parameter", async () =
       document.querySelector('[data-slot="group-settings-panel"]'),
     ).toBeNull(),
   );
-  expect(router.state.location.search).toEqual({});
+  expect(router.state.location.search as unknown).toEqual({});
   // And the bar's button opens it again, writing the parameter back.
   fireEvent.click(await view.findByRole("button", { name: "群组设置" }));
   await panelOf(view);
-  expect(router.state.location.search).toEqual({ settings: 1 });
+  expect(router.state.location.search as unknown).toEqual({ settings: 1 });
 });
 
 test("the top bar names the group and falls back to 群组", async () => {
@@ -556,14 +579,39 @@ test("the top bar names the group and falls back to 群组", async () => {
       </SidebarProvider>
     ),
   });
-  const group = createRoute({
-    path: "group/$channelId",
-    getParentRoute: () => root,
-    component: GroupRoute.options.component,
-    validateSearch: GroupRoute.options.validateSearch,
-  } as never);
   const router = createRouter({
-    routeTree: root.addChildren([group, ...stubs(root)]),
+    routeTree: root.addChildren([groupRouteIn(root), ...stubs(root)]),
+    history: createMemoryHistory({ initialEntries: ["/group/nope"] }),
+  });
+  const view = render(
+    <QueryClientProvider client={client()}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
+  const header = await waitFor(() => {
+    const found = view.container.querySelector(
+      '[data-slot="conversation-header"]',
+    );
+    if (!found) throw new Error("no header");
+    return found;
+  });
+  expect(header.textContent).toContain("群组");
+  expect(header.textContent).not.toContain("群聊");
+});
+
+test("the group page finds its own route once the app's router has been loaded too", async () => {
+  // What any earlier test file that imports the router does to the page's route id.
+  await import("@/router");
+  reset();
+  const root = createRootRoute({
+    component: () => (
+      <SidebarProvider>
+        <Outlet />
+      </SidebarProvider>
+    ),
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([groupRouteIn(root), ...stubs(root)]),
     history: createMemoryHistory({ initialEntries: ["/group/nope"] }),
   });
   const view = render(
