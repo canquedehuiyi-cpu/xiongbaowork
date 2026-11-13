@@ -3,9 +3,9 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   readdirSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -475,7 +475,7 @@ const launchOnThisMachine: BrowserLauncher = async (profileDir, options) => {
  * Why SQLite and not a text file: two runners can be pointed at one profile root, and the claim has to
  * be atomic or both hand out the same generation. The journal beside it already makes the same trade.
  */
-type CounterStore = {
+export type CounterStore = {
   /** The generations already issued for this profile. Zero means never used. */
   open: (profileKey: string, profileWasOnDisk: boolean) => number;
   next: (profileKey: string) => number;
@@ -522,6 +522,29 @@ function missingCounter(file: string): never {
   );
 }
 
+/** A lock another process holds past the wait, as opposed to a file that is wrong. */
+function isBusy(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as {
+    code?: unknown;
+    message?: unknown;
+  };
+  return (
+    (typeof code === "string" && code.includes("SQLITE_BUSY")) ||
+    (typeof message === "string" &&
+      /database is locked|SQLITE_BUSY/i.test(message))
+  );
+}
+
+/**
+ * The counter is held by another runner right now. A refusal like a damaged one, because a number issued
+ * without the lock could be a number the other runner has issued too, but it names what is true: wait and ask again.
+ */
+function busyCounter(file: string): never {
+  throw new BrowserFailure(
+    `This browser's element-list counter in ${file} is in use by another runner on this machine right now, so nothing was opened. The file is fine; try again in a moment.`,
+  );
+}
+
 /** The snapshot counter's file in the profile root, and the name it had before the rename. */
 const COUNTER_FILE = "xiongbao-snapshots.sqlite";
 const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
@@ -554,7 +577,8 @@ export function counterFilesIn(
   if (existsSync(file))
     return existsSync(legacy) ? { file, earlier: legacy } : { file };
   if (!existsSync(legacy)) return { file };
-  const partial = `${file}.copying`;
+  // Per process and per attempt: two runners starting together must not write one temporary file.
+  const partial = `${file}.${process.pid}.${randomUUID().slice(0, 8)}.copying`;
   try {
     const old = new Database(legacy, { strict: true });
     try {
@@ -564,7 +588,9 @@ export function counterFilesIn(
       const done = old
         .query<{ busy: number }, []>("PRAGMA wal_checkpoint(TRUNCATE)")
         .get();
-      if (done?.busy !== 0) return { file: legacy };
+      // Another runner holds it: it may be copying right now, so writing only the earlier file here could
+      // hand out numbers it hands out too. Not a fallback; wait was the busy timeout, and this refuses.
+      if (done?.busy !== 0) busyCounter(legacy);
     } finally {
       old.close();
     }
@@ -576,14 +602,23 @@ export function counterFilesIn(
     } catch {
       // A filesystem without modes: the copy is still private to the profile root.
     }
-    renameSync(partial, file);
+    try {
+      // A link fails when the current file is already there (another runner got there first): it is
+      // used as it is, never overwritten with this copy, which may be older.
+      linkSync(partial, file);
+    } catch (error) {
+      if (!existsSync(file)) throw error;
+    }
+    rmSync(partial, { force: true });
     return { file, earlier: legacy };
-  } catch {
+  } catch (error) {
     try {
       rmSync(partial, { force: true });
     } catch {
       // Whatever stands there is not ours to clear.
     }
+    if (error instanceof BrowserFailure) throw error;
+    if (isBusy(error)) busyCounter(legacy);
     return { file: legacy };
   }
 }
@@ -605,7 +640,12 @@ export const counterFileIn = (root: string, busyMs = 5000): string =>
  * increment: no number is issued that the other file does not hold. (Across two WAL files the commit is
  * not one atomic step; a crash between them leaves one ahead, which the next open's larger-of-two undoes.)
  */
-function openCounterStore(file: string, earlier?: string): CounterStore {
+export function openCounterStore(
+  file: string,
+  earlier?: string,
+  options: { busyMs?: number; between?: () => void } = {},
+): CounterStore {
+  const busyMs = Math.trunc(options.busyMs ?? 5000);
   mkdirSync(dirname(file) || ".", { recursive: true });
   // An owned, empty file with the mode set before anything is written into it: this holds a
   // coworker's browsing state reference, and the journal beside it is kept to the same rule.
@@ -617,7 +657,7 @@ function openCounterStore(file: string, earlier?: string): CounterStore {
   }
   const database = new Database(file, { create: true, strict: true });
   database.exec(
-    "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;",
+    `PRAGMA journal_mode=WAL; PRAGMA busy_timeout=${busyMs}; PRAGMA synchronous=FULL;`,
   );
   database.exec(
     "CREATE TABLE IF NOT EXISTS snapshot_counters (profile TEXT PRIMARY KEY, generation INTEGER NOT NULL);",
@@ -640,9 +680,7 @@ function openCounterStore(file: string, earlier?: string): CounterStore {
   if (earlier) {
     try {
       database.run("ATTACH DATABASE ? AS earlier", [earlier]);
-      database.exec(
-        "PRAGMA earlier.busy_timeout=5000; PRAGMA earlier.synchronous=FULL;",
-      );
+      database.exec("PRAGMA earlier.synchronous=FULL;");
       database.exec(
         "CREATE TABLE IF NOT EXISTS earlier.snapshot_counters (profile TEXT PRIMARY KEY, generation INTEGER NOT NULL);",
       );
@@ -652,78 +690,126 @@ function openCounterStore(file: string, earlier?: string): CounterStore {
       >(
         "SELECT typeof(generation) AS kind, generation FROM earlier.snapshot_counters WHERE profile = ?",
       );
+      // Only ever upward: a number is never written over a larger one, whoever wrote that.
       putEarlier = database.query(
-        "INSERT INTO earlier.snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = excluded.generation",
+        "INSERT INTO earlier.snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = max(generation, excluded.generation)",
       );
-    } catch {
+    } catch (error) {
       database.close();
+      if (isBusy(error)) busyCounter(earlier);
       unusable(undefined, earlier);
     }
   }
   const put = database.query(
-    "INSERT INTO snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = excluded.generation",
+    "INSERT INTO snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = max(generation, excluded.generation)",
   );
+  /** The profile's number in each file that has a row, validated; reading is done under the write lock. */
+  const numbersOf = (profileKey: string): number[] => {
+    const present: number[] = [];
+    for (const [reader, where] of [
+      [read, file],
+      [readEarlier, earlier ?? file],
+    ] as const) {
+      if (!reader) continue;
+      let row: { kind: string; generation: number } | null = null;
+      try {
+        row = reader.get(profileKey);
+      } catch (error) {
+        if (isBusy(error)) busyCounter(where);
+        unusable(undefined, where);
+      }
+      if (!row) continue;
+      if (row.kind !== "integer") unusable(undefined, where);
+      present.push(unusable(row.generation, where));
+    }
+    return present;
+  };
+  /** One write transaction over both files: nothing is read before the lock is held, nothing outlives it. */
+  const exclusively = <T>(work: () => T): T => {
+    try {
+      database.exec("BEGIN IMMEDIATE");
+    } catch (error) {
+      if (isBusy(error)) busyCounter(file);
+      throw error;
+    }
+    try {
+      const result = work();
+      database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        database.exec("ROLLBACK");
+      } catch {
+        // No transaction to undo, which is the state we wanted either way.
+      }
+      throw error;
+    }
+  };
 
   return {
     open(profileKey, profileWasOnDisk) {
-      const present: number[] = [];
-      for (const [reader, where] of [
-        [read, file],
-        [readEarlier, earlier ?? file],
-      ] as const) {
-        if (!reader) continue;
-        let row: { kind: string; generation: number } | null = null;
-        try {
-          row = reader.get(profileKey);
-        } catch {
-          unusable(undefined, where);
-        }
-        if (!row) continue;
-        if (row.kind !== "integer") unusable(undefined, where);
-        present.push(unusable(row.generation, where));
+      if (putEarlier) {
+        return exclusively(() => {
+          const present = numbersOf(profileKey);
+          options.between?.();
+          if (present.length === 0) {
+            if (profileWasOnDisk) missingCounter(file);
+            // Nothing in either file: both get a row, neither is overwritten if one appeared meanwhile.
+            create.run(profileKey);
+            database
+              .query(
+                "INSERT INTO earlier.snapshot_counters(profile, generation) VALUES (?, 0) ON CONFLICT(profile) DO NOTHING",
+              )
+              .run(profileKey);
+            return 0;
+          }
+          const held = Math.max(...present);
+          if (held >= MAX_SNAPSHOT_GENERATION) unusable(held + 1, file);
+          // The larger stands, written to both (upward only) before anything is issued.
+          put.run(profileKey, held);
+          putEarlier?.run(profileKey, held);
+          return held;
+        });
       }
-      if (present.length === 0) {
+      let row: { kind: string; generation: number } | null = null;
+      try {
+        row = read.get(profileKey);
+      } catch {
+        unusable(undefined, file);
+      }
+      if (!row) {
         if (profileWasOnDisk) missingCounter(file);
         create.run(profileKey);
-        putEarlier?.run(profileKey, 0);
         return 0;
       }
-      const held = Math.max(...present);
+      if (row.kind !== "integer") unusable(undefined, file);
+      const held = unusable(row.generation, file);
       /*
        * Read at the ceiling is already past it: the list this profile would hand out next is the number
        * over the line. Refusing here, rather than in `next`, is what makes the answer cost no launch and
        * no action — a counter that has run out is a bookkeeping fact about a row, not about a page.
        */
       if (held >= MAX_SNAPSHOT_GENERATION) unusable(held + 1, file);
-      if (putEarlier && present.some((value) => value !== held)) {
-        // The two files disagree: the larger stands, and is written to both before anything is issued.
-        database.exec("BEGIN IMMEDIATE");
-        try {
-          put.run(profileKey, held);
-          putEarlier.run(profileKey, held);
-          database.exec("COMMIT");
-        } catch (error) {
-          try {
-            database.exec("ROLLBACK");
-          } catch {
-            // No transaction to undo.
-          }
-          throw error;
-        }
-      } else if (putEarlier && present.length === 1) {
-        // One file has no row for this profile yet: give it the same number.
-        put.run(profileKey, held);
-        putEarlier.run(profileKey, held);
-      }
       return held;
     },
     next(profileKey) {
+      if (putEarlier) {
+        return exclusively(() => {
+          // Both files are read under the write lock, so a number a runner on the other side of the rename
+          // issued a moment ago is seen; the one issued is above both and is written to both, upward only.
+          const present = numbersOf(profileKey);
+          options.between?.();
+          if (present.length === 0) unusable(undefined, file);
+          const issued = unusable(Math.max(...present) + 1, file);
+          put.run(profileKey, issued);
+          putEarlier?.run(profileKey, issued);
+          return issued;
+        });
+      }
       database.exec("BEGIN IMMEDIATE");
       try {
         const row = step.get(profileKey);
         const issued = unusable(row?.generation, file);
-        // The earlier file gets the same number in the same transaction; if it cannot, none is issued.
-        putEarlier?.run(profileKey, issued);
         database.exec("COMMIT");
         return issued;
       } catch (error) {
