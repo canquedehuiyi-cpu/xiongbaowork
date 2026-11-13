@@ -71,6 +71,7 @@ afterEach(() => {
   globalThis.WebSocket = originalSocket;
   window.localStorage.clear();
   forgetChosenBots();
+  wakerGroups = [];
 });
 
 const now = new Date().toISOString();
@@ -388,6 +389,9 @@ const plugins: PluginsPage = {
 
 type Call = { method: string; path: string; body: unknown };
 
+/** The person's own groups, as `GET /api/waker-groups` lists them; each test that wants some sets it. */
+let wakerGroups: unknown[] = [];
+
 function serve(options: { role?: "admin" | "user"; userId?: string } = {}) {
   const calls: Call[] = [];
   const routes: Record<string, unknown> = {
@@ -402,6 +406,7 @@ function serve(options: { role?: "admin" | "user"; userId?: string } = {}) {
     },
     "/api/agents": { agents: [scout, muse] },
     "/api/channels": { channels, nextCursor: null },
+    "/api/waker-groups": { groups: wakerGroups },
     "/api/approvals": inbox,
     "/api/bots/attention": { bots: attention, lastPingId: null },
     [`/api/bots/${muse.id}/activity`]: { activity },
@@ -802,6 +807,69 @@ describe("every OpenBot surface stays reachable", () => {
     expect(
       menu.getByRole("link", { name: /Launch plan/ }).getAttribute("href"),
     ).toBe("/group/g-team");
+  });
+
+  test("a group's row offers 解散群组 to its creator and 退出群组 to others; a single chat keeps 删除", async () => {
+    wakerGroups = [
+      {
+        id: "wg-team",
+        name: "发布群",
+        description: null,
+        members: [
+          { agentId: muse.id, position: 0 },
+          { agentId: scout.id, position: 1 },
+        ],
+        channelId: "g-team",
+        chatStatus: "chat",
+      },
+    ];
+    const calls = serve({ role: "admin" });
+    renderAt("/s/activity");
+    const rowOf = async (title: RegExp) => {
+      const link = await within(await openMenu()).findByRole("link", {
+        name: title,
+      });
+      const row = link.closest("div.border-b");
+      if (!(row instanceof HTMLElement)) throw new Error("no row");
+      return within(row);
+    };
+    // Linked to a group of mine: dissolve, with the same confirmation as the main sidebar's.
+    const mine = await rowOf(/Launch plan/);
+    fireEvent.click(await mine.findByRole("button", { name: "解散群组…" }));
+    expect(mine.queryByRole("button", { name: "删除" })).toBeNull();
+    const confirm = await within(document.body).findByRole("button", {
+      name: "确认解散「发布群」",
+    });
+    await waitFor(() =>
+      expect((confirm as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        method: "DELETE",
+        path: "/api/waker-groups/wg-team",
+        body: undefined,
+      }),
+    );
+    cleanup();
+
+    // Several Bots, not linked to a group of mine, not mine to rename: leave it.
+    wakerGroups = [];
+    serve({ role: "admin" });
+    renderAt("/s/activity");
+    const theirs = await rowOf(/Launch plan/);
+    expect(
+      await theirs.findByRole("button", { name: "退出群组…" }),
+    ).toBeTruthy();
+    expect(theirs.queryByRole("button", { name: "删除" })).toBeNull();
+    expect(theirs.queryByRole("button", { name: "解散群组…" })).toBeNull();
+    cleanup();
+
+    serve({ role: "admin" });
+    renderAt("/s/activity");
+    const single = await rowOf(/Planning the week/);
+    expect(single.getByRole("button", { name: "删除" })).toBeTruthy();
+    expect(single.queryByRole("button", { name: "退出群组…" })).toBeNull();
   });
 
   test.each(["admin", "user"] as const)(

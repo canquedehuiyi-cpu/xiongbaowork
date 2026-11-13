@@ -6,16 +6,20 @@ import {
   IconPinnedOff,
   IconPlus,
   IconStack2,
-  IconTrash,
 } from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { isUnread, pinnedFirst } from "@/components/app-sidebar/app-sidebar";
 import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
+import {
+  DangerItem,
+  DissolveRowDialog,
+} from "@/components/app-sidebar/row-danger";
 import { waitingOnYou } from "@/components/bot-profile/attention";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
+import { LeaveGroupDialog } from "@/components/channels/leave-group-dialog";
 import { NavigationTarget } from "@/components/layout/navigation-target";
 import {
   ContextMenu,
@@ -360,6 +364,8 @@ function ConversationRow({
   const unread = isUnread(channel, isOpen ? channel.id : undefined);
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
+  const [dissolving, setDissolving] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const title = channel.summary || untitledLine(channel) || "新对话";
   const when = channel.lastMessageAt
@@ -416,13 +422,15 @@ function ConversationRow({
             {channel.pinned ? <IconPinnedOff /> : <IconPin />}
             {channel.pinned ? "取消置顶" : "置顶对话"}
           </ContextMenuItem>
-          <ContextMenuItem
-            onClick={() => setConfirming(true)}
-            variant="destructive"
-          >
-            <IconTrash />
-            删除对话…
-          </ContextMenuItem>
+          <DangerItem
+            canRename={channel.canRename ?? false}
+            channelId={channel.id}
+            deleteLabel="删除对话…"
+            group={channel.agentIds.length > 1}
+            onDelete={() => setConfirming(true)}
+            onDissolve={setDissolving}
+            onLeave={() => setLeaving(true)}
+          />
         </ContextMenuContent>
       </ContextMenu>
       {problem ? (
@@ -433,6 +441,21 @@ function ConversationRow({
           {problem}
         </p>
       ) : null}
+      {dissolving ? (
+        <DissolveRowDialog
+          fallbackName={channel.name}
+          groupId={dissolving}
+          onDissolved={isOpen ? () => navigate({ to: "/" }) : undefined}
+          onOpenChange={(next) => setDissolving(next ? dissolving : null)}
+        />
+      ) : null}
+      <LeaveGroupDialog
+        channelId={channel.id}
+        leave={isOpen ? () => navigate({ to: "/" }) : undefined}
+        name={channel.name}
+        onOpenChange={setLeaving}
+        open={leaving}
+      />
       <DeleteConversationDialog
         channelId={channel.id}
         leave={isOpen ? () => navigate({ to: "/" }) : undefined}

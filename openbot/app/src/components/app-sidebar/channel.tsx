@@ -1,13 +1,5 @@
-import {
-  IconLoader2,
-  IconLogout,
-  IconPencil,
-  IconPin,
-  IconPinnedOff,
-  IconTrash,
-  IconUsersMinus,
-} from "@tabler/icons-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { IconPencil, IconPin, IconPinnedOff } from "@tabler/icons-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useState } from "react";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
@@ -19,12 +11,11 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { DissolveCrewDialog } from "@/components/wakers/dissolve-crew";
 import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import type { MessageListEmphasis } from "@/lib/settings/message-list";
 import { useTypedReveal } from "@/lib/typed-reveal";
-import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelItemContent } from "./channel-item-content";
+import { DangerItem, DissolveRowDialog } from "./row-danger";
 
 /**
  * One conversation in the sidebar's list: the faces of whoever is in it (two or more stack, which is
@@ -193,94 +184,3 @@ export const Channel = memo(function Channel({
     </>
   );
 });
-
-/**
- * 解散群组 from a row: the same confirmation as the settings drawer's, which needs the group's name.
- * Mounted only once asked, so the list's many rows do not each read the groups.
- */
-function DissolveRowDialog({
-  fallbackName,
-  groupId,
-  onDissolved,
-  onOpenChange,
-}: {
-  fallbackName: string;
-  groupId: string;
-  onDissolved?: () => unknown;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const crew = useQuery(wakerGroupsQueryOptions()).data?.find(
-    (entry) => entry.id === groupId,
-  );
-  return (
-    <DissolveCrewDialog
-      crew={{ id: groupId, name: crew?.name ?? fallbackName }}
-      onDissolved={() => void onDissolved?.()}
-      onOpenChange={onOpenChange}
-      open
-    />
-  );
-}
-
-/**
- * The menu's last item, which depends on whether the chat is a group's the person made. That is
- * read from the groups list, and the list is read only here: the menu's content mounts when the menu
- * opens, so a roster whose menus are never opened asks for nothing. Until the answer is in a disabled
- * placeholder stands in, so 删除会话 never shows first and then turns into something else. If the
- * read fails, a multi-employee chat falls back to what the row knew: not mine to rename → leave,
- * mine → delete.
- */
-function DangerItem({
-  canRename,
-  channelId,
-  group,
-  groupId,
-  onDelete,
-  onDissolve,
-  onLeave,
-}: {
-  canRename: boolean;
-  channelId: string;
-  group: boolean;
-  groupId?: string;
-  onDelete: () => void;
-  onDissolve: (groupId: string) => void;
-  onLeave: () => void;
-}) {
-  // The list is fresh for 30s everywhere else; a menu that decides between delete and dissolve must
-  // not read a stale one, so each opening asks again and waits for the answer.
-  const groups = useQuery({
-    ...wakerGroupsQueryOptions(),
-    enabled: group,
-    refetchOnMount: "always",
-  });
-  if (group && (groups.isPending || groups.isFetching))
-    return (
-      <ContextMenuItem disabled>
-        <IconLoader2 />
-        正在读取…
-      </ContextMenuItem>
-    );
-  const linked =
-    groupId ?? groups.data?.find((entry) => entry.channelId === channelId)?.id;
-  if (linked)
-    return (
-      <ContextMenuItem variant="destructive" onClick={() => onDissolve(linked)}>
-        <IconUsersMinus />
-        解散群组…
-      </ContextMenuItem>
-    );
-  if (group && !canRename)
-    return (
-      <ContextMenuItem variant="destructive" onClick={onLeave}>
-        <IconLogout />
-        退出群组…
-      </ContextMenuItem>
-    );
-  return (
-    <ContextMenuItem variant="destructive" onClick={onDelete}>
-      <IconTrash />
-      删除会话…
-    </ContextMenuItem>
-  );
-}

@@ -65,8 +65,11 @@ function recorded() {
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: one runner for each mutation's own input and result type
-const run = (options: any, queryClient: QueryClient, variables: unknown) =>
-  new MutationObserver(queryClient, options).mutate(variables);
+type Loose = any;
+const run = (options: Loose, queryClient: QueryClient, variables: unknown) =>
+  new MutationObserver<Loose, Error, Loose>(queryClient, options).mutate(
+    variables,
+  );
 
 test("making a group chat in 新对话 reads the groups again", async () => {
   const { queryClient, keys } = recorded();

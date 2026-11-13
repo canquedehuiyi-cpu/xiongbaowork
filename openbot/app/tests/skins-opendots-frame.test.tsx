@@ -17,7 +17,14 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { act, cleanup, render, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { appConfig } from "@/lib/generated/application-config";
@@ -129,6 +136,8 @@ let actor: Actor = person;
 let bots: AgentProfile[] = [];
 let channels: ReturnType<typeof channel>[] = [];
 let agentsFail = false;
+/** The person's own groups, as `GET /api/waker-groups` lists them. */
+let wakerGroups: Record<string, unknown>[] = [];
 let edition: "team" | "personal" = "team";
 const paused = new Set<string>();
 
@@ -182,6 +191,9 @@ async function serve(path: string, init?: RequestInit): Promise<Response> {
       ? Response.json({ channel: found })
       : Response.json({ error: "Not found" }, { status: 404 });
   }
+  if (url.pathname === "/api/waker-groups" && method === "GET") {
+    return Response.json({ groups: wakerGroups });
+  }
   if (url.pathname === "/api/routines") {
     return Response.json({
       routines: [],
@@ -231,6 +243,7 @@ beforeEach(() => {
   requests.length = 0;
   actor = person;
   agentsFail = false;
+  wakerGroups = [];
   edition = "team";
   paused.clear();
   bots = [
@@ -348,6 +361,79 @@ describe("OpenDots frame", () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/bots/cass"),
     );
+  });
+
+  test("a group chat's row offers 解散群组… to its creator, 退出群组… to others, and a single chat keeps 删除对话…", async () => {
+    wakerGroups = [
+      {
+        id: "g-standup",
+        name: "站会群",
+        description: null,
+        members: [
+          { agentId: "ada", position: 0 },
+          { agentId: "brook", position: 1 },
+        ],
+        channelId: "standup",
+        chatStatus: "chat",
+      },
+    ];
+    channels = [
+      channel("trip", ["brook"], {
+        summary: "Planning the Lisbon trip",
+        canRename: true,
+      }),
+      channel("standup", ["ada", "brook"], {
+        summary: "Monday standup",
+        canRename: true,
+      }),
+      channel("review", ["ada", "cass"], {
+        summary: "Friday review",
+        canRename: false,
+      }),
+    ];
+    const { view } = draw("/");
+    const menuOf = async (title: string) => {
+      const row = (await view.findByText(title)).closest("a");
+      if (!row) throw new Error(`no row for ${title}`);
+      fireEvent.contextMenu(row);
+      return within(document.body);
+    };
+    // Mine, and linked to a group: dissolve, with the same confirmation as the main sidebar's.
+    let menu = await menuOf("Monday standup");
+    fireEvent.click(await menu.findByRole("menuitem", { name: /解散群组…/ }));
+    expect(menu.queryByRole("menuitem", { name: /删除对话…/ })).toBeNull();
+    expect(await menu.findByText(/解散「站会群」/)).toBeTruthy();
+    const confirm = await menu.findByRole("button", {
+      name: "确认解散「站会群」",
+    });
+    // Held back while the count of what goes with the group is still being read.
+    await waitFor(() =>
+      expect((confirm as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        method: "DELETE",
+        path: "/api/waker-groups/g-standup",
+      }),
+    );
+    cleanup();
+    // A chat with several Bots that is not mine: leave it.
+    draw("/");
+    menu = await menuOf("Friday review");
+    expect(
+      await menu.findByRole("menuitem", { name: /退出群组…/ }),
+    ).toBeTruthy();
+    expect(menu.queryByRole("menuitem", { name: /删除对话…/ })).toBeNull();
+    expect(menu.queryByRole("menuitem", { name: /解散群组…/ })).toBeNull();
+    cleanup();
+    // One Bot: just delete.
+    draw("/");
+    menu = await menuOf("Planning the Lisbon trip");
+    expect(
+      await menu.findByRole("menuitem", { name: /删除对话…/ }),
+    ).toBeTruthy();
+    expect(menu.queryByRole("menuitem", { name: /退出群组…/ })).toBeNull();
   });
 
   test("a new conversation with a chosen Bot is OpenDots' coworker home", async () => {
