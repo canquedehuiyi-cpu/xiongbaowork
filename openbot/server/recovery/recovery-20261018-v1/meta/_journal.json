@@ -1338,6 +1338,20 @@
       "when": 1794566826452,
       "tag": "0210_skill_blocked_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 211,
+      "version": "7",
+      "when": 1794572550896,
+      "tag": "0211_waker_group_upgrades",
+      "breakpoints": true
+    },
+    {
+      "idx": 212,
+      "version": "7",
+      "when": 1794572550897,
+      "tag": "0212_waker_group_upgrades_original_owner",
+      "breakpoints": true
     }
   ]
 }
