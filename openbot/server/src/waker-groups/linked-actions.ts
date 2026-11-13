@@ -3,11 +3,12 @@ import type { AgentActor } from "../agents/profile-types";
 import type { GroupConversations } from "../channels/group";
 import type { AgentChannel, ChannelStore } from "../channels/routes";
 import type { Database } from "../db/client";
-import { channels, wakerGroups } from "../db/schema";
+import { botTasks, channelAgents, channels, wakerGroups } from "../db/schema";
 import type { PortraitStore } from "../portraits/store";
 import {
   channelCreatedBy,
   channelOwner,
+  isGroupConversation,
   stateOf,
   type WakerGroupLink,
 } from "./channel-link";
@@ -279,7 +280,8 @@ export function createWakerGroupActions(deps: {
       }
       const channelId = await link.liveChannelOf(groupId);
       // Linked: the chat's title is the name's truth; renaming it renames the crew (the decorator).
-      if (name !== undefined && channelId)
+      // Only a new name is written to the chat: a description alone leaves the chat untouched.
+      if (name !== undefined && renaming && channelId)
         await deps.channels.rename(await deps.actorFor(owner), channelId, name);
       const set: { name?: string; description?: string | null } = {};
       if (renaming && !channelId) set.name = name;
@@ -334,13 +336,32 @@ export function createWakerGroupActions(deps: {
       if (!(await deps.channels.get(actor, channelId))) return null;
       // The caller reads this row in their own frame now that they are known to be a member.
       const [row] = (await database.execute(
-        sql`select ${channels.tenantId} as tenant_id, ${channelCreatedBy} as created_by
+        sql`select ${channels.tenantId} as tenant_id, ${channelCreatedBy} as created_by,
+                   (select count(*)::int from ${channelAgents}
+                     where ${channelAgents.channelId} = ${channels.id}) as agent_count,
+                   exists (select 1 from ${botTasks}
+                            where ${botTasks.channelId} = ${channels.id}) as task
               from ${channels} where ${channels.id} = ${channelId}`,
-      )) as unknown as { tenant_id: string; created_by: string | null }[];
+      )) as unknown as {
+        tenant_id: string;
+        created_by: string | null;
+        agent_count: number;
+        task: boolean;
+      }[];
+      // A one-on-one chat or a task's conversation has no group settings: answered as unreadable,
+      // so what kind of conversation an id names cannot be probed either (3.1).
       if (
         !row ||
+        !isGroupConversation({
+          tenantId: row.tenant_id,
+          agentCount: Number(row.agent_count),
+          task: row.task,
+        })
+      )
+        return null;
+      if (
         channelOwner({ tenantId: row.tenant_id, createdBy: row.created_by }) !==
-          owner
+        owner
       )
         throw new WakerGroupForbiddenError();
       const claimed = (await deps.conversions?.claimedBy(channelId)) ?? null;

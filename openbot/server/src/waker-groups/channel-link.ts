@@ -3,7 +3,13 @@ import { eq, type SQL, sql } from "drizzle-orm";
 import type { GroupConversations, GroupStore } from "../channels/group";
 import type { ChannelStore } from "../channels/routes";
 import type { Database } from "../db/client";
-import { channels, wakerGroupMembers, wakerGroups } from "../db/schema";
+import {
+  botTasks,
+  channelAgents,
+  channels,
+  wakerGroupMembers,
+  wakerGroups,
+} from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { asPlatform, isPersonTenant, runAsTenant } from "../tenant/context";
 
@@ -65,6 +71,18 @@ export function channelOwner(row: {
 }): string | null {
   const owner = row.tenantId === TEAM_TENANT ? row.createdBy : row.tenantId;
   return isPersonTenant(owner) ? owner : null;
+}
+
+/**
+ * 3.1：只有群聊挂群组，单聊永远为 NULL。群聊 = 共享群（`team`），或员工至少 2 位、且不是任务会话
+ * （tasks/runner.ts 给一件工作开的会话，只有一位员工）的个人旧频道。
+ */
+export function isGroupConversation(row: {
+  tenantId: string;
+  agentCount: number;
+  task: boolean;
+}): boolean {
+  return row.tenantId === TEAM_TENANT || (row.agentCount >= 2 && !row.task);
 }
 
 const NAME_LIMIT = 80;
@@ -130,7 +148,7 @@ export type WakerGroupLink = {
   /**
    * 未挂接时：所有者帧里一个事务建群组（名字 = title ?? name，经 pickGroupName）、写镜像、挂接；已挂接返回原 id；无所有者返回 null。
    *
-   * 频道已软删且未挂接时返回 null，不建群组。已挂接时即使频道已软删，也返回原 id。
+   * 频道已软删且未挂接时返回 null，不建群组。不是群聊（单聊、任务会话，见 isGroupConversation）时也返回 null。已挂接时即使频道已软删，也返回原 id。
    * 同一频道并发调用时，输掉的一方返回赢家挂上的 id。
    * 未挂接而所有者帧读不到这个频道（创建者已不是成员）时，记 waker-group-owner-gone 并返回 null。
    * 已挂接时只返回原 id，不重算镜像，也就不受这条规则影响。
@@ -171,6 +189,9 @@ type ChannelFacts = {
   called: string;
   groupId: string | null;
   deleted: boolean;
+  /** Bots on the channel, and whether it is a task's own conversation: see isGroupConversation. */
+  agentCount: number;
+  task: boolean;
 };
 
 /** Thrown inside the link transaction when another writer linked the channel first. */
@@ -200,7 +221,11 @@ export function createWakerGroupLink(deps: {
         sql`select ${channels.tenantId} as tenant_id, ${channelCreatedBy} as created_by,
                    ${channels.title} as title, ${channels.name} as name,
                    ${channelWakerGroupId} as waker_group_id,
-                   ${channels.deletedAt} is not null as deleted
+                   ${channels.deletedAt} is not null as deleted,
+                   (select count(*)::int from ${channelAgents}
+                     where ${channelAgents.channelId} = ${channels.id}) as agent_count,
+                   exists (select 1 from ${botTasks}
+                            where ${botTasks.channelId} = ${channels.id}) as task
               from ${channels} where ${channels.id} = ${channelId}`,
       ),
     )) as unknown as {
@@ -210,6 +235,8 @@ export function createWakerGroupLink(deps: {
       name: string;
       waker_group_id: string | null;
       deleted: boolean;
+      agent_count: number;
+      task: boolean;
     }[];
     const [row] = rows;
     if (!row) return null;
@@ -219,6 +246,8 @@ export function createWakerGroupLink(deps: {
       called: row.title?.trim() ? row.title : row.name,
       groupId: row.waker_group_id,
       deleted: row.deleted,
+      agentCount: Number(row.agent_count),
+      task: row.task,
     };
   }
 
@@ -326,7 +355,8 @@ export function createWakerGroupLink(deps: {
       if (!found) return null;
       const { channel, owner } = found;
       if (channel.groupId) return channel.groupId;
-      if (channel.deleted) return null;
+      // A one-on-one chat or a task's conversation is never a crew's (3.1).
+      if (channel.deleted || !isGroupConversation(channel)) return null;
       try {
         return await runAsTenant(owner, async () => {
           if (!(await ownerSees(channelId))) return null;

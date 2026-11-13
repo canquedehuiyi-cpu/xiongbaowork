@@ -4137,6 +4137,9 @@ await startupLifecycle.run(async (startup) => {
    * apply unchanged; Bots answering each other reuse the handoff desk's grant and caps.
    */
   const staffingProposalStore = createStaffingProposalStore(database);
+  /** Whether this person may run the Bot in a group; the crew routes ask the same (`canUse`). */
+  const canUseGroupBot = async (ownerUserId: string, agentId: string) =>
+    Boolean(await agentProfileStore.get(await actorFor(ownerUserId), agentId));
   const baseGroupConversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
@@ -4213,10 +4216,7 @@ await startupLifecycle.run(async (startup) => {
     createChannel: async (ownerUserId, agentIds, options) =>
       channelStore.create(await actorFor(ownerUserId), agentIds, options),
     // Adding a Bot to an existing group passes the same access filter as naming it at creation.
-    canUseBot: async (ownerUserId, agentId) =>
-      Boolean(
-        await agentProfileStore.get(await actorFor(ownerUserId), agentId),
-      ),
+    canUseBot: canUseGroupBot,
     // The owner says whether a Bot's words may reach the other people in a group.
     privateShare: createPrivateShareCheck({ approvals: approvalService.store }),
     // A Team Bot's consent card raised in a group turn is drawn in the shared transcript.
@@ -5247,10 +5247,7 @@ await startupLifecycle.run(async (startup) => {
         actorFor,
         portraits: createPortraitStore(database),
         // The groups service's own `canUseBot`.
-        canUse: async (ownerUserId, agentId) =>
-          Boolean(
-            await agentProfileStore.get(await actorFor(ownerUserId), agentId),
-          ),
+        canUse: canUseGroupBot,
       }),
     ),
   );

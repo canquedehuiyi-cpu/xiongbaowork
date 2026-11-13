@@ -38,6 +38,7 @@ import { runAsTenant } from "../src/tenant/context";
 import {
   channelOwner,
   createWakerGroupLink,
+  isGroupConversation,
   pickGroupName,
   runtimeOrder,
   type WakerGroupLink,
@@ -1319,19 +1320,34 @@ describe("routes", () => {
    * rename-decorated channel store. `as(person)` signs the next request in, the way `requireUser`
    * does in production: inside that person's own tenant.
    */
-  function crewApi(options: { link?: WakerGroupLink } = {}) {
+  type CrewOptions = {
+    link?: WakerGroupLink;
+    channels?: (
+      renaming: ReturnType<typeof withChannelRenameLink>,
+    ) => Parameters<typeof createWakerGroupActions>[0]["channels"];
+    store?: typeof crewStore;
+    log?: (line: Record<string, unknown>) => void;
+  };
+
+  function crewActions(options: CrewOptions = {}) {
     const link = options.link ?? linkCore();
-    const actions = createWakerGroupActions({
+    const renaming = withChannelRenameLink(channelStore, link);
+    return createWakerGroupActions({
       database,
-      store: crewStore,
+      store: options.store ?? crewStore,
       link,
       groups: conversations(),
-      channels: withChannelRenameLink(channelStore, link),
+      channels: options.channels ? options.channels(renaming) : renaming,
       actorFor: async (id) => ({ id, role: "user" }),
       portraits: createPortraitStore(database),
       canUse: async (owner, agentId) =>
         Boolean(await profileStore.get({ id: owner, role: "user" }, agentId)),
+      ...(options.log ? { log: options.log } : {}),
     });
+  }
+
+  function crewApi(options: CrewOptions = {}) {
+    const actions = crewActions(options);
     let caller: AgentActor | null = null;
     const routes = createWakerGroupRoutes(
       crewStore,
@@ -1518,7 +1534,7 @@ describe("routes", () => {
       agentIds: ids,
     });
 
-    expect(answer.status).toBeGreaterThanOrEqual(400);
+    expect(answer.status).toBe(400);
     expect(await namedCrews(alice.id, "用不了的员工")).toEqual([]);
     expect(await chatsOf(alice.id)).toEqual([]);
   });
@@ -1534,7 +1550,7 @@ describe("routes", () => {
       }),
     );
 
-    expect(answer.status).toBeGreaterThanOrEqual(400);
+    expect(answer.status).toBe(500);
     const chats = await chatsOf(alice.id);
     expect(chats).toHaveLength(1);
     expect(chats[0]?.deleted).toBe(true);
@@ -1553,7 +1569,7 @@ describe("routes", () => {
       crewApi({ link: broken() })(alice, "POST", `/${groupId}/chat`),
     );
 
-    expect(answer.status).toBeGreaterThanOrEqual(400);
+    expect(answer.status).toBe(500);
     const chats = await chatsOf(alice.id);
     expect(chats).toHaveLength(1);
     expect(chats[0]?.deleted).toBe(true);
@@ -1852,18 +1868,266 @@ describe("routes", () => {
 
     const answer = await api(alice, "POST", `/${made.group.id}/chat`);
 
+    // TODO(Task 5A): once leaving hands the crew to the chat's earliest member, Alice no longer owns
+    // it and this answers 404 from the ownership check, before any chat is made. Until then the
+    // chat this request opened is made and hidden again before the 409.
     expect(answer.status).toBe(409);
     expect(answer.json.code).toBe("waker-group-owner-gone");
     expect((await channelRow(made.channel.id)).waker_group_id).toBe(
       made.group.id,
     );
-    const others = (await chatsOf(alice.id)).filter(
-      (chat) => chat.id !== made.channel.id,
-    );
-    expect(others).toHaveLength(1);
-    expect(others[0]?.deleted).toBe(true);
     expect(
       (await api(alice, "POST", `/for-channel/${made.channel.id}`)).status,
     ).toBe(404);
+  });
+
+  describe("fix round 1", () => {
+    async function channelUpdatedAt(channelId: string) {
+      const rows = (await runAsTenant("platform", () =>
+        database.execute(
+          sql`select updated_at::text as at from channels where id = ${channelId}`,
+        ),
+      )) as unknown as { at: string }[];
+      return rows[0]?.at ?? null;
+    }
+
+    test("isGroupConversation: a shared group, or two Bots in a chat that is no task's", () => {
+      expect(
+        isGroupConversation({ tenantId: "team", agentCount: 2, task: false }),
+      ).toBe(true);
+      expect(
+        isGroupConversation({ tenantId: "alice", agentCount: 2, task: false }),
+      ).toBe(true);
+      expect(
+        isGroupConversation({ tenantId: "alice", agentCount: 1, task: false }),
+      ).toBe(false);
+      expect(
+        isGroupConversation({ tenantId: "alice", agentCount: 0, task: false }),
+      ).toBe(false);
+      expect(
+        isGroupConversation({ tenantId: "alice", agentCount: 2, task: true }),
+      ).toBe(false);
+    });
+
+    test("for-channel answers 404 for a one-on-one chat and links nothing; linkChannel refuses it too", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const [ada, grace] = [await bot(alice, "Ada"), await bot(alice, "Grace")];
+      const [single, pair] = await runAsTenant(alice.id, async () => [
+        await channelStore.create(alice, [ada]),
+        // A person's own multi-Bot chat from before shared groups: still a group (3.1).
+        await channelStore.create(alice, [ada, grace]),
+      ]);
+      createdChannels.push(single.id, pair.id);
+      const before = await crewsOf(alice.id);
+
+      const answer = await api(alice, "POST", `/for-channel/${single.id}`);
+
+      expect(answer.status).toBe(404);
+      expect(answer.json).toEqual({
+        error: "Couldn't find that conversation.",
+      });
+      expect((await channelRow(single.id)).waker_group_id).toBeNull();
+      expect(await linkCore().linkChannel(single.id)).toBeNull();
+      expect((await channelRow(single.id)).waker_group_id).toBeNull();
+      expect(await crewsOf(alice.id)).toEqual(before);
+
+      const linked = await api(alice, "POST", `/for-channel/${pair.id}`);
+      expect(linked.status).toBe(200);
+      expect((await channelRow(pair.id)).waker_group_id).toBe(
+        (linked.json.group as Listed).id,
+      );
+    });
+
+    test("a member of the shared chat who did not start it gets 404 from PATCH and chat", async () => {
+      const alice = await person("alice");
+      const bob = await person("bob");
+      const api = crewApi();
+      const ids = [await bot(alice, "Ada"), await bot(alice, "Grace")];
+      const linked = (
+        await api(alice, "POST", "/", { name: "一起的", agentIds: ids })
+      ).json as unknown as Made;
+      await runAsTenant(alice.id, () =>
+        conversations().addMember(alice.id, linked.channel.id, {
+          email: `${bob.id}@example.test`,
+        }),
+      );
+      const unlinked = (
+        (await api(alice, "POST", "/", { name: "没开始" })).json.group as Listed
+      ).id;
+      await writeRoster(unlinked, ids);
+
+      for (const groupId of [linked.group.id, unlinked]) {
+        const renamed = await api(bob, "PATCH", `/${groupId}`, {
+          name: "鲍勃改的",
+        });
+        expect(renamed.status).toBe(404);
+        expect(renamed.json).toEqual({ error: "No such group." });
+        const opened = await api(bob, "POST", `/${groupId}/chat`);
+        expect(opened.status).toBe(404);
+        expect(opened.json).toEqual({ error: "No such group." });
+      }
+
+      expect((await crewRow(linked.group.id))?.name).toBe("一起的");
+      expect((await crewRow(unlinked))?.name).toBe("没开始");
+      expect((await channelRow(linked.channel.id)).title).toBe("一起的");
+      expect(await chatsOf(bob.id)).toEqual([]);
+      expect(
+        (await chatsOf(alice.id)).filter(
+          (chat) => chat.waker_group_id === unlinked,
+        ),
+      ).toEqual([]);
+    });
+
+    test("a chat rename the store refuses as not the starter's answers 403 and renames nothing", async () => {
+      const alice = await person("alice");
+      const api = crewApi({
+        channels: (renaming) => ({
+          ...renaming,
+          rename: async (_actor, channelId) => {
+            throw new ChannelNotOwnerError(channelId);
+          },
+        }),
+      });
+      const made = (
+        await api(alice, "POST", "/", {
+          name: "原来的",
+          agentIds: [await bot(alice, "Ada"), await bot(alice, "Grace")],
+        })
+      ).json as unknown as Made;
+
+      const answer = await api(alice, "PATCH", `/${made.group.id}`, {
+        name: "改不了",
+      });
+
+      expect(answer.status).toBe(403);
+      expect(answer.json).toEqual({ error: "只有发起人能调整这个群组。" });
+      expect((await crewRow(made.group.id))?.name).toBe("原来的");
+      expect((await channelRow(made.channel.id)).title).toBe("原来的");
+    });
+
+    test("an undo that fails is logged, and the error thrown is the one that made it necessary", async () => {
+      const alice = await person("alice");
+      const lines: Record<string, unknown>[] = [];
+      const log = (line: Record<string, unknown>) => lines.push(line);
+      const agentIds = [await bot(alice, "Ada"), await bot(alice, "Grace")];
+      const attempt = (actions: ReturnType<typeof crewActions>, name: string) =>
+        runAsTenant(alice.id, () =>
+          actions.createWithChat(alice.id, {
+            name,
+            description: null,
+            agentIds,
+          }),
+        ).then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+      // The chat cannot be hidden: the crew is still removed, and adopt's error is the answer.
+      const unhidden = await attempt(
+        crewActions({
+          link: broken(),
+          channels: (renaming) => ({
+            ...renaming,
+            softDelete: async () => {
+              throw new Error("softDelete unavailable");
+            },
+          }),
+          log,
+        }),
+        "藏不掉",
+      );
+      expect(unhidden).toBeInstanceOf(Error);
+      expect((unhidden as Error).message).toBe("adopt unavailable");
+      expect(lines).toEqual([
+        {
+          type: "waker-group-undo-failed",
+          step: "hide-chat",
+          error: "softDelete unavailable",
+        },
+      ]);
+      expect(await namedCrews(alice.id, "藏不掉")).toEqual([]);
+      expect((await chatsOf(alice.id)).map((chat) => chat.deleted)).toEqual([
+        false,
+      ]);
+
+      // The crew cannot be removed: the chat is still hidden, and adopt's error is the answer.
+      lines.length = 0;
+      const kept = await attempt(
+        crewActions({
+          link: broken(),
+          store: {
+            ...crewStore,
+            remove: async () => {
+              throw new Error("remove unavailable");
+            },
+          },
+          log,
+        }),
+        "删不掉",
+      );
+      expect((kept as Error).message).toBe("adopt unavailable");
+      expect(lines).toEqual([
+        {
+          type: "waker-group-undo-failed",
+          step: "remove-crew",
+          error: "remove unavailable",
+        },
+      ]);
+      expect(await namedCrews(alice.id, "删不掉")).toHaveLength(1);
+      expect((await chatsOf(alice.id)).map((chat) => chat.deleted)).toEqual([
+        false,
+        true,
+      ]);
+    });
+
+    test("PATCH with the name unchanged leaves the chat alone", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const made = (
+        await api(alice, "POST", "/", {
+          name: "不改名",
+          agentIds: [await bot(alice, "Ada"), await bot(alice, "Grace")],
+        })
+      ).json as unknown as Made;
+      const before = await channelUpdatedAt(made.channel.id);
+
+      const answer = await api(alice, "PATCH", `/${made.group.id}`, {
+        name: "不改名",
+        description: "只改用途",
+      });
+
+      expect(answer.status).toBe(200);
+      expect(answer.json.group).toEqual(
+        expect.objectContaining({ name: "不改名", description: "只改用途" }),
+      );
+      expect(await channelUpdatedAt(made.channel.id)).toBe(before);
+      expect((await channelRow(made.channel.id)).title).toBe("不改名");
+    });
+
+    test("POST /for-channel/chat is a conversation called chat, and a crew's chat route still opens", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const groupId = (
+        (await api(alice, "POST", "/", { name: "路由顺序" })).json
+          .group as Listed
+      ).id;
+      await writeRoster(groupId, [
+        await bot(alice, "Ada"),
+        await bot(alice, "Grace"),
+      ]);
+
+      const channelNamedChat = await api(alice, "POST", "/for-channel/chat");
+      expect(channelNamedChat.status).toBe(404);
+      expect(channelNamedChat.json).toEqual({
+        error: "Couldn't find that conversation.",
+      });
+
+      const opened = await api(alice, "POST", `/${groupId}/chat`);
+      expect(opened.status).toBe(201);
+      expect((opened.json as unknown as Made).channel.wakerGroupId).toBe(
+        groupId,
+      );
+    });
   });
 });
