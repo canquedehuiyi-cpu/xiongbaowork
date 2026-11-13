@@ -8,7 +8,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
 import { type PipelineTemplate, pipelineKeys } from "@/lib/pipelines/queries";
@@ -150,6 +150,51 @@ test("starting a run keeps the group the page was opened on", async () => {
       group: "crew-2",
       run: "run-9",
     }),
+  );
+  expect(
+    view.getByRole("button", { name: "第二组" }).getAttribute("aria-pressed"),
+  ).toBe("true");
+  scroll.mockRestore();
+});
+
+test("a new ?group= while the page is open scrolls again and wins over a hand-picked group", async () => {
+  const scroll = stubScroll();
+  const view = draw("/pipelines?group=crew-1");
+  await view.findByText("流程-crew-1");
+  await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+  // A hand-picked group first, so the arriving parameter has something to override.
+  await userEvent.click(view.getByRole("button", { name: "第一组" }));
+  await act(async () => {
+    await view.router.navigate({
+      to: "/pipelines",
+      search: { group: "crew-2" },
+    } as never);
+  });
+  await view.findByText("流程-crew-2");
+  await waitFor(() => expect(scroll).toHaveBeenCalledTimes(2));
+  expect(
+    view.getByRole("button", { name: "第二组" }).getAttribute("aria-pressed"),
+  ).toBe("true");
+  scroll.mockRestore();
+});
+
+test("closing the run panel keeps the group in the address", async () => {
+  const scroll = stubScroll();
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    const path = String(input);
+    if (path.includes("/api/group-pipelines/runs/") && !init?.method)
+      return Response.json({
+        run: { status: "running", cursor: 0, parentTaskId: "p", steps: [] },
+      });
+    if (init?.method) return Response.json({ ok: true });
+    return Response.json([]);
+  }) as typeof fetch;
+  const view = draw("/pipelines?group=crew-2&run=run-9");
+  await userEvent.click(
+    await view.findByRole("button", { name: "中止这次运行" }),
+  );
+  await waitFor(() =>
+    expect(view.router.state.location.search).toEqual({ group: "crew-2" }),
   );
   expect(
     view.getByRole("button", { name: "第二组" }).getAttribute("aria-pressed"),

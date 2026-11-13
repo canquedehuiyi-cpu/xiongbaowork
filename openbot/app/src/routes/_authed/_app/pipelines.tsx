@@ -138,6 +138,15 @@ function RouteComponent() {
    */
   const [editing, setEditing] = useState<PipelineTemplate | null>(null);
   const { run: runId, group: groupParam } = Route.useSearch();
+  /*
+   * A `?group=` that arrives later (a link from the staff page while this page is open) beats a
+   * group picked by hand: the hand-picked one is dropped when the parameter changes.
+   */
+  const [seenGroupParam, setSeenGroupParam] = useState(groupParam);
+  if (seenGroupParam !== groupParam) {
+    setSeenGroupParam(groupParam);
+    setCrewId(null);
+  }
   const navigate = useNavigate();
   const setRunId = (id: string | null) =>
     // Only `run` changes: `group` stays, so the address still says which group the page is on.
@@ -160,18 +169,18 @@ function RouteComponent() {
   );
   const sectionRef = useRef<HTMLElement>(null);
   const sectionShown = templates.data !== undefined;
-  const scrolled = useRef(false);
+  const scrolledTo = useRef<string | null>(null);
   useEffect(() => {
-    // Only the arrival from a link scrolls, once; picking groups by hand is already where the eyes are.
-    // The section exists once the group's templates have loaded, so that is when to look for it.
+    // Only the arrival from a link scrolls, once per group named; picking groups by hand is already
+    // where the eyes are. The section exists once the group's templates have loaded.
     if (
-      scrolled.current ||
+      scrolledTo.current === fromAddress ||
       !sectionShown ||
       !fromAddress ||
       selected !== fromAddress
     )
       return;
-    scrolled.current = true;
+    scrolledTo.current = fromAddress;
     sectionRef.current?.scrollIntoView?.({ block: "start" });
   }, [sectionShown, fromAddress, selected]);
   const names = new Map(
