@@ -412,31 +412,32 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
      - `group_pipeline_start_receipts`：`run_id IN runs AND tenant_id = p_from` → `p_heir`；
      - `flow_confirmations`、`flow_run_events`（`run_id IN runs`）以及 `flow_run_retries`（`source_run_id IN runs OR new_run_id IN runs`），都限 `tenant_id = p_from` → `p_heir`。
    - **不动**：`usage_counters`、审批、`audit_events`、`group_bot_threads`、`waker_group_members`。
-3. `openbot_team_channel_hand_over_core(p_channel_id text) RETURNS text`
+3. `openbot_team_channel_hand_over_core(p_channel_id text, p_leaving boolean DEFAULT true) RETURNS text`（修复轮 1 加 `p_leaving`：真 = 退群，假 = 停用）
    - 属性：`SECURITY DEFINER`，固定 `search_path`；`REVOKE ALL FROM PUBLIC`，不授权。
    - 函数体：
      1. `SELECT tenant_id, created_by, waker_group_id INTO c FROM channels WHERE id = p_channel_id FOR UPDATE`。没找到、`tenant_id IS DISTINCT FROM 'team'`、或 `created_by IS NULL`，返回 NULL。频道已软删（`deleted_at IS NOT NULL`）：返回 `c.created_by`，什么都不改（设计稿 3.1.1 第 4.1 条）。
      2. 定义「在籍」：`EXISTS (SELECT 1 FROM channel_memberships m WHERE m.channel_id = c.id AND m.tenant_id = 'team' AND m.user_id = X) AND NOT EXISTS (SELECT 1 FROM users u JOIN revoked_access r ON r.email = lower(u.email) WHERE u.id = X)`。`created_by` 在籍时返回 `c.created_by`。
      3. `heir := SELECT m.user_id FROM channel_memberships m JOIN users u ON u.id = m.user_id WHERE m.channel_id = c.id AND m.tenant_id = 'team' AND NOT EXISTS (SELECT 1 FROM revoked_access r WHERE r.email = lower(u.email)) ORDER BY m.created_at, u.email LIMIT 1`。不加 `COLLATE`。
-     4. `heir IS NULL`：
+     4. `c.waker_group_id` 非空，并且（`heir IS NOT NULL` 或 `p_leaving`）：先 `PERFORM 1 FROM waker_groups WHERE id = c.waker_group_id FOR UPDATE`（与解散一样先锁后查），再查 `group_task_runs WHERE group_id = c.waker_group_id AND status IN ('running','awaiting_action')`，有就 `RAISE EXCEPTION 'a crew run is still going' USING ERRCODE = '55006'`。退群一律拒绝（含最后一人、只剩停用成员）；停用只在有人接手时推迟。
+     5. `heir IS NULL`：
         - 一个成员都没有：`PERFORM hand_over_write(c.id, c.created_by, NULL, NULL)`，返回 NULL；
         - 否则返回 `c.created_by`，不改。
-     5. `c.waker_group_id` 非空，并且存在 `group_task_runs WHERE group_id = c.waker_group_id AND status IN ('running','awaiting_action')`：`RAISE EXCEPTION 'a crew run is still going' USING ERRCODE = '55006'`。
      6. `PERFORM hand_over_write(c.id, c.created_by, heir, c.waker_group_id)`，返回 heir。
 4. `xiongbao_team_channel_hand_over(p_channel_id text) RETURNS text`
    - 属性：`SECURITY DEFINER`，固定 `search_path`；`REVOKE ALL FROM PUBLIC`；`GRANT EXECUTE TO openbot_app`。
    - 函数体：
      - `frame IN ('system','team','')` → 42501；
      - 不加锁读 `created_by`。`frame <> 'platform'` 且（行不存在，或 `frame` 既不是 `created_by`、`openbot_team_channel_member(p_channel_id)` 也为假）→ `RAISE EXCEPTION 'only a member hands a shared group over' USING ERRCODE = '42501'`；
-     - 通过后 `RETURN openbot_team_channel_hand_over_core(p_channel_id)`。
+     - 通过后 `RETURN openbot_team_channel_hand_over_core(p_channel_id, true)`。
 5. `openbot_team_person_leaves_groups(p_user_id text) RETURNS void`
    - 属性：`SECURITY DEFINER`，固定 `search_path`；`REVOKE ALL FROM PUBLIC`，不授权。
-   - 先 `owned := ARRAY(SELECT id FROM channels WHERE tenant_id = 'team' AND created_by = p_user_id ORDER BY id)`；
+   - 先 `owned := ARRAY(SELECT id FROM channels WHERE tenant_id = 'team' AND created_by = p_user_id ORDER BY id FOR UPDATE)`（先锁频道行，与退群的加锁顺序一致）；
    - 再 `DELETE FROM channel_memberships WHERE user_id = p_user_id AND tenant_id = 'team'`（不删映射：同「被别人移出」）；
-   - 对 `owned` 逐个 `BEGIN PERFORM openbot_team_channel_hand_over_core(id); EXCEPTION WHEN SQLSTATE '55006' THEN NULL; END;`。其他异常照常抛出。
+   - 对 `owned` 逐个 `BEGIN PERFORM openbot_team_channel_hand_over_core(id, false); EXCEPTION WHEN SQLSTATE '55006' THEN NULL; WHEN OTHERS THEN RAISE WARNING …; END;`（修复轮 1：其他错误也只回滚这一个群，见设计稿 3.1.1 第 4.1 条「停用时的错误处理」）。
 6. `openbot_team_revoked_leaves() RETURNS trigger`
    - 属性：`SECURITY DEFINER`，固定 `search_path`；`REVOKE ALL FROM PUBLIC`。
-   - 函数体：`FOR uid IN SELECT id FROM users WHERE lower(email) = NEW.email LOOP PERFORM openbot_team_person_leaves_groups(uid); END LOOP; RETURN NULL;`
+   - 函数体：`FOR uid IN SELECT id FROM users WHERE lower(email) = NEW.email LOOP BEGIN PERFORM openbot_team_person_leaves_groups(uid); EXCEPTION WHEN OTHERS THEN RAISE WARNING …; END; END LOOP; RETURN NULL;`
+   - 索引（修复轮 1，放在函数之前）：`channel_memberships_user_idx (user_id)`、`channels_team_created_by_idx (created_by) WHERE tenant_id = 'team'`、`users_lower_email_idx (lower(email))`，都 `IF NOT EXISTS`。
    - `CREATE TRIGGER openbot_team_revoked_leaves AFTER INSERT ON public.revoked_access FOR EACH ROW EXECUTE FUNCTION public.openbot_team_revoked_leaves();`
 7. 存量补做（放在文件最后）：
    ```sql

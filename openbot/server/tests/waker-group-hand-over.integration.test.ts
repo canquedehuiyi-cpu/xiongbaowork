@@ -156,6 +156,7 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
+  for (const side of sideClients.splice(0)) await side.$client.close();
   await database.$client.close();
 });
 
@@ -197,8 +198,12 @@ async function crew(owner: AgentActor, name: string) {
   return row.id;
 }
 
-/** What the groups service is in production (index.ts), minus the turns: no Bot answers here. */
-function conversations() {
+/**
+ * What the groups service is in production (index.ts), minus the turns: no Bot answers here.
+ * `beforeUse`, when given, runs as upstream asks whether a Bot may be used: after its checks on the
+ * caller, before its write, which is where a test holds an addBots.
+ */
+function conversations(beforeUse?: () => Promise<void>) {
   return createGroupConversations({
     store: groupStore,
     queue: createWorkQueue(database),
@@ -227,10 +232,12 @@ function conversations() {
       createdChannels.push(channel.id);
       return channel;
     },
-    canUseBot: async (ownerUserId, agentId) =>
-      Boolean(
+    canUseBot: async (ownerUserId, agentId) => {
+      await beforeUse?.();
+      return Boolean(
         await profileStore.get({ id: ownerUserId, role: "user" }, agentId),
-      ),
+      );
+    },
     progressEveryMs: 0,
   });
 }
@@ -834,6 +841,42 @@ describe("hand-over function (0207)", () => {
     expect((await crewRow(groupId))?.tenantId).toBe(alice.id);
   });
 
+  test("the last one out is refused while a crew run is going, and the chat stays", async () => {
+    const alice = await person("alice");
+    const { channelId, groupId } = await linkedGroup(alice);
+    const flow = await runWithCards(alice, groupId, "running");
+
+    const refused = await failure(() => leaveAndHandOver(alice, channelId));
+
+    expect(refused.code).toBe("55006");
+    expect(await membersOf(channelId)).toEqual([alice.id]);
+    const row = await channelRow(channelId);
+    expect(row.deleted).toBe(false);
+    expect(row.created_by).toBe(alice.id);
+    expect((await stamps(groupId, flow)).run).toEqual([alice.id]);
+  });
+
+  test("with only deactivated members left, a leave is refused while a crew run is going", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    await deactivate.scim(bob);
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`insert into channel_memberships (channel_id, user_id, tenant_id) values (${channelId}, ${bob.id}, 'team')`,
+      ),
+    );
+    await runWithCards(alice, groupId, "running");
+
+    const refused = await failure(() => leaveAndHandOver(alice, channelId));
+
+    expect(refused.code).toBe("55006");
+    expect(await membersOf(channelId)).toEqual([alice.id, bob.id]);
+    const row = await channelRow(channelId);
+    expect(row.deleted).toBe(false);
+    expect(row.created_by).toBe(alice.id);
+  });
+
   test("a personal channel and a shared group with no creator are left alone", async () => {
     const alice = await person("alice");
     const [ada, grace] = [await bot(alice, "Ada"), await bot(alice, "Grace")];
@@ -954,6 +997,23 @@ describe("hand-over function (0207)", () => {
     // ROW (1) | INSERT (4), and not BEFORE (2): after the row is in.
     expect(triggers).toEqual([
       { table: "revoked_access", type: 1 | 4, enabled: "O" },
+    ]);
+  });
+
+  test("the lookups a deactivation makes by person have indexes", async () => {
+    const indexes = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`select indexdef from pg_indexes
+             where schemaname = 'public' and indexname in (
+               'channel_memberships_user_idx', 'channels_team_created_by_idx', 'users_lower_email_idx')
+             order by indexname`,
+      ),
+    )) as unknown as { indexdef: string }[];
+
+    expect(indexes.map((row) => row.indexdef)).toEqual([
+      "CREATE INDEX channel_memberships_user_idx ON public.channel_memberships USING btree (user_id)",
+      "CREATE INDEX channels_team_created_by_idx ON public.channels USING btree (created_by) WHERE (tenant_id = 'team'::text)",
+      "CREATE INDEX users_lower_email_idx ON public.users USING btree (lower(email))",
     ]);
   });
 });
@@ -1145,6 +1205,163 @@ describe("deactivation (0207 trigger)", () => {
     expect((await stamps(groupId, flow)).run).toEqual([bob.id]);
   });
 
+  test("a deactivated creator alone with a crew run going still leaves the chat deleted", async () => {
+    const alice = await person("alice");
+    const { channelId, groupId } = await linkedGroup(alice);
+    const flow = await runWithCards(alice, groupId, "running");
+
+    await deactivate.scim(alice);
+
+    expect(await deniedEmails([alice])).toEqual([emailOf(alice)]);
+    expect(await membersOf(channelId)).toEqual([]);
+    const row = await channelRow(channelId);
+    expect(row.deleted).toBe(true);
+    expect(row.created_by).toBe(alice.id);
+    expect((await stamps(groupId, flow)).run).toEqual([alice.id]);
+  });
+
+  test("a hand-over that fails for another reason does not fail the deactivation, and waits for a heal", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    const flow = await runWithCards(alice, groupId, "done");
+    // A template of this crew already under Bob, by the same name: the crew went to him and back.
+    const left = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`insert into group_task_templates (tenant_id, group_id, name, steps)
+            select ${bob.id}, group_id, name, '[]'::jsonb from group_task_templates
+             where id = ${flow.templateId}::uuid
+            returning id`,
+      ),
+    )) as unknown as { id: string }[];
+
+    await deactivate.scim(alice);
+
+    expect(await deniedEmails([alice])).toEqual([emailOf(alice)]);
+    expect(await membersOf(channelId)).toEqual([bob.id]);
+    expect((await channelRow(channelId)).created_by).toBe(alice.id);
+    expect((await stamps(groupId, flow)).crew).toEqual([alice.id]);
+
+    // The next heal, once the clash is gone, hands it over.
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`delete from group_task_templates where id = ${left[0]?.id ?? ""}::uuid`,
+      ),
+    );
+    const opened = await crewApi()(bob, "POST", `/for-channel/${channelId}`);
+    expect(opened.status).toBe(200);
+    expect((await channelRow(channelId)).created_by).toBe(bob.id);
+    expect((await stamps(groupId, flow)).template).toEqual([bob.id]);
+  });
+
+  test("a deactivation whose leaving cannot get its locks in time still deactivates", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId } = await linkedGroup(alice, [bob]);
+    const holder = sideClient();
+    const remover = sideClient();
+    const holding = gate();
+    const done = gate();
+    // Someone holds Alice's membership row; the deactivating request waits at most a moment.
+    const held = runAsTenant("platform", () =>
+      holder.client.transaction(async (tx) => {
+        await tx.execute(
+          sql`select 1 from channel_memberships
+               where channel_id = ${channelId} and user_id = ${alice.id} for update`,
+        );
+        holding.open();
+        await done.shut;
+      }),
+    );
+    await holding.shut;
+
+    const removed = await runAsTenant("platform", () =>
+      remover.client.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '300ms'`);
+        await tx
+          .insert(revokedAccess)
+          .values({ email: emailOf(alice), revokedBy: "test" });
+      }),
+    ).then(
+      () => null,
+      (error: unknown) => stateOf(error) ?? String(error),
+    );
+    done.open();
+    await held;
+
+    expect(removed).toBeNull();
+    expect(await deniedEmails([alice])).toEqual([emailOf(alice)]);
+    // She is out of reach; leaving the group waits for the next heal of its owner.
+    expect(await membersOf(channelId)).toEqual([alice.id, bob.id]);
+    expect((await channelRow(channelId)).created_by).toBe(alice.id);
+    const opened = await crewApi()(bob, "POST", `/for-channel/${channelId}`);
+    expect(opened.status).toBe(200);
+    expect((await channelRow(channelId)).created_by).toBe(bob.id);
+  });
+
+  test("a deactivation and the same person's leave at once both go through", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const carol = await person("carol");
+    const { channelId, groupId } = await linkedGroup(alice, [bob, carol]);
+    const leaver = sideClient();
+    const remover = sideClient();
+    const locked = gate();
+    const go = gate();
+    // A leave as `link.leave` takes its locks: the channel row, then the leaver's membership.
+    const leaving = runAsTenant(alice.id, () =>
+      leaver.client.transaction(async (tx) => {
+        await tx.execute(
+          sql`select 1 from channels where id = ${channelId} and deleted_at is null for update`,
+        );
+        locked.open();
+        await go.shut;
+        await tx.execute(
+          sql`delete from channel_memberships where channel_id = ${channelId} and user_id = ${alice.id}`,
+        );
+        const rows = (await tx.execute(
+          sql`select public.xiongbao_team_channel_hand_over(${channelId}) as owner`,
+        )) as unknown as { owner: string | null }[];
+        return rows[0]?.owner ?? null;
+      }),
+    );
+    await locked.shut;
+    const removing = runAsTenant("platform", async () => {
+      await remover.client
+        .insert(revokedAccess)
+        .values({ email: emailOf(alice), revokedBy: "test" });
+    });
+    const removerWaited = await waitsOnALock(remover.name);
+    // What the deactivation holds while it waits: not her membership row, which the leave deletes
+    // next. Holding it there is the other order, and a deadlock.
+    const free = (await runAsTenant("platform", () =>
+      database.transaction(
+        (tx) =>
+          tx.execute(
+            sql`select 1 from channel_memberships
+                 where channel_id = ${channelId} and user_id = ${alice.id} for update skip locked`,
+          ) as unknown as Promise<unknown[]>,
+      ),
+    )) as unknown[];
+    go.open();
+
+    const [left, removed] = await Promise.allSettled([leaving, removing]);
+
+    expect(removerWaited).toBe(true);
+    expect(free).toHaveLength(1);
+    // A refusal shows as its SQLSTATE (a deadlock is 40P01).
+    const outcome = (settled: PromiseSettledResult<unknown>) =>
+      settled.status === "fulfilled"
+        ? settled.value
+        : (stateOf(settled.reason) ?? String(settled.reason));
+    expect(outcome(left)).toBe(bob.id);
+    expect(outcome(removed)).toBeUndefined();
+    expect(await deniedEmails([alice])).toEqual([emailOf(alice)]);
+    expect(await membersOf(channelId)).toEqual([bob.id, carol.id]);
+    expect((await channelRow(channelId)).created_by).toBe(bob.id);
+    expect((await crewRow(groupId))?.tenantId).toBe(bob.id);
+  });
+
   test("restoring the account gives nothing back", async () => {
     const alice = await person("alice");
     const bob = await person("bob");
@@ -1267,6 +1484,84 @@ describe("deactivation (0207 trigger)", () => {
     // Rolled back: the shared database is as it was.
     expect((await channelRow(made.channelId)).created_by).toBe(made.alice.id);
   });
+
+  test("0207's backfill run a second time changes nothing", async () => {
+    // One group handed over, one put off by a running flow: the two states a first run leaves.
+    const made = await threeWithAFlow();
+    const later = await linkedGroup(made.alice, [made.bob]);
+    const going = await runWithCards(made.alice, later.groupId, "running");
+    const channelIds = [made.channelId, later.channelId];
+    const groupIds = [made.groupId, later.groupId];
+    const cardIds = [...made.flow.cardIds, ...going.cardIds];
+    const migration = await Bun.file(
+      new URL(
+        "../recovery/recovery-20261018-v1/sql/0207_team_channel_hand_over.sql",
+        import.meta.url,
+      ),
+    ).text();
+    const backfill = migration.split("--> statement-breakpoint").at(-1) ?? "";
+    expect(backfill).toContain("openbot_team_person_leaves_groups(uid)");
+    const owner = ownerConnection();
+    class Rollback extends Error {}
+    const plain = (rows: object[]) => [...rows].map((row) => ({ ...row }));
+    // Every row a run could touch, with its physical place: any update, even a no-op one, moves it.
+    const read = async (tx: SQL) => ({
+      channels: plain(
+        await tx`select id, ctid::text as at, created_by, deleted_at from channels
+                  where id in ${tx(channelIds)} order by id`,
+      ),
+      members: plain(
+        await tx`select channel_id, user_id, ctid::text as at from channel_memberships
+                  where channel_id in ${tx(channelIds)} order by channel_id, user_id`,
+      ),
+      crews: plain(
+        await tx`select id::text, tenant_id, name, ctid::text as at from waker_groups
+                  where id::text in ${tx(groupIds)} order by id`,
+      ),
+      runs: plain(
+        await tx`select id::text, tenant_id, ctid::text as at from group_task_runs
+                  where group_id::text in ${tx(groupIds)} order by id`,
+      ),
+      cards: plain(
+        await tx`select id::text, tenant_id, ctid::text as at from tasks
+                  where id::text in ${tx(cardIds)} order by id`,
+      ),
+    });
+    let once: Awaited<ReturnType<typeof read>> | null = null;
+    let twice: typeof once = null;
+    try {
+      await owner.begin(async (tx) => {
+        await tx`alter table revoked_access disable trigger openbot_team_revoked_leaves`;
+        await tx`insert into revoked_access (email, revoked_by) values (${emailOf(made.alice)}, 'before-0207')`;
+        await tx`alter table revoked_access enable trigger openbot_team_revoked_leaves`;
+        await tx.unsafe(backfill);
+        once = await read(tx as unknown as SQL);
+        await tx.unsafe(backfill);
+        twice = await read(tx as unknown as SQL);
+        throw new Rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof Rollback)) throw error;
+    } finally {
+      await owner.close();
+    }
+
+    if (!once || !twice) throw new Error("the backfill did not run");
+    const first: Awaited<ReturnType<typeof read>> = once;
+    // The first run did its work: one group handed to Bob, the other left to a heal.
+    expect(
+      first.channels.map((row) => [row.id, row.created_by, row.deleted_at]),
+    ).toEqual(
+      [
+        [made.channelId, made.bob.id, null],
+        [later.channelId, made.alice.id, null],
+      ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    );
+    expect(first.members.map((row) => row.user_id)).not.toContain(
+      made.alice.id,
+    );
+    expect(twice).toEqual(first);
+  });
 });
 
 /** The deny-list rows of these people. */
@@ -1385,6 +1680,41 @@ function gate() {
   return { shut, open };
 }
 
+const sideClients: ReturnType<typeof createDatabase>[] = [];
+
+/**
+ * A pool of its own, named in `pg_stat_activity`, so a test can hold a transaction open on it while
+ * others run, and tell when it waits on a lock. The shared pool has two connections.
+ */
+function sideClient() {
+  const name = `wgho_${randomUUID().replaceAll("-", "")}`;
+  const url = new URL(testDatabaseUrl());
+  url.searchParams.set("application_name", name);
+  const client = createDatabase(url.toString(), TEST_POOL);
+  sideClients.push(client);
+  return { name, client };
+}
+
+/**
+ * Until a session of `name` waits on a lock another session holds: true, or false after five seconds.
+ * It does not throw, so a test still opens its gates and lets its held transactions go.
+ */
+async function waitsOnALock(name: string) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const rows = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`select 1 from pg_stat_activity
+             where application_name = ${name} and cardinality(pg_blocking_pids(pid)) > 0
+             limit 1`,
+      ),
+    )) as unknown[];
+    if (rows.length > 0) return true;
+    await Bun.sleep(10);
+  }
+  return false;
+}
+
 describe("leaving through the service", () => {
   test("the creator leaves through DELETE /members/:self and the earliest member takes over", async () => {
     const alice = await person("alice");
@@ -1493,7 +1823,44 @@ describe("leaving through the service", () => {
     expect((await crewRow(groupId))?.tenantId).toBe(alice.id);
   });
 
-  test("a hand-over and an addBots at once end consistent", async () => {
+  test("a hand-over and an addBots at once end consistent: the leave lands after addBots's checks", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    const linus = await bot(alice, "Linus");
+    const reached = gate();
+    const held = gate();
+    const groups = withWakerGroupLink(
+      conversations(async () => {
+        reached.open();
+        await held.shut;
+      }),
+      linkCore(() => {}),
+      () => {},
+    );
+    const adding = runAsTenant(alice.id, () =>
+      groups.addBots(alice.id, channelId, [linus]),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await reached.shut;
+
+    await runAsTenant(alice.id, () =>
+      groups.removeMember(alice.id, channelId, alice.id),
+    );
+    held.open();
+    const added = await adding;
+
+    // Upstream's checks passed while she was the creator; its write, after the leave, finds a
+    // conversation she can no longer read.
+    expect(added).toBeInstanceOf(GroupNotFoundError);
+    expect((await crewRow(groupId))?.tenantId).toBe(bob.id);
+    expect(await mirror(groupId)).toEqual(await truthIn(bob.id, channelId));
+    expect(await mirror(groupId)).not.toContain(linus);
+  });
+
+  test("a hand-over and an addBots at once end consistent: the addBots first", async () => {
     const alice = await person("alice");
     const bob = await person("bob");
     const { channelId, groupId } = await linkedGroup(alice, [bob]);
@@ -1504,27 +1871,235 @@ describe("leaving through the service", () => {
       () => {},
     );
 
-    const [, added] = await Promise.all([
-      runAsTenant(alice.id, () =>
-        groups.removeMember(alice.id, channelId, alice.id),
-      ),
-      runAsTenant(alice.id, () =>
-        groups.addBots(alice.id, channelId, [linus]),
-      ).then(
-        () => null,
-        (error: unknown) => error,
-      ),
-    ]);
+    await runAsTenant(alice.id, () =>
+      groups.addBots(alice.id, channelId, [linus]),
+    );
+    await runAsTenant(alice.id, () =>
+      groups.removeMember(alice.id, channelId, alice.id),
+    );
 
-    // Refused when it came after the leave: as a stranger (not found), or as a member who no longer
-    // started the group, depending on where in upstream's checks the leave landed.
-    if (added !== null)
-      expect(
-        added instanceof GroupNotFoundError ||
-          added instanceof GroupRefusedError,
-      ).toBe(true);
     expect((await crewRow(groupId))?.tenantId).toBe(bob.id);
     expect(await mirror(groupId)).toEqual(await truthIn(bob.id, channelId));
+    expect(await mirror(groupId)).toContain(linus);
+  });
+
+  test("a hand-over and an addBots at once end consistent: the leave first", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    const linus = await bot(alice, "Linus");
+    const groups = withWakerGroupLink(
+      conversations(),
+      linkCore(() => {}),
+      () => {},
+    );
+
+    await runAsTenant(alice.id, () =>
+      groups.removeMember(alice.id, channelId, alice.id),
+    );
+    const added = await runAsTenant(alice.id, () =>
+      groups.addBots(alice.id, channelId, [linus]),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(added).toBeInstanceOf(GroupNotFoundError);
+    expect((await crewRow(groupId))?.tenantId).toBe(bob.id);
+    expect(await mirror(groupId)).toEqual(await truthIn(bob.id, channelId));
+  });
+
+  test("the last person out cannot leave while a crew run is going either, and the chat and crew stay", async () => {
+    const alice = await person("alice");
+    const { channelId, groupId } = await linkedGroup(alice);
+    const flow = await runWithCards(alice, groupId, "running");
+    const api = groupApi(linkCore(() => {}));
+
+    const answer = await api(
+      alice,
+      "DELETE",
+      `/${channelId}/members/${alice.id}`,
+    );
+
+    expect(answer.status).toBe(400);
+    expect(answer.json.error).toBe("有组团流程正在运行，先停下再退群。");
+    expect(await membersOf(channelId)).toEqual([alice.id]);
+    const row = await channelRow(channelId);
+    expect(row.deleted).toBe(false);
+    expect(row.created_by).toBe(alice.id);
+    expect(row.waker_group_id).toBe(groupId);
+    const left = await stamps(groupId, flow);
+    expect(left.crew).toEqual([alice.id]);
+    expect(left.run).toEqual([alice.id]);
+    expect(left.cards).toEqual([alice.id, alice.id, alice.id]);
+  });
+
+  test("a run that starts while a leave waits for the crew's row is seen, and the leave is refused", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    const [template] = await runAsTenant(alice.id, () =>
+      database
+        .insert(groupTaskTemplates)
+        .values({ groupId, name: `流程-${randomUUID()}`, steps: [] })
+        .returning({ id: groupTaskTemplates.id }),
+    );
+    if (!template) throw new Error("template not written");
+    const starter = sideClient();
+    const leaver = sideClient();
+    const inserted = gate();
+    const commit = gate();
+    // A run being started: inserted, not yet committed, holding a key-share lock on the crew's row.
+    let runId = "";
+    const starting = runAsTenant(alice.id, () =>
+      starter.client.transaction(async (tx) => {
+        const [run] = await tx
+          .insert(groupTaskRuns)
+          .values({
+            templateId: template.id,
+            groupId,
+            status: "running",
+            steps: [],
+          })
+          .returning({ id: groupTaskRuns.id });
+        runId = run?.id ?? "";
+        inserted.open();
+        await commit.shut;
+      }),
+    );
+    await inserted.shut;
+    const api = groupApi(
+      createWakerGroupLink({ database: leaver.client, groupStore }),
+    );
+
+    const leaving = api(alice, "DELETE", `/${channelId}/members/${alice.id}`);
+    const leaverWaited = await waitsOnALock(leaver.name);
+    commit.open();
+    await starting;
+    const answer = await leaving;
+
+    expect(leaverWaited).toBe(true);
+    expect(answer.status).toBe(400);
+    expect(answer.json.error).toBe("有组团流程正在运行，先停下再退群。");
+    expect(await membersOf(channelId)).toEqual([alice.id, bob.id]);
+    expect((await channelRow(channelId)).created_by).toBe(alice.id);
+    expect((await crewRow(groupId))?.tenantId).toBe(alice.id);
+    const runs = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`select tenant_id from group_task_runs where id = ${runId}::uuid`,
+      ),
+    )) as unknown as { tenant_id: string }[];
+    expect(runs).toEqual([{ tenant_id: alice.id }]);
+  });
+
+  test("the creator and the earliest member leaving at once leave the crew with the one who left, until a heal", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const carol = await person("carol");
+    const { channelId, groupId } = await linkedGroup(alice, [bob, carol]);
+    const side = sideClient();
+    const deleted = gate();
+    const commit = gate();
+    // Bob leaves the upstream way (`store.removeMember`, no lock on the channel row), not yet committed.
+    const bobLeaving = runAsTenant(bob.id, () =>
+      side.client.transaction(async (tx) => {
+        await tx.execute(
+          sql`delete from channel_memberships where channel_id = ${channelId} and user_id = ${bob.id}`,
+        );
+        deleted.open();
+        await commit.shut;
+      }),
+    );
+    await deleted.shut;
+
+    const answer = await groupApi(linkCore(() => {}))(
+      alice,
+      "DELETE",
+      `/${channelId}/members/${alice.id}`,
+    );
+    commit.open();
+    await bobLeaving;
+
+    // The accepted race (3.1.1 第 8 条): the crew went to Bob, who is gone too.
+    expect(answer.status).toBe(204);
+    expect(await membersOf(channelId)).toEqual([carol.id]);
+    expect((await channelRow(channelId)).created_by).toBe(bob.id);
+    expect((await crewRow(groupId))?.tenantId).toBe(bob.id);
+    // Carol opening settings is the heal.
+    const opened = await crewApi()(carol, "POST", `/for-channel/${channelId}`);
+    expect(opened.status).toBe(200);
+    expect((await channelRow(channelId)).created_by).toBe(carol.id);
+    expect((await crewRow(groupId))?.tenantId).toBe(carol.id);
+  });
+
+  test("a leave that commits while the mirror write waits on the channel row is seen in the row it locks", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId, bots } = await linkedGroup(alice, [bob], 3);
+    const holder = sideClient();
+    const leaver = sideClient();
+    const mirrorer = sideClient();
+    const holding = gate();
+    const release = gate();
+    // Holds Alice's membership row, so her leave stops holding the channel row, before it deletes it.
+    const held = runAsTenant("platform", () =>
+      holder.client.transaction(async (tx) => {
+        await tx.execute(
+          sql`select 1 from channel_memberships
+               where channel_id = ${channelId} and user_id = ${alice.id} for update`,
+        );
+        holding.open();
+        await release.shut;
+      }),
+    );
+    await holding.shut;
+    const reached = gate();
+    const roster = gate();
+    const { lines, log } = collected();
+    const gated = createWakerGroupLink({
+      database: mirrorer.client,
+      groupStore: {
+        order: async (id) => {
+          reached.open();
+          await roster.shut;
+          return groupStore.order(id);
+        },
+        bots: async (id) => {
+          await roster.shut;
+          return groupStore.bots(id);
+        },
+      },
+      log,
+    });
+    // Alice can still read the channel: the reconcile passes its first check and waits at the roster.
+    const reconciling = gated.reconcile(channelId);
+    await reached.shut;
+    // `link.leave` alone: the service's own reconcile afterwards would write the same mirror at the
+    // same moment, and that race is not this test's.
+    const leaving = runAsTenant(alice.id, () =>
+      createWakerGroupLink({ database: leaver.client, groupStore }).leave(
+        alice.id,
+        channelId,
+      ),
+    );
+    const leaveWaited = await waitsOnALock(leaver.name);
+    // The roster is read while she is still in; the share lock then waits for her leave.
+    roster.open();
+    const mirrorWaited = await waitsOnALock(mirrorer.name);
+    release.open();
+    await held;
+    const left = await leaving;
+
+    expect(leaveWaited).toBe(true);
+    expect(left).toEqual({ heir: bob.id });
+    expect(mirrorWaited).toBe(true);
+    expect(await reconciling).toBe(true);
+    expect(
+      lines.filter((line) => line.type === "waker-group-owner-gone"),
+    ).toEqual([]);
+    expect((await crewRow(groupId))?.tenantId).toBe(bob.id);
+    expect(await mirror(groupId)).toEqual(await truthIn(bob.id, channelId));
+    expect(await mirror(groupId)).toHaveLength(bots.length);
   });
 
   test("a reconcile that read the roster before the hand-over follows the new owner and logs no owner-gone", async () => {

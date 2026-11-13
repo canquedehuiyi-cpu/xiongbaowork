@@ -114,7 +114,7 @@
 | # | 路径 | 生产里有没有 | 处理 |
 |---|---|---|---|
 | 1 | 创建者在人员面板点「退出」→ `DELETE /api/groups/:id/members/:self` | 有（放开后） | **立即**：装饰器在一个事务里退群并移交（4.2）。流程正在运行时回 400 |
-| 2 | 创建者只剩自己时退群 | 有 | **立即**：同一个事务；没有接手人，聊天软删，群组留给他（第 6 条） |
+| 2 | 创建者只剩自己时退群 | 有 | **立即**：同一个事务；没有接手人，聊天软删，群组留给他（第 6 条）。流程正在运行时同样回 400：「流程正在运行时创建者不能退群」一律适用，有没有接手人都一样（只剩停用成员时也是） |
 | 3 | 创建者被停用：<br>① SCIM 停用：`reconcileDirectoryState`，`active = false`，向 `revoked_access` 插一行，`revoked_by = 'scim:directory'`（`S/auth/scim.ts:64-117`，插入在 `:82-87`）；<br>② 管理员移除：`POST /api/admin/people/:userId/access {revoked:true}` → `peopleStore.revoke`，事务里插 `revoked_access` 并删会话（`S/app.ts:1509-1590`、`S/people/store.ts:318-333`）；<br>③ 平台运营停用租户：`POST /tenants/:id/suspend` → `suspendTenant`，在 `platform` 帧插 `revoked_access`（`S/platform/routes.ts:85-106`、`S/platform/store.ts:57-82`） | 三条都有 | **立即**：三条唯一的共同点是 `INSERT INTO revoked_access`，所以在这张表上建 `AFTER INSERT` 触发器（4.3）。移交与插入在同一个事务里，三个 TS 文件都不用改 |
 | 4 | 停用的人如果不是创建者 | — | 同一个触发器让他离开他所在的所有共享群（删成员行），这就是「算作退群」。否则上游 `people()[0]` 可能落在停用的人身上，接手人在上游就成了非发起人 |
 | 5 | 创建者在自己的帧里直接删自己的成员行 | 生产代码只有 `store.removeMember`，而且只经上游服务调用 | 方案 A：不当场移交，靠自愈点（4.4） |
@@ -128,15 +128,15 @@ SCIM 停用之后还有一个 `setTimeout(…, 0)` 的善后（`scim.ts:88-112`�
 
 #### 4. 怎么做
 
-**4.1 迁移 0207 `0207_team_channel_hand_over.sql`**（四个函数加一个触发器，守卫一行不改）
+**4.1 迁移 0207 `0207_team_channel_hand_over.sql`**（四个函数加一个触发器，外加三个按人查的索引，守卫一行不改）
 
 | 函数 | 属性 | 谁能调 | 作用 |
 |---|---|---|---|
 | `openbot_team_channel_hand_over_write(p_channel_id, p_from, p_heir, p_group_id)` | `SECURITY DEFINER`，`SET search_path`，**`SET app.tenant_id = 'platform'`** | 不授权给应用（只有同一属主的函数能调） | 真正改数据（第 5 条）。`p_heir` 为 NULL 时改为软删聊天 |
-| `openbot_team_channel_hand_over_core(p_channel_id)` | `SECURITY DEFINER` | 不授权 | 锁频道、判定、调写入函数。返回调用后的所有者 |
+| `openbot_team_channel_hand_over_core(p_channel_id, p_leaving DEFAULT true)` | `SECURITY DEFINER` | 不授权 | 锁频道、判定、调写入函数。返回调用后的所有者。`p_leaving` 为真（退群，对外函数传它）时有流程在运行一律 55006；为假（停用）时只在有人接手时 55006 |
 | `xiongbao_team_channel_hand_over(p_channel_id)` | `SECURITY DEFINER` | `GRANT EXECUTE TO openbot_app` | 先校验身份，再调 core |
-| `openbot_team_person_leaves_groups(p_user_id)` | `SECURITY DEFINER` | 不授权 | 停用时用：删他在所有 `team` 频道的成员行；对他是 `created_by` 的频道逐个调 core，遇到 55006 就跳过那一个（不能让停用失败） |
-| `openbot_team_revoked_leaves()`（触发器函数） | `SECURITY DEFINER`，`RETURNS trigger` | 不授权 | 按 `NEW.email` 找到 `users.id`（`lower(email)` 比较），调上一个函数；找不到人就什么都不做 |
+| `openbot_team_person_leaves_groups(p_user_id)` | `SECURITY DEFINER` | 不授权 | 停用时用：先 `FOR UPDATE` 锁他创建的 `team` 频道行（按 id），再删他在所有 `team` 频道的成员行；对锁到的频道逐个以 `p_leaving = false` 调 core，每个群各在一个子事务里：55006 跳过，其他错误只回滚那一个群并记 WARNING（不能让停用失败） |
+| `openbot_team_revoked_leaves()`（触发器函数） | `SECURITY DEFINER`，`RETURNS trigger` | 不授权 | 按 `NEW.email` 找到 `users.id`（`lower(email)` 比较），在子事务里调上一个函数，整体失败只记 WARNING；找不到人就什么都不做 |
 
 触发器：`CREATE TRIGGER openbot_team_revoked_leaves AFTER INSERT ON public.revoked_access FOR EACH ROW EXECUTE FUNCTION public.openbot_team_revoked_leaves();`。三条停用路径都用 `onConflictDoNothing`，同一个人第二次停用不会再插入，触发器只在第一次生效。
 
@@ -145,13 +145,27 @@ core 的判定顺序：
    - 频道已软删：原样返回 `created_by`，什么都不改。同一个群组可能已经挂着一个新开的聊天（部分唯一索引只管未删的频道），旧聊天的成员不能把群组从新聊天的所有者手里带走；不加这一条，创建者被停用时停用函数会对新旧两个聊天各调一次，群组可能落到旧聊天的成员名下，不再属于它活着的聊天的所有者。应用路径不受影响：退群只认未删的频道，`for-channel` 读不到已删的频道。
 2. `created_by` 是成员并且未停用：返回 `created_by`，什么都不改（幂等）。
 3. 接手人 = 第 1 条规则选出的人（成员、未停用，`ORDER BY created_at, email`）。
-4. 没有接手人：
+4. 频道挂着群组，并且有接手人或这是退群（`p_leaving`）：先 `FOR UPDATE` 锁群组行，再查群组有没有 `running` 或 `awaiting_action` 的运行，有就报 55006 `a crew run is still going`。
+   - 这一步放在「没有接手人」之前：用户裁定 Q7「流程正在运行时创建者不能退群」一律适用，最后一人退群、只剩停用成员时退群都回 400，聊天和群组原样不动。
+   - 停用（`p_leaving = false`）维持原样：有人接手时只推迟移交；没有接手人时不查运行，最后一人被停用照样软删聊天（这时什么都不搬，运行留在原主名下）。
+   - 先锁后查，与解散相同（`S/waker-groups/linked-actions.ts` 的 `dissolve`）：插入运行时外键对群组行持有 KEY SHARE 锁，先插入的运行一定在锁到之后被看见，不会被当成已结束的运行搬走。加锁顺序仍是先频道后群组。
+   - 残余窗口（接受）：启动方在移交前读了模板、移交提交后才插入运行，外键照样通过，这条运行落在原主租户、指向已归接手人的群组。它只在「流程启动」与「创建者退群或被停用」落在同一瞬间时出现；要关掉得在启动运行时校验群组归属，留给后续。
+5. 没有接手人：
    - 一个成员都没有了：软删聊天，返回 NULL；
    - 还剩成员，但全是停用的（只有停用后又被重新拉进群才会出现）：什么都不改，返回 `created_by`。
-5. 频道挂着群组，并且群组有 `running` 或 `awaiting_action` 的运行：报 55006 `a crew run is still going`。
 6. 调写入函数，返回接手人。
 
 公开函数的身份校验：当前帧必须是 `platform`、`created_by` 本人，或现任成员；否则报 42501，频道不存在时报同一个错。校验之前不加锁。
+
+**加锁顺序**：频道行 → 成员行 → 群组行。退群（`leave`：`FOR UPDATE` 频道行，删自己的成员行，再由写入函数改群组行）、镜像自愈（`for share` 频道行再写镜像，第 8 条）、上游 `lockedBots` 都先锁频道行。停用也照这个顺序：先锁他创建的频道行，再删他的成员行。反过来（先删成员行再锁频道行）会和同一个人正在进行的退群互相等待，死锁时被回滚的可能是停用。
+
+**停用时的错误处理**（原则：停用本身不能因为移交失败而失败）：
+- 每个群的移交各在一个子事务里。55006 跳过；其他任何错误（比如接手人名下已有同一群组同名的模板，`group_task_templates_group_name_idx` 报 23505；子事务里的死锁）只回滚那一个群，记一条 `WARNING`（服务器日志），停用照常提交。频道的 `created_by` 仍是停用的人，属于第 8 条的 owner-gone 情形，由自愈点补上；不另设标记，`created_by` 不在籍或已停用本身就是待自愈的标记。
+- 「离开共享群」这一步（锁频道行、删成员行）整体也在子事务里，失败（比如调用方设了 `lock_timeout`，等不到成员行）同样只记 `WARNING`，停用照常提交。这时停用的人暂时还留在群里：他已被拒之门外，所建的群照样由自愈点移交（core 把停用的创建者当作已离开）；成员行要由属主再执行一次补做语句（`openbot_team_person_leaves_groups`，幂等）才会删掉。
+- 保留会失败的情况：PL/pgSQL 的 `WHEN OTHERS` 按设计不捕获取消（57014：`statement_timeout`、`pg_cancel_backend`）和 `assert_failure`，它们照旧让整条 `INSERT INTO revoked_access` 失败。那是调用方或运维在叫停这次停用，不是移交失败，重试即可。插入语句本身的错误也照常失败。
+- 存量补做直接调 `openbot_team_person_leaves_groups`，逐群的错误照样只记 `WARNING`；「离开共享群」这一步失败会让迁移失败（迁移可以重跑，比悄悄留下停用的人更好查）。
+
+**索引**：停用与补做按人查 `channel_memberships.user_id`、`channels.created_by`（共享群）、`lower(users.email)`，原来都没有索引（只有 `channel_memberships (channel_id, user_id)` 主键、`users.email` 唯一索引、`revoked_access.email` 主键），每停用一个人要顺序扫三张表。0207 补三个最小的：`channel_memberships_user_idx (user_id)`、`channels_team_created_by_idx (created_by) WHERE tenant_id = 'team'`、`users_lower_email_idx (lower(email))`，都用 `IF NOT EXISTS`。`group_task_runs` 按 `group_id` 查运行也没有索引，但只在真正移交的那几个群上查一次，与解散的检查相同，不加。
 
 **为什么在写入函数里切到 `platform` 帧**：`created_by` 被两道守卫冻住，只放行 `platform` 帧：`openbot_team_row_guard('created_by')`（`R/0122:162-163`，函数体在 `R/0125_team_bots.sql:69-113`），以及 `openbot_team_channel_guard`（`R/0206:63-68`）。0128 的注释要求改共享群的行必须在 `platform` 帧里做（`R/0128:217-222`）。函数级的 `SET` 在函数退出或出错时由 PostgreSQL 自动还原。落地前要先确认这个写法可用，不可用就退回 `R/0114_delivery_binding_owner_tenant.sql:23-35` 的保存再还原写法。
 
@@ -167,7 +181,7 @@ core 的判定顺序：
   1. 对频道行 `select … for update`，和上游 `lockedBots` 用的是同一把锁；
   2. 删自己的成员行和映射；
   3. `select xiongbao_team_channel_hand_over($1)`。
-- 函数报 55006 时整个事务回滚，抛 `GroupRefusedError("有组团流程正在运行，先停下再退群。")`，路由回 400。
+- 函数报 55006 时整个事务回滚，抛 `GroupRefusedError("有组团流程正在运行，先停下再退群。")`，路由回 400。最后一人退群、只剩停用成员时退群也一样（core 第 4 步）。
 - 提交后如果有接手人并且已挂接，在接手人帧调一次 `reconcile`，失败只记日志。
 
 **4.3 应用层：停用**
@@ -191,7 +205,7 @@ core 的判定顺序：
 | `waker_group_members` | 不动，随父行 | 没有 `tenant_id`，RLS 看父行（`openbot/server/drizzle/0072_rls_command_scopes.sql:39-50`） |
 | `portraits`、`portrait_media`（`subject_kind='group'`） | `tenant_id` 改为接手人；先删接手人名下同键的残行 | 主键含 `tenant_id`（`R/0144`、`R/0203`） |
 | `group_task_templates`（`group_id`=群组，`tenant_id`=原主） | `tenant_id` 改为接手人 | 0075 |
-| **`group_task_runs`**（`group_id`=群组，`tenant_id`=原主） | `tenant_id` 改为接手人 | `S/db/schema/pipeline.ts:169-240`。此时没有未结束的运行（core 第 5 步），所以不会打断正在跑的驱动或回收（`S/pipeline/reap.ts`、`S/recovery/abandoned-work.ts` 只看未结束的运行） |
+| **`group_task_runs`**（`group_id`=群组，`tenant_id`=原主） | `tenant_id` 改为接手人 | `S/db/schema/pipeline.ts:169-240`。此时没有未结束的运行（core 第 4 步），所以不会打断正在跑的驱动或回收（`S/pipeline/reap.ts`、`S/recovery/abandoned-work.ts` 只看未结束的运行） |
 | **`tasks`**（看板任务卡） | `tenant_id` 改为接手人，范围是：<br>① 父卡：`id IN (这些运行的 parent_task_id)`；<br>② 步骤卡：`parent_task_id IN (①)`，或 `id IN (这些运行 steps[].taskId)`；<br>都只改 `tenant_id = 原主` 的 | `parent_task_id` 没有外键（`pipeline.ts:186-194`），步骤卡由 `steps[].taskId` 和 `runRef` 指回（`pipeline.ts:213-220`）。看板的 `?group=` 过滤靠运行的 `parent_task_id` 找卡（`S/tasks/routes.ts:398-405`），卡不跟着搬的话，接手人的看板就看不到 |
 | `task_archives` | `task_id IN (上面搬的卡)` 的行，`tenant_id` 改为接手人 | `S/db/schema/task-archives.ts:22-32`，`tenant_id` 必须与卡一致 |
 | `group_pipeline_start_receipts` | `run_id IN (这些运行)` 的行，`tenant_id` 改为接手人 | `R/0090`；`S/` 里目前没有代码读写它，但它按 `tenant_id` 隔离，`run_id` 指向运行 |
@@ -212,6 +226,7 @@ core 的判定顺序：
 
 - **现状**：上游允许最后一人退群，但只删成员行，频道不软删（`group.ts:707-739`）。这个聊天从此谁也读不到，却还占着唯一活频道索引，群组开不了新聊天（Task 4 回 409 owner-gone，`T/waker-group-channel-link.integration.test.ts:1858-1896`），也解散不了。
 - **决定**：软删聊天，群组仍归他，状态变成「未开始聊天」，可以重开或解散。最后一人被停用时也一样（触发器删掉他的成员行以后，群里一个人都不剩）。
+- 流程正在运行时，最后一人退群回 400，聊天和群组原样不动（Q7 一律适用）；最后一人被停用则照样软删（停用不被流程阻止，这时不搬任何东西）。
 
 #### 7. 安全与 RLS
 
@@ -227,8 +242,9 @@ core 的判定顺序：
 
 移交上线后，`waker-group-owner-gone` 只在下面几种情况出现：
 1. 创建者的成员行被**绕过服务**删掉（第 3 条 #5–#7：本人帧直接删行、运维删账号的级联、`platform` 帧删行），还没经过自愈点。
-2. 移交因为流程正在运行被推迟。这包括停用触发器遇到 55006 时跳过的那几个群：停用的人已经离开，但群组要等运行结束、下一次自愈时才移交。
-3. 只剩停用的成员、没有人能接手（第 4.1 条 core 第 4 步的第二种情况）。
+2. 移交因为流程正在运行被推迟。这包括停用触发器遇到 55006 时跳过的那几个群：停用的人已经离开，但群组要等运行结束、下一次自愈时才移交。停用时移交因为别的错误被回滚（第 4.1 条「停用时的错误处理」）也一样，等下一次自愈。
+3. 只剩停用的成员、没有人能接手（第 4.1 条 core 第 5 步的第二种情况）。
+4. 创建者和最早的成员**同时离开**（创建者经 `leave`，最早的成员走上游 `store.removeMember`，后者不锁频道行），或者两个互为成员的人**同时被停用**（SCIM 批量下线）：创建者一边的 core 在 READ COMMITTED 下看不到另一边尚未提交的删除，选了那个人当接手人。两边提交后 `created_by` 指向一个已不在群里（或已停用）的人，群组连同运行和看板卡都搬到了他名下，直到下一个成员打开设置（自愈点）才再移交给真正最早的在籍成员。接受这个竞态：不在选接手人时加 `FOR SHARE` 锁成员行，因为两人同时被停用时那会制造新的死锁。用例 `the creator and the earliest member leaving at once leave the crew with the one who left, until a heal` 锁定这一行为。
 
 Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`）的注释相应改写，断言不动。
 
@@ -684,6 +700,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
    - 用户裁定（2026-11-13）：「最后一个人退群时，软删这个聊天，群组仍归他，状态变成『未开始聊天』」。
 7. **Q7 流程正在运行时能不能退群？**
    - 用户裁定（2026-11-13）：「流程正在运行时，创建者不能退群」，回 400「有组团流程正在运行，先停下再退群。」
+   - 一律适用：最后一人退群、只剩停用成员时退群，有流程在运行也回 400（3.1.1 第 4.1 条 core 第 4 步）。
    - 停用不能被拒，所以停用时移交推迟到自愈点。
 8. **Q8 移交时什么跟着走？**
    - 用户裁定（2026-11-13）：「全部跟走」：群组、头像、视频、流程模板、运行记录、看板任务卡，以及运行的附属行。已消耗的配额、审批记录、审计日志不搬（第 5 条）。
@@ -709,6 +726,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
    - 不足 2 位的标「待补成员」。
    - 同名的老群聊和转出来的群组会同时存在，可以自行解散其中一个。
    - 已经停用的人会离开他所在的共享群组，他创建的群组交给群里最早的在籍成员。
+   - 0207 新建三个索引（`channel_memberships (user_id)`、`channels (created_by)`（共享群）、`users (lower(email))`），建索引期间这三张表的写入短暂等待。表很大的外接库部署，可以在升级前先用 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` 以同样的名字建好，0207 会跳过。
 4. **旧链接**：
    - `/bots?tab=groups`：页签保留，**不需要跳转**，打开的就是「我建的群组」。
    - `/wakers?tab=groups`：仍由 `legacyWakersTarget` 带到 `/bots?tab=groups`。
