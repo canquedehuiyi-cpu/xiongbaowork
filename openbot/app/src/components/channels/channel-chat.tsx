@@ -1416,6 +1416,7 @@ export function ChannelChat({
               agentProfiles?.find((profile) => profile.id === runtimeAgentId)
                 ?.avatarSeed ?? runtimeAgentId
             }
+            agentId={runtimeAgentId}
             taskRunning={agent.isRunning || runsInFlight > 0}
           />
           <ConversationView

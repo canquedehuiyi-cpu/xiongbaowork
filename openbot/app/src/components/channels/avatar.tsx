@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { QueryClientContext, useQuery } from "@tanstack/react-query";
 import Avatar from "boring-avatars";
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, useContext } from "react";
+import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { useBotLook } from "@/components/agents/bot-look";
 import { BotOrb } from "@/components/agents/bot-orb";
+import { usePortraitSrc } from "@/components/portraits/use-portrait";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { cn } from "@/lib/utils";
 
@@ -86,11 +88,66 @@ const ORB_PAIR: Layout = {
 };
 
 function boringFace(id: string, size: number) {
-  return <Avatar className="size-full" name={id} size={size} />;
+  return (
+    <ChosenPortrait id={id} size={size}>
+      <Avatar className="size-full" name={id} size={size} />
+    </ChosenPortrait>
+  );
 }
 
 function orbFace(id: string, size: number) {
-  return <OrbFace id={id} size={size} />;
+  return (
+    <ChosenPortrait id={id} size={size}>
+      <OrbFace id={id} size={size} />
+    </ChosenPortrait>
+  );
+}
+
+/**
+ * A portrait somebody chose (头像) for this participant wins over the seed's drawing, so a
+ * coworker looks the same in a conversation's header and list as in the roster. A participant with
+ * none, or a face drawn where there is no query client to read portraits with, keeps `children`.
+ */
+function ChosenPortrait({
+  id,
+  size,
+  children,
+}: {
+  id: string;
+  size: number;
+  children: ReactNode;
+}) {
+  const queryClient = useContext(QueryClientContext);
+  if (!queryClient) return children;
+  return (
+    <ChosenPortraitFace id={id} size={size}>
+      {children}
+    </ChosenPortraitFace>
+  );
+}
+
+function ChosenPortraitFace({
+  id,
+  size,
+  children,
+}: {
+  id: string;
+  size: number;
+  children: ReactNode;
+}) {
+  const chosen = usePortraitSrc("coworker", id);
+  if (!chosen) return children;
+  return (
+    <span className="block size-full overflow-hidden rounded-full">
+      <AbstractAvatar
+        decorative
+        name=""
+        portrait={{ kind: "coworker", id }}
+        seed={id}
+        size={size}
+      />
+    </span>
+  );
 }
 
 /**

@@ -171,6 +171,7 @@ export function OpenMuseFrame({ children }: { children: ReactNode }) {
                     <AbstractAvatar
                       name={bot.name}
                       seed={bot.avatarSeed}
+                      portrait={{ kind: "coworker", id: bot.id }}
                       size={52}
                     />
                   ) : (

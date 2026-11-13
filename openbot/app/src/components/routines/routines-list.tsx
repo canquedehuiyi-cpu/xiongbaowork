@@ -353,6 +353,7 @@ export function RoutinesList({
                                 <AbstractAvatar
                                   name={bot.name}
                                   seed={bot.avatarSeed}
+                                  portrait={{ kind: "coworker", id: bot.id }}
                                   size={14}
                                 />
                               </span>
