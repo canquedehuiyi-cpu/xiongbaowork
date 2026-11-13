@@ -1078,9 +1078,11 @@
   {
     "file": "extension/src/content/notice.ts",
     "text": "\"openbot-recorder-notice\"",
-    "reason": "persisted-identifier: 页面里的自定义元素标签；附录 A 第 11 行（已批）由 Task 19 落地前仍画这个名字，落地后只作旧名查找、移除（L1-22）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧标签名；新版本画 xb-recorder-notice，查找、移除时仍认旧名，扩展更新期间老内容脚本画的提示不重复、不残留（L1-22，Task 14，附录 A 第 11 行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/content/notice.ts",

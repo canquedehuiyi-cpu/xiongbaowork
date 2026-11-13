@@ -74,7 +74,7 @@ test("the notice knows both names; it draws the older one until appendix A row 1
     "xb-recorder-notice",
     "openbot-recorder-notice",
   ]);
-  expect(NOTICE_TAG).toBe(LEGACY_NOTICE_TAG);
+  expect(NOTICE_TAG).toBe(XB_NOTICE_TAG);
 });
 
 test("with an older version's mark in the page, the new script does not draw a second", () => {
