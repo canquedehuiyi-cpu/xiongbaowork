@@ -1244,3 +1244,45 @@ test("image and deb are brand-scanned", () => {
   expect(checkAt, "deb job checks the package").toBeGreaterThan(-1);
   expect(debAt, "deb job scans the package").toBeGreaterThan(checkAt);
 });
+
+// The container release (release.yml): what the image and its manifest say about themselves.
+const containerRelease = Bun.YAML.parse(
+  readFileSync(join(workflows, "release.yml"), "utf8"),
+);
+const containerReleaseText = readFileSync(join(workflows, "release.yml"), "utf8");
+
+test("release labels carry title and vendor, not the repository", () => {
+  const labels = containerReleaseText
+    .split("\n")
+    .filter((l) => l.includes("org.opencontainers.image."));
+  expect(labels.length).toBeGreaterThan(0);
+  expect(
+    labels.some((l) => l.includes("org.opencontainers.image.source")),
+    "no source label",
+  ).toBe(false);
+  for (const step of containerRelease.jobs.image.steps.filter((s) =>
+    s.uses?.startsWith("docker/build-push-action"),
+  )) {
+    const l = step.with.labels;
+    expect(l).toContain("org.opencontainers.image.title=");
+    expect(l).toContain("org.opencontainers.image.vendor=");
+    expect(l).toContain("org.opencontainers.image.revision=");
+    expect(l).toContain("org.opencontainers.image.version=");
+  }
+  const brandStep = containerRelease.jobs.image.steps.find((s) =>
+    s.run?.includes("brand.yaml"),
+  );
+  expect(brandStep, "a step reads the brand package").toBeDefined();
+  expect(brandStep.run).toContain("product_name");
+  expect(brandStep.run).toContain("company_name");
+});
+
+test("container-images.json carries images.xiongbao alongside images.openbot", () => {
+  const step = Object.values(containerRelease.jobs)
+    .flatMap((j) => j.steps ?? [])
+    .find((s) => s.name === "Write container-images.json");
+  expect(step).toBeDefined();
+  expect(step.run).toMatch(
+    /images:\s*\{\s*xiongbao:\s*\$image,\s*openbot:\s*\$image\s*\}/,
+  );
+});

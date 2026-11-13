@@ -6,36 +6,6 @@
     "note": "第三方运行时自己的变量名；附录 A 第 7 行获批后挪进 docker/defaults.env，届时从镜像 ENV 消失、从本词表删除"
   },
   {
-    "word": "OPENBOT_BUILD_CHANNEL",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "镜像 ENV 里的构建标识；Task 10（构建标识、标签、发布清单）改新名"
-  },
-  {
-    "word": "OPENBOT_BUILD_COMMIT",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "镜像 ENV 里的构建标识；Task 10（构建标识、标签、发布清单）改新名"
-  },
-  {
-    "word": "OPENBOT_BUILD_DISTRIBUTION_ID",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "镜像 ENV 里的构建标识；Task 10（构建标识、标签、发布清单）改新名"
-  },
-  {
-    "word": "OPENBOT_BUILD_REPOSITORY",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "镜像 ENV 里的构建标识；Task 10（构建标识、标签、发布清单）改新名"
-  },
-  {
-    "word": "OPENBOT_BUILD_VERSION",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "镜像 ENV 里的构建标识；Task 10（构建标识、标签、发布清单）改新名"
-  },
-  {
     "word": "OPENBOT_IN_CONTAINER",
     "category": "operator-visible",
     "plan": "rewrite",
