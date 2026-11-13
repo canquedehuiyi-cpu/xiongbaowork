@@ -19,6 +19,23 @@ import { REPO } from "./scan";
 
 export type ArtifactEntryKey = string; // `word` or `prefix:<prefix>`
 
+/**
+ * A growth or change the plan's appendix A explicitly allows (`appendixRow`), in machine-readable form.
+ * It lets through exactly one change: same kind, key, from and to. An approval that matches no change in
+ * this branch is itself reported, so the file cannot turn into a standing pass.
+ *
+ * `budget`: key is `<rule>/<scope>`, from and to are line counts. `words`: key is the word-list file name,
+ * from is the word that went away (null when none did) and to the word that came in (null for a deletion).
+ */
+export type RatchetApproval = {
+  appendixRow: number;
+  kind: "budget" | "words";
+  key: string;
+  from: number | string | null;
+  to: number | string | null;
+  note: string;
+};
+
 export type RatchetInput = {
   base: AllowEntry[];
   head: AllowEntry[];
@@ -27,6 +44,7 @@ export type RatchetInput = {
   baseWords: Record<string, ArtifactEntryKey[]>;
   headWords: Record<string, ArtifactEntryKey[]>;
   syncPr: boolean;
+  approvals?: RatchetApproval[];
   inUpstream: (entry: AllowEntry) => boolean;
 };
 
@@ -85,14 +103,34 @@ export function ratchetProblems(input: RatchetInput): string[] {
     }
   }
 
-  for (const row of input.headBudget) {
-    const was = input.baseBudget.find((b) => key(b) === key(row))?.lines ?? 0;
-    if (row.lines <= was) continue;
-    if (syncPr)
-      console.log(
-        `预算增加（写进 PR 说明）：${key(row)} ${was} -> ${row.lines}`,
-      );
-    else problems.push(`预算增加：${key(row)} ${was} -> ${row.lines}`);
+  const approvals = input.approvals ?? [];
+  const used = new Set<RatchetApproval>();
+  const approved = (
+    kind: RatchetApproval["kind"],
+    at: string,
+    from: number | string | null,
+    to: number | string | null,
+  ): boolean => {
+    const hit = approvals.find(
+      (a) => a.kind === kind && a.key === at && a.from === from && a.to === to,
+    );
+    if (hit) used.add(hit);
+    return hit !== undefined;
+  };
+
+  const budgetKeys = new Set([
+    ...input.headBudget.map(key),
+    ...input.baseBudget.map(key),
+  ]);
+  for (const at of budgetKeys) {
+    const was = input.baseBudget.find((b) => key(b) === at)?.lines ?? 0;
+    const row = input.headBudget.find((b) => key(b) === at);
+    const now = row?.lines ?? 0;
+    if (now === was) continue;
+    const allowed = approved("budget", at, was, now);
+    if (now <= was || allowed) continue;
+    if (syncPr) console.log(`预算增加（写进 PR 说明）：${at} ${was} -> ${now}`);
+    else problems.push(`预算增加：${at} ${was} -> ${now}`);
   }
 
   for (const [name, words] of Object.entries(input.headWords)) {
@@ -102,9 +140,21 @@ export function ratchetProblems(input: RatchetInput): string[] {
         problems.push(`词表文件名不在清单里：${name}`);
       continue;
     }
-    for (const word of words)
-      if (!was.includes(word)) problems.push(`词表 ${name} 增加了：${word}`);
+    const gone = was.filter((w) => !words.includes(w));
+    const added = words.filter((w) => !was.includes(w));
+    for (const word of added) {
+      const from = gone.find((w) => approved("words", name, w, word)) ?? null;
+      if (from !== null) continue;
+      if (approved("words", name, null, word)) continue;
+      problems.push(`词表 ${name} 增加了：${word}`);
+    }
+    for (const word of gone) approved("words", name, word, null);
   }
+  for (const a of approvals)
+    if (!used.has(a))
+      problems.push(
+        `ratchet-approvals.json 第 ${a.appendixRow} 行的放行没有对上本分支的任何改动：${a.kind} ${a.key} ${String(a.from)} -> ${String(a.to)}`,
+      );
   return problems;
 }
 
@@ -162,6 +212,7 @@ export function ratchetBase(base: string, head: string, repo = REPO): string {
   }
 }
 
+const APPROVALS = join(REPO, "scripts/brand/guard/ratchet-approvals.json");
 const WORDS_DIR = "app/tests/brand-artifacts";
 const wordKeys = (text: string): ArtifactEntryKey[] =>
   (JSON.parse(text) as { word?: string; prefix?: string }[]).map((e) =>
@@ -208,6 +259,9 @@ export function loadRatchetInput(base: string): RatchetInput {
     baseWords,
     headWords,
     syncPr,
+    approvals: existsSync(APPROVALS)
+      ? (JSON.parse(readFileSync(APPROVALS, "utf8")) as RatchetApproval[])
+      : [],
     inUpstream: (entry) => {
       upstream ??= upstreamReader(sync, syncGit);
       return upstream(entry.file)?.includes(entry.text) ?? false;

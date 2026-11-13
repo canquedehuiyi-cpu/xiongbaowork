@@ -924,6 +924,8 @@
 
 **批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）；第 35 行，用户 2026-11-13 批准（原话「附录 A 第 35 行批准」）；第 36 行，用户 2026-11-13 批准（原话「附录 A 第 36 行批准」）。
 
+**棘轮放行**：第 7、35 行获准的棘轮增长（预算新增一行、词表换词）以机器可读的形式记在 `openbot/scripts/brand/guard/ratchet-approvals.json`，每条必须写明所依据的已批准行（`appendixRow`），并且要与本分支的真实改动逐项相符（kind、key、from、to），对不上的条目算过期，棘轮报红。
+
 | # | 项 | 源码 | 已有断言（文件:行） | 要改成 | 处理任务 |
 |---|---|---|---|---|---|
 | 1 | `readMigrated` 复制不删（规格 4.3） | `app/src/lib/storage-migrate.ts:21-22`、`app/index.html:14-29` | `app/tests/storage-migrate.test.ts`「only the legacy key present…legacy key removed」：`[...storage.data]` 精确等于 `[["xiongbao-theme","dark"]]` | 等于 `[["openbot-theme","dark"],["xiongbao-theme","dark"]]`（按插入顺序） | 19 |
