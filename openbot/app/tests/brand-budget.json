@@ -46,12 +46,12 @@
   },
   {
     "rule": "declaration",
-    "scope": "app/src",
+    "scope": "extension/src",
     "lines": 1
   },
   {
-    "rule": "declaration",
-    "scope": "extension/src",
+    "rule": "env-name",
+    "scope": "Dockerfile",
     "lines": 1
   },
   {
@@ -73,11 +73,6 @@
     "rule": "env-name",
     "scope": "docker/delivery.env.example",
     "lines": 2
-  },
-  {
-    "rule": "env-name",
-    "scope": "Dockerfile",
-    "lines": 1
   },
   {
     "rule": "env-name",

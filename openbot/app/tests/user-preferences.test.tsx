@@ -115,7 +115,7 @@ test("successful writes update only the current account cache; failures preserve
         messageListEmphasis: "thread",
         selfHostBannerDismissed: false,
         narration: null,
-        skin: "openbot",
+        skin: "xiongbao",
         proactive: "on",
       },
     });
@@ -148,7 +148,7 @@ test("successful writes update only the current account cache; failures preserve
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
     narration: null,
-    skin: "openbot",
+    skin: "xiongbao",
     proactive: "on",
   });
 });

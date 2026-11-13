@@ -149,20 +149,6 @@
     "removeIn": "0.2.11"
   },
   {
-    "file": "app/src/skins/registry.ts",
-    "text": "id: \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "app/src/skins/registry.ts",
-    "text": "openbot,",
-    "reason": "persisted-identifier: the default skin's module identifier (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
     "file": "app/src/lib/theme.ts",
     "text": "\"openbot-theme\"",
     "reason": "persisted-identifier: legacy browser storage key, read once through the storage-migrate helper that its consumer calls, to carry a saved choice to its xiongbao- name",
@@ -365,9 +351,11 @@
   {
     "file": "app/index.html",
     "text": "skin !== \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in browser storage (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 默认皮肤改名前的 id，预绘脚本把缓存里的旧值也当默认、不设 data-skin（L1-2，附录 A 第 13 行；index.html 不能 import，所以不删这一行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "server/src/components/routes.ts",
@@ -1038,17 +1026,12 @@
   },
   {
     "file": "shared/user-preferences.ts",
-    "text": "\"openbot\",",
-    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
-    "file": "shared/user-preferences.ts",
-    "text": "DEFAULT_SKIN: SkinId = \"openbot\"",
-    "reason": "persisted-identifier: default skin id saved in user preferences (L1-2)；待批：附录 A 第 13 行（服务器偏好测试断言默认皮肤仍发出旧 id）",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "text": "\"openbot\"",
+    "reason": "persisted-identifier: 默认皮肤改名前的 id，只在 normalizeSkinId 的映射里认，把已存的账号偏好和浏览器缓存里的旧值读成 xiongbao（L1-2，附录 A 第 13 行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "shared/openbot-actor.ts",

@@ -1,6 +1,6 @@
 import {
   DEFAULT_USER_PREFERENCES,
-  isSkinId,
+  normalizeSkinId,
   type UserPreferences,
 } from "@openbot/shared/user-preferences";
 import { and, eq, sql } from "drizzle-orm";
@@ -13,9 +13,11 @@ import { users } from "./db/schema";
  */
 function withDefaults(stored: Partial<UserPreferences>): UserPreferences {
   const preferences = { ...DEFAULT_USER_PREFERENCES, ...stored };
-  return isSkinId(preferences.skin)
-    ? preferences
-    : { ...preferences, skin: DEFAULT_USER_PREFERENCES.skin };
+  // A row saved before the rename holds the old default's name; it reads as the new one.
+  return {
+    ...preferences,
+    skin: normalizeSkinId(String(preferences.skin)),
+  };
 }
 
 export type UserPreferencesStore = {

@@ -285,7 +285,7 @@
     "word": "openbot",
     "category": "persisted-data",
     "plan": "rewrite",
-    "note": "租户 id（永久保留，Task 6 核实）、默认皮肤 id（Task 7）、data-orb（附录 A 第 2 行）；一词合并登记，按剩余工作计"
+    "note": "租户 id（永久保留，Task 6 核实）；默认皮肤 id、data-orb 已在附录 A 第 2、13 行改成 xiongbao，旧皮肤 id 只在 normalizeSkinId 里认"
   },
   {
     "word": "openbot-$",
@@ -490,12 +490,6 @@
     "category": "upstream-shell-only",
     "plan": "keep",
     "note": "只在不交付的上游桌面里使用"
-  },
-  {
-    "word": "openbot:_",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键前缀；Task 7"
   },
   {
     "word": "openbot:app-access-request",

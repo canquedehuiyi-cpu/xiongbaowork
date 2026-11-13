@@ -132,7 +132,7 @@ function client(role: "user" | "admin" = "user") {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
     narration: null,
-    skin: "openbot",
+    skin: "xiongbao",
     proactive: "on",
   });
   queryClient.setQueryData(authKeys.currentUser(), {

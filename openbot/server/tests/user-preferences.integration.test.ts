@@ -50,21 +50,21 @@ test("database defaults and writes survive a new store and remain scoped to the 
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     });
     expect(await store.patch(alice, { messageListEmphasis: "agent" })).toEqual({
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     });
     expect(await createUserPreferencesStore(database).read(alice)).toEqual({
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     });
   });
@@ -73,7 +73,7 @@ test("database defaults and writes survive a new store and remain scoped to the 
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
       narration: null,
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     });
   });
@@ -119,7 +119,7 @@ test("the narration choice is kept in the database beside the others", async () 
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
       narration: "on",
-      skin: "openbot",
+      skin: "xiongbao",
       proactive: "on",
     });
   });
@@ -150,7 +150,7 @@ test("a stored skin this build does not ship reads as the default", async () => 
       .update(users)
       .set({ preferences: sql`'{"skin":"retired-skin"}'::jsonb` })
       .where(eq(users.id, id));
-    expect((await store.read(id)).skin).toBe("openbot");
+    expect((await store.read(id)).skin).toBe("xiongbao");
   });
 });
 
@@ -268,3 +268,21 @@ test.each([
     });
   },
 );
+
+test("a stored skin under the old default's name reads as the new default, and a patch with it is stored under the new one", async () => {
+  const id = await person();
+  // Their own preferences, read and written in their own tenant.
+  await runAsTenant(id, async () => {
+    await database
+      .update(users)
+      .set({ preferences: sql`'{"skin":"openbot"}'::jsonb` })
+      .where(eq(users.id, id));
+    expect((await store.read(id)).skin).toBe("xiongbao");
+    await store.patch(id, { skin: "openmuse" });
+    await database
+      .update(users)
+      .set({ preferences: sql`'{"skin":"openbot"}'::jsonb` })
+      .where(eq(users.id, id));
+    expect((await store.patch(id, { narration: "on" })).skin).toBe("xiongbao");
+  });
+});

@@ -126,7 +126,7 @@ function renderNarrowApp(start = "/channel/models") {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
     narration: null,
-    skin: "openbot",
+    skin: "xiongbao",
     proactive: "on",
   });
   queryClient.setQueryData(agentKeys.list(false), [
