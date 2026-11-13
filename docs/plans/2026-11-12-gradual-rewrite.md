@@ -922,6 +922,8 @@
 
 执行者发现新的冲突时，在表尾追加一行，并在 PR 说明里列出。用户在 Task U2 里逐行批准。
 
+**批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）。
+
 | # | 项 | 源码 | 已有断言（文件:行） | 要改成 | 处理任务 |
 |---|---|---|---|---|---|
 | 1 | `readMigrated` 复制不删（规格 4.3） | `app/src/lib/storage-migrate.ts:21-22`、`app/index.html:14-29` | `app/tests/storage-migrate.test.ts`「only the legacy key present…legacy key removed」：`[...storage.data]` 精确等于 `[["xiongbao-theme","dark"]]` | 等于 `[["openbot-theme","dark"],["xiongbao-theme","dark"]]`（按插入顺序） | 19 |
