@@ -27,7 +27,7 @@
     "word": "openbot-actor.ts",
     "category": "operator-visible",
     "plan": "rewrite",
-    "note": "镜像 /app/shared 里的上游源文件名；是否改名待定"
+    "note": "镜像 /app/shared 里的上游源文件名；Task 15（R4b 服务器打包成单文件）后镜像不再带源码，届时从词表删除"
   },
   {
     "word": "openbot-apt",
@@ -39,6 +39,6 @@
     "word": "openbot-browser.ts",
     "category": "operator-visible",
     "plan": "rewrite",
-    "note": "镜像 /app/shared 里的上游源文件名；是否改名待定"
+    "note": "镜像 /app/shared 里的上游源文件名；Task 15（R4b 服务器打包成单文件）后镜像不再带源码，届时从词表删除"
   }
 ]
