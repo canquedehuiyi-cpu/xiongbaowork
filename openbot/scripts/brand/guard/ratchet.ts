@@ -45,6 +45,8 @@ export type RatchetInput = {
   headWords: Record<string, ArtifactEntryKey[]>;
   syncPr: boolean;
   approvals?: RatchetApproval[];
+  /** The approvals file as it was at the ratchet base; what it already holds is inert history. */
+  baseApprovals?: RatchetApproval[];
   inUpstream: (entry: AllowEntry) => boolean;
 };
 
@@ -103,7 +105,16 @@ export function ratchetProblems(input: RatchetInput): string[] {
     }
   }
 
-  const approvals = input.approvals ?? [];
+  // Only an approval added in this branch counts: one the base already holds neither allows nor goes stale.
+  const sameApproval = (a: RatchetApproval, b: RatchetApproval) =>
+    a.kind === b.kind &&
+    a.key === b.key &&
+    a.from === b.from &&
+    a.to === b.to &&
+    a.appendixRow === b.appendixRow;
+  const approvals = (input.approvals ?? []).filter(
+    (a) => !(input.baseApprovals ?? []).some((b) => sameApproval(a, b)),
+  );
   const used = new Set<RatchetApproval>();
   const approved = (
     kind: RatchetApproval["kind"],
@@ -259,6 +270,10 @@ export function loadRatchetInput(base: string): RatchetInput {
     baseWords,
     headWords,
     syncPr,
+    baseApprovals: json(
+      show(base, "scripts/brand/guard/ratchet-approvals.json"),
+      [],
+    ),
     approvals: existsSync(APPROVALS)
       ? (JSON.parse(readFileSync(APPROVALS, "utf8")) as RatchetApproval[])
       : [],
