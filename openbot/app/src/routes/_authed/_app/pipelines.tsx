@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageShell } from "@/components/layout/page-shell";
 import { QueryError } from "@/components/layout/query-error";
 import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
@@ -43,8 +43,17 @@ export const Route = createFileRoute("/_authed/_app/pipelines")({
    * and the group chat's "查看这次运行" can land on it (audit N1). Absent means no run is open, which
    * is the same as the page before a person presses 运行.
    */
-  validateSearch: (search: Record<string, unknown>): { run?: string } =>
-    typeof search.run === "string" && search.run ? { run: search.run } : {},
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { run?: string; group?: string } => ({
+    ...(typeof search.run === "string" && search.run
+      ? { run: search.run }
+      : {}),
+    // `?group=` is the group whose section opens first: 员工页卡片的「组团流程」带它来。
+    ...(typeof search.group === "string" && search.group
+      ? { group: search.group }
+      : {}),
+  }),
 });
 
 /** What a step's state reads as on the page. Every state the store can leave a step in is named. */
@@ -65,9 +74,23 @@ const STATE_WORDS: Record<PipelineRunStep["state"], string> = {
 const SELECT_CLASS =
   "h-[32px] min-w-0 max-w-full rounded-[9px] border border-border bg-muted px-[9px] text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 dark:bg-[oklch(0.196_0.002_286.2)]";
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  sectionRef,
+  groupId,
+}: {
+  title: string;
+  children: ReactNode;
+  sectionRef?: Ref<HTMLElement>;
+  groupId?: string;
+}) {
   return (
-    <section className="mt-[28px] first:mt-0">
+    <section
+      className="mt-[28px] first:mt-0"
+      data-group={groupId}
+      ref={sectionRef}
+    >
       <h2 className="mb-[9px] font-bold text-[17px] leading-[26px] tracking-[-0.02em]">
         {title}
       </h2>
@@ -114,15 +137,28 @@ function RouteComponent() {
    * inside the crew it was written for.
    */
   const [editing, setEditing] = useState<PipelineTemplate | null>(null);
-  const { run: runId } = Route.useSearch();
+  const { run: runId, group: groupParam } = Route.useSearch();
   const navigate = useNavigate();
   const setRunId = (id: string | null) =>
     navigate({ to: "/pipelines", search: id ? { run: id } : {} });
 
-  const selected = crewId ?? crews.data?.[0]?.id ?? null;
+  /*
+   * The group named in the address wins over the first one, but only when it exists: a stale or
+   * mistyped id falls back to the first group instead of leaving the page on nothing.
+   */
+  const fromAddress = crews.data?.find((crew) => crew.id === groupParam)?.id;
+  const selected = crewId ?? fromAddress ?? crews.data?.[0]?.id ?? null;
   const templates = useQuery(
     pipelineTemplatesQueryOptions(selected ?? undefined),
   );
+  const sectionRef = useRef<HTMLElement>(null);
+  const sectionShown = templates.data !== undefined;
+  useEffect(() => {
+    // Only the arrival from a link scrolls; picking a group by hand is already where the eyes are.
+    // The section exists once the group's templates have loaded, so that is when to look for it.
+    if (sectionShown && fromAddress && selected === fromAddress)
+      sectionRef.current?.scrollIntoView?.({ block: "start" });
+  }, [sectionShown, fromAddress, selected]);
   const names = new Map(
     (coworkers.data ?? []).map((agent) => [agent.id, agent.name]),
   );
@@ -223,7 +259,11 @@ function RouteComponent() {
             />
           ) : null}
           {templates.data === undefined || !selected ? null : (
-            <Section title={`${templates.data?.length ?? 0} 条流程`}>
+            <Section
+              groupId={selected}
+              sectionRef={sectionRef}
+              title={`${templates.data?.length ?? 0} 条流程`}
+            >
               {templates.data.length === 0 ? (
                 <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
                   这个群组还没有流程。在上面写下第一条。

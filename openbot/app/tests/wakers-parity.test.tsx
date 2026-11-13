@@ -11,6 +11,10 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  wakersBackLink,
+  wakersReturnSearch,
+} from "@/components/wakers/wakers-search";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { avatarSourceKeys } from "@/lib/avatar/sources";
 import {
@@ -25,10 +29,6 @@ import {
   type WakerGroup,
   wakerGroupKeys,
 } from "@/lib/waker-groups/queries";
-import {
-  wakersBackLink,
-  wakersReturnSearch,
-} from "@/components/wakers/wakers-search";
 import { Route as BotsRoute } from "@/routes/_authed/_app/bots.index";
 import { seedQuietNeedsYou } from "./quiet-needs-you";
 import { settleReactWork } from "./settle-react-work";
@@ -701,7 +701,7 @@ test("a group card opens its board and 组团流程", async () => {
   const card = await screen.findByTestId("crew-card");
   expect(
     within(card).getByRole("link", { name: "组团流程" }).getAttribute("href"),
-  ).toBe("/pipelines");
+  ).toBe("/pipelines?group=crew-1");
   expect(
     within(card).getByRole("link", { name: "在看板上看" }).getAttribute("href"),
   ).toBe("/tasks?crew=agent-1");

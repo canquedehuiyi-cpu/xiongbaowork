@@ -12,6 +12,9 @@ import { groupQueryOptions } from "@/lib/groups";
 /** A conversation with several employees. The channel is an ordinary channel with more than one. */
 export const Route = createFileRoute("/_authed/_app/group/$channelId")({
   component: RouteComponent,
+  // `?settings=1` opens the group's settings; the card's 「设置」 links here. Nothing else is kept.
+  validateSearch: (search: Record<string, unknown>): { settings?: 1 } =>
+    search.settings === 1 || search.settings === "1" ? { settings: 1 } : {},
 });
 
 function RouteComponent() {

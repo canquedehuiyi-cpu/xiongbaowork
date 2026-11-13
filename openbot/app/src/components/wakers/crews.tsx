@@ -1,5 +1,9 @@
 import { IconPlus, IconUsersGroup } from "@tabler/icons-react";
-import { useMutation, type useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  type useQueryClient,
+} from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
@@ -17,12 +21,18 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { channelKeys } from "@/lib/channels/queries";
+import { pipelineTemplatesQueryOptions } from "@/lib/pipelines/queries";
 import { cn } from "@/lib/utils";
 import {
   retireCrewMutationOptions,
   setCrewMembersMutationOptions,
+  startCrewChatMutationOptions,
 } from "@/lib/waker-groups/mutations";
-import type { WakerGroup } from "@/lib/waker-groups/queries";
+import {
+  CREW_STATUS_WORDS,
+  crewStatus,
+  type WakerGroup,
+} from "@/lib/waker-groups/queries";
 import {
   CARD_SURFACE,
   CardFooter,
@@ -34,6 +44,10 @@ import {
   ordinal,
 } from "./card-chrome";
 import { CreateGroupForm } from "./create-group-form";
+
+/** A text link in a card's action row, sized like the ghost buttons beside it. */
+const CARD_LINK =
+  "inline-flex h-6 items-center rounded-md px-2 font-medium text-[12px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60";
 
 type QueryClient = ReturnType<typeof useQueryClient>;
 
@@ -113,9 +127,17 @@ export function CrewTab({
           .filter((member) => member.agentId !== agentId)
           .map((member) => member.agentId)
       : [...crew.members.map((member) => member.agentId), agentId];
+    setProblem(null);
     members.mutate(
       { groupId: crew.id, agentIds: next },
-      { onError: (thrown: Error) => setProblem(thrown.message) },
+      {
+        // The roster is saved even when the chat did not start; the card then offers 开始聊天.
+        onSuccess: ({ chatError }) => {
+          if (chatError) setProblem(chatError);
+        },
+        // A 409 (part-way, or owner-gone) carries the server's own sentence.
+        onError: (thrown: Error) => setProblem(thrown.message),
+      },
     );
   };
 
@@ -167,6 +189,7 @@ export function CrewTab({
               });
             }}
             onToggle={(agentId) => toggle(crew, agentId)}
+            queryClient={queryClient}
             retiring={retire.isPending}
             roster={roster}
             rosterLoading={rosterLoading}
@@ -201,6 +224,7 @@ function CrewCard({
   index,
   onRetire,
   onToggle,
+  queryClient,
   retiring,
   roster,
   rosterLoading,
@@ -211,6 +235,7 @@ function CrewCard({
   index: string;
   onRetire: () => void;
   onToggle: (agentId: string) => void;
+  queryClient: QueryClient;
   retiring: boolean;
   roster: AgentProfile[];
   rosterLoading: boolean;
@@ -223,6 +248,18 @@ function CrewCard({
    * the button that does it asks once before it does it.
    */
   const [confirming, setConfirming] = useState(false);
+  const navigate = useNavigate();
+  const startChat = useMutation(startCrewChatMutationOptions(queryClient));
+  const [chatProblem, setChatProblem] = useState<string | null>(null);
+  const status = crewStatus(crew);
+  // Only read when the question is asked: how many flows go with the group.
+  const pipelines = useQuery({
+    ...pipelineTemplatesQueryOptions(),
+    enabled: confirming,
+  });
+  const pipelineCount = pipelines.data?.filter(
+    (template) => template.groupId === crew.id,
+  ).length;
   const nameOf = (agentId: string) =>
     roster.find((agent) => agent.id === agentId)?.name ?? agentId;
   const ordered = [...crew.members].sort((a, b) => a.position - b.position);
@@ -365,6 +402,48 @@ function CrewCard({
             seed={crew.id}
           />
         ) : null}
+        {status === "chat" && crew.channelId ? (
+          <>
+            <Link
+              className={CARD_LINK}
+              params={{ channelId: crew.channelId }}
+              to="/group/$channelId"
+            >
+              打开
+            </Link>
+            <Link
+              className={CARD_LINK}
+              params={{ channelId: crew.channelId }}
+              search={{ settings: 1 }}
+              to="/group/$channelId"
+            >
+              设置
+            </Link>
+          </>
+        ) : status === "not_started" ? (
+          <Button
+            disabled={startChat.isPending}
+            onClick={() => {
+              setChatProblem(null);
+              startChat.mutate(crew.id, {
+                onSuccess: ({ channel }) =>
+                  void navigate({
+                    to: "/group/$channelId",
+                    params: { channelId: channel.id },
+                  }),
+                onError: (thrown: Error) => setChatProblem(thrown.message),
+              });
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            开始聊天
+          </Button>
+        ) : status === "pending_members" || status === "too_many" ? (
+          <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+            {CREW_STATUS_WORDS[status]}
+          </span>
+        ) : null}
         {confirming ? (
           <>
             <Button
@@ -398,6 +477,19 @@ function CrewCard({
         )}
       </div>
 
+      {confirming ? (
+        <p className="mb-[8px] text-[12px] text-muted-foreground leading-[18px]">
+          解散「{crew.name}」：聊天记录不再显示；它的
+          {pipelineCount === undefined ? "" : ` ${pipelineCount} 条`}
+          组团流程和运行记录会一并删除；看板上已有的任务卡保留。
+        </p>
+      ) : null}
+      {chatProblem ? (
+        <p className="mb-[8px] text-[12px] text-destructive" role="alert">
+          {chatProblem}
+        </p>
+      ) : null}
+
       <CardFooter
         left={<span>{crew.members.length} 名员工</span>}
         right={
@@ -409,10 +501,11 @@ function CrewCard({
           crew.members.length > 0 ? (
             <span className="flex items-center gap-[10px]">
               {/*
-               * 组团流程：给这个群组排好顺序的工作。流程页按群组列出，所以这里只带人过去，不带参数。
+               * 组团流程：给这个群组排好顺序的工作。带上群组 id，流程页直接停在这个群组那一节。
                */}
               <Link
                 className="rounded-sm font-semibold text-foreground/90 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+                search={{ group: crew.id }}
                 to="/pipelines"
               >
                 组团流程
