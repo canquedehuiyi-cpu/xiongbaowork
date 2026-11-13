@@ -1,3 +1,4 @@
+# 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
 # GitHub only discovers workflows here. openbot/.github/workflows is retained
 # for upstream synchronisation and does not execute in this fork.
 name: 熊宝交付 CI
@@ -73,7 +74,8 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -101,6 +103,10 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Print database version
+        # After checkout: the workflow's default working-directory (openbot) exists only then.
+        # Run psql inside the service container: the runner image need not ship a client.
+        run: docker exec ${{ job.services.postgres.id }} psql -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'select version()'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -194,7 +200,8 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -260,7 +267,8 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -1079,7 +1087,8 @@ jobs:
       contents: read
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
