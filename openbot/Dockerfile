@@ -94,6 +94,34 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
   && bun install --frozen-lockfile --production
 
 
+# The source half of the runtime tree, with what a running container never reads taken out. The
+# runtime stage copies from here instead of from the build context, so the image carries the code that
+# runs and not the checks on it. Each deletion below has its reason; the ones that stay stay because
+# the server reads them at start (migrations, recovery, the tenant packages).
+FROM ubuntu:24.04 AS runtime-src
+COPY server /out/server
+COPY shared /out/shared
+COPY toolkit /out/toolkit
+COPY examples /out/examples
+COPY agent-computer/src /out/agent-computer/src
+COPY agent-computer/package.json /out/agent-computer/package.json
+RUN cd /out \
+  # server/tests is the server's own test suite and server/tsconfig.tests.json only configures it;
+  # nothing under src imports either. Most of the lines this image carried that do not belong to it.
+  && find server/tests server/tsconfig.tests.json -delete \
+  # server/docs is documentation for people who read the repository. The server serves none of it.
+  && find server/docs -delete \
+  # toolkit/tests is the toolkit's suite, and it is not a package export.
+  && find toolkit/tests -delete \
+  # Unit tests that sit beside the shared sources and the browser's: they import bun:test, which the
+  # production install does not carry, so they could not run here even if something wanted them.
+  && find shared agent-computer/src -type f -name '*.test.ts' -delete \
+  # examples holds the tenant packages the server loads (each one has a brand.yaml) next to sample
+  # bots written against other frameworks, with their own manifests and lockfiles. Those are
+  # starting points for a reader of the repository; no deployment runs them.
+  && find examples -mindepth 1 -maxdepth 1 -type d ! -exec test -f '{}/brand.yaml' ';' -exec rm -rf '{}' +
+
+
 FROM deps AS app-build
 
 # The SPA configuration is baked during prebuild, not read when the container starts.
@@ -193,12 +221,12 @@ COPY --from=deps /src/bun.lock bun.lock
 # Pruning it would mean a second `--production` install in the stage above.
 COPY --from=deps /src/agent-computer/node_modules agent-computer/node_modules
 
-COPY server server
-COPY shared shared
-COPY toolkit toolkit
-COPY examples examples
-COPY agent-computer/src agent-computer/src
-COPY agent-computer/package.json agent-computer/package.json
+COPY --from=runtime-src /out/server server
+COPY --from=runtime-src /out/shared shared
+COPY --from=runtime-src /out/toolkit toolkit
+COPY --from=runtime-src /out/examples examples
+COPY --from=runtime-src /out/agent-computer/src agent-computer/src
+COPY --from=runtime-src /out/agent-computer/package.json agent-computer/package.json
 
 # `bun run composio:smoke`, because the manifest copied above carries that entry and the question it
 # answers belongs here rather than on a laptop: it asks what THIS deployment's Composio key can see,
@@ -381,17 +409,23 @@ ENV EMBEDDED_POSTGRES=off
 ENV OPENBOT_RLS_ENFORCE=refuse
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
-# Public, build-bound identity. Ordinary local builds leave it unknown; release CI supplies all five.
-ARG OPENBOT_BUILD_VERSION
-ARG OPENBOT_BUILD_COMMIT
-ARG OPENBOT_BUILD_DISTRIBUTION_ID
-ARG OPENBOT_BUILD_REPOSITORY
-ARG OPENBOT_BUILD_CHANNEL
-ENV OPENBOT_BUILD_VERSION=${OPENBOT_BUILD_VERSION} \
-    OPENBOT_BUILD_COMMIT=${OPENBOT_BUILD_COMMIT} \
-    OPENBOT_BUILD_DISTRIBUTION_ID=${OPENBOT_BUILD_DISTRIBUTION_ID} \
-    OPENBOT_BUILD_REPOSITORY=${OPENBOT_BUILD_REPOSITORY} \
-    OPENBOT_BUILD_CHANNEL=${OPENBOT_BUILD_CHANNEL}
+# Public, build-bound identity. A build that passes no --build-arg leaves it unknown (the root release
+# workflow passes none today, so its images report the same unknown identity they always did). The
+# build arguments are XIONGBAO_*; the ENV keeps the OPENBOT_* names the server reads, on purpose: an
+# unset argument still becomes an EMPTY variable, and an empty XIONGBAO_BUILD_* would be copied over
+# an OPENBOT_BUILD_* that an existing deployment supplies at run time (the alias layer lets an empty
+# new name win), erasing its release identity. A run-time XIONGBAO_BUILD_* still works through the
+# alias layer. Moving these to their new names waits for a lowest-priority defaults home (Task 11).
+ARG XIONGBAO_BUILD_VERSION
+ARG XIONGBAO_BUILD_COMMIT
+ARG XIONGBAO_BUILD_DISTRIBUTION_ID
+ARG XIONGBAO_BUILD_REPOSITORY
+ARG XIONGBAO_BUILD_CHANNEL
+ENV OPENBOT_BUILD_VERSION=${XIONGBAO_BUILD_VERSION} \
+    OPENBOT_BUILD_COMMIT=${XIONGBAO_BUILD_COMMIT} \
+    OPENBOT_BUILD_DISTRIBUTION_ID=${XIONGBAO_BUILD_DISTRIBUTION_ID} \
+    OPENBOT_BUILD_REPOSITORY=${XIONGBAO_BUILD_REPOSITORY} \
+    OPENBOT_BUILD_CHANNEL=${XIONGBAO_BUILD_CHANNEL}
 
 # Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
 # container only callers on this machine are the administrator; in here every caller arrives through
