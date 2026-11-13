@@ -1,0 +1,434 @@
+[
+  {
+    "word": "$OPENBOT_IMAGE",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "$OPENBOT_TAG",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "$OpenbotImage",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "$OpenbotTag",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "$env:OPENBOT_IMAGE",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "$env:OPENBOT_TAG",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": ".images.openbot.reference",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": ".scratch/qoderwake-replica/seed-snapshots.mjs",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
+  },
+  {
+    "word": ".scratch/qoderwake-replica/tickets/029-",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
+  },
+  {
+    "word": "/openbot",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "/xiongbaoshuziyuangong/openbot",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "@copilotkit/",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方产品自己的名字、变量或地址"
+  },
+  {
+    "word": "@db.example.com:5432/openbot_b",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "COPILOTKIT_LICENSE_TOKEN",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方产品自己的名字、变量或地址"
+  },
+  {
+    "word": "CopilotKit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方产品自己的名字、变量或地址"
+  },
+  {
+    "word": "OPENBOT_",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_IMAGE",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_IMAGE:-ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OPENBOT_TAG",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_IMAGE:-xiongbao-digital-employee:local",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_ORGANIZATION_AUTHORITY",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_PORT",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_PORT:-3772",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_PUBLIC_URL",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_RLS_ENFORCE",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_SELF_HOST_BANNER",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_SINGLE_USER",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_TAG",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OPENBOT_TAG:-v<version>",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "OpenBot",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "文档正文里的上游产品名；Task 18（L1-15）改掉"
+  },
+  {
+    "word": "QoderWake",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
+  },
+  {
+    "word": "container:openbot-g2-server",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
+    "word": "dev@openbot.local",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OpenbotTag",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "https://copilotkit.ai/talk-to-an-engineer",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方产品自己的名字、变量或地址"
+  },
+  {
+    "word": "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/$OPENBOT_TAG/container-images.json",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker/delivery.env.example",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OpenbotTag/openbot/docker/delivery.env.example",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "oci://$OPENBOT_IMAGE",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
+  },
+  {
+    "word": "openbot",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "openbot-dev",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
+    "word": "openbot-echo-bot",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
+    "word": "openbot-g2-app",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
+    "word": "openbot-g2-computer",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
+    "word": "openbot-g2-server",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
+    "word": "openbot-postgres-1",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
+    "word": "openbot/",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/:",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/CHANGELOG.md",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/LICENSE",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/README.md",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/UPSTREAM.md",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/docker-compose.yml",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/docs/deployment-xiongbao.md",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/docs/deployment.md",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/docs/staffing.md",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/runner/src/index.ts",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/server",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot/tools/bun/bun.exe",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  },
+  {
+    "word": "openbot_app",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "openbot_role_writer",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "openbot_test",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot:openbot@127.0.0.1:5433/$DB",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot:openbot@127.0.0.1:5433/openbot",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot:openbot@host.docker.internal:5433/openbot_test",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot_app:",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot_app:openbot@127.0.0.1:5433/openbot",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot_app:openbot@host.docker.internal:5433/openbot",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot_app:openbot@host.docker.internal:5433/openbot_test",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "postgres://openbot_role_writer:",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+  },
+  {
+    "word": "qoderwake",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
+  },
+  {
+    "word": "xiongbaowork/openbot",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
+  }
+]

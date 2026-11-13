@@ -1,0 +1,73 @@
+/*
+ * Env var names the upstream code really reads (spec 2.6, first row), plus whatever server/src, shared,
+ * runner/src, agent-computer/src, supervisor/src and worker/src read through process.env, `env.` or
+ * `optional(`. An entry ending in `_` matches by prefix. Names that are only error codes, constant
+ * names or other shapes are not here: they stay findings.
+ */
+export const UPSTREAM_ENV_NAMES: readonly string[] = [
+  "OPENBOT_ACCESSIBILITY_DISABLED",
+  "OPENBOT_APP_URL",
+  "OPENBOT_ARCH",
+  "OPENBOT_BROKER_PROVIDER",
+  "OPENBOT_BROWSER_URL",
+  "OPENBOT_BUILD_CHANNEL",
+  "OPENBOT_BUILD_COMMIT",
+  "OPENBOT_BUILD_DISTRIBUTION_ID",
+  "OPENBOT_BUILD_REPOSITORY",
+  "OPENBOT_BUILD_VERSION",
+  "OPENBOT_CREDENTIAL_LOCK",
+  "OPENBOT_DESKTOP_ENGINE",
+  "OPENBOT_DESKTOP_HELPER",
+  "OPENBOT_DESKTOP_HOST_TOKEN",
+  "OPENBOT_DEV_NO_AUTH",
+  "OPENBOT_DISTRIBUTION",
+  "OPENBOT_EDITION",
+  "OPENBOT_ENGINE",
+  "OPENBOT_GENERATIVE_UI",
+  "OPENBOT_IN_CONTAINER",
+  "OPENBOT_INBOUND_EMAIL_DOMAIN",
+  "OPENBOT_INBOUND_EMAIL_SNS_TOPIC_ARNS",
+  "OPENBOT_LEARNING_AUTO_ASSIGN",
+  "OPENBOT_LEARNING_MODEL_TOKEN",
+  "OPENBOT_LEARNING_MODEL_UNAVAILABLE",
+  "OPENBOT_LOCAL_LEARNING",
+  "OPENBOT_MEMORY_SOURCE_DEFAULTS",
+  "OPENBOT_MODEL_CAPABILITIES_URL",
+  "OPENBOT_MODEL_OAUTH_FILE",
+  "OPENBOT_ORGANIZATION_AUTH_URL",
+  "OPENBOT_OS_VERSION",
+  "OPENBOT_OTEL_EXPORT",
+  "OPENBOT_PLATFORM",
+  "OPENBOT_POOL_",
+  "OPENBOT_PROACTIVE_DEFAULTS",
+  "OPENBOT_PRODUCT_TELEMETRY",
+  "OPENBOT_PUBLIC_URL",
+  "OPENBOT_RECORDER_DIR",
+  "OPENBOT_RECORDER_EXTRA_EXTENSION_IDS",
+  "OPENBOT_RLS_ENFORCE",
+  "OPENBOT_RUNNER_DATA_DIR",
+  "OPENBOT_SELF_HOST_BANNER",
+  "OPENBOT_SINGLE_USER",
+  "OPENBOT_TENANT_FRAME_GUARD",
+  "OPENBOT_THIS_MACHINE_HOST",
+  "OPENBOT_VERSION",
+];
+
+export const THIRD_PARTY_ENV_NAMES = [
+  "COPILOTKIT_TELEMETRY_DISABLED",
+  "COPILOTKIT_LICENSE_TOKEN",
+];
+
+// Version strings of the approval crypto: a rename invalidates stored data.
+export const CRYPTO_NAMES = [
+  "OPENBOT_APPROVAL_EXACT_AEAD_V1",
+  "OPENBOT_APPROVAL_EXACT_HEADER_V1",
+  "OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1",
+  "OPENBOT_APPROVAL_EXACT_WIRE_V1",
+  "OPENBOT_EXACT_INPUT_JSON_V1",
+];
+
+export const isKnownEnvName = (name: string): boolean =>
+  [...UPSTREAM_ENV_NAMES, ...THIRD_PARTY_ENV_NAMES].some((known) =>
+    known.endsWith("_") ? name.startsWith(known) : name === known,
+  );
