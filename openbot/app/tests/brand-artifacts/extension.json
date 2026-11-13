@@ -1,0 +1,296 @@
+[
+  {
+    "word": ".openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "/api/copilotkit/trajectory/$",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "库约定路径，品牌去痕决定保留"
+  },
+  {
+    "word": "/copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "库约定路径，品牌去痕决定保留"
+  },
+  {
+    "word": ":_.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "CopilotKit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "OpenBot",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "界面与控制台文字、关于页 MIT 署名；Task 8"
+  },
+  {
+    "word": "OpenBotError",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "扩展内部错误类名"
+  },
+  {
+    "word": "OpenBotUrl",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "企业策略键；Task 14 加 XiongbaoUrl，OpenBotUrl 改 legacy-compat"
+  },
+  {
+    "word": "_.OpenBotUrl",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "企业策略键；Task 14 加 XiongbaoUrl，OpenBotUrl 改 legacy-compat"
+  },
+  {
+    "word": "_.__openbotRecorderActive",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "扩展全局标志；Task 14"
+  },
+  {
+    "word": "_.__openbotRecorderContent",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "扩展全局标志；Task 14"
+  },
+  {
+    "word": "_.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "_.openbotUrl.startsWith",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "_.openbotUrl:null",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "_.openbotUrlInvalid",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "_.target.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "ai.copilotkit.openbot.recorder",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "原生消息主机名，只有不交付的上游桌面会装"
+  },
+  {
+    "word": "children:_.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "copilotKitSubscriber",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "copilotkitSuggest",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "data-copilotkit-action",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "data-copilotkit-ignore",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "globalThis.__openbotRecorderActive",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "扩展全局标志；Task 14"
+  },
+  {
+    "word": "invalid:_.openbotUrlInvalid",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "null:_.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbot-browser",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot-recorder",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "扩展 IndexedDB 名，永久残留（第 9 问）"
+  },
+  {
+    "word": "openbot-recorder-mark",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "注入第三方网页的自定义元素；Task 14（附录 A 第 11 行待批）"
+  },
+  {
+    "word": "openbot-recorder-notice",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "注入第三方网页的自定义元素；Task 14（附录 A 第 11 行待批）"
+  },
+  {
+    "word": "openbot-unreachable",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.connect",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.connect.status",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.ping",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.record",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.recorder.configure",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "MAIN world 的 Symbol.for 键；Task 14"
+  },
+  {
+    "word": "openbot.recorder.stop",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "MAIN world 的 Symbol.for 键；Task 14"
+  },
+  {
+    "word": "openbot.state",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.stop",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot/",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "内置工具引用，已存进数据库"
+  },
+  {
+    "word": "openbotLauncher",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrl:",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrl:_",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrl:_.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrl:_.origin",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrl:_.session.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrl:null",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrlInvalid:",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "origin:_.openbotUrl",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "this.copilotKitSubscriber",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  }
+]

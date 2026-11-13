@@ -1,0 +1,656 @@
+[
+  {
+    "word": "--copilotkit-license-banner-offset",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "..._.copilotkit_action",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": ".__copilotkitMcpResourceReadOnly",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "prefix": ".copilotKit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "prefix": ".copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "word": ".openbot-breakdown",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
+  },
+  {
+    "word": ".openbot-markdown",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
+  },
+  {
+    "word": ".openbotVersion",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": ".runsOnOpenBotModel",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "/CopilotKit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "/api/copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "库约定路径，品牌去痕决定保留"
+  },
+  {
+    "word": "/api/copilotkit/threads/$",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "库约定路径，品牌去痕决定保留"
+  },
+  {
+    "word": "/api/copilotkit/trajectory/$",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "库约定路径，品牌去痕决定保留"
+  },
+  {
+    "word": "/copilotkit_knowledge_base_shell/",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "prefix": "@copilotkit/",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "prefix": "CopilotKit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "word": "OPENBOT_",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "环境变量名前缀，随报错文字出现；Task 13"
+  },
+  {
+    "word": "OPENBOT_PUBLIC_URL",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "管理页「旧名仍可用」提示与环境变量名；Task 8（附录 A 第 5 行待批）"
+  },
+  {
+    "word": "OpenBot",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "界面与控制台文字、关于页 MIT 署名；Task 8"
+  },
+  {
+    "word": "X-CopilotKit-Telemetry-Id",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "_.__COPILOTKIT_CORE__",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "_.copilotKitInput",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "_.copilotKitInput:focus-within",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "prefix": "_.copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "word": "_.openbotHeld",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "_.openbotRunning",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "__copilotkitMcpResourceReadOnly:",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "__copilotkitRequestId:_",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "action:_.copilotkit_action",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "children:_.openbotRunning",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "contextSent:_.copilotkit_contextSent",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "prefix": "copilotKit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "prefix": "copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "prefix": "data-copilotkit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "word": "forwardedProps.copilotkit.ui",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "fromOpenBot:_",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "fromOpenBot:_.keyFromOpenBot",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "prefix": "https://api.cloud.copilotkit.ai",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "prefix": "https://cdn.copilotkit.ai",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "word": "https://copilotkit.ai",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "https://copilotkit.ai/pricing",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "https://dashboard.operations.copilotkit.ai",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "prefix": "https://docs.copilotkit.ai",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "word": "https://github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
+    "category": "upstream-shell-only",
+    "plan": "keep",
+    "note": "上游桌面才显示的遥测说明链接；Task 8 评估"
+  },
+  {
+    "word": "https://intelligence.copilotkit.ai",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "prefix": "https://telemetry.copilotkit.ai",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
+  },
+  {
+    "word": "https://www.copilotkit.ai/talk-to-an-engineer",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "isCopilotKitDestination",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "openbot",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "租户 id（永久保留，Task 6 核实）、默认皮肤 id（Task 7）、data-orb（附录 A 第 2 行）；一词合并登记，按剩余工作计"
+  },
+  {
+    "word": "openbot-$",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-attention-$",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "通知 tag；附录 A 第 3 行待批，Task 19"
+  },
+  {
+    "word": "openbot-breakdown",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
+  },
+  {
+    "word": "openbot-browser",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot-desktop",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
+  },
+  {
+    "word": "openbot-learned-$",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-markdown",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "CSS 类名；Task 8（附录 A 第 4 行待批）"
+  },
+  {
+    "word": "openbot-notify-prompt-answered",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-ping-$",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "通知 tag；附录 A 第 3 行待批，Task 19"
+  },
+  {
+    "word": "openbot-runner",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
+  },
+  {
+    "word": "openbot-secret",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-sidebar",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-sidebar-more",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-sidebar-view",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-sidebar-width:",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-skin",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-theme",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-unreachable",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot-version",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-voice-chat",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot-voice-context",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot.bot-thread",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot.connect",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.connect.status",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.ping",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.reachability.pendingSms",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot.record",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.state",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.stop",
+    "category": "peer-protocol",
+    "plan": "rewrite",
+    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
+  },
+  {
+    "word": "openbot.surface",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "K8s 标签（规格 1.2 不改）"
+  },
+  {
+    "word": "openbot.teach-a-bot.introduced",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot.wakerflow-share-return",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键；Task 7 双认后改新键"
+  },
+  {
+    "word": "openbot/",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "内置工具引用，已存进数据库"
+  },
+  {
+    "word": "openbot/share_private_information",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "内置工具引用，已存进数据库"
+  },
+  {
+    "word": "openbot/ui@1",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "A2UI 目录 id，与对端共享"
+  },
+  {
+    "word": "openbot:",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键前缀；Task 7"
+  },
+  {
+    "word": "openbot://open",
+    "category": "upstream-shell-only",
+    "plan": "keep",
+    "note": "只在不交付的上游桌面里使用"
+  },
+  {
+    "word": "openbot:_",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键前缀；Task 7"
+  },
+  {
+    "word": "openbot:app-access-request",
+    "category": "parsed-exact-text",
+    "plan": "keep",
+    "note": "授权与提案标记，按原文被对端解析"
+  },
+  {
+    "word": "openbot:carried-on:",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键前缀；Task 7"
+  },
+  {
+    "word": "openbot:check-in-declined:",
+    "category": "parsed-exact-text",
+    "plan": "keep",
+    "note": "授权与提案标记，按原文被对端解析"
+  },
+  {
+    "word": "openbot:computer-activity-wiped:",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键前缀；Task 7"
+  },
+  {
+    "word": "openbot:open",
+    "category": "upstream-shell-only",
+    "plan": "keep",
+    "note": "只在不交付的上游桌面里使用"
+  },
+  {
+    "word": "openbot:pending-handoff:_",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键前缀；Task 7"
+  },
+  {
+    "word": "openbot:staffing-proposal",
+    "category": "parsed-exact-text",
+    "plan": "keep",
+    "note": "授权与提案标记，按原文被对端解析"
+  },
+  {
+    "word": "openbot:voice-outbox:",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "浏览器存储键前缀；Task 7"
+  },
+  {
+    "word": "openbotTimeZone",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotUrl:_",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotVersion:_.version",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotWaiting",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "plugin:openbot-desktop",
+    "category": "upstream-shell-only",
+    "plan": "keep",
+    "note": "只在不交付的上游桌面里使用"
+  },
+  {
+    "word": "public/icons/copilotkit-kite.svg",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "surfaces:_.copilotkit_surfaces",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "targets:_.copilotkit_targets",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "this.isCopilotKitDestination",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "transport:_.copilotkit_transport",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "useCopilotKit",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "window.__COPILOTKIT_CORE__",
+    "category": "third-party-name",
+    "plan": "keep",
+    "note": "第三方库自带的 CopilotKit 字样"
+  },
+  {
+    "word": "window.__OPENBOT_WS_PORT__",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发服务器注入的全局名，不进构建后的 HTML"
+  },
+  {
+    "word": "window.__OPENBOT_WS_PORT__:",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发服务器注入的全局名，不进构建后的 HTML"
+  }
+]

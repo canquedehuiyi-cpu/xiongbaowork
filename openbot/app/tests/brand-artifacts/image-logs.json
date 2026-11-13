@@ -1,0 +1,20 @@
+[
+  {
+    "word": "OpenBot",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "启动日志里的上游名；Task 8（网页与运维可见文字）改写"
+  },
+  {
+    "word": "openbot_app",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库角色名，已有部署的库里就是这个名字，改名要动迁移与运维，不在本计划范围"
+  },
+  {
+    "word": "openbot_role_writer",
+    "category": "persisted-data",
+    "plan": "keep",
+    "note": "数据库角色名，同 openbot_app"
+  }
+]
