@@ -1161,7 +1161,7 @@ skills:
       ```bash
       for lbl in base head; do
         echo "#### $lbl"
-        awk '/^✖ failing tests:/{flag=1} flag' "$P/${lbl}_raw.txt" \
+        awk '/^✖ failing tests:/{flag=1} flag' "$P/${lbl:-}_raw.txt" \
           | grep -A 12 -E "^✖ <用例名>" \
           | grep -E '^✖ |AssertionError|actual:|expected:|Error:'
       done
@@ -4317,7 +4317,7 @@ skills:
       const svc = require('/opt/.../src/services/xxxService.js');
       for (const c of cases) {
         let r; try { svc.validate(c.body); r = 'PASS'; } catch (e) { r = 'THROW: ' + e.message; }
-        console.log(`${c.label} => ${r}`);
+        console.log(`${c.label} => ${ r }`);
       }
       ```
       ```bash
@@ -5882,7 +5882,7 @@ skills:
     
       function requiredEnv(name: string): string {
         const value = process.env[name];
-        if (!value) throw new Error(`Missing required env var: ${name}`);  // fail fast
+        if (!value) throw new Error(`Missing required env var: ${ name }`);  // fail fast
         return value;
       }
       ```
@@ -5933,7 +5933,7 @@ skills:
       }
       class NotFoundError extends AppError {
         constructor(resource: string, id: string) {
-          super(`${resource} not found: ${id}`, 'NOT_FOUND', 404);
+          super(`${ resource } not found: ${ id }`, 'NOT_FOUND', 404);
         }
       }
       class ValidationError extends AppError {
@@ -6042,18 +6042,18 @@ skills:
     
       class ApiError extends Error {
         constructor(public status: number, public body: any) {
-          super(body?.detail || body?.message || `API error ${status}`);
+          super(body?.detail || body?.message || `API error ${ status }`);
         }
       }
     
       async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
         const token = getAuthToken();  // from cookie / memory / context
     
-        const res = await fetch(`${BASE_URL}${path}`, {
+        const res = await fetch(`${ BASE_URL }${ path }`, {
           ...options,
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(token ? { Authorization: `Bearer ${ token }` } : {}),
             ...options.headers,
           },
         });
@@ -6285,13 +6285,13 @@ skills:
     
       ```typescript
       async function getUser(id: string): Promise<User> {
-        const cached = await redis.get(`user:${id}`);
+        const cached = await redis.get(`user:${ id }`);
         if (cached) return JSON.parse(cached);
     
         const user = await userRepo.findById(id);
         if (!user) throw new NotFoundError('User', id);
     
-        await redis.set(`user:${id}`, JSON.stringify(user), 'EX', 900);  // 15min TTL
+        await redis.set(`user:${ id }`, JSON.stringify(user), 'EX', 900);  // 15min TTL
         return user;
       }
       ```
@@ -6330,7 +6330,7 @@ skills:
       ```typescript
       app.get('/api/uploads/presign', authenticate, async (req, res) => {
         const { filename, type } = req.query;
-        const key = `uploads/${crypto.randomUUID()}-${filename}`;
+        const key = `uploads/${crypto.randomUUID()}-${ filename }`;
         const url = await s3.getSignedUrl('putObject', {
           Bucket: process.env.S3_BUCKET, Key: key,
           ContentType: type, Expires: 300,  // 5 min
@@ -6386,7 +6386,7 @@ skills:
           Connection: 'keep-alive',
         });
         const send = (event: string, data: unknown) => {
-          res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          res.write(`event: ${ event }\ndata: ${JSON.stringify(data)}\n\n`);
         };
         const unsubscribe = eventBus.subscribe(req.user.id, (event) => {
           send(event.type, event.payload);
@@ -6399,7 +6399,7 @@ skills:
       ```typescript
       function useServerEvents(userId: string) {
         useEffect(() => {
-          const source = new EventSource(`/api/events?userId=${userId}`);
+          const source = new EventSource(`/api/events?userId=${ userId }`);
           source.addEventListener('notification', (e) => {
             showToast(JSON.parse(e.data).message);
           });
@@ -6449,7 +6449,7 @@ skills:
       function useOrderStatus(orderId: string) {
         return useQuery({
           queryKey: ['order-status', orderId],
-          queryFn: () => apiClient.get<Order>(`/api/orders/${orderId}`),
+          queryFn: () => apiClient.get<Order>(`/api/orders/${ orderId }`),
           refetchInterval: (query) => {
             if (query.state.data?.status === 'completed') return false;
             return 5000;
@@ -7180,7 +7180,7 @@ skills:
     
       function requiredEnv(name: string): string {
         const value = process.env[name];
-        if (!value) throw new Error(`Missing required env var: ${name}`);  // fail fast
+        if (!value) throw new Error(`Missing required env var: ${ name }`);  // fail fast
         return value;
       }
       ```
@@ -7231,7 +7231,7 @@ skills:
       }
       class NotFoundError extends AppError {
         constructor(resource: string, id: string) {
-          super(`${resource} not found: ${id}`, 'NOT_FOUND', 404);
+          super(`${ resource } not found: ${ id }`, 'NOT_FOUND', 404);
         }
       }
       class ValidationError extends AppError {
@@ -7340,18 +7340,18 @@ skills:
     
       class ApiError extends Error {
         constructor(public status: number, public body: any) {
-          super(body?.detail || body?.message || `API error ${status}`);
+          super(body?.detail || body?.message || `API error ${ status }`);
         }
       }
     
       async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
         const token = getAuthToken();  // from cookie / memory / context
     
-        const res = await fetch(`${BASE_URL}${path}`, {
+        const res = await fetch(`${ BASE_URL }${ path }`, {
           ...options,
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(token ? { Authorization: `Bearer ${ token }` } : {}),
             ...options.headers,
           },
         });
@@ -7583,13 +7583,13 @@ skills:
     
       ```typescript
       async function getUser(id: string): Promise<User> {
-        const cached = await redis.get(`user:${id}`);
+        const cached = await redis.get(`user:${ id }`);
         if (cached) return JSON.parse(cached);
     
         const user = await userRepo.findById(id);
         if (!user) throw new NotFoundError('User', id);
     
-        await redis.set(`user:${id}`, JSON.stringify(user), 'EX', 900);  // 15min TTL
+        await redis.set(`user:${ id }`, JSON.stringify(user), 'EX', 900);  // 15min TTL
         return user;
       }
       ```
@@ -7628,7 +7628,7 @@ skills:
       ```typescript
       app.get('/api/uploads/presign', authenticate, async (req, res) => {
         const { filename, type } = req.query;
-        const key = `uploads/${crypto.randomUUID()}-${filename}`;
+        const key = `uploads/${crypto.randomUUID()}-${ filename }`;
         const url = await s3.getSignedUrl('putObject', {
           Bucket: process.env.S3_BUCKET, Key: key,
           ContentType: type, Expires: 300,  // 5 min
@@ -7684,7 +7684,7 @@ skills:
           Connection: 'keep-alive',
         });
         const send = (event: string, data: unknown) => {
-          res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          res.write(`event: ${ event }\ndata: ${JSON.stringify(data)}\n\n`);
         };
         const unsubscribe = eventBus.subscribe(req.user.id, (event) => {
           send(event.type, event.payload);
@@ -7697,7 +7697,7 @@ skills:
       ```typescript
       function useServerEvents(userId: string) {
         useEffect(() => {
-          const source = new EventSource(`/api/events?userId=${userId}`);
+          const source = new EventSource(`/api/events?userId=${ userId }`);
           source.addEventListener('notification', (e) => {
             showToast(JSON.parse(e.data).message);
           });
@@ -7747,7 +7747,7 @@ skills:
       function useOrderStatus(orderId: string) {
         return useQuery({
           queryKey: ['order-status', orderId],
-          queryFn: () => apiClient.get<Order>(`/api/orders/${orderId}`),
+          queryFn: () => apiClient.get<Order>(`/api/orders/${ orderId }`),
           refetchInterval: (query) => {
             if (query.state.data?.status === 'completed') return false;
             return 5000;
@@ -15312,7 +15312,7 @@ skills:
     
       **正确做法：按完整路径模板逐条匹配。**
       - 后端 `/api/v1/x/{id}` → 正则 `^/api/v1/x/[^/]+/?$`
-      - 前端 `/api/v1/x/${id}/y` → 先把 `${...}` 归一为通配，再转正则
+      - 前端 `/api/v1/x/${ id }/y` → 先把 `${...}` 归一为通配，再转正则
       - 解析 `APIRouter(prefix=...)` 时**要能解析模块级字符串常量**（`PREFIX = "..."` → `APIRouter(prefix=PREFIX)`）；否则 prefix 取空 → 全量误判
     
       **分三档输出，别混为一谈：**
