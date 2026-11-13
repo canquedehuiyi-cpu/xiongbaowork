@@ -54,7 +54,7 @@ describe("arcadeVerifierNotice", () => {
     for (const ownsProject of [true, false]) {
       const notice = arcadeVerifierNotice(undefined, { ownsProject });
       expect(notice).toContain(ARCADE_VERIFY_PATH);
-      expect(notice).toContain("OPENBOT_PUBLIC_URL");
+      expect(notice).toContain("XIONGBAO_PUBLIC_URL");
       expect(notice).not.toContain("undefined");
     }
   });

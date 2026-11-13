@@ -68,7 +68,7 @@ describe("a deployment that cannot name a provider takes the name from its rows"
       arcadeApiKey: "a",
     });
     expect(() => storedProvider(decision, ["composio", "arcade"])).toThrow(
-      /OPENBOT_BROKER_PROVIDER/,
+      /XIONGBAO_BROKER_PROVIDER/,
     );
     // It names the way out that exists — by hand, at a vendor — and never an unbuilt flow.
     let message = "";

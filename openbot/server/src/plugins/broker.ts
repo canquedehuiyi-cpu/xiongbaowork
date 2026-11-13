@@ -761,7 +761,7 @@ export function brokerReturnUrl(returnUrl: string): string {
   const address = webAddress(returnUrl);
   if (address === null) {
     throw new BrokerReturnUrlError(
-      "The address Composio would send you back to is not a web address, so a consent granted there would end on Composio's own page with no way back here. Set OPENBOT_APP_URL to this deployment's own origin including the scheme — https://example.com rather than example.com.",
+      `The address Composio would send you back to is not a web address, so a consent granted there would end on Composio's own page with no way back here. Set ${envName("APP_URL")} to this deployment's own origin including the scheme — https://example.com rather than example.com.`,
     );
   }
   return address.href;
@@ -881,7 +881,7 @@ export function assertActivatable(
   }
   if (otherProviderRows === 0) return;
   throw new BrokerRefusalError(
-    `不能启用 ${self}：还有 ${otherProviderRows} 个连接属于 ${other}。请让 ${other} 保持启用（保留它的 API key，并设 OPENBOT_BROKER_PROVIDER=${other.toLowerCase()}），先结束这些连接：每个人在自己的「已连接账号」里断开，管理员断开共享应用的团队账号，或者移除应用（会结束连到它的所有账号）。没有一键结束全部的操作。直接改环境变量换提供商会留下谁也撤销不了的账号。`,
+    `不能启用 ${self}：还有 ${otherProviderRows} 个连接属于 ${other}。请让 ${other} 保持启用（保留它的 API key，并设 ${envName("BROKER_PROVIDER")}=${other.toLowerCase()}），先结束这些连接：每个人在自己的「已连接账号」里断开，管理员断开共享应用的团队账号，或者移除应用（会结束连到它的所有账号）。没有一键结束全部的操作。直接改环境变量换提供商会留下谁也撤销不了的账号。`,
   );
 }
 

@@ -480,24 +480,10 @@
   },
   {
     "file": "server/src/tenant-package.ts",
-    "text": "is the shape of a person's OpenBot browser",
-    "reason": "internal-error: tenant package loader error read by the operator at start-up [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/tenant-package.test.ts:433]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/tenant-package.ts",
     "text": "say exactly what you are doing; OpenBot asks the person before it happens",
     "reason": "parsed-exact-text: EARLIER_STARTER_INSTRUCTIONS: matched verbatim to recognise unedited old starters",
     "category": "parsed-exact-text",
     "plan": "keep"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有 OpenBot",
-    "reason": "internal-error: configuration error that stops start-up; read by the operator [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/entra-obo-config.test.ts:100]",
-    "category": "operator-visible",
-    "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
@@ -1313,69 +1299,6 @@
     "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
     "plan": "keep"
-  },
-  {
-    "file": "server/src/auth/role-writer-lifecycle.ts",
-    "text": "OPENBOT_RLS_ENFORCE must",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/server-readiness-gates.test.ts:375]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/edition.ts",
-    "text": "OPENBOT_EDITION is",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1518]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "OPENBOT_THIS_MACHINE_HOST \"",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/agent-on-this-machine.test.ts:376]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "needs OPENBOT_PUBLIC_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config-github-app.test.ts:81]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/plugins/broker.ts",
-    "text": "OPENBOT_APP_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/composio-broker-seam.test.ts:99]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/plugins/broker.ts",
-    "text": "OPENBOT_BROKER_PROVIDER=",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/provider-selection.test.ts:107,157]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/plugins/routes.ts",
-    "text": "OPENBOT_APP_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/plugin-routes.test.ts:2186]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/plugins/provider-wiring.ts",
-    "text": "OPENBOT_BROKER_PROVIDER",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/provider-selection.test.ts:295；server/tests/provider-undecided.test.ts:71]",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/plugins/provider-wiring.ts",
-    "text": "OPENBOT_PUBLIC_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/arcade-verifier-notice.test.ts:57]",
-    "category": "operator-visible",
-    "plan": "rewrite"
   },
   {
     "file": "server/src/db/schema/model.ts",

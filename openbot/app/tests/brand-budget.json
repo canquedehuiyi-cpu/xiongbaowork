@@ -77,7 +77,7 @@
   {
     "rule": "env-name",
     "scope": "server/src",
-    "lines": 59
+    "lines": 58
   },
   {
     "rule": "env-name",

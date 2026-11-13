@@ -19,6 +19,7 @@ import {
 import { singleUserEnabled } from "./auth/dev-actor";
 import { normalizeDomain } from "./auth/email-domain";
 import { organizationAuthority } from "./auth/organization";
+import { productName } from "./brand";
 import type { ActionPolicy } from "./computer/policy";
 import { parseActionPolicy } from "./computer/policy-store";
 import {
@@ -1265,7 +1266,7 @@ function allowedEntraClients(
     )
   ) {
     throw new Error(
-      "MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有 OpenBot 自己的 client id（MICROSOFT_OAUTH_CLIENT_ID）。OpenBot 代表某人换出来的 token 也带这个 azp，列进来就能被拿去冒充本人调用 OpenBot。请去掉它：OpenBot 自己的网页用会话登录，不需要列。",
+      `MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有${productName()}自己的 client id（MICROSOFT_OAUTH_CLIENT_ID）。${productName()}代表某人换出来的 token 也带这个 azp，列进来就能被拿去冒充本人调用${productName()}。请去掉它：${productName()}自己的网页用会话登录，不需要列。`,
     );
   }
   return named.map((client) => client.toLowerCase());
@@ -1475,7 +1476,7 @@ function thisMachineHost(environment: NodeJS.ProcessEnv): {
   if (!host) return {};
   if (!/^[a-z0-9.-]+$/.test(host)) {
     throw new Error(
-      `OPENBOT_THIS_MACHINE_HOST "${host}" must be a host name, without a scheme, port or path.`,
+      `${envName("THIS_MACHINE_HOST")} "${host}" must be a host name, without a scheme, port or path.`,
     );
   }
   return { thisMachineHost: host };
@@ -1808,7 +1809,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
   // switched off, so say so at start-up instead.
   if (githubApp && !publicUrl) {
     throw new Error(
-      "GITHUB_APP_CLIENT_ID needs OPENBOT_PUBLIC_URL (or BETTER_AUTH_URL) so GitHub can send people back to this server.",
+      `GITHUB_APP_CLIENT_ID needs ${envName("PUBLIC_URL")} (or BETTER_AUTH_URL) so GitHub can send people back to this server.`,
     );
   }
   const workerSharedSecret = optional(environment, "WORKER_SHARED_SECRET");

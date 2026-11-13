@@ -96,7 +96,7 @@ describe("brokerReturnUrl", () => {
     }
 
     const sentence = brokerSentence(thrown);
-    expect(sentence).toContain("OPENBOT_APP_URL");
+    expect(sentence).toContain("XIONGBAO_APP_URL");
     expect(sentence).not.toContain(address);
     expect(sentence).not.toContain("openbot-tenant-42.internal.corp");
     expect(sentence).not.toContain("/connections/9f3c");

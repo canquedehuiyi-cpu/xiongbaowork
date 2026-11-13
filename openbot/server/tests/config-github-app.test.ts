@@ -78,7 +78,7 @@ describe("GitHub App sign-in configuration", () => {
         GITHUB_APP_CLIENT_SECRET: "gh-secret",
       }),
     ).toThrow(
-      "GITHUB_APP_CLIENT_ID needs OPENBOT_PUBLIC_URL (or BETTER_AUTH_URL) so GitHub can send people back to this server.",
+      "GITHUB_APP_CLIENT_ID needs XIONGBAO_PUBLIC_URL (or BETTER_AUTH_URL) so GitHub can send people back to this server.",
     );
   });
 

@@ -79,12 +79,12 @@ export function selectProviderWiring<
   if (decision.kind === "misnamed") {
     const keyName = BROKERED_PROFILE[decision.named].envVar;
     throw new Error(
-      `OPENBOT_BROKER_PROVIDER=${decision.named} 指明的提供商没有配置 ${keyName}。请把 ${keyName} 设为这个部署的 key，或者修改、去掉 OPENBOT_BROKER_PROVIDER。`,
+      `${envName("BROKER_PROVIDER")}=${decision.named} 指明的提供商没有配置 ${keyName}。请把 ${keyName} 设为这个部署的 key，或者修改、去掉 ${envName("BROKER_PROVIDER")}。`,
     );
   }
   if (decision.kind === "ambiguous") {
     throw new Error(
-      "COMPOSIO_API_KEY 和 ARCADE_API_KEY 都设置了，但没有设 OPENBOT_BROKER_PROVIDER，所以没有任何提供商是活动的，所有连接应用都不会工作。请把 OPENBOT_BROKER_PROVIDER 设为 composio 或 arcade 指明在用哪一个，或者去掉不用的那个 key。",
+      `COMPOSIO_API_KEY 和 ARCADE_API_KEY 都设置了，但没有设 ${envName("BROKER_PROVIDER")}，所以没有任何提供商是活动的，所有连接应用都不会工作。请把 ${envName("BROKER_PROVIDER")} 设为 composio 或 arcade 指明在用哪一个，或者去掉不用的那个 key。`,
     );
   }
   if (decision.kind === "unconfigured") {
@@ -157,9 +157,9 @@ export function storedProvider(
     throw new Error(
       `这个部署在 ${counted} 都持有连接，而没有任何配置说明哪一个是活动的：${
         decision.kind === "ambiguous"
-          ? `${decision.configured.map((p) => BROKERED_PROFILE[p].envVar).join(" 和 ")} 都设置了，OPENBOT_BROKER_PROVIDER 没有设置`
+          ? `${decision.configured.map((p) => BROKERED_PROFILE[p].envVar).join(" 和 ")} 都设置了，${envName("BROKER_PROVIDER")} 没有设置`
           : "没有设置任何 broker 的 API key"
-      }。两边都持有时，这个部署里没有办法结束它们：只要另一边还有连接，启用任何一边都会被拒绝。请在其中一个厂商自己的后台结束那边的账号，手动删除对应的连接行，再把 OPENBOT_BROKER_PROVIDER 设为另一个。`,
+      }。两边都持有时，这个部署里没有办法结束它们：只要另一边还有连接，启用任何一边都会被拒绝。请在其中一个厂商自己的后台结束那边的账号，手动删除对应的连接行，再把 ${envName("BROKER_PROVIDER")} 设为另一个。`,
     );
   }
   const owner = owners[0];
@@ -194,7 +194,7 @@ export function arcadeVerifierNotice(
 ): string | null {
   const address = arcadeVerifierAddress(publicUrl);
   if (!address) {
-    return `Arcade 是活动的 broker，但 OPENBOT_PUBLIC_URL 和 BETTER_AUTH_URL 都没有设置，这个部署不知道自己的公开地址，没法检查 Arcade 项目的用户验证地址是否是 <这个部署的公开地址>${ARCADE_VERIFY_PATH}。授权完成后会回到项目里填的那个地址，别的地址都是不存在的页面。请设置 OPENBOT_PUBLIC_URL。`;
+    return `Arcade 是活动的 broker，但 ${envName("PUBLIC_URL")} 和 BETTER_AUTH_URL 都没有设置，这个部署不知道自己的公开地址，没法检查 Arcade 项目的用户验证地址是否是 <这个部署的公开地址>${ARCADE_VERIFY_PATH}。授权完成后会回到项目里填的那个地址，别的地址都是不存在的页面。请设置 ${envName("PUBLIC_URL")}。`;
   }
   if (ownsProject) return null;
   return `Arcade 是活动的 broker，这个部署需要登录，所以把 Arcade 项目当作共享的，从不修改项目的用户验证地址。每次授权前「连接」都会检查它，在它指向 ${address} 之前会拒绝。请在 Arcade 后台（Auth → Settings）把自定义验证地址设为这个地址。`;

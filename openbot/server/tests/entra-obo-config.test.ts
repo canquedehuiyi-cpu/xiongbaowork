@@ -97,7 +97,9 @@ describe("MICROSOFT_OAUTH_ALLOWED_CLIENTS", () => {
       entra({
         MICROSOFT_OAUTH_ALLOWED_CLIENTS: `${APP},${OPENBOT.toUpperCase()}`,
       }),
-    ).toThrow("MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有 OpenBot 自己的 client id");
+    ).toThrow(
+      "MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有熊宝数字员工自己的 client id",
+    );
     expect(
       entra({ MICROSOFT_OAUTH_ALLOWED_CLIENTS: APP })?.allowedClients,
     ).toEqual([APP]);
