@@ -1515,7 +1515,7 @@ describe("edition", () => {
   test("refuses an unknown value", () => {
     expect(() =>
       loadConfig({ ...personalEnvironment, OPENBOT_EDITION: "consumer" }),
-    ).toThrow(/OPENBOT_EDITION.*"team".*"personal"/);
+    ).toThrow(/XIONGBAO_EDITION.*"team".*"personal"/);
   });
 
   test("personal edition refuses without single-user mode", () => {

@@ -922,7 +922,7 @@
 
 执行者发现新的冲突时，在表尾追加一行，并在 PR 说明里列出。用户在 Task U2 里逐行批准。
 
-**批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）；第 35 行，用户 2026-11-13 批准（原话「附录 A 第 35 行批准」）；第 36 行，用户 2026-11-13 批准（原话「附录 A 第 36 行批准」）。
+**批准记录**：第 1–12 行，用户 2026-11-12 批准；第 13–33 行，用户 2026-11-13 批准（原话「附录 A 第 13–33 行批准」）；第 34 行，用户 2026-11-13 批准（原话「附录 A 第 34 行批准」）；第 35 行，用户 2026-11-13 批准（原话「附录 A 第 35 行批准」）；第 36 行，用户 2026-11-13 批准（原话「附录 A 第 36 行批准」）；第 37–41 行，用户 2026-11-13 批准（原话「附录 A 第 37–41 行批准」）；第 42–44 行，用户 2026-11-13 批准（原话「附录 A 第 42–44 行批准」）。
 
 **棘轮放行**：第 7、35 行获准的棘轮增长（预算新增一行、词表换词）以机器可读的形式记在 `openbot/scripts/brand/guard/ratchet-approvals.json`，每条必须写明所依据的已批准行（`appendixRow`），并且要与本分支的真实改动逐项相符（kind、key、from、to），对不上的条目算过期，棘轮报红。只有相对 ratchet base 新增的条目才生效；base 里已有的条目是惰性历史，既不放行也不算过期，由之后的清理 PR 一次性删除（删条目不算增长）。改 `ratchet-approvals.json` 必须在 PR 说明里列出新增的条目。
 
@@ -968,7 +968,10 @@
 | 38 | Task 19 发现（行 14 的衍生）：`conversationTag` 改名后，其他用例里写死的同源 tag。用户 2026-11-13 已批准 | `app/src/lib/notifications/show.ts:21` | `app/tests/desktop-notify-prompt.test.tsx:196,213`（`openbot-channel-plan`）、`bots-nav-badge.test.tsx:223`（同）、`reply-notice.test.tsx:280,393,478`（`openbot-march-receipts`） | `xiongbao-channel-plan`、`xiongbao-march-receipts` | 19（代码已改，提交 727932ce；待批准后合并） |
 | 39 | Task 19 发现（行 11 的衍生）：`NOTICE_TAG` 改为新名后，常量比较的断言。用户 2026-11-13 已批准 | `extension/src/content/notice.ts:17` | `extension/tests/recorder-marks-compat.test.ts:77` `expect(NOTICE_TAG).toBe(LEGACY_NOTICE_TAG)` | `toBe(XB_NOTICE_TAG)` | 19（代码已改，提交 0b4c2474；待批准后合并） |
 | 40 | Task 19 发现（行 8 的衍生）：`shell.test.ts:128` 的另一半。用户 2026-11-13 已批准 | `agent-computer/src/shell.ts:1030` | `agent-computer/tests/shell.test.ts:129` `toContain("[Console]::SetError($openbotErr)")` | `toContain("[Console]::SetError($xbErr)")` | 19（代码已改，提交 4165a2b3；待批准后合并） |
-| 41 | Task 19 发现（行 35 的衍生）：开 `--minify` 后，现有断言要求不含它。用户 2026-11-13 已批准 | `desktop-device/scripts/build-sidecar.ts`（`compileArgs`） | `desktop-device/tests/build-sidecar.test.ts:66` `expect(args).not.toContain("--minify")` | `expect(args).toContain("--minify")` | 19（行 35 尚未做，随行 35 一起落地） |
+| 41 | Task 19 发现（行 35 的衍生）：开 `--minify` 后，现有断言要求不含它。用户 2026-11-13 已批准 | `desktop-device/scripts/build-sidecar.ts`（`compileArgs`） | `desktop-device/tests/build-sidecar.test.ts:66` `expect(args).not.toContain("--minify")` | `expect(args).toContain("--minify")` | 19（已落地，提交 f7e6c83b） |
+| 42 | Task 19 发现（行 25、28 的衍生）：行 25 的两句报错改名后，同一用例里的另一半和相邻用例；行 28 的反向断言。用户 2026-11-13 已批准 | `openbot/server/src/plugins/provider-wiring.ts:87,81`（`selectProviderWiring` 两个 key 都设、指明了 composio 却没有 key）、`openbot/server/src/plugins/routes.ts`（行 28 的 `Set ${envName("APP_URL")}`） | `server/tests/provider-selection.test.ts:241` `toContain("OPENBOT_BROKER_PROVIDER")`（两个 key 的拒绝句）；同文件 `:301` `/OPENBOT_BROKER_PROVIDER=composio.*COMPOSIO_API_KEY/`（`:295` 的另一半）；`server/tests/plugin-routes.test.ts:2819` `expect(refusal).not.toContain("OPENBOT_APP_URL")`（不改它也绿，但改名后就成了永远通过的空断言） | `XIONGBAO_BROKER_PROVIDER`；`/XIONGBAO_BROKER_PROVIDER=composio.*COMPOSIO_API_KEY/`；`not.toContain("XIONGBAO_APP_URL")` | 19（代码已改，提交 647926c2；用户 2026-11-13 已批准） |
+| 43 | Task 19 发现（行 35 的衍生）：`compileArgs` 加 `--minify` 后，同一用例里按位置比较参数列表的断言。`--minify` 放在参数列表末尾，只有这一条要改，`.at(2)` 的入口断言与 `slice(0, 2)` 不动。用户 2026-11-13 已批准 | `desktop-device/scripts/build-sidecar.ts`（`compileArgs`） | `desktop-device/tests/build-sidecar.test.ts:44-51` `expect(native.slice(3)).toEqual(["--external","chromium-bidi","--external","chromium-bidi/*","--outfile","/out/runner"])` | 数组末尾多一项 `"--minify"` | 19（代码已改，提交 f7e6c83b；用户 2026-11-13 已批准） |
+| 44 | Task 19 发现（行 33 的衍生）：`BROWSER_CODE_SUFFIXES` 加回 `MODEL_AUTH_REQUIRED` 后，列出清单本身的断言。用户 2026-11-13 已批准 | `server/src/wire-codes.ts`（`BROWSER_CODE_SUFFIXES`） | `server/tests/wire-codes.test.ts:29-38` 「each listed code maps to XIONGBAO_」里 `[...BROWSER_CODE_SUFFIXES].sort()` 精确等于的清单数组 | 数组多一项 `"MODEL_AUTH_REQUIRED"` | 19（代码已改，提交 8aabc26f；用户 2026-11-13 已批准） |
 
 ## 附录 B：验证与切换记录
 

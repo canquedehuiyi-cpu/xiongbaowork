@@ -6,7 +6,7 @@ import type { BackgroundToContent } from "../protocol/messages";
 /** Runs in the page's ISOLATED world before content.js, so the script starts capturing the moment it loads, before its
  * port says anything (the injection race, Task 9). Chrome serializes it: it must use nothing but its argument. */
 function markRecordingActive(recordingId: string): void {
-  (globalThis as { __openbotRecorderActive?: string }).__openbotRecorderActive =
+  (globalThis as { [key: symbol]: string })[Symbol.for("xb.recorder.active")] =
     recordingId;
 }
 

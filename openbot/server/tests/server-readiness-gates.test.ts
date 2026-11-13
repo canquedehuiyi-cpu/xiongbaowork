@@ -372,7 +372,7 @@ describe("the RLS enforcement mode a deployment runs with", () => {
           NODE_ENV: "development",
           OPENBOT_RLS_ENFORCE: value,
         }),
-      ).toThrow("OPENBOT_RLS_ENFORCE");
+      ).toThrow("XIONGBAO_RLS_ENFORCE");
     },
   );
 

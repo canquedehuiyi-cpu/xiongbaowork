@@ -288,7 +288,7 @@ describe("the filter proxy", () => {
     });
     expect(plain).toStartWith("HTTP/1.1 407");
     expect(plain.toLowerCase()).toContain(
-      'proxy-authenticate: basic realm="openbot"',
+      'proxy-authenticate: basic realm="xiongbao"',
     );
 
     // With them, a Bot allowed everything is not held to the other Bot's deny_all.
@@ -709,7 +709,7 @@ describe("the filter proxy", () => {
     setEgressPolicy("sales", { mode: "allow_all", rules: [] });
     const shared = await asABrowser(filter.port, METADATA);
     expect(shared).toContain(
-      "169.254.169.254 is a cloud metadata or link-local address, which OpenBot never opens.",
+      "169.254.169.254 is a cloud metadata or link-local address, which XiongBao never opens.",
     );
     expect(shared).not.toMatch(/\bBot\b/);
 

@@ -77,7 +77,7 @@
   {
     "rule": "env-name",
     "scope": "server/src",
-    "lines": 59
+    "lines": 58
   },
   {
     "rule": "env-name",
@@ -122,7 +122,7 @@
   {
     "rule": "identifier",
     "scope": "extension/src",
-    "lines": 195
+    "lines": 193
   },
   {
     "rule": "identifier",

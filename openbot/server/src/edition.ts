@@ -6,6 +6,7 @@
  * itself (the gateway, its policy, approvals and the audit trail) runs the same in both; the edition
  * only fixes what feeds it.
  */
+import { envName } from "../../shared/env-aliases";
 import type { Capability } from "./admin/capabilities";
 import type { EnterpriseSettings } from "./admin/settings-store";
 
@@ -76,7 +77,7 @@ export function parseEdition(raw: string | undefined): Edition {
   if (value === "" || value === "team") return "team";
   if (value === "personal") return "personal";
   throw new Error(
-    `OPENBOT_EDITION is "${value}". It must be "team" or "personal", or unset for "team".`,
+    `${envName("EDITION")} is "${value}". It must be "team" or "personal", or unset for "team".`,
   );
 }
 

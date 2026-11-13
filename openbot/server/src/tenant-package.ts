@@ -17,7 +17,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { parse } from "yaml";
-import { englishName } from "./brand";
+import { englishName, productName } from "./brand";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
 import {
@@ -577,7 +577,7 @@ function parseAgents(
     // would share its computer with the person whose browser it is.
     if (isPersonBrowserId(id)) {
       throw new Error(
-        `${source}: agent.id "${id}" is the shape of a person's OpenBot browser and cannot name a Bot`,
+        `${source}: agent.id "${id}" is the shape of a person's ${productName()} browser and cannot name a Bot`,
       );
     }
     if (type === "remote_ag_ui" || type === "remote_mastra") {

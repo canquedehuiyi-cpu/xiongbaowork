@@ -2346,7 +2346,7 @@ export function createPluginRoutes(
         return context.json(
           {
             error:
-              "This deployment has no app URL configured, so Composio would have nowhere to send you back to. Set OPENBOT_APP_URL.",
+              `This deployment has no app URL configured, so Composio would have nowhere to send you back to. Set ${envName("APP_URL")}.`,
           },
           503,
         );

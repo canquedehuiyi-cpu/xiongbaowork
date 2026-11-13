@@ -48,12 +48,6 @@
     "note": "界面与控制台文字、关于页 MIT 署名；Task 8"
   },
   {
-    "word": "openbot-browser.ts",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "打包进二进制的模块路径注释（路径已按段切开，只剩文件名）；Task 13 加 --minify"
-  },
-  {
     "word": "openbot-desktop",
     "category": "persisted-data",
     "plan": "rewrite",
@@ -74,9 +68,9 @@
     "removeIn": "0.2.13"
   },
   {
-    "word": "openbotUrl:",
+    "word": "openbotUrl:_",
     "category": "peer-protocol",
     "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）；--minify 后的写法（附录 A 第 35 行，Task 13）"
   }
 ]

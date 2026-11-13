@@ -50,15 +50,9 @@
     "removeIn": "0.2.13"
   },
   {
-    "word": "openbotUrl:",
+    "word": "openbotUrl:_",
     "category": "peer-protocol",
     "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
-  },
-  {
-    "word": "shared/openbot-browser.ts",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "打包进二进制的模块路径注释；Task 13 加 --minify"
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）；--minify 后的写法（附录 A 第 35 行，Task 13）"
   }
 ]

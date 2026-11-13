@@ -430,7 +430,7 @@ describe("tenant YAML validation", () => {
         themeCss: "",
       });
     expect(() => withAgent(`person-${"0a".repeat(16)}`)).toThrow(
-      /person's OpenBot browser/,
+      /person's 熊宝数字员工 browser/,
     );
     expect(withAgent("person-helper").agents.map((agent) => agent.id)).toEqual([
       "person-helper",

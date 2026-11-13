@@ -15,9 +15,9 @@ import { LEGACY_PREFIX, NEW_PREFIX } from "../../shared/env-aliases";
  * Only these. An approval's version string (`…APPROVAL_EXACT_*_V1`, `…EXACT_INPUT_JSON_V1`) is bound
  * into ciphertext and database constraints and is never renamed, and it is not a `RUN_ERROR` code.
  *
- * `MODEL_AUTH_REQUIRED` belongs here too and is held back for now: an existing test reads it off the
- * runtime's response under the old prefix (`tests/provider-refusal.test.ts`, "a harness refused the
- * key … with the code kept"), and an existing assertion is changed only once it is approved.
+ * `MODEL_AUTH_REQUIRED` is listed too: the desktop's own reader (`desktop-connection-failure.ts`) and
+ * the provider wrapper (`agents/provider-refusal.ts`) read the old code before this rename, so what
+ * the browser is sent can carry the new one.
  */
 export const BROWSER_CODE_SUFFIXES: readonly string[] = [
   "MODEL_REFUSED",
@@ -29,6 +29,7 @@ export const BROWSER_CODE_SUFFIXES: readonly string[] = [
   "HARNESS_START_FAILED",
   "HEADLESS_TOOL_ERROR",
   "TOOL_LIMIT_EXCEEDED",
+  "MODEL_AUTH_REQUIRED",
 ];
 
 const RENAMED = new Set(BROWSER_CODE_SUFFIXES);

@@ -71,6 +71,7 @@ export function compileArgs(
     "chromium-bidi/*",
     "--outfile",
     outfile,
+    "--minify",
   ];
 }
 

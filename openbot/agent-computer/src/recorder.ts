@@ -50,7 +50,7 @@ export function extensionIdFromKey(key: string): string {
 
 const notARecorder = (dir: string, why: string): RecorderLookup => ({
   ok: false,
-  error: `${RECORDER_DIR_ENV} (${dir}) is not a built OpenBot Recorder: ${why} Point it at the Recorder's build output, extension/dist after bun run build.`,
+  error: `${RECORDER_DIR_ENV} (${dir}) is not a built XiongBao Recorder: ${why} Point it at the Recorder's build output, extension/dist after bun run build.`,
 });
 
 /**

@@ -1,3 +1,4 @@
+import { envName } from "../../../shared/env-aliases";
 import { judgeRlsEnforcement } from "../db/rls-role";
 import { runAsTenant } from "../tenant/context";
 
@@ -24,7 +25,7 @@ export function resolveRlsEnforcementMode(
   if (written === "refuse" || written === "warn") return written;
   if (written)
     throw new Error(
-      `OPENBOT_RLS_ENFORCE must be "refuse" or "warn" (got "${written}"). Leave it unset to refuse.`,
+      `${envName("RLS_ENFORCE")} must be "refuse" or "warn" (got "${written}"). Leave it unset to refuse.`,
     );
   const nodeEnvironment = environment.NODE_ENV?.trim();
   return nodeEnvironment === "development" || nodeEnvironment === "test"

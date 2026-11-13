@@ -2183,7 +2183,7 @@ describe("connecting a brokered app", () => {
 
     expect(response.status).toBe(503);
     // The setting, because it is the whole remedy and nothing else on the screen names it.
-    expect((await response.json()).error).toContain("OPENBOT_APP_URL");
+    expect((await response.json()).error).toContain("XIONGBAO_APP_URL");
     expect(authorized).toEqual([]);
   });
 
@@ -2816,7 +2816,7 @@ describe("connecting an app that needs no account", () => {
     expect(response.status).toBe(400);
     const refusal = (await response.json()).error as string;
     expect(refusal).toContain("Hacker News");
-    expect(refusal).not.toContain("OPENBOT_APP_URL");
+    expect(refusal).not.toContain("XIONGBAO_APP_URL");
     expect(authorized).toEqual([]);
   });
 
