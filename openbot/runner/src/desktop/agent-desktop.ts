@@ -69,7 +69,7 @@ export type AdRunOptions = {
 export type AgentDesktopCli = {
   /** Runs one command and returns the envelope's `data`. */
   run(args: readonly string[], opts?: AdRunOptions): Promise<unknown>;
-  /** Checks the version and creates the state directory (0700) on first use, once. */
+  /** Checks the version and creates the state directory (owner-only: 0700, a protected DACL on Windows) on first use, once. */
   ensureReady(signal?: AbortSignal): Promise<void>;
   wipeState(): Promise<void>;
   close(): Promise<void>;
