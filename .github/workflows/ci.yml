@@ -99,13 +99,14 @@ jobs:
       TEST_DATABASE_BYPASS_URL: postgres://openbot_fixture:ci-fixture@127.0.0.1:5432/postgres
       PGPASSWORD: ci-owner
     steps:
-      - name: Print database version
-        # Run psql inside the service container: the runner image need not ship a client.
-        run: docker exec ${{ job.services.postgres.id }} psql -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'select version()'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Print database version
+        # After checkout: the workflow's default working-directory (openbot) exists only then.
+        # Run psql inside the service container: the runner image need not ship a client.
+        run: docker exec ${{ job.services.postgres.id }} psql -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'select version()'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
