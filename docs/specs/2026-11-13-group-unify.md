@@ -437,7 +437,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 ### 5.6 回滚
 
-- **代码回滚**（换回上一版镜像 digest）：0206、0207、0210 都是新增，旧代码不读新列、新表、新函数；守卫函数的新版本只多了针对新列的放行，旧代码不碰新列，所以这部分行为不变。`scripts/migrate.ts` 的迁移守卫只拒绝「要跳过一个比库里戳更早的迁移」，旧镜像的迁移全部已经执行过，不会被拒。
+- **代码回滚**（换回上一版镜像 digest）：0206、0207、0210 都是新增；0211 不是纯新增，它收回台账表的整表 UPDATE、按列重新授权（唯独不含 `original_owner`），但旧代码不读写这张表，所以结论不变（要恢复整表权限，0211 文件头写了回滚语句）。旧代码不读新列、新表、新函数；守卫函数的新版本只多了针对新列的放行，旧代码不碰新列，所以这部分行为不变。`scripts/migrate.ts` 的迁移守卫只拒绝「要跳过一个比库里戳更早的迁移」，旧镜像的迁移全部已经执行过，不会被拒。
   - **例外：0207 的停用触发器换回旧镜像后仍然有效。** `revoked_access` 上的 `openbot_team_revoked_leaves` 是数据库对象，不随代码回退：停用照样会把人移出他所在的所有共享群，照样把他创建的群（连同群组、头像、流程、运行记录、看板卡）移交给最早的在籍成员，旧代码对此一无所知。移交没有数据回滚手段（不记原主，不会还回去）。要在回滚期间停掉这一行为，执行回滚手册里单独的「停用触发器」一步（见下）。
 - **停用 0207 的触发器**（回滚手册单独一步，与下面的数据回滚无关，换回旧镜像时就做）：用迁移属主账号（应用账号没有权限）执行 `ALTER TABLE public.revoked_access DISABLE TRIGGER openbot_team_revoked_leaves;`。停用期间，被停用的人不再离开共享群，他创建的群也不移交，回到 0207 之前的行为。之后再升级到含 0207 的版本时，迁移不会重跑，要由属主手动 `ALTER TABLE public.revoked_access ENABLE TRIGGER openbot_team_revoked_leaves;`，再执行一次 0207 末尾的补做语句（对每个已停用的人调 `openbot_team_person_leaves_groups`，幂等），把停用期间停用的人补做。
 - **数据回滚**：写成运维手册（放进 `openbot/docs/deployment-xiongbao.md` 第 6 节），在 `platform` 帧里执行三步：
@@ -744,7 +744,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 ## 12. 升级须知（京东云等已部署实例）
 
-1. **迁移自动执行**：京东云是单容器内嵌库（`docs/acceptance/HUMAN-STEPS.md:20` 的部署记录），每次启动都会自动跑 `scripts/migrate.ts`，0206、0207、0210 随新镜像自动应用。外接库部署照 `openbot/docs/deployment-xiongbao.md` 第 4 节，先用新 digest 跑迁移，再重建 API 容器。
+1. **迁移自动执行**：京东云是单容器内嵌库（`docs/acceptance/HUMAN-STEPS.md:20` 的部署记录），每次启动都会自动跑 `scripts/migrate.ts`，0206、0207、0210、0211 随新镜像自动应用。外接库部署照 `openbot/docs/deployment-xiongbao.md` 第 4 节，先用新 digest 跑迁移，再重建 API 容器。
 2. **升级前**按部署文档第 6 节备份。升级后首次启动，日志里会出现一行 `waker-group-upgrade` 汇总，记下转换和补挂的数量。如果要推迟转换，在 env 文件里设 `XIONGBAO_GROUP_UPGRADE=off`，之后去掉这个开关再重启即可。
 3. **用户能看到的变化**：
    - 侧边栏「群组」里原来的群聊和群组合成一个列表。

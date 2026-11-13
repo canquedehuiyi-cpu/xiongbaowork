@@ -520,6 +520,10 @@ import {
 import { createWakerGroupActions } from "./waker-groups/linked-actions";
 import { createWakerGroupRoutes } from "./waker-groups/routes";
 import { createWakerGroupStore } from "./waker-groups/store";
+import {
+  createConversionClaims,
+  startGroupUpgrade,
+} from "./waker-groups/upgrade";
 import { createFlowGenerator } from "./wakerflows/generator";
 import { createFlowModelResolver } from "./wakerflows/model";
 import { recoverInterruptedFlowRuns } from "./wakerflows/recovery";
@@ -4253,6 +4257,27 @@ await startupLifecycle.run(async (startup) => {
       }, 1_000),
     (resource) => resource.stop(),
   );
+  /*
+   * 群组与群聊合一的开机升级（设计稿 group-unify 第 5 节）：在后台把已有群组转成群聊、给已有群聊补群组、自愈已挂接
+   * 的镜像，不挡健康检查。一个副本跑（咨询锁），`XIONGBAO_GROUP_UPGRADE=off` 跳过。员工能不能用，与群聊服务的
+   * `canUseBot` 同一个判断；一个角色都没有的所有者 `actorFor` 会拒绝，先问 `hasRole`，记 `no_owner`。
+   */
+  startup.acquireSync(
+    () =>
+      startGroupUpgrade({
+        database,
+        databaseUrl: config.databaseUrl,
+        groups: baseGroupConversations,
+        link: wakerGroupLink,
+        canUse: canUseGroupBot,
+        hasRole: async (userId) =>
+          config.singleUser ||
+          (await roleRepository.rolesForUser(userId)).some(
+            (role) => role === "admin" || role === "user",
+          ),
+      }),
+    (task) => task.stop(),
+  );
 
   /*
    * 「招聘与组群」：员工替本人起草提议的工具，与 Routines 一样是按模块解析的内置传输，所以依赖在这里交一次。
@@ -5263,6 +5288,12 @@ await startupLifecycle.run(async (startup) => {
         actorFor,
         // The groups service's own `canUseBot`.
         canUse: canUseGroupBot,
+        // A chat an unfinished upgrade conversion holds is finished with the original crew (5.4).
+        conversions: createConversionClaims({
+          database,
+          link: wakerGroupLink,
+          groupStore: baseGroupConversations.store,
+        }),
         // Dissolving hides the chat: the same `channel.deleted` row as DELETE /api/channels/:id.
         auditStore: bootAuditStore,
       }),

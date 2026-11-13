@@ -1,10 +1,16 @@
 import { eq, type SQL, sql } from "drizzle-orm";
-import type { GroupConversations } from "../channels/group";
+import postgres from "postgres";
+import type { GroupConversations, GroupStore } from "../channels/group";
 import type { Database } from "../db/client";
 import { wakerGroupMembers } from "../db/schema";
+import { TEAM_TENANT } from "../db/schema/tenant";
 import { asPlatform, isPersonTenant, runAsTenant } from "../tenant/context";
-import type { WakerGroupLink } from "./channel-link";
-import { MAX_MEMBERS, MIN_MEMBERS } from "./linked-actions";
+import { channelOwner, stateOf, type WakerGroupLink } from "./channel-link";
+import {
+  type ConversionClaims,
+  MAX_MEMBERS,
+  MIN_MEMBERS,
+} from "./linked-actions";
 
 /*
  * 开机升级任务（设计稿 docs/specs/2026-11-13-group-unify.md 第 5 节）。第一阶段：已有群组转成可以聊天的群组。
@@ -27,16 +33,42 @@ import { MAX_MEMBERS, MIN_MEMBERS } from "./linked-actions";
  *
  * 装包不写 `waker_groups`（写它的只有 store.ts、channel-link.ts 与 WakerFlow），没有装包来的群组需要排除。
  *
+ * Task 14 补的几条（控制方裁定）：
+ * - `started` 行记下的聊天后来被删了：不再续做，也不记日志，群组留着、聊天不重开（与规则 2 从严同理）。
+ * - ④ 撞上唯一挂接索引（转换途中本人从群组页给同一群组开了聊天），或下次开机发现群组已挂着别的未删聊天：
+ *   以已挂上的那个为准，台账 `converted`、`channel_id` 写它；这次转换建的聊天没有消息就软删，有消息就留着并
+ *   记一行 {"type":"waker-group-upgrade-chat-kept","groupId","channelId","linkedChannelId"}。
+ * - 所有者一个角色都没有（`hasRole` 为假，生产里 `actorFor` 会抛错）：记 `no_owner`，不问 `canUse`。
+ * - 收养孤儿时补一次上游的 `seedOrder`：孤儿可能是在上游「建频道」与「种顺序」两步之间崩溃留下的。
+ *
  * 单项失败记 {"type":"waker-group-upgrade-item-failed","groupId","error"}，继续下一项。
+ *
+ * 第二阶段（5.4）：已有群聊补群组，台账 `backfilled`。第三阶段（4.5）：已挂接的聊天各自愈一次。两个阶段对
+ * 共享群都先在 `platform` 帧移交一次（3.1.1 第 4.4 条）。装包物化的频道不是群组，第二阶段不碰。被未完成的
+ * 转换占用的频道（`createConversionClaims`）第二阶段跳过，留给第一阶段续做。单项失败记
+ * {"type":"waker-group-upgrade-item-failed","channelId","error"}。
+ *
+ * `runGroupUpgrade` 一个副本跑（咨询锁），`XIONGBAO_GROUP_UPGRADE=off` 整个跳过；结束打一行汇总
+ * {"type":"waker-group-upgrade",…}。`startGroupUpgrade` 是开机时的后台装配。
  */
 
 export type GroupUpgradeDeps = {
   database: Database;
-  /** The undecorated `baseGroupConversations`: the crew already exists, `adopt` links it. */
-  groups: Pick<GroupConversations, "create">;
+  /**
+   * The undecorated `baseGroupConversations`: the crew already exists, `adopt` links it. Its `store`
+   * seeds the answering order of an adopted orphan.
+   */
+  groups: Pick<GroupConversations, "create" | "store">;
   link: WakerGroupLink;
   /** The groups service's own `canUseBot` (S/index.ts): the owner can read the Bot's profile. */
   canUse(ownerUserId: string, agentId: string): Promise<boolean>;
+  /**
+   * Whether the person holds a role `actorFor` (S/index.ts) acts for: `admin` or `user`, or anyone in
+   * single-user mode. Asked before `canUse`, which throws for anyone else.
+   */
+  hasRole(userId: string): Promise<boolean>;
+  /** Asked between items and between phases: true once the server is shutting down. */
+  stopped?: () => boolean;
   log?: (line: Record<string, unknown>) => void;
 };
 
@@ -82,6 +114,123 @@ export function textArray(values: readonly string[]): SQL {
     : sql`'{}'::text[]`;
 }
 
+/**
+ * 5.3's orphan of the ledger row aliased `l`: the chat a crash left between ② and ③. A shared group
+ * the owner started since the conversion started, still unlinked and not hidden, whose Bots are
+ * exactly the crew's roster less the ones the conversion left out. The oldest, when there is more
+ * than one. Phase 1 adopts by it and `claimedBy` keeps phase 2 and for-channel off it: one condition.
+ */
+const ORPHAN_OF_LEDGER_ROW = sql`(
+  select c.id from channels c
+   where c.tenant_id = 'team' and c.created_by = l.tenant_id
+     and c.waker_group_id is null and c.deleted_at is null
+     and c.created_at >= l.started_at
+     and array(select a.agent_id from channel_agents a
+                where a.channel_id = c.id order by a.agent_id)
+       = array(select m.agent_id from waker_group_members m
+                where m.group_id = l.group_id
+                  and m.agent_id <> all (l.dropped_agent_ids)
+                order by m.agent_id)
+   order by c.created_at, c.id
+   limit 1)`;
+
+/**
+ * The crew's roster in `position` order, the order the crew pages show it in (store.ts `shape`).
+ * In the caller's frame.
+ */
+async function rosterOf(database: Database, groupId: string) {
+  const rows = await database
+    .select({
+      agentId: wakerGroupMembers.agentId,
+      position: wakerGroupMembers.position,
+    })
+    .from(wakerGroupMembers)
+    .where(eq(wakerGroupMembers.groupId, groupId));
+  return rows
+    .map((row) => ({
+      agentId: row.agentId,
+      position: Number(row.position) || 0,
+    }))
+    .sort(
+      (a, b) => a.position - b.position || a.agentId.localeCompare(b.agentId),
+    )
+    .map((row) => row.agentId);
+}
+
+/**
+ * What upstream's `create` does after making the channel (`seedOrder`), for an orphan a crash left
+ * before it: the chat's Bots in the crew's `position` order. Threads already there are kept, so it
+ * changes nothing for a chat that was seeded. In the owner's frame.
+ */
+async function seedRoster(
+  database: Database,
+  store: Pick<GroupStore, "seedOrder" | "bots">,
+  owner: string,
+  groupId: string,
+  channelId: string,
+) {
+  const [roster, bots] = await Promise.all([
+    rosterOf(database, groupId),
+    store.bots(channelId),
+  ]);
+  const onChat = new Set(bots);
+  await store.seedOrder(
+    owner,
+    channelId,
+    roster.filter((agentId) => onChat.has(agentId)),
+  );
+}
+
+/**
+ * 5.4：未完成的转换占用的频道（台账 `started` 记下的 `channel_id`，或孤儿条件命中的频道）。`claimedBy` 在调用者
+ * 帧里读：第二阶段在 `platform` 帧，`for-channel` 在创建者本人帧（台账、群组名单都是他的）。群组已经挂着别的
+ * 未删聊天的转换不占用（下次第一阶段会收尾）。`finish` 在调用者帧（所有者本人）补种顺序、`adopt`，台账改
+ * `converted` 并写 `channel_id`。
+ */
+export function createConversionClaims(deps: {
+  database: Database;
+  link: WakerGroupLink;
+  /** The groups service's store (`baseGroupConversations.store`): an orphan's order is seeded. */
+  groupStore: Pick<GroupStore, "seedOrder" | "bots">;
+}): ConversionClaims {
+  const { database, link } = deps;
+  return {
+    async claimedBy(channelId) {
+      const rows = (await database.execute(
+        sql`select l.group_id::text as group_id from waker_group_upgrades l
+             where l.outcome = 'started'
+               and (l.channel_id = ${channelId}
+                    or (l.channel_id is null and ${ORPHAN_OF_LEDGER_ROW} = ${channelId}))
+               and not exists (select 1 from channels x
+                                where x.waker_group_id = l.group_id and x.deleted_at is null
+                                  and x.id <> ${channelId})
+             order by l.started_at, l.group_id
+             limit 1`,
+      )) as unknown as { group_id: string }[];
+      return rows[0]?.group_id ?? null;
+    },
+    async finish(groupId, channelId) {
+      const [crew] = (await database.execute(
+        sql`select tenant_id from waker_groups where id = ${groupId}::uuid`,
+      )) as unknown as { tenant_id: string }[];
+      if (!crew) throw new Error(`crew ${groupId} is not the caller's`);
+      await seedRoster(
+        database,
+        deps.groupStore,
+        crew.tenant_id,
+        groupId,
+        channelId,
+      );
+      await link.adopt(groupId, channelId);
+      await database.execute(
+        sql`update waker_group_upgrades
+               set outcome = 'converted', channel_id = ${channelId}, updated_at = now()
+             where group_id = ${groupId}::uuid`,
+      );
+    },
+  };
+}
+
 /** A crew as the task enumerates it, with its ledger row when it has one. */
 type Crew = {
   id: string;
@@ -90,10 +239,14 @@ type Crew = {
   flow: boolean;
   /** Every chat linked to it, hidden ones too. */
   linked: string[];
+  /** The chats linked to it that are not hidden. */
+  live: string[];
   /** Whether `users` still has the person its `tenant_id` names. */
   person: boolean;
   outcome: string | null;
   channelId: string | null;
+  /** The ledger's chat is hidden or no longer there. */
+  channelGone: boolean;
 };
 
 const logToStderr = (line: Record<string, unknown>) =>
@@ -132,8 +285,13 @@ export async function convertGroups(
         sql`select g.id::text as id, g.tenant_id,
                    exists (select 1 from waker_flows f where f.group_id = g.id) as flow,
                    array(select c.id from channels c where c.waker_group_id = g.id order by c.id) as linked,
+                   array(select c.id from channels c
+                          where c.waker_group_id = g.id and c.deleted_at is null order by c.id) as live,
                    exists (select 1 from users u where u.id = g.tenant_id) as person,
-                   l.outcome, l.channel_id
+                   l.outcome, l.channel_id,
+                   l.channel_id is not null
+                     and not exists (select 1 from channels c
+                                      where c.id = l.channel_id and c.deleted_at is null) as channel_gone
               from waker_groups g
               left join waker_group_upgrades l on l.group_id = g.id
              order by g.created_at, g.id`,
@@ -143,42 +301,35 @@ export async function convertGroups(
       tenant_id: string;
       flow: boolean;
       linked: string[];
+      live: string[];
       person: boolean;
       outcome: string | null;
       channel_id: string | null;
+      channel_gone: boolean;
     }[];
     return rows.map((row) => ({
       id: row.id,
       tenantId: row.tenant_id,
       flow: row.flow,
       linked: row.linked,
+      live: row.live,
       person: row.person,
       outcome: row.outcome,
       channelId: row.channel_id,
+      channelGone: row.channel_gone,
     }));
   }
 
-  /** The crew's roster in `position` order, the order the crew pages show it in (store.ts `shape`). */
-  async function roster(groupId: string) {
-    const rows = await asPlatform(() =>
-      database
-        .select({
-          agentId: wakerGroupMembers.agentId,
-          position: wakerGroupMembers.position,
-        })
-        .from(wakerGroupMembers)
-        .where(eq(wakerGroupMembers.groupId, groupId)),
-    );
-    return rows
-      .map((row) => ({
-        agentId: row.agentId,
-        position: Number(row.position) || 0,
-      }))
-      .sort(
-        (a, b) => a.position - b.position || a.agentId.localeCompare(b.agentId),
-      )
-      .map((row) => row.agentId);
-  }
+  /** Whether the person holds a role, asked once per person in their own frame. */
+  const roles = new Map<string, Promise<boolean>>();
+  const holdsRole = (owner: string) => {
+    let answer = roles.get(owner);
+    if (!answer) {
+      answer = runAsTenant(owner, () => deps.hasRole(owner));
+      roles.set(owner, answer);
+    }
+    return answer;
+  };
 
   /**
    * Write the crew's ledger row as `outcome`. A first write names `tenant` as both the row's tenant
@@ -212,51 +363,98 @@ export async function convertGroups(
     );
   }
 
-  /** ④ and ⑤: link the crew to its chat (the title and the mirror follow), then it is converted. */
-  async function finish(groupId: string, channelId: string) {
-    await link.adopt(groupId, channelId);
+  /** ⑤, or a settled race: the crew is converted, and `channelId` is its chat. */
+  async function converted(groupId: string, channelId: string) {
     await asPlatform(() =>
       database.execute(
-        sql`update waker_group_upgrades set outcome = 'converted', updated_at = now()
+        sql`update waker_group_upgrades
+               set outcome = 'converted', channel_id = ${channelId}, updated_at = now()
              where group_id = ${groupId}::uuid`,
       ),
     );
   }
 
-  /**
-   * 5.3: the chat a crash left between ② and ③. A shared group the owner started since the conversion
-   * started, still unlinked and not hidden, whose Bots are exactly the crew's roster less the ones the
-   * conversion left out. The oldest, when there is more than one.
-   */
-  async function orphanOf(groupId: string) {
+  /** A chat not hidden that links the crew, other than `except`; null when there is none. */
+  async function liveChannelOf(groupId: string, except: string) {
     const rows = (await asPlatform(() =>
       database.execute(
         sql`select c.id from channels c
-              join waker_group_upgrades l on l.group_id = ${groupId}::uuid
-             where c.tenant_id = 'team' and c.created_by = l.tenant_id
-               and c.waker_group_id is null and c.deleted_at is null
-               and c.created_at >= l.started_at
-               and array(select a.agent_id from channel_agents a
-                          where a.channel_id = c.id order by a.agent_id)
-                 = array(select m.agent_id from waker_group_members m
-                          where m.group_id = l.group_id
-                            and m.agent_id <> all (l.dropped_agent_ids)
-                          order by m.agent_id)
-             order by c.created_at, c.id
+             where c.waker_group_id = ${groupId}::uuid and c.deleted_at is null and c.id <> ${except}
              limit 1`,
       ),
     )) as unknown as { id: string }[];
     return rows[0]?.id ?? null;
   }
 
+  /**
+   * The person opened the crew's chat themselves while its conversion was under way: theirs is the
+   * crew's chat. The one this conversion made (`ours`) is hidden while it is still unlinked and nobody
+   * has said anything in it; with messages it is left as it is and said once.
+   */
+  async function settle(groupId: string, ours: string | null, theirs: string) {
+    const kept =
+      ours !== null &&
+      (await asPlatform(async () => {
+        const hidden = (await database.execute(
+          sql`update channels set deleted_at = now(), updated_at = now()
+               where id = ${ours} and deleted_at is null and waker_group_id is null
+                 and not exists (select 1 from group_messages m where m.channel_id = ${ours})
+               returning id`,
+        )) as unknown[];
+        if (hidden.length > 0) return false;
+        // Not hidden: already gone or linked elsewhere (nothing to say), or spoken in (kept).
+        const [chat] = (await database.execute(
+          sql`select 1 from channels c
+               where c.id = ${ours} and c.deleted_at is null and c.waker_group_id is null`,
+        )) as unknown[];
+        return chat !== undefined;
+      }));
+    if (kept)
+      log({
+        type: "waker-group-upgrade-chat-kept",
+        groupId,
+        channelId: ours,
+        linkedChannelId: theirs,
+      });
+    await converted(groupId, theirs);
+  }
+
+  /** ④ and ⑤: link the crew to its chat (the title and the mirror follow), then it is converted. */
+  async function finish(groupId: string, channelId: string) {
+    try {
+      await link.adopt(groupId, channelId);
+    } catch (error) {
+      // 23505 on the one-live-chat-per-crew index: the person linked another chat meanwhile.
+      const theirs =
+        stateOf(error) === "23505"
+          ? await liveChannelOf(groupId, channelId)
+          : null;
+      if (!theirs) throw error;
+      return settle(groupId, channelId, theirs);
+    }
+    await converted(groupId, channelId);
+  }
+
+  /** 5.3: the chat a crash left between ② and ③ (`ORPHAN_OF_LEDGER_ROW`). */
+  async function orphanOf(groupId: string) {
+    const rows = (await asPlatform(() =>
+      database.execute(
+        sql`select ${ORPHAN_OF_LEDGER_ROW} as id
+              from waker_group_upgrades l where l.group_id = ${groupId}::uuid`,
+      ),
+    )) as unknown as { id: string | null }[];
+    return rows[0]?.id ?? null;
+  }
+
   /** Rules 3–6, for a crew with no ledger row or a `started` one with nothing to pick up. */
   async function convert(crew: Crew): Promise<Outcome> {
     const owner = crew.tenantId;
-    if (!isPersonTenant(owner) || !crew.person) {
+    // An owner with no role at all: `actorFor` would refuse them, and every boot would fail on it.
+    if (!isPersonTenant(owner) || !crew.person || !(await holdsRole(owner))) {
       await record(crew.id, owner, "no_owner");
       return "no_owner";
     }
-    const members = await roster(crew.id);
+    const members = await asPlatform(() => rosterOf(database, crew.id));
     const answers = await Promise.all(
       members.map((agentId) => usable(owner, agentId)),
     );
@@ -285,10 +483,24 @@ export async function convertGroups(
     if (crew.flow) return null;
     if (crew.outcome && SETTLED.has(crew.outcome)) return null;
     const resuming = crew.outcome === "started";
+    // The person opened the crew's chat themselves since the conversion started: theirs wins.
+    const theirs = resuming
+      ? crew.live.find((channelId) => channelId !== crew.channelId)
+      : undefined;
+    if (theirs) {
+      await settle(
+        crew.id,
+        crew.channelId ?? (await orphanOf(crew.id)),
+        theirs,
+      );
+      return "converted";
+    }
     // Rule 2: a chat links it already, other than the one its own conversion wrote down.
     const own = resuming ? crew.channelId : null;
     if (crew.linked.some((channelId) => channelId !== own)) return null;
     if (resuming && crew.channelId) {
+      // Its chat was deleted since: the crew stays, and the chat is not opened again (rule 2).
+      if (crew.channelGone) return null;
       await finish(crew.id, crew.channelId);
       return "converted";
     }
@@ -296,6 +508,9 @@ export async function convertGroups(
       const orphan = await orphanOf(crew.id);
       if (orphan) {
         await recordChannel(crew.id, orphan);
+        await runAsTenant(crew.tenantId, () =>
+          seedRoster(database, groups.store, crew.tenantId, crew.id, orphan),
+        );
         await finish(crew.id, orphan);
         return "converted";
       }
@@ -304,6 +519,7 @@ export async function convertGroups(
   }
 
   for (const crew of await crews()) {
+    if (deps.stopped?.()) break;
     try {
       const outcome = await upgrade(crew);
       const counted = outcome ? COUNTED[outcome] : undefined;
@@ -317,4 +533,242 @@ export async function convertGroups(
     }
   }
   return counts;
+}
+
+export type BackfillCounts = {
+  backfilled: number;
+  ownerless: number;
+  /** Shared groups whose creator had left, handed to their earliest member first. */
+  handedOver: number;
+};
+
+export type ReconcileCounts = { reconciled: number; handedOver: number };
+
+/** A chat as phases 2 and 3 enumerate it. */
+type Chat = { id: string; tenantId: string; createdBy: string | null };
+
+async function chatsWhere(database: Database, condition: SQL) {
+  const rows = (await asPlatform(() =>
+    database.execute(
+      sql`select c.id, c.tenant_id, c.created_by from channels c
+           where c.deleted_at is null and ${condition}
+           order by c.created_at, c.id`,
+    ),
+  )) as unknown as {
+    id: string;
+    tenant_id: string;
+    created_by: string | null;
+  }[];
+  return rows.map(
+    (row): Chat => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      createdBy: row.created_by,
+    }),
+  );
+}
+
+/**
+ * 3.1.1 第 4.4 条：a shared group whose creator left past the service, or was deactivated while a run
+ * held the hand-over off, goes to its earliest member now. In `platform`'s frame; anything else
+ * comes back as it was. `moved` when the group changed hands.
+ */
+async function handOverFirst(link: WakerGroupLink, chat: Chat) {
+  if (chat.tenantId !== TEAM_TENANT)
+    return { owner: chat.createdBy, deferred: false, moved: false };
+  const handed = await asPlatform(() => link.handOver(chat.id));
+  return {
+    ...handed,
+    moved: Boolean(handed.owner) && handed.owner !== chat.createdBy,
+  };
+}
+
+/**
+ * 第二阶段（5.4）：每个未删除、员工至少 2 位、未挂接、不是装包物化的频道补一个群组，台账 `backfilled`。被未完成
+ * 的转换占用的跳过；定不出所有者的计数后跳过；共享群先移交。名字按 4.4（撞名加「（2）」），成员与顺序取运行时
+ * 顺序，都由 `link.linkChannel` 在所有者帧的一个事务里做。
+ */
+export async function backfillChannels(
+  deps: GroupUpgradeDeps,
+): Promise<BackfillCounts> {
+  const { database, link } = deps;
+  const log = deps.log ?? logToStderr;
+  const claims = createConversionClaims({
+    database,
+    link,
+    groupStore: deps.groups.store,
+  });
+  const counts: BackfillCounts = { backfilled: 0, ownerless: 0, handedOver: 0 };
+  const chats = await chatsWhere(
+    database,
+    sql`c.waker_group_id is null and c.package_id is null
+        and (select count(*) from channel_agents a where a.channel_id = c.id) >= 2`,
+  );
+  for (const chat of chats) {
+    if (deps.stopped?.()) break;
+    try {
+      // Left for phase 1 to finish: a crew of its own here could never be linked to the original.
+      if (await asPlatform(() => claims.claimedBy(chat.id))) continue;
+      if (!channelOwner(chat)) {
+        counts.ownerless += 1;
+        continue;
+      }
+      const handed = await handOverFirst(link, chat);
+      if (handed.moved) counts.handedOver += 1;
+      // Put off by a running flow (logged by `handOver`), or the last one out: nobody to give it to.
+      if (handed.deferred || !handed.owner) continue;
+      const groupId = await link.linkChannel(chat.id);
+      if (!groupId) continue;
+      await asPlatform(() =>
+        database.execute(
+          sql`insert into waker_group_upgrades
+                (group_id, tenant_id, original_owner, channel_id, outcome)
+              select g.id, g.tenant_id, g.tenant_id, ${chat.id}, 'backfilled'
+                from waker_groups g where g.id = ${groupId}::uuid
+              on conflict (group_id) do nothing`,
+        ),
+      );
+      counts.backfilled += 1;
+    } catch (error) {
+      log({
+        type: "waker-group-upgrade-item-failed",
+        channelId: chat.id,
+        error: messageOf(error),
+      });
+    }
+  }
+  return counts;
+}
+
+/**
+ * 第三阶段（4.5）：每个已挂接、未删除的频道自愈一次（`link.reconcile` 改写镜像、跟名字），共享群先移交。
+ * `reconciled` 数的是写了镜像的频道。
+ */
+export async function reconcileLinked(
+  deps: GroupUpgradeDeps,
+): Promise<ReconcileCounts> {
+  const { database, link } = deps;
+  const log = deps.log ?? logToStderr;
+  const counts: ReconcileCounts = { reconciled: 0, handedOver: 0 };
+  for (const chat of await chatsWhere(
+    database,
+    sql`c.waker_group_id is not null`,
+  )) {
+    if (deps.stopped?.()) break;
+    try {
+      if ((await handOverFirst(link, chat)).moved) counts.handedOver += 1;
+      if (await link.reconcile(chat.id)) counts.reconciled += 1;
+    } catch (error) {
+      log({
+        type: "waker-group-upgrade-item-failed",
+        channelId: chat.id,
+        error: messageOf(error),
+      });
+    }
+  }
+  return counts;
+}
+
+export type GroupUpgradeSummary = {
+  type: "waker-group-upgrade";
+  converted: number;
+  pending: number;
+  tooMany: number;
+  noOwner: number;
+  backfilled: number;
+  reconciled: number;
+  /** Chats phase 2 could not find an owner for (expected to be 0). */
+  ownerless: number;
+  /** Shared groups handed to their earliest member by phases 2 and 3. */
+  handedOver: number;
+};
+
+/** The advisory lock one replica holds while it upgrades: a fixed number, the spec's date. */
+export const GROUP_UPGRADE_LOCK = 20261113;
+
+/**
+ * 5.3：开机任务。`XIONGBAO_GROUP_UPGRADE=off` 整个跳过，不连库。否则在一条自己的连接上抢咨询锁（会话级，
+ * 不能走连接池，同 audit-retention.ts），抢不到说明别的副本在跑，跳过；抢到就依次跑三个阶段，结束打一行汇总。
+ * 停止标记在阶段之间与项之间检查。
+ */
+export async function runGroupUpgrade(
+  deps: GroupUpgradeDeps & { databaseUrl: string },
+  env: Record<string, string | undefined> = process.env,
+): Promise<GroupUpgradeSummary | { skipped: "off" | "locked" }> {
+  if (env.XIONGBAO_GROUP_UPGRADE === "off") return { skipped: "off" };
+  const connection = postgres(deps.databaseUrl, { max: 1 });
+  let held = false;
+  try {
+    const [lock] = await connection`
+      select pg_try_advisory_lock(${GROUP_UPGRADE_LOCK}) as held
+    `;
+    held = Boolean(lock?.held);
+    if (!held) return { skipped: "locked" };
+    const stopped = () => deps.stopped?.() ?? false;
+    const one = await convertGroups(deps);
+    const two = stopped()
+      ? { backfilled: 0, ownerless: 0, handedOver: 0 }
+      : await backfillChannels(deps);
+    const three = stopped()
+      ? { reconciled: 0, handedOver: 0 }
+      : await reconcileLinked(deps);
+    const summary: GroupUpgradeSummary = {
+      type: "waker-group-upgrade",
+      converted: one.converted,
+      pending: one.pending,
+      tooMany: one.tooMany,
+      noOwner: one.noOwner,
+      backfilled: two.backfilled,
+      reconciled: three.reconciled,
+      ownerless: two.ownerless,
+      handedOver: two.handedOver + three.handedOver,
+    };
+    console.error(JSON.stringify(summary));
+    return summary;
+  } finally {
+    if (held)
+      await connection`select pg_advisory_unlock(${GROUP_UPGRADE_LOCK})`.catch(
+        () => undefined,
+      );
+    // Ending the connection releases the lock with it, should the unlock above have failed.
+    await connection.end({ timeout: 5 }).catch(() => undefined);
+  }
+}
+
+/**
+ * 开机装配（`startup.acquireSync`）：立即返回，升级在后台跑，不挡健康检查。出错记
+ * {"type":"waker-group-upgrade-failed","error"}，不抛；跳过记 {"type":"waker-group-upgrade-skipped","reason"}。
+ * `stop()` 让它在下一项之前停下，并等它结束。
+ */
+export function startGroupUpgrade(
+  deps: GroupUpgradeDeps & { databaseUrl: string },
+): { done: Promise<unknown>; stop(): Promise<void> } {
+  let stopping = false;
+  const done = runGroupUpgrade({
+    ...deps,
+    stopped: () => stopping || (deps.stopped?.() ?? false),
+  }).then(
+    (result) => {
+      if ("skipped" in result)
+        logToStderr({
+          type: "waker-group-upgrade-skipped",
+          reason: result.skipped,
+        });
+      return result;
+    },
+    (error: unknown) => {
+      logToStderr({
+        type: "waker-group-upgrade-failed",
+        error: messageOf(error),
+      });
+      return null;
+    },
+  );
+  return {
+    done,
+    async stop() {
+      stopping = true;
+      await done;
+    },
+  };
 }

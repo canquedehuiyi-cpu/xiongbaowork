@@ -301,7 +301,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/waker-groups/channel-link.ts": { "asPlatform(": 1 },
   // 群组与群聊合一 5.1、5.3：开机任务跨租户枚举群组、读名单、找孤儿，台账（0210）在 `platform` 帧写，戳的是
   // 群组自己的所有者。建聊天在 `runAsTenant(所有者)` 里（只认个人租户），挂接交给 channel-link 自己定帧。
-  "src/waker-groups/upgrade.ts": { "asPlatform(": 6 },
+  // Task 14 加 6 处：第一阶段收尾时找群组已挂着的别的聊天、软删这次转换建的空聊天（只限未挂接、没有消息的），
+  // 第二、三阶段跨租户枚举频道、查是否被未完成的转换占用、调移交函数（3.1.1 第 4.4 条，0207 只认 `platform`
+  // 或成员）、写 `backfilled` 台账。补群组、自愈仍由 channel-link 在所有者帧做。
+  "src/waker-groups/upgrade.ts": { "asPlatform(": 12 },
   // WF8: the fourth finds retries a restart left `prepared`, across tenants; each is settled in its own.
   "src/wakerflows/recovery.ts": { 'runAsTenant("platform"': 4 },
   /*

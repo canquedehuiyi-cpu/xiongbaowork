@@ -1,8 +1,16 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { randomUUID } from "node:crypto";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import { createRoleRepository } from "../src/auth/guards";
 import {
   createGroupConversations,
   createGroupStore,
@@ -14,6 +22,10 @@ import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
   agents,
+  channelAgents,
+  deploymentPackages,
+  groupMessages,
+  groupTaskRuns,
   groupTaskTemplates,
   intelligenceChannelMappings,
   portraits,
@@ -25,11 +37,22 @@ import {
 import { runAsTenant } from "../src/tenant/context";
 import {
   createWakerGroupLink,
+  runtimeOrder,
   stateOf,
+  type WakerGroupLink,
+  withWakerGroupLink,
 } from "../src/waker-groups/channel-link";
+import { createWakerGroupActions } from "../src/waker-groups/linked-actions";
+import { createWakerGroupRoutes } from "../src/waker-groups/routes";
+import { createWakerGroupStore } from "../src/waker-groups/store";
 import {
+  backfillChannels,
   convertGroups,
+  createConversionClaims,
   type GroupUpgradeDeps,
+  reconcileLinked,
+  runGroupUpgrade,
+  startGroupUpgrade,
   textArray,
 } from "../src/waker-groups/upgrade";
 import { createWorkQueue } from "../src/work/queue";
@@ -428,22 +451,31 @@ async function canUse(ownerUserId: string, agentId: string) {
 /** What the boot task is given in production, with the log kept for the test to read. */
 function upgrade(
   options: {
-    groups?: Pick<GroupConversations, "create">;
+    groups?: GroupUpgradeDeps["groups"];
+    link?: WakerGroupLink;
     log?: Record<string, unknown>[];
+    canUse?: GroupUpgradeDeps["canUse"];
+    hasRole?: GroupUpgradeDeps["hasRole"];
   } = {},
 ): GroupUpgradeDeps {
   const log = options.log ?? [];
   return {
     database,
     groups: options.groups ?? conversations(),
-    link: createWakerGroupLink({
-      database,
-      groupStore,
-      log: (line) => log.push(line),
-    }),
-    canUse,
+    link: options.link ?? linkFor(log),
+    canUse: options.canUse ?? canUse,
+    // Every person here holds the `user` role, as `canUse` above assumes.
+    hasRole: options.hasRole ?? (async () => true),
     log: (line) => log.push(line),
   };
+}
+
+function linkFor(log: Record<string, unknown>[] = []) {
+  return createWakerGroupLink({
+    database,
+    groupStore,
+    log: (line) => log.push(line),
+  });
 }
 
 async function bot(owner: string, name: string) {
@@ -894,7 +926,7 @@ describe("phase 1", () => {
     const groupId = await oldCrew(alice, "周报", ids);
     // Who it was first written for stays, whatever the rebuild writes.
     await started(groupId, alice, { originalOwner: `${prefix}-first` });
-    // Not an orphan: one Bot short of the crew.
+    // Not an orphan: one Bot more than the crew.
     const other = await openChat(alice, [...ids, await bot(alice, "Linus")]);
 
     await convertGroups(upgrade());
@@ -928,6 +960,7 @@ describe("phase 1", () => {
       upgrade({
         log,
         groups: {
+          store: base.store,
           create: async (owner, input) => {
             const { agentIds } = input as { agentIds: string[] };
             if (agentIds.includes(linus)) throw new Error("no chat today");
@@ -977,5 +1010,944 @@ describe("phase 1", () => {
       [false, "复盘", groupId],
     ]);
     expect(chats.every((row) => !row.deleted)).toBe(true);
+  });
+});
+
+/** A shared group chat `owner` opened with no order seeded: a crash between upstream's two writes. */
+async function unseededChat(owner: string, agentIds: string[]) {
+  const channel = await runAsTenant(owner, () =>
+    channelStore.create({ id: owner, role: "user" }, agentIds, {
+      shared: true,
+    }),
+  );
+  createdChannels.push(channel.id);
+  return channel;
+}
+
+/** Two Bots of `owner`'s, the first sorting after the second by id: an order only a seed keeps. */
+async function twoOutOfIdOrder(owner: string) {
+  const [one, two] = await bots(owner, 2);
+  if (!one || !two) throw new Error("bots not written");
+  return one.localeCompare(two) > 0 ? [one, two] : [two, one];
+}
+
+/** The answering order of a chat, as `platform` reads it. */
+async function orderOf(channelId: string) {
+  return runAsTenant("platform", () => groupStore.order(channelId));
+}
+
+async function hide(channelId: string) {
+  await runAsTenant("platform", () =>
+    database.execute(
+      sql`update channels set deleted_at = now() where id = ${channelId}`,
+    ),
+  );
+}
+
+/** A reply in the chat, the way a Bot's answer lands. */
+async function say(owner: string, channelId: string) {
+  await runAsTenant("platform", () =>
+    database.insert(groupMessages).values({
+      id: `${prefix}-${randomUUID()}`,
+      channelId,
+      ownerUserId: owner,
+      text: "已经聊过",
+      tenantId: "team",
+    }),
+  );
+}
+
+async function devUser() {
+  const existed = await runAsTenant("platform", () =>
+    database.select({ id: users.id }).from(users).where(eq(users.id, DEV_USER)),
+  );
+  if (existed.length === 0) {
+    await runAsTenant(DEV_USER, () =>
+      database.insert(users).values({
+        id: DEV_USER,
+        email: "dev-local-user@example.test",
+        name: "Local",
+      }),
+    );
+    createdUsers.push(DEV_USER);
+  }
+  return DEV_USER;
+}
+
+/**
+ * index.ts's `canUseGroupBot` and the upgrade's `hasRole`, with `actorFor` as index.ts writes it: the
+ * single-user owner is an administrator; anyone else needs the `admin` or `user` role.
+ */
+function productionChecks(singleUser: boolean) {
+  const roles = createRoleRepository(database);
+  const actorFor = async (ownerUserId: string): Promise<AgentActor> => {
+    if (singleUser) return { id: ownerUserId, role: "admin" };
+    const held = await roles.rolesForUser(ownerUserId);
+    if (!held.includes("admin") && !held.includes("user"))
+      throw new Error("A routine requires an authorized owner.");
+    return { id: ownerUserId, role: held.includes("admin") ? "admin" : "user" };
+  };
+  return {
+    canUse: async (ownerUserId: string, agentId: string) =>
+      Boolean(await profileStore.get(await actorFor(ownerUserId), agentId)),
+    hasRole: async (userId: string) =>
+      singleUser ||
+      (await roles.rolesForUser(userId)).some(
+        (role) => role === "admin" || role === "user",
+      ),
+  };
+}
+
+describe("phase 1: what a crash, a race or a rule leaves", () => {
+  test("rule 3: a crew of the platform or the team is kept as no_owner", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const platformCrew = await oldCrew("platform", `${prefix} 平台`, ids);
+    const teamCrew = await oldCrew("team", `${prefix} 团队`, ids);
+    const before = await totals();
+
+    await convertGroups(upgrade());
+
+    expect(await ledgerOf(platformCrew)).toMatchObject({
+      tenant_id: "platform",
+      original_owner: "platform",
+      outcome: "no_owner",
+    });
+    expect(await ledgerOf(teamCrew)).toMatchObject({
+      tenant_id: "team",
+      original_owner: "team",
+      outcome: "no_owner",
+    });
+    expect((await totals())?.channels).toBe(before?.channels);
+  });
+
+  test("an owner with no role at all is no_owner, and nobody asks whether they may use a Bot", async () => {
+    const alice = await person("alice");
+    const groupId = await oldCrew(alice, "周报", await bots(alice, 2));
+    const log: Record<string, unknown>[] = [];
+    const checks = productionChecks(false);
+    let asked = 0;
+
+    await convertGroups(
+      upgrade({
+        log,
+        hasRole: checks.hasRole,
+        canUse: async (owner, agentId) => {
+          asked += 1;
+          return checks.canUse(owner, agentId);
+        },
+      }),
+    );
+
+    expect(await ledgerOf(groupId)).toMatchObject({
+      tenant_id: alice,
+      outcome: "no_owner",
+      channel_id: null,
+    });
+    expect(asked).toBe(0);
+    expect(log.filter((line) => line.groupId === groupId)).toEqual([]);
+    expect(await chatsOf(alice)).toEqual([]);
+  });
+
+  test("with the production check in single-user mode the owner is an administrator, and row security still keeps others' Bots out", async () => {
+    const owner = await devUser();
+    const bob = await person("bob");
+    const ids = await bots(owner, 2);
+    const notTheirs = await bot(bob, "Linus");
+    const groupId = await oldCrew(owner, `${prefix} 管理员`, [
+      ...ids,
+      notTheirs,
+    ]);
+
+    await convertGroups(upgrade(productionChecks(true)));
+
+    const ledger = await ledgerOf(groupId);
+    expect(ledger).toMatchObject({
+      tenant_id: owner,
+      outcome: "converted",
+      dropped_agent_ids: [notTheirs],
+    });
+    expect(await membersOf(groupId)).toEqual(ids);
+  });
+
+  test("a started row with no orphan is judged again, and may end pending or too many", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const pending = await oldCrew(alice, "待补成员", [
+      await bot(alice, "Ada"),
+      await bot(bob, "Linus"),
+    ]);
+    const crowded = await oldCrew(alice, "人太多", await bots(alice, 21));
+    await started(pending, alice, { originalOwner: `${prefix}-first` });
+    await started(crowded, alice, { dropped: ["gone"] });
+
+    await convertGroups(upgrade());
+
+    expect(await ledgerOf(pending)).toEqual({
+      tenant_id: alice,
+      original_owner: `${prefix}-first`,
+      channel_id: null,
+      outcome: "pending_members",
+      dropped_agent_ids: [],
+    });
+    expect(await ledgerOf(crowded)).toMatchObject({
+      channel_id: null,
+      outcome: "too_many",
+      dropped_agent_ids: [],
+    });
+    expect(await chatsOf(alice)).toEqual([]);
+  });
+
+  test("an orphan is a shared group: a personal chat with the same Bots is not adopted", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    await started(groupId, alice, {});
+    await Bun.sleep(5);
+    const personal = await runAsTenant(alice, () =>
+      channelStore.create({ id: alice, role: "user" }, ids),
+    );
+    createdChannels.push(personal.id);
+
+    await convertGroups(upgrade());
+
+    const ledger = await ledgerOf(groupId);
+    expect(ledger).toMatchObject({ outcome: "converted" });
+    expect(ledger?.channel_id).not.toBe(personal.id);
+    const chats = await chatsOf(alice);
+    expect(chats.find((row) => row.id === personal.id)?.waker_group_id).toBe(
+      null,
+    );
+    expect(chats.find((row) => row.id === ledger?.channel_id)).toMatchObject({
+      tenant_id: "team",
+      waker_group_id: groupId,
+    });
+  });
+
+  test("an adopted orphan gets the order upstream would have seeded", async () => {
+    const alice = await person("alice");
+    // Positions put the Bot that sorts later by id first: only the seed keeps that order.
+    const [first, second] = await twoOutOfIdOrder(alice);
+    if (!first || !second) throw new Error("bots not written");
+    const groupId = await oldCrew(alice, "周报", [first, second]);
+    await started(groupId, alice, {});
+    await Bun.sleep(5);
+    const orphan = await unseededChat(alice, [first, second]);
+    expect(await orderOf(orphan.id)).toEqual([]);
+
+    await convertGroups(upgrade());
+
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: orphan.id,
+      outcome: "converted",
+    });
+    expect(await orderOf(orphan.id)).toEqual([first, second]);
+    expect(await membersOf(groupId)).toEqual([first, second]);
+  });
+
+  test("a started row whose chat was deleted since is passed over without a word", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const unlinked = await oldCrew(alice, "周报", ids);
+    const linked = await oldCrew(alice, "复盘", ids);
+    const first = await openChat(alice, ids);
+    await started(unlinked, alice, { channelId: first.id });
+    const second = await openChat(alice, ids);
+    await started(linked, alice, { channelId: second.id });
+    await upgrade().link.adopt(linked, second.id);
+    await hide(first.id);
+    await hide(second.id);
+    const log: Record<string, unknown>[] = [];
+
+    await convertGroups(upgrade({ log }));
+    await convertGroups(upgrade({ log }));
+
+    expect(
+      log.filter(
+        (line) => line.groupId === unlinked || line.groupId === linked,
+      ),
+    ).toEqual([]);
+    expect(await ledgerOf(unlinked)).toMatchObject({
+      channel_id: first.id,
+      outcome: "started",
+    });
+    expect(await ledgerOf(linked)).toMatchObject({
+      channel_id: second.id,
+      outcome: "started",
+    });
+    // The crews stay; their chats are not opened again.
+    expect((await chatsOf(alice)).map((row) => [row.id, row.deleted])).toEqual([
+      [first.id, true],
+      [second.id, true],
+    ]);
+  });
+
+  test("a chat the person opened for the crew mid-conversion wins: the empty one the upgrade made is hidden", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    const base = conversations();
+    const link = linkFor();
+    let theirs = "";
+    let ours = "";
+
+    const counts = await convertGroups(
+      upgrade({
+        link,
+        groups: {
+          store: base.store,
+          create: async (owner, input) => {
+            const made = await base.create(owner, input);
+            ours = made.id;
+            // Between ② and ④ the person opens the crew's chat from the crew page.
+            const opened = await openChat(alice, ids);
+            theirs = opened.id;
+            await link.adopt(groupId, opened.id);
+            return made;
+          },
+        },
+      }),
+    );
+
+    expect(counts.converted).toBeGreaterThanOrEqual(1);
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: theirs,
+      outcome: "converted",
+    });
+    const chats = await chatsOf(alice);
+    expect(
+      chats.map((row) => [row.id, row.waker_group_id, row.deleted]),
+    ).toEqual([
+      [ours, null, true],
+      [theirs, groupId, false],
+    ]);
+  });
+
+  test("when the chat the upgrade made already has messages, it is kept and said once", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    const base = conversations();
+    const link = linkFor();
+    const log: Record<string, unknown>[] = [];
+    let theirs = "";
+    let ours = "";
+
+    await convertGroups(
+      upgrade({
+        link,
+        log,
+        groups: {
+          store: base.store,
+          create: async (owner, input) => {
+            const made = await base.create(owner, input);
+            ours = made.id;
+            await say(alice, made.id);
+            const opened = await openChat(alice, ids);
+            theirs = opened.id;
+            await link.adopt(groupId, opened.id);
+            return made;
+          },
+        },
+      }),
+    );
+
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: theirs,
+      outcome: "converted",
+    });
+    expect(log.filter((line) => line.groupId === groupId)).toEqual([
+      {
+        type: "waker-group-upgrade-chat-kept",
+        groupId,
+        channelId: ours,
+        linkedChannelId: theirs,
+      },
+    ]);
+    expect((await chatsOf(alice)).map((row) => [row.id, row.deleted])).toEqual([
+      [ours, false],
+      [theirs, false],
+    ]);
+  });
+
+  test("a started row whose crew the person linked to another chat since is settled on the next boot", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    // Crashed after ③; then the person opened the crew's chat themselves.
+    const ours = await openChat(alice, ids);
+    await started(groupId, alice, { channelId: ours.id });
+    const theirs = await openChat(alice, ids);
+    await upgrade().link.adopt(groupId, theirs.id);
+
+    await convertGroups(upgrade());
+
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: theirs.id,
+      outcome: "converted",
+    });
+    expect((await chatsOf(alice)).map((row) => [row.id, row.deleted])).toEqual([
+      [ours.id, true],
+      [theirs.id, false],
+    ]);
+  });
+});
+
+/** `runGroupUpgrade` against the test database, with the summary line it prints kept. */
+async function run(
+  deps: GroupUpgradeDeps = upgrade(),
+  env: Record<string, string | undefined> = {},
+) {
+  const [result] = await printed(() =>
+    runGroupUpgrade({ ...deps, databaseUrl: testDatabaseUrl() }, env),
+  );
+  return result;
+}
+
+/** What `work` printed with console.error, kept from the output. */
+async function printed<T>(work: () => Promise<T>): Promise<[T, string[]]> {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  try {
+    return [await work(), lines];
+  } finally {
+    console.error = original;
+  }
+}
+
+/** A linked shared group of `owner`'s with `others` added, as `POST /api/groups` makes one now. */
+async function linkedGroup(owner: string, others: string[], botCount = 3) {
+  const ids = await bots(owner, botCount);
+  const groups = withWakerGroupLink(conversations(), linkFor(), () => {});
+  const channel = await runAsTenant(owner, () =>
+    groups.create(owner, { agentIds: ids }),
+  );
+  const groupId = channel.wakerGroupId;
+  if (!groupId) throw new Error("not linked");
+  for (const other of others)
+    await runAsTenant(owner, () =>
+      conversations().addMember(owner, channel.id, {
+        email: `${other}@example.test`,
+      }),
+    );
+  return { channelId: channel.id, groupId, bots: ids };
+}
+
+/** The roster the chat answers in, as the mirror should hold it. */
+async function truthOf(channelId: string) {
+  return runAsTenant("platform", async () =>
+    runtimeOrder(
+      await groupStore.order(channelId),
+      await groupStore.bots(channelId),
+    ),
+  );
+}
+
+async function dropBot(channelId: string, agentId: string) {
+  await runAsTenant("platform", () =>
+    database.execute(
+      sql`delete from channel_agents where channel_id = ${channelId} and agent_id = ${agentId}`,
+    ),
+  );
+}
+
+async function crewOwner(groupId: string) {
+  const [row] = await runAsTenant("platform", () =>
+    database
+      .select({ tenantId: wakerGroups.tenantId, name: wakerGroups.name })
+      .from(wakerGroups)
+      .where(eq(wakerGroups.id, groupId)),
+  );
+  return row ?? null;
+}
+
+/** `/api/waker-groups` as index.ts mounts it, with the conversions the boot task leaves unfinished. */
+function crewApi() {
+  const link = linkFor();
+  const crews = createWakerGroupStore(database);
+  const actions = createWakerGroupActions({
+    database,
+    store: crews,
+    link,
+    groups: conversations(),
+    channels: channelStore,
+    actorFor: async (id) => ({ id, role: "user" }),
+    canUse,
+    conversions: createConversionClaims({
+      database,
+      link,
+      groupStore,
+    }),
+    log: () => {},
+  });
+  let caller = "";
+  const routes = createWakerGroupRoutes(
+    crews,
+    async (context, next) => {
+      context.set("actor", {
+        id: caller,
+        email: `${caller}@example.test`,
+        role: "user",
+      });
+      await runAsTenant(caller, () => next());
+    },
+    actions,
+  );
+  return async (who: string, path: string) => {
+    caller = who;
+    const response = await routes.request(path, { method: "POST" });
+    const text = await response.text();
+    let json: Record<string, unknown> = {};
+    try {
+      json = JSON.parse(text);
+    } catch {}
+    return { status: response.status, json };
+  };
+}
+
+describe("phases 2 and 3", () => {
+  // Whatever older chats this database holds are given their crews once, so the counts below are ours.
+  beforeAll(async () => {
+    const sink: Record<string, unknown>[] = [];
+    await backfillChannels(upgrade({ log: sink }));
+  });
+
+  test("phase 2 links every unlinked chat of two or more, once", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const shared = await openChat(alice, ids);
+    // A personal chat with several Bots, from before shared groups (P11).
+    const personal = await runAsTenant(alice, () =>
+      channelStore.create({ id: alice, role: "user" }, ids),
+    );
+    createdChannels.push(personal.id);
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`update channels set title = '个人群' where id = ${personal.id}`,
+      ),
+    );
+
+    expect(await backfillChannels(upgrade())).toMatchObject({
+      backfilled: 2,
+      ownerless: 0,
+    });
+
+    const chats = await chatsOf(alice);
+    expect(chats.map((row) => row.id).sort()).toEqual(
+      [shared.id, personal.id].sort(),
+    );
+    for (const chat of chats) {
+      const groupId = chat.waker_group_id;
+      if (!groupId) throw new Error(`${chat.id} not linked`);
+      expect(await ledgerOf(groupId)).toEqual({
+        tenant_id: alice,
+        original_owner: alice,
+        channel_id: chat.id,
+        outcome: "backfilled",
+        dropped_agent_ids: [],
+      });
+      expect(await membersOf(groupId)).toEqual(await truthOf(chat.id));
+      expect((await crewOwner(groupId))?.tenantId).toBe(alice);
+    }
+    const before = await totals();
+
+    expect(await backfillChannels(upgrade())).toMatchObject({
+      backfilled: 0,
+      ownerless: 0,
+    });
+    expect(await totals()).toEqual(before);
+  });
+
+  test("phase 2 adds （2） when the name is taken", async () => {
+    const alice = await person("alice");
+    await crew(alice, "复盘");
+    const old = await openChat(alice, await bots(alice, 2));
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`update channels set title = '复盘' where id = ${old.id}`,
+      ),
+    );
+
+    await backfillChannels(upgrade());
+
+    const [chat] = await chatsOf(alice);
+    const groupId = chat?.waker_group_id;
+    if (!groupId) throw new Error("not linked");
+    expect((await crewOwner(groupId))?.name).toBe("复盘（2）");
+  });
+
+  test("phase 2 leaves a package's chats alone, and for-channel answers 404 for them", async () => {
+    const alice = await person("alice");
+    const chat = await openChat(alice, await bots(alice, 2));
+    const [installed] = await runAsTenant("platform", () =>
+      database
+        .insert(deploymentPackages)
+        .values({
+          tenantId: `${prefix}-pkg-${randomUUID()}`,
+          sourcePath: "test",
+          checksum: "test",
+        })
+        .returning({ id: deploymentPackages.id }),
+    );
+    if (!installed) throw new Error("package not written");
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`update channels set package_id = ${installed.id}::uuid, kind = 'team' where id = ${chat.id}`,
+      ),
+    );
+    try {
+      expect(await backfillChannels(upgrade())).toMatchObject({
+        backfilled: 0,
+        ownerless: 0,
+      });
+      expect((await crewApi()(alice, `/for-channel/${chat.id}`)).status).toBe(
+        404,
+      );
+      expect((await chatsOf(alice))[0]?.waker_group_id).toBeNull();
+    } finally {
+      await runAsTenant("platform", async () => {
+        await database.execute(
+          sql`update channels set package_id = null where id = ${chat.id}`,
+        );
+        await database
+          .delete(deploymentPackages)
+          .where(eq(deploymentPackages.id, installed.id));
+      });
+    }
+  });
+
+  test("a conversion whose adopt failed keeps its chat out of phase 2, and the next run finishes it", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    const link = linkFor();
+    const log: Record<string, unknown>[] = [];
+    await convertGroups(
+      upgrade({
+        log,
+        link: {
+          ...link,
+          adopt: async () => {
+            throw new Error("adopt down");
+          },
+        },
+      }),
+    );
+    const ledger = await ledgerOf(groupId);
+    expect(ledger).toMatchObject({ outcome: "started" });
+    const chatId = ledger?.channel_id;
+    if (!chatId) throw new Error("no chat written down");
+    const before = await totals();
+
+    expect(await backfillChannels(upgrade())).toMatchObject({
+      backfilled: 0,
+    });
+    expect((await chatsOf(alice))[0]?.waker_group_id).toBeNull();
+    expect((await totals())?.crews).toBe(before?.crews);
+
+    await run();
+
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: chatId,
+      outcome: "converted",
+    });
+    expect((await chatsOf(alice)).map((row) => row.waker_group_id)).toEqual([
+      groupId,
+    ]);
+    expect((await totals())?.crews).toBe(before?.crews);
+  });
+
+  test("a chat in the orphan window is not backfilled", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    await started(groupId, alice, {});
+    await Bun.sleep(5);
+    const orphan = await openChat(alice, ids);
+
+    expect(await backfillChannels(upgrade())).toMatchObject({
+      backfilled: 0,
+    });
+    expect((await chatsOf(alice)).map((row) => row.waker_group_id)).toEqual([
+      null,
+    ]);
+    expect(
+      await runAsTenant("platform", () =>
+        createConversionClaims({
+          database,
+          link: linkFor(),
+          groupStore,
+        }).claimedBy(orphan.id),
+      ),
+    ).toBe(groupId);
+  });
+
+  test("for-channel on a chat claimed by an unfinished conversion finishes it with the original crew", async () => {
+    const alice = await person("alice");
+    const [first, second] = await twoOutOfIdOrder(alice);
+    if (!first || !second) throw new Error("bots not written");
+    const groupId = await oldCrew(alice, "周报", [first, second]);
+    await started(groupId, alice, {});
+    await Bun.sleep(5);
+    const orphan = await unseededChat(alice, [first, second]);
+    const before = await totals();
+
+    const answer = await crewApi()(alice, `/for-channel/${orphan.id}`);
+
+    expect(answer.status).toBe(200);
+    expect((answer.json.group as { id: string }).id).toBe(groupId);
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: orphan.id,
+      outcome: "converted",
+    });
+    expect((await totals())?.crews).toBe(before?.crews);
+    expect(await orderOf(orphan.id)).toEqual([first, second]);
+    expect((await chatsOf(alice))[0]?.waker_group_id).toBe(groupId);
+  });
+
+  test("phase 2 skips a shared chat with no creator", async () => {
+    const alice = await person("alice");
+    const [ada, grace] = await bots(alice, 2);
+    if (!ada || !grace) throw new Error("bots not written");
+    const ownerless = `${prefix}-ownerless-${randomUUID()}`;
+    createdChannels.push(ownerless);
+    await runAsTenant("platform", async () => {
+      await database.execute(
+        sql`insert into channels (id, tenant_id, name, description, created_by)
+            values (${ownerless}, 'team', 'Ada、Grace', 'legacy', null)`,
+      );
+      await database.insert(channelAgents).values([
+        { channelId: ownerless, agentId: ada, tenantId: "team" },
+        { channelId: ownerless, agentId: grace, tenantId: "team" },
+      ]);
+    });
+    const before = await totals();
+
+    expect(await backfillChannels(upgrade())).toMatchObject({
+      backfilled: 0,
+      ownerless: 1,
+    });
+    expect((await totals())?.crews).toBe(before?.crews);
+  });
+
+  test("phase 3 rewrites a drifted mirror", async () => {
+    const alice = await person("alice");
+    const made = await linkedGroup(alice, []);
+    // A Bot taken out past the service: the mirror still lists it.
+    await dropBot(made.channelId, made.bots[1] ?? "");
+    expect(await membersOf(made.groupId)).toEqual(made.bots);
+
+    const { reconciled } = await reconcileLinked(upgrade());
+
+    expect(reconciled).toBeGreaterThanOrEqual(1);
+    expect(await membersOf(made.groupId)).toEqual([made.bots[0], made.bots[2]]);
+  });
+
+  test("phase 3 hands over a group whose creator left past the service, then rewrites its mirror", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const made = await linkedGroup(alice, [bob]);
+    await runAsTenant(alice, () =>
+      groupStore.removeMember(made.channelId, alice),
+    );
+    await dropBot(made.channelId, made.bots[0] ?? "");
+    const log: Record<string, unknown>[] = [];
+
+    const counts = await reconcileLinked(upgrade({ log }));
+
+    expect(counts.handedOver).toBeGreaterThanOrEqual(1);
+    expect(counts.reconciled).toBeGreaterThanOrEqual(1);
+    expect((await crewOwner(made.groupId))?.tenantId).toBe(bob);
+    expect((await chatsOf(bob)).map((row) => row.id)).toEqual([made.channelId]);
+    expect(await membersOf(made.groupId)).toEqual(made.bots.slice(1));
+    expect(log).toContainEqual(
+      expect.objectContaining({
+        type: "waker-group-handed-over",
+        channelId: made.channelId,
+        from: alice,
+        to: bob,
+      }),
+    );
+  });
+
+  test("phase 3 finishes a hand-over a running flow had put off", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const made = await linkedGroup(alice, [bob]);
+    const [run] = await runAsTenant(alice, async () => {
+      const [template] = await database
+        .insert(groupTaskTemplates)
+        .values({ groupId: made.groupId, name: "周报流程", steps: [] })
+        .returning({ id: groupTaskTemplates.id });
+      return database
+        .insert(groupTaskRuns)
+        .values({
+          templateId: template?.id ?? null,
+          groupId: made.groupId,
+          status: "running",
+          steps: [],
+        })
+        .returning({ id: groupTaskRuns.id });
+    });
+    if (!run) throw new Error("run not written");
+    await runAsTenant(alice, () =>
+      groupStore.removeMember(made.channelId, alice),
+    );
+    const log: Record<string, unknown>[] = [];
+
+    await reconcileLinked(upgrade({ log }));
+    expect(log).toContainEqual({
+      type: "waker-group-hand-over-deferred",
+      channelId: made.channelId,
+    });
+    expect((await crewOwner(made.groupId))?.tenantId).toBe(alice);
+
+    await runAsTenant("platform", () =>
+      database
+        .update(groupTaskRuns)
+        .set({ status: "done" })
+        .where(eq(groupTaskRuns.id, run.id)),
+    );
+    await dropBot(made.channelId, made.bots[2] ?? "");
+    const counts = await reconcileLinked(upgrade());
+
+    expect(counts.handedOver).toBeGreaterThanOrEqual(1);
+    expect((await crewOwner(made.groupId))?.tenantId).toBe(bob);
+    expect(await membersOf(made.groupId)).toEqual(made.bots.slice(0, 2));
+  });
+
+  test("phase 1 runs before phase 2, so an orphan is not backfilled first", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    await started(groupId, alice, {});
+    await Bun.sleep(5);
+    const orphan = await openChat(alice, ids);
+    const before = await totals();
+
+    await run();
+
+    expect(
+      (await chatsOf(alice)).map((row) => [row.id, row.waker_group_id]),
+    ).toEqual([[orphan.id, groupId]]);
+    expect((await totals())?.crews).toBe(before?.crews);
+  });
+
+  test("a personal chat beside an unfinished conversion is not its orphan, so phase 2 gives it a crew", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    await started(groupId, alice, {});
+    await Bun.sleep(5);
+    const personal = await runAsTenant(alice, () =>
+      channelStore.create({ id: alice, role: "user" }, ids),
+    );
+    createdChannels.push(personal.id);
+    expect(
+      await runAsTenant("platform", () =>
+        createConversionClaims({
+          database,
+          link: linkFor(),
+          groupStore,
+        }).claimedBy(personal.id),
+      ),
+    ).toBeNull();
+
+    await run();
+
+    const chats = await chatsOf(alice);
+    const own = chats.find((row) => row.id === personal.id)?.waker_group_id;
+    expect(own).toBeTruthy();
+    expect(own).not.toBe(groupId);
+    expect(await ledgerOf(own ?? "")).toMatchObject({ outcome: "backfilled" });
+    expect(await ledgerOf(groupId)).toMatchObject({ outcome: "converted" });
+  });
+
+  test("two runs at once: one works, the other is skipped", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    const old = await openChat(alice, ids);
+
+    const [results] = await printed(() =>
+      Promise.all([
+        runGroupUpgrade({ ...upgrade(), databaseUrl: testDatabaseUrl() }, {}),
+        runGroupUpgrade({ ...upgrade(), databaseUrl: testDatabaseUrl() }, {}),
+      ]),
+    );
+
+    expect(
+      results.filter(
+        (result) => "skipped" in result && result.skipped === "locked",
+      ),
+    ).toHaveLength(1);
+    const chats = await chatsOf(alice);
+    expect(chats).toHaveLength(2);
+    expect(chats.find((row) => row.id === old.id)?.waker_group_id).toBeTruthy();
+    expect(chats.filter((row) => row.waker_group_id === groupId)).toHaveLength(
+      1,
+    );
+    // What one run leaves: a second run on its own finds nothing more to make.
+    const after = await totals();
+    await run();
+    expect(await totals()).toEqual(after);
+  });
+
+  test("XIONGBAO_GROUP_UPGRADE=off does nothing", async () => {
+    const alice = await person("alice");
+    await oldCrew(alice, "周报", await bots(alice, 2));
+    const before = await totals();
+
+    // Not even a connection: the address leads nowhere.
+    const result = await runGroupUpgrade(
+      { ...upgrade(), databaseUrl: "postgres://nobody@127.0.0.1:1/nothing" },
+      { XIONGBAO_GROUP_UPGRADE: "off" },
+    );
+
+    expect(result).toEqual({ skipped: "off" });
+    expect(await totals()).toEqual(before);
+  });
+
+  test("the summary line carries all six counts", async () => {
+    const alice = await person("alice");
+    await oldCrew(alice, "周报", await bots(alice, 2));
+
+    const [result, lines] = await printed(() =>
+      runGroupUpgrade({ ...upgrade(), databaseUrl: testDatabaseUrl() }, {}),
+    );
+
+    const summaries = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((line) => line.type === "waker-group-upgrade");
+    expect(summaries).toEqual([result]);
+    for (const key of [
+      "converted",
+      "pending",
+      "tooMany",
+      "noOwner",
+      "backfilled",
+      "reconciled",
+    ])
+      expect(typeof summaries[0]?.[key]).toBe("number");
+    expect(summaries[0]?.converted).toBeGreaterThanOrEqual(1);
+  });
+
+  test("the boot task runs in the background, logs a failure rather than throwing, and stop waits for it", async () => {
+    const [outcome, lines] = await printed(async () => {
+      const task = startGroupUpgrade({
+        ...upgrade(),
+        databaseUrl: "postgres://nobody@127.0.0.1:1/nothing",
+      });
+      await task.stop();
+      return task.done;
+    });
+
+    expect(outcome).toBeNull();
+    expect(lines.map((line) => JSON.parse(line).type as string)).toContain(
+      "waker-group-upgrade-failed",
+    );
   });
 });
