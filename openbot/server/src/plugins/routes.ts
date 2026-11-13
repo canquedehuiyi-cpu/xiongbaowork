@@ -563,6 +563,10 @@ export function createPluginRoutes(
       })),
       // Scoped: the deployment's skills plus this person's own. An administrator sees them all.
       skills: await store.listSkills(skillActor(context)),
+      // P4-4b: the expert teams this person's copy of the package gave them, for the 资源 page's
+      // team block. Read in this person's scope, so it names what THEY were given, not the brand's
+      // whole declaration.
+      teams: await store.personTeams(),
       /*
        * What an administrator has to register with the vendor, character for character.
        *
