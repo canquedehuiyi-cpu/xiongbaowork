@@ -35,6 +35,7 @@ test("each listed code maps to XIONGBAO_", () => {
       "HARNESS_START_FAILED",
       "HEADLESS_TOOL_ERROR",
       "TOOL_LIMIT_EXCEEDED",
+      "MODEL_AUTH_REQUIRED",
     ].sort(),
   );
   for (const suffix of BROWSER_CODE_SUFFIXES)
@@ -105,12 +106,15 @@ beforeAll(() => {
     port: 0,
     async fetch(request) {
       const { threadId, runId } = (await request.json()) as RunAgentInput;
+      const code = threadId.endsWith("-auth")
+        ? `${OLD}MODEL_AUTH_REQUIRED`
+        : `${OLD}MODEL_REFUSED`;
       const events = [
         { type: "RUN_STARTED", threadId, runId },
         {
           type: "RUN_ERROR",
           message: "The model provider refused the request.",
-          code: `${OLD}MODEL_REFUSED`,
+          code,
         },
       ];
       return new Response(
@@ -160,12 +164,12 @@ function mount() {
   );
 }
 
-function inbound(path: string, runId: string) {
+function inbound(path: string, runId: string, threadId = "thread-wire-codes") {
   return new Request(`http://127.0.0.1/api/copilotkit${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      threadId: "thread-wire-codes",
+      threadId,
       runId,
       state: {},
       messages: [{ id: `ask-${runId}`, role: "user", content: "Hello?" }],
@@ -204,4 +208,16 @@ test("the runtime stream a browser reads carries XIONGBAO_MODEL_REFUSED when the
   const replayed = await replay.text();
   expect(runErrorCodes(replayed)).toEqual([`${NEW}MODEL_REFUSED`]);
   expect(replayed).not.toContain(`${OLD}MODEL_REFUSED`);
+});
+
+test("the runtime stream a browser reads carries XIONGBAO_MODEL_AUTH_REQUIRED when the agent sent the old code", async () => {
+  const runtime = mount();
+
+  const run = await runtime.handler.fetch(
+    inbound("/agent/agent_expense/run", "run-wire-auth", "thread-wire-auth"),
+  );
+  expect(run.status).toBe(200);
+  const live = await run.text();
+  expect(runErrorCodes(live)).toEqual([`${NEW}MODEL_AUTH_REQUIRED`]);
+  expect(live).not.toContain(`${OLD}MODEL_AUTH_REQUIRED`);
 });

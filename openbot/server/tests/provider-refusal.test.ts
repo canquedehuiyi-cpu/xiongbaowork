@@ -580,7 +580,7 @@ test("a harness refused the key is told to check the key, not to sign in, with t
   });
   expect(failure.message).toBe(said.key("OpenAI"));
   // The desktop reads the code to ask for the credential again.
-  expect(failure.code).toBe("OPENBOT_MODEL_AUTH_REQUIRED");
+  expect(failure.code).toBe("XIONGBAO_MODEL_AUTH_REQUIRED");
 }, 20_000);
 
 test("a harness's billing sentence is already in words and is left alone", async () => {
