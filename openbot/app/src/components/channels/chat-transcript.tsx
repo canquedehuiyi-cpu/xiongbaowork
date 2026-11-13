@@ -2686,7 +2686,13 @@ export function ChatTranscript({
                     )}
                 </MessageScrollerContent>
               </MessageScrollerViewport>
-              {introBar && hasIntro ? introBar(introPin.away) : null}
+              {/*
+               * The full intro sits above the earliest page. While earlier pages are not mounted it is
+               * above the visible history by definition, so the compact bar shows.
+               */}
+              {introBar && intro
+                ? introBar(pages.from > 0 ? true : introPin.away)
+                : null}
               <MessageScrollerButton
                 onClick={(event) => {
                   // Ours, not the scroller's: it would scroll before it had been told to follow again.
