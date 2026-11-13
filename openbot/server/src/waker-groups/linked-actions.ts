@@ -552,7 +552,7 @@ export function createWakerGroupActions(deps: {
           group: await listed(groupId),
           chatError: refusal
             ? (error as Error).message
-            : "成员已保存，但群聊没能开始，请稍后点「开始聊天」再试。",
+            : "成员已保存，但群组没能开始，请稍后点「开始聊天」再试。",
         };
       }
     },

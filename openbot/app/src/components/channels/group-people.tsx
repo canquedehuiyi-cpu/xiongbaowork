@@ -87,7 +87,7 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>群聊成员</DialogTitle>
+            <DialogTitle>群组成员</DialogTitle>
             <DialogDescription>
               群里的每个人都能看到完整的对话，群里的每位员工都会回答他们。
             </DialogDescription>
@@ -109,14 +109,14 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                           {self ? "你" : (person.name ?? person.email)}
                         </ItemTitle>
                         <ItemDescription>
-                          {person.creator ? "发起了这个群聊" : person.email}
+                          {person.creator ? "发起了这个群组" : person.email}
                         </ItemDescription>
                       </ItemContent>
                       {removable ? (
                         <ItemActions>
                           <Button
                             aria-label={
-                              self ? "退出这个群聊" : `移除 ${person.email}`
+                              self ? "退出这个群组" : `移除 ${person.email}`
                             }
                             disabled={remove.isPending}
                             onClick={() =>

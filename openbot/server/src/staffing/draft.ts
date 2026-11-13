@@ -324,10 +324,10 @@ function employeeChange(
 }
 
 function group(input: unknown): GroupDraft {
-  const given = record(input, "群聊草稿");
+  const given = record(input, "群组草稿");
   const members = distinct(idList(given.members, "成员"), "成员");
   if (members.length < GROUP_MIN || members.length > GROUP_MAX) {
-    refuse(`群聊需要 ${GROUP_MIN} 到 ${GROUP_MAX} 位不重复的成员。`);
+    refuse(`群组需要 ${GROUP_MIN} 到 ${GROUP_MAX} 位不重复的成员。`);
   }
   return {
     name: text(given.name, "群名", NAME_MAX, { required: true }),
@@ -336,9 +336,9 @@ function group(input: unknown): GroupDraft {
 }
 
 function groupChange(input: unknown): GroupChangeDraft {
-  const given = record(input, "群聊改动");
+  const given = record(input, "群组改动");
   const draft: GroupChangeDraft = {
-    channelId: id(given.channelId, "群聊"),
+    channelId: id(given.channelId, "群组"),
     add: distinct(idList(given.add, "要加的成员"), "要加的成员"),
     remove: distinct(idList(given.remove, "要移的成员"), "要移的成员"),
   };

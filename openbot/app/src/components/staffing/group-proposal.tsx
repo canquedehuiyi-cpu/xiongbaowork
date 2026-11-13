@@ -60,7 +60,7 @@ export function GroupProposal({
       caption="你按下「确认建群」之前，什么都不会建。"
       proposalId={proposal.id}
       status="pending"
-      title={`组建群聊「${draft.name.trim() || "新群聊"}」`}
+      title={`组建群组「${draft.name.trim() || "新群组"}」`}
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
@@ -119,7 +119,7 @@ export function GroupChangeProposal({
       caption="只列出要改的地方。你按下「确认调整」之前，什么都不会改。"
       proposalId={proposal.id}
       status="pending"
-      title={`调整群聊「${before?.name ?? "群聊"}」`}
+      title={`调整群组「${before?.name ?? "群组"}」`}
     >
       <div className="flex flex-col gap-3 text-sm">
         {draft.name !== undefined ? (

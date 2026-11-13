@@ -2756,7 +2756,7 @@ describe("routes", () => {
 
         expect(answer.status).toBe(200);
         expect(answer.json.chatError).toBe(
-          "成员已保存，但群聊没能开始，请稍后点「开始聊天」再试。",
+          "成员已保存，但群组没能开始，请稍后点「开始聊天」再试。",
         );
         const group = answer.json.group as Listed;
         expect(group.channelId).toBeNull();

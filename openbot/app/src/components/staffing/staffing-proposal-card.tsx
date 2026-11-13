@@ -167,8 +167,8 @@ export function StaffingProposalCard({
 const KIND_TITLE: Record<StaffingProposalKind, string> = {
   employee: "招聘员工",
   employee_change: "调整员工",
-  group: "组建群聊",
-  group_change: "调整群聊",
+  group: "组建群组",
+  group_change: "调整群组",
 };
 
 /** 新员工、新群用服务端草稿里的名字；改动类用泛称（改的是哪位、哪个群，卡片里写着）。 */
@@ -176,15 +176,15 @@ function titleOf(proposal: Proposal): string {
   if (proposal.kind === "employee" && proposal.draft.name.trim())
     return `招聘「${proposal.draft.name.trim()}」`;
   if (proposal.kind === "group" && proposal.draft.name.trim())
-    return `组建群聊「${proposal.draft.name.trim()}」`;
+    return `组建群组「${proposal.draft.name.trim()}」`;
   return KIND_TITLE[proposal.kind];
 }
 
 const KIND_WORDS: Record<StaffingProposalKind, string> = {
   employee: "一个新员工",
   employee_change: "一份员工调整",
-  group: "一个新群聊",
-  group_change: "一份群聊调整",
+  group: "一个新群组",
+  group_change: "一份群组调整",
 };
 
 /** 摘要里括号中的那句：还在等谁、做没做、作废还是过期。 */

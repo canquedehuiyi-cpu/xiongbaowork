@@ -92,6 +92,8 @@ export function wakerGroupsQueryOptions() {
       client<WakerGroup[]>("/api/waker-groups", "groups", {
         fallback: "Could not load the workspace's groups.",
       }),
+    // A row menu reads this list each time it opens; fresh for 30s means it does not refetch every time.
+    staleTime: 30_000,
   });
 }
 

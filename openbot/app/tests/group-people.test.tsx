@@ -164,7 +164,7 @@ test("the creator can leave, and is told who takes the group", async () => {
   serving([ME, ALEX]);
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "2 人" }));
-  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群组" }));
   expect(
     await view.findByText(
       "退出后，这个群组和它的头像、组团流程、运行记录、看板任务卡都归「Alex」。",
@@ -182,7 +182,7 @@ test("the last person is told the chat goes and the group stays", async () => {
   serving([ME]);
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "1 人" }));
-  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群组" }));
   expect(
     await view.findByText(
       "你是最后一个人。退出后这个聊天会删除，群组留在你的「群组」里，可以重新开始聊天。",
@@ -202,7 +202,7 @@ test("the server's refusal to leave is shown as it was sent", async () => {
       : base(input, init)) as unknown as typeof fetch;
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "2 人" }));
-  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群组" }));
   fireEvent.click(await view.findByRole("button", { name: "确认退出" }));
   expect((await view.findByRole("alert")).textContent).toBe(
     "有组团流程正在运行，先停下再退群。",
@@ -214,7 +214,7 @@ test("the creator of a chat that is no group's has no way to leave it", async ()
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "2 人" }));
   await view.findByText("Alex");
-  expect(view.queryByRole("button", { name: "退出这个群聊" })).toBeNull();
+  expect(view.queryByRole("button", { name: "退出这个群组" })).toBeNull();
   // Taking someone else out is still theirs to do.
   expect(
     view.getByRole("button", { name: "移除 alex@example.test" }),
@@ -225,7 +225,7 @@ test("after the creator leaves, the person is taken home", async () => {
   serving([ME, ALEX]);
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "2 人" }));
-  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群组" }));
   fireEvent.click(await view.findByRole("button", { name: "确认退出" }));
   await waitFor(() => expect(view.router.state.location.pathname).toBe("/"));
 });

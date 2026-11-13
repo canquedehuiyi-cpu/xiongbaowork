@@ -273,7 +273,7 @@ function summaryTitle(proposal: Proposal): string {
   return {
     employee: "招聘员工",
     employee_change: "调整员工",
-    group: "组建群聊",
-    group_change: "调整群聊",
+    group: "组建群组",
+    group_change: "调整群组",
   }[proposal.kind];
 }

@@ -112,7 +112,7 @@ const LIST_MAX = 50;
  */
 const SPEAKING_RULES = [
   "怎么做：",
-  "- 先用 list_staff 看现有的员工、群聊和角色模板；有合适的模板就基于它起草，并告诉用户用了哪个模板。",
+  "- 先用 list_staff 看现有的员工、群组和角色模板；有合适的模板就基于它起草，并告诉用户用了哪个模板。",
   "- 缺关键信息最多追问用户一轮，其余用合理的默认值。",
   "- 一次只出一份提议。用户口头要求改草稿时，请用户作废旧卡片，再起草一份新的。",
   "- 卡片出现后用一两句话说明为什么这么拟；用户确认之后，用 proposal_status 读结果再接着说。",
@@ -207,7 +207,7 @@ const TOOLS: readonly McpTool[] = Object.freeze([
   {
     name: "list_staff",
     description: [
-      "列出正在和你说话的这个人能用的员工、他发起的群聊（成员与回答顺序）、角色模板、能选的模型、能装的技能、",
+      "列出正在和你说话的这个人能用的员工、他发起的群组（成员与回答顺序）、角色模板、能选的模型、能装的技能、",
       "以及他能直接给员工的应用。起草任何提议之前先调它，提议里的 id 都从这里取。",
       "",
       SPEAKING_RULES,
@@ -295,7 +295,7 @@ const TOOLS: readonly McpTool[] = Object.freeze([
   {
     name: "propose_group",
     description: [
-      "替这个人起草一个新群聊。只是起草：这个人在卡片上确认之后才真正建好。",
+      "替这个人起草一个新群组。只是起草：这个人在卡片上确认之后才真正建好。",
       "",
       "members 是已有员工的 id，按回答顺序排，2 到 20 位，都必须是这个人能用的员工（取自 list_staff）。",
       "需求里有对不上的角色（现有员工里没有合适的），写进 missingRoles，然后问用户要不要先招。",
@@ -323,8 +323,8 @@ const TOOLS: readonly McpTool[] = Object.freeze([
   {
     name: "propose_group_change",
     description: [
-      "替这个人起草对一个已有群聊的调整：加员工、移员工、改回答顺序、改名，任意组合。只是起草：这个人在卡片上",
-      "确认之后才真正改。只有群的发起人能调整；channelId 取自 list_staff 的「你发起的群聊」。",
+      "替这个人起草对一个已有群组的调整：加员工、移员工、改回答顺序、改名，任意组合。只是起草：这个人在卡片上",
+      "确认之后才真正改。只有群的发起人能调整；channelId 取自 list_staff 的「你发起的群组」。",
       "order 给出时必须正好包含调整之后群里的每一位员工；群里至少留 2 位。",
       "",
       SPEAKING_RULES,
@@ -332,7 +332,7 @@ const TOOLS: readonly McpTool[] = Object.freeze([
     inputSchema: {
       type: "object",
       properties: {
-        channelId: { type: "string", description: "群聊的 id。" },
+        channelId: { type: "string", description: "群组的 id。" },
         name: { type: "string", description: "新的群名。" },
         add: { type: "array", items: { type: "string" } },
         remove: { type: "array", items: { type: "string" } },
@@ -415,8 +415,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KIND_WORDS: Record<ProposalKind, string> = {
   employee: "新员工",
   employee_change: "员工改动",
-  group: "新群聊",
-  group_change: "群聊调整",
+  group: "新群组",
+  group_change: "群组调整",
 };
 
 /**
@@ -491,7 +491,7 @@ async function listStaff(run: Run): Promise<string> {
     return `${oneLine(profile.name, NAME_CHARS)}（id: ${profile.id}）头衔：${oneLine(profile.title, NAME_CHARS) || "无"}；职责：${short(profile.roleDescription)}${template}${mine}`;
   });
 
-  lines.push("", "你发起的群聊：");
+  lines.push("", "你发起的群组：");
   listed(
     lines,
     await groupsStartedBy(run),
@@ -917,7 +917,7 @@ async function checkGroup(
   const unusable = await unusableBots(run, draft.members);
   if (unusable.length > 0)
     throw new DraftRefused(
-      `员工 ${unusable.join("、")} 你用不了（找不到，或者是别人的私有员工），群聊没有起草。请换成 list_staff 里列出的员工。`,
+      `员工 ${unusable.join("、")} 你用不了（找不到，或者是别人的私有员工），群组没有起草。请换成 list_staff 里列出的员工。`,
     );
   const notes: string[] = [];
   const missing = missingRolesOf(given.missingRoles);
@@ -952,13 +952,13 @@ async function checkGroupChange(
     channelId,
   );
   if (baseVersion === null)
-    throw new DraftRefused("找不到这个群聊，所以没有起草。");
+    throw new DraftRefused("找不到这个群组，所以没有起草。");
   const bots = await deps.groups.store.bots(channelId);
-  if (bots.length < 2) throw new DraftRefused("这不是群聊，所以没有起草。");
+  if (bots.length < 2) throw new DraftRefused("这不是群组，所以没有起草。");
   // 与执行时 `creatorOnly` 同一条：群里第一个人是发起人。
   if ((await deps.groups.store.people(channelId))[0]?.userId !== run.ownerId)
     throw new DraftRefused(
-      "只有发起这个群聊的人才能调整它，所以没有起草。可以请发起人来调整。",
+      "只有发起这个群组的人才能调整它，所以没有起草。可以请发起人来调整。",
     );
   const [row] = await deps.database
     .select({ title: channels.title, name: channels.name })

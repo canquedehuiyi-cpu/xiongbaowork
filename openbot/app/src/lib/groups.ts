@@ -51,7 +51,7 @@ export function groupQueryOptions(channelId: string) {
     queryFn: async (): Promise<GroupConversation> => {
       const response = await client(
         `/api/groups/${encodeURIComponent(channelId)}`,
-        { fallback: "读不到这个群聊。" },
+        { fallback: "读不到这个群组。" },
       );
       return (await response.json()) as GroupConversation;
     },
@@ -108,7 +108,7 @@ export function createGroupMutationOptions(queryClient: QueryClient) {
       const response = await client("/api/groups", {
         method: "POST",
         body: { agentIds },
-        fallback: "群聊没能开始。",
+        fallback: "群组没能建好。",
       });
       return (
         (await response.json()) as {

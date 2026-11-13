@@ -11,7 +11,7 @@ import { ActionProblem, CardShell, TAP } from "./card-parts";
 
 /**
  * 执行之后的卡片：逐项写做成了什么——✓、已转申请、需要先连接（带连接按钮）、失败（可重试）——再给
- * 「打开员工」「打开群聊」。
+ * 「打开员工」「打开群组」。
  *
  * 应用的状态只在这里出现：起草时算的状态不随提议保存，执行时才按本人此刻的权限与连接决定，所以结果
  * 才是准的。重试只把失败的几步按草稿里的内容再做一遍，已经做成的不动，也不重新比对起草之后的改动。
@@ -35,7 +35,7 @@ const STEP_WORDS: Record<string, string> = {
   reorder: "调整顺序",
 };
 
-/** 结果里点名的对象：技能、应用、定时任务、群名写出来；员工与群聊的 id 不给人看。 */
+/** 结果里点名的对象：技能、应用、定时任务、群名写出来；员工与群组的 id 不给人看。 */
 const NAMED_STEPS = new Set([
   "skill",
   "app",
@@ -135,7 +135,7 @@ export function ProposalResult({
               params={{ channelId: open.id }}
               to="/group/$channelId"
             >
-              打开群聊
+              打开群组
             </Link>
           )}
         </div>

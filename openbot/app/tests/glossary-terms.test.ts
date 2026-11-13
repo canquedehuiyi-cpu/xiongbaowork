@@ -62,3 +62,22 @@ test("the app and the server say 员工, never 唤醒者, 数字员工 or Waker 
     ).filter((where) => !where.includes(MODEL_PROMPT)),
   ).toEqual([]);
 });
+
+/*
+ * CONTEXT.md: a 群组 with a chat is what used to be called a 群聊, so the word is retired
+ * everywhere a person reads it. IM chats (the 触达 page and its components) are a different
+ * thing and keep it; comments are skipped.
+ */
+const IM_CHATS = [
+  "app/src/routes/_authed/_app/reachability.tsx",
+  "app/src/components/reachability/",
+];
+
+test("the app and the server say 群组, never 群聊 (IM chats aside)", () => {
+  // 跳过注释行：去掉首空白后以 //、/*、* 开头的行
+  expect(
+    linesMatching(
+      (line) => line.includes("群聊") && !/^\s*(\/\/|\/\*|\*)/.test(line),
+    ).filter((where) => !IM_CHATS.some((path) => where.includes(path))),
+  ).toEqual([]);
+});

@@ -1,4 +1,4 @@
-# 规格：在对话里招员工、改员工、组群聊
+# 规格：在对话里招员工、改员工、组群组
 
 - 日期：2026-11-11
 - 状态：用户已于 2026-11-11 同意
@@ -13,7 +13,7 @@
 - 实施中的修订（2026-11-11，已写入下文对应各节，用户文档见 `openbot/docs/staffing.md`）：
   - 起草时剔除的项（无效的模型、本人给不了的技能和应用、不合规的定时任务）由小管家在卡片上方那句话里说明，卡片本身不列。
   - 应用的状态标签（已转申请 / 需要先连接 / ✓ / 失败）只出现在确认后的结果里，草稿卡片上没有。
-  - 只有提出需求的人看得到草稿、能确认；提议存在本人的工作区里，群聊里的其他人读不到它，卡片只写「读不到这份提议了」，没有按钮（不为他们新开跨工作区的读取）。重试只按草稿内容重做失败的步骤；重试也做不成的部分完成提议可以作废（做成的不回滚）。
+  - 只有提出需求的人看得到草稿、能确认；提议存在本人的工作区里，群组里的其他人读不到它，卡片只写「读不到这份提议了」，没有按钮（不为他们新开跨工作区的读取）。重试只按草稿内容重做失败的步骤；重试也做不成的部分完成提议可以作废（做成的不回滚）。
   - 单独的工作指令（`instructions`）只有个人起步员工有，别的员工按职责描述工作：新员工草稿不带它，改普通员工时起草即剔除，卡片只在个人起步员工身上显示。
   - 卡片写全确认后会做的事：公开给全团队醒目标出，工作手册、定时任务的指令、应用的动作整段列出。
   - 「也给它招聘与组群能力」与小管家的默认授予都走「给员工应用」的同一套规则：应用不在、管理员设为只有管理员能给、对本人关掉了自己给员工时不给（勾选项照实说原因，不转申请；默认授予跳过，放开后再补）。团队版只在第一次启动时添加这个应用，管理员删掉后不再加回；个人版一直在。
@@ -22,7 +22,7 @@
 
 ## 1. 背景
 
-上游 OpenBot 的服务端工具里没有创建员工或组群聊的工具。熊宝前端有一个简化版：持有 `bot-creator` 技能的员工在网页对话里可以调用前端工具 `save_bot`（`app/src/lib/copilot/bot-tools.tsx`），弹出 `ProposedBotCard`（`app/src/components/agents/proposed-bot.tsx`），用户保存后以本人身份建员工并装技能。它只有名字、头衔、角色描述、技能四项，只在网页对话开着时有效（群聊、IM 渠道、后台运行时用不了），草稿不保存、不过期、无审计。新建员工的其余入口是「新建员工」向导（`POST /api/agents`）和角色模板，建群是「新建群聊」页和新对话页多选。
+上游 OpenBot 的服务端工具里没有创建员工或组群组的工具。熊宝前端有一个简化版：持有 `bot-creator` 技能的员工在网页对话里可以调用前端工具 `save_bot`（`app/src/lib/copilot/bot-tools.tsx`），弹出 `ProposedBotCard`（`app/src/components/agents/proposed-bot.tsx`），用户保存后以本人身份建员工并装技能。它只有名字、头衔、角色描述、技能四项，只在网页对话开着时有效（群组、IM 渠道、后台运行时用不了），草稿不保存、不过期、无审计。新建员工的其余入口是「新建员工」向导（`POST /api/agents`）和角色模板，建群是「新建群组」页和新对话页多选。
 
 现有可复用的基础：
 
@@ -32,7 +32,7 @@
 | 员工的内置工具服务、按员工授予 | `server/src/plugins/builtin-routines.ts`（定时任务、触发器工具），授予走插件的员工级授予 |
 | 授予应用动作（主人可授予 / 只有管理员 / 共享使用） | X3、X4 的授予接口与 `decisionRefusal` |
 | 应用访问申请 | X2 的 `app_access_requests` |
-| 建群聊并按挑选顺序定员工顺序 | `POST /api/groups`（`group.ts` 的 `create` + `GroupStore.seedOrder`）；改群名用 `ChannelStore.rename`。**缺口**：已有群里加员工、移员工、改员工顺序没有服务方法，本期补上（3.3） |
+| 建群组并按挑选顺序定员工顺序 | `POST /api/groups`（`group.ts` 的 `create` + `GroupStore.seedOrder`）；改群名用 `ChannelStore.rename`。**缺口**：已有群里加员工、移员工、改员工顺序没有服务方法，本期补上（3.3） |
 | 员工模型 | `store.update` 写 `modelRef` / `platformModelRef`；**`store.create` 不写模型**，执行器建好后再更新一次 |
 | 对话里的卡片 | `shared/connect-prompt.ts` 的标记 + 前端卡片解析 |
 | 管理员能力每次重读 | #455、#456 的 `decisionRefusal` 与门 |
@@ -40,14 +40,14 @@
 ## 2. 目标与非目标
 
 **目标**
-1. 用户在对话里说需求，小管家（或被打开该能力的员工）拟出草稿，用户在对话里看到可编辑的卡片，点「确认」后生效。覆盖六件事：新员工、基于角色模板的新员工、改已有员工、新群聊、调整已有群聊、查提议状态。
+1. 用户在对话里说需求，小管家（或被打开该能力的员工）拟出草稿，用户在对话里看到可编辑的卡片，点「确认」后生效。覆盖六件事：新员工、基于角色模板的新员工、改已有员工、新群组、调整已有群组、查提议状态。
 2. 执行结果与手动操作完全一致：同样的权限、套餐名额、审批底线、审计。
 3. 员工自己无法执行任何创建或修改。
 
 **非目标**
 - 员工自主（不经确认）建员工或建群。
 - 组群时顺带新招员工（用户选了「只用现有员工」）。
-- 删除员工、解散群聊（风险高，本期不做；仍走现有页面）。
+- 删除员工、解散群组（风险高，本期不做；仍走现有页面）。
 - 跨租户、给别人建员工。
 
 ## 3. 总体结构
@@ -70,11 +70,11 @@
 
 | 工具 | 读 / 写 | 做什么 |
 |---|---|---|
-| `list_staff` | 读 | 列出当前用户能用的员工（名字、简介、角色模板）、他发起的群聊（成员与顺序）、可用的角色模板、可用的模型与技能名单、能授予的应用 |
+| `list_staff` | 读 | 列出当前用户能用的员工（名字、简介、角色模板）、他发起的群组（成员与顺序）、可用的角色模板、可用的模型与技能名单、能授予的应用 |
 | `propose_employee` | 草稿 | 提议新员工；可带 `roleTemplate` |
 | `propose_employee_change` | 草稿 | 提议修改一位已有员工 |
-| `propose_group` | 草稿 | 提议新群聊（成员只能是已有员工，带回答顺序） |
-| `propose_group_change` | 草稿 | 提议调整已有群聊（加人、移人、改顺序、改名） |
+| `propose_group` | 草稿 | 提议新群组（成员只能是已有员工，带回答顺序） |
+| `propose_group_change` | 草稿 | 提议调整已有群组（加人、移人、改顺序、改名） |
 | `proposal_status` | 读 | 读一份提议的状态与执行结果 |
 
 `propose_*` 只写提议表，归入「读 / 低风险」一类：不触发「改动之前先问」，也不能绕过它，因为它们不改动任何业务数据。
@@ -96,7 +96,7 @@
 |---|---|
 | `id` | uuid |
 | `tenant_id` | 租户；ENABLE + FORCE RLS，四条 `tenant_isolation` 策略，GRANT `openbot_app` |
-| `owner_id` | 提议的主人：当前说话的人（群聊或 Team Bot 队友里，是发消息的那个人） |
+| `owner_id` | 提议的主人：当前说话的人（群组或 Team Bot 队友里，是发消息的那个人） |
 | `proposed_by_agent_id` | 起草的员工 |
 | `channel_id` | 起草所在的对话 |
 | `kind` | `employee` / `employee_change` / `group` / `group_change` |
@@ -125,7 +125,7 @@
    - `employee`：`agents` 的创建（带 `quota.assertCapacityWithin` 与角色模板）→ 逐个应用授予（无权授予的转成访问申请，未连接的记为「需要先连接」）→ 建定时任务。员工默认 `private`，默认不授予「招聘与组群」，除非用户在卡片上勾选。
    - `employee_change`：员工更新接口；授予与定时任务的增删分别走各自接口。
    - `group`：`POST /api/groups` 的服务（`create` + `seedOrder`），按草稿顺序定成员。
-   - `group_change`：群名用 `ChannelStore.rename`；加员工、移员工、改员工顺序用本期新增的 `GroupConversations.addBots(owner, channelId, agentIds)`、`removeBots(owner, channelId, agentIds)`、`reorder(owner, channelId, agentIds)`（写 `channel_agents` 与 `group_bot_threads`，加的员工同样要求 `canRunAgent`，群至少保留 2 位员工）；只限群的发起人（`people[0]`）。这三个方法同时开放为 `POST/DELETE /api/groups/:id/bots` 与 `PUT /api/groups/:id/order`，供群聊页以后使用。
+   - `group_change`：群名用 `ChannelStore.rename`；加员工、移员工、改员工顺序用本期新增的 `GroupConversations.addBots(owner, channelId, agentIds)`、`removeBots(owner, channelId, agentIds)`、`reorder(owner, channelId, agentIds)`（写 `channel_agents` 与 `group_bot_threads`，加的员工同样要求 `canRunAgent`，群至少保留 2 位员工）；只限群的发起人（`people[0]`）。这三个方法同时开放为 `POST/DELETE /api/groups/:id/bots` 与 `PUT /api/groups/:id/order`，供群组页以后使用。
    - 新员工的模型：`store.create` 不写模型，建好后用 `store.update` 写 `modelRef` 或 `platformModelRef`。
 4. 每一步各自成败，写入 `result`；全部成功为 `applied`，部分失败为 `partially_applied`。已建好的员工不回滚。
 5. 每一步沿用现有审计事件，并带 `proposalId`。
@@ -160,11 +160,11 @@
 
 `agentId` + 只含要改的字段（同 4.1 的字段与规则），外加 `appsRemove`、`routinesRemove`。只能改当前用户有权修改的员工。
 
-### 4.3 新群聊（`propose_group`）
+### 4.3 新群组（`propose_group`）
 
 `name`、`members`（员工 id 的有序列表，至少 2 位，都是当前用户能用的员工）。需求里有对不上的角色时，工具结果另附 `missingRoles`，小管家据此问用户要不要先招。
 
-### 4.4 改群聊（`propose_group_change`）
+### 4.4 改群组（`propose_group_change`）
 
 `channelId` + `add`、`remove`、`order`、`name` 任意组合；只限群的发起人。
 
@@ -193,7 +193,7 @@
   - 底部：名额提示（「这是你的第 3 / 3 个员工」）、「确认创建」「作废」。
 - **改员工卡片**：只列要改的字段，每项「改前 → 改后」，旧值带删除线。
 - **建群 / 改群卡片**：群名；成员头像按回答顺序排成一行，用每位成员的「上移」「下移」按钮调整顺序（键盘可用，未做拖动）；缺的角色列在下面，带「先去招」按钮（等于对小管家说「先帮我招一个××」）。
-- **执行后**：卡片变成逐项结果（✓ / 已转申请 / 需要先连接 / 失败可重试；重试只按草稿内容重做失败的步骤），附「打开员工」「打开群聊」。
+- **执行后**：卡片变成逐项结果（✓ / 已转申请 / 需要先连接 / 失败可重试；重试只按草稿内容重做失败的步骤），附「打开员工」「打开群组」。
 - **非主人**：一行只读摘要，例如「张三的小管家拟了一个新员工：小红书运营（待张三确认）」。
 - **作废 / 过期**：卡片变灰，不可操作。
 - 风格照 `docs/design/ios-studio`（黑白红），中文，手机宽度可用。
@@ -238,7 +238,7 @@
 
 | PR | 内容 |
 |---|---|
-| S1 | 提议表与迁移、提议存储、群聊加 / 移员工与改顺序的服务方法、执行接口（apply / discard / retry / PATCH / GET）、审计 |
+| S1 | 提议表与迁移、提议存储、群组加 / 移员工与改顺序的服务方法、执行接口（apply / discard / retry / PATCH / GET）、审计 |
 | S2 | 「招聘与组群」内置工具服务、分身默认授予与升级补授、员工设置里可打开、`bot-creator` 技能说明改用新工具 |
 | S3 | 前端四种卡片与卡片标记，复用 `ProposedBotCard`；下线前端 `save_bot` |
 | S4 | 端到端流程、用户文档、CHANGELOG |

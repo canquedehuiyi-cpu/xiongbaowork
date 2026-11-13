@@ -242,7 +242,7 @@ test("a non-member, an unusable coworker and a group conversation are refused wi
   });
   await expect(
     submit(group.service, { id: "m3", agentId: "reviewer", text: "x" }),
-  ).rejects.toThrow("群聊");
+  ).rejects.toThrow("群组");
 
   expect(items.size).toBe(0);
   expect(cards.size).toBe(0);

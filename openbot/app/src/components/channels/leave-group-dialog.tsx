@@ -47,7 +47,7 @@ export function LeaveGroupDialog({
         <DialogHeader>
           <DialogTitle>退出「{name}」？</DialogTitle>
           <DialogDescription>
-            退出后你不会再看到这个群聊，群里的其他人不受影响。
+            退出后你不会再看到这个群组，群里的其他人不受影响。
           </DialogDescription>
         </DialogHeader>
         {remove.error ? (

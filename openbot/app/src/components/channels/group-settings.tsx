@@ -63,7 +63,7 @@ export function GroupSettingsButton({
           <SheetHeader>
             <SheetTitle>群组设置</SheetTitle>
             <SheetDescription>
-              这个群聊背后的群组：名称、员工与顺序、头像和组团流程。
+              这个群组的设置：名称、员工与顺序、头像和组团流程。
             </SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-4">
