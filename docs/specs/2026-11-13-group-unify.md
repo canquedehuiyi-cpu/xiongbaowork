@@ -428,7 +428,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 | `group_id uuid` | 主键，外键指向 `waker_groups`，级联删除 |
 | `tenant_id text` | 所有者，0072 四条策略；移交时由 0210 改写的写入函数跟着改为接手人 |
 | `original_owner text` | 写台账时的所有者，之后不改，移交也不搬。回滚手册用它认出「已经被移交过」的转换群组（3.1.1 第 5 条）。「不改」由数据库保证：0211 收回整表 UPDATE，按列重新授给 `openbot_app`，唯独不含这一列 |
-| `channel_id text` | 可空；转出来的或补挂的频道 |
+| `channel_id text` | 可空；转出来的或补挂的频道。`converted` 行只记这次转换自己建的频道（可以为空），从不指向用户自己开的聊天：转换途中用户先给群组开了聊天时，群组挂着用户的聊天，台账仍记转换建的那个或空（控制方裁定 2026-11-13），回滚手册第 1 步才不会把用户的聊天当成转换建的软删 |
 | `outcome text` | `started`、`converted`、`backfilled`、`pending_members`、`too_many`、`no_owner`（CHECK 约束） |
 | `dropped_agent_ids text[]` | 转换时被筛掉的员工，默认空数组 |
 | `started_at`、`updated_at` | 时间戳 |

@@ -1346,8 +1346,9 @@ describe("phase 1: what a crash, a race or a rule leaves", () => {
     );
 
     expect(counts.converted).toBeGreaterThanOrEqual(1);
+    // The ledger names the chat the upgrade made, never the person's own (the runbook hides by it).
     expect(await ledgerOf(groupId)).toMatchObject({
-      channel_id: theirs,
+      channel_id: ours,
       outcome: "converted",
     });
     const chats = await chatsOf(alice);
@@ -1398,7 +1399,7 @@ describe("phase 1: what a crash, a race or a rule leaves", () => {
     );
 
     expect(await ledgerOf(groupId)).toMatchObject({
-      channel_id: theirs,
+      channel_id: ours,
       outcome: "converted",
     });
     expect(log.filter((line) => line.groupId === groupId)).toEqual([
@@ -1429,7 +1430,7 @@ describe("phase 1: what a crash, a race or a rule leaves", () => {
     await convertGroups(upgrade({ log }));
 
     expect(await ledgerOf(groupId)).toMatchObject({
-      channel_id: theirs.id,
+      channel_id: ours.id,
       outcome: "converted",
     });
     expect((await chatsOf(alice)).map((row) => [row.id, row.deleted])).toEqual([
@@ -1444,6 +1445,33 @@ describe("phase 1: what a crash, a race or a rule leaves", () => {
         linkedChannelId: theirs.id,
       },
     ]);
+  });
+
+  test("a started row with no chat of its own, settled on a chat the person opened, names no chat", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const groupId = await oldCrew(alice, "周报", ids);
+    // Crashed before ②; then the person opened the crew's chat themselves.
+    await started(groupId, alice, {});
+    const theirs = await openChat(alice, ids);
+    await upgrade().link.adopt(groupId, theirs.id);
+    const log: Record<string, unknown>[] = [];
+
+    await convertGroups(upgrade({ log }));
+
+    // The conversion made no chat, so the ledger names none: theirs is not the upgrade's to hide.
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: null,
+      outcome: "converted",
+    });
+    expect(
+      (await chatsOf(alice)).map((row) => [
+        row.id,
+        row.waker_group_id,
+        row.deleted,
+      ]),
+    ).toEqual([[theirs.id, groupId, false]]);
+    expect(log.filter((line) => line.groupId === groupId)).toEqual([]);
   });
 
   test("the upgrade hides a chat only as its owner could: one they cannot reach is left alone", async () => {
@@ -1461,7 +1489,7 @@ describe("phase 1: what a crash, a race or a rule leaves", () => {
     await convertGroups(upgrade({ log }));
 
     expect(await ledgerOf(groupId)).toMatchObject({
-      channel_id: theirs.id,
+      channel_id: bobs.id,
       outcome: "converted",
     });
     expect((await chatsOf(bob)).map((row) => [row.id, row.deleted])).toEqual([

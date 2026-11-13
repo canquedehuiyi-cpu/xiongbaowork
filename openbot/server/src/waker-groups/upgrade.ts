@@ -36,8 +36,10 @@ import {
  * Task 14 补的几条（控制方裁定）：
  * - `started` 行记下的聊天后来被删了：不再续做，也不记日志，群组留着、聊天不重开（与规则 2 从严同理）。
  * - ④ 撞上唯一挂接索引（转换途中本人从群组页给同一群组开了聊天），或下次开机发现群组已挂着别的未删聊天：
- *   以已挂上的那个为准，台账 `converted`、`channel_id` 写它；这次转换建的聊天没有消息就软删，有消息就留着并
+ *   以已挂上的那个为准，台账 `converted`；这次转换建的聊天没有消息就软删，有消息就留着并
  *   记一行 {"type":"waker-group-upgrade-chat-kept","groupId","channelId","linkedChannelId"}。
+ * - 台账的 `channel_id` 只记这次转换自己建的聊天（续做时是台账记下的或收养的孤儿），可以为空，从不指向本人
+ *   自己开的聊天：回滚手册第 1 步按它软删，本人的聊天不能被当成转换建的删掉（控制方裁定 2026-11-13）。
  * - 所有者一个角色都没有（`hasRole` 为假，生产里 `actorFor` 会抛错）：记 `no_owner`，不问 `canUse`。
  * - 收养孤儿时补一次上游的 `seedOrder`：孤儿可能是在上游「建频道」与「种顺序」两步之间崩溃留下的。
  *
@@ -363,8 +365,11 @@ export async function convertGroups(
     );
   }
 
-  /** ⑤, or a settled race: the crew is converted, and `channelId` is its chat. */
-  async function converted(groupId: string, channelId: string) {
+  /**
+   * ⑤, or a settled race: the crew is converted. `channelId` is the chat this conversion made, null
+   * when it made none; never one the person opened themselves (the rollback runbook hides it).
+   */
+  async function converted(groupId: string, channelId: string | null) {
     await asPlatform(() =>
       database.execute(
         sql`update waker_group_upgrades
@@ -428,7 +433,8 @@ export async function convertGroups(
           linkedChannelId: theirs,
         });
     }
-    await converted(groupId, theirs);
+    // The ledger names the chat this conversion made, not theirs: the runbook may hide what it names.
+    await converted(groupId, ours);
   }
 
   /** ④ and ⑤: link the crew to its chat (the title and the mirror follow), then it is converted. */
