@@ -1,0 +1,122 @@
+[
+  {
+    "word": "$openbotCommandExit",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": "$openbotCommandSucceeded",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": "$openbotErr",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": "$openbotErr.AutoFlush",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": "$openbotOut",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": "$openbotOut.AutoFlush",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": ".openbot-shell-",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": "<build-path>",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "构建机绝对路径（playwright-core 的 __dirname/__filename 被 Bun 写进二进制，路径含 openbot）；Task 13 在无品牌的临时目录里构建后删除"
+  },
+  {
+    "word": "OPENBOT_",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "环境变量名前缀，随报错文字出现；Task 13"
+  },
+  {
+    "word": "OPENBOT_DESKTOP_ENGINE",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "设备端环境变量名，随报错文字出现；Task 13"
+  },
+  {
+    "word": "OPENBOT_DESKTOP_ENGINE.",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "设备端环境变量名，随报错文字出现；Task 13"
+  },
+  {
+    "word": "OPENBOT_DESKTOP_HELPER",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "设备端环境变量名，随报错文字出现；Task 13"
+  },
+  {
+    "word": "OPENBOT_DESKTOP_HELPER.",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "设备端环境变量名，随报错文字出现；Task 13"
+  },
+  {
+    "word": "OPENBOT_RUNNER_DATA_DIR",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "设备端环境变量名，随报错文字出现；Task 13"
+  },
+  {
+    "word": "OPENBOT_RUNNER_DATA_DIR.",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "设备端环境变量名，随报错文字出现；Task 13"
+  },
+  {
+    "word": "__openbot_prompt",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "Bot 终端变量名与临时文件前缀；Task 12（附录 A 第 8 行待批）"
+  },
+  {
+    "word": "data-openbot-secret",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "遮罩属性，注入第三方网页；runner 与 agent-computer 两头一起改（Task 12、19，附录 A 第 9 行待批）"
+  },
+  {
+    "word": "openbot-snapshots.sqlite",
+    "category": "persisted-data",
+    "plan": "rewrite",
+    "note": "快照计数文件；Task 19（附录 A 第 10 行待批）"
+  },
+  {
+    "word": "openbotUrl:",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "shared/openbot-browser.ts",
+    "category": "operator-visible",
+    "plan": "rewrite",
+    "note": "打包进二进制的模块路径注释；Task 13 加 --minify"
+  }
+]

@@ -183,6 +183,37 @@ jobs:
           name: app-logs
           path: ${{ runner.temp }}/*.log
 
+  # Scan what the customer is given (spec 5.1): the built web app, the recorder extension and the
+  # runner sidecar are checked against the word lists in openbot/app/tests/brand-artifacts, and the
+  # rewrite gauge goes into the job summary.
+  brand-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Build the web app
+        run: bun run generate:app-config && bun run --cwd app build
+      - name: Build the extension
+        run: bun run --cwd extension build
+      - name: Build the runner sidecar
+        run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Scan the web app
+        run: bun scripts/brand/scan-artifact.ts --kind web --input app/dist --allowlist app/tests/brand-artifacts/web.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Scan the extension
+        run: bun scripts/brand/scan-artifact.ts --kind extension --input extension/dist --allowlist app/tests/brand-artifacts/extension.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Scan the runner
+        run: bun scripts/brand/scan-artifact.ts --kind runner --input desktop-device/src-tauri/binaries/xiongbao-runner-x86_64-unknown-linux-gnu --allowlist app/tests/brand-artifacts/runner.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Rewrite gauge
+        if: always()
+        run: bun scripts/brand/metrics.ts --base origin/main >> "$GITHUB_STEP_SUMMARY"
+
   # Gate G4: the WakerFlow basic lifecycle in a real browser (the runner's preinstalled Chrome, driven
   # by playwright-core) against the real server on its own PostgreSQL, serving the built app the way
   # the image does. The model is aimock: no secret, no provider call, nothing charged. Generate ->
