@@ -1310,6 +1310,13 @@
       "when": 1794537806196,
       "tag": "0206_waker_group_channel_link",
       "breakpoints": true
+    },
+    {
+      "idx": 207,
+      "version": "7",
+      "when": 1794545581182,
+      "tag": "0207_team_channel_hand_over",
+      "breakpoints": true
     }
   ]
 }

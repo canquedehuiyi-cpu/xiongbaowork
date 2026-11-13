@@ -14,6 +14,7 @@ import {
   wakerFlows,
   wakerGroups,
 } from "../db/schema";
+import { TEAM_TENANT } from "../db/schema/tenant";
 import {
   channelCreatedBy,
   channelOwner,
@@ -65,9 +66,12 @@ export class WakerGroupForbiddenError extends Error {
 }
 
 /**
- * The crew is linked to a live chat its owner can no longer read: the creator of a shared group left
- * it. Who owns the crew then is not decided yet (spec 3.1), so nothing is moved or reopened and the
- * caller is told, with `code`, instead of being handed a second chat or a silent nothing.
+ * The crew is linked to a live chat its owner can no longer read, and nobody has taken it over yet.
+ * A creator who leaves through the service hands the group over at once (spec 3.1.1), so this is
+ * what is left: a creator removed past the service (their membership deleted straight, an account
+ * deleted by an operator) before a heal; a hand-over a running flow put off; or only deactivated
+ * members left to take it. Nothing is moved or reopened, and the caller is told, with `code`,
+ * instead of being handed a second chat or a silent nothing.
  */
 export class WakerGroupOwnerGoneError extends Error {
   readonly code = "waker-group-owner-gone";
@@ -139,7 +143,11 @@ export type WakerGroupActions = {
     owner: string,
     groupId: string,
   ): Promise<{ group: ListedWakerGroup; channel: Chat } | null>;
-  /** null when the caller cannot read the channel; WakerGroupForbiddenError when they did not start it. */
+  /**
+   * null when the caller cannot read the channel; WakerGroupForbiddenError when they do not own it.
+   * A shared group whose creator has left or been deactivated is first handed over (3.1.1 第 4.4 条):
+   * the earliest member who opens it takes it over.
+   */
   forChannel(
     owner: string,
     channelId: string,
@@ -640,9 +648,12 @@ export function createWakerGroupActions(deps: {
         })
       )
         return null;
+      let creator = row.created_by;
+      // Someone other than its creator opens a shared group: a creator who has left is succeeded now.
+      if (row.tenant_id === TEAM_TENANT && creator !== owner)
+        creator = (await link.handOver(channelId)).owner;
       if (
-        channelOwner({ tenantId: row.tenant_id, createdBy: row.created_by }) !==
-        owner
+        channelOwner({ tenantId: row.tenant_id, createdBy: creator }) !== owner
       )
         throw new WakerGroupForbiddenError();
       const claimed = (await deps.conversions?.claimedBy(channelId)) ?? null;

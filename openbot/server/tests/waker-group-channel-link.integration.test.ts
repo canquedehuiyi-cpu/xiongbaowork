@@ -1882,9 +1882,8 @@ describe("routes", () => {
 
     const answer = await api(alice, "POST", `/${made.group.id}/chat`);
 
-    // TODO(Task 5A): once leaving hands the crew to the chat's earliest member, Alice no longer owns
-    // it and this answers 404 from the ownership check, before any chat is made. Until then the
-    // chat this request opened is made and hidden again before the 409.
+    // 这里锁的是绕过服务的退群（直接删成员行），按设计稿 3.1.1 方案 A 不当场移交，仍回 409：
+    // 这次请求开的聊天建好后又被隐藏，再回 409。
     expect(answer.status).toBe(409);
     expect(answer.json.code).toBe("waker-group-owner-gone");
     expect((await channelRow(made.channel.id)).waker_group_id).toBe(
@@ -2528,7 +2527,7 @@ describe("routes", () => {
         agentIds: [a, b, c],
       });
 
-      // TODO(Task 5A): once leaving hands the crew over, this is a 404 from the ownership check.
+      // 这里锁的是绕过服务的退群（直接删成员行），按设计稿 3.1.1 方案 A 不当场移交，仍回 409。
       expect(answer.status).toBe(409);
       expect(answer.json.code).toBe("waker-group-owner-gone");
       // The roster written before the chat was refused is put back: the mirror still follows the chat.
