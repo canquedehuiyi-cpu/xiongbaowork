@@ -547,6 +547,22 @@ test("a linked chat the person made offers 解散群组… in the list", async (
   ).toBeNull();
 });
 
+test("a package's multi-employee channel has no group, so its menu never offers 解散群组…", async () => {
+  const view = renderSidebar(
+    "/",
+    [channel("pkg", ["a", "b"], { summary: "工程团队", canRename: true })],
+    { groups: [] },
+  );
+  const list = await view.findByRole("navigation", { name: "会话" });
+  fireEvent.contextMenu(within(list).getByRole("link", { name: /工程团队/ }));
+  expect(
+    await within(document.body).findByRole("menuitem", { name: /删除会话…/ }),
+  ).toBeTruthy();
+  expect(
+    within(document.body).queryByRole("menuitem", { name: /解散群组…/ }),
+  ).toBeNull();
+});
+
 test("the groups are asked for only when a row's menu opens, and a disabled placeholder stands in until they arrive", async () => {
   const view = renderSidebar(
     "/",

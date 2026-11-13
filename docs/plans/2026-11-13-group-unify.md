@@ -989,6 +989,8 @@ export async function convertGroups(deps: GroupUpgradeDeps): Promise<PhaseOneCou
 
 **建议执行模型**：opus　**评审方式**：完整评审
 
+**用户拍板（2026-11-13）**：装包物化的频道（`channels.package_id` 非空）不是群组；第二阶段补建跳过 `package_id` 非空的频道。
+
 **文件：**
 - 修改：`S/waker-groups/upgrade.ts`、`S/index.ts`（`:4216` 群聊 sweep 的 `startup.acquireSync` 之后注册）
 - 测试：追加到 `waker-group-upgrade.integration.test.ts`（`describe("phases 2 and 3")`）

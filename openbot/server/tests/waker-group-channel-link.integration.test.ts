@@ -22,6 +22,7 @@ import {
   agents,
   channelAgents,
   channels,
+  deploymentPackages,
   groupTaskRuns,
   groupTaskTemplates,
   intelligenceChannelMappings,
@@ -2037,6 +2038,84 @@ describe("routes", () => {
       expect((await channelRow(pair.id)).waker_group_id).toBe(
         (linked.json.group as Listed).id,
       );
+    });
+
+    test("a package's channels are never groups: nothing links, reconciles or backfills, for-channel answers 404; a chat the person made still links", async () => {
+      const alice = await person("alice");
+      const api = crewApi();
+      const [ada, grace] = [await bot(alice, "Ada"), await bot(alice, "Grace")];
+      const packageTenant = `${prefix}-pkg-${randomUUID()}`;
+      const [installed] = await runAsTenant("platform", () =>
+        database
+          .insert(deploymentPackages)
+          .values({
+            tenantId: packageTenant,
+            sourcePath: "test",
+            checksum: "test",
+          })
+          .returning({ id: deploymentPackages.id }),
+      );
+      if (!installed) throw new Error("package not written");
+      const stamp = async (channelId: string, kind: string) => {
+        await runAsTenant("platform", () =>
+          database
+            .update(channels)
+            .set({ packageId: installed.id, kind })
+            .where(eq(channels.id, channelId)),
+        );
+      };
+      try {
+        const [team, plain, shared, own] = await runAsTenant(
+          alice.id,
+          async () => [
+            await channelStore.create(alice, [ada, grace]),
+            await channelStore.create(alice, [ada, grace]),
+            await channelStore.create(alice, [ada, grace], { shared: true }),
+            await channelStore.create(alice, [ada, grace]),
+          ],
+        );
+        createdChannels.push(team.id, plain.id, shared.id, own.id);
+        await stamp(team.id, "team");
+        await stamp(plain.id, "channel");
+        await stamp(shared.id, "team");
+        const spare = await crew(alice, "包群");
+        const before = await crewsOf(alice.id);
+        const link = linkCore();
+        expect(
+          isGroupConversation({
+            tenantId: "team",
+            agentCount: 3,
+            task: false,
+            packageId: installed.id,
+          }),
+        ).toBe(false);
+
+        for (const channel of [team, plain, shared]) {
+          expect(await link.linkChannel(channel.id)).toBeNull();
+          expect(await link.reconcile(channel.id)).toBe(false);
+          await expect(link.adopt(spare, channel.id)).rejects.toThrow();
+          const answer = await api(alice, "POST", `/for-channel/${channel.id}`);
+          expect(answer.status).toBe(404);
+          expect((await channelRow(channel.id)).waker_group_id).toBeNull();
+        }
+        expect(await crewsOf(alice.id)).toEqual(before);
+
+        const linked = await api(alice, "POST", `/for-channel/${own.id}`);
+        expect(linked.status).toBe(200);
+        expect((await channelRow(own.id)).waker_group_id).toBe(
+          (linked.json.group as Listed).id,
+        );
+      } finally {
+        await runAsTenant("platform", async () => {
+          await database
+            .update(channels)
+            .set({ packageId: null })
+            .where(inArray(channels.id, createdChannels));
+          await database
+            .delete(deploymentPackages)
+            .where(eq(deploymentPackages.id, installed.id));
+        });
+      }
     });
 
     test("a member of the shared chat who did not start it gets 404 from PATCH and chat", async () => {
