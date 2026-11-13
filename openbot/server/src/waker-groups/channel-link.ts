@@ -327,10 +327,16 @@ export function createWakerGroupLink(deps: {
    * its visibility check: the conversation already vouched for every Bot in it.
    */
   async function writeMirror(
-    tx: Pick<Database, "delete" | "insert" | "update">,
+    tx: Pick<Database, "delete" | "insert" | "update" | "execute">,
     groupId: string,
     agentIds: string[],
   ) {
+    // Two writers delete-then-insert the same roster: without the group row's lock the later insert
+    // hits the primary key (23505). Every caller holds or has just written the channel row first
+    // (or the group is brand new), so this keeps the order channel -> group.
+    await tx.execute(
+      sql`select ${wakerGroups.id} from ${wakerGroups} where ${wakerGroups.id} = ${groupId}::uuid for update`,
+    );
     await tx
       .delete(wakerGroupMembers)
       .where(eq(wakerGroupMembers.groupId, groupId));

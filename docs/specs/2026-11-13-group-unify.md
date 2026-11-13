@@ -369,7 +369,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 
 `GET /api/waker-groups` **保持只读**，不在读接口里写库。
 
-已知遗留（**已登记后续任务**，台账停放任务②）：两次改写镜像并发时（比如 staffing 的增删与打开设置同时发生），镜像是「先删全部成员行、再插入」，后到的插入可能撞主键报 23505。影响：`for-channel` 里的 `reconcile` 没有捕获它，会回 500；`adopt` 撞上时，建群组的请求按 4.2 的补偿收尾后失败；装饰器里的 `reconcile` 只记 `waker-group-reconcile-failed`。再试一次即可，不写坏数据。修法是先更新群组行（取得行锁）再删插成员行。
+已修复（原台账停放任务②）：两次改写镜像并发时（比如 staffing 的增删与打开设置同时发生，或设置抽屉同时发两次 `for-channel`），镜像是「先删全部成员行、再插入」，后到的插入曾撞主键报 23505。现在 `writeMirror` 在事务开头先 `SELECT … FOR UPDATE` 锁群组行，写镜像的事务排队执行；各调用方都已先持有（或刚改过）频道行，加锁顺序仍是先频道后群组，不新增死锁。设置抽屉也只发一次 `for-channel`（`GroupSettingsPanel` 的 effect 按频道 id 只触发一次，StrictMode 的双次挂载不再重复请求）。用例 `reconcile calls at once all succeed and leave the mirror as the chat's order` 锁定。
 
 ---
 

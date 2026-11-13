@@ -18,6 +18,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { Channel } from "@/components/app-sidebar/channel";
 import {
   GroupSettingsButton,
@@ -797,4 +798,26 @@ test("any other failure says so and can be retried", async () => {
   world.forChannel = { status: 200, body: { group: crew() } };
   fireEvent.click(panel.getByRole("button", { name: "重试" }));
   expect(await panel.findByText("名称与用途")).toBeTruthy();
+});
+
+test("opening the panel asks the server for the group once, even under StrictMode", async () => {
+  reset();
+  const root = createRootRoute({
+    component: () => <GroupSettingsPanel channelId="ch-1" />,
+  });
+  const router = createRouter({
+    routeTree: root.addChildren(stubs(root)),
+    history: createMemoryHistory({ initialEntries: ["/x"] }),
+  });
+  const view = render(
+    <StrictMode>
+      <QueryClientProvider client={client()}>
+        <RouterProvider router={router as never} />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+  expect(await view.findByText("名称与用途")).toBeTruthy();
+  expect(
+    sent.filter((call) => call.path === "/api/waker-groups/for-channel/ch-1"),
+  ).toHaveLength(1);
 });

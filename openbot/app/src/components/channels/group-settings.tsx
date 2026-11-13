@@ -6,7 +6,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PortraitPicker } from "@/components/portraits/portrait-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +84,12 @@ export function GroupSettingsPanel({ channelId }: { channelId: string }) {
   const queryClient = useQueryClient();
   const lookup = useMutation(crewForChannelMutationOptions(queryClient));
   const { mutate } = lookup;
+  // The lookup writes the mirror on the server, so it goes out once per chat: StrictMode runs this
+  // effect twice on mount, and two concurrent lookups used to race each other there.
+  const asked = useRef<string | null>(null);
   useEffect(() => {
+    if (asked.current === channelId) return;
+    asked.current = channelId;
     mutate(channelId);
   }, [channelId, mutate]);
 

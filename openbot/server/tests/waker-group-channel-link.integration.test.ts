@@ -653,6 +653,43 @@ describe("link core, fix round 1", () => {
     }
   });
 
+  test("reconcile calls at once all succeed and leave the mirror as the chat's order", async () => {
+    const alice = await person("alice");
+    const bots = [
+      await bot(alice, "Ada"),
+      await bot(alice, "Grace"),
+      await bot(alice, "Linus"),
+      await bot(alice, "Edsger"),
+    ];
+    const channel = await sharedGroup(alice, bots);
+    const wide = createDatabase(testDatabaseUrl(), { max: 10 });
+    try {
+      const link = createWakerGroupLink({ database: wide, groupStore });
+      const groupId = await link.linkChannel(channel.id);
+      if (!groupId) throw new Error("not linked");
+      // What `for-channel` does when the settings drawer opens, several times at once: each call
+      // deletes the whole roster and writes it back, and without the crew's row lock the later
+      // insert hit the primary key (23505).
+      const answers = await Promise.allSettled(
+        Array.from({ length: 8 }, () => link.reconcile(channel.id)),
+      );
+      expect(answers).toEqual(
+        Array.from({ length: 8 }, () => ({
+          status: "fulfilled" as const,
+          value: true,
+        })),
+      );
+      expect(await mirror(groupId)).toEqual(
+        bots.map((agentId, position) => ({
+          agentId,
+          position: String(position),
+        })),
+      );
+    } finally {
+      await wide.$client.close();
+    }
+  });
+
   test("a channel stamped system, or a shared group created by platform, gets no crew", async () => {
     const alice = await person("alice");
     const ids = [await bot(alice, "Ada"), await bot(alice, "Grace")];
