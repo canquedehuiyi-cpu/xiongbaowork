@@ -91,6 +91,8 @@ skills:
       attribution: © 熊宝数字员工
       declared_tools: []
       runnable: blocked
+      reason: unknown-mcp-server
+      reason_ref: "正文引用 mcp__<server>__<tool>，而该 server 不在 connectors.yaml 里。 ← \"mcp__staffing__list_staff\"（共 4 处）"
       dropped: []
       refs_bytes: 0
   - slug: skill-creator
@@ -1311,6 +1313,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"git log --oneline -8 # 找到任务起点\"（共 11 处）；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/*`）。\""
       dropped: []
       refs_bytes: 0
   - slug: canvasflow-ppt
@@ -2009,6 +2013,8 @@ skills:
         - Write
         - WebSearch
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"npx tsc --version\"（共 5 处）"
       dropped: []
       refs_bytes: 0
   - slug: code-review-and-quality
@@ -2610,6 +2616,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python scripts/cursor-memory-backup.py backup # 默认：D:\\Curso…\"（共 4 处）；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/cursor-memory-backup.py`，只用标准库（Python 3.8+）。\""
       dropped:
         - scripts/
       refs_bytes: 0
@@ -3025,6 +3033,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"git revert HEAD（创建新commit回滚，不用reset --hard）\"（共 6 处）；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/screenshot.mjs 截图（2x 高清，只截 .card 元素，自动 open 图片）：\""
       dropped:
         - assets/
         - docs/
@@ -3335,6 +3345,8 @@ skills:
         - Task
         - WebSearch
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/init_deploy.py`（dry-run → `--apply`：写前 `.bak`、幂等合并、…\""
       dropped:
         - hooks/
         - references/
@@ -3477,6 +3489,8 @@ skills:
         - Task
         - WebSearch
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/init_deploy.py`（dry-run→`--apply`：写前 `.bak`、幂等合并、只追…\""
       dropped:
         - hooks/
         - references/
@@ -3621,6 +3635,8 @@ skills:
         - Task
         - WebSearch
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/init_deploy.py`（dry-run→`--apply`：写前 `.bak`、幂等合并、只追…\""
       dropped:
         - hooks/
         - references/
@@ -3810,6 +3826,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python3 \"<本技能目录>/scripts/skill_lookup.py\" @harmonyos\"；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/project_probe.py) /\""
       dropped:
         - agents/
         - hooks/
@@ -3975,6 +3993,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python3 <本技能目录>/scripts/project_probe.py <目标工程目录>\"；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/project_probe.py)：\""
       dropped:
         - agents/
         - references/
@@ -4254,6 +4274,8 @@ skills:
       attribution: © fore.vip
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python3 scripts/gen_clean_script.py --platform macos --titl…\"；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/gen_clean_script.py`，把本次全部步骤生成为一键清理脚本放到**桌面**：\""
       dropped:
         - references/
         - scripts/
@@ -4371,6 +4393,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"ssh -i key.pem ubuntu@host 'sudo env NODE_PATH=<release>/no…\"（共 3 处）"
       dropped: []
       refs_bytes: 0
   - slug: frontend-build-verification
@@ -4715,6 +4739,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"npx tsc --noEmit # 类型\"（共 3 处）"
       dropped: []
       refs_bytes: 0
       sanitized:
@@ -5058,6 +5084,8 @@ skills:
       declared_tools:
         - Bash(browser-use:*)
       runnable: blocked
+      reason: shell-tool-call
+      reason_ref: "正文调用 Bash/Shell/Terminal(...)；openbot 员工没有本地 shell。 ← \"Bash(browser-use:*)**: 使用 Bash(browser-use:*) 工具\""
       dropped:
         - references/
       refs_bytes: 6467
@@ -5631,6 +5659,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/ # Asset generation scripts\""
       dropped:
         - canvas-fonts/
         - references/
@@ -7409,6 +7439,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"npx prisma migrate dev alembic revision --autogenerate migr…\"（共 2 处）"
       dropped:
         - references/
       refs_bytes: 86119
@@ -9441,6 +9473,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"npx prisma migrate dev alembic revision --autogenerate migr…\"（共 2 处）"
       dropped:
         - references/
       refs_bytes: 86119
@@ -9965,6 +9999,8 @@ skills:
       attribution: © LingGraph Studio
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python run.py --selftest\"（共 2 处）"
       dropped:
         - scripts/
       refs_bytes: 0
@@ -10318,6 +10354,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"git --shortstat` 数字照抄，被审查判为 blocker。\"（共 3 处）"
       dropped: []
       refs_bytes: 0
       sanitized:
@@ -10718,6 +10756,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"git init -q t && cd t && git commit -q --allow-empty -m x\"（共 41 处）"
       dropped: []
       refs_bytes: 0
       sanitized:
@@ -11055,6 +11095,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"bash scripts/deploy.sh <path-to-presentation>\"（共 4 处）；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/extract-pptx.py <input.pptx> <output_dir>` (install…\""
       dropped:
         - scripts/
       refs_bytes: 0
@@ -11396,6 +11438,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"node --check`。\""
       dropped:
         - assets/
         - references/
@@ -11641,6 +11685,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: executable-scripts+shell-command-prose
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/\"；正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"sh templates/theme-showcase.html # one shot\"（共 5 处）"
       dropped:
         - assets/
         - docs/
@@ -11749,6 +11795,8 @@ skills:
       attribution: © LearnPrompt
       declared_tools: []
       runnable: blocked
+      reason: executable-scripts+shell-command-prose
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/humanize_ppt_v1.py \\\"；正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python3 scripts/humanize_ppt_v1.py \\\""
       dropped:
         - adapters/
         - contracts/
@@ -12358,6 +12406,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose+executable-scripts
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python -c \"\"（共 3 处）；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/`）\""
       dropped: []
       refs_bytes: 0
   - slug: postgres-real-verification
@@ -12469,6 +12519,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"node node_modules/vitest/vitest.mjs run --no-file-paralleli…\"（共 2 处）"
       dropped: []
       refs_bytes: 0
   - slug: ppt-craft-master
@@ -12904,6 +12956,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/generate.js`。\""
       dropped:
         - scripts/
       refs_bytes: 0
@@ -13969,6 +14023,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: unknown-mcp-server
+      reason_ref: "正文引用 mcp__<server>__<tool>，而该 server 不在 connectors.yaml 里。 ← \"mcp__wb-issues__automation_list_experts\""
       dropped: []
       refs_bytes: 0
   - slug: prompt-engineering-expert
@@ -14426,6 +14482,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"npx remotion render src/index.ts MyComposition out/video.mp4\""
       dropped:
         - rules/
       refs_bytes: 0
@@ -14648,6 +14706,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/test-nes.ts` - 集成测试脚本\""
       dropped:
         - references/
         - scripts/
@@ -14815,6 +14875,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/ # AI 资产生成脚本\""
       dropped:
         - canvas-fonts/
         - references/
@@ -16055,6 +16117,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"npm i playwright && npx playwright install chromium\""
       dropped: []
       refs_bytes: 0
       sanitized:
@@ -16103,6 +16167,8 @@ skills:
         - WebSearch
         - WebFetch
       runnable: blocked
+      reason: executable-scripts
+      reason_ref: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 ← \"scripts/check_bat.py`（静态检查）+ `scripts/test_bat_ps.py`（内嵌命令实…\""
       dropped:
         - references/
         - scripts/
@@ -16590,6 +16656,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"npx tsc --noEmit --listFiles > /tmp/before.txt # 记录基线\"（共 2 处）"
       dropped: []
       refs_bytes: 0
   - slug: workbuddy-market-export
@@ -16839,6 +16907,8 @@ skills:
       attribution: © WorkBuddy 能力市场
       declared_tools: []
       runnable: blocked
+      reason: shell-command-prose
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \"python - <<'EOF'\"（共 2 处）"
       dropped: []
       refs_bytes: 0
       sanitized:

@@ -277,6 +277,37 @@ describe("the ported package, end to end", () => {
       expect(gradeOf.get(skill.slug)).toBe(skill.runnable);
     }
     expect((await skillRow("bot-creator"))?.runnable).toBe("blocked");
+
+    /*
+     * R18's other half: a badge without a reason under it is the "badged but unexplained" state
+     * R18 forbids. Every blocked row must carry the audit rule id and the citation; every full row
+     * must carry neither — null is "not graded" or "nothing missing", never "unexplained".
+     */
+    const grades = await runAsTenant("platform", () =>
+      database
+        .select({
+          id: skillTable.id,
+          runnable: skillTable.runnable,
+          blockedReason: skillTable.blockedReason,
+          blockedReasonRef: skillTable.blockedReasonRef,
+        })
+        .from(skillTable)
+        .where(inArray(skillTable.id, packageSkillSlugs)),
+    );
+    const reasonRows = grades.filter((row) => row.runnable === "blocked");
+    expect(reasonRows).toHaveLength(35);
+    for (const row of reasonRows) {
+      expect(row.blockedReason, row.id).toBeTruthy();
+      expect(row.blockedReasonRef, row.id).toBeTruthy();
+    }
+    expect(reasonRows.map((row) => row.id)).toContain("bot-creator");
+    const fullWithReason = grades.filter(
+      (row) => row.runnable === "full" && (row.blockedReason || row.blockedReasonRef),
+    );
+    expect(fullWithReason).toHaveLength(0);
+    const botCreator = grades.find((row) => row.id === "bot-creator");
+    expect(botCreator?.blockedReason).toBe("unknown-mcp-server");
+    expect(botCreator?.blockedReasonRef).toContain("mcp__staffing__list_staff");
   });
 
   test("a picked skill's instructions reach the run, and declaring tools grants none", async () => {

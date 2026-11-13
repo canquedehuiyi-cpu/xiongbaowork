@@ -57,6 +57,20 @@ export function MineScreen() {
                     </div>
                     <RunnableBadge runnable={skill.runnable} />
                   </div>
+                  {/*
+                    R18：badged-but-unexplained 是 bug 不是状态。徽章打了非 full 就必须答
+                    「缺什么」——引文给人读（规则理由 ← 最强命中），规则 id 挂 title 供检索。
+                  */}
+                  {skill.runnable &&
+                  skill.runnable !== "full" &&
+                  (skill.blockedReasonRef ?? skill.blockedReason) ? (
+                    <p
+                      className="mt-[6px] line-clamp-2 text-[11px] text-muted-foreground"
+                      title={skill.blockedReason ?? undefined}
+                    >
+                      {skill.blockedReasonRef ?? skill.blockedReason}
+                    </p>
+                  ) : null}
                 </li>
               ))}
             </ul>

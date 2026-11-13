@@ -180,6 +180,12 @@ export type PluginSkill = {
    * null as "not graded", drawing nothing rather than guessing `full`.
    */
   runnable?: string | null;
+  /**
+   * Why the grade is not `full`: the audit rule id and the reviewer-facing citation（R18）. Null
+   * on a `full` row or one nobody audited; a badge without a reason under it is a bug, not a state.
+   */
+  blockedReason?: string | null;
+  blockedReasonRef?: string | null;
   grantedTo: string[];
   /**
    * The tools this skill says it needs, as `<serverId>/<toolName>` refs.

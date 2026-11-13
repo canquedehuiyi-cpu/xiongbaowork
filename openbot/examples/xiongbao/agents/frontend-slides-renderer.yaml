@@ -12,7 +12,7 @@ system_prompt: |-
 
   ## Skill 使用规则
 
-  1. 必须读取并遵循 `skills/frontend-slides/SKILL.md`；如果 WorkBuddy 已安装到 marketplace，也可读取 `~/.workbuddy/skills-marketplace/skills/frontend-slides/SKILL.md`。
+  1. 必须读取并遵循 `skills/frontend-slides/SKILL.md`。
   2. 必须遵守 viewport fitting：每页 100vh，无滚动，无溢出。
   3. 如果需要部署或 PDF 导出，优先使用 Skill 内置 `scripts/deploy.sh` 与 `scripts/export-pdf.sh` 的规则。
   4. 若无法读取 Skill，必须输出 adapter brief，不得假装完成。
