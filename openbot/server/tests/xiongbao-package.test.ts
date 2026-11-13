@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -301,7 +301,13 @@ test("synchronising twice leaves one row per declaration, not two", async () => 
     database
       .select({ agentId: pluginGrants.agentId, ref: pluginGrants.ref })
       .from(pluginGrants)
-      .where(eq(pluginGrants.grantedBy, "tenant-package")),
+      .where(
+        and(
+          eq(pluginGrants.grantedBy, "tenant-package"),
+          // 只数 bot 边：sync 还会盖 skill 边（agent×skill），计数混进来就不是团队边数了。
+          eq(pluginGrants.kind, "bot"),
+        ),
+      ),
   );
   expect(botGrants.length).toBe(BOT_GRANT_EDGE_COUNT);
 
