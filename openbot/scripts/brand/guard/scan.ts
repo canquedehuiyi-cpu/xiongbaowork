@@ -275,7 +275,10 @@ export function* walk(dir: string): Generator<string> {
 
 // Every file under `dir` whatever its name: image scripts have no extension. TEXT_FILE stays as it was; the
 // files of the new scopes are reached by listing their directories here.
-function* walkAll(dir: string, skip: (path: string) => boolean = () => false) {
+function* walkAll(
+  dir: string,
+  skip: (path: string) => boolean = () => false,
+): Generator<string> {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules") continue;
     const path = join(dir, name);

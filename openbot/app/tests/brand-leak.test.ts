@@ -8,6 +8,7 @@ import {
   codeLines,
   EXEMPT_PATHS,
   escapeRegExp,
+  type Finding,
   findings,
   masked,
   NEVER_CHANGE,
