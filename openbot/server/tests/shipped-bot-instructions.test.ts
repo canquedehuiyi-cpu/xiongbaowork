@@ -71,7 +71,26 @@ function shippedBots(): ShippedBot[] {
 }
 
 /** Words in capitals that are names, not emphasis. */
-const ACRONYMS = new Set(["AI", "API", "CSV", "ID", "PDF", "URL"]);
+const ACRONYMS = new Set([
+  // 原有
+  "AI", "API", "CSV", "ID", "PDF", "URL",
+  // 领域与角色缩写（2026-11-13 用户批准扩充：P2 落位员工正文的技术词）
+  "QA", "PPT", "PRD", "HTML", "CEO", "CI", "CD", "DX", "CSS", "UI", "UX",
+  "LLM", "OWASP", "AST", "STRIDE", "SOP", "PR", "IP", "ISO", "CLI", "MUI",
+  "DNS", "CSO", "ADR", "MIT", "XSS", "IDOR", "SKILL", "JS",
+  "ARIA", "FID", "CLS", "REST", "CRUD", "DRY", "CVE", "SQL", "MVP", "WCAG",
+  "AA", "LCP", "CDN", "UTF", "ASCII", "CORS", "RPC", "AVIF", "NVDA", "JAWS",
+  "RUM", "HEX", "GPT", "MVDP", "JSON", "TRIM", "DHCP", "LSP", "CPU", "SMART",
+  "CMD", "IT", "FAQ", "JWT", "UTC", "MVC", "MVVM", "PHP", "DDD", "ML", "TLS",
+  "CSP", "HSTS", "PII", "SSRF", "HTTP", "RSA",
+  // 专名与文件名（模板引用的 VERSION/CHANGELOG/README 等是文件名，不是强调）
+  "README", "VERSION", "ARCHITECTURE", "CHANGELOG", "TODOS", "TODO",
+  "DESIGN", "BEGIN", "PRIVATE",
+  // 日期与占位格式
+  "YYYY", "MM", "DD", "HHMMSS", "YYYYMMDD", "XX", "YY", "TL", "DR",
+  // 其他专名
+  "QQ", "MAC", "SVG", "YC",
+].filter(Boolean));
 
 /** Any word of two or more capital letters that is not a known acronym. */
 function shouting(text: string): string[] {
