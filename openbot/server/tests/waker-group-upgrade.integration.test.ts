@@ -1308,6 +1308,27 @@ describe("phase 1: what a crash, a race or a rule leaves", () => {
     expect(await membersOf(groupId)).toEqual([first, second]);
   });
 
+  test("an orphan recorded before its order was seeded is seeded when the conversion resumes", async () => {
+    // A crash between writing the orphan into the ledger and seeding its order: the next boot finds
+    // a `started` row that already names the chat, and must still seed it before adopting.
+    const alice = await person("alice");
+    const [first, second] = await twoOutOfIdOrder(alice);
+    if (!first || !second) throw new Error("bots not written");
+    const groupId = await oldCrew(alice, "周报", [first, second]);
+    const orphan = await unseededChat(alice, [first, second]);
+    await started(groupId, alice, { channelId: orphan.id });
+    expect(await orderOf(orphan.id)).toEqual([]);
+
+    await convertGroups(upgrade());
+
+    expect(await ledgerOf(groupId)).toMatchObject({
+      channel_id: orphan.id,
+      outcome: "converted",
+    });
+    expect(await orderOf(orphan.id)).toEqual([first, second]);
+    expect(await membersOf(groupId)).toEqual([first, second]);
+  });
+
   test("a started row whose chat was deleted since is passed over without a word", async () => {
     const alice = await person("alice");
     const ids = await bots(alice, 2);

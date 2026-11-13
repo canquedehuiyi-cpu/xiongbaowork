@@ -462,6 +462,13 @@ export async function convertGroups(
     await converted(groupId, channelId);
   }
 
+  /** Upstream's `seedOrder` for a crew's chat, in the owner's frame; harmless on a seeded chat. */
+  function seed(owner: string, groupId: string, channelId: string) {
+    return runAsTenant(owner, () =>
+      seedRoster(database, groups.store, owner, groupId, channelId),
+    );
+  }
+
   /** 5.3: the chat a crash left between ② and ③ (`ORPHAN_OF_LEDGER_ROW`). */
   async function orphanOf(groupId: string) {
     const rows = (await asPlatform(() =>
@@ -537,6 +544,9 @@ export async function convertGroups(
     if (resuming && crew.channelId) {
       // Its chat was deleted since: the crew stays, and the chat is not opened again (rule 2).
       if (crew.channelGone) return null;
+      // The chat may be an orphan written down before its order was seeded (a crash between the
+      // two): seed again. A chat that was seeded keeps its threads, so this changes nothing there.
+      await seed(crew.tenantId, crew.id, crew.channelId);
       await finish(crew.tenantId, crew.id, crew.channelId);
       return "converted";
     }
@@ -544,9 +554,7 @@ export async function convertGroups(
       const orphan = await orphanOf(crew.id);
       if (orphan) {
         await recordChannel(crew.id, orphan);
-        await runAsTenant(crew.tenantId, () =>
-          seedRoster(database, groups.store, crew.tenantId, crew.id, orphan),
-        );
+        await seed(crew.tenantId, crew.id, orphan);
         await finish(crew.tenantId, crew.id, orphan);
         return "converted";
       }
