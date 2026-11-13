@@ -1,6 +1,8 @@
 # capability-census — 连接器市场的全量普查（`bun run port:capabilities -- --census`）
 # 只读：读 connectors.json 与每个连接器目录，不联网、不写源目录、不产出包。
 # generated_at 取清单文件自身的写入时间，不是本次运行时间；两次运行对同一份清单必须完全一致。
+# 三档（§4a-3）：A=端点存在+凭据可自备，B=端点存在+凭据平台代持（server-side），C=无远程端点。
+# counts.auth_undeclared 单列（§4a-4）：156 条认证方式未声明不许默默算进可用。
 generated_at: 2026-09-24T12:59:26.000Z
 source_index_checksum: 581fd1d69c058a9b0a439bfb08cbde1e58b284558c8b4a4241b8c3ed180b45cc
 counts:
@@ -19,6 +21,16 @@ counts:
     full: 226
     degraded: 13
     blocked: 59
+  by_tier:
+    A: 227
+    B: 12
+    C: 59
+  auth_undeclared: 156
+  by_reason_code:
+    ok: 71
+    auth-undeclared: 156
+    platform-held-credential: 12
+    no-remote-endpoint: 59
 cross_table:
   - transport: mcp-url
     none: 156
@@ -51,6 +63,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: 24haowan-space
@@ -59,6 +73,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: 3chat-customer-growth
@@ -67,6 +83,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: 51shebao-hr-tools
@@ -75,6 +93,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: 58pic-qiantu-ai
@@ -83,6 +103,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: 77ircloud
@@ -91,6 +113,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: agent-earth
@@ -99,6 +123,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: aholo-lux3d
@@ -107,6 +133,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: ai-hive
@@ -115,6 +143,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: aiclass-teaching
@@ -123,6 +153,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: aidd-saas
@@ -131,6 +163,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: ailit
@@ -139,6 +173,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: aimoderator
@@ -147,6 +183,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: alphapai-lite-mcp
@@ -155,6 +193,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: archive-hospital-mcp
@@ -163,6 +203,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: awesun
@@ -171,6 +213,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: baidu-netdisk
@@ -179,6 +223,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: baijimu-enterprise-ai
@@ -187,6 +233,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: baixiao-mcp
@@ -195,6 +243,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: bazhuayu
@@ -203,6 +253,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: beatapi-beatdesign
@@ -211,6 +263,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: beisen-cli
@@ -219,6 +273,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: biobuddy
@@ -227,6 +283,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: bizmuse-ai-music-video
@@ -235,6 +293,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: bugly-token
@@ -243,6 +303,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: caihui-mcp
@@ -251,6 +313,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: camscanner-mcp
@@ -259,6 +323,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: candao-age
@@ -267,6 +333,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: canva
@@ -275,6 +343,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: chainlon-geo-mcp
@@ -283,6 +353,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: charge-order-query
@@ -291,6 +363,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: chuangkit
@@ -299,6 +373,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: chuhaijiang
@@ -307,6 +383,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: cisp-mcp
@@ -315,6 +393,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: cloudbase
@@ -323,6 +403,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: cloudhub
@@ -331,6 +413,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: cloudmall-operations
@@ -339,6 +423,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: cnb-api
@@ -347,6 +433,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: connector-workshop
@@ -355,6 +443,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: coros
@@ -363,6 +453,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: dami-external-mcp
@@ -371,6 +463,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: databuddy
@@ -379,6 +473,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: datahub
@@ -387,6 +483,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: datayes-data
@@ -395,6 +493,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: dcs-cloud
@@ -403,6 +503,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: deeplink
@@ -411,6 +513,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: deli-mcp
@@ -419,6 +523,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: designkit-buddy-cli
@@ -427,6 +533,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: dingdanbao
@@ -435,6 +543,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: dingtalk
@@ -443,6 +553,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: dknowc-mcp
@@ -451,6 +563,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: dnb-global-data
@@ -459,6 +573,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: dnb-longyicha-workbuddy
@@ -467,6 +583,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: dramabuddy
@@ -475,6 +593,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: duoguan-course
@@ -483,6 +603,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: duoguan-fengchao
@@ -491,6 +613,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: duoguan-ge
@@ -499,6 +623,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: dzh-mcp
@@ -507,6 +633,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: easymofang
@@ -515,6 +643,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: eccang-reconcile
@@ -523,6 +653,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: edgeone-pages
@@ -531,6 +663,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: edu-next
@@ -539,6 +673,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: efunds
@@ -547,6 +683,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: emes-ai
@@ -555,6 +693,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: emr-query
@@ -563,6 +703,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: erhao-hr
@@ -571,6 +713,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: es
@@ -579,6 +723,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: ezjoin-meeting
@@ -587,6 +733,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: ezr-crm
@@ -595,6 +743,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: fadada-richee
@@ -603,6 +753,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: fanruan-growth-advisor
@@ -611,6 +763,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: fastmoss
@@ -619,6 +773,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: fazhi-law
@@ -627,6 +783,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: fbs-connector
@@ -635,6 +793,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: feishu
@@ -643,6 +803,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: fenbeitong
@@ -651,6 +813,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: fenbi-baokao-decision
@@ -659,6 +823,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: finenter
@@ -667,6 +833,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: flova
@@ -675,6 +843,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: oauth
     auth_mode_mapped: user-oauth
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
   - id: fuma-ai-callout
@@ -683,6 +853,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: fyopen-lawsearch
@@ -691,6 +863,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: gangtise-mcp
@@ -699,6 +873,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: gaoding
@@ -707,6 +883,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: gaodun-job
@@ -715,6 +893,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: getnote
@@ -723,6 +903,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: gfsecurities
@@ -731,6 +913,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: gildata
@@ -739,6 +923,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: github
@@ -747,6 +933,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: gongxie-erp
@@ -755,6 +943,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: gongyi-open-mcp
@@ -763,6 +953,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: gt-generate-sql-data
@@ -771,6 +963,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: guansd
@@ -779,6 +973,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: h3c-cloudnet
@@ -787,6 +983,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: h3yun-connector
@@ -795,6 +993,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: haier-assistant
@@ -803,6 +1003,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: hanyi-fonts
@@ -811,6 +1013,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: hefei-city-alerts
@@ -819,6 +1023,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: hose-ai-assistant
@@ -827,6 +1033,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: huita-ims
@@ -835,6 +1043,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: huize-insurance-product-recommendation
@@ -843,6 +1053,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: ifind-mcp
@@ -851,6 +1063,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: ihr-cli
@@ -859,6 +1073,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: ima-mcp
@@ -867,6 +1083,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: infimind-ecommerce-content
@@ -875,6 +1093,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: intco-ai-platform
@@ -883,6 +1103,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: investoday-finance-data
@@ -891,6 +1113,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: ioa
@@ -899,6 +1123,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: iyiou-connector
@@ -907,6 +1133,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: jiandaoyun
@@ -915,6 +1143,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: jinshouzhi
@@ -923,6 +1153,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: jinshuju
@@ -931,6 +1163,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: jiucuodashi
@@ -939,6 +1173,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: jiushuyun
@@ -947,6 +1183,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: joyread-english
@@ -955,6 +1193,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: jufa-mcp-server
@@ -963,6 +1203,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: jumper-kpi
@@ -971,6 +1213,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: kdocs
@@ -979,6 +1223,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: kingbot-xiaodie
@@ -987,6 +1233,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: kiwi-sourcing
@@ -995,6 +1243,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: kling-ai-plugin
@@ -1003,6 +1253,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: kuaicha-search
@@ -1011,6 +1263,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: kuka-service
@@ -1019,6 +1273,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: laiye-adp
@@ -1027,6 +1283,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: lawyerone
@@ -1035,6 +1293,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: leads-cloud-crm
@@ -1043,6 +1303,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: lemon-agi
@@ -1051,6 +1313,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: lemonclaw
@@ -1059,6 +1323,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: lexiang
@@ -1067,6 +1333,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: liesun
@@ -1075,6 +1343,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: lingxing-mcp
@@ -1083,6 +1353,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: lingyi-mcp
@@ -1091,6 +1363,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: linkfox
@@ -1099,6 +1373,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: listinggood
@@ -1107,6 +1383,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: lovrabet-cli
@@ -1115,6 +1393,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: lxcloud
@@ -1123,6 +1403,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: magic-agent-token
@@ -1131,6 +1413,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: masocloud-barcode-generator
@@ -1139,6 +1423,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: mastergo-vibe-mcp
@@ -1147,6 +1433,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: medgroup-drgdip-toolkit
@@ -1155,6 +1443,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: medlive-medical-qa
@@ -1163,6 +1453,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: meitu-ai
@@ -1171,6 +1463,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: meitu-kaipai
@@ -1179,6 +1473,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: meituan-for-business
@@ -1187,6 +1483,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: menglar-ozon
@@ -1195,6 +1493,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: meo-xiaoyuan
@@ -1203,6 +1503,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: mergerinfo
@@ -1211,6 +1513,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: mglc
@@ -1219,6 +1523,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: miaoda
@@ -1227,6 +1533,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: miki-cursor-catalog
@@ -1235,6 +1543,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: mindbye-contract-review
@@ -1243,6 +1553,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: moka
@@ -1251,6 +1563,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: morningstar
@@ -1259,6 +1573,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: mx-ds-mcp
@@ -1267,6 +1583,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: myunker-mcp
@@ -1275,6 +1593,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: mzl-trademark
@@ -1283,6 +1603,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: neo-crm
@@ -1291,6 +1613,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: neo-eakey
@@ -1299,6 +1623,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: neodata
@@ -1307,6 +1633,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: notion
@@ -1315,6 +1643,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: novai-studio
@@ -1323,6 +1653,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: oauth
     auth_mode_mapped: user-oauth
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
   - id: noxinfluencer-cli
@@ -1331,6 +1663,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: nvapp-windows-local
@@ -1339,6 +1673,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: ofdh-doc-convert
@@ -1347,6 +1683,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: oiioii
@@ -1355,6 +1693,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: opcmenu
@@ -1363,6 +1703,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: opendata
@@ -1371,6 +1713,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: orientfutures-mobile-knowledge-base
@@ -1379,6 +1723,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: pandadata
@@ -1387,6 +1733,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: paper-retrieval
@@ -1395,6 +1743,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: patsnap-search
@@ -1403,6 +1753,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: picset-commerce-images
@@ -1411,6 +1763,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: picset-video-generation
@@ -1419,6 +1773,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: pkulaw
@@ -1427,6 +1783,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: plaud
@@ -1435,6 +1793,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: primematrix-company
@@ -1443,6 +1803,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: proboost
@@ -1451,6 +1813,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: property-saas
@@ -1459,6 +1823,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: qcc-company
@@ -1467,6 +1833,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: qcc-legal
@@ -1475,6 +1843,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: qibook-mcp
@@ -1483,6 +1853,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: qingflow
@@ -1491,6 +1863,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: qinghu-ai
@@ -1499,6 +1873,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: qisemierp
@@ -1507,6 +1883,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: oauth
     auth_mode_mapped: user-oauth
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
   - id: qixinhuiyan-mcp
@@ -1515,6 +1893,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: qiyuan-robot-executor
@@ -1523,6 +1903,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: qq-mail
@@ -1531,6 +1913,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: qveris
@@ -1539,6 +1923,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: qzd-connector
@@ -1547,6 +1933,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: realtrace
@@ -1555,6 +1943,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: replygen
@@ -1563,6 +1953,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: reportgem-research
@@ -1571,6 +1963,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: salesnail-instructor
@@ -1579,6 +1973,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: salestouch
@@ -1587,6 +1983,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: seeyon-office-marketing-suite
@@ -1595,6 +1993,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: sesunfox-gateway
@@ -1603,6 +2003,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: shanglv-mcp-gateway
@@ -1611,6 +2013,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: shangyitong
@@ -1619,6 +2023,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: shanlong-claw
@@ -1627,6 +2033,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: sharecrm
@@ -1635,6 +2043,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: shopee-market-intelligence
@@ -1643,6 +2053,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: shuidi-credit
@@ -1651,6 +2063,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: shuidi-discovery
@@ -1659,6 +2073,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: shunong-assistant
@@ -1667,6 +2083,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: sif-mcp
@@ -1675,6 +2093,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: smartsalary
@@ -1683,6 +2103,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: sq-company-dynamic
@@ -1691,6 +2113,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: sugon-scinsight-agent
@@ -1699,6 +2123,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: oauth
     auth_mode_mapped: user-oauth
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
   - id: sumscope-data
@@ -1707,6 +2133,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: sungo-device-registry
@@ -1715,6 +2143,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: syspetro-service-22065846
@@ -1723,6 +2153,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: tanyuan-assistant
@@ -1731,6 +2163,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tapd
@@ -1739,6 +2173,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tapnow
@@ -1747,6 +2183,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tc-chengxin
@@ -1755,6 +2193,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: tct-business-expert
@@ -1763,6 +2203,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tdengine
@@ -1771,6 +2213,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: tdx-connector
@@ -1779,6 +2223,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: teacher-assistant
@@ -1787,6 +2233,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tec-do
@@ -1795,6 +2243,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-dlc
@@ -1803,6 +2253,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-docs
@@ -1811,6 +2263,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-docs-oa
@@ -1819,6 +2273,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: oneid-token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: tencent-health-nges
@@ -1827,6 +2283,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-map
@@ -1835,6 +2293,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: tencent-map-guide
@@ -1843,6 +2303,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-marketing-solution
@@ -1851,6 +2313,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-qidian-cs
@@ -1859,6 +2323,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: mcp
     auth_mode_mapped: unknown
+    tier: A
+    reason_code: ok
     verdict: degraded
     reason: 远端 server 可直连，但 auth_mode 无法映射到 openbot 的三种凭据模型，需人工定夺
   - id: tencent-survey
@@ -1867,6 +2333,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-tchouse-c
@@ -1875,6 +2343,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-weiyun
@@ -1883,6 +2353,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencent-yaoxiang-bi
@@ -1891,6 +2363,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tencentads
@@ -1899,6 +2373,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: textin-xparse
@@ -1907,6 +2383,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: thinkingai-ae-cli
@@ -1915,6 +2393,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: tiktok
@@ -1923,6 +2403,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tmeet
@@ -1931,6 +2413,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: today-watermark-camera
@@ -1939,6 +2423,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tongzhou-fin-research
@@ -1947,6 +2433,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tplus-api
@@ -1955,6 +2443,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: tuniu-travel
@@ -1963,6 +2453,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: tushare
@@ -1971,6 +2463,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: tyc-mcp
@@ -1979,6 +2473,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: uptgai-manager
@@ -1987,6 +2483,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: uupt
@@ -1995,6 +2493,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: variflight-mcp
@@ -2003,6 +2503,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: verya-knowledgebase
@@ -2011,6 +2513,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: viaim
@@ -2019,6 +2523,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: vibeknow-cli
@@ -2027,6 +2533,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: voko-guest
@@ -2035,6 +2543,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: wangxiaobao
@@ -2043,6 +2553,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: wavenote-audio
@@ -2051,6 +2563,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: weaver-eteams-connector
@@ -2059,6 +2573,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: wecom
@@ -2067,6 +2583,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: weiban-agent-mcp
@@ -2075,6 +2593,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: weisheng-scrm
@@ -2083,6 +2603,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: welife-ai-workbench-connector
@@ -2091,6 +2613,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: westock-mcp
@@ -2099,6 +2623,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: wind-finance
@@ -2107,6 +2633,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: wisenote
@@ -2115,6 +2643,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: wk-workbuddy
@@ -2123,6 +2653,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: wm-weight-manage
@@ -2131,6 +2663,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: workrally1
@@ -2139,6 +2673,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: woscli
@@ -2147,6 +2683,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: wpe-general-connector
@@ -2155,6 +2693,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: wps-knowledgebase
@@ -2163,6 +2703,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: wscnmcp-token
@@ -2171,6 +2713,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: xhcj-mcp-announcements-news-policy
@@ -2179,6 +2723,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: xiaoe-cloud-cli
@@ -2187,6 +2733,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: xiaoliebian-scrm
@@ -2195,6 +2743,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: xiaolv-law-search
@@ -2203,6 +2753,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: xiehui-fr
@@ -2211,6 +2763,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: xingtu-claw-risk
@@ -2219,6 +2773,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: xinke-laile-analytics-enterprise
@@ -2227,6 +2783,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: xmed-figure-mcp
@@ -2235,6 +2793,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: xmind
@@ -2243,6 +2803,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: xrxs
@@ -2251,6 +2813,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: server-side
     auth_mode_mapped: deployment-bearer
+    tier: B
+    reason_code: platform-held-credential
     verdict: degraded
     reason: 远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用
   - id: xuanpian-schedule
@@ -2259,6 +2823,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: yanxu
@@ -2267,6 +2833,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: yichayun-trade-data
@@ -2275,6 +2843,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: yingmi-mcp
@@ -2283,6 +2853,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: yixiaoke
@@ -2291,6 +2863,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: youshu-bd-mate
@@ -2299,6 +2873,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: youzan-workbuddy
@@ -2307,6 +2883,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: yuanbei-hub
@@ -2315,6 +2893,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: yuandian-mcp
@@ -2323,6 +2903,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: yunjing-crm-analytics
@@ -2331,6 +2913,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: yunke-cli
@@ -2339,6 +2923,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: yuntu-ft-workbench
@@ -2347,6 +2933,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: yunzhi-campus
@@ -2355,6 +2943,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: oauth
     auth_mode_mapped: user-oauth
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 user-oauth，openbot 可直接托管
   - id: yunzhi-mcp
@@ -2363,6 +2953,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: yzf-general-mcp-server
@@ -2371,6 +2963,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: zenava
@@ -2379,6 +2973,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: zfs-fssc-ai
@@ -2387,6 +2983,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: token
     auth_mode_mapped: deployment-bearer
+    tier: A
+    reason_code: ok
     verdict: full
     reason: 远端 server + 凭据模型 deployment-bearer，openbot 可直接托管
   - id: zhangsanfeng
@@ -2395,6 +2993,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管
   - id: zsxq
@@ -2403,6 +3003,8 @@ rows:
     declared_type: cli
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时
   - id: zw3d-mcp
@@ -2411,6 +3013,8 @@ rows:
     declared_type: (absent)
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: zwcad-mcp
@@ -2419,6 +3023,8 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: C
+    reason_code: no-remote-endpoint
     verdict: blocked
     reason: mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时
   - id: zxygj-business-data
@@ -2427,5 +3033,7 @@ rows:
     declared_type: mcp
     auth_mode_raw: (absent)
     auth_mode_mapped: none
+    tier: A
+    reason_code: auth-undeclared
     verdict: full
     reason: 远端 server + 凭据模型 none，openbot 可直接托管

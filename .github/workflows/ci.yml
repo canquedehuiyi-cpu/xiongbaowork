@@ -498,6 +498,69 @@ jobs:
           name: workspace-${{ matrix.pkg }}-logs
           path: ${{ runner.temp }}/head.log
 
+  # The computer's real-browser tests, which prove a secret typed into a page never reaches the Bot:
+  # the aria snapshot hides a password's value and the screenshot paints the marked fields over under
+  # the neutral attribute names (L1-17, neutral-page-marks.test.ts), the private sign-in types only on
+  # its own origin and is not read back (sign-in.test.ts), a field a person filled reads as filled
+  # (person-filled.test.ts), and session cookies survive a restart under the renamed file
+  # (session-cookies.test.ts). They are asked for by name and skipped by the plain workspace run above,
+  # so this job also fails on any skip: a misspelt variable would otherwise make the proof a silent pass.
+  computer-browser:
+    name: computer browser tests (real Chromium, headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      # agent-computer's source reaches `shared`, and takes `@types/bun` from the root.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install agent-computer from its own frozen lockfile (no lifecycle scripts)
+        working-directory: openbot/agent-computer
+        run: bun install --frozen-lockfile --ignore-scripts
+      # agent-computer's own playwright, so the Chromium is the build that version drives. `--no-shell`
+      # as the image does, so the headless run proves nothing needs the shell.
+      - name: Install Chromium for agent-computer's Playwright
+        working-directory: openbot/agent-computer
+        run: bunx playwright install --with-deps --no-shell chromium
+      - name: Browser tests
+        working-directory: openbot/agent-computer
+        env:
+          OPENBOT_COMPUTER_BROWSER: '1'
+          COMPUTER_BROWSER_MODE: headless
+        run: >-
+          bun test tests/neutral-page-marks.test.ts tests/sign-in.test.ts
+          tests/person-filled.test.ts tests/session-cookies.test.ts
+          > "$RUNNER_TEMP/computer-browser.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/computer-browser.log" 'computer browser tests (head only)'
+      - name: Zero-skip gate (a skipped browser test proves nothing)
+        if: always()
+        run: |
+          set -euo pipefail
+          text=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/computer-browser.log")
+          if ! grep -Eq '^Ran [1-9][0-9]* tests? across 4 files' <<<"$text"; then
+            echo "::error::the four browser test files did not all run"
+            exit 1
+          fi
+          if grep -Eq '^[[:space:]]*[1-9][0-9]* skip[[:space:]]*$' <<<"$text"; then
+            echo "::error::browser tests were skipped: OPENBOT_COMPUTER_BROWSER did not reach them"
+            exit 1
+          fi
+      - name: Print browser test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/computer-browser.log"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: computer-browser-logs
+          path: ${{ runner.temp }}/computer-browser.log
+
   # WIN1: the native Windows device CLI executes commands, start failures are explicit, and Stop,
   # timeout and protocol cancel kill the whole descendant tree. The probe imports the real runner
   # executor, agent-computer shell, bun:sqlite journal and dispatcher; any failed check throws.

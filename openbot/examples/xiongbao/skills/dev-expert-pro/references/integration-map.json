@@ -1,0 +1,178 @@
+{
+  "product": "dev-expert-pro",
+  "registry_version": 1,
+  "description": "Local engineering, HarmonyOS and WeChat reference paths. No standalone CloudBase pack or business execution.",
+  "topics": {
+    "agent-reasoning-patterns": {
+      "path": "references/agent-reasoning-patterns.md"
+    },
+    "ai-coding-governance": {
+      "path": "references/ai-coding-governance.md"
+    },
+    "api-design": {
+      "path": "references/api-design.md"
+    },
+    "architecture-decision": {
+      "path": "references/architecture-decision.md"
+    },
+    "bug-diagnosis": {
+      "path": "references/bug-diagnosis.md"
+    },
+    "cms-development": {
+      "path": "references/cms-development.md"
+    },
+    "code-generation": {
+      "path": "references/code-generation.md"
+    },
+    "code-readability-for-agents": {
+      "path": "references/code-readability-for-agents.md"
+    },
+    "code-review": {
+      "path": "references/code-review.md"
+    },
+    "delivery-assurance": {
+      "path": "references/delivery-assurance.md"
+    },
+    "dependency-downloads": {
+      "path": "references/dependency-downloads.md"
+    },
+    "design-audit": {
+      "path": "references/design-audit.md"
+    },
+    "design-critique": {
+      "path": "references/design-critique.md"
+    },
+    "dev-navigation": {
+      "path": "references/dev-navigation.md"
+    },
+    "distributed-systems": {
+      "path": "references/distributed-systems.md"
+    },
+    "doc-generation": {
+      "path": "references/doc-generation.md"
+    },
+    "domain-driven-design": {
+      "path": "references/domain-driven-design.md"
+    },
+    "engineering-metrics": {
+      "path": "references/engineering-metrics.md"
+    },
+    "error-ledger": {
+      "path": "references/error-ledger.md"
+    },
+    "execution-safety": {
+      "path": "references/execution-safety.md"
+    },
+    "expert-topics": {
+      "path": "references/expert-topics.md"
+    },
+    "frontend-design": {
+      "path": "references/frontend-design.md"
+    },
+    "harmonyos": {
+      "path": "references/harmonyos.md"
+    },
+    "harmonyos/arkui": {
+      "path": "references/harmonyos/arkui/index.md"
+    },
+    "harmonyos/compile-errors": {
+      "path": "references/harmonyos/compile-errors.md"
+    },
+    "harmonyos/runtime": {
+      "path": "references/harmonyos/runtime/index.md"
+    },
+    "incident-review": {
+      "path": "references/incident-review.md"
+    },
+    "java-development": {
+      "path": "references/java-development.md"
+    },
+    "java-testing": {
+      "path": "references/java-testing.md"
+    },
+    "javascript-development": {
+      "path": "references/javascript-development.md"
+    },
+    "karpathy-coding-guidelines": {
+      "path": "references/karpathy-coding-guidelines.md"
+    },
+    "laravel-development": {
+      "path": "references/laravel-development.md"
+    },
+    "laravel-testing": {
+      "path": "references/laravel-testing.md"
+    },
+    "legacy-tools": {
+      "path": "references/legacy-tools.md"
+    },
+    "legacy-tools-index": {
+      "path": "references/legacy-tools-index.md"
+    },
+    "llm-application-security": {
+      "path": "references/llm-application-security.md"
+    },
+    "miniprogram": {
+      "path": "references/miniprogram.md"
+    },
+    "mysql-database": {
+      "path": "references/mysql-database.md"
+    },
+    "performance-benchmark": {
+      "path": "references/performance-benchmark.md"
+    },
+    "platforms": {
+      "path": "references/platforms.md"
+    },
+    "production-readiness": {
+      "path": "references/production-readiness.md"
+    },
+    "project-knowledge-graph": {
+      "path": "references/project-knowledge-graph.md"
+    },
+    "project-memory-management": {
+      "path": "references/project-memory-management.md"
+    },
+    "refactoring": {
+      "path": "references/refactoring.md"
+    },
+    "root-cause-debugging": {
+      "path": "references/root-cause-debugging.md"
+    },
+    "routing": {
+      "path": "references/routing.md"
+    },
+    "software-project": {
+      "path": "references/software-project.md"
+    },
+    "spec-driven-development": {
+      "path": "references/spec-driven-development.md"
+    },
+    "style-alignment": {
+      "path": "references/style-alignment.md"
+    },
+    "task-decomposition-and-execution": {
+      "path": "references/task-decomposition-and-execution.md"
+    },
+    "tech-influence": {
+      "path": "references/tech-influence.md"
+    },
+    "tech-selection": {
+      "path": "references/tech-selection.md"
+    },
+    "technical-strategy": {
+      "path": "references/technical-strategy.md"
+    },
+    "test-generation": {
+      "path": "references/test-generation.md"
+    },
+    "threat-modeling": {
+      "path": "references/threat-modeling.md"
+    },
+    "website-project": {
+      "path": "references/website-project.md"
+    },
+    "wechat-devtools": {
+      "path": "references/wechat-devtools/index.md"
+    }
+  }
+}

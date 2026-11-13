@@ -114,8 +114,14 @@ const KEYCHAIN_DEFAULT_ARGS = [
  * Duplicated under compulsion, not inattentively: that file types its page against `playwright`, and
  * this process has `playwright-core` and no `playwright` package at all. Even a type-only import of
  * the missing name fails to resolve, so importing the rule would make the runner unbuildable. The
- * three values are the contract a person reads on screen, so they are written down here with the same
- * spelling and the tests that cover them are in `server/tests/runner-browser.test.ts`.
+ * three values are the contract a person reads on screen, so they are written down here and the tests
+ * that cover them are in `server/tests/runner-browser.test.ts`.
+ *
+ * The attribute's spelling is the one that differs: the computer's mark has a neutral name now
+ * (L1-17), and this one keeps its earlier name until that test's expectation is changed (appendix A,
+ * row 9, of the gradual-rewrite plan). They need not agree. The runner never writes this attribute
+ * (nothing here marks a field): it is only read, as part of the rule kept the same as the computer's,
+ * so the runner's masking rests on the password and autocomplete selectors either way.
  */
 const SECRET_ATTRIBUTE = "data-openbot-secret";
 const MASKED_VALUE = "[hidden: sensitive field]";

@@ -35,6 +35,10 @@ import { isNeverAllowedHostname } from "../computer/target";
 // The static half of the outbound guard. It reaches no database and no network, so the rule that
 // this module imports nothing that does still holds.
 import { checkOutboundUrl } from "../net/outbound-guard";
+// 技能附件的两个读工具名，同一份常量的道理：目录的读名单与传输实现读同一组名字。常量放在
+// skills/assets-store.ts（叶子模块）而不是 read-tool.ts，因为 read-tool 要经过 plugins/mcp，
+// 而 mcp 又回到本模块——cycle 两端都要用的常量必须住在 cycle 下面。这条 import 不成环。
+import { SKILL_ASSET_TOOL_NAMES } from "../skills/assets-store";
 // Type-only, so naming the transport here creates no import cycle with the registry that resolves it.
 import type { CuratedTransportKind } from "./transport";
 
@@ -1752,6 +1756,34 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
      */
     writeTools: Object.freeze([]),
     readTools: Object.freeze([...STAFFING_TOOL_NAMES]),
+    get docsUrl() {
+      return supportUrl();
+    },
+  },
+
+  {
+    key: "skills",
+    title: "技能附件",
+    // Getters, not values: the catalogue is built at import, before the tenant package sets the brand.
+    get vendor() {
+      return companyName();
+    },
+    summary:
+      "读取技能随附的参考文件：先列清单，再按步读取当前这一步需要的文件，不把整份材料塞进每轮对话。",
+    /*
+     * 和 Routines、招聘与组群一样是本部署自己的代码，没有要拨的主机、没有凭据。仍然放进目录，因为哪位
+     * 员工能读技能附件，是管理员要像授予应用一样明确授予的能力（授予写成 `skills/<工具名>`）。
+     *
+     * 授予这个能力给的是「读附件」这个工具，不是任何一份文件：read-tool 在每次调用时还要复查这位员工
+     * 是否真的持有它点名的那个技能（见 `skills/read-tool.ts` 顶部的两层闸门）。所以这里只列读，
+     * 越权由那一层拒绝。
+     */
+    host: "builtin://skills",
+    path: "/",
+    transport: "builtin-skills",
+    auth: Object.freeze({ kind: "builtin" }),
+    writeTools: Object.freeze([]),
+    readTools: Object.freeze([...SKILL_ASSET_TOOL_NAMES]),
     get docsUrl() {
       return supportUrl();
     },

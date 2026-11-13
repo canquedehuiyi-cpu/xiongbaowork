@@ -336,6 +336,7 @@ import { showAppAccessTools } from "./plugins/show-app-access-tool";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useStaffingTools } from "./plugins/builtin-staffing";
 import { useComposioClient } from "./plugins/composio";
+import { useSkillAssetTools } from "./skills/read-tool";
 import { createAccountModeSwitch } from "./plugins/account-mode";
 import { useArcadeClient } from "./plugins/arcade";
 import { asComposioBroker, createArcadeClient } from "./plugins/arcade-adapter";
@@ -1003,6 +1004,14 @@ await startupLifecycle.run(async (startup) => {
        * provisioned instead -- see ticket 004 -- so nothing is claimed here on their behalf.
        */
       config.singleUser ? [DEV_ACTOR.id] : [],
+      /*
+       * 连接器（connectors.yaml）声明了 credential_env 且环境里确实有值时，值从这里进保险库
+       * （kind "mcp"，keyId `mcp-<id>`，与插件页同一把钥匙）；没有声明或没设值时用不到它。
+       */
+      {
+        encryptionKey: config.keyEncryptionKey,
+        credentials: credentialStore,
+      },
     ),
   );
   /*
@@ -4253,6 +4262,13 @@ await startupLifecycle.run(async (startup) => {
     }),
     auditStore: bootAuditStore,
   });
+
+  /*
+   * 技能附件的读工具（skills/list_skill_assets 与 skills/read_skill_asset），与上面两个内置传输同一个
+   * 装配缝：transport 在导入时建注册表，那时还没有数据库，依赖在这里交一次。调用层的技能授予复查
+   * （read-tool 里查 plugin_grants kind='skill'）只需要数据库，所以依赖就只有它。
+   */
+  useSkillAssetTools({ database });
 
   /*
    * `@` a coworker inside a 1:1 conversation (spec B2, B3): a card on the board with the coworker named
