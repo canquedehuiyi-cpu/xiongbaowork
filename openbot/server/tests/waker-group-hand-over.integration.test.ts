@@ -338,11 +338,11 @@ async function truthIn(frame: string, channelId: string) {
   );
 }
 
-/** `openbot_team_channel_hand_over` in `frame`, the way the app calls it. */
+/** `xiongbao_team_channel_hand_over` in `frame`, the way the app calls it. */
 async function handOver(frame: string, channelId: string) {
   const rows = (await runAsTenant(frame, () =>
     database.execute(
-      sql`select public.openbot_team_channel_hand_over(${channelId}) as owner`,
+      sql`select public.xiongbao_team_channel_hand_over(${channelId}) as owner`,
     ),
   )) as unknown as { owner: string | null }[];
   return rows[0]?.owner ?? null;
@@ -356,7 +356,7 @@ async function leaveAndHandOver(who: AgentActor, channelId: string) {
         sql`delete from channel_memberships where channel_id = ${channelId} and user_id = ${who.id}`,
       );
       const rows = (await tx.execute(
-        sql`select public.openbot_team_channel_hand_over(${channelId}) as owner`,
+        sql`select public.xiongbao_team_channel_hand_over(${channelId}) as owner`,
       )) as unknown as { owner: string | null }[];
       return rows[0]?.owner ?? null;
     }),
@@ -912,7 +912,7 @@ describe("hand-over function (0207)", () => {
               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
              where n.nspname = 'public' and p.proname in (
                'openbot_team_channel_hand_over_write', 'openbot_team_channel_hand_over_core',
-               'openbot_team_channel_hand_over', 'openbot_team_person_leaves_groups',
+               'xiongbao_team_channel_hand_over', 'openbot_team_person_leaves_groups',
                'openbot_team_revoked_leaves')
              order by 1`,
       ),
@@ -925,11 +925,11 @@ describe("hand-over function (0207)", () => {
     }[];
 
     expect(functions.map((fn) => fn.name)).toEqual([
-      "openbot_team_channel_hand_over",
       "openbot_team_channel_hand_over_core",
       "openbot_team_channel_hand_over_write",
       "openbot_team_person_leaves_groups",
       "openbot_team_revoked_leaves",
+      "xiongbao_team_channel_hand_over",
     ]);
     for (const fn of functions) {
       expect(fn.definer).toBe(true);
@@ -937,7 +937,7 @@ describe("hand-over function (0207)", () => {
         (fn.config ?? []).some((setting) => setting.startsWith("search_path=")),
       ).toBe(true);
       expect(fn.everyone).toBe(false);
-      expect(fn.app).toBe(fn.name === "openbot_team_channel_hand_over");
+      expect(fn.app).toBe(fn.name === "xiongbao_team_channel_hand_over");
     }
     expect(
       functions.find((fn) => fn.name === "openbot_team_channel_hand_over_write")

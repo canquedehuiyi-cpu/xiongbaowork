@@ -73,7 +73,7 @@
 - 共享群（`tenant_id = 'team'`）：所有者 = `created_by`；`created_by` 为 NULL 的共享群没有所有者，不挂接（0128 注释说 P11 之前没有代码写共享群，这类行应为零，开机任务会计数）。
 - 个人的多员工频道（P11 之前的旧行，`tenant_id` = 某个用户）：所有者 = `tenant_id`。
 - 被挂的群组必须满足：`waker_groups.tenant_id = 所有者`，并且不是 WakerFlow 内部群组（`waker_flows.group_id` 没有指向它）。
-- `created_by` 会随 3.1.1 改变，只经 `openbot_team_channel_hand_over*` 函数改。
+- `created_by` 会随 3.1.1 改变，只经 0207 的移交函数改（对外的 `xiongbao_team_channel_hand_over` 与内部的 `openbot_team_channel_hand_over_*`）。
 
 ### 3.1.1 创建者退群后的归属
 
@@ -134,7 +134,7 @@ SCIM 停用之后还有一个 `setTimeout(…, 0)` 的善后（`scim.ts:88-112`�
 |---|---|---|---|
 | `openbot_team_channel_hand_over_write(p_channel_id, p_from, p_heir, p_group_id)` | `SECURITY DEFINER`，`SET search_path`，**`SET app.tenant_id = 'platform'`** | 不授权给应用（只有同一属主的函数能调） | 真正改数据（第 5 条）。`p_heir` 为 NULL 时改为软删聊天 |
 | `openbot_team_channel_hand_over_core(p_channel_id)` | `SECURITY DEFINER` | 不授权 | 锁频道、判定、调写入函数。返回调用后的所有者 |
-| `openbot_team_channel_hand_over(p_channel_id)` | `SECURITY DEFINER` | `GRANT EXECUTE TO openbot_app` | 先校验身份，再调 core |
+| `xiongbao_team_channel_hand_over(p_channel_id)` | `SECURITY DEFINER` | `GRANT EXECUTE TO openbot_app` | 先校验身份，再调 core |
 | `openbot_team_person_leaves_groups(p_user_id)` | `SECURITY DEFINER` | 不授权 | 停用时用：删他在所有 `team` 频道的成员行；对他是 `created_by` 的频道逐个调 core，遇到 55006 就跳过那一个（不能让停用失败） |
 | `openbot_team_revoked_leaves()`（触发器函数） | `SECURITY DEFINER`，`RETURNS trigger` | 不授权 | 按 `NEW.email` 找到 `users.id`（`lower(email)` 比较），调上一个函数；找不到人就什么都不做 |
 
@@ -157,7 +157,7 @@ core 的判定顺序：
 
 **存量补做**：0207 末尾在 `platform` 帧对 `revoked_access` 现有的每一行执行一次 `openbot_team_person_leaves_groups`，把「已经停用的创建者」也立即移交，并让停用的人离开共享群。之后 `set_config` 还原为空串，同 0128 的写法。
 
-所有函数都以 `openbot_team_` 开头，所以 `T/tenant-invariants.test.ts:470-529` 的 (f) 会自动检查它们：非触发器必须是 definer、固定 search_path、PUBLIC 不可执行。同文件 `:572-628` 枚举 `openbot_team_%` 触发器时，只核对触发器参数是否都指向存在的列；新触发器没有参数，自然通过。
+不授权给应用的内部函数都以 `openbot_team_` 开头，所以 `T/tenant-invariants.test.ts:470-529` 的 (f) 会自动检查它们：非触发器必须是 definer、固定 search_path、PUBLIC 不可执行。应用调用的那一个用新名 `xiongbao_team_channel_hand_over`（应用代码里不写旧品牌名，品牌预算不涨），在 (f) 里照 0206 两个函数的做法显式登记，并断言它是 definer、只授权给 `openbot_app`。同文件 `:572-628` 枚举 `openbot_team_%` 触发器时，只核对触发器参数是否都指向存在的列；新触发器没有参数，自然通过。
 
 **4.2 应用层：退群（装饰器）**
 
@@ -166,7 +166,7 @@ core 的判定顺序：
 - 否则在 owner 帧开一个事务：
   1. 对频道行 `select … for update`，和上游 `lockedBots` 用的是同一把锁；
   2. 删自己的成员行和映射；
-  3. `select openbot_team_channel_hand_over($1)`。
+  3. `select xiongbao_team_channel_hand_over($1)`。
 - 函数报 55006 时整个事务回滚，抛 `GroupRefusedError("有组团流程正在运行，先停下再退群。")`，路由回 400。
 - 提交后如果有接手人并且已挂接，在接手人帧调一次 `reconcile`，失败只记日志。
 
@@ -176,7 +176,7 @@ core 的判定顺序：
 
 **4.4 自愈点（方案 A 的 #5–#7，以及被推迟的移交）**
 
-- `POST /api/waker-groups/for-channel/:channelId`：读权限校验通过后，如果 `created_by` 不是调用者，先在调用者帧调一次 `openbot_team_channel_hand_over`，再用返回值判断。55006 时记 `waker-group-hand-over-deferred`，照旧回 403。
+- `POST /api/waker-groups/for-channel/:channelId`：读权限校验通过后，如果 `created_by` 不是调用者，先在调用者帧调一次 `xiongbao_team_channel_hand_over`，再用返回值判断。55006 时记 `waker-group-hand-over-deferred`，照旧回 403。
 - PR3 开机任务：第二、三阶段之前，在 `platform` 帧对涉及的共享群各调一次（Task 14 的追加）。
 - `reconcile`、`syncName`、`linkChannel` 不做移交。这样 Task 3 和 Task 4 锁定绕过服务路径的两条已有用例保持不变。
 
@@ -295,7 +295,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 4. **群组一侧不改**：`waker_groups` 和 `waker_group_members` 的策略（0070、0072）保持原样。
 5. **台账表 `waker_group_upgrades`**（0208，见 5.5）带 `tenant_id`，照 0072 建 `ENABLE` + `FORCE` 和四条策略，`GRANT` 给 `openbot_app`。写法照抄 `0203_portrait_media.sql:37-49`。
 6. **已知限制（接受）**：被创建者拉进共享群的**其他人**读不到创建者租户里的 `waker_groups`、`portraits` 和流程模板。他们看到的仍是叠放的员工头像，设置面板对他们只读（显示员工与顺序，数据取自群聊）。要让其他人也看到自定义头像，需要把头像改成 `team` 戳，本期不做（Q2）。
-7. **移交函数与停用触发器**（0207，3.1.1 第 7 条）：移交只在 `created_by` 已不是成员或已停用时生效，接手人由数据库按规则选，调用方只传频道 id；陌生人与频道不存在报同一个 42501，校验前不加锁；写入、判定、停用三个函数不授权给应用，只有 `openbot_team_channel_hand_over` 授权；直接 `UPDATE channels SET created_by` 仍被两道守卫拒绝；`revoked_access` 上的触发器只执行确定的规则，不接受调用方参数，没有扩大现有的信任边界。
+7. **移交函数与停用触发器**（0207，3.1.1 第 7 条）：移交只在 `created_by` 已不是成员或已停用时生效，接手人由数据库按规则选，调用方只传频道 id；陌生人与频道不存在报同一个 42501，校验前不加锁；写入、判定、停用三个函数不授权给应用，只有 `xiongbao_team_channel_hand_over` 授权；直接 `UPDATE channels SET created_by` 仍被两道守卫拒绝；`revoked_access` 上的触发器只执行确定的规则，不接受调用方参数，没有扩大现有的信任边界。
 
 ---
 

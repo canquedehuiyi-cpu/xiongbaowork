@@ -195,7 +195,7 @@ export type WakerGroupLink = {
   /**
    * 创建者本人退群（3.1.1 第 4.2 条）：owner 帧一个事务：
    * `select … from channels where id = $1 and deleted_at is null for update`（要求 tenant_id = 'team'、created_by = owner）
-   * → 删自己的成员行与 intelligence_channel_mappings → select openbot_team_channel_hand_over($1)。
+   * → 删自己的成员行与 intelligence_channel_mappings → select xiongbao_team_channel_hand_over($1)。
    * 读不到、不是 team、或不是创建者时返回 null（交给上游）。55006 时整体回滚，抛 GroupRefusedError("有组团流程正在运行，先停下再退群。")。
    *
    * `heir`：接手的人；没有人接手时为 null（最后一人离开、聊天已软删，或只剩停用的成员）。
@@ -205,7 +205,7 @@ export type WakerGroupLink = {
     channelId: string,
   ): Promise<{ heir: string | null } | null>;
   /**
-   * 在当前帧调 openbot_team_channel_hand_over；55006 时记 {"type":"waker-group-hand-over-deferred","channelId"}，
+   * 在当前帧调 xiongbao_team_channel_hand_over；55006 时记 {"type":"waker-group-hand-over-deferred","channelId"}，
    * 返回 deferred。`owner` 是调用之后的所有者（不是共享群、没有创建者或聊天已删时为 null，推迟时也为 null）。
    */
   handOver(
@@ -240,7 +240,7 @@ const RUN_STILL_GOING = "有组团流程正在运行，先停下再退群。";
  */
 async function handOverIn(executor: Executor, channelId: string) {
   const [row] = (await executor.execute(
-    sql`select public.openbot_team_channel_hand_over(${channelId}) as owner`,
+    sql`select public.xiongbao_team_channel_hand_over(${channelId}) as owner`,
   )) as { owner: string | null }[];
   return row?.owner ?? null;
 }

@@ -493,7 +493,9 @@ describe("the catalogue (I1–I4, I8)", () => {
       where n.nspname = 'public'
         and (p.proname like 'openbot\\_team\\_%' or p.proname like 'openbot\\_flow\\_share\\_%'
              -- 0206: the crew link's two functions sit beside the shared-group guard.
-             or p.proname in ('openbot_waker_group_absent', 'openbot_channel_waker_group_link'))
+             or p.proname in ('openbot_waker_group_absent', 'openbot_channel_waker_group_link')
+             -- 0207: the shared-group hand-over the app calls, under the new name.
+             or p.proname = 'xiongbao_team_channel_hand_over')
       order by 1
     `);
     expect(functions.length).toBeGreaterThan(0);
@@ -529,6 +531,8 @@ describe("the catalogue (I1–I4, I8)", () => {
         // 0206: whether a linked crew is gone (read past row security), and the link check.
         "openbot_waker_group_absent",
         "openbot_channel_waker_group_link",
+        // 0207: the one hand-over function the app may call.
+        "xiongbao_team_channel_hand_over",
       ]),
     );
     /*
@@ -540,6 +544,22 @@ describe("the catalogue (I1–I4, I8)", () => {
       functions.find((fn) => fn.name === name)?.definer;
     expect(definer("openbot_channel_waker_group_link")).toBe(false);
     expect(definer("openbot_waker_group_absent")).toBe(true);
+    /*
+     * 0207's hand-over reads and moves rows no caller's frame reaches, so it runs as its owner, and the
+     * app is the only role it is granted to. Its helpers keep the `openbot_team_` prefix, so the
+     * checks above cover them by prefix.
+     */
+    expect(definer("xiongbao_team_channel_hand_over")).toBe(true);
+    // Who the function's ACL grants EXECUTE to, besides its owner: PUBLIC shows up as grantee 0.
+    const handOverGrants = await catalogue<{ role: string }>(`
+      select case when a.grantee = 0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end as "role"
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      cross join lateral aclexplode(p.proacl) a
+      where n.nspname = 'public' and p.proname = 'xiongbao_team_channel_hand_over'
+        and a.privilege_type = 'EXECUTE' and a.grantee <> p.proowner
+      order by 1
+    `);
+    expect(handOverGrants.map((row) => row.role)).toEqual(["openbot_app"]);
   });
 
   test("(f) the share link guard is a BEFORE UPDATE row trigger on flow_share_links, and only there", async () => {

@@ -375,7 +375,7 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
 
 **建议执行模型**：opus　**评审方式**：完整评审，逐行核对：
 - 0207 不 `CREATE OR REPLACE` 任何已有函数；
-- 只有 `openbot_team_channel_hand_over` 授权给应用；
+- 只有 `xiongbao_team_channel_hand_over` 授权给应用；
 - 陌生人拿不到信息；
 - 停用触发器不会让停用失败；
 - 搬运范围与设计稿 3.1.1 第 5 条一致。
@@ -423,7 +423,7 @@ dissolve(owner: string, groupId: string): Promise<boolean>; // false = 不存在
         - 否则返回 `c.created_by`，不改。
      5. `c.waker_group_id` 非空，并且存在 `group_task_runs WHERE group_id = c.waker_group_id AND status IN ('running','awaiting_action')`：`RAISE EXCEPTION 'a crew run is still going' USING ERRCODE = '55006'`。
      6. `PERFORM hand_over_write(c.id, c.created_by, heir, c.waker_group_id)`，返回 heir。
-4. `openbot_team_channel_hand_over(p_channel_id text) RETURNS text`
+4. `xiongbao_team_channel_hand_over(p_channel_id text) RETURNS text`
    - 属性：`SECURITY DEFINER`，固定 `search_path`；`REVOKE ALL FROM PUBLIC`；`GRANT EXECUTE TO openbot_app`。
    - 函数体：
      - `frame IN ('system','team','')` → 42501；
@@ -465,11 +465,11 @@ export type WakerGroupLink = {
   /**
    * 创建者本人退群（3.1.1 第 4.2 条）：owner 帧一个事务：
    * `select … from channels where id = $1 and deleted_at is null for update`（要求 tenant_id = 'team'、created_by = owner）
-   * → 删自己的成员行与 intelligence_channel_mappings → select openbot_team_channel_hand_over($1)。
+   * → 删自己的成员行与 intelligence_channel_mappings → select xiongbao_team_channel_hand_over($1)。
    * 读不到、不是 team、或不是创建者时返回 null（交给上游）。55006 时整体回滚，抛 GroupRefusedError("有组团流程正在运行，先停下再退群。")。
    */
   leave(owner: string, channelId: string): Promise<{ heir: string | null } | null>;
-  /** 在当前帧调 openbot_team_channel_hand_over；55006 时记 {"type":"waker-group-hand-over-deferred","channelId"}，返回 deferred。 */
+  /** 在当前帧调 xiongbao_team_channel_hand_over；55006 时记 {"type":"waker-group-hand-over-deferred","channelId"}，返回 deferred。 */
   handOver(channelId: string): Promise<{ owner: string | null; deferred: boolean }>;
 };
 ```
@@ -539,7 +539,7 @@ export type WakerGroupLink = {
     - 应用连接直接调 `_write`、`_core`、`openbot_team_person_leaves_groups` 都报 `42501`（permission denied）。
   - `the functions are definer, pin search_path, and only one is granted`：
     - 查目录：五个函数 `prosecdef` 为真；都有 `search_path=`；`_write` 的 `proconfig` 含 `app.tenant_id=platform`；
-    - `has_function_privilege('openbot_app', …)`：只有 `openbot_team_channel_hand_over` 为真；
+    - `has_function_privilege('openbot_app', …)`：只有 `xiongbao_team_channel_hand_over` 为真；
     - PUBLIC 全为假；
     - `pg_trigger` 里有 `openbot_team_revoked_leaves`，挂在 `revoked_access` 上，`AFTER INSERT ROW`，已启用。
 
@@ -599,7 +599,7 @@ export type WakerGroupLink = {
 - [ ] **Step 2：运行** 服务端测试 `tests/waker-group-hand-over.integration.test.ts`，预期失败（函数不存在）。
 - [ ] **Step 3：实现。** 逐行确认：
   - 0207 没有 `CREATE OR REPLACE`；
-  - 除 `openbot_team_channel_hand_over` 外没有 `GRANT`；
+  - 除 `xiongbao_team_channel_hand_over` 外没有 `GRANT`；
   - 写入函数的每条 `UPDATE` 都带 `tenant_id = p_from`（`channels` 除外）；
   - `channel-link.ts` 没有新增 `asPlatform(` 或 `runAsTenant("platform"`。
 - [ ] **Step 4：运行。**

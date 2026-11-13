@@ -15,10 +15,13 @@
  * 影响；不用 0114 那种保存再还原的写法（出错路径还原不了）。只有写入函数这样切帧。
  *
  * 为什么只有一个函数授权给应用：写入、判定（core）、停用三个函数都能在调用方给不出的条件下改所有权，
- * 只有同一属主的函数能调。应用只拿到 `openbot_team_channel_hand_over`：先校验身份（`platform`、
+ * 只有同一属主的函数能调。应用只拿到 `xiongbao_team_channel_hand_over`：先校验身份（`platform`、
  * `created_by` 本人或现任成员；陌生人与频道不存在报同一个 42501，校验前不加锁），再调 core。现任成员调它
  * 只能让已经发生的离开按规则落地：`created_by` 仍在籍且未停用时 core 什么都不改。接手人由数据库选，调用方
  * 只传频道 id。
+ *
+ * 命名：应用调用的这一个用新名 `xiongbao_` 开头（应用代码里不再写旧品牌名），tests/tenant-invariants.test.ts
+ * 的 (f) 显式登记它；其余不授权给应用的内部函数保持 `openbot_team_` 开头，由 (f) 按前缀自动覆盖。
  *
  * 为什么挂在 `revoked_access` 上：SCIM 停用、管理员移除、平台停用租户三条路径唯一的共同点是插入这张表
  * （S/auth/scim.ts、S/people/store.ts、S/platform/store.ts），停用生效就在那一刻，移交与插入同一个事务。
@@ -157,7 +160,7 @@ END $f$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.openbot_team_channel_hand_over_core(text) FROM PUBLIC;
 --> statement-breakpoint
-CREATE FUNCTION public.openbot_team_channel_hand_over(p_channel_id text)
+CREATE FUNCTION public.xiongbao_team_channel_hand_over(p_channel_id text)
   RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $f$
 DECLARE
   frame text := coalesce(current_setting('app.tenant_id', true), '');
@@ -176,9 +179,9 @@ BEGIN
   RETURN public.openbot_team_channel_hand_over_core(p_channel_id);
 END $f$;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION public.openbot_team_channel_hand_over(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.xiongbao_team_channel_hand_over(text) FROM PUBLIC;
 --> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.openbot_team_channel_hand_over(text) TO openbot_app;
+GRANT EXECUTE ON FUNCTION public.xiongbao_team_channel_hand_over(text) TO openbot_app;
 --> statement-breakpoint
 CREATE FUNCTION public.openbot_team_person_leaves_groups(p_user_id text)
   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $f$
