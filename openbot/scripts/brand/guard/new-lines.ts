@@ -97,14 +97,24 @@ const inScope = (file: string): boolean =>
   (SCOPES.some((s) => file.startsWith(s)) &&
     (TEXT_FILE.test(file) || file.startsWith("docker/")));
 
-/** Added lines that still name the upstream after the rules; comments count. */
-export function newLineFindings(lines: AddedLine[]): Finding[] {
+/**
+ * Added lines that still name the upstream after the rules; comments count. A line the allowlist covers
+ * (same file, line contains the entry's text, as the main guard matches) is not reported: the ratchet keeps
+ * the allowlist from growing, so this does not loosen anything.
+ */
+export function newLineFindings(
+  lines: AddedLine[],
+  allow: { file: string; text: string }[] = [],
+): Finding[] {
   return lines
     .filter(
       (l) =>
         inScope(l.file) && !EXEMPT_PATHS.some((exempt) => exempt.test(l.file)),
     )
     .filter((l) => BRAND.test(masked(l.line)))
+    .filter(
+      (l) => !allow.some((a) => a.file === l.file && l.line.includes(a.text)),
+    )
     .map((l) => ({ file: l.file, number: l.number, line: l.line.trim() }));
 }
 
