@@ -339,6 +339,20 @@ pub fn runner_args(
     args
 }
 
+/// The desktop engine this machine asks for, as `--desktop-engine`: `XIONGBAO_DESKTOP_ENGINE`, or
+/// else `OPENBOT_DESKTOP_ENGINE`, passed on exactly as set. The runner decides what the name means
+/// and refuses one it does not know; the app does not guess. A variable that is empty (or only
+/// spaces), as `setx XIONGBAO_DESKTOP_ENGINE ""` leaves it, counts as not set. Neither set: no flag,
+/// and the runner keeps its own default for the platform.
+pub fn desktop_engine_args(env: &dyn Fn(&str) -> Option<OsString>) -> Vec<OsString> {
+    ["XIONGBAO_DESKTOP_ENGINE", "OPENBOT_DESKTOP_ENGINE"]
+        .iter()
+        .filter_map(|name| env(name))
+        .find(|value| !value.to_string_lossy().trim().is_empty())
+        .map(|engine| vec!["--desktop-engine".into(), engine])
+        .unwrap_or_default()
+}
+
 /// Where Chrome, Edge and Chromium are installed on this operating system, in order of preference.
 /// D9: no browser is bundled, so the runner can only use one of these.
 pub fn browser_candidates(env: &dyn Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
@@ -501,6 +515,8 @@ impl RunnerLauncher {
                 self.browser.as_deref(),
                 self.desktop_helper.as_deref(),
             ))
+            // The engine switch (Windows trials agent-desktop with it), read at every launch.
+            .args(desktop_engine_args(&|name| std::env::var_os(name)))
             // The device app's end of the desktop control channel: its banner and stop key.
             .args(["--desktop-control", "stdio"])
             .current_dir(&self.data_dir)
@@ -795,6 +811,57 @@ mod tests {
         assert!(launched
             .windows(2)
             .any(|w| w == ["--desktop-helper", &*helper.to_string_lossy()]));
+    }
+
+    #[test]
+    fn the_desktop_engine_switch_is_passed_on_as_set() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| OsString::from(*value))
+            }
+        };
+        // Neither variable: no flag, and the runner keeps its own default.
+        assert!(desktop_engine_args(&env(&[])).is_empty());
+        // The product's own name first.
+        assert_eq!(
+            strings(&desktop_engine_args(&env(&[
+                ("XIONGBAO_DESKTOP_ENGINE", "agent-desktop"),
+                ("OPENBOT_DESKTOP_ENGINE", "legacy"),
+            ]))),
+            ["--desktop-engine", "agent-desktop"]
+        );
+        // The older name when the product's is not set.
+        assert_eq!(
+            strings(&desktop_engine_args(&env(&[(
+                "OPENBOT_DESKTOP_ENGINE",
+                "legacy"
+            )]))),
+            ["--desktop-engine", "legacy"]
+        );
+        // As set: the runner, not the app, decides what an engine name means.
+        assert_eq!(
+            strings(&desktop_engine_args(&env(&[(
+                "XIONGBAO_DESKTOP_ENGINE",
+                "Agent-Desktop "
+            )]))),
+            ["--desktop-engine", "Agent-Desktop "]
+        );
+        // Cleared (`setx XIONGBAO_DESKTOP_ENGINE ""`): as if not set.
+        assert_eq!(
+            strings(&desktop_engine_args(&env(&[
+                ("XIONGBAO_DESKTOP_ENGINE", ""),
+                ("OPENBOT_DESKTOP_ENGINE", "agent-desktop"),
+            ]))),
+            ["--desktop-engine", "agent-desktop"]
+        );
+        assert!(desktop_engine_args(&env(&[
+            ("XIONGBAO_DESKTOP_ENGINE", "  "),
+            ("OPENBOT_DESKTOP_ENGINE", ""),
+        ]))
+        .is_empty());
     }
 
     #[test]

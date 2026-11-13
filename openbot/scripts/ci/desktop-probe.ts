@@ -6,11 +6,15 @@
  *
  * Then the writes (Task 23), through the runner's own session actions and the control channel, whose
  * device end the probe plays itself (it answers that the banner is up and the mouse check paused). On
- * macOS only: Chinese typed into TextEdit and read back, a write voiding the window's refs, and a key
+ * macOS: Chinese typed into TextEdit and read back, a write voiding the window's refs, and a key
  * that needs the window in front; and (Task 25) text put on the clipboard and read back exactly, and
- * `desktop.wait` seeing TextEdit's save dialog after cmd+s in a new document. Each write is sent once
- * and never again: a write that failed is reported as it came back, not retried, so nothing is typed
- * twice. Linux and the legacy Windows engine must refuse a write in their own words.
+ * `desktop.wait` seeing TextEdit's save dialog after cmd+s in a new document. Windows, on the
+ * agent-desktop engine (Task 28, `OPENBOT_DESKTOP_ENGINE=agent-desktop`): Chinese put into Notepad
+ * with `set-value` and read back, a write voiding the window's refs, ctrl+s with Notepad in front
+ * landing on disk, 1 2 × 3 4 = clicked in Calculator reading 408, and an append going through
+ * `--headed` inside the device's begin, ack and end. Each write is sent once and never again: a write
+ * that failed is reported as it came back, not retried, so nothing is typed twice. Linux and the
+ * legacy Windows engine must refuse a write in their own words.
  *
  * On macOS agent-desktop finds its clipboard helper next to itself by its installed name, so the
  * probe copies the fetched pair (named with the target triple) into `<dir>/bin` under the names the
@@ -34,6 +38,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -56,6 +61,8 @@ import {
 } from "../../runner/src/execute.ts";
 import {
   DESKTOP_REF,
+  DESKTOP_TEXT_ROLES,
+  type DesktopElement,
   type DesktopPlatform,
   type DesktopSnapshot,
   type DesktopWindow,
@@ -84,8 +91,9 @@ export const DESKTOP_PROBE_CHECKS = {
 } as const;
 
 /**
- * The write checks' labels (Tasks 23 and 25). macOS runs all but the read-only one; Linux and
- * Windows only that one.
+ * The write checks' labels (Tasks 23, 25 and 28). macOS runs its five; Windows its four, the stale
+ * one and the read-only one (the legacy engine, still what a Windows device runs by default); Linux
+ * only the read-only one.
  */
 export const DESKTOP_PROBE_WRITE_CHECKS = {
   typed: "macOS: typing Chinese reads back",
@@ -93,6 +101,11 @@ export const DESKTOP_PROBE_WRITE_CHECKS = {
   foreground: "a key needs the window in front",
   clipboard: "macOS: text put on the clipboard reads back exactly",
   waited: "macOS: wait sees TextEdit's save dialog after cmd+s",
+  winTyped: "Windows: Chinese put into Notepad with set-value reads back",
+  winSaved: "Windows: ctrl+s with Notepad in front saves the text to disk",
+  winCalculator: "Windows: clicking 1 2 × 3 4 = in Calculator reads 408",
+  winHeaded:
+    "Windows: appending goes through --headed with begin, ack and end in order",
   readOnly:
     "a write is refused in defined words where the desktop is read-only",
 } as const;
@@ -110,13 +123,43 @@ export function probeChecksFor(platform: DesktopPlatform): string[] {
           writes.clipboard,
           writes.waited,
         ]
-      : [writes.readOnly]),
+      : platform === "windows"
+        ? [
+            writes.winTyped,
+            writes.staleAfterWrite,
+            writes.winSaved,
+            writes.winCalculator,
+            writes.winHeaded,
+            writes.readOnly,
+          ]
+        : [writes.readOnly]),
   ];
 }
 
 const TEXT = "熊宝员工-桌面探针";
 /** What the macOS write check types over the editor's text. */
 const WRITE_TEXT = "熊宝员工 写入 abc 123";
+/** What the Windows check appends to Notepad's text through `--headed`. */
+const APPEND_TEXT = " 追加 xyz";
+/** How long Notepad may take to write the file after ctrl+s. */
+const SAVE_WAIT_MS = 10_000;
+/** How long Calculator may take to show the result after `=`. */
+const RESULT_WAIT_MS = 5_000;
+/**
+ * Calculator's buttons by the names either Calculator gives them: the classic one (`win32calc`, what
+ * Windows Server ships) names them by their face and `Multiply`/`Equals`, the Store one `One`,
+ * `Multiply by`, `Equals`.
+ */
+const CALCULATOR_KEYS: ReadonlyArray<{ face: string; names: string[] }> = [
+  { face: "1", names: ["1", "one"] },
+  { face: "2", names: ["2", "two"] },
+  { face: "×", names: ["×", "*", "multiply", "multiply by"] },
+  { face: "3", names: ["3", "three"] },
+  { face: "4", names: ["4", "four"] },
+  { face: "=", names: ["=", "equals", "equal"] },
+];
+/** 12 × 34, shown as a whole number in a name or a value ("408", "Display is 408"). */
+const CALCULATOR_RESULT = /(^|[^\d])408([^\d]|$)/;
 /** What the macOS clipboard check puts on the clipboard and reads back. */
 const CLIPBOARD_TEXT = "熊宝员工 剪贴板 ✓ abc 123";
 /** The save dialog's button, which only the dialog has (macos-latest runs in English). */
@@ -141,8 +184,14 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
  * banner is up and every `--headed` step's mouse check is paused, at once. The events are printed
  * for the log; they name a session by its label, never by its token.
  */
-export function probeControl(): { control: ControlChannel; close(): void } {
+export function probeControl(): {
+  control: ControlChannel;
+  close(): void;
+  /** Every `--headed` step so far, as the device saw it: `begin`, its `ack`, `end`, in order. */
+  headed(): string[];
+} {
   const pending: string[] = [];
+  const headed: string[] = [];
   let wake: (() => void) | undefined;
   let closed = false;
   const poke = () => {
@@ -177,12 +226,17 @@ export function probeControl(): { control: ControlChannel; close(): void } {
       console.log(JSON.stringify({ control: event }));
       if (event.event === "session-started")
         push({ control: "session-ready", label: event.label });
-      if (event.event === "headed-begin")
+      if (event.event === "headed-begin") {
+        headed.push("begin");
+        headed.push("ack");
         push({ control: "headed-ack", seq: event.seq });
+      }
+      if (event.event === "headed-end") headed.push("end");
     },
   });
   return {
     control,
+    headed: () => [...headed],
     close() {
       closed = true;
       poke();
@@ -218,6 +272,11 @@ export function stageMacBinaries(helper: string, root: string): string {
   chmodSync(cli, 0o755);
   chmodSync(helperCopy, 0o755);
   return cli;
+}
+
+/** The editor's file: a Chinese name, Chinese text; the Windows save check reads it back. */
+function editorFile(root: string): string {
+  return join(root, "熊宝员工.txt");
 }
 
 /** agent-desktop's state directory for a probe workspace; the executor and the probe agree on it. */
@@ -433,6 +492,8 @@ export async function probeAgentDesktop(
     execute: RunnerExecutor;
     /** The channel the executor's desktop actions were built with (`probeControl`). */
     control: ControlChannel;
+    /** The device's view of `--headed` steps (`probeControl().headed`). */
+    headed?: () => string[];
   },
 ): Promise<void> {
   const { root, helper, platform, execute, control } = opts;
@@ -463,7 +524,10 @@ export async function probeAgentDesktop(
       opened,
     );
     snapshotWorked = read.worked;
-    await writeChecks(assert, run, platform, read.windowId, control);
+    await writeChecks(assert, run, platform, read.windowId, control, {
+      file: editorFile(root),
+      headed: opts.headed ?? (() => []),
+    });
   } finally {
     if (!snapshotWorked) diagnose(helper, root);
     // 7. Private (0700, or on Windows the protected DACL a working snapshot proves), never traced,
@@ -552,7 +616,7 @@ async function readChecks(
 ): Promise<{ worked: boolean; windowId?: string }> {
   // 1. An editor with a Chinese file name and Chinese text, in the runner's window list. The BOM
   // keeps every editor from guessing another encoding.
-  const file = join(root, "熊宝员工.txt");
+  const file = editorFile(root);
   writeFileSync(file, `\uFEFF${TEXT}`, "utf8");
   opened(await openEditor(platform, file));
   const editor = (window: DesktopWindow) => window.title.includes("熊宝员工");
@@ -848,12 +912,359 @@ async function saveDialogCheck(
   };
 }
 
+/** What the Windows checks need besides the runner: the editor's file and the device's view. */
+type WindowsWriteContext = {
+  file: string;
+  headed: () => string[];
+};
+
+/** The control holding `text` in a read, as the read checks found it. */
+function holding(
+  snapshot: DesktopSnapshot | undefined,
+  text: string,
+): DesktopElement | undefined {
+  return snapshot?.elements.find((element) =>
+    (element.value ?? "").includes(text),
+  );
+}
+
 /**
- * The write checks (Task 23). Linux, and Windows on the legacy engine, refuse every write before
- * anything runs. macOS writes to the editor through a session the probe opens with the runner's own
- * `desktop.session_start`. EVERY WRITE IS SENT ONCE: one that failed is reported as it came back and
- * never sent again, so a write the machine may have carried out is not repeated (the second type
- * below is sent only after the first succeeded, when its ref must already be void).
+ * A text control the writer types into without asking (`DESKTOP_TEXT_ROLES`) is sent unapproved, as
+ * on macOS. Notepad's text area can also come back as a `document`, which the writer asks about;
+ * there the probe sends what the server sends once the owner said yes. Either way it is sent once.
+ */
+function typeApproval(box: DesktopElement): boolean {
+  return !DESKTOP_TEXT_ROLES.has(box.type);
+}
+
+/** The file as Notepad left it: decoded by its byte-order mark (UTF-8 or UTF-16 LE), the mark dropped. */
+function savedText(file: string): {
+  text?: string;
+  head: string;
+  error?: string;
+} {
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(file);
+  } catch (error) {
+    return { head: "", error: String(error) };
+  }
+  const head = bytes.subarray(0, 16).toString("hex");
+  if (bytes[0] === 0xff && bytes[1] === 0xfe)
+    return { text: bytes.subarray(2).toString("utf16le"), head };
+  const utf8 =
+    bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
+      ? bytes.subarray(3)
+      : bytes;
+  return { text: utf8.toString("utf8"), head };
+}
+
+/** Reads the file until it holds `expected` (Notepad writes it a moment after ctrl+s). Only reads. */
+async function waitForSaved(file: string, expected: string) {
+  const deadline = Date.now() + SAVE_WAIT_MS;
+  for (;;) {
+    const saved = savedText(file);
+    if (saved.text === expected || Date.now() > deadline)
+      return { matches: saved.text === expected, ...saved };
+    await Bun.sleep(250);
+  }
+}
+
+/** Calculator's button for `names`, in a read: a button whose whole name is one of them, any case. */
+function calculatorButton(
+  snapshot: DesktopSnapshot | undefined,
+  names: string[],
+): DesktopElement | undefined {
+  return snapshot?.elements.find(
+    (element) =>
+      element.type.toLowerCase() === "button" &&
+      names.includes(element.name.trim().toLowerCase()),
+  );
+}
+
+/** Where Calculator shows 408, in a read: a name or a value holding it as a whole number. */
+function calculatorShows(snapshot: DesktopSnapshot | undefined) {
+  return snapshot?.elements.find(
+    (element) =>
+      CALCULATOR_RESULT.test(element.name) ||
+      CALCULATOR_RESULT.test(element.value ?? ""),
+  );
+}
+
+/** Ends Calculator: the process started (a stub may be gone already) and the window's own. */
+function endCalculator(pid: number | undefined, image: string | undefined) {
+  const root =
+    process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
+  const taskkill = win32.join(root, "System32", "taskkill.exe");
+  const run = (args: string[]) =>
+    spawnSync(taskkill, args, {
+      windowsHide: true,
+      stdio: "ignore",
+      timeout: 15_000,
+    });
+  if (pid !== undefined) run(["/PID", String(pid), "/T", "/F"]);
+  // Only a process that is plainly a calculator, never the shell hosting other windows.
+  if (image && /calc/i.test(image))
+    run([
+      "/IM",
+      image.toLowerCase().endsWith(".exe") ? image : `${image}.exe`,
+      "/F",
+    ]);
+}
+
+/**
+ * Calculator: started fresh, then for each of 1 2 × 3 4 = one read and one click on that button (a
+ * click voids the window's refs, so every button is found on a read made after the previous click).
+ * Then the result is read until it shows 408. The first step that fails ends the check, with what
+ * came back.
+ */
+async function calculatorCheck(
+  run: Run,
+  write: (action: string, body: Record<string, unknown>) => Promise<Result>,
+): Promise<{ passed: boolean; seen: unknown }> {
+  const before = await run("desktop.windows", {});
+  const known = new Set(windowsOf(before).map((w) => w.windowId));
+  let child: Bun.Subprocess;
+  try {
+    child = Bun.spawn(["calc.exe"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+  } catch (error) {
+    return {
+      passed: false,
+      seen: { step: "starting calc.exe", error: String(error) },
+    };
+  }
+  child.unref();
+  let image: string | undefined;
+  try {
+    const opened = await waitForWindow(
+      run,
+      (w) => !known.has(w.windowId) && /calculator|计算器/i.test(w.title),
+    );
+    if (!opened.window)
+      return {
+        passed: false,
+        seen: { step: "Calculator's window", seen: opened.seen },
+      };
+    const windowId = opened.window.windowId;
+    image = opened.window.process;
+    const clicks: unknown[] = [];
+    for (const key of CALCULATOR_KEYS) {
+      const read = await run("desktop.snapshot", { windowId });
+      const snapshot = read.ok ? (read.output as DesktopSnapshot) : undefined;
+      const button = calculatorButton(snapshot, key.names);
+      if (!button)
+        return {
+          passed: false,
+          seen: {
+            step: `the ${key.face} button`,
+            window: opened.window,
+            clicks,
+            read: snapshot ? brief(snapshot) : read,
+          },
+        };
+      const clicked = await write("desktop.click", { ref: button.ref });
+      clicks.push({ face: key.face, name: button.name, clicked });
+      if (!clicked.ok)
+        return {
+          passed: false,
+          seen: { step: `clicking ${key.face}`, clicks },
+        };
+    }
+    const deadline = Date.now() + RESULT_WAIT_MS;
+    let last: Result | undefined;
+    for (;;) {
+      last = await run("desktop.snapshot", { windowId });
+      const snapshot = last.ok ? (last.output as DesktopSnapshot) : undefined;
+      const shown = calculatorShows(snapshot);
+      if (shown)
+        return {
+          passed: true,
+          seen: {
+            shown: { type: shown.type, name: shown.name, value: shown.value },
+          },
+        };
+      if (!last.ok || Date.now() > deadline)
+        return {
+          passed: false,
+          seen: {
+            step: "reading 408",
+            clicks,
+            read: snapshot ? brief(snapshot) : last,
+          },
+        };
+      await Bun.sleep(250);
+    }
+  } finally {
+    endCalculator(child.pid, image);
+  }
+}
+
+/**
+ * Windows on agent-desktop (Task 28), in one session the probe opens: Chinese put into Notepad over
+ * its text (`desktop.type` replace, which goes through `set-value`: headless, so `physical` is false)
+ * and read back, the same ref refused afterwards; Notepad brought to the front, checked to be there,
+ * then ctrl+s, and the file on disk holding exactly that text; Calculator clicked to 408; and a few
+ * words appended to Notepad's text (`desktop.type` append: headless `type` is refused on Windows, so
+ * it goes through `--headed`), with the device seeing begin, ack and end in that order.
+ */
+async function windowsWriteChecks(
+  assert: Assert,
+  run: Run,
+  windowId: string,
+  win: WindowsWriteContext,
+): Promise<void> {
+  const checks = DESKTOP_PROBE_WRITE_CHECKS;
+  const token = randomBytes(32).toString("hex");
+  const started = await run("desktop.session_start", { token, ...PROBE_WHO });
+  if (!started.ok)
+    console.log(
+      JSON.stringify({
+        sessionStart: "the desktop session did not start; no write was sent",
+        seen: started,
+      }),
+    );
+  const write = (action: string, body: Record<string, unknown>) =>
+    run(action, {
+      session: token,
+      ...PROBE_WHO,
+      approved: false,
+      actionWords: [],
+      ...body,
+    });
+  try {
+    // 1. Replace through set-value, read back; the same ref again is stale.
+    const before = await run("desktop.snapshot", { windowId });
+    const snapshot = before.ok ? (before.output as DesktopSnapshot) : undefined;
+    const box = holding(snapshot, TEXT);
+    const typed =
+      started.ok && box
+        ? await write("desktop.type", {
+            ref: box.ref,
+            text: WRITE_TEXT,
+            mode: "replace",
+            approved: typeApproval(box),
+          })
+        : undefined;
+    const again =
+      typed?.ok === true && box
+        ? await write("desktop.type", {
+            ref: box.ref,
+            text: WRITE_TEXT,
+            mode: "replace",
+            approved: typeApproval(box),
+          })
+        : undefined;
+    const after = await run("desktop.snapshot", { windowId });
+    const reread = after.ok ? (after.output as DesktopSnapshot) : undefined;
+    const readBack = reread?.elements.find(
+      (element) => (element.value ?? "").trim() === WRITE_TEXT,
+    );
+    const typedOutput = typed?.ok
+      ? (typed.output as { physical?: unknown })
+      : undefined;
+    assert(
+      started.ok &&
+        typed?.ok === true &&
+        typedOutput?.physical === false &&
+        readBack !== undefined,
+      checks.winTyped,
+      {
+        started,
+        box: box && {
+          ref: box.ref,
+          type: box.type,
+          approved: typeApproval(box),
+        },
+        typed,
+        reread: reread ? brief(reread) : after,
+        before: snapshot ? undefined : before,
+      },
+    );
+    assert(
+      again !== undefined &&
+        !again.ok &&
+        again.error === desktopMessage("stale"),
+      checks.staleAfterWrite,
+      { typed: typed?.ok, again },
+    );
+
+    // 2. Notepad in front (checked, never assumed), then ctrl+s, then the file on disk.
+    const focused =
+      typed?.ok === true
+        ? await write("desktop.focus", { windowId })
+        : undefined;
+    const inFront =
+      focused?.ok === true && (await waitForFocus(run, windowId, true));
+    const saved = inFront
+      ? await write("desktop.key", { windowId, keys: "ctrl+s" })
+      : undefined;
+    const disk =
+      saved?.ok === true ? await waitForSaved(win.file, WRITE_TEXT) : undefined;
+    assert(saved?.ok === true && disk?.matches === true, checks.winSaved, {
+      typed: typed?.ok,
+      focused,
+      inFront,
+      saved,
+      disk,
+      expected: WRITE_TEXT,
+    });
+
+    // 3. Calculator.
+    const calculator = started.ok
+      ? await calculatorCheck(run, write)
+      : { passed: false, seen: { started } };
+    assert(calculator.passed, checks.winCalculator, calculator.seen);
+
+    // 4. Append through --headed: the device sees begin, its ack, then end, and nothing else.
+    const fresh = await run("desktop.snapshot", { windowId });
+    const current = fresh.ok ? (fresh.output as DesktopSnapshot) : undefined;
+    const target = holding(current, WRITE_TEXT);
+    const mark = win.headed().length;
+    const appended =
+      started.ok && target
+        ? await write("desktop.type", {
+            ref: target.ref,
+            text: APPEND_TEXT,
+            mode: "append",
+            approved: typeApproval(target),
+          })
+        : undefined;
+    const steps = win.headed().slice(mark);
+    const last = await run("desktop.snapshot", { windowId });
+    const ended = last.ok ? (last.output as DesktopSnapshot) : undefined;
+    const appendedOutput = appended?.ok
+      ? (appended.output as { physical?: unknown })
+      : undefined;
+    assert(
+      appended?.ok === true &&
+        appendedOutput?.physical === true &&
+        steps.join(",") === "begin,ack,end" &&
+        holding(ended, APPEND_TEXT.trim()) !== undefined,
+      checks.winHeaded,
+      {
+        target: target && { ref: target.ref, type: target.type },
+        appended,
+        steps,
+        read: ended ? brief(ended) : last,
+        fresh: current ? undefined : fresh,
+      },
+    );
+  } finally {
+    await run("desktop.session_end", { token });
+  }
+}
+
+/**
+ * The write checks (Tasks 23 and 28). Linux, and Windows on the legacy engine, refuse every write
+ * before anything runs. macOS and Windows on agent-desktop then write to the editor through a session
+ * the probe opens with the runner's own `desktop.session_start`. EVERY WRITE IS SENT ONCE: one that
+ * failed is reported as it came back and never sent again, so a write the machine may have carried
+ * out is not repeated (the second type below is sent only after the first succeeded, when its ref
+ * must already be void).
  */
 async function writeChecks(
   assert: Assert,
@@ -861,6 +1272,7 @@ async function writeChecks(
   platform: DesktopPlatform,
   windowId: string | undefined,
   control: ControlChannel,
+  win: WindowsWriteContext,
 ): Promise<void> {
   const writes: Array<[string, Record<string, unknown>]> = [
     ["desktop.click", { ref: "abcdef-1:1" }],
@@ -904,6 +1316,9 @@ async function writeChecks(
       DESKTOP_PROBE_WRITE_CHECKS.readOnly,
       { expected, answers },
     );
+    // Windows on agent-desktop (this probe's engine there): the writes themselves.
+    if (platform === "windows" && windowId)
+      await windowsWriteChecks(assert, run, windowId, win);
     return;
   }
 
@@ -1105,6 +1520,7 @@ if (import.meta.main) {
       platform,
       execute,
       control: probe.control,
+      headed: probe.headed,
     });
   } catch (error) {
     failed++;
