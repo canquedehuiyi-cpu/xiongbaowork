@@ -4,7 +4,10 @@
  * runner/tests/runner-package.test.ts, with these same flags.
  */
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
+  BUILD_CWD,
   bunTargetFor,
   compileArgs,
   hostTriple,
@@ -49,6 +52,22 @@ test("the stage 0 flags are used, and --target only when cross-compiling", () =>
   expect(compileArgs("x86_64-pc-windows-msvc", host, "/o")).toContain(
     "--target=bun-windows-x64",
   );
+});
+
+test("compile args do not define __dirname or __filename", () => {
+  // `--define __dirname=...` applies to the bundled playwright-core too, which then looks for its
+  // package.json at `/` and cannot launch a browser. Neither is `--minify` on yet (appendix A row 35).
+  const args = compileArgs(
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+    "/o",
+  );
+  expect(args).not.toContain("--define");
+  expect(args).not.toContain("--minify");
+});
+
+test("the compile runs in the openbot directory, so module paths in the binary are relative", () => {
+  expect(existsSync(join(BUILD_CWD, "runner", "src", "index.ts"))).toBe(true);
 });
 
 test("the host triple is read from rustc -vV", () => {
