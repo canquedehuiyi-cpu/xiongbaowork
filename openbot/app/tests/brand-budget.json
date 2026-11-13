@@ -51,11 +51,6 @@
   },
   {
     "rule": "env-name",
-    "scope": "Dockerfile",
-    "lines": 1
-  },
-  {
-    "rule": "env-name",
     "scope": "agent-computer/src",
     "lines": 1
   },
@@ -63,6 +58,11 @@
     "rule": "env-name",
     "scope": "desktop-device/src-tauri",
     "lines": 5
+  },
+  {
+    "rule": "env-name",
+    "scope": "docker/defaults.env",
+    "lines": 1
   },
   {
     "rule": "env-name",

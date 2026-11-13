@@ -458,9 +458,8 @@ RUN set -eu; \
 # the container engine's network, so that rule would refuse everybody. See `singleUserAccess` in
 # server/src/config.ts. It is IN_CONTAINER=true in docker/defaults.env (above).
 ENV NODE_ENV=production
-# The CopilotKit runtime reports usage to its vendor unless this is set; the server also swaps its
-# capture scope for a silent one, so this covers any process that reads the variable directly.
-ENV COPILOTKIT_TELEMETRY_DISABLED=1
+# The usage-reporting switch of the agent runtime library is in docker/defaults.env, which the env-aliases
+# step reads: it is written under its own name, and only when the deployment has not set it.
 ENV PORT=3001
 EXPOSE 3001
 

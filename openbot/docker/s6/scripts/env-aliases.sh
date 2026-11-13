@@ -10,6 +10,8 @@
 # (`#` starts a comment) is written as XIONGBAO_<X> only when neither XIONGBAO_<X> nor its legacy
 # name is set, and is then copied like any other. As an image ENV under the new name it would win
 # over a customer's own setting under the legacy name: RLS_ENFORCE=warn turned back into refuse.
+# An entry right after a line that is exactly `#third-party` is a third party's own variable name and has no
+# XIONGBAO_ counterpart: it is written as it is, only when that name is not set, and never copied.
 # A missing defaults file is skipped.
 #
 # Usage: env-aliases.sh [dir] [defaults-file]
@@ -24,10 +26,19 @@ defaults=${2:-/etc/xiongbao/defaults.env}
 legacy_of() { printf '%s\n' "$dir"/OPENBOT_"$1"; }
 
 if [ -f "$defaults" ]; then
+  own=
   while IFS= read -r entry || [ -n "$entry" ]; do
-    case $entry in '' | '#'*) continue ;; esac
+    case $entry in
+      '#third-party') own=1; continue ;;
+      '' | '#'*) continue ;;
+    esac
     suffix=${entry%%=*}
-    [ -n "$suffix" ] && [ "$suffix" != "$entry" ] || continue
+    [ -n "$suffix" ] && [ "$suffix" != "$entry" ] || { own=; continue; }
+    if [ -n "$own" ]; then
+      own=
+      [ -e "$dir/$suffix" ] || printf %s "${entry#*=}" > "$dir/$suffix"
+      continue
+    fi
     if [ ! -e "$dir/XIONGBAO_$suffix" ] && [ ! -e "$(legacy_of "$suffix")" ]; then
       printf %s "${entry#*=}" > "$dir/XIONGBAO_$suffix"
     fi
