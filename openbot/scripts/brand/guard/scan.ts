@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse } from "yaml";
+import { CRYPTO_NAMES, isKnownEnvName } from "./env-names";
 
 /*
  * This fork ships as 熊宝. The upstream names (OpenBot, CopilotKit, Qoder) must not reach a
@@ -73,7 +74,67 @@ const OPENBOT =
 const QODER = "(?:Qoder|qoder|QODER)";
 
 // Each rule erases what it allows; whatever brand text survives the masking is a finding.
-export type Rule = { id: string; pattern: RegExp; reason: string };
+// `erase` may veto one match, given the string literal it sits in (if any): the match then stays in the line.
+export type Literal = { start: number; end: number; text: string };
+export type Rule = {
+  id: string;
+  pattern: RegExp;
+  reason: string;
+  erase?: (match: string, literal: Literal | undefined) => boolean;
+};
+
+// The string literals of one line, as the ranges between their quotes. A quote that never closes on the
+// line is no literal (an apostrophe in prose); an unclosed backtick opens a template that runs on, so the
+// rest of the line counts. `${…}` inside a template is code and punches a hole in the literal.
+export function literals(line: string): Literal[] {
+  const out: Literal[] = [];
+  let i = 0;
+  while (i < line.length) {
+    const quote = line[i];
+    if (quote !== '"' && quote !== "'" && quote !== "`") {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    let hole = 0;
+    let segment = j;
+    const parts: Literal[] = [];
+    let closed = false;
+    for (; j < line.length; j++) {
+      const ch = line[j];
+      if (ch === "\\") {
+        j++;
+        continue;
+      }
+      if (quote === "`" && hole === 0 && ch === "$" && line[j + 1] === "{") {
+        parts.push({ start: segment, end: j, text: "" });
+        hole = 1;
+        j++;
+        continue;
+      }
+      if (hole > 0) {
+        if (ch === "{") hole++;
+        else if (ch === "}" && --hole === 0) segment = j + 1;
+        continue;
+      }
+      if (ch === quote) {
+        closed = true;
+        break;
+      }
+    }
+    if (!closed && quote !== "`") {
+      i++;
+      continue;
+    }
+    if (hole === 0) parts.push({ start: segment, end: j, text: "" });
+    const whole = line.slice(i + 1, j);
+    for (const part of parts) out.push({ ...part, text: whole });
+    i = j + 1;
+  }
+  return out;
+}
+
+const UPPER_NAME = /^[A-Z][A-Z0-9_$]*$/;
 export const RULES: Rule[] = [
   {
     id: "copilotkit-package",
@@ -91,9 +152,17 @@ export const RULES: Rule[] = [
     reason: "runtime endpoint path shared with the upstream client",
   },
   {
-    id: "openbot-env",
-    pattern: /\bOPENBOT_\w*/g,
-    reason: "OPENBOT_* env var names stay valid for existing deployments",
+    id: "env-name",
+    pattern: /\b(?:OPENBOT|COPILOTKIT)_\w*/g,
+    // In a string, a bare name is an env var read; a sentence that mentions one is operator-visible text.
+    erase: (match, literal) =>
+      isKnownEnvName(match) && (!literal || !/\s/.test(literal.text)),
+    reason: "known env var names stay valid for existing deployments",
+  },
+  {
+    id: "crypto-name",
+    pattern: new RegExp(`\\b(?:${CRYPTO_NAMES.join("|")})\\b`, "g"),
+    reason: "approval crypto version names are written into stored data",
   },
   {
     id: "wire-dom",
@@ -124,6 +193,10 @@ export const RULES: Rule[] = [
       `[\\w$]*[a-z_$](?:${OPENBOT}|${QODER})[\\w$]*|${OPENBOT}(?=[A-Z_])[\\w$]*|${QODER}(?=_)[\\w$]*`,
       "g",
     ),
+    // An upper-case name inside a string is an env var or an error code: only env-name and crypto-name
+    // may erase it there.
+    erase: (match, literal) =>
+      !(literal && UPPER_NAME.test(match) && /OPENBOT|COPILOTKIT/.test(match)),
     reason: "code identifiers are not renamed (Global Constraints)",
   },
   {
@@ -185,6 +258,10 @@ export const EXEMPT_PATHS: {
     reason: "tests and their fixtures",
   },
   { test: (p) => p === "server/src/brand.ts", reason: "the brand exit itself" },
+  {
+    test: (p) => p.startsWith("charts/"),
+    reason: "Helm chart is not delivered",
+  },
 ];
 
 export function* walk(dir: string): Generator<string> {
@@ -196,6 +273,18 @@ export function* walk(dir: string): Generator<string> {
   }
 }
 
+// Every file under `dir` whatever its name: image scripts have no extension. TEXT_FILE stays as it was; the
+// files of the new scopes are reached by listing their directories here.
+function* walkAll(dir: string, skip: (path: string) => boolean = () => false) {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules") continue;
+    const path = join(dir, name);
+    if (skip(relative(REPO, path))) continue;
+    if (statSync(path).isDirectory()) yield* walkAll(path, skip);
+    else yield path;
+  }
+}
+
 export function scannedFiles(): string[] {
   const files = [
     ...walk(join(REPO, "app/src")),
@@ -203,6 +292,12 @@ export function scannedFiles(): string[] {
     ...walk(join(REPO, "runner/src")),
     ...walk(join(REPO, "shared")),
     ...walk(join(REPO, "toolkit/src")),
+    ...walk(join(REPO, "agent-computer/src")),
+    ...walk(join(REPO, "supervisor/src")),
+    ...walk(join(REPO, "worker/src")),
+    ...walkAll(join(REPO, "docker"), (path) => path === "docker/tests"),
+    join(REPO, "Dockerfile"),
+    join(REPO, "extension/scripts/build.ts"),
     ...walk(join(REPO, "desktop-device/src-tauri/src")),
     ...readdirSync(join(REPO, "desktop-device/src-tauri"))
       .filter((name) => name.endsWith(".json"))
@@ -226,6 +321,7 @@ export function scannedFiles(): string[] {
 export function codeLines(
   source: string,
   templates = true,
+  hash = false,
 ): { line: string; number: number }[] {
   const out: { line: string; number: number }[] = [];
   let inBlock = false;
@@ -255,24 +351,48 @@ export function codeLines(
       if (!trimmed.includes("*/") && !trimmed.includes("-->")) inBlock = true;
       return;
     }
-    if (/^(\/\/|\*)/.test(trimmed)) return;
+    if (/^(\/\/|\*)/.test(trimmed) || (hash && trimmed.startsWith("#"))) return;
     out.push({ line, number: index + 1 });
     if (ticks % 2 === 1) inTemplate = true;
   });
   return out;
 }
 
+// The rule's erasing of one line, same length so literal ranges stay valid; `rule.erase` can veto a match.
+export function applyRule(rule: Rule, line: string): string {
+  const spans = rule.erase ? literals(line) : [];
+  return line.replace(rule.pattern, (match: string, ...rest: unknown[]) => {
+    const offset = rest.find((x) => typeof x === "number") as number;
+    const literal = spans.find((l) => offset >= l.start && offset < l.end);
+    if (rule.erase && !rule.erase(match, literal)) return match;
+    return " ".repeat(match.length);
+  });
+}
+
 export const masked = (line: string) =>
-  RULES.reduce((text, rule) => text.replace(rule.pattern, " "), line);
+  RULES.reduce((text, rule) => applyRule(rule, text), line);
+
+// `#` is a comment in image scripts, Dockerfile and YAML only.
+export const hashComments = (path: string) =>
+  path === "Dockerfile" ||
+  /\.(sh|yml)$/.test(path) ||
+  (path.startsWith("docker/s6/") && !/\.[^/]+$/.test(path));
+
+export const linesOf = (path: string, source: string) =>
+  codeLines(
+    source,
+    /\.(ts|tsx|js|mjs|cjs|jsx)$/.test(path),
+    hashComments(path),
+  );
 
 export type Finding = { file: string; number: number; line: string };
 
 export function findings(): Finding[] {
   const found: Finding[] = [];
   for (const file of scannedFiles()) {
-    for (const { line, number } of codeLines(
+    for (const { line, number } of linesOf(
+      file,
       readFileSync(join(REPO, file), "utf8"),
-      /\.(ts|tsx|js|mjs|cjs|jsx)$/.test(file),
     )) {
       if (BRAND.test(masked(line)))
         found.push({ file, number, line: line.trim() });

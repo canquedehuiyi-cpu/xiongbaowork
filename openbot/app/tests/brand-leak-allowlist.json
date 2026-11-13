@@ -1374,6 +1374,440 @@
     "plan": "keep"
   },
   {
+    "file": "server/src/intelligence-entitlement-check.ts",
+    "text": "COPILOTKIT_LICENSE_TOKEN",
+    "reason": "external-name: the third party's own variable, named in boot-time advice",
+    "category": "third-party-name",
+    "plan": "keep"
+  },
+  {
+    "file": "server/src/setup/checklist.ts",
+    "text": "COPILOTKIT_LICENSE_TOKEN",
+    "reason": "external-name: the third party's own variable, named in setup advice",
+    "category": "third-party-name",
+    "plan": "keep"
+  },
+  {
+    "file": "server/src/index.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "reason": "external-name: the runtime's own switch, named in a start-up message",
+    "category": "third-party-name",
+    "plan": "keep"
+  },
+  {
+    "file": "docker/delivery.env.example",
+    "text": "CopilotKit",
+    "reason": "external-name: names the third-party product whose licence and cloud the optional Intelligence settings need",
+    "category": "third-party-name",
+    "plan": "keep"
+  },
+  {
+    "file": "server/src/agents/provider-refusal.ts",
+    "text": "\"OPENBOT_MODEL_",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/agents/plan-model.ts",
+    "text": "\"OPENBOT_MODEL_AUTH_REQUIRED\"",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/desktop-connection-failure.ts",
+    "text": "\"OPENBOT_MODEL_AUTH_REQUIRED\"",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/provider-error.ts",
+    "text": "\"OPENBOT_PROVIDER_REQUEST_REFUSED\"",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/threads/postgres-runner.ts",
+    "text": "\"OPENBOT_AP_LOCAL_",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/learning/remote.ts",
+    "text": "\"OPENBOT_LEARNED_SKILLS_ERROR\"",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "toolkit/src/copilotkit/agents.ts",
+    "text": "\"OPENBOT_TOOL_LIMIT_EXCEEDED\"",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "toolkit/src/headless-tools.ts",
+    "text": "\"OPENBOT_HEADLESS_TOOL_ERROR\"",
+    "reason": "persisted-identifier: error code sent to the browser or the peer, L1-8",
+    "category": "peer-protocol",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/auth/dev-actor.ts",
+    "text": "OPENBOT_SINGLE_USER=true",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/auth/role-writer-lifecycle.ts",
+    "text": "OPENBOT_RLS_ENFORCE must",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/edition.ts",
+    "text": "OPENBOT_EDITION is",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/config.ts",
+    "text": "OPENBOT_BROKER_PROVIDER 只能",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/config.ts",
+    "text": "OPENBOT_SINGLE_USER admits",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/config.ts",
+    "text": "OPENBOT_THIS_MACHINE_HOST \"",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/config.ts",
+    "text": "needs OPENBOT_PUBLIC_URL",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/config.ts",
+    "text": "OPENBOT_EDITION=personal",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/config.ts",
+    "text": "OPENBOT_RECORDER_EXTRA_EXTENSION_IDS lists",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/web-bot-auth.ts",
+    "text": "OPENBOT_PUBLIC_URL",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/plugins/broker.ts",
+    "text": "OPENBOT_APP_URL",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/plugins/broker.ts",
+    "text": "OPENBOT_BROKER_PROVIDER=",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/plugins/routes.ts",
+    "text": "OPENBOT_APP_URL",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/plugins/routes.ts",
+    "text": "OPENBOT_PUBLIC_URL",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/plugins/provider-wiring.ts",
+    "text": "OPENBOT_BROKER_PROVIDER",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/plugins/provider-wiring.ts",
+    "text": "OPENBOT_PUBLIC_URL",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/plugins/arcade-routes.ts",
+    "text": "OPENBOT_APP_URL",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "runner/src/index.ts",
+    "text": "Also read from OPENBOT_",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "server/src/db/schema/model.ts",
+    "text": "'^OPENBOT_POOL_",
+    "reason": "persisted-identifier: the database CHECK pattern on stored key names",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "shared/env-aliases.ts",
+    "text": "\"OPENBOT_\"",
+    "reason": "developer-only: the alias module's own prefix, never shown",
+    "category": "developer-only",
+    "plan": "keep"
+  },
+  {
+    "file": "agent-computer/src/person-access.ts",
+    "text": "OpenBot Desktop's",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "agent-computer/src/recorder-launcher.ts",
+    "text": "OpenBot cannot connect it",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "agent-computer/src/recorder.ts",
+    "text": "OpenBot Recorder",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "agent-computer/src/bot-browser-host.ts",
+    "text": "OpenBot Recorder",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "agent-computer/src/real-browser.ts",
+    "text": "(OpenBot Desktop)",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "agent-computer/src/egress.ts",
+    "text": "which OpenBot never opens",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "agent-computer/src/egress.ts",
+    "text": "realm=\"OpenBot\"",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "agent-computer/src/egress.ts",
+    "text": "x-openbot-egress",
+    "reason": "persisted-identifier: wire header the egress filter sends (Global Constraints)",
+    "category": "peer-protocol",
+    "plan": "keep"
+  },
+  {
+    "file": "agent-computer/src/egress.ts",
+    "text": "openbot-egress-credentials.invalid",
+    "reason": "persisted-identifier: sentinel host name shared by the filter and its clients",
+    "category": "peer-protocol",
+    "plan": "keep"
+  },
+  {
+    "file": "agent-computer/src/index.ts",
+    "text": ".openbot-write-probe-",
+    "reason": "developer-only: probe file removed right after the write check",
+    "category": "developer-only",
+    "plan": "keep"
+  },
+  {
+    "file": "agent-computer/src/live-shell.ts",
+    "text": ".openbot-shell-",
+    "reason": "developer-only: temporary directory name, removed after use",
+    "category": "developer-only",
+    "plan": "keep"
+  },
+  {
+    "file": "agent-computer/src/real-browser.ts",
+    "text": "startsWith(\"OPENBOT_\")",
+    "reason": "developer-only: env-var prefix filter and temporary profile directory name",
+    "category": "developer-only",
+    "plan": "keep"
+  },
+  {
+    "file": "agent-computer/src/real-browser.ts",
+    "text": "\"openbot-real-browser\"",
+    "reason": "developer-only: env-var prefix filter and temporary profile directory name",
+    "category": "developer-only",
+    "plan": "keep"
+  },
+  {
+    "file": "agent-computer/src/session-cookies.ts",
+    "text": "openbot-session-cookies.json",
+    "reason": "persisted-identifier: file name already written on customers' computers",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "supervisor/src/docker.ts",
+    "text": ".openbot-carried-over",
+    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "supervisor/src/docker.ts",
+    "text": ".openbot-carrying-",
+    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "supervisor/src/docker.ts",
+    "text": "\"openbot.carry-over\"",
+    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "supervisor/src/names.ts",
+    "text": "DEFAULT_NAMESPACE = \"openbot\"",
+    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "supervisor/src/names.ts",
+    "text": "= \"openbot.",
+    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "supervisor/src/index.ts",
+    "text": "openbot-agent-computer:latest",
+    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "supervisor/src/identity.ts",
+    "text": "openbot.local",
+    "reason": "persisted-identifier: SPIFFE trust domain and join token name already issued",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "worker/src/index.ts",
+    "text": "OpenBot worker status",
+    "reason": "internal-log: worker status line in the log, L1-6 (Task 8)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "docker/openbot-apt",
+    "text": "openbot-apt",
+    "reason": "internal-log: command name customers type inside the image, L1-9 (Task 11)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "Dockerfile",
+    "text": "openbot-apt",
+    "reason": "internal-log: command name customers type inside the image, L1-9 (Task 11)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "docker/compose.delivery.yml",
+    "text": "OPENBOT_PORT",
+    "reason": "internal-log: compose interpolation variable named in the delivery file, Task 18",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "docker/s6/scripts/postgres-init.sh",
+    "text": "-U openbot",
+    "reason": "persisted-identifier: database name and role names written into every customer database",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "docker/s6/scripts/postgres-init.sh",
+    "text": "postgres://openbot",
+    "reason": "persisted-identifier: database name and role names written into every customer database",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "docker/s6/scripts/migrate.sh",
+    "text": "-U openbot",
+    "reason": "persisted-identifier: database name and role names written into every customer database",
+    "category": "persisted-data",
+    "plan": "keep"
+  },
+  {
+    "file": "desktop-device/src-tauri/src/sidecar.rs",
+    "text": "OPENBOT_RUNNER_BINARY",
+    "reason": "developer-only: development override variable read by the device shell, L1-20 (Task 13)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
+    "file": "desktop-device/src-tauri/src/sidecar.rs",
+    "text": "OPENBOT_AGENT_DESKTOP_BINARY",
+    "reason": "developer-only: development override variable read by the device shell, L1-20 (Task 13)",
+    "category": "operator-visible",
+    "plan": "rewrite"
+  },
+  {
     "file": "shared/desktop-control.ts",
     "text": "\"openbot-runner\",",
     "reason": "persisted-identifier: 识别旧版安装包的进程名（C1），把旧版设备端自己的窗口也当成本机界面挡住",

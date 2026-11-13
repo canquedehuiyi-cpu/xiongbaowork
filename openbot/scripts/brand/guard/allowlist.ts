@@ -43,6 +43,16 @@ export type AllowEntry = {
 
 const VERSION = /^\d+\.\d+\.\d+$/;
 
+const compare = (a: string, b: string): number => {
+  const x = a.split(".").map(Number);
+  const y = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+};
+
 export function entryProblems(entry: AllowEntry): string[] {
   const where = `${entry.file}: ${entry.text}`;
   const problems: string[] = [];
@@ -68,6 +78,20 @@ export function entryProblems(entry: AllowEntry): string[] {
         `${where}: ${key} "${value}" is not a version of the form X.Y.Z`,
       );
   }
+  if (entry.notBefore !== undefined && entry.device !== true)
+    problems.push(
+      `${where}: notBefore only applies to device entries, add device: true`,
+    );
+  if (
+    entry.introducedIn &&
+    entry.removeIn &&
+    VERSION.test(entry.introducedIn) &&
+    VERSION.test(entry.removeIn) &&
+    compare(entry.removeIn, entry.introducedIn) <= 0
+  )
+    problems.push(
+      `${where}: removeIn ${entry.removeIn} must be after introducedIn ${entry.introducedIn}`,
+    );
   if (
     (entry.category === "persisted-data" ||
       entry.category === "peer-protocol") &&
@@ -79,16 +103,6 @@ export function entryProblems(entry: AllowEntry): string[] {
     );
   return problems;
 }
-
-const compare = (a: string, b: string): number => {
-  const x = a.split(".").map(Number);
-  const y = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const d = (x[i] ?? 0) - (y[i] ?? 0);
-    if (d !== 0) return d;
-  }
-  return 0;
-};
 
 /** Formal releases newer than `version`: the changelog's `## X.Y.Z` headings plus `current`. */
 export function releasesAfter(
