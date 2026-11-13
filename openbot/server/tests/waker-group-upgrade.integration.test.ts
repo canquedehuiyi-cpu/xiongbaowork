@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { SQL } from "bun";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
@@ -2188,5 +2189,418 @@ describe("phases 2 and 3", () => {
       .map((line) => JSON.parse(line) as Record<string, unknown>)
       .find((line) => line.type === "waker-group-upgrade");
     expect(summary).toMatchObject({ backfilled: 0, reconciled: 0 });
+  });
+});
+
+/** The deployment manual, whose rollback runbook (section 6.2) the tests below run as written. */
+const MANUAL = await Bun.file(
+  new URL("../../docs/deployment-xiongbao.md", import.meta.url),
+).text();
+const RUNBOOK_START = "<!-- group-upgrade-rollback:start -->";
+const RUNBOOK_END = "<!-- group-upgrade-rollback:end -->";
+const HAND_OVER_TRIGGER = "openbot_team_revoked_leaves";
+
+/** The runbook's SQL between its two markers, as the operator pastes it. */
+function runbookSql() {
+  const start = MANUAL.indexOf(RUNBOOK_START);
+  const end = MANUAL.indexOf(RUNBOOK_END);
+  if (start < 0 || end < start) throw new Error("runbook markers missing");
+  const fenced = /```sql\n([\s\S]*?)\n```/.exec(
+    MANUAL.slice(start + RUNBOOK_START.length, end),
+  );
+  if (!fenced?.[1]) throw new Error("the runbook has no sql block");
+  return fenced[1];
+}
+
+/** Its statements in order, each without its semicolon (none of them has one inside). */
+function statementsOf(text: string) {
+  return text
+    .split(/;[ \t]*(?:\n|$)/)
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.replace(/^--.*$/gm, "").trim() !== "");
+}
+
+/** The database owner, as the operator connects: only it may disable a trigger. */
+function ownerConnection(): SQL {
+  const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
+  if (!raw)
+    throw new Error(
+      "TEST_DATABASE_ADMIN_URL must name the database owner: the runbook runs as the owner.",
+    );
+  const admin = new URL(raw);
+  const target = new URL(testDatabaseUrl());
+  if (admin.hostname !== target.hostname || admin.port !== target.port)
+    throw new Error(
+      "TEST_DATABASE_ADMIN_URL must reach the same server as TEST_DATABASE_URL.",
+    );
+  return new SQL({
+    adapter: "postgres",
+    hostname: admin.hostname,
+    port: admin.port ? Number(admin.port) : 5432,
+    username: decodeURIComponent(admin.username),
+    password: decodeURIComponent(admin.password),
+    database: decodeURIComponent(target.pathname.replace(/^\//, "")),
+    max: 1,
+  });
+}
+
+/** Thrown to unwind the owner's transaction: the runbook touches every row of its tables. */
+class Rollback extends Error {}
+
+/**
+ * `statements` as the owner, one by one in one transaction, then `look` at what they left before
+ * the transaction is rolled back, so the shared test database is as it was.
+ */
+async function ownerRolledBack<T>(
+  statements: string[],
+  look: (tx: SQL, results: unknown[][]) => Promise<T>,
+): Promise<T> {
+  const owner = ownerConnection();
+  let seen: { value: T } | null = null;
+  try {
+    await owner.begin(async (tx) => {
+      const results: unknown[][] = [];
+      for (const statement of statements)
+        results.push(await tx.unsafe(statement));
+      seen = { value: await look(tx as unknown as SQL, results) };
+      throw new Rollback();
+    });
+  } catch (error) {
+    if (!(error instanceof Rollback)) throw error;
+  } finally {
+    await owner.close();
+  }
+  if (!seen) throw new Error("the runbook was not run");
+  return (seen as { value: T }).value;
+}
+
+/** The runbook between its BEGIN and COMMIT, run as the owner and rolled back. */
+async function runRunbook<T>(
+  look: (tx: SQL, handedOver: Record<string, unknown>[]) => Promise<T>,
+) {
+  const statements = statementsOf(runbookSql());
+  expect(statements[0]).toBe("BEGIN");
+  expect(statements.at(-1)).toBe("COMMIT");
+  expect(statements[1]).toBe(
+    "SELECT set_config('app.tenant_id', 'platform', true)",
+  );
+  // The listing of converted crews that changed hands comes first, before anything is undone.
+  expect(statements[2]).toContain("g.tenant_id <> l.original_owner");
+  return ownerRolledBack(statements.slice(1, -1), (tx, results) =>
+    look(tx, [...(results[1] ?? [])] as Record<string, unknown>[]),
+  );
+}
+
+/** The chat the ledger names for `groupId`. */
+async function ledgerChannel(groupId: string) {
+  const channelId = (await ledgerOf(groupId))?.channel_id;
+  if (!channelId) throw new Error(`no chat in the ledger for ${groupId}`);
+  return channelId;
+}
+
+async function linkOf(channelId: string) {
+  const [row] = (await runAsTenant("platform", () =>
+    database.execute(
+      sql`select waker_group_id::text as group_id from channels where id = ${channelId}`,
+    ),
+  )) as unknown as { group_id: string | null }[];
+  return row?.group_id ?? null;
+}
+
+/** In the owner's transaction: the chat's state and its link. */
+async function chatIn(tx: SQL, channelId: string) {
+  const [row] = await tx`select deleted_at, waker_group_id::text as group_id
+                           from channels where id = ${channelId}`;
+  return {
+    deleted: row?.deleted_at !== null,
+    deletedAt: row?.deleted_at ?? null,
+    groupId: (row?.group_id as string | null) ?? null,
+  };
+}
+
+/** In the owner's transaction: the crew's roster in `position` order. */
+async function rosterIn(tx: SQL, groupId: string) {
+  const rows =
+    await tx`select agent_id from waker_group_members where group_id = ${groupId}::uuid
+              order by position::int`;
+  return [...rows].map((row: { agent_id: string }) => row.agent_id);
+}
+
+async function crewIn(tx: SQL, groupId: string) {
+  const [row] =
+    await tx`select tenant_id from waker_groups where id = ${groupId}::uuid`;
+  return (row?.tenant_id as string | undefined) ?? null;
+}
+
+describe("rollback runbook", () => {
+  test("the runbook is marked once", () => {
+    for (const marker of [RUNBOOK_START, RUNBOOK_END])
+      expect(MANUAL.split(marker).length - 1).toBe(1);
+    expect(MANUAL.indexOf(RUNBOOK_START)).toBeLessThan(
+      MANUAL.indexOf(RUNBOOK_END),
+    );
+  });
+
+  test("the runbook SQL undoes an untouched conversion and backfill", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const carol = await person("carol");
+    const mine = await bots(alice, 2);
+    // Bob's Bot is private to him: Alice's conversion leaves it out.
+    const theirs = await bot(bob, "别人的员工");
+    const untouched = await oldCrew(alice, "周报", [...mine, theirs]);
+    const spoken = await oldCrew(alice, "复盘", await bots(alice, 2));
+    const handed = await oldCrew(alice, "交接", await bots(alice, 2));
+    await convertGroups(upgrade());
+    const untouchedChat = await ledgerChannel(untouched);
+    const spokenChat = await ledgerChannel(spoken);
+    const handedChat = await ledgerChannel(handed);
+    expect(await ledgerOf(untouched)).toMatchObject({
+      outcome: "converted",
+      dropped_agent_ids: [theirs],
+    });
+    expect(await membersOf(untouched)).toEqual(mine);
+    await say(alice, spokenChat);
+    // Carol joins the converted chat while it is still empty; Alice leaves past the service.
+    await runAsTenant(alice, () =>
+      conversations().addMember(alice, handedChat, {
+        email: `${carol}@example.test`,
+      }),
+    );
+    await runAsTenant(alice, () => groupStore.removeMember(handedChat, alice));
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`select public.xiongbao_team_channel_hand_over(${handedChat})`,
+      ),
+    );
+    expect((await crewOwner(handed))?.tenantId).toBe(carol);
+    expect(await ledgerOf(handed)).toMatchObject({
+      tenant_id: carol,
+      original_owner: alice,
+    });
+
+    const unused = await openChat(alice, await bots(alice, 2));
+    const used = await openChat(alice, await bots(alice, 2));
+    await backfillChannels(upgrade());
+    const unusedCrew = await linkOf(unused.id);
+    const usedCrew = await linkOf(used.id);
+    if (!unusedCrew || !usedCrew) throw new Error("not backfilled");
+    expect(await ledgerOf(unusedCrew)).toMatchObject({ outcome: "backfilled" });
+    // Its template was deleted, which keeps the run and empties its template id.
+    const [run] = await runAsTenant(alice, () =>
+      database
+        .insert(groupTaskRuns)
+        .values({
+          templateId: null,
+          groupId: usedCrew,
+          status: "done",
+          steps: [],
+        })
+        .returning({ id: groupTaskRuns.id }),
+    );
+    if (!run) throw new Error("run not written");
+
+    const seen = await runRunbook(async (tx, handedOver) => ({
+      handedOver: handedOver.filter((row) =>
+        [untouched, spoken, handed].includes(String(row.group_id)),
+      ),
+      untouched: await chatIn(tx, untouchedChat),
+      roster: await rosterIn(tx, untouched),
+      spoken: await chatIn(tx, spokenChat),
+      handed: await chatIn(tx, handedChat),
+      handedOwner: await crewIn(tx, handed),
+      unusedCrew: await crewIn(tx, unusedCrew),
+      unused: await chatIn(tx, unused.id),
+      usedCrew: await crewIn(tx, usedCrew),
+      runs: [
+        ...(await tx`select id::text as id from group_task_runs where id = ${run.id}::uuid`),
+      ].map((row: { id: string }) => row.id),
+      ledger: Number(
+        (await tx`select count(*)::int as n from waker_group_upgrades`)[0]?.n,
+      ),
+    }));
+
+    // The untouched conversion is undone: its chat hidden, the coworker it left out back last.
+    expect(seen.untouched).toMatchObject({ deleted: true, groupId: untouched });
+    expect(seen.roster).toEqual([...mine, theirs]);
+    // The unused backfill is gone, and its chat unlinked.
+    expect(seen.unusedCrew).toBeNull();
+    expect(seen.unused).toMatchObject({ deleted: false, groupId: null });
+    // Spoken in, or used by a run whose template is gone: left alone.
+    expect(seen.spoken).toMatchObject({ deleted: false, groupId: spoken });
+    expect(seen.usedCrew).toBe(alice);
+    expect(seen.runs).toEqual([run.id]);
+    // Handed over: left with its heir, and written down by the opening query.
+    expect(seen.handed).toMatchObject({ deleted: false, groupId: handed });
+    expect(seen.handedOwner).toBe(carol);
+    expect(seen.handedOver).toEqual([
+      {
+        group_id: handed,
+        original_owner: alice,
+        current_owner: carol,
+        channel_id: handedChat,
+      },
+    ]);
+    expect(seen.ledger).toBe(0);
+    // Rolled back: the shared database is as it was.
+    expect(await ledgerOf(untouched)).toMatchObject({ outcome: "converted" });
+  });
+
+  test("the runbook leaves alone a chat the person opened themselves", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+
+    // The person opened the crew's chat mid-conversion: the ledger names the one the upgrade made.
+    const racedIds = await bots(alice, 2);
+    const raced = await oldCrew(alice, "周报", racedIds);
+    const base = conversations();
+    const link = linkFor();
+    let racedOurs = "";
+    let racedTheirs = "";
+    await convertGroups(
+      upgrade({
+        link,
+        groups: {
+          store: base.store,
+          create: async (owner, input) => {
+            const made = await base.create(owner, input);
+            if (owner === alice && !racedOurs) {
+              racedOurs = made.id;
+              const opened = await openChat(alice, racedIds);
+              racedTheirs = opened.id;
+              await link.adopt(raced, opened.id);
+            }
+            return made;
+          },
+        },
+      }),
+    );
+    expect(await ledgerOf(raced)).toMatchObject({
+      outcome: "converted",
+      channel_id: racedOurs,
+    });
+
+    // Crashed before it made a chat; the person opened one since: the ledger names none.
+    const nothingIds = await bots(alice, 2);
+    const nothing = await oldCrew(alice, "复盘", nothingIds);
+    await started(nothing, alice, {});
+    const nothingTheirs = await openChat(alice, nothingIds);
+    await upgrade().link.adopt(nothing, nothingTheirs.id);
+
+    // The ledger names a chat that never linked the crew and nobody spoke in (the upgrade could
+    // not hide it: Alice cannot reach Bob's group).
+    const elsewhereIds = await bots(alice, 2);
+    const elsewhere = await oldCrew(alice, "交接", elsewhereIds);
+    const bobs = await openChat(bob, await bots(bob, 2));
+    await started(elsewhere, alice, { channelId: bobs.id });
+    const elsewhereTheirs = await openChat(alice, elsewhereIds);
+    await upgrade().link.adopt(elsewhere, elsewhereTheirs.id);
+
+    // A converted chat the person deleted since, with a coworker the conversion left out.
+    const mine = await bots(alice, 2);
+    const left = await bot(bob, "别人的员工");
+    const deleted = await oldCrew(alice, "月报", [...mine, left]);
+
+    await convertGroups(upgrade());
+    expect(await ledgerOf(nothing)).toMatchObject({
+      outcome: "converted",
+      channel_id: null,
+    });
+    expect(await ledgerOf(elsewhere)).toMatchObject({
+      outcome: "converted",
+      channel_id: bobs.id,
+    });
+    const deletedChat = await ledgerChannel(deleted);
+    await hide(deletedChat);
+
+    const before = await runAsTenant("platform", () =>
+      database.execute(
+        sql`select deleted_at::text as at from channels where id = ${deletedChat}`,
+      ),
+    );
+    const seen = await runRunbook(async (tx) => ({
+      racedTheirs: await chatIn(tx, racedTheirs),
+      racedOurs: await chatIn(tx, racedOurs),
+      nothingTheirs: await chatIn(tx, nothingTheirs.id),
+      elsewhereTheirs: await chatIn(tx, elsewhereTheirs.id),
+      bobs: await chatIn(tx, bobs.id),
+      deletedAt: (
+        await tx`select deleted_at::text as at from channels where id = ${deletedChat}`
+      )[0]?.at,
+      roster: await rosterIn(tx, deleted),
+    }));
+
+    // The person's own chats stay, linked to their crews.
+    expect(seen.racedTheirs).toMatchObject({ deleted: false, groupId: raced });
+    expect(seen.racedOurs).toMatchObject({ deleted: true, groupId: null });
+    expect(seen.nothingTheirs).toMatchObject({
+      deleted: false,
+      groupId: nothing,
+    });
+    expect(seen.elsewhereTheirs).toMatchObject({
+      deleted: false,
+      groupId: elsewhere,
+    });
+    // A chat that does not link the crew is not the conversion's to hide.
+    expect(seen.bobs).toMatchObject({ deleted: false, groupId: null });
+    // A chat deleted since is not undone again: nobody is added back to its crew.
+    expect(seen.deletedAt).toBe((before as unknown as { at: string }[])[0]?.at);
+    expect(seen.roster).toEqual(mine);
+  });
+
+  test("the runbook disables the hand-over trigger in its own step", async () => {
+    const disabling = MANUAL.match(
+      /^ALTER TABLE public\.revoked_access DISABLE TRIGGER [^;\n]+;$/gm,
+    );
+    expect(disabling).toHaveLength(1);
+    const statement = disabling?.[0] ?? "";
+    // Its own step: not part of the data rollback.
+    expect(MANUAL.indexOf(statement)).toBeLessThan(
+      MANUAL.indexOf(RUNBOOK_START),
+    );
+    expect(runbookSql()).not.toContain("TRIGGER");
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const made = await linkedGroup(alice, [bob]);
+
+    const seen = await ownerRolledBack([], async (tx) => {
+      // The manual disables every user trigger on the table: the hand-over one must be all of them.
+      const triggers = [
+        ...(await tx`select tgname from pg_trigger
+                      where tgrelid = 'public.revoked_access'::regclass and not tgisinternal`),
+      ].map((row: { tgname: string }) => row.tgname);
+      await tx.unsafe(statement);
+      const [state] = await tx`select tgenabled from pg_trigger
+                                 where tgrelid = 'public.revoked_access'::regclass
+                                   and tgname = ${HAND_OVER_TRIGGER}`;
+      await tx`insert into revoked_access (email, revoked_by)
+               values (${`${alice}@example.test`.toLowerCase()}, 'runbook-test')`;
+      const [chat] =
+        await tx`select created_by from channels where id = ${made.channelId}`;
+      const members = [
+        ...(await tx`select user_id from channel_memberships
+                      where channel_id = ${made.channelId} order by created_at`),
+      ].map((row: { user_id: string }) => row.user_id);
+      return {
+        triggers,
+        enabled: state?.tgenabled,
+        creator: chat?.created_by,
+        members,
+      };
+    });
+
+    expect(seen.triggers).toEqual([HAND_OVER_TRIGGER]);
+    expect(seen.enabled).toBe("D");
+    // Deactivated with the trigger off: she stays in her group, and it stays hers.
+    expect(seen.creator).toBe(alice);
+    expect(seen.members).toEqual([alice, bob]);
+    // Rolled back: the trigger is on again.
+    const [after] = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`select tgenabled from pg_trigger
+             where tgrelid = 'public.revoked_access'::regclass and tgname = ${HAND_OVER_TRIGGER}`,
+      ),
+    )) as unknown as { tgenabled: string }[];
+    expect(after?.tgenabled).toBe("O");
   });
 });
