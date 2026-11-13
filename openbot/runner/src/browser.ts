@@ -1,5 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 import type {
@@ -117,13 +124,12 @@ const KEYCHAIN_DEFAULT_ARGS = [
  * three values are the contract a person reads on screen, so they are written down here and the tests
  * that cover them are in `server/tests/runner-browser.test.ts`.
  *
- * The attribute's spelling is the one that differs: the computer's mark has a neutral name now
- * (L1-17), and this one keeps its earlier name until that test's expectation is changed (appendix A,
- * row 9, of the gradual-rewrite plan). They need not agree. The runner never writes this attribute
- * (nothing here marks a field): it is only read, as part of the rule kept the same as the computer's,
- * so the runner's masking rests on the password and autocomplete selectors either way.
+ * The computer's mark has the neutral name `data-xb-secret` (L1-17) and this selector now spells it the same.
+ * The runner never writes this attribute (nothing here marks a field): it is only read, as part of the rule
+ * kept the same as the computer's, so the runner's masking also rests on the password and autocomplete
+ * selectors.
  */
-const SECRET_ATTRIBUTE = "data-openbot-secret";
+const SECRET_ATTRIBUTE = "data-xb-secret";
 const MASKED_VALUE = "[hidden: sensitive field]";
 const SENSITIVE_FIELD_SELECTOR = [
   "input[type=password]",
@@ -514,6 +520,44 @@ function missingCounter(file: string): never {
   );
 }
 
+/** The snapshot counter's file in the profile root, and the name it had before the rename. */
+const COUNTER_FILE = "xiongbao-snapshots.sqlite";
+const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
+
+/**
+ * The counter file to open in `root`, giving it its current name first when only the earlier one exists.
+ *
+ * The earlier file is a WAL database: after an unclean exit the counts that were committed last can still
+ * sit in its `-wal`, and a rename of the main file alone would leave them behind under a name nothing
+ * reads. So the earlier file is opened exclusively and checkpointed (TRUNCATE) first, and closed; only
+ * when no `-wal` or `-shm` is left beside it is it renamed. Anything that stops that (another process
+ * holds it, the checkpoint could not finish, a volume that cannot be written, a file that is no database)
+ * keeps the earlier name, which is then opened exactly as it always was. Nothing is thrown: a browser must
+ * still start, and the refusals about a damaged counter come from opening it, as before.
+ */
+export function counterFileIn(root: string): string {
+  const file = join(root, COUNTER_FILE);
+  const legacy = join(root, LEGACY_COUNTER_FILE);
+  if (existsSync(file) || !existsSync(legacy)) return file;
+  try {
+    const old = new Database(legacy, { strict: true });
+    try {
+      old.exec("PRAGMA locking_mode=EXCLUSIVE; PRAGMA busy_timeout=5000;");
+      const done = old
+        .query<{ busy: number }, []>("PRAGMA wal_checkpoint(TRUNCATE)")
+        .get();
+      if (done?.busy !== 0) return legacy;
+    } finally {
+      old.close();
+    }
+    if (existsSync(`${legacy}-wal`) || existsSync(`${legacy}-shm`))
+      return legacy;
+    renameSync(legacy, file);
+    return file;
+  } catch {
+    return legacy;
+  }
+}
 
 function openCounterStore(file: string): CounterStore {
   mkdirSync(dirname(file) || ".", { recursive: true });
@@ -697,9 +741,7 @@ export function createRunnerBrowser(
     // One connection for the profile root, shared by every coworker's state, and opened only now:
     // constructing a browser must not create anything on disk, because a runner that is only being
     // asked to run a command has no business making a browser's files.
-    counters ??= openCounterStore(
-      join(profileRoot, "openbot-snapshots.sqlite"),
-    );
+    counters ??= openCounterStore(counterFileIn(profileRoot));
     const counter = counters;
     const generation = counter.open(
       key,

@@ -859,9 +859,12 @@
   {
     "file": "runner/src/browser.ts",
     "text": "\"openbot-snapshots.sqlite\"",
-    "reason": "persisted-identifier: snapshot database file in existing profiles (L1-18)",
-    "category": "persisted-data",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: 旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（L1-18，附录 A 第 10 行）",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "device": true
   },
   {
     "file": "desktop-device/src-tauri/src/main.rs",

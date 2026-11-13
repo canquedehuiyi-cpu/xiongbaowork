@@ -30,12 +30,6 @@
     "note": "设备端环境变量名，随报错文字出现；Task 13"
   },
   {
-    "word": "data-openbot-secret",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "遮罩属性，注入第三方网页；runner 与 agent-computer 两头一起改（Task 12、19，附录 A 第 9 行待批）"
-  },
-  {
     "word": "openbot-desktop",
     "category": "persisted-data",
     "plan": "rewrite",
@@ -49,9 +43,11 @@
   },
   {
     "word": "openbot-snapshots.sqlite",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "快照计数文件；Task 19（附录 A 第 10 行待批）"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "note": "旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（附录 A 第 10 行，Task 19）",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "word": "openbotUrl:",

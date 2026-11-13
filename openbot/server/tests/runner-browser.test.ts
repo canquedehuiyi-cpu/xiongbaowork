@@ -1,10 +1,13 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -34,7 +37,9 @@ import {
  */
 
 /** The counter file's name, restated: the recovery advice in the refusals has to name this. */
-const COUNTER_FILE = "openbot-snapshots.sqlite";
+const COUNTER_FILE = "xiongbao-snapshots.sqlite";
+/** The name the counter file had before the rename, restated for the same reason. */
+const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
 const OWNER = { tenantId: "t-1", botId: "bot-a" };
 const COLLEAGUE = { tenantId: "t-1", botId: "bot-b" };
 const OTHER_TENANT = { tenantId: "t-2", botId: "bot-a" };
@@ -447,7 +452,7 @@ describe("what one browser action is answered with", () => {
         'input[autocomplete~="new-password"]',
         'input[autocomplete~="cc-number"]',
         'input[autocomplete~="cc-csc"]',
-        "[data-openbot-secret]",
+        "[data-xb-secret]",
       ].join(", "),
     );
     await browser.close();
@@ -857,6 +862,63 @@ describe("numbers that outlive the browser", () => {
     const before = asRecord(await drive(browser, "snapshot"));
     const after = asRecord(await drive(browser, "snapshot"));
     expect(after.snapshotId).toBe(Number(before.snapshotId) + 1);
+    await browser.close();
+  });
+
+  /** A root whose counter has been advanced to `snapshots` lists, and the file under the current name. */
+  async function countedRoot(snapshots: number): Promise<string> {
+    const root = profileRoot();
+    const browser = browserOf(root, fakeBrowser());
+    for (let i = 0; i < snapshots; i++) await drive(browser, "snapshot");
+    await browser.close();
+    return root;
+  }
+
+  test("a counter file under its earlier name is renamed on start and the numbers carry on", async () => {
+    const root = await countedRoot(3);
+    renameSync(join(root, COUNTER_FILE), join(root, LEGACY_COUNTER_FILE));
+
+    const browser = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(browser, "snapshot"));
+    expect(next.snapshotId).toBe(4);
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
+    expect(existsSync(join(root, LEGACY_COUNTER_FILE))).toBe(false);
+    await browser.close();
+  });
+
+  test("an earlier counter that died with counts still in its WAL is checkpointed before the rename, so the counts are not lost", async () => {
+    const source = await countedRoot(3);
+    const root = profileRoot();
+    // The state an unclean exit leaves: a commit that only the `-wal` holds. The copies are taken while
+    // the writing connection is still open, which is what a crash leaves behind.
+    const writer = new Database(join(source, COUNTER_FILE));
+    writer.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;");
+    writer.exec("UPDATE snapshot_counters SET generation = generation + 10");
+    const legacy = join(root, LEGACY_COUNTER_FILE);
+    copyFileSync(join(source, COUNTER_FILE), legacy);
+    copyFileSync(`${join(source, COUNTER_FILE)}-wal`, `${legacy}-wal`);
+    writer.close();
+    expect(statSync(`${legacy}-wal`).size).toBeGreaterThan(0);
+
+    const browser = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(browser, "snapshot"));
+    expect(next.snapshotId).toBe(14);
+    expect(existsSync(join(root, COUNTER_FILE))).toBe(true);
+    for (const leftover of [legacy, `${legacy}-wal`, `${legacy}-shm`])
+      expect(existsSync(leftover)).toBe(false);
+    await browser.close();
+  });
+
+  test("a counter under the current name is used as it is, and an earlier one beside it is left alone", async () => {
+    const root = await countedRoot(2);
+    writeFileSync(join(root, LEGACY_COUNTER_FILE), "left alone");
+
+    const browser = browserOf(root, fakeBrowser());
+    const next = asRecord(await drive(browser, "snapshot"));
+    expect(next.snapshotId).toBe(3);
+    expect(statSync(join(root, LEGACY_COUNTER_FILE)).size).toBe(
+      "left alone".length,
+    );
     await browser.close();
   });
 });

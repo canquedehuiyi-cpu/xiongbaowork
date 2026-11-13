@@ -296,11 +296,6 @@
   },
   {
     "rule": "wire-dom",
-    "scope": "runner/src",
-    "lines": 1
-  },
-  {
-    "rule": "wire-dom",
     "scope": "server/src",
     "lines": 21
   },
