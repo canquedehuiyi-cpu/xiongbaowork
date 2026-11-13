@@ -230,6 +230,25 @@ test("an owner-gone 409 from setCrewMembers also reads the lists again", async (
   expect(invalidated).toContainEqual(["channels"]);
 });
 
+test("a plain 409 with no code and no done also reads the lists again", async () => {
+  const queryClient = new QueryClient();
+  const invalidated: unknown[] = [];
+  queryClient.invalidateQueries = (async (filters?: { queryKey?: unknown }) => {
+    invalidated.push(filters?.queryKey);
+  }) as typeof queryClient.invalidateQueries;
+  serve(409, { error: "群组刚被别人改过，请刷新后再试。" });
+  const error = await run(
+    setCrewMembersMutationOptions(queryClient),
+    queryClient,
+    { groupId: "g-1", agentIds: ["a", "b"] },
+  ).catch((caught: unknown) => caught);
+  expect((error as CrewRequestError).status).toBe(409);
+  expect((error as CrewRequestError).code).toBeUndefined();
+  expect((error as CrewRequestError).done).toBeUndefined();
+  expect(invalidated).toContainEqual(["waker-groups"]);
+  expect(invalidated).toContainEqual(["channels"]);
+});
+
 test("a 403 from PATCH keeps the server's words", async () => {
   const queryClient = new QueryClient();
   serve(403, { error: "只有发起人能调整这个群组。" });

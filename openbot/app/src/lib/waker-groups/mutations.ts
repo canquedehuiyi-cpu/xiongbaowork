@@ -64,19 +64,6 @@ async function crewRequest<T>(
   return body;
 }
 
-export function createCrewMutationOptions(queryClient: QueryClient) {
-  return mutationOptions({
-    mutationFn: async (input: { name: string; description?: string }) =>
-      client("/api/waker-groups", "group", {
-        method: "POST",
-        body: input,
-        fallback: "That group could not be created.",
-      }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: wakerGroupKeys.all }),
-  });
-}
-
 /** Make a group and its chat in one request. */
 export function createGroupWithChatMutationOptions(queryClient: QueryClient) {
   return mutationOptions({

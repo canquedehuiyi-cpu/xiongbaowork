@@ -39,7 +39,7 @@ type QueryClient = ReturnType<typeof useQueryClient>;
 
 /** Why a group exists and what it does not do, said wherever a person is about to make one. */
 const CREW_MEANING =
-  "群组是一串排好顺序的员工的名字，可以一起被叫来干活。它不授予任何权限——每位员工仍然只对它自己已获授权的那件事负责。";
+  "新建群组会同时建一个聊天，群里的员工在里面一起干活。群组不授予任何权限——每位员工仍然只对它自己已获授权的那件事负责。";
 
 /**
  * Making a group (`POST /api/waker-groups`): the same form as the 新建群组 page, in a dialog. One
