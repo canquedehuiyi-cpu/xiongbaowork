@@ -6,7 +6,22 @@
  * trusted events.
  */
 
-export const NOTICE_TAG = "openbot-recorder-notice";
+/*
+ * The extension updates while pages stay open, and the content script of the version before keeps running in them
+ * with what it drew (L1-22). So every name a version has drawn under is looked for: drawing takes away what is already
+ * there under either, and so does removing.
+ */
+export const XB_NOTICE_TAG = "xb-recorder-notice";
+export const LEGACY_NOTICE_TAG = "openbot-recorder-notice";
+/** Drawn under the older name until plan appendix A row 11 is landed (Task 19), then under XB_NOTICE_TAG. */
+export const NOTICE_TAG = LEGACY_NOTICE_TAG;
+export const NOTICE_TAGS = [XB_NOTICE_TAG, LEGACY_NOTICE_TAG] as const;
+
+/** Takes every element under these tags out of the page. */
+export function removeTagged(tags: readonly string[]): void {
+  for (const element of document.querySelectorAll(tags.join(",")))
+    element.remove();
+}
 
 export const NOTICE_TOKENS = {
   light: {
@@ -149,7 +164,14 @@ export function showNotice(options: {
 
   card.append(title, body, actions);
   root.append(style, card);
+  removeTagged(NOTICE_TAGS);
   document.documentElement.append(host);
 
-  return { host, remove: () => host.remove() };
+  return {
+    host,
+    remove: () => {
+      host.remove();
+      removeTagged(NOTICE_TAGS);
+    },
+  };
 }

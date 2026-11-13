@@ -37,7 +37,8 @@ function allowedUrlsFrom(value: unknown): string[] | null {
 
 function policyFrom(managed: Record<string, unknown>): RecorderPolicy {
   return {
-    ...openbotUrlFrom(managed.OpenBotUrl),
+    // The key IT writes is XiongbaoUrl; a browser still configured with the older key keeps its address (L1-23).
+    ...openbotUrlFrom(managed.XiongbaoUrl ?? managed.OpenBotUrl),
     allowedIntelligenceUrls: allowedUrlsFrom(managed.AllowedIntelligenceUrls),
   };
 }

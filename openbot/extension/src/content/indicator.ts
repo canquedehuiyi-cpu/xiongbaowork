@@ -37,9 +37,12 @@
  * A test reaches inside through `root`, which only this content script holds; the end-to-end build (RECORDER_VARIANT
  * `e2e`) opens the root, so a harness driving a real page can press the mark's button as a person would.
  */
-import { declarations, NOTICE_TOKENS, RADIUS } from "./notice";
+import { declarations, NOTICE_TOKENS, RADIUS, removeTagged } from "./notice";
 
-export const INDICATOR_TAG = "openbot-recorder-mark";
+/** Drawn under INDICATOR_TAG; the older name is still looked for and taken away, as the notice does (notice.ts). */
+export const INDICATOR_TAG = "xb-recorder-mark";
+export const LEGACY_INDICATOR_TAG = "openbot-recorder-mark";
+export const INDICATOR_TAGS = [INDICATOR_TAG, LEGACY_INDICATOR_TAG] as const;
 
 export type IndicatorView = {
   /** The site the tab shows. */
@@ -394,6 +397,8 @@ export function showIndicator(options: {
   update(options.view);
 
   root.append(style, mark);
+  // A mark the version before drew is dead (its buttons speak to an extension that is gone): this one takes its place.
+  removeTagged(INDICATOR_TAGS);
   document.documentElement.append(host);
 
   /*
@@ -499,6 +504,7 @@ export function showIndicator(options: {
       timers.clear(looking);
       window.removeEventListener("resize", place);
       host.remove();
+      removeTagged(INDICATOR_TAGS);
     },
   };
 }

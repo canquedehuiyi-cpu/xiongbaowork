@@ -43,27 +43,31 @@
   },
   {
     "word": "OpenBotUrl",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "企业策略键；Task 14 加 XiongbaoUrl，OpenBotUrl 改 legacy-compat"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "旧企业策略键：managed_schema.json 与 XiongbaoUrl 同时声明，读时新键优先、没有再读旧键，已按旧键配置的企业浏览器升级后仍连得上（L1-23，Task 14）；窗口期满（0.2.13）删"
   },
   {
     "word": "_.OpenBotUrl",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "企业策略键；Task 14 加 XiongbaoUrl，OpenBotUrl 改 legacy-compat"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "旧企业策略键的读取（policy.ts：XiongbaoUrl 没设才读它，L1-23，Task 14）；窗口期满（0.2.13）删"
   },
   {
     "word": "_.__openbotRecorderActive",
     "category": "operator-visible",
     "plan": "rewrite",
-    "note": "扩展全局标志；Task 14"
+    "note": "扩展内容脚本在隔离环境里的全局标志（网页控制台看不到）；content-port.test.ts 断言旧名，待批：附录 A 第 36 行"
   },
   {
     "word": "_.__openbotRecorderContent",
     "category": "operator-visible",
     "plan": "rewrite",
-    "note": "扩展全局标志；Task 14"
+    "note": "扩展内容脚本在隔离环境里的全局标志（网页控制台看不到）；content-port.test.ts 断言旧名，待批：附录 A 第 36 行"
   },
   {
     "word": "_.openbotUrl",
@@ -135,7 +139,7 @@
     "word": "globalThis.__openbotRecorderActive",
     "category": "operator-visible",
     "plan": "rewrite",
-    "note": "扩展全局标志；Task 14"
+    "note": "扩展内容脚本在隔离环境里的全局标志（网页控制台看不到）；content-port.test.ts 断言旧名，待批：附录 A 第 36 行"
   },
   {
     "word": "invalid:_.openbotUrlInvalid",
@@ -163,15 +167,17 @@
   },
   {
     "word": "openbot-recorder-mark",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "注入第三方网页的自定义元素；Task 14（附录 A 第 11 行待批）"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "旧标记标签：新版本画 xb-recorder-mark，查找、移除时仍认旧名，扩展更新期间老内容脚本画的标记不重复、不残留（L1-22，Task 14）；窗口期满（0.2.13）删"
   },
   {
     "word": "openbot-recorder-notice",
     "category": "operator-visible",
     "plan": "rewrite",
-    "note": "注入第三方网页的自定义元素；Task 14（附录 A 第 11 行待批）"
+    "note": "注入第三方网页的自定义元素；新版本仍画这个名字，同时查找、移除 xb-recorder-notice；附录 A 第 11 行（已批）由 Task 19 落地后改画新名，本条改 legacy-compat"
   },
   {
     "word": "openbot-unreachable",
@@ -205,15 +211,19 @@
   },
   {
     "word": "openbot.recorder.configure",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "MAIN world 的 Symbol.for 键；Task 14"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "旧 Symbol.for 键：页面钩子同时用新旧 Symbol 注册，fallback 先调新的、没有再调旧的（L1-22，Task 14）；窗口期满（0.2.13）删"
   },
   {
     "word": "openbot.recorder.stop",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "MAIN world 的 Symbol.for 键；Task 14"
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13",
+    "note": "旧 Symbol.for 键：页面钩子同时用新旧 Symbol 注册，fallback 先调新的、没有再调旧的（L1-22，Task 14）；窗口期满（0.2.13）删"
   },
   {
     "word": "openbot.state",
