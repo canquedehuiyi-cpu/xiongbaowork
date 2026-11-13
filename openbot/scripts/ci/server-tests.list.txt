@@ -845,6 +845,7 @@ tests/what-if-boundary-words.test.ts
 tests/what-if.integration.test.ts
 tests/who-can-check.test.ts
 tests/who-can.integration.test.ts
+tests/wire-codes.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
 tests/xiongbao-package.test.ts
