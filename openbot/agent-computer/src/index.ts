@@ -1264,8 +1264,9 @@ serve<StreamData & TerminalSocketData>({
 
     // The server's headers have two names while they are renamed (wire-headers.ts). A request that
     // names one Bot or person under the new name and another under the old one is refused, not
-    // resolved: either answer would act for somebody the other name did not mean. The token is
-    // already refused above, by `offeredToken`.
+    // resolved: either answer would act for somebody the other name did not mean. Two token headers
+    // that disagree are already a 401 above (`offeredToken`) everywhere but `/stream` and `/terminal`,
+    // which take their token from the query; there this check is what refuses them, with a 400.
     if (!isOpenPath(url.pathname) && disagreeingWireHeader(request.headers)) {
       return json({ error: "Conflicting request headers." }, 400);
     }

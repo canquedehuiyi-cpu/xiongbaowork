@@ -3,8 +3,8 @@
  * and reload) and the Recorder loaded in it, which records only that person. The contract is
  * `shared/bot-browser.ts`; these are its computer routes (`botBrowserComputerPaths`).
  *
- * Under the computer token like every other route, with the Bot's id in `x-openbot-bot-id`; `index.ts` checks the
- * token, this checks the id. The server is the only caller: it decides who the signed-in person is and whether they
+ * Under the computer token like every other route, with the Bot's id in `x-xiongbao-bot-id` (the old
+ * `x-openbot-bot-id` is still accepted, see `wire-headers.ts`); `index.ts` checks the token, this checks the id. The server is the only caller: it decides who the signed-in person is and whether they
  * may use the Bot, mints the Recorder connection for the person who pressed Record, and forwards here.
  *
  * WHO MAY DO WHAT is asked of the Bot's control (`control.ts`) at every call, never remembered from an earlier one:

@@ -343,7 +343,7 @@ describe("a computer taking both names", () => {
     ).not.toContain("a.txt");
   });
 
-  test("Bots that disagree are a 400 and reach no folder", async () => {
+  test("Bots or people that disagree are a 400 and reach no folder", async () => {
     for (const name of ["botId", "personId"] as const) {
       const response = await post(
         "/files/write",
@@ -355,10 +355,62 @@ describe("a computer taking both names", () => {
         { path: `disagreed-${name}.txt`, contents: "x" },
       );
       expect(response.status).toBe(400);
+      // The conflict check's own refusal, not some other 400 further down.
+      expect(((await response.json()) as { error: string }).error).toBe(
+        "Conflicting request headers.",
+      );
     }
-    for (const bot of ["bot-a", "bot-b"])
-      expect(
-        await listed({ [HEADER.computerToken]: TOKEN, [HEADER.botId]: bot }),
-      ).not.toContain("disagreed-botId.txt");
+    // Neither file landed in any seat either name could have meant.
+    for (const seat of [
+      { [HEADER.botId]: "bot-a" },
+      { [HEADER.botId]: "bot-b" },
+      { [HEADER.personId]: "bot-a" },
+      { [HEADER.personId]: "bot-b" },
+    ]) {
+      const paths = await listed({ [HEADER.computerToken]: TOKEN, ...seat });
+      expect(paths).not.toContain("disagreed-botId.txt");
+      expect(paths).not.toContain("disagreed-personId.txt");
+    }
+  });
+
+  /** A request written by hand, so a header can appear twice: fetch would join them first. */
+  function raw(lines: string[]) {
+    const { port } = new URL(base);
+    return new Promise<string>((resolve, reject) => {
+      const socket = connect(Number(port), "127.0.0.1", () =>
+        socket.write(
+          [
+            "POST /files/list HTTP/1.1",
+            `Host: 127.0.0.1:${port}`,
+            "Content-Type: application/json",
+            "Content-Length: 2",
+            "Connection: close",
+            ...lines,
+            "",
+            "{}",
+          ].join("\r\n"),
+        ),
+      );
+      let seen = "";
+      socket.on("data", (chunk) => {
+        seen += chunk.toString();
+      });
+      socket.on("end", () => resolve(seen.split("\r\n")[0] ?? ""));
+      socket.on("error", reject);
+    });
+  }
+
+  test("a new token header sent twice, wrong then right, next to a right old one is a 401", async () => {
+    // Control: the same hand-written request with one right token gets in.
+    expect(await raw([`${HEADER.computerToken}: ${TOKEN}`])).toStartWith(
+      "HTTP/1.1 200",
+    );
+    expect(
+      await raw([
+        `${HEADER.computerToken}: wrong-token`,
+        `${HEADER.computerToken}: ${TOKEN}`,
+        `${LEGACY_HEADER.computerToken}: ${TOKEN}`,
+      ]),
+    ).toStartWith("HTTP/1.1 401");
   });
 });

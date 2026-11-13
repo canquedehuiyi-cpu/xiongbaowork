@@ -3,7 +3,7 @@
  * connected, and act for the person in it (record, narrate, tabs, navigate, close, clear).
  *
  * Under the computer token like every other route, with the person's browser id in
- * `x-openbot-bot-id`; `index.ts` checks the token, this checks the id. The server is the only caller:
+ * `x-xiongbao-bot-id` (the old `x-openbot-bot-id` is still accepted, see `wire-headers.ts`); `index.ts` checks the token, this checks the id. The server is the only caller:
  * it decides who the signed-in person is, mints their Recorder connection, and forwards here. The
  * shapes are the contract in `shared/openbot-browser.ts`, which every slice builds against.
  *

@@ -1,8 +1,8 @@
 /**
  * What a Bot id is allowed to be, before it becomes a path.
  *
- * The id arrives as the `x-openbot-bot-id` header, or as the `bot` query parameter on the stream, and
- * the API server forwards whatever segment a caller put in the URL. It then becomes the directory a
+ * The id arrives as the `x-xiongbao-bot-id` header (the old `x-openbot-bot-id` is still accepted, see
+ * `wire-headers.ts`), or as the `bot` query parameter on the stream, and the API server forwards whatever segment a caller put in the URL. It then becomes the directory a
  * Chromium profile lives in, which `reset` deletes with `rm -rf`, as root. So this is the same class
  * of input `workspace.ts` already treats as hostile, and it needs the same answer: an id that is not
  * a plain name never reaches `join`.
@@ -43,7 +43,8 @@ export class UnusableBotIdError extends Error {
  * WHY THE PERSON IS IN IT. One process can serve many people: Helm's `computers.mode: shared` runs a
  * single computer for the whole deployment. Keyed by the Bot alone there, a public Bot had one
  * profile, so whoever signed it into a site signed it in for everybody. On that computer the server
- * names the person as well (`x-openbot-person-id`), and the seat is the pair, so each person's logins
+ * names the person as well (`x-xiongbao-person-id`, or the still-accepted old `x-openbot-person-id`;
+ * see `wire-headers.ts`), and the seat is the pair, so each person's logins
  * stay their own. A computer the supervisor or the sandbox makes belongs to one person already, and
  * there the server names only the Bot and the seat is the Bot's id, exactly as before.
  *

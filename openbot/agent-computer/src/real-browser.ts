@@ -24,8 +24,8 @@
  *   - Linux: the browser's own launcher script beside its executable (what `google-chrome` and
  *     `microsoft-edge` on the PATH are), started in the background of a shell that exits at once.
  *
- * Under the computer token, with the person's browser id in `x-openbot-bot-id`, like the person's
- * browser routes: the server is the only caller, for the signed-in person.
+ * Under the computer token, with the person's browser id in `x-xiongbao-bot-id` (the old
+ * `x-openbot-bot-id` is still accepted, see `wire-headers.ts`), like the person's browser routes: the server is the only caller, for the signed-in person.
  */
 import { spawn } from "node:child_process";
 import { posix, win32 } from "node:path";
