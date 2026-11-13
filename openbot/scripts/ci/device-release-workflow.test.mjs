@@ -2241,11 +2241,14 @@ test("clean-deploy fetches from our download page when configured", () => {
     "XB_DOWNLOAD_BASE_URL",
   ])
     expect(recordEnv[name]).toBe(expression(`vars.${name}`));
-  // delivery.env.example (external database) comes from the same place; the customer run starts our
-  // registry's copy through the README's OPENBOT_IMAGE when it is configured. Both run as written.
-  const roles = (env) => {
+  // delivery.env.example comes from the same place in both database shapes (delivery-env, below);
+  // the customer run starts our registry's copy through the README's OPENBOT_IMAGE when it is
+  // configured. Both run as written.
+  const roles = (env, existing) => {
     const customer = scratch();
     const evidence = scratch();
+    if (existing !== undefined)
+      writeFileSync(join(customer, ".env.delivery"), existing);
     writeFileSync(
       join(evidence, "g7-external-roles.sql"),
       "ALTER ROLE a PASSWORD '<app随机口令>';\nALTER ROLE b PASSWORD '<role_writer随机口令>';\n",
@@ -2265,8 +2268,6 @@ test("clean-deploy fetches from our download page when configured", () => {
         RUNNER_TEMP: scratch(),
         EXTERNAL_DB_HOST: "172.17.0.2",
         GITHUB_REPOSITORY: "o/r",
-        XB_DOWNLOAD_BUCKET: "",
-        XB_DOWNLOAD_BASE_URL: "",
         ...env,
       },
       scratch(),
@@ -2287,18 +2288,81 @@ test("clean-deploy fetches from our download page when configured", () => {
     " https://raw.githubusercontent.com/o/r/v0.2.0/openbot/docker/delivery.env.example",
   );
   expect(rolesBefore.env).toContain("EMBEDDED_POSTGRES=off");
-  const rolesAfter = roles({
-    XB_DOWNLOAD_BUCKET: "downloads",
-    XB_DOWNLOAD_BASE_URL: "https://download.example.com/xb/",
-  });
+  // Already fetched from our download page: roles fetches nothing and switches that file over.
+  const rolesAfter = roles({}, "FROM_OUR_PAGE=1\nEMBEDDED_POSTGRES=on\n");
   expect(rolesAfter.status).toBe(0);
-  expect(rolesAfter.curl.length).toBe(1);
-  expect(rolesAfter.curl[0]).toEndWith(
-    " https://download.example.com/xb/v0.2.0/delivery.env.example",
+  expect(rolesAfter.curl).toEqual([]);
+  expect(rolesAfter.env).toStartWith(
+    "FROM_OUR_PAGE=1\nEMBEDDED_POSTGRES=off\n",
   );
-  expect(step("linux", "roles", cleanDeploy).env.XB_DOWNLOAD_BUCKET).toBe(
-    expression("vars.XB_DOWNLOAD_BUCKET"),
+  expect(rolesAfter.env).toContain("ROLE_WRITER_DATABASE_URL=");
+  // Configured, both database shapes take .env.delivery from our download page before the README
+  // block runs; only the embedded one gets its KEY_ENCRYPTION_KEY here (roles writes the external
+  // one's). Not configured, the step is skipped and the README block fetches the file as before.
+  const fetchStep = step("linux", "delivery-env", cleanDeploy);
+  expect(fetchStep.if).toBe(expression("vars.XB_DOWNLOAD_BUCKET != ''"));
+  expect(when(fetchStep.if, {})).toBe(false);
+  expect(
+    when(fetchStep.if, { vars: { XB_DOWNLOAD_BUCKET: "downloads" } }),
+  ).toBe(true);
+  expect(fetchStep.env.XB_DOWNLOAD_BASE_URL).toBe(
+    expression("vars.XB_DOWNLOAD_BASE_URL"),
   );
+  const linuxSteps = cleanDeploy.jobs.linux.steps;
+  const at = (s) => linuxSteps.indexOf(s);
+  const migrate = linuxSteps.find((s) =>
+    s.run?.includes('g7-external-migrate.sh" 2>&1'),
+  );
+  expect(at(fetchStep)).toBeGreaterThan(at(migrate));
+  expect(at(fetchStep)).toBeLessThan(at(step("linux", "roles", cleanDeploy)));
+  expect(at(fetchStep)).toBeLessThan(
+    at(step("linux", "customer", cleanDeploy)),
+  );
+  const fetchDelivery = (shape, base = "https://download.example.com/xb/") => {
+    const customer = scratch();
+    const tools = stubs({
+      curl: `out=""; prev=""; for a in "$@"; do [ "$prev" = -o ] && out="$a"; prev="$a"; done; printf 'EMBEDDED_POSTGRES=on\\n' > "$out"`,
+    });
+    // As README: the file is made private by chmod, whatever the runner's umask.
+    const umask = process.umask(0o022);
+    const result = run(
+      "linux",
+      "delivery-env",
+      {
+        TAG: "v0.2.0",
+        CUSTOMER: customer,
+        DATABASE_SHAPE: shape,
+        XB_DOWNLOAD_BASE_URL: base,
+      },
+      scratch(),
+      tools.path,
+      cleanDeploy,
+    );
+    process.umask(umask);
+    const file = join(customer, ".env.delivery");
+    return {
+      ...result,
+      curl: tools.calls().filter((c) => c.startsWith("curl ")),
+      env: existsSync(file) ? readFileSync(file, "utf8") : null,
+      mode: existsSync(file) ? statSync(file).mode & 0o777 : null,
+    };
+  };
+  for (const shape of ["embedded", "external"]) {
+    const fetched = fetchDelivery(shape);
+    expect(fetched.status).toBe(0);
+    expect(fetched.curl.length).toBe(1);
+    expect(fetched.curl[0]).toEndWith(
+      " https://download.example.com/xb/v0.2.0/delivery.env.example",
+    );
+    expect(fetched.mode).toBe(0o600);
+    expect(fetched.env).toStartWith("EMBEDDED_POSTGRES=on\n");
+    if (shape === "embedded")
+      expect(fetched.env).toMatch(/\nKEY_ENCRYPTION_KEY=[A-Za-z0-9+/]{43}=\n$/);
+    else expect(fetched.env).not.toContain("KEY_ENCRYPTION_KEY");
+  }
+  const plainPage = fetchDelivery("embedded", "http://download.example.com");
+  expect(plainPage.status).not.toBe(0);
+  expect(plainPage.curl).toEqual([]);
   const customer = (env) => {
     const dir = scratch();
     const evidence = scratch();

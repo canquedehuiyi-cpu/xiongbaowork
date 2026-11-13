@@ -174,12 +174,34 @@ jobs:
             -c 'SELECT count(*) FROM drizzle.__drizzle_migrations')"
           printf 'applied_migrations=%s\n' "$migrations" | tee -a "$EVIDENCE/external-db.txt"
           [ "$migrations" -gt 0 ]
+
+      # --- both database shapes, once our download page is configured ---
+      # .env.delivery comes from there, as a customer gets it. The README block then finds the file and
+      # keeps it (as on a customer's second run), so it fetches nothing from GitHub; for the embedded
+      # database this step adds the KEY_ENCRYPTION_KEY that block would have added, and roles adds the
+      # external database's settings.
+      - id: delivery-env
+        name: .env.delivery from our download page
+        if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        env:
+          XB_DOWNLOAD_BASE_URL: ${{ vars.XB_DOWNLOAD_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [[ "$XB_DOWNLOAD_BASE_URL" != https://* ]]; then
+            echo "::error::XB_DOWNLOAD_BASE_URL must start with https://: '$XB_DOWNLOAD_BASE_URL'"
+            exit 1
+          fi
+          cd "$CUSTOMER"
+          curl --fail --silent --show-error --location -o .env.delivery \
+            "${XB_DOWNLOAD_BASE_URL%/}/$TAG/delivery.env.example"
+          chmod 600 .env.delivery
+          if [ "$DATABASE_SHAPE" = embedded ]; then
+            printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
+          fi
+
       - id: roles
         name: Set the runtime role passwords (deployment manual, section 4, verbatim)
         if: ${{ matrix.database == 'external' }}
-        env:
-          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
-          XB_DOWNLOAD_BASE_URL: ${{ vars.XB_DOWNLOAD_BASE_URL }}
         run: |
           set -euo pipefail
           app_pw="$(openssl rand -hex 32)"
@@ -202,14 +224,10 @@ jobs:
             echo "::error::expected openbot_app|f|f and openbot_role_writer|f|f"
             exit 1
           fi
-          # .env.delivery as the README fetches it (from our download page once it is configured),
-          # switched to the external database (section 4).
+          # .env.delivery as the README fetches it (already fetched from our download page when that is
+          # configured), switched to the external database (section 4).
           cd "$CUSTOMER"
-          if [ -n "$XB_DOWNLOAD_BUCKET" ]; then
-            XB_DOWNLOAD_BASE_URL="${XB_DOWNLOAD_BASE_URL%/}"
-            curl --fail --silent --show-error --location -o .env.delivery \
-              "$XB_DOWNLOAD_BASE_URL/$TAG/delivery.env.example"
-          else
+          if [ ! -e .env.delivery ]; then
             curl --fail --silent --show-error --location -o .env.delivery \
               "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$TAG/openbot/docker/delivery.env.example"
           fi
