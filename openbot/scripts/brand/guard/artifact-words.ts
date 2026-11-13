@@ -35,12 +35,28 @@ export const SEGMENT_WORD =
   /(?:[A-Za-z0-9_.:@$-]*[_.:@$-])?(?:openbot|copilotkit|qoder)[A-Za-z0-9_.:@$-]*/gi;
 const VERSION_TAIL = /@v?\d+\.\d+[\w.-]*$/;
 
+const BRAND_WORD = /openbot|copilotkit|qoder/i;
+
+/**
+ * Literals a compiler packs back to back have no separator between them: cut where a lowercase letter
+ * or digit runs into an ALL-CAPS name (`runnerXIONGBAO_…`), and where a brand word starts right after a
+ * letter or digit (`…ENGINEOPENBOT_…`). camelCase such as `$openbotOut` or `OpenBot` is left whole.
+ */
+function unglue(raw: string): string[] {
+  return raw
+    .replace(/([a-z0-9])(?=[A-Z]{2,})/g, "$1\u0000")
+    .replace(/(?<=[A-Za-z0-9])(?=openbot|copilotkit|qoder)/gi, "\u0000")
+    .split("\u0000")
+    .filter((piece) => BRAND_WORD.test(piece));
+}
+
 export function segmentWords(text: string): Map<string, number> {
   const found = new Map<string, number>();
-  for (const [raw] of text.matchAll(SEGMENT_WORD)) {
-    const word = raw.replace(VERSION_TAIL, "");
-    found.set(word, (found.get(word) ?? 0) + 1);
-  }
+  for (const [raw] of text.matchAll(SEGMENT_WORD))
+    for (const piece of unglue(raw)) {
+      const word = piece.replace(VERSION_TAIL, "");
+      found.set(word, (found.get(word) ?? 0) + 1);
+    }
   return found;
 }
 

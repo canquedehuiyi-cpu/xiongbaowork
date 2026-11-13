@@ -196,6 +196,16 @@ describe("image and deb scans (Task 5)", () => {
     ]);
   });
 
+  test("deb: a literal glued to an ALL-CAPS name, or a brand word glued to the one before it, is cut there", () => {
+    const text =
+      "openbot-runnerXIONGBAO_DESKTOP_ENGINEOPENBOT_DESKTOP_ENGINE\nfromOpenBot\nOpenBot\n";
+    expect([...segmentWords(text).keys()]).toEqual([
+      "openbot-runner",
+      "OPENBOT_DESKTOP_ENGINE",
+      "OpenBot",
+    ]);
+  });
+
   test("image-config: Config.Env and Config.Labels, nothing else", () => {
     const root = dir();
     const file = join(root, "inspect.json");
