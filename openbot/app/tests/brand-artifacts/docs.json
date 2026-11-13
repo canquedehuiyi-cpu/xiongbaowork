@@ -162,7 +162,7 @@
     "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
   },
   {
-    "word": "OPENBOT_TAG:-v0.2.9",
+    "word": "OPENBOT_TAG:-v<version>",
     "category": "operator-visible",
     "plan": "rewrite",
     "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
