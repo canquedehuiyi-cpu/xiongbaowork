@@ -40,7 +40,10 @@ import {
  *   记一行 {"type":"waker-group-upgrade-chat-kept","groupId","channelId","linkedChannelId"}。
  * - 台账的 `channel_id` 只记这次转换自己建的聊天（续做时是台账记下的或收养的孤儿），可以为空，从不指向本人
  *   自己开的聊天：回滚手册第 1 步按它软删，本人的聊天不能被当成转换建的删掉（控制方裁定 2026-11-13）。
- * - 所有者一个角色都没有（`hasRole` 为假，生产里 `actorFor` 会抛错）：记 `no_owner`，不问 `canUse`。
+ * - 所有者一个角色都没有（`hasRole` 为假，生产里 `actorFor` 会抛错），或已被停用（地址在 `revoked_access`，
+ *   与 0207 一样算退群）：记 `no_owner`，不问 `canUse`。
+ * - 第二阶段软删的、没有人类成员的老共享群聊（`handOver` 无人可交）记一行
+ *   {"type":"waker-group-upgrade-chat-dropped","channelId"}。
  * - 收养孤儿时补一次上游的 `seedOrder`：孤儿可能是在上游「建频道」与「种顺序」两步之间崩溃留下的。
  *
  * 单项失败记 {"type":"waker-group-upgrade-item-failed","groupId","error"}，继续下一项。
@@ -245,6 +248,8 @@ type Crew = {
   live: string[];
   /** Whether `users` still has the person its `tenant_id` names. */
   person: boolean;
+  /** Whether that person's address is in `revoked_access` (deactivated: counts as having left). */
+  deactivated: boolean;
   outcome: string | null;
   channelId: string | null;
   /** The ledger's chat is hidden or no longer there. */
@@ -290,6 +295,8 @@ export async function convertGroups(
                    array(select c.id from channels c
                           where c.waker_group_id = g.id and c.deleted_at is null order by c.id) as live,
                    exists (select 1 from users u where u.id = g.tenant_id) as person,
+                   exists (select 1 from users u join revoked_access r on r.email = lower(u.email)
+                            where u.id = g.tenant_id) as deactivated,
                    l.outcome, l.channel_id,
                    l.channel_id is not null
                      and not exists (select 1 from channels c
@@ -305,6 +312,7 @@ export async function convertGroups(
       linked: string[];
       live: string[];
       person: boolean;
+      deactivated: boolean;
       outcome: string | null;
       channel_id: string | null;
       channel_gone: boolean;
@@ -316,6 +324,7 @@ export async function convertGroups(
       linked: row.linked,
       live: row.live,
       person: row.person,
+      deactivated: row.deactivated,
       outcome: row.outcome,
       channelId: row.channel_id,
       channelGone: row.channel_gone,
@@ -468,7 +477,13 @@ export async function convertGroups(
   async function convert(crew: Crew): Promise<Outcome> {
     const owner = crew.tenantId;
     // An owner with no role at all: `actorFor` would refuse them, and every boot would fail on it.
-    if (!isPersonTenant(owner) || !crew.person || !(await holdsRole(owner))) {
+    // A deactivated owner counts as having left (the 0207 rule): no shared group is made under them.
+    if (
+      !isPersonTenant(owner) ||
+      !crew.person ||
+      crew.deactivated ||
+      !(await holdsRole(owner))
+    ) {
       await record(crew.id, owner, "no_owner");
       return "no_owner";
     }
@@ -596,7 +611,7 @@ async function chatsWhere(database: Database, condition: SQL) {
  */
 async function handOverFirst(link: WakerGroupLink, chat: Chat) {
   if (chat.tenantId !== TEAM_TENANT)
-    return { owner: chat.createdBy, deferred: false, moved: false };
+    return { owner: channelOwner(chat), deferred: false, moved: false };
   const handed = await asPlatform(() => link.handOver(chat.id));
   return {
     ...handed,
@@ -637,7 +652,11 @@ export async function backfillChannels(
       const handed = await handOverFirst(link, chat);
       if (handed.moved) counts.handedOver += 1;
       // Put off by a running flow (logged by `handOver`), or the last one out: nobody to give it to.
-      if (handed.deferred || !handed.owner) continue;
+      if (handed.deferred) continue;
+      if (!handed.owner) {
+        log({ type: "waker-group-upgrade-chat-dropped", channelId: chat.id });
+        continue;
+      }
       const groupId = await link.linkChannel(chat.id);
       if (!groupId) continue;
       await asPlatform(() =>

@@ -259,8 +259,8 @@ Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用
 4. **用户能看到的变化**：
    - 侧边栏「群组」里，原来的群聊和群组合成一个列表。
    - 原来有 2–20 位员工的群组变成可以聊天的群组，名字、员工、顺序、头像、流程都不变。转出来的聊天是空的，会一次性出现在「会话」列表顶部。
-   - 所有者已经用不了的员工不算在内。剩下不足 2 位的标「待补成员」，超过 20 位的标「待调整成员（超过 20 位）」，原来的成员都不改动；补够或减到 2–20 位后自动开始聊天。
-   - 原来有 2 位以上员工的群聊各补挂一个群组。所有者已有同名群组时，补挂的名字加「（2）」。
+   - 所有者已经用不了的员工不算在内。剩下不足 2 位的标「待补成员」，超过 20 位的标「待调整成员（超过 20 位）」，这两种群组的成员名单都不改动；补够或减到 2–20 位后自动开始聊天。转换出来的群组里，所有者用不了的员工不进聊天，群组自己的成员名单不变。所有者已被停用或没有任何角色的群组不转换（`no_owner`）。
+   - 原来有 2 位以上员工的群聊各补挂一个群组。没有任何人类成员的老共享群聊没有人可以接手，补挂时会被软删，并记一行 `waker-group-upgrade-chat-dropped`；回滚手册不还原它。所有者已有同名群组时，补挂的名字加「（2）」。
    - 同名的老群聊和转出来的群组会同时存在，不自动合并，可以自行解散其中一个。
    - 装包带来的频道（`package_id` 非空，如专家团队）不是群组：不挂群组，也不补建。
    - 已经停用的人会离开他所在的共享群组，他创建的群组连同头像、流程、运行记录、看板任务卡交给群里最早加入的在籍成员。之后再停用的人也一样，账号恢复后不还，要重新邀请。
@@ -283,20 +283,21 @@ docker exec -it xiongbao-local sh -c \
 
 外接库用第 4 节 `.env.migration` 里的 owner 串连接。
 
-**第一步：停用 0207 的停用触发器。** 这一步单独做，与第二步的数据回滚无关，换回旧镜像时就做。先确认这张表上只有 0207 建的那一个触发器：
+**第一步：停用 0207 的停用触发器。** 这一步单独做，与第二步的数据回滚无关，换回旧镜像时就做。下面这段先自动核对这张表上只有 0207 建的那一个触发器，多出别的就报错停下，不会停用任何东西；核对通过才停用：
 
 ```sql
-SELECT tgname, tgenabled FROM pg_trigger WHERE tgrelid = 'public.revoked_access'::regclass AND NOT tgisinternal;
-```
-
-应当只有一行（`tgenabled` 为 `O`，表示启用）。多出别的触发器时先停下，不要执行下面的语句。然后停用它：
-
-```sql
-ALTER TABLE public.revoked_access DISABLE TRIGGER USER;
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'public.revoked_access'::regclass AND NOT tgisinternal) <> 1 THEN
+    RAISE EXCEPTION 'public.revoked_access 上的用户触发器不是恰好一个，先查清楚再停用';
+  END IF;
+  EXECUTE 'ALTER TABLE public.revoked_access DISABLE TRIGGER USER';
+END
+$$;
 ```
 
 - 停用期间，被停用的人不再离开共享群，他创建的群也不移交，回到 0207 之前的行为。
-- 之后重新升级到含 0207 的版本时，迁移不会重跑，要由属主手动恢复：先执行 `ALTER TABLE public.revoked_access ENABLE TRIGGER USER;`，再把 0207 迁移文件（镜像内 `/app/server/recovery/recovery-20261018-v1/sql/0207_team_channel_hand_over.sql`）最后一段 `DO $$ … $$` 原样执行一次。这一段对每个已停用的人补做一次离开与移交，可以重复执行，用来补上停用期间停用的人。
+- 之后重新升级到含 0207 的版本时，迁移不会重跑，要由属主手动恢复：先把上面那段 `DO` 里的 `DISABLE` 换成 `ENABLE` 执行一次（同样先核对只有一个触发器），再把 0207 迁移文件（镜像内 `/app/server/recovery/recovery-20261018-v1/sql/0207_team_channel_hand_over.sql`）最后一段 `DO $$ … $$` 原样执行一次。这一段对每个已停用的人补做一次离开与移交，可以重复执行，用来补上停用期间停用的人。
 
 **第二步：撤销自动转换（需要时才做）。** 整段原样执行，它自己开、关事务：
 

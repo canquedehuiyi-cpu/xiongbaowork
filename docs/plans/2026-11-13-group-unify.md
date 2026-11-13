@@ -1045,8 +1045,8 @@ export function startGroupUpgrade(deps: GroupUpgradeDeps & { databaseUrl: string
 **内容：**
 - 升级须知照设计稿第 12 节 1–6 条，写明 Q4：转出来的空群组会出现在会话列表顶部；同名老群聊与转出来的群组同时存在，可自行解散一个；推迟转换用 `XIONGBAO_GROUP_UPGRADE=off`。
 - 升级须知另写一条（设计稿 5.6、12.5）：**0207 的停用触发器换回旧镜像后仍然有效**，停用照样移人、照样移交，移交没有数据回滚手段。
-- 回滚手册的「停用触发器」一步（单独一段，与下面的数据回滚无关，换回旧镜像时就做）：用迁移属主账号执行 `ALTER TABLE public.revoked_access DISABLE TRIGGER openbot_team_revoked_leaves;`；写明停用期间停用的人不离开共享群、他建的群不移交；重新升级后由属主 `ENABLE TRIGGER`，再执行一次 0207 末尾的补做语句（幂等）。
-- 回滚手册：一段 ```` ```sql ```` 代码块，前后用 `<!-- group-upgrade-rollback:start -->` / `<!-- group-upgrade-rollback:end -->` 标出，开头 `SELECT set_config('app.tenant_id', 'platform', true);`，先一条查询列出**已经被移交过的转换群组**（台账 `converted`，群组的 `tenant_id <> original_owner`：群组 id、原所有者、现所有者、频道 id），运维把输出存档；然后在一个事务里三步（设计稿 5.6）：
+- 回滚手册的「停用触发器」一步（单独一段，与下面的数据回滚无关，换回旧镜像时就做）：用迁移属主账号执行一段 `DO` 块（表上的用户触发器不是恰好一个就 `RAISE EXCEPTION`，否则 `ALTER TABLE public.revoked_access DISABLE TRIGGER USER`）；写明停用期间停用的人不离开共享群、他建的群不移交；重新升级后由属主用同样的 `DO` 块 `ENABLE TRIGGER USER`，再执行一次 0207 末尾的补做语句（幂等）。
+- 回滚手册：一段 ```` ```sql ```` 代码块，前后用 `<!-- group-upgrade-rollback:start -->` / `<!-- group-upgrade-rollback:end -->` 标出，以 `BEGIN` 开头，紧接着 `SELECT set_config('app.tenant_id', 'platform', true);`，先一条查询列出**已经被移交过的转换群组**（台账 `converted`，群组的 `tenant_id <> original_owner`：群组 id、原所有者、现所有者、频道 id），运维把输出存档；然后在一个事务里三步（设计稿 5.6）：
   1. 台账 `converted`、频道没有任何 `group_messages`、**并且群组的 `tenant_id = original_owner`**（没被移交过）：`UPDATE channels SET deleted_at = now()`；按 `dropped_agent_ids` 把员工追加回 `waker_group_members`（`position` 接在现有最大值之后）。被移交过的不回滚，只由开头那条查询记录。
   2. 台账 `backfilled` 且该群组没有 `group_task_templates`、没有 `portraits`（`subject_kind = 'group'`）、**也没有任何 `group_task_runs`**（`deleteTemplate` 让运行的 `template_id` 置空而保留运行，`group_task_runs.group_id` 却随群组级联删除，所以「没有模板」不等于「没用过」）：`DELETE FROM waker_groups`（外键自动解挂）。
   3. `DELETE FROM waker_group_upgrades`。

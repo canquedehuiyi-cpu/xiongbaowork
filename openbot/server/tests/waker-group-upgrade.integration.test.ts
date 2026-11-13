@@ -1184,6 +1184,34 @@ describe("phase 1: what a crash, a race or a rule leaves", () => {
     expect(await chatsOf(alice)).toEqual([]);
   });
 
+  test("an owner whose address is in revoked_access is no_owner: the group is not converted", async () => {
+    const alice = await person("alice");
+    const groupId = await oldCrew(alice, "周报", await bots(alice, 2));
+    // The 0207 trigger has nothing to move for this person; the row is what counts as leaving.
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`insert into revoked_access (email, revoked_by)
+            values (${`${alice}@example.test`}, 'upgrade-test')`,
+      ),
+    );
+    try {
+      await convertGroups(upgrade());
+    } finally {
+      await runAsTenant("platform", () =>
+        database.execute(
+          sql`delete from revoked_access where email = ${`${alice}@example.test`}`,
+        ),
+      );
+    }
+
+    expect(await ledgerOf(groupId)).toMatchObject({
+      tenant_id: alice,
+      outcome: "no_owner",
+      channel_id: null,
+    });
+    expect(await chatsOf(alice)).toEqual([]);
+  });
+
   test("with the production check in single-user mode the owner is an administrator, and row security still keeps others' Bots out", async () => {
     const owner = await devUser();
     const bob = await person("bob");
@@ -1600,7 +1628,8 @@ async function linkedGroup(owner: string, others: string[], botCount = 3) {
   const channel = await runAsTenant(owner, () =>
     groups.create(owner, { agentIds: ids }),
   );
-  const groupId = channel.wakerGroupId;
+  // The link decorator adds `wakerGroupId`; the store type does not name it.
+  const groupId = (channel as { wakerGroupId?: string | null }).wakerGroupId;
   if (!groupId) throw new Error("not linked");
   for (const other of others)
     await runAsTenant(owner, () =>
@@ -1759,6 +1788,40 @@ describe("phases 2 and 3", () => {
     expect((await crewOwner(groupId))?.name).toBe("复盘（2）");
   });
 
+  test("phase 2 gives an old personal chat whose created_by is null a crew in its tenant's name", async () => {
+    const alice = await person("alice");
+    const ids = await bots(alice, 2);
+    const personal = await runAsTenant(alice, () =>
+      channelStore.create({ id: alice, role: "user" }, ids),
+    );
+    createdChannels.push(personal.id);
+    // Rows from before P11 carry no creator.
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`update channels set created_by = null where id = ${personal.id}`,
+      ),
+    );
+
+    expect(await backfillChannels(upgrade())).toMatchObject({
+      backfilled: 1,
+      ownerless: ownerlessBefore,
+    });
+
+    // `chatsOf` goes by creator, which this chat no longer has.
+    const [row] = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`select waker_group_id::text as id from channels where id = ${personal.id}`,
+      ),
+    )) as unknown as { id: string | null }[];
+    const groupId = row?.id;
+    if (!groupId) throw new Error("not linked");
+    expect(await ledgerOf(groupId)).toMatchObject({
+      tenant_id: alice,
+      channel_id: personal.id,
+      outcome: "backfilled",
+    });
+  });
+
   test("phase 2 leaves a package's chats alone, and for-channel answers 404 for them", async () => {
     const alice = await person("alice");
     const chat = await openChat(alice, await bots(alice, 2));
@@ -1911,6 +1974,38 @@ describe("phases 2 and 3", () => {
       ownerless: before + 1,
     });
     expect((await totals())?.crews).toBe(crews);
+  });
+
+  test("phase 2 logs the old shared chat it drops when no human is left in it", async () => {
+    const alice = await person("alice");
+    const [ada, grace] = await bots(alice, 2);
+    if (!ada || !grace) throw new Error("bots not written");
+    const empty = `${prefix}-empty-${randomUUID()}`;
+    createdChannels.push(empty);
+    await runAsTenant("platform", async () => {
+      await database.execute(
+        sql`insert into channels (id, tenant_id, name, description, created_by)
+            values (${empty}, 'team', 'Ada、Grace', 'legacy', ${alice})`,
+      );
+      await database.insert(channelAgents).values([
+        { channelId: empty, agentId: ada, tenantId: "team" },
+        { channelId: empty, agentId: grace, tenantId: "team" },
+      ]);
+    });
+    const log: Record<string, unknown>[] = [];
+
+    await backfillChannels(upgrade({ log }));
+
+    expect(log).toContainEqual({
+      type: "waker-group-upgrade-chat-dropped",
+      channelId: empty,
+    });
+    const [row] = (await runAsTenant("platform", () =>
+      database.execute(
+        sql`select deleted_at is not null as gone, waker_group_id from channels where id = ${empty}`,
+      ),
+    )) as unknown as { gone: boolean; waker_group_id: string | null }[];
+    expect(row).toMatchObject({ gone: true, waker_group_id: null });
   });
 
   test("phase 3 rewrites a drifted mirror", async () => {
@@ -2550,10 +2645,10 @@ describe("rollback runbook", () => {
 
   test("the runbook disables the hand-over trigger in its own step", async () => {
     const disabling = MANUAL.match(
-      /^ALTER TABLE public\.revoked_access DISABLE TRIGGER [^;\n]+;$/gm,
+      /^DO \$\$\n(?:(?!\$\$)[\s\S])*?DISABLE TRIGGER USER(?:(?!\$\$)[\s\S])*?\n\$\$;$/gm,
     );
     expect(disabling).toHaveLength(1);
-    const statement = disabling?.[0] ?? "";
+    const statement = (disabling?.[0] ?? "").replace(/;$/, "");
     // Its own step: not part of the data rollback.
     expect(MANUAL.indexOf(statement)).toBeLessThan(
       MANUAL.indexOf(RUNBOOK_START),
@@ -2602,5 +2697,27 @@ describe("rollback runbook", () => {
       ),
     )) as unknown as { tgenabled: string }[];
     expect(after?.tgenabled).toBe("O");
+  });
+
+  test("the runbook's disabling step refuses to run when the table has another trigger", async () => {
+    const statement = (
+      MANUAL.match(
+        /^DO \$\$\n(?:(?!\$\$)[\s\S])*?DISABLE TRIGGER USER(?:(?!\$\$)[\s\S])*?\n\$\$;$/gm,
+      )?.[0] ?? ""
+    ).replace(/;$/, "");
+    const seen = await ownerRolledBack([], async (tx) => {
+      await tx.unsafe(
+        `CREATE TRIGGER runbook_test_extra BEFORE UPDATE ON public.revoked_access
+           FOR EACH ROW EXECUTE FUNCTION suppress_redundant_updates_trigger()`,
+      );
+      try {
+        await tx.unsafe(statement);
+        return "ran";
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    });
+    expect(seen).toContain("revoked_access");
+    expect(seen).not.toBe("ran");
   });
 });
