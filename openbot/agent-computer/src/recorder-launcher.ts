@@ -363,7 +363,7 @@ export function createRecorderLauncher(input: {
       if (defined === true) return;
       if (Date.now() > deadline)
         throw new RecorderUnavailableError(
-          "The Recorder in this browser does not offer its launcher, so OpenBot cannot connect it.",
+          "The Recorder in this browser does not offer its launcher, so it cannot be connected.",
         );
       await sleep(POLL_MS);
     }

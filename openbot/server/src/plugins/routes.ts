@@ -1,3 +1,4 @@
+import { envName } from "../../../shared/env-aliases";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -2493,8 +2494,7 @@ export function createPluginRoutes(
     if (!connect?.publicUrl) {
       return context.json(
         {
-          error:
-            "This deployment has no public URL configured, so it cannot complete a consent flow. Set OPENBOT_PUBLIC_URL.",
+          error: `This deployment has no public URL configured, so it cannot complete a consent flow. Set ${envName("PUBLIC_URL")}.`,
         },
         503,
       );

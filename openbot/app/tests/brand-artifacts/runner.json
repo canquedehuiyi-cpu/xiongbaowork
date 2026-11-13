@@ -60,31 +60,13 @@
     "note": "设备端环境变量名，随报错文字出现；Task 13"
   },
   {
-    "word": "OPENBOT_DESKTOP_ENGINE.",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "设备端环境变量名，随报错文字出现；Task 13"
-  },
-  {
     "word": "OPENBOT_DESKTOP_HELPER",
     "category": "operator-visible",
     "plan": "rewrite",
     "note": "设备端环境变量名，随报错文字出现；Task 13"
   },
   {
-    "word": "OPENBOT_DESKTOP_HELPER.",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "设备端环境变量名，随报错文字出现；Task 13"
-  },
-  {
     "word": "OPENBOT_RUNNER_DATA_DIR",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "设备端环境变量名，随报错文字出现；Task 13"
-  },
-  {
-    "word": "OPENBOT_RUNNER_DATA_DIR.",
     "category": "operator-visible",
     "plan": "rewrite",
     "note": "设备端环境变量名，随报错文字出现；Task 13"

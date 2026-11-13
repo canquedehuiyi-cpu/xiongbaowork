@@ -1,3 +1,4 @@
+import { envName } from "../../../shared/env-aliases";
 import { BROKERED_PROFILE, type BrokerProvider } from "./access";
 import { type ProviderDecision, providerDecision } from "./broker";
 
@@ -145,7 +146,7 @@ export function storedProvider(
   if (decision.kind === "active") return decision.provider;
   if (decision.kind === "misnamed") {
     throw new Error(
-      `OPENBOT_BROKER_PROVIDER=${decision.named} 指明的提供商没有设置 ${BROKERED_PROFILE[decision.named].envVar}。`,
+      `${envName("BROKER_PROVIDER")}=${decision.named} 指明的提供商没有设置 ${BROKERED_PROFILE[decision.named].envVar}。`,
     );
   }
   const owners = [...new Set(rowOwners)];

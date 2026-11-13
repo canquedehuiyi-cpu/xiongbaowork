@@ -124,7 +124,7 @@ export function computerOwner(
 /** Why a person's browser is refused on a computer Bots run on. Said to whoever runs OpenBot: the server tells the
  * person their browser cannot open and who can see to it. */
 export const NOT_ITS_OWN_COMPUTER =
-  "A person's own browser runs only on a computer of its own, and Bots run on this one. Give people's browsers their own computers (COMPUTER_SUPERVISOR_URL or a Sandbox), or OpenBot Desktop's.";
+  "A person's own browser runs only on a computer of its own, and Bots run on this one. Give people's browsers their own computers (COMPUTER_SUPERVISOR_URL or a Sandbox), or the desktop app's.";
 
 /**
  * Why Record is refused in a Bot's browser on the computer every person shares (`shared`, not a person's own). Record hands the Recorder there a person's own

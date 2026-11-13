@@ -57,13 +57,6 @@
     "removeIn": "0.2.13"
   },
   {
-    "file": "app/src/components/browser/learning-next.tsx",
-    "text": "`openbot-learned-",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
-  },
-  {
     "file": "app/src/components/browser/teach-steps.tsx",
     "text": "\"openbot.teach-a-bot.introduced\"",
     "reason": "persisted-identifier: 旧键；新键 xiongbao.teach-a-bot.introduced 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
@@ -78,13 +71,6 @@
     "reason": "persisted-identifier: prefix of built-in tool refs stored in rules",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "app/src/components/layout/openbot-version.tsx",
-    "text": "data-slot=\"openbot-version\"",
-    "reason": "persisted-identifier: CSS class / DOM hook, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
   },
   {
     "file": "app/src/components/notifications/notify-prompt.tsx",
@@ -124,13 +110,6 @@
     "plan": "remove",
     "introducedIn": "0.2.9",
     "removeIn": "0.2.11"
-  },
-  {
-    "file": "app/src/components/computer/computer-view.tsx",
-    "text": "\"openbot-secret\"",
-    "reason": "persisted-identifier: DOM id pairing a label with its input, never rendered as text (L1-3)",
-    "category": "persisted-data",
-    "plan": "rewrite"
   },
   {
     "file": "app/src/components/onboarding/demo-orb.tsx",
@@ -282,7 +261,7 @@
   {
     "file": "app/src/lib/notifications/show.ts",
     "text": "`openbot-${channelId}`",
-    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3)",
+    "reason": "persisted-identifier: notification tag; only used to replace an earlier notice (L1-3) [待批：待批：附录 A 新增行（Task 8 报告）；app/tests/component-reply-notice.test.tsx:579,592,612,647]",
     "category": "persisted-data",
     "plan": "rewrite"
   },
@@ -363,13 +342,6 @@
     "removeIn": "0.2.13"
   },
   {
-    "file": "app/src/lib/copilot/stopped-turn.ts",
-    "text": "console.warn(\"OpenBot couldn't reach its back end.\"",
-    "reason": "internal-log: browser console warning for developers",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "app/src/routes/_authed/admin/learning.tsx",
     "text": "需要接入 CopilotKit Intelligence",
     "reason": "external-name: names the third-party service an admin must sign up for",
@@ -412,20 +384,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/intelligence-entitlement-check.ts",
-    "text": "on OpenBot alone is not enough",
-    "reason": "internal-log: boot-time licence advice written to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/intelligence-entitlement-check.ts",
-    "text": "OpenBot asks again for up to",
-    "reason": "internal-log: boot-time note written to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "server/src/index.ts",
     "text": "eq(recorderConnections.via, \"openbot-browser\")",
     "reason": "persisted-identifier: recorder connection `via` value stored in the database",
@@ -435,16 +393,9 @@
   {
     "file": "server/src/index.ts",
     "text": "granted_by 以 openbot: 开头",
-    "reason": "internal-log: start-up warning in the server log naming the stored marker",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/index.ts",
-    "text": "OpenBot's own apps' tools could not be brought up to date",
-    "reason": "internal-log: start-up warning in the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: names the stored granted_by marker prefix an operator would find in the database",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/agents/connection-test.ts",
@@ -575,16 +526,9 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/browser/bot-browser.ts",
-    "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
-    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "server/src/browser/routes.ts",
     "text": "Set OPENBOT_PUBLIC_URL to this OpenBot's https address",
-    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL",
+    "reason": "internal-log: operator advice written to the server log, naming OPENBOT_PUBLIC_URL [待批：附录 A 第 6 行；server/tests/browser-routes.integration.test.ts:2739]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
@@ -605,7 +549,7 @@
   {
     "file": "server/src/tenant-package.ts",
     "text": "is the shape of a person's OpenBot browser",
-    "reason": "internal-error: tenant package loader error read by the operator at start-up",
+    "reason": "internal-error: tenant package loader error read by the operator at start-up [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/tenant-package.test.ts:433]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
@@ -619,16 +563,16 @@
   {
     "file": "server/src/config.ts",
     "text": "MICROSOFT_OAUTH_ALLOWED_CLIENTS 里有 OpenBot",
-    "reason": "internal-error: configuration error that stops start-up; read by the operator",
+    "reason": "internal-error: configuration error that stops start-up; read by the operator [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/entra-obo-config.test.ts:100]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "CopilotKit Intelligence is optional, and is half configured",
-    "reason": "internal-error: configuration error that stops start-up; read by the operator",
-    "category": "operator-visible",
-    "plan": "rewrite"
+    "reason": "external-name: names the third-party service whose settings are half given",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/config.ts",
@@ -640,23 +584,9 @@
   {
     "file": "server/src/config.ts",
     "text": "creates the openbot Learning container",
-    "reason": "internal-error: configuration error that stops start-up; names the container id",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/computer/policy-network.ts",
-    "text": "OpenBot pushes again within seconds",
-    "reason": "internal-log: egress push status written to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/computer/policy-network.ts",
-    "text": "OpenBot keeps pushing every 30 seconds",
-    "reason": "internal-log: egress push status written to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: names the Learning container id the operator must create",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/audit-retention.ts",
@@ -675,9 +605,9 @@
   {
     "file": "server/src/request-actor.ts",
     "text": "A CopilotKit run requires",
-    "reason": "internal-error: guard error caught by the runtime, not shown to a person",
-    "category": "operator-visible",
-    "plan": "rewrite"
+    "reason": "external-name: guard error naming the third-party runtime that asked; request-actor.test.ts asserts the sentence",
+    "category": "third-party-name",
+    "plan": "keep"
   },
   {
     "file": "server/src/db/apply-migrations.ts",
@@ -706,41 +636,6 @@
     "reason": "parsed-exact-text: context heading copilot.ts and the agents match verbatim",
     "category": "parsed-exact-text",
     "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/auto-assign.ts",
-    "text": "Intelligence could not be asked about the Learning container. OpenBot tries again.",
-    "reason": "internal-log: written once to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/learning/auto-assign.ts",
-    "text": "so OpenBot ignores it${options.enabled",
-    "reason": "internal-log: written once to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/learning/auto-assign.ts",
-    "text": "so OpenBot ignores it here",
-    "reason": "internal-log: written once to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/learning/auto-assign.ts",
-    "text": "OpenBot checks again.",
-    "reason": "internal-log: written once to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/learning/auto-assign.ts",
-    "text": "Automatic Learning container assignment failed. OpenBot tries again.",
-    "reason": "internal-log: written once to the server log",
-    "category": "operator-visible",
-    "plan": "rewrite"
   },
   {
     "file": "server/src/plugins/composio-adapter.ts",
@@ -1018,16 +913,16 @@
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "Automatic Learning: no credential here could create the openbot container",
-    "reason": "internal-log: setup job log line",
-    "category": "operator-visible",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: names the Learning container id",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "server/src/learning/ensure-container.ts",
     "text": "Automatic Learning: the openbot container is",
-    "reason": "internal-log: setup job log line",
-    "category": "operator-visible",
-    "plan": "rewrite"
+    "reason": "persisted-identifier: names the Learning container id",
+    "category": "persisted-data",
+    "plan": "keep"
   },
   {
     "file": "runner/src/browser.ts",
@@ -1480,126 +1375,91 @@
   {
     "file": "server/src/auth/dev-actor.ts",
     "text": "OPENBOT_SINGLE_USER=true",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1523]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/auth/role-writer-lifecycle.ts",
     "text": "OPENBOT_RLS_ENFORCE must",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/server-readiness-gates.test.ts:375]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/edition.ts",
     "text": "OPENBOT_EDITION is",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1518]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "OPENBOT_BROKER_PROVIDER 只能",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：附录 A 第 6 行；server/tests/arcade-config.test.ts:35]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "OPENBOT_SINGLE_USER admits",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:625,655,672]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "OPENBOT_THIS_MACHINE_HOST \"",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/agent-on-this-machine.test.ts:376]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "needs OPENBOT_PUBLIC_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config-github-app.test.ts:81]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/config.ts",
     "text": "OPENBOT_EDITION=personal",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "OPENBOT_RECORDER_EXTRA_EXTENSION_IDS lists",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/web-bot-auth.ts",
-    "text": "OPENBOT_PUBLIC_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/config.test.ts:1523]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/plugins/broker.ts",
     "text": "OPENBOT_APP_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/composio-broker-seam.test.ts:99]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/plugins/broker.ts",
     "text": "OPENBOT_BROKER_PROVIDER=",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/provider-selection.test.ts:107,157]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/plugins/routes.ts",
     "text": "OPENBOT_APP_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/plugins/routes.ts",
-    "text": "OPENBOT_PUBLIC_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/plugin-routes.test.ts:2186]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/plugins/provider-wiring.ts",
     "text": "OPENBOT_BROKER_PROVIDER",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/provider-selection.test.ts:295；server/tests/provider-undecided.test.ts:71]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "server/src/plugins/provider-wiring.ts",
     "text": "OPENBOT_PUBLIC_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "server/src/plugins/arcade-routes.ts",
-    "text": "OPENBOT_APP_URL",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "runner/src/index.ts",
-    "text": "Also read from OPENBOT_",
-    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8)",
+    "reason": "internal-error: operator advice that names an env var in a sentence, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；server/tests/arcade-verifier-notice.test.ts:57]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
@@ -1618,51 +1478,30 @@
     "plan": "keep"
   },
   {
-    "file": "agent-computer/src/person-access.ts",
-    "text": "OpenBot Desktop's",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "agent-computer/src/recorder-launcher.ts",
-    "text": "OpenBot cannot connect it",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "agent-computer/src/recorder.ts",
     "text": "OpenBot Recorder",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/person-browser-rules.test.ts:101；agent-computer/tests/person-browser.test.ts:349]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "agent-computer/src/bot-browser-host.ts",
     "text": "OpenBot Recorder",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "agent-computer/src/real-browser.ts",
-    "text": "(OpenBot Desktop)",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/bot-browser-computer.test.ts:1017]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "agent-computer/src/egress.ts",
     "text": "which OpenBot never opens",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/egress-policy.test.ts:712]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
   {
     "file": "agent-computer/src/egress.ts",
     "text": "realm=\"OpenBot\"",
-    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8)",
+    "reason": "internal-error: text shown to a person who runs the computer or reads the Bot's logs, L1-6 (Task 8) [待批：待批：附录 A 新增行（Task 8 报告）；agent-computer/tests/egress-policy.test.ts:291]",
     "category": "operator-visible",
     "plan": "rewrite"
   },
@@ -1763,13 +1602,6 @@
     "reason": "persisted-identifier: SPIFFE trust domain and join token name already issued",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "worker/src/index.ts",
-    "text": "OpenBot worker status",
-    "reason": "internal-log: worker status line in the log, L1-6 (Task 8)",
-    "category": "operator-visible",
-    "plan": "rewrite"
   },
   {
     "file": "docker/openbot-apt",
