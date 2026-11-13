@@ -9,7 +9,7 @@
 
 | 交付物 | 当前版本 | 获取方式 |
 | --- | --- | --- |
-| 服务端镜像 | `v0.2.9` | `ghcr.io/canquedehuiyi-cpu/xiongbaowork:v0.2.9`，每个 Release 附 `container-images.json` 记录镜像 digest |
+| 服务端镜像 | `v0.2.10` | `ghcr.io/canquedehuiyi-cpu/xiongbaowork:v0.2.10`，每个 Release 附 `container-images.json` 记录镜像 digest |
 | 设备端（Windows / Linux） | `device-v0.2.4-rc.1`（未签名内测版） | GitHub Releases 中「熊宝数字员工 设备端」，附 `SHA256SUMS` |
 
 ## 能做什么
@@ -66,7 +66,7 @@ WSL 使用 Docker Desktop 时先启用该发行版的 WSL Integration，并确�
 
 <!-- g7:linux:begin -->
 ```bash
-OPENBOT_TAG=${OPENBOT_TAG:-v0.2.9}
+OPENBOT_TAG=${OPENBOT_TAG:-v0.2.10}
 OPENBOT_IMAGE=${OPENBOT_IMAGE:-ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OPENBOT_TAG}
 docker pull "$OPENBOT_IMAGE"
 if [ -e .env.delivery ]; then
@@ -108,7 +108,7 @@ echo
 
 <!-- g7:windows:begin -->
 ```powershell
-$OpenbotTag = if ($env:OPENBOT_TAG) { $env:OPENBOT_TAG } else { 'v0.2.9' }
+$OpenbotTag = if ($env:OPENBOT_TAG) { $env:OPENBOT_TAG } else { 'v0.2.10' }
 $OpenbotImage = if ($env:OPENBOT_IMAGE) { $env:OPENBOT_IMAGE } else { "ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OpenbotTag" }
 docker pull $OpenbotImage
 if ($LASTEXITCODE -ne 0) { throw '拉取镜像失败' }
