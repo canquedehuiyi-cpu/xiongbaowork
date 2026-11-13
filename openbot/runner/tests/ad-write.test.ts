@@ -208,11 +208,18 @@ function setup(
     rmSync(root, { recursive: true, force: true });
   });
 
-  const entries = (): Entry[] =>
-    readFileSync(logPath, "utf8")
+  /**
+   * The fake binary may still be appending its last line while a test polls (`waitFor`), so only
+   * lines that already end in a newline are read; a half-written one is read on the next poll.
+   */
+  const entries = (): Entry[] => {
+    const text = readFileSync(logPath, "utf8");
+    return text
+      .slice(0, text.lastIndexOf("\n") + 1)
       .split("\n")
       .filter(Boolean)
       .map((line) => JSON.parse(line) as Entry);
+  };
   const log = () => entries().map((entry) => entry.args);
   /** The write commands that reached the binary, in order, `--headed` kept. */
   const writes = () =>
