@@ -118,12 +118,13 @@ export function textArray(values: readonly string[]): SQL {
  * 5.3's orphan of the ledger row aliased `l`: the chat a crash left between ② and ③. A shared group
  * the owner started since the conversion started, still unlinked and not hidden, whose Bots are
  * exactly the crew's roster less the ones the conversion left out. The oldest, when there is more
- * than one. Phase 1 adopts by it and `claimedBy` keeps phase 2 and for-channel off it: one condition.
+ * than one. Never a package's channel (user decision 2026-11-13: not a crew's, and `adopt` refuses
+ * it). Phase 1 adopts by it and `claimedBy` keeps phase 2 and for-channel off it: one condition.
  */
 const ORPHAN_OF_LEDGER_ROW = sql`(
   select c.id from channels c
    where c.tenant_id = 'team' and c.created_by = l.tenant_id
-     and c.waker_group_id is null and c.deleted_at is null
+     and c.waker_group_id is null and c.deleted_at is null and c.package_id is null
      and c.created_at >= l.started_at
      and array(select a.agent_id from channel_agents a
                 where a.channel_id = c.id order by a.agent_id)
@@ -184,7 +185,7 @@ async function seedRoster(
 /**
  * 5.4：未完成的转换占用的频道（台账 `started` 记下的 `channel_id`，或孤儿条件命中的频道）。`claimedBy` 在调用者
  * 帧里读：第二阶段在 `platform` 帧，`for-channel` 在创建者本人帧（台账、群组名单都是他的）。群组已经挂着别的
- * 未删聊天的转换不占用（下次第一阶段会收尾）。`finish` 在调用者帧（所有者本人）补种顺序、`adopt`，台账改
+ * 聊天的转换不占用：那个聊天未删，下次第一阶段会收尾；已删，第一阶段不再续做（同裁定 3a），占用随之放开。`finish` 在调用者帧（所有者本人）补种顺序、`adopt`，台账改
  * `converted` 并写 `channel_id`。
  */
 export function createConversionClaims(deps: {
@@ -202,8 +203,7 @@ export function createConversionClaims(deps: {
                and (l.channel_id = ${channelId}
                     or (l.channel_id is null and ${ORPHAN_OF_LEDGER_ROW} = ${channelId}))
                and not exists (select 1 from channels x
-                                where x.waker_group_id = l.group_id and x.deleted_at is null
-                                  and x.id <> ${channelId})
+                                where x.waker_group_id = l.group_id and x.id <> ${channelId})
              order by l.started_at, l.group_id
              limit 1`,
       )) as unknown as { group_id: string }[];
@@ -389,38 +389,50 @@ export async function convertGroups(
   /**
    * The person opened the crew's chat themselves while its conversion was under way: theirs is the
    * crew's chat. The one this conversion made (`ours`) is hidden while it is still unlinked and nobody
-   * has said anything in it; with messages it is left as it is and said once.
+   * has said anything in it, and said once; with messages it is left as it is, and said once too.
+   *
+   * Hidden in the owner's frame, as their own delete would be: `ours` is a shared group they started
+   * (`groups.create` ran in their frame, and an orphan's `created_by` is them), so row security and
+   * 0122's guard (only the creator hides a shared group) both still have their say.
    */
-  async function settle(groupId: string, ours: string | null, theirs: string) {
-    const kept =
-      ours !== null &&
-      (await asPlatform(async () => {
+  async function settle(
+    owner: string,
+    groupId: string,
+    ours: string | null,
+    theirs: string,
+  ) {
+    if (ours !== null) {
+      const outcome = await runAsTenant(owner, async () => {
         const hidden = (await database.execute(
           sql`update channels set deleted_at = now(), updated_at = now()
                where id = ${ours} and deleted_at is null and waker_group_id is null
                  and not exists (select 1 from group_messages m where m.channel_id = ${ours})
                returning id`,
         )) as unknown[];
-        if (hidden.length > 0) return false;
+        if (hidden.length > 0) return "hidden" as const;
         // Not hidden: already gone or linked elsewhere (nothing to say), or spoken in (kept).
-        const [chat] = (await database.execute(
+        const [open] = (await database.execute(
           sql`select 1 from channels c
                where c.id = ${ours} and c.deleted_at is null and c.waker_group_id is null`,
         )) as unknown[];
-        return chat !== undefined;
-      }));
-    if (kept)
-      log({
-        type: "waker-group-upgrade-chat-kept",
-        groupId,
-        channelId: ours,
-        linkedChannelId: theirs,
+        return open === undefined ? null : ("kept" as const);
       });
+      if (outcome)
+        log({
+          type:
+            outcome === "hidden"
+              ? "waker-group-upgrade-chat-hidden"
+              : "waker-group-upgrade-chat-kept",
+          groupId,
+          channelId: ours,
+          linkedChannelId: theirs,
+        });
+    }
     await converted(groupId, theirs);
   }
 
   /** ④ and ⑤: link the crew to its chat (the title and the mirror follow), then it is converted. */
-  async function finish(groupId: string, channelId: string) {
+  async function finish(owner: string, groupId: string, channelId: string) {
     try {
       await link.adopt(groupId, channelId);
     } catch (error) {
@@ -430,7 +442,7 @@ export async function convertGroups(
           ? await liveChannelOf(groupId, channelId)
           : null;
       if (!theirs) throw error;
-      return settle(groupId, channelId, theirs);
+      return settle(owner, groupId, channelId, theirs);
     }
     await converted(groupId, channelId);
   }
@@ -474,7 +486,7 @@ export async function convertGroups(
       groups.create(owner, { agentIds: kept }),
     );
     await recordChannel(crew.id, channel.id);
-    await finish(crew.id, channel.id);
+    await finish(owner, crew.id, channel.id);
     return "converted";
   }
 
@@ -489,19 +501,22 @@ export async function convertGroups(
       : undefined;
     if (theirs) {
       await settle(
+        crew.tenantId,
         crew.id,
         crew.channelId ?? (await orphanOf(crew.id)),
         theirs,
       );
       return "converted";
     }
-    // Rule 2: a chat links it already, other than the one its own conversion wrote down.
+    // Rule 2: a chat links it already, other than the one its own conversion wrote down. For a
+    // `started` row that chat is one the person opened and then deleted: passed over without a word,
+    // as when its own chat was deleted (below); `claimedBy` lets go of what it wrote down.
     const own = resuming ? crew.channelId : null;
     if (crew.linked.some((channelId) => channelId !== own)) return null;
     if (resuming && crew.channelId) {
       // Its chat was deleted since: the crew stays, and the chat is not opened again (rule 2).
       if (crew.channelGone) return null;
-      await finish(crew.id, crew.channelId);
+      await finish(crew.tenantId, crew.id, crew.channelId);
       return "converted";
     }
     if (resuming) {
@@ -511,7 +526,7 @@ export async function convertGroups(
         await runAsTenant(crew.tenantId, () =>
           seedRoster(database, groups.store, crew.tenantId, crew.id, orphan),
         );
-        await finish(crew.id, orphan);
+        await finish(crew.tenantId, crew.id, orphan);
         return "converted";
       }
     }
@@ -656,7 +671,10 @@ export async function reconcileLinked(
   )) {
     if (deps.stopped?.()) break;
     try {
-      if ((await handOverFirst(link, chat)).moved) counts.handedOver += 1;
+      const handed = await handOverFirst(link, chat);
+      if (handed.moved) counts.handedOver += 1;
+      // Put off by a running flow (logged by `handOver`): the mirror waits for the hand-over.
+      if (handed.deferred) continue;
       if (await link.reconcile(chat.id)) counts.reconciled += 1;
     } catch (error) {
       log({
@@ -696,7 +714,13 @@ export async function runGroupUpgrade(
   env: Record<string, string | undefined> = process.env,
 ): Promise<GroupUpgradeSummary | { skipped: "off" | "locked" }> {
   if (env.XIONGBAO_GROUP_UPGRADE === "off") return { skipped: "off" };
-  const connection = postgres(deps.databaseUrl, { max: 1 });
+  // The lock lives as long as this connection, which sits idle while the pool does the work: neither
+  // an idle timeout nor postgres.js's default 30–60 minute lifetime may end it mid-run.
+  const connection = postgres(deps.databaseUrl, {
+    max: 1,
+    idle_timeout: 0,
+    max_lifetime: null,
+  });
   let held = false;
   try {
     const [lock] = await connection`

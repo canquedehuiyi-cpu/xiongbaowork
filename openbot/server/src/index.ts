@@ -102,6 +102,7 @@ import { createRequireUser, createRoleRepository } from "./auth/guards";
 import { createIdentityProviderStore } from "./auth/identity-provider-store";
 import { createOrganizationAuth } from "./auth/organization";
 import { organizationUserStore } from "./auth/organization-store";
+import { createRoleOf } from "./auth/role-of";
 import {
   checkDatabaseCredential,
   checkServerReadiness,
@@ -2935,19 +2936,18 @@ await startupLifecycle.run(async (startup) => {
    * sitting in front of them in chat. This asks the same repository the request path asks, so a routine
    * sees exactly the coworkers its owner sees.
    */
+  /** Who acts in which role with nobody at the keyboard; `actorFor` and the group upgrade both ask it. */
+  const roleOf = createRoleOf({
+    singleUser: config.singleUser,
+    roles: roleRepository,
+  });
   const actorFor = async (ownerUserId: string): Promise<AgentActor> => {
-    // One person, and they are an administrator. The id stays the routine owner's rather than being
-    // rewritten to DEV_ACTOR's: in this mode they are the same person, and if they ever were not,
-    // silently borrowing the dev actor's identity would be worse than finding nothing.
-    if (config.singleUser) return { id: ownerUserId, role: DEV_ACTOR.role };
-    const roles = await roleRepository.rolesForUser(ownerUserId);
-    if (!roles.includes("admin") && !roles.includes("user")) {
-      throw new Error("A routine requires an authorized owner.");
-    }
-    return {
-      id: ownerUserId,
-      role: roles.includes("admin") ? "admin" : "user",
-    };
+    // One person, and they are an administrator (`roleOf`). The id stays the routine owner's rather
+    // than being rewritten to DEV_ACTOR's: in this mode they are the same person, and if they ever
+    // were not, silently borrowing the dev actor's identity would be worse than finding nothing.
+    const role = await roleOf(ownerUserId);
+    if (!role) throw new Error("A routine requires an authorized owner.");
+    return { id: ownerUserId, role };
   };
 
   /*
@@ -4270,11 +4270,8 @@ await startupLifecycle.run(async (startup) => {
         groups: baseGroupConversations,
         link: wakerGroupLink,
         canUse: canUseGroupBot,
-        hasRole: async (userId) =>
-          config.singleUser ||
-          (await roleRepository.rolesForUser(userId)).some(
-            (role) => role === "admin" || role === "user",
-          ),
+        // The same answer `actorFor` acts on: no role is `no_owner`, not a failure every boot.
+        hasRole: async (userId) => (await roleOf(userId)) !== null,
       }),
     (task) => task.stop(),
   );
