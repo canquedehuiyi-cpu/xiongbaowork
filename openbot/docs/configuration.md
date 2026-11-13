@@ -546,7 +546,9 @@ configured, it is admitted only for a caller on this machine, and the app's own 
 (`app/serve.ts`, the Vite dev server) answer only this machine too. To open it from another machine
 on your network, set `OPENBOT_APP_URL` (or `TRUSTED_ORIGINS`) to the address they use. OpenBot's
 container images set `OPENBOT_IN_CONTAINER=true`, because there every caller arrives through the
-container engine; set it yourself only for a container of your own that runs this server. Routes
+container engine: `server/Dockerfile` as an ENV, the one-container image through its defaults file
+(`docker/defaults.env`, written into each service's environment at start unless you set the name).
+Set it yourself only for a container of your own that runs this server. Routes
 that containers and services call back on (Bots' tool calls, the model proxy, the routines worker)
 prove themselves with their own secrets and are not affected.
 

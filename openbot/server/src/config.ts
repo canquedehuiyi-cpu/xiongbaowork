@@ -762,8 +762,10 @@ function singleUserAllowed(
  * Which requests single-user mode admits. See {@link SingleUserAccess}.
  *
  * WHERE THE SERVER RUNS IS SAID BY THE IMAGE, NOT GUESSED. `OPENBOT_IN_CONTAINER=true` is set by both
- * Dockerfiles that run this server (`server/Dockerfile`, used by Compose and the chart, and the
- * one-container `Dockerfile`), so every container gets it without anybody writing it down, and every
+ * images that run this server: `server/Dockerfile` (Compose and the chart) as an ENV, and the
+ * one-container `Dockerfile` through its defaults file (`docker/defaults.env`, which the s6
+ * env-aliases oneshot writes into every service's environment unless the deployment set the name
+ * itself). So every container gets it without anybody writing it down, and every
  * other way of starting the server (OpenBot Desktop, `scripts/start.sh`, `bun run dev`) does not.
  * The default is the strict one: a server nobody said is in a container admits only this machine.
  * Inside a container that would refuse everybody, because the engine's proxy is the peer of every

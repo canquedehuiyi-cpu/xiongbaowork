@@ -17,6 +17,8 @@ expect_file() { # dir name value
   [ "$got" = "$3" ] || fail "$2 is '$got', wanted '$3'"
 }
 
+# Cases 1-5 pass no defaults file, so the script reads /etc/xiongbao/defaults.env if it is there: they
+# run on the CI host, which has none, not inside the image.
 # 1. legacy only: untouched, silent
 d=$T/legacy; mkdir "$d"
 printf %s http://old > "$d/OPENBOT_PUBLIC_URL"
@@ -60,14 +62,14 @@ DEFAULTS=$HERE/../defaults.env
 # 6. only the legacy name set: the default does not override it, under either name
 d=$T/defaults-legacy; mkdir "$d"
 printf %s warn > "$d/OPENBOT_RLS_ENFORCE"
-err=$(XB_DEFAULTS_FILE=$DEFAULTS sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "only OPENBOT_RLS_ENFORCE=warn set: exited non-zero"
+err=$(sh "$SCRIPT" "$d" "$DEFAULTS" 2>&1 >/dev/null) || fail "only OPENBOT_RLS_ENFORCE=warn set: exited non-zero"
 [ ! -e "$d/XIONGBAO_RLS_ENFORCE" ] || fail "only OPENBOT_RLS_ENFORCE=warn set: XIONGBAO_RLS_ENFORCE was written"
 expect_file "$d" OPENBOT_RLS_ENFORCE warn
 [ -z "$err" ] || fail "only OPENBOT_RLS_ENFORCE=warn set: warned: $err"
 
 # 7. neither name set: the default lands under both
 d=$T/defaults-none; mkdir "$d"
-err=$(XB_DEFAULTS_FILE=$DEFAULTS sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "neither set: exited non-zero"
+err=$(sh "$SCRIPT" "$d" "$DEFAULTS" 2>&1 >/dev/null) || fail "neither set: exited non-zero"
 expect_file "$d" XIONGBAO_RLS_ENFORCE refuse
 expect_file "$d" OPENBOT_RLS_ENFORCE refuse
 expect_file "$d" XIONGBAO_SELF_HOST_BANNER false
@@ -79,23 +81,37 @@ expect_file "$d" OPENBOT_IN_CONTAINER true
 # 8. the new name set: it stays, and is copied to the legacy name as before
 d=$T/defaults-new; mkdir "$d"
 printf %s warn > "$d/XIONGBAO_RLS_ENFORCE"
-err=$(XB_DEFAULTS_FILE=$DEFAULTS sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "XIONGBAO_RLS_ENFORCE=warn set: exited non-zero"
+err=$(sh "$SCRIPT" "$d" "$DEFAULTS" 2>&1 >/dev/null) || fail "XIONGBAO_RLS_ENFORCE=warn set: exited non-zero"
 expect_file "$d" XIONGBAO_RLS_ENFORCE warn
 expect_file "$d" OPENBOT_RLS_ENFORCE warn
 [ -z "$err" ] || fail "XIONGBAO_RLS_ENFORCE=warn set: warned: $err"
 
 # 9. no defaults file: nothing written, no error
 d=$T/defaults-missing; mkdir "$d"
-err=$(XB_DEFAULTS_FILE=$T/no-such-defaults.env sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "defaults.env missing: exited non-zero"
+err=$(sh "$SCRIPT" "$d" "$T/no-such-defaults.env" 2>&1 >/dev/null) || fail "defaults.env missing: exited non-zero"
 [ "$(ls "$d" | wc -l)" -eq 0 ] || fail "defaults.env missing: wrote $(ls "$d")"
 [ -z "$err" ] || fail "defaults.env missing: warned: $err"
 
 # 10. a defaults file's comments and blank lines are skipped; a value keeps everything after the first =
 d=$T/defaults-format; mkdir "$d"
 printf '%s\n' '# a comment' '' 'SOME_URL=http://x/?a=b' > "$T/format.env"
-XB_DEFAULTS_FILE=$T/format.env sh "$SCRIPT" "$d" 2>/dev/null || fail "defaults format: exited non-zero"
+sh "$SCRIPT" "$d" "$T/format.env" 2>/dev/null || fail "defaults format: exited non-zero"
 expect_file "$d" XIONGBAO_SOME_URL "http://x/?a=b"
 [ "$(ls "$d" | wc -l)" -eq 2 ] || fail "defaults format: wrote $(ls "$d" | tr '\n' ' ')"
+
+# 11. a build identity the image's build wrote into the defaults file (Dockerfile, BUILD_<X>): the
+#     deployment's own identity under the legacy name wins; without one, the image's applies
+cat "$DEFAULTS" > "$T/build.env"
+printf '%s\n' 'BUILD_VERSION=v2' >> "$T/build.env"
+d=$T/build-legacy; mkdir "$d"
+printf %s v1 > "$d/OPENBOT_BUILD_VERSION"
+sh "$SCRIPT" "$d" "$T/build.env" 2>/dev/null || fail "build identity, legacy set: exited non-zero"
+expect_file "$d" OPENBOT_BUILD_VERSION v1
+[ ! -e "$d/XIONGBAO_BUILD_VERSION" ] || fail "build identity, legacy set: XIONGBAO_BUILD_VERSION was written"
+d=$T/build-none; mkdir "$d"
+sh "$SCRIPT" "$d" "$T/build.env" 2>/dev/null || fail "build identity, none set: exited non-zero"
+expect_file "$d" XIONGBAO_BUILD_VERSION v2
+expect_file "$d" OPENBOT_BUILD_VERSION v2
 
 [ "$rc" -eq 0 ] && echo "env-aliases.sh: all passed"
 exit "$rc"

@@ -420,22 +420,36 @@ ENV EMBEDDED_POSTGRES=off
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 # Public, build-bound identity. A build that passes no --build-arg leaves it unknown (the root release
-# workflow passes none today, so its images report the same unknown identity they always did). The
-# build arguments are XIONGBAO_*; the ENV keeps the OPENBOT_* names the server reads, on purpose: an
-# unset argument still becomes an EMPTY variable, and an empty XIONGBAO_BUILD_* would be copied over
-# an OPENBOT_BUILD_* that an existing deployment supplies at run time (the alias layer lets an empty
-# new name win), erasing its release identity. A run-time XIONGBAO_BUILD_* still works through the
-# alias layer. Moving these to their new names waits for a lowest-priority defaults home (Task 11).
+# workflow passes none today, so its images report the same unknown identity they always did).
+#
+# NOT ENV: A LINE OF THE DEFAULTS FILE, AND ONLY WHEN SET. An unset argument still becomes an EMPTY
+# variable, and baked into ENV under either name it would stand in for, or be copied over, the
+# identity a deployment supplies at run time. So each argument that is set becomes `BUILD_<X>=<value>`
+# in /etc/xiongbao/defaults.env, which the env-aliases oneshot writes under the new name only when the
+# deployment sets the identity under neither name; an unset one writes nothing. A value is one line:
+# one holding a line break could add a key of its own to the file, so it fails the build instead.
+# The image's last RUN, so a new commit's arguments rebuild this layer and nothing before it.
+#
+# release.yml already labels its images with org.opencontainers.image.version and .revision, which is
+# what `docker inspect` shows of the identity; no second label is set here.
 ARG XIONGBAO_BUILD_VERSION
 ARG XIONGBAO_BUILD_COMMIT
 ARG XIONGBAO_BUILD_DISTRIBUTION_ID
 ARG XIONGBAO_BUILD_REPOSITORY
 ARG XIONGBAO_BUILD_CHANNEL
-ENV OPENBOT_BUILD_VERSION=${XIONGBAO_BUILD_VERSION} \
-    OPENBOT_BUILD_COMMIT=${XIONGBAO_BUILD_COMMIT} \
-    OPENBOT_BUILD_DISTRIBUTION_ID=${XIONGBAO_BUILD_DISTRIBUTION_ID} \
-    OPENBOT_BUILD_REPOSITORY=${XIONGBAO_BUILD_REPOSITORY} \
-    OPENBOT_BUILD_CHANNEL=${XIONGBAO_BUILD_CHANNEL}
+RUN set -eu; \
+    add() { \
+      [ -n "$2" ] || return 0; \
+      if [ "$(printf '%s' "$2" | wc -l)" -ne 0 ]; then \
+        echo "XIONGBAO_BUILD_$1 holds a line break; a build identity is one line" >&2; exit 1; \
+      fi; \
+      printf 'BUILD_%s=%s\n' "$1" "$2" >> /etc/xiongbao/defaults.env; \
+    }; \
+    add VERSION "${XIONGBAO_BUILD_VERSION:-}"; \
+    add COMMIT "${XIONGBAO_BUILD_COMMIT:-}"; \
+    add DISTRIBUTION_ID "${XIONGBAO_BUILD_DISTRIBUTION_ID:-}"; \
+    add REPOSITORY "${XIONGBAO_BUILD_REPOSITORY:-}"; \
+    add CHANNEL "${XIONGBAO_BUILD_CHANNEL:-}"
 
 # Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
 # container only callers on this machine are the administrator; in here every caller arrives through

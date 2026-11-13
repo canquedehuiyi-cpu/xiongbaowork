@@ -10,12 +10,14 @@
 # (`#` starts a comment) is written as XIONGBAO_<X> only when neither XIONGBAO_<X> nor its legacy
 # name is set, and is then copied like any other. As an image ENV under the new name it would win
 # over a customer's own setting under the legacy name: RLS_ENFORCE=warn turned back into refuse.
-# XB_DEFAULTS_FILE is for the tests; a missing file is skipped.
+# A missing defaults file is skipped.
 #
-# Usage: env-aliases.sh [environment-directory]   (default /run/s6/container_environment)
+# Usage: env-aliases.sh [dir] [defaults-file]
+#   dir            default /run/s6/container_environment
+#   defaults-file  default /etc/xiongbao/defaults.env (s6 passes neither; the tests pass both)
 set -eu
 dir=${1:-/run/s6/container_environment}
-defaults=${XB_DEFAULTS_FILE:-/etc/xiongbao/defaults.env}
+defaults=${2:-/etc/xiongbao/defaults.env}
 [ -d "$dir" ] || exit 0
 
 # The legacy name of a suffix, as a path in $dir.

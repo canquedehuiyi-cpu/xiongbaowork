@@ -147,6 +147,13 @@ pass "employee A may not sudo xiongbao-apt"
 [ -L /usr/local/sbin/openbot-apt ] || fail "openbot-apt is not a link: $(ls -l /usr/local/sbin/openbot-apt 2>&1)"
 [ "$(readlink -f /usr/local/sbin/openbot-apt)" = /usr/local/sbin/xiongbao-apt ] || fail "openbot-apt points at $(readlink -f /usr/local/sbin/openbot-apt 2>&1), not xiongbao-apt"
 pass "openbot-apt is a link to xiongbao-apt"
+# Run through sudo, not only listed: both paths reach the same helper, which refuses a bogus action
+# with 2 before it touches apt (no network needed).
+for path in /usr/local/sbin/xiongbao-apt /usr/local/sbin/openbot-apt; do
+  expect_code 2 "pwuser: sudo $path bogus is refused by the helper" -- runuser -u pwuser -- sudo -n "$path" bogus
+  head -n 1 "$T/err" | grep -q '^xiongbao-apt: ' || fail "sudo $path bogus: stderr does not start with xiongbao-apt: ($(cat "$T/err"))"
+  pass "sudo $path bogus says xiongbao-apt:"
+done
 
 # What the shell tool tells an employee to do instead: install user-level tools in its own
 # directory. The image has no python3, so npm and bun are the installers; an empty `npm install`
