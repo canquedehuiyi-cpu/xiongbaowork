@@ -302,8 +302,8 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 ### 3.2 迁移放在哪里、怎么编号
 
 - **放在** `openbot/server/recovery/recovery-20261018-v1/sql/`。原因：`drizzle/` 被测试冻结，叠加层「只能追加」（`scripts/migrate.ts:29-37, 57-63`）；0081 以后的迁移全部在这里。
-- **编号**：PR1 用 `0206_waker_group_channel_link.sql`、`0207_team_channel_hand_over.sql`，PR3 用 **`0210_waker_group_upgrades.sql`**（原定的 0205 已被 main 的 `0205_skill_assets` 占用，依次顺延；PR3 动工时 main 又已有 `0208_skill_runnable`、`0209_channel_kind`，控制方 2026-11-13 裁定改为 0210，日志 `idx` 210、`when` 晚于 0209）。合入前如果别的 PR 先占了号，就再顺延，并同步改日志。
-- **三件套**：SQL 文件；`meta/_journal.json` 追加一条，`idx` 与文件编号相同（206、207、210），`tag` 带四位数字前缀，`when` 取真实当前时间且晚于前一条（0205 为 `1794527335046`）；0108 以后不配快照（与 0108–0204 一致）。
+- **编号**：PR1 用 `0206_waker_group_channel_link.sql`、`0207_team_channel_hand_over.sql`，PR3 用 **`0210_waker_group_upgrades.sql`** 与 **`0211_waker_group_upgrades_original_owner.sql`**（后者是 Task 12 评审后补的列级权限，0210 已提交不再改；原定的 0205 已被 main 的 `0205_skill_assets` 占用，依次顺延；PR3 动工时 main 又已有 `0208_skill_runnable`、`0209_channel_kind`，控制方 2026-11-13 裁定改为 0210，日志 `idx` 210、`when` 晚于 0209）。合入前如果别的 PR 先占了号，就再顺延，并同步改日志。
+- **三件套**：SQL 文件；`meta/_journal.json` 追加一条，`idx` 与文件编号相同（206、207、210、211），`tag` 带四位数字前缀，`when` 取真实当前时间且晚于前一条（0205 为 `1794527335046`）；0108 以后不配快照（与 0108–0204 一致）。
 - **执行身份**：要替换守卫函数、建触发器，必须用 owner 或 BYPASSRLS 身份跑，与 0122/0128 一样，文件开头照 0122:27-31 加角色自检。所有部署路径（镜像、Helm Job、compose、CI、`db:migrate`）都已经走 `scripts/migrate.ts` 的 owner 串，不需要改流程。
 
 ### 3.3 RLS、租户与守卫
@@ -315,7 +315,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
    - 把已挂的群组改指到另一个群组，在 `platform` 帧以外一律拒绝。
 3. **新增触发器 `openbot_channel_waker_group_link`**（BEFORE INSERT OR UPDATE OF `waker_group_id`，对所有频道生效，`platform` 帧放行）：新值非 NULL 时，要求在**当前帧的 RLS 下**能读到这一行群组，且它的 `tenant_id` 等于 3.1 节的所有者，且没有 `waker_flows` 指向它。函数**不用** SECURITY DEFINER：故意借当前帧的 RLS，读不到就等于不是你的。这条挡住两种情况：外键检查绕过 RLS，可以拿别人的群组 id 去挂；也可以把 WakerFlow 内部群组挂进聊天。
 4. **群组一侧不改**：`waker_groups` 和 `waker_group_members` 的策略（0070、0072）保持原样。
-5. **台账表 `waker_group_upgrades`**（0210，见 5.5）带 `tenant_id`，照 0072 建 `ENABLE` + `FORCE` 和四条策略，`GRANT` 给 `openbot_app`。写法照抄 `0203_portrait_media.sql:37-49`。
+5. **台账表 `waker_group_upgrades`**（0210，见 5.5）带 `tenant_id`，照 0072 建 `ENABLE` + `FORCE` 和四条策略，`GRANT` 给 `openbot_app`。写法照抄 `0203_portrait_media.sql:38-50`。
 6. **已知限制（接受）**：被创建者拉进共享群的**其他人**读不到创建者租户里的 `waker_groups`、`portraits` 和流程模板。他们看到的仍是叠放的员工头像，设置面板对他们只读（显示员工与顺序，数据取自群聊）。要让其他人也看到自定义头像，需要把头像改成 `team` 戳，本期不做（Q2）。
 7. **移交函数与停用触发器**（0207，3.1.1 第 7 条）：移交只在 `created_by` 已不是成员或已停用时生效，接手人由数据库按规则选，调用方只传频道 id；陌生人与频道不存在报同一个 42501，校验前不加锁；写入、判定、停用三个函数不授权给应用，只有 `xiongbao_team_channel_hand_over` 授权；直接 `UPDATE channels SET created_by` 仍被两道守卫拒绝；`revoked_access` 上的触发器只执行确定的规则，不接受调用方参数，没有扩大现有的信任边界。
 
@@ -425,7 +425,7 @@ Task 4 的 `WakerGroupOwnerGoneError`（`S/waker-groups/linked-actions.ts:56-67`
 |---|---|
 | `group_id uuid` | 主键，外键指向 `waker_groups`，级联删除 |
 | `tenant_id text` | 所有者，0072 四条策略；移交时由 0210 改写的写入函数跟着改为接手人 |
-| `original_owner text` | 写台账时的所有者，之后不改，移交也不搬。回滚手册用它认出「已经被移交过」的转换群组（3.1.1 第 5 条） |
+| `original_owner text` | 写台账时的所有者，之后不改，移交也不搬。回滚手册用它认出「已经被移交过」的转换群组（3.1.1 第 5 条）。「不改」由数据库保证：0211 收回整表 UPDATE，按列重新授给 `openbot_app`，唯独不含这一列 |
 | `channel_id text` | 可空；转出来的或补挂的频道 |
 | `outcome text` | `started`、`converted`、`backfilled`、`pending_members`、`too_many`、`no_owner`（CHECK 约束） |
 | `dropped_agent_ids text[]` | 转换时被筛掉的员工，默认空数组 |

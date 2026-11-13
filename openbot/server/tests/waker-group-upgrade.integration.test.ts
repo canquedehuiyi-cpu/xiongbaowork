@@ -9,13 +9,14 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
  * The upgrade that turns crews into chats and gives old chats a crew (spec 2026-11-13 group-unify,
- * section 5; migration 0210).
+ * section 5; migrations 0210, 0211).
  *
  * Its ledger, `waker_group_upgrades`, is one row per crew the upgrade touched: what it did, the chat
  * it made or linked, the coworkers it left out. It is the owner's row like any tenant row (0072's
  * four policies, FORCE), it goes with the crew when the crew is deleted, and it follows the crew to
  * the heir when a shared group is handed over, while `original_owner` keeps who it was written for
- * (the rollback runbook leaves alone a converted crew that has changed hands).
+ * (the rollback runbook leaves alone a converted crew that has changed hands). The app may never
+ * change `original_owner` once written (0211).
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `wgup-${randomUUID()}`;
@@ -105,6 +106,11 @@ async function refusal(work: () => Promise<unknown>) {
   throw new Error("expected a refusal");
 }
 
+/** What the database said, under drizzle's "Failed query" wrapper. */
+function reason(error: unknown) {
+  return String((error as { cause?: Error }).cause?.message ?? error);
+}
+
 describe("ledger", () => {
   test("the journal registers 0210 after 0209", async () => {
     const journal = (await Bun.file(
@@ -159,6 +165,95 @@ describe("ledger", () => {
       ),
     )) as unknown as { outcome: string }[];
     expect(kept?.outcome).toBe("converted");
+  });
+
+  test("the journal registers 0211 after 0210", async () => {
+    const journal = (await Bun.file(
+      new URL(
+        "../recovery/recovery-20261018-v1/meta/_journal.json",
+        import.meta.url,
+      ),
+    ).json()) as {
+      entries: { idx: number; tag: string; when: number }[];
+    };
+    const previous = journal.entries.find((item) => item.idx === 210);
+    const entry = journal.entries.find((item) => item.idx === 211);
+    expect(entry?.tag).toBe("0211_waker_group_upgrades_original_owner");
+    expect(entry?.when ?? 0).toBeGreaterThan(previous?.when ?? Infinity);
+  });
+
+  test("a tenant cannot hand its own ledger row to another tenant", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const ours = await crew(alice, "周报");
+    await record(alice, ours, alice);
+
+    // WITH CHECK, the half of the update policy the cross-tenant test above does not reach.
+    const refused = await runAsTenant(alice, () =>
+      database.execute(
+        sql`update waker_group_upgrades set tenant_id = ${bob} where group_id = ${ours}::uuid`,
+      ),
+    ).catch((error: unknown) => error);
+    expect(stateOf(refused)).toBe("42501");
+    expect(reason(refused)).toContain("row-level security");
+    expect(await ledger("platform", [ours])).toEqual([
+      { group_id: ours, tenant_id: alice, original_owner: alice },
+    ]);
+  });
+
+  test("every outcome the upgrade writes is accepted", async () => {
+    const alice = await person("alice");
+    const outcomes = [
+      "started",
+      "converted",
+      "backfilled",
+      "pending_members",
+      "too_many",
+      "no_owner",
+    ];
+    const ids: string[] = [];
+    for (const outcome of outcomes) {
+      const id = await crew(alice, `台账 ${outcome}`);
+      await record(alice, id, alice, outcome);
+      ids.push(id);
+    }
+
+    const rows = (await runAsTenant(alice, () =>
+      database.execute(
+        sql`select outcome from waker_group_upgrades where group_id::text in ${ids}`,
+      ),
+    )) as unknown as { outcome: string }[];
+    expect(rows.map((row) => row.outcome).sort()).toEqual([...outcomes].sort());
+  });
+
+  test("original_owner keeps the value it was first written with", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const ours = await crew(alice, "周报");
+    await record(alice, ours, alice);
+
+    // Not even the platform frame may change it: the app has no UPDATE on the column (0211).
+    for (const frame of [alice, "platform"]) {
+      const refused = await runAsTenant(frame, () =>
+        database.execute(
+          sql`update waker_group_upgrades set original_owner = ${bob} where group_id = ${ours}::uuid`,
+        ),
+      ).catch((error: unknown) => error);
+      expect(stateOf(refused)).toBe("42501");
+      expect(reason(refused)).toContain("permission denied");
+    }
+    // Every other column the upgrade moves stays writable.
+    await runAsTenant("platform", () =>
+      database.execute(
+        sql`update waker_group_upgrades
+               set outcome = 'started', channel_id = 'c', dropped_agent_ids = '{a}',
+                   started_at = now(), updated_at = now(), tenant_id = ${bob}
+             where group_id = ${ours}::uuid`,
+      ),
+    );
+    expect(await ledger("platform", [ours])).toEqual([
+      { group_id: ours, tenant_id: bob, original_owner: alice },
+    ]);
   });
 
   test("an unknown outcome is refused", async () => {

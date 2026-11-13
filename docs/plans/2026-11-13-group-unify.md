@@ -53,7 +53,7 @@
 - 新接口全部在调用者帧里读写；别人的群组 id 一律 404（不暴露存在与否）。`for-channel` 对能读到频道的非创建者 403，读不到 404。
 - 挂接校验触发器不用 SECURITY DEFINER，借当前帧 RLS；守卫放行 (b) 判断「群组已不存在」必须绕过 RLS（见 Task 1）。
 - 开机任务：`platform` 帧只用来枚举和写台账，建群、挂接、改镜像都在 `runAsTenant(所有者)` 里。
-- 台账表照 0072 建 `ENABLE` + `FORCE` 与四条策略，写法抄 `0203_portrait_media.sql:37-49`，`GRANT` 给 `openbot_app`。
+- 台账表照 0072 建 `ENABLE` + `FORCE` 与四条策略，写法抄 `0203_portrait_media.sql:38-50`，`GRANT` 给 `openbot_app`。
 - 新增集成测试至少两个租户（A 建，B 试图读写），并含共享群的「成员但非创建者」。
 
 **执行档位**
@@ -922,7 +922,7 @@ CREATE TABLE public.waker_group_upgrades (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 ```
-其后 `ENABLE` + `FORCE ROW LEVEL SECURITY`、四条 `tenant_isolation*` 策略、`GRANT SELECT, INSERT, UPDATE, DELETE … TO openbot_app`，逐字照 `0203_portrait_media.sql:37-49` 换表名。文件开头角色自检。表不进 Drizzle schema，`upgrade.ts` 用 `sql` 读写。
+其后 `ENABLE` + `FORCE ROW LEVEL SECURITY`、四条 `tenant_isolation*` 策略、`GRANT SELECT, INSERT, UPDATE, DELETE … TO openbot_app`，逐字照 `0203_portrait_media.sql:38-50` 换表名。文件开头角色自检。表不进 Drizzle schema，`upgrade.ts` 用 `sql` 读写。
 
 末尾 `CREATE OR REPLACE FUNCTION public.openbot_team_channel_hand_over_write(...)`（设计稿 3.1.1 第 5 条）：在 0207 的函数体上多一句 `UPDATE waker_group_upgrades SET tenant_id = p_heir WHERE group_id = p_group_id AND tenant_id = p_from`，其余逐字不变，`REVOKE` 照旧。
 
