@@ -1,9 +1,5 @@
 import { IconPlus, IconUsersGroup } from "@tabler/icons-react";
-import {
-  useMutation,
-  useQuery,
-  type useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, type useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
@@ -21,7 +17,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { channelKeys } from "@/lib/channels/queries";
-import { pipelineTemplatesQueryOptions } from "@/lib/pipelines/queries";
 import { cn } from "@/lib/utils";
 import {
   retireCrewMutationOptions,
@@ -44,6 +39,7 @@ import {
   ordinal,
 } from "./card-chrome";
 import { CreateGroupForm } from "./create-group-form";
+import { useDissolveCopy } from "./dissolve-crew";
 
 /** A text link in a card's action row, sized like the ghost buttons beside it. */
 const CARD_LINK =
@@ -252,16 +248,7 @@ function CrewCard({
   const startChat = useMutation(startCrewChatMutationOptions(queryClient));
   const [chatProblem, setChatProblem] = useState<string | null>(null);
   const status = crewStatus(crew);
-  // Only read when the question is asked: how many flows go with the group.
-  const pipelines = useQuery({
-    ...pipelineTemplatesQueryOptions(),
-    enabled: confirming,
-  });
-  // A failed count must not block the dissolve; the copy then simply says it without the number.
-  const counting = confirming && pipelines.isPending;
-  const pipelineCount = pipelines.data?.filter(
-    (template) => template.groupId === crew.id,
-  ).length;
+  const { counting, copy: dissolveCopy } = useDissolveCopy(crew, confirming);
   const nameOf = (agentId: string) =>
     roster.find((agent) => agent.id === agentId)?.name ?? agentId;
   const ordered = [...crew.members].sort((a, b) => a.position - b.position);
@@ -481,11 +468,7 @@ function CrewCard({
 
       {confirming ? (
         <p className="mb-[8px] text-[12px] text-muted-foreground leading-[18px]">
-          {counting
-            ? "正在统计…"
-            : `解散「${crew.name}」：聊天记录不再显示；它的${
-                pipelineCount === undefined ? "" : ` ${pipelineCount} 条`
-              }组团流程和运行记录会一并删除；看板上已有的任务卡保留。`}
+          {dissolveCopy}
         </p>
       ) : null}
       {chatProblem ? (

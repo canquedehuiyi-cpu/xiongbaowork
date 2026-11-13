@@ -46,12 +46,20 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
   );
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  // The creator's leaving hands the group on (or ends the chat), so it is asked before it is done.
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
   const people = group.data?.people ?? [];
   if (!group.data) return null;
   const iCreated = people.some(
     (person) => person.creator && person.userId === me?.id,
   );
   const count = `${people.length} 人`;
+  // The server's people come in the order they joined, and the earliest one left takes the group
+  // over (`channel_memberships.created_at`), so the first person who is not me is who gets it.
+  const successor = people.find((person) => person.userId !== me?.id);
+  const leaveWords = successor
+    ? `退出后，这个群组和它的头像、组团流程、运行记录、看板任务卡都归「${successor.name ?? successor.email}」。`
+    : "你是最后一个人。退出后这个聊天会删除，群组留在你的「群组」里，可以重新开始聊天。";
 
   return (
     <>
@@ -76,7 +84,7 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
             <div className="overflow-hidden rounded-lg">
               {people.map((person, index) => {
                 const self = person.userId === me?.id;
-                const removable = self ? !person.creator : iCreated;
+                const removable = self || iCreated;
                 return (
                   <Fragment key={person.userId}>
                     {index > 0 ? <Separator /> : null}
@@ -99,7 +107,11 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                               self ? "退出这个群聊" : `移除 ${person.email}`
                             }
                             disabled={remove.isPending}
-                            onClick={() => remove.mutate(person.userId)}
+                            onClick={() =>
+                              self && iCreated
+                                ? setConfirmingLeave(true)
+                                : remove.mutate(person.userId)
+                            }
                             size="sm"
                             variant="outline"
                           >
@@ -112,6 +124,32 @@ export function GroupPeopleButton({ channelId }: { channelId: string }) {
                 );
               })}
             </div>
+            {confirmingLeave ? (
+              <div className="grid gap-2 rounded-lg border p-3">
+                <p className="text-sm">{leaveWords}</p>
+                <div className="flex gap-2">
+                  <Button
+                    disabled={remove.isPending}
+                    onClick={() =>
+                      remove.mutate(me?.id ?? "", {
+                        onSuccess: () => setConfirmingLeave(false),
+                      })
+                    }
+                    size="sm"
+                    variant="destructive"
+                  >
+                    确认退出
+                  </Button>
+                  <Button
+                    onClick={() => setConfirmingLeave(false)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    取消
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <form
               className="flex items-center gap-2"
               onSubmit={(event) => {

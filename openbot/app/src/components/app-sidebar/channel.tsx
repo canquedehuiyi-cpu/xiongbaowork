@@ -1,13 +1,16 @@
 import {
+  IconLogout,
   IconPencil,
   IconPin,
   IconPinnedOff,
   IconTrash,
+  IconUsersMinus,
 } from "@tabler/icons-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useState } from "react";
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
+import { LeaveGroupDialog } from "@/components/channels/leave-group-dialog";
 import { RenameConversationDialog } from "@/components/channels/rename-conversation-dialog";
 import {
   ContextMenu,
@@ -15,9 +18,11 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { DissolveCrewDialog } from "@/components/wakers/dissolve-crew";
 import { setChannelPinnedMutationOptions } from "@/lib/channels/mutations";
 import type { MessageListEmphasis } from "@/lib/settings/message-list";
 import { useTypedReveal } from "@/lib/typed-reveal";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelItemContent } from "./channel-item-content";
 
 /**
@@ -78,6 +83,8 @@ export const Channel = memo(function Channel({
   const setPinned = useMutation(setChannelPinnedMutationOptions(queryClient));
   const [confirming, setConfirming] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [dissolving, setDissolving] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   /**
    * Why a pin did not take, said on the row it was asked of.
    *
@@ -137,13 +144,32 @@ export const Channel = memo(function Channel({
               重命名会话…
             </ContextMenuItem>
           ) : null}
-          <ContextMenuItem
-            variant="destructive"
-            onClick={() => setConfirming(true)}
-          >
-            <IconTrash />
-            删除会话…
-          </ContextMenuItem>
+          {groupId ? (
+            // A chat the person's own group is the other face of: deleting it would orphan the group.
+            <ContextMenuItem
+              variant="destructive"
+              onClick={() => setDissolving(true)}
+            >
+              <IconUsersMinus />
+              解散群组…
+            </ContextMenuItem>
+          ) : group && !canRename ? (
+            <ContextMenuItem
+              variant="destructive"
+              onClick={() => setLeaving(true)}
+            >
+              <IconLogout />
+              退出群组…
+            </ContextMenuItem>
+          ) : (
+            <ContextMenuItem
+              variant="destructive"
+              onClick={() => setConfirming(true)}
+            >
+              <IconTrash />
+              删除会话…
+            </ContextMenuItem>
+          )}
         </ContextMenuContent>
       </ContextMenu>
       {pinProblem ? (
@@ -157,6 +183,21 @@ export const Channel = memo(function Channel({
         open={renaming}
         title={summary || untitled || ""}
       />
+      {dissolving && groupId ? (
+        <DissolveRowDialog
+          fallbackName={name}
+          groupId={groupId}
+          onDissolved={isOpen ? () => navigate({ to: "/" }) : undefined}
+          onOpenChange={setDissolving}
+        />
+      ) : null}
+      <LeaveGroupDialog
+        channelId={channelId}
+        leave={isOpen ? () => navigate({ to: "/" }) : undefined}
+        name={name}
+        onOpenChange={setLeaving}
+        open={leaving}
+      />
       <DeleteConversationDialog
         channelId={channelId}
         // Away first when this row's channel is the one on screen.
@@ -168,3 +209,31 @@ export const Channel = memo(function Channel({
     </>
   );
 });
+
+/**
+ * 解散群组 from a row: the same confirmation as the settings drawer's, which needs the group's name.
+ * Mounted only once asked, so the list's many rows do not each read the groups.
+ */
+function DissolveRowDialog({
+  fallbackName,
+  groupId,
+  onDissolved,
+  onOpenChange,
+}: {
+  fallbackName: string;
+  groupId: string;
+  onDissolved?: () => unknown;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const crew = useQuery(wakerGroupsQueryOptions()).data?.find(
+    (entry) => entry.id === groupId,
+  );
+  return (
+    <DissolveCrewDialog
+      crew={{ id: groupId, name: crew?.name ?? fallbackName }}
+      onDissolved={() => void onDissolved?.()}
+      onOpenChange={onOpenChange}
+      open
+    />
+  );
+}

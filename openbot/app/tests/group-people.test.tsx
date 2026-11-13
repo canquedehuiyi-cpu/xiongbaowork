@@ -114,3 +114,53 @@ test("adding someone by email lists them without reopening the dialog", async ()
   );
   expect(await view.findByText("Sam")).toBeTruthy();
 });
+
+/** The creator's own row: leaving is allowed, and says who takes the group. */
+test("the creator can leave, and is told who takes the group", async () => {
+  serving([ME, ALEX]);
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "2 人" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  expect(
+    await view.findByText(
+      "退出后，这个群组和它的头像、组团流程、运行记录、看板任务卡都归「Alex」。",
+    ),
+  ).toBeTruthy();
+  // Nothing has been sent yet: it is a question first.
+  expect(requests).toEqual([]);
+  fireEvent.click(view.getByRole("button", { name: "确认退出" }));
+  await waitFor(() =>
+    expect(requests).toContain("DELETE /api/groups/group-1/members/me "),
+  );
+});
+
+test("the last person is told the chat goes and the group stays", async () => {
+  serving([ME]);
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "1 人" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  expect(
+    await view.findByText(
+      "你是最后一个人。退出后这个聊天会删除，群组留在你的「群组」里，可以重新开始聊天。",
+    ),
+  ).toBeTruthy();
+});
+
+test("the server's refusal to leave is shown as it was sent", async () => {
+  serving([ME, ALEX]);
+  const base = global.fetch;
+  global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
+    init?.method === "DELETE"
+      ? Response.json(
+          { error: "有组团流程正在运行，先停下再退群。" },
+          { status: 400 },
+        )
+      : base(input, init)) as unknown as typeof fetch;
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "2 人" }));
+  fireEvent.click(await view.findByRole("button", { name: "退出这个群聊" }));
+  fireEvent.click(await view.findByRole("button", { name: "确认退出" }));
+  expect((await view.findByRole("alert")).textContent).toBe(
+    "有组团流程正在运行，先停下再退群。",
+  );
+});
