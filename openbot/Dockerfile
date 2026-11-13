@@ -110,6 +110,8 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ && cp -R patches /prod/pat
 FROM deps AS server-bundle
 COPY shared shared
 COPY toolkit toolkit
+# policy-network imports agent-computer/src/egress by relative path.
+COPY agent-computer/src agent-computer/src
 COPY server server
 COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
 RUN set -eu; mkdir -p /out/server/dist; \
