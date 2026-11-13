@@ -54,5 +54,48 @@ sh "$SCRIPT" "$d" 2>/dev/null || fail "bare prefix exited non-zero"
 # 5. missing directory is a no-op, not a failure that would block container start
 sh "$SCRIPT" "$T/nonexistent" 2>/dev/null || fail "missing directory exited non-zero"
 
+# --- Image defaults (docker/defaults.env, L1-10): the lowest priority, written only when neither name is set.
+DEFAULTS=$HERE/../defaults.env
+
+# 6. only the legacy name set: the default does not override it, under either name
+d=$T/defaults-legacy; mkdir "$d"
+printf %s warn > "$d/OPENBOT_RLS_ENFORCE"
+err=$(XB_DEFAULTS_FILE=$DEFAULTS sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "only OPENBOT_RLS_ENFORCE=warn set: exited non-zero"
+[ ! -e "$d/XIONGBAO_RLS_ENFORCE" ] || fail "only OPENBOT_RLS_ENFORCE=warn set: XIONGBAO_RLS_ENFORCE was written"
+expect_file "$d" OPENBOT_RLS_ENFORCE warn
+[ -z "$err" ] || fail "only OPENBOT_RLS_ENFORCE=warn set: warned: $err"
+
+# 7. neither name set: the default lands under both
+d=$T/defaults-none; mkdir "$d"
+err=$(XB_DEFAULTS_FILE=$DEFAULTS sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "neither set: exited non-zero"
+expect_file "$d" XIONGBAO_RLS_ENFORCE refuse
+expect_file "$d" OPENBOT_RLS_ENFORCE refuse
+expect_file "$d" XIONGBAO_SELF_HOST_BANNER false
+expect_file "$d" OPENBOT_SELF_HOST_BANNER false
+expect_file "$d" XIONGBAO_IN_CONTAINER true
+expect_file "$d" OPENBOT_IN_CONTAINER true
+[ -z "$err" ] || fail "neither set: warned: $err"
+
+# 8. the new name set: it stays, and is copied to the legacy name as before
+d=$T/defaults-new; mkdir "$d"
+printf %s warn > "$d/XIONGBAO_RLS_ENFORCE"
+err=$(XB_DEFAULTS_FILE=$DEFAULTS sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "XIONGBAO_RLS_ENFORCE=warn set: exited non-zero"
+expect_file "$d" XIONGBAO_RLS_ENFORCE warn
+expect_file "$d" OPENBOT_RLS_ENFORCE warn
+[ -z "$err" ] || fail "XIONGBAO_RLS_ENFORCE=warn set: warned: $err"
+
+# 9. no defaults file: nothing written, no error
+d=$T/defaults-missing; mkdir "$d"
+err=$(XB_DEFAULTS_FILE=$T/no-such-defaults.env sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "defaults.env missing: exited non-zero"
+[ "$(ls "$d" | wc -l)" -eq 0 ] || fail "defaults.env missing: wrote $(ls "$d")"
+[ -z "$err" ] || fail "defaults.env missing: warned: $err"
+
+# 10. a defaults file's comments and blank lines are skipped; a value keeps everything after the first =
+d=$T/defaults-format; mkdir "$d"
+printf '%s\n' '# a comment' '' 'SOME_URL=http://x/?a=b' > "$T/format.env"
+XB_DEFAULTS_FILE=$T/format.env sh "$SCRIPT" "$d" 2>/dev/null || fail "defaults format: exited non-zero"
+expect_file "$d" XIONGBAO_SOME_URL "http://x/?a=b"
+[ "$(ls "$d" | wc -l)" -eq 2 ] || fail "defaults format: wrote $(ls "$d" | tr '\n' ' ')"
+
 [ "$rc" -eq 0 ] && echo "env-aliases.sh: all passed"
 exit "$rc"

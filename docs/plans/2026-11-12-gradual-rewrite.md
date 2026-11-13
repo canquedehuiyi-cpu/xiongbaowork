@@ -959,6 +959,7 @@
 | 31 | Task 8 发现（原 C18） | `agent-computer/src/egress.ts:449` | `agent-computer/tests/egress-policy.test.ts:712` `which OpenBot never opens` | 新产品名 | 19 |
 | 32 | Task 8 发现（原 C19） | `agent-computer/src/egress.ts:844,999`（`realm="OpenBot"`） | `agent-computer/tests/egress-policy.test.ts:291` `realm="openbot"` | `realm="xiongbao"` | 19 |
 | 33 | Task 9 发现：浏览器收到的模型认证错误码 | `server/src/wire-codes.ts`（`BROWSER_CODE_SUFFIXES` 暂不含 `MODEL_AUTH_REQUIRED`） | `server/tests/provider-refusal.test.ts:583` `expect(failure.code).toBe("OPENBOT_MODEL_AUTH_REQUIRED")`（读的是 runtime 发给浏览器的流） | `XIONGBAO_MODEL_AUTH_REQUIRED`，并把该后缀加回映射表、补回原名测试 `…carries XIONGBAO_MODEL_AUTH_REQUIRED…` | 19 |
+| 34 | Task 11 发现：apt 助手源文件改名 | `openbot/docker/xiongbao-apt`（原 `docker/openbot-apt`，已 `git mv`）；仓库里暂留 `docker/openbot-apt` → `xiongbao-apt` 的符号链接，只为让下列断言照常通过，镜像不复制它 | `app/tests/brand-rules-split.test.ts:55`「the new scopes are scanned」`expect(files).toContain("docker/openbot-apt")` | `toContain("docker/xiongbao-apt")`，并删掉仓库里的 `docker/openbot-apt` 符号链接（镜像里的 `/usr/local/sbin/openbot-apt` 兼容链接不受影响，按 legacy-compat 到期再删） | 19 |
 
 ## 附录 B：验证与切换记录
 

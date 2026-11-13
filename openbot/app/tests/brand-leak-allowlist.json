@@ -1604,18 +1604,13 @@
     "plan": "keep"
   },
   {
-    "file": "docker/openbot-apt",
-    "text": "openbot-apt",
-    "reason": "internal-log: command name customers type inside the image, L1-9 (Task 11)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
     "file": "Dockerfile",
     "text": "openbot-apt",
-    "reason": "internal-log: command name customers type inside the image, L1-9 (Task 11)",
-    "category": "operator-visible",
-    "plan": "rewrite"
+    "reason": "internal-log: legacy path of the apt helper, kept as a link to xiongbao-apt with its own sudoers rule for Bots that learned the old name, L1-9 (Task 11)",
+    "category": "legacy-compat",
+    "plan": "remove",
+    "introducedIn": "0.2.11",
+    "removeIn": "0.2.13"
   },
   {
     "file": "docker/compose.delivery.yml",

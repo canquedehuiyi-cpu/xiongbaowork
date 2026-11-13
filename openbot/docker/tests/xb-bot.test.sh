@@ -136,6 +136,17 @@ runuser -u pwuser -- sudo -n -l /usr/local/sbin/openbot-apt update >/dev/null 2>
 pass "pwuser may still sudo openbot-apt"
 runuser -u pwuser -- sudo -n apt-get --version >"$T/out" 2>&1 && fail "pwuser may sudo apt-get itself: $(cat "$T/out")"
 pass "pwuser may not sudo apt-get itself"
+# The helper's own name is xiongbao-apt; openbot-apt stays as a link to it for Bots that learned the
+# old name (L1-9). The checks above on the old path prove it still works; these are the new one's.
+runuser -u pwuser -- sudo -n -l /usr/local/sbin/xiongbao-apt update >/dev/null 2>"$T/err" || fail "pwuser may not sudo xiongbao-apt: $(cat "$T/err")"
+pass "pwuser may sudo xiongbao-apt"
+as "$A" 10 '
+sudo -n /usr/local/sbin/xiongbao-apt update
+' && fail "employee A may sudo xiongbao-apt"
+pass "employee A may not sudo xiongbao-apt"
+[ -L /usr/local/sbin/openbot-apt ] || fail "openbot-apt is not a link: $(ls -l /usr/local/sbin/openbot-apt 2>&1)"
+[ "$(readlink -f /usr/local/sbin/openbot-apt)" = /usr/local/sbin/xiongbao-apt ] || fail "openbot-apt points at $(readlink -f /usr/local/sbin/openbot-apt 2>&1), not xiongbao-apt"
+pass "openbot-apt is a link to xiongbao-apt"
 
 # What the shell tool tells an employee to do instead: install user-level tools in its own
 # directory. The image has no python3, so npm and bun are the installers; an empty `npm install`
