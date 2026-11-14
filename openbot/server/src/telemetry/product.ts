@@ -188,6 +188,7 @@ milestones("bot", "setup", "human", {
   completed: [
     "bot.created",
     "bot.duplicated",
+    "bot.summoned",
     "bot.updated",
     "bot.paused",
     "bot.resumed",
