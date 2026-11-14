@@ -421,6 +421,16 @@ describe("工作台首页", () => {
     expect(view.queryByText(/日报/)).toBeNull();
   });
 
+  test("「审批」格子的说明是「等你拍板」", async () => {
+    const { view } = renderHome();
+    const apps = within(await view.findByRole("region", { name: "应用" }));
+    const link = apps.getByRole("link", { name: "审批" });
+    const detail = document.getElementById(
+      link.getAttribute("aria-describedby") ?? "",
+    );
+    expect(detail?.textContent).toBe("等你拍板");
+  });
+
   test("服务端说跑不了浏览器时没有「教员工做事」", async () => {
     const { view } = renderHome();
     await view.findByRole("region", { name: "应用" });

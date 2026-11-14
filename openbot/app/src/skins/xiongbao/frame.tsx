@@ -1,9 +1,12 @@
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { IconChevronLeft } from "@tabler/icons-react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { UpdateBanner } from "@/components/layout/update-banner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
 import { type Rail, railForPath } from "@/lib/navigation";
+import { cn } from "@/lib/utils";
 import {
   EmployeeCard,
   EmployeeCardContext,
@@ -24,15 +27,41 @@ import { WorkbenchRail } from "./rail";
  * 员工名片（右侧抽屉）挂在这里，盖在列表栏和主区的右边：任何地方用 `useEmployeeCard()` 拿到
  * `openEmployeeCard(agentId)` 打开它。地址一变它就收起，和入口栏的「先切过去」是同一个办法。
  *
+ * 手机上（宽度不足 768px，`useIsMobile`）像微信：入口栏变成底部标签栏，一屏只放一样东西。在四个入口的
+ * 根地址（`ENTRY_ROOTS`）上是那个入口的一屏加标签栏，「消息」是全屏的会话列表，另外三个是各自的页面；别的
+ * 地址（对话、群组、设置的某一页、员工的某一页……）是页面全屏，标签栏收起，顶上一个「返回」回到地址所属
+ * 入口的根地址，对话回到消息列表。名片在手机上是盖住整屏的一页。
+ *
  * 颜色只从 `--wb-*` 令牌取（`skin.css`），暗色跟着 `<html class="dark">`。
  */
+/** 四个入口各自的根地址：手机上在这里显示标签栏，别处「返回」回到这里。 */
+const ENTRY_ROOTS: Record<Rail, "/" | "/contacts" | "/workbench" | "/me"> = {
+  msg: "/",
+  contacts: "/contacts",
+  work: "/workbench",
+  me: "/me",
+};
+
+function isEntryRoot(pathname: string): boolean {
+  return Object.values(ENTRY_ROOTS).some((root) => root === pathname);
+}
+
 export function WorkbenchFrame({ children }: { children: ReactNode }) {
   // 整个应用一条推送连接，开在名册保持最新的地方，和原来的侧栏一样。
   useChannelEvents();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  /*
+   * 首页带着要填进输入框的话（`?ask=`，教员工做事的「试一试」交过来的）时，手机上也得是首页那个输入框，
+   * 不能换成会话列表。
+   */
+  const asking = useRouterState({
+    select: (state) =>
+      Boolean((state.location.search as { ask?: unknown }).ask),
+  });
   const navigate = useNavigate();
+  const phone = useIsMobile();
   const [chosen, setChosen] = useState<Rail | null>(null);
   const [card, setCard] = useState<string | null>(null);
   // 地址一变（点链接、浏览器后退前进都算），点出来的临时入口就作废，回到地址所属的入口；名片也收起。
@@ -43,8 +72,16 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     setChosen(null);
     setCard(null);
   }
-  const rail = chosen ?? railForPath(pathname);
+  // 手机上一屏只放一样东西，入口只跟着地址走：点标签栏就是换地址。
+  const rail = (phone ? null : chosen) ?? railForPath(pathname);
   const cardFor = card;
+  /*
+   * 手机上：入口的根地址有标签栏；「消息」的根地址画会话列表而不是主区。名片盖住整屏时底下的都 `inert`
+   * （点不到、读屏读不到），但不收起，关掉名片回来时页面还停在原来滚到的地方。
+   */
+  const phoneDetail = phone && (!isEntryRoot(pathname) || asking);
+  const phoneList = phone && pathname === "/" && !asking;
+  const covered = phone && cardFor !== null;
   const cards = useMemo<EmployeeCardControl>(
     () => ({ openEmployeeCard: (agentId) => setCard(agentId) }),
     [],
@@ -53,38 +90,75 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
   return (
     <EmployeeCardContext.Provider value={cards}>
       <div
-        className="relative grid h-svh grid-cols-[68px_300px_minmax(0,1fr)] overflow-hidden bg-(--wb-frame) text-foreground"
+        className={cn(
+          "relative h-svh overflow-hidden bg-(--wb-frame) text-foreground",
+          phone ? "flex flex-col" : "grid grid-cols-[68px_300px_minmax(0,1fr)]",
+        )}
         data-workbench-frame
+        data-workbench-phone={phone ? "" : undefined}
       >
+        {phoneDetail ? (
+          <header
+            className="flex h-11 shrink-0 items-center border-(--wb-line) border-b bg-(--wb-list) px-1.5"
+            data-workbench-back
+            inert={covered}
+          >
+            <Link
+              className="inline-flex h-9 items-center gap-0.5 rounded-(--wb-radius-sm) pr-2.5 pl-1 text-(--wb-accent) text-[15px] outline-none focus-visible:outline-2 focus-visible:outline-(--wb-accent) [&>svg]:size-[22px] [&>svg]:stroke-[1.8]"
+              to={ENTRY_ROOTS[rail]}
+            >
+              <IconChevronLeft aria-hidden="true" />
+              返回
+            </Link>
+          </header>
+        ) : null}
+        {/* 手机上标签栏在详情页只是收起（`hidden`），不拿掉：它挂着角标和浏览器通知。 */}
         <WorkbenchRail
+          hidden={phoneDetail}
+          inert={covered}
+          layout={phone ? "tabs" : "rail"}
           onSelect={(next) => {
             setChosen(next);
             // 已经在 /me（/contacts、/workbench）时地址不变，靠上面这一行把列表栏切回去。
             if (next === "me") void navigate({ to: "/me" });
             if (next === "contacts") void navigate({ to: "/contacts" });
             if (next === "work") void navigate({ to: "/workbench" });
+            // 手机上没有并排的列表栏，「消息」就是回到会话列表那一屏。
+            if (next === "msg" && phone) void navigate({ to: "/" });
           }}
           rail={rail}
         />
         <aside
           aria-label="列表栏"
-          className="flex min-h-0 min-w-0 flex-col border-(--wb-line) border-r bg-(--wb-list) text-(--wb-fg)"
+          className={cn(
+            "flex min-h-0 min-w-0 flex-col bg-(--wb-list) text-(--wb-fg)",
+            phone ? "flex-1" : "border-(--wb-line) border-r",
+          )}
           data-workbench-list={rail}
+          hidden={phone && !phoneList}
+          inert={covered}
         >
-          <ListColumn rail={rail} />
+          {phone && !phoneList ? null : <ListColumn rail={rail} />}
         </aside>
         <main
-          className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-(--wb-main)"
+          className={cn(
+            "relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-(--wb-main)",
+            phone && "flex-1",
+          )}
           data-workbench-main
+          hidden={phoneList}
+          inert={covered}
         >
           {/* Only inside the desktop app: the banner asks it, and draws nothing in a browser. */}
           <UpdateBanner />
           <SelfHostBanner />
-          {children}
+          {/* 手机上的消息入口画会话列表，首页（新对话的输入框）不挂；新对话走列表顶上的「＋」。 */}
+          {phoneList ? null : children}
         </main>
         {cardFor ? (
           <EmployeeCard
             agentId={cardFor}
+            fullScreen={phone}
             key={cardFor}
             onClose={() => setCard(null)}
           />

@@ -329,13 +329,17 @@ function CardBody({
  *
  * 它不是模态框：页面还能点，抽屉盖在右边。打开时焦点落在「关闭」上，Esc 或「关闭」收起，焦点回到打开它的
  * 地方。挂在哪里由调用的人决定（工作台外壳；没有外壳时是通讯录页自己），它只要一个相对定位的祖先。
+ *
+ * 手机上（`fullScreen`）它不是抽屉，是盖住整个外壳的一页，像微信点开一个人的资料页。
  */
 export function EmployeeCard({
   agentId,
   onClose,
+  fullScreen = false,
 }: {
   agentId: string;
   onClose: () => void;
+  fullScreen?: boolean;
 }) {
   const agents = useQuery(agentListQueryOptions());
   const agent = agents.data?.find((candidate) => candidate.id === agentId);
@@ -382,12 +386,16 @@ export function EmployeeCard({
       aria-label="员工名片"
       aria-modal="false"
       className={cn(
-        "absolute inset-y-0 right-0 z-30 w-[320px] max-w-full overflow-y-auto border-l pb-[18px] shadow-[var(--wb-drawer-shadow,var(--shadow-lg))] motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200",
+        "absolute z-30 overflow-y-auto motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200",
+        fullScreen
+          ? "inset-0 pb-[calc(18px+env(safe-area-inset-bottom))]"
+          : "inset-y-0 right-0 w-[320px] max-w-full border-l pb-[18px] shadow-[var(--wb-drawer-shadow,var(--shadow-lg))]",
         TONE.frame,
         TONE.line2,
         TONE.fg,
       )}
       data-employee-card={agentId}
+      data-full-screen={fullScreen ? "" : undefined}
       ref={drawerRef}
       role="dialog"
     >

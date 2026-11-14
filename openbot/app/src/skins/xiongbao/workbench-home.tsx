@@ -215,7 +215,7 @@ const MORE_TILES: readonly Tile[] = [
   {
     id: "approvals",
     label: "审批",
-    detail: "员工能做什么",
+    detail: "等你拍板",
     icon: IconChecks,
     tone: "--wb-app-red",
     link: { to: "/approvals" },
