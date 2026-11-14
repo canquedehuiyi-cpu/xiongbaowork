@@ -56,13 +56,17 @@ const skill = (
   title: string,
   runnable: string | null,
   reason?: { blockedReason: string; blockedReasonRef: string },
+  /**
+   * 正文。卡片只在有正文时给「看正文」——一条没有正文的技能，那个入口点开只会说「没有正文」。
+   */
+  instructions = "这位员工照着做就行。",
 ) => ({
   id: `s-${slug}`,
   slug,
   ownerUserId: null,
   title,
   summary: `${title}的说明。`,
-  instructions: "",
+  instructions,
   origin: "catalogue",
   installedBy: null,
   runnable,
@@ -194,10 +198,18 @@ const renderMine = async (
     path: "/channel/$channelId",
     component: () => <p>团队频道</p>,
   });
+  /*
+   * 技能卡的「看正文」落在技能页的只读面板上（`?view=<slug>`），地址参数由那张页自己解析。
+   */
+  const skillView = createRoute({
+    getParentRoute: () => root,
+    path: "/capabilities/skills",
+    component: () => <p>技能页</p>,
+  });
   const router = createRouter({
     context: { queryClient },
     history: createMemoryHistory({ initialEntries: ["/"] }),
-    routeTree: root.addChildren([mine, connections, channel]),
+    routeTree: root.addChildren([mine, connections, channel, skillView]),
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -697,4 +709,36 @@ test("a short reason draws no expand control, because there is nothing hidden", 
   await waitFor(() => expect(view.getByText("阻断乙")).toBeTruthy());
   const row = within(view.getByText("阻断乙").closest("li") as HTMLElement);
   expect(row.queryByRole("button", { name: "展开原因" })).toBeNull();
+});
+
+/**
+ * 技能卡说「这条技能能干什么」，但说不清「它到底教员工做什么」——正文（`instructions`）在这一页
+ * 从来没有一个读的地方，要看得去技能页，而那页翻开的是编辑面板、只有自己的技能点得开。清单里列
+ * 出来的每一样都该能走过去读，所以卡片给一条到正文的路：`/capabilities/skills?view=<slug>`。
+ *
+ * 没有正文的技能不画这个入口：那个地址打开只会说「这条技能没有正文」，画出来是个空承诺。
+ */
+test("a skill card gives the way to read its body, and one with no body draws none", async () => {
+  const view = await renderMine(
+    page(
+      [
+        skill("report-writer", "写周报", "full"),
+        skill("empty-body", "空技能", "full", undefined, "   "),
+      ],
+      [],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("写周报")).toBeTruthy());
+  const link = within(
+    view.getByText("写周报").closest("li") as HTMLElement,
+  ).getByRole("link", { name: "看正文：写周报" });
+  expect(link.getAttribute("href")).toBe(
+    "/capabilities/skills?view=report-writer",
+  );
+  expect(
+    within(view.getByText("空技能").closest("li") as HTMLElement).queryByRole(
+      "link",
+      { name: /看正文/ },
+    ),
+  ).toBeNull();
 });

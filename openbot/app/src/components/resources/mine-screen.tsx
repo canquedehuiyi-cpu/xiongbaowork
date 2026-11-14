@@ -9,6 +9,7 @@ import {
   RunnableBadge,
   runnableGrade,
 } from "@/components/resources/runnable-badge";
+import { SkillViewLink } from "@/components/skills/skill-view";
 import {
   ConnectorCard,
   type ConnectorState,
@@ -313,7 +314,20 @@ export function MineScreen() {
                             {skill.summary}
                           </p>
                         </div>
-                        <RunnableBadge runnable={skill.runnable} />
+                        <div className="flex shrink-0 flex-col items-end gap-[5px]">
+                          <RunnableBadge runnable={skill.runnable} />
+                          {/*
+                          卡片说得清「这条技能能干什么」，说不清「它教员工做什么」——正文在别处，
+                          而那一处只有一个读得开（技能页的编辑面板只对自己的技能开）。有正文就给
+                          一条路过去，没有正文的技能不画：那个地址打开只会说「没有正文」。
+                        */}
+                          {skill.instructions.trim() ? (
+                            <SkillViewLink
+                              slug={skill.slug}
+                              title={skill.title}
+                            />
+                          ) : null}
+                        </div>
                       </div>
                       {/*
                       R18：badged-but-unexplained 是 bug 不是状态。徽章打了非 full 就必须答
