@@ -10,9 +10,13 @@ import { loadTenantPackage } from "../src/tenant-package";
  * edited, so a missing legacy path must still load the renamed package instead of failing the boot.
  */
 const root = await mkdtemp(join(tmpdir(), "legacy-tenant-path-"));
-await cp(join(import.meta.dir, "../../examples/xiongbao"), join(root, "examples/xiongbao"), {
-  recursive: true,
-});
+await cp(
+  join(import.meta.dir, "../../examples/xiongbao"),
+  join(root, "examples/xiongbao"),
+  {
+    recursive: true,
+  },
+);
 
 afterAll(async () => {
   await rm(root, { recursive: true, force: true });
@@ -24,11 +28,19 @@ test("a missing examples/qoderwake directory falls back to the sibling examples/
     const loaded = await loadTenantPackage(join(root, "examples/qoderwake"));
     const direct = await loadTenantPackage(join(root, "examples/xiongbao"));
     expect(loaded.checksum).toBe(direct.checksum);
+    /*
+     * Matched by separator-agnostic pattern, not by the spelling written above.
+     *
+     * The path in the warning is the one the caller passed, and `join` on Windows puts a backslash in
+     * it: `includes("examples/qoderwake")` was therefore false on every Windows machine and true only
+     * on CI, which made this look like a platform difference rather than a test that could not fail
+     * locally. What the warning says is what matters here, not which slash it says it with.
+     */
     const legacyWarnings = log.mock.calls.filter((call) =>
-      String(call[0]).includes("examples/qoderwake"),
+      /examples[\\/]qoderwake/.test(String(call[0])),
     );
     expect(legacyWarnings).toHaveLength(1);
-    expect(String(legacyWarnings[0]?.[0])).toContain("examples/xiongbao");
+    expect(String(legacyWarnings[0]?.[0])).toMatch(/examples[\\/]xiongbao/);
   } finally {
     log.mockRestore();
   }

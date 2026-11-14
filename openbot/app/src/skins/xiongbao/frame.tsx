@@ -33,18 +33,21 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
-  const [chosen, setChosen] = useState<{ rail: Rail; at: string } | null>(null);
-  const rail =
-    chosen && chosen.at === pathname ? chosen.rail : railForPath(pathname);
-  const [card, setCard] = useState<{ agentId: string; at: string } | null>(
-    null,
-  );
-  const cardFor = card && card.at === pathname ? card.agentId : null;
+  const [chosen, setChosen] = useState<Rail | null>(null);
+  const [card, setCard] = useState<string | null>(null);
+  // 地址一变（点链接、浏览器后退前进都算），点出来的临时入口就作废，回到地址所属的入口；名片也收起。
+  // 只是「不匹配时忽略」不够：后退回到原地址时，旧的选择又会匹配上，把入口错放在别处。
+  const [seenPath, setSeenPath] = useState(pathname);
+  if (seenPath !== pathname) {
+    setSeenPath(pathname);
+    setChosen(null);
+    setCard(null);
+  }
+  const rail = chosen ?? railForPath(pathname);
+  const cardFor = card;
   const cards = useMemo<EmployeeCardControl>(
-    () => ({
-      openEmployeeCard: (agentId) => setCard({ agentId, at: pathname }),
-    }),
-    [pathname],
+    () => ({ openEmployeeCard: (agentId) => setCard(agentId) }),
+    [],
   );
 
   return (
@@ -55,7 +58,7 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
       >
         <WorkbenchRail
           onSelect={(next) => {
-            setChosen({ rail: next, at: pathname });
+            setChosen(next);
             // 已经在 /me（/contacts）时地址不变，靠上面这一行把列表栏切回去。
             if (next === "me") void navigate({ to: "/me" });
             if (next === "contacts") void navigate({ to: "/contacts" });
