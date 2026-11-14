@@ -431,7 +431,12 @@ export function buildL1Gate(
     } else if (pluginDecision.code !== "ALLOWED") {
       decision = pluginDecision;
     } else {
-      const subs = whitelistSub.get(parsed.pluginSlug);
+      // A plain `pkg` entry admits the whole package, so a `pkg/sub` entry must not re-narrow it:
+      // the sub-path set only bites when the package is listed *exclusively* through sub-paths.
+      const subs =
+        allowedSlugs !== undefined && allowedSlugs.has(parsed.pluginSlug)
+          ? undefined
+          : whitelistSub.get(parsed.pluginSlug);
       decision =
         subs !== undefined && !subs.has(parsed.subpath)
           ? {
@@ -597,6 +602,7 @@ export function verifyAllowedUnits(
   options: { strict: boolean },
 ): GateVerification {
   const verified = new Set<string>();
+  const warned = new Set<string>();
   const warnings: string[] = [];
   const verifyDecision = (decision: GateDecision, unit: string): void => {
     if (decision.code !== "ALLOWED") {
@@ -609,7 +615,7 @@ export function verifyAllowedUnits(
       throw new Error(`verifyAllowedUnits: ${unit} 无锁行——闸门与校验状态不一致`);
     }
     const rowKey = `${entry.channel}:${entry.origin}`;
-    if (verified.has(rowKey)) {
+    if (verified.has(rowKey) || warned.has(rowKey)) {
       return;
     }
     const unitRoot = join(
@@ -623,6 +629,7 @@ export function verifyAllowedUnits(
           `CHECKSUM_MISMATCH: ${entry.kind}/${entry.slug} 的缓存副本不存在：${posix.join(CACHE_CHANNEL_ROOTS[entry.channel], entry.origin)}`,
         );
       }
+      warned.add(rowKey);
       warnings.push(
         `${entry.kind}/${entry.slug}：锁行来源 ${posix.join(CACHE_CHANNEL_ROOTS[entry.channel], entry.origin)} 在本机不存在，跳过字节校验`,
       );

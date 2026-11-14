@@ -508,6 +508,21 @@ describe("official-plugin skill mapping and skill-level whitelist", () => {
     expect(gated.snapshot.userSkills).toHaveLength(2);
   });
 
+  test("a plain entry wins over co-listed sub-paths: pkg + pkg/a admits the whole package", () => {
+    const gate = buildL1Gate(validLock([officialPluginEntry()]), [
+      "all-skills",
+      "all-skills/artifacts-builder",
+    ]);
+    for (const sub of ["artifacts-builder", "file-organizer"]) {
+      expect(
+        gate.decideOfficialPluginSkill(`all-skills--skills--${sub}`, {
+          pluginSlug: "all-skills",
+          subpath: sub,
+        }).code,
+      ).toBe("ALLOWED");
+    }
+  });
+
   test("a package listed only through sub-paths refuses the whole-package unit", () => {
     const gate = buildL1Gate(validLock([officialPluginEntry()]), [
       "all-skills/artifacts-builder",
@@ -641,8 +656,20 @@ describe("verifyAllowedUnits — batch byte closure of the gate", () => {
       expect(() => verifyAllowedUnits(gated, gate, empty, { strict: true })).toThrow(
         /缓存副本不存在/,
       );
-      const homeMode = verifyAllowedUnits(gated, gate, empty, { strict: false });
+      const homeMode = verifyAllowedUnits(
+        filterSnapshotByGate(
+          snapshotWith(
+            skillUnit("all-skills--skills--artifacts-builder"),
+            skillUnit("all-skills--skills--file-organizer"),
+          ),
+          gate,
+        ),
+        gate,
+        empty,
+        { strict: false },
+      );
       expect(homeMode.verified).toBe(0);
+      // Two units of the same plugin share one lock row: the missing root warns exactly once.
       expect(homeMode.warnings).toHaveLength(1);
       expect(homeMode.warnings[0]).toContain("official-plugin/all-skills");
     } finally {
