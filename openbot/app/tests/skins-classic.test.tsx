@@ -35,7 +35,7 @@ import { settleReactWork } from "./settle-react-work";
  * The skin is saved on the person's account. These drive it the way a person does: the picker on
  * Settings, a reload whose cached skin is not the account's, signing out on a shared machine, and
  * the account's skin changing under a screen only the old skin had. The API is a fake that answers
- * in the shapes OpenBot's endpoints send; the store, the sync, the picker and the routes are real.
+ * in the shapes the product's endpoints send; the store, the sync, the picker and the routes are real.
  */
 
 class OfflineWebSocket extends EventTarget {
