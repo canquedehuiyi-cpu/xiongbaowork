@@ -99,6 +99,15 @@ export function waitingBotIds(inbox: ApprovalInboxData): ReadonlySet<string> {
   ]);
 }
 
+/**
+ * 等这个人拍板的有几件：员工问的问题，加上还在等决定的动作，和这一页列出的是同一份（工作台首页「等你确认」）。
+ */
+export function waitingCount(inbox: ApprovalInboxData): number {
+  return (
+    inbox.questions.length + inbox.requests.filter(isWaitingRequest).length
+  );
+}
+
 /** A question a Bot asked mid-run, answered on the row's own footer line. */
 function QuestionRow({
   question,

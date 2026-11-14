@@ -77,6 +77,15 @@
   --wb-radius: 12px;
   --wb-radius-sm: 9px;
   --wb-radius-pill: 99px;
+  /* 工作台首页（Task 10）：应用格子的图标底色，取自设计稿 `.app-t i`；管理区的格子是灰的。 */
+  --wb-app-red: linear-gradient(135deg, #ff5a4a, #ff8a5c);
+  --wb-app-amber: linear-gradient(135deg, #f5a524, #f2c46d);
+  --wb-app-violet: linear-gradient(135deg, #7a5cff, #a98bff);
+  --wb-app-gold: linear-gradient(135deg, #d9963b, #f2c46d);
+  --wb-app-teal: linear-gradient(135deg, #2bb3a3, #3ccf8e);
+  --wb-app-blue: linear-gradient(135deg, #3b82f6, #60a5fa);
+  --wb-app-admin: linear-gradient(135deg, #4b4b55, #2c2c33);
+  --wb-app-fg: #fff;
 }
 
 :root:not([data-skin]).dark {
@@ -148,6 +157,15 @@
   --wb-radius: 12px;
   --wb-radius-sm: 9px;
   --wb-radius-pill: 99px;
+  /* 工作台首页（Task 10）：应用格子的图标底色，取自设计稿 `.app-t i`；管理区的格子是灰的。 */
+  --wb-app-red: linear-gradient(135deg, #ff5a4a, #ff8a5c);
+  --wb-app-amber: linear-gradient(135deg, #f5a524, #f2c46d);
+  --wb-app-violet: linear-gradient(135deg, #7a5cff, #a98bff);
+  --wb-app-gold: linear-gradient(135deg, #d9963b, #f2c46d);
+  --wb-app-teal: linear-gradient(135deg, #2bb3a3, #3ccf8e);
+  --wb-app-blue: linear-gradient(135deg, #3b82f6, #60a5fa);
+  --wb-app-admin: linear-gradient(135deg, #4b4b55, #2c2c33);
+  --wb-app-fg: #fff;
 }
 
 /*

@@ -38,6 +38,7 @@ import { Route as AuthedAppSkillsRouteImport } from './routes/_authed/_app/skill
 import { Route as AuthedAppTasksRouteImport } from './routes/_authed/_app/tasks'
 import { Route as AuthedAppTeamBotsRouteImport } from './routes/_authed/_app/team-bots'
 import { Route as AuthedAppWakersRouteImport } from './routes/_authed/_app/wakers'
+import { Route as AuthedAppWorkbenchRouteImport } from './routes/_authed/_app/workbench'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
 import { Route as AuthedAdminApprovalsRouteImport } from './routes/_authed/admin/approvals'
 import { Route as AuthedAdminAuditRouteImport } from './routes/_authed/admin/audit'
@@ -282,6 +283,11 @@ const AuthedAppTeamBotsRoute = AuthedAppTeamBotsRouteImport.update({
 const AuthedAppWakersRoute = AuthedAppWakersRouteImport.update({
   id: '/wakers',
   path: '/wakers',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppWorkbenchRoute = AuthedAppWorkbenchRouteImport.update({
+  id: '/workbench',
+  path: '/workbench',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
@@ -875,6 +881,7 @@ export interface FileRoutesByFullPath {
   '/tasks': typeof AuthedAppTasksRoute
   '/team-bots': typeof AuthedAppTeamBotsRoute
   '/wakers': typeof AuthedAppWakersRoute
+  '/workbench': typeof AuthedAppWorkbenchRoute
   '/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
@@ -1001,6 +1008,7 @@ export interface FileRoutesByTo {
   '/tasks': typeof AuthedAppTasksRoute
   '/team-bots': typeof AuthedAppTeamBotsRoute
   '/wakers': typeof AuthedAppWakersRoute
+  '/workbench': typeof AuthedAppWorkbenchRoute
   '/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
@@ -1132,6 +1140,7 @@ export interface FileRoutesById {
   '/_authed/_app/tasks': typeof AuthedAppTasksRoute
   '/_authed/_app/team-bots': typeof AuthedAppTeamBotsRoute
   '/_authed/_app/wakers': typeof AuthedAppWakersRoute
+  '/_authed/_app/workbench': typeof AuthedAppWorkbenchRoute
   '/_authed/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/_authed/admin/audit': typeof AuthedAdminAuditRoute
   '/_authed/admin/boundaries': typeof AuthedAdminBoundariesRoute
@@ -1265,6 +1274,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/team-bots'
     | '/wakers'
+    | '/workbench'
     | '/admin/approvals'
     | '/admin/audit'
     | '/admin/boundaries'
@@ -1391,6 +1401,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/team-bots'
     | '/wakers'
+    | '/workbench'
     | '/admin/approvals'
     | '/admin/audit'
     | '/admin/boundaries'
@@ -1521,6 +1532,7 @@ export interface FileRouteTypes {
     | '/_authed/_app/tasks'
     | '/_authed/_app/team-bots'
     | '/_authed/_app/wakers'
+    | '/_authed/_app/workbench'
     | '/_authed/admin/approvals'
     | '/_authed/admin/audit'
     | '/_authed/admin/boundaries'
@@ -1833,6 +1845,13 @@ declare module '@tanstack/react-router' {
       path: '/wakers'
       fullPath: '/wakers'
       preLoaderRoute: typeof AuthedAppWakersRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/workbench': {
+      id: '/_authed/_app/workbench'
+      path: '/workbench'
+      fullPath: '/workbench'
+      preLoaderRoute: typeof AuthedAppWorkbenchRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/admin/': {
@@ -2754,6 +2773,7 @@ interface AuthedAppRouteChildren {
   AuthedAppTasksRoute: typeof AuthedAppTasksRoute
   AuthedAppTeamBotsRoute: typeof AuthedAppTeamBotsRoute
   AuthedAppWakersRoute: typeof AuthedAppWakersRoute
+  AuthedAppWorkbenchRoute: typeof AuthedAppWorkbenchRoute
   AuthedAppIndexRoute: typeof AuthedAppIndexRoute
   AuthedAppAssembleAgentIdRoute: typeof AuthedAppAssembleAgentIdRoute
   AuthedAppChannelChannelIdRoute: typeof AuthedAppChannelChannelIdRoute
@@ -2810,6 +2830,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppTasksRoute: AuthedAppTasksRoute,
   AuthedAppTeamBotsRoute: AuthedAppTeamBotsRoute,
   AuthedAppWakersRoute: AuthedAppWakersRoute,
+  AuthedAppWorkbenchRoute: AuthedAppWorkbenchRoute,
   AuthedAppIndexRoute: AuthedAppIndexRoute,
   AuthedAppAssembleAgentIdRoute: AuthedAppAssembleAgentIdRoute,
   AuthedAppChannelChannelIdRoute: AuthedAppChannelChannelIdRoute,

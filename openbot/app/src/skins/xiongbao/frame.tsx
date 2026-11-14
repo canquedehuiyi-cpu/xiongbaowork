@@ -18,8 +18,8 @@ import { WorkbenchRail } from "./rail";
  * 横幅在它顶上，和原来的外壳一样。
  *
  * 亮哪个入口跟着地址走（`railForPath`），刷新、直达链接都落到对的入口。点一下入口栏，列表栏先切过去，
- * 主区不动，像微信那样；地址一变，入口又回到地址所属的那个。「通讯录」和「我」例外：它们直接落到自己的
- * 页面（组织架构 `/contacts`、「我」页面 `/me`）。
+ * 主区不动，像微信那样；地址一变，入口又回到地址所属的那个。「通讯录」「工作台」「我」例外：它们直接落到
+ * 自己的页面（组织架构 `/contacts`、工作台首页 `/workbench`、「我」页面 `/me`）。
  *
  * 员工名片（右侧抽屉）挂在这里，盖在列表栏和主区的右边：任何地方用 `useEmployeeCard()` 拿到
  * `openEmployeeCard(agentId)` 打开它。地址一变它就收起，和入口栏的「先切过去」是同一个办法。
@@ -59,9 +59,10 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
         <WorkbenchRail
           onSelect={(next) => {
             setChosen(next);
-            // 已经在 /me（/contacts）时地址不变，靠上面这一行把列表栏切回去。
+            // 已经在 /me（/contacts、/workbench）时地址不变，靠上面这一行把列表栏切回去。
             if (next === "me") void navigate({ to: "/me" });
             if (next === "contacts") void navigate({ to: "/contacts" });
+            if (next === "work") void navigate({ to: "/workbench" });
           }}
           rail={rail}
         />
