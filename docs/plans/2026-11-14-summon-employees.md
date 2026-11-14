@@ -108,12 +108,12 @@
 - [ ] **Step 4: 运行确认通过**，并跑 `bun test tests/agent-duplicate*.test.ts tests/channel-routes.test.ts`（文件名以仓库实际为准，`grep -l duplicate tests/*.test.ts`）。
 - [ ] **Step 5: 提交** `feat(agents): 召唤接口——预设复制一份本人的员工并建一对一会话（召唤员工 Task 3）`
 
-### Task 4: 员工列表接口带 `summonKind` / `summoned`；不再自动建分身会话；个人版默认技能跳过召唤来的员工
+### Task 4: 员工列表接口带 `summonKind` / `summoned`；不再自动建分身会话；个人版只有默认技能跳过召唤来的员工
 
 **Files:**
 - Modify: `openbot/server/src/agents/routes.ts`（`GET /api/agents` 每项加两字段）、`profile-types.ts`
 - Modify: `openbot/server/src/channels/routes.ts`（删掉约 1720 行对 `ensureAvatarConversation` 的调用及只为它存在的 `avatarConversationsEnsured`；`avatar-conversation.ts` 若再无调用方则删除并删其专属测试中断言「自动建」的用例——**删用例需在 PR 里写明原因**，其余断言不改）
-- Modify: `openbot/server/src/plugins/personal-defaults.ts`（召唤来的员工即 `summonedFrom !== null` 的，一律排除在个人版默认授予之外：`giveEverySkillOnce`、新技能广播，以及默认工具授予 `grantEveryTool`（`withPersonalDefaults().listForAgent` 每次运行前调用）和 `refreshTools` 的广播；最简做法是让 `deps.bots()` 的查询排除它们）
+- Modify: `openbot/server/src/plugins/personal-defaults.ts`（召唤来的员工即 `summonedFrom !== null` 的，只跳过「每个技能给一次」`giveEverySkillOnce` 和新技能广播——它带着预设的技能；常开应用、默认工具授予 `grantEveryTool`、`refreshTools` 的广播和互相请教（`botsReachableFrom`）都和本人自建的员工一样给，`deps.bots()` 不排除它们（2026-11-14 终审 Ruling 9 改：最初写的是一律排除，用户改为「召唤直接可用、完整专家能力」后撤回））
 - Modify: `openbot/app/src/lib/agents/queries.ts`（两字段）
 - Test: `openbot/server/tests/agent-summon-list.integration.test.ts`、`openbot/server/tests/personal-defaults.integration.test.ts`（新增用例）
 
@@ -129,7 +129,7 @@
   - 「分身在没有一对一会话时 `summonKind === "avatar"`、`summoned === false`；召唤分身后 `summoned === true`」
   - 「老用户已有和共用预设的一对一会话 → 该会话仍在 `GET /api/channels` 结果里，预设 `summoned === false`」
   - `personal-defaults.integration.test.ts`：「个人版下召唤来的员工（`summonedFrom` 非空）在列出/运行后仍没有任何技能授予；普通员工照旧被授予」
-  - `personal-defaults.integration.test.ts`：「个人版、已连接应用时，召唤来的员工运行一次（走 `listForAgent`）以及 `refreshTools` 之后，仍没有任何 `kind = "mcp"` 的自动授予；普通员工照旧被授予」
+  - `personal-defaults.integration.test.ts`：「个人版、已连接应用时，召唤来的员工运行一次（走 `listForAgent`）以及 `refreshTools` 之后，和普通员工一样拿到全部工具；收回应用、Routines、另一位员工都被拒绝；能请其他员工帮忙，也能被请」（Ruling 9）
 - [ ] **Step 2: 运行确认失败**。
 - [ ] **Step 3: 实现**；`summoned` 用一次批量查询算出，不对每个员工单独查。
 - [ ] **Step 4: 运行确认通过**，并跑 `bun test tests/avatar-conversation*.test.ts tests/personal-defaults*.test.ts tests/channel-routes.test.ts`。
