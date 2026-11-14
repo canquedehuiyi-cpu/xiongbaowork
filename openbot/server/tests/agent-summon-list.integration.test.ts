@@ -1,14 +1,11 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
-import {
-  type AgentProfileStore,
-  createAgentProfileStore,
-} from "../src/agents/profile-store";
+import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
-import { type SummonDeps, summonAgent } from "../src/agents/summon";
+import type { SummonDeps } from "../src/agents/summon";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import {
@@ -29,10 +26,7 @@ import {
   subscriptions,
   users,
 } from "../src/db/schema";
-import {
-  createPortraitStore,
-  type PortraitPreset,
-} from "../src/portraits/store";
+import type { PortraitPreset } from "../src/portraits/store";
 import { createQuotaService } from "../src/quota/limits";
 import { runAsTenant } from "../src/tenant/context";
 import { avatarAgentId, provisionTenant } from "../src/tenant/provisioning";
@@ -48,7 +42,6 @@ const channelStore = createChannelStore(
   profiles,
   createThreadIdentity("test-deployment"),
 );
-const portraitStore = createPortraitStore(database);
 const quota = createQuotaService(database);
 const audit: AuditEventInput[] = [];
 const auditStore: AuditStore = {
@@ -265,41 +258,12 @@ async function summoned(actor: AgentActor, agentId: string): Promise<Summoned> {
   return (await response.json()) as Summoned;
 }
 
-/** The person's live coworkers (the 分身 included). */
-function liveAgents(actor: AgentActor) {
-  return runAsTenant(actor.id, () =>
-    database
-      .select({ id: agentProfiles.agentId })
-      .from(agentProfiles)
-      .where(
-        and(
-          eq(agentProfiles.ownerUserId, actor.id),
-          isNull(agentProfiles.deletedAt),
-        ),
-      ),
-  );
-}
-
 function memberships(actor: AgentActor) {
   return runAsTenant(actor.id, () =>
     database
       .select({ id: channelMemberships.channelId })
       .from(channelMemberships)
       .where(eq(channelMemberships.userId, actor.id)),
-  );
-}
-
-function grantsOf(actor: AgentActor, agentId: string) {
-  return runAsTenant(actor.id, () =>
-    database
-      .select({
-        kind: pluginGrants.kind,
-        ref: pluginGrants.ref,
-        grantedBy: pluginGrants.grantedBy,
-        grantedAs: pluginGrants.grantedAs,
-      })
-      .from(pluginGrants)
-      .where(eq(pluginGrants.agentId, agentId)),
   );
 }
 
