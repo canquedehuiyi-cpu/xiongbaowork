@@ -20,11 +20,24 @@ import { latestUserText } from "./selection";
 
 export { PICKED_SKILL_PROP };
 
-/** A skill as a run needs it: its command, its name, and what it tells the Bot. */
+/** A skill as a run needs it: its command, its name, what it tells the Bot, and how usable it is. */
 export type PickableSkill = {
   slug: string;
   title: string;
   instructions?: string;
+  /**
+   * 移植时逐条审出来的档位，以及非 `full` 时「缺什么」。
+   *
+   * 缺省即 `full`：没被审计过的手写技能没有档位，没有档位不等于不能用。`blocked`/`degraded` 的
+   * 技能正文照旧会给（人点开就能读到的东西，模型也该读到），另外加一句它在这个部署里跑不成。
+   *
+   * 类型跟着存储那一行走（`string | null`），认不出的值一律当作没有档位：宁可不说，也不替一条技能
+   * 编一个档位出来。三个值的合法性由包加载时校验（`tenant-package.ts`）。
+   */
+  runnable?: string | null;
+  /** 规则名（`shell-command-prose`）。`blockedReasonRef` 才是能给人读的那句。 */
+  blockedReason?: string | null;
+  blockedReasonRef?: string | null;
 };
 
 /**
@@ -52,6 +65,28 @@ export function pickedSkillCommand(
 }
 
 /**
+ * 这条技能在这个部署里到底能不能照做，作为一句话跟在正文后面（`blocked`/`degraded` 才有）。
+ *
+ * 放在正文**之后**：前面那句「Follow its instructions for this reply:」得紧挨着正文，否则读起来
+ * 就成了「照这条办：<一句提醒> <正文>」。放在末尾也是模型最后读到的那一句。
+ */
+function gradeNote(skill: PickableSkill): string | undefined {
+  const opening =
+    skill.runnable === "blocked"
+      ? "This deployment cannot run this skill as written."
+      : skill.runnable === "degraded"
+        ? "This deployment can only partly run this skill as written."
+        : undefined;
+  if (!opening) return undefined;
+  const why = (skill.blockedReasonRef ?? skill.blockedReason)?.trim();
+  return [
+    opening,
+    ...(why ? [`Reason: ${why}`] : []),
+    "When a step needs something this deployment does not have, say what is missing rather than acting as if it had been done.",
+  ].join(" ");
+}
+
+/**
  * What the Bot is told for the skill this run picked among the ones it holds, or undefined when it
  * picked none, picked one the Bot does not hold, or one with no instructions.
  */
@@ -67,5 +102,8 @@ export function pickedSkillGuidance(
   return [
     `The person picked the skill "${skill.title || skill.slug}" (/${skill.slug}) for their latest message. Follow its instructions for this reply:`,
     instructions,
-  ].join("\n\n");
+    gradeNote(skill),
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("\n\n");
 }

@@ -433,5 +433,12 @@ export async function grantedSkills(options: {
     summary: skill.summary,
     tools: skill.tools,
     instructions: skill.instructions,
+    /*
+     * 档位与「缺什么」跟着走一趟：run 拿到的是这一份，`picked-skill.ts` 据此在正文后面加一句
+     * 「这个部署跑不成它，因为…」。不传就等于告诉模型「照做」，而卡片上明明写着暂不可用。
+     */
+    runnable: skill.runnable,
+    blockedReason: skill.blockedReason,
+    blockedReasonRef: skill.blockedReasonRef,
   }));
 }

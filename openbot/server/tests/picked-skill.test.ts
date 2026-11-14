@@ -21,6 +21,8 @@ import {
 import {
   leadingSkillCommand,
   PICKED_SKILL_PROP,
+  pickedSkillGuidance,
+  type PickableSkill,
 } from "../src/plugins/picked-skill";
 
 /*
@@ -343,6 +345,78 @@ describe("a skill picked for a Bot on a harness this deployment runs", () => {
       },
     );
     expect(standingRole(seen)).toContain(MARKER);
+  });
+});
+
+/**
+ * 档位不只是卡片上的一个徽章。
+ *
+ * 人从 `/` 菜单选中一条技能，服务端把它的正文注进这次运行的指令，并写着「Follow its
+ * instructions」。可一条 `blocked` 的技能正文里常常就写着 `bash scripts/deploy.sh`——员工没有本地
+ * 运行时。徽章挂在卡片上，模型看不见；不知道这件事，它只有两种反应：照做（幻觉出一个结果），或者
+ * 撞墙。把档位和「缺什么」一起交给它，它才有第三种：说清楚缺什么。
+ *
+ * 正文照旧给：人点开就能读到的东西，模型也该读到，藏起来是另一种撒谎。加的是档位那句话。
+ */
+describe("一条被打了档位的技能，交给模型时也带着档位", () => {
+  const picked = (slug: string) => ({
+    messages: [{ id: "q", role: "user" as const, content: `/${slug} do it` }],
+  });
+  const held = (over: Partial<PickableSkill>): PickableSkill => ({
+    slug: "deploy",
+    title: "Deploy the site",
+    instructions: "Run `bash scripts/deploy.sh` and report the URL.",
+    ...over,
+  });
+  const REPO_REF = "正文给出可执行的 shell 命令；openbot 员工没有本地运行时。";
+
+  test("blocked 的技能带着「跑不了」和原因交给模型，正文照旧给它", () => {
+    const guidance = pickedSkillGuidance(picked("deploy"), [
+      held({
+        runnable: "blocked",
+        blockedReason: "shell-command-prose",
+        blockedReasonRef: REPO_REF,
+      }),
+    ]);
+    expect(guidance).toContain("cannot run this skill as written");
+    expect(guidance).toContain(REPO_REF);
+    expect(guidance).toContain("bash scripts/deploy.sh");
+  });
+
+  test("degraded 的技能说的是「只能照一半」，不是「跑不了」", () => {
+    const guidance = pickedSkillGuidance(picked("deploy"), [
+      held({
+        runnable: "degraded",
+        blockedReason: "missing-asset-references",
+        blockedReasonRef: "文件 references/voltagent.md 未入包。",
+      }),
+    ]);
+    expect(guidance).toContain("only partly run this skill as written");
+    expect(guidance).not.toContain("cannot run");
+    expect(guidance).toContain("references/voltagent.md");
+  });
+
+  test("没有原因可说时也照样说明跑不了，不留一句空话", () => {
+    const guidance = pickedSkillGuidance(picked("deploy"), [
+      held({ runnable: "blocked" }),
+    ]);
+    expect(guidance).toContain("cannot run this skill as written");
+    expect(guidance).not.toContain("Reason:");
+  });
+
+  test("full 的技能一个字都不加，跟原来一样", () => {
+    const guidance = pickedSkillGuidance(picked("deploy"), [
+      held({ runnable: "full" }),
+    ]);
+    expect(guidance).not.toContain("cannot run");
+    expect(guidance).not.toContain("partly");
+    expect(guidance).not.toContain("Reason:");
+  });
+
+  test("没有档位的技能（没被审计过的手写技能）也不加", () => {
+    const guidance = pickedSkillGuidance(picked("deploy"), [held({})]);
+    expect(guidance).not.toContain("cannot run");
+    expect(guidance).not.toContain("partly");
   });
 });
 

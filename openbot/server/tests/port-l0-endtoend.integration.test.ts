@@ -4,10 +4,7 @@ import { fileURLToPath } from "node:url";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { MCPMock } from "@copilotkit/aimock/mcp";
 import { createAgentProfileStore } from "../src/agents/profile-store";
-import {
-  createHandoffDesk,
-  HANDOFF_KIND,
-} from "../src/agents/handoff";
+import { createHandoffDesk, HANDOFF_KIND } from "../src/agents/handoff";
 import { createHandoffRunner } from "../src/agents/handoff-runner";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
@@ -91,9 +88,7 @@ const desk = createHandoffDesk({
   actorFor: async (id) => ({ id, role: "user" as const }),
   mayAddress: async (fromBotId, toBotId) =>
     (
-      await pluginStore
-        .botsReachableFrom(fromBotId)
-        .catch(() => [] as string[])
+      await pluginStore.botsReachableFrom(fromBotId).catch(() => [] as string[])
     ).includes(toBotId),
   auditStore,
   caps: { maxDepth: 2, maxPerRun: 3 },
@@ -210,9 +205,7 @@ afterAll(async () => {
       .update(mcpServers)
       .set({ credentialId: null })
       .where(eq(mcpServers.id, "tapd"));
-    await database
-      .delete(credentials)
-      .where(eq(credentials.keyId, "mcp-tapd"));
+    await database.delete(credentials).where(eq(credentials.keyId, "mcp-tapd"));
     // The tool grant the lead held, in the owner's frame where it was written.
     await database
       .delete(pluginGrants)
@@ -227,7 +220,12 @@ afterAll(async () => {
   await runAsTenant(OWNER, async () => {
     await database
       .delete(pluginGrants)
-      .where(and(eq(pluginGrants.kind, "mcp"), eq(pluginGrants.agentId, "software-team-lead")));
+      .where(
+        and(
+          eq(pluginGrants.kind, "mcp"),
+          eq(pluginGrants.agentId, "software-team-lead"),
+        ),
+      );
   });
   await runAsTenant("platform", () =>
     database.delete(users).where(eq(users.id, OWNER)),
@@ -243,7 +241,10 @@ describe("the ported package, end to end", () => {
 
     const seeded = await runAsTenant("platform", () =>
       database
-        .select({ agentId: agentProfiles.agentId, seed: agentProfiles.avatarSeed })
+        .select({
+          agentId: agentProfiles.agentId,
+          seed: agentProfiles.avatarSeed,
+        })
         .from(agentProfiles)
         .where(inArray(agentProfiles.agentId, packageAgentIds)),
     );
@@ -326,7 +327,8 @@ describe("the ported package, end to end", () => {
       expect(row.blockedReasonRef, row.id).toBeTruthy();
     }
     const fullWithReason = grades.filter(
-      (row) => row.runnable === "full" && (row.blockedReason || row.blockedReasonRef),
+      (row) =>
+        row.runnable === "full" && (row.blockedReason || row.blockedReasonRef),
     );
     expect(fullWithReason).toHaveLength(0);
     const botCreator = grades.find((row) => row.id === "bot-creator");
@@ -344,7 +346,11 @@ describe("the ported package, end to end", () => {
     const guidance = pickedSkillGuidance(
       {
         messages: [
-          { id: "q", role: "user" as const, content: "/bot-creator 帮我造一个员工" },
+          {
+            id: "q",
+            role: "user" as const,
+            content: "/bot-creator 帮我造一个员工",
+          },
         ],
       },
       held,
@@ -353,6 +359,17 @@ describe("the ported package, end to end", () => {
     // The instructions are the package's own stored text, not a guess from the name: a sentence
     // that exists only inside the skill body.
     expect(guidance).toContain("mcp__staffing__list_staff");
+
+    /*
+     * 档位从存储一路到 prompt 不许掉：`bot-creator` 是 blocked（缺 `mcp__staffing__*`），徽章只挂在
+     * 卡片上，模型看不见。若 `grantedSkills` 漏搬这三个字段，这里拿到的是「照做」而不是「跑不了」。
+     */
+    expect(guidance).toContain(
+      "This deployment cannot run this skill as written",
+    );
+    expect(held.find((skill) => skill.slug === "bot-creator")?.runnable).toBe(
+      "blocked",
+    );
 
     // A declaration is a selector, not a grant (§4): no package skill declares a tool into
     // existence, so nothing is offered because a skill named it.
@@ -405,7 +422,9 @@ describe("the ported package, end to end", () => {
         ),
     );
     expect(
-      queued.some((row) => JSON.stringify(row.payload).includes("software-product-manager")),
+      queued.some((row) =>
+        JSON.stringify(row.payload).includes("software-product-manager"),
+      ),
     ).toBe(true);
 
     // Another replica, sharing nothing but the row: the delivery reads what the ask wrote.
@@ -451,7 +470,9 @@ describe("the ported package, end to end", () => {
     expect(refusals("not_granted").length).toBeGreaterThan(0);
 
     // Leave the deployment as it was found: the package's own grant, restored verbatim.
-    await runAsTenant("platform", () => database.insert(pluginGrants).values(grant!));
+    await runAsTenant("platform", () =>
+      database.insert(pluginGrants).values(grant!),
+    );
     const restored = await botGrant();
     expect(restored).toBeDefined();
   });

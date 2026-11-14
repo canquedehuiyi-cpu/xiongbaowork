@@ -1,5 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { ownerTenantOfBot } from "../agents/bot-owner";
 import { ALREADY_WAITING, DECLINED_BY_PERSON } from "../approvals/service";
 import {
@@ -439,8 +450,8 @@ export type PersonTeamRecord = {
   id: string;
   name: string;
   description: string;
-      /** The 员工 who answer here, in the order the sync wrote them: the lead is first. */
-      agentIds: string[];
+  /** The 员工 who answer here, in the order the sync wrote them: the lead is first. */
+  agentIds: string[];
 };
 
 /**
@@ -472,6 +483,14 @@ export type GrantedPlugins = {
     title: string;
     summary: string;
     instructions: string;
+    /**
+     * 移植时审出来的档位：`full` 能照正文干，`degraded` 缺随包的附件，`blocked` 缺运行环境或授权。
+     * 手写技能没有档位（null），没有档位不等于不能用。卡片上画的那枚徽章就是这一行。
+     */
+    runnable?: string | null;
+    /** 规则名，如 `shell-command-prose`；`blockedReasonRef` 才是能给人读的那句。 */
+    blockedReason?: string | null;
+    blockedReasonRef?: string | null;
     /**
      * What this skill says it needs, as refs. Never a superset of `tools` above in effect: selection
      * intersects the two, because a skill naming a tool the Bot lacks must load nothing rather than
@@ -7122,7 +7141,9 @@ export function createPluginStore(options: PluginStoreOptions) {
           description: channelRows.description,
         })
         .from(channelRows)
-        .where(and(isNotNull(channelRows.packageId), eq(channelRows.kind, "team")))
+        .where(
+          and(isNotNull(channelRows.packageId), eq(channelRows.kind, "team")),
+        )
         .orderBy(asc(channelRows.name));
       if (rows.length === 0) return [];
       const members = await database
@@ -8304,6 +8325,14 @@ export function createPluginStore(options: PluginStoreOptions) {
           title: row.title,
           summary: row.summary,
           instructions: row.instructions,
+          /*
+           * 档位与「缺什么」跟着技能走：`grantedSkills` 把它交给 run，`picked-skill.ts` 据此在人选中
+           * 这条技能时补一句「这个部署跑不成它，因为…」。卡片上的徽章模型看不见，读不到这一行，
+           * 它就只能照做或者撞墙。
+           */
+          runnable: row.runnable,
+          blockedReason: row.blockedReason,
+          blockedReasonRef: row.blockedReasonRef,
           tools: declared.get(row.id) ?? [],
         })),
       };
@@ -12279,7 +12308,9 @@ export function createPluginStore(options: PluginStoreOptions) {
               // 「招聘与组群」没有账号可开，`actorId` 就是提议的主人：说话的人。Team Bot 上它若取了主人，
               // 队友起草的提议就会记到主人名下。只限这个传输：别的传输照旧（Routines 的取法另议）。
               actorId:
-                access.transport === "builtin-staffing" ? input.actorId : runsAs,
+                access.transport === "builtin-staffing"
+                  ? input.actorId
+                  : runsAs,
               botId: input.botId,
               ...((pinned?.accountId ?? ownersAccountId)
                 ? { accountId: pinned?.accountId ?? ownersAccountId ?? "" }
