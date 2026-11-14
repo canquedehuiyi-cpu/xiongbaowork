@@ -1,5 +1,5 @@
 import { useLocation } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import logo256 from "@/assets/brand/xiongbao-logo-256.png";
 import { usePortraitSrc } from "@/components/portraits/use-portrait";
 import type { SummonProblem } from "@/components/summon/use-summon";
@@ -23,7 +23,8 @@ export function summonAnchor(agentId: string): string {
  * card with its 熊宝 portrait and one primary 「召唤」. Summoning is `useSummon`'s, owned by the page,
  * so one flip plays at a time and a second press while it runs does nothing.
  *
- * A link to `/bots#summon-<id>` brings that card into view.
+ * A link to `/bots#summon-<id>` brings that card into view, focuses it and lights it briefly — each
+ * time the link is followed, not only the first (every navigation has its own history key).
  */
 export function SummonGrid({
   agents,
@@ -39,10 +40,18 @@ export function SummonGrid({
   onSummon: (agent: AgentProfile) => void;
 }) {
   const hash = useLocation({ select: (location) => location.hash });
+  const visit = useLocation({ select: (location) => location.state.__TSR_key });
+  const [lit, setLit] = useState<string | null>(null);
   useEffect(() => {
-    if (!hash) return;
-    document.getElementById(hash)?.scrollIntoView?.({ block: "center" });
-  }, [hash]);
+    if (!hash || !visit) return;
+    const card = document.getElementById(hash);
+    if (!card) return;
+    card.scrollIntoView?.({ block: "center" });
+    card.focus({ preventScroll: true });
+    setLit(hash);
+    const done = setTimeout(() => setLit(null), LIT_MS);
+    return () => clearTimeout(done);
+  }, [hash, visit]);
   return (
     <div
       className={cn(GRID, "mt-4")}
@@ -56,6 +65,7 @@ export function SummonGrid({
           isAvatar={agent.id === avatarId || agent.summonKind === "avatar"}
           key={agent.id}
           onSummon={() => onSummon(agent)}
+          lit={lit === summonAnchor(agent.id)}
           problem={problem?.agentId === agent.id ? problem.message : null}
         />
       ))}
@@ -63,16 +73,22 @@ export function SummonGrid({
   );
 }
 
+/** How long a card reached through its anchor stays lit. */
+const LIT_MS = 1600;
+
 function SummonCard({
   agent,
   busy,
   isAvatar,
+  lit,
   onSummon,
   problem,
 }: {
   agent: AgentProfile;
   busy: boolean;
   isAvatar: boolean;
+  /** Reached just now through its anchor. */
+  lit: boolean;
   onSummon: () => void;
   problem: string | null;
 }) {
@@ -81,9 +97,16 @@ function SummonCard({
   const duties = agent.roleDescription.trim();
   return (
     <div
-      className={cn(CARD_SURFACE, "gap-[10px]", isAvatar && PERSONAL_SURFACE)}
+      className={cn(
+        CARD_SURFACE,
+        "gap-[10px] outline-none transition-shadow",
+        isAvatar && PERSONAL_SURFACE,
+        lit && "ring-2 ring-signal/70",
+      )}
+      data-highlighted={lit ? "" : undefined}
       data-testid="summon-card"
       id={summonAnchor(agent.id)}
+      tabIndex={-1}
     >
       <div className="flex items-start justify-between gap-2">
         <span className={CARD_TAG}>待召唤</span>

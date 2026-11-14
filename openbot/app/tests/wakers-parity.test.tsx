@@ -884,7 +884,7 @@ test("a second 召唤 while one is in flight sends no second request", async () 
   expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
 });
 
-test("a link to a 待召唤 card's anchor brings that card into view", async () => {
+test("a link to a 待召唤 card's anchor brings that card into view, focused and lit, each time it is followed", async () => {
   const scrolled: string[] = [];
   const original = Element.prototype.scrollIntoView;
   Element.prototype.scrollIntoView = function (this: Element) {
@@ -892,8 +892,19 @@ test("a link to a 待召唤 card's anchor brings that card into view", async () 
   };
   try {
     seed({ agents: MARKET });
-    draw("/bots#summon-preset-doctor");
+    const { screen, router } = draw("/bots#summon-preset-doctor");
     await waitFor(() => expect(scrolled).toContain("summon-preset-doctor"));
+    const card = screen.container.querySelector(
+      "#summon-preset-doctor",
+    ) as HTMLElement;
+    expect(document.activeElement).toBe(card);
+    expect(card.getAttribute("tabindex")).toBe("-1");
+    expect(card.hasAttribute("data-highlighted")).toBe(true);
+    // The same link followed again (another 「去人才市场」 press) brings it back again.
+    const before = scrolled.length;
+    await router.navigate({ to: "/bots", hash: "summon-preset-doctor" });
+    await waitFor(() => expect(scrolled.length).toBeGreaterThan(before));
+    expect(new Set(scrolled)).toEqual(new Set(["summon-preset-doctor"]));
   } finally {
     Element.prototype.scrollIntoView = original;
   }
