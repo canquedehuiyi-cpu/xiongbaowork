@@ -1,4 +1,9 @@
-import { queryOptions } from "@tanstack/react-query";
+import {
+  mutationOptions,
+  type QueryClient,
+  queryOptions,
+} from "@tanstack/react-query";
+import { channelKeys } from "@/lib/channels/queries";
 import { client, tryClient } from "@/lib/client";
 import type { Persona } from "../../../../shared/persona";
 import type { PortraitPreset } from "@/lib/portraits/queries";
@@ -205,6 +210,36 @@ export function agentListQueryOptions(hidden = false) {
 }
 
 /** Package-defined IDs remain one path segment without changing their stored or cache identity. */
+/** What summoning answers: the employee now on the roster, and the 1:1 conversation with it. */
+export type SummonResult = {
+  agent: AgentProfile;
+  channelId: string;
+  /** False when the summon found what already existed (a copy already held, the 分身). */
+  created: boolean;
+};
+
+/**
+ * 召唤: `POST /api/agents/:agentId/summon`. A full allowance is a 402 whose message the server
+ * wrote, so the caller shows `error.message`; the shared query client also opens the plan dialog.
+ * A success refreshes the roster and the conversation list, which now holds the new 1:1.
+ */
+export function summonAgentMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (agentId: string): Promise<SummonResult> => {
+      const response = await client(
+        `/api/agents/${encodeURIComponent(agentId)}/summon`,
+        { method: "POST", fallback: "没能召唤这位员工" },
+      );
+      return (await response.json()) as SummonResult;
+    },
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["agents", "list"] }),
+        queryClient.invalidateQueries({ queryKey: channelKeys.list() }),
+      ]),
+  });
+}
+
 export function agentApiPath(agentId: string): string {
   return `/api/agents/${encodeURIComponent(agentId)}`;
 }

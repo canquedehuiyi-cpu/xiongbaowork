@@ -31,6 +31,7 @@ import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { browserKeys } from "@/lib/browser/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
+import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import { portraitKeys } from "@/lib/portraits/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
@@ -165,6 +166,7 @@ function renderSidebar(
     groups,
     details = [],
     portraits = [],
+    agents = AGENTS,
   }: {
     channels?: ChannelSummary[];
     nextCursor?: string | null;
@@ -174,6 +176,7 @@ function renderSidebar(
     /** Channels read on their own (`GET /api/channels/:id`), for one not among the loaded pages. */
     details?: { id: string; agentIds: string[] }[];
     portraits?: unknown[];
+    agents?: unknown[];
   } = {},
 ) {
   const queryClient = new QueryClient({
@@ -210,7 +213,7 @@ function renderSidebar(
     role: "user",
     onboarding: null,
   });
-  queryClient.setQueryData(agentKeys.list(false), AGENTS);
+  queryClient.setQueryData(agentKeys.list(false), agents);
   queryClient.setQueryDefaults(botLifecycleKeys.attention, {
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
@@ -694,4 +697,153 @@ test("a linked chat I started shows the crew's portrait", async () => {
   );
   // A linked crew is its chat's row, not a second 未开始聊天 row.
   expect(within(list).getAllByRole("link")).toHaveLength(1);
+});
+
+/* 召唤员工：员工列表分「已召唤 / 待召唤」。 */
+const SUMMON_AGENTS = [
+  agent("agent-analyst", "分析师", { roleDescription: "整理周报与指标" }),
+  agent("avatar-user", "我的分身", {
+    summonKind: "avatar",
+    summoned: false,
+  }),
+  agent("preset-doctor", "暖心医生", {
+    title: "医生",
+    summonKind: "preset",
+    summoned: false,
+    presetPortrait: "doctor",
+  }),
+  agent("preset-lawyer", "专业律师", {
+    summonKind: "preset",
+    summoned: true,
+    presetPortrait: "lawyer",
+  }),
+  agent("copy-lawyer", "专业律师", {
+    summonedFrom: "preset-lawyer",
+    summonKind: null,
+    summoned: true,
+  }),
+];
+
+test("员工 splits into 已召唤 and 待召唤; a summoned preset's original shows in neither, the 分身 leads 待召唤", async () => {
+  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  await chooseView(view, /^员工/);
+  const done = await view.findByRole("list", { name: "员工" });
+  expect(
+    within(done)
+      .getAllByRole("link")
+      .map((row) => [textOf(row), hrefOf(row)]),
+  ).toEqual([
+    ["分析师整理周报与指标", "/channel/c-analyst-new"],
+    ["专业律师", "/channel/new?agent=copy-lawyer"],
+  ]);
+  const pending = view.getByRole("list", { name: "待召唤" });
+  expect(within(pending).queryAllByRole("link")).toHaveLength(0);
+  expect(
+    within(pending)
+      .getAllByRole("listitem")
+      .map((row) => textOf(row)),
+  ).toEqual(["我的分身召唤", "暖心医生医生召唤"]);
+  expect(within(pending).getAllByRole("button", { name: /^召唤/ })).toHaveLength(2);
+  // The original of the summoned preset is listed nowhere.
+  expect(view.queryAllByText("专业律师")).toHaveLength(1);
+});
+
+test("an employee without a portrait row draws its presetPortrait's picture", async () => {
+  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  await chooseView(view, /^员工/);
+  const pending = await view.findByRole("list", { name: "待召唤" });
+  const row = within(pending)
+    .getAllByRole("listitem")
+    .find((item) => textOf(item)?.startsWith("暖心医生")) as HTMLElement;
+  expect(row.querySelector("img")?.getAttribute("src")).toBe(
+    PRESET_IMAGES.doctor,
+  );
+});
+
+test("召唤 posts the summon, flips the card, then opens the returned conversation", async () => {
+  let release: (response: Response) => void = () => {};
+  respond = (request) =>
+    request.url === "/api/agents/preset-doctor/summon"
+      ? new Promise<Response>((resolve) => {
+          release = resolve;
+        })
+      : Promise.reject(new Error(`Unexpected request ${request.url}`));
+  const { view, router } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  await chooseView(view, /^员工/);
+  const pending = await view.findByRole("list", { name: "待召唤" });
+  await userEvent.click(
+    within(pending).getByRole("button", { name: "召唤 暖心医生" }),
+  );
+  await waitFor(() =>
+    expect(sent.filter((request) => request.method === "POST")).toEqual([
+      { url: "/api/agents/preset-doctor/summon", method: "POST" },
+    ]),
+  );
+  const overlay = await view.findByRole("dialog", { name: "召唤员工" });
+  expect(router.state.location.pathname).toBe("/bots");
+  release(
+    Response.json({
+      agent: agent("copy-doctor", "暖心医生"),
+      channelId: "c-doctor",
+      created: true,
+    }),
+  );
+  await waitFor(() => expect(overlay.getAttribute("data-phase")).toBe("reveal"));
+  await userEvent.click(overlay);
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
+  );
+});
+
+test("a refused summon (名额已满) stays put, says why, and keeps the employee in 待召唤", async () => {
+  respond = async () =>
+    Response.json(
+      {
+        error: "员工名额已满。",
+        code: "quota_exceeded",
+        metric: "wakers",
+        used: 10,
+        limit: 10,
+        plan: "专业版",
+        upgradeUrl: "/plans",
+      },
+      { status: 402 },
+    );
+  const { view, router } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  await chooseView(view, /^员工/);
+  const pending = await view.findByRole("list", { name: "待召唤" });
+  await userEvent.click(
+    within(pending).getByRole("button", { name: "召唤 暖心医生" }),
+  );
+  expect(await view.findByText("员工名额已满。")).toBeTruthy();
+  expect(view.queryByRole("dialog", { name: "召唤员工" })).toBeNull();
+  expect(router.state.location.pathname).toBe("/bots");
+  expect(
+    within(view.getByRole("list", { name: "待召唤" })).getByRole("button", {
+      name: "召唤 暖心医生",
+    }),
+  ).toBeTruthy();
+});
+
+test("after a preset is summoned its older conversations stay in 会话 while 员工 lists only the copy", async () => {
+  const { view } = renderSidebar("/bots", {
+    agents: SUMMON_AGENTS,
+    channels: [
+      channel("c-old-lawyer", ["preset-lawyer"], {
+        summary: "旧的法务会话",
+        lastMessageAt: "2026-11-07T01:00:00Z",
+      }),
+    ],
+  });
+  const list = await view.findByRole("navigation", { name: "会话" });
+  expect(within(list).getAllByRole("link").map(hrefOf)).toEqual([
+    "/channel/c-old-lawyer",
+  ]);
+  await chooseView(view, /^员工/);
+  const roster = await view.findByRole("list", { name: "员工" });
+  expect(
+    within(roster)
+      .getAllByRole("link")
+      .map((row) => hrefOf(row)),
+  ).not.toContain("/channel/c-old-lawyer");
 });

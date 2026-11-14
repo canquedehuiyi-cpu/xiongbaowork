@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, type RefObject, useMemo, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
@@ -14,8 +14,15 @@ import {
 } from "@/components/bot-profile/attention";
 import { SearchBox } from "@/components/layout/search-box";
 import { usePortraitSrc } from "@/components/portraits/use-portrait";
+import { SummonCardFlip } from "@/components/summon/summon-card-flip";
 import { Button } from "@/components/ui/button";
-import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
+import logo256 from "@/assets/brand/xiongbao-logo-256.png";
+import {
+  type AgentProfile,
+  agentListQueryOptions,
+  type SummonResult,
+  summonAgentMutationOptions,
+} from "@/lib/agents/queries";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
 import {
   type BotAttention,
@@ -37,6 +44,7 @@ import { ChannelPagination } from "./channel-pagination";
 import { ChannelRow } from "./channel-row";
 import {
   channelsOf,
+  employeeGroups,
   hasUnseenActivity,
   isGroupChannel,
   latestDirectChannel,
@@ -303,12 +311,109 @@ function EmployeeRow({
 }
 
 /**
+ * A 待召唤 row: not on the person's roster yet, so no conversation to open — a face, a name, and
+ * the 「召唤」 button. Why a summon was refused is said under the row.
+ */
+function PendingEmployeeRow({
+  agent,
+  busy,
+  onSummon,
+  problem,
+}: {
+  agent: AgentProfile;
+  busy: boolean;
+  onSummon: () => void;
+  problem: string | null;
+}) {
+  const line = agent.roleDescription || agent.title;
+  return (
+    <li className="flex flex-wrap items-center">
+      <div className={rowClassName}>
+        <span aria-hidden="true" className="contents">
+          <AbstractAvatar
+            decorative
+            name={agent.name}
+            seed={agent.avatarSeed}
+            portrait={{ kind: "coworker", id: agent.id }}
+            size={29}
+          />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-semibold text-[13px] leading-[18px]">
+            {agent.name}
+          </span>
+          {line ? (
+            <span className="block truncate text-[11px] text-faint leading-[16px]">
+              {line}
+            </span>
+          ) : null}
+        </span>
+        <Button
+          aria-label={`召唤 ${agent.name}`}
+          className="h-[26px] shrink-0 px-[10px] text-[12px]"
+          disabled={busy}
+          onClick={onSummon}
+          size="sm"
+          variant="outline"
+        >
+          召唤
+        </Button>
+      </div>
+      {problem ? (
+        <p
+          className="w-full px-[6px] pb-1 text-[12px] text-signal-ink"
+          role="alert"
+        >
+          {problem}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+/** The card flip for one summon in flight, drawn with the face the roster shows for that employee. */
+function SummonFlight({
+  agent,
+  result,
+  onDone,
+  onFail,
+}: {
+  agent: AgentProfile;
+  result: Promise<SummonResult>;
+  onDone: () => void;
+  onFail: (error: unknown) => void;
+}) {
+  const portrait = usePortraitSrc("coworker", agent.id);
+  return (
+    <SummonCardFlip
+      name={agent.name}
+      onDone={onDone}
+      onFail={onFail}
+      portrait={portrait ?? logo256}
+      result={result}
+      title={agent.title || agent.roleDescription}
+    />
+  );
+}
+
+/**
  * 员工: everyone the person can talk to, each row opening its latest 单聊 (or a new one addressed to
  * it), with what waits on the person from that employee. 「新建员工」 opens the same wizard as the
  * header of 员工 (`/bots?new=true`).
  */
 export function EmployeeList() {
   const [query, setQuery] = useState("");
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const summon = useMutation(summonAgentMutationOptions(queryClient));
+  const [flight, setFlight] = useState<{
+    agent: AgentProfile;
+    result: Promise<SummonResult>;
+  } | null>(null);
+  const [problem, setProblem] = useState<{
+    agentId: string;
+    message: string;
+  } | null>(null);
   const agents = useQuery(agentListQueryOptions());
   const channels = useInfiniteQuery(channelListQueryOptions());
   const attention = useQuery(botAttentionQueryOptions());
@@ -322,6 +427,13 @@ export function EmployeeList() {
   const shown = employees.filter((agent) =>
     matches(query, agent.name, agent.title, agent.roleDescription),
   );
+  const { summoned, pending } = employeeGroups(shown);
+  const startSummon = (agent: AgentProfile) => {
+    if (flight) return;
+    setProblem(null);
+    const result = summon.mutateAsync(agent.id);
+    setFlight({ agent, result });
+  };
   /*
    * Selected only while a 单聊 with it (or a new conversation addressed to it) is open: a 群聊 is
    * about everyone in it, so it lights nobody here. Read off the address (`/group/$id`), not the
@@ -362,18 +474,72 @@ export function EmployeeList() {
       ) : shown.length === 0 ? (
         <RosterNote>没有匹配的员工</RosterNote>
       ) : (
-        <ul aria-label="员工" className="mt-[8px] flex flex-col gap-px">
-          {shown.map((agent) => (
-            <EmployeeRow
-              agent={agent}
-              attention={attentionById.get(agent.id)}
-              channels={channels.data}
-              key={agent.id}
-              selected={selectedId === agent.id}
-            />
-          ))}
-        </ul>
+        <>
+          {summoned.length > 0 ? (
+            <>
+              {pending.length > 0 ? (
+                <p className={sectionLabelClassName}>已召唤</p>
+              ) : null}
+              <ul
+                aria-label="员工"
+                className={cn(
+                  "flex flex-col gap-px",
+                  pending.length === 0 && "mt-[8px]",
+                )}
+              >
+                {summoned.map((agent) => (
+                  <EmployeeRow
+                    agent={agent}
+                    attention={attentionById.get(agent.id)}
+                    channels={channels.data}
+                    key={agent.id}
+                    selected={selectedId === agent.id}
+                  />
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {pending.length > 0 ? (
+            <>
+              <p className={sectionLabelClassName}>待召唤</p>
+              <ul aria-label="待召唤" className="flex flex-col gap-px">
+                {pending.map((agent) => (
+                  <PendingEmployeeRow
+                    agent={agent}
+                    busy={flight !== null}
+                    key={agent.id}
+                    onSummon={() => startSummon(agent)}
+                    problem={
+                      problem?.agentId === agent.id ? problem.message : null
+                    }
+                  />
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </>
       )}
+      {flight ? (
+        <SummonFlight
+          agent={flight.agent}
+          onDone={() => {
+            const { result } = flight;
+            setFlight(null);
+            void result.then(({ channelId }) =>
+              navigate({ to: "/channel/$channelId", params: { channelId } }),
+            );
+          }}
+          onFail={(error) => {
+            setFlight(null);
+            setProblem({
+              agentId: flight.agent.id,
+              message:
+                error instanceof Error ? error.message : "没能召唤这位员工",
+            });
+          }}
+          result={flight.result}
+        />
+      ) : null}
     </>
   );
 }
