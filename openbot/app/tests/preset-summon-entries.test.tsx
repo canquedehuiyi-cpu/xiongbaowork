@@ -138,3 +138,15 @@ test("the employee dialog's conversation row sends a preset to 人才市场", as
   expect(dialog.queryByRole("button", { name: "开始" })).toBeNull();
   expect(posted).toEqual([]);
 });
+
+test("the employee dialog's row on an already summoned preset does not offer to summon it", async () => {
+  const { view } = draw({ ...PRESET, summoned: true }, (id) => (
+    <AgentDialog agentId={id} onClose={() => {}} open />
+  ));
+  const dialog = within(await within(view.baseElement).findByRole("dialog"));
+  expect(await dialog.findByText("已召唤")).toBeTruthy();
+  expect(dialog.queryByText("召唤")).toBeNull();
+  expect(
+    dialog.getByRole("link", { name: "去人才市场" }).getAttribute("href"),
+  ).toBe("/bots");
+});

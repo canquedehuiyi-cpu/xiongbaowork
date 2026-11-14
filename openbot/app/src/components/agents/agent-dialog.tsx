@@ -418,7 +418,9 @@ function GeneralSection({
 
       <Item variant="muted">
         <ItemContent>
-          <ItemTitle>{preset ? "召唤" : "开始对话"}</ItemTitle>
+          <ItemTitle>
+            {!preset ? "开始对话" : profile.summoned ? "已召唤" : "召唤"}
+          </ItemTitle>
           <ItemDescription>
             {!preset
               ? "和这位员工开一个新频道。"
