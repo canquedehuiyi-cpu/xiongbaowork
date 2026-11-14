@@ -216,6 +216,16 @@ test("the shipped brand copy says nothing in English that a person would read as
   // manifest and the audit report, not this check — a substring scan over the whole corpus would
   // flag content, not placeholders. Seed skills are read back off disk, filtered by the assembler's
   // source stamp, so the check follows the file rather than a hand-maintained slug list.
+  //
+  // The stamp answers a different question than this check asks. It says the package owns the row,
+  // which is also true of the coworker-portrait skills: they carry it because their generator no
+  // longer exists, and without the stamp a rebuild would take them for last round's output and drop
+  // them. Their prose is still ported coworker content, and it holds words this scan reads as
+  // unfinished — `TODOS sync` in a changelog step, `WCAG Compliance` in an accessibility checklist —
+  // neither of which is a placeholder left behind. Rows ported from a portrait are therefore read
+  // the way the rest of the corpus is read: through the manifest. What remains is the copy somebody
+  // wrote for this package.
+  const portraitSource = "xiongbao-package/agents/";
   const { readFile } = await import("node:fs/promises");
   const { parse } = await import("yaml");
   const packageDir = new URL("../../examples/xiongbao/", import.meta.url);
@@ -232,9 +242,10 @@ test("the shipped brand copy says nothing in English that a person would read as
     await readFile(new URL("skills.yaml", packageDir), "utf8"),
   );
   const seedSkills = skillsDoc.skills.filter(
-    (entry: { _porting?: { source?: string } }) =>
+    (entry: { _porting?: { source?: string; source_url?: string } }) =>
       entry._porting === undefined ||
-      entry._porting.source === "xiongbao-package",
+      (entry._porting.source === "xiongbao-package" &&
+        !String(entry._porting.source_url ?? "").startsWith(portraitSource)),
   );
   const text = [brand, seedAgents, channelsDoc, seedSkills]
     .map((part) => JSON.stringify(part))
