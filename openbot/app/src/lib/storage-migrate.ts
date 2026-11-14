@@ -1,5 +1,17 @@
 type ReadableStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
+/** Reads `key`; a refusal by storage (some privacy modes throw) reads as "nothing stored". */
+export function readStored(
+  key: string,
+  storage?: ReadableStorage,
+): string | null {
+  try {
+    return (storage ?? window.localStorage).getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Reads `key`, copying a value left under the pre-rename `legacyKey` across first, so a preference
  * set before the rename survives it. The legacy key is left in place, so an older build sharing this

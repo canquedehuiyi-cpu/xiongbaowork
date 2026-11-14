@@ -282,52 +282,10 @@
     "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
   },
   {
-    "word": "openbot-notify-prompt-answered",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
     "word": "openbot-runner",
     "category": "persisted-data",
     "plan": "rewrite",
     "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
-  },
-  {
-    "word": "openbot-sidebar",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot-sidebar-more",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot-sidebar-view",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot-sidebar-width:",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot-skin",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot-theme",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
   },
   {
     "word": "openbot-unreachable",

@@ -6,12 +6,7 @@ import {
 import type { AuthenticatedActor, AuthService } from "./guards";
 
 export const ORGANIZATION_SESSION_COOKIE = "xiongbao.organization-session";
-/** The name written before the rename. Still read, so a person signed in across the upgrade stays signed in; it is
- * cleared whenever the new cookie is set or cleared, and never written. */
-export const LEGACY_ORGANIZATION_SESSION_COOKIE =
-  "openbot.organization-session";
 const COOKIE = ORGANIZATION_SESSION_COOKIE;
-const LEGACY_COOKIE = LEGACY_ORGANIZATION_SESSION_COOKIE;
 const COOKIE_ATTRIBUTES = "Path=/; HttpOnly; SameSite=Lax";
 const HANDOFF_PATH = "/api/auth/organization/session";
 /** How long the organization session cookie lasts, in seconds: its Max-Age, set once at the handoff and never renewed,
@@ -193,7 +188,7 @@ export function createOrganizationAuth(options: {
       parts
         ?.find((part) => part.startsWith(`${name}=`))
         ?.slice(name.length + 1);
-    const encoded = read(COOKIE) ?? read(LEGACY_COOKIE);
+    const encoded = read(COOKIE);
     if (!encoded || encoded.length > 12000) return null;
     const record = organizationRecord(encoded);
     // Binding the cookie to the authority prevents a changed organization setting reusing it.
@@ -317,11 +312,6 @@ export function createOrganizationAuth(options: {
             "set-cookie",
             `${COOKIE}=${value}; ${COOKIE_ATTRIBUTES}; Max-Age=${COOKIE_AGE}${url.protocol === "https:" ? "; Secure" : ""}`,
           );
-          // A stale legacy cookie would otherwise outlive this sign-in and be read as a fallback.
-          headers.append(
-            "set-cookie",
-            `${LEGACY_COOKIE}=; ${COOKIE_ATTRIBUTES}; Max-Age=0`,
-          );
           return new Response(null, { status: 303, headers });
         }
         if (url.pathname === "/api/auth/get-session")
@@ -378,12 +368,10 @@ export function createOrganizationAuth(options: {
             }
           }
           const headers = new Headers({ "cache-control": "no-store" });
-          for (const name of [COOKIE, LEGACY_COOKIE]) {
-            headers.append(
-              "set-cookie",
-              `${name}=; ${COOKIE_ATTRIBUTES}; Max-Age=0`,
-            );
-          }
+          headers.append(
+            "set-cookie",
+            `${COOKIE}=; ${COOKIE_ATTRIBUTES}; Max-Age=0`,
+          );
           return Response.json({ success: true }, { headers });
         }
         return json(

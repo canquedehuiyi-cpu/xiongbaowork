@@ -49,7 +49,7 @@ import {
   useNavigationItems,
 } from "@/lib/navigation";
 import { useMessageListEmphasis } from "@/lib/settings/message-list";
-import { readMigrated } from "@/lib/storage-migrate";
+import { readStored } from "@/lib/storage-migrate";
 import { cn } from "@/lib/utils";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelPagination } from "./channel-pagination";
@@ -83,11 +83,10 @@ const SHORTCUT_LABEL =
 const MAX_ANIMATED_ROWS = 60;
 
 const MORE_STORAGE_KEY = "xiongbao-sidebar-more";
-const LEGACY_MORE_STORAGE_KEY = "openbot-sidebar-more";
 
 function readMoreOpen(): boolean {
   try {
-    return readMigrated(MORE_STORAGE_KEY, LEGACY_MORE_STORAGE_KEY) === "open";
+    return readStored(MORE_STORAGE_KEY) === "open";
   } catch {
     return false;
   }
@@ -109,11 +108,10 @@ function writeMoreOpen(open: boolean) {
 export type SidebarView = "chats" | "wakers" | "groups";
 
 const VIEW_STORAGE_KEY = "xiongbao-sidebar-view";
-const LEGACY_VIEW_STORAGE_KEY = "openbot-sidebar-view";
 
 function readView(): SidebarView {
   try {
-    const stored = readMigrated(VIEW_STORAGE_KEY, LEGACY_VIEW_STORAGE_KEY);
+    const stored = readStored(VIEW_STORAGE_KEY);
     return stored === "wakers" || stored === "groups" ? stored : "chats";
   } catch {
     return "chats";

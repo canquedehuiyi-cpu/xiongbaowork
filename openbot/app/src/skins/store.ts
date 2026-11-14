@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { readMigrated } from "@/lib/storage-migrate";
+import { readStored } from "@/lib/storage-migrate";
 import { DEFAULT_SKIN, normalizeSkinId, type SkinId } from "./types";
 
 /*
@@ -14,8 +14,6 @@ import { DEFAULT_SKIN, normalizeSkinId, type SkinId } from "./types";
  * starts from the default.
  */
 export const SKIN_STORAGE_KEY = "xiongbao-skin";
-/** Read once to carry a pre-rename choice across; see `readMigrated`. */
-export const LEGACY_SKIN_STORAGE_KEY = "openbot-skin";
 
 export { DEFAULT_SKIN };
 
@@ -43,8 +41,6 @@ export function clearCachedSkin(
   effects: Pick<SkinEffects, "removeStoredValue" | "setRootSkin">,
 ) {
   effects.removeStoredValue(SKIN_STORAGE_KEY);
-  // A legacy key left behind would hand the previous person's skin to the next one on a shared machine.
-  effects.removeStoredValue(LEGACY_SKIN_STORAGE_KEY);
   effects.setRootSkin(null);
 }
 
@@ -86,7 +82,7 @@ export function reconcileSkin(
 }
 
 function readStoredValue() {
-  return readMigrated(SKIN_STORAGE_KEY, LEGACY_SKIN_STORAGE_KEY);
+  return readStored(SKIN_STORAGE_KEY);
 }
 
 let current: SkinId = reconcileSkin(readStoredValue(), browserEffects);
