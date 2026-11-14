@@ -313,8 +313,10 @@ describe("WorkbenchFrame", () => {
     expect(await within(main).findByText("首页内容")).toBeTruthy();
     const list = within(view.getByRole("complementary", { name: "列表栏" }));
     expect(list.getByRole("heading", { name: "消息" })).toBeTruthy();
-    expect(list.getByRole("link", { name: "新对话" })).toBeTruthy();
-    expect(list.getByRole("link", { name: "新建群组" })).toBeTruthy();
+    // 新对话、新建群组收在右上「＋」菜单里（Task 4）。
+    expect(
+      list.getByRole("button", { name: "新对话 / 新建群组" }),
+    ).toBeTruthy();
     const conversations = list.getByRole("navigation", { name: "会话" });
     expect(await within(conversations).findByText("代码熊")).toBeTruthy();
   });

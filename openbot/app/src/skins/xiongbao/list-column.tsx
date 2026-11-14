@@ -3,36 +3,21 @@ import {
   IconChalkboardTeacher,
   IconLogout,
   IconMoon,
-  IconPlus,
-  IconSearch,
   IconSun,
   IconUsers,
   IconUsersGroup,
-  IconUsersPlus,
 } from "@tabler/icons-react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps, useRouterState } from "@tanstack/react-router";
-import { AnimatePresence } from "motion/react";
-import { type ReactNode, useRef, useState } from "react";
 import { MORE_SIDEBAR_ONLY } from "@/components/app-sidebar/app-sidebar";
-import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
-import { ChannelRow } from "@/components/app-sidebar/channel-row";
-import { matchingChannels, pinnedFirst } from "@/components/app-sidebar/roster";
 import { EmployeeList } from "@/components/app-sidebar/sidebar-roster";
 import { useSignOut } from "@/components/app-sidebar/use-sign-out";
 import { TEACH_A_BOT } from "@/components/browser/browser-nav-item";
 import { useOptionalTheme } from "@/components/theme-provider";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import { browserStateQueryOptions } from "@/lib/browser/queries";
-import { channelListQueryOptions } from "@/lib/channels/queries";
 import {
   AVATAR_MENU_ITEM,
   type NavigationItem,
@@ -41,16 +26,9 @@ import {
   useNavigationItems,
 } from "@/lib/navigation";
 import { planSummaryQueryOptions } from "@/lib/quota/queries";
-import { useMessageListEmphasis } from "@/lib/settings/message-list";
 import { cn } from "@/lib/utils";
-import { RAIL_LABELS } from "./rail";
-
-/** Cap layout animation because `layout` measures every animated row on each reorder. */
-const MAX_ANIMATED_ROWS = 60;
-
-/** 设计稿 `.icon-btn`：30px 的圆角方块，细描边。 */
-const iconButtonClassName =
-  "grid size-[30px] shrink-0 place-items-center rounded-(--wb-radius-sm) border border-(--wb-line2) bg-(--wb-card) text-(--wb-fg2) outline-none hover:text-(--wb-fg) focus-visible:outline-2 focus-visible:outline-(--wb-accent) [&>svg]:size-4";
+import { ListHead } from "./list-head";
+import { MessageList } from "./message-list";
 
 /** 设计稿 `.row`：一行一个入口，12px 圆角，悬停铺 `--wb-hover`，当前页抬成一张卡。 */
 const rowClassName =
@@ -59,24 +37,6 @@ const rowClassName =
 /** 设计稿 `.sec`：分组的小标题。 */
 const sectionClassName =
   "flex justify-between px-[10px] pt-3 pb-1.5 font-semibold text-(--wb-muted) text-[11px] tracking-[.06em]";
-
-function ListHead({
-  rail,
-  children,
-}: {
-  rail: Rail;
-  /** 标题右边的按钮。 */
-  children?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2 px-4 pt-4 pb-2.5">
-      <h2 className="m-0 flex-1 font-bold text-(--wb-fg) text-[17px] tracking-[-.01em]">
-        {RAIL_LABELS[rail]}
-      </h2>
-      {children}
-    </div>
-  );
-}
 
 /**
  * 一个链接行：图标、名字，可选第二行。打开着的那一页标 `aria-current`（由 `current` 决定）。
@@ -124,104 +84,6 @@ function LinkRow({
 
 function usePathname() {
   return useRouterState({ select: (state) => state.location.pathname });
-}
-
-/**
- * 消息：现有的会话列表（单聊和群聊都在里面，群聊的头像叠在一起），顶上可以搜。新对话、新建群组在标题右边。
- */
-function MessageList() {
-  const emphasis = useMessageListEmphasis();
-  const channels = useInfiniteQuery(channelListQueryOptions());
-  const [search, setSearch] = useState("");
-  const scrollRoot = useRef<HTMLDivElement>(null);
-  const searching = search.trim().length > 0;
-  const visible = pinnedFirst(matchingChannels(channels.data, search));
-  const animateOrder =
-    !searching && (channels.data?.length ?? 0) <= MAX_ANIMATED_ROWS;
-  return (
-    <>
-      <ListHead rail="msg">
-        <Link
-          aria-label="新对话"
-          className={iconButtonClassName}
-          title="新对话"
-          to="/channel/new"
-        >
-          <IconPlus aria-hidden="true" />
-        </Link>
-        <Link
-          aria-label="新建群组"
-          className={iconButtonClassName}
-          title="新建群组"
-          to="/group/new"
-        >
-          <IconUsersPlus aria-hidden="true" />
-        </Link>
-      </ListHead>
-      <label className="mx-4 mb-2 flex items-center gap-1.5 rounded-(--wb-radius-sm) bg-(--wb-card2) px-[11px] py-2 text-(--wb-muted) text-[13px]">
-        <IconSearch aria-hidden="true" className="size-4 shrink-0" />
-        <input
-          aria-label="搜索会话"
-          className="min-w-0 flex-1 border-0 bg-transparent text-(--wb-fg) outline-none placeholder:text-(--wb-muted)"
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="搜索会话…"
-          type="search"
-          value={search}
-        />
-      </label>
-      <div
-        className="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
-        ref={scrollRoot}
-      >
-        <nav aria-label="会话" className="flex flex-col gap-px">
-          {searching && visible.length === 0 ? (
-            <Empty className="my-2 min-h-[30dvh] border border-dashed">
-              <EmptyHeader>
-                <EmptyTitle>
-                  {channels.hasNextPage
-                    ? "已加载的会话里没有匹配的"
-                    : "没有匹配的会话"}
-                </EmptyTitle>
-                <EmptyDescription className="text-pretty">
-                  {channels.hasNextPage
-                    ? "加载更早的会话，再多搜一些。"
-                    : `没有哪段会话的名字或最近一条消息里有「${search.trim()}」。`}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : null}
-          {!searching && channels.data?.length === 0 ? (
-            <Empty className="my-2 min-h-[30dvh] border border-dashed">
-              <EmptyHeader>
-                <EmptyTitle>还没有会话</EmptyTitle>
-                <EmptyDescription className="text-pretty">
-                  和员工开始一段对话，它就会出现在这里。
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : null}
-          <AnimatePresence
-            initial={false}
-            key={searching ? `search:${search.trim()}` : "all"}
-          >
-            {visible.map((channel) => (
-              <ChannelRow
-                animateOrder={animateOrder}
-                channel={channel}
-                emphasis={emphasis}
-                key={channel.id}
-              />
-            ))}
-          </AnimatePresence>
-          <ChannelPagination
-            query={channels}
-            scrollRoot={scrollRoot}
-            searching={searching}
-          />
-        </nav>
-      </div>
-    </>
-  );
 }
 
 /** 通讯录：人才市场、我的群组两个入口，下面是现在侧栏里的员工列表。 */
