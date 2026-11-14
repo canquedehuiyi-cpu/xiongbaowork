@@ -8,7 +8,7 @@
 | 资源 | 数量 | 说明 |
 | --- | --- | --- |
 | 员工（agent） | 28 | 5 个种子角色 + 23 个移植（3 支专家团的 lead 与成员含在内） |
-| 技能（skill） | 109 | 全部可见、可授予；**64 条 `full`，9 条 `degraded`，36 条 `blocked`**（审计判定） |
+| 技能（skill） | 109 | 全部可见、可授予；**62 条 `full`，11 条 `degraded`，36 条 `blocked`**（包内记录，与 `tool-ref-audit.md` 同源） |
 | 团队（team） | 3 | 软件工坊 / 卡尔的人感PPT专家团 / 软件公司（teams.yaml → 频道 + 成员 + 授予） |
 | 连接器（connector） | 3 | github（user-oauth）/ tapd、tencent-docs（deployment-bearer，**待绑定**） |
 
