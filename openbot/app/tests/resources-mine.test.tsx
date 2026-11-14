@@ -580,6 +580,8 @@ test("each grade is counted before you scroll, and a count narrows the grid", as
   await settleReactWork();
   expect(view.getByText("阻断甲")).toBeTruthy();
   expect(view.queryByText("完整甲")).toBeNull();
+  // 总览答的是「被给了多少」，不是「这一筛筛出多少」——筛完还是 5 条。
+  expect(view.getByText(/^5 条技能$/)).toBeTruthy();
   expect(
     tally
       .getByRole("button", { name: /暂不可用 1/ })
@@ -709,6 +711,102 @@ test("a short reason draws no expand control, because there is nothing hidden", 
   await waitFor(() => expect(view.getByText("阻断乙")).toBeTruthy());
   const row = within(view.getByText("阻断乙").closest("li") as HTMLElement);
   expect(row.queryByRole("button", { name: "展开原因" })).toBeNull();
+});
+
+/**
+ * 这一页是「我被给了什么」的清单，但三块的规模要滚过三段才数得出来：技能块自己带了档位汇总，团队
+ * 和连接器各有多少却只有滚到那儿才知道。页首一行先把三样答完，再往下看细节。
+ *
+ * 待连接的数只在每个连接器都答得上来时才写：有一次读不到，写「0 个待连接」就是替人断言没连。
+ */
+test("页首一行答出三块各多少，待连接的数只算真的待连接", async () => {
+  const view = await renderMine(
+    page(
+      [skill("a", "甲", "full"), skill("b", "乙", "blocked")],
+      [
+        server("tapd", "TAPD", "deployment-bearer", false),
+        server("github", "GitHub", "deployment-bearer", true),
+        server("feishu", "飞书", "deployment-bearer", true),
+      ],
+      [team("gstack", "软件工坊", 6), team("design", "设计所", 2)],
+      [
+        listed("tapd", "deployment-bearer"),
+        listed("github", "deployment-bearer"),
+        listed("feishu", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("甲")).toBeTruthy());
+  expect(
+    view.getByText("2 条技能 · 2 支团队 · 3 个连接器（1 个待连接）"),
+  ).toBeTruthy();
+});
+
+test("连接读不到时不写待连接几个，只说连接器总数", async () => {
+  const view = await renderMine(
+    page(
+      [],
+      [
+        // 这一张确实待连接（部署没凭据，也不需要本人授权）。
+        server("tapd", "TAPD", "deployment-bearer", false),
+        // 这一张要读本人连接，而那次读失败了：它答不上来。
+        server("notion", "Notion", "user-oauth", false),
+      ],
+      [],
+      [listed("tapd", "deployment-bearer"), listed("notion", "user-oauth")],
+    ),
+    { connectionsFail: true },
+  );
+  await waitFor(() => expect(view.getByText("读不到你的连接")).toBeTruthy());
+  /*
+   * 有一个确实待连接，另一个答不上来：这时候写「1 个待连接」就是把数得出来的那几个当成了全部，
+   * 把「不知道」说成「就一个」。所以整句都不写，只说总数。
+   */
+  expect(view.getByText("2 个连接器")).toBeTruthy();
+  expect(view.queryByText(/个待连接/)).toBeNull();
+});
+
+test("只有团队的人，总览只说他有的那一样，不留一个空的连接号", async () => {
+  const view = await renderMine(
+    page([], [], [team("gstack", "软件工坊", 6), team("design", "设计所", 2)]),
+  );
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+  expect(view.getByText("2 支团队")).toBeTruthy();
+});
+
+test("连接器全都连好了，总览只说几个，不写「0 个待连接」", async () => {
+  const view = await renderMine(
+    page(
+      [],
+      [
+        server("github", "GitHub", "deployment-bearer", true),
+        server("feishu", "飞书", "deployment-bearer", true),
+      ],
+      [],
+      [
+        listed("github", "deployment-bearer"),
+        listed("feishu", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(view.getAllByText("GitHub").length).toBeGreaterThan(0),
+  );
+  expect(view.getByText("2 个连接器")).toBeTruthy();
+});
+
+test("什么都没被给时不画总览，三块各自说还没有", async () => {
+  const view = await renderMine(page([], []));
+  await waitFor(() => expect(view.getAllByText(/还没有/).length).toBe(3));
+  expect(view.queryByText(/条技能|支团队|个连接器/)).toBeNull();
+});
+
+test("整页读不到时不画总览——数字没有来源", async () => {
+  const view = await renderMine(page([], []), { fail: true });
+  await waitFor(() =>
+    expect(view.getAllByText(/重试/).length).toBeGreaterThan(0),
+  );
+  expect(view.queryByText(/条技能|支团队|个连接器/)).toBeNull();
 });
 
 /**
