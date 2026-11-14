@@ -279,6 +279,73 @@ if [ "$healthy" = true ]; then
   fi
 fi
 
+# The same checks under the headers' new names, as the server sends them from 0.2.12 on
+# (shared/wire-headers.ts): the employee in x-xiongbao-bot-id and the token in
+# x-xiongbao-computer-token. The checks above send the old employee header, which the computer still
+# takes from a server a release behind it. Two employees of their own, so nothing the checks above
+# left behind answers for these.
+#
+# call_new <bot> <path> <json body> [curl args...]: as `call`, under the new names. With
+# WRONG_TOKEN set, that is sent as the token instead of the computer's own.
+call_new() {
+  local bot=$1 path=$2 body=$3
+  shift 3
+  printf '%s' "$body" | docker exec -i "$name" sh -c '
+    bot=$1; path=$2; wrong=$3; shift 3
+    token=$(cat /run/s6/container_environment/COMPUTER_TOKEN)
+    if [ -n "$wrong" ]; then token=$wrong; fi
+    exec curl -sS -w "\n%{http_code}" -X POST "$@" \
+      -H "x-xiongbao-computer-token: $token" -H "x-xiongbao-bot-id: $bot" \
+      -H "content-type: application/json" \
+      --data-binary @- "http://127.0.0.1:4100$path"
+  ' sh "$bot" "$path" "${WRONG_TOKEN:-}" "$@" || true
+}
+C=smoke-c
+D=smoke-d
+keyC=$(key_of "$C")
+userC="xb-$keyC"
+echo "keys (new headers): $C=$keyC $D=$(key_of "$D")"
+
+if [ "$healthy" = true ]; then
+  marker="per-bot-smoke-new-$$-$RANDOM"
+
+  r=$(call_new "$C" /files/write "$(jq -nc --arg t "$marker" '{path: "c.txt", contents: $t}')")
+  if [ "$(code_of "$r")" = 200 ]; then pass "new headers: $C writes c.txt with the file tools"; else fail "new headers: $C writes c.txt with the file tools (HTTP $(code_of "$r"): $(body_of "$r"))"; fi
+
+  r=$(call_new "$D" /files/read '{"path":"c.txt"}')
+  if [ "$(code_of "$r")" != 200 ]; then pass "new headers: $D's /files/read c.txt is not 200 (HTTP $(code_of "$r"))"; else fail "new headers: $D's /files/read c.txt is not 200 (got 200: $(body_of "$r"))"; fi
+
+  r=$(call_new "$C" /exec "$(exec_body 'cat c.txt')")
+  out=$(body_of "$r" | jq -r '.stdout // empty' 2>/dev/null || true)
+  if [ "$(exit_of "$r")" = 0 ] && [ "$out" = "$marker" ]; then pass "new headers: $C's command reads c.txt"; else fail "new headers: $C's command reads c.txt (HTTP $(code_of "$r"): $(body_of "$r"))"; fi
+
+  r=$(call_new "$D" /exec "$(exec_body "cat ../$keyC/c.txt")")
+  rc=$(exit_of "$r")
+  # Permission denied, not merely absent, as above.
+  if [ -n "$rc" ] && [ "$rc" != 0 ] && ! body_of "$r" | grep -q "$marker" \
+    && body_of "$r" | jq -r '.stderr' | grep -q 'Permission denied'; then
+    pass "new headers: $D's command cannot cat ../$keyC/c.txt (exit $rc: $(body_of "$r" | jq -r '.stderr' | head -n 1))"
+  else
+    fail "new headers: $D's command cannot cat ../$keyC/c.txt (HTTP $(code_of "$r"): $(body_of "$r"))"
+  fi
+
+  r=$(call_new "$C" /exec "$(exec_body 'id -un')")
+  out=$(body_of "$r" | jq -r '.stdout // empty' 2>/dev/null | tr -d '\n' || true)
+  if [ "$(exit_of "$r")" = 0 ] && [ "$out" = "$userC" ]; then pass "new headers: $C's id -un is $userC"; else fail "new headers: $C's id -un is $userC (HTTP $(code_of "$r"): $(body_of "$r"))"; fi
+
+  r=$(call_new "$C" /exec "$(exec_body 'sudo -n apt-get --version')")
+  rc=$(exit_of "$r")
+  if [ -n "$rc" ] && [ "$rc" != 0 ]; then
+    pass "new headers: $C cannot sudo -n apt-get --version (exit $rc: $(body_of "$r" | jq -r '.stderr' | head -n 1))"
+  else
+    fail "new headers: $C cannot sudo -n apt-get --version (HTTP $(code_of "$r"): $(body_of "$r"))"
+  fi
+
+  # The token is still checked under its new name: a wrong one is refused, never let through.
+  r=$(WRONG_TOKEN=not-the-computer-token call_new "$C" /exec "$(exec_body 'id -un')")
+  if [ "$(code_of "$r")" = 401 ]; then pass "new headers: a wrong x-xiongbao-computer-token is a 401"; else fail "new headers: a wrong x-xiongbao-computer-token is a 401 (HTTP $(code_of "$r"): $(body_of "$r"))"; fi
+fi
+
 echo "PER-BOT USERS failed checks=$failures"
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   printf '## 员工独立电脑冒烟\n\n失败检查：%s（逐项结果见日志）。\n' "$failures" >> "$GITHUB_STEP_SUMMARY"
