@@ -113,7 +113,7 @@
 **Files:**
 - Modify: `openbot/server/src/agents/routes.ts`（`GET /api/agents` 每项加两字段）、`profile-types.ts`
 - Modify: `openbot/server/src/channels/routes.ts`（删掉约 1720 行对 `ensureAvatarConversation` 的调用及只为它存在的 `avatarConversationsEnsured`；`avatar-conversation.ts` 若再无调用方则删除并删其专属测试中断言「自动建」的用例——**删用例需在 PR 里写明原因**，其余断言不改）
-- Modify: `openbot/server/src/plugins/personal-defaults.ts`（`giveEverySkillOnce` 与新技能广播跳过 `summonedFrom !== null` 的员工）
+- Modify: `openbot/server/src/plugins/personal-defaults.ts`（召唤来的员工即 `summonedFrom !== null` 的，一律排除在个人版默认授予之外：`giveEverySkillOnce`、新技能广播，以及默认工具授予 `grantEveryTool`（`withPersonalDefaults().listForAgent` 每次运行前调用）和 `refreshTools` 的广播；最简做法是让 `deps.bots()` 的查询排除它们）
 - Modify: `openbot/app/src/lib/agents/queries.ts`（两字段）
 - Test: `openbot/server/tests/agent-summon-list.integration.test.ts`、`openbot/server/tests/personal-defaults.integration.test.ts`（新增用例）
 
@@ -129,6 +129,7 @@
   - 「分身在没有一对一会话时 `summonKind === "avatar"`、`summoned === false`；召唤分身后 `summoned === true`」
   - 「老用户已有和共用预设的一对一会话 → 该会话仍在 `GET /api/channels` 结果里，预设 `summoned === false`」
   - `personal-defaults.integration.test.ts`：「个人版下召唤来的员工（`summonedFrom` 非空）在列出/运行后仍没有任何技能授予；普通员工照旧被授予」
+  - `personal-defaults.integration.test.ts`：「个人版、已连接应用时，召唤来的员工运行一次（走 `listForAgent`）以及 `refreshTools` 之后，仍没有任何 `kind = "mcp"` 的自动授予；普通员工照旧被授予」
 - [ ] **Step 2: 运行确认失败**。
 - [ ] **Step 3: 实现**；`summoned` 用一次批量查询算出，不对每个员工单独查。
 - [ ] **Step 4: 运行确认通过**，并跑 `bun test tests/avatar-conversation*.test.ts tests/personal-defaults*.test.ts tests/channel-routes.test.ts`。
@@ -166,7 +167,8 @@
 - Consumes: Task 4 的 `summonKind` / `summoned`、Task 1 的 `presetPortrait`、Task 5 的 `SummonCardFlip`。
 
 - [ ] **Step 1: 写失败测试**：
-  - 「`summonKind` 非空且 `summoned === false` 的员工出现在『待召唤』分组，行内有『召唤』按钮；其余员工在『已召唤』分组，点击行为与现在相同（有一对一会话就打开，没有就去 `/channel/new`）」
+  - 「`summonKind` 非空且 `summoned === false` 的员工出现在『待召唤』分组，行内有『召唤』按钮；`summonKind === "preset"` 且 `summoned === true` 的共用预设原件两组都不出现（只显示本人那份副本）；其余员工在『已召唤』分组，点击行为与现在相同（有一对一会话就打开，没有就去 `/channel/new`）」
+  - 「召唤某预设后（列表数据里该原件 `summoned === true`、多出一份 `summonedFrom === 原件 id` 的副本），员工列表只出现副本、不出现原件；原件已有的旧会话仍在会话列表里」
   - 「点『召唤』→ 发 `POST /api/agents/<id>/summon`，显示 `SummonCardFlip`，完成后跳到返回的 `/channel/<channelId>`」
   - 「接口返回名额拒绝 → 不跳转，显示接口给的提示，员工仍在『待召唤』」
   - 「分身排在『待召唤』第一位」
