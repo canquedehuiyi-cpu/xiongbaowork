@@ -894,3 +894,109 @@ describe("a --package directory that is not a package yet", () => {
     }
   });
 });
+
+/**
+ * A rebuild must not talk a package UP.
+ *
+ * The pipeline's answer comes from the rule table, which reads a body and cannot know anything that is
+ * not in the text. `workbuddy-market-export` is the case that made this concrete: a person graded it
+ * `blocked` (`host-specific-skill` — it explains how to drive three marketplaces OpenBot does not
+ * have), the rule table sees no call it recognises, and a rebuild wrote `full` back over it. A badge
+ * that promises a skill runs is exactly what the grade exists to prevent, and it came back by being
+ * regenerated rather than by anyone deciding.
+ *
+ * So the merge is one-way down: a package that records `degraded` or `blocked` keeps it, with its
+ * reason, unless the fresh answer is at least as strict. Loosening one is a deliberate edit to the
+ * package, visible in a diff — not a side effect of running the assembler again.
+ */
+describe("a rebuild cannot loosen a verdict the package already recorded", () => {
+  const LEGACY = [
+    "skills:",
+    "  - slug: market-export",
+    "    title: Market export",
+    "    summary: s",
+    "    instructions: It explains how to drive a marketplace OpenBot does not have.",
+    "    tools: []",
+    "    _porting:",
+    "      source: workbuddy skill-marketplace:market-export@1",
+    "      source_url: ~/.workbuddy/skills/market-export/SKILL.md",
+    "      runnable: blocked",
+    "      reason: host-specific-skill",
+    '      reason_ref: "整篇只讲宿主市场"',
+    "",
+  ].join("\n");
+
+  const generated = (runnable: string) => [
+    {
+      slug: "market-export",
+      title: "Market export",
+      summary: "s",
+      instructions: "It explains how to drive a marketplace OpenBot does not have.",
+      tools: [],
+      _porting: {
+        source: "workbuddy skill-marketplace:market-export@1",
+        source_url: "~/.workbuddy/skills/market-export/SKILL.md",
+        runnable,
+      },
+    },
+  ];
+
+  const merge = (runnable: string) =>
+    parseYaml(
+      mergeSkillsYaml({
+        legacySkillsRaw: LEGACY,
+        packageSkills: (parseYaml(LEGACY) as { skills: Record<string, unknown>[] }).skills,
+        generatedSkills: generated(runnable) as Record<string, unknown>[],
+        plans: new Map(),
+        connectorIds: new Set<string>(),
+      }),
+    ) as { skills: Record<string, unknown>[] };
+
+  test("blocked stays blocked when the fresh answer says full, reason included", () => {
+    const [row] = merge("full").skills;
+    const porting = row._porting as Record<string, unknown>;
+    expect(porting.runnable).toBe("blocked");
+    // The reason is the half that makes the badge readable; a kept grade with a lost reason is a
+    // badge nobody can act on.
+    expect(porting.reason).toBe("host-specific-skill");
+    expect(porting.reason_ref).toBe("整篇只讲宿主市场");
+  });
+
+  test("a fresh answer that is stricter still wins", () => {
+    // The rule is one-way DOWN, not "the package always wins": a body that has since started
+    // failing the rule table must be able to take the package's `degraded` to `blocked`.
+    const looser = LEGACY.replace("runnable: blocked", "runnable: degraded");
+    const document = parseYaml(
+      mergeSkillsYaml({
+        legacySkillsRaw: LEGACY,
+        packageSkills: (parseYaml(looser) as { skills: Record<string, unknown>[] })
+          .skills,
+        generatedSkills: generated("blocked") as Record<string, unknown>[],
+        plans: new Map(),
+        connectorIds: new Set<string>(),
+      }),
+    ) as { skills: Record<string, unknown>[] };
+    expect(
+      (document.skills[0]._porting as Record<string, unknown>).runnable,
+    ).toBe("blocked");
+  });
+
+  test("a package that recorded only full takes the stricter fresh answer", () => {
+    // The one-way rule must not freeze a package: a row the package calls `full` has nothing to
+    // protect, so the pipeline's `degraded` is taken — and with it its reason.
+    const loose = LEGACY.replace("runnable: blocked", "runnable: full");
+    const document = parseYaml(
+      mergeSkillsYaml({
+        legacySkillsRaw: LEGACY,
+        packageSkills: (parseYaml(loose) as { skills: Record<string, unknown>[] })
+          .skills,
+        generatedSkills: generated("degraded") as Record<string, unknown>[],
+        plans: new Map(),
+        connectorIds: new Set<string>(),
+      }),
+    ) as { skills: Record<string, unknown>[] };
+    expect(
+      (document.skills[0]._porting as Record<string, unknown>).runnable,
+    ).toBe("degraded");
+  });
+});

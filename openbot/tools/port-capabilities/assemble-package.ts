@@ -39,6 +39,7 @@ import {
   auditRulesSha256,
   CONNECTOR_ALLOWLIST,
   type RunnableLevel,
+  SEVERITY_ORDER,
 } from "./mapping";
 import { sha256Hex } from "./normalize";
 import { readWorkBuddy } from "./read-workbuddy";
@@ -736,16 +737,114 @@ export function mergeSkillsYaml(options: {
   if (!merged.endsWith("\n")) {
     merged = `${merged}\n`;
   }
+  const recorded = recordedGrades(packageSkills);
   const generatedText = generatedSkills
-    .map((skill) =>
-      renderGeneratedSkillEntry(
-        skill,
+    .map((skill) => {
+      const stricter = keepStricterGrade(skill, recorded.get(String(skill.slug)));
+      /*
+       * Only one of the two may add the reason. When the package's grade wins, it comes with the
+       * sentence the package wrote; letting the asset-downgrade path append its own on top produced
+       * `missing-asset-references+missing-asset-references` and a reason_ref saying the same file was
+       * missing twice on the second run, which is how a rebuild stops being byte-identical.
+       */
+      const downgrade =
+        stricter === skill
+          ? options.downgrades?.get(String(skill.slug))
+          : undefined;
+      return renderGeneratedSkillEntry(
+        stricter,
         plans.get(String(skill.slug)),
-        options.downgrades?.get(String(skill.slug)),
-      ),
-    )
+        downgrade,
+      );
+    })
     .join("\n");
   return generatedText === "" ? merged : `${merged}${generatedText}\n`;
+}
+
+/**
+ * A grade the package already records for a row the pipeline is about to regenerate.
+ *
+ * Only the two strict ones are interesting: `full` is the absence of a grade, so a package that says
+ * `full` has nothing to protect.
+ */
+type RecordedGrade = {
+  runnable: "degraded" | "blocked";
+  reason: unknown;
+  reasonRef: unknown;
+};
+
+/** The grade a row carries, or `full` when it carries none. Mirrors the pipeline's own reading. */
+function gradeOf(porting: Record<string, unknown>): RunnableLevel {
+  const declared = porting.runnable;
+  return declared === "degraded" || declared === "blocked" ? declared : "full";
+}
+
+/**
+ * Keeps the package's stricter grade instead of the pipeline's looser one, with its reason.
+ *
+ * THE REBUILD IS A RE-DERIVATION, NOT A RE-DECISION. The rule table reads a body; a person reads the
+ * thing the body is about. `workbuddy-market-export` is graded `blocked` because it explains how to
+ * drive three marketplaces OpenBot does not have — no sentence in it matches a call the rule table
+ * recognises, so a rebuild wrote `full` back over a judgement nobody retracted. A badge promising a
+ * skill runs is the one lie the grade exists to prevent, and it came back by regeneration.
+ *
+ * So the merge only moves DOWN. Loosening a grade is an edit to `skills.yaml`, which shows up in a
+ * diff and gives somebody the chance to disagree; running the assembler again must not.
+ */
+export function keepStricterGrade(
+  skill: SkillRow,
+  previous: RecordedGrade | undefined,
+): SkillRow {
+  if (previous === undefined) return skill;
+  const porting = asRecord(
+    { ...((skill._porting as Record<string, unknown> | undefined) ?? {}) },
+    `${String(skill.slug)} _porting`,
+  );
+  if (SEVERITY_ORDER[previous.runnable] <= SEVERITY_ORDER[gradeOf(porting)]) {
+    return skill;
+  }
+  /*
+   * The reason goes immediately after `runnable`, the way {@link applyDowngrade} places it. Position
+   * is not cosmetic here: a second assemble run has to produce the bytes the first one did, and
+   * appending `reason` after `dropped` instead made an idempotent run show up as a rewrite.
+   */
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(porting)) {
+    if (key === "reason" || key === "reason_ref") continue;
+    kept[key] = key === "runnable" ? previous.runnable : value;
+    if (key === "runnable") {
+      // The reason travels with the grade: a blocked badge with no sentence beside it tells the
+      // reader nothing about what to do, and the package already wrote the sentence.
+      if (previous.reason !== undefined) kept.reason = previous.reason;
+      if (previous.reasonRef !== undefined) kept.reason_ref = previous.reasonRef;
+    }
+  }
+  if (!("runnable" in kept)) {
+    kept.runnable = previous.runnable;
+    if (previous.reason !== undefined) kept.reason = previous.reason;
+    if (previous.reasonRef !== undefined) kept.reason_ref = previous.reasonRef;
+  }
+  return { ...skill, _porting: kept };
+}
+
+/** The stricter grades `packageSkills` already records, by slug. */
+function recordedGrades(packageSkills: readonly SkillRow[]): Map<string, RecordedGrade> {
+  const grades = new Map<string, RecordedGrade>();
+  for (const skill of packageSkills) {
+    const porting = skill._porting;
+    if (porting === null || typeof porting !== "object" || Array.isArray(porting)) {
+      continue;
+    }
+    const record = porting as Record<string, unknown>;
+    const runnable = gradeOf(record);
+    if (runnable === "full") continue;
+    grades.set(String(skill.slug), {
+      runnable,
+      reason: record.reason,
+      reasonRef: record.reason_ref,
+    });
+  }
+  return grades;
 }
 
 /** The manifest row the assembler synthesises for a package-seeded entry. */
