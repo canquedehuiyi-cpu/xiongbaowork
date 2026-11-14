@@ -234,8 +234,9 @@ test("the 技能 tab is the full skills screen: the command to type, edit and de
   // The command a person types, which only the old page showed.
   expect(panel.getByText("/my-notes")).toBeTruthy();
   expect(panel.getByText("/weekly-report")).toBeTruthy();
-  // The grant count the summary added stays.
-  expect(panel.getAllByText("已授予 1 位员工").length).toBe(2);
+  // Each row says how many of the person's own employees hold it (waker-a is theirs; the sentence
+  // waits for /api/agents).
+  expect((await panel.findAllByText("已装到你的 1 个员工")).length).toBe(2);
 
   // Your own skill has its menu; the deployment's does not.
   await user.click(panel.getByRole("button", { name: "我的笔记法 的操作" }));
