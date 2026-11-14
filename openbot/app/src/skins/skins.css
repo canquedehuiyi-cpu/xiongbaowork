@@ -3,10 +3,20 @@
  * That selector outranks OpenBot's own `.dark`, so a token a skin sets for light it must also set
  * for dark, or dark mode would show the skin's light value. `app/tests/skins.test.ts` holds every
  * skin to that.
+ *
+ * 默认皮肤（聊天工作台）不写 `data-skin`，它的 `--wb-*` 令牌挂在 `:root:not([data-skin])` 上，见
+ * `xiongbao/skin.css`。
  */
+@import "./xiongbao/skin.css";
+@import "./classic/skin.css";
 @import "./openduet/skin.css";
 @import "./opendots/skin.css";
 @import "./openmuse/skin.css";
+
+/*
+ * 下面三条通用规则对「经典」皮肤不生效（`:where(:not(...))` 不增加优先级）：经典就是原外观，不改列宽、
+ * 内边距和空状态花纹。
+ */
 
 /*
  * OpenBot's own composer column pads `px-4`, the transcript's inset, so a narrow pane keeps it off
@@ -16,7 +26,8 @@
  * while being outside Tailwind's layers is enough to beat the `px-4` utility. Before the width
  * rule below, which is more specific, so the stylesheet reads in ascending specificity.
  */
-:where(:root[data-skin]) [data-slot="composer-column"] {
+:where(:root[data-skin]:where(:not([data-skin="classic"])))
+[data-slot="composer-column"] {
   padding-inline: 0;
 }
 
@@ -24,8 +35,9 @@
  * OpenBot's own look draws a Bot's answers and the composer in a 768px column. Every skin keeps the
  * column it was drawn with, 672px for both.
  */
-:root[data-skin] [data-transcript-column],
-:root[data-skin] [data-slot="composer-column"] {
+:root[data-skin]:where(:not([data-skin="classic"])) [data-transcript-column],
+:root[data-skin]:where(:not([data-skin="classic"]))
+  [data-slot="composer-column"] {
   max-width: var(--container-2xl);
 }
 
@@ -33,6 +45,6 @@
  * The empty-state pattern is drawn for OpenBot's own palette, so a skin starts without it. A skin
  * that wants one sets `--empty-pattern-opacity` (and its colour) in its own skin.css.
  */
-:root[data-skin] {
+:root[data-skin]:where(:not([data-skin="classic"])) {
   --empty-pattern-opacity: 0;
 }
