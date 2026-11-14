@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   AGENT_NAME_OVERRIDES,
+  AssembleError,
   AUTH_OVERRIDES,
   applyVerdictDowngrades,
   assemblePackage,
@@ -28,6 +29,7 @@ import {
   computeAssetDowngrades,
   mergeSkillsYaml,
   parseAssembleArgs,
+  readLegacyPackage,
   readPipelineOutput,
   renderGeneratedSkillEntry,
   renderPackageConnectorsYaml,
@@ -854,5 +856,41 @@ describe("asset downgrades — full must not promise files that did not ship", (
     expect(readFileSync(join(copyPackage, "skills.yaml"), "utf8")).toBe(firstRun);
 
     rmSync(copyRoot, { recursive: true, force: true });
+  });
+});
+
+/**
+ * A `--package` that is not a package yet.
+ *
+ * The assembler merges the pipeline's output INTO a brand package; it does not create one, because the
+ * brand, the channels, the model and the knowledge sources are facts somebody has to write. Handed an
+ * empty directory it used to fail with `ENOENT: no such file or directory, open '…/skills.yaml'` —
+ * accurate, and useless to the person who ran it: nothing in that sentence says the command will never
+ * be able to build a package from nothing, so re-running it is the obvious and wrong next move.
+ */
+describe("a --package directory that is not a package yet", () => {
+  test("says what the command does instead of quoting ENOENT", () => {
+    const empty = mkdtempSync(join(tmpdir(), "port-assemble-empty-"));
+    try {
+      expect(() => readLegacyPackage(empty)).toThrow(AssembleError);
+      expect(() => readLegacyPackage(empty)).toThrow(/只把管道产出并入/);
+      // The two things the caller can do next, named: prepare the files, or point at a real package.
+      expect(() => readLegacyPackage(empty)).toThrow(/skills\.yaml/);
+      expect(() => readLegacyPackage(empty)).toThrow(/--package/);
+      expect(() => readLegacyPackage(empty)).not.toThrow(/ENOENT/);
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  test("a present skills.yaml but a missing agents.yaml is named the same way", () => {
+    const half = mkdtempSync(join(tmpdir(), "port-assemble-half-"));
+    try {
+      writeFileSync(join(half, "skills.yaml"), "skills: []\n", "utf8");
+      expect(() => readLegacyPackage(half)).toThrow(/agents\.yaml/);
+      expect(() => readLegacyPackage(half)).not.toThrow(/ENOENT/);
+    } finally {
+      rmSync(half, { recursive: true, force: true });
+    }
   });
 });

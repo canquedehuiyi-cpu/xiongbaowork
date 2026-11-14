@@ -802,6 +802,27 @@ export function partitionSeedSkills(skills: readonly SkillRow[]): SkillRow[] {
 }
 
 /**
+ * Read a file the brand package is required to already have, or say what the command expects.
+ *
+ * WHY NOT LET `readFileSync` SPEAK. `ENOENT: no such file or directory, open '…/skills.yaml'` is
+ * accurate and useless here: it reads like a path somebody mistyped. What actually happened is that
+ * the assembler was pointed at a directory that is not a package, and no amount of re-running changes
+ * that — this command merges the pipeline's output INTO a package whose brand, channels, model and
+ * knowledge sources somebody wrote. Saying so, and naming the way forward, is the whole fix.
+ */
+function readPackageFile(packageDir: string, filename: string): string {
+  const path = join(packageDir, filename);
+  if (!existsSync(path)) {
+    throw new AssembleError(
+      `品牌包 ${packageDir} 里没有 ${filename}：port:assemble 只把管道产出并入一个已经存在的品牌包，` +
+        `不负责新建。先准备 brand.yaml / agents.yaml / channels.yaml / model.yaml / knowledge.yaml` +
+        `（要并入技能还需要 skills.yaml），或把 --package 指向 examples/ 下已有的包。`,
+    );
+  }
+  return readFileSync(path, "utf8");
+}
+
+/**
  * Read the brand package's own declarations: the verbatim `skills.yaml` text (seed comments and
  * formatting included), its parsed rows (seeds AND any previous run's generated rows — callers
  * partition with {@link partitionSeedSkills}), and the seed agents in `agents.yaml`.
@@ -810,13 +831,10 @@ export function partitionSeedSkills(skills: readonly SkillRow[]): SkillRow[] {
  * `theme.css` are never touched.
  */
 export function readLegacyPackage(packageDir: string): LegacyPackage {
-  const skillsRaw = readFileSync(join(packageDir, "skills.yaml"), "utf8");
-  const skillsDoc = readYamlFile(
-    join(packageDir, "skills.yaml"),
-    "skills.yaml",
-  );
-  const agentsDoc = readYamlFile(
-    join(packageDir, "agents.yaml"),
+  const skillsRaw = readPackageFile(packageDir, "skills.yaml");
+  const skillsDoc = asRecord(parseYaml(skillsRaw), "skills.yaml");
+  const agentsDoc = asRecord(
+    parseYaml(readPackageFile(packageDir, "agents.yaml")),
     "agents.yaml",
   );
   return {
