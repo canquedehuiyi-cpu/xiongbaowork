@@ -308,14 +308,21 @@ describe("the ported package, end to end", () => {
     expect(reasonRows.map((row) => row.id)).toContain("bot-creator");
 
     /*
-     * `degraded` 同理：部分可用必须说清缺什么。这一档是逐条按"正文引用了没随包附上的附件"
-     * 判出来的，理由行由 `port:verdict-refresh` 写在 `_porting.reason` / `reason_ref` 上；
+     * `degraded` 同理：部分可用必须说清缺什么。11 条里有 9 条是逐条按"正文引用了没随包附上的附件"
+     * 判出来的，理由行由 `port:verdict-refresh` 写在 `_porting.reason` / `reason_ref` 上；另 2 条
+     * 是规则表 `references-without-assets` 判的（正文引用了 references/，包内连目录都没有）。
      * 一条没有理由的 degraded 和被静默升成 full 一样，都只是换了颜色的谎。
      */
     const degradedRows = grades.filter((row) => row.runnable === "degraded");
-    expect(degradedRows).toHaveLength(9);
+    expect(degradedRows).toHaveLength(11);
+    // 两类降级：附件按文件级账本判缺（`missing-asset-references`），以及规则表的
+    // `references-without-assets`（正文引用了 references/，包内连目录都没有）。
+    const DEGRADE_RULES = new Set([
+      "missing-asset-references",
+      "references-without-assets",
+    ]);
     for (const row of degradedRows) {
-      expect(row.blockedReason, row.id).toBe("missing-asset-references");
+      expect(DEGRADE_RULES.has(String(row.blockedReason)), row.id).toBe(true);
       expect(row.blockedReasonRef, row.id).toBeTruthy();
     }
     const fullWithReason = grades.filter(

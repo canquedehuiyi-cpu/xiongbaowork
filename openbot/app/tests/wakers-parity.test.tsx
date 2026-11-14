@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -899,10 +899,14 @@ test("a second 召唤 while one is in flight sends no second request", async () 
 
 test("a link to a 待召唤 card's anchor brings that card into view, focused and lit, each time it is followed", async () => {
   const scrolled: string[] = [];
-  const original = Element.prototype.scrollIntoView;
-  Element.prototype.scrollIntoView = function (this: Element) {
+  // Spied on HTMLElement.prototype, as other files do: a spy restored there leaves its own copy on
+  // HTMLElement.prototype, which would shadow a replacement made on Element.prototype.
+  const scroll = spyOn(
+    HTMLElement.prototype,
+    "scrollIntoView",
+  ).mockImplementation(function (this: HTMLElement) {
     scrolled.push(this.id);
-  };
+  });
   try {
     seed({ agents: MARKET });
     const { screen, router } = draw("/bots#summon-preset-doctor");
@@ -912,14 +916,17 @@ test("a link to a 待召唤 card's anchor brings that card into view, focused an
     ) as HTMLElement;
     expect(document.activeElement).toBe(card);
     expect(card.getAttribute("tabindex")).toBe("-1");
-    expect(card.hasAttribute("data-highlighted")).toBe(true);
+    // The light is state set in the same effect, so it lands on the render after the scroll.
+    await waitFor(() =>
+      expect(card.hasAttribute("data-highlighted")).toBe(true),
+    );
     // The same link followed again (another 「去人才市场」 press) brings it back again.
     const before = scrolled.length;
     await router.navigate({ to: "/bots", hash: "summon-preset-doctor" });
     await waitFor(() => expect(scrolled.length).toBeGreaterThan(before));
     expect(new Set(scrolled)).toEqual(new Set(["summon-preset-doctor"]));
   } finally {
-    Element.prototype.scrollIntoView = original;
+    scroll.mockRestore();
   }
 });
 
@@ -929,4 +936,81 @@ test("with only employees still 待召唤, the page shows them rather than an em
   await waitFor(() => expect(pendingGrid(screen)).not.toBeNull());
   expect(screen.queryByTestId("wakers-empty")).toBeNull();
   expect(screen.getByTestId("waker-count").textContent).toBe("0 名员工");
+});
+
+/*
+ * Codex 评审（PR #607）：召唤成功后名单会先刷新再交回结果。筛选只命中那位预设、而本人那份不命中时（预设不是本人的，
+ * 算「未绑定设备」；本人那份带着本人设备那一行），名单落到「没有符合筛选条件」的空状态。翻卡动画不能跟着名单一起
+ * 卸掉：卸掉了就交不回 onDone，人进不了会话，之后的召唤也一直是禁用的。
+ */
+const copyDoctor: AgentProfile = {
+  ...base,
+  id: "copy-doctor",
+  name: "我的医生",
+  title: "医生",
+  summonedFrom: "preset-doctor",
+  summonKind: null,
+  summoned: true,
+};
+
+/** `/api/agents` after the summon: the original summoned, the person's copy under 已召唤. */
+function servingAfterSummon(summon: () => Response | Promise<Response>) {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "POST" && url.endsWith("/summon")) return summon();
+    if (url.endsWith("/api/agents?hidden=true"))
+      return Response.json({ agents: [] });
+    if (url.endsWith("/api/agents"))
+      return Response.json({
+        agents: [base, { ...presetDoctor, summoned: true }, copyDoctor],
+      });
+    return Response.json({ error: "not served" }, { status: 404 });
+  }) as typeof fetch;
+}
+
+test("a summon whose copy falls outside the filter still plays out and opens the conversation", async () => {
+  servingAfterSummon(() =>
+    Response.json({ agent: copyDoctor, channelId: "c-doctor", created: true }),
+  );
+  seed({ agents: [base, presetDoctor] });
+  const { screen, router } = draw("/bots?env=unbound");
+  await userEvent.click(
+    await screen.findByRole("button", { name: "召唤 暖心医生" }),
+  );
+  // The refreshed roster has nobody unbound left: the copy is the person's, with their machine's line.
+  await waitFor(() =>
+    expect(screen.queryByTestId("wakers-no-match")).not.toBeNull(),
+  );
+  const overlay = within(document.body).getByRole("dialog", {
+    name: "召唤员工",
+  });
+  await waitFor(() =>
+    expect(overlay.getAttribute("data-phase")).toBe("reveal"),
+  );
+  await userEvent.click(overlay);
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
+  );
+});
+
+/*
+ * Codex 评审（PR #607）：复制成功、建会话失败时，服务端留下了那份员工（再召唤会找到它），只是回了错误。名单得照样
+ * 刷新：预设不再是待召唤，本人那份出现在已召唤。
+ */
+test("a summon that fails after the copy was made still refreshes the roster", async () => {
+  servingAfterSummon(() =>
+    Response.json({ error: "没能建会话。" }, { status: 500 }),
+  );
+  seed({ agents: [base, presetDoctor] });
+  const { screen } = draw();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "召唤 暖心医生" }),
+  );
+  await waitFor(() =>
+    expect(sectionNames(screen, "yours")).toEqual([
+      "Backend Engineer",
+      "我的医生",
+    ]),
+  );
+  expect(screen.queryByRole("button", { name: "召唤 暖心医生" })).toBeNull();
 });

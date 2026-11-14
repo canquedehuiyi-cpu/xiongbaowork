@@ -264,7 +264,9 @@ function isSummonedConflict(error: unknown): boolean {
  *
  * `preset`: a shared package coworker (no owner, `agents.package_id` set), summoned once the person
  * holds a live copy of it. `avatar`: their own 分身, summoned once a 1:1 conversation with only it
- * exists. Anyone else is already theirs to talk to: no kind, summoned. Two queries for the whole
+ * has been made, deleted since or not: deleting the conversation leaves the employee under 已召唤
+ * (spec「会话删了以后」), as it does a preset's copy, whose summon state no conversation decides.
+ * Anyone else is already theirs to talk to: no kind, summoned. Two queries for the whole
  * list, not one per coworker; in the person's tenant frame.
  */
 export async function summonStates(
@@ -320,10 +322,7 @@ export async function summonStates(
         ),
       )
       .where(
-        and(
-          isNull(channels.deletedAt),
-          sql`(select count(*) from ${channelAgents} where ${channelAgents.channelId} = ${channels.id}) = 1`,
-        ),
+        sql`(select count(*) from ${channelAgents} where ${channelAgents.channelId} = ${channels.id}) = 1`,
       )
       .limit(1);
     avatarTalked = Boolean(row);

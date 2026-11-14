@@ -6,7 +6,7 @@ import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
 import type { SummonDeps } from "../src/agents/summon";
-import type { AuditEventInput, AuditStore } from "../src/audit";
+import type { AuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import {
   createChannelRoutes,
@@ -43,11 +43,9 @@ const channelStore = createChannelStore(
   createThreadIdentity("test-deployment"),
 );
 const quota = createQuotaService(database);
-const audit: AuditEventInput[] = [];
+// These tests read the roster, not the trail: the summon audit is asserted in agent-summon.integration.
 const auditStore: AuditStore = {
-  async insert(event) {
-    audit.push(event);
-  },
+  async insert() {},
 };
 
 const prefix = `summon-${randomUUID()}`;
@@ -56,7 +54,6 @@ const presetIds: string[] = [];
 const packageIds: string[] = [];
 
 afterEach(async () => {
-  audit.splice(0);
   await runAsTenant("platform", async () => {
     for (const tenant of tenants.splice(0)) {
       const owned = await database
@@ -357,6 +354,20 @@ describe("GET /api/agents 的召唤状态", () => {
       (await listAgents(actor)).find((row) => row.id === avatar),
     ).toMatchObject({ summonKind: "avatar", summoned: false });
     await summoned(actor, avatar);
+    expect(
+      (await listAgents(actor)).find((row) => row.id === avatar),
+    ).toMatchObject({ summonKind: "avatar", summoned: true });
+  });
+
+  // Codex 评审（PR #607）：spec「会话删了以后」——一对一会话删了，员工本身还在「已召唤」里，分身也一样。
+  test("召唤分身后删掉它的一对一会话，分身仍是 summoned true", async () => {
+    const actor = await person();
+    const avatar = avatarAgentId(actor.id);
+    const body = await summoned(actor, avatar);
+    await runAsTenant(actor.id, () =>
+      channelStore.softDelete(actor, body.channelId, false),
+    );
+    expect(await listChannels(actor)).toEqual([]);
     expect(
       (await listAgents(actor)).find((row) => row.id === avatar),
     ).toMatchObject({ summonKind: "avatar", summoned: true });

@@ -65,7 +65,7 @@ const skill = (id: string, grantedTo: string[]) => ({
 beforeEach(() => {
   global.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0]) => {
-      const path = String(input).split("?")[0];
+      const [path, search = ""] = String(input).split("?");
       const json = (body: unknown) =>
         new Response(JSON.stringify(body), {
           headers: { "content-type": "application/json" },
@@ -86,6 +86,10 @@ beforeEach(() => {
       if (path === "/api/agents" && agentsMode === "pending") {
         return new Promise<Response>(() => {});
       }
+      // `?hidden=true` answers only the employees the person hid, which the default list leaves out.
+      if (path === "/api/agents" && search === "hidden=true") {
+        return json({ agents: [agent("mine-hidden", true)] });
+      }
       if (path === "/api/agents") {
         return json({
           agents: [
@@ -103,6 +107,7 @@ beforeEach(() => {
           skills: [
             skill("two", ["mine-a", "mine-b", "shared-preset"]),
             skill("none", ["shared-preset", "theirs"]),
+            skill("hidden", ["mine-hidden"]),
           ],
           botsMayCallBack: true,
           redirectUri: null,
@@ -193,4 +198,14 @@ test("no 未安装 is claimed when the employee list fails to load", async () =>
   await new Promise((resolve) => setTimeout(resolve, 100));
   expect(view.queryByText("未安装")).toBeNull();
   expect(view.queryByText(/已装到你的/)).toBeNull();
+});
+
+/*
+ * Codex 评审（PR #607）：本人隐藏了的员工也是本人的员工。默认的员工列表不带它们（`hiddenAt IS NULL`），所以技能页
+ * 要连 `?hidden=true` 一起读，否则只装在隐藏员工身上的技能会说「未安装」。
+ */
+test("a skill granted only to an employee of mine I hid still counts it", async () => {
+  const view = renderSkills();
+  expect(await view.findByText("已装到你的 1 个员工")).toBeTruthy();
+  expect(view.getAllByText("未安装")).toHaveLength(1);
 });

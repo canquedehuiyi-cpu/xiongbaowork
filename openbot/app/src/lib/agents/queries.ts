@@ -220,7 +220,9 @@ export type SummonResult = {
 /**
  * 召唤: `POST /api/agents/:agentId/summon`. A full allowance is a 402 whose message the server
  * wrote, so the caller shows `error.message`; the shared query client also opens the plan dialog.
- * A success refreshes the roster and the conversation list, which now holds the new 1:1.
+ * Settled either way, the roster and the conversation list are refreshed: a success holds the new
+ * 1:1, and a failure after the copy committed (the conversation could not be made) has still left
+ * the person's copy on the roster, which a retry finds.
  */
 export function summonAgentMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
@@ -231,7 +233,7 @@ export function summonAgentMutationOptions(queryClient: QueryClient) {
       );
       return (await response.json()) as SummonResult;
     },
-    onSuccess: () =>
+    onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ["agents", "list"] }),
         queryClient.invalidateQueries({ queryKey: channelKeys.list() }),

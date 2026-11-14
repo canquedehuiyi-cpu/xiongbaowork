@@ -78,17 +78,36 @@ import { SummonGrid } from "./summon-card";
  * 卡片，主按钮「召唤」，播入职动画后进入会话）；本人的员工在「已召唤」（原「你的员工」）。已召唤过的预设原件
  * 哪里都不列，本人那份才是他的员工。
  */
-export function BotRoster({
-  search = {},
-  query = "",
-  onClearFilters,
-}: {
+export function BotRoster(props: RosterProps) {
+  const summon = useSummon();
+  /*
+   * The flip is drawn beside the roster, not inside it: a summon refreshes the roster before it
+   * answers, and a filter that matched the preset may match nobody once it is the person's own copy
+   * (Codex review, PR #607). The roster then answers with its no-match frame, and the flip must not
+   * go with it, or it never hands over and the person is never taken to the conversation.
+   */
+  return (
+    <>
+      <RosterSections {...props} summon={summon} />
+      {summon.overlay}
+    </>
+  );
+}
+
+type RosterProps = {
   /** The roster's address: the filters, the sort and the view. */
   search?: WakersSearch;
   /** The search box's live text, ahead of the address while typing. */
   query?: string;
   onClearFilters?: () => void;
-}) {
+};
+
+function RosterSections({
+  search = {},
+  query = "",
+  onClearFilters,
+  summon,
+}: RosterProps & { summon: ReturnType<typeof useSummon> }) {
   const personal =
     useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   const facts = useRosterFacts();
@@ -99,7 +118,6 @@ export function BotRoster({
   const roster = wallSearch(search);
   const createSearch: WakersSearch = { ...roster, new: true };
   const { agents } = facts;
-  const summon = useSummon();
 
   // Only when nothing ever loaded: a failed background refetch keeps the roster it had.
   if (agents.data === undefined && agents.isError) {
@@ -342,7 +360,6 @@ export function BotRoster({
           {hiddenShown ? draw("hidden", hidden) : null}
         </PageSection>
       ) : null}
-      {summon.overlay}
     </>
   );
 }

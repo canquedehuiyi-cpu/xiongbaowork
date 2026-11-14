@@ -1746,7 +1746,7 @@
   license: proprietary-xiongbao
   redistributable: true
   attribution: © 熊宝数字员工
-  runnable: full
+  runnable: degraded
   dropped: []
 - kind: skill
   slug: persona-gstack-security-officer
@@ -1928,5 +1928,5 @@
   license: proprietary-xiongbao
   redistributable: true
   attribution: © 熊宝数字员工
-  runnable: full
+  runnable: degraded
   dropped: []

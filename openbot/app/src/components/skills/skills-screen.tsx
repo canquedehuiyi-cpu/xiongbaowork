@@ -75,6 +75,8 @@ export function SkillsScreen({
   const plugins = useQuery(pluginsPageQueryOptions());
   const me = useQuery(currentUserQueryOptions());
   const agents = useQuery(agentListQueryOptions());
+  // The default list leaves out the employees the person hid; they are still theirs (Codex review).
+  const hiddenAgents = useQuery(agentListQueryOptions(true));
   const [error, setError] = useState<string | null>(null);
   const removeSkill = useMutation({
     ...removeSkillMutationOptions(queryClient),
@@ -85,11 +87,14 @@ export function SkillsScreen({
   const showEdit = !creating && editing !== undefined;
   const skills = plugins.data?.skills ?? [];
   const meId = me.data?.id;
-  // Only the person's own employees (summoned ones included) count as having the skill installed;
-  // grants to shared preset employees or other people's employees are not theirs.
+  // Only the person's own employees (summoned and hidden ones included) count as having the skill
+  // installed; grants to shared preset employees or other people's employees are not theirs.
   const myAgentIds = new Set(
-    (agents.data ?? []).filter((agent) => agent.mine).map((agent) => agent.id),
+    [...(agents.data ?? []), ...(hiddenAgents.data ?? [])]
+      .filter((agent) => agent.mine)
+      .map((agent) => agent.id),
   );
+  const rosterKnown = agents.isSuccess && hiddenAgents.isSuccess;
   const visible = skills.filter((skill) =>
     textMatch(
       query,
@@ -112,8 +117,11 @@ export function SkillsScreen({
     <ResourceCard
       actions={
         <>
-          {/* No sentence until the roster is known: an empty set would read as 「未安装」. */}
-          {agents.isSuccess ? (
+          {/*
+           * No sentence until the roster is known, hidden employees included: an employee missing
+           * from the set would read as 「未安装」.
+           */}
+          {rosterKnown ? (
             <span className="text-[12px] text-muted-foreground">
               {installedSentence(
                 skill.grantedTo.filter((id) => myAgentIds.has(id)).length,
