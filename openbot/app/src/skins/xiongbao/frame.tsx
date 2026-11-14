@@ -137,7 +137,8 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
    * 手机上：入口的根地址有标签栏；「消息」的根地址画会话列表而不是主区。名片盖住整屏时底下的都 `inert`
    * （点不到、读屏读不到），但不收起，关掉名片回来时页面还停在原来滚到的地方。
    */
-  const homePage = asking || failedHome;
+  // 只在 `/` 上算数：没能开始的对话等的是首页，人已经去了工作台、通讯录、我时，那几页的标签栏照旧。
+  const homePage = pathname === "/" && (asking || failedHome);
   const phoneDetail = phone && (!isEntryRoot(pathname) || homePage);
   const phoneList = phone && pathname === "/" && !homePage;
   const covered = phone && cardFor !== null;
@@ -242,7 +243,13 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
           hidden={phone && !phoneList}
           inert={covered}
         >
-          {phone && !phoneList ? null : <ListColumn rail={rail} />}
+          {/*
+           * 手机上进了对话，会话列表只藏起来不卸掉：返回时搜索词、筛选和滚到的位置都还在（藏起来的元素
+           * 浏览器会记住滚动位置）。别的入口的列表栏手机上用不到，不挂。
+           */}
+          {phone && !phoneList && rail !== "msg" ? null : (
+            <ListColumn rail={rail} />
+          )}
         </aside>
         <main
           className={cn(

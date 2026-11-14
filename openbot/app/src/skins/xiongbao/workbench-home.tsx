@@ -40,6 +40,7 @@ import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { navigationFor } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import {
+  COMPLETED_STATUSES,
   clockOf,
   greetingFor,
   type TodayTask,
@@ -50,17 +51,29 @@ import { TONE } from "./employee-card";
 import { useBrowserAvailable } from "./list-column";
 
 /**
- * 任务看板的卡，按全部时间读（`period=all`）。看板的时间窗按建卡时间算，月初建、今天做完的卡不能被它
- * 挡在外面；服务端按更新时间倒序给最近的 200 张，今天做完的都在前面。键在 `["tasks"]` 下面，看板改了
- * 卡（查收、归档）时一起刷新。
+ * 今天做完的卡，按全部时间读（`period=all`）。看板的时间窗按建卡时间算，月初建、今天做完的卡不能被它
+ * 挡在外面。服务端一次最多给最近更新的 200 张，所以只要本人员工（`executors=`）、每种「做完了」的状态
+ * 各读一次：工作区里别人的卡、还在跑的卡挤不掉今天做完的。一个人的员工一天做完超过 200 张才会少数。
+ * 键在 `["tasks"]` 下面，看板改了卡（查收、归档）时一起刷新。
  */
-const todayTasksQueryOptions = () =>
+const todayTasksQueryOptions = (employees: readonly string[]) =>
   queryOptions({
-    queryKey: ["tasks", "workbench-today"],
-    queryFn: () =>
-      client<TodayTask[]>("/api/tasks?period=all", "tasks", {
-        fallback: "读不到今天的任务。",
-      }),
+    queryKey: ["tasks", "workbench-today", employees],
+    queryFn: async () => {
+      if (employees.length === 0) return [];
+      const executors = employees.map(encodeURIComponent).join(",");
+      const pages = await Promise.all(
+        COMPLETED_STATUSES.map((status) =>
+          client<TodayTask[]>(
+            `/api/tasks?period=all&status=${status}&executors=${executors}`,
+            "tasks",
+            { fallback: "读不到今天的任务。" },
+          ),
+        ),
+      );
+      // 两次读之间卡换了状态时可能两边都有，按 id 只留一张。
+      return [...new Map(pages.flat().map((task) => [task.id, task])).values()];
+    },
     refetchInterval: 30_000,
   });
 
@@ -333,7 +346,6 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
   const showToggle = useSidebarToggleVisible();
   const user = useQuery(currentUserQueryOptions()).data;
   const agents = useQuery(agentListQueryOptions());
-  const tasks = useQuery(todayTasksQueryOptions());
   const inbox = useQuery(approvalInboxOptions());
   const overview = useQuery(autonomousOverviewQueryOptions(true));
   const automations = useQuery(automationListQueryOptions());
@@ -368,6 +380,11 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
         (agent) => agent.id,
       )
     : [];
+  // 先知道本人有哪些员工，再按他们读今天做完的卡。
+  const tasks = useQuery({
+    ...todayTasksQueryOptions(employees),
+    enabled: agents.data !== undefined,
+  });
   const counts = todayStats({
     tasks: tasks.data ?? [],
     waiting: inbox.data ? waitingCount(inbox.data) : 0,

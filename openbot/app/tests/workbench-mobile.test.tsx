@@ -302,6 +302,49 @@ describe("手机宽度", () => {
     expect(view.queryByRole("complementary", { name: "列表栏" })).toBeNull();
   });
 
+  test("人已经去了别的入口时对话才失败，那一页的标签栏照旧，不变成详情页", async () => {
+    const { view } = renderFrame("/workbench");
+    await view.findByText("工作台首页内容");
+    act(() =>
+      stashFailedStart({ text: "帮我写周报", error: "对话没能开始。" }),
+    );
+    await settleReactWork();
+    expect(tabBar(view)).not.toBeNull();
+    expect(pressed(view)).toEqual(["工作台"]);
+    expect(view.queryByRole("link", { name: "返回" })).toBeNull();
+    expect(view.getByText("工作台首页内容")).toBeTruthy();
+  });
+
+  test("进了对话再返回，会话列表的搜索词和筛选还在", async () => {
+    const { view, user, router } = renderFrame("/");
+    const list = await view.findByRole("complementary", { name: "列表栏" });
+    await user.type(within(list).getByLabelText("搜索会话"), "周报");
+    const filters = within(list).getByRole("group", { name: "筛选" });
+    const unread = within(filters)
+      .getAllByRole("button")
+      .find((button) => button.getAttribute("aria-pressed") === "false");
+    await user.click(unread as HTMLElement);
+    const chosen = unread?.textContent;
+
+    await router.navigate({
+      to: "/channel/$channelId" as never,
+      params: { channelId: "x" } as never,
+    });
+    await view.findByText("对话页内容");
+    await user.click(view.getByRole("link", { name: "返回" }));
+
+    const back = await view.findByRole("complementary", { name: "列表栏" });
+    expect(
+      (within(back).getByLabelText("搜索会话") as HTMLInputElement).value,
+    ).toBe("周报");
+    const pressedFilter = within(
+      within(back).getByRole("group", { name: "筛选" }),
+    )
+      .getAllByRole("button")
+      .find((button) => button.getAttribute("aria-pressed") === "true");
+    expect(pressedFilter?.textContent).toBe(chosen);
+  });
+
   test.each([
     ["/capabilities/skills", "技能页内容", "/workbench"],
     ["/bots", "人才市场页内容", "/contacts"],

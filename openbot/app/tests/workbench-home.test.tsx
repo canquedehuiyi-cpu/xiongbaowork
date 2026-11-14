@@ -83,6 +83,9 @@ const AGENTS = [
   },
 ];
 
+/** 本人员工的 id：上面三位已召唤的。 */
+const EMPLOYEE_IDS = ["a1", "a2", "a3"];
+
 let serial = 0;
 function card(overrides: Record<string, unknown>) {
   serial += 1;
@@ -339,6 +342,31 @@ describe("工作台首页", () => {
     expect(calls.some((url) => url.includes("/api/tasks?period=all"))).toBe(
       true,
     );
+  });
+
+  test("只按本人的员工、每种做完了的状态读：别人的卡和还在跑的卡挤不掉今天做完的", async () => {
+    renderHome();
+    await waitFor(() => expect(requests).toContain("GET /api/tasks"));
+    const calls: string[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL) => {
+        calls.push(String(input));
+        return Response.json({ tasks: [] });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    await queryClient.refetchQueries({ queryKey: ["tasks"] });
+    const reads = calls
+      .filter((url) => url.includes("/api/tasks?"))
+      .map((url) => new URL(url, "http://localhost/").searchParams);
+    expect(reads.map((query) => query.get("status")).sort()).toEqual([
+      "awaiting_review",
+      "done",
+    ]);
+    for (const query of reads) {
+      expect(query.get("period")).toBe("all");
+      expect(query.get("executors")?.split(",").sort()).toEqual(EMPLOYEE_IDS);
+    }
   });
 
   test("读不到的来源画「—」，不编 0；读到的照常画", async () => {
