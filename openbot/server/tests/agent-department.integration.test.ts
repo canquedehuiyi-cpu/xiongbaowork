@@ -377,3 +377,33 @@ describe("员工部门", () => {
     expect((await read(owner, id)).department).toBe("研发部");
   });
 });
+
+describe("入职时间（聊天工作台 Task 7）", () => {
+  test("DTO 带上员工的创建时间：单个读取和列表一样；召唤副本是召唤那一刻", async () => {
+    const actor = await person();
+    const before = Date.now();
+    const id = await handMade(actor);
+    const copy = (await summonedCopy(
+      actor,
+      await preset("研发部"),
+    )) as AgentBody["agent"] & { createdAt?: string };
+    const after = Date.now();
+
+    const single = (await read(actor, id)) as AgentBody["agent"] & {
+      createdAt?: string;
+    };
+    const entry = (await listed(actor, id)) as AgentBody["agent"] & {
+      createdAt?: string;
+    };
+    expect(typeof single.createdAt).toBe("string");
+    expect(entry.createdAt).toBe(single.createdAt);
+    const made = Date.parse(single.createdAt ?? "");
+    // The database clock and this one may differ by a moment; a minute is plenty.
+    expect(made).toBeGreaterThan(before - 60_000);
+    expect(made).toBeLessThan(after + 60_000);
+
+    const summoned = Date.parse(copy.createdAt ?? "");
+    expect(summoned).toBeGreaterThan(before - 60_000);
+    expect(summoned).toBeLessThan(after + 60_000);
+  });
+});

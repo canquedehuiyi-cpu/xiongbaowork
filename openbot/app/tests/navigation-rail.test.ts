@@ -15,6 +15,7 @@ const CASES: [string, string][] = [
   ["/bots", "contacts"],
   ["/bots/a/setup", "contacts"],
   ["/assemble/a", "contacts"],
+  ["/contacts", "contacts"],
   ["/tasks", "work"],
   ["/autonomous", "work"],
   ["/reachability", "work"],

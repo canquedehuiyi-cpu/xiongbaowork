@@ -86,6 +86,11 @@ export type AgentProfile = {
    */
   department?: string | null;
   /**
+   * When it was made: for a summoned copy, when it was summoned. The address book's 入职第 N 天
+   * (聊天工作台 Task 7) counts from it. Optional for the same reason; absent publishes none.
+   */
+  createdAt?: Date | null;
+  /**
    * Whether its owner asked for it to have a computer of its own rather than share theirs.
    *
    * What was asked for, not what happens: an administrator can withdraw "Isolated Bots" from the

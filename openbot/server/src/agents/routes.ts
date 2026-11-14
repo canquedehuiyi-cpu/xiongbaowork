@@ -1428,6 +1428,8 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     presetPortrait: agent.presetPortrait ?? null,
     // 聊天工作台: its department, or its preset's for a summoned copy without one; null for none.
     department: agent.department ?? null,
+    // 聊天工作台: when it was made (a summoned copy: summoned), which 入职第 N 天 counts from.
+    ...(agent.createdAt ? { createdAt: agent.createdAt.toISOString() } : {}),
     // The personal starter's, for its Setup page. No other Bot's DTO carries any.
     ...(agent.instructions ? { instructions: agent.instructions } : {}),
     // What runs it, by name, so a page can say that where it would otherwise show an address.

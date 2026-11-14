@@ -192,3 +192,25 @@ test("自己画外壳的其他皮肤（OpenDots）在设置页也照旧是原来
   ).toBeTruthy();
   expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
 });
+
+test("默认皮肤下 /contacts 是组织架构，在工作台外壳里亮「通讯录」", async () => {
+  const { view, router } = renderApp("/contacts", member, "xiongbao");
+  await view.findByRole("navigation", { name: "入口" }, LOAD);
+  expect(router.state.location.pathname).toBe("/contacts");
+  expect(pressedRails(view)).toEqual(["通讯录"]);
+  const main = view.getByRole("main");
+  expect(
+    await within(main).findByRole("heading", { name: "组织架构" }, LOAD),
+  ).toBeTruthy();
+});
+
+test("经典皮肤下 /contacts 也打得开，画在原来的侧栏外壳里", async () => {
+  const { view } = renderApp("/contacts", member, "classic");
+  expect(
+    await view.findByRole("navigation", { name: "主导航" }, LOAD),
+  ).toBeTruthy();
+  expect(
+    await view.findByRole("heading", { name: "组织架构" }, LOAD),
+  ).toBeTruthy();
+  expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
+});

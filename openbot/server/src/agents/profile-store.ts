@@ -382,6 +382,8 @@ const joinedProjection = {
   department: sql<
     string | null
   >`coalesce(${agentProfiles.department}, (select "department_source"."department" from "agent_profiles" "department_source" where "department_source"."agent_id" = ${agentProfiles.summonedFrom}))`,
+  // When the coworker was made (a summoned copy: when it was summoned), for 入职第 N 天.
+  createdAt: agents.createdAt,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
   configuration: agents.configuration,
@@ -446,6 +448,7 @@ function mapProfile(
     presetPortrait: row.presetPortrait ?? null,
     // "" is an explicit clear (未分组); the DTO says none as null either way.
     department: row.department || null,
+    createdAt: row.createdAt,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,

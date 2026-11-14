@@ -452,6 +452,25 @@ describe("agent lifecycle routes", () => {
     });
   });
 
+  test("publishes when the coworker was made, as ISO text, and nothing for a profile without it", async () => {
+    const store = fakeStore({
+      async list() {
+        return [
+          profile({ createdAt: new Date("2026-11-11T04:00:00.000Z") }),
+          profile({ id: "agent-2" }),
+        ];
+      },
+    });
+
+    const response = await appFor(store).request("http://agents.test/");
+    const { agents } = (await json(response)) as {
+      agents: Record<string, unknown>[];
+    };
+
+    expect(agents[0]?.createdAt).toBe("2026-11-11T04:00:00.000Z");
+    expect(agents[1] && "createdAt" in agents[1]).toBe(false);
+  });
+
   test("separates ownership from permission for an administrator", async () => {
     const administrator: AuthenticatedActor = {
       id: "admin-1",
