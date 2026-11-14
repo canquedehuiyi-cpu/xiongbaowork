@@ -353,6 +353,8 @@ const joinedProjection = {
   roleTemplateId: agentProfiles.roleTemplateId,
   roleTemplateVersion: agentProfiles.roleTemplateVersion,
   isolated: agentProfiles.isolated,
+  summonedFrom: agentProfiles.summonedFrom,
+  presetPortrait: agentProfiles.presetPortrait,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
   configuration: agents.configuration,
@@ -413,6 +415,8 @@ function mapProfile(
     assignedToMe: Boolean(row.assignedToMe),
     deletedAt: row.deletedAt,
     isolated: row.isolated,
+    summonedFrom: row.summonedFrom ?? null,
+    presetPortrait: row.presetPortrait ?? null,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,

@@ -1335,6 +1335,9 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     hasCallbackToken: agent.hasCallbackToken,
     // What the owner asked for. Whether it is in effect is `isolationActive`, added by the route.
     isolated: agent.isolated,
+    // 召唤员工: where it was summoned from and its preset portrait; null for one made by hand.
+    summonedFrom: agent.summonedFrom ?? null,
+    presetPortrait: agent.presetPortrait ?? null,
     // The personal starter's, for its Setup page. No other Bot's DTO carries any.
     ...(agent.instructions ? { instructions: agent.instructions } : {}),
     // What runs it, by name, so a page can say that where it would otherwise show an address.

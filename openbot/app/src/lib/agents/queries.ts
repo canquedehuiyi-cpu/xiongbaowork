@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { client, tryClient } from "@/lib/client";
 import type { Persona } from "../../../../shared/persona";
+import type { PortraitPreset } from "@/lib/portraits/queries";
 
 export type AgentVisibility = "public" | "private";
 
@@ -89,6 +90,14 @@ export type AgentProfile = {
    * so that giving the switch back restores it.
    */
   isolated: boolean;
+  /**
+   * The agent this coworker was summoned from, or null for one made by hand. Optional on the type
+   * only so the many hand-written profiles in tests still check; the server always sends both, and
+   * absent reads as null.
+   */
+  summonedFrom?: string | null;
+  /** The preset portrait it uses, or null for none. Optional for the same reason. */
+  presetPortrait?: PortraitPreset | null;
   /** Whether its next run gets that computer of its own. Decided by the server from the owner's switch. */
   isolationActive: boolean;
   /**

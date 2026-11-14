@@ -20,6 +20,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Persona } from "../../../../shared/persona";
+import type { PortraitPreset } from "../../portraits/store";
 import { agents, users } from "./core";
 import { jsonb } from "./json";
 import { knowledgeNotebooks } from "./knowledge-foundations";
@@ -119,11 +120,23 @@ export const agentProfiles = pgTable(
      */
     roleTemplateId: uuid("role_template_id"),
     roleTemplateVersion: integer("role_template_version"),
+    /**
+     * The agent this coworker was summoned from (召唤员工, migration 0213). Null for one made by hand.
+     * Cleared when the source is deleted; the coworker stays.
+     */
+    summonedFrom: text("summoned_from").references(() => agents.id, {
+      onDelete: "set null",
+    }),
+    /** The preset portrait this coworker uses (migration 0213). Null means none. */
+    presetPortrait: text("preset_portrait").$type<PortraitPreset>(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (table) => [
+    uniqueIndex("agent_profiles_owner_summoned_from_unique")
+      .on(table.ownerUserId, table.summonedFrom)
+      .where(sql`${table.summonedFrom} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     index("agent_profiles_visibility_deleted_idx").on(
       table.visibility,
       table.deletedAt,
