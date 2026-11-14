@@ -3,8 +3,9 @@
  * the one the egress filter puts on a refusal.
  *
  * WHY TWO NAMES. They are being renamed, and a computer image can be rolled out before the server
- * that talks to it, so for a release this side takes both and the server keeps sending the old ones.
- * The next release moves the server to the new names, and the one after drops the old ones here.
+ * that talks to it, so for a release this side took both while the server kept sending the old ones.
+ * The server now sends only the new ones (`shared/wire-headers.ts`, where both sides read them from),
+ * and this side keeps taking the old ones for a server a release behind it, until the window below.
  *
  * ONE VALUE PER HEADER. Taking two names is exactly where a check can open: a request with a wrong
  * secret under one name and the right one under the other must not get in because one of them
@@ -13,12 +14,9 @@
  * (`disagreeingWireHeader`), the token included: nothing says which of the two is the forgery.
  */
 
-export const HEADER = {
-  botId: "x-xiongbao-bot-id",
-  personId: "x-xiongbao-person-id",
-  computerToken: "x-xiongbao-computer-token",
-  egress: "x-xiongbao-egress",
-} as const;
+import { HEADER, type WireHeader } from "../../shared/wire-headers";
+
+export { HEADER, type WireHeader };
 
 // legacy-compat：introducedIn 0.2.11，removeIn 0.2.13，Task 20/21：botId, personId, computerToken, egress
 // That is all four old names below, and every read of them through this module.
@@ -28,8 +26,6 @@ export const LEGACY_HEADER = {
   computerToken: "x-openbot-computer-token",
   egress: "x-openbot-egress",
 } as const;
-
-export type WireHeader = keyof typeof HEADER;
 
 /** The header's value, trimmed: the new name when it is not blank, otherwise the old one. */
 export function readWireHeader(
