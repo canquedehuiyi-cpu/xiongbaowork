@@ -61,15 +61,21 @@ import {
   readConnectorIndex,
   readWorkBuddy,
   SourceLayoutError,
+  type WorkBuddySnapshot,
 } from "./read-workbuddy";
+import {
+  buildL1Gate,
+  filterSnapshotByGate,
+  parseLockDocument,
+} from "./l1-gate";
 
 /** CLI exit codes. `usage` is distinct so a script can tell a typo from a failed conversion. */
 const EXIT_OK = 0;
 const EXIT_INVALID = 1;
 const EXIT_USAGE = 2;
 
-/** The only porting scope that exists in P0. */
-const SUPPORTED_SCOPES = ["l0"] as const;
+/** Porting scopes. `l0` is the machine-installed set; `l1` reads the fetch cache behind the lock gate. */
+const SUPPORTED_SCOPES = ["l0", "l1"] as const;
 
 type Scope = (typeof SUPPORTED_SCOPES)[number];
 
@@ -90,6 +96,10 @@ export interface CliOptions {
   census: boolean;
   /** Where the census is written. Resolved even when `--census` is absent, so the type stays simple. */
   censusPath: string;
+  /** `--lock`: the capability-lock file the l1 gate consults. Required for `--only=l1`, refused for `l0`. */
+  lockPath: string | undefined;
+  /** `--whitelist`: optional narrowing slug list (one per line, `#` comments). Only meaningful with `l1`. */
+  whitelistPath: string | undefined;
   help: boolean;
 }
 
@@ -116,7 +126,9 @@ const USAGE = `用法：
 选项：
   --source <路径>     WorkBuddy 主目录或抓取缓存（fetch-capabilities 产物），默认 ~/.workbuddy
   --out <路径>        输出目录（必须显式给出；不会写到仓库里的默认位置）
-  --only=<范围>       移植范围，P0 只支持 l0（本机已装：专家包 + 用户技能 + 已授权连接器）
+  --only=<范围>       移植范围：l0（本机已装：专家包 + 用户技能 + 已授权连接器）或 l1（抓取缓存，经 capability-lock 白名单闸门）
+  --lock <路径>       capability-lock 文件；--only=l1 必填，l0 下禁止（默认仓库根 capability-lock.yaml 可显式指定）
+  --whitelist <路径>  可选白名单（每行一个 slug，# 注释）：在锁的许可规则之上进一步收窄；仅 l1 有效
   --connectors=<档>   l0 = 仅已授权连接器（默认，P0 行为）；all = 市场索引里的全部连接器（L1 全量普查用）
   --verify            写完后回读输出目录，按同一套规则再校验一遍
   --verify-only       只回读 --out 里已有的产出，不重新生成（用于复核已生成的包）
@@ -132,6 +144,23 @@ export function expandPath(input: string): string {
         ? join(homedir(), input.slice(2))
         : input;
   return resolve(expanded);
+}
+
+/**
+ * Read the optional `--whitelist` file: one slug per line; blank lines and `#` comments are ignored.
+ * The list narrows the gate; it can never widen one — a slug the licence rules refuse stays refused
+ * even if it appears here.
+ */
+export function readWhitelistSlugs(path: string): string[] {
+  const slugs: string[] = [];
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#")) {
+      continue;
+    }
+    slugs.push(trimmed);
+  }
+  return slugs;
 }
 
 /** Split `--flag=value` into its two halves; leave bare flags alone. */
@@ -163,6 +192,8 @@ export function parseArgs(argv: readonly string[]): CliOptions {
       verifyOnly: false,
       census: false,
       censusPath: DEFAULT_CENSUS_PATH,
+      lockPath: undefined,
+      whitelistPath: undefined,
       help: true,
     };
   }
@@ -171,6 +202,8 @@ export function parseArgs(argv: readonly string[]): CliOptions {
   let only: string | undefined;
   let connectors: string | undefined;
   let censusPath: string | undefined;
+  let lockPath: string | undefined;
+  let whitelistPath: string | undefined;
   let verify = false;
   let verifyOnly = false;
   let census = false;
@@ -202,6 +235,12 @@ export function parseArgs(argv: readonly string[]): CliOptions {
       case "--connectors":
         connectors = value();
         break;
+      case "--lock":
+        lockPath = value();
+        break;
+      case "--whitelist":
+        whitelistPath = value();
+        break;
       case "--verify":
         verify = true;
         break;
@@ -227,7 +266,17 @@ export function parseArgs(argv: readonly string[]): CliOptions {
   const scope = (only ?? "l0").trim();
   if (!SUPPORTED_SCOPES.includes(scope as Scope)) {
     throw new UsageError(
-      `--only=${scope} 不受支持；P0 只实现 ${SUPPORTED_SCOPES.join(" / ")}`,
+      `--only=${scope} 不受支持；支持 ${SUPPORTED_SCOPES.join(" / ")}`,
+    );
+  }
+  if (scope === "l1" && lockPath === undefined) {
+    throw new UsageError(
+      "--only=l1 需要 --lock <capability-lock.yaml>：闸门只放行锁内且许可放行的条目",
+    );
+  }
+  if (scope === "l0" && (lockPath !== undefined || whitelistPath !== undefined)) {
+    throw new UsageError(
+      "--lock / --whitelist 只在 --only=l1 下有意义；l0 直读本机装量，不走闸门",
     );
   }
   const connectorScope = (connectors ?? "l0").trim();
@@ -246,6 +295,9 @@ export function parseArgs(argv: readonly string[]): CliOptions {
     census,
     censusPath:
       censusPath === undefined ? DEFAULT_CENSUS_PATH : expandPath(censusPath),
+    lockPath: lockPath === undefined ? undefined : expandPath(lockPath),
+    whitelistPath:
+      whitelistPath === undefined ? undefined : expandPath(whitelistPath),
     help: false,
   };
 }
@@ -756,13 +808,43 @@ export function main(argv: readonly string[]): number {
       options.connectors === "all"
         ? [...readConnectorIndex(options.sourceRoot).keys()]
         : CONNECTOR_ALLOWLIST;
-    const snapshot = readWorkBuddy({
+    let snapshot: WorkBuddySnapshot = readWorkBuddy({
       sourceRoot: options.sourceRoot,
       connectorAllowlist,
     });
     console.log(
       `[port:capabilities] 读取 专家包 ${snapshot.packages.length} / 用户技能 ${snapshot.userSkills.length} / 连接器 ${snapshot.connectors.length}`,
     );
+
+    // `l1` runs every read unit through the capability-lock gate (§2.2 step 3): identity first, then
+    // the owner's exclusion list, then the redistributable flag, then the optional whitelist. What
+    // never measured never enters; what the licence rules refuse never enters; what the caller
+    // narrows away never enters. The filtered snapshot is what the rest of the pipeline sees.
+    if (options.scope === "l1") {
+      const lock = parseLockDocument(
+        readFileSync(options.lockPath as string, "utf8"),
+      );
+      const whitelist =
+        options.whitelistPath === undefined
+          ? undefined
+          : readWhitelistSlugs(options.whitelistPath);
+      const gate = buildL1Gate(lock, whitelist);
+      const gated = filterSnapshotByGate(snapshot, gate);
+      const codeSummary = Object.entries(gated.stats.byCode)
+        .map(([code, count]) => `${code} ${count}`)
+        .join(" / ");
+      console.log(
+        `[port:capabilities] L1 闸门  放行 ${gated.stats.allowed} / 拒绝 ${gated.stats.refused}${codeSummary === "" ? "" : `（${codeSummary}）`}`,
+      );
+      const preview = gated.dropped.slice(0, 10);
+      if (preview.length > 0) {
+        console.log("[port:capabilities] 闸门拒绝（前 10 条）：");
+        for (const dropped of preview) {
+          console.log(`  - ${dropped.code}  ${dropped.unit}`);
+        }
+      }
+      snapshot = gated.snapshot;
+    }
 
     const capabilities = normalizeCapabilities(snapshot, {
       connectorSurvey: options.connectors === "all",
