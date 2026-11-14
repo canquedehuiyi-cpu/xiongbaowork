@@ -7,13 +7,17 @@ import { SkillsScreen } from "@/components/skills/skills-screen";
 /**
  * 能力 › 技能：自己的 `/` 技能（写、改、删）和部署里管理员写的技能。
  *
- * 写技能和改技能是地址参数而不是路由（`?new=true`、`?edit=<slug>`），所以面板打开时列表仍在后面，表单可以
- * 分享、刷新，按后退就关上。`/skills` 与 `/resources?tab=skills` 的重定向把这两个参数照带过来。
+ * 写技能、改技能、读正文都是地址参数而不是路由（`?new=true`、`?edit=<slug>`、`?view=<slug>`），所以面板打开
+ * 时列表仍在后面，也能分享、刷新，按后退就关上。`/skills` 与 `/resources?tab=skills` 的重定向把参数照带过来。
  */
 const skillsSearchSchema = z.object({
   new: z.boolean().optional(),
   /** The slug being edited. Absent means nothing is. */
   edit: z.string().optional(),
+  /**
+   * 正在读正文的那条技能。只读——写归 `edit`，两者互斥，`new` 优先于两者。
+   */
+  view: z.string().optional(),
   /** 搜索框里的字。 */
   q: z.string().optional(),
 });
@@ -25,6 +29,9 @@ export const Route = createFileRoute("/_authed/_app/capabilities/skills")({
       ...(search.new === true || search.new === "true" ? { new: true } : {}),
       ...(typeof search.edit === "string" || typeof search.edit === "number"
         ? { edit: String(search.edit) }
+        : {}),
+      ...(typeof search.view === "string" || typeof search.view === "number"
+        ? { view: String(search.view) }
         : {}),
       ...((typeof search.q === "string" && search.q) ||
       typeof search.q === "number"
@@ -59,6 +66,7 @@ function SkillsPage() {
           });
         }}
         query={query}
+        viewing={search.view}
       />
     </CapabilitiesShell>
   );

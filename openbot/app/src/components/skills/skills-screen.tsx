@@ -15,6 +15,7 @@ import {
 } from "@/components/resources/resource-kit";
 import { EditSkill } from "@/components/skills/edit-skill";
 import { NewSkill } from "@/components/skills/new-skill";
+import { SkillView, SkillViewLink } from "@/components/skills/skill-view";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -43,6 +44,8 @@ import { useZh } from "@/lib/translations/queries";
  *
  * Writing and editing are search parameters rather than routes (`?new=true`, `?edit=<slug>`), so
  * the list stays on screen behind the panel and the form is linkable, reloadable and closed by Back.
+ * 读正文（`?view=<slug>`）用的是同一套机制：`SkillView` 只画，不改——部署的技能不归这个人改，而
+ * 一条只读的正文从前没有任何地址，于是「我的」里那 109 张卡谁也点不开。
  * The caller owns them; this draws whatever it is given.
  *
  * Only the signed-in person's own count as 我的. The server already scopes `/api/plugins` to
@@ -56,6 +59,7 @@ export function SkillsScreen({
   onQuery,
   creating,
   editing,
+  viewing,
   onCompose,
   onEdit,
   onClose,
@@ -66,6 +70,8 @@ export function SkillsScreen({
   creating: boolean;
   /** `?edit=<slug>`: the slug being edited. */
   editing: string | undefined;
+  /** `?view=<slug>`: the slug being READ. Ignored while writing or editing. */
+  viewing: string | undefined;
   onCompose: () => void;
   onEdit: (slug: string) => void;
   onClose: () => void;
@@ -85,6 +91,11 @@ export function SkillsScreen({
   });
 
   const showEdit = !creating && editing !== undefined;
+  /*
+   * 读正文：`new` 与 `edit` 都优先——一次只该有一个人在读、在写。地址里点名的那条不在这份列表里时
+   * 面板照样打开，由 `SkillView` 说「不在了」，因为「不在了」和「不归你看」是它手里的事实。
+   */
+  const showView = !creating && editing === undefined && viewing !== undefined;
   const skills = plugins.data?.skills ?? [];
   const meId = me.data?.id;
   // Only the person's own employees (summoned and hidden ones included) count as having the skill
@@ -117,6 +128,12 @@ export function SkillsScreen({
     <ResourceCard
       actions={
         <>
+          {/*
+           * 正文的入口：只有真写了正文才画。没有正文的技能点开只说「没有正文」，那是空承诺。
+           */}
+          {skill.instructions.trim() ? (
+            <SkillViewLink slug={skill.slug} title={zh(skill.title)} />
+          ) : null}
           {/*
            * No sentence until the roster is known, hidden employees included: an employee missing
            * from the set would read as 「未安装」.
@@ -191,10 +208,12 @@ export function SkillsScreen({
           <NewSkill />
         ) : editing !== undefined ? (
           <EditSkill slug={editing} />
+        ) : showView ? (
+          <SkillView slug={viewing} />
         ) : null
       }
       onClose={onClose}
-      open={creating || showEdit}
+      open={creating || showEdit || showView}
     >
       <TabHeader
         actions={
