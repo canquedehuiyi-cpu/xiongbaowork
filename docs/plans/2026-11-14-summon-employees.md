@@ -15,7 +15,7 @@
 - 界面文案原样使用：「已召唤」「待召唤」「召唤」「进入会话」「召唤成功」「已装到你的 N 个员工」「未安装」。
 - 召唤幂等：同一主人 + 同一预设、未删除的员工最多一份，由数据库唯一约束兜底。
 - 召唤和复制员工一样占套餐名额，名额满时返回与 `POST /api/agents/:agentId/duplicate` 相同的拒绝响应。
-- 复制出来的员工不带任何 `plugin_grants`；可见范围 `private`。
+- 复制出来的员工带上预设自身的全部 `kind = "skill"` 授予（`granted_by` = 本人），不带任何 `kind = "mcp"` 授予；可见范围 `private`。（2026-11-14 用户补充「召唤它直接就可以使用」）
 - 不收回、不修改任何已有会话、聊天记录、`plugin_grants`；包同步对共用预设员工的技能授予逻辑不改。
 - 不改单机试用模式（`singleUser`）的包频道按人副本逻辑。
 - 动画不引入新的动画依赖（只用 CSS / 现有依赖）；时长约 2 秒，可点击跳过；`prefers-reduced-motion: reduce` 时不播动画。
@@ -209,3 +209,20 @@
 - [ ] **Step 3: 实现**：计数 = `grantedTo` 与本人员工 id 的交集大小。
 - [ ] **Step 4: 运行确认通过**，并跑 `bun test tests/skills-read-failure.test.tsx`。
 - [ ] **Step 5: 提交** `feat(app): 技能页显示安装到本人员工的数量（召唤员工 Task 8）`
+
+### Task 9: 预设员工的完整人设（`persona:`）
+
+**Files:**
+- Modify: `openbot/server/src/tenant-package.ts`（`TenantAgent` 加 `persona?: string`；`parseAgents` 解析，非字符串或超过 `agent_profiles` 人设长度上限时抛错并带员工 id；同步写 `agentProfiles.persona`，去掉字段后再同步恢复为空值，与 Task 2 写 `presetPortrait` 同法）
+- Modify: `openbot/examples/xiongbao/agents.yaml` 与 `agents/*.yaml`（28 个员工各写 `persona:`）
+- Test: `openbot/server/tests/tenant-package.test.ts`、`openbot/server/tests/xiongbao-package.test.ts`、`openbot/server/tests/agent-summon.integration.test.ts`（各新增用例）
+
+**Interfaces:**
+- Consumes: `agent_profiles.persona`（已有列，`duplicate` 已复制它）；Task 3 的 `summonAgent`。
+
+- [ ] **Step 1: 写失败测试**：「`persona:` 被解析进 `TenantAgent.persona` 并同步到预设员工资料」「去掉 `persona:` 再同步 → 恢复为空」「熊宝包每个预设员工都有非空 `persona`」「召唤后副本的人设与预设相同」
+- [ ] **Step 2: 运行确认失败**。
+- [ ] **Step 3: 实现解析与写入；为 28 个员工写人设**：中文，每个 150–400 字，包含身份、性格、说话风格、擅长领域、工作方式；内容从该员工 `system_prompt` 与其 `persona-*` 技能（`skills.yaml`）里整理，不编造原规范没有的能力；不出现 `openbot`/`OpenBot`。
+- [ ] **Step 4: 运行确认通过**，并跑 `bun test tests/tenant-package*.test.ts tests/xiongbao-package.test.ts tests/agent-summon.integration.test.ts`。
+- [ ] **Step 5: 提交** `feat(package): 预设员工完整人设（召唤员工 Task 9）`
+
