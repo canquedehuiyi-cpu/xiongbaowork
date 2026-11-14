@@ -40,8 +40,19 @@ export const UNMAPPED_TOOL_NAMES: readonly string[] = Object.freeze([
   "Task",
 ]);
 
-/** 与 audit-toolrefs 的 file-tool-call 规则同一个词表和同一种形态（`\s*`，不是单个空格）。 */
-const MAPPED_CALL = /\b(Read|Write|Edit|MultiEdit)\s*\(/g;
+/**
+ * 与 audit-toolrefs 的 file-tool-call 规则同一个词表，但**形态更严：括号必须紧跟工具名**。
+ *
+ * 审计侧用 `\s*\(` 是有意的——它宁可多判（`Bash (shell)`、`Write (URL scheme)` 这类散文记法会被判成
+ * 调用，mapping.ts 已把这条记为「接受的假阳性」）。改写层不能用同一条形态：把 `Write (URL scheme)`
+ * 这个**章节小标题**替换成 `computer_write_file (URL scheme)`，命中消失、重审计升 full，等于用「正文
+ * 被改坏」换来一枚「完整可用」。2026-11-14 实测：271 条技能里只有 things-mac 一条走到这一步，而它
+ * 唯一的命中就是这样一个标题，代价是整条管线在「档位不许变好」的守卫处崩掉。
+ *
+ * 因此：带空格的形态一律视为散文，原样保留——它仍然是 degraded（悲观但不说谎），由审计口径负责；
+ * 改写层只对「确定是调用」（`Read(` / `Write(` / `Edit(` / `MultiEdit(`）动手。
+ */
+const MAPPED_CALL = /\b(Read|Write|Edit|MultiEdit)\(/g;
 
 /** 环境事实段的正文。blocked 与 degraded 用同一段：散文不构成任何审计命中形态。 */
 const ENVIRONMENT_FACTS_BLOCK = [
