@@ -235,6 +235,31 @@ export function MineScreen() {
   const shownConnectors =
     onlyPending && canPickPending ? pendingConnectors : connectors;
 
+  /*
+   * 三块规模的单行答案。这一页是「我被给了什么」，但一共几样得滚过三段才数得出来：技能块自己带了
+   * 档位汇总，团队和连接器各多少却只有到那儿才知道。
+   *
+   * 只说有的那几样：「0 支团队」是三块的空态已经在回答的事，再说一遍是噪音。待连接的数只在每个连接器
+   * 都答得上来时才写——有一次读不到，写「0 个待连接」就是替人断言没连，那正是 4d 修掉的那个错。
+   */
+  const pendingCount =
+    connectors.length > 0 &&
+    connectors.every(
+      (row) => row.state === "settled" || row.state === "pending",
+    )
+      ? pendingConnectors.length
+      : null;
+  const overview: string[] = [];
+  if (skills.length > 0) overview.push(`${skills.length} 条技能`);
+  if (teams.length > 0) overview.push(`${teams.length} 支团队`);
+  if (servers.length > 0) {
+    overview.push(
+      pendingCount
+        ? `${servers.length} 个连接器（${pendingCount} 个待连接）`
+        : `${servers.length} 个连接器`,
+    );
+  }
+
   return (
     <div className="px-1 pb-6">
       <TabHeader
@@ -245,6 +270,12 @@ export function MineScreen() {
           ) : undefined
         }
       />
+
+      {overview.length > 0 ? (
+        <p className="mt-[14px] text-[12px] text-muted-foreground">
+          {overview.join(" · ")}
+        </p>
+      ) : null}
 
       <section aria-labelledby="mine-skills-head" className="mt-[16px]">
         <SectionHead
