@@ -24,9 +24,15 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
-  const [chosen, setChosen] = useState<{ rail: Rail; at: string } | null>(null);
-  const rail =
-    chosen && chosen.at === pathname ? chosen.rail : railForPath(pathname);
+  const [chosen, setChosen] = useState<Rail | null>(null);
+  // 地址一变（点链接、浏览器后退前进都算），点出来的临时入口就作废，回到地址所属的入口。只是「不匹配时
+  // 忽略」不够：后退回到原地址时，旧的选择又会匹配上，把入口错放在别处。
+  const [seenPath, setSeenPath] = useState(pathname);
+  if (seenPath !== pathname) {
+    setSeenPath(pathname);
+    setChosen(null);
+  }
+  const rail = chosen ?? railForPath(pathname);
 
   return (
     <div
@@ -35,7 +41,7 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     >
       <WorkbenchRail
         onSelect={(next) => {
-          setChosen({ rail: next, at: pathname });
+          setChosen(next);
           // 已经在 /me 时地址不变，靠上面这一行把列表栏切回「我」。
           if (next === "me") void navigate({ to: "/me" });
         }}

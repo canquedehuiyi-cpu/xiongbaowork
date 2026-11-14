@@ -241,6 +241,18 @@ describe("WorkbenchFrame", () => {
     expect(pressed(view)).toEqual(["通讯录"]);
   });
 
+  test("点过别的入口后离开再后退回来，入口回到地址所属的那个", async () => {
+    const { view, user, router } = renderFrame("/");
+    await view.findByText("首页内容");
+    await user.click(rail(view).getByRole("button", { name: "工作台" }));
+    expect(pressed(view)).toEqual(["工作台"]);
+    await router.navigate({ to: "/bots" as never });
+    await view.findByText("人才市场页内容");
+    router.history.back();
+    await view.findByText("首页内容");
+    expect(pressed(view)).toEqual(["消息"]);
+  });
+
   test("普通成员的工作台列表栏里没有管理", async () => {
     const { view, user } = renderFrame("/", member);
     await view.findByText("首页内容");
