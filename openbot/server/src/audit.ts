@@ -589,6 +589,8 @@ export const auditEventTypes = [
   "bot.created",
   "bot.updated",
   "bot.duplicated",
+  // A shared preset copied as a person's own on summoning (agents/summon.ts); named on the copy.
+  "bot.summoned",
   "bot.hidden",
   "bot.unhidden",
   "bot.pinned",

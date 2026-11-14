@@ -133,6 +133,7 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "bot.created": "创建员工",
   "bot.updated": "修改员工",
   "bot.duplicated": "复制员工",
+  "bot.summoned": "召唤员工",
   "bot.hidden": "隐藏员工",
   "bot.unhidden": "显示员工",
   "bot.pinned": "置顶员工",

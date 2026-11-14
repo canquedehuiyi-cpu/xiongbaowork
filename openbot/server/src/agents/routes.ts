@@ -15,6 +15,7 @@ import { takesModelChoice } from "./harness-model";
 import { isolationState, mayIsolate } from "./isolation";
 import { isManagedEndpoint } from "./managed-endpoint";
 import { canManageAgent } from "./profile-policy";
+import { type SummonDeps, summonAgent } from "./summon";
 import {
   AgentAssignedError,
   AgentNotFoundError,
@@ -571,6 +572,11 @@ export function createAgentRoutes(
    * so a connection test dials an agent on their loopback where a run will. See onThisMachine.
    */
   dial?: { thisMachineHost?: string },
+  /**
+   * What summoning needs beyond this store (`agents/summon.ts`): the person's 1:1 conversation and
+   * their portraits. Absent, `POST /:agentId/summon` is not mounted.
+   */
+  summon?: Omit<SummonDeps, "profiles" | "admit">,
 ) {
   const isolationAvailable = isolation?.available ?? false;
   /** The plan's refusal as a response, or null when there is room. A create and a duplicate answer alike. */
@@ -1132,6 +1138,51 @@ export function createAgentRoutes(
       return mapStoreError(context, error);
     }
   });
+
+  /*
+   * 召唤: a shared preset becomes a copy of the person's own, with its 1:1 conversation; their 分身 or
+   * their own coworker just gets the conversation. A new copy takes a seat as a duplicate does and is
+   * refused alike, but only a new one: the copy already summoned, or the 分身, takes none.
+   */
+  if (summon) {
+    routes.post("/:agentId/summon", requireUser, async (context) => {
+      const actor = context.var.actor;
+      const agentId = context.req.param("agentId");
+      if (!agentId.trim()) {
+        return context.json({ error: "A Bot id is required." }, 400);
+      }
+      try {
+        const summoned = await summonAgent(
+          {
+            ...summon,
+            profiles: store,
+            ...(quota
+              ? {
+                  admit: (transaction) =>
+                    quota.assertCapacityWithin(transaction, actor.id, "wakers"),
+                }
+              : {}),
+          },
+          actor,
+          agentId,
+        );
+        // Against the copy, naming the preset, as a duplicate names its original.
+        if (summoned.created) {
+          await record(context, "bot.summoned", summoned.agent.id, {
+            summonedFrom: agentId,
+            ...(summoned.agent.isolated ? { isolated: true } : {}),
+          });
+        }
+        return context.json({
+          agent: await dtoOf(actor, summoned.agent),
+          channelId: summoned.channelId,
+          created: summoned.created,
+        });
+      } catch (error) {
+        return mapStoreError(context, error);
+      }
+    });
+  }
 
   routes.post("/:agentId/hide", requireUser, async (context) => {
     try {
