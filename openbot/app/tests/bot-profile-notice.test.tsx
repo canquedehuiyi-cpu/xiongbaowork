@@ -4,10 +4,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
   createRootRoute,
+  createRoute,
   createRouter,
+  Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { BotProfile } from "@/components/bot-profile/profile";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { settleReactWork } from "./settle-react-work";
@@ -117,4 +119,93 @@ test("the Message row shows the chevron every row that goes somewhere carries", 
   const view = draw(BOT);
   const row = (await view.findByText("给 Expenses 发消息")).closest("a");
   expect(row?.querySelector(".tabler-icon-chevron-right")).not.toBeNull();
+});
+
+/*
+ * 召唤员工 (Ruling 8): a preset original is not talked to directly. On its page the conversation row
+ * summons it (the card flip, then the conversation), or, once summoned, opens the person's own copy's
+ * conversation; the summon request answers that one without making another.
+ */
+const PRESET: AgentProfile = {
+  ...BOT,
+  id: "preset-doctor",
+  name: "暖心医生",
+  mine: false,
+  canManage: false,
+  visibility: "public",
+  summonKind: "preset",
+  summoned: false,
+};
+
+function drawWithConversations(agent: AgentProfile) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const rootRoute = createRootRoute({ component: Outlet });
+  const router = createRouter({
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+    routeTree: rootRoute.addChildren([
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/",
+        component: () => <BotProfile agent={agent} />,
+      }),
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/channel/$channelId",
+        component: () => null,
+      }),
+    ]),
+  });
+  const view = render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
+  return { view, router };
+}
+
+/** `serving()`, plus the summon answering with the person's copy and its conversation. */
+function servingSummon(posted: string[], answer: () => Promise<Response>) {
+  serving();
+  const served = global.fetch;
+  global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "POST" && url.endsWith("/summon")) {
+      posted.push(url);
+      return answer();
+    }
+    return served(input, init);
+  }) as unknown as typeof fetch;
+}
+
+const summoned = () =>
+  Response.json({
+    agent: { ...BOT, id: "copy-doctor", name: "暖心医生" },
+    channelId: "c-doctor",
+    created: false,
+  });
+
+test("on a preset not summoned yet, the conversation row summons it, with the card flip", async () => {
+  const posted: string[] = [];
+  servingSummon(posted, () => new Promise<Response>(() => {}));
+  const { view } = drawWithConversations(PRESET);
+  const row = await view.findByRole("button", { name: /召唤 暖心医生/ });
+  expect(view.queryByText("给 暖心医生 发消息")).toBeNull();
+  fireEvent.click(row);
+  expect(await view.findByRole("dialog", { name: "召唤员工" })).toBeTruthy();
+  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+});
+
+test("on a preset already summoned, the conversation row opens the person's own copy's conversation", async () => {
+  const posted: string[] = [];
+  servingSummon(posted, async () => summoned());
+  const { view, router } = drawWithConversations({ ...PRESET, summoned: true });
+  const row = await view.findByRole("button", { name: /给 暖心医生 发消息/ });
+  fireEvent.click(row);
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
+  );
+  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+  expect(view.queryByRole("dialog", { name: "召唤员工" })).toBeNull();
 });

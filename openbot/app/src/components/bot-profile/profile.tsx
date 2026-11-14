@@ -12,6 +12,7 @@ import { useState } from "react";
 import { BotNeedsYou } from "@/components/needs-you/board";
 import { SharedAppNotice } from "@/components/plugins/shared-app-notice";
 import { UpdateRoutingSection } from "@/components/settings/update-routing";
+import { useSummon } from "@/components/summon/use-summon";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -118,6 +119,12 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
   const permission = useNotificationPermission();
   const memory = useOffersMemory();
   const [resetOpen, setResetOpen] = useState(false);
+  /*
+   * A preset original is talked to through the person's own summoned copy (召唤员工): its row
+   * summons it, or opens that copy's conversation once it is summoned.
+   */
+  const preset = agent.summonKind === "preset";
+  const summon = useSummon();
 
   return (
     <ProfileSection className="mt-12" title="对你">
@@ -208,20 +215,43 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
             </Item>
           ) : null}
           <Item
-            render={<Link to="/channel/new" search={{ agent: agent.id }} />}
+            render={
+              preset ? (
+                <button
+                  disabled={summon.busy}
+                  onClick={() => summon.start(agent)}
+                  type="button"
+                />
+              ) : (
+                <Link to="/channel/new" search={{ agent: agent.id }} />
+              )
+            }
             size="sm"
           >
             <ItemMedia variant="icon">
               <IconMessage />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>给 {agent.name} 发消息</ItemTitle>
-              <ItemDescription>开始一段对话。</ItemDescription>
+              <ItemTitle>
+                {preset && !agent.summoned
+                  ? `召唤 ${agent.name}`
+                  : `给 ${agent.name} 发消息`}
+              </ItemTitle>
+              <ItemDescription>
+                {!preset
+                  ? "开始一段对话。"
+                  : agent.summoned
+                    ? "打开和你召唤的这位员工的对话。"
+                    : "召唤到你的员工列表，再开始对话。"}
+              </ItemDescription>
             </ItemContent>
             <ItemActions>
               <IconChevronRight className="size-4 text-muted-foreground" />
             </ItemActions>
           </Item>
+          {summon.problem ? (
+            <ProfileAlert>{summon.problem.message}</ProfileAlert>
+          ) : null}
           {/*
            * 重置 here as well as in 管理 below: v0.2.7 put it with the rest of what is between this
            * person and this employee, and the user wanted it back where they used to find it.
@@ -249,6 +279,7 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
         </ProfilePanel>
       )}
       <ResetDialog agent={agent} onOpenChange={setResetOpen} open={resetOpen} />
+      {summon.overlay}
     </ProfileSection>
   );
 }
