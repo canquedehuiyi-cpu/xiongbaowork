@@ -37,21 +37,7 @@ test("the inline script is found", () => {
   expect(script).toContain("dataset.skin");
 });
 
-test("a cached skin under the old default's name is the default: no data-skin is set", () => {
-  const { dataset } = boot({ "openbot-skin": "openbot" });
-  expect(dataset.skin).toBeUndefined();
+test("a cached skin under the default's name is the default: no data-skin is set", () => {
   expect(boot({ "xiongbao-skin": "xiongbao" }).dataset.skin).toBeUndefined();
   expect(boot({ "xiongbao-skin": "openduet" }).dataset.skin).toBe("openduet");
-});
-
-test("a value under an old key is copied to the new key, and the old key is kept", () => {
-  const { data, classes } = boot({
-    "openbot-theme": "dark",
-    "openbot-skin": "opendots",
-  });
-  expect(data.get("xiongbao-theme")).toBe("dark");
-  expect(data.get("openbot-theme")).toBe("dark");
-  expect(data.get("xiongbao-skin")).toBe("opendots");
-  expect(data.get("openbot-skin")).toBe("opendots");
-  expect(classes.has("dark")).toBe(true);
 });

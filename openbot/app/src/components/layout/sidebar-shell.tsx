@@ -12,14 +12,12 @@ import {
 } from "@/components/ui/sidebar";
 import {
   applySidebarOpen,
-  LEGACY_SIDEBAR_STORAGE_KEY,
-  LEGACY_SIDEBAR_WIDTH_STORAGE_PREFIX,
   parseStoredSidebarOpen,
   parseStoredSidebarWidth,
   SIDEBAR_STORAGE_KEY,
   SIDEBAR_WIDTH_STORAGE_PREFIX,
 } from "@/lib/sidebar";
-import { readMigrated } from "@/lib/storage-migrate";
+import { readStored } from "@/lib/storage-migrate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -57,16 +55,11 @@ export function SidebarShell({
 }) {
   // Read before the first paint, so a shell somebody left collapsed never flashes open.
   const [open, setOpen] = useState(() =>
-    parseStoredSidebarOpen(
-      readMigrated(SIDEBAR_STORAGE_KEY, LEGACY_SIDEBAR_STORAGE_KEY),
-    ),
+    parseStoredSidebarOpen(readStored(SIDEBAR_STORAGE_KEY)),
   );
   const widthKey = `${SIDEBAR_WIDTH_STORAGE_PREFIX}${name}`;
   const [width, setWidth] = useState(() =>
-    parseStoredSidebarWidth(
-      readMigrated(widthKey, `${LEGACY_SIDEBAR_WIDTH_STORAGE_PREFIX}${name}`),
-      defaultWidth,
-    ),
+    parseStoredSidebarWidth(readStored(widthKey), defaultWidth),
   );
   // While the edge is dragged, the sidebar follows the pointer instead of easing after it.
   const [resizing, setResizing] = useState(false);

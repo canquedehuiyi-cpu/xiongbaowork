@@ -913,6 +913,9 @@
 
 - [ ] **Step 1**：对每个到期条目，删掉读旧名的分支，删掉白名单条目；产物词表删掉对应的词。
 - [ ] **Step 2**：删 U7 批准的兼容断言，提交说明逐条列出（文件:行）。
+
+**0.2.11 到期清理记录**：用户 2026-11-13 批准删除（8 条，均非 device）：
+`app/index.html` `"openbot-theme"`；`app/index.html` `"openbot-skin"`；`app/src/components/notifications/notify-prompt.tsx` `"openbot-notify-prompt-answered"`；`app/src/components/app-sidebar/app-sidebar.tsx` `"openbot-sidebar-`；`app/src/skins/store.ts` `"openbot-skin"`；`app/src/lib/theme.ts` `"openbot-theme"`；`app/src/lib/sidebar.ts` `"openbot-sidebar`；`server/src/auth/organization.ts` `"openbot.organization-session"`。
 - [ ] **Step 3**：运行全部测试、护栏、`brand-artifacts`；`brand-expiry.test.ts` 转绿。
 - [ ] **Step 4：提交** `到期清理：删除 <版本> 起双认的旧名（<条目数> 条）`。度量：白名单 `legacy-compat` 减去到期条数；`web` 等词表对应下降。
 

@@ -1,23 +1,5 @@
 [
   {
-    "file": "app/index.html",
-    "text": "\"openbot-theme\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
-  },
-  {
-    "file": "app/index.html",
-    "text": "\"openbot-skin\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by the inline pre-paint script to carry a saved choice to its xiongbao- name",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
-  },
-  {
     "file": "app/src/components/desktop/desktop-return.tsx",
     "text": "\"openbot://open\"",
     "reason": "persisted-identifier: URL scheme the upstream desktop app registers",
@@ -73,15 +55,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/components/notifications/notify-prompt.tsx",
-    "text": "\"openbot-notify-prompt-answered\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
-  },
-  {
     "file": "app/src/components/settings/browsers/connected-browsers.tsx",
     "text": "\"openbot-browser\"",
     "reason": "persisted-identifier: recorder connection `via` value stored in the database",
@@ -101,33 +74,6 @@
     "reason": "upstream-shell-only: truthful disclosure of who receives upstream desktop's usage data; drawn only inside upstream OpenBot Desktop",
     "category": "upstream-shell-only",
     "plan": "keep"
-  },
-  {
-    "file": "app/src/components/app-sidebar/app-sidebar.tsx",
-    "text": "\"openbot-sidebar-",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
-  },
-  {
-    "file": "app/src/skins/store.ts",
-    "text": "\"openbot-skin\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once by readMigrated to carry a saved choice to its xiongbao- name",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
-  },
-  {
-    "file": "app/src/lib/theme.ts",
-    "text": "\"openbot-theme\"",
-    "reason": "persisted-identifier: legacy browser storage key, read once through the storage-migrate helper that its consumer calls, to carry a saved choice to its xiongbao- name",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/lib/wakerflows.ts",
@@ -183,15 +129,6 @@
     "reason": "persisted-identifier: event name the upstream desktop emits",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/sidebar.ts",
-    "text": "\"openbot-sidebar",
-    "reason": "persisted-identifier: legacy browser storage key, read once through the storage-migrate helper that its consumer calls, to carry a saved choice to its xiongbao- name",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
   },
   {
     "file": "app/src/lib/voice/outbox.ts",
@@ -419,15 +356,6 @@
     "reason": "persisted-identifier: database password of the public default setup",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "server/src/auth/organization.ts",
-    "text": "\"openbot.organization-session\"",
-    "reason": "persisted-identifier: legacy cookie name, still read (and cleared on sign-in/out) so a session started before the rename keeps working",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.9",
-    "removeIn": "0.2.11"
   },
   {
     "file": "server/src/delivery/opentag.ts",

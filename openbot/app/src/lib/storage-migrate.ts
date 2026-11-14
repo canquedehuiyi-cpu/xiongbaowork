@@ -7,6 +7,17 @@ type ReadableStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
  * modes, so every access is guarded: a refusal reads as "nothing stored", and a failed write
  * leaves only the legacy key so the copy can be retried on the next read.
  */
+export function readStored(
+  key: string,
+  storage?: ReadableStorage,
+): string | null {
+  try {
+    return (storage ?? window.localStorage).getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 export function readMigrated(
   key: string,
   legacyKey: string,

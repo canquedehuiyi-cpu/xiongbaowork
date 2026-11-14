@@ -142,11 +142,8 @@ test("organization identity and current role come from the authority; expiry and
     expect(cookie).toBeTruthy();
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
     const setCookies = response.headers.getSetCookie();
-    expect(setCookies).toHaveLength(2);
+    expect(setCookies).toHaveLength(1);
     expect(setCookies[0]).toStartWith("xiongbao.organization-session=");
-    expect(setCookies[1]).toBe(
-      "openbot.organization-session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
-    );
     expect((await consume()).status).toBe(401);
     const headers = new Headers({ cookie: cookie ?? "" });
     expect(
@@ -237,7 +234,6 @@ test("signing out ends the person's Recorders first, and does not sign out when 
     expect(signedOut.headers.get("set-cookie")).toContain("Max-Age=0");
     expect(signedOut.headers.getSetCookie()).toEqual([
       "xiongbao.organization-session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
-      "openbot.organization-session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
     ]);
     // The Recorders before the organization's session: never a sign-out answered with a Recorder still signed in.
     expect(happened).toEqual([
@@ -457,27 +453,6 @@ describe("quiet verification of a forwarded cookie", () => {
   test("a malformed cookie is a sign-out", async () => {
     expect(
       await auth.verifySessionQuietly("xiongbao.organization-session=x"),
-    ).toBeNull();
-  });
-
-  test("a cookie under the legacy openbot name still signs in", async () => {
-    body = { user: employee };
-    const legacy = cookieHeader.replace(
-      "xiongbao.organization-session=",
-      "openbot.organization-session=",
-    );
-    expect(legacy).toStartWith("openbot.organization-session=");
-    const user = await auth.verifySessionQuietly(legacy);
-    expect(user?.id).toBe("local-employee-1");
-  });
-
-  test("a present but invalid new cookie does not fall back to a valid legacy one", async () => {
-    body = { user: employee };
-    const valid = cookieHeader.split("=")[1];
-    expect(
-      await auth.verifySessionQuietly(
-        `xiongbao.organization-session=x; openbot.organization-session=${valid}`,
-      ),
     ).toBeNull();
   });
 

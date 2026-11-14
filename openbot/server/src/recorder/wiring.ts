@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 import type { AuditStore } from "../audit";
 import type { AuthenticatedActor, RoleRepository } from "../auth/guards";
 import {
-  LEGACY_ORGANIZATION_SESSION_COOKIE,
   ORGANIZATION_SESSION_COOKIE,
   ORGANIZATION_SESSION_MAX_AGE_SECONDS,
   organizationCookieExpiresAt,
@@ -206,8 +205,7 @@ export function createRecorderExtension(deps: {
     organizationAuth
       ? async (cookieHeader) => {
           const value = cookieHeader
-            ? (cookieValue(cookieHeader, ORGANIZATION_SESSION_COOKIE) ??
-              cookieValue(cookieHeader, LEGACY_ORGANIZATION_SESSION_COOKIE))
+            ? cookieValue(cookieHeader, ORGANIZATION_SESSION_COOKIE)
             : undefined;
           return value
             ? {

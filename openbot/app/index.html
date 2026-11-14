@@ -12,20 +12,11 @@
       // localStorage throws in some privacy modes; a theme is not worth taking the app down for.
       try {
         // Same fallback as `readMigrated` (lib/storage-migrate.ts), duplicated because nothing can be imported here.
-        const read = (key, legacy) => {
-          const now = window.localStorage.getItem(key);
-          if (now !== null) return now;
-          const old = window.localStorage.getItem(legacy);
-          if (old === null) return null;
-          try {
-            window.localStorage.setItem(key, old);
-          } catch {}
-          return old;
-        };
-        const dark = read("xiongbao-theme", "openbot-theme") === "dark";
+        const read = (key) => window.localStorage.getItem(key);
+        const dark = read("xiongbao-theme") === "dark";
         document.documentElement.classList.toggle("dark", dark);
         document.documentElement.style.colorScheme = dark ? "dark" : "light";
-        const skin = read("xiongbao-skin", "openbot-skin");
+        const skin = read("xiongbao-skin");
         // The default skin sets no attribute, under its new name and under the one the cache may still hold.
         if (skin && skin !== "xiongbao" && skin !== "openbot") document.documentElement.dataset.skin = skin;
       } catch {}
