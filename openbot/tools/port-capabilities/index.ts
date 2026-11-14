@@ -66,6 +66,7 @@ import {
 import {
   buildL1Gate,
   filterSnapshotByGate,
+  verifyAllowedUnits,
   parseLockDocument,
 } from "./l1-gate";
 
@@ -128,7 +129,7 @@ const USAGE = `用法：
   --out <路径>        输出目录（必须显式给出；不会写到仓库里的默认位置）
   --only=<范围>       移植范围：l0（本机已装：专家包 + 用户技能 + 已授权连接器）或 l1（抓取缓存，经 capability-lock 白名单闸门）
   --lock <路径>       capability-lock 文件；--only=l1 必填，l0 下禁止（默认仓库根 capability-lock.yaml 可显式指定）
-  --whitelist <路径>  可选白名单（每行一个 slug，# 注释）：在锁的许可规则之上进一步收窄；仅 l1 有效
+  --whitelist <路径>  可选白名单（每行一个 slug 或 slug/子路径，# 注释）：slug 收窄整包；slug/子路径 只放行官方插件包内该技能；仅 l1 有效
   --connectors=<档>   l0 = 仅已授权连接器（默认，P0 行为）；all = 市场索引里的全部连接器（L1 全量普查用）
   --verify            写完后回读输出目录，按同一套规则再校验一遍
   --verify-only       只回读 --out 里已有的产出，不重新生成（用于复核已生成的包）
@@ -836,12 +837,39 @@ export function main(argv: readonly string[]): number {
       console.log(
         `[port:capabilities] L1 闸门  放行 ${gated.stats.allowed} / 拒绝 ${gated.stats.refused}${codeSummary === "" ? "" : `（${codeSummary}）`}`,
       );
-      const preview = gated.dropped.slice(0, 10);
-      if (preview.length > 0) {
-        console.log("[port:capabilities] 闸门拒绝（前 10 条）：");
-        for (const dropped of preview) {
-          console.log(`  - ${dropped.code}  ${dropped.unit}`);
+      // Grouped preview so a dominant code cannot drown the others: each refusal kind shows its
+      // first few units, which is usually enough to spot the interesting outliers.
+      const previewGroups = new Map<string, string[]>();
+      for (const dropped of gated.dropped) {
+        const group = previewGroups.get(dropped.code) ?? [];
+        if (group.length < 3) {
+          group.push(dropped.unit);
+          previewGroups.set(dropped.code, group);
         }
+      }
+      if (previewGroups.size > 0) {
+        console.log("[port:capabilities] 闸门拒绝（按类别各取前 3 条）：");
+        for (const [code, units] of previewGroups) {
+          for (const unit of units) {
+            console.log(`  - ${code}  ${unit}`);
+          }
+        }
+      }
+      // Byte-level closure of the gate: every allowed unit's cached bytes must still hash to the
+      // lock's value. A fetch cache (channel-provenance.json present) must contain every origin the
+      // lock records — a missing one is fatal there; a live home may legitimately lack the
+      // marketplace bundle, so missing roots are skipped with a warning in that case only.
+      const strictCache = existsSync(
+        join(options.sourceRoot, "channel-provenance.json"),
+      );
+      const verification = verifyAllowedUnits(gated, gate, options.sourceRoot, {
+        strict: strictCache,
+      });
+      console.log(
+        `[port:capabilities] L1 锁校验  字节比对 ${verification.verified} 个锁行${verification.warnings.length > 0 ? `（本机缺失跳过 ${verification.warnings.length} 个单元根，已警告）` : ""}`,
+      );
+      for (const warning of verification.warnings) {
+        console.log(`  - VERIFY_WARN  ${warning}`);
       }
       snapshot = gated.snapshot;
     }
