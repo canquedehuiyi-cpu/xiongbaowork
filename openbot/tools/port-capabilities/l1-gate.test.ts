@@ -27,6 +27,7 @@ import {
   ChecksumMismatchError,
   filterSnapshotByGate,
   isSafeLockOrigin,
+  lockOriginDirName,
   LockParseError,
   parseLockDocument,
   parseOfficialSkillUnitName,
@@ -569,6 +570,229 @@ describe("official-plugin skill mapping and skill-level whitelist", () => {
     );
     expect(gated.snapshot.userSkills).toHaveLength(0);
     expect(gated.dropped[0]?.code).toBe("NOT_IN_LOCK");
+  });
+});
+
+describe("official-plugin directory-name alias (lock slug ≠ marketplace slug)", () => {
+  // The lock's official-plugin `slug` comes from the marketplace index `name` field, while a flattened
+  // skill unit's name carries the *directory* name. When the two disagree the unit must still resolve —
+  // but only through the alias, never instead of a real slug, and never for another kind.
+
+  test("a unit whose prefix is the plugin directory name maps to the lock row and is allowed", () => {
+    const gate = buildL1Gate(
+      validLock([
+        officialPluginEntry({
+          slug: "lexiang-knowledge",
+          origin: "plugins/lexiang-knowledge-plugins",
+        }),
+      ]),
+    );
+    const gated = filterSnapshotByGate(
+      snapshotWith(skillUnit("lexiang-knowledge-plugins--skills--lexiang-knowledge-base")),
+      gate,
+    );
+    expect(gated.snapshot.userSkills).toHaveLength(1);
+    expect(gated.stats.byCode.ALLOWED).toBe(1);
+    const decision = gate.decisions.get(
+      "official-plugin:lexiang-knowledge-plugins#lexiang-knowledge-base",
+    );
+    expect(decision?.code).toBe("ALLOWED");
+    // the lock row is the identity: the decision binds to the real slug, not to the directory name
+    expect(decision?.entry?.slug).toBe("lexiang-knowledge");
+    expect(decision?.reason).toContain("lexiang-knowledge");
+  });
+
+  test("the alias reason spells out the mapping, for triage", () => {
+    const gate = buildL1Gate(
+      validLock([
+        officialPluginEntry({
+          slug: "lexiang-knowledge",
+          origin: "plugins/lexiang-knowledge-plugins",
+        }),
+      ]),
+    );
+    const decision = gate.decideOfficialPluginSkill(
+      "lexiang-knowledge-plugins--skills--lexiang-knowledge-base",
+      { pluginSlug: "lexiang-knowledge-plugins", subpath: "lexiang-knowledge-base" },
+    );
+    expect(decision.code).toBe("ALLOWED");
+    expect(decision.reason).toContain("目录 lexiang-knowledge-plugins");
+    expect(decision.reason).toContain("锁内 slug lexiang-knowledge");
+  });
+
+  test("a real slug wins over another row's directory alias", () => {
+    const entries = [
+      // row A's directory name is `a`; row B's slug is `a`
+      officialPluginEntry({
+        slug: "x",
+        origin: "plugins/a",
+        license: "MIT",
+        attribution: "© Author A",
+      }),
+      officialPluginEntry({
+        slug: "a",
+        origin: "plugins/b",
+        license: "Apache-2.0",
+        attribution: "© Author B",
+      }),
+    ];
+    const decision = buildL1Gate(validLock(entries)).decide("a", "official-plugin");
+    expect(decision.code).toBe("ALLOWED");
+    // bound to B (the row whose *slug* is `a`), not to A (whose directory is `a`)
+    expect(decision.entry?.slug).toBe("a");
+    expect(decision.entry?.license).toBe("Apache-2.0");
+    expect(decision.entry?.attribution).toBe("© Author B");
+    expect(decision.reason).not.toContain("目录 a");
+  });
+
+  test("the alias never leaks into expert-package, skill or connector", () => {
+    const entries = [
+      validEntry({ slug: "foo", origin: "plugins/foo-plugins", redistributable: true }),
+      validEntry({
+        slug: "bar",
+        kind: "skill",
+        channel: "experts",
+        origin: "plugins/bar-plugins",
+        redistributable: true,
+      }),
+      validEntry({
+        slug: "baz",
+        kind: "connector",
+        channel: "connectors",
+        origin: "connectors/baz-plugins/mcp.json",
+        redistributable: true,
+      }),
+    ];
+    const gate = buildL1Gate(validLock(entries));
+    expect(gate.decide("foo-plugins", "expert-package").code).toBe("NOT_IN_LOCK");
+    expect(gate.decide("bar-plugins", "skill").code).toBe("NOT_IN_LOCK");
+    expect(gate.decide("baz-plugins", "connector").code).toBe("NOT_IN_LOCK");
+  });
+
+  test("two rows sharing one directory name are ambiguous and admit nothing", () => {
+    const entries = [
+      officialPluginEntry({ slug: "dup-a", origin: "plugins/dup" }),
+      officialPluginEntry({ slug: "dup-b", origin: "plugins/dup" }),
+    ];
+    const gate = buildL1Gate(validLock(entries));
+    expect(gate.decide("dup", "official-plugin").code).toBe("NOT_IN_LOCK");
+    // …while both real slugs still resolve, the ambiguity only costs the alias
+    expect(gate.decide("dup-a", "official-plugin").code).toBe("ALLOWED");
+    expect(gate.decide("dup-b", "official-plugin").code).toBe("ALLOWED");
+  });
+
+  test("the whitelist speaks lock slugs, not directory names", () => {
+    const lock = validLock([
+      officialPluginEntry({
+        slug: "lexiang-knowledge",
+        origin: "plugins/lexiang-knowledge-plugins",
+      }),
+    ]);
+    const byLockSlug = buildL1Gate(lock, ["lexiang-knowledge"]);
+    expect(
+      byLockSlug.decideOfficialPluginSkill(
+        "lexiang-knowledge-plugins--skills--lexiang-knowledge-base",
+        { pluginSlug: "lexiang-knowledge-plugins", subpath: "lexiang-knowledge-base" },
+      ).code,
+    ).toBe("ALLOWED");
+    // the directory name is not a lock identity, so listing it admits nothing
+    const byDirName = buildL1Gate(lock, ["lexiang-knowledge-plugins"]);
+    expect(
+      byDirName.decideOfficialPluginSkill(
+        "lexiang-knowledge-plugins--skills--lexiang-knowledge-base",
+        { pluginSlug: "lexiang-knowledge-plugins", subpath: "lexiang-knowledge-base" },
+      ).code,
+    ).toBe("NOT_WHITELISTED");
+  });
+
+  test("a skill-level whitelist entry is keyed by the lock slug too", () => {
+    const lock = validLock([
+      officialPluginEntry({
+        slug: "lexiang-knowledge",
+        origin: "plugins/lexiang-knowledge-plugins",
+      }),
+    ]);
+    const parsed = {
+      pluginSlug: "lexiang-knowledge-plugins",
+      subpath: "lexiang-knowledge-base",
+    };
+    const listed = buildL1Gate(lock, ["lexiang-knowledge/lexiang-knowledge-base"]);
+    expect(
+      listed.decideOfficialPluginSkill(
+        "lexiang-knowledge-plugins--skills--lexiang-knowledge-base",
+        parsed,
+      ).code,
+    ).toBe("ALLOWED");
+    const otherSub = buildL1Gate(lock, ["lexiang-knowledge/some-other-skill"]);
+    expect(
+      otherSub.decideOfficialPluginSkill(
+        "lexiang-knowledge-plugins--skills--lexiang-knowledge-base",
+        parsed,
+      ).code,
+    ).toBe("NOT_WHITELISTED");
+  });
+
+  test("a trailing slash on the origin still yields the directory name", () => {
+    expect(lockOriginDirName("plugins/chainguard/")).toBe("chainguard");
+    expect(lockOriginDirName("plugins/chainguard")).toBe("chainguard");
+    expect(lockOriginDirName("chainguard")).toBe("chainguard");
+    expect(lockOriginDirName("/")).toBeUndefined();
+    expect(lockOriginDirName("")).toBeUndefined();
+    const gate = buildL1Gate(
+      validLock([
+        officialPluginEntry({ slug: "chainguard-enterprise", origin: "plugins/chainguard/" }),
+      ]),
+    );
+    const decision = gate.decide("chainguard", "official-plugin");
+    expect(decision.code).toBe("ALLOWED");
+    expect(decision.entry?.slug).toBe("chainguard-enterprise");
+  });
+
+  test("a row whose directory name equals its slug needs no alias entry", () => {
+    // the primary index already answers; no alias note must appear in the reason
+    const gate = buildL1Gate(validLock([officialPluginEntry()]));
+    const decision = gate.decide("all-skills", "official-plugin");
+    expect(decision.code).toBe("ALLOWED");
+    expect(decision.reason).not.toContain("目录 ");
+  });
+
+  // The two assertions below pin the *two directions* of the kind guard described in buildL1Gate's
+  // JSDoc: each side of the alias index/query pair stops an opposite cross-kind leak, and each is
+  // killed by exactly one test — so deleting either guard turns a red test, not a silent pass. They
+  // guard a safety property (never adjudicate a unit against the wrong licence row), not cosmetics.
+  test("an official unit may not borrow another kind's row by directory name (index-side guard)", () => {
+    // An expert package whose directory is `foo-plugins`: if the alias index did not restrict itself
+    // to `official-plugin`, the official query below would bind to this expert row and allow it.
+    const entries = [
+      validEntry({
+        slug: "foo",
+        kind: "expert-package",
+        channel: "experts",
+        origin: "plugins/foo-plugins",
+        redistributable: true,
+      }),
+    ];
+    const decision = buildL1Gate(validLock(entries)).decide("foo-plugins", "official-plugin");
+    expect(decision.code).toBe("NOT_IN_LOCK");
+    expect(decision.entry).toBeUndefined();
+  });
+
+  test("another kind's unit may not borrow an official row by directory name (query-side guard)", () => {
+    // An official plugin whose directory is `p-dir`: if the alias lookup were not kind-scoped, these
+    // three non-plugin queries would each bind to the plugin row and allow them under its licence.
+    const entries = [
+      officialPluginEntry({ slug: "p", origin: "plugins/p-dir", redistributable: true }),
+    ];
+    const gate = buildL1Gate(validLock(entries));
+    for (const kind of ["expert-package", "skill", "connector"] as const) {
+      const decision = gate.decide("p-dir", kind);
+      expect(decision.code).toBe("NOT_IN_LOCK");
+      expect(decision.entry).toBeUndefined();
+    }
+    // …while the plugin itself still resolves through the alias.
+    const aliased = gate.decide("p-dir", "official-plugin");
+    expect(aliased.code).toBe("ALLOWED");
+    expect(aliased.entry?.slug).toBe("p");
   });
 });
 

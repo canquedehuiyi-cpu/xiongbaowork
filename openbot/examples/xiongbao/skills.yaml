@@ -1053,7 +1053,9 @@ skills:
         - Read
         - Write
         - Bash
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 文件 references/voltagent.md 未入包，正文引用 references/voltagent.md
       dropped:
         - references/
         - references/voltagent.md（25.7KB，超过单文件 24KB 入仓上限）
@@ -1532,7 +1534,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 目录 assets 未入包，正文引用 assets/template.html
       dropped:
         - assets/
         - references/
@@ -4100,7 +4104,9 @@ skills:
       redistributable: true
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 目录 reference 未入包，正文引用 reference/api-and-interface-design.md、reference/browser-testing-with-devtools.md、reference/ci-cd-and-automation.md 等 23 个
       dropped:
         - reference/
       refs_bytes: 0
@@ -10106,7 +10112,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 目录 vendor 未入包，正文引用 vendor/pretext.js
       dropped:
         - vendor/
       refs_bytes: 0
@@ -10164,7 +10172,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 目录 templates 未入包，正文引用 templates/qa-report-template.md
       dropped:
         - references/
         - templates/
@@ -10219,7 +10229,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 目录 specialists 未入包，正文引用 specialists/api-contract.md、specialists/data-migration.md、specialists/maintainability.md 等 7 个
       dropped:
         - specialists/
       refs_bytes: 0
@@ -13435,7 +13447,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 目录 assets 未入包，正文引用 assets/template.html
       dropped:
         - agents/
         - assets/
@@ -14303,7 +14317,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 文件 references/playbook.md 未入包，正文引用 references/playbook.md
       dropped:
         - references/
         - references/playbook.md（24.1KB，超过单文件 24KB 入仓上限）
@@ -15712,7 +15728,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: missing-asset-references
+      reason_ref: 目录 assets 未入包，正文引用 assets/design-template.md、assets/quality-checklist.md、assets/slide-plan-template.md 等 4 个
       dropped:
         - assets/
         - references/
@@ -16756,7 +16774,9 @@ skills:
       redistributable: false
       attribution: © WorkBuddy 能力市场
       declared_tools: []
-      runnable: full
+      runnable: blocked
+      reason: host-specific-skill
+      reason_ref: 正文整篇只讲 WorkBuddy/CodeBuddy 三个市场（专家、技能、插件）怎么批量导出：官方市场的免鉴权整包接口、workbuddy_marketplace_* 工具、市场目录结构。openbot 没有这三个市场、没有这些接口与工具，每一步都落空。 ← "workbuddy_marketplace_skill"; "把 WorkBuddy 市场里的专家/技能/插件全下载下来"
       dropped: []
       refs_bytes: 0
   - slug: workbuddy-safe-delete-guard

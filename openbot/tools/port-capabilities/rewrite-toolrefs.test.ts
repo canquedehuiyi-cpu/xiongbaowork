@@ -90,6 +90,31 @@ describe("rewriteInstructions", () => {
     expect(auditOne("research", result.instructions)).toBe("degraded");
   });
 
+  test("prose labels written with a space are not calls: the body is left verbatim", () => {
+    // 真实事故夹具（things-mac）：`Read-only (DB)` / `Write (URL scheme)` 是章节小标题，
+    // 括号里是说明不是实参。审计的 `\s*` 形态会把它判成 file-tool-call（接受的假阳性），
+    // 但如果改写层也照 `\s*` 替换，标题会变成 `computer_write_file (URL scheme)` ——
+    // 命中消失、重审计升 full，用「正文被改坏」换来一枚「完整可用」。
+    const body = [
+      "# Things 3 CLI",
+      "",
+      "Read-only (DB)",
+      "- `things inbox --limit 50`",
+      "",
+      "Write (URL scheme)",
+      '- Add: `things add "Title" --notes "..."`',
+    ].join("\n");
+    const result = rewriteInstructions(
+      { slug: "things-mac", instructions: body },
+      "degraded",
+    );
+    expect(result.rewrittenToolCalls).toBe(0);
+    expect(result.instructions).toContain("Write (URL scheme)");
+    expect(result.instructions).toContain("Read-only (DB)");
+    // 档位不被改写层抬高：散文假阳性留在散文里，由审计口径决定，不许被「改好」。
+    expect(auditOne("things-mac", result.instructions)).toBe("degraded");
+  });
+
   test("a full body is returned untouched", () => {
     const body = "# Greeting\n\nSay hello to the user.\n";
     const result = rewriteInstructions(

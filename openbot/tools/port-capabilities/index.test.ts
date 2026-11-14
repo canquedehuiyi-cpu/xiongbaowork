@@ -8,7 +8,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { verifyOutDir } from "./index";
+import { verifyOutDir } from "./verify-out-dir";
 import { auditRulesSha256 } from "./mapping";
 
 const root = mkdtempSync(join(tmpdir(), "port-capabilities-verify-"));
