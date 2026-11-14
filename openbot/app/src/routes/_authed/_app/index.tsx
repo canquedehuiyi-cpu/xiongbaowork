@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { AgentCard } from "@/components/agents/agent-card";
+import { ShowEmployeesButton } from "@/components/app-sidebar/show-employees-button";
 import {
   Composer,
   type ComposerDraft,
@@ -23,10 +24,11 @@ import {
   WorkbenchEmpty,
 } from "@/components/layout/workbench-empty";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
+import { useSummon } from "@/components/summon/use-summon";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { defaultAgentProfile } from "@/lib/agents/default-agent";
-import { agentListQueryOptions, isSharedWithYou } from "@/lib/agents/queries";
+import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import type { AuthenticatedUser } from "@/lib/auth/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import {
@@ -47,6 +49,14 @@ import { appConfig } from "@/lib/generated/application-config";
 import { newId } from "@/lib/new-id";
 import { useAnyBotSkillCommands } from "@/lib/plugins/skill-commands";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
+
+/**
+ * 发现员工 offers the presets the person has not summoned yet (召唤员工, Ruling 8): a preset is talked to
+ * through the person's own copy, so the shared original is never a card to open a conversation with.
+ */
+function awaitsSummon(agent: AgentProfile): boolean {
+  return agent.summonKind === "preset" && agent.summoned === false;
+}
 
 /** How many Bots the home page shows before pointing to the rest. Two rows of two. */
 const EXPLORE_SHOWN = 4;
@@ -83,7 +93,9 @@ function RouteComponent() {
     isPending: loading,
     isError: failed,
   } = useQuery(agentListQueryOptions());
-  const explore = agents?.filter(isSharedWithYou);
+  const explore = agents?.filter(awaitsSummon);
+  const summon = useSummon();
+  const noConversations = channels.isSuccess && channels.data.length === 0;
   // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
   const groups = useQuery(wakerGroupsQueryOptions()).data;
   const roster = toAgentOptions(agents);
@@ -194,11 +206,17 @@ function RouteComponent() {
             {appConfig.brand.productName}
           </h2>
           <h1 className="mt-[6px] font-bold text-[28px] leading-[1.15] tracking-tight">
-            {homeGreeting(
-              user,
-              channels.isSuccess && channels.data.length === 0,
-            )}
+            {homeGreeting(user, noConversations)}
           </h1>
+          {noConversations ? (
+            // A new person: every conversation starts from an employee they summoned (召唤员工).
+            <div className="mt-[10px] flex flex-col items-center gap-2">
+              <p className="text-[13px] text-muted-foreground">
+                先在左侧「员工」列表召唤一位员工，再和它对话。
+              </p>
+              <ShowEmployeesButton />
+            </div>
+          ) : null}
         </div>
         <div
           className="mt-[26px] w-full flex flex-col items-center"
@@ -313,9 +331,24 @@ function RouteComponent() {
               <ul className="mt-4 grid min-h-[140px] grid-cols-1 content-start gap-3 sm:grid-cols-2">
                 {explore.slice(0, EXPLORE_SHOWN).map((agent) => (
                   <li className="min-w-0" key={agent.id}>
-                    <Link search={{ agent: agent.id }} to="/channel/new">
+                    {/* Summoned the way the sidebar's 员工 list does it: the flip, then its conversation. */}
+                    <button
+                      aria-label={`召唤 ${agent.name}`}
+                      className="block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-60"
+                      disabled={summon.busy}
+                      onClick={() => summon.start(agent)}
+                      type="button"
+                    >
                       <AgentCard agent={agent} appearance="row" />
-                    </Link>
+                    </button>
+                    {summon.problem?.agentId === agent.id ? (
+                      <p
+                        className="mt-1 text-[12px] text-signal-ink"
+                        role="alert"
+                      >
+                        {summon.problem.message}
+                      </p>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -346,18 +379,21 @@ function RouteComponent() {
             // Reached both when the query never failed and `explore` is genuinely empty, and
             // when it failed but `agents` is defined — a loaded, empty slice either way. Same
             // plain copy for both: an empty roster is a fact, not an error.
-            <>
-              <h2 className="font-bold text-[15px]">发现员工</h2>
+            <section aria-labelledby="explore-agents-heading">
+              <h2 className="font-bold text-[15px]" id="explore-agents-heading">
+                发现员工
+              </h2>
               <WorkbenchEmpty
                 className="mt-4 h-[140px] min-h-0 rounded-[14px] border border-border border-dashed"
-                description="同事把员工共享给你之后，会出现在这里。"
+                description="召唤过的员工都在左侧「员工」列表里。"
                 mood="cute"
-                title="还没有人把员工共享给你。"
+                title="没有待召唤的员工了。"
               />
-            </>
+            </section>
           )}
         </div>
       </div>
+      {summon.overlay}
       {/* A Bot already working somewhere, and the way to it. Nothing while every Bot is idle. */}
       <WorkingNow channels={channels.data} />
     </>
