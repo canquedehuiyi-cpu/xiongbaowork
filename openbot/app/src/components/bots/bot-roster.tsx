@@ -8,10 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ComponentProps, Fragment, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
-import {
-  employeeGroups,
-  isPendingSummon,
-} from "@/components/app-sidebar/roster";
+import { employeeGroups, isOnRoster } from "@/components/app-sidebar/roster";
 import {
   attentionSummary,
   waitingOnYou,
@@ -44,7 +41,6 @@ import {
   STATUS_WORD,
 } from "@/components/wakers/coworker-card";
 import {
-  isSummonedOriginal,
   type RosterFacts,
   useRosterFacts,
 } from "@/components/wakers/roster-facts";
@@ -125,7 +121,7 @@ export function BotRoster({
       </div>
     );
   }
-  if (facts.roster.length === 0) {
+  if (facts.roster.length === 0 && facts.pending.length === 0) {
     return (
       <div className={EMPTY_FRAME} data-testid="wakers-empty">
         <WorkbenchEmpty
@@ -152,10 +148,13 @@ export function BotRoster({
    * 待召唤 first, the 分身 leading it; everybody else in their own section. A summoned preset's original
    * is nowhere: the person's copy is under 已召唤. What a Bot waits on is on the board above, by name.
    */
-  const listed = agents.data.filter((agent) => !isSummonedOriginal(agent));
-  const pending = facts.narrow(employeeGroups(listed).pending, search, query);
+  const pending = facts.narrow(
+    employeeGroups(agents.data).pending,
+    search,
+    query,
+  );
   const groups = groupRoster(
-    listed.filter((agent) => !isPendingSummon(agent)),
+    agents.data.filter(isOnRoster),
     undefined,
     facts.avatarAgentId,
   );
@@ -164,11 +163,7 @@ export function BotRoster({
   const pinned = shown(groups.pinned);
   const yours = shown(groups.yours);
   const shared = shown(groups.shared);
-  const hidden = shown(
-    (facts.hidden.data ?? []).filter(
-      (agent) => !isSummonedOriginal(agent) && !isPendingSummon(agent),
-    ),
-  );
+  const hidden = shown((facts.hidden.data ?? []).filter(isOnRoster));
   const yoursPinned =
     groups.yours.length === 0 && groups.pinned.some((agent) => agent.mine);
 

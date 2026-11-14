@@ -790,8 +790,12 @@ test("the page is 人才市场: 待召唤 cards with a portrait and 召唤, then
   ]);
   // The summoned original is nowhere; its copy is under 已召唤.
   expect(screen.queryByText("专业律师")).toBeNull();
-  // Pending ones are not under 已召唤, nor in the count of employees.
+  // Pending ones are not under 已召唤, nor in the count of employees: Backend Engineer and the copy.
   expect(sectionNames(screen, "shared")).toEqual([]);
+  expect(screen.getByTestId("waker-count").textContent).toBe("2 名员工");
+  expect(
+    screen.getByRole("tab", { name: /^员工/ }).textContent?.replace(/\D/g, ""),
+  ).toBe("2");
 });
 
 test("召唤 on a 待召唤 card plays the flip, then opens the conversation the summon returns", async () => {
@@ -893,4 +897,12 @@ test("a link to a 待召唤 card's anchor brings that card into view", async () 
   } finally {
     Element.prototype.scrollIntoView = original;
   }
+});
+
+test("with only employees still 待召唤, the page shows them rather than an empty roster", async () => {
+  seed({ agents: [avatar, presetDoctor] });
+  const { screen } = draw();
+  await waitFor(() => expect(pendingGrid(screen)).not.toBeNull());
+  expect(screen.queryByTestId("wakers-empty")).toBeNull();
+  expect(screen.getByTestId("waker-count").textContent).toBe("0 名员工");
 });
