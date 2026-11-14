@@ -278,6 +278,7 @@ tests/computer-stream-upgrade.test.ts
 tests/computer-supervisor.test.ts
 tests/computer-target.test.ts
 tests/computer-terminal.test.ts
+tests/computer-wire-headers.test.ts
 tests/config-github-app.test.ts
 tests/config.test.ts
 tests/connection-siblings.integration.test.ts

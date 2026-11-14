@@ -1,4 +1,3 @@
-import { isDevActorEmail } from "../auth/dev-actor-email";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type BrowserApiState,
@@ -36,7 +35,9 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { z } from "zod";
 import { envName } from "../../../shared/env-aliases";
+import { HEADER } from "../../../shared/wire-headers";
 import { type AuditStore, recordAuditEvent } from "../audit";
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import type { AppVariables, AuthenticatedActor } from "../auth/guards";
 import { englishName, productName } from "../brand";
 import { type SeatAddress, seatHeaders } from "../computer/client";
@@ -422,7 +423,7 @@ const NOT_ANSWERED = {
 };
 
 /** One computer route for a person's browser (or a Bot's, browser/bot-browser.ts), under that computer's token
- * (`token`, which the caller names because the computer it goes to decides it) with the browser in `x-openbot-bot-id`:
+ * (`token`, which the caller names because the computer it goes to decides it) with the browser in `x-xiongbao-bot-id`:
  * a GET, or a POST of `body` (a POST with no body when `method` says so). */
 export function computerCaller(
   deps: Pick<BrowserRouteDeps, "fetchImpl" | "callTimeoutMs">,
@@ -467,9 +468,7 @@ export function computerCaller(
         method: options.method ?? (body === undefined ? "GET" : "POST"),
         headers: {
           ...seatHeaders(computerId),
-          ...(options.token
-            ? { "x-openbot-computer-token": options.token }
-            : {}),
+          ...(options.token ? { [HEADER.computerToken]: options.token } : {}),
           ...(body === undefined ? {} : { "content-type": "application/json" }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),

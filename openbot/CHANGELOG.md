@@ -8,6 +8,14 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **内部请求头改发新名：服务器发给 agent-computer 的请求头只用 `x-xiongbao-*`（bot-id、person-id、computer-token），
+  不再带 `x-openbot-*`。** agent-computer 从 0.2.11 起新旧两种都收，所以 0.2.11 及以后的 agent-computer 与本版服务器照常
+  能通；0.2.10 及更早的 agent-computer 只认旧名，收到本版服务器的请求会当作没带令牌，一律拒绝（401）。agent-computer
+  到 0.2.13 之前仍然收旧名，所以 0.2.11 的服务器配更新的 agent-computer 也照常能用。头名统一放在 `shared/wire-headers.ts`，
+  agent-computer 镜像多带这一个文件。
+  升级须知：不需要迁移，不需要改配置。**服务器升级前，设备端和 agent-computer 必须先升到 0.2.11 或更高**，已经在运行的
+  电脑容器也要换成 0.2.11 或更高的镜像；从 0.2.10 或更早直接升级的部署，先升到 0.2.11，再升本版。
+
 ## 0.2.11
 
 **从 v0.2.10 升级先看这几条**（逐条说明在下面各项的「升级须知」里）：

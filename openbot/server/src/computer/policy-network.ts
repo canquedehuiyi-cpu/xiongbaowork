@@ -26,6 +26,7 @@ import {
   needsResolution,
   parseEgressRules,
 } from "../../../agent-computer/src/egress";
+import { HEADER } from "../../../shared/wire-headers";
 import type { NetworkPolicyRow } from "../admin/settings-store";
 import type { WebBotAuth } from "../web-bot-auth";
 import { type ComputerSeat, computerKeyText, seatText } from "./computer-key";
@@ -104,9 +105,7 @@ export async function botsOn(
   const response = await options.fetchImpl(
     `${(computer.url ?? "").replace(/\/$/, "")}/computers`,
     {
-      headers: options.token
-        ? { "x-openbot-computer-token": options.token }
-        : {},
+      headers: options.token ? { [HEADER.computerToken]: options.token } : {},
       signal: AbortSignal.timeout(5_000),
     },
   );
@@ -218,10 +217,8 @@ export async function pushEgressPolicy(
         method: "PUT",
         headers: {
           "content-type": "application/json",
-          "x-openbot-bot-id": botId,
-          ...(options.token
-            ? { "x-openbot-computer-token": options.token }
-            : {}),
+          [HEADER.botId]: botId,
+          ...(options.token ? { [HEADER.computerToken]: options.token } : {}),
         },
         body: JSON.stringify({
           policy: { mode: policy.mode, rules: policy.rules },

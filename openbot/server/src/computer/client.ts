@@ -1,4 +1,5 @@
 import type { HandoffRequest } from "@openbot/shared/computer-control";
+import { HEADER } from "../../../shared/wire-headers";
 import type { NavigateResult } from "./schema";
 import { checkNavigationTarget } from "./target";
 
@@ -261,8 +262,8 @@ export function seatHeaders(seat: SeatAddress): Record<string, string> {
   const { botId, personId } =
     typeof seat === "string" ? { botId: seat, personId: undefined } : seat;
   return {
-    "x-openbot-bot-id": botId,
-    ...(personId ? { "x-openbot-person-id": personId } : {}),
+    [HEADER.botId]: botId,
+    ...(personId ? { [HEADER.personId]: personId } : {}),
   };
 }
 
@@ -311,7 +312,7 @@ export function createComputerTransport(
         headers: {
           ...(init?.headers as Record<string, string> | undefined),
           ...seatHeaders(botId),
-          ...(token ? { "x-openbot-computer-token": token } : {}),
+          ...(token ? { [HEADER.computerToken]: token } : {}),
         },
         signal: caller
           ? AbortSignal.any([caller, AbortSignal.timeout(timeoutMs)])

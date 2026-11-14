@@ -297,7 +297,7 @@
   {
     "rule": "wire-dom",
     "scope": "server/src",
-    "lines": 21
+    "lines": 11
   },
   {
     "rule": "wire-dom",
