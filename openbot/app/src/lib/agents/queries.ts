@@ -98,6 +98,13 @@ export type AgentProfile = {
   summonedFrom?: string | null;
   /** The preset portrait it uses, or null for none. Optional for the same reason. */
   presetPortrait?: PortraitPreset | null;
+  /**
+   * For the person asking: `preset` a shared package coworker, `avatar` their own 分身, null any other.
+   * Optional on the type for the same reason; absent reads as null.
+   */
+  summonKind?: "preset" | "avatar" | null;
+  /** Whether it is already on their roster (a preset they hold a copy of, a 分身 they talk to, any other coworker). */
+  summoned?: boolean;
   /** Whether its next run gets that computer of its own. Decided by the server from the owner's switch. */
   isolationActive: boolean;
   /**

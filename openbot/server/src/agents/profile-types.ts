@@ -186,3 +186,12 @@ export type AgentRoleContent = {
   persona: Persona;
   bible: string | null;
 };
+
+/**
+ * Where a coworker stands for the person asking, on the list that offers to summon it (`summon.ts`).
+ * `preset`: a shared package coworker; `avatar`: their own 分身; null: any other, already theirs.
+ */
+export type SummonState = {
+  summonKind: "preset" | "avatar" | null;
+  summoned: boolean;
+};

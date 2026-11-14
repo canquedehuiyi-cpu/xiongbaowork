@@ -62,6 +62,7 @@ const SEARCH = ["parallel/web_fetch", "parallel/web_search"];
 const STANDUP = `standup-${suite}`;
 const TRIAGE = `triage-${suite}`;
 const FRESH = `fresh-${suite}`;
+const SUMMONED = `pd-summoned-${suite}`;
 
 const audit = createAuditStore(database);
 const real = personalDefaultsDeps(database, OWNER);
@@ -116,7 +117,7 @@ async function held(bot: string) {
     .sort();
 }
 
-async function addBot(id: string) {
+async function addBot(id: string, summonedFrom?: string) {
   await asPlatform(async () => {
     await database.insert(agents).values({
       id,
@@ -133,6 +134,7 @@ async function addBot(id: string) {
       roleDescription: "测试员工",
       avatarSeed: id,
       visibility: "private",
+      ...(summonedFrom ? { summonedFrom } : {}),
     });
   });
 }
@@ -652,3 +654,65 @@ async function waitFor(condition: () => Promise<boolean>) {
     await Bun.sleep(25);
   }
 }
+
+/*
+ * 召唤来的员工（`summoned_from` 非空）带着预设的技能直接可用；个人版的默认授予（技能、全部工具）一概不给它，
+ * 普通员工照旧。
+ */
+describe("a summoned coworker in the personal edition", () => {
+  const SUMMON_SKILL = `summon-skill-${suite}`;
+
+  beforeAll(async () => {
+    await addBot(SUMMONED, ASSISTANT);
+  });
+  afterAll(async () => {
+    await asPlatform(() =>
+      database.delete(agents).where(eq(agents.id, SUMMONED)),
+    );
+  });
+
+  test("holds no skill grant after being listed or run, while an ordinary one is given them", async () => {
+    await asPlatform(() =>
+      database
+        .delete(enterpriseSettings)
+        .where(
+          like(enterpriseSettings.key, `personal_skills_given:pd-%${suite}`),
+        ),
+    );
+    await writeSkill(SUMMON_SKILL);
+    await ensurePersonalSkills(store, deps);
+    await asOwner(() => store.listForAgent(SUMMONED));
+    await asOwner(() => store.listForAgent(ASSISTANT));
+    expect(await offers(SUMMONED)).toEqual([]);
+    expect(await real.skillsGiven(SUMMONED)).toBe(false);
+    expect(await offers(ASSISTANT)).toContain(SUMMON_SKILL);
+  });
+
+  test("holds no app tool grant after a run or a refresh, while an ordinary one is given them", async () => {
+    await restart();
+    expect(await held(SUMMONED)).toEqual([]);
+    expect(await held(ASSISTANT)).toEqual(SEARCH);
+
+    const row = await asPlatform(() => serverAddress(PARALLEL));
+    expect(row).toBeDefined();
+    const id = await asPlatform(async () => {
+      const [found] = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.catalogueKey, PARALLEL));
+      return found?.id as string;
+    });
+    await asPlatform(() => store.refreshTools(id));
+    expect(await held(SUMMONED)).toEqual([]);
+    const grants = await asOwner(() =>
+      database
+        .select({ ref: pluginGrants.ref })
+        .from(pluginGrants)
+        .where(
+          and(eq(pluginGrants.agentId, SUMMONED), eq(pluginGrants.kind, "mcp")),
+        ),
+    );
+    expect(grants).toEqual([]);
+    expect(await held(ASSISTANT)).toEqual(SEARCH);
+  });
+});

@@ -1,13 +1,21 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { agentProfiles, agents, pluginGrants, portraits } from "../db/schema";
+import {
+  agentProfiles,
+  agents,
+  channelAgents,
+  channelMemberships,
+  channels,
+  pluginGrants,
+  portraits,
+} from "../db/schema";
 import { avatarAgentId } from "../tenant/provisioning";
 import {
-  type AgentProfileStore,
   AgentNotFoundError,
+  type AgentProfileStore,
   type ProfileTransaction,
 } from "./profile-store";
-import type { AgentActor, AgentProfile } from "./profile-types";
+import type { AgentActor, AgentProfile, SummonState } from "./profile-types";
 
 /**
  * 召唤员工（spec `docs/specs/2026-11-14-summon-employees.md`）。
@@ -249,4 +257,87 @@ function isSummonedConflict(error: unknown): boolean {
       return true;
   }
   return false;
+}
+
+/**
+ * Whether each of these coworkers is already on this person's roster, for the list that offers them.
+ *
+ * `preset`: a shared package coworker (no owner, `agents.package_id` set), summoned once the person
+ * holds a live copy of it. `avatar`: their own 分身, summoned once a 1:1 conversation with only it
+ * exists. Anyone else is already theirs to talk to: no kind, summoned. Two queries for the whole
+ * list, not one per coworker; in the person's tenant frame.
+ */
+export async function summonStates(
+  database: Database,
+  actor: AgentActor,
+  list: readonly AgentProfile[],
+): Promise<Map<string, SummonState>> {
+  const avatarId = avatarAgentId(actor.id);
+  const unowned = list
+    .filter((agent) => agent.ownerUserId === null)
+    .map((agent) => agent.id);
+  const packaged = new Set<string>();
+  const held = new Set<string>();
+  if (unowned.length > 0) {
+    const rows = await database
+      .select({ id: agents.id })
+      .from(agents)
+      .where(
+        and(inArray(agents.id, unowned), sql`${agents.packageId} is not null`),
+      );
+    for (const row of rows) packaged.add(row.id);
+    if (packaged.size > 0) {
+      const copies = await database
+        .select({ from: agentProfiles.summonedFrom })
+        .from(agentProfiles)
+        .where(
+          and(
+            eq(agentProfiles.ownerUserId, actor.id),
+            isNull(agentProfiles.deletedAt),
+            inArray(agentProfiles.summonedFrom, [...packaged]),
+          ),
+        );
+      for (const copy of copies) if (copy.from) held.add(copy.from);
+    }
+  }
+  let avatarTalked = false;
+  if (list.some((agent) => agent.id === avatarId)) {
+    const [row] = await database
+      .select({ id: channels.id })
+      .from(channels)
+      .innerJoin(
+        channelMemberships,
+        and(
+          eq(channelMemberships.channelId, channels.id),
+          eq(channelMemberships.userId, actor.id),
+        ),
+      )
+      .innerJoin(
+        channelAgents,
+        and(
+          eq(channelAgents.channelId, channels.id),
+          eq(channelAgents.agentId, avatarId),
+        ),
+      )
+      .where(
+        and(
+          isNull(channels.deletedAt),
+          sql`(select count(*) from ${channelAgents} where ${channelAgents.channelId} = ${channels.id}) = 1`,
+        ),
+      )
+      .limit(1);
+    avatarTalked = Boolean(row);
+  }
+  return new Map(
+    list.map((agent): [string, SummonState] => {
+      if (agent.id === avatarId)
+        return [agent.id, { summonKind: "avatar", summoned: avatarTalked }];
+      if (packaged.has(agent.id))
+        return [
+          agent.id,
+          { summonKind: "preset", summoned: held.has(agent.id) },
+        ];
+      return [agent.id, { summonKind: null, summoned: true }];
+    }),
+  );
 }

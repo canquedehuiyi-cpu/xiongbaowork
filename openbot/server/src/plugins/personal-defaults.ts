@@ -38,6 +38,7 @@ import {
   DEPLOYMENT_INITIATOR,
   recordAuditEvent,
 } from "../audit";
+import { productName } from "../brand";
 import type { Database } from "../db/client";
 import { reasonWithoutStatement } from "../db/query-failure";
 import { enterpriseSettings } from "../db/schema/admin";
@@ -54,7 +55,6 @@ import {
 import { currentEdition } from "../edition";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import { STAFFING_DEFAULT_BY } from "../tenant/provisioning";
-import { productName } from "../brand";
 
 type ListedTool = { ref: string };
 
@@ -696,7 +696,8 @@ export function personalDefaultsDeps(
     /*
      * 分身不算：它的连接器来源只写只读工具，移除来源就收回（`avatar-sources.ts`），给它全部工具会让来源失去
      * 意义，移除的也会在下一次运行时被加回来。远端员工不算：它们是本人不控制的外部端点，不该拿到本人全部
-     * 账号的全部工具。
+     * 账号的全部工具。召唤来的员工不算（`summoned_from` 非空）：它带着预设的技能直接可用，别的授予由本人
+     * 在自己的这份上决定，默认授予（技能、全部工具、新技能广播）一概不给。
      */
     bots: () =>
       framed(async () => {
@@ -707,6 +708,7 @@ export function personalDefaultsDeps(
           .where(
             and(
               isNull(agentProfiles.deletedAt),
+              isNull(agentProfiles.summonedFrom),
               eq(agents.type, "built_in"),
               notLike(agentProfiles.agentId, `${AVATAR_PREFIX}%`),
             ),

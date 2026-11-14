@@ -1,11 +1,12 @@
-import { isDevActorEmail } from "../auth/dev-actor-email";
 import { declaredHarness } from "@openbot/shared/harnesses";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AuditEventType, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
 import type { AdminScope } from "../auth/admin-scope";
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import type { AppVariables } from "../auth/guards";
+import { englishName } from "../brand";
 import type { QuotaService } from "../quota/limits";
 import { QuotaExceeded } from "../quota/limits";
 import { capabilityFor, isPersonTenant } from "../tenant/context";
@@ -15,7 +16,6 @@ import { takesModelChoice } from "./harness-model";
 import { isolationState, mayIsolate } from "./isolation";
 import { isManagedEndpoint } from "./managed-endpoint";
 import { canManageAgent } from "./profile-policy";
-import { type SummonServices, summonAgent } from "./summon";
 import {
   AgentAssignedError,
   AgentNotFoundError,
@@ -38,7 +38,7 @@ import type {
   CreateAgentInput,
   Persona,
 } from "./profile-types";
-import { englishName } from "../brand";
+import { type SummonServices, summonAgent, summonStates } from "./summon";
 
 type AgentInputParseResult =
   | { ok: true; value: CreateAgentInput }
@@ -628,8 +628,13 @@ export function createAgentRoutes(
       if (owners.has(agent.ownerUserId)) continue;
       owners.set(agent.ownerUserId, await mayIsolate(agent.ownerUserId));
     }
+    // Without the summon wiring there is no database to ask: the two fields are then left out.
+    const states = summon
+      ? await summonStates(summon.database, actor, list)
+      : undefined;
     return list.map((agent) => ({
       ...dto(actor, agent),
+      ...states?.get(agent.id),
       ...isolationState(
         agent,
         isolationAvailable,
