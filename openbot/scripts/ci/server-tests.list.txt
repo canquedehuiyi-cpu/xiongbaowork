@@ -711,6 +711,7 @@ tests/sandboxed-routes.test.ts
 tests/sandboxed-save-fields.test.ts
 tests/schema.test.ts
 tests/self-host-banner.test.ts
+tests/server-dockerfile-agent-computer.test.ts
 tests/server-readiness-gates.test.ts
 tests/server-row-recorded-values.integration.test.ts
 tests/server-row-upstream-shape.integration.test.ts
