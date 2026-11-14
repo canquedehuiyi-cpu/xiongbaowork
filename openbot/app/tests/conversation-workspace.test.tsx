@@ -565,3 +565,42 @@ test("a linked chat the person made offers 解散群组… in the employee's lis
     await within(document.body).findByRole("menuitem", { name: /解散群组…/ }),
   ).toBeTruthy();
 });
+
+test("with no conversation yet, the column sends a new person to 员工 to summon one, and its button opens that list", async () => {
+  const { view } = renderApp("/channel/new", { channels: [] });
+  // A new conversation is addressed to the default employee, so the column is about it.
+  const column = await view.findByRole("complementary", {
+    name: "分析师的对话",
+  });
+  expect(within(column).getByText("还没有和分析师的对话")).toBeTruthy();
+  expect(
+    within(column).getByText(
+      "先在「员工」列表里召唤一位员工，和它的对话会出现在这里。",
+    ),
+  ).toBeTruthy();
+  expect(within(column).queryByText(/点「新建」开始第一段对话/)).toBeNull();
+  const switcher = view.getByRole("group", { name: "侧栏列表" });
+  await userEvent.click(
+    within(column).getByRole("button", { name: "去员工列表" }),
+  );
+  expect(
+    within(switcher)
+      .getByRole("button", { name: /^员工/ })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+});
+
+test("once the person has a conversation, an employee without one still says 「新建」 starts it", async () => {
+  const { view } = renderApp("/channel/new?agent=agent-writer", {
+    channels: [CHANNELS[0] as ChannelSummary],
+  });
+  const column = await view.findByRole("complementary", {
+    name: "写手的对话",
+  });
+  expect(
+    within(column).getByText("点「新建」开始第一段对话，它就会出现在这里。"),
+  ).toBeTruthy();
+  expect(
+    within(column).queryByRole("button", { name: "去员工列表" }),
+  ).toBeNull();
+});
