@@ -321,12 +321,19 @@ describe("(b) two tenants writing the same slug", () => {
     expect(listedB[0]?.grantedTo).toEqual([botB]);
 
     const resolvedA = await asTenant(tenantA, () => store.listForAgent(botA));
+    /*
+     * 形状是断言的一部分：这一份就是 run 拿到的东西。档位三项跟着走（PR #618：人选中这条技能时
+     * 模型要被告知它在这个部署里跑不跑得成），手写的技能没有档位，所以这里是 null 而不是缺字段。
+     */
     expect(resolvedA.skills).toEqual([
       {
         slug: sharedSlug,
         title: sharedSlug,
         summary: "For a test.",
         instructions: "Tenant A's, v2.",
+        runnable: null,
+        blockedReason: null,
+        blockedReasonRef: null,
         tools: [refA],
       },
     ]);
