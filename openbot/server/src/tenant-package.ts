@@ -147,28 +147,40 @@ export function validateThemeCss(rawCss: string) {
   }
 }
 
+/**
+ * One package file, as text or already parsed.
+ *
+ * Two shapes because there are two callers with different needs. `loadTenantPackage` reads a file,
+ * parses it once and hands on the document, so the fields whose value belongs to the deployment can
+ * be expanded where the structure is known (see {@link expandPackageDocument}) instead of by
+ * rewriting the whole file's bytes. Tests, and anything assembling a package in memory, hand over
+ * YAML text and let validation parse it — which is also why the type has to stay `string | object`
+ * rather than narrowing to one.
+ */
+type PackageFile = string | Record<string, unknown>;
+
 type PackageFiles = {
-  brand: string;
-  agents: string;
-  channels: string;
-  model: string;
-  knowledge: string;
+  brand: PackageFile;
+  agents: PackageFile;
+  channels: PackageFile;
+  model: PackageFile;
+  knowledge: PackageFile;
   /**
    * Optional, unlike the five above, because packages written before skills shipped do not have it
    * and must keep loading. Absent means a deployment with no skills of its own, which is what every
    * package had until now.
    */
-  skills?: string;
+  skills?: PackageFile;
   /**
    * Optional, like `skills.yaml`: `connectors.yaml`, the connectors the package declares. Absent is a
    * package that declares none, which is every package written before this contract shipped.
    */
-  connectors?: string;
+  connectors?: PackageFile;
   /**
    * Optional, like `connectors.yaml`: `teams.yaml`, the expert teams the package declares. Absent is
    * a package that declares none.
    */
-  teams?: string;
+  teams?: PackageFile;
   /**
    * A coworker per file, from `agents/` beside `agents.yaml`, in the order they should be read.
    *
@@ -184,7 +196,8 @@ type PackageFiles = {
 /** One file from `agents/`, kept with its name so a refusal can say which file it came from. */
 export type PackageAgentFile = {
   filename: string;
-  contents: string;
+  /** Text or a parsed document — see {@link PackageFile} for why both are accepted. */
+  contents: PackageFile;
 };
 
 /**
@@ -557,9 +570,9 @@ function stringArray(value: unknown, name: string): string[] {
   return value;
 }
 
-function yaml(value: string, filename: string): Record<string, unknown> {
+function yaml(value: PackageFile, filename: string): Record<string, unknown> {
   try {
-    return asRecord(parse(value), filename);
+    return asRecord(typeof value === "string" ? parse(value) : value, filename);
   } catch (error) {
     throw new Error(
       `${filename} is invalid: ${error instanceof Error ? error.message : "unknown error"}`,
@@ -567,12 +580,21 @@ function yaml(value: string, filename: string): Record<string, unknown> {
   }
 }
 
+/** Whether an optional file was supplied at all, in either of its two shapes. */
+function hasDocument(value: PackageFile | undefined): value is PackageFile {
+  if (value === undefined) return false;
+  return typeof value === "string" ? value.trim().length > 0 : true;
+}
+
 /**
- * `${NAME}` in a package file, resolved from the environment.
+ * `${NAME}` in one field, resolved from the environment.
  *
  * A package describes a deployment's Bots, and the addresses of the services behind them belong to
  * the environment rather than to the package: the same package has to be usable against a local
  * stack, a staging one and production. An unset name is an error rather than an empty string.
+ *
+ * This is the leaf. It is applied to the fields named in {@link expandPackageDocument}, never to a
+ * package file's bytes — see the note there for why the difference matters.
  */
 export function expandEnvironment(
   value: string,
@@ -590,6 +612,116 @@ export function expandEnvironment(
       );
     },
   );
+}
+
+/**
+ * The only fields a package file may take from the environment.
+ *
+ * WHAT BELONGS HERE: values that are facts about the machine the package runs on — the address of
+ * the service behind a Bot, which agent on that server, whether it is a Mastra one. A package that
+ * hard-codes these can only be deployed where they were written.
+ *
+ * WHAT DOES NOT: anything a person reads or a model is asked to follow. `instructions`,
+ * `system_prompt`, `role_description`, brand copy and knowledge roots stay exactly as the file wrote
+ * them. The two are not the same kind of text and cannot share one namespace, because `${...}` is
+ * *also* how JavaScript and shell write a template: a skill explaining a script is not a template
+ * waiting to be filled in.
+ *
+ * The scope used to be the whole file. That silently rewrote two shipped skill bodies —
+ * `"$P/${lbl:-}_raw.txt"` became `"$P/_raw.txt"` (so the two runs in that example overwrite each
+ * other) and a documented default of `20` became whichever value the reader's machine had set. See
+ * `docs/expand-environment-scope.md`.
+ */
+const EXPANDABLE_AGENT_FIELDS = [
+  "type",
+  "name",
+  "title",
+  "endpoint",
+  "remote_agent_id",
+] as const;
+
+/**
+ * A connector's address, and the hostname restated from it.
+ *
+ * Both, because validation refuses a `host` that is not exactly the URL's hostname: expanding one
+ * and not the other would ship a connector that cannot load.
+ */
+const EXPANDABLE_CONNECTOR_FIELDS = ["url", "host"] as const;
+
+function expandFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+  filename: string,
+  environment: Record<string, string | undefined>,
+): void {
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === "string") {
+      record[field] = expandEnvironment(value, filename, environment);
+    }
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Whether this file declares coworkers, in `agents.yaml` or beside it. */
+function isAgentDocument(filename: string): boolean {
+  return filename === "agents.yaml" || filename.startsWith("agents/");
+}
+
+/**
+ * Expands the deployment-owned fields of one already-parsed package document, in place.
+ *
+ * WHY PARSE FIRST. A regex over the file's text cannot tell a deployment address from a line of
+ * sample code, and every skill that teaches JavaScript or shell contains the latter. Parsing first
+ * means the file's structure decides what a field *is*, so the answer is a property of the package
+ * rather than of how closely a body happens to resemble a template. It also makes the guarantee
+ * checkable: a body loads byte for byte as the file wrote it.
+ *
+ * Files that declare no deployment-owned field are returned untouched — `skills.yaml`,
+ * `channels.yaml`, `model.yaml`, `knowledge.yaml` and `teams.yaml` today. Their text is what it is.
+ */
+export function expandPackageDocument(
+  document: Record<string, unknown>,
+  filename: string,
+  environment: Record<string, string | undefined> = process.env,
+): Record<string, unknown> {
+  if (isAgentDocument(filename)) {
+    // Two shapes are legal, and both are read (`collectAgents`): a list under `agents:`, or the one
+    // coworker at the top level of a file dropped into `agents/`.
+    if (Array.isArray(document.agents)) {
+      for (const entry of document.agents) {
+        // A malformed entry is `parseAgents`' refusal to make, with its own wording and its own file
+        // name in it. Expanding it here would answer "not an object" first and blame this function.
+        if (isRecord(entry)) {
+          expandFields(entry, EXPANDABLE_AGENT_FIELDS, filename, environment);
+        }
+      }
+      return document;
+    }
+    if (document.agents === undefined) {
+      expandFields(document, EXPANDABLE_AGENT_FIELDS, filename, environment);
+    }
+    return document;
+  }
+  if (filename === "connectors.yaml" && Array.isArray(document.connectors)) {
+    for (const entry of document.connectors) {
+      if (isRecord(entry)) {
+        expandFields(entry, EXPANDABLE_CONNECTOR_FIELDS, filename, environment);
+      }
+    }
+    return document;
+  }
+  if (filename === "brand.yaml" && isRecord(document.tenant)) {
+    // The one brand field that is a deployment fact rather than brand copy: where people are sent
+    // for help. A deployment that has its own support desk states the address here, and every other
+    // word in this file is the product's, not the machine's.
+    expandFields(document.tenant, ["support_url"], filename, environment);
+    return document;
+  }
+  return document;
 }
 
 /**
@@ -794,14 +926,16 @@ export function validateTenantPackage(files: PackageFiles): TenantPackage {
   const knowledgeYaml = yaml(files.knowledge, "knowledge.yaml");
   // Absent is a package with no skills, not a malformed one. A file that is present and wrong is
   // still refused, the way every other file here is.
-  const skillsYaml = files.skills?.trim()
+  const skillsYaml = hasDocument(files.skills)
     ? yaml(files.skills, "skills.yaml")
     : {};
   // Absent is a package with no connectors of its own, not a malformed one (same rule as skills).
-  const connectorsYaml = files.connectors?.trim()
+  const connectorsYaml = hasDocument(files.connectors)
     ? yaml(files.connectors, "connectors.yaml")
     : {};
-  const teamsYaml = files.teams?.trim() ? yaml(files.teams, "teams.yaml") : {};
+  const teamsYaml = hasDocument(files.teams)
+    ? yaml(files.teams, "teams.yaml")
+    : {};
   const packageTeams = parseTeams(teamsYaml);
   const tenant = asRecord(brand.tenant, "brand.tenant");
   const skin =
@@ -1094,10 +1228,17 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
  * decides which file a duplicate id is blamed on, and a refusal that names a different file on
  * another machine is not one anybody can act on.
  *
- * `${NAME}` is expanded here exactly as it is in `agents.yaml`: these are the clone's own files,
- * written by whoever wrote the rest of the package.
+ * `${NAME}` is expanded in these files exactly as it is in `agents.yaml`, and in the same fields: a
+ * coworker dropped in here is a coworker like any other, so it gets the deployment's address and
+ * keeps its own prose.
+ *
+ * The file's text comes back alongside the document because the checksum covers the bytes a person
+ * wrote, not the result of reading them: an environment variable changing must not look like a
+ * package change, and a comment edited must.
  */
-async function readAgentFiles(sourcePath: string): Promise<PackageAgentFile[]> {
+async function readAgentFiles(
+  sourcePath: string,
+): Promise<(PackageAgentFile & { text: string })[]> {
   const directory = join(sourcePath, "agents");
   const entries = await readdir(directory).catch(
     (error: NodeJS.ErrnoException) => {
@@ -1109,15 +1250,23 @@ async function readAgentFiles(sourcePath: string): Promise<PackageAgentFile[]> {
     .filter((entry) => entry.endsWith(".yaml") || entry.endsWith(".yml"))
     .sort();
   return await Promise.all(
-    filenames.map(async (filename) => ({
-      filename,
-      contents: expandEnvironment(
-        await readFile(join(directory, filename), "utf8"),
-        `agents/${filename}`,
-      ),
-    })),
+    filenames.map(async (filename) => {
+      const source = `agents/${filename}`;
+      const text = await readFile(join(directory, filename), "utf8");
+      return {
+        filename,
+        text,
+        contents: expandPackageDocument(yaml(text, source), source),
+      };
+    }),
   );
 }
+
+/** One required package file, in both shapes: the text the checksum covers and the document validation reads. */
+type ReadPackageFile = {
+  text: string;
+  document: Record<string, unknown>;
+};
 
 export async function loadTenantPackage(
   requestedPath: string,
@@ -1131,12 +1280,13 @@ export async function loadTenantPackage(
     "knowledge.yaml",
   ] as const;
   const contents = await Promise.all(
-    filenames.map(async (filename) =>
-      expandEnvironment(
-        await readFile(join(sourcePath, filename), "utf8"),
-        filename,
-      ),
-    ),
+    filenames.map(async (filename): Promise<ReadPackageFile> => {
+      const text = await readFile(join(sourcePath, filename), "utf8");
+      return {
+        text,
+        document: expandPackageDocument(yaml(text, filename), filename),
+      };
+    }),
   );
   const [brand, agents, channels, model, knowledge] = contents;
   const themeCss = await readFile(join(sourcePath, "theme.css"), "utf8").catch(
@@ -1151,35 +1301,39 @@ export async function loadTenantPackage(
    * Every package written before skills shipped has no `skills.yaml`, and those packages have to go
    * on loading. Missing is a deployment with no skills of its own; present and malformed is still
    * refused.
+   *
+   * These three declare no deployment-owned field today, so `expandPackageDocument` hands them back
+   * untouched — a skill body is prose about tools, and `${...}` in one is usually a shell or
+   * JavaScript template the skill is teaching. See `docs/expand-environment-scope.md`.
    */
-  const skills = await readFile(join(sourcePath, "skills.yaml"), "utf8")
-    .then((file) => expandEnvironment(file, "skills.yaml"))
-    .catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
-  const connectors = await readFile(join(sourcePath, "connectors.yaml"), "utf8")
-    .then((file) => expandEnvironment(file, "connectors.yaml"))
-    .catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
-  const teams = await readFile(join(sourcePath, "teams.yaml"), "utf8")
-    .then((file) => expandEnvironment(file, "teams.yaml"))
-    .catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
+  const optional = async (
+    filename: string,
+  ): Promise<ReadPackageFile | undefined> => {
+    const text = await readFile(join(sourcePath, filename), "utf8").catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined;
+        throw error;
+      },
+    );
+    if (text === undefined) return undefined;
+    return {
+      text,
+      document: expandPackageDocument(yaml(text, filename), filename),
+    };
+  };
+  const skills = await optional("skills.yaml");
+  const connectors = await optional("connectors.yaml");
+  const teams = await optional("teams.yaml");
   const agentFiles = await readAgentFiles(sourcePath);
   const tenantPackage = validateTenantPackage({
-    brand,
-    agents,
-    channels,
-    model,
-    knowledge,
-    skills,
-    connectors,
-    teams,
+    brand: brand.document,
+    agents: agents.document,
+    channels: channels.document,
+    model: model.document,
+    knowledge: knowledge.document,
+    skills: skills?.document,
+    connectors: connectors?.document,
+    teams: teams?.document,
     agentFiles,
     themeCss,
   });
@@ -1201,14 +1355,20 @@ export async function loadTenantPackage(
     // roster it booted with while the repository said otherwise.
     // Skill attachments are in it for the same reason, by CONTENT: an attachment edited in place is
     // a package change even though `skills.yaml` did not move.
+    // The checksum covers the files as written, not as read: an environment variable changing is
+    // not a package change, and a comment edited is one.
     checksum: createHash("sha256")
       .update(
         [
-          ...contents,
-          skills,
-          connectors,
-          teams,
-          ...agentFiles.map((file) => `${file.filename}\n${file.contents}`),
+          brand.text,
+          agents.text,
+          channels.text,
+          model.text,
+          knowledge.text,
+          skills?.text ?? "",
+          connectors?.text ?? "",
+          teams?.text ?? "",
+          ...agentFiles.map((file) => `${file.filename}\n${file.text}`),
           ...Object.entries(skillAssets).flatMap(([slug, files]) =>
             files.map((file) => `${slug}/${file.path}\n${file.content}`),
           ),
