@@ -387,6 +387,16 @@ describe("组织架构", () => {
     expect(main.getAllByRole("link", { name: /招一位新同事/ })).toHaveLength(1);
   });
 
+  test("「招一位新同事」卡上写待召唤预设的名字，不写职务，也不写本人的分身", async () => {
+    const { view } = renderApp("/contacts");
+    const main = await orgChart(view);
+    await main.findByRole("button", { name: /代码熊/ });
+    const recruit = main.getByRole("link", { name: /招一位新同事/ });
+    expect(recruit.textContent).toContain("许清楚");
+    expect(recruit.textContent).not.toContain("产品经理");
+    expect(recruit.textContent).not.toContain("分身");
+  });
+
   test("没有研发部时「招一位新同事」放在最后一组末尾", async () => {
     answers.set("GET /api/agents", {
       agents: AGENTS.filter((row) => row.department !== "研发部"),

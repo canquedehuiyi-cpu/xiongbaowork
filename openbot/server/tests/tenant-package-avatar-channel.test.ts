@@ -246,7 +246,7 @@ describe("an existing person, synchronized by the package as it shipped before",
   test("the catalogue Bot is renamed on the same start and still belongs to nobody", async () => {
     const assistant = await catalogueAssistant();
     expect(assistant?.name).toBe("通用助手");
-    expect(assistant?.title).toBe("General Assistant");
+    expect(assistant?.title).toBe("通用助理");
     expect(assistant?.roleDescription).not.toContain("代表我");
     expect(assistant?.ownerUserId).toBeNull();
     // Not routed to anybody's machine: device selection still finds no owner for it.

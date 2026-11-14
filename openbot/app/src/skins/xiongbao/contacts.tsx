@@ -108,12 +108,20 @@ function EmployeeTile({
   );
 }
 
-/** 「招一位新同事 → 人才市场」，第三行是人才市场里还没召唤的几位的职务（读得到才写）。 */
+/**
+ * 「招一位新同事 → 人才市场」，第三行是人才市场里还没召唤的几位预设员工的名字（有才写）。写名字不写职务：
+ * 人才市场的卡片上认的是名字（通用助手、运营助手），职务只是名字下面那一行。本人的分身不算「新同事」。
+ */
 function RecruitTile({ pending }: { pending: readonly AgentProfile[] }) {
-  const titles = [
-    ...new Set(pending.map((agent) => agent.title.trim()).filter(Boolean)),
+  const names = [
+    ...new Set(
+      pending
+        .filter((agent) => agent.summonKind === "preset")
+        .map((agent) => agent.name.trim())
+        .filter(Boolean),
+    ),
   ];
-  const sample = titles.slice(0, 3).join("、");
+  const sample = names.slice(0, 3).join("、");
   return (
     <li className="flex">
       <Link
@@ -151,7 +159,7 @@ function RecruitTile({ pending }: { pending: readonly AgentProfile[] }) {
               TONE.fg2,
             )}
           >
-            {titles.length > 3 ? `${sample}…` : sample}
+            {names.length > 3 ? `${sample}…` : sample}
           </span>
         ) : null}
       </Link>

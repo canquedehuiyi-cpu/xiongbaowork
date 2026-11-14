@@ -88,6 +88,20 @@ test("every preset coworker in the package has a Chinese display name, not a raw
   ).toBe("电脑管家");
 });
 
+test("every preset coworker in the package has a Chinese job title, with no English and no internal slug", () => {
+  // 工作台第二期: the title is the line under the name on the 通讯录 and the 员工名片.
+  for (const entry of loaded.agents) {
+    expect(entry.title, `agent ${entry.id}`).toMatch(/\p{Script=Han}/u);
+    expect(entry.title, `agent ${entry.id}`).not.toMatch(/[A-Za-z]/);
+    expect(entry.title, `agent ${entry.id}`).not.toContain("/");
+  }
+  const titleOf = (id: string) =>
+    loaded.agents.find((entry) => entry.id === id)?.title;
+  expect(titleOf("general-assistant")).toBe("通用助理");
+  expect(titleOf("ops-assistant")).toBe("运营专员");
+  expect(titleOf("guizang-renderer")).toBe("中文幻灯片生成");
+});
+
 test("every preset coworker in the package has a full persona in all three parts", () => {
   for (const entry of loaded.agents) {
     const persona = entry.persona;
@@ -124,7 +138,7 @@ test("the package declares the product, five seed coworkers, the ported twenty-t
   // The spec's engineer card is the one named in the objective, so it has to be in the seed.
   expect(
     loaded.agents.find((entry) => entry.id === "backend-engineer")?.title,
-  ).toBe("Backend Engineer");
+  ).toBe("后端开发");
   // Four declared channels plus one per ported team.
   expect(loaded.channels.length).toBe(7);
 });

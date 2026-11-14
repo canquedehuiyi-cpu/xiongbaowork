@@ -1,13 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { isOnRoster } from "@/components/app-sidebar/roster";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { agentListQueryOptions } from "@/lib/agents/queries";
+import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import type { AgentChannel } from "@/lib/channels/queries";
 import { createGroupWithChatMutationOptions } from "@/lib/waker-groups/mutations";
 import { CrewRequestError, type WakerGroup } from "@/lib/waker-groups/queries";
+
+/** Module-level so the query's `select` keeps one identity and its result is not recomputed per render. */
+function ownEmployees(agents: AgentProfile[]): AgentProfile[] {
+  return agents.filter(isOnRoster);
+}
 
 /** The most employees one 群组 holds: the server refuses more (`max(20)`). */
 export const MOST_MEMBERS = 20;
@@ -47,7 +53,14 @@ export function CreateGroupForm({
   initialChosen?: readonly string[];
 }) {
   const queryClient = useQueryClient();
-  const profiles = useQuery(agentListQueryOptions());
+  /*
+   * Only the person's own employees (`isOnRoster`): a preset original — summoned or not — and a 分身
+   * still 待召唤 are summoned on 人才市场 first, so neither goes into a group from here.
+   */
+  const profiles = useQuery({
+    ...agentListQueryOptions(),
+    select: ownEmployees,
+  });
   const create = useMutation(createGroupWithChatMutationOptions(queryClient));
   const [chosen, setChosen] = useState<string[]>([]);
   const [seeded, setSeeded] = useState(false);

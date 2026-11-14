@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   AGENT_NAME_OVERRIDES,
+  AGENT_TITLE_OVERRIDES,
   AssembleError,
   AUTH_OVERRIDES,
   applyVerdictDowngrades,
@@ -617,6 +618,34 @@ describe("withDisplayName", () => {
     expect(named.name).toBe("电脑管家");
     expect(named.system_prompt).toBe("# 电脑管家\n\n你是本团队的成员之一。");
     expect(named.title).toBe("电脑运维专家");
+  });
+
+  test("a coworker whose source title is English or carries a skill slug gets its Chinese title", () => {
+    const titled = withDisplayName({
+      id: "guizang-renderer",
+      name: "归藏生成师",
+      title: "中文稳定版HTML PPT / guizang-ppt-skill",
+      system_prompt: "# 归藏生成师",
+    });
+    expect(titled.title).toBe("中文幻灯片生成");
+    expect(titled.name).toBe("归藏生成师");
+    expect(titled.system_prompt).toBe("# 归藏生成师");
+  });
+
+  test("every title override is what the committed package file says, so a re-run keeps it", () => {
+    const committed = join(
+      import.meta.dir,
+      "..",
+      "..",
+      "examples",
+      "xiongbao",
+      "agents",
+    );
+    for (const [id, title] of Object.entries(AGENT_TITLE_OVERRIDES)) {
+      expect(title, id).not.toMatch(/[A-Za-z/]/);
+      const file = readFileSync(join(committed, `${id}.yaml`), "utf8");
+      expect(file, id).toContain(`\ntitle: ${title}\n`);
+    }
   });
 
   test("every other coworker is left exactly as the pipeline made it", () => {

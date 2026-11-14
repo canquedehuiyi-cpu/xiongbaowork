@@ -7,6 +7,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { isOnRoster } from "@/components/app-sidebar/roster";
 import { PortraitPicker } from "@/components/portraits/portrait-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,8 +210,10 @@ function CrewEditor({ initial }: { initial: WakerGroup }) {
     order.length !== saved.length ||
     order.some((agentId, index) => agentId !== saved[index]);
   const sizeOk = order.length >= MIN_MEMBERS && order.length <= MAX_MEMBERS;
+  // Only the person's own employees can be added (`isOnRoster`): a preset original or a 分身 still
+  // 待召唤 is summoned on 人才市场 first, as in 新建群组.
   const candidates = (agents.data ?? []).filter(
-    (agent) => !order.includes(agent.id),
+    (agent) => isOnRoster(agent) && !order.includes(agent.id),
   );
   // Taking out someone who owns a step is allowed; the person is told which step goes ownerless.
   const leaving = saved.filter((agentId) => !order.includes(agentId));

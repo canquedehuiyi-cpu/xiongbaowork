@@ -11,7 +11,7 @@
 agents:
   - id: general-assistant
     name: 通用助手
-    title: General Assistant
+    title: 通用助理
     # 这一句也是路由器读到的"它是干什么的"：写清它不代表谁、用不了谁的电脑，没 @ 的消息才会默认交给本人的分身。
     role_description: 在对话里帮人造员工、写技能，回答不涉及个人的通用问题；它是大家共用的助手，不代表任何人，也用不了任何人的电脑。
     avatar_seed: general-assistant
@@ -29,7 +29,7 @@ agents:
 
   - id: backend-engineer
     name: 后端工程师
-    title: Backend Engineer
+    title: 后端开发
     role_description: 按需求写实现、跑测试、提交可复核的改动；改动说明写清为什么而不只是做了什么。
     avatar_seed: backend-engineer
     portrait: programmer
@@ -43,7 +43,7 @@ agents:
 
   - id: code-reviewer
     name: 代码审核员
-    title: Code Reviewer
+    title: 代码审核
     role_description: 审差异与风险：正确性、边界、可维护性与测试是否真的覆盖改动。
     avatar_seed: code-reviewer
     portrait: tech-engineer
@@ -57,7 +57,7 @@ agents:
 
   - id: qa-engineer
     name: 测试工程师
-    title: QA Engineer
+    title: 测试工程
     role_description: 把验收标准变成能跑的用例，报失败时带上复现步骤与实际输出。
     avatar_seed: qa-engineer
     portrait: test-engineer
@@ -71,7 +71,7 @@ agents:
 
   - id: ops-assistant
     name: 运营助手
-    title: Operations
+    title: 运营专员
     role_description: 跟进日常运营事务：整理数据、盯进度、把结论写成人能直接用的样子。
     avatar_seed: ops-assistant
     portrait: operations-director

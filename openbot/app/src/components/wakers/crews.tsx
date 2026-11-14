@@ -3,6 +3,7 @@ import { useMutation, type useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { isOnRoster } from "@/components/app-sidebar/roster";
 import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { PortraitPicker } from "@/components/portraits/portrait-picker";
 import { usePortraitSrc } from "@/components/portraits/use-portrait";
@@ -343,10 +344,13 @@ function CrewCard({
 
       {managing && !rosterLoading ? (
         <div className="mt-[10px] flex flex-wrap gap-1">
-          {roster.map((agent) => {
+          {roster.flatMap((agent) => {
             const inside = crew.members.some(
               (member) => member.agentId === agent.id,
             );
+            // Only the person's own employees are added (`isOnRoster`); a preset original already in
+            // the group keeps its chip so it can still be taken out.
+            if (!inside && !isOnRoster(agent)) return [];
             return (
               <button
                 aria-pressed={inside}
