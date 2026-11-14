@@ -21,9 +21,11 @@ import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
+import { GroupChat } from "@/components/channels/group-chat";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import type { Presence } from "@/lib/agents/presence";
 import { authKeys } from "@/lib/auth/queries";
+import { groupKeys } from "@/lib/groups";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { queryClient } from "@/query-client";
 import { routeTree } from "@/routeTree.gen";
@@ -284,6 +286,83 @@ describe("气泡", () => {
     ).not.toContain("gradient");
   });
 
+  test("排队等着发的自己的话也带 data-mine，发出去前后是同一种气泡", () => {
+    const view = inFrame(
+      <ChatTranscript
+        busy
+        messages={[said("m1", "user", "先做这个")]}
+        queued={[
+          { id: "q1", text: "再做那个", commandIds: [], attachments: [] },
+        ]}
+      />,
+    );
+    const queued = view.getByText("再做那个").closest('[data-slot="bubble"]');
+    expect(queued?.hasAttribute("data-mine")).toBe(true);
+    // 排队中的样子还在：半透明，下面写「排队中」。
+    expect(queued?.className).toContain("opacity-60");
+    expect(view.getByText("排队中")).toBeTruthy();
+    expect(
+      getComputedStyle(bubbleContent(queued ?? null)).backgroundImage,
+    ).toBe(token("--wb-me"));
+  });
+
+  test("群聊里自己的气泡也带 data-mine、是渐变；同事的不带", async () => {
+    queryClient.setQueryData(authKeys.currentUser(), member);
+    queryClient.setQueryData(groupKeys.detail("g1"), {
+      bots: [],
+      people: [
+        {
+          userId: "alice",
+          email: "alice@example.com",
+          name: "Alice Park",
+          creator: true,
+        },
+        {
+          userId: "bob",
+          email: "bob@example.com",
+          name: "Bob",
+          creator: false,
+        },
+      ],
+      messages: [
+        {
+          id: "gm1",
+          channelId: "g1",
+          ownerUserId: "alice",
+          agentId: null,
+          text: "我在群里说的话",
+          status: "completed",
+          createdAt: "2026-11-14T08:00:00.000Z",
+        },
+        {
+          id: "gm2",
+          channelId: "g1",
+          ownerUserId: "bob",
+          agentId: null,
+          text: "同事说的话",
+          status: "completed",
+          createdAt: "2026-11-14T08:01:00.000Z",
+        },
+      ],
+    });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <div data-workbench-frame="">
+          <GroupChat channelId="g1" />
+        </div>
+      </QueryClientProvider>,
+    );
+    const mine = (await view.findByText("我在群里说的话")).closest(
+      '[data-slot="bubble"]',
+    );
+    expect(mine?.hasAttribute("data-mine")).toBe(true);
+    expect(getComputedStyle(bubbleContent(mine ?? null)).backgroundImage).toBe(
+      token("--wb-me"),
+    );
+    const theirs = view.getByText("同事说的话").closest('[data-slot="bubble"]');
+    expect(theirs?.hasAttribute("data-mine")).toBe(false);
+  });
+
   test("暗色里自己的气泡也是渐变，不是白底", () => {
     document.documentElement.classList.add("dark");
     try {
@@ -380,6 +459,13 @@ describe("确认卡与进度卡", () => {
     expect(getComputedStyle(send).backgroundImage).toBe(token("--wb-me"));
   });
 
+  test("默认皮肤：拍板按钮悬停时有反馈", () => {
+    // 渐变盖住了按钮自己的悬停底色，所以悬停的反馈由皮肤给。
+    expect(css).toMatch(
+      /\[data-slot="decision-card"\]\s*\[data-slot="button"\]:hover:not\(:disabled\)\s*\{[^}]*filter:\s*brightness\(/,
+    );
+  });
+
   test("经典皮肤：确认卡照旧", () => {
     setSkin("classic");
     const view = card();
@@ -404,6 +490,17 @@ describe("确认卡与进度卡", () => {
     );
     const progress = view.getByText("进度");
     expect(getComputedStyle(progress).backgroundColor).toBe(token("--wb-card"));
+    cleanup();
+
+    // 「未显示」卡也借用 gallery-frame 这个钩子，但它是 div、有自己的警示红框底，皮肤不碰它。
+    const refused = inFrame(
+      <div data-slot="gallery-frame" data-testid="component-refused">
+        未显示
+      </div>,
+    );
+    const card = refused.getByTestId("component-refused");
+    expect(getComputedStyle(card).backgroundColor).toBe("");
+    expect(getComputedStyle(card).borderTopColor).toBe("");
     cleanup();
 
     setSkin("classic");

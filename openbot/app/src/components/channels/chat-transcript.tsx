@@ -512,7 +512,13 @@ function Queued({
          * message sent by mistake rather than as a file waiting its turn.
          */}
         {text ? (
-          <Bubble align="end" className="opacity-60" variant="user">
+          // `data-mine` as on a sent bubble, so the skins draw it the same before and after it runs.
+          <Bubble
+            align="end"
+            className="opacity-60"
+            data-mine=""
+            variant="user"
+          >
             <BubbleContent>
               {/* Shown exactly as typed, for the same reason a sent message is. */}
               <span className="whitespace-pre-wrap">{text}</span>

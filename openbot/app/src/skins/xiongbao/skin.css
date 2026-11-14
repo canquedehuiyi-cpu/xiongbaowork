@@ -243,9 +243,21 @@
   border-radius: var(--wb-radius-sm);
   font-weight: 600;
 }
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="decision-card"]
+  [data-slot="button"]:hover:not(:disabled) {
+  /* 渐变在层外，盖住了按钮自己的悬停底色，这里给回悬停的反馈（不加过渡，不涉及动效）。 */
+  filter: brightness(1.08);
+}
 
-/* 员工画在对话里的卡片（任务进度、清单……）：和设计稿的进度卡一样的卡片底、细描边、圆角。 */
-:root:not([data-skin]) [data-workbench-frame] [data-slot="gallery-frame"] {
+/*
+ * 员工画在对话里的卡片（任务进度、清单……）：和设计稿的进度卡一样的卡片底、细描边、圆角。只认 `figure`：
+ * 「未显示」卡（`RefusedCard`）是借用同一个钩子的 div，留着它自己的警示红框底。
+ */
+:root:not([data-skin])
+  [data-workbench-frame]
+  figure[data-slot="gallery-frame"] {
   background: var(--wb-card);
   color: var(--wb-fg);
   border: 1px solid var(--wb-line2);
@@ -253,7 +265,7 @@
 }
 :root:not([data-skin])
   [data-workbench-frame]
-  [data-slot="gallery-frame"]
+  figure[data-slot="gallery-frame"]
   > figcaption {
   border-bottom-color: var(--wb-line);
 }
