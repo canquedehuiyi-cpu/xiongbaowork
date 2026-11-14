@@ -35,6 +35,9 @@ import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
  * - 我的分身：地址是这个人自己的分身员工（`/bots/avatar-<tenant>`，id 读自 `GET /api/me/avatar/sources`），
  *   不是固定页面，所以单独定义成 `AVATAR_MENU_ITEM`，由账户菜单解析出地址后画在最前面。
  */
+/** 聊天工作台最左侧入口栏的四个入口：消息、通讯录、工作台、我。 */
+export type Rail = "msg" | "contacts" | "work" | "me";
+
 export type NavigationItem = {
   /*
    * "routines" is upstream's (#1406) Routines entry. This fork does not list it: scheduled work is
@@ -67,6 +70,8 @@ export type NavigationItem = {
     | "/settings";
   icon: Icon;
   section: "primary" | "more" | "account";
+  /** 这一项归入口栏的哪一个入口。 */
+  rail: Rail;
   /** Admin routes are guarded on the server; the entry is hidden from people who cannot open them. */
   adminOnly?: boolean;
   /**
@@ -90,6 +95,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/bots",
     icon: IconUsers,
     section: "primary",
+    rail: "contacts",
   },
   {
     id: "tasks",
@@ -97,6 +103,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/tasks",
     icon: IconLayoutKanban,
     section: "primary",
+    rail: "work",
   },
   {
     id: "autonomous",
@@ -104,6 +111,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/autonomous",
     icon: IconBolt,
     section: "primary",
+    rail: "work",
     owns: ["/responsibilities", "/routines"],
   },
   {
@@ -112,6 +120,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/reachability",
     icon: IconAt,
     section: "primary",
+    rail: "work",
   },
   {
     id: "capabilities",
@@ -119,6 +128,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/capabilities",
     icon: IconBoxSeam,
     section: "primary",
+    rail: "work",
     owns: ["/wakerflows"],
   },
   {
@@ -127,6 +137,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/connections",
     icon: IconPlug,
     section: "primary",
+    rail: "work",
   },
   {
     id: "pipelines",
@@ -134,6 +145,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/pipelines",
     icon: IconRoute,
     section: "more",
+    rail: "work",
   },
   {
     id: "plans",
@@ -141,6 +153,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/settings/plans",
     icon: IconGauge,
     section: "account",
+    rail: "me",
   },
   {
     id: "settings",
@@ -148,6 +161,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/settings",
     icon: IconSettings,
     section: "account",
+    rail: "me",
   },
   {
     id: "admin",
@@ -155,6 +169,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
     to: "/admin",
     icon: IconShieldLock,
     section: "account",
+    rail: "work",
     adminOnly: true,
   },
 ];
@@ -197,6 +212,37 @@ export function navigationOwns(
   const under = (path: string) =>
     pathname === path || pathname.startsWith(`${path}/`);
   return under(item.to) || (item.owns ?? []).some(under);
+}
+
+/** 不在导航表里的页面，按路径前缀归入口；导航表里的页面先由 `navigationOwns` 认领。 */
+const RAIL_PREFIXES: readonly (readonly [string, Rail])[] = [
+  ["/channel", "msg"],
+  ["/group", "msg"],
+  ["/bots", "contacts"],
+  ["/assemble", "contacts"],
+  ["/tasks", "work"],
+  ["/autonomous", "work"],
+  ["/reachability", "work"],
+  ["/capabilities", "work"],
+  ["/connections", "work"],
+  ["/browser", "work"],
+  ["/pipelines", "work"],
+  ["/team-bots", "work"],
+  ["/approvals", "work"],
+  ["/admin", "work"],
+  ["/workbench", "work"],
+  ["/settings", "me"],
+  ["/me", "me"],
+];
+
+/** 打开 `pathname` 时入口栏亮哪一个入口；认不出的地址归消息。 */
+export function railForPath(pathname: string): Rail {
+  const owner = NAVIGATION.find((item) => navigationOwns(item, pathname));
+  if (owner) return owner.rail;
+  const hit = RAIL_PREFIXES.find(
+    ([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  return hit ? hit[1] : "msg";
 }
 
 /** `navigationFor` the signed-in person, on this deployment's edition. */
