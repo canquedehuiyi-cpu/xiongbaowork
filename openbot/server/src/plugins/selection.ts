@@ -38,6 +38,13 @@ export type SelectableSkill = {
    * skill is given it (`picked-skill.ts`).
    */
   instructions?: string;
+  /**
+   * 移植时审出来的档位与「缺什么」，跟着正文一起交给模型：徽章挂在卡片上，模型看不见，而一条
+   * `blocked` 的正文里往往就写着员工没有本地运行时的 shell 命令。缺省即 full。
+   */
+  runnable?: string | null;
+  blockedReason?: string | null;
+  blockedReasonRef?: string | null;
 };
 
 /** A granted tool, as much of it as narrowing needs. */
