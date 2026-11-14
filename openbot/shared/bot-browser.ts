@@ -35,7 +35,7 @@ import {
  * before this change, or a take with no `by`, has no `heldBy`: nobody may record or use the bar until it is taken again. */
 
 /* THE COMPUTER'S ROUTES (agent-computer), under the computer token like every other route, with the Bot's id in
- * `x-openbot-bot-id`. A person's browser id (`person-…`) is refused with 400: the person's own browser has its own routes
+ * `x-xiongbao-bot-id`. A person's browser id (`person-…`) is refused with 400: the person's own browser has its own routes
  * (`browserComputerPaths`). A computer Bots share refuses that id sooner, with 503, since no person's browser runs there
  * at all (agent-computer's person-access.ts). Every route answers `BotBrowserState`, or `{ error }` with a status below. */
 export const botBrowserComputerPaths = {

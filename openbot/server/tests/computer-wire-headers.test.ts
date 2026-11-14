@@ -301,8 +301,8 @@ describe("a real computer called by the server's transport", () => {
     await expect(
       wrong.post(base, "bot-a", "/files/list", {}),
     ).rejects.toThrow();
-    // The refusal is the computer's, not a failure to reach it: the same call with no token at all is refused the same way,
-    // and the right one (above) gets in.
+    // The refusal is the computer's, not a failure to reach it: the same wrong token sent by hand comes back 401, and the
+    // right one (above) gets in.
     const response = await fetch(`${base}/files/list`, {
       method: "POST",
       headers: {

@@ -8,7 +8,7 @@ import { z } from "zod";
  *
  * One browser per person. It is a computer named for that person, so every way of reaching a computer that gives it a
  * computer of its own (a supervisor container, a Kubernetes Sandbox, or the host-side local Chrome computer on OpenBot
- * Desktop) carries it unchanged: the id goes in `x-openbot-bot-id` as a Bot's does. Never the one computer every Bot
+ * Desktop) carries it unchanged: the id goes in `x-xiongbao-bot-id` as a Bot's does. Never the one computer every Bot
  * shares: a Bot there runs a shell beside the browser's profile, and the profile holds what the person signed in to by
  * hand. The server refuses it there, and so does the computer (`PEOPLE_ONLY_ENV`, `COMPUTER_BOT_ID`).
  */
@@ -162,7 +162,7 @@ export type LauncherApi = {
 };
 
 /* THE COMPUTER'S ROUTES (agent-computer), under the computer token like every other route, with the person's browser
- * id in `x-openbot-bot-id`. A non-person id is refused with 400. */
+ * id in `x-xiongbao-bot-id`. A non-person id is refused with 400. */
 export const browserComputerPaths = {
   open: "/browser/open",
   state: "/browser/state",
