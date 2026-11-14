@@ -9,6 +9,10 @@ import { Link } from "@tanstack/react-router";
 import { type ComponentProps, Fragment, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
+  employeeGroups,
+  isPendingSummon,
+} from "@/components/app-sidebar/roster";
+import {
   attentionSummary,
   waitingOnYou,
 } from "@/components/bot-profile/attention";
@@ -21,6 +25,7 @@ import { QueryError } from "@/components/layout/query-error";
 import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
 import { NeedsYouBoard } from "@/components/needs-you/board";
 import { DoneTasks, useNeedsYou } from "@/components/needs-you/needs-you";
+import { useSummon } from "@/components/summon/use-summon";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -39,6 +44,7 @@ import {
   STATUS_WORD,
 } from "@/components/wakers/coworker-card";
 import {
+  isSummonedOriginal,
   type RosterFacts,
   useRosterFacts,
 } from "@/components/wakers/roster-facts";
@@ -54,6 +60,7 @@ import { shortName } from "@/lib/brand";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
+import { SummonGrid } from "./summon-card";
 
 /**
  * Every Bot the person can reach, in the one place they are listed: what needs the person first,
@@ -70,6 +77,10 @@ import { cn } from "@/lib/utils";
  * 本月任务数与最近运行、群组、个人分身标记（分身固定在「你的员工」第一位）。员工页工具栏的搜索、筛选、排序对每个
  * 分区都生效；`view` 决定画成卡片（默认）还是列表。原「团队 Bot」页里「你可以用的」就是「共享给你的」这一节，
  * 发布与分配在每位员工的「共享」分页。
+ *
+ * 召唤员工 Task 10：这一页是「人才市场」，唯一召唤的地方。最上面「待召唤」是还没召唤的预设员工和分身（熊宝头像
+ * 卡片，主按钮「召唤」，播入职动画后进入会话）；本人的员工在「已召唤」（原「你的员工」）。已召唤过的预设原件
+ * 哪里都不列，本人那份才是他的员工。
  */
 export function BotRoster({
   search = {},
@@ -92,6 +103,7 @@ export function BotRoster({
   const roster = wallSearch(search);
   const createSearch: WakersSearch = { ...roster, new: true };
   const { agents } = facts;
+  const summon = useSummon();
 
   // Only when nothing ever loaded: a failed background refetch keeps the roster it had.
   if (agents.data === undefined && agents.isError) {
@@ -136,20 +148,38 @@ export function BotRoster({
     );
   }
 
-  // Every Bot stays in its own section; what it waits on is on the board above, by name.
-  const groups = groupRoster(agents.data, undefined, facts.avatarAgentId);
+  /*
+   * 待召唤 first, the 分身 leading it; everybody else in their own section. A summoned preset's original
+   * is nowhere: the person's copy is under 已召唤. What a Bot waits on is on the board above, by name.
+   */
+  const listed = agents.data.filter((agent) => !isSummonedOriginal(agent));
+  const pending = facts.narrow(employeeGroups(listed).pending, search, query);
+  const groups = groupRoster(
+    listed.filter((agent) => !isPendingSummon(agent)),
+    undefined,
+    facts.avatarAgentId,
+  );
   const shown = (agentsIn: readonly AgentProfile[]) =>
     facts.order(facts.narrow(agentsIn, search, query), search.sort);
   const pinned = shown(groups.pinned);
   const yours = shown(groups.yours);
   const shared = shown(groups.shared);
-  const hidden = shown(facts.hidden.data ?? []);
+  const hidden = shown(
+    (facts.hidden.data ?? []).filter(
+      (agent) => !isSummonedOriginal(agent) && !isPendingSummon(agent),
+    ),
+  );
   const yoursPinned =
     groups.yours.length === 0 && groups.pinned.some((agent) => agent.mine);
 
   if (
     narrowed &&
-    pinned.length + yours.length + shared.length + hidden.length === 0
+    pending.length +
+      pinned.length +
+      yours.length +
+      shared.length +
+      hidden.length ===
+      0
   ) {
     return (
       <div className={EMPTY_FRAME} data-testid="wakers-no-match">
@@ -221,13 +251,28 @@ export function BotRoster({
        * A Bot waiting on them stays in its own section below too, with its badge.
        */}
       <NeedsYouBoard />
+      {pending.length ? (
+        <PageSection
+          className={SECTION}
+          description="召唤后它就是你自己的员工，和它的对话会出现在会话列表里。"
+          title="待召唤"
+        >
+          <SummonGrid
+            agents={pending}
+            avatarId={facts.avatarAgentId ?? null}
+            busy={summon.busy}
+            onSummon={summon.start}
+            problem={summon.problem}
+          />
+        </PageSection>
+      ) : null}
       {pinned.length ? (
         <PageSection className={SECTION} title="已置顶">
           {draw("pinned", pinned)}
         </PageSection>
       ) : null}
       {yours.length || !narrowed ? (
-        <PageSection className={SECTION} title="你的员工">
+        <PageSection className={SECTION} title="已召唤">
           {yours.length ? (
             draw("yours", yours, true)
           ) : (
@@ -247,11 +292,11 @@ export function BotRoster({
                 )
               }
               icon={IconBolt}
-              title={yoursPinned ? "都已置顶" : "还没有你的员工"}
+              title={yoursPinned ? "都已置顶" : "还没有召唤员工"}
             >
               {yoursPinned
                 ? "你的员工都已置顶在上面。"
-                : "你新建的员工会出现在这里。"}
+                : "在上面「待召唤」里召唤的员工，和你新建的员工，会出现在这里。"}
             </PageEmpty>
           )}
         </PageSection>
@@ -302,6 +347,7 @@ export function BotRoster({
           {hiddenShown ? draw("hidden", hidden) : null}
         </PageSection>
       ) : null}
+      {summon.overlay}
     </>
   );
 }

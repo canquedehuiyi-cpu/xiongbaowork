@@ -217,7 +217,7 @@ test.each([
     /AI Model and Agent Framework/,
     "/channel/models",
   ],
-  ["员工", "link", /^员工/, "/bots"],
+  ["人才市场", "link", /^人才市场/, "/bots"],
   ["任务看板", "link", /^任务看板/, "/tasks"],
   ["连接", "link", /^连接/, "/connections"],
   ["教员工做事", "link", /^教员工做事/, "/browser"],

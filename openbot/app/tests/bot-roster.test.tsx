@@ -144,7 +144,7 @@ test("sections read Pinned, Yours, Shared with you, and each Bot appears once", 
   const headings = [...view.container.querySelectorAll("h2")].map(
     (heading) => heading.textContent,
   );
-  expect(headings).toEqual(["已置顶", "你的员工", "共享给你的"]);
+  expect(headings).toEqual(["已置顶", "已召唤", "共享给你的"]);
   expect(view.getAllByText("Favourite")).toHaveLength(1);
 });
 
@@ -240,7 +240,7 @@ test("a Bot with something waiting stays in its own section, with its count", as
     (heading) => heading.textContent,
   );
   // What it waits on is on the Needs you board, by name; the Bot itself stays where it is.
-  expect(headings).toEqual(["你的员工", "共享给你的"]);
+  expect(headings).toEqual(["已召唤", "共享给你的"]);
   expect(view.getAllByText("Waiting")).toHaveLength(1);
 });
 

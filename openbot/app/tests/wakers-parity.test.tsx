@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import {
   wakersBackLink,
   wakersReturnSearch,
@@ -260,7 +261,7 @@ test("the header names the page, and 员工 / 群组 is one tablist mirrored to 
     expect(screen.getByText("Backend Engineer")).toBeTruthy(),
   );
 
-  expect(screen.getByRole("heading", { name: "员工" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "人才市场" })).toBeTruthy();
   const tablist = screen.getByRole("tablist", { name: "员工与群组" });
   const tabs = within(tablist).getAllByRole("tab");
   // docs/design/ios-studio/04-员工管理.png: each side of the pill carries its count after the word.
@@ -709,72 +710,153 @@ test("a group card opens its board and 组团流程", async () => {
 });
 
 /*
- * 召唤员工: a preset original is never talked to directly. Its card summons it (the card flip,
- * then the conversation), or, once summoned, its 进对话 opens the person's own copy's conversation —
- * never a /channel/new that would not take the original.
+ * 召唤员工 Task 10: this page is 人才市场, the one place summoning happens. 待召唤 holds the presets and
+ * the 分身 not summoned yet, each a card with its 熊宝 portrait and a 召唤 button; 已召唤 holds the
+ * person's own employees. A preset original already summoned is shown nowhere: its copy is the one.
  */
 const presetDoctor: AgentProfile = {
   ...base,
   id: "preset-doctor",
   name: "暖心医生",
   title: "医生",
+  roleDescription: "看病。",
   mine: false,
   canManage: false,
   visibility: "public",
   summonKind: "preset",
   summoned: false,
+  presetPortrait: "doctor",
 };
+const presetLawyer: AgentProfile = {
+  ...presetDoctor,
+  id: "preset-lawyer",
+  name: "专业律师",
+  title: "律师",
+  summoned: true,
+  presetPortrait: "lawyer",
+};
+const copyLawyer: AgentProfile = {
+  ...base,
+  id: "copy-lawyer",
+  name: "我的律师",
+  title: "律师",
+  summonedFrom: "preset-lawyer",
+  summonKind: null,
+  summoned: true,
+};
+const avatar: AgentProfile = {
+  ...base,
+  id: "avatar-me",
+  name: "我的分身",
+  title: "",
+  summonKind: "avatar",
+  summoned: false,
+};
+const MARKET = [base, avatar, presetDoctor, presetLawyer, copyLawyer];
 
-function servingSummon(posted: string[], answer: () => Promise<Response>) {
+const pendingGrid = (screen: ReturnType<typeof render>) =>
+  screen.container.querySelector(
+    "[data-testid=summon-grid][data-section=pending]",
+  ) as HTMLElement | null;
+
+test("the page is 人才市场: 待召唤 cards with a portrait and 召唤, then the person's own under 已召唤", async () => {
+  seed({ agents: MARKET });
+  const { screen } = draw();
+  expect(
+    await screen.findByRole("heading", { level: 1, name: "人才市场" }),
+  ).toBeTruthy();
+  await waitFor(() => expect(pendingGrid(screen)).not.toBeNull());
+  const pending = within(pendingGrid(screen) as HTMLElement);
+  expect(
+    pending
+      .getAllByRole("button", { name: /^召唤 / })
+      .map((button) => button.getAttribute("aria-label")),
+  ).toEqual(["召唤 我的分身", "召唤 暖心医生"]);
+  const doctor = screen.container.querySelector(
+    "#summon-preset-doctor",
+  ) as HTMLElement;
+  expect(doctor.querySelector("img")?.getAttribute("src")).toBe(
+    PRESET_IMAGES.doctor,
+  );
+  expect(within(doctor).getByText("医生")).toBeTruthy();
+
+  const headings = [...screen.container.querySelectorAll("h2")].map(
+    (heading) => heading.textContent,
+  );
+  expect(headings.slice(0, 2)).toEqual(["待召唤", "已召唤"]);
+  expect(sectionNames(screen, "yours")).toEqual([
+    "Backend Engineer",
+    "我的律师",
+  ]);
+  // The summoned original is nowhere; its copy is under 已召唤.
+  expect(screen.queryByText("专业律师")).toBeNull();
+  // Pending ones are not under 已召唤, nor in the count of employees.
+  expect(sectionNames(screen, "shared")).toEqual([]);
+});
+
+test("召唤 on a 待召唤 card plays the flip, then opens the conversation the summon returns", async () => {
+  const posted: string[] = [];
+  let release: (response: Response) => void = () => {};
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST" && url.endsWith("/summon")) {
       posted.push(url);
-      return answer();
+      return new Promise<Response>((resolve) => {
+        release = resolve;
+      });
     }
     return Response.json({ error: "not served" }, { status: 404 });
   }) as typeof fetch;
-}
-
-const cardOf = (screen: ReturnType<typeof render>, name: string) =>
-  within(
-    screen
-      .getAllByTestId("waker-card")
-      .find((node) => node.textContent?.includes(name)) as HTMLElement,
+  seed({ agents: MARKET });
+  const { screen, router } = draw();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "召唤 暖心医生" }),
   );
-
-test("a preset not summoned yet is summoned from its card, with the card flip", async () => {
-  const posted: string[] = [];
-  servingSummon(posted, () => new Promise<Response>(() => {}));
-  seed({ agents: [base, presetDoctor] });
-  const { screen } = draw();
-  await waitFor(() => expect(screen.getByText("暖心医生")).toBeTruthy());
-  const card = cardOf(screen, "暖心医生");
-  expect(card.queryByRole("link", { name: "进对话" })).toBeNull();
-  await userEvent.click(card.getByRole("button", { name: "召唤 暖心医生" }));
-  expect(
-    await within(document.body).findByRole("dialog", { name: "召唤员工" }),
-  ).toBeTruthy();
+  const overlay = await within(document.body).findByRole("dialog", {
+    name: "召唤员工",
+  });
   expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
-});
-
-test("a summoned preset's 进对话 opens the person's own copy's conversation", async () => {
-  const posted: string[] = [];
-  servingSummon(posted, async () =>
+  release(
     Response.json({
-      agent: { ...base, id: "copy-doctor", name: "暖心医生" },
+      agent: { ...presetDoctor, id: "copy-doctor", summonKind: null },
       channelId: "c-doctor",
-      created: false,
+      created: true,
     }),
   );
-  seed({ agents: [base, { ...presetDoctor, summoned: true }] });
-  const { screen, router } = draw();
-  await waitFor(() => expect(screen.getByText("暖心医生")).toBeTruthy());
-  const card = cardOf(screen, "暖心医生");
-  expect(card.queryByRole("link", { name: "进对话" })).toBeNull();
-  await userEvent.click(card.getByRole("button", { name: "进对话" }));
+  await waitFor(() =>
+    expect(overlay.getAttribute("data-phase")).toBe("reveal"),
+  );
+  await userEvent.click(overlay);
   await waitFor(() =>
     expect(router.state.location.pathname).toBe("/channel/c-doctor"),
   );
-  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+});
+
+test("a refused summon says why on that card and leaves it in 待召唤", async () => {
+  globalThis.fetch = (async () =>
+    Response.json(
+      { error: "员工名额已满。", code: "quota_exceeded" },
+      { status: 402 },
+    )) as unknown as typeof fetch;
+  seed({ agents: MARKET });
+  const { screen } = draw();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "召唤 暖心医生" }),
+  );
+  const doctor = within(
+    screen.container.querySelector("#summon-preset-doctor") as HTMLElement,
+  );
+  expect((await doctor.findByRole("alert")).textContent).toBe("员工名额已满。");
+  expect(doctor.getByRole("button", { name: "召唤 暖心医生" })).toBeTruthy();
+});
+
+test("the toolbar's search narrows 待召唤 too", async () => {
+  seed({ agents: MARKET });
+  const { screen } = draw("/bots?q=医生");
+  await waitFor(() => expect(pendingGrid(screen)).not.toBeNull());
+  expect(
+    within(pendingGrid(screen) as HTMLElement)
+      .getAllByRole("button", { name: /^召唤 / })
+      .map((button) => button.getAttribute("aria-label")),
+  ).toEqual(["召唤 暖心医生"]);
 });

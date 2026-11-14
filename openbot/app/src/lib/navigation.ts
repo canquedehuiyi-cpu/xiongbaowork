@@ -86,7 +86,7 @@ export function isNavigationLink(item: NavigationItem): item is NavigationLink {
 export const NAVIGATION: readonly NavigationItem[] = [
   {
     id: "bots",
-    label: "员工",
+    label: "人才市场",
     to: "/bots",
     icon: IconUsers,
     section: "primary",

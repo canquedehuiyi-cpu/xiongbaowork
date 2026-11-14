@@ -119,8 +119,15 @@ export function useRosterFacts() {
     };
   };
 
+  /*
+   * A preset original the person already summoned is not on 人才市场 at all (召唤员工): their copy is
+   * the one they have, so it is neither listed nor counted.
+   */
   const roster = useMemo(
-    () => [...(agents.data ?? []), ...(hidden.data ?? [])],
+    () =>
+      [...(agents.data ?? []), ...(hidden.data ?? [])].filter(
+        (agent) => !isSummonedOriginal(agent),
+      ),
     [agents.data, hidden.data],
   );
   const workingIds = useMemo(
@@ -244,3 +251,8 @@ export function useRosterFacts() {
 }
 
 export type RosterFacts = ReturnType<typeof useRosterFacts>;
+
+/** A shared preset the person holds a copy of: the original stays out of their lists. */
+export function isSummonedOriginal(agent: AgentProfile): boolean {
+  return agent.summonKind === "preset" && agent.summoned !== false;
+}

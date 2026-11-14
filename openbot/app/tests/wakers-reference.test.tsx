@@ -196,9 +196,11 @@ test("the header carries the eyebrow and subtitle, 角色模板 beside the prima
   const { screen } = draw();
   await screen.findByText("Code Reviewer");
 
-  expect(screen.getByRole("heading", { name: "员工" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "人才市场" })).toBeTruthy();
   expect(
-    screen.getByText("管理你的员工、群组，以及别人共享给你的员工。"),
+    screen.getByText(
+      "在这里召唤员工，管理你的员工、群组，以及别人共享给你的员工。",
+    ),
   ).toBeTruthy();
   expect(
     screen.container.querySelector("[data-slot=eyebrow]")?.textContent,

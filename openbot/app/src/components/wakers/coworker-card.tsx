@@ -10,7 +10,6 @@ import {
   attentionSummary,
   needsInput,
 } from "@/components/bot-profile/attention";
-import { useSummon } from "@/components/summon/use-summon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { type AgentProfile, isSharedWithYou } from "@/lib/agents/queries";
 import type { BotAttention } from "@/lib/bot-lifecycle/queries";
@@ -28,7 +27,7 @@ import {
   Fact,
   PERSONAL_SURFACE,
 } from "./card-chrome";
-import type { WakerStatus, WakersSearch } from "./wakers-search";
+import type { WakersSearch, WakerStatus } from "./wakers-search";
 
 /** The hairline and top highlight around a profile's face, over the face's own rounded clip. */
 const FACE_RING =
@@ -158,12 +157,6 @@ export function CoworkerCard({
   unconfigured: boolean;
 }) {
   const paused = status === "paused";
-  /*
-   * A preset original is talked to through the person's own summoned copy (召唤员工): its card
-   * summons it, or opens that copy's conversation once it is summoned.
-   */
-  const preset = agent.summonKind === "preset";
-  const summon = useSummon();
   const count = stats
     ? `${stats.truncated ? "≥" : ""}${stats.stats.count}`
     : "—";
@@ -380,7 +373,7 @@ export function CoworkerCard({
           "pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:-mx-[14px] pointer-coarse:mt-[10px] pointer-coarse:-mb-[12px] pointer-coarse:w-[calc(100%+28px)] pointer-coarse:opacity-100",
         )}
         data-card-actions=""
-        data-open={problem || summon.problem ? "" : undefined}
+        data-open={problem ? "" : undefined}
       >
         {waiting ? (
           /*
@@ -462,25 +455,13 @@ export function CoworkerCard({
             Real links, not buttons drawn as anchors: each goes to another screen, so it should open
             in a new tab like any other address.
           */}
-          {preset ? (
-            <Button
-              aria-label={agent.summoned ? undefined : `召唤 ${agent.name}`}
-              disabled={summon.busy}
-              onClick={() => summon.start(agent)}
-              size="xs"
-              variant="ghost"
-            >
-              {agent.summoned ? "进对话" : "召唤"}
-            </Button>
-          ) : (
-            <Link
-              className={buttonVariants({ size: "xs", variant: "ghost" })}
-              search={{ agent: agent.id }}
-              to="/channel/new"
-            >
-              进对话
-            </Link>
-          )}
+          <Link
+            className={buttonVariants({ size: "xs", variant: "ghost" })}
+            search={{ agent: agent.id }}
+            to="/channel/new"
+          >
+            进对话
+          </Link>
           {/*
             Spec D7: the coworker's assembly (model, persona, skills, knowledge), one tap from its
             card. 装配页搬进了员工详情的「设置」分页（M5b）。
@@ -511,12 +492,6 @@ export function CoworkerCard({
             {problem}
           </p>
         ) : null}
-        {summon.problem ? (
-          <p className="text-destructive" role="alert">
-            {summon.problem.message}
-          </p>
-        ) : null}
-        {summon.overlay}
       </div>
     </div>
   );
