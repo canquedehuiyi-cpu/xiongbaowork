@@ -407,6 +407,17 @@ describe("正在输入", () => {
     expect(view.queryByText("思考中")).toBeNull();
   });
 
+  test("「正在输入」是 <div role=status>：里面的头像是 div，不能放在 <p> 里", () => {
+    const view = inFrame(
+      <ChatTranscript busy messages={waiting} typist={typist} />,
+    );
+    const status = view.getByRole("status");
+    expect(status.tagName).toBe("DIV");
+    // 头像（`ChannelAvatar`）画的是 div；放进段落里浏览器会把段落拆开，React 也报嵌套不合法。
+    expect(status.querySelector("div")).not.toBeNull();
+    expect(view.container.querySelector("p div")).toBeNull();
+  });
+
   test("回话已经开始写了，就不再说正在输入", () => {
     const view = inFrame(
       <ChatTranscript

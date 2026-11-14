@@ -36,13 +36,18 @@ const stats = (
     tasks: [],
     waiting: 0,
     autonomous: [],
-    employees: 0,
+    // 默认本人有一位员工 a1（`task()` 默认是它做的）。
+    employees: ["a1"],
     ...input,
   });
 
 describe("todayStats", () => {
   test("在岗员工、等你确认原样带过来", () => {
-    const result = stats({ employees: 5, waiting: 2, now: at(14, 15) });
+    const result = stats({
+      employees: ["a1", "a2", "a3", "a4", "a5"],
+      waiting: 2,
+      now: at(14, 15),
+    });
     expect(result.onDuty).toBe(5);
     expect(result.waitingOnYou).toBe(2);
   });
@@ -78,6 +83,39 @@ describe("todayStats", () => {
       ],
     });
     expect(result.doneToday).toBe(1);
+  });
+
+  test("今日完成只数本人的员工做完的，和「在岗员工」是同一群人", () => {
+    const result = stats({
+      now: at(14, 15),
+      employees: ["a1", "a2"],
+      tasks: [
+        task({ executorAgentId: "a1" }),
+        task({ executorAgentId: "a2" }),
+        // 工作区里别人的员工做完的、没有执行员工的，都不算进这个人的今日完成。
+        task({ executorAgentId: "teammate-bot" }),
+        task({ executorAgentId: null }),
+      ],
+    });
+    expect(result.onDuty).toBe(2);
+    expect(result.doneToday).toBe(2);
+  });
+
+  test("今日完成不算归档了的卡（归档会把更新时间刷成归档那一刻）", () => {
+    const result = stats({
+      now: at(14, 15),
+      tasks: [
+        task({ id: "kept", updatedAt: at(14, 9).toISOString() }),
+        task({
+          id: "filed",
+          updatedAt: at(14, 14).toISOString(),
+          archivedAt: at(14, 14).toISOString(),
+        }),
+        // 没归档（服务端给 null）和老服务端不带这一项的，照常算。
+        task({ id: "open", archivedAt: null }),
+      ],
+    });
+    expect(result.doneToday).toBe(2);
   });
 
   test("今晚定时任务：现在到次日 06:00 之间要跑的才算", () => {
@@ -138,7 +176,7 @@ describe("todayFeed", () => {
       task({ id: "running", status: "running" }),
       task({ id: "yesterday", updatedAt: at(13, 23).toISOString() }),
     ];
-    const feed = todayFeed(tasks, now);
+    const feed = todayFeed(tasks, ["a1"], now);
     expect(feed.map((item) => item.id)).toEqual([
       "done-11",
       "done-10",
@@ -153,12 +191,32 @@ describe("todayFeed", () => {
     ]);
   });
 
+  test("口径和今日完成一样：别人的员工做完的、归档了的都不进今日动态", () => {
+    const feed = todayFeed(
+      [
+        task({ id: "mine", executorAgentId: "a1" }),
+        task({ id: "theirs", executorAgentId: "teammate-bot" }),
+        task({ id: "nobody", executorAgentId: null }),
+        task({
+          id: "filed",
+          executorAgentId: "a1",
+          updatedAt: at(14, 19).toISOString(),
+          archivedAt: at(14, 19).toISOString(),
+        }),
+      ],
+      ["a1"],
+      at(14, 20),
+    );
+    expect(feed.map((item) => item.id)).toEqual(["mine"]);
+  });
+
   test("跨零点：昨天 23:59 的不进今日动态", () => {
     const feed = todayFeed(
       [
         task({ id: "late", updatedAt: at(13, 23, 59).toISOString() }),
         task({ id: "early", updatedAt: at(14, 0, 1).toISOString() }),
       ],
+      ["a1"],
       at(14, 0, 5),
     );
     expect(feed.map((item) => item.id)).toEqual(["early"]);

@@ -101,7 +101,7 @@ function Stat({ label, value }: { label: string; value: Reading }) {
   return (
     <div
       className={cn(
-        "flex flex-col-reverse rounded-[14px] border p-3.5",
+        "flex min-w-0 flex-col-reverse rounded-[14px] border p-3.5",
         TONE.card,
         TONE.line,
       )}
@@ -254,12 +254,12 @@ function TileLink({ tile }: { tile: Tile }) {
   const detailId = useId();
   const Glyph = tile.icon;
   return (
-    <li className="flex">
+    <li className="flex min-w-0">
       <Link
         {...tile.link}
         aria-describedby={detailId}
         className={cn(
-          "grid w-full content-start justify-items-start gap-2 rounded-[14px] border px-3 py-3.5 font-medium text-[13px] transition-[transform,border-color] duration-150 motion-safe:hover:-translate-y-0.5 hover:border-[color:var(--wb-line2,var(--border))]",
+          "grid w-full min-w-0 content-start justify-items-start gap-2 rounded-[14px] border px-3 py-3.5 font-medium text-[13px] transition-[transform,border-color] duration-150 motion-safe:hover:-translate-y-0.5 hover:border-[color:var(--wb-line2,var(--border))]",
           TONE.card,
           TONE.line,
           TONE.fg,
@@ -286,8 +286,19 @@ function TileLink({ tile }: { tile: Tile }) {
   );
 }
 
+/**
+ * 应用格子：手机上（不足 768px，和 `useIsMobile` 同一个分界）固定三列，均分整屏宽度；够宽时每格至少
+ * 120px，能放几列放几列。
+ */
 const tileGridClassName =
-  "m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2.5 p-0";
+  "m-0 grid list-none grid-cols-3 gap-2.5 p-0 md:grid-cols-[repeat(auto-fill,minmax(120px,1fr))]";
+
+/**
+ * 页面的一列：`minmax(0,1fr)` 而不是默认的 `auto`，这一列就不会被里面不换行的长内容（今日动态里截断的
+ * 长标题）撑得比屏幕还宽；左右留 13px（够宽时 26px）。
+ */
+const pageClassName =
+  "grid grid-cols-[minmax(0,1fr)] gap-[18px] px-[13px] py-[22px] md:px-[26px]";
 
 const sectionTitleClassName = cn(
   "m-0 mb-2.5 font-semibold text-[13px] tracking-[.04em]",
@@ -351,20 +362,25 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
     flowName: () => "WakerFlow",
     now,
   });
+  /** 本人的员工：「在岗员工」数的是他们，「今日完成」和今日动态也只算他们做完的。 */
+  const employees = agents.data
+    ? employeeGroups(listedEmployees(agents.data)).summoned.map(
+        (agent) => agent.id,
+      )
+    : [];
   const counts = todayStats({
     tasks: tasks.data ?? [],
     waiting: inbox.data ? waitingCount(inbox.data) : 0,
     autonomous,
-    employees: agents.data
-      ? employeeGroups(listedEmployees(agents.data)).summoned.length
-      : 0,
+    employees,
     now,
   });
   const automationsReading =
     automations.data !== undefined && !triggersKnown
       ? { isError: true, data: undefined }
       : automations;
-  const feed = tasks.data ? todayFeed(tasks.data, now) : [];
+  const feedReady = tasks.data !== undefined && agents.data !== undefined;
+  const feed = feedReady ? todayFeed(tasks.data ?? [], employees, now) : [];
 
   const name = user?.name?.trim() || user?.email || "";
   const hello = greetingFor(now);
@@ -377,8 +393,8 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
     >
       {showToggle ? <SidebarToggleBar /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-[18px] px-[13px] py-[22px] md:px-[26px]">
-          <h1 className="m-0 font-bold text-[22px] tracking-[-.01em]">
+        <div className={pageClassName}>
+          <h1 className="m-0 font-bold text-[22px] tracking-[-.01em] [overflow-wrap:anywhere]">
             {name ? `${hello}，${name}` : hello}
           </h1>
 
@@ -390,7 +406,7 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
               />
               <Stat
                 label="今日完成"
-                value={reading(tasks, () => counts.doneToday)}
+                value={readingOf([tasks, agents], () => counts.doneToday)}
               />
               <Stat
                 label="等你确认"
@@ -461,9 +477,10 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
                 </ol>
               ) : (
                 <p className={cn("m-0 py-2.5 text-[13px]", TONE.muted)}>
-                  {tasks.data
+                  {feedReady
                     ? "今天还没有做完的任务。"
-                    : tasks.isError
+                    : (tasks.isError && !tasks.data) ||
+                        (agents.isError && !agents.data)
                       ? "读不到今天的任务。"
                       : "正在读取今天的任务…"}
                 </p>

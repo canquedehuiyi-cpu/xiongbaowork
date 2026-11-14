@@ -5,7 +5,7 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { UpdateBanner } from "@/components/layout/update-banner";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -37,7 +37,8 @@ import { WorkbenchRail } from "./rail";
  * 根地址（`ENTRY_ROOTS`）上是那个入口的一屏加标签栏，「消息」是全屏的会话列表，另外三个是各自的页面；别的
  * 地址（对话、群组、设置的某一页、员工的某一页……）是页面全屏，标签栏收起，顶上一个「返回」回到地址所属
  * 入口的根地址，对话回到消息列表：上一条历史记录就是同一个入口里的页面时是浏览器的后退（回到原来滚到的
- * 地方，也不多压一条历史），直达链接这类没有上一页可退的，才去入口的根地址。名片在手机上是盖住整屏的一页。
+ * 地方，也不多压一条历史），直达链接这类没有上一页可退的，才去入口的根地址。名片在手机上是盖住整屏的一页，
+ * 也是历史里的一页（`CARD_STATE`）：安卓的返回键、浏览器后退先收起名片，不离开底下的页面。
  *
  * 颜色只从 `--wb-*` 令牌取（`skin.css`），暗色跟着 `<html class="dark">`。
  */
@@ -51,6 +52,19 @@ const ENTRY_ROOTS: Record<Rail, "/" | "/contacts" | "/workbench" | "/me"> = {
 
 function isEntryRoot(pathname: string): boolean {
   return Object.values(ENTRY_ROOTS).some((root) => root === pathname);
+}
+
+/**
+ * 手机上打开名片时压进历史的那条记录，在 `state` 里带着这个记号，值是员工 id。地址不变，只多一条历史：
+ * 后退（安卓返回键、浏览器后退）就回到没有记号的那条，名片跟着收起；「关闭」收起时把这条退掉。桌面的
+ * 抽屉不进历史。
+ */
+const CARD_STATE = "workbenchCard";
+
+/** 这条历史记录上开着谁的名片（手机）；没有记号是 null。 */
+function cardInState(state: unknown): string | null {
+  const value = (state as Record<string, unknown> | undefined)?.[CARD_STATE];
+  return typeof value === "string" ? value : null;
 }
 
 /**
@@ -86,6 +100,9 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     select: (state) =>
       (state.location.state as { __TSR_index?: number }).__TSR_index ?? 0,
   });
+  const markedCard = useRouterState({
+    select: (state) => cardInState(state.location.state),
+  });
   const router = useRouter();
   const navigate = useNavigate();
   const phone = useIsMobile();
@@ -111,7 +128,11 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
   }
   // 手机上一屏只放一样东西，入口只跟着地址走：点标签栏就是换地址。
   const rail = (phone ? null : chosen) ?? railForPath(pathname);
-  const cardFor = card;
+  /*
+   * 桌面上名片是抽屉，开着谁记在这里（`card`）；手机上名片是历史里的一页，开着谁看这条历史记录上的记号。
+   * 换地址时新的记录上没有记号，名片照样收起。
+   */
+  const cardFor = phone ? markedCard : card;
   /*
    * 手机上：入口的根地址有标签栏；「消息」的根地址画会话列表而不是主区。名片盖住整屏时底下的都 `inert`
    * （点不到、读屏读不到），但不收起，关掉名片回来时页面还停在原来滚到的地方。
@@ -126,10 +147,43 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     pathname !== ENTRY_ROOTS[rail] &&
     previous !== undefined &&
     railForPath(previous) === rail;
+  const phoneNow = useRef(phone);
+  phoneNow.current = phone;
   const cards = useMemo<EmployeeCardControl>(
-    () => ({ openEmployeeCard: (agentId) => setCard(agentId) }),
-    [],
+    () => ({
+      openEmployeeCard: (agentId) => {
+        if (!phoneNow.current) {
+          setCard(agentId);
+          return;
+        }
+        // 同一个地址压一条带记号的历史；已经开着一张时换掉那一条，不再多压。
+        const { href, state } = router.history.location;
+        const next = { ...state, [CARD_STATE]: agentId };
+        if (cardInState(state)) router.history.replace(href, next);
+        else router.history.push(href, next);
+      },
+    }),
+    [router],
   );
+  /**
+   * 「关闭」和 Esc。手机上把名片那条历史退掉：底下那条就是这一页时后退一步；否则（刷新后停在名片那条上，
+   * 底下不是这一页）就地把记号去掉，不后退到别处。
+   */
+  const closeCard = () => {
+    if (!phone) {
+      setCard(null);
+      return;
+    }
+    const { href, state } = router.history.location;
+    if (!cardInState(state)) return;
+    if (previous === pathname) {
+      router.history.back();
+      return;
+    }
+    const rest: Record<string, unknown> = { ...state };
+    delete rest[CARD_STATE];
+    router.history.replace(href, rest);
+  };
 
   return (
     <EmployeeCardContext.Provider value={cards}>
@@ -210,7 +264,9 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
             agentId={cardFor}
             fullScreen={phone}
             key={cardFor}
-            onClose={() => setCard(null)}
+            onClose={closeCard}
+            // 去别处的按钮随后就换地址：桌面收起抽屉；手机上名片那条历史留着，从那一页后退回到名片。
+            onLeave={() => setCard(null)}
           />
         ) : null}
       </div>

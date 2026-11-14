@@ -207,7 +207,7 @@ function OrgChart({ onOpen }: { onOpen: (agentId: string) => void }) {
     <div className={cn("flex h-full min-h-0 flex-col", TONE.fg)} data-contacts>
       {showToggle ? <SidebarToggleBar /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-[18px] px-[13px] py-[22px] md:px-[26px]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-[18px] px-[13px] py-[22px] md:px-[26px]">
           <header className="flex items-baseline justify-between gap-3">
             <h1 className="m-0 font-bold text-[18px] tracking-[-.01em]">
               组织架构

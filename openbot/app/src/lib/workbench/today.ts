@@ -6,6 +6,10 @@ import type { UnifiedEntry } from "@/lib/autonomous/unified";
  * - 今日完成：今天 0 点以来做完的任务。任务看板（`/api/tasks`）没有完成时间，所以按规格退一步，用
  *   「今天更新、状态是做完了」判断，不加字段。做完了是两个状态：员工做完、等你查收（`awaiting_review`，
  *   服务端 `projector.finished` 写的），和你查收或归档后的已完成（`done`）。失败不算。
+ *   - 只数本人的员工做完的（和「在岗员工」是同一群人）：团队版的看板读得到整个工作区的卡，别人员工做完的
+ *     不算进这个人的今日完成，两个数才对得上。
+ *   - 归档了的卡（`archivedAt` 有值）不算：归档会把 `updatedAt` 刷成归档那一刻，算进来就会在归档时冒出
+ *     一条「X 完成了「…」」。
  * - 今晚定时任务：现在到下一个早上 06:00 之间要跑的自主工作项（`nextRunAt`）。
  */
 
@@ -16,6 +20,8 @@ export type TodayTask = {
   executorAgentId: string | null;
   status: string;
   updatedAt: string;
+  /** 归档的时间；没归档（或归档后又动过）是 null，老服务端不带。 */
+  archivedAt?: string | null;
 };
 
 /** 算「做完了」的任务状态。 */
@@ -50,12 +56,20 @@ export function tonightEnds(now: Date): Date {
 const timeOf = (value: string | null | undefined) =>
   value ? Date.parse(value) : Number.NaN;
 
-/** 今天做完的任务，最近的在前。 */
-function completedToday<T extends TodayTask>(tasks: readonly T[], now: Date) {
+/** 本人的员工（`employees`）今天做完、没归档的任务，最近的在前。 */
+function completedToday<T extends TodayTask>(
+  tasks: readonly T[],
+  employees: readonly string[],
+  now: Date,
+) {
   const since = startOfToday(now).getTime();
+  const own = new Set(employees);
   return tasks
     .filter(
       (task) =>
+        task.executorAgentId !== null &&
+        own.has(task.executorAgentId) &&
+        !task.archivedAt &&
         COMPLETED_STATUSES.includes(task.status) &&
         timeOf(task.updatedAt) >= since,
     )
@@ -70,21 +84,22 @@ export type TodayStats = {
 };
 
 /**
- * 工作台的四个数：在岗员工（本人的员工数）、今日完成、等你确认（审批收件箱里等你的）、今晚定时任务。
- * 每个数只管把给它的东西数对；哪个来源没读到，由页面决定不画那个数。
+ * 工作台的四个数：在岗员工（本人的员工数）、今日完成（这些员工今天做完的）、等你确认（审批收件箱里等你
+ * 的）、今晚定时任务。`employees` 是本人员工的 id。每个数只管把给它的东西数对；哪个来源没读到，由页面
+ * 决定不画那个数。
  */
 export function todayStats(input: {
   tasks: readonly TodayTask[];
   waiting: number;
   autonomous: readonly Pick<UnifiedEntry, "nextRunAt">[];
-  employees: number;
+  employees: readonly string[];
   now: Date;
 }): TodayStats {
   const from = input.now.getTime();
   const until = tonightEnds(input.now).getTime();
   return {
-    onDuty: input.employees,
-    doneToday: completedToday(input.tasks, input.now).length,
+    onDuty: input.employees.length,
+    doneToday: completedToday(input.tasks, input.employees, input.now).length,
     waitingOnYou: input.waiting,
     tonight: input.autonomous.filter((entry) => {
       const next = timeOf(entry.nextRunAt);
@@ -93,12 +108,16 @@ export function todayStats(input: {
   };
 }
 
-/** 今日动态：今天做完的任务，按时间倒序，最多 `FEED_LIMIT` 条。 */
+/**
+ * 今日动态：本人的员工（`employees`）今天做完的任务，口径和「今日完成」一样，按时间倒序，最多
+ * `FEED_LIMIT` 条。
+ */
 export function todayFeed<T extends TodayTask>(
   tasks: readonly T[],
+  employees: readonly string[],
   now: Date,
 ): T[] {
-  return completedToday(tasks, now).slice(0, FEED_LIMIT);
+  return completedToday(tasks, employees, now).slice(0, FEED_LIMIT);
 }
 
 /** 按本地时间问好：5–11 点早上好，12–17 点下午好，其余晚上好。 */

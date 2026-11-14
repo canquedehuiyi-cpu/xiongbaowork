@@ -17,7 +17,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { act, cleanup, render, within } from "@testing-library/react";
+import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { authKeys } from "@/lib/auth/queries";
@@ -374,6 +374,86 @@ describe("手机宽度", () => {
   });
 });
 
+describe("手机上的名片是历史里的一页", () => {
+  /** 这条历史记录上开着谁的名片（外壳压的记号）。 */
+  const marked = (router: { state: { location: { state: unknown } } }) =>
+    (router.state.location.state as { workbenchCard?: string }).workbenchCard;
+
+  test("打开名片压一条历史；后退（安卓返回键）收起名片，留在原页", async () => {
+    const { view, user, router } = renderFrame("/contacts");
+    await user.click(await view.findByRole("button", { name: "看名片" }));
+    await view.findByRole("dialog", { name: "员工名片" });
+    expect(historyIndex(router)).toBe(1);
+    expect(marked(router)).toBe("a1");
+    expect(router.state.location.pathname).toBe("/contacts");
+
+    act(() => router.history.back());
+    await waitFor(() =>
+      expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull(),
+    );
+    expect(router.state.location.pathname).toBe("/contacts");
+    expect(historyIndex(router)).toBe(0);
+    expect(view.getByText("组织架构页内容").closest("[inert]")).toBeNull();
+    expect(pressed(view)).toEqual(["通讯录"]);
+  });
+
+  test("点「关闭」把名片那条历史退掉，不多留一条", async () => {
+    const { view, user, router } = renderFrame("/contacts");
+    await user.click(await view.findByRole("button", { name: "看名片" }));
+    const card = await view.findByRole("dialog", { name: "员工名片" });
+    await user.click(within(card).getByRole("button", { name: "关闭" }));
+    await waitFor(() =>
+      expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull(),
+    );
+    expect(historyIndex(router)).toBe(0);
+    expect(marked(router)).toBeUndefined();
+    // 再后退就是真的离开这一页，不是先退到一条空的名片记录上。
+    expect(router.history.canGoBack()).toBe(false);
+  });
+
+  test("前进回到名片那条，名片又打开", async () => {
+    const { view, user, router } = renderFrame("/contacts");
+    await user.click(await view.findByRole("button", { name: "看名片" }));
+    await view.findByRole("dialog", { name: "员工名片" });
+    act(() => router.history.back());
+    await waitFor(() =>
+      expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull(),
+    );
+    act(() => router.history.forward());
+    expect(await view.findByRole("dialog", { name: "员工名片" })).toBeTruthy();
+  });
+
+  test("停在名片那条上、底下不是这一页时（比如刷新过），「关闭」就地收起，不后退到别处", async () => {
+    const { view, router } = renderFrame("/contacts");
+    await view.findByText("组织架构页内容");
+    act(() => router.history.replace("/contacts", { workbenchCard: "a1" }));
+    const card = await view.findByRole("dialog", { name: "员工名片" });
+    await userEvent
+      .setup({ document })
+      .click(within(card).getByRole("button", { name: "关闭" }));
+    await waitFor(() =>
+      expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull(),
+    );
+    expect(router.state.location.pathname).toBe("/contacts");
+    expect(historyIndex(router)).toBe(0);
+    expect(marked(router)).toBeUndefined();
+  });
+
+  test("名片开着时换地址，名片收起；「返回」照旧按地址算", async () => {
+    const { view, user, router } = renderFrame("/contacts");
+    await user.click(await view.findByRole("button", { name: "看名片" }));
+    await view.findByRole("dialog", { name: "员工名片" });
+    await router.navigate({ to: "/bots" as never });
+    await view.findByText("人才市场页内容");
+    expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull();
+    // 上一条是 /contacts（名片那条）：同一个入口，「返回」后退一步，回到名片。
+    await user.click(view.getByRole("link", { name: "返回" }));
+    expect(await view.findByRole("dialog", { name: "员工名片" })).toBeTruthy();
+    expect(router.state.location.pathname).toBe("/contacts");
+    expect(historyIndex(router)).toBe(1);
+  });
+});
+
 describe("桌面宽度", () => {
   test("还是三栏：入口栏在左、列表栏、主区，对话页没有「返回」", async () => {
     setPhone(false);
@@ -398,5 +478,17 @@ describe("桌面宽度", () => {
     // 桌面的抽屉不是模态的：页面还能点。
     expect(card.getAttribute("aria-modal")).toBe("false");
     expect(card.className).toContain("w-[320px]");
+  });
+
+  test("桌面的抽屉不进历史：打开、关闭都不压也不退", async () => {
+    setPhone(false);
+    const { view, user, router } = renderFrame("/contacts");
+    await user.click(await view.findByRole("button", { name: "看名片" }));
+    const card = await view.findByRole("dialog", { name: "员工名片" });
+    expect(historyIndex(router)).toBe(0);
+    await user.click(within(card).getByRole("button", { name: "关闭" }));
+    expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull();
+    expect(historyIndex(router)).toBe(0);
+    expect(router.state.location.pathname).toBe("/contacts");
   });
 });

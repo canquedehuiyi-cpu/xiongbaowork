@@ -184,10 +184,11 @@ function Action({
 
 function CardBody({
   agent,
-  onClose,
+  onLeave,
 }: {
   agent: AgentProfile;
-  onClose: () => void;
+  /** 点了去别处的按钮：名片收起，地址随后换到那一页。 */
+  onLeave: () => void;
 }) {
   const channels = useInfiniteQuery(channelListQueryOptions()).data;
   const bound = Boolean(agent.modelRef || agent.platformModelRef);
@@ -213,7 +214,7 @@ function CardBody({
     day === null ? "" : `入职第 ${day} 天`,
   ].filter(Boolean);
   return (
-    <div className="-mt-9 grid gap-2.5 px-[18px]">
+    <div className="-mt-9 grid grid-cols-[minmax(0,1fr)] gap-2.5 px-[18px]">
       <span
         className={cn(
           "relative w-fit rounded-full border-[3px] border-[color:var(--wb-frame,var(--background))]",
@@ -253,7 +254,7 @@ function CardBody({
       </p>
       {doing ? <NowDoing className="text-[12.5px]" doing={doing} /> : null}
       {tone || model ? (
-        <dl className="m-0 grid grid-cols-[70px_1fr] gap-x-2.5 gap-y-2 text-[12.5px]">
+        <dl className="m-0 grid grid-cols-[70px_minmax(0,1fr)] gap-x-2.5 gap-y-2 text-[12.5px]">
           {tone ? (
             <>
               <dt className={TONE.muted}>性格</dt>
@@ -296,11 +297,11 @@ function CardBody({
         </div>
       ) : null}
       <div className="mt-1 grid grid-cols-2 gap-2">
-        <Action {...talk} onClick={onClose} primary>
+        <Action {...talk} onClick={onLeave} primary>
           发消息
         </Action>
         <Action
-          onClick={onClose}
+          onClick={onLeave}
           params={{ agentId: agent.id }}
           to="/bots/$agentId/setup"
         >
@@ -311,10 +312,10 @@ function CardBody({
          * 聚焦输入框（ChannelChat 的 `autoFocus`），发给他的新对话有了收件人也聚焦输入框——所以到了就能
          * 直接写任务。
          */}
-        <Action {...talk} onClick={onClose}>
+        <Action {...talk} onClick={onLeave}>
           交给他一个任务
         </Action>
-        <Action onClick={onClose} search={{ agent: agent.id }} to="/group/new">
+        <Action onClick={onLeave} search={{ agent: agent.id }} to="/group/new">
           拉进群
         </Action>
       </div>
@@ -332,14 +333,19 @@ function CardBody({
  *
  * 手机上（`fullScreen`）它不是抽屉，是盖住整个外壳的一页，像微信点开一个人的资料页：这时它是模态的
  * （`aria-modal`），外壳把底下的都设成 `inert`。
+ *
+ * `onClose` 是「关闭」和 Esc；名片上去别处的四个按钮调 `onLeave`（不给时同 `onClose`）。分开是因为手机上
+ * 名片占着一条历史记录：「关闭」要把那条退掉，去别处的按钮不能退——后退和随后的跳转会撞在一起。
  */
 export function EmployeeCard({
   agentId,
   onClose,
+  onLeave = onClose,
   fullScreen = false,
 }: {
   agentId: string;
   onClose: () => void;
+  onLeave?: () => void;
   fullScreen?: boolean;
 }) {
   const agents = useQuery(agentListQueryOptions());
@@ -415,7 +421,7 @@ export function EmployeeCard({
         </button>
       </div>
       {agent ? (
-        <CardBody agent={agent} onClose={onClose} />
+        <CardBody agent={agent} onLeave={onLeave} />
       ) : (
         <p className={cn("m-0 px-[18px] pt-4 text-[13px]", TONE.muted)}>
           {agents.isPending ? "正在加载…" : "找不到这位员工。"}

@@ -335,8 +335,9 @@ function Thinking({ typist }: { typist?: Typist }) {
  * tokens, which only the default skin defines.
  */
 function Typing({ typist }: { typist: Typist }) {
+  // A `<div>`, not a `<p>`: the avatar inside is a `<div>`, which a paragraph may not hold.
   return (
-    <p
+    <div
       className="flex items-center gap-2 text-[12px] text-(--wb-muted)"
       data-typing=""
       role="status"
@@ -354,7 +355,7 @@ function Typing({ typist }: { typist: Typist }) {
           />
         ))}
       </span>
-    </p>
+    </div>
   );
 }
 

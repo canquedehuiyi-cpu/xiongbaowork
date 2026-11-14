@@ -7,6 +7,7 @@ import {
   expect,
   test,
 } from "bun:test";
+import { readFileSync } from "node:fs";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -212,6 +213,34 @@ describe("StatusDot", () => {
     expect(colour("忙碌")).toContain("var(--wb-busy");
     expect(colour("空闲")).toContain("var(--wb-idle");
     expect(colour("已暂停")).toContain("var(--wb-paused");
+  });
+
+  test("别的皮肤里没有 --wb-* 时，后备是应用的主题令牌，不写死颜色", () => {
+    const view = render(
+      <>
+        <StatusDot status="working" />
+        <StatusDot status="resting" />
+        <StatusDot status="paused" />
+      </>,
+    );
+    const colour = (name: string) =>
+      view.getByRole("img", { name }).getAttribute("class") ?? "";
+    expect(colour("忙碌")).toContain("var(--wb-busy,var(--signal))");
+    expect(colour("空闲")).toContain("var(--wb-idle,var(--success))");
+    expect(colour("已暂停")).toContain(
+      "var(--wb-paused,var(--muted-foreground))",
+    );
+    for (const name of ["忙碌", "空闲", "已暂停"]) {
+      expect(colour(name)).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|oklch\(/i);
+    }
+    // 这三个令牌应用的浅色、深色两套里都有（`styles.css` 的 `:root` 和 `.dark`）。
+    const theme = readFileSync(
+      new URL("../src/styles.css", import.meta.url),
+      "utf8",
+    );
+    for (const token of ["--signal:", "--success:", "--muted-foreground:"]) {
+      expect(theme.split(token).length - 1).toBeGreaterThanOrEqual(2);
+    }
   });
 
   test("unknown 和没拿到的不画", () => {

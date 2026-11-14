@@ -269,7 +269,7 @@ export function MePage() {
     <div className={cn("flex h-full min-h-0 flex-col", TONE.fg)} data-me-page>
       {showToggle ? <SidebarToggleBar /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid w-full max-w-[560px] gap-3.5 px-[13px] py-[26px] md:px-[26px]">
+        <div className="grid w-full max-w-[560px] grid-cols-[minmax(0,1fr)] gap-3.5 px-[13px] py-[26px] md:px-[26px]">
           <h1 className="sr-only">我</h1>
           <section
             aria-label="个人卡"

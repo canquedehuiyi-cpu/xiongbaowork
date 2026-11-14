@@ -490,6 +490,79 @@ describe("工作台首页", () => {
     expect(view.queryByRole("region", { name: "管理" })).toBeNull();
   });
 
+  test("今日完成和今日动态只算本人的员工做完的、没归档的，和「在岗员工」对得上", async () => {
+    answers.set("GET /api/tasks", {
+      tasks: [
+        ...TASKS,
+        // 工作区里同事的员工做完的：不是这个人的员工，不算。
+        card({
+          title: "同事员工做完的",
+          executorAgentId: "teammate-bot",
+          updatedAt: at(14, 15).toISOString(),
+        }),
+        // 今天归档的：归档把更新时间刷成了归档那一刻，不是今天做完的。
+        card({
+          title: "归档了的",
+          executorAgentId: "a3",
+          updatedAt: at(14, 16).toISOString(),
+          archivedAt: at(14, 16).toISOString(),
+        }),
+      ],
+    });
+    const { view } = renderHome();
+    await waitFor(() => expect(stat(view, "在岗员工")).toBe("3"));
+    await waitFor(() => expect(stat(view, "今日完成")).toBe("2"));
+    const feed = within(await view.findByRole("region", { name: "今日动态" }));
+    const items = await feed.findAllByRole("listitem");
+    expect(items.map((item) => item.textContent)).toEqual([
+      "代码熊 完成了「短信验证码登录」13:15",
+      "小熊会计 完成了「核对本月报销单」11:40",
+    ]);
+  });
+
+  test("员工名单读不到时，今日完成也画「—」（不知道该数谁的）", async () => {
+    failing.add("GET /api/agents");
+    const { view } = renderHome();
+    await waitFor(() => expect(stat(view, "今日完成")).toContain("读不到"), {
+      timeout: 4000,
+    });
+    expect(stat(view, "今日完成")).toContain("—");
+  });
+
+  test("手机上不横向溢出：页面一列是 minmax(0,1fr)、两边留白，四个数两列，应用格子三列", async () => {
+    const { view } = renderHome();
+    const heading = await view.findByRole("heading", { level: 1 });
+    const page = heading.parentElement as HTMLElement;
+    // 默认的 `auto` 列会被今日动态里不换行的长标题撑宽，整页（连同四个数、应用格子）就伸出屏幕右边。
+    expect(page.className).toContain("grid-cols-[minmax(0,1fr)]");
+    expect(page.className).toContain("px-[13px]");
+    expect(page.className).toContain("md:px-[26px]");
+    expect(heading.className).toContain("[overflow-wrap:anywhere]");
+
+    const stats = view.getByRole("region", { name: "今日数据" });
+    const list = stats.querySelector("dl") as HTMLElement;
+    expect(list.className.split(" ")).toContain("grid-cols-2");
+    expect(list.className.split(" ")).toContain("md:grid-cols-4");
+    for (const tile of Array.from(list.children)) {
+      expect(tile.className.split(" ")).toContain("min-w-0");
+    }
+
+    const apps = within(view.getByRole("region", { name: "应用" }));
+    const grid = apps.getByRole("list");
+    // 手机上固定三列、均分宽度（`repeat(3,minmax(0,1fr))`）；够宽时才是每格至少 120px 的自动列数。
+    expect(grid.className.split(" ")).toContain("grid-cols-3");
+    expect(grid.className).toContain(
+      "md:grid-cols-[repeat(auto-fill,minmax(120px,1fr))]",
+    );
+    expect(grid.className).not.toMatch(/(^| )grid-cols-\[repeat\(auto-fill/);
+    for (const item of apps.getAllByRole("listitem")) {
+      expect(item.className.split(" ")).toContain("min-w-0");
+      expect(
+        (item.firstElementChild as HTMLElement).className.split(" "),
+      ).toContain("min-w-0");
+    }
+  });
+
   test("只从 `--wb-*` 令牌取色，不写死白色", () => {
     const source = readFileSync(
       new URL("../src/skins/xiongbao/workbench-home.tsx", import.meta.url),

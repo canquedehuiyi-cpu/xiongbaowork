@@ -3,12 +3,13 @@ import { cn } from "@/lib/utils";
 
 /*
  * 状态点的颜色只从 `--wb-*` 令牌取（`skins/xiongbao/skin.css`）：忙碌橙、空闲绿、已暂停灰。通讯录页和名片
- * 也画在别的皮肤里，那里没有 `--wb-*`，所以每个取值带一个同色的后备。
+ * 也画在别的皮肤里，那里没有 `--wb-*`，后备取应用自己的主题令牌，跟着那个皮肤和深浅色走：忙碌是提醒色
+ * `--signal`（应用没有单独的警示色），空闲是 `--success`，已暂停是 `--muted-foreground`。不写死颜色。
  */
 const DOT_COLOR: Record<Exclude<PresenceStatus, "unknown">, string> = {
-  working: "bg-[color:var(--wb-busy,#f5a524)]",
-  resting: "bg-[color:var(--wb-idle,#3ccf8e)]",
-  paused: "bg-[color:var(--wb-paused,#6b6b74)]",
+  working: "bg-[color:var(--wb-busy,var(--signal))]",
+  resting: "bg-[color:var(--wb-idle,var(--success))]",
+  paused: "bg-[color:var(--wb-paused,var(--muted-foreground))]",
 };
 
 /**
