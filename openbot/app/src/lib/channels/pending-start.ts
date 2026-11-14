@@ -88,6 +88,15 @@ export function onFailedStart(listener: () => void): () => void {
   };
 }
 
+/**
+ * Whether a failed start is waiting for a home page, without taking it. A phone shows the
+ * conversation list at `/` instead of the home composer, so the workbench frame asks this to put the
+ * composer back while there are words and a reason to show.
+ */
+export function hasFailedStart(): boolean {
+  return failedStart !== null;
+}
+
 export function takeFailedStart(): FailedStart | null {
   const taken = failedStart;
   failedStart = null;

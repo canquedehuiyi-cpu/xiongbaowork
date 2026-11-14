@@ -17,9 +17,14 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, within } from "@testing-library/react";
+import { act, cleanup, render, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { authKeys } from "@/lib/auth/queries";
+import {
+  stashFailedStart,
+  takeFailedStart,
+} from "@/lib/channels/pending-start";
 import { queryClient } from "@/query-client";
 import { useEmployeeCard } from "@/skins/xiongbao/employee-card";
 import { WorkbenchFrame } from "@/skins/xiongbao/frame";
@@ -89,6 +94,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  takeFailedStart();
   queryClient.clear();
   globalThis.fetch = originalFetch;
   window.matchMedia = originalMatchMedia;
@@ -108,6 +114,18 @@ function OpensCard() {
     </button>
   );
 }
+
+/**
+ * 首页的替身：像真的首页那样在挂上时取走没能开始的对话（`takeFailedStart`），把原因写出来。
+ */
+function Home() {
+  const [failed] = useState(takeFailedStart);
+  return <p>{failed ? `首页内容：${failed.error}` : "首页内容"}</p>;
+}
+
+/** 这条历史记录在历史里的序号：后退是回到前一个序号，换地址是压一个新的。 */
+const historyIndex = (router: { state: { location: { state: unknown } } }) =>
+  (router.state.location.state as { __TSR_index: number }).__TSR_index;
 
 function renderFrame(path: string) {
   queryClient.setQueryData(authKeys.currentUser(), {
@@ -132,7 +150,8 @@ function renderFrame(path: string) {
     });
   const router = createRouter({
     routeTree: root.addChildren([
-      page("/", "首页内容"),
+      createRoute({ path: "/", getParentRoute: () => root, component: Home }),
+      page("/start/$startId", "占位页内容"),
       page("/capabilities/skills", "技能页内容"),
       page("/bots", "人才市场页内容"),
       createRoute({
@@ -220,6 +239,67 @@ describe("手机宽度", () => {
     expect(within(list).getByRole("heading", { name: "消息" })).toBeTruthy();
     expect(pressed(view)).toEqual(["消息"]);
     expect(view.queryByText("对话页内容")).toBeNull();
+    // 直达链接进来的，没有上一页可退：去消息列表，压一条新的历史。
+    expect(historyIndex(router)).toBe(1);
+  });
+
+  test("从消息列表点进对话，「返回」是后退一步，不多压一条历史", async () => {
+    const { view, user, router } = renderFrame("/");
+    await view.findByRole("complementary", { name: "列表栏" });
+    await router.navigate({
+      to: "/channel/$channelId" as never,
+      params: { channelId: "x" } as never,
+    });
+    await view.findByText("对话页内容");
+    expect(historyIndex(router)).toBe(1);
+
+    await user.click(view.getByRole("link", { name: "返回" }));
+    await view.findByRole("complementary", { name: "列表栏" });
+    expect(router.state.location.pathname).toBe("/");
+    expect(historyIndex(router)).toBe(0);
+  });
+
+  test("上一页归别的入口时，「返回」不后退，去这个入口的根地址", async () => {
+    const { view, user, router } = renderFrame("/workbench");
+    await view.findByText("工作台首页内容");
+    await router.navigate({
+      to: "/channel/$channelId" as never,
+      params: { channelId: "x" } as never,
+    });
+    await view.findByText("对话页内容");
+
+    await user.click(view.getByRole("link", { name: "返回" }));
+    await view.findByRole("complementary", { name: "列表栏" });
+    expect(router.state.location.pathname).toBe("/");
+    expect(historyIndex(router)).toBe(2);
+  });
+
+  test("首页发出的对话没能开始、退回 / 时，照常画首页，话和原因不丢；「返回」回到会话列表", async () => {
+    const { view, user, router } = renderFrame("/start/s1");
+    await view.findByText("占位页内容");
+    act(() =>
+      stashFailedStart({ text: "帮我写周报", error: "对话没能开始。" }),
+    );
+    await router.navigate({ to: "/", replace: true });
+    expect(await view.findByText("首页内容：对话没能开始。")).toBeTruthy();
+    expect(view.queryByRole("complementary", { name: "列表栏" })).toBeNull();
+    expect(tabBar(view)).toBeNull();
+
+    await user.click(view.getByRole("link", { name: "返回" }));
+    const list = await view.findByRole("complementary", { name: "列表栏" });
+    expect(within(list).getByRole("heading", { name: "消息" })).toBeTruthy();
+    expect(view.queryByText(/首页内容/)).toBeNull();
+    expect(pressed(view)).toEqual(["消息"]);
+  });
+
+  test("已经回到会话列表时对话才失败，也换成首页把原因写出来", async () => {
+    const { view } = renderFrame("/");
+    await view.findByRole("complementary", { name: "列表栏" });
+    act(() =>
+      stashFailedStart({ text: "帮我写周报", error: "对话没能开始。" }),
+    );
+    expect(await view.findByText("首页内容：对话没能开始。")).toBeTruthy();
+    expect(view.queryByRole("complementary", { name: "列表栏" })).toBeNull();
   });
 
   test.each([
@@ -276,6 +356,8 @@ describe("手机宽度", () => {
     await user.click(await view.findByRole("button", { name: "看名片" }));
     const card = await view.findByRole("dialog", { name: "员工名片" });
     expect(card.hasAttribute("data-full-screen")).toBe(true);
+    // 盖住整屏的名片是模态的。
+    expect(card.getAttribute("aria-modal")).toBe("true");
     expect(card.className).toContain("inset-0");
     expect(card.className).not.toContain("w-[320px]");
     // 名片盖住整屏时，底下的页面和标签栏点不到、读屏读不到（`inert`），但不收起，关掉后页面还在原处。
@@ -313,6 +395,8 @@ describe("桌面宽度", () => {
     await user.click(await view.findByRole("button", { name: "看名片" }));
     const card = await view.findByRole("dialog", { name: "员工名片" });
     expect(card.hasAttribute("data-full-screen")).toBe(false);
+    // 桌面的抽屉不是模态的：页面还能点。
+    expect(card.getAttribute("aria-modal")).toBe("false");
     expect(card.className).toContain("w-[320px]");
   });
 });

@@ -330,7 +330,8 @@ function CardBody({
  * 它不是模态框：页面还能点，抽屉盖在右边。打开时焦点落在「关闭」上，Esc 或「关闭」收起，焦点回到打开它的
  * 地方。挂在哪里由调用的人决定（工作台外壳；没有外壳时是通讯录页自己），它只要一个相对定位的祖先。
  *
- * 手机上（`fullScreen`）它不是抽屉，是盖住整个外壳的一页，像微信点开一个人的资料页。
+ * 手机上（`fullScreen`）它不是抽屉，是盖住整个外壳的一页，像微信点开一个人的资料页：这时它是模态的
+ * （`aria-modal`），外壳把底下的都设成 `inert`。
  */
 export function EmployeeCard({
   agentId,
@@ -384,7 +385,7 @@ export function EmployeeCard({
   return (
     <div
       aria-label="员工名片"
-      aria-modal="false"
+      aria-modal={fullScreen ? "true" : "false"}
       className={cn(
         "absolute z-30 overflow-y-auto motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200",
         fullScreen

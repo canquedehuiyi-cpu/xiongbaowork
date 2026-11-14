@@ -1,9 +1,15 @@
 import { IconChevronLeft } from "@tabler/icons-react";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { type ReactNode, useMemo, useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { UpdateBanner } from "@/components/layout/update-banner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { hasFailedStart, onFailedStart } from "@/lib/channels/pending-start";
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
 import { type Rail, railForPath } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -30,7 +36,8 @@ import { WorkbenchRail } from "./rail";
  * 手机上（宽度不足 768px，`useIsMobile`）像微信：入口栏变成底部标签栏，一屏只放一样东西。在四个入口的
  * 根地址（`ENTRY_ROOTS`）上是那个入口的一屏加标签栏，「消息」是全屏的会话列表，另外三个是各自的页面；别的
  * 地址（对话、群组、设置的某一页、员工的某一页……）是页面全屏，标签栏收起，顶上一个「返回」回到地址所属
- * 入口的根地址，对话回到消息列表。名片在手机上是盖住整屏的一页。
+ * 入口的根地址，对话回到消息列表：上一条历史记录就是同一个入口里的页面时是浏览器的后退（回到原来滚到的
+ * 地方，也不多压一条历史），直达链接这类没有上一页可退的，才去入口的根地址。名片在手机上是盖住整屏的一页。
  *
  * 颜色只从 `--wb-*` 令牌取（`skin.css`），暗色跟着 `<html class="dark">`。
  */
@@ -44,6 +51,21 @@ const ENTRY_ROOTS: Record<Rail, "/" | "/contacts" | "/workbench" | "/me"> = {
 
 function isEntryRoot(pathname: string): boolean {
   return Object.values(ENTRY_ROOTS).some((root) => root === pathname);
+}
+
+/**
+ * 这个应用里走过的每条历史记录是哪个地址，按历史里的序号（`__TSR_index`）记，每个路由的历史一份。放在
+ * 模块里而不是外壳里：设置、管理各自套一层外壳，在它们之间走动时外壳会换一个，记下的不能跟着丢。
+ */
+const visitedPaths = new WeakMap<object, Map<number, string>>();
+
+function visitsOf(history: object): Map<number, string> {
+  let visits = visitedPaths.get(history);
+  if (!visits) {
+    visits = new Map();
+    visitedPaths.set(history, visits);
+  }
+  return visits;
 }
 
 export function WorkbenchFrame({ children }: { children: ReactNode }) {
@@ -60,8 +82,22 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     select: (state) =>
       Boolean((state.location.search as { ask?: unknown }).ask),
   });
+  const historyIndex = useRouterState({
+    select: (state) =>
+      (state.location.state as { __TSR_index?: number }).__TSR_index ?? 0,
+  });
+  const router = useRouter();
   const navigate = useNavigate();
   const phone = useIsMobile();
+  /*
+   * 首页输入框里发出的对话没能开始时，话和原因留着等首页取（`takeFailedStart`）。手机上 `/` 是会话列表，
+   * 所以有这样一条在等时，`/` 照常画首页，直到离开 `/` 或按「返回」。
+   */
+  const [failedHome, setFailedHome] = useState(hasFailedStart);
+  useEffect(() => onFailedStart(() => setFailedHome(true)), []);
+  useEffect(() => {
+    visitsOf(router.history).set(historyIndex, pathname);
+  }, [router.history, historyIndex, pathname]);
   const [chosen, setChosen] = useState<Rail | null>(null);
   const [card, setCard] = useState<string | null>(null);
   // 地址一变（点链接、浏览器后退前进都算），点出来的临时入口就作废，回到地址所属的入口；名片也收起。
@@ -71,6 +107,7 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     setSeenPath(pathname);
     setChosen(null);
     setCard(null);
+    setFailedHome(hasFailedStart());
   }
   // 手机上一屏只放一样东西，入口只跟着地址走：点标签栏就是换地址。
   const rail = (phone ? null : chosen) ?? railForPath(pathname);
@@ -79,9 +116,16 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
    * 手机上：入口的根地址有标签栏；「消息」的根地址画会话列表而不是主区。名片盖住整屏时底下的都 `inert`
    * （点不到、读屏读不到），但不收起，关掉名片回来时页面还停在原来滚到的地方。
    */
-  const phoneDetail = phone && (!isEntryRoot(pathname) || asking);
-  const phoneList = phone && pathname === "/" && !asking;
+  const homePage = asking || failedHome;
+  const phoneDetail = phone && (!isEntryRoot(pathname) || homePage);
+  const phoneList = phone && pathname === "/" && !homePage;
   const covered = phone && cardFor !== null;
+  /** 上一条历史记录还在这个应用里、也归这个入口时，「返回」就是后退一步。 */
+  const previous = visitsOf(router.history).get(historyIndex - 1);
+  const backSteps =
+    pathname !== ENTRY_ROOTS[rail] &&
+    previous !== undefined &&
+    railForPath(previous) === rail;
   const cards = useMemo<EmployeeCardControl>(
     () => ({ openEmployeeCard: (agentId) => setCard(agentId) }),
     [],
@@ -105,6 +149,12 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
           >
             <Link
               className="inline-flex h-9 items-center gap-0.5 rounded-(--wb-radius-sm) pr-2.5 pl-1 text-(--wb-accent) text-[15px] outline-none focus-visible:outline-2 focus-visible:outline-(--wb-accent) [&>svg]:size-[22px] [&>svg]:stroke-[1.8]"
+              onClick={(event) => {
+                setFailedHome(false);
+                if (!backSteps) return;
+                event.preventDefault();
+                router.history.back();
+              }}
               to={ENTRY_ROOTS[rail]}
             >
               <IconChevronLeft aria-hidden="true" />
