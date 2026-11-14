@@ -278,6 +278,24 @@ describe("消息列表", () => {
     expect(presenceAsks).toEqual([["a1", "a2", "a4"]]);
   });
 
+  test("换筛选、搜索不换这一批，不重新问", async () => {
+    answers.set("GET /api/channels", { channels: CHANNELS, nextCursor: null });
+    const { view, user } = renderAt("/", () => <MessageList />);
+    await waitFor(() =>
+      expect(
+        within(row(view, "c-a1")).getByRole("img", { name: "忙碌" }),
+      ).toBeTruthy(),
+    );
+    await user.type(view.getByRole("searchbox", { name: "搜索会话" }), "会计");
+    await waitFor(() =>
+      expect(view.container.querySelector('a[href$="/c-a1"]')).toBeNull(),
+    );
+    await user.click(view.getByRole("button", { name: "群组" }));
+    await settleReactWork();
+    // 一批，取全部载入的单聊员工：筛掉的那几位也在里面。
+    expect(presenceAsks).toEqual([["a1", "a2", "a4"]]);
+  });
+
   test("读不到时不画状态点", async () => {
     answers.set("GET /api/channels", { channels: CHANNELS, nextCursor: null });
     failing.add("GET /api/agents/presence");
@@ -300,9 +318,9 @@ describe("通讯录与员工名片", () => {
     await waitFor(() =>
       expect(within(busy).getByRole("img", { name: "忙碌" })).toBeTruthy(),
     );
-    expect(
-      busy.querySelector("[data-now-doing]")?.textContent?.trim(),
-    ).toBe("此刻：跑登录页的测试");
+    expect(busy.querySelector("[data-now-doing]")?.textContent?.trim()).toBe(
+      "此刻：跑登录页的测试",
+    );
 
     const idle = await card(view, /小熊会计/);
     expect(within(idle).getByRole("img", { name: "空闲" })).toBeTruthy();
@@ -435,8 +453,7 @@ describe("对话顶栏", () => {
     void queryClient.refetchQueries({ queryKey: ["agents", "presence"] });
     // 失败的读取重试一次才算失败。
     await waitFor(
-      () =>
-        expect(view.container.querySelector("[data-presence]")).toBeNull(),
+      () => expect(view.container.querySelector("[data-presence]")).toBeNull(),
       { timeout: 5_000 },
     );
     expect(view.container.querySelector("[data-status-dot]")).toBeNull();

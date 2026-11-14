@@ -111,6 +111,7 @@ import { useResultVisibility } from "@/lib/product-telemetry";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
+import { useSkinId } from "@/skins/store";
 import {
   AppAccessCard,
   AppAccessRequestCard,
@@ -202,7 +203,15 @@ type ChatTranscriptProps = {
    * answer will appear.
    */
   working?: React.ReactNode;
+  /**
+   * Who is answering, for the default skin's 「<员工名> 正在输入」 in place of 「思考中」 (聊天工作台
+   * Task 9). Other skins keep 「思考中」 whether or not it is given.
+   */
+  typist?: Typist;
 };
+
+/** The employee whose reply is on its way: the name it is known by, and the id its face is drawn from. */
+export type Typist = { name: string; agentId: string };
 
 /** One shared empty array, so a screen without a queue does not hand down a new one per render. */
 const EMPTY_QUEUE: readonly QueuedMessage[] = [];
@@ -304,7 +313,9 @@ function RestoringTranscript() {
  * It borrows the shimmer a running tool line uses, so "working on it" reads the same whether the
  * work is a tool call or a model that has not spoken yet.
  */
-function Thinking() {
+function Thinking({ typist }: { typist?: Typist }) {
+  const workbench = useSkinId() === "xiongbao";
+  if (workbench && typist) return <Typing typist={typist} />;
   return (
     <p
       className="tool-line-running text-muted-foreground text-sm"
@@ -316,6 +327,39 @@ function Thinking() {
     </p>
   );
 }
+
+/**
+ * `Thinking` in the default skin (聊天工作台 Task 9): the employee's face, 「<员工名> 正在输入」 and
+ * three dots blinking in turn, as the mock draws it. The same slot, the same moment and the same
+ * `status` role; only the words and the look are the workbench's. Colours come from the `--wb-*`
+ * tokens, which only the default skin defines.
+ */
+function Typing({ typist }: { typist: Typist }) {
+  return (
+    <p
+      className="flex items-center gap-2 text-[12px] text-(--wb-muted)"
+      data-typing=""
+      role="status"
+    >
+      <span aria-hidden="true" className="shrink-0">
+        <ChannelAvatar participantIds={[typist.agentId]} size={20} />
+      </span>
+      <span>{`${typist.name} 正在输入`}</span>
+      <span aria-hidden="true" className="flex items-center gap-[3px]">
+        {TYPING_DOTS.map((delay) => (
+          <i
+            className="size-[5px] animate-pulse rounded-full bg-(--wb-muted) [animation-duration:1.2s] motion-reduce:animate-none"
+            key={delay}
+            style={{ animationDelay: delay }}
+          />
+        ))}
+      </span>
+    </p>
+  );
+}
+
+/** The three dots' delays, so they blink one after another. */
+const TYPING_DOTS = ["0s", "0.2s", "0.4s"] as const;
 
 /**
  * The turn ended and no answer came.
@@ -888,10 +932,15 @@ const TranscriptMessage = memo(function TranscriptMessage({
             docs/design/ios-studio: the person's words in the pale bubble, the coworker's answer on
             a graphite card with a hairline border, so who said what reads before what was said.
           */}
+          {/*
+            `data-mine` marks the person's own bubble for the skins (the default skin paints it with
+            its `--wb-me` gradient); it changes nothing by itself.
+          */}
           <Bubble
             align={align}
             variant={isUser ? "user" : "card"}
             className={isUser ? undefined : "w-full max-w-full"}
+            {...(isUser ? { "data-mine": "" } : {})}
           >
             <BubbleContent className={isUser ? undefined : "w-full"}>
               {isUser ? (
@@ -2122,6 +2171,7 @@ export function ChatTranscript({
   restoring = false,
   stopped,
   working,
+  typist,
 }: ChatTranscriptProps) {
   const isDrawn = useDrawnTool();
   /**
@@ -2663,7 +2713,7 @@ export function ChatTranscript({
                     {stopped ? (
                       <Stopped reason={stopped} />
                     ) : waitingOnTheModel ? (
-                      <Thinking />
+                      <Thinking typist={typist} />
                     ) : null}
                     {working}
                     {queued.map((message) => (

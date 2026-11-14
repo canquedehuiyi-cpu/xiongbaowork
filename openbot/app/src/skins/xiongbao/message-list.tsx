@@ -179,9 +179,12 @@ export function MessageList() {
       passes(channel, filter, openChannelId, waiting.bots),
     ),
   );
-  // 整个列表一次读出画着的那些单聊员工此刻的状态，不是每行一个。
+  // 整个列表一次读出已经载入的单聊员工此刻的状态，不是每行一个。取全部载入的会话（按最近排、截到上限），
+  // 不取筛选、搜索之后剩下的：换筛选或敲一个字不换这一批，不重新问。
   const presence = usePresence(
-    visible.flatMap((channel) => directAgentId(channel) ?? []),
+    byRecency(channels.data ?? []).flatMap(
+      (channel) => directAgentId(channel) ?? [],
+    ),
   );
   const loaded = channels.data !== undefined;
   // 「待我确认」还不知道答案时，不说「没有」。

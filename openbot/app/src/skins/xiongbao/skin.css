@@ -69,6 +69,10 @@
   --wb-busy: #f5a524;
   --wb-idle: #3ccf8e;
   --wb-paused: #6b6b74;
+  /* 对话（Task 9）：气泡与卡片的圆角、气泡贴着说话人那一角的小圆角、进度卡里做完一步的浅绿底。 */
+  --wb-radius-bubble: 14px;
+  --wb-radius-tail: 4px;
+  --wb-done-soft: rgba(60, 207, 142, 0.15);
   --wb-radius-frame: 18px;
   --wb-radius: 12px;
   --wb-radius-sm: 9px;
@@ -136,8 +140,132 @@
   --wb-busy: #f5a524;
   --wb-idle: #3ccf8e;
   --wb-paused: #6b6b74;
+  /* 对话（Task 9）：气泡与卡片的圆角、气泡贴着说话人那一角的小圆角、进度卡里做完一步的浅绿底。 */
+  --wb-radius-bubble: 14px;
+  --wb-radius-tail: 4px;
+  --wb-done-soft: rgba(60, 207, 142, 0.15);
   --wb-radius-frame: 18px;
   --wb-radius: 12px;
   --wb-radius-sm: 9px;
   --wb-radius-pill: 99px;
+}
+
+/*
+ * 对话（聊天工作台 Task 9），照设计稿的对话区：只改样子，不改行为。每条规则都挂在默认皮肤的工作台外壳
+ * （`[data-workbench-frame]`）里，选了别的皮肤（包括「经典」）时一条也不生效；在 Tailwind 的层外面，所以
+ * 盖得过组件自己的工具类。颜色、圆角都取上面的令牌，暗色块重写了每一个。
+ */
+
+/* 自己的气泡：熊宝红到暖橙的渐变，靠右那一角收成小圆角。`data-mine` 由对话记录标在自己的气泡上。 */
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-mine]
+  > [data-slot="bubble-content"] {
+  background: var(--wb-me);
+  color: var(--wb-me-fg);
+  border: 0;
+  border-radius: var(--wb-radius-bubble) var(--wb-radius-tail)
+    var(--wb-radius-bubble) var(--wb-radius-bubble);
+  padding: 10px 13px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+/* 员工的回答：卡片底、细描边，靠左那一角收成小圆角。 */
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="bubble"][data-variant="card"]
+  > [data-slot="bubble-content"] {
+  background: var(--wb-card);
+  color: var(--wb-fg);
+  border: 1px solid var(--wb-line);
+  border-radius: var(--wb-radius-tail) var(--wb-radius-bubble)
+    var(--wb-radius-bubble) var(--wb-radius-bubble);
+  box-shadow: none;
+}
+
+/* 对话顶栏：主区底色上一层薄玻璃，细分隔线。 */
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="conversation-header"] {
+  background: linear-gradient(var(--wb-glass), var(--wb-glass)), var(--wb-main);
+  border-bottom-color: var(--wb-line);
+  backdrop-filter: blur(10px);
+  padding: 14px 20px;
+  color: var(--wb-fg);
+}
+
+/* 需要你拍板的卡（审批、员工的提问）：卡片底、细描边，选中的那一行是浅红底、红点，拍板按钮是渐变。 */
+:root:not([data-skin]) [data-workbench-frame] [data-slot="decision-card"] {
+  background: var(--wb-card);
+  color: var(--wb-fg);
+  border: 1px solid var(--wb-line2);
+  border-radius: var(--wb-radius-bubble);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="decision-card"]
+  fieldset,
+:root:not([data-skin]) [data-workbench-frame] [data-slot="decision-card"] label,
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="decision-card"]
+  fieldset
+  > div,
+:root:not([data-skin]) [data-workbench-frame] [data-slot="decision-card"] p {
+  border-color: var(--wb-line);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="decision-card"]
+  label:has(> input:checked),
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="decision-card"]
+  fieldset
+  > div:has(> input:checked) {
+  background: var(--wb-accent-soft);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="decision-card"]
+  input:checked
+  + span {
+  border-color: var(--wb-accent);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="decision-card"]
+  [data-slot="button"] {
+  background: var(--wb-me);
+  color: var(--wb-me-fg);
+  border: 0;
+  border-radius: var(--wb-radius-sm);
+  font-weight: 600;
+}
+
+/* 员工画在对话里的卡片（任务进度、清单……）：和设计稿的进度卡一样的卡片底、细描边、圆角。 */
+:root:not([data-skin]) [data-workbench-frame] [data-slot="gallery-frame"] {
+  background: var(--wb-card);
+  color: var(--wb-fg);
+  border: 1px solid var(--wb-line2);
+  border-radius: var(--wb-radius-bubble);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="gallery-frame"]
+  > figcaption {
+  border-bottom-color: var(--wb-line);
+}
+
+/* 清单里做完的一步：浅绿底的圆，绿色的勾，和设计稿进度卡的步骤一样。 */
+:root:not([data-skin]) [data-workbench-frame] [data-check="done"] {
+  background: var(--wb-done-soft);
+  color: var(--wb-green);
+  border-color: transparent;
+  border-radius: var(--wb-radius-pill);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-check="todo"] {
+  border-color: var(--wb-line2);
+  border-radius: var(--wb-radius-pill);
 }
