@@ -5,9 +5,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { type ReactNode, type RefObject, useMemo, useState } from "react";
-import logo256 from "@/assets/brand/xiongbao-logo-256.png";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   attentionSummary,
@@ -15,14 +14,9 @@ import {
 } from "@/components/bot-profile/attention";
 import { SearchBox } from "@/components/layout/search-box";
 import { usePortraitSrc } from "@/components/portraits/use-portrait";
-import { SummonCardFlip } from "@/components/summon/summon-card-flip";
+import { useSummon } from "@/components/summon/use-summon";
 import { Button } from "@/components/ui/button";
-import {
-  type AgentProfile,
-  agentListQueryOptions,
-  type SummonResult,
-  summonAgentMutationOptions,
-} from "@/lib/agents/queries";
+import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
 import {
   type BotAttention,
@@ -371,32 +365,6 @@ function PendingEmployeeRow({
   );
 }
 
-/** The card flip for one summon in flight, drawn with the face the roster shows for that employee. */
-function SummonFlight({
-  agent,
-  result,
-  onDone,
-  onFail,
-}: {
-  agent: AgentProfile;
-  result: Promise<SummonResult>;
-  onDone: () => void;
-  onFail: (error: unknown) => void;
-}) {
-  const portrait = usePortraitSrc("coworker", agent.id);
-  return (
-    <SummonCardFlip
-      agentId={agent.id}
-      name={agent.name}
-      onDone={onDone}
-      onFail={onFail}
-      portrait={portrait ?? logo256}
-      result={result}
-      title={agent.title || agent.roleDescription}
-    />
-  );
-}
-
 /**
  * 员工: everyone the person can talk to, each row opening its latest 单聊 (or a new one addressed to
  * it), with what waits on the person from that employee. 「新建员工」 opens the same wizard as the
@@ -404,17 +372,7 @@ function SummonFlight({
  */
 export function EmployeeList() {
   const [query, setQuery] = useState("");
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const summon = useMutation(summonAgentMutationOptions(queryClient));
-  const [flight, setFlight] = useState<{
-    agent: AgentProfile;
-    result: Promise<SummonResult>;
-  } | null>(null);
-  const [problem, setProblem] = useState<{
-    agentId: string;
-    message: string;
-  } | null>(null);
+  const summon = useSummon();
   const agents = useQuery(agentListQueryOptions());
   const channels = useInfiniteQuery(channelListQueryOptions());
   const attention = useQuery(botAttentionQueryOptions());
@@ -429,12 +387,6 @@ export function EmployeeList() {
     matches(query, agent.name, agent.title, agent.roleDescription),
   );
   const { summoned, pending } = employeeGroups(shown);
-  const startSummon = (agent: AgentProfile) => {
-    if (flight) return;
-    setProblem(null);
-    const result = summon.mutateAsync(agent.id);
-    setFlight({ agent, result });
-  };
   /*
    * Selected only while a 单聊 with it (or a new conversation addressed to it) is open: a 群聊 is
    * about everyone in it, so it lights nobody here. Read off the address (`/group/$id`), not the
@@ -507,11 +459,13 @@ export function EmployeeList() {
                 {pending.map((agent) => (
                   <PendingEmployeeRow
                     agent={agent}
-                    busy={flight !== null}
+                    busy={summon.busy}
                     key={agent.id}
-                    onSummon={() => startSummon(agent)}
+                    onSummon={() => summon.start(agent)}
                     problem={
-                      problem?.agentId === agent.id ? problem.message : null
+                      summon.problem?.agentId === agent.id
+                        ? summon.problem.message
+                        : null
                     }
                   />
                 ))}
@@ -520,27 +474,7 @@ export function EmployeeList() {
           ) : null}
         </>
       )}
-      {flight ? (
-        <SummonFlight
-          agent={flight.agent}
-          onDone={() => {
-            const { result } = flight;
-            setFlight(null);
-            void result.then(({ channelId }) =>
-              navigate({ to: "/channel/$channelId", params: { channelId } }),
-            );
-          }}
-          onFail={(error) => {
-            setFlight(null);
-            setProblem({
-              agentId: flight.agent.id,
-              message:
-                error instanceof Error ? error.message : "没能召唤这位员工",
-            });
-          }}
-          result={flight.result}
-        />
-      ) : null}
+      {summon.overlay}
     </>
   );
 }
