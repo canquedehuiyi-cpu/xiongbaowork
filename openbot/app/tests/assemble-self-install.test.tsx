@@ -56,7 +56,7 @@ const grantCalls = () =>
   calls.filter((entry) => entry.path.startsWith("/api/plugins/grants"));
 
 const agentId = "assemble-reviewer";
-const REFUSAL = "You can only install listed entries on Bots you own.";
+const REFUSAL = "You can only install apps and skills on Bots you own.";
 
 const base: AgentProfile = {
   id: agentId,

@@ -360,7 +360,7 @@ test("a failed roster on / reports the failure and explains the disabled compose
   const view = renderHome(failingQueryClient());
 
   expect(
-    await view.findByText("读不到共享给你的员工。", {}, HOME_FIND_TIMEOUT),
+    await view.findByText("读不到可召唤的员工。", {}, HOME_FIND_TIMEOUT),
   ).toBeTruthy();
   expect(view.queryByText("没有待召唤的员工了。")).toBeNull();
 
@@ -466,7 +466,7 @@ test("a failed REFETCH on / keeps the roster and does not disclaim the composer"
   expect(
     view.queryByText("读不到你的员工，所以暂时没有人可以接收这条消息。"),
   ).toBeNull();
-  expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
+  expect(view.queryByText("读不到可召唤的员工。")).toBeNull();
 });
 
 /*
@@ -636,7 +636,7 @@ test("a failed REFETCH on / with explore empty shows it as empty, not broken", a
   expect(
     await view.findByText("没有待召唤的员工了。", {}, HOME_FIND_TIMEOUT),
   ).toBeTruthy();
-  expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
+  expect(view.queryByText("读不到可召唤的员工。")).toBeNull();
   // `agents` loaded (it holds "Mine Agent"), so `fallback` falls back to it and the composer is
   // enabled — the alert claiming a load failure must not appear beside that working composer.
   expect(

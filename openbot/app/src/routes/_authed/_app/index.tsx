@@ -370,7 +370,7 @@ function RouteComponent() {
               >
                 <EmptyHeader>
                   <EmptyTitle className="text-signal-ink text-[14px]">
-                    读不到共享给你的员工。
+                    读不到可召唤的员工。
                   </EmptyTitle>
                 </EmptyHeader>
               </Empty>

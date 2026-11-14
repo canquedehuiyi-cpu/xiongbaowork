@@ -469,7 +469,7 @@ describe("an owner installs and uninstalls a listed entry on their own Waker", (
       expect(response.status).toBe(403);
       // One sentence for all three, so the refusal says nothing about other people's Wakers.
       expect((await response.json()).error).toBe(
-        "You can only install listed entries on Bots you own.",
+        "You can only install apps and skills on Bots you own.",
       );
     }
     expect((await held(bobBot)).tools).toEqual([]);
@@ -481,7 +481,21 @@ describe("an owner installs and uninstalls a listed entry on their own Waker", (
       grant("skill", deploymentSkill, bobBot),
     );
     expect(skill.status).toBe(403);
+    expect((await skill.json()).error).toBe(
+      "You can only install apps and skills on Bots you own.",
+    );
     expect((await held(bobBot)).skills).toEqual([]);
+
+    // Taking one off somebody else's Waker is refused in the words for taking off, not installing.
+    const off = await send(
+      asAlice(),
+      revoke("skill", deploymentSkill, bobBot),
+      { method: "DELETE" },
+    );
+    expect(off.status).toBe(403);
+    expect((await off.json()).error).toBe(
+      "You can only remove apps and skills from Bots you own.",
+    );
   });
 
   test("a listing is not a licence for another app, or for an app's name without a tool", async () => {

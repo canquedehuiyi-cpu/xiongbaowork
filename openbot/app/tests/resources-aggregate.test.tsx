@@ -396,7 +396,7 @@ test("each zone is its own tab of 能力 (connectors are drawn as 连接 draws t
   }
 });
 
-test("skills are split into 我的 and 部署; only a listed deployment skill is 可自助安装", async () => {
+test("skills are split into 我的 and 部署; no deployment skill is tagged 可自助安装 any more", async () => {
   // A skill row counts only the person's own employees that hold it (召唤员工 Task 8): waker-a and
   // waker-b are theirs, waker-c is somebody else's.
   const saved = { ...responses };
@@ -441,13 +441,9 @@ async function checkSkillGroups() {
   expect(deployment.getByText("已装到你的 2 个员工")).toBeTruthy();
   expect(deployment.getByText("未安装")).toBeTruthy();
 
-  // The tag sits on the listed skill's row and nowhere else — not on the one whose slug only an app
-  // listing happens to share.
-  const tags = skills.getAllByText("可自助安装");
-  expect(tags).toHaveLength(1);
-  expect(tags[0]?.closest("[data-slot='item-title']")?.textContent).toContain(
-    "周报",
-  );
+  // Every deployment skill is the owner's to install without a listing (Ruling 10), so a tag on
+  // the listed one would single out nothing.
+  expect(skills.queryByText("可自助安装")).toBeNull();
 
   // Somebody else's personal skill (an administrator's `/api/plugins` carries those) is neither.
   expect(skills.queryByText("别人的技能")).toBeNull();
@@ -613,7 +609,7 @@ test("a person with no skills, connectors or bases sees each tab say so rather t
 test("each tab reads its own endpoints, the knowledge tab one detail per base", async () => {
   const expected: Record<string, string[]> = {
     models: ["/api/models"],
-    skills: ["/api/plugins", "/api/plugins/listings"],
+    skills: ["/api/plugins", "/api/agents"],
     connectors: ["/api/plugins", "/api/plugins/connections"],
     knowledge: [
       "/api/knowledge/notebooks",
