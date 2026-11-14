@@ -5,6 +5,9 @@ import type { AgentProfile } from "./queries";
 /** What the server accepts as an avatar seed (`routes.ts`). Kept in step by hand, like the limits. */
 export const AVATAR_SEED_PATTERN = /^[\w:.-]{1,64}$/;
 
+/** The longest department the server accepts (`routes.ts`), in code points. Kept in step by hand. */
+export const DEPARTMENT_MAX_CHARACTERS = 32;
+
 /**
  * A fresh avatar seed for the 换一个 button.
  *
@@ -79,9 +82,18 @@ export const agentFormSchema = z.object({
   isolated: z.boolean().optional(),
   /**
    * The coworker's department (聊天工作台 Task 6), which only the Setup row sends. Absent leaves it as
-   * it is; empty clears it. At most 32 characters, as the server allows.
+   * it is; empty is the owner's explicit 未分组, which the server keeps as such — a summoned copy then
+   * reads null rather than its preset's department. At most 32 characters, counted in code points as
+   * the server counts them, so an emoji is one character here too.
    */
-  department: z.string().trim().max(32, "部门不能超过 32 个字。").optional(),
+  department: z
+    .string()
+    .trim()
+    .refine(
+      (value) => [...value].length <= DEPARTMENT_MAX_CHARACTERS,
+      `部门不能超过 ${DEPARTMENT_MAX_CHARACTERS} 个字。`,
+    )
+    .optional(),
   /**
    * The starter Bot's instructions, which only its Setup page sends. Absent leaves them as they are.
    */

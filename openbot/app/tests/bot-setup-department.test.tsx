@@ -174,8 +174,8 @@ test("改成别的部门，或清空回到未分组", async () => {
   await user.click(view.getByRole("button", { name: "保存" }));
 
   await waitFor(() => expect(updates).toHaveLength(1));
-  // Sent empty; the route reads empty as none.
-  expect(updates[0]).toMatchObject({ department: null });
+  // Sent empty, and kept as the explicit clear ("") the server stores for 未分组.
+  expect(updates[0]).toMatchObject({ department: "" });
 });
 
 test("超过 32 个字在页面上就被拦下，不发请求", async () => {
@@ -192,6 +192,28 @@ test("超过 32 个字在页面上就被拦下，不发请求", async () => {
     "部门不能超过 32 个字",
   );
   expect(updates).toHaveLength(0);
+});
+
+test("按字（码点）计长度：32 个 emoji 能保存，33 个被拦下", async () => {
+  serve(null);
+  const view = draw();
+  const user = userEvent.setup({ document: view.baseElement.ownerDocument });
+
+  await user.click(await view.findByRole("button", { name: /^部门/ }));
+  const field = await view.findByRole("textbox", { name: "部门" });
+  // Each is two UTF-16 units: a length check would refuse at 16.
+  await user.type(field, "🚀".repeat(33));
+  await user.click(view.getByRole("button", { name: "保存" }));
+  expect((await view.findByRole("alert")).textContent).toContain(
+    "部门不能超过 32 个字",
+  );
+  expect(updates).toHaveLength(0);
+
+  await user.clear(field);
+  await user.type(field, "🚀".repeat(32));
+  await user.click(view.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(updates).toHaveLength(1));
+  expect(updates[0]).toMatchObject({ department: "🚀".repeat(32) });
 });
 
 test("其他员工资料的编辑不碰部门", async () => {

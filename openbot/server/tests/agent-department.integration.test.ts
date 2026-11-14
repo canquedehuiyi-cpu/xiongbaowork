@@ -251,6 +251,32 @@ async function storedDepartment(actor: AgentActor, agentId: string) {
   return rows[0]?.department;
 }
 
+/** The roster entry for one coworker, as `GET /api/agents` lists it. */
+async function listed(actor: AgentActor, agentId: string) {
+  const response = await routesFor(actor).request(
+    new Request("http://department.test/"),
+  );
+  expect(response.status).toBe(200);
+  const { agents: roster } = (await response.json()) as {
+    agents: AgentBody["agent"][];
+  };
+  const entry = roster.find((candidate) => candidate.id === agentId);
+  if (!entry) throw new Error(`${agentId} is not on the roster`);
+  return entry;
+}
+
+/** What the preset's own row holds, read where package sync writes it. */
+async function presetDepartment(presetId: string) {
+  const rows = await runAsTenant("system", () =>
+    database
+      .select({ department: agentProfiles.department })
+      .from(agentProfiles)
+      .where(eq(agentProfiles.agentId, presetId)),
+  );
+  expect(rows).toHaveLength(1);
+  return rows[0]?.department;
+}
+
 const editBody = (department: unknown, visibility = "private") => ({
   name: "后端工程师",
   title: "后端工程师",
@@ -283,16 +309,28 @@ describe("员工部门", () => {
     expect(await storedDepartment(actor, copy.id)).toBeNull();
     expect((await read(actor, copy.id)).department).toBe("测试部");
     // The roster reads it the same way.
-    const listed = await routesFor(actor).request(
-      new Request("http://department.test/"),
-    );
-    expect(listed.status).toBe(200);
-    const { agents: roster } = (await listed.json()) as {
-      agents: AgentBody["agent"][];
-    };
-    expect(roster.find((entry) => entry.id === copy.id)?.department).toBe(
-      "测试部",
-    );
+    expect((await listed(actor, copy.id)).department).toBe("测试部");
+  });
+
+  test("主人清空召唤副本的部门 → 「未分组」：单个读取和列表都是 null，不回退到预设；预设自己的部门不变", async () => {
+    const actor = await person();
+    const source = await preset("设计部");
+    const copy = await summonedCopy(actor, source);
+    expect(copy.department).toBe("设计部");
+
+    const cleared = await patch(actor, copy.id, editBody(""));
+    expect(cleared.status).toBe(200);
+    expect(((await cleared.json()) as AgentBody).agent.department).toBeNull();
+    // Kept as an explicit clear, not NULL, which is what stops the fallback.
+    expect(await storedDepartment(actor, copy.id)).toBe("");
+    expect((await read(actor, copy.id)).department).toBeNull();
+    expect((await listed(actor, copy.id)).department).toBeNull();
+    // A null in the body clears it the same way.
+    expect((await patch(actor, copy.id, editBody("运营部"))).status).toBe(200);
+    expect((await patch(actor, copy.id, editBody(null))).status).toBe(200);
+    expect((await read(actor, copy.id)).department).toBeNull();
+
+    expect(await presetDepartment(source)).toBe("设计部");
   });
 
   test("手工建的员工没有部门，DTO 为 null", async () => {
@@ -321,7 +359,9 @@ describe("员工部门", () => {
 
     const cleared = await patch(actor, id, editBody(""));
     expect(cleared.status).toBe(200);
-    expect(await storedDepartment(actor, id)).toBeNull();
+    expect(((await cleared.json()) as AgentBody).agent.department).toBeNull();
+    // An explicit clear is stored as "" (未分组), never NULL ("never written").
+    expect(await storedDepartment(actor, id)).toBe("");
   });
 
   test("不是主人改不了部门：别人能看到的公开员工，改部门得到 403，部门不变", async () => {

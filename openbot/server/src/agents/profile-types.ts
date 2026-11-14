@@ -183,10 +183,11 @@ export type CreateAgentInput = Pick<
    */
   avatarSeed?: string;
   /**
-   * The coworker's department (聊天工作台 Task 6). Absent on an update leaves it where it is; null
-   * clears it; text (at most 32 characters) replaces it.
+   * The coworker's department (聊天工作台 Task 6). Absent on an update leaves it where it is; text (at
+   * most 32 characters) replaces it; "" clears it, stored as "" rather than NULL so a summoned copy
+   * reads 未分组 instead of falling back to its preset's (NULL is "never written").
    */
-  department?: string | null;
+  department?: string;
 };
 
 /** The role content a template hands a coworker (ROLE1): identity, persona and Bible, nothing else. */

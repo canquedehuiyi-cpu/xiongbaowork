@@ -105,7 +105,8 @@ export type AgentProfile = {
   presetPortrait?: PortraitPreset | null;
   /**
    * Its department (聊天工作台 Task 6), what the address book groups by; null for none (未分组). A
-   * summoned copy without one of its own reads its preset's. Optional for the same reason.
+   * summoned copy that never had one written reads its preset's; one its owner cleared reads null.
+   * Optional for the same reason.
    */
   department?: string | null;
   /**

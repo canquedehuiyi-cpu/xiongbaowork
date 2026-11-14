@@ -180,7 +180,7 @@ export function parseAgentInput(
   const bible = parseBible(input.bible);
   if (typeof bible === "object" && bible !== null) return bible;
   const department = parseDepartment(input.department);
-  if (typeof department === "object" && department !== null) return department;
+  if (typeof department === "object") return department;
 
   // Optional on create and on update alike. Absent means "the default" on a create and "leave it"
   // on an update, so a form that never showed the avatar cannot redraw it; anything sent is checked.
@@ -270,7 +270,7 @@ export function parseAgentInput(
       ...(persona === undefined ? {} : { persona }),
       // The same: a form that never showed the handbook leaves it alone.
       ...(bible === undefined ? {} : { bible }),
-      // And the department: absent leaves it, null or blank clears it.
+      // And the department: absent leaves it, "" clears it (an explicit 未分组).
       ...(department === undefined ? {} : { department }),
       ...(avatarSeed === undefined ? {} : { avatarSeed }),
       ...(isolated === undefined ? {} : { isolated }),
@@ -362,18 +362,20 @@ function parseBible(
 }
 
 /**
- * The department (聊天工作台 Task 6): absent leaves it, null or blank clears it, text up to 32
- * characters writes it. Counted in code points, as the database's CHECK counts them.
+ * The department (聊天工作台 Task 6): absent leaves it, text up to 32 characters writes it, and null
+ * or blank clears it — as the empty string, not NULL. The difference is load-bearing: NULL means
+ * "never written" and a summoned copy then reads its preset's department, while "" is the owner's
+ * explicit 未分组, which must not fall back. Counted in code points, as the database's CHECK counts.
  */
 function parseDepartment(
   value: unknown,
-): string | null | undefined | { ok: false; error: string } {
+): string | undefined | { ok: false; error: string } {
   if (value === undefined) return undefined;
-  if (value === null) return null;
+  if (value === null) return "";
   if (typeof value !== "string")
     return { ok: false, error: "部门必须是文字。" };
   const trimmed = value.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return "";
   if ([...trimmed].length > DEPARTMENT_MAX_CHARACTERS) {
     return {
       ok: false,

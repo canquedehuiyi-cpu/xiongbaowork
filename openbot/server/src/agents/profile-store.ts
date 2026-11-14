@@ -371,8 +371,13 @@ const joinedProjection = {
   summonedFrom: agentProfiles.summonedFrom,
   presetPortrait: agentProfiles.presetPortrait,
   /*
-   * Its own department, or, for a summoned copy without one, its preset's (聊天工作台 Task 6): copies
-   * summoned before the column existed carry none, and are read through rather than backfilled.
+   * Its own department, or, for a summoned copy that never had one written, its preset's (聊天工作台
+   * Task 6): copies summoned before the column existed carry NULL, and are read through rather than
+   * backfilled. Only NULL falls back: "" is the owner's explicit 未分组 and comes out as null below.
+   *
+   * The source is read whether or not it has since been soft-deleted, on purpose: the owner could see
+   * the preset when they summoned it, and the copy keeping the department it was grouped under is
+   * the intended behaviour, not a leak of a row they can no longer open.
    */
   department: sql<
     string | null
@@ -439,7 +444,8 @@ function mapProfile(
     isolated: row.isolated,
     summonedFrom: row.summonedFrom ?? null,
     presetPortrait: row.presetPortrait ?? null,
-    department: row.department ?? null,
+    // "" is an explicit clear (未分组); the DTO says none as null either way.
+    department: row.department || null,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,
@@ -1108,7 +1114,7 @@ export function createAgentProfileStore(
           visibility: input.visibility,
           persona: input.persona ?? null,
           bible: input.bible ?? null,
-          department: input.department ?? null,
+          department: input.department || null,
           // Recorded whatever it runs on: a new coworker is never the 分身 (D4, revised 2026-11-04).
           ...(input.roleTemplate
             ? await roleTemplateSource(transaction, input.roleTemplate)
@@ -1356,7 +1362,8 @@ export function createAgentProfileStore(
                 : { persona: input.persona }),
               // The same three-way: absent leaves it, null clears it. Never copied into systemPrompt.
               ...(input.bible === undefined ? {} : { bible: input.bible }),
-              // The same three-way for the department (聊天工作台 Task 6).
+              // The same three-way for the department (聊天工作台 Task 6): "" is an explicit clear,
+              // kept as "" so a summoned copy does not fall back to its preset's.
               ...(input.department === undefined
                 ? {}
                 : { department: input.department }),
