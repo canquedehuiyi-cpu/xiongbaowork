@@ -3,7 +3,11 @@
  * That selector outranks OpenBot's own `.dark`, so a token a skin sets for light it must also set
  * for dark, or dark mode would show the skin's light value. `app/tests/skins.test.ts` holds every
  * skin to that.
+ *
+ * 默认皮肤（聊天工作台）不写 `data-skin`，它的 `--wb-*` 令牌挂在 `:root:not([data-skin])` 上，见
+ * `xiongbao/skin.css`。
  */
+@import "./xiongbao/skin.css";
 @import "./classic/skin.css";
 @import "./openduet/skin.css";
 @import "./opendots/skin.css";

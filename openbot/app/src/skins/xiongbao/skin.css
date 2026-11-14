@@ -1,0 +1,79 @@
+/*
+ * 默认外观（聊天工作台）的令牌，数值取自设计稿 `docs/specs/assets/2026-11-14-chat-workbench-mock.html`：
+ * 暗色一套来自它的 `:root`，浅色一套来自它的浅色块。
+ *
+ * 默认皮肤不在 `<html>` 上写 `data-skin`（`store.ts` 对默认皮肤调 `setRootSkin(null)`，`index.html` 的
+ * 预绘制脚本也跳过它），所以这里挂在 `:root:not([data-skin])` 上：选了任何别的皮肤（包括「经典」）时一条
+ * 也不生效。暗色跟着 `<html class="dark">` 走，和应用自己的主题开关是同一个开关；暗色块里重写了浅色块
+ * 里的每一个令牌，所以暗色用户永远拿不到浅色值。工作台外壳只通过这些变量取色。
+ */
+:root:not([data-skin]) {
+  --wb-bg: #eef0f4;
+  --wb-frame: #ffffff;
+  --wb-rail: #f4f5f8;
+  --wb-list: #fafbfc;
+  --wb-main: #ffffff;
+  --wb-card: #ffffff;
+  --wb-card2: #f3f4f7;
+  --wb-hover: #f1f2f6;
+  --wb-glass: rgba(0, 0, 0, 0.02);
+  --wb-fg: #1a1b1f;
+  --wb-fg2: #3d3f46;
+  --wb-muted: #7b7e88;
+  --wb-line: rgba(15, 20, 40, 0.08);
+  --wb-line2: rgba(15, 20, 40, 0.12);
+  --wb-accent: #e8402f;
+  --wb-accent2: #f2734a;
+  --wb-accent-soft: rgba(232, 64, 47, 0.09);
+  --wb-gold: #b9821c;
+  --wb-green: #3ccf8e;
+  --wb-amber: #f5a524;
+  --wb-gray: #6b6b74;
+  --wb-me: linear-gradient(135deg, #ff5a4a, #ff8a5c);
+  --wb-me-fg: #fff;
+  --wb-shadow: 0 24px 60px rgba(20, 30, 60, 0.12);
+  --wb-row-shadow:
+    0 1px 0 var(--wb-line2) inset, 0 6px 16px rgba(0, 0, 0, 0.12);
+  --wb-logo-shadow: 0 6px 18px rgba(255, 90, 74, 0.25);
+  --wb-me-avatar: linear-gradient(135deg, #e6e7ec, #d5d7de);
+  --wb-radius-frame: 18px;
+  --wb-radius: 12px;
+  --wb-radius-sm: 9px;
+  --wb-radius-pill: 99px;
+}
+
+:root:not([data-skin]).dark {
+  --wb-bg: #0b0b0d;
+  --wb-frame: #121215;
+  --wb-rail: #0e0e11;
+  --wb-list: #151519;
+  --wb-main: #101013;
+  --wb-card: #1c1c21;
+  --wb-card2: #23232a;
+  --wb-hover: #1f1f25;
+  --wb-glass: rgba(255, 255, 255, 0.04);
+  --wb-fg: #f4f2ef;
+  --wb-fg2: #c9c5c0;
+  --wb-muted: #8b8680;
+  --wb-line: rgba(255, 255, 255, 0.07);
+  --wb-line2: rgba(255, 255, 255, 0.11);
+  --wb-accent: #ff5a4a;
+  --wb-accent2: #ff8a5c;
+  --wb-accent-soft: rgba(255, 90, 74, 0.13);
+  --wb-gold: #f2c46d;
+  --wb-green: #3ccf8e;
+  --wb-amber: #f5a524;
+  --wb-gray: #6b6b74;
+  --wb-me: linear-gradient(135deg, #ff5a4a, #ff8a5c);
+  --wb-me-fg: #fff;
+  --wb-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45), 0 2px 0 rgba(255, 255, 255, 0.03) inset;
+  --wb-row-shadow:
+    0 1px 0 var(--wb-line2) inset, 0 6px 16px rgba(0, 0, 0, 0.12);
+  --wb-logo-shadow: 0 6px 18px rgba(255, 90, 74, 0.25);
+  --wb-me-avatar: linear-gradient(135deg, #3a3a44, #24242b);
+  --wb-radius-frame: 18px;
+  --wb-radius: 12px;
+  --wb-radius-sm: 9px;
+  --wb-radius-pill: 99px;
+}
