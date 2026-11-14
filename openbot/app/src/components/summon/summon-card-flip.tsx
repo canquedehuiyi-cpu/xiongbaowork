@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import logo256 from "@/assets/brand/xiongbao-logo-256.png";
+import { shortName } from "@/lib/brand";
 import "./summon-card-flip.css";
 
 /**
@@ -271,7 +272,7 @@ function Badge({
             <span aria-hidden="true" className="summon-badge-slot" />
             <span className="summon-badge-org">
               <img alt="" draggable={false} src={logo256} />
-              熊宝 · 员工证
+              {shortName()} · 员工证
             </span>
           </div>
           <div className="summon-portrait">
@@ -302,7 +303,7 @@ function Badge({
   );
 }
 
-/** 红色圆章：外粗内细两道圈，上弧「熊宝人事部」，中间五角星，下方「已入职」；边缘用噪声做出墨迹。 */
+/** 红色圆章：外粗内细两道圈，上弧「<品牌简称>人事部」，中间五角星，下方「已入职」；边缘用噪声做出墨迹。 */
 function Seal() {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const arc = `summon-seal-arc-${id}`;
@@ -345,7 +346,7 @@ function Seal() {
         />
         <text fontSize="10.5" fontWeight="700" letterSpacing="2.5">
           <textPath href={`#${arc}`} startOffset="50%" textAnchor="middle">
-            熊宝人事部
+            {`${shortName()}人事部`}
           </textPath>
         </text>
         <path d="M50 36 L52.2 42 L58.6 42.2 L53.5 46.1 L55.3 52.3 L50 48.7 L44.7 52.3 L46.5 46.1 L41.4 42.2 L47.8 42Z" />
