@@ -17,6 +17,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { parse } from "yaml";
+import { emptyPersona, type Persona } from "../../shared/persona";
 import { englishName, productName } from "./brand";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
@@ -34,7 +35,6 @@ import {
   users,
 } from "./db/schema";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
-import { emptyPersona, type Persona } from "../../shared/persona";
 import { PORTRAIT_PRESETS, type PortraitPreset } from "./portraits/store";
 import { runAsTenant } from "./tenant/context";
 import { avatarAgentId, packageChannelId } from "./tenant/provisioning";

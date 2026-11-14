@@ -136,7 +136,9 @@ export const agentProfiles = pgTable(
   (table) => [
     uniqueIndex("agent_profiles_owner_summoned_from_unique")
       .on(table.ownerUserId, table.summonedFrom)
-      .where(sql`${table.summonedFrom} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+      .where(
+        sql`${table.summonedFrom} IS NOT NULL AND ${table.deletedAt} IS NULL`,
+      ),
     index("agent_profiles_visibility_deleted_idx").on(
       table.visibility,
       table.deletedAt,
