@@ -175,14 +175,15 @@ export const EVERY_BOT_ASKS_REFUSAL =
 
 /**
  * 一位员工在不在个人默认的「每位员工」里：内置的普通员工在；分身（它的连接器来源只写只读工具，移除就收回，
- * 见 `avatar-sources.ts`）和远端员工（本人不控制的外部端点）不在。和 `personalDefaultsDeps` 的 `bots()` 是
- * 同一条规则。
+ * 见 `avatar-sources.ts`）、远端员工（本人不控制的外部端点）和召唤来的员工（`summoned_from` 非空，授予由本人
+ * 在自己的这份上决定）不在。和 `personalDefaultsDeps` 的 `bots()` 是同一条规则。
  */
 export function coveredByPersonalDefaults(
   agentId: string,
   type: string | undefined,
+  summoned = false,
 ): boolean {
-  return type === "built_in" && !agentId.startsWith(AVATAR_PREFIX);
+  return type === "built_in" && !summoned && !agentId.startsWith(AVATAR_PREFIX);
 }
 
 /**
@@ -198,10 +199,11 @@ export function personalRevokeRefusal(
   kind: string,
   ref: string,
   /** 收回的是哪位员工的授予；不给时按个人默认管着的员工答（只看授予本身时用）。 */
-  bot?: { id: string; type: string | undefined },
+  bot?: { id: string; type: string | undefined; summoned?: boolean },
 ): string | null {
   if (currentEdition() !== "personal") return null;
-  if (bot && !coveredByPersonalDefaults(bot.id, bot.type)) return null;
+  if (bot && !coveredByPersonalDefaults(bot.id, bot.type, bot.summoned))
+    return null;
   if (kind === "mcp" && isAlwaysOn(ref)) return ALWAYS_ON_REFUSAL;
   if (kind === "mcp" && isPerBotApp(ref)) return null;
   if (kind === "mcp") return EVERY_BOT_REFUSAL;
@@ -211,7 +213,10 @@ export function personalRevokeRefusal(
 
 /** {@link personalRevokeRefusal}，员工的类型从 store 读；团队版不读库。 */
 export async function personalRevokeRefusalFor(
-  store: { agentType(agentId: string): Promise<string | undefined> },
+  store: {
+    agentType(agentId: string): Promise<string | undefined>;
+    agentSummoned?(agentId: string): Promise<boolean>;
+  },
   kind: string,
   ref: string,
   agentId: string,
@@ -220,6 +225,7 @@ export async function personalRevokeRefusalFor(
   return personalRevokeRefusal(kind, ref, {
     id: agentId,
     type: await store.agentType(agentId),
+    summoned: (await store.agentSummoned?.(agentId)) ?? false,
   });
 }
 
@@ -570,15 +576,17 @@ export function withPersonalDefaults<S extends Store>(
      */
     if (currentEdition() === "personal")
       await inPersonsFrame(deps, async () => {
-        if (!(await deps.bots()).includes(agentId)) return;
-        await grantEveryTool(
-          this,
-          deps,
-          await everyBotApps(deps),
-          [agentId],
-          GRANTED_BY,
-        );
-        await giveEverySkillOnce(this, deps, [agentId]);
+        // 召唤来的员工不在 bots() 里：不补工具和技能，但仍和别的员工一样进自动学习。
+        if ((await deps.bots()).includes(agentId)) {
+          await grantEveryTool(
+            this,
+            deps,
+            await everyBotApps(deps),
+            [agentId],
+            GRANTED_BY,
+          );
+          await giveEverySkillOnce(this, deps, [agentId]);
+        }
         const included = await deps.includeEveryBotInLearning();
         if (included.length > 0 && audit)
           await recordAuditEvent(audit, {

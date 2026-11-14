@@ -33,6 +33,7 @@ import {
   ensurePersonalSkillsOwned,
   personalDefaultAppsMemory,
   personalDefaultsDeps,
+  personalRevokeRefusalFor,
   skillsGivenSetting,
   startPersonalDefaultApps,
   withPersonalDefaults,
@@ -714,5 +715,58 @@ describe("a summoned coworker in the personal edition", () => {
     );
     expect(grants).toEqual([]);
     expect(await held(ASSISTANT)).toEqual(SEARCH);
+  });
+
+  test("an app granted to it by hand can be revoked; the same grant on an ordinary Bot is refused", async () => {
+    await restart();
+    await asOwner(() =>
+      store.grant("mcp", `${PARALLEL}/web_search`, SUMMONED, OWNER),
+    );
+    expect(
+      await asOwner(() =>
+        personalRevokeRefusalFor(
+          store,
+          "mcp",
+          `${PARALLEL}/web_search`,
+          SUMMONED,
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      await asOwner(() =>
+        personalRevokeRefusalFor(
+          store,
+          "mcp",
+          `${PARALLEL}/web_search`,
+          ASSISTANT,
+        ),
+      ),
+    ).toBe(EVERY_BOT_REFUSAL);
+    await asOwner(() =>
+      store.revoke("mcp", `${PARALLEL}/web_search`, SUMMONED, OWNER),
+    );
+    expect(await held(SUMMONED)).toEqual([]);
+  });
+
+  test("its run still includes every Bot in Automatic Learning", async () => {
+    let calls = 0;
+    const counting = withPersonalDefaults(
+      createPluginStore({
+        database,
+        auditStore: audit,
+        credentials: createCredentialStore(database),
+        encryptionKey: Buffer.alloc(32, 7).toString("base64"),
+        policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+      }),
+      {
+        ...deps,
+        includeEveryBotInLearning: async () => {
+          calls += 1;
+          return [];
+        },
+      },
+    );
+    await asOwner(() => counting.listForAgent(SUMMONED));
+    expect(calls).toBe(1);
   });
 });

@@ -406,3 +406,27 @@ describe("GET /api/agents 的召唤状态", () => {
     ).toMatchObject({ summonKind: null, summoned: true });
   });
 });
+
+test("没有召唤接线时，员工列表不带 summonKind / summoned", async () => {
+  const actor = await person();
+  const guard: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
+  ) => {
+    context.set("actor", {
+      id: actor.id,
+      email: `${actor.id}@example.test`,
+      role: actor.role,
+    });
+    await runAsTenant(actor.id, next);
+  };
+  const response = await createAgentRoutes(profiles, guard).request(
+    new Request("http://summon.test/"),
+  );
+  const rows = ((await response.json()) as { agents: object[] }).agents;
+  expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) {
+    expect("summonKind" in row).toBe(false);
+    expect("summoned" in row).toBe(false);
+  }
+});

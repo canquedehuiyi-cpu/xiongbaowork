@@ -7264,6 +7264,16 @@ export function createPluginStore(options: PluginStoreOptions) {
       return row?.type;
     },
 
+    /** 员工是不是召唤来的（`summoned_from` 非空）；个人默认不管它们（`coveredByPersonalDefaults`）。 */
+    async agentSummoned(agentId: string): Promise<boolean> {
+      const [row] = await database
+        .select({ from: agentProfiles.summonedFrom })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, agentId))
+        .limit(1);
+      return Boolean(row?.from);
+    },
+
     async agentOwner(agentId: string): Promise<string | null | undefined> {
       const [row] = await database
         .select({ ownerUserId: agentProfiles.ownerUserId })
@@ -7457,14 +7467,15 @@ export function createPluginStore(options: PluginStoreOptions) {
      */
     async botsReachableFrom(agentId: string): Promise<string[]> {
       /*
-       * 「每位员工」和个人默认是同一个范围：内置的普通员工，不含分身和远端员工（`./personal-defaults` 的
+       * 「每位员工」和个人默认是同一个范围：内置的普通员工，不含分身、远端员工和召唤来的员工（`./personal-defaults` 的
        * `coveredByPersonalDefaults`）。范围外的员工照团队版只认授予，所以从它身上收回的另一位员工真的够不着了；
        * 也不会被自动交到分身或外部端点手上。
        */
       if (
         currentEdition() === "personal" &&
         (await this.agentType(agentId)) === "built_in" &&
-        !agentId.startsWith("avatar-")
+        !agentId.startsWith("avatar-") &&
+        !(await this.agentSummoned(agentId))
       ) {
         const everyOther = await database
           .select({ id: agents.id })

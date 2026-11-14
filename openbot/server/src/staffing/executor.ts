@@ -138,6 +138,7 @@ export type StaffingExecutorDeps = {
     | "agentOwner"
     | "agentIsRegistered"
     | "agentType"
+    | "agentSummoned"
     | "inspectApp"
     | "listForAgent"
     | "listServers"
