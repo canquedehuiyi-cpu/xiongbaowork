@@ -20,6 +20,7 @@ import {
   pinnedFirst,
 } from "@/components/app-sidebar/app-sidebar";
 import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
+import { isOnRoster } from "@/components/app-sidebar/roster";
 import {
   DangerItem,
   DissolveRowDialog,
@@ -158,9 +159,12 @@ export function latestChannelWith(
   return latest;
 }
 
-/** The Bots a person can talk to, pinned and assigned first, then their own, then shared ones. */
+/**
+ * The Bots a person can talk to, pinned and assigned first, then their own, then shared ones. Not a
+ * preset original or a 分身 still 待召唤: those are summoned on 人才市场 (`isOnRoster`).
+ */
 export function dotOrder(agents: readonly AgentProfile[]): AgentProfile[] {
-  const roster = groupRoster(agents);
+  const roster = groupRoster(agents.filter(isOnRoster));
   return [...roster.pinned, ...roster.yours, ...roster.shared];
 }
 

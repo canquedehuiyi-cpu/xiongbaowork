@@ -7,6 +7,7 @@ import {
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { isOnRoster } from "@/components/app-sidebar/roster";
 import {
   attentionSummary,
   waitingOnYou,
@@ -35,6 +36,8 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
+  // The person's own employees; a preset or a 分身 still 待召唤 is summoned on 人才市场 (`isOnRoster`).
+  const roster = agents.data?.filter(isOnRoster) ?? [];
 
   const choose = (agentId: string) => {
     if (userId) chooseBot(userId, agentId);
@@ -56,11 +59,11 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-3.5">
         {agents.isPending ? null : agents.error ? (
           <ErrorNotice error="读不到你的员工。请刷新页面。" />
-        ) : agents.data.length === 0 ? (
+        ) : roster.length === 0 ? (
           <p className={museText.muted}>你还没有员工。</p>
         ) : (
           <div className="flex flex-col">
-            {agents.data.map((agent) => {
+            {roster.map((agent) => {
               const waiting = attention.data?.find(
                 (entry) => entry.agentId === agent.id,
               );
@@ -129,11 +132,11 @@ export function BotsSheet({ onClose }: { onClose: () => void }) {
             />
           ) : null}
           <LinkRow
-            detail="你的、共享给你的，以及团队的"
+            detail="召唤员工，管理你的、共享给你的员工"
             icon={IconBolt}
             render={<Link onClick={onClose} to="/bots" />}
             tint="plain"
-            title="全部员工"
+            title="人才市场"
           />
           <LinkRow
             detail="描述它要做什么"

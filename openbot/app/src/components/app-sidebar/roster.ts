@@ -158,6 +158,15 @@ export function isPendingSummon(agent: AgentProfile): boolean {
 }
 
 /**
+ * On the person's roster: not a preset original (summoned or not — the person's copy is the one they
+ * talk to) and not a 分身 still 待召唤. What is left is summoned on 人才市场 (召唤员工 Task 10), so the
+ * skins' own employee lists hold the same people as the sidebar's 员工.
+ */
+export function isOnRoster(agent: AgentProfile): boolean {
+  return agent.summonKind !== "preset" && !isPendingSummon(agent);
+}
+
+/**
  * The 员工 list in its two groups: 已召唤 (talk to them) and 待召唤 (a 「召唤」 button), the 分身 first
  * among the latter.
  */
