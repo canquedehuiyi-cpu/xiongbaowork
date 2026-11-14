@@ -133,8 +133,16 @@ function NewConversation({ composition }: { composition: string }) {
   // Optimistic seed shown before the first channel record exists.
   const [sent, setSent] = useState<Message | null>(null);
 
+  /*
+   * Who To: offers: everyone but a preset original (召唤员工), summoned or not — a person talks to
+   * their own summoned copy, so a link naming the shared original picks nobody.
+   */
+  const offered = profiles?.filter(
+    (profile) => profile.summonKind !== "preset",
+  );
   // Stale or private `?agent=` values are ignored because the roster is permission-filtered.
-  const listed = profiles?.find((profile) => profile.id === agent);
+  const listed = offered?.find((profile) => profile.id === agent);
+  const rostered = profiles?.some((profile) => profile.id === agent) ?? false;
   /**
    * Hidden coworkers are omitted from the roster but may still be valid recipients from a profile
    * link, so fetch the URL-selected coworker when it is absent from the visible list.
@@ -146,7 +154,7 @@ function NewConversation({ composition }: { composition: string }) {
     isPending: detailPending,
   } = useQuery({
     ...agentQueryOptions(agent ?? ""),
-    enabled: Boolean(agent) && profiles !== undefined && !listed,
+    enabled: Boolean(agent) && profiles !== undefined && !rostered,
     retry: false,
   });
   /*
@@ -161,7 +169,7 @@ function NewConversation({ composition }: { composition: string }) {
    */
   const chosen = listed ?? (fetched?.id === agent ? fetched : undefined);
   const needsUrlAgentDetail =
-    Boolean(agent) && profiles !== undefined && !listed;
+    Boolean(agent) && profiles !== undefined && !rostered;
   const waitingForUrlAgent =
     needsUrlAgentDetail && detailPending && !detailError;
   const urlAgentDetailFailed = needsUrlAgentDetail && detailError && !fetched;
@@ -256,7 +264,7 @@ function NewConversation({ composition }: { composition: string }) {
           open={pickerOpen ?? (!chosen && !loadError && !waitingForUrlAgent)}
           onOpenChange={setPickerOpen}
           autoHighlight
-          items={profiles ?? []}
+          items={offered ?? []}
           isItemEqualToValue={(item: AgentProfile, value: AgentProfile) =>
             item.id === value.id
           }

@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import type { ComposerDraft } from "../src/components/channels/composer/draft";
+import { toAgentOptions } from "../src/components/channels/composer/triggers";
 import {
   dispatchToWaker,
   mentionRoster,
@@ -165,4 +166,28 @@ test("a refused dispatch throws the server's own sentence with its status", asyn
   expect(failure).toBeInstanceOf(RequestError);
   expect((failure as RequestError).status).toBe(404);
   expect((failure as RequestError).message).toBe("找不到这段对话或这位员工。");
+});
+
+test("the @ menu leaves out preset originals: the person's own summoned copy is the one to name", () => {
+  const withPresets = [
+    ...profiles,
+    { id: "preset-doctor", name: "暖心医生", summonKind: "preset" as const },
+    { id: "preset-lawyer", name: "专业律师", summonKind: "preset" as const },
+    { id: "copy-lawyer", name: "专业律师", summonKind: null },
+  ];
+  expect(
+    mentionRoster(withPresets, ["pinned"]).map((option) => option.id),
+  ).toEqual(["pinned", "reviewer", "writer", "copy-lawyer"]);
+  expect(toAgentOptions(withPresets).map((option) => option.id)).toEqual([
+    "pinned",
+    "reviewer",
+    "writer",
+    "copy-lawyer",
+  ]);
+  // A conversation that already has a preset original among its members still names it.
+  expect(
+    mentionRoster(withPresets, ["pinned", "preset-doctor"]).map(
+      (option) => option.id,
+    ),
+  ).toEqual(["pinned", "preset-doctor"]);
 });
