@@ -8,6 +8,27 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.2.11
+
+**从 v0.2.10 升级先看这几条**（逐条说明在下面各项的「升级须知」里）：
+
+- 新迁移 8 个，都在恢复叠加目录 `recovery-20261018-v1` 里，启动时自动执行：`0205`（技能附件表 `skill_assets`）、
+  `0206`（`channels.waker_group_id`，会话挂群组）、`0207`（共享群创建者退群或被停用后移交群组的数据库触发器）、`0208`
+  （`skills.runnable` 可运行档位）、`0209`（`channels.kind` 团队标记）、`0210`（`skills.blocked_reason`、
+  `blocked_reason_ref`）、`0211`（群组升级台账表 `waker_group_upgrades`）、`0212`（台账 `original_owner` 写入后不可改）。
+  主迁移目录 `server/drizzle` 相对 v0.2.10 没有变化，`release-policy.json` 的数据库段不变。升级前照常备份；`0207`
+  的触发器和移交不可撤销，回滚前先读部署文档 §6.2。
+- 没有依赖版本变化：`bun.lock` 与两份 `Cargo.lock` 相对 v0.2.10 都没有改动版本；`bun.lock` 和 `package.json` 只新增了
+  `patchedDependencies`（给 `playwright-core@1.62.1` 打补丁，见下），`package.json` 另加脚本 `port:assemble`。
+- **运维不需要改任何配置**：环境变量改以 `XIONGBAO_*` 为正式写法，`OPENBOT_*` 旧名照常生效，两个都写时以新名为准；
+  旧名的兼容窗口从 0.2.11 开始，计划到 0.2.13 移除（见下面「逐步重写」一项）。到 0.2.13 之前不必改 `.env.delivery`、
+  compose 或 Helm 值。
+- 设备端不必与服务器同步升级：服务器仍然发旧名请求头，本版没有改设备端与服务器之间的接口；设备端安装包另行发版，版本号独立。
+- **旧名到期清理（v0.2.9 引入的兼容，按计划在 0.2.11 移除）：** 从 v0.2.8 或更早的版本直接升级时，浏览器里旧名保存的主题、皮肤、
+  侧栏状态（展开、宽度、视图）和通知提示的已答复标记不再被读取，这些会恢复默认；旧的组织会话 cookie（`openbot.organization-session`）
+  不再识别，可能要重新选一次组织（组织登录与登出现在只设置、清除 `xiongbao.organization-session`）。从 v0.2.9 或 v0.2.10
+  升级的部署在 0.2.9 之后已经带着新名，不受影响。
+
 - **群组与群聊合一：侧边栏只剩「群组」，群组里可以直接聊天；升级时自动转换，见部署文档 §6。**
   每个群组背后挂一个群聊，名字、员工和顺序两边同步；新建群组时选好员工就能开始聊天。在群组聊天页的设置面板里可以改名、
   调整员工和顺序、换头像、建组团流程。员工页「群组」页签、`@群组`、流程页和看板用的都是同一个群组。解散群组时，它的
@@ -21,6 +42,48 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   升级前照常备份。新增开关 `XIONGBAO_GROUP_UPGRADE=off`（默认开），可以推迟转换。0207 让停用的人离开共享群、移交他建的群，
   这个数据库触发器换回旧镜像后仍然有效，移交不可撤销：回滚时先按部署文档第 6.2 节单独停用它，要撤销自动转换也按那一节执行。
   设备端不涉及。
+
+- **逐步重写（去 OpenBot 化）：对外可见的名字改为熊宝，旧名在兼容窗口内继续有效。**
+  依据 `docs/plans/2026-11-12-gradual-rewrite.md` 的 Task 1–19。运维需要知道的：
+  - 环境变量以 `XIONGBAO_*` 为正式写法，`OPENBOT_*` 照旧可用，新名优先；客户文档、`docker/delivery.env.example` 只写新名。
+    镜像内部默认值（`OPENBOT_SELF_HOST_BANNER`、`OPENBOT_RLS_ENFORCE`、`OPENBOT_IN_CONTAINER`）不再是镜像 ENV，改放
+    `/etc/xiongbao/defaults.env`，优先级最低：你写的 `XIONGBAO_X` 高于你写的 `OPENBOT_X`，再高于默认值。构建标识改为
+    `XIONGBAO_BUILD_*`。
+  - 兼容窗口：登记为 `legacy-compat` 的旧名 `introducedIn` 为 0.2.11、`removeIn` 为 0.2.13（共 21 条，见
+    `app/tests/brand-leak-allowlist.json`），到期由测试强制清理。0.2.13 之前旧名不会被移除；要提前迁移的部署现在就可以改成新名。
+  - 网页：9 个浏览器存储键改新名，旧名的值复制到新名下、旧键不删，照读一个窗口期；默认皮肤 id 由 `openbot` 改为
+    `xiongbao`，已保存的旧 id 读作新 id。发往浏览器的错误码改为 `XIONGBAO_*`。网页与命令行的提示、`--help` 只写新名。
+  - 内部请求头：agent-computer 同时接受 `x-xiongbao-*` 与 `x-openbot-*`（bot-id、person-id、computer-token、egress），新名
+    优先；新旧两个头取值冲突或令牌头重复时拒绝，不会因为旧头匹配就放行。服务器本版仍发旧名（改发新名是后续 Task 20），所以
+    服务器与 agent-computer 不必同时升级，混用旧版本也能通。agent-computer 的拒绝响应同时带两个 egress 头。
+  - 镜像：服务器打包成 `/app/server/dist/*.js`（server、migrate、fire-routines、cull-idle-computers、
+    cull-staged-attachments、ensure-container、composio-smoke 七个入口），运行镜像不再带服务端 TypeScript 源码、测试和文档；
+    原来的脚本路径各留一行 `import` 的垫片，Helm、compose 和手册里的命令不变。`/app/server/dist` 是 API 实际运行的代码，
+    不要在镜像里改它。镜像标签加了名称与厂商信息、去掉了仓库地址；`container-images.json` 同时写 `images.xiongbao` 与
+    `images.openbot`。apt 助手改名 `xiongbao-apt`，`/usr/local/sbin/openbot-apt` 保留为指向它的符号链接，sudoers 两个路径都放行。
+  - Bot 浏览器与终端：注入第三方网页的属性改为中性名（`data-xb-secret`、`data-xb-person-filled`、`data-xb-login`），登录态
+    文件改新名并兼容旧名；录制扩展不再往网页挂全局名，标记元素改 `xb-recorder-*`，旧名照认。
+  - 发布流水线（Task 17）：`release.yml`、`device-release.yml`、`clean-deploy.yml` 新增把平台清单镜像到自有仓库、把清单、
+    样例和安装包上传自有下载页的 job。**在配置自有渠道变量（`XB_REGISTRY`、`XB_DOWNLOAD_*`）之前这些 job 整个跳过，
+    行为与以前相同**；下载页变量只配了一部分时会直接报错。
+  - 设备端 runner：快照计数文件新名 `xiongbao-snapshots.sqlite`，旧名 `openbot-snapshots.sqlite` 保留并**双写**，打开时取
+    两边较大值，计数单调，回退到旧版本也不会重号；旧文件随兼容窗口到期删除。打包的 runner 加 `--minify` 并去掉构建机路径，
+    设备端开发变量 `XIONGBAO_RUNNER_BINARY`、`XIONGBAO_AGENT_DESKTOP_BINARY` 优先，旧名照认。
+  升级须知：不需要迁移（本项不涉及数据库），不需要改配置；想用新名的部署按上面规则逐步替换即可。旧名到 0.2.13 之前都有效。
+
+- **修复：打包的 runner sidecar 离开构建机后无法启动浏览器。** `bun build --compile` 把 `playwright-core` 读自身
+  `package.json`、`browsers.json` 的路径写死成构建机路径，用户机器上浏览器一律启动失败。现在用 `bun patch`
+  （`patches/playwright-core@1.62.1.patch`，`patchedDependencies`）改成静态相对引用，两个 JSON 编进二进制；
+  Dockerfile 的冻结安装也带上 `patches/`。升级须知：不需要迁移，不需要改配置；这是设备端安装包里的修复，随设备端下一次发版生效。
+
+- **能力移植与资源页面（内部能力链，运维无须操作）。** 技能支持附件（`skill_assets`，迁移 0205）和「可运行」档位
+  （`runnable`，迁移 0208）；被判为不可运行的技能记下原因与引文（迁移 0210），点开可看到缺什么；包里的专家团（`teams.yaml`）
+  同步成频道并带团队标记（迁移 0209），连接器由 `connectors.yaml` 声明；资源页新增「我的」员工级资源一览与档位徽章。
+  升级须知：要跑迁移 0205、0208、0209、0210；不需要改配置。
+
+- **其他小改动：** 网页对话页的员工介绍卡固定在顶部，对话页、会话列表和群聊里的员工头像显示自选头像；若干发布脚本与
+  浏览器用例的偶发超时、桌面操作测试的偶发 JSON 解析失败已修；品牌护栏（词表、预算、棘轮、产物扫描）扩展到前端、扩展、
+  runner、镜像和 `.deb`。升级须知：不需要迁移，不需要改配置。
 
 ## 0.2.10
 
