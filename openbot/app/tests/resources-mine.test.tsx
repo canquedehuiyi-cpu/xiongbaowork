@@ -9,7 +9,8 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
+import { cleanup, render, waitFor, within, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { PluginTeam, PluginsPage } from "@/lib/plugins/queries";
 import { MineScreen } from "@/components/resources/mine-screen";
 import { settleReactWork } from "./settle-react-work";
@@ -266,4 +267,131 @@ test("a person given no teams sees the team block say so, not a blank", async ()
   // 空态数从两变三：技能、团队、连接器各说各话。
   await waitFor(() => expect(view.getAllByText(/还没有/).length).toBe(3));
 });
+
+/**
+ * 109 条技能里 36 条暂不可用、11 条部分可用：这一页如果只给一个长列表，「我能用什么」要滚到底
+ * 才数得出来。汇总先答数，点一下再按档位收窄——两者都从同一份 `/api/plugins` 读，不另发请求。
+ */
+test("each grade is counted before you scroll, and a count narrows the grid", async () => {
+  const view = await renderMine(
+    page(
+      [
+        skill("full-a", "完整甲", "full"),
+        skill("full-b", "完整乙", "full"),
+        skill("partial-a", "降级甲", "degraded"),
+        skill("dead-a", "阻断甲", "blocked"),
+        skill("hand-a", "手写甲", null),
+      ],
+      [],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("完整甲")).toBeTruthy());
+
+  const tally = within(view.getByRole("group", { name: "按档位筛选" }));
+  expect(tally.getByRole("button", { name: /完整可用 2/ })).toBeTruthy();
+  expect(tally.getByRole("button", { name: /部分可用 1/ })).toBeTruthy();
+  expect(tally.getByRole("button", { name: /暂不可用 1/ })).toBeTruthy();
+  // 没被移植审计过的手写技能单独一档，不并进「完整可用」。
+  expect(tally.getByRole("button", { name: /未评估 1/ })).toBeTruthy();
+
+  act(() => tally.getByRole("button", { name: /暂不可用 1/ }).click());
+  await settleReactWork();
+  expect(view.getByText("阻断甲")).toBeTruthy();
+  expect(view.queryByText("完整甲")).toBeNull();
+  expect(
+    tally
+      .getByRole("button", { name: /暂不可用 1/ })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+
+  // 再点一次放开，而不是把人困在一个筛选里。
+  act(() => tally.getByRole("button", { name: /暂不可用 1/ }).click());
+  await settleReactWork();
+  expect(view.getByText("完整甲")).toBeTruthy();
+});
+
+test("搜索词收窄技能列表，一条都不匹配时给出清除筛选的出口", async () => {
+  const view = await renderMine(
+    page(
+      [
+        skill("market-export", "导出市场", "full"),
+        skill("delete-guard", "修删除守卫", "blocked", {
+          blockedReason: "host-specific-skill",
+          blockedReasonRef: "正文只讲宿主平台的操作",
+        }),
+      ],
+      [],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("导出市场")).toBeTruthy());
+
+  const user = userEvent.setup({ document });
+  await user.type(view.getByRole("searchbox", { name: "搜索技能" }), "删除");
+  await settleReactWork();
+  expect(view.getByText("修删除守卫")).toBeTruthy();
+  expect(view.queryByText("导出市场")).toBeNull();
+
+  await user.clear(view.getByRole("searchbox", { name: "搜索技能" }));
+  await user.type(view.getByRole("searchbox", { name: "搜索技能" }), "没有这回事");
+  await settleReactWork();
+  expect(view.getByText("没有匹配的技能")).toBeTruthy();
+  act(() => view.getByRole("button", { name: "清除筛选" }).click());
+  await settleReactWork();
+  expect(view.getByText("导出市场")).toBeTruthy();
+});
+
+/**
+ * R18 说徽章打了非 full 就必须答「缺什么」，而卡片只画两行。阻断理由常常比两行长（一句规则
+ * 理由 + 一条正文引文 + 处数），截断等于答一半，所以要能就地看全，不用离开这一页。
+ */
+test("a reason longer than the two lines on the card can be read in full there", async () => {
+  const longRef =
+    '正文给出可执行的 shell 命令；openbot 员工没有本地运行时。 ← "git init -q t"（共 2 处）；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。';
+  const view = await renderMine(
+    page(
+      [
+        skill("dead-a", "阻断甲", "blocked", {
+          blockedReason: "shell-command-prose+executable-scripts",
+          blockedReasonRef: longRef,
+        }),
+      ],
+      [],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("阻断甲")).toBeTruthy());
+  const row = within(view.getByText("阻断甲").closest("li") as HTMLElement);
+  const reason = () =>
+    row.getByText(/openbot 员工没有本地运行时/).closest("p") as HTMLElement;
+
+  expect(reason().className).toContain("line-clamp-2");
+  const toggle = row.getByRole("button", { name: "展开原因" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+  act(() => toggle.click());
+  await settleReactWork();
+  expect(reason().className).not.toContain("line-clamp-2");
+  expect(
+    row
+      .getByRole("button", { name: "收起原因" })
+      .getAttribute("aria-expanded"),
+  ).toBe("true");
+});
+
+test("a short reason draws no expand control, because there is nothing hidden", async () => {
+  const view = await renderMine(
+    page(
+      [
+        skill("dead-b", "阻断乙", "blocked", {
+          blockedReason: "host-specific-skill",
+          blockedReasonRef: "正文只讲宿主平台的操作",
+        }),
+      ],
+      [],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("阻断乙")).toBeTruthy());
+  const row = within(view.getByText("阻断乙").closest("li") as HTMLElement);
+  expect(row.queryByRole("button", { name: "展开原因" })).toBeNull();
+});
+
 
