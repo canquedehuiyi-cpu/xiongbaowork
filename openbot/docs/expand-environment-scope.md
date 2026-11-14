@@ -94,3 +94,46 @@ const res = await fetch(`${ BASE_URL }${ path }` ← 靠空格躲过
 ## 7. 与交付验收的关系
 
 这条不影响 L4 当前四项验收（品牌清洗、R18 数据链、资源页、回归基线），因为它只在**包内含 `${...}` 正文**时才显形；`examples/xiongbao` 已经有两处坏样本，属于"已发生、可静默扩散"的一类，建议排在技术债 #25（`index.ts` 拆分）之前。
+
+## 8. S1 结论：字段白名单（实施契约）
+
+全仓取证（`grep -rn '\${' --include=*.yaml examples/`，排除 `skills.yaml` 正文）：占位符**只**出现在
+`agents.yaml`，合计 11 处、5 个字段。没有第二个文件需要环境化。
+
+| 字段 | 出现 | 语义 |
+|---|---|---|
+| `endpoint` | 3 | 远程同事的地址，随部署环境变 |
+| `name` | 2 | 选定的 harness 名字（`${PICKED_HARNESS_NAME:-Your Bot}`） |
+| `title` | 2 | 同上，带前缀文案（`Powered by …`） |
+| `type` | 2 | `${PICKED_HARNESS_KIND:-remote-ag-ui}` |
+| `remote_agent_id` | 2 | 远端 agent id |
+
+**白名单 = 这 5 个字段**（`agents.yaml` 与 `agents/*.yaml` 同一结构）。其余一律不展开。
+
+对第 6 节开放问题的答复（都有实测）：
+
+1. `teams.yaml` / `channels.yaml`：全仓 **0 处**占位符 → 整体退出展开范围，不需要白名单条目。
+2. `model.yaml`：全仓 **0 处** → 本次不为密钥引入例外。密钥由部署环境的 env 提供，与"正文不可展开"不冲突。
+3. `docs/deployment*.md` 的示例写法：S3 一并收窄，此处不动。
+
+### 契约（S2 实现必须满足）
+
+1. **先解析、后展开**：只对白名单字段的字符串叶子调用现有的 `expandEnvironment`，不再对整份文件文本做替换。
+   已实测前提成立：不展开直接 `parse()`，占位符原样保留在解析结果里
+   （`agents.3.name = "${PICKED_HARNESS_NAME:-Your Bot}"`），不存在"不先展开就解析不了"的依赖。
+2. **fail-closed 不变**：白名单字段的占位符未设且无默认，仍然报错并点名文件。
+3. **正文逐字不变**：`skills[].instructions`、`description`、`summary`、brand 文案、knowledge 正文。
+
+### 红测试（已提交，S2 之前必红）
+
+`server/tests/tenant-package-environment-scope.test.ts`，三条断言 + 一条守卫：
+
+| 用例 | 现状（红/绿） |
+|---|---|
+| 正文里出现无默认值的占位符 → 整包照常加载且逐字保留 | **红**：`skills.yaml refers to ${NOT_SET_ANYWHERE}, which is not set in this environment.` |
+| `baseline-regression-triage` 保留 `"$P/${lbl:-}_raw.txt"` | **红**：加载后变成 `"$P/_raw.txt"` |
+| `workbuddy-safe-delete-guard` 保留 `threshold=${…:-20(内置默认)}` | **红**：本机加载后变成 `threshold=50` |
+| 守卫：`agents[].name` 仍按环境展开（`…:-Your Bot` → `Your Bot`） | 绿，S2 后必须仍绿 |
+
+测试读的是仓库里真实的 `examples/xiongbao` 与 `examples/personal`，不另造夹具——事故就在那个包里，
+用合成夹具只能证明"我以为的包长什么样"。
