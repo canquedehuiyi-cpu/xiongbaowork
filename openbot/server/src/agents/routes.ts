@@ -15,6 +15,7 @@ import { checkAgentEndpoint } from "./endpoint";
 import { takesModelChoice } from "./harness-model";
 import { isolationState, mayIsolate } from "./isolation";
 import { isManagedEndpoint } from "./managed-endpoint";
+import { type AgentPresenceReader, PRESENCE_MAX_IDS } from "./presence";
 import { canManageAgent } from "./profile-policy";
 import {
   AgentAssignedError,
@@ -609,6 +610,11 @@ export function createAgentRoutes(
    * on, and the person's 1:1 conversation. Absent, `POST /:agentId/summon` is not mounted.
    */
   summon?: SummonServices,
+  /**
+   * 员工此刻（聊天工作台 Task 8）：一批员工各自忙、闲、暂停和正在做的事（`agents/presence.ts`）。Absent,
+   * `GET /presence` answers 404 rather than falling through to the Bot read below.
+   */
+  presence?: AgentPresenceReader,
 ) {
   const isolationAvailable = isolation?.available ?? false;
   /** The plan's refusal as a response, or null when there is room. A create and a duplicate answer alike. */
@@ -677,6 +683,35 @@ export function createAgentRoutes(
   const dtoOf = async (actor: AgentActor, agent: AgentProfile) =>
     (await dtos(actor, [agent]))[0];
   const routes = new Hono<{ Variables: AppVariables }>();
+
+  /**
+   * 员工此刻，一次一批：`?ids=a,b,c` → `{ items: [{ agentId, status, doing }] }`。
+   *
+   * Registered before every `/:agentId` route, so "presence" can never be read as a Bot id. Only the
+   * Bots this person may see come back, read in their own tenant frame; an id they cannot see, or
+   * that names nothing, is left out without saying which. More than `PRESENCE_MAX_IDS` is a 400:
+   * the screens ask for what they draw, and nothing draws that many at once.
+   */
+  routes.get("/presence", requireUser, async (context) => {
+    if (!presence)
+      return context.json({ error: "Presence is not available here." }, 404);
+    const ids = [
+      ...new Set(
+        (context.req.query("ids") ?? "")
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0),
+      ),
+    ];
+    if (ids.length > PRESENCE_MAX_IDS)
+      return context.json(
+        { error: `Ask about at most ${PRESENCE_MAX_IDS} Bots at a time.` },
+        400,
+      );
+    return context.json({
+      items: await presence.read(context.var.actor, ids),
+    });
+  });
 
   /*
    * Signed in, and for an administrator the request-scoped capability the admin doors below demand.

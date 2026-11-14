@@ -8,6 +8,7 @@ import {
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { memo, useRef, useState } from "react";
+import { StatusDot } from "@/components/agents/status-dot";
 import { ChannelMenu } from "@/components/app-sidebar/channel";
 import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
 import {
@@ -31,6 +32,13 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { useBotNames } from "@/lib/agents/bot-names";
+import {
+  knownPresence,
+  PRESENCE_WORD,
+  type Presence,
+  presenceDoing,
+  usePresence,
+} from "@/lib/agents/presence";
 import { approvalInboxOptions } from "@/lib/approvals";
 import { untitledLine } from "@/lib/channels/label";
 import {
@@ -112,6 +120,13 @@ function passes(
   }
 }
 
+/** 一对一会话的那位员工；群组没有（状态点只画在单聊上）。 */
+function directAgentId(channel: ChannelSummary): string | undefined {
+  return !isGroupChannel(channel) && channel.agentIds.length === 1
+    ? channel.agentIds[0]
+    : undefined;
+}
+
 /**
  * 有事等你确认的员工：在等你回答的提问、在等你批的审批，按员工归（和 `useWaitingByBot` 同一套规则），
  * 整个列表一次审批收件箱查询，不是每行一个。
@@ -163,6 +178,10 @@ export function MessageList() {
     matchingChannels(channels.data, search).filter((channel) =>
       passes(channel, filter, openChannelId, waiting.bots),
     ),
+  );
+  // 整个列表一次读出画着的那些单聊员工此刻的状态，不是每行一个。
+  const presence = usePresence(
+    visible.flatMap((channel) => directAgentId(channel) ?? []),
   );
   const loaded = channels.data !== undefined;
   // 「待我确认」还不知道答案时，不说「没有」。
@@ -231,6 +250,7 @@ export function MessageList() {
               emphasis={emphasis}
               groupId={groupOfChannel.get(channel.id)}
               key={channel.id}
+              presence={presence.get(directAgentId(channel) ?? "")}
               waitsOnMe={waitsOnMe(channel, waiting.bots)}
             />
           ))}
@@ -437,12 +457,15 @@ const MessageRow = memo(function MessageRow({
   emphasis,
   botName,
   groupId,
+  presence,
   waitsOnMe,
 }: {
   channel: ChannelSummary;
   emphasis: MessageListEmphasis;
   botName: (botId: string) => string;
   groupId?: string;
+  /** 一对一会话那位员工此刻的状态；群组、读不到的都没有。 */
+  presence?: Presence;
   /** 这位员工有事等你确认（只对一对一会话）。 */
   waitsOnMe: boolean;
 }) {
@@ -455,6 +478,8 @@ const MessageRow = memo(function MessageRow({
   const { first, second } = rowLines(channel, emphasis, botName);
   // A turn running, or work the conversation waits on between turns: a hop, a routine.
   const busy = (channel.busy ?? false) || (channel.work?.length ?? 0) > 0;
+  const known = group ? undefined : knownPresence(presence);
+  const doing = presenceDoing(known);
   return (
     <ChannelMenu
       canRename={channel.canRename ?? false}
@@ -474,12 +499,26 @@ const MessageRow = memo(function MessageRow({
         {group ? (
           <GroupMosaic busy={busy} memberIds={channel.agentIds} />
         ) : (
-          <span className="shrink-0">
+          <span className="relative shrink-0">
             <ChannelAvatar
               participantIds={channel.agentIds}
               size={42}
               typing={busy}
             />
+            {/* 正在输入的小标也在右下角，它在的时候让给它。 */}
+            {busy ? null : (
+              <StatusDot
+                overlay
+                status={known?.status}
+                title={
+                  known
+                    ? [PRESENCE_WORD[known.status], doing]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : undefined
+                }
+              />
+            )}
           </span>
         )}
         <span className="flex min-w-0 flex-1 flex-col">

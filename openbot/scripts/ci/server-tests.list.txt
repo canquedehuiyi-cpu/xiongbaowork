@@ -25,6 +25,7 @@ tests/agent-handoff.test.ts
 tests/agent-key-rotation.integration.test.ts
 tests/agent-model-binding.test.ts
 tests/agent-on-this-machine.test.ts
+tests/agent-presence.integration.test.ts
 tests/agent-profile-policy.test.ts
 tests/agent-profile-store.integration.test.ts
 tests/agent-registry.test.ts

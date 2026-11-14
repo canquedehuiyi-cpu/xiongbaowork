@@ -21,6 +21,7 @@ import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
+import { usePresence } from "@/lib/agents/presence";
 import {
   type AgentProfile as AgentProfileData,
   agentListQueryOptions,
@@ -28,6 +29,7 @@ import {
 import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
 import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
+import { useSkinId } from "@/skins/store";
 
 const chatSearchSchema = z.object({
   settings: z.boolean().optional(),
@@ -275,13 +277,20 @@ function ChannelBody({
   );
 }
 
-/** The pinned employee card atop a 单聊, its face animated by the same status read as {@link HeaderFace}. */
+/**
+ * The pinned employee card atop a 单聊, its face animated by the same status read as {@link HeaderFace}.
+ * In the workbench skin it also says where the employee is now (status dot, 「忙碌 · 任务标题」), from
+ * the batch presence read (聊天工作台 Task 8); the other skins draw the card as they always have.
+ */
 function HeaderCard({ agent }: { agent: AgentProfileData }) {
   const status = useProfileStatus(agent.id);
+  const workbench = useSkinId() === "xiongbao";
+  const presence = usePresence(workbench ? [agent.id] : []).get(agent.id);
   return (
     <ConversationHeaderCard
       agent={agent}
       motion={status === "working" ? "working" : "idle"}
+      presence={workbench ? presence : undefined}
     />
   );
 }

@@ -44,6 +44,7 @@ import {
   guardBotTurn,
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
+import { readAgentPresence } from "./agents/presence";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
 import { isUnattended, runModeOf } from "./agents/run-mode";
@@ -4998,6 +4999,10 @@ await startupLifecycle.run(async (startup) => {
       summon: {
         database,
         direct: (actor, agentId) => channelStore.direct(actor, agentId),
+      },
+      // 员工此刻: the same pause row and running tasks the per-Bot reads use, for a batch at once.
+      presence: {
+        read: (actor, agentIds) => readAgentPresence(database, actor, agentIds),
       },
       // AUT3: the WakerFlow target is registered above, so the form may offer it.
       wakerflowAutomations: true,

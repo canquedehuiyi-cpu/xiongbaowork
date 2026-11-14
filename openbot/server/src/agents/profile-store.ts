@@ -409,7 +409,11 @@ function joinedProfiles(executor: DatabaseExecutor, actor: AgentActor) {
     .leftJoin(deploymentPackages, eq(deploymentPackages.id, agents.packageId));
 }
 
-function accessFilter(actor: AgentActor) {
+/**
+ * Which profiles this person may see: the rule the list and every per-Bot read share. Exported for
+ * the batch presence read (`presence.ts`), so it can never see a Bot the list would not show.
+ */
+export function agentAccessFilter(actor: AgentActor) {
   if (actor.role === "admin") return undefined;
 
   return or(
@@ -667,7 +671,7 @@ async function findAccessibleProfile(
     and(
       eq(agents.id, id),
       isNull(agentProfiles.deletedAt),
-      accessFilter(actor),
+      agentAccessFilter(actor),
     ),
   );
   return row ? mapProfile(row) : null;
@@ -1025,7 +1029,7 @@ export function createAgentProfileStore(
       const rows = await joinedProfiles(database, actor).where(
         and(
           isNull(agentProfiles.deletedAt),
-          accessFilter(actor),
+          agentAccessFilter(actor),
           hidden
             ? isNotNull(agentPreferences.hiddenAt)
             : isNull(agentPreferences.hiddenAt),

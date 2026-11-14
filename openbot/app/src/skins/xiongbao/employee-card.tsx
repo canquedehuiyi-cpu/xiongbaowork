@@ -9,9 +9,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { StatusDot } from "@/components/agents/status-dot";
 import { latestDirectChannel } from "@/components/app-sidebar/roster";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { employeeNumber } from "@/components/summon/summon-card-flip";
+import {
+  knownPresence,
+  presenceDoing,
+  usePresence,
+} from "@/lib/agents/presence";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { channelListQueryOptions } from "@/lib/channels/queries";
 import {
@@ -115,6 +121,34 @@ export function modelLabel(
   return "部署自带的模型";
 }
 
+/**
+ * 「此刻：正在做的事」（设计稿 `.status` / `.pcard .st`）：通讯录卡和名片上，员工忙碌时写它手上运行中的那件
+ * 任务的标题。不忙、读不到时调用的人不画它，不写占位。
+ */
+export function NowDoing({
+  doing,
+  className,
+}: {
+  doing: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "block truncate rounded-[8px] px-2 py-1.5 text-[12px]",
+        TONE.card2,
+        TONE.fg2,
+        className,
+      )}
+      data-now-doing=""
+      title={doing}
+    >
+      <b className={cn("font-semibold", TONE.fg)}>此刻：</b>
+      {doing}
+    </span>
+  );
+}
+
 const actionClassName = cn(
   "grid min-h-[38px] place-items-center rounded-[10px] px-2 py-[9px] text-center font-medium text-[13px]",
   TONE.focus,
@@ -163,6 +197,8 @@ function CardBody({
   }).data;
   const skills = useQuery(agentPluginsQueryOptions(agent.id)).data?.skills;
   const direct = latestDirectChannel(channels, agent.id);
+  const presence = knownPresence(usePresence([agent.id]).get(agent.id));
+  const doing = presenceDoing(presence);
   // 最近的单聊，没有就开一段发给他的新对话，和侧栏员工行一样。
   const talk: LinkProps = direct
     ? { to: "/channel/$channelId", params: { channelId: direct.id } }
@@ -179,13 +215,19 @@ function CardBody({
   return (
     <div className="-mt-9 grid gap-2.5 px-[18px]">
       <span
-        aria-hidden="true"
         className={cn(
           "relative w-fit rounded-full border-[3px] border-[color:var(--wb-frame,var(--background))]",
           TONE.frame,
         )}
       >
-        <ChannelAvatar participantIds={[agent.id]} size={72} />
+        <span aria-hidden="true" className="block">
+          <ChannelAvatar participantIds={[agent.id]} size={72} />
+        </span>
+        <StatusDot
+          className="right-0.5 bottom-0.5 size-3.5 border-[color:var(--wb-frame,var(--background))]"
+          overlay
+          status={presence?.status}
+        />
       </span>
       <h2 className="m-0 font-semibold text-[18px] leading-tight">
         {agent.name}
@@ -209,6 +251,7 @@ function CardBody({
           </span>
         ))}
       </p>
+      {doing ? <NowDoing className="text-[12.5px]" doing={doing} /> : null}
       {tone || model ? (
         <dl className="m-0 grid grid-cols-[70px_1fr] gap-x-2.5 gap-y-2 text-[12.5px]">
           {tone ? (
