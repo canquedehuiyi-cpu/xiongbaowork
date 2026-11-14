@@ -23,6 +23,7 @@ import {
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
+import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
@@ -165,6 +166,7 @@ function renderSidebar(
     groups,
     details = [],
     portraits = [],
+    agents = AGENTS,
   }: {
     channels?: ChannelSummary[];
     nextCursor?: string | null;
@@ -174,6 +176,7 @@ function renderSidebar(
     /** Channels read on their own (`GET /api/channels/:id`), for one not among the loaded pages. */
     details?: { id: string; agentIds: string[] }[];
     portraits?: unknown[];
+    agents?: unknown[];
   } = {},
 ) {
   const queryClient = new QueryClient({
@@ -210,7 +213,7 @@ function renderSidebar(
     role: "user",
     onboarding: null,
   });
-  queryClient.setQueryData(agentKeys.list(false), AGENTS);
+  queryClient.setQueryData(agentKeys.list(false), agents);
   queryClient.setQueryDefaults(botLifecycleKeys.attention, {
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
@@ -694,4 +697,120 @@ test("a linked chat I started shows the crew's portrait", async () => {
   );
   // A linked crew is its chat's row, not a second 未开始聊天 row.
   expect(within(list).getAllByRole("link")).toHaveLength(1);
+});
+
+/* 召唤员工：员工列表分「已召唤 / 待召唤」。 */
+const SUMMON_AGENTS = [
+  agent("agent-analyst", "分析师", { roleDescription: "整理周报与指标" }),
+  agent("avatar-user", "我的分身", {
+    summonKind: "avatar",
+    summoned: false,
+  }),
+  agent("preset-doctor", "暖心医生", {
+    title: "医生",
+    summonKind: "preset",
+    summoned: false,
+    presetPortrait: "doctor",
+  }),
+  agent("preset-lawyer", "专业律师", {
+    summonKind: "preset",
+    summoned: true,
+    presetPortrait: "lawyer",
+  }),
+  agent("copy-lawyer", "专业律师", {
+    summonedFrom: "preset-lawyer",
+    summonKind: null,
+    summoned: true,
+    presetPortrait: "lawyer",
+  }),
+];
+
+/*
+ * 召唤员工 Task 10: summoning happens only on 人才市场 (/bots). 员工 here lists the person's own
+ * employees — a summoned copy, the 分身 once summoned, the ones they made — and nothing to summon.
+ */
+test("员工 lists only the person's own employees; what waits to be summoned is on 人才市场, not here", async () => {
+  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  await chooseView(view, /^员工/);
+  const done = await view.findByRole("list", { name: "员工" });
+  expect(
+    within(done)
+      .getAllByRole("link")
+      .map((row) => [textOf(row), hrefOf(row)]),
+  ).toEqual([
+    ["分析师整理周报与指标", "/channel/c-analyst-new"],
+    ["专业律师", "/channel/new?agent=copy-lawyer"],
+  ]);
+  expect(view.queryByRole("list", { name: "待召唤" })).toBeNull();
+  expect(view.queryAllByRole("button", { name: /^召唤/ })).toHaveLength(0);
+  expect(view.queryByText("暖心医生")).toBeNull();
+  expect(view.queryByText("我的分身")).toBeNull();
+  // Right under the list, drawn as an action with its icon rather than a line of grey text, and
+  // not stretched to fill the panel (which left a gap between the rows and it).
+  const market = view.getByRole("link", { name: "去人才市场召唤员工" });
+  expect(hrefOf(market)).toBe("/bots");
+  expect(done.nextElementSibling).toBe(market);
+  expect(market.querySelector("svg")).not.toBeNull();
+  expect(market.className).not.toContain("flex-1");
+});
+
+test("a summoned employee without a portrait row draws its presetPortrait's picture", async () => {
+  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  await chooseView(view, /^员工/);
+  const list = await view.findByRole("list", { name: "员工" });
+  const row = within(list)
+    .getAllByRole("link")
+    .find((link) => hrefOf(link) === "/channel/new?agent=copy-lawyer");
+  expect(row?.querySelector("img")?.getAttribute("src")).toBe(
+    PRESET_IMAGES.lawyer,
+  );
+});
+
+test("with nobody summoned yet, 员工 says to go to 人才市场", async () => {
+  const { view } = renderSidebar("/bots", {
+    // Nothing of the person's own: only the 分身 and the presets, which wait on 人才市场.
+    agents: SUMMON_AGENTS.filter(
+      (profile) => !["agent-analyst", "copy-lawyer"].includes(profile.id),
+    ),
+  });
+  await chooseView(view, /^员工/);
+  expect(await view.findByText(/还没有员工/)).toBeTruthy();
+  expect(hrefOf(view.getByRole("link", { name: "去人才市场" }))).toBe("/bots");
+});
+
+test("after a preset is summoned its older conversations stay in 会话 while 员工 lists only the copy", async () => {
+  const { view } = renderSidebar("/bots", {
+    agents: SUMMON_AGENTS,
+    channels: [
+      channel("c-old-lawyer", ["preset-lawyer"], {
+        summary: "旧的法务会话",
+        lastMessageAt: "2026-11-07T01:00:00Z",
+      }),
+    ],
+  });
+  const list = await view.findByRole("navigation", { name: "会话" });
+  expect(within(list).getAllByRole("link").map(hrefOf)).toEqual([
+    "/channel/c-old-lawyer",
+  ]);
+  await chooseView(view, /^员工/);
+  const roster = await view.findByRole("list", { name: "员工" });
+  expect(
+    within(roster)
+      .getAllByRole("link")
+      .map((row) => hrefOf(row)),
+  ).not.toContain("/channel/c-old-lawyer");
+});
+
+test("the 员工 count counts the employees on the person's roster, not the ones still 待召唤", async () => {
+  const { view } = renderSidebar("/bots", {
+    agents: SUMMON_AGENTS,
+    groups: [],
+  });
+  const switcher = await view.findByRole("group", { name: "侧栏列表" });
+  // 分析师 and the copy of 专业律师; 我的分身 and 暖心医生 wait to be summoned.
+  expect(
+    within(switcher)
+      .getByRole("button", { name: /^员工/ })
+      .getAttribute("aria-label"),
+  ).toBe("员工，2 位");
 });

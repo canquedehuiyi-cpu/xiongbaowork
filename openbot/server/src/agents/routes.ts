@@ -1,11 +1,12 @@
-import { isDevActorEmail } from "../auth/dev-actor-email";
 import { declaredHarness } from "@openbot/shared/harnesses";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AuditEventType, AuditStore } from "../audit";
 import { recordAuditEvent } from "../audit";
 import type { AdminScope } from "../auth/admin-scope";
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import type { AppVariables } from "../auth/guards";
+import { englishName } from "../brand";
 import type { QuotaService } from "../quota/limits";
 import { QuotaExceeded } from "../quota/limits";
 import { capabilityFor, isPersonTenant } from "../tenant/context";
@@ -37,7 +38,7 @@ import type {
   CreateAgentInput,
   Persona,
 } from "./profile-types";
-import { englishName } from "../brand";
+import { type SummonServices, summonAgent, summonStates } from "./summon";
 
 type AgentInputParseResult =
   | { ok: true; value: CreateAgentInput }
@@ -571,6 +572,11 @@ export function createAgentRoutes(
    * so a connection test dials an agent on their loopback where a run will. See onThisMachine.
    */
   dial?: { thisMachineHost?: string },
+  /**
+   * What summoning needs beyond this store (`agents/summon.ts`): the database its lock and copy run
+   * on, and the person's 1:1 conversation. Absent, `POST /:agentId/summon` is not mounted.
+   */
+  summon?: SummonServices,
 ) {
   const isolationAvailable = isolation?.available ?? false;
   /** The plan's refusal as a response, or null when there is room. A create and a duplicate answer alike. */
@@ -622,8 +628,13 @@ export function createAgentRoutes(
       if (owners.has(agent.ownerUserId)) continue;
       owners.set(agent.ownerUserId, await mayIsolate(agent.ownerUserId));
     }
+    // Without the summon wiring there is no database to ask: the two fields are then left out.
+    const states = summon
+      ? await summonStates(summon.database, actor, list)
+      : undefined;
     return list.map((agent) => ({
       ...dto(actor, agent),
+      ...states?.get(agent.id),
       ...isolationState(
         agent,
         isolationAvailable,
@@ -1133,6 +1144,51 @@ export function createAgentRoutes(
     }
   });
 
+  /*
+   * 召唤: a shared preset becomes a copy of the person's own, with its 1:1 conversation; their 分身 or
+   * their own coworker just gets the conversation. A new copy takes a seat as a duplicate does and is
+   * refused alike, but only a new one: the copy already summoned, or the 分身, takes none.
+   */
+  if (summon) {
+    routes.post("/:agentId/summon", requireUser, async (context) => {
+      const actor = context.var.actor;
+      const agentId = context.req.param("agentId");
+      if (!agentId.trim()) {
+        return context.json({ error: "A Bot id is required." }, 400);
+      }
+      try {
+        const summoned = await summonAgent(
+          {
+            ...summon,
+            profiles: store,
+            ...(quota
+              ? {
+                  admit: (transaction) =>
+                    quota.assertCapacityWithin(transaction, actor.id, "wakers"),
+                }
+              : {}),
+            // Against the copy, naming the preset, as a duplicate names its original. Recorded as the
+            // copy commits, before the conversation, so a failure there cannot lose it.
+            onCreated: (copy) =>
+              record(context, "bot.summoned", copy.id, {
+                summonedFrom: agentId,
+                ...(copy.isolated ? { isolated: true } : {}),
+              }),
+          },
+          actor,
+          agentId,
+        );
+        return context.json({
+          agent: await dtoOf(actor, summoned.agent),
+          channelId: summoned.channelId,
+          created: summoned.created,
+        });
+      } catch (error) {
+        return mapStoreError(context, error);
+      }
+    });
+  }
+
   routes.post("/:agentId/hide", requireUser, async (context) => {
     try {
       await store.setHidden(
@@ -1335,6 +1391,9 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     hasCallbackToken: agent.hasCallbackToken,
     // What the owner asked for. Whether it is in effect is `isolationActive`, added by the route.
     isolated: agent.isolated,
+    // 召唤员工: where it was summoned from and its preset portrait; null for one made by hand.
+    summonedFrom: agent.summonedFrom ?? null,
+    presetPortrait: agent.presetPortrait ?? null,
     // The personal starter's, for its Setup page. No other Bot's DTO carries any.
     ...(agent.instructions ? { instructions: agent.instructions } : {}),
     // What runs it, by name, so a page can say that where it would otherwise show an address.

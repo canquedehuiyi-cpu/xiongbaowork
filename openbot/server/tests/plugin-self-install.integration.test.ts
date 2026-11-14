@@ -278,7 +278,7 @@ afterAll(async () => {
 });
 
 describe("before anything is listed", () => {
-  test("an owner cannot install an app's tool or a deployment skill on their own Waker", async () => {
+  test("an owner cannot install an app's tool on their own Waker", async () => {
     const app = await send(
       asAlice(),
       "/grants",
@@ -289,16 +289,54 @@ describe("before anything is listed", () => {
       "An administrator decides which Bots may reach a tool.",
     );
 
-    const skill = await send(
+    const now = await held(aliceBot);
+    expect(now.tools).toEqual([]);
+    expect(now.skills).toEqual([]);
+  });
+
+  /*
+   * Ruling 10 (召唤员工): a skill is instructions and reaches nothing, so the owner of a Waker may put a
+   * deployment skill on it, and take it off again, without anybody listing it first. An app still
+   * needs its listing (above).
+   */
+  test("an owner installs and uninstalls a deployment skill on their own Waker without a listing", async () => {
+    const installed = await send(
       asAlice(),
       "/grants",
       grant("skill", deploymentSkill, aliceBot),
     );
-    expect(skill.status).toBe(403);
+    expect(installed.status).toBe(200);
+    expect((await held(aliceBot)).skills.map((skill) => skill.slug)).toEqual([
+      deploymentSkill,
+    ]);
+    expect(await trail("plugin_granted", deploymentSkill)).toContainEqual({
+      actor: aliceEmail,
+      change: "plugin_granted",
+      kind: "skill",
+      ref: deploymentSkill,
+      bot: aliceBot,
+      selfService: true,
+    });
 
-    const now = await held(aliceBot);
-    expect(now.tools).toEqual([]);
-    expect(now.skills).toEqual([]);
+    const removed = await send(
+      asAlice(),
+      revoke("skill", deploymentSkill, aliceBot),
+      { method: "DELETE" },
+    );
+    expect(removed.status).toBe(200);
+    expect((await held(aliceBot)).skills).toEqual([]);
+  });
+
+  test("not on somebody else's Waker or one the workspace shares", async () => {
+    for (const agentId of [bobBot, sharedBot]) {
+      const response = await send(
+        asAlice(),
+        "/grants",
+        grant("skill", deploymentSkill, agentId),
+      );
+      expect(response.status).toBe(403);
+      expect((await held(agentId)).skills).toEqual([]);
+    }
   });
 });
 
@@ -431,7 +469,7 @@ describe("an owner installs and uninstalls a listed entry on their own Waker", (
       expect(response.status).toBe(403);
       // One sentence for all three, so the refusal says nothing about other people's Wakers.
       expect((await response.json()).error).toBe(
-        "You can only install listed entries on Bots you own.",
+        "You can only install apps and skills on Bots you own.",
       );
     }
     expect((await held(bobBot)).tools).toEqual([]);
@@ -443,7 +481,21 @@ describe("an owner installs and uninstalls a listed entry on their own Waker", (
       grant("skill", deploymentSkill, bobBot),
     );
     expect(skill.status).toBe(403);
+    expect((await skill.json()).error).toBe(
+      "You can only install apps and skills on Bots you own.",
+    );
     expect((await held(bobBot)).skills).toEqual([]);
+
+    // Taking one off somebody else's Waker is refused in the words for taking off, not installing.
+    const off = await send(
+      asAlice(),
+      revoke("skill", deploymentSkill, bobBot),
+      { method: "DELETE" },
+    );
+    expect(off.status).toBe(403);
+    expect((await off.json()).error).toBe(
+      "You can only remove apps and skills from Bots you own.",
+    );
   });
 
   test("a listing is not a licence for another app, or for an app's name without a tool", async () => {

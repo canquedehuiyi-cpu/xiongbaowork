@@ -29,7 +29,7 @@ function BotProfilePage() {
   return (
     <PageShell
       // Back to the roster as the person left it: its filters, sort and view (the 员工 wall's own).
-      backButton={{ label: "员工", linkProps: wakersBackLink() }}
+      backButton={{ label: "人才市场", linkProps: wakersBackLink() }}
       // No description: the employee's own role, on its card just below, says what this page is about.
       title={agent.data?.name ?? "员工"}
     >

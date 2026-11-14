@@ -17,6 +17,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { parse } from "yaml";
+import { emptyPersona, type Persona } from "../../shared/persona";
 import { englishName, productName } from "./brand";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
@@ -34,6 +35,7 @@ import {
   users,
 } from "./db/schema";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
+import { PORTRAIT_PRESETS, type PortraitPreset } from "./portraits/store";
 import { runAsTenant } from "./tenant/context";
 import { avatarAgentId, packageChannelId } from "./tenant/provisioning";
 import {
@@ -252,6 +254,10 @@ type TenantAgent = {
   title: string;
   roleDescription: string;
   avatarSeed?: string;
+  /** The preset face this coworker wears (`PORTRAIT_PRESETS`); unset means none. */
+  portrait?: PortraitPreset;
+  /** The persona this coworker is summoned with; unset means none. */
+  persona?: Persona;
   type: "built_in" | "remote_ag_ui" | "remote_mastra";
   configuration: Record<string, unknown>;
   /**
@@ -453,6 +459,67 @@ function asList(value: unknown, name: string): unknown[] {
   return value;
 }
 
+/** The longest a single persona part may be: the same bound the persona boxes enforce (agents/routes.ts). */
+const PERSONA_PART_MAX_CHARACTERS = 2_000;
+
+/**
+ * An agent's `persona:` -- absent is fine; otherwise a mapping of `tone`, `principles` and `habits`
+ * (each text, a missing one is empty), refused by agent id for anything else or a part over the
+ * persona boxes' limit.
+ */
+function parseAgentPersona(
+  value: unknown,
+  agentId: string,
+): Persona | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(
+      `agent "${agentId}": persona must be a mapping of tone, principles and habits`,
+    );
+  }
+  const given = value as Record<string, unknown>;
+  for (const key of Object.keys(given)) {
+    if (key !== "tone" && key !== "principles" && key !== "habits") {
+      throw new Error(
+        `agent "${agentId}": persona has an unknown part ${JSON.stringify(key)}; use tone, principles and habits`,
+      );
+    }
+  }
+  const persona = emptyPersona();
+  for (const key of ["tone", "principles", "habits"] as const) {
+    const entry = given[key];
+    if (entry === undefined || entry === null) continue;
+    if (typeof entry !== "string") {
+      throw new Error(`agent "${agentId}": persona.${key} must be text`);
+    }
+    const trimmed = entry.trim();
+    if (trimmed.length > PERSONA_PART_MAX_CHARACTERS) {
+      throw new Error(
+        `agent "${agentId}": persona.${key} must be ${PERSONA_PART_MAX_CHARACTERS} characters or fewer`,
+      );
+    }
+    persona[key] = trimmed;
+  }
+  return persona;
+}
+
+/** An agent's `portrait:` -- absent is fine, anything but a preset key is refused by agent id. */
+function parsePortrait(
+  value: unknown,
+  agentId: string,
+): PortraitPreset | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    !(PORTRAIT_PRESETS as readonly string[]).includes(value)
+  ) {
+    throw new Error(
+      `agent "${agentId}": portrait must be one of the preset portraits, got ${JSON.stringify(value)}`,
+    );
+  }
+  return value as PortraitPreset;
+}
+
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${name} must be a non-empty string`);
@@ -601,6 +668,8 @@ function parseAgents(
           agent.avatar_seed === undefined
             ? undefined
             : requiredString(agent.avatar_seed, "agent.avatar_seed"),
+        portrait: parsePortrait(agent.portrait, id),
+        persona: parseAgentPersona(agent.persona, id),
         type,
         configuration:
           type === "built_in"
@@ -982,7 +1051,11 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
       runnable = "full";
     } else {
       runnable = requiredString(declared, "skill.runnable");
-      if (runnable !== "full" && runnable !== "degraded" && runnable !== "blocked") {
+      if (
+        runnable !== "full" &&
+        runnable !== "degraded" &&
+        runnable !== "blocked"
+      ) {
         throw new Error(
           `skill.runnable must be one of full, degraded, blocked; got "${runnable}"`,
         );
@@ -1899,6 +1972,8 @@ export async function synchronizeTenantPackage(
               title: agent.title,
               roleDescription: agent.roleDescription,
               avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
+              presetPortrait: agent.portrait ?? null,
+              persona: agent.persona ?? null,
               visibility,
               deletedAt: null,
               updatedAt,
@@ -1915,6 +1990,8 @@ export async function synchronizeTenantPackage(
                   title: agent.title,
                   roleDescription: agent.roleDescription,
                   avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
+                  presetPortrait: agent.portrait ?? null,
+                  persona: agent.persona ?? null,
                   visibility,
                   deletedAt: null,
                   updatedAt,

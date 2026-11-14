@@ -1,4 +1,9 @@
-import { IconPlayerPlay, IconPlus, IconSearch } from "@tabler/icons-react";
+import {
+  IconPlayerPlay,
+  IconPlus,
+  IconSearch,
+  IconUserPlus,
+} from "@tabler/icons-react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -37,6 +42,7 @@ import { ChannelPagination } from "./channel-pagination";
 import { ChannelRow } from "./channel-row";
 import {
   channelsOf,
+  employeeGroups,
   hasUnseenActivity,
   isGroupChannel,
   latestDirectChannel,
@@ -55,6 +61,13 @@ import { useConversationFocus } from "./use-conversation-focus";
  * The 「+ 新建…」 row and the search toggle beside it (docs/design/ios-studio): a quiet text row with
  * a red plus, left-aligned under the switch, and a 32px magnifier at its right.
  */
+/*
+ * 「去人才市场召唤员工」 right under the 员工 rows: an action row as tall as one, its icon in the signal
+ * colour like 新建员工's, not stretched (a `flex-1` row in the panel's column pushed it to the bottom).
+ */
+const marketRowClassName =
+  "mt-[2px] flex h-[32px] min-w-0 items-center gap-[7px] rounded-[8px] px-[9px] font-medium text-[12px] text-foreground/85 outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[15px] [&>svg]:shrink-0 [&>svg]:text-signal";
+
 const newRowClassName =
   "flex h-[32px] min-w-0 flex-1 items-center gap-[7px] rounded-[8px] pl-[9px] text-[12px] text-foreground/85 outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[15px] [&>svg]:shrink-0 [&>svg]:text-signal";
 
@@ -306,6 +319,9 @@ function EmployeeRow({
  * 员工: everyone the person can talk to, each row opening its latest 单聊 (or a new one addressed to
  * it), with what waits on the person from that employee. 「新建员工」 opens the same wizard as the
  * header of 员工 (`/bots?new=true`).
+ *
+ * Only the person's own employees (召唤员工 Task 10): what waits to be summoned is on 人才市场
+ * (`/bots`), the one place summoning happens, which a link at the foot of the list leads to.
  */
 export function EmployeeList() {
   const [query, setQuery] = useState("");
@@ -318,7 +334,7 @@ export function EmployeeList() {
       new Map((attention.data ?? []).map((bot) => [bot.agentId, bot] as const)),
     [attention.data],
   );
-  const employees = listedEmployees(agents.data);
+  const employees = employeeGroups(listedEmployees(agents.data)).summoned;
   const shown = employees.filter((agent) =>
     matches(query, agent.name, agent.title, agent.roleDescription),
   );
@@ -358,21 +374,33 @@ export function EmployeeList() {
           </Button>
         </RosterNote>
       ) : employees.length === 0 ? (
-        <RosterNote>还没有员工。点「新建员工」创建第一位。</RosterNote>
+        <RosterNote>
+          还没有员工。
+          <Link className="text-foreground underline" to="/bots">
+            去人才市场
+          </Link>
+          召唤一位，或者点「新建员工」。
+        </RosterNote>
       ) : shown.length === 0 ? (
         <RosterNote>没有匹配的员工</RosterNote>
       ) : (
-        <ul aria-label="员工" className="mt-[8px] flex flex-col gap-px">
-          {shown.map((agent) => (
-            <EmployeeRow
-              agent={agent}
-              attention={attentionById.get(agent.id)}
-              channels={channels.data}
-              key={agent.id}
-              selected={selectedId === agent.id}
-            />
-          ))}
-        </ul>
+        <>
+          <ul aria-label="员工" className="mt-[8px] flex flex-col gap-px">
+            {shown.map((agent) => (
+              <EmployeeRow
+                agent={agent}
+                attention={attentionById.get(agent.id)}
+                channels={channels.data}
+                key={agent.id}
+                selected={selectedId === agent.id}
+              />
+            ))}
+          </ul>
+          <Link className={marketRowClassName} to="/bots">
+            <IconUserPlus aria-hidden="true" />
+            去人才市场召唤员工
+          </Link>
+        </>
       )}
     </>
   );

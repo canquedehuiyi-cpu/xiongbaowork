@@ -4994,6 +4994,11 @@ await startupLifecycle.run(async (startup) => {
         ownerName: createOwnerNameReader(database),
       },
       teamBots,
+      // 召唤员工: a summoned coworker's 1:1 conversation with the person.
+      summon: {
+        database,
+        direct: (actor, agentId) => channelStore.direct(actor, agentId),
+      },
       // AUT3: the WakerFlow target is registered above, so the form may offer it.
       wakerflowAutomations: true,
       lifecycle: {

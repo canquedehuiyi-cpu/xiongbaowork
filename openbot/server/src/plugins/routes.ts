@@ -3889,18 +3889,22 @@ export function createPluginRoutes(
   /**
    * Spec E3 / D11: may the owner of this Waker install (or uninstall) this entry themselves?
    *
-   * THE ONE NON-ADMINISTRATOR DOOR ONTO A DEPLOYMENT'S CATALOGUE. An administrator lists (上架) an
-   * app or a deployment skill; from then on the person who owns a Waker may put it on that Waker and
-   * take it off again without an administrator approving each one. The governance boundary is the
-   * listing, not each grant, and every install and uninstall still writes a trail row that says it
-   * was self-service.
+   * THE ONE NON-ADMINISTRATOR DOOR ONTO A DEPLOYMENT'S CATALOGUE. For an app the governance boundary
+   * is the listing (上架): once an administrator lists it, the person who owns a Waker may put its
+   * tools on that Waker and take them off again without an administrator approving each one. A
+   * deployment skill needs no listing (Ruling 10, 召唤员工): a skill is instructions and reaches
+   * nothing, so the owner may put any of them on their own Waker, and take any off. Every install and
+   * uninstall still writes a trail row that says it was self-service.
    *
    * Answers `not-applicable` whenever this door does not open, so the caller falls through to the
-   * rules that applied before and every refusal a person saw before is word for word the same:
-   *  - an entry nobody listed is still an administrator's (`mcp`) or still refused as the
-   *    deployment's (`skill`), and a person's own skill is still decided by the owner rule;
-   *  - an uninstall is allowed while the entry is listed, and after it is unlisted only for a grant
+   * rules that applied before:
+   *  - an app nobody listed is still an administrator's, and a person's own skill (or a skill that
+   *    does not exist) is still decided by the owner rule;
+   *  - an app's uninstall is allowed while it is listed, and after it is unlisted only for a grant
    *    this same person made: what an administrator granted stays the administrator's to remove.
+   *
+   * Somebody else's Waker (or one nobody owns, or none at all) gets one sentence, so the refusal says
+   * nothing about other people's private Wakers; it says installing or removing, whichever was asked.
    */
   async function selfInstallDecision(
     context: { var: AppVariables },
@@ -3920,7 +3924,13 @@ export function createPluginRoutes(
     }
     if (!listingRef) return "not-applicable";
 
-    const listed = await store.isInstallListed(kind, listingRef);
+    /*
+     * A deployment skill counts as listed without a row (Ruling 10, 召唤员工): a skill is instructions
+     * and reaches nothing, so the owner of a Waker may put one on it, or take one off, without an
+     * administrator listing it first. An app still needs its listing.
+     */
+    const listed =
+      kind === "skill" || (await store.isInstallListed(kind, listingRef));
     if (!listed && intent === "grant") return "not-applicable";
 
     /*
@@ -3929,9 +3939,13 @@ export function createPluginRoutes(
      */
     const botOwner = await store.agentOwner(agentId);
     if (botOwner !== actor.id) {
-      return listed
-        ? { refusal: "You can only install listed entries on Bots you own." }
-        : "not-applicable";
+      if (!listed) return "not-applicable";
+      return {
+        refusal:
+          intent === "grant"
+            ? "You can only install apps and skills on Bots you own."
+            : "You can only remove apps and skills from Bots you own.",
+      };
     }
 
     if (intent === "revoke") {

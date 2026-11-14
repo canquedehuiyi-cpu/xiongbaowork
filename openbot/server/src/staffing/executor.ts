@@ -134,7 +134,6 @@ export type StaffingExecutorDeps = {
     PluginStore,
     | "grant"
     | "skillOwner"
-    | "isInstallListed"
     | "agentOwner"
     | "agentIsRegistered"
     | "agentType"
@@ -526,7 +525,8 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
 
   /**
    * 技能按现有的授予规则：管理员（此刻持有能力）可以装任何技能；其余的人只能装在自己的员工上，装自己写的，
-   * 或管理员上架了的部署技能（自助安装，记成主人的）。
+   * 或部署的技能（自助安装，记成主人的）。部署技能不用上架：技能只是指令、不带权限（召唤员工 Ruling 10，
+   * 同 `plugins/routes.ts` 的 `selfInstallDecision`）。
    */
   async function giveSkill(
     run: Run,
@@ -546,17 +546,13 @@ export function createStaffingExecutor(deps: StaffingExecutorDeps) {
       await deps.plugins.grant("skill", slug, agentId, by);
       return done(`已装上技能「${slug}」。`);
     }
-    if (owner === null && (await deps.plugins.isInstallListed("skill", slug))) {
+    if (owner === null) {
       await deps.plugins.grant("skill", slug, agentId, by, {
         selfService: true,
       });
       return done(`已装上技能「${slug}」。`);
     }
-    return failed(
-      owner === null
-        ? `「${slug}」是部署的技能，由管理员决定给哪些员工。`
-        : `「${slug}」是别人的技能。`,
-    );
+    return failed(`「${slug}」是别人的技能。`);
   }
 
   /** 员工已经持有的应用动作与各自是谁给的，在本人的帧里读。 */

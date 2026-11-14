@@ -110,6 +110,7 @@ export type AgentProfileStore = {
     actor: AgentActor,
     id: string,
     admit?: (transaction: Transaction) => Promise<void>,
+    options?: DuplicateOptions,
   ): Promise<AgentProfile>;
   setHidden(actor: AgentActor, id: string, hidden: boolean): Promise<void>;
   setPinned(actor: AgentActor, id: string, pinned: boolean): Promise<void>;
@@ -134,6 +135,20 @@ export type AgentProfileStore = {
    */
   agentForCallbackToken(hash: string): Promise<CallbackTokenHolder | null>;
 };
+
+/** What a summon adds to a plain duplicate (`agents/summon.ts`). Absent, a duplicate is just a copy. */
+export type DuplicateOptions = {
+  /** The shared preset this copy was summoned from, written to `agent_profiles.summoned_from`. */
+  summonedFrom?: string;
+  /**
+   * Rows that must commit with the copy, written on the copy's own transaction after it exists, so
+   * a failure here leaves no copy behind and a copy never exists without them.
+   */
+  alongside?: (transaction: Transaction, copy: AgentProfile) => Promise<void>;
+};
+
+/** The transaction `duplicate`'s `admit` and `alongside` are handed. */
+export type ProfileTransaction = Transaction;
 
 /**
  * The store with the one write role templates need (ROLE1). A separate type so the many stand-in
@@ -353,6 +368,8 @@ const joinedProjection = {
   roleTemplateId: agentProfiles.roleTemplateId,
   roleTemplateVersion: agentProfiles.roleTemplateVersion,
   isolated: agentProfiles.isolated,
+  summonedFrom: agentProfiles.summonedFrom,
+  presetPortrait: agentProfiles.presetPortrait,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
   configuration: agents.configuration,
@@ -413,6 +430,8 @@ function mapProfile(
     assignedToMe: Boolean(row.assignedToMe),
     deletedAt: row.deletedAt,
     isolated: row.isolated,
+    summonedFrom: row.summonedFrom ?? null,
+    presetPortrait: row.presetPortrait ?? null,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,
@@ -1355,7 +1374,7 @@ export function createAgentProfileStore(
       );
     },
 
-    async duplicate(actor, id, admit) {
+    async duplicate(actor, id, admit, options = {}) {
       /*
        * A copy is the duplicator's Bot, so it keeps a computer of its own only if they may give it
        * one. Asked up front for the reason `requireMayIsolate` gives, and answered for every
@@ -1416,6 +1435,11 @@ export function createAgentProfileStore(
               }
             : {}),
           isolated: source.isolated && mayKeepIsolated,
+          // The face it was shipped with travels with it, so a copy of a preset looks like the preset.
+          presetPortrait: source.presetPortrait ?? null,
+          ...(options.summonedFrom
+            ? { summonedFrom: options.summonedFrom }
+            : {}),
         });
 
         const duplicate = await findAccessibleProfile(
@@ -1424,6 +1448,7 @@ export function createAgentProfileStore(
           duplicateId,
         );
         if (!duplicate) throw new AgentNotFoundError(duplicateId);
+        await options.alongside?.(transaction, duplicate);
         return duplicate;
       });
     },

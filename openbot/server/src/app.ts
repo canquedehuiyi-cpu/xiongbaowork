@@ -28,6 +28,7 @@ import {
 import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
+import type { SummonServices } from "./agents/summon";
 import { createReviewerGuidanceRoutes } from "./approvals/reviewer-guidance";
 import { createApprovalRoutes } from "./approvals/routes";
 import { createApprovalRuleDraftRoutes } from "./approvals/rule-translate";
@@ -555,6 +556,11 @@ export function createApp(
       ownerName?: ProposalRouteOptions["ownerName"];
     };
     teamBots?: TeamBots;
+    /**
+     * 召唤员工: the database and the person's 1:1 conversation, for `POST /api/agents/:agentId/summon`
+     * (agents/summon.ts). Absent, that route is not mounted.
+     */
+    summon?: SummonServices;
     /** Pause, reset, Activity and attention for a person's own Bots. See agents/lifecycle.ts. */
     lifecycle?: BotLifecycleServices;
     /**
@@ -2040,6 +2046,8 @@ export function createApp(
         config.thisMachineHost
           ? { thisMachineHost: config.thisMachineHost }
           : undefined,
+        // Summoning a preset copies it as the person's own and opens the 1:1 conversation.
+        coworker?.summon,
       ),
     );
     // Choosing a coworker for an untagged message needs the same permission-filtered roster the

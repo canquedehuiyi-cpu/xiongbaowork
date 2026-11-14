@@ -20900,8 +20900,8 @@ skills:
       refs_bytes: 0
       sanitized: []
   - slug: persona-xtgxiso-windows-pc-care
-    title: xtgxiso · 完整工作规范
-    summary: "xtgxiso 的完整人设与工作规范（由原 system_prompt 全文降级而来）。"
+    title: 电脑管家 · 完整工作规范
+    summary: "电脑管家的完整人设与工作规范（由原 system_prompt 全文降级而来）。"
     instructions: |-
       # 电脑运维专家 - xtgxiso
 

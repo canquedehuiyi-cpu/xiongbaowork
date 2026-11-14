@@ -138,13 +138,50 @@ export function latestDirectChannel(
 /**
  * The employees the 员工 list shows: everyone on the roster except those switched out of the list,
  * unless the person pinned one or an administrator assigned it to them — those stay in reach.
+ *
+ * A shared preset the person already summoned is not listed either: they hold a copy of their own,
+ * and that copy is the one shown. (Its older conversations stay in the conversation list.)
  */
 export function listedEmployees(
   agents: readonly AgentProfile[] | undefined,
 ): AgentProfile[] {
   return (agents ?? []).filter(
-    (agent) => !agent.hidden || agent.pinned || agent.assignedToMe === true,
+    (agent) =>
+      (!agent.hidden || agent.pinned || agent.assignedToMe === true) &&
+      !(agent.summonKind === "preset" && agent.summoned !== false),
   );
+}
+
+/** Not yet on the person's roster: a preset they hold no copy of, or their own 分身 not yet summoned. */
+export function isPendingSummon(agent: AgentProfile): boolean {
+  return (agent.summonKind ?? null) !== null && agent.summoned === false;
+}
+
+/**
+ * On the person's roster: not a preset original (summoned or not — the person's copy is the one they
+ * talk to) and not a 分身 still 待召唤. What is left is summoned on 人才市场 (召唤员工 Task 10), so the
+ * skins' own employee lists hold the same people as the sidebar's 员工.
+ */
+export function isOnRoster(agent: AgentProfile): boolean {
+  return agent.summonKind !== "preset" && !isPendingSummon(agent);
+}
+
+/**
+ * The 员工 list in its two groups: 已召唤 (talk to them) and 待召唤 (a 「召唤」 button), the 分身 first
+ * among the latter.
+ */
+export function employeeGroups(agents: readonly AgentProfile[]): {
+  summoned: AgentProfile[];
+  pending: AgentProfile[];
+} {
+  const pending = agents.filter(isPendingSummon);
+  return {
+    summoned: agents.filter((agent) => !isPendingSummon(agent)),
+    pending: [
+      ...pending.filter((agent) => agent.summonKind === "avatar"),
+      ...pending.filter((agent) => agent.summonKind !== "avatar"),
+    ],
+  };
 }
 
 /** The conversation routes, read off the path: which conversation is open, if any. */

@@ -732,7 +732,11 @@ describe("applying a staffing proposal as the person", () => {
     await asRequest(ADMIN, () => executor.apply(admin, fromAdmin.id));
 
     const demotedBot = await createdBot(fromDemoted.id);
-    expect(await grantsOf(demotedBot)).toEqual([]);
+    // A member may give a deployment skill to their own employee (Ruling 10), as their own install;
+    // the admin-only app is still only requested.
+    expect(await grantsOf(demotedBot)).toEqual([
+      { kind: "skill", ref: DEPLOYMENT_SKILL, grantedAs: "owner" },
+    ]);
     const requested = await asPlatform(() =>
       database
         .select({ serverId: appAccessRequests.serverId })
@@ -746,7 +750,7 @@ describe("applying a staffing proposal as the person", () => {
     }[];
     expect(demotedItems.map((item) => [item.step, item.outcome])).toEqual([
       ["create", "done"],
-      ["skill", "failed"],
+      ["skill", "done"],
       ["app", "requested"],
     ]);
     // The same draft from somebody who still holds the role grants both: the gate is the role, not the draft.
@@ -754,6 +758,32 @@ describe("applying a staffing proposal as the person", () => {
     expect(await grantsOf(adminBot)).toEqual([
       { kind: "mcp", ref: `${ADMIN_APP}/lookup`, grantedAs: "admin" },
       { kind: "skill", ref: DEPLOYMENT_SKILL, grantedAs: "admin" },
+    ]);
+  });
+
+  /*
+   * Ruling 10 (召唤员工): a skill is instructions and reaches nothing, so the owner of an employee may
+   * give it a deployment skill nobody listed, recorded as their own self-service install.
+   */
+  test("a member gives a deployment skill nobody listed to their own new employee", async () => {
+    const member = await person("member");
+    const proposal = await propose(
+      member,
+      "employee",
+      employee("部署技能的员工", { skills: [DEPLOYMENT_SKILL] }),
+    );
+    await runAsTenant(member.id, () => executor.apply(member, proposal.id));
+    const bot = await createdBot(proposal.id);
+    expect(await grantsOf(bot)).toEqual([
+      { kind: "skill", ref: DEPLOYMENT_SKILL, grantedAs: "owner" },
+    ]);
+    const items = (await stored(proposal.id))?.result as {
+      step: string;
+      outcome: string;
+    }[];
+    expect(items.map((item) => [item.step, item.outcome])).toEqual([
+      ["create", "done"],
+      ["skill", "done"],
     ]);
   });
 

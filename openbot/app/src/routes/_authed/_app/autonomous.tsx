@@ -263,7 +263,7 @@ function AgentsView() {
         <Skeleton className="h-[34px] w-64 rounded-[11px]" />
       ) : null}
       {agents.isSuccess && roster.length === 0 ? (
-        <WorkNote>还没有可用员工。请先到「员工」创建一位。</WorkNote>
+        <WorkNote>还没有可用员工。请先到「人才市场」召唤或新建一位。</WorkNote>
       ) : null}
       {roster.length > 0 ? (
         /*

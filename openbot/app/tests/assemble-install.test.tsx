@@ -164,18 +164,20 @@ function draw(grantedSlugs: string[]) {
 test("the assembly screen shows what the coworker already holds", async () => {
   const { view } = draw(["careful-review"]);
 
-  const box = await view.findByRole("checkbox");
+  const box = await view.findByRole("checkbox", { name: "已安装" });
   expect(box.getAttribute("aria-checked")).toBe("true");
-  // An administrator's skill is said to be an administrator's, not offered as a box to tick.
-  expect(view.queryByText("Deployment skill")).toBeNull();
+  // A deployment skill is the owner's to install too (Ruling 10, 召唤员工): a box, not yet ticked.
   expect(
-    view.getByText(/另有 1 个部署技能由管理员在插件页里授予/),
-  ).toBeTruthy();
+    view
+      .getByRole("checkbox", { name: "安装目录技能 Deployment skill" })
+      .getAttribute("aria-checked"),
+  ).toBe("false");
+  expect(view.queryByText(/个部署技能由管理员在插件页里授予/)).toBeNull();
 });
 
 test("ticking a skill grants it to this coworker and nothing else", async () => {
   const { view } = draw([]);
-  const box = await view.findByRole("checkbox");
+  const box = await view.findByRole("checkbox", { name: "已安装" });
   expect(box.getAttribute("aria-checked")).toBe("false");
 
   await userEvent
@@ -202,7 +204,7 @@ test("ticking a skill grants it to this coworker and nothing else", async () => 
 
 test("unticking takes the same grant back", async () => {
   const { view } = draw(["careful-review"]);
-  const box = await view.findByRole("checkbox");
+  const box = await view.findByRole("checkbox", { name: "已安装" });
   expect(box.getAttribute("aria-checked")).toBe("true");
 
   await userEvent

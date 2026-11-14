@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentDialog } from "@/components/agents/agent-dialog";
+import { TalentMarketLink } from "@/components/summon/talent-market-link";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -110,14 +111,26 @@ export function AgentProfile({
       </section>
 
       <div className="flex flex-col gap-2">
-        <Button
-          className="w-full text-sm!"
-          onClick={() =>
-            void navigate({ search: { agent: agentId }, to: "/channel/new" })
-          }
-        >
-          开始新对话
-        </Button>
+        {/*
+         * A preset original is talked to through the person's own summoned copy, and summoning
+         * happens only on 人才市场 (召唤员工 Task 10): this goes there, to its card while it waits.
+         */}
+        {profile.summonKind === "preset" ? (
+          <TalentMarketLink
+            agentId={profile.summoned ? undefined : agentId}
+            className="w-full text-sm!"
+            variant="default"
+          />
+        ) : (
+          <Button
+            className="w-full text-sm!"
+            onClick={() =>
+              void navigate({ search: { agent: agentId }, to: "/channel/new" })
+            }
+          >
+            开始新对话
+          </Button>
+        )}
         <Button
           className="w-full text-sm!"
           onClick={() => setManaging(true)}

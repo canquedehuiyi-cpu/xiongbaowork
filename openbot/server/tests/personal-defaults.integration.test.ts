@@ -33,6 +33,7 @@ import {
   ensurePersonalSkillsOwned,
   personalDefaultAppsMemory,
   personalDefaultsDeps,
+  personalRevokeRefusalFor,
   skillsGivenSetting,
   startPersonalDefaultApps,
   withPersonalDefaults,
@@ -62,6 +63,7 @@ const SEARCH = ["parallel/web_fetch", "parallel/web_search"];
 const STANDUP = `standup-${suite}`;
 const TRIAGE = `triage-${suite}`;
 const FRESH = `fresh-${suite}`;
+const SUMMONED = `pd-summoned-${suite}`;
 
 const audit = createAuditStore(database);
 const real = personalDefaultsDeps(database, OWNER);
@@ -116,7 +118,7 @@ async function held(bot: string) {
     .sort();
 }
 
-async function addBot(id: string) {
+async function addBot(id: string, summonedFrom?: string) {
   await asPlatform(async () => {
     await database.insert(agents).values({
       id,
@@ -133,6 +135,7 @@ async function addBot(id: string) {
       roleDescription: "测试员工",
       avatarSeed: id,
       visibility: "private",
+      ...(summonedFrom ? { summonedFrom } : {}),
     });
   });
 }
@@ -652,3 +655,103 @@ async function waitFor(condition: () => Promise<boolean>) {
     await Bun.sleep(25);
   }
 }
+
+/*
+ * 召唤来的员工（`summoned_from` 非空）是本人自己的员工：个人版里它和别的员工一样拿到每个已连接的应用、常开的
+ * Routines，能请其他员工帮忙（Ruling 9）；只有「每个技能给一次」和新技能广播不给它——它带着预设的技能。
+ */
+describe("a summoned coworker in the personal edition", () => {
+  const SUMMON_SKILL = `summon-skill-${suite}`;
+
+  beforeAll(async () => {
+    await addBot(SUMMONED, ASSISTANT);
+  });
+  afterAll(async () => {
+    await asPlatform(() =>
+      database.delete(agents).where(eq(agents.id, SUMMONED)),
+    );
+  });
+
+  test("is not given every skill, nor a new one when it is written, while an ordinary one is", async () => {
+    await asPlatform(() =>
+      database
+        .delete(enterpriseSettings)
+        .where(
+          like(enterpriseSettings.key, `personal_skills_given:pd-%${suite}`),
+        ),
+    );
+    // A new skill is broadcast to every Bot on its first save; the copy is not among them.
+    await writeSkill(SUMMON_SKILL);
+    await ensurePersonalSkills(store, deps);
+    await asOwner(() => store.listForAgent(SUMMONED));
+    await asOwner(() => store.listForAgent(ASSISTANT));
+    expect(await offers(SUMMONED)).toEqual([]);
+    expect(await real.skillsGiven(SUMMONED)).toBe(false);
+    expect(await offers(ASSISTANT)).toContain(SUMMON_SKILL);
+  });
+
+  test("is given every connected app's tools after a run or a refresh, like an ordinary one", async () => {
+    await restart();
+    expect(await held(SUMMONED)).toEqual(SEARCH);
+    expect(await held(ASSISTANT)).toEqual(SEARCH);
+
+    const id = await asPlatform(async () => {
+      const [found] = await database
+        .select({ id: mcpServers.id })
+        .from(mcpServers)
+        .where(eq(mcpServers.catalogueKey, PARALLEL));
+      return found?.id as string;
+    });
+    await asOwner(() =>
+      store.revoke("mcp", `${PARALLEL}/web_search`, SUMMONED, OWNER),
+    );
+    await asPlatform(() => store.refreshTools(id));
+    expect(await held(SUMMONED)).toEqual(SEARCH);
+  });
+
+  test("a connected app, Routines or another Bot cannot be taken from it, as from an ordinary one", async () => {
+    await restart();
+    for (const bot of [SUMMONED, ASSISTANT]) {
+      const refusal = (kind: string, ref: string) =>
+        asOwner(() => personalRevokeRefusalFor(store, kind, ref, bot));
+      expect(await refusal("mcp", `${PARALLEL}/web_search`)).toBe(
+        EVERY_BOT_REFUSAL,
+      );
+      expect(await refusal("mcp", "routines/create_routine")).toBe(
+        ALWAYS_ON_REFUSAL,
+      );
+      expect(await refusal("bot", ASSISTANT)).toBe(EVERY_BOT_ASKS_REFUSAL);
+    }
+  });
+
+  test("it can ask every other Bot, and every other Bot can ask it", async () => {
+    const fromCopy = await asOwner(() => store.botsReachableFrom(SUMMONED));
+    expect(fromCopy).toContain(ASSISTANT);
+    expect(fromCopy).not.toContain(SUMMONED);
+    expect(await asOwner(() => store.botsReachableFrom(ASSISTANT))).toContain(
+      SUMMONED,
+    );
+  });
+
+  test("its run still includes every Bot in Automatic Learning", async () => {
+    let calls = 0;
+    const counting = withPersonalDefaults(
+      createPluginStore({
+        database,
+        auditStore: audit,
+        credentials: createCredentialStore(database),
+        encryptionKey: Buffer.alloc(32, 7).toString("base64"),
+        policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+      }),
+      {
+        ...deps,
+        includeEveryBotInLearning: async () => {
+          calls += 1;
+          return [];
+        },
+      },
+    );
+    await asOwner(() => counting.listForAgent(SUMMONED));
+    expect(calls).toBe(1);
+  });
+});

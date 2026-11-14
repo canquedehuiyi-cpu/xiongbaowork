@@ -52,12 +52,12 @@ function draw(edition: "team" | "personal", at: string) {
   );
 }
 
-test("in the personal edition, 技能 is its own page that goes back to 员工", async () => {
+test("in the personal edition, 技能 is its own page that goes back to 人才市场", async () => {
   const view = draw("personal", "/capabilities/skills");
   expect(await view.findByRole("heading", { name: "技能" })).toBeTruthy();
-  expect(view.getByRole("button", { name: /员工/ }).getAttribute("href")).toBe(
-    "/bots",
-  );
+  expect(
+    view.getByRole("button", { name: /人才市场/ }).getAttribute("href"),
+  ).toBe("/bots");
   expect(view.queryByRole("navigation", { name: "能力" })).toBeNull();
 });
 

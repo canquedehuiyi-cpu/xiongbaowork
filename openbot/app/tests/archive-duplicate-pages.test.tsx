@@ -232,7 +232,7 @@ test("/agents?new=true lands on /bots?new=true with the create dialog open over 
   ).toBeTruthy();
   // The roster is behind it (inert while the modal is open), not a blank page holding a dialog.
   expect(
-    screen.getByRole("heading", { hidden: true, name: "员工" }),
+    screen.getByRole("heading", { hidden: true, name: "人才市场" }),
   ).toBeTruthy();
   expect(cardOf(screen, "Backend Engineer")).toBeTruthy();
 });

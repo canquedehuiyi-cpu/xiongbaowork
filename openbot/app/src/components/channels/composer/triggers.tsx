@@ -57,6 +57,9 @@ export type CrewOption = {
  * Narrows the agent roster to mention options, scoped to a channel's permitted agents when
  * `permittedIds` is given.
  *
+ * Without that scope a preset original (`summonKind: "preset"`) is left out, summoned or not: a
+ * person talks to their own summoned copy of a preset, never to the shared original (召唤员工).
+ *
  * Takes a structural shape so the composer stays independent of the queries module.
  */
 export function toAgentOptions(
@@ -66,6 +69,7 @@ export function toAgentOptions(
         name: string;
         title?: string;
         avatarSeed?: string;
+        summonKind?: string | null;
       }[]
     | undefined,
   permittedIds?: readonly string[],
@@ -75,7 +79,9 @@ export function toAgentOptions(
   }
   const permitted = permittedIds ? new Set(permittedIds) : null;
   return profiles
-    .filter((profile) => !permitted || permitted.has(profile.id))
+    .filter((profile) =>
+      permitted ? permitted.has(profile.id) : profile.summonKind !== "preset",
+    )
     .map((profile) => ({
       id: profile.id,
       name: profile.name,

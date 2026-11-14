@@ -56,7 +56,7 @@ const grantCalls = () =>
   calls.filter((entry) => entry.path.startsWith("/api/plugins/grants"));
 
 const agentId = "assemble-reviewer";
-const REFUSAL = "You can only install listed entries on Bots you own.";
+const REFUSAL = "You can only install apps and skills on Bots you own.";
 
 const base: AgentProfile = {
   id: agentId,
@@ -106,6 +106,7 @@ function draw({
   teamScoped = false,
   hold = false,
   personal = false,
+  extraSkills = [],
 }: {
   profile?: AgentProfile;
   listings?: InstallListing[];
@@ -119,6 +120,8 @@ function draw({
   hold?: boolean;
   /** 个人版：服务端对逐位员工收回应用工具答 403（X4），所以这里只看不改。 */
   personal?: boolean;
+  /** More deployment skills after the three every test has. */
+  extraSkills?: ReturnType<typeof deploymentSkill>[];
 } = {}) {
   const grants = new Set(held);
   const installedByMe = new Set(mine);
@@ -172,6 +175,7 @@ function draw({
       deploymentSkill("weekly-report", "周报"),
       deploymentSkill("standup", "站会"),
       deploymentSkill("retro", "复盘"),
+      ...extraSkills,
     ],
     botsMayCallBack: true,
     redirectUri: null,
@@ -295,20 +299,69 @@ function draw({
 const SKILL_BOX = "安装目录技能 周报";
 const TOOL_BOX = "安装工具 Notion/create_page";
 
-test("a listed deployment skill is a box; only the unlisted ones are counted as an administrator's", async () => {
+/*
+ * Ruling 10 (召唤员工): a skill is instructions and reaches nothing, so every deployment skill is the
+ * owner's to put on their own coworker, listed or not. Apps keep the listing rule (below).
+ */
+test("every deployment skill is a box, listed or not; none is left as an administrator's", async () => {
   const { view } = draw();
 
   await view.findByRole("checkbox", { name: SKILL_BOX });
   expect(
     view.getByRole("heading", { level: 3, name: "目录技能" }),
   ).toBeTruthy();
-  // Three deployment skills, one listed: the sentence counts the two that are not.
-  await view.findByText(/另有 2 个部署技能由管理员在插件页里授予/);
-  expect(view.queryByText(/另有 3 个部署技能/)).toBeNull();
-  // An unlisted deployment skill is not offered as a box.
+  for (const title of ["站会", "复盘"])
+    expect(
+      view.getByRole("checkbox", { name: `安装目录技能 ${title}` }),
+    ).toBeTruthy();
+  expect(view.queryByText(/个部署技能由管理员在插件页里授予/)).toBeNull();
+  expect(view.queryByText("你还没有可以安装的技能")).toBeNull();
+});
+
+test("the skills the coworker already holds are ticked and come first, an unlisted deployment one included", async () => {
+  // As a summoned coworker holds its preset's skills: granted, though nobody listed them.
+  const { view } = draw({ listings: [], held: ["retro"] });
+  const held = await view.findByRole("checkbox", {
+    name: "安装目录技能 复盘",
+  });
+  await waitFor(() => expect(held.getAttribute("aria-checked")).toBe("true"));
   expect(
-    view.queryByRole("checkbox", { name: "安装目录技能 站会" }),
-  ).toBeNull();
+    view
+      .getAllByRole("checkbox", { name: /^安装目录技能 / })
+      .map((box) => box.getAttribute("aria-label")),
+  ).toEqual(["安装目录技能 复盘", "安装目录技能 周报", "安装目录技能 站会"]);
+});
+
+test("ticking a deployment skill nobody listed installs it on this coworker", async () => {
+  const { view, user, grants } = draw({ listings: [] });
+  await user.click(
+    await view.findByRole("checkbox", { name: "安装目录技能 站会" }),
+  );
+  await waitFor(() => expect([...grants]).toEqual(["standup"]));
+  expect(grantCalls()).toEqual([
+    {
+      method: "POST",
+      path: "/api/plugins/grants",
+      body: { agentId, kind: "skill", ref: "standup" },
+    },
+  ]);
+});
+
+test("a long list of deployment skills can be searched by name", async () => {
+  const { view, user } = draw({
+    extraSkills: Array.from({ length: 10 }, (_, index) =>
+      deploymentSkill(`extra-${index}`, `额外技能${index}`),
+    ),
+  });
+  const search = await view.findByRole("searchbox", { name: "搜索技能" });
+  await user.type(search, "额外技能7");
+  await waitFor(() =>
+    expect(
+      view
+        .getAllByRole("checkbox", { name: /^安装目录技能 / })
+        .map((box) => box.getAttribute("aria-label")),
+    ).toEqual(["安装目录技能 额外技能7"]),
+  );
 });
 
 test("ticking a catalogue skill installs it on this coworker, unticking takes it off", async () => {
@@ -464,8 +517,6 @@ test("after an app and a skill are unlisted, what this person installed stays, f
   expect(view.getByText(/已下架：你之前装上的工具仍在/)).toBeTruthy();
   // The administrator's grant is not this person's to take off, so it gets no box here.
   expect(view.queryByRole("checkbox", { name: TOOL_BOX })).toBeNull();
-  // Unlisted skills nobody installed are still counted as an administrator's.
-  await view.findByText(/另有 2 个部署技能由管理员在插件页里授予/);
 
   await user.click(tool);
   await user.click(view.getByRole("checkbox", { name: SKILL_BOX }));
@@ -488,7 +539,12 @@ test("after an app and a skill are unlisted, what this person installed stays, f
       view.queryByRole("checkbox", { name: "安装工具 Notion/search" }),
     ).toBeNull(),
   );
-  expect(view.queryByRole("checkbox", { name: SKILL_BOX })).toBeNull();
+  // A skill needs no listing (Ruling 10): taken off, it is still there to put back.
+  expect(
+    view
+      .getByRole("checkbox", { name: SKILL_BOX })
+      .getAttribute("aria-checked"),
+  ).toBe("false");
 });
 
 test("every box with a write in flight stays disabled, not only the latest one", async () => {

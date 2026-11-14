@@ -118,3 +118,34 @@ test("the Message row shows the chevron every row that goes somewhere carries", 
   const row = (await view.findByText("给 Expenses 发消息")).closest("a");
   expect(row?.querySelector(".tabler-icon-chevron-right")).not.toBeNull();
 });
+
+/*
+ * 召唤员工 (Ruling 8, Task 10): a preset original is not talked to directly, and summoning happens
+ * only on 人才市场. On its page the conversation row is a link to its card there; nothing is summoned
+ * from here.
+ */
+const PRESET: AgentProfile = {
+  ...BOT,
+  id: "preset-doctor",
+  name: "暖心医生",
+  mine: false,
+  canManage: false,
+  visibility: "public",
+  summonKind: "preset",
+  summoned: false,
+};
+
+test("on a preset not summoned yet, the conversation row goes to its card on 人才市场", async () => {
+  serving();
+  const view = draw(PRESET);
+  const row = (await view.findByText("去人才市场召唤 暖心医生")).closest("a");
+  expect(row?.getAttribute("href")).toBe("/bots#summon-preset-doctor");
+  expect(view.queryByText("给 暖心医生 发消息")).toBeNull();
+});
+
+test("on a preset already summoned, the row goes to 人才市场, where the person's own copy is", async () => {
+  serving();
+  const view = draw({ ...PRESET, summoned: true });
+  const row = (await view.findByText("去人才市场")).closest("a");
+  expect(row?.getAttribute("href")).toBe("/bots");
+});

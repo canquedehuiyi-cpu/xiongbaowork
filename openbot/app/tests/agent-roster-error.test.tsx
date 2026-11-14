@@ -360,9 +360,9 @@ test("a failed roster on / reports the failure and explains the disabled compose
   const view = renderHome(failingQueryClient());
 
   expect(
-    await view.findByText("读不到共享给你的员工。", {}, HOME_FIND_TIMEOUT),
+    await view.findByText("读不到可召唤的员工。", {}, HOME_FIND_TIMEOUT),
   ).toBeTruthy();
-  expect(view.queryByText("还没有人把员工共享给你。")).toBeNull();
+  expect(view.queryByText("没有待召唤的员工了。")).toBeNull();
 
   // The composer goes `disabled={!fallback}` on the very same failure, with nothing on screen
   // saying why unless this alert renders.
@@ -437,11 +437,14 @@ test("a failed REFETCH on /agents keeps the roster it already had, not the error
 });
 
 test("a failed REFETCH on / keeps the roster and does not disclaim the composer", async () => {
+  // 发现员工 lists the presets not yet summoned (召唤员工), so the retained one is such a preset.
   const shared = agent({
     id: "shared-1",
     name: "Shared Agent",
     mine: false,
     visibility: "public",
+    summonKind: "preset",
+    summoned: false,
   });
   const queryClient = staleQueryClient([shared]);
 
@@ -463,7 +466,7 @@ test("a failed REFETCH on / keeps the roster and does not disclaim the composer"
   expect(
     view.queryByText("读不到你的员工，所以暂时没有人可以接收这条消息。"),
   ).toBeNull();
-  expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
+  expect(view.queryByText("读不到可召唤的员工。")).toBeNull();
 });
 
 /*
@@ -631,9 +634,9 @@ test("a failed REFETCH on / with explore empty shows it as empty, not broken", a
   await waitForFailedRefetch(queryClient);
 
   expect(
-    await view.findByText("还没有人把员工共享给你。", {}, HOME_FIND_TIMEOUT),
+    await view.findByText("没有待召唤的员工了。", {}, HOME_FIND_TIMEOUT),
   ).toBeTruthy();
-  expect(view.queryByText("读不到共享给你的员工。")).toBeNull();
+  expect(view.queryByText("读不到可召唤的员工。")).toBeNull();
   // `agents` loaded (it holds "Mine Agent"), so `fallback` falls back to it and the composer is
   // enabled — the alert claiming a load failure must not appear beside that working composer.
   expect(

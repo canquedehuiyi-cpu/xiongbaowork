@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type * as React from "react";
 import { useState } from "react";
+import { summonAnchor } from "@/components/bots/summon-card";
 import { BotNeedsYou } from "@/components/needs-you/board";
 import { SharedAppNotice } from "@/components/plugins/shared-app-notice";
 import { UpdateRoutingSection } from "@/components/settings/update-routing";
@@ -118,6 +119,11 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
   const permission = useNotificationPermission();
   const memory = useOffersMemory();
   const [resetOpen, setResetOpen] = useState(false);
+  /*
+   * A preset original is talked to through the person's own summoned copy, and summoning happens only
+   * on 人才市场 (召唤员工 Task 10): its row goes there, to its card while it waits to be summoned.
+   */
+  const preset = agent.summonKind === "preset";
 
   return (
     <ProfileSection className="mt-12" title="对你">
@@ -208,15 +214,36 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
             </Item>
           ) : null}
           <Item
-            render={<Link to="/channel/new" search={{ agent: agent.id }} />}
+            render={
+              preset ? (
+                <Link
+                  hash={agent.summoned ? undefined : summonAnchor(agent.id)}
+                  to="/bots"
+                />
+              ) : (
+                <Link to="/channel/new" search={{ agent: agent.id }} />
+              )
+            }
             size="sm"
           >
             <ItemMedia variant="icon">
               <IconMessage />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>给 {agent.name} 发消息</ItemTitle>
-              <ItemDescription>开始一段对话。</ItemDescription>
+              <ItemTitle>
+                {!preset
+                  ? `给 ${agent.name} 发消息`
+                  : agent.summoned
+                    ? "去人才市场"
+                    : `去人才市场召唤 ${agent.name}`}
+              </ItemTitle>
+              <ItemDescription>
+                {!preset
+                  ? "开始一段对话。"
+                  : agent.summoned
+                    ? "你已经召唤过它，你的那位在人才市场的「已召唤」里。"
+                    : "在人才市场召唤它，它就成为你自己的员工，再开始对话。"}
+              </ItemDescription>
             </ItemContent>
             <ItemActions>
               <IconChevronRight className="size-4 text-muted-foreground" />

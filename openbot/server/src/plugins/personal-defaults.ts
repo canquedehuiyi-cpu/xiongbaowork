@@ -38,6 +38,7 @@ import {
   DEPLOYMENT_INITIATOR,
   recordAuditEvent,
 } from "../audit";
+import { productName } from "../brand";
 import type { Database } from "../db/client";
 import { reasonWithoutStatement } from "../db/query-failure";
 import { enterpriseSettings } from "../db/schema/admin";
@@ -54,7 +55,6 @@ import {
 import { currentEdition } from "../edition";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import { STAFFING_DEFAULT_BY } from "../tenant/provisioning";
-import { productName } from "../brand";
 
 type ListedTool = { ref: string };
 
@@ -86,6 +86,11 @@ export type PersonalDefaultsDeps = {
   tools(app: string): Promise<ListedTool[]>;
   /** 这个人能看见的每一位内置的普通员工（没有删除的；不含分身和远端员工）。 */
   bots(): Promise<string[]>;
+  /**
+   * 其中召唤来的员工（`summoned_from` 非空）。它们和别的员工一样拿到每个应用、能互相请教，只是带着预设的
+   * 技能，不经「每个技能给一次」也不收新技能广播（见 {@link skillBots}）。不给时当作没有。
+   */
+  summonedBots?(): Promise<string[]>;
   /** 一位员工在一个应用（键）上持有的授予 ref。 */
   granted(agentId: string, appKey: string): Promise<Set<string>>;
   /** 部署添加过的每个应用（行 id）。 */
@@ -275,13 +280,25 @@ async function giveEverySkillOnce(
   bots: string[],
 ): Promise<void> {
   if (currentEdition() !== "personal") return;
-  for (const bot of bots) {
+  for (const bot of await skillBots(deps, bots)) {
     if (await deps.skillsGiven(bot)) continue;
     const held = await deps.heldSkills(bot);
     for (const slug of await deps.skills())
       if (!held.has(slug)) await store.grant("skill", slug, bot, GRANTED_BY);
     await deps.rememberSkillsGiven(bot);
   }
+}
+
+/**
+ * 这些员工里，个人版自动给技能的那些：召唤来的员工不在其中，它们带着预设的技能（召唤时复制过来），本人
+ * 自己再装。
+ */
+async function skillBots(
+  deps: Pick<PersonalDefaultsDeps, "summonedBots">,
+  bots: string[],
+): Promise<string[]> {
+  const summoned = new Set((await deps.summonedBots?.()) ?? []);
+  return bots.filter((bot) => !summoned.has(bot));
 }
 
 /** 个人版启动时：给已有的每位员工每个技能，各一次。见 {@link giveEverySkillOnce}。 */
@@ -621,7 +638,8 @@ export function withPersonalDefaults<S extends Store>(
 
   /*
    * 个人版里新技能给每位员工，和新应用一样：写它的人就是这里唯一的人，一个没有员工提供的技能，在他找到开关
-   * 之前什么也做不了。只在它是新的时候：再保存一次是编辑，不能把他在技能页上为某位员工关掉的又打开。
+   * 之前什么也做不了。只在它是新的时候：再保存一次是编辑，不能把他在技能页上为某位员工关掉的又打开。召唤来的
+   * 员工除外（{@link skillBots}）。
    */
   const install = store.installSkill;
   store.installSkill = async function (
@@ -633,7 +651,7 @@ export function withPersonalDefaults<S extends Store>(
     await install.call(this, input);
     if (fresh)
       await inPersonsFrame(deps, async () => {
-        for (const bot of await deps.bots())
+        for (const bot of await skillBots(deps, await deps.bots()))
           await this.grant("skill", input.slug, bot, input.by || GRANTED_BY);
       });
   } as S["installSkill"];
@@ -709,6 +727,19 @@ export function personalDefaultsDeps(
               isNull(agentProfiles.deletedAt),
               eq(agents.type, "built_in"),
               notLike(agentProfiles.agentId, `${AVATAR_PREFIX}%`),
+            ),
+          );
+        return rows.map((row) => row.id);
+      }),
+    summonedBots: () =>
+      framed(async () => {
+        const rows = await database
+          .select({ id: agentProfiles.agentId })
+          .from(agentProfiles)
+          .where(
+            and(
+              isNull(agentProfiles.deletedAt),
+              isNotNull(agentProfiles.summonedFrom),
             ),
           );
         return rows.map((row) => row.id);

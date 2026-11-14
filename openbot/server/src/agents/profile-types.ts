@@ -1,4 +1,5 @@
 import type { Persona } from "../../../shared/persona";
+import type { PortraitPreset } from "../portraits/store";
 
 export type AgentVisibility = "public" | "private";
 export type { Persona };
@@ -71,6 +72,14 @@ export type AgentProfile = {
    * it. A surface only needs to know whether to offer "generate" or "rotate".
    */
   hasCallbackToken: boolean;
+  /**
+   * The agent this coworker was summoned from, or null for one made by hand. Optional on the type
+   * only so profiles written by hand in tests before it existed still check; the store always sets
+   * it and `presetPortrait`, and absent reads as null.
+   */
+  summonedFrom?: string | null;
+  /** The preset portrait it uses, or null for none. Optional for the same reason. */
+  presetPortrait?: PortraitPreset | null;
   /**
    * Whether its owner asked for it to have a computer of its own rather than share theirs.
    *
@@ -176,4 +185,13 @@ export type AgentRoleContent = {
   roleDescription: string;
   persona: Persona;
   bible: string | null;
+};
+
+/**
+ * Where a coworker stands for the person asking, on the list that offers to summon it (`summon.ts`).
+ * `preset`: a shared package coworker; `avatar`: their own 分身; null: any other, already theirs.
+ */
+export type SummonState = {
+  summonKind: "preset" | "avatar" | null;
+  summoned: boolean;
 };

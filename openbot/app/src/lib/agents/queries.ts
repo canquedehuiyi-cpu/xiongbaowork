@@ -1,5 +1,11 @@
-import { queryOptions } from "@tanstack/react-query";
+import {
+  mutationOptions,
+  type QueryClient,
+  queryOptions,
+} from "@tanstack/react-query";
+import { channelKeys } from "@/lib/channels/queries";
 import { client, tryClient } from "@/lib/client";
+import type { PortraitPreset } from "@/lib/portraits/queries";
 import type { Persona } from "../../../../shared/persona";
 
 export type AgentVisibility = "public" | "private";
@@ -89,6 +95,21 @@ export type AgentProfile = {
    * so that giving the switch back restores it.
    */
   isolated: boolean;
+  /**
+   * The agent this coworker was summoned from, or null for one made by hand. Optional on the type
+   * only so the many hand-written profiles in tests still check; the server always sends both, and
+   * absent reads as null.
+   */
+  summonedFrom?: string | null;
+  /** The preset portrait it uses, or null for none. Optional for the same reason. */
+  presetPortrait?: PortraitPreset | null;
+  /**
+   * For the person asking: `preset` a shared package coworker, `avatar` their own 分身, null any other.
+   * Optional on the type for the same reason; absent reads as null.
+   */
+  summonKind?: "preset" | "avatar" | null;
+  /** Whether it is already on their roster (a preset they hold a copy of, a 分身 they talk to, any other coworker). */
+  summoned?: boolean;
   /** Whether its next run gets that computer of its own. Decided by the server from the owner's switch. */
   isolationActive: boolean;
   /**
@@ -185,6 +206,38 @@ export function agentListQueryOptions(hidden = false) {
       client(`/api/agents${hidden ? "?hidden=true" : ""}`, "agents", {
         fallback: "无法加载员工",
       }),
+  });
+}
+
+/** What summoning answers: the employee now on the roster, and the 1:1 conversation with it. */
+export type SummonResult = {
+  agent: AgentProfile;
+  channelId: string;
+  /** False when the summon found what already existed (a copy already held, the 分身). */
+  created: boolean;
+};
+
+/**
+ * 召唤: `POST /api/agents/:agentId/summon`. A full allowance is a 402 whose message the server
+ * wrote, so the caller shows `error.message`; the shared query client also opens the plan dialog.
+ * Settled either way, the roster and the conversation list are refreshed: a success holds the new
+ * 1:1, and a failure after the copy committed (the conversation could not be made) has still left
+ * the person's copy on the roster, which a retry finds.
+ */
+export function summonAgentMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async (agentId: string): Promise<SummonResult> => {
+      const response = await client(
+        `/api/agents/${encodeURIComponent(agentId)}/summon`,
+        { method: "POST", fallback: "没能召唤这位员工" },
+      );
+      return (await response.json()) as SummonResult;
+    },
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["agents", "list"] }),
+        queryClient.invalidateQueries({ queryKey: channelKeys.list() }),
+      ]),
   });
 }
 

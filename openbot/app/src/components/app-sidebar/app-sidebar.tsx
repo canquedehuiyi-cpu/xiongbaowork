@@ -54,7 +54,12 @@ import { cn } from "@/lib/utils";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelPagination } from "./channel-pagination";
 import { ChannelRow } from "./channel-row";
-import { listedEmployees, matchingChannels, pinnedFirst } from "./roster";
+import {
+  employeeGroups,
+  listedEmployees,
+  matchingChannels,
+  pinnedFirst,
+} from "./roster";
 import { SidebarAccount } from "./sidebar-account";
 import { EmployeeList, GroupList } from "./sidebar-roster";
 
@@ -156,7 +161,10 @@ function ViewSwitch({
     {
       value: "wakers",
       label: "员工",
-      count: agents.data ? listedEmployees(agents.data).length : undefined,
+      // The person's roster only: an employee still 待召唤 is not one of theirs yet.
+      count: agents.data
+        ? employeeGroups(listedEmployees(agents.data)).summoned.length
+        : undefined,
       unit: "位",
     },
     { value: "groups", label: "群组", count: groups.data?.length, unit: "个" },

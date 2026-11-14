@@ -9,6 +9,7 @@ import {
   SegmentedTabs,
   tabPanelProps,
 } from "@/components/layout/segmented-tabs";
+import { TalentMarketLink } from "@/components/summon/talent-market-link";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -91,9 +92,11 @@ function CountRow({
 function ListEmpty({
   title,
   description,
+  action,
 }: {
   title: string;
   description: string;
+  action?: ReactNode;
 }) {
   return (
     <div className="px-[8px] py-3">
@@ -104,6 +107,7 @@ function ListEmpty({
             {description}
           </EmptyDescription>
         </EmptyHeader>
+        {action}
       </Empty>
     </div>
   );
@@ -138,6 +142,12 @@ function ConversationList({
    * conversations would otherwise watch every page load in search of one. The button stays.
    */
   const emptySoFar = !searching && own !== undefined && own.length === 0;
+  /*
+   * No conversation at all yet: a new person. Conversations start from an employee they summoned on
+   * 人才市场 (召唤员工), so that is where this sends them, not to 「新建」.
+   */
+  const firstTime =
+    emptySoFar && channels.data?.length === 0 && !channels.hasNextPage;
   /*
    * One employee's share of the loaded pages is a filter too: two of its conversations leave the
    * sentinel in view, and paging on sight would then load every page of everybody's history looking
@@ -246,10 +256,17 @@ function ConversationList({
         ) : null}
         {emptySoFar ? (
           <ListEmpty
+            action={
+              firstTime ? (
+                <TalentMarketLink className="h-[26px] text-[12px]" />
+              ) : undefined
+            }
             description={
               channels.hasNextPage
                 ? "加载更早的会话，看看更早的历史里有没有。"
-                : "点「新建」开始第一段对话，它就会出现在这里。"
+                : firstTime
+                  ? "先去「人才市场」召唤一位员工，和它的对话会出现在这里。"
+                  : "点「新建」开始第一段对话，它就会出现在这里。"
             }
             title={
               channels.hasNextPage

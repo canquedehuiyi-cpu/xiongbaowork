@@ -11,6 +11,8 @@ import {
   skillAssets,
   skills,
 } from "../src/db/schema";
+import { personaIsEmpty } from "../../shared/persona";
+import { PORTRAIT_PRESETS } from "../src/portraits/store";
 import { runAsTenant } from "../src/tenant/context";
 import {
   loadTenantPackage,
@@ -46,6 +48,50 @@ const PORTED_SKILLS_WITH_ASSETS = 30;
 const BOT_GRANT_EDGE_COUNT = 15;
 
 const loaded = await loadTenantPackage("../examples/xiongbao");
+
+test("every preset coworker in the package carries a portrait that is one of the presets", () => {
+  for (const entry of loaded.agents) {
+    expect(
+      PORTRAIT_PRESETS as readonly string[],
+      `agent ${entry.id}`,
+    ).toContain(entry.portrait as string);
+  }
+});
+
+test("every preset coworker in the package has a Chinese display name, not a raw handle or id", () => {
+  for (const entry of loaded.agents) {
+    expect(entry.name, `agent ${entry.id}`).toMatch(/\p{Script=Han}/u);
+    expect(entry.persona?.principles ?? "", `agent ${entry.id}`).not.toContain(
+      "你是 xtgxiso",
+    );
+  }
+  expect(
+    loaded.agents.find((entry) => entry.id === "xtgxiso-windows-pc-care")?.name,
+  ).toBe("电脑管家");
+});
+
+test("every preset coworker in the package has a full persona in all three parts", () => {
+  for (const entry of loaded.agents) {
+    const persona = entry.persona;
+    expect(persona, `agent ${entry.id}`).toBeDefined();
+    expect(personaIsEmpty(persona), `agent ${entry.id}`).toBe(false);
+    for (const part of ["tone", "principles", "habits"] as const) {
+      expect(persona?.[part]?.trim(), `agent ${entry.id} ${part}`).toBeTruthy();
+    }
+    const total = [
+      ...(persona?.tone ?? ""),
+      ...(persona?.principles ?? ""),
+      ...(persona?.habits ?? ""),
+    ].length;
+    expect(total, `agent ${entry.id} persona length`).toBeGreaterThanOrEqual(
+      120,
+    );
+    expect(total, `agent ${entry.id} persona length`).toBeLessThanOrEqual(600);
+    expect(JSON.stringify(persona), `agent ${entry.id}`).not.toMatch(
+      /openbot/i,
+    );
+  }
+});
 
 test("the package declares the product, five seed coworkers, the ported twenty-three, and the navigation entries", () => {
   // collectAgents reads agents.yaml first, then agents/ in filename order, so the five seeds stay in

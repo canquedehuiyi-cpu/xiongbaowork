@@ -178,11 +178,11 @@ export function BotsPage({ search }: { search: WakersSearch }) {
       }
       description={
         personal
-          ? "你日常用的员工。"
-          : "管理你的员工、群组，以及别人共享给你的员工。"
+          ? "在这里召唤员工；召唤来的和你自己的员工也在这里管理。"
+          : "在这里召唤员工，管理你的员工、群组，以及别人共享给你的员工。"
       }
       eyebrow="04 DIGITAL TEAM"
-      title="员工"
+      title="人才市场"
       width="workbench"
     >
       {/*

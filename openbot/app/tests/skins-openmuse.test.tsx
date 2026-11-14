@@ -392,7 +392,14 @@ type Call = { method: string; path: string; body: unknown };
 /** The person's own groups, as `GET /api/waker-groups` lists them; each test that wants some sets it. */
 let wakerGroups: unknown[] = [];
 
-function serve(options: { role?: "admin" | "user"; userId?: string } = {}) {
+function serve(
+  options: {
+    role?: "admin" | "user";
+    userId?: string;
+    /** `GET /api/agents`, when a test needs a roster other than Scout and Muse. */
+    agents?: unknown[];
+  } = {},
+) {
   const calls: Call[] = [];
   const routes: Record<string, unknown> = {
     "/api/me": {
@@ -404,7 +411,7 @@ function serve(options: { role?: "admin" | "user"; userId?: string } = {}) {
         onboarding: null,
       },
     },
-    "/api/agents": { agents: [scout, muse] },
+    "/api/agents": { agents: options.agents ?? [scout, muse] },
     "/api/channels": { channels, nextCursor: null },
     "/api/waker-groups": { groups: wakerGroups },
     "/api/approvals": inbox,
@@ -773,7 +780,7 @@ describe("every OpenBot surface stays reachable", () => {
     [/^新建群组$/, "/group/new"],
     [/^首页$/, "/"],
     // OpenBot's own destinations, from the shared navigation list its sidebar draws.
-    [/^员工$/, "/bots"],
+    [/^人才市场$/, "/bots"],
     [/^任务看板$/, "/tasks"],
     [/^自主工作$/, "/autonomous"],
     [/^@Waker$/, "/reachability"],
@@ -917,6 +924,43 @@ describe("every OpenBot surface stays reachable", () => {
     );
   });
 
+  /*
+   * 召唤员工 Task 10: the switcher lists the person's own employees. A preset original is never one
+   * of them (its summoned copy is), and one still 待召唤 is summoned on 人才市场, not chosen here.
+   */
+  test("the Bot switcher lists only the person's own employees, never a preset original", async () => {
+    serve({
+      agents: [
+        scout,
+        muse,
+        agent({
+          id: "preset-doctor",
+          name: "Preset Doctor",
+          summonKind: "preset",
+          summoned: false,
+        }),
+        agent({
+          id: "preset-lawyer",
+          name: "Preset Lawyer",
+          summonKind: "preset",
+          summoned: true,
+        }),
+        agent({
+          id: "avatar-alex",
+          name: "Alex Avatar",
+          summonKind: "avatar",
+          summoned: false,
+        }),
+      ],
+    });
+    renderAt("/connections");
+    fireEvent.click(await page().findByRole("button", { name: /切换员工$/ }));
+    const sheet = within(await page().findByRole("dialog"));
+    expect(await sheet.findByText("Scout")).toBeTruthy();
+    for (const name of ["Preset Doctor", "Preset Lawyer", "Alex Avatar"])
+      expect(sheet.queryByText(name)).toBeNull();
+  });
+
   test("the Bot switcher reaches each Bot's page, the roster and a new Bot", async () => {
     serve();
     renderAt("/connections");
@@ -924,7 +968,7 @@ describe("every OpenBot surface stays reachable", () => {
     const sheet = within(await page().findByRole("dialog"));
     expect(hrefOf(/^Muse的主页/)).toBe("/bots/picked-harness");
     expect(
-      sheet.getByRole("link", { name: /^全部员工/ }).getAttribute("href"),
+      sheet.getByRole("link", { name: /^人才市场/ }).getAttribute("href"),
     ).toBe("/bots");
     expect(
       sheet.getByRole("link", { name: /^新建员工/ }).getAttribute("href"),

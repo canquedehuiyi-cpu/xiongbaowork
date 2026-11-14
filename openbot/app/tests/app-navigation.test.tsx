@@ -35,7 +35,7 @@ test("the primary destinations are the six pages the user chose, under their Chi
       ({ id, label, to }) => ({ id, label, to }),
     ),
   ).toEqual([
-    { id: "bots", label: "员工", to: "/bots" },
+    { id: "bots", label: "人才市场", to: "/bots" },
     { id: "tasks", label: "任务看板", to: "/tasks" },
     { id: "autonomous", label: "自主工作", to: "/autonomous" },
     { id: "reachability", label: "@Waker", to: "/reachability" },

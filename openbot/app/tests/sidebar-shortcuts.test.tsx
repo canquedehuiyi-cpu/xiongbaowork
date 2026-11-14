@@ -274,7 +274,7 @@ test("the main destinations sit under 工作管理 and 员工资源", async () =
       .getAllByRole("link")
       .map(textOf);
   expect(group("工作管理")).toEqual(["任务看板", "自主工作", "@Waker"]);
-  expect(group("员工资源")).toEqual(["员工", "能力", "连接"]);
+  expect(group("员工资源")).toEqual(["人才市场", "能力", "连接"]);
 });
 
 test("the account row says which plan this is, and a gauge beside it opens 套餐与用量", async () => {

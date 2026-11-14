@@ -31,6 +31,7 @@ export const AGENT_AUDIT_LABEL: Record<string, string> = {
   "bot.created": "创建了这位员工",
   "bot.updated": "修改了这位员工的设置",
   "bot.duplicated": "复制了这位员工",
+  "bot.summoned": "召唤了这位员工",
   "bot.deleted": "删除了这位员工",
   "bot.hidden": "隐藏了这位员工",
   "bot.unhidden": "取消隐藏",

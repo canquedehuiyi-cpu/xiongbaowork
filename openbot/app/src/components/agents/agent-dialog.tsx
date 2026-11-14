@@ -18,6 +18,7 @@ import { CallbackTokenPanel } from "@/components/agents/callback-token-panel";
 import { HandoffPanel } from "@/components/agents/handoff-panel";
 import { AgentRolePanel } from "@/components/roles/role-editor";
 import { RoutinesList } from "@/components/routines/routines-list";
+import { TalentMarketLink } from "@/components/summon/talent-market-link";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -345,6 +346,7 @@ function GeneralSection({
 }) {
   const navigate = useNavigate();
   const { save } = useProfileSave(agentId, profile);
+  const preset = profile.summonKind === "preset";
 
   return (
     <>
@@ -416,21 +418,37 @@ function GeneralSection({
 
       <Item variant="muted">
         <ItemContent>
-          <ItemTitle>开始对话</ItemTitle>
-          <ItemDescription>和这位员工开一个新频道。</ItemDescription>
+          <ItemTitle>
+            {!preset ? "开始对话" : profile.summoned ? "已召唤" : "召唤"}
+          </ItemTitle>
+          <ItemDescription>
+            {!preset
+              ? "和这位员工开一个新频道。"
+              : profile.summoned
+                ? "你已经召唤过它，你的那位在人才市场的「已召唤」里。"
+                : "在人才市场召唤它，它就成为你自己的员工，再开始对话。"}
+          </ItemDescription>
         </ItemContent>
         <ItemActions>
-          <Button
-            onClick={() =>
-              void navigate({
-                search: { agent: agentId },
-                to: "/channel/new",
-              })
-            }
-            size="sm"
-          >
-            开始
-          </Button>
+          {/* Summoning happens only on 人才市场 (召唤员工 Task 10). */}
+          {preset ? (
+            <TalentMarketLink
+              agentId={profile.summoned ? undefined : agentId}
+              variant="default"
+            />
+          ) : (
+            <Button
+              onClick={() =>
+                void navigate({
+                  search: { agent: agentId },
+                  to: "/channel/new",
+                })
+              }
+              size="sm"
+            >
+              开始
+            </Button>
+          )}
         </ItemActions>
       </Item>
     </>

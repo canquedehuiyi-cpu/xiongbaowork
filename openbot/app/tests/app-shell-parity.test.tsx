@@ -314,7 +314,7 @@ test("top to bottom: 新对话, the search, the conversations, the destinations,
   expect(follows(more, account)).toBe(true);
   // 用户决定找回 #452 去掉的熊宝分组标题「工作管理」「员工资源」，六项按组排。
   expect(textOf(nav)).toBe(
-    "工作管理任务看板自主工作@Waker员工资源员工能力连接",
+    "工作管理任务看板自主工作@Waker员工资源人才市场能力连接",
   );
 });
 

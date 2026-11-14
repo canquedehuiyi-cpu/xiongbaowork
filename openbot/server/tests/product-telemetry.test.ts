@@ -73,6 +73,20 @@ test("audit export projects closed categories only and discards raw content", ()
   ).toBeNull();
 });
 
+test("summoning a Bot is a person's completed setup, like creating one", () => {
+  expect(
+    projectAuditMilestone({
+      eventType: "bot.summoned",
+      payload: { preset: "private-preset" },
+    }),
+  ).toEqual({
+    capability: "bot",
+    stage: "setup",
+    outcome: "completed",
+    actor_kind: "human",
+  });
+});
+
 test.each([
   {
     label: "verified",

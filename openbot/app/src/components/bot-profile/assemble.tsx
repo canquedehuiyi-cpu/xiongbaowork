@@ -18,6 +18,7 @@ import {
   ProfilePanel,
   ProfileSection,
 } from "@/components/bot-profile/profile-kit";
+import { SearchBox } from "@/components/layout/search-box";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -49,7 +50,6 @@ import {
   installListingsQueryOptions,
   listedRefs,
   type PluginServer,
-  type PluginSkill,
   type PluginsPage,
   type PluginTool,
   pluginsPageQueryOptions,
@@ -156,15 +156,21 @@ function useTrackedGrant() {
   };
 }
 
+/** Past this many deployment skills the list gets a search box (a package can bring a hundred). */
+const SKILL_SEARCH_FROM = 8;
+
+/** A skill this coworker holds, as `/api/plugins/for/:agentId` names it. */
+type HeldSkill = { slug: string; title: string; summary: string };
+
 /**
  * The skills that can be put on this coworker, with a box for each.
  *
  * Two kinds of box. The person's own skills, which the owner rule lets them grant; and the
- * deployment skills an administrator has listed (上架, spec E3), which the owner of a Waker may
- * install on it and take off again themselves. A deployment skill nobody listed is still an
- * administrator's to grant, so it is counted in a sentence rather than offered as a box that would
- * bounce with somebody else's refusal on it — except one this person installed while it was listed:
- * that stays theirs to take off after it is unlisted (下架), so it keeps its box, for removing only.
+ * deployment's skills (a package's included), which the owner of a Waker may install on it and take
+ * off again themselves without anybody listing them first: a skill is instructions and reaches
+ * nothing (Ruling 10, 召唤员工). What the coworker already holds is ticked and comes first — a
+ * summoned employee holds its preset's skills from the start. Apps keep their listing (上架) rule,
+ * below in {@link SelfInstallToolsZone}.
  */
 export function SkillsZone({
   agentId,
@@ -176,25 +182,28 @@ export function SkillsZone({
   const page = useQuery(pluginsPageQueryOptions());
   const granted = useQuery(agentPluginsQueryOptions(agentId));
   const me = useQuery(currentUserQueryOptions());
-  const listings = useQuery(installListingsQueryOptions());
-  const byMe = useQuery(installedByMeQueryOptions(agentId));
   const { mutation: setGrant, busy: busyRef } = useTrackedGrant();
 
   const skills = page.data?.skills ?? [];
+  const held = granted.data?.skills ?? [];
   const mine = skills.filter((skill) => skill.ownerUserId === me.data?.id);
-  const listed = listedRefs(listings.data, "skill");
-  const installed = new Set(
-    (granted.data?.skills ?? []).map((skill) => skill.slug),
+  const installed = new Set(held.map((skill) => skill.slug));
+  const mineSlugs = new Set(mine.map((skill) => skill.slug));
+  /*
+   * The deployment's skills, and anything else the coworker holds that is not the person's own (a
+   * skill the page does not list is still on it, so it gets a box to take it off): held first.
+   */
+  const deployment: HeldSkill[] = skills.filter(
+    (skill) => skill.ownerUserId === null,
   );
-  const installedByMe = new Set(byMe.data?.skills ?? []);
-  const deploymentOwned = skills.filter((skill) => skill.ownerUserId === null);
-  const catalogue = deploymentOwned.filter(
-    (skill) =>
-      listed.has(skill.slug) ||
-      (installed.has(skill.slug) && installedByMe.has(skill.slug)),
-  );
-  const unlisted = deploymentOwned.filter(
-    (skill) => !catalogue.includes(skill),
+  const known = new Set(deployment.map((skill) => skill.slug));
+  const catalogue = [
+    ...held.filter((skill) => !mineSlugs.has(skill.slug)),
+    ...deployment.filter((skill) => !installed.has(skill.slug)),
+  ].map((skill) =>
+    known.has(skill.slug)
+      ? (deployment.find((entry) => entry.slug === skill.slug) ?? skill)
+      : skill,
   );
   const busy = (slug: string) => busyRef("skill", slug);
   const toggle = (slug: string, checked: boolean) =>
@@ -254,23 +263,12 @@ export function SkillsZone({
               busy={busy}
               canManage={canManage}
               installed={installed}
-              listed={listed}
               onToggle={toggle}
               skills={catalogue}
             />
           ) : null}
         </>
       )}
-      {unlisted.length > 0 ? (
-        <p className="mt-[8px] text-[12.5px] text-muted-foreground">
-          另有 {unlisted.length} 个部署技能由管理员在插件页里授予。
-        </p>
-      ) : null}
-      {listings.error ? (
-        <p className="mt-[8px] text-[13px] text-destructive" role="alert">
-          读不到管理员上架的目录，所以这里暂时只列出你自己的技能。
-        </p>
-      ) : null}
       {setGrant.error ? (
         <p className="mt-[8px] text-[13px] text-destructive" role="alert">
           {setGrant.error.message}
@@ -281,7 +279,7 @@ export function SkillsZone({
 }
 
 /**
- * 目录技能: the deployment skills an administrator listed, one box each (spec E3).
+ * 目录技能: the deployment's skills, held ones first, one box each; searchable once there are many.
  *
  * Named by an aria-label and never wrapped in a <label>: Base UI names a checkbox after a label it
  * finds, and "已安装" would then name every box alike.
@@ -289,57 +287,70 @@ export function SkillsZone({
 function CatalogueSkills({
   skills,
   installed,
-  listed,
   canManage,
   busy,
   onToggle,
 }: {
-  skills: PluginSkill[];
+  skills: HeldSkill[];
   installed: Set<string>;
-  listed: Set<string>;
   canManage: boolean;
   busy: (slug: string) => boolean;
   onToggle: (slug: string, checked: boolean) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const shown = needle
+    ? skills.filter((skill) =>
+        [skill.title, skill.slug, skill.summary].some((field) =>
+          field.toLowerCase().includes(needle),
+        ),
+      )
+    : skills;
   return (
     <div className="mt-[16px]">
       <h3 className="font-semibold text-[13px] text-foreground/90">目录技能</h3>
       <p className="mt-[2px] text-[12px] text-muted-foreground">
-        管理员上架的部署技能。你可以自己给这位员工装上或卸下，每次都会记录。
+        部署里的技能。技能只是指令，不带任何权限，你可以自己给这位员工装上或卸下，每次都会记录。
       </p>
-      <ProfilePanel>
-        {skills.map((skill) => (
-          <Item key={skill.slug} size="sm">
-            <ItemContent>
-              <ItemTitle>{skill.title}</ItemTitle>
-              <ItemDescription>
-                {listed.has(skill.slug)
-                  ? skill.summary
-                  : "已下架：你之前装上的仍在，可以卸下，但不能再装。"}
-              </ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <div className="flex items-center gap-[7px] text-[12.5px] text-muted-foreground">
-                <Checkbox
-                  aria-label={`安装目录技能 ${skill.title}`}
-                  checked={installed.has(skill.slug)}
-                  disabled={
-                    !canManage ||
-                    busy(skill.slug) ||
-                    // Unlisted: taking it off is all that is left, so an empty box is not a choice.
-                    (!listed.has(skill.slug) && !installed.has(skill.slug))
-                  }
-                  onCheckedChange={(checked) => {
-                    if (!canManage) return;
-                    onToggle(skill.slug, checked === true);
-                  }}
-                />
-                <span aria-hidden="true">已安装</span>
-              </div>
-            </ItemActions>
-          </Item>
-        ))}
-      </ProfilePanel>
+      {skills.length > SKILL_SEARCH_FROM ? (
+        <SearchBox
+          className="mt-[8px]"
+          label="搜索技能"
+          onValueChange={setQuery}
+          placeholder="按名字搜索技能"
+          value={query}
+        />
+      ) : null}
+      {shown.length === 0 ? (
+        <p className="mt-[8px] text-[12.5px] text-muted-foreground">
+          没有匹配的技能
+        </p>
+      ) : (
+        <ProfilePanel>
+          {shown.map((skill) => (
+            <Item key={skill.slug} size="sm">
+              <ItemContent>
+                <ItemTitle>{skill.title}</ItemTitle>
+                <ItemDescription>{skill.summary}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <div className="flex items-center gap-[7px] text-[12.5px] text-muted-foreground">
+                  <Checkbox
+                    aria-label={`安装目录技能 ${skill.title}`}
+                    checked={installed.has(skill.slug)}
+                    disabled={!canManage || busy(skill.slug)}
+                    onCheckedChange={(checked) => {
+                      if (!canManage) return;
+                      onToggle(skill.slug, checked === true);
+                    }}
+                  />
+                  <span aria-hidden="true">已安装</span>
+                </div>
+              </ItemActions>
+            </Item>
+          ))}
+        </ProfilePanel>
+      )}
     </div>
   );
 }

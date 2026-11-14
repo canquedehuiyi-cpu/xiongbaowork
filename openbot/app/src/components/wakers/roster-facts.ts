@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { isOnRoster, isPendingSummon } from "@/components/app-sidebar/roster";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import {
@@ -119,10 +120,17 @@ export function useRosterFacts() {
     };
   };
 
-  const roster = useMemo(
+  /*
+   * The person's employees (召唤员工 Task 10): a preset original they already summoned is not on
+   * 人才市场 at all (their copy is the one they have), and one still 待召唤 is in its own section, so
+   * neither is counted, filtered by role or status, or listed here. `pending` is that section.
+   */
+  const everyone = useMemo(
     () => [...(agents.data ?? []), ...(hidden.data ?? [])],
     [agents.data, hidden.data],
   );
+  const roster = useMemo(() => everyone.filter(isOnRoster), [everyone]);
+  const pending = useMemo(() => everyone.filter(isPendingSummon), [everyone]);
   const workingIds = useMemo(
     () => new Set((running.data ?? []).map((task) => task.executorAgentId)),
     [running.data],
@@ -228,6 +236,7 @@ export function useRosterFacts() {
     attention,
     month,
     roster,
+    pending,
     avatarAgentId,
     unconfiguredAvatar,
     attentionById,

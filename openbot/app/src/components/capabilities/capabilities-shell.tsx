@@ -31,7 +31,10 @@ export function CapabilitiesShell({ children }: { children: React.ReactNode }) {
     const tab = current ?? ALL_CAPABILITY_TABS[1];
     return (
       <PageShell
-        backButton={{ label: "员工", linkProps: linkOptions({ to: "/bots" }) }}
+        backButton={{
+          label: "人才市场",
+          linkProps: linkOptions({ to: "/bots" }),
+        }}
         className="@container"
         title={tab?.label ?? "技能"}
       >
