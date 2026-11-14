@@ -434,7 +434,7 @@ export function buildL1Gate(
       // A plain `pkg` entry admits the whole package, so a `pkg/sub` entry must not re-narrow it:
       // the sub-path set only bites when the package is listed *exclusively* through sub-paths.
       const subs =
-        allowedSlugs !== undefined && allowedSlugs.has(parsed.pluginSlug)
+        allowedSlugs?.has(parsed.pluginSlug) === true
           ? undefined
           : whitelistSub.get(parsed.pluginSlug);
       decision =
