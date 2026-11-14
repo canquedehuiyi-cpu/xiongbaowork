@@ -275,10 +275,7 @@ function ChannelBody({
   );
 }
 
-/**
- * The conversation title's face, playing its animation in the state the employee is in: the same
- * read the 员工 detail page's face follows (working while it has running work, idling otherwise).
- */
+/** The pinned employee card atop a 单聊, its face animated by the same status read as {@link HeaderFace}. */
 function HeaderCard({ agent }: { agent: AgentProfileData }) {
   const status = useProfileStatus(agent.id);
   return (
@@ -289,6 +286,10 @@ function HeaderCard({ agent }: { agent: AgentProfileData }) {
   );
 }
 
+/**
+ * The conversation title's face, playing its animation in the state the employee is in: the same
+ * read the 员工 detail page's face follows (working while it has running work, idling otherwise).
+ */
 function HeaderFace({
   agentId,
   participantIds,
