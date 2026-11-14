@@ -6,7 +6,9 @@
  * in this order, and every refusal carries a reason code so the dropped report can state *why*:
  *
  *   1. **Identity** — the unit must be in the lock. A unit the lock never measured has no provenance,
- *      no checksum and no licence row: refusing it is the whole point of a lock file.
+ *      no checksum and no licence row: refusing it is the whole point of a lock file. Official plugins
+ *      are matched by lock slug, with the plugin's origin directory name as a subordinate alias when
+ *      the marketplace name and the directory name disagree (see {@link buildL1Gate}).
  *   2. **Licence** — the owner's exclusion list ({@link LICENSE_EXCLUSIONS}) is checked *before* the
  *      `redistributable` flag, so a lock file that mis-records an excluded slug as redistributable
  *      still cannot smuggle it through. Defence in depth, not redundancy: `validateLockEntries` refuses
@@ -74,6 +76,10 @@ export interface L1Gate {
    * Decide one flattened official-plugin skill unit by its provenance-preserving name
    * (`<plugin>--skills--<subpath with "/" folded to "--">`, e.g. `all-skills--skills--artifacts-builder`).
    * The lock row is the plugin; the whitelist may narrow at skill level with `pkg/subpath` entries.
+   *
+   * `parsed.pluginSlug` is the plugin's *directory* name as the unit name carries it; the row resolves
+   * by lock slug first and by that directory name as an alias (see {@link buildL1Gate}), and the
+   * whitelist always speaks the resolved lock slug.
    */
   decideOfficialPluginSkill(
     unitName: string,
@@ -122,6 +128,28 @@ export function isSafeLockOrigin(origin: unknown): origin is string {
       .split("/")
       .every((segment) => segment !== "" && segment !== "." && segment !== "..")
   );
+}
+
+/**
+ * The directory name a lock `origin` points at: the last segment, with trailing slashes stripped.
+ *
+ * This is the second half of the official-plugin identity pair. The lock's `slug` is the *marketplace*
+ * name (`scripts/fetch-capabilities.ts` writes `slug: name` from `marketplace.json`), while the plugin's
+ * directory on disk — and therefore every flattened skill unit name under it — carries the directory
+ * name. The two agree for all but a handful of rows, but a disagreement is structural, not data drift:
+ * `lexiang-knowledge` vs `lexiang-knowledge-plugins` is a legal marketplace arrangement.
+ *
+ * Returns `undefined` for an origin with no usable segment (empty string, `/`): such a row cannot
+ * contribute a directory alias.
+ */
+export function lockOriginDirName(origin: string): string | undefined {
+  const trimmed = origin.replace(/\/+$/, "");
+  if (trimmed === "") {
+    return undefined;
+  }
+  const segments = trimmed.split("/");
+  const last = segments[segments.length - 1];
+  return last === undefined || last === "" ? undefined : last;
 }
 
 /**
@@ -327,14 +355,77 @@ function parseWhitelistEntries(
  * list when one is given. Passing `undefined` means "everything the licence rules allow". Entries of
  * the form `pkg/skill` narrow at skill level for flattened official-plugin units (see
  * {@link parseOfficialSkillUnitName}); plain `pkg` entries keep the whole-package meaning.
+ *
+ * **Directory-name aliases (official plugins only).** An `official-plugin` row is keyed by its
+ * marketplace name (`marketplace.json`'s `name`), but the plugins on disk — and therefore every
+ * flattened skill unit name built from them
+ * (`lexiang-knowledge-plugins--skills--lexiang-knowledge-base`) — carry the *directory* name. When the
+ * two disagree, the gate would refuse a unit that the lock did measure, so the gate keeps a second,
+ * strictly subordinate index: `origin`'s last segment → row. Three properties keep it safe:
+ *
+ *   1. **Real slugs win.** The primary `kind:slug` index is consulted first and always answers alone:
+ *      an alias can never shadow or redirect a genuine slug, so a row cannot be reached under another
+ *      row's name.
+ *   2. **official-plugin only.** Expert packages, skills and connectors are matched by lock slug alone;
+ *      their `origin` layouts are not a name source, and admitting a directory alias there would widen
+ *      the gate for kinds whose identity is unambiguous.
+ *   3. **Ambiguity is closed.** A directory name shared by two rows is not indexed at all — a coin flip
+ *      between two licence rows is worse than a refusal. Rows whose directory name already equals
+ *      their slug are skipped: the primary index covers them, and duplicating them would only create
+ *      spurious ambiguity.
+ *
+ * Two of those properties are guarded twice on purpose — readable redundancy, not a duplicate to clean
+ * up, and **a green run is not proof that either half is dead code**. "Real slugs win" lives both in the
+ * lookup gate (`direct === undefined && …`) and in the precedence (`direct ?? aliased`); the gate is the
+ * load-bearing half (with it in place `aliased` is already `undefined` whenever `direct` exists, so
+ * flipping the precedence is an equivalent mutant), and the gate itself is pinned by a test. The
+ * `official-plugin`-only property is split across the two sides because the two sides stop opposite
+ * leaks: the index build skips other kinds, so an official unit can never be bound to an expert package,
+ * skill or connector row; `computeDecision` consults the alias only for `official-plugin`, so a unit of
+ * another kind can never be bound to a plugin row. Each direction carries its own test — "an official
+ * unit may not borrow another kind's row by directory name" kills the index-side guard, "another kind's
+ * unit may not borrow an official row by directory name" kills the query-side one — so deleting either
+ * half turns exactly one test red rather than passing silently.
+ *
+ * The alias also rests on a shape premise: an `official-plugin` row's `origin` ends in a *directory*
+ * (`plugins/<dir>`, `external_plugins/<dir>`), which is exactly why the index is kind-scoped. A
+ * `connector` row's origin ends in a file (`connectors/<id>/mcp.json`), so its last segment is a
+ * filename and a directory-name index would be meaningless there. All 206 official-plugin rows in the
+ * current lock are directory-shaped. If the writer ever records a plugin origin as a file path (e.g.
+ * `external_plugins/<dir>/plugin.json`), the last segment silently becomes a filename and this alias
+ * stops matching — re-check the premise whenever the fetch side changes its origin layout.
+ *
+ * The whitelist and the exclusion list always speak the *lock* slug (`entry.slug`), never a directory
+ * alias, so one unit has exactly one identity no matter which name it arrived under.
  */
 export function buildL1Gate(
   lock: LockDocument,
   whitelist?: readonly string[],
 ): L1Gate {
   const index = new Map<string, LockEntry>();
+  /** `<origin 目录名>` → official-plugin row; the subordinate alias index described above. */
+  const officialByDir = new Map<string, LockEntry>();
+  /** Directory names claimed by more than one row: recorded so the alias is dropped, not overwritten. */
+  const ambiguousDirs = new Set<string>();
   for (const entry of lock.entries) {
     index.set(`${entry.kind}:${entry.slug}`, entry);
+    if (entry.kind !== "official-plugin") {
+      continue;
+    }
+    const dirName = lockOriginDirName(entry.origin);
+    if (dirName === undefined || dirName === entry.slug) {
+      // No usable segment, or the primary index already answers under this name.
+      continue;
+    }
+    if (ambiguousDirs.has(dirName)) {
+      continue;
+    }
+    if (officialByDir.has(dirName)) {
+      officialByDir.delete(dirName);
+      ambiguousDirs.add(dirName);
+      continue;
+    }
+    officialByDir.set(dirName, entry);
   }
   const { plain: allowedSlugs, sub: whitelistSub } =
     parseWhitelistEntries(whitelist);
@@ -346,38 +437,49 @@ export function buildL1Gate(
     whitelistOk: (slug: string) => boolean = (candidate) =>
       allowedSlugs === undefined || allowedSlugs.has(candidate),
   ): GateDecision => {
-    const entry = index.get(`${kind}:${slug}`);
+    const direct = index.get(`${kind}:${slug}`);
+    const aliased =
+      direct === undefined && kind === "official-plugin"
+        ? officialByDir.get(slug)
+        : undefined;
+    const entry = direct ?? aliased;
     if (entry === undefined) {
       return {
         code: "NOT_IN_LOCK",
         reason: `NOT_IN_LOCK: ${kind}/${slug} 不在 capability-lock 内（无来源、无校验和、无许可记录）`,
       };
     }
-    const exclusion = LICENSE_EXCLUSIONS[slug];
+    // Lock identity for every downstream rule and every message: a unit reached through a directory
+    // alias is still the row's slug, never the alias. The trailing note names the mapping so a dropped
+    // report says *why* a directory-named unit landed on this row.
+    const lockSlug = entry.slug;
+    const aliasNote =
+      aliased === undefined ? "" : `（目录 ${slug} → 锁内 slug ${lockSlug}）`;
+    const exclusion = LICENSE_EXCLUSIONS[lockSlug];
     if (exclusion !== undefined) {
       return {
         code: "LICENSE_EXCLUDED",
-        reason: `LICENSE_EXCLUDED: ${slug} 在 owner 排除清单内（${exclusion}），无论锁内标记如何均不得进入品牌包`,
+        reason: `LICENSE_EXCLUDED: ${lockSlug} 在 owner 排除清单内（${exclusion}），无论锁内标记如何均不得进入品牌包${aliasNote}`,
         entry,
       };
     }
     if (entry.redistributable !== true) {
       return {
         code: "NOT_REDISTRIBUTABLE",
-        reason: `NOT_REDISTRIBUTABLE: ${slug} 锁内标记 redistributable: false（license=${entry.license}）`,
+        reason: `NOT_REDISTRIBUTABLE: ${lockSlug} 锁内标记 redistributable: false（license=${entry.license}）${aliasNote}`,
         entry,
       };
     }
-    if (allowedSlugs !== undefined && !whitelistOk(slug)) {
+    if (allowedSlugs !== undefined && !whitelistOk(lockSlug)) {
       return {
         code: "NOT_WHITELISTED",
-        reason: `NOT_WHITELISTED: ${slug} 通过许可规则但不在本次白名单内`,
+        reason: `NOT_WHITELISTED: ${lockSlug} 通过许可规则但不在本次白名单内${aliasNote}`,
         entry,
       };
     }
     return {
       code: "ALLOWED",
-      reason: `ALLOWED: ${slug}（${entry.channel}/${entry.kind}，license=${entry.license}）`,
+      reason: `ALLOWED: ${lockSlug}（${entry.channel}/${entry.kind}，license=${entry.license}）${aliasNote}`,
       entry,
     };
   };
@@ -402,6 +504,10 @@ export function buildL1Gate(
    * against the plugin row; the whitelist passes when the plugin has a plain entry, or when the
    * unit's own sub-path is listed under `plugin/subpath` — a package listed only through sub-paths
    * never lets a unit through whose sub-path is missing.
+   *
+   * `parsed.pluginSlug` is whatever the unit name carries (the plugin *directory* name); the row it
+   * resolves to may have a different lock slug, and both the whitelist and every message below speak
+   * that lock slug once the row is known.
    */
   const decideOfficialPluginSkill = (
     unitName: string,
@@ -421,11 +527,18 @@ export function buildL1Gate(
         allowedSlugs.has(candidate) ||
         (whitelistSub.get(candidate)?.size ?? 0) > 0,
     );
+    /** The row's own slug once resolved; the unit-name prefix is only a lookup key. */
+    const lockSlug = pluginDecision.entry?.slug ?? parsed.pluginSlug;
+    /** Names the unit-prefix → lock-slug mapping whenever the two differ (directory alias). */
+    const aliasHint =
+      lockSlug === parsed.pluginSlug
+        ? ""
+        : `（目录 ${parsed.pluginSlug} → 锁内 slug ${lockSlug}）`;
     let decision: GateDecision;
     if (pluginDecision.code === "NOT_WHITELISTED") {
       decision = {
         code: "NOT_WHITELISTED",
-        reason: `NOT_WHITELISTED: ${unitName}（官方插件 ${parsed.pluginSlug}）不在本次白名单内`,
+        reason: `NOT_WHITELISTED: ${unitName}（官方插件 ${lockSlug}）不在本次白名单内${aliasHint}`,
         entry: pluginDecision.entry,
       };
     } else if (pluginDecision.code !== "ALLOWED") {
@@ -434,14 +547,12 @@ export function buildL1Gate(
       // A plain `pkg` entry admits the whole package, so a `pkg/sub` entry must not re-narrow it:
       // the sub-path set only bites when the package is listed *exclusively* through sub-paths.
       const subs =
-        allowedSlugs?.has(parsed.pluginSlug) === true
-          ? undefined
-          : whitelistSub.get(parsed.pluginSlug);
+        allowedSlugs?.has(lockSlug) === true ? undefined : whitelistSub.get(lockSlug);
       decision =
         subs !== undefined && !subs.has(parsed.subpath)
           ? {
               code: "NOT_WHITELISTED",
-              reason: `NOT_WHITELISTED: ${unitName} 通过许可规则，但白名单对 ${parsed.pluginSlug} 只放行 [${[...subs].sort().join(", ")}]，不含 ${parsed.subpath}`,
+              reason: `NOT_WHITELISTED: ${unitName} 通过许可规则，但白名单对 ${lockSlug} 只放行 [${[...subs].sort().join(", ")}]，不含 ${parsed.subpath}${aliasHint}`,
               entry: pluginDecision.entry,
             }
           : pluginDecision;
