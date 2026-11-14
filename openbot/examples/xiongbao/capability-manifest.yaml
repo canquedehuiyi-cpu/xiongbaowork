@@ -712,7 +712,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - references/
 - kind: skill
@@ -739,7 +739,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - assets/
     - references/
@@ -922,7 +922,7 @@
   license: MIT
   redistributable: true
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - plugins/marketplaces/experts/plugins/ex_eqoqYRT1NIwb/skills/engineering-workflow/SKILL.md — 所属专家包 ex_eqoqYRT1NIwb 是被丢弃的重复下载
     - reference/
@@ -1119,7 +1119,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - vendor/
 - kind: skill
@@ -1133,7 +1133,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - references/
     - templates/
@@ -1148,7 +1148,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - specialists/
 - kind: skill
@@ -1315,7 +1315,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - agents/
     - assets/
@@ -1373,7 +1373,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - references/
 - kind: skill
@@ -1462,7 +1462,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: degraded
   dropped:
     - assets/
     - references/
@@ -1549,7 +1549,7 @@
   license: unspecified
   redistributable: false
   attribution: © WorkBuddy 能力市场
-  runnable: full
+  runnable: blocked
   dropped: []
 - kind: skill
   slug: workbuddy-safe-delete-guard
