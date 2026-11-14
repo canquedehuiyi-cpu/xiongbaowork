@@ -226,3 +226,16 @@
 - [ ] **Step 4: 运行确认通过**，并跑 `bun test tests/tenant-package*.test.ts tests/xiongbao-package.test.ts tests/agent-summon.integration.test.ts`。
 - [ ] **Step 5: 提交** `feat(package): 预设员工完整人设（召唤员工 Task 9）`
 
+
+### Task 10: 员工资源 › 员工页改成「人才市场」，作为唯一召唤入口（用户 2026-11-14：「召唤只在员工页面，把那个页面改成人才市场，只有在人才市场召唤后才会在会话列表出现」「就是员工资源下面那个员工页」）
+
+**Files:**
+- Modify: `/bots` 路由页（`app/src/routes/_authed/_app/bots*.tsx`）、员工墙 `app/src/components/bots/bot-roster.tsx`、卡片 `app/src/components/wakers/coworker-card.tsx`、侧栏「员工资源」导航项文案、`app/src/components/app-sidebar/sidebar-roster.tsx`（去掉待召唤/召唤）、`app/src/components/conversation/conversation-workspace.tsx` 与首页 `routes/_authed/_app/index.tsx` 的引导与「发现员工」、`bot-profile/profile.tsx` / `agents/agent-profile.tsx` / `agents/agent-dialog.tsx` 的召唤入口
+- Test: 对应 app 测试（新增或更新）
+
+**要求：**
+- 侧栏「员工资源 › 员工」改名「人才市场」，页面标题与面包屑「人才市场」。页面上半部分「待召唤」：所有 `summonKind != null && summoned === false` 的员工（预设 + 分身）用熊宝头像卡片展示，卡片主按钮「召唤」（`useSummon`，播入职动画，完成后进会话）；下半部分「已召唤」：本人已有的员工（召唤来的副本、分身、自建员工），按钮「进入会话」。共用预设原件已召唤的不再出现。
+- 召唤只在人才市场发生：侧栏「员工」分组去掉「待召唤」分组与召唤按钮，只列已召唤/本人员工；首页「发现员工」、员工资料页、聊天里的员工资料面板、员工对话框、会话空状态与首页的引导，凡原来能召唤或打开预设原件的地方，改为「去人才市场」按钮（链到 `/bots`，必要时带锚点定位到该员工卡）。
+- 会话列表照旧：只有召唤后才出现该员工的会话。
+- 现有 `/bots` 的筛选/搜索等能力保留；卡片上原「进对话」对本人员工保持不变。
+- 改动的既有断言逐条列在报告里（会进 PR 描述）。
