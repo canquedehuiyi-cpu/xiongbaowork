@@ -745,9 +745,13 @@ test("员工 lists only the person's own employees; what waits to be summoned is
   expect(view.queryAllByRole("button", { name: /^召唤/ })).toHaveLength(0);
   expect(view.queryByText("暖心医生")).toBeNull();
   expect(view.queryByText("我的分身")).toBeNull();
-  expect(hrefOf(view.getByRole("link", { name: "去人才市场召唤员工" }))).toBe(
-    "/bots",
-  );
+  // Right under the list, drawn as an action with its icon rather than a line of grey text, and
+  // not stretched to fill the panel (which left a gap between the rows and it).
+  const market = view.getByRole("link", { name: "去人才市场召唤员工" });
+  expect(hrefOf(market)).toBe("/bots");
+  expect(done.nextElementSibling).toBe(market);
+  expect(market.querySelector("svg")).not.toBeNull();
+  expect(market.className).not.toContain("flex-1");
 });
 
 test("a summoned employee without a portrait row draws its presetPortrait's picture", async () => {

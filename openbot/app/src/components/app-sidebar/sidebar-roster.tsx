@@ -1,4 +1,9 @@
-import { IconPlayerPlay, IconPlus, IconSearch } from "@tabler/icons-react";
+import {
+  IconPlayerPlay,
+  IconPlus,
+  IconSearch,
+  IconUserPlus,
+} from "@tabler/icons-react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -56,6 +61,13 @@ import { useConversationFocus } from "./use-conversation-focus";
  * The 「+ 新建…」 row and the search toggle beside it (docs/design/ios-studio): a quiet text row with
  * a red plus, left-aligned under the switch, and a 32px magnifier at its right.
  */
+/*
+ * 「去人才市场召唤员工」 right under the 员工 rows: an action row as tall as one, its icon in the signal
+ * colour like 新建员工's, not stretched (a `flex-1` row in the panel's column pushed it to the bottom).
+ */
+const marketRowClassName =
+  "mt-[2px] flex h-[32px] min-w-0 items-center gap-[7px] rounded-[8px] px-[9px] font-medium text-[12px] text-foreground/85 outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[15px] [&>svg]:shrink-0 [&>svg]:text-signal";
+
 const newRowClassName =
   "flex h-[32px] min-w-0 flex-1 items-center gap-[7px] rounded-[8px] pl-[9px] text-[12px] text-foreground/85 outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 [&>svg]:size-[15px] [&>svg]:shrink-0 [&>svg]:text-signal";
 
@@ -384,7 +396,8 @@ export function EmployeeList() {
               />
             ))}
           </ul>
-          <Link className={newRowClassName} to="/bots">
+          <Link className={marketRowClassName} to="/bots">
+            <IconUserPlus aria-hidden="true" />
             去人才市场召唤员工
           </Link>
         </>
