@@ -8,7 +8,7 @@
 | 资源 | 数量 | 说明 |
 | --- | --- | --- |
 | 员工（agent） | 28 | 5 个种子角色 + 23 个移植（3 支专家团的 lead 与成员含在内） |
-| 技能（skill） | 109 | 全部可见、可授予；**64 条 `full`，9 条 `degraded`，36 条 `blocked`**（审计判定） |
+| 技能（skill） | 109 | 全部可见、可授予；**62 条 `full`，11 条 `degraded`，36 条 `blocked`**（包内记录，与 `tool-ref-audit.md` 同源） |
 | 团队（team） | 3 | 软件工坊 / 卡尔的人感PPT专家团 / 软件公司（teams.yaml → 频道 + 成员 + 授予） |
 | 连接器（connector） | 3 | github（user-oauth）/ tapd、tencent-docs（deployment-bearer，**待绑定**） |
 
@@ -27,6 +27,7 @@
 | `bun run port:capabilities -- --verify ./examples/xiongbao` | 校验包：9 个许可字段齐备，且 `capability-manifest.yaml` 首行与 `tool-ref-audit.md` 头部的 `audit_rules_sha256` 一致，缺一 exit 1 |
 | `bun run port:assemble` | 把管道产物落位成品牌包文件（幂等：跑两次 `diff -r` 无差异） |
 | `bun run port:verdict-refresh -- --package examples/xiongbao` | 按包内 `_porting.dropped` 与 `assets` 重算档位，只改 `_porting.runnable` 及其 `reason`/`reason_ref` 三行、manifest 同名行同步（源侧漂移、管道跑不动时的兜底；`--check` 只报告不写盘，不一致 exit 1） |
+| `bun run port:audit-report -- --package examples/xiongbao` | 按包内记录的档位重写该包的 `tool-ref-audit.md`（证据优先取规则表重扫，扫不到的用 `_porting.reason_ref`）。包比审计更乐观直接报错；`--check` 只比对不写盘，不一致 exit 1 |
 
 转换器源码在 `tools/port-capabilities/`，与交付物同仓。
 

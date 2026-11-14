@@ -8,15 +8,25 @@
 
 | 类型 | full | degraded | blocked | 合计 |
 |---|---|---|---|---|
-| skill | 72 | 2 | 35 | 109 |
-| agent | 27 | 0 | 1 | 28 |
+| skill | 62 | 11 | 36 | 109 |
+| agent | 26 | 1 | 1 | 28 |
+
+口径与 `examples/xiongbao/tool-ref-audit.md` 同一份：两处数字不一致就是缺陷（`package-audit-report.test.ts`
+把技能侧 62/11/36 与员工侧 26/1/1 钉死）。两份表都由「包内记录的档位」说了算，规则表重扫只提供证据。
+只按规则表扫技能侧是 72/2/35——它看不见 10 条：9 条附件缺口要按文件级账本判，1 条宿主专属技能要靠人
+写理由，两类都没有「可被正则命中的调用」可供规则表抓。员工侧同理还有 1 条（`gstack-qa-lead`）：它的
+`system_prompt` 有 1000 字符上限合同，降级说明搬进了 persona 技能，正文里自然扫不到。
+这 11 条，正是这份报告原先说「一切正常」的那 11 条。
 
 - `full`：正文没有引用本环境不可执行的工具形态，声明即可用。
-- `degraded`：引用了 file-tool 类工具（`Read(` 等）。P3 改写层（`rewrite-toolrefs.ts`）已把它们
-  映射到 `computer_read_file` / `computer_write_file` 或在正文首部插入环境事实段——agent 侧除外
-  （system_prompt 有 1000 字符上限合同，降级说明由 persona 技能承载）。
+- `degraded`：两类。①正文引用了 file-tool 类工具（`Read(` 等）——P3 改写层（`rewrite-toolrefs.ts`）
+  已把它们映射到 `computer_read_file` / `computer_write_file` 或在正文首部插入环境事实段，agent 侧除外
+  （system_prompt 有 1000 字符上限合同，降级说明由 persona 技能承载）；②正文引用的附件按**文件级**核对后
+  并不在包内（规则 `missing-asset-references`）。规则表的 `hasBundledReferences` 是个布尔值，
+  「目录在、其中若干文件缺」它一律判 full，所以这一类只有账本看得见。
 - `blocked`：正文真调用 shell / 引用可执行 scripts。openbot 员工没有 shell，**不 shim**，改写层
-  只插入降级说明、原样保留调用证据。
+  只插入降级说明、原样保留调用证据。宿主专属技能（`host-specific-skill`）另计：正文里没有可命中的调用，
+  拒绝理由由 `port:verdict-refresh` 的名单逐条写明。
 
 ## blocked / degraded 逐条
 
@@ -57,9 +67,25 @@
 | skill | `windows-pc-tuneup` | blocked | `executable-scripts` | L10（行内代码）：`4. **出建议或交付 bat**：建议逐条过 references 清单 §5 自检门禁后再输出；bat 以 `templates/tuneup-template.bat` 为骨架填充，交付前必跑 ` | 1 |
 | skill | `wiring-and-coverage-audit` | blocked | `shell-command-prose` | L42（代码块内命令）：`npx tsc --noEmit --listFiles > /tmp/before.txt     # 记录基线` | 2 |
 | skill | `workbuddy-safe-delete-guard` | blocked | `shell-command-prose` | L40（代码块内命令）：`python - <<'EOF'` | 2 |
+| skill | `workbuddy-market-export` | blocked | `host-specific-skill` | 包内记录（名单理由）：正文整篇只讲 WorkBuddy/CodeBuddy 三个市场（专家、技能、插件）怎么批量导出：官方市场的免鉴权整包接口、workbuddy_marketplace_* 工具、市场目录结构。openbot 没有这三个市场、没有这些接口与工具，每一步都落空。 ← `workbuddy_marketplace_skill` | 1 |
+| skill | `awesome-design-md` | degraded | `missing-asset-references` | 包内记录（文件级账本）：文件 references/voltagent.md 未入包，正文引用 references/voltagent.md | 1 |
+| skill | `canvasflow-ppt` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 assets 未入包，正文引用 assets/template.html | 1 |
+| skill | `engineering-workflow` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 reference 未入包，正文引用 reference/api-and-interface-design.md、reference/browser-testing-with-devtools.md、reference/ci-cd-and-automation.md 等 23 个 | 1 |
+| skill | `gstack--design-html` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 vendor 未入包，正文引用 vendor/pretext.js | 1 |
+| skill | `gstack--qa` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 templates 未入包，正文引用 templates/qa-report-template.md | 1 |
+| skill | `gstack--review` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 specialists 未入包，正文引用 specialists/api-contract.md、specialists/data-migration.md、specialists/maintainability.md 等 7 个 | 1 |
 | skill | `persona-gstack-qa-lead` | degraded | `references-without-assets` | L32（行内代码）：`3. **Collect issues** — Classify using `references/issue-taxonomy.md` (from qa skill)` | 1 |
 | skill | `persona-xtgxiso-windows-pc-care` | degraded | `references-without-assets` | L112（行内代码）：`> **脚本模板见 `references/script-templates.md`，需要时再读取**，不要把模板常驻在每一次回答里。` | 1 |
+| skill | `ppt-generator` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 assets 未入包，正文引用 assets/template.html | 1 |
+| skill | `qqbrowser-skill` | degraded | `missing-asset-references` | 包内记录（文件级账本）：文件 references/playbook.md 未入包，正文引用 references/playbook.md | 1 |
+| skill | `super-all-around-ppt-master` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 assets 未入包，正文引用 assets/design-template.md、assets/quality-checklist.md、assets/slide-plan-template.md 等 4 个 | 1 |
 | agent | `frontend-slides-renderer` | blocked | `executable-scripts` | L9（行内代码）：`3. 如果需要部署或 PDF 导出，优先使用 Skill 内置 `scripts/deploy.sh` 与 `scripts/export-pdf.sh` 的规则。` | 1 |
+| agent | `gstack-qa-lead` | degraded | `manifest-runnable` | 包内记录（manifest）：员工正文里已无该引用，降级说明由 persona 技能 `persona-gstack-qa-lead` 承载 | 1 |
+
+`决定性命中` 一列有两类来源：带 `L<行号>` 的是规则表在正文里真扫到的原文；标 `包内记录` 的是**规则表扫不到**
+的那 11 条（9 条附件缺口 + 1 条宿主专属技能 + 1 条员工侧建档降级）——它们的判据在包内记录
+（`_porting.reason_ref` / manifest）里，不在「能被正则命中的调用」上。
+`命中数` 只统计规则表命中；账本行按 1 条计，因为账本记的是「这个引用点没有落地」而不是命中了几次。
 
 ## 抽样复核（G3：blocked 数与人工抽样一致）
 

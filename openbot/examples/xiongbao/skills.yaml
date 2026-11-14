@@ -19014,7 +19014,9 @@ skills:
       redistributable: true
       attribution: © 熊宝数字员工
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: references-without-assets
+      reason_ref: 正文引用 references/ 下的附件，而该技能没有随包附上 references/。 ← "references/issue-taxonomy.md` (from qa skill)"
       dropped: []
       refs_bytes: 0
       sanitized: []
@@ -21138,7 +21140,9 @@ skills:
       redistributable: true
       attribution: © 熊宝数字员工
       declared_tools: []
-      runnable: full
+      runnable: degraded
+      reason: references-without-assets
+      reason_ref: 正文引用 references/ 下的附件，而该技能没有随包附上 references/。 ← "references/script-templates.md`，需要时再读取**，不要把模板常驻在每一次回答里。"
       dropped: []
       refs_bytes: 0
       sanitized: []
