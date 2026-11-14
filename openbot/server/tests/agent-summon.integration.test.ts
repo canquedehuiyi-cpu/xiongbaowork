@@ -2,9 +2,13 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import { createAgentProfileStore } from "../src/agents/profile-store";
+import {
+  type AgentProfileStore,
+  createAgentProfileStore,
+} from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
+import { type SummonDeps, summonAgent } from "../src/agents/summon";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import { createChannelStore } from "../src/channels/routes";
@@ -199,7 +203,11 @@ async function privateAgent(owner: AgentActor) {
   return id;
 }
 
-function routesFor(actor: AgentActor) {
+function routesFor(
+  actor: AgentActor,
+  direct: SummonDeps["direct"] = (who, agentId) =>
+    channelStore.direct(who, agentId),
+) {
   const guard: MiddlewareHandler<{ Variables: AppVariables }> = async (
     context,
     next,
@@ -225,11 +233,7 @@ function routesFor(actor: AgentActor) {
     undefined,
     undefined,
     undefined,
-    {
-      database,
-      direct: (who, agentId) => channelStore.direct(who, agentId),
-      portraits: portraitStore,
-    },
+    { database, direct },
   );
 }
 
@@ -465,9 +469,121 @@ describe("POST /api/agents/:agentId/summon", () => {
     const { limits } = await quota.planFor(actor.id);
     const seats = typeof limits.wakers === "number" ? limits.wakers : 0;
     for (let i = 1; i < seats; i++) await privateAgent(actor);
+    // The plan really is full now: a new copy is refused.
+    const duplicate = await routesFor(actor).request(
+      new Request(`http://summon.test/${source}/duplicate`, { method: "POST" }),
+    );
+    expect(duplicate.status).toBe(402);
     const again = await summoned(actor, source);
     expect(again.agent.id).toBe(first.agent.id);
     expect(again.created).toBe(false);
+  });
+
+  test("头像写入失败 → 复制品、技能授予、头像一起回滚，什么都不留", async () => {
+    const actor = await person();
+    const source = await preset({
+      portrait: "test-engineer",
+      skills: [`${prefix}-persona-skill`],
+    });
+    const agentsBefore = await liveAgents(actor);
+    // The real store, with the copy's transaction refusing the one `portraits` insert. Everything
+    // `alongside` wrote before it (the skill grants) is on the same transaction.
+    const failingPortrait: Pick<AgentProfileStore, "get" | "duplicate"> = {
+      get: (who, id) => profiles.get(who, id),
+      duplicate: (who, id, admit, options) =>
+        profiles.duplicate(who, id, admit, {
+          ...options,
+          alongside: (transaction, copy) =>
+            options?.alongside?.(
+              new Proxy(transaction, {
+                get(target, property) {
+                  const value = Reflect.get(target, property, target);
+                  if (property === "insert")
+                    return (table: unknown) => {
+                      if (table === portraits)
+                        throw new Error("forced portrait failure");
+                      return target.insert(table as typeof portraits);
+                    };
+                  return typeof value === "function"
+                    ? value.bind(target)
+                    : value;
+                },
+              }),
+              copy,
+            ) ?? Promise.resolve(),
+        }),
+    };
+    await expect(
+      runAsTenant(actor.id, () =>
+        summonAgent(
+          {
+            database,
+            profiles: failingPortrait,
+            direct: (who, agentId) => channelStore.direct(who, agentId),
+          },
+          actor,
+          source,
+        ),
+      ),
+    ).rejects.toThrow("forced portrait failure");
+
+    const copies = await runAsTenant(actor.id, () =>
+      database
+        .select({ id: agentProfiles.agentId })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.summonedFrom, source)),
+    );
+    expect(copies).toHaveLength(0);
+    expect(await liveAgents(actor)).toHaveLength(agentsBefore.length);
+    const leftGrants = await runAsTenant(actor.id, () =>
+      database
+        .select({ ref: pluginGrants.ref })
+        .from(pluginGrants)
+        .where(eq(pluginGrants.tenantId, actor.id)),
+    );
+    expect(leftGrants).toHaveLength(0);
+    const leftFaces = await runAsTenant(actor.id, () =>
+      database
+        .select({ id: portraits.subjectId })
+        .from(portraits)
+        .where(eq(portraits.tenantId, actor.id)),
+    );
+    expect(leftFaces).toHaveLength(0);
+    expect(await memberships(actor)).toHaveLength(0);
+
+    // Nothing half-made blocks the next try: it makes the copy, whole.
+    const body = await summoned(actor, source);
+    expect(body.created).toBe(true);
+    expect(await grantsOf(actor, body.agent.id)).toHaveLength(1);
+  });
+
+  test("建会话失败 → bot.summoned 已经记下，再召唤拿到那份并建好会话", async () => {
+    const actor = await person();
+    const source = await preset();
+    const failing = await routesFor(actor, async () => {
+      throw new Error("forced conversation failure");
+    }).request(
+      new Request(`http://summon.test/${source}/summon`, { method: "POST" }),
+    );
+    expect(failing.status).toBe(500);
+    const rows = audit.filter((event) => event.eventType === "bot.summoned");
+    expect(rows).toHaveLength(1);
+    const [copy] = await runAsTenant(actor.id, () =>
+      database
+        .select({ id: agentProfiles.agentId })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.summonedFrom, source)),
+    );
+    expect(rows[0]?.targetId).toBe(copy?.id);
+
+    const again = await summoned(actor, source);
+    expect(again.created).toBe(false);
+    expect(again.agent.id).toBe(copy?.id);
+    expect(typeof again.channelId).toBe("string");
+    // The retry made nothing, so it records nothing.
+    expect(
+      audit.filter((event) => event.eventType === "bot.summoned"),
+    ).toHaveLength(1);
   });
 
   test("召唤后删掉那份员工，再召唤 → 新的一份，created 为 true", async () => {

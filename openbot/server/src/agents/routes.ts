@@ -15,7 +15,7 @@ import { takesModelChoice } from "./harness-model";
 import { isolationState, mayIsolate } from "./isolation";
 import { isManagedEndpoint } from "./managed-endpoint";
 import { canManageAgent } from "./profile-policy";
-import { type SummonDeps, summonAgent } from "./summon";
+import { type SummonServices, summonAgent } from "./summon";
 import {
   AgentAssignedError,
   AgentNotFoundError,
@@ -573,10 +573,10 @@ export function createAgentRoutes(
    */
   dial?: { thisMachineHost?: string },
   /**
-   * What summoning needs beyond this store (`agents/summon.ts`): the person's 1:1 conversation and
-   * their portraits. Absent, `POST /:agentId/summon` is not mounted.
+   * What summoning needs beyond this store (`agents/summon.ts`): the database its lock and copy run
+   * on, and the person's 1:1 conversation. Absent, `POST /:agentId/summon` is not mounted.
    */
-  summon?: Omit<SummonDeps, "profiles" | "admit">,
+  summon?: SummonServices,
 ) {
   const isolationAvailable = isolation?.available ?? false;
   /** The plan's refusal as a response, or null when there is room. A create and a duplicate answer alike. */
@@ -1162,17 +1162,17 @@ export function createAgentRoutes(
                     quota.assertCapacityWithin(transaction, actor.id, "wakers"),
                 }
               : {}),
+            // Against the copy, naming the preset, as a duplicate names its original. Recorded as the
+            // copy commits, before the conversation, so a failure there cannot lose it.
+            onCreated: (copy) =>
+              record(context, "bot.summoned", copy.id, {
+                summonedFrom: agentId,
+                ...(copy.isolated ? { isolated: true } : {}),
+              }),
           },
           actor,
           agentId,
         );
-        // Against the copy, naming the preset, as a duplicate names its original.
-        if (summoned.created) {
-          await record(context, "bot.summoned", summoned.agent.id, {
-            summonedFrom: agentId,
-            ...(summoned.agent.isolated ? { isolated: true } : {}),
-          });
-        }
         return context.json({
           agent: await dtoOf(actor, summoned.agent),
           channelId: summoned.channelId,

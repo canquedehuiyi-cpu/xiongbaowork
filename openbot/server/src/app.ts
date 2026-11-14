@@ -28,7 +28,7 @@ import {
 import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
-import type { SummonDeps } from "./agents/summon";
+import type { SummonServices } from "./agents/summon";
 import { createReviewerGuidanceRoutes } from "./approvals/reviewer-guidance";
 import { createApprovalRoutes } from "./approvals/routes";
 import { createApprovalRuleDraftRoutes } from "./approvals/rule-translate";
@@ -557,10 +557,10 @@ export function createApp(
     };
     teamBots?: TeamBots;
     /**
-     * 召唤员工: the person's 1:1 conversation and portraits, for `POST /api/agents/:agentId/summon`
+     * 召唤员工: the database and the person's 1:1 conversation, for `POST /api/agents/:agentId/summon`
      * (agents/summon.ts). Absent, that route is not mounted.
      */
-    summon?: Omit<SummonDeps, "profiles" | "admit">;
+    summon?: SummonServices;
     /** Pause, reset, Activity and attention for a person's own Bots. See agents/lifecycle.ts. */
     lifecycle?: BotLifecycleServices;
     /**

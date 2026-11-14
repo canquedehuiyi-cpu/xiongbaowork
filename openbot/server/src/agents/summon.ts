@@ -1,7 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { agentProfiles, agents, pluginGrants } from "../db/schema";
-import type { PortraitStore } from "../portraits/store";
+import { agentProfiles, agents, pluginGrants, portraits } from "../db/schema";
 import { avatarAgentId } from "../tenant/provisioning";
 import {
   type AgentProfileStore,
@@ -25,13 +24,20 @@ export type SummonDeps = {
   profiles: Pick<AgentProfileStore, "get" | "duplicate">;
   /** `ChannelStore.direct`: find or make this person's 1:1 conversation with one coworker. */
   direct: (actor: AgentActor, agentId: string) => Promise<{ id: string }>;
-  portraits: Pick<PortraitStore, "set">;
   /**
    * The plan's admission for one more coworker, on the copy's own transaction. Only a new copy is
    * admitted: finding the copy already summoned, or the 分身, takes no seat. Absent, no ceiling.
    */
   admit?: (transaction: ProfileTransaction) => Promise<void>;
+  /**
+   * Told once a new copy has committed, before the conversation is looked for: the trail row for the
+   * copy must not depend on a later step that can fail, since a retry finds the copy and makes none.
+   */
+  onCreated?: (copy: AgentProfile) => Promise<void>;
 };
+
+/** What a deployment wires in once (`index.ts`); the route adds the store, admission and trail. */
+export type SummonServices = Pick<SummonDeps, "database" | "direct">;
 
 export type Summoned = {
   agent: AgentProfile;
@@ -56,6 +62,7 @@ export async function summonAgent(
   agentId: string,
 ): Promise<Summoned> {
   const { agent, created } = await coworkerFor(deps, actor, agentId);
+  if (created) await deps.onCreated?.(agent);
   const channel = await deps.direct(actor, agent.id);
   return { agent, channelId: channel.id, created };
 }
@@ -83,10 +90,7 @@ async function coworkerFor(
       if (agent) return { agent, created: false };
     }
     const copy = await copyPreset(deps, actor, agentId);
-    if (copy.created) {
-      await givePortrait(deps, actor, copy.agent);
-      return copy;
-    }
+    if (copy.created) return copy;
     if (copy.agent) return { agent: copy.agent, created: false };
   }
   throw new AgentNotFoundError(agentId);
@@ -153,8 +157,12 @@ async function copyPreset(
       },
       {
         summonedFrom: presetId,
-        alongside: (transaction, copy) =>
-          giveSkills(transaction, actor, presetId, copy.id),
+        // The copy, its skills and its face commit together or not at all: a retry finds the copy
+        // and makes nothing, so anything left for after the commit would be missing for good.
+        alongside: async (transaction, copy) => {
+          await giveSkills(transaction, actor, presetId, copy.id);
+          await givePortrait(transaction, actor, copy);
+        },
       },
     );
     return { agent, created: true };
@@ -208,15 +216,23 @@ async function giveSkills(
     .onConflictDoNothing();
 }
 
-/** The preset's face, as a `portraits` row of this person's own. None when the preset has none. */
+/**
+ * The preset's face, as a `portraits` row of this person's own (stamped by their frame, never the
+ * platform's). None when the preset has none. A plain insert: the copy's id is new, so no row exists.
+ */
 async function givePortrait(
-  deps: SummonDeps,
+  transaction: ProfileTransaction,
   actor: AgentActor,
   copy: AgentProfile,
 ) {
   const preset = copy.presetPortrait ?? null;
   if (!preset) return;
-  await deps.portraits.set("coworker", copy.id, { preset }, actor.id);
+  await transaction.insert(portraits).values({
+    subjectKind: "coworker",
+    subjectId: copy.id,
+    preset,
+    updatedBy: actor.id,
+  });
 }
 
 /** A unique violation on the one-copy-per-preset index. Bun puts the SQLSTATE in `errno`, under `cause`. */
