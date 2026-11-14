@@ -429,6 +429,66 @@ describe("tenant YAML validation", () => {
     expect(tenantPackage.agents[1]?.portrait).toBeUndefined();
   });
 
+  test("parses an agent's persona into three parts and leaves an omitted one undefined", () => {
+    const tenantPackage = validateTenantPackage({
+      brand: "tenant: { id: fintech, product_name: Ledgerline }",
+      agents: `agents:
+  - id: knowledge
+    name: Knowledge
+    title: Company Knowledge
+    role_description: Answer company questions.
+    persona:
+      tone: Plain and warm.
+      principles: Answer from knowledge only.
+    type: built-in
+    system_prompt: Answer from knowledge.
+  - id: risk
+    name: Risk
+    title: Risk & Compliance
+    role_description: Investigate policies and controls.
+    type: remote-ag-ui
+    endpoint: http://risk.internal/ag-ui`,
+      channels: "channels: []",
+      model:
+        "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+      knowledge: "sources: []",
+      themeCss: "",
+    });
+
+    expect(tenantPackage.agents[0]?.persona).toEqual({
+      tone: "Plain and warm.",
+      principles: "Answer from knowledge only.",
+      habits: "",
+    });
+    expect(tenantPackage.agents[1]?.persona).toBeUndefined();
+  });
+
+  test("rejects a persona that is not three text parts or is too long, naming the agent", () => {
+    const withPersona = (persona: string) => () =>
+      validateTenantPackage({
+        brand: "tenant: { id: fintech, product_name: Ledgerline }",
+        agents: `agents:
+  - id: knowledge
+    name: Knowledge
+    title: Company Knowledge
+    role_description: Answer company questions.
+    persona: ${persona}
+    type: built-in
+    system_prompt: Answer from knowledge.`,
+        channels: "channels: []",
+        model:
+          "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+        knowledge: "sources: []",
+        themeCss: "",
+      });
+    expect(withPersona("just a string")).toThrow(/knowledge.*persona/);
+    expect(withPersona("{ tone: 3 }")).toThrow(/knowledge.*persona/);
+    expect(withPersona("{ voice: hi }")).toThrow(/knowledge.*persona/);
+    expect(withPersona(`{ habits: "${"x".repeat(2001)}" }`)).toThrow(
+      /knowledge.*persona/,
+    );
+  });
+
   test("rejects a portrait that is not a preset, naming the agent", () => {
     expect(() =>
       validateTenantPackage({
@@ -865,6 +925,39 @@ describe("tenant package agent profile synchronization", () => {
         checksum: randomUUID(),
       });
       expect((await read())?.presetPortrait).toBeNull();
+    }));
+
+  test("writes the package persona to the profile, and clears it when the package drops it", () =>
+    inCatalogue(async () => {
+      const persona = {
+        tone: "Plain and warm.",
+        principles: "Answer from knowledge only.",
+        habits: "Never guesses.",
+      };
+      const agent = packageAgent({ persona });
+      const tenantPackage = loadedPackage(agent);
+      const deploymentPackage = await synchronizeTenantPackage(
+        database,
+        tenantPackage,
+      );
+      createdAgentIds.push(agent.id);
+      createdPackageIds.push(deploymentPackage.id);
+      const read = async () =>
+        (
+          await database
+            .select()
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, agent.id))
+        )[0];
+      expect((await read())?.persona).toEqual(persona);
+
+      const { persona: _dropped, ...withoutPersona } = agent;
+      await synchronizeTenantPackage(database, {
+        ...tenantPackage,
+        agents: [withoutPersona],
+        checksum: randomUUID(),
+      });
+      expect((await read())?.persona).toBeNull();
     }));
 
   test("resynchronizes and undeletes an existing package profile", () =>

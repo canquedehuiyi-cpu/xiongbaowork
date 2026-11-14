@@ -6,6 +6,7 @@ import {
   type AgentProfileStore,
   createAgentProfileStore,
 } from "../src/agents/profile-store";
+import type { Persona } from "../../shared/persona";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
 import { type SummonDeps, summonAgent } from "../src/agents/summon";
@@ -128,6 +129,7 @@ async function person(): Promise<AgentActor> {
 async function preset(
   options: {
     portrait?: PortraitPreset | null;
+    persona?: Persona | null;
     skills?: string[];
     mcp?: string[];
   } = {},
@@ -163,6 +165,7 @@ async function preset(
       visibility: "public",
       presetPortrait:
         options.portrait === undefined ? "test-engineer" : options.portrait,
+      persona: options.persona ?? null,
     });
     const grants = [
       ...(options.skills ?? []).map((ref) => ({ kind: "skill", ref })),
@@ -356,6 +359,24 @@ describe("POST /api/agents/:agentId/summon", () => {
         .where(eq(portraits.subjectId, body.agent.id)),
     );
     expect(row?.tenantId).toBe(actor.id);
+  });
+
+  test("召唤出的员工带着和预设完全相同的人设", async () => {
+    const actor = await person();
+    const persona = {
+      tone: "冷静、讲证据。",
+      principles: "以验收标准为唯一依据设计用例。",
+      habits: "报告里必须带实际输出。",
+    };
+    const source = await preset({ persona });
+    const body = await summoned(actor, source);
+    const [copy] = await runAsTenant(actor.id, () =>
+      database
+        .select({ persona: agentProfiles.persona })
+        .from(agentProfiles)
+        .where(eq(agentProfiles.agentId, body.agent.id)),
+    );
+    expect(copy?.persona).toEqual(persona);
   });
 
   test("预设没有 presetPortrait 时不写 portraits", async () => {

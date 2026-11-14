@@ -11,6 +11,7 @@ import {
   skillAssets,
   skills,
 } from "../src/db/schema";
+import { personaIsEmpty } from "../../shared/persona";
 import { PORTRAIT_PRESETS } from "../src/portraits/store";
 import { runAsTenant } from "../src/tenant/context";
 import {
@@ -54,6 +55,29 @@ test("every preset coworker in the package carries a portrait that is one of the
       PORTRAIT_PRESETS as readonly string[],
       `agent ${entry.id}`,
     ).toContain(entry.portrait as string);
+  }
+});
+
+test("every preset coworker in the package has a full persona in all three parts", () => {
+  for (const entry of loaded.agents) {
+    const persona = entry.persona;
+    expect(persona, `agent ${entry.id}`).toBeDefined();
+    expect(personaIsEmpty(persona), `agent ${entry.id}`).toBe(false);
+    for (const part of ["tone", "principles", "habits"] as const) {
+      expect(persona?.[part]?.trim(), `agent ${entry.id} ${part}`).toBeTruthy();
+    }
+    const total = [
+      ...(persona?.tone ?? ""),
+      ...(persona?.principles ?? ""),
+      ...(persona?.habits ?? ""),
+    ].length;
+    expect(total, `agent ${entry.id} persona length`).toBeGreaterThanOrEqual(
+      120,
+    );
+    expect(total, `agent ${entry.id} persona length`).toBeLessThanOrEqual(600);
+    expect(JSON.stringify(persona), `agent ${entry.id}`).not.toMatch(
+      /openbot/i,
+    );
   }
 });
 
