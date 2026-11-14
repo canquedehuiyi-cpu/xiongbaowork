@@ -13,8 +13,10 @@
 
 口径与 `examples/xiongbao/tool-ref-audit.md` 同一份：两处数字不一致就是缺陷（`package-audit-report.test.ts`
 把技能侧 62/11/36 与员工侧 26/1/1 钉死）。两份表都由「包内记录的档位」说了算，规则表重扫只提供证据。
-只按规则表扫是 72/2/35——它看不见 10 条：9 条附件缺口要按文件级账本判，1 条宿主专属技能要靠人写理由，
-两类都没有「可被正则命中的调用」可供规则表抓。少掉的 10 条，正是这份报告原先说「一切正常」的那 10 条。
+只按规则表扫技能侧是 72/2/35——它看不见 10 条：9 条附件缺口要按文件级账本判，1 条宿主专属技能要靠人
+写理由，两类都没有「可被正则命中的调用」可供规则表抓。员工侧同理还有 1 条（`gstack-qa-lead`）：它的
+`system_prompt` 有 1000 字符上限合同，降级说明搬进了 persona 技能，正文里自然扫不到。
+这 11 条，正是这份报告原先说「一切正常」的那 11 条。
 
 - `full`：正文没有引用本环境不可执行的工具形态，声明即可用。
 - `degraded`：两类。①正文引用了 file-tool 类工具（`Read(` 等）——P3 改写层（`rewrite-toolrefs.ts`）
@@ -78,9 +80,11 @@
 | skill | `qqbrowser-skill` | degraded | `missing-asset-references` | 包内记录（文件级账本）：文件 references/playbook.md 未入包，正文引用 references/playbook.md | 1 |
 | skill | `super-all-around-ppt-master` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 assets 未入包，正文引用 assets/design-template.md、assets/quality-checklist.md、assets/slide-plan-template.md 等 4 个 | 1 |
 | agent | `frontend-slides-renderer` | blocked | `executable-scripts` | L9（行内代码）：`3. 如果需要部署或 PDF 导出，优先使用 Skill 内置 `scripts/deploy.sh` 与 `scripts/export-pdf.sh` 的规则。` | 1 |
+| agent | `gstack-qa-lead` | degraded | `manifest-runnable` | 包内记录（manifest）：员工正文里已无该引用，降级说明由 persona 技能 `persona-gstack-qa-lead` 承载 | 1 |
 
 `决定性命中` 一列有两类来源：带 `L<行号>` 的是规则表在正文里真扫到的原文；标 `包内记录` 的是**规则表扫不到**
-的那 10 条——它们的判据在包内账本（`_porting.reason_ref`）里，不在「能被正则命中的调用」上。
+的那 11 条（9 条附件缺口 + 1 条宿主专属技能 + 1 条员工侧建档降级）——它们的判据在包内记录
+（`_porting.reason_ref` / manifest）里，不在「能被正则命中的调用」上。
 `命中数` 只统计规则表命中；账本行按 1 条计，因为账本记的是「这个引用点没有落地」而不是命中了几次。
 
 ## 抽样复核（G3：blocked 数与人工抽样一致）
