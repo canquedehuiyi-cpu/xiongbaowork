@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 新用户会话列表从空开始；员工列表分「已召唤 / 待召唤」，召唤预设员工时给本人复制一份自己的员工、建一对一会话并播翻卡动画；预设员工配熊宝头像；召唤来的员工技能从空开始；会话页顶部员工卡固定。
+**Goal:** 新用户会话列表从空开始；员工列表分「已召唤 / 待召唤」，召唤预设员工时给本人复制一份自己的员工、建一对一会话并播翻卡动画；预设员工配熊宝头像；召唤来的员工带着预设的技能直接可用（不带应用插件）；会话页顶部员工卡固定。
 
 **Architecture:** 服务端在 `agent_profiles` 上加 `summoned_from`、`preset_portrait` 两列，包同步写预设头像，新加 `POST /api/agents/:agentId/summon`（复用 `duplicate` 与 `ChannelStore.direct`），员工列表接口带出 `summonKind` / `summoned` / `presetPortrait`；去掉自动建分身会话。前端在员工列表按这两个字段分栏，召唤走新接口并配翻卡动画组件；会话页固定标题栏换成紧凑员工卡；技能页显示安装数。
 
@@ -94,7 +94,7 @@
 
 - [ ] **Step 1: 写失败测试** `agent-summon.integration.test.ts`：
   - 「召唤预设 → 返回的 `agent.id` 不等于预设 id，`summonedFrom === 预设 id`，`visibility === "private"`，主人是本人，`created === true`」
-  - 「复制出的员工没有任何 `plugin_grants` 行，即使预设本身有包授予的技能」
+  - 「复制出的员工带着预设的技能授予（`kind = 'skill'`，记作本人安装），没有任何 `mcp` 授予」（2026-11-14 用户补充「召唤直接可用」后改）
   - 「本人名下有 `portraits` 行，`preset` 等于预设的 `presetPortrait`」
   - 「再召唤一次 → 同一个 `agent.id`、同一个 `channelId`、`created === false`」
   - 「两个请求并发召唤同一预设 → 只有一份员工，两个响应 `agent.id` 相同」
