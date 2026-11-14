@@ -25,6 +25,12 @@ export type Skin = {
    */
   Frame?: ComponentType<{ children: ReactNode }>;
   /**
+   * Whether `Frame` also goes around Settings and Admin, which otherwise keep OpenBot's own shells
+   * whatever the skin. Only the default skin's workbench asks for it: its rail has to stay on screen
+   * when 「我 › 设置」 or 工作台's 管理 is opened.
+   */
+  frameCoversSettings?: boolean;
+  /**
    * How this skin draws a Bot: as its orb, with the orb, name and role at the top of a conversation,
    * or as the generated face. Absent, a face.
    */

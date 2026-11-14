@@ -255,3 +255,48 @@ export function AdminSidebar({
     </Sidebar>
   );
 }
+
+/*
+ * The same rows outside the sidebar primitive, for a skin frame that draws Admin inside its own main
+ * area (the default skin's workbench): no `SidebarProvider` there, so nothing here may ask for one.
+ */
+const ADMIN_NAV_ROW =
+  "flex h-[37px] items-center gap-[10px] rounded-[9px] border border-transparent px-[11px] text-[13px] text-muted-foreground outline-none hover:bg-foreground/[0.03] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 data-[status=active]:border-foreground/[0.06] data-[status=active]:bg-sidebar-accent data-[status=active]:font-medium data-[status=active]:text-sidebar-accent-foreground after:ml-auto after:hidden after:h-[12px] after:w-[4px] after:shrink-0 after:rounded-[3px] after:bg-signal after:content-[''] data-[status=active]:after:block [&>svg]:size-[16px] [&>svg]:shrink-0";
+
+/**
+ * Admin's own column inside a skin's frame: 概览 and the same groups as `AdminSidebar`, in the same
+ * order. The frame's rail is the way back to the app, so there is no 返回应用 row.
+ */
+export function AdminNav() {
+  return (
+    <nav
+      aria-label="管理导航"
+      className="flex w-[148px] shrink-0 flex-col gap-[3px] overflow-y-auto border-border border-r bg-sidebar px-[8px] py-[12px] md:w-[226px] md:px-[15px]"
+    >
+      <Link
+        {...adminLinkOptions}
+        activeOptions={{ exact: true }}
+        className={ADMIN_NAV_ROW}
+      >
+        概览
+      </Link>
+      {GROUPS.map((group) => (
+        <div className="flex flex-col gap-px" key={group.label}>
+          <div className="px-[11px] pt-[12px] pb-[4px] text-[11px] text-faint">
+            {group.label}
+          </div>
+          {group.items.map((item) => (
+            <Link
+              {...item.linkOptions}
+              className={ADMIN_NAV_ROW}
+              key={item.title}
+            >
+              <item.icon />
+              {item.title}
+            </Link>
+          ))}
+        </div>
+      ))}
+    </nav>
+  );
+}

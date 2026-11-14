@@ -217,6 +217,19 @@ describe("WorkbenchFrame", () => {
     expect(pressed(view)).toEqual(["通讯录"]);
   });
 
+  test.each([
+    ["/bots", "人才市场"],
+    ["/bots?tab=groups", "我的群组"],
+  ])("在 %s 时通讯录入口里只有「%s」是当前项", async (path, expected) => {
+    const { view } = renderFrame(path);
+    await view.findByText("人才市场页内容");
+    const entries = within(view.getByRole("list", { name: "通讯录入口" }));
+    const current = entries
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("aria-current") === "page");
+    expect(current.map((link) => link.textContent)).toEqual([expected]);
+  });
+
   test("地址一变，入口回到地址所属的那个", async () => {
     const { view, user, router } = renderFrame("/");
     await view.findByText("首页内容");

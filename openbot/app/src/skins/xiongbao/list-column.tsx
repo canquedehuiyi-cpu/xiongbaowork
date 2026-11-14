@@ -78,25 +78,33 @@ function ListHead({
   );
 }
 
-/** 一个链接行：图标、名字，可选第二行。打开着的那一页标 `aria-current`。 */
+/**
+ * 一个链接行：图标、名字，可选第二行。打开着的那一页标 `aria-current`（由 `current` 决定）。
+ *
+ * TanStack 自己也会给它认为「正在打开」的链接写上 `aria-current`，而且盖不掉，所以它的匹配收得最紧
+ * （路径完全相同）；两个只差查询参数的链接（人才市场 `/bots` 和我的群组 `/bots?tab=groups`）要传
+ * `exactSearch`，查询参数也得完全相同才算，免得两行同时亮。
+ */
 function LinkRow({
   icon: Glyph,
   label,
   detail,
   current,
+  exactSearch = false,
   ...link
 }: LinkProps & {
   icon: Icon;
   label: string;
   detail?: string;
   current?: boolean;
+  exactSearch?: boolean;
 }) {
   return (
     <li className="flex">
       <Link
         {...link}
         {...(current ? { "aria-current": "page" as const } : {})}
-        activeOptions={{ exact: true, includeSearch: false }}
+        activeOptions={{ exact: true, includeSearch: exactSearch }}
         activeProps={{}}
         className={rowClassName}
       >
@@ -230,12 +238,14 @@ function ContactsList() {
         <ul aria-label="通讯录入口" className="m-0 flex list-none flex-col p-0">
           <LinkRow
             current={onBots && search.tab !== "groups"}
+            exactSearch
             icon={IconUsers}
             label="人才市场"
             to="/bots"
           />
           <LinkRow
             current={onBots && search.tab === "groups"}
+            exactSearch
             icon={IconUsersGroup}
             label="我的群组"
             search={{ tab: "groups" }}

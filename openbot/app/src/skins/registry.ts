@@ -16,6 +16,7 @@ const xiongbao: Skin = {
   description: "聊天工作台：消息、通讯录、工作台、我。",
   botLook: "orb",
   Frame: WorkbenchFrame,
+  frameCoversSettings: true,
 };
 
 /** 原来的侧栏外观：没有自己的 Frame，`_app` 布局画回 AppShell。 */
