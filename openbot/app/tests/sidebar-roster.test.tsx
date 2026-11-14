@@ -21,6 +21,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -29,6 +30,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
+import { showSidebarView } from "@/components/app-sidebar/sidebar-view";
 import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
@@ -871,4 +873,36 @@ test("a second click on 召唤 while a summon is in flight sends no second reque
     within(pending).getByRole("button", { name: "召唤 我的分身" }),
   );
   expect(sent.filter((request) => request.method === "POST")).toHaveLength(1);
+});
+
+test("the 员工 count counts the employees on the person's roster, not the ones still 待召唤", async () => {
+  const { view } = renderSidebar("/bots", {
+    agents: SUMMON_AGENTS,
+    groups: [],
+  });
+  const switcher = await view.findByRole("group", { name: "侧栏列表" });
+  // 分析师 and the copy of 专业律师; 我的分身 and 暖心医生 wait to be summoned.
+  expect(
+    within(switcher)
+      .getByRole("button", { name: /^员工/ })
+      .getAttribute("aria-label"),
+  ).toBe("员工，2 位");
+});
+
+test("a 「去员工列表」 elsewhere in the app switches the sidebar to 员工, and it is remembered", async () => {
+  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  const switcher = await view.findByRole("group", { name: "侧栏列表" });
+  expect(
+    within(switcher)
+      .getByRole("button", { name: "会话" })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+  act(() => showSidebarView("wakers"));
+  expect(await view.findByRole("list", { name: "待召唤" })).toBeTruthy();
+  expect(
+    within(switcher)
+      .getByRole("button", { name: /^员工/ })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(window.localStorage.getItem("xiongbao-sidebar-view")).toBe("wakers");
 });

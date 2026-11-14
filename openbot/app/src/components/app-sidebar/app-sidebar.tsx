@@ -54,9 +54,20 @@ import { cn } from "@/lib/utils";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { ChannelPagination } from "./channel-pagination";
 import { ChannelRow } from "./channel-row";
-import { listedEmployees, matchingChannels, pinnedFirst } from "./roster";
+import {
+  employeeGroups,
+  listedEmployees,
+  matchingChannels,
+  pinnedFirst,
+} from "./roster";
 import { SidebarAccount } from "./sidebar-account";
 import { EmployeeList, GroupList } from "./sidebar-roster";
+import {
+  onSidebarView,
+  readView,
+  type SidebarView,
+  writeView,
+} from "./sidebar-view";
 
 /*
  * The roster helpers live in roster.ts; re-exported here because the channel screen, the skins and
@@ -101,32 +112,6 @@ function writeMoreOpen(open: boolean) {
 }
 
 /**
- * Which list the sidebar shows: upstream's 会话 (every conversation, newest first), or 熊宝 v0.2.7's
- * 员工 / 群组 roster, where a 单聊 is reached from its employee and every group chat is a row in the single 群组 section.
- * 会话 is the default; the choice is remembered per browser.
- */
-export type SidebarView = "chats" | "wakers" | "groups";
-
-const VIEW_STORAGE_KEY = "xiongbao-sidebar-view";
-
-function readView(): SidebarView {
-  try {
-    const stored = readStored(VIEW_STORAGE_KEY);
-    return stored === "wakers" || stored === "groups" ? stored : "chats";
-  } catch {
-    return "chats";
-  }
-}
-
-function writeView(view: SidebarView) {
-  try {
-    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
-  } catch {
-    // A browser that refuses storage still switches; it just opens on 会话 next time.
-  }
-}
-
-/**
  * The 「会话 · 员工 · 群组」 switch, drawn as the boxed switch the v0.2.7 roster had.
  *
  * Toggle buttons (`aria-pressed`) in a labelled group rather than a tab list: what changes is the
@@ -156,7 +141,10 @@ function ViewSwitch({
     {
       value: "wakers",
       label: "员工",
-      count: agents.data ? listedEmployees(agents.data).length : undefined,
+      // The person's roster only: an employee still 待召唤 is not one of theirs yet.
+      count: agents.data
+        ? employeeGroups(listedEmployees(agents.data)).summoned.length
+        : undefined,
       unit: "位",
     },
     { value: "groups", label: "群组", count: groups.data?.length, unit: "个" },
@@ -377,6 +365,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setView(next);
     writeView(next);
   };
+  // 「去员工列表」 where a new person has nothing yet (召唤员工) switches this list from outside it.
+  useEffect(() => onSidebarView(setView), []);
   const [search, setSearch] = useState("");
   const scrollRoot = useRef<HTMLDivElement>(null);
   const searching = search.trim().length > 0;
