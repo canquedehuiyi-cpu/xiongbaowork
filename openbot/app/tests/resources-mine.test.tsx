@@ -27,8 +27,8 @@ import { settleReactWork } from "./settle-react-work";
  * 这个人连上没有，其余看部署手里有没有凭据；都不画「已连接」）。团队块在 4b 由 `/api/teams`
  * 供给，这里不画。
  *
- * 渲染在自己的小路由上：`MineScreen` 的待绑定卡片链接到 `/connections`，那条地址在这棵树里以
- * 桩存在（连接页本身由 aggregate/parity 测试看管）。
+ * 渲染在自己的小路由上：`MineScreen` 的待绑定卡片链接到 `/connections`，团队卡拉到
+ * `/channel/$channelId`，这两条地址在这棵树里以桩存在（连接页与频道本身由各自的测试看管）。
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -185,10 +185,19 @@ const renderMine = async (
     path: "/connections",
     component: () => <p>连接页</p>,
   });
+  /*
+   * 团队卡的入口落在频道上：多员工的频道由 `/channel/$channelId` 统一转给群聊，所以卡片只认这一条
+   * 地址，不必自己判断团里有几个人。
+   */
+  const channel = createRoute({
+    getParentRoute: () => root,
+    path: "/channel/$channelId",
+    component: () => <p>团队频道</p>,
+  });
   const router = createRouter({
     context: { queryClient },
     history: createMemoryHistory({ initialEntries: ["/"] }),
-    routeTree: root.addChildren([mine, connections]),
+    routeTree: root.addChildren([mine, connections, channel]),
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -420,6 +429,113 @@ test("a person given no teams sees the team block say so, not a blank", async ()
   await waitFor(() => expect(view.getByText("还没有被给的团队")).toBeTruthy());
   // 空态数从两变三：技能、团队、连接器各说各话。
   await waitFor(() => expect(view.getAllByText(/还没有/).length).toBe(3));
+});
+
+/**
+ * 团队卡原先只画「叫什么、干什么、几个人」，理由是不去重复侧栏已有的频道链接。但这一页是「我被
+ * 给了什么」的清单：技能有连接入口、连接器有「去连接」，团队却是死路一条——一支在侧栏里得按名字
+ * 去找。清单里列出来的每一样，都该能从它自己走到去用它。
+ */
+test("a team card offers the way into that team's own channel", async () => {
+  const view = await renderMine(
+    page([], [], [team("gstack", "软件工坊", 6), team("design", "设计所", 2)]),
+  );
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+  const link = within(
+    view.getByText("软件工坊").closest("li") as HTMLElement,
+  ).getByRole("link", { name: "进入软件工坊" });
+  expect(link.getAttribute("href")).toBe("/channel/gstack");
+  // 每张卡指向自己那个团，不是同一个地址。
+  expect(
+    within(view.getByText("设计所").closest("li") as HTMLElement)
+      .getByRole("link", { name: "进入设计所" })
+      .getAttribute("href"),
+  ).toBe("/channel/design");
+});
+
+/**
+ * 连接器块把「已经连好的」和「还要你去连的」并排画在一起，四个里只有一个是待办：要找它得先认一遍
+ * 徽章。先挑出来的那个开关也一样从状态算，不另发请求。
+ */
+test("待连接的连接器可以先挑出来看，再点一次放开", async () => {
+  const view = await renderMine(
+    page(
+      [],
+      [
+        server("tapd", "TAPD", "deployment-bearer", false),
+        server("github", "GitHub", "deployment-bearer", true),
+        server("feishu", "飞书", "deployment-bearer", true),
+      ],
+      [],
+      [
+        listed("tapd", "deployment-bearer"),
+        listed("github", "deployment-bearer"),
+        listed("feishu", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(view.getAllByText("TAPD").length).toBeGreaterThan(0),
+  );
+  const toggle = () => view.getByRole("button", { name: /只看待连接的 1/ });
+  expect(toggle().getAttribute("aria-pressed")).toBe("false");
+
+  act(() => toggle().click());
+  await settleReactWork();
+  expect(view.getAllByText("TAPD").length).toBeGreaterThan(0);
+  expect(view.queryByText("GitHub")).toBeNull();
+  expect(view.queryByText("飞书")).toBeNull();
+  expect(toggle().getAttribute("aria-pressed")).toBe("true");
+
+  act(() => toggle().click());
+  await settleReactWork();
+  expect(view.getAllByText("GitHub").length).toBeGreaterThan(0);
+  expect(view.getAllByText("飞书").length).toBeGreaterThan(0);
+});
+
+/**
+ * 一个按了什么都不变的按钮不是功能。全都连好了就没什么可挑的，全都待连接也无从挑——两种情况下
+ * 这个开关都不画。
+ */
+test("没有可挑的就不画只看待连接的", async () => {
+  const connected = await renderMine(
+    page(
+      [],
+      [
+        server("github", "GitHub", "deployment-bearer", true),
+        server("feishu", "飞书", "deployment-bearer", true),
+      ],
+      [],
+      [
+        listed("github", "deployment-bearer"),
+        listed("feishu", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(connected.getAllByText("GitHub").length).toBeGreaterThan(0),
+  );
+  expect(connected.queryByRole("button", { name: /只看待连接的/ })).toBeNull();
+  cleanup();
+
+  const allPending = await renderMine(
+    page(
+      [],
+      [
+        server("tapd", "TAPD", "deployment-bearer", false),
+        server("notion", "Notion", "deployment-bearer", false),
+      ],
+      [],
+      [
+        listed("tapd", "deployment-bearer"),
+        listed("notion", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(allPending.getAllByText("TAPD").length).toBeGreaterThan(0),
+  );
+  expect(allPending.queryByRole("button", { name: /只看待连接的/ })).toBeNull();
 });
 
 /**
