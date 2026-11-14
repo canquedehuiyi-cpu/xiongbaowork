@@ -43,12 +43,8 @@ const reason = (error: unknown) =>
   error instanceof Error ? error.message : "没能召唤这位员工";
 
 /**
- * 召唤 one employee, the same way wherever it is offered (the sidebar's 员工 list, 发现员工 on the home
- * page, an employee's own page): the summon request, the card flip while it is answered, and then
- * the 1:1 conversation it returns.
- *
- * One already summoned (`summoned === true`: a preset the person holds a copy of) is not summoned
- * again with a flip: the same request finds the copy and its conversation, which opens.
+ * 召唤 one employee on 人才市场 (`/bots`), the one place summoning happens (召唤员工 Task 10): the
+ * summon request, the card flip while it is answered, and then the 1:1 conversation it returns.
  *
  * `overlay` is the flip, to be drawn by the caller; `problem` says why the last summon was refused.
  */
@@ -72,14 +68,7 @@ export function useSummon(): {
   const start = (agent: AgentProfile) => {
     if (busy) return;
     setProblem(null);
-    const result = summon.mutateAsync(agent.id);
-    if (agent.summoned === true) {
-      result.then(openConversation, (error: unknown) =>
-        setProblem({ agentId: agent.id, message: reason(error) }),
-      );
-      return;
-    }
-    setFlight({ agent, result });
+    setFlight({ agent, result: summon.mutateAsync(agent.id) });
   };
   const overlay = flight ? (
     <SummonFlight

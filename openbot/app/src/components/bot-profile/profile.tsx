@@ -9,10 +9,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type * as React from "react";
 import { useState } from "react";
+import { summonAnchor } from "@/components/bots/summon-card";
 import { BotNeedsYou } from "@/components/needs-you/board";
 import { SharedAppNotice } from "@/components/plugins/shared-app-notice";
 import { UpdateRoutingSection } from "@/components/settings/update-routing";
-import { useSummon } from "@/components/summon/use-summon";
 import { Button } from "@/components/ui/button";
 import {
   Item,
@@ -120,11 +120,10 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
   const memory = useOffersMemory();
   const [resetOpen, setResetOpen] = useState(false);
   /*
-   * A preset original is talked to through the person's own summoned copy (召唤员工): its row
-   * summons it, or opens that copy's conversation once it is summoned.
+   * A preset original is talked to through the person's own summoned copy, and summoning happens only
+   * on 人才市场 (召唤员工 Task 10): its row goes there, to its card while it waits to be summoned.
    */
   const preset = agent.summonKind === "preset";
-  const summon = useSummon();
 
   return (
     <ProfileSection className="mt-12" title="对你">
@@ -217,10 +216,9 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
           <Item
             render={
               preset ? (
-                <button
-                  disabled={summon.busy}
-                  onClick={() => summon.start(agent)}
-                  type="button"
+                <Link
+                  hash={agent.summoned ? undefined : summonAnchor(agent.id)}
+                  to="/bots"
                 />
               ) : (
                 <Link to="/channel/new" search={{ agent: agent.id }} />
@@ -233,25 +231,24 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
             </ItemMedia>
             <ItemContent>
               <ItemTitle>
-                {preset && !agent.summoned
-                  ? `召唤 ${agent.name}`
-                  : `给 ${agent.name} 发消息`}
+                {!preset
+                  ? `给 ${agent.name} 发消息`
+                  : agent.summoned
+                    ? "去人才市场"
+                    : `去人才市场召唤 ${agent.name}`}
               </ItemTitle>
               <ItemDescription>
                 {!preset
                   ? "开始一段对话。"
                   : agent.summoned
-                    ? "打开和你召唤的这位员工的对话。"
-                    : "召唤到你的员工列表，再开始对话。"}
+                    ? "你已经召唤过它，你的那位在人才市场的「已召唤」里。"
+                    : "在人才市场召唤它，它就成为你自己的员工，再开始对话。"}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
               <IconChevronRight className="size-4 text-muted-foreground" />
             </ItemActions>
           </Item>
-          {summon.problem ? (
-            <ProfileAlert>{summon.problem.message}</ProfileAlert>
-          ) : null}
           {/*
            * 重置 here as well as in 管理 below: v0.2.7 put it with the rest of what is between this
            * person and this employee, and the user wanted it back where they used to find it.
@@ -279,7 +276,6 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
         </ProfilePanel>
       )}
       <ResetDialog agent={agent} onOpenChange={setResetOpen} open={resetOpen} />
-      {summon.overlay}
     </ProfileSection>
   );
 }

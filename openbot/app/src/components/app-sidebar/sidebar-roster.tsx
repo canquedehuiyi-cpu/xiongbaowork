@@ -14,7 +14,6 @@ import {
 } from "@/components/bot-profile/attention";
 import { SearchBox } from "@/components/layout/search-box";
 import { usePortraitSrc } from "@/components/portraits/use-portrait";
-import { useSummon } from "@/components/summon/use-summon";
 import { Button } from "@/components/ui/button";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { setBotPausedMutationOptions } from "@/lib/bot-lifecycle/mutations";
@@ -305,74 +304,15 @@ function EmployeeRow({
 }
 
 /**
- * A 待召唤 row: not on the person's roster yet, so no conversation to open — a face, a name, and
- * the 「召唤」 button. Why a summon was refused is said under the row.
- */
-function PendingEmployeeRow({
-  agent,
-  busy,
-  onSummon,
-  problem,
-}: {
-  agent: AgentProfile;
-  busy: boolean;
-  onSummon: () => void;
-  problem: string | null;
-}) {
-  const line = agent.roleDescription || agent.title;
-  return (
-    <li className="flex flex-wrap items-center">
-      <div className={rowClassName}>
-        <span aria-hidden="true" className="contents">
-          <AbstractAvatar
-            decorative
-            name={agent.name}
-            seed={agent.avatarSeed}
-            portrait={{ kind: "coworker", id: agent.id }}
-            size={29}
-          />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold text-[13px] leading-[18px]">
-            {agent.name}
-          </span>
-          {line ? (
-            <span className="block truncate text-[11px] text-faint leading-[16px]">
-              {line}
-            </span>
-          ) : null}
-        </span>
-        <Button
-          aria-label={`召唤 ${agent.name}`}
-          className="h-[26px] shrink-0 px-[10px] text-[12px]"
-          disabled={busy}
-          onClick={onSummon}
-          size="sm"
-          variant="outline"
-        >
-          召唤
-        </Button>
-      </div>
-      {problem ? (
-        <p
-          className="w-full px-[6px] pb-1 text-[12px] text-signal-ink"
-          role="alert"
-        >
-          {problem}
-        </p>
-      ) : null}
-    </li>
-  );
-}
-
-/**
  * 员工: everyone the person can talk to, each row opening its latest 单聊 (or a new one addressed to
  * it), with what waits on the person from that employee. 「新建员工」 opens the same wizard as the
  * header of 员工 (`/bots?new=true`).
+ *
+ * Only the person's own employees (召唤员工 Task 10): what waits to be summoned is on 人才市场
+ * (`/bots`), the one place summoning happens, which a link at the foot of the list leads to.
  */
 export function EmployeeList() {
   const [query, setQuery] = useState("");
-  const summon = useSummon();
   const agents = useQuery(agentListQueryOptions());
   const channels = useInfiniteQuery(channelListQueryOptions());
   const attention = useQuery(botAttentionQueryOptions());
@@ -382,11 +322,10 @@ export function EmployeeList() {
       new Map((attention.data ?? []).map((bot) => [bot.agentId, bot] as const)),
     [attention.data],
   );
-  const employees = listedEmployees(agents.data);
+  const employees = employeeGroups(listedEmployees(agents.data)).summoned;
   const shown = employees.filter((agent) =>
     matches(query, agent.name, agent.title, agent.roleDescription),
   );
-  const { summoned, pending } = employeeGroups(shown);
   /*
    * Selected only while a 单聊 with it (or a new conversation addressed to it) is open: a 群聊 is
    * about everyone in it, so it lights nobody here. Read off the address (`/group/$id`), not the
@@ -423,58 +362,33 @@ export function EmployeeList() {
           </Button>
         </RosterNote>
       ) : employees.length === 0 ? (
-        <RosterNote>还没有员工。点「新建员工」创建第一位。</RosterNote>
+        <RosterNote>
+          还没有员工。
+          <Link className="text-foreground underline" to="/bots">
+            去人才市场
+          </Link>
+          召唤一位，或者点「新建员工」。
+        </RosterNote>
       ) : shown.length === 0 ? (
         <RosterNote>没有匹配的员工</RosterNote>
       ) : (
         <>
-          {summoned.length > 0 ? (
-            <>
-              {pending.length > 0 ? (
-                <p className={sectionLabelClassName}>已召唤</p>
-              ) : null}
-              <ul
-                aria-label="员工"
-                className={cn(
-                  "flex flex-col gap-px",
-                  pending.length === 0 && "mt-[8px]",
-                )}
-              >
-                {summoned.map((agent) => (
-                  <EmployeeRow
-                    agent={agent}
-                    attention={attentionById.get(agent.id)}
-                    channels={channels.data}
-                    key={agent.id}
-                    selected={selectedId === agent.id}
-                  />
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {pending.length > 0 ? (
-            <>
-              <p className={sectionLabelClassName}>待召唤</p>
-              <ul aria-label="待召唤" className="flex flex-col gap-px">
-                {pending.map((agent) => (
-                  <PendingEmployeeRow
-                    agent={agent}
-                    busy={summon.busy}
-                    key={agent.id}
-                    onSummon={() => summon.start(agent)}
-                    problem={
-                      summon.problem?.agentId === agent.id
-                        ? summon.problem.message
-                        : null
-                    }
-                  />
-                ))}
-              </ul>
-            </>
-          ) : null}
+          <ul aria-label="员工" className="mt-[8px] flex flex-col gap-px">
+            {shown.map((agent) => (
+              <EmployeeRow
+                agent={agent}
+                attention={attentionById.get(agent.id)}
+                channels={channels.data}
+                key={agent.id}
+                selected={selectedId === agent.id}
+              />
+            ))}
+          </ul>
+          <Link className={newRowClassName} to="/bots">
+            去人才市场召唤员工
+          </Link>
         </>
       )}
-      {summon.overlay}
     </>
   );
 }

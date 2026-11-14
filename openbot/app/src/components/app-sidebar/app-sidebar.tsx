@@ -62,12 +62,6 @@ import {
 } from "./roster";
 import { SidebarAccount } from "./sidebar-account";
 import { EmployeeList, GroupList } from "./sidebar-roster";
-import {
-  onSidebarView,
-  readView,
-  type SidebarView,
-  writeView,
-} from "./sidebar-view";
 
 /*
  * The roster helpers live in roster.ts; re-exported here because the channel screen, the skins and
@@ -108,6 +102,32 @@ function writeMoreOpen(open: boolean) {
     window.localStorage.setItem(MORE_STORAGE_KEY, open ? "open" : "closed");
   } catch {
     // A browser that refuses storage still gets a working disclosure; it just will not remember.
+  }
+}
+
+/**
+ * Which list the sidebar shows: upstream's 会话 (every conversation, newest first), or 熊宝 v0.2.7's
+ * 员工 / 群组 roster, where a 单聊 is reached from its employee and every group chat is a row in the single 群组 section.
+ * 会话 is the default; the choice is remembered per browser.
+ */
+export type SidebarView = "chats" | "wakers" | "groups";
+
+const VIEW_STORAGE_KEY = "xiongbao-sidebar-view";
+
+function readView(): SidebarView {
+  try {
+    const stored = readStored(VIEW_STORAGE_KEY);
+    return stored === "wakers" || stored === "groups" ? stored : "chats";
+  } catch {
+    return "chats";
+  }
+}
+
+function writeView(view: SidebarView) {
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // A browser that refuses storage still switches; it just opens on 会话 next time.
   }
 }
 
@@ -365,8 +385,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setView(next);
     writeView(next);
   };
-  // 「去员工列表」 where a new person has nothing yet (召唤员工) switches this list from outside it.
-  useEffect(() => onSidebarView(setView), []);
   const [search, setSearch] = useState("");
   const scrollRoot = useRef<HTMLDivElement>(null);
   const searching = search.trim().length > 0;

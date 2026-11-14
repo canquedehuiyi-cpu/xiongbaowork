@@ -860,3 +860,37 @@ test("the toolbar's search narrows 待召唤 too", async () => {
       .map((button) => button.getAttribute("aria-label")),
   ).toEqual(["召唤 暖心医生"]);
 });
+
+test("a second 召唤 while one is in flight sends no second request", async () => {
+  const posted: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") posted.push(String(input));
+    return new Promise<Response>(() => {});
+  }) as typeof fetch;
+  seed({ agents: MARKET });
+  const { screen } = draw();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "召唤 暖心医生" }),
+  );
+  await within(document.body).findByRole("dialog", { name: "召唤员工" });
+  for (const name of ["召唤 暖心医生", "召唤 我的分身"])
+    expect(
+      (screen.getByRole("button", { name }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+});
+
+test("a link to a 待召唤 card's anchor brings that card into view", async () => {
+  const scrolled: string[] = [];
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolled.push(this.id);
+  };
+  try {
+    seed({ agents: MARKET });
+    draw("/bots#summon-preset-doctor");
+    await waitFor(() => expect(scrolled).toContain("summon-preset-doctor"));
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+});

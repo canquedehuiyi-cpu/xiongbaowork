@@ -9,7 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { AgentCard } from "@/components/agents/agent-card";
-import { ShowEmployeesButton } from "@/components/app-sidebar/show-employees-button";
+import { summonAnchor } from "@/components/bots/summon-card";
 import {
   Composer,
   type ComposerDraft,
@@ -24,7 +24,7 @@ import {
   WorkbenchEmpty,
 } from "@/components/layout/workbench-empty";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
-import { useSummon } from "@/components/summon/use-summon";
+import { TalentMarketLink } from "@/components/summon/talent-market-link";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { defaultAgentProfile } from "@/lib/agents/default-agent";
@@ -51,7 +51,8 @@ import { useAnyBotSkillCommands } from "@/lib/plugins/skill-commands";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 
 /**
- * 发现员工 offers the presets the person has not summoned yet (召唤员工, Ruling 8): a preset is talked to
+ * 发现员工 offers the presets the person has not summoned yet (召唤员工, Ruling 8), each a link to its
+ * card on 人才市场, the one place summoning happens (Task 10): a preset is talked to
  * through the person's own copy, so the shared original is never a card to open a conversation with.
  */
 function awaitsSummon(agent: AgentProfile): boolean {
@@ -94,7 +95,6 @@ function RouteComponent() {
     isError: failed,
   } = useQuery(agentListQueryOptions());
   const explore = agents?.filter(awaitsSummon);
-  const summon = useSummon();
   const noConversations = channels.isSuccess && channels.data.length === 0;
   // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
   const groups = useQuery(wakerGroupsQueryOptions()).data;
@@ -209,12 +209,12 @@ function RouteComponent() {
             {homeGreeting(user, noConversations)}
           </h1>
           {noConversations ? (
-            // A new person: every conversation starts from an employee they summoned (召唤员工).
+            // A new person: every conversation starts from an employee they summoned on 人才市场.
             <div className="mt-[10px] flex flex-col items-center gap-2">
               <p className="text-[13px] text-muted-foreground">
-                先在左侧「员工」列表召唤一位员工，再和它对话。
+                先去「人才市场」召唤一位员工，再和它对话。
               </p>
-              <ShowEmployeesButton />
+              <TalentMarketLink />
             </div>
           ) : null}
         </div>
@@ -319,36 +319,24 @@ function RouteComponent() {
                 >
                   发现员工
                 </h2>
-                {explore.length > EXPLORE_SHOWN ? (
-                  <Link
-                    className="text-[13px] text-muted-foreground hover:text-foreground"
-                    to="/bots"
-                  >
-                    全部员工
-                  </Link>
-                ) : null}
+                <Link
+                  className="text-[13px] text-muted-foreground hover:text-foreground"
+                  to="/bots"
+                >
+                  去人才市场
+                </Link>
               </div>
               <ul className="mt-4 grid min-h-[140px] grid-cols-1 content-start gap-3 sm:grid-cols-2">
                 {explore.slice(0, EXPLORE_SHOWN).map((agent) => (
                   <li className="min-w-0" key={agent.id}>
-                    {/* Summoned the way the sidebar's 员工 list does it: the flip, then its conversation. */}
-                    <button
-                      aria-label={`召唤 ${agent.name}`}
-                      className="block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-60"
-                      disabled={summon.busy}
-                      onClick={() => summon.start(agent)}
-                      type="button"
+                    {/* Summoned on 人才市场, the one place that happens: the link lands on its card. */}
+                    <Link
+                      className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                      hash={summonAnchor(agent.id)}
+                      to="/bots"
                     >
                       <AgentCard agent={agent} appearance="row" />
-                    </button>
-                    {summon.problem?.agentId === agent.id ? (
-                      <p
-                        className="mt-1 text-[12px] text-signal-ink"
-                        role="alert"
-                      >
-                        {summon.problem.message}
-                      </p>
-                    ) : null}
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -393,7 +381,6 @@ function RouteComponent() {
           )}
         </div>
       </div>
-      {summon.overlay}
       {/* A Bot already working somewhere, and the way to it. Nothing while every Bot is idle. */}
       <WorkingNow channels={channels.data} />
     </>

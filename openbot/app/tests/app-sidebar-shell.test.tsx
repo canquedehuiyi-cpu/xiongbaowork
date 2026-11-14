@@ -298,7 +298,7 @@ test("the primary navigation lists 熊宝's destinations in the order the user c
     ["任务看板", "/tasks"],
     ["自主工作", "/autonomous"],
     ["@Waker", "/reachability"],
-    ["员工", "/bots"],
+    ["人才市场", "/bots"],
     ["能力", "/capabilities"],
     ["连接", "/connections"],
   ]);
@@ -307,14 +307,14 @@ test("the primary navigation lists 熊宝's destinations in the order the user c
       (link) => textOf(link),
     );
   expect(group("工作管理")).toEqual(["任务看板", "自主工作", "@Waker"]);
-  expect(group("员工资源")).toEqual(["员工", "能力", "连接"]);
+  expect(group("员工资源")).toEqual(["人才市场", "能力", "连接"]);
 });
 
 test("the entry for the open page is marked current", async () => {
   const view = renderSidebar("/bots");
   const nav = await view.findByRole("navigation", { name: "主导航" });
   const current = [...nav.querySelectorAll('[aria-current="page"]')];
-  expect(current.map(textOf)).toEqual(["员工"]);
+  expect(current.map(textOf)).toEqual(["人才市场"]);
 });
 
 test("更多 holds 组团流程; the old pages are not linked from the sidebar", async () => {
@@ -355,8 +355,8 @@ test("更多 holds 组团流程; the old pages are not linked from the sidebar",
 });
 
 test.each([
-  ["/bots/agent-1", "员工"],
-  ["/bots/agent-1/setup", "员工"],
+  ["/bots/agent-1", "人才市场"],
+  ["/bots/agent-1/setup", "人才市场"],
   ["/responsibilities", "自主工作"],
   ["/routines", "自主工作"],
   ["/capabilities/plugins", "能力"],

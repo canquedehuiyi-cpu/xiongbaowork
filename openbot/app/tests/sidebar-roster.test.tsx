@@ -20,17 +20,9 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
-import { showSidebarView } from "@/components/app-sidebar/sidebar-view";
 import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
@@ -729,10 +721,15 @@ const SUMMON_AGENTS = [
     summonedFrom: "preset-lawyer",
     summonKind: null,
     summoned: true,
+    presetPortrait: "lawyer",
   }),
 ];
 
-test("员工 splits into 已召唤 and 待召唤; a summoned preset's original shows in neither, the 分身 leads 待召唤", async () => {
+/*
+ * 召唤员工 Task 10: summoning happens only on 人才市场 (/bots). 员工 here lists the person's own
+ * employees — a summoned copy, the 分身 once summoned, the ones they made — and nothing to summon.
+ */
+test("员工 lists only the person's own employees; what waits to be summoned is on 人才市场, not here", async () => {
   const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
   await chooseView(view, /^员工/);
   const done = await view.findByRole("list", { name: "员工" });
@@ -744,97 +741,37 @@ test("员工 splits into 已召唤 and 待召唤; a summoned preset's original s
     ["分析师整理周报与指标", "/channel/c-analyst-new"],
     ["专业律师", "/channel/new?agent=copy-lawyer"],
   ]);
-  const pending = view.getByRole("list", { name: "待召唤" });
-  expect(within(pending).queryAllByRole("link")).toHaveLength(0);
-  expect(
-    within(pending)
-      .getAllByRole("listitem")
-      .map((row) => textOf(row)),
-  ).toEqual(["我的分身召唤", "暖心医生医生召唤"]);
-  expect(
-    within(pending).getAllByRole("button", { name: /^召唤/ }),
-  ).toHaveLength(2);
-  // The original of the summoned preset is listed nowhere.
-  expect(view.queryAllByText("专业律师")).toHaveLength(1);
+  expect(view.queryByRole("list", { name: "待召唤" })).toBeNull();
+  expect(view.queryAllByRole("button", { name: /^召唤/ })).toHaveLength(0);
+  expect(view.queryByText("暖心医生")).toBeNull();
+  expect(view.queryByText("我的分身")).toBeNull();
+  expect(hrefOf(view.getByRole("link", { name: "去人才市场召唤员工" }))).toBe(
+    "/bots",
+  );
 });
 
-test("an employee without a portrait row draws its presetPortrait's picture", async () => {
+test("a summoned employee without a portrait row draws its presetPortrait's picture", async () => {
   const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
   await chooseView(view, /^员工/);
-  const pending = await view.findByRole("list", { name: "待召唤" });
-  const row = within(pending)
-    .getAllByRole("listitem")
-    .find((item) => textOf(item)?.startsWith("暖心医生")) as HTMLElement;
-  expect(row.querySelector("img")?.getAttribute("src")).toBe(
-    PRESET_IMAGES.doctor,
+  const list = await view.findByRole("list", { name: "员工" });
+  const row = within(list)
+    .getAllByRole("link")
+    .find((link) => hrefOf(link) === "/channel/new?agent=copy-lawyer");
+  expect(row?.querySelector("img")?.getAttribute("src")).toBe(
+    PRESET_IMAGES.lawyer,
   );
 });
 
-test("召唤 posts the summon, flips the card, then opens the returned conversation", async () => {
-  let release: (response: Response) => void = () => {};
-  respond = (request) =>
-    request.url === "/api/agents/preset-doctor/summon"
-      ? new Promise<Response>((resolve) => {
-          release = resolve;
-        })
-      : Promise.reject(new Error(`Unexpected request ${request.url}`));
-  const { view, router } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+test("with nobody summoned yet, 员工 says to go to 人才市场", async () => {
+  const { view } = renderSidebar("/bots", {
+    // Nothing of the person's own: only the 分身 and the presets, which wait on 人才市场.
+    agents: SUMMON_AGENTS.filter(
+      (profile) => !["agent-analyst", "copy-lawyer"].includes(profile.id),
+    ),
+  });
   await chooseView(view, /^员工/);
-  const pending = await view.findByRole("list", { name: "待召唤" });
-  await userEvent.click(
-    within(pending).getByRole("button", { name: "召唤 暖心医生" }),
-  );
-  await waitFor(() =>
-    expect(sent.filter((request) => request.method === "POST")).toEqual([
-      { url: "/api/agents/preset-doctor/summon", method: "POST" },
-    ]),
-  );
-  const overlay = await view.findByRole("dialog", { name: "召唤员工" });
-  expect(router.state.location.pathname).toBe("/bots");
-  release(
-    Response.json({
-      agent: agent("copy-doctor", "暖心医生"),
-      channelId: "c-doctor",
-      created: true,
-    }),
-  );
-  await waitFor(() =>
-    expect(overlay.getAttribute("data-phase")).toBe("reveal"),
-  );
-  await userEvent.click(overlay);
-  await waitFor(() =>
-    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
-  );
-});
-
-test("a refused summon (名额已满) stays put, says why, and keeps the employee in 待召唤", async () => {
-  respond = async () =>
-    Response.json(
-      {
-        error: "员工名额已满。",
-        code: "quota_exceeded",
-        metric: "wakers",
-        used: 10,
-        limit: 10,
-        plan: "专业版",
-        upgradeUrl: "/plans",
-      },
-      { status: 402 },
-    );
-  const { view, router } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
-  await chooseView(view, /^员工/);
-  const pending = await view.findByRole("list", { name: "待召唤" });
-  await userEvent.click(
-    within(pending).getByRole("button", { name: "召唤 暖心医生" }),
-  );
-  expect(await view.findByText("员工名额已满。")).toBeTruthy();
-  expect(view.queryByRole("dialog", { name: "召唤员工" })).toBeNull();
-  expect(router.state.location.pathname).toBe("/bots");
-  expect(
-    within(view.getByRole("list", { name: "待召唤" })).getByRole("button", {
-      name: "召唤 暖心医生",
-    }),
-  ).toBeTruthy();
+  expect(await view.findByText(/还没有员工/)).toBeTruthy();
+  expect(hrefOf(view.getByRole("link", { name: "去人才市场" }))).toBe("/bots");
 });
 
 test("after a preset is summoned its older conversations stay in 会话 while 员工 lists only the copy", async () => {
@@ -860,21 +797,6 @@ test("after a preset is summoned its older conversations stay in 会话 while �
   ).not.toContain("/channel/c-old-lawyer");
 });
 
-test("a second click on 召唤 while a summon is in flight sends no second request", async () => {
-  respond = () => new Promise<Response>(() => {});
-  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
-  await chooseView(view, /^员工/);
-  const pending = await view.findByRole("list", { name: "待召唤" });
-  const button = within(pending).getByRole("button", { name: "召唤 暖心医生" });
-  await userEvent.click(button);
-  await view.findByRole("dialog", { name: "召唤员工" });
-  fireEvent.click(button);
-  fireEvent.click(
-    within(pending).getByRole("button", { name: "召唤 我的分身" }),
-  );
-  expect(sent.filter((request) => request.method === "POST")).toHaveLength(1);
-});
-
 test("the 员工 count counts the employees on the person's roster, not the ones still 待召唤", async () => {
   const { view } = renderSidebar("/bots", {
     agents: SUMMON_AGENTS,
@@ -887,22 +809,4 @@ test("the 员工 count counts the employees on the person's roster, not the ones
       .getByRole("button", { name: /^员工/ })
       .getAttribute("aria-label"),
   ).toBe("员工，2 位");
-});
-
-test("a 「去员工列表」 elsewhere in the app switches the sidebar to 员工, and it is remembered", async () => {
-  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
-  const switcher = await view.findByRole("group", { name: "侧栏列表" });
-  expect(
-    within(switcher)
-      .getByRole("button", { name: "会话" })
-      .getAttribute("aria-pressed"),
-  ).toBe("true");
-  act(() => showSidebarView("wakers"));
-  expect(await view.findByRole("list", { name: "待召唤" })).toBeTruthy();
-  expect(
-    within(switcher)
-      .getByRole("button", { name: /^员工/ })
-      .getAttribute("aria-pressed"),
-  ).toBe("true");
-  expect(window.localStorage.getItem("xiongbao-sidebar-view")).toBe("wakers");
 });

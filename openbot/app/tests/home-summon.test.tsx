@@ -1,7 +1,7 @@
 /*
- * 召唤员工 on the home page (Ruling 8): a new person is sent to 员工 to summon their first employee,
- * and 「发现员工」 lists only the presets they have not summoned, each card summoning it the same way
- * the sidebar's 员工 list does — the card flip, then the conversation the summon returns.
+ * 召唤员工 on the home page (Ruling 8, Task 10): a new person is sent to 人才市场 to summon their first
+ * employee, and 「发现员工」 lists only the presets they have not summoned, each card a link to that
+ * employee's card on 人才市场 — the one place summoning happens. Nothing is summoned from here.
  */
 import {
   afterAll,
@@ -139,8 +139,13 @@ function renderHome({
     path: "/channel/$channelId",
     component: () => null,
   });
+  const market = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/bots",
+    component: () => null,
+  });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([home, conversation]),
+    routeTree: rootRoute.addChildren([home, conversation, market]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   const view = render(
@@ -155,53 +160,28 @@ async function discover(view: ReturnType<typeof renderHome>["view"]) {
   return within(await view.findByRole("region", { name: "发现员工" }, SLOW));
 }
 
-test("发现员工 lists only the presets the person has not summoned", async () => {
+test("发现员工 lists only the presets the person has not summoned, each a link to its 人才市场 card", async () => {
   const { view } = renderHome();
   const section = await discover(view);
   expect(
     section
-      .getAllByRole("button")
-      .map((card) => card.getAttribute("aria-label")),
-  ).toEqual(["召唤 暖心医生"]);
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.startsWith("/bots#"))
+      .map((card) => [card.textContent, card.getAttribute("href")]),
+  ).toEqual([["暖心医生暖心医生的职责", "/bots#summon-preset-doctor"]]);
   expect(section.queryByText("专业律师")).toBeNull();
   expect(section.queryByText("同事的助手")).toBeNull();
   expect(section.queryByText("我的分身")).toBeNull();
 });
 
-test("a 发现员工 card summons that preset with the card flip, then opens its conversation", async () => {
-  let release: (response: Response) => void = () => {};
-  respond = (request) =>
-    request.url === "/api/agents/preset-doctor/summon"
-      ? new Promise<Response>((resolve) => {
-          release = resolve;
-        })
-      : undefined;
+test("a 发现员工 card summons nothing from the home page", async () => {
   const { view, router } = renderHome();
   const section = await discover(view);
-  await userEvent.click(section.getByRole("button", { name: "召唤 暖心医生" }));
-  await waitFor(() =>
-    expect(sent.filter((request) => request.method === "POST")).toEqual([
-      { url: "/api/agents/preset-doctor/summon", method: "POST" },
-    ]),
-  );
-  const overlay = await view.findByRole("dialog", { name: "召唤员工" });
-  expect(router.state.location.pathname).toBe("/");
-  release(
-    Response.json({
-      agent: agent("copy-doctor", "暖心医生", {
-        summonedFrom: "preset-doctor",
-      }),
-      channelId: "c-doctor",
-      created: true,
-    }),
-  );
-  await waitFor(() =>
-    expect(overlay.getAttribute("data-phase")).toBe("reveal"),
-  );
-  await userEvent.click(overlay);
-  await waitFor(() =>
-    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
-  );
+  await userEvent.click(section.getByRole("link", { name: /暖心医生/ }));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/bots"));
+  expect(router.state.location.hash).toBe("summon-preset-doctor");
+  expect(sent.filter((request) => request.method === "POST")).toEqual([]);
+  expect(view.queryByRole("dialog", { name: "召唤员工" })).toBeNull();
 });
 
 test("with every preset summoned, 发现员工 says so instead of listing anybody", async () => {
@@ -213,17 +193,19 @@ test("with every preset summoned, 发现员工 says so instead of listing anybod
   expect(section.queryAllByRole("button")).toHaveLength(0);
 });
 
-test("a person with no conversation yet is sent to 员工 to summon one", async () => {
+test("a person with no conversation yet is sent to 人才市场 to summon one", async () => {
   const { view } = renderHome();
   expect(
     await view.findByText(
-      "先在左侧「员工」列表召唤一位员工，再和它对话。",
+      "先去「人才市场」召唤一位员工，再和它对话。",
       {},
       SLOW,
     ),
   ).toBeTruthy();
-  await userEvent.click(view.getByRole("button", { name: "去员工列表" }));
-  expect(window.localStorage.getItem("xiongbao-sidebar-view")).toBe("wakers");
+  const links = view
+    .getAllByRole("link", { name: "去人才市场" })
+    .map((link) => link.getAttribute("href"));
+  expect(links).toContain("/bots");
 });
 
 test("once there is a conversation, the home page no longer says how to start", async () => {
@@ -246,5 +228,7 @@ test("once there is a conversation, the home page no longer says how to start", 
     ],
   });
   await discover(view);
-  expect(view.queryByRole("button", { name: "去员工列表" })).toBeNull();
+  expect(
+    view.queryByText("先去「人才市场」召唤一位员工，再和它对话。"),
+  ).toBeNull();
 });

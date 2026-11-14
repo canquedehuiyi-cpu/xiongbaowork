@@ -773,7 +773,7 @@ describe("every OpenBot surface stays reachable", () => {
     [/^新建群组$/, "/group/new"],
     [/^首页$/, "/"],
     // OpenBot's own destinations, from the shared navigation list its sidebar draws.
-    [/^员工$/, "/bots"],
+    [/^人才市场$/, "/bots"],
     [/^任务看板$/, "/tasks"],
     [/^自主工作$/, "/autonomous"],
     [/^@Waker$/, "/reachability"],

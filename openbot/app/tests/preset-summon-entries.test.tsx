@@ -1,7 +1,7 @@
 /*
- * 召唤员工: the remaining ways into a conversation with an employee — the chat's profile panel
- * (「开始新对话」) and the employee dialog's 「开始对话」 — summon a preset original instead, the
- * card flip and all, or open the person's own copy's conversation once it is summoned.
+ * 召唤员工 Task 10: the remaining ways into a conversation with an employee — the chat's profile
+ * panel (「开始新对话」) and the employee dialog's 「开始对话」 — send a preset original to 人才市场
+ * instead, the one place summoning happens. Nothing is summoned from here.
  */
 import {
   afterAll,
@@ -21,8 +21,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, render, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
 import { AgentProfile } from "@/components/agents/agent-profile";
@@ -113,59 +112,29 @@ function draw(agent: AgentProfileData, page: (id: string) => ReactNode) {
   return { view, router };
 }
 
-const copyConversation = async () =>
-  Response.json({
-    agent: { ...PRESET, id: "copy-doctor", summonKind: null, mine: true },
-    channelId: "c-doctor",
-    created: false,
-  });
-
-test("the profile panel summons a preset not summoned yet, with the card flip", async () => {
+test("the profile panel sends a preset not summoned yet to its card on 人才市场", async () => {
   const { view } = draw(PRESET, (id) => <AgentProfile agentId={id} />);
-  await userEvent.click(
-    await view.findByRole("button", { name: "召唤 暖心医生" }),
-  );
-  expect(
-    await within(document.body).findByRole("dialog", { name: "召唤员工" }),
-  ).toBeTruthy();
-  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+  const link = await view.findByRole("link", { name: "去人才市场" });
+  expect(link.getAttribute("href")).toBe("/bots#summon-preset-doctor");
+  expect(view.queryByRole("button", { name: "开始新对话" })).toBeNull();
+  expect(posted).toEqual([]);
 });
 
-test("the profile panel's 开始新对话 on a summoned preset opens the person's own copy's conversation", async () => {
-  answer = copyConversation;
-  const { view, router } = draw({ ...PRESET, summoned: true }, (id) => (
+test("the profile panel sends a summoned preset to 人才市场, where the person's copy is", async () => {
+  const { view } = draw({ ...PRESET, summoned: true }, (id) => (
     <AgentProfile agentId={id} />
   ));
-  await userEvent.click(
-    await view.findByRole("button", { name: "开始新对话" }),
-  );
-  await waitFor(() =>
-    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
-  );
-  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+  const link = await view.findByRole("link", { name: "去人才市场" });
+  expect(link.getAttribute("href")).toBe("/bots");
 });
 
-test("the employee dialog's conversation row summons a preset not summoned yet", async () => {
+test("the employee dialog's conversation row sends a preset to 人才市场", async () => {
   const { view } = draw(PRESET, (id) => (
     <AgentDialog agentId={id} onClose={() => {}} open />
   ));
   const dialog = within(await within(view.baseElement).findByRole("dialog"));
-  await userEvent.click(await dialog.findByRole("button", { name: "召唤" }));
-  expect(
-    await within(document.body).findByRole("dialog", { name: "召唤员工" }),
-  ).toBeTruthy();
-  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
-});
-
-test("the employee dialog's 开始 on a summoned preset opens the person's own copy's conversation", async () => {
-  answer = copyConversation;
-  const { view, router } = draw({ ...PRESET, summoned: true }, (id) => (
-    <AgentDialog agentId={id} onClose={() => {}} open />
-  ));
-  const dialog = within(await within(view.baseElement).findByRole("dialog"));
-  await userEvent.click(await dialog.findByRole("button", { name: "开始" }));
-  await waitFor(() =>
-    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
-  );
-  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+  const link = await dialog.findByRole("link", { name: "去人才市场" });
+  expect(link.getAttribute("href")).toBe("/bots#summon-preset-doctor");
+  expect(dialog.queryByRole("button", { name: "开始" })).toBeNull();
+  expect(posted).toEqual([]);
 });

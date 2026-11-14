@@ -9,6 +9,7 @@ import {
   SegmentedTabs,
   tabPanelProps,
 } from "@/components/layout/segmented-tabs";
+import { TalentMarketLink } from "@/components/summon/talent-market-link";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -31,7 +32,6 @@ import { cn } from "@/lib/utils";
 import { ChannelPagination } from "./channel-pagination";
 import { ChannelRow } from "./channel-row";
 import { channelsOf, matchingChannels, pinnedFirst } from "./roster";
-import { ShowEmployeesButton } from "./show-employees-button";
 import { useConversationFocus } from "./use-conversation-focus";
 
 /**
@@ -143,8 +143,8 @@ function ConversationList({
    */
   const emptySoFar = !searching && own !== undefined && own.length === 0;
   /*
-   * No conversation at all yet: a new person. Conversations start from an employee they summoned in
-   * 员工 (召唤员工), so that is where this sends them, not to 「新建」.
+   * No conversation at all yet: a new person. Conversations start from an employee they summoned on
+   * 人才市场 (召唤员工), so that is where this sends them, not to 「新建」.
    */
   const firstTime =
     emptySoFar && channels.data?.length === 0 && !channels.hasNextPage;
@@ -258,14 +258,14 @@ function ConversationList({
           <ListEmpty
             action={
               firstTime ? (
-                <ShowEmployeesButton className="h-[26px] text-[12px]" />
+                <TalentMarketLink className="h-[26px] text-[12px]" />
               ) : undefined
             }
             description={
               channels.hasNextPage
                 ? "加载更早的会话，看看更早的历史里有没有。"
                 : firstTime
-                  ? "先在「员工」列表里召唤一位员工，和它的对话会出现在这里。"
+                  ? "先去「人才市场」召唤一位员工，和它的对话会出现在这里。"
                   : "点「新建」开始第一段对话，它就会出现在这里。"
             }
             title={

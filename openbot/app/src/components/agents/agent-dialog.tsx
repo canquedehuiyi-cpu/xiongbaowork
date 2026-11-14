@@ -18,7 +18,7 @@ import { CallbackTokenPanel } from "@/components/agents/callback-token-panel";
 import { HandoffPanel } from "@/components/agents/handoff-panel";
 import { AgentRolePanel } from "@/components/roles/role-editor";
 import { RoutinesList } from "@/components/routines/routines-list";
-import { useSummon } from "@/components/summon/use-summon";
+import { TalentMarketLink } from "@/components/summon/talent-market-link";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -347,7 +347,6 @@ function GeneralSection({
   const navigate = useNavigate();
   const { save } = useProfileSave(agentId, profile);
   const preset = profile.summonKind === "preset";
-  const summon = useSummon();
 
   return (
     <>
@@ -419,41 +418,37 @@ function GeneralSection({
 
       <Item variant="muted">
         <ItemContent>
-          <ItemTitle>
-            {preset && !profile.summoned ? "召唤" : "开始对话"}
-          </ItemTitle>
+          <ItemTitle>{preset ? "召唤" : "开始对话"}</ItemTitle>
           <ItemDescription>
             {!preset
               ? "和这位员工开一个新频道。"
               : profile.summoned
-                ? "打开和你召唤的这位员工的对话。"
-                : "召唤到你的员工列表，再开始对话。"}
+                ? "你已经召唤过它，你的那位在人才市场的「已召唤」里。"
+                : "在人才市场召唤它，它就成为你自己的员工，再开始对话。"}
           </ItemDescription>
-          {summon.problem ? (
-            <p className="text-sm text-destructive" role="alert">
-              {summon.problem.message}
-            </p>
-          ) : null}
         </ItemContent>
         <ItemActions>
-          {/* A preset original is talked to through the person's own summoned copy (召唤员工). */}
-          <Button
-            disabled={summon.busy}
-            onClick={() =>
-              preset
-                ? summon.start(profile)
-                : void navigate({
-                    search: { agent: agentId },
-                    to: "/channel/new",
-                  })
-            }
-            size="sm"
-          >
-            {preset && !profile.summoned ? "召唤" : "开始"}
-          </Button>
+          {/* Summoning happens only on 人才市场 (召唤员工 Task 10). */}
+          {preset ? (
+            <TalentMarketLink
+              agentId={profile.summoned ? undefined : agentId}
+              variant="default"
+            />
+          ) : (
+            <Button
+              onClick={() =>
+                void navigate({
+                  search: { agent: agentId },
+                  to: "/channel/new",
+                })
+              }
+              size="sm"
+            >
+              开始
+            </Button>
+          )}
         </ItemActions>
       </Item>
-      {summon.overlay}
     </>
   );
 }
