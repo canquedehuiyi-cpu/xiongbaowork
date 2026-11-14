@@ -794,6 +794,7 @@ tests/tenant-package-channel-membership.test.ts
 tests/tenant-package-clear-refs.test.ts
 tests/tenant-package-connectors.test.ts
 tests/tenant-package-duplicates.test.ts
+tests/tenant-package-environment-scope.test.ts
 tests/tenant-package-legacy-path.test.ts
 tests/tenant-package-per-user-connectors.test.ts
 tests/tenant-package-personal.test.ts

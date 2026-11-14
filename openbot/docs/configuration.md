@@ -1419,6 +1419,31 @@ examples/fintech/
     └── expense-review.yaml
 ```
 
+### Which fields come from the environment
+
+`${NAME}` and `${NAME:-default}` are resolved from the deployment's environment, but **only in the
+fields that describe the machine** — never in text a person reads or a model is asked to follow:
+
+| File | Fields |
+| --- | --- |
+| `agents.yaml`, `agents/*.yaml` | `type`, `name`, `title`, `endpoint`, `remote_agent_id` |
+| `connectors.yaml` | `url`, `host` |
+| `brand.yaml` | `tenant.support_url` |
+
+Everything else — `instructions`, `system_prompt`, `role_description`, brand copy, knowledge roots —
+is read exactly as the file wrote it, so `${...}` in those is literal text. This is deliberate: a
+skill that teaches JavaScript or shell is full of `${...}`, and none of those are placeholders.
+Before this was a whitelist, a skill body explaining `blob="$P/${lbl:-}_raw.txt"` loaded as
+`blob="$P/_raw.txt"`, and a documented default of `20` loaded as whatever the reader's machine had
+set. See `docs/expand-environment-scope.md`.
+
+A name on the list with no value and no default still refuses the package, naming the file — an
+empty address would point a Bot at nothing. A name that is not on the list is never resolved, so it
+cannot refuse anything.
+
+The checksum covers the files as written rather than as expanded: changing the environment is not
+changing the package, so it does not trigger a re-synchronise.
+
 ### `brand.yaml`
 
 ```yaml

@@ -1,7 +1,7 @@
-# expandEnvironment 的作用域冲突（立项）
+# expandEnvironment 的作用域冲突
 
-> 状态：已立项，未开工。2026-11-14 由用户裁定立项并排期。
-> 结论先行：**模板求值与正文共用一个命名空间**，导致技能正文随部署环境的 `env` 变化、且已在包内发生两次静默改写。建议改成「按字段白名单展开」，而不是给正文加转义约定。
+> 状态：**已实施**（S1–S4，2026-11-14 落地；起始记录为立项稿）。2026-11-14 由用户裁定立项并排期。
+> 结论先行：**模板求值与正文共用一个命名空间**，导致技能正文随部署环境的 `env` 变化、且已在包内发生两次静默改写。已改成「按字段白名单展开」，而不是给正文加转义约定 —— 结果见第 8 节。
 
 ## 1. 现在的行为
 
@@ -94,3 +94,37 @@ const res = await fetch(`${ BASE_URL }${ path }` ← 靠空格躲过
 ## 7. 与交付验收的关系
 
 这条不影响 L4 当前四项验收（品牌清洗、R18 数据链、资源页、回归基线），因为它只在**包内含 `${...}` 正文**时才显形；`examples/xiongbao` 已经有两处坏样本，属于"已发生、可静默扩散"的一类，建议排在技术债 #25（`index.ts` 拆分）之前。
+
+## 8. 实施结果（S1–S4）
+
+`expandEnvironment` 保留为叶子函数，但不再套在整份文件文本上：`loadTenantPackage` 与 `readAgentFiles` 改成**先解析、再按字段展开**（`expandPackageDocument`）。白名单就是全部可环境化的位置：
+
+| 文件 | 可展开字段 |
+|---|---|
+| `agents.yaml`、`agents/*.yaml` | `type`、`name`、`title`、`endpoint`、`remote_agent_id` |
+| `connectors.yaml` | `url`、`host`（必须一起：只展开其一会让 host 校验拒绝整包） |
+| `brand.yaml` | `tenant.support_url` |
+| `skills.yaml`、`channels.yaml`、`model.yaml`、`knowledge.yaml`、`teams.yaml` | 无，整体按字面量 |
+
+`agents/*.yaml` 的两种形态（`agents:` 列表、整份文件即一个员工）都按同一张表处理。
+
+两处已被改写的正文随之恢复原样：`"$P/${lbl:-}_raw.txt"` 与
+`threshold=${CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD:-20(内置默认)}`。第 3 节那 50 行「靠差一个字符才躲过」的
+近似形态不再需要躲 —— 它们本来就不在求值通道里。
+
+**顺带修正一处语义错误**：checksum 原先哈希的是**展开后**的文本，于是换一台机器（地址不同）就会被判成
+「包变了」并重新同步。现在哈希文件原文 —— 环境变化不是包变化，改一个注释才是。
+
+守卫在 `server/tests/tenant-package-environment-scope.test.ts`（12 例）：
+
+- **逐字段断言**，含白名单特有的静默失败模式：漏加一个字段的表现是「占位符原样留在字符串里」，不报错；
+- **真实包保真**：`examples/xiongbao` 每一条技能正文加载后与文件一致，而不是只钉住那两个已知点；
+- **拒绝方向**：未设置的名字落在白名单字段上仍拒绝加载并点名文件，落在正文上不拒绝；
+- **checksum 不随环境变化**。
+
+五个变异分别改回旧行为（删白名单字段、让 `skills.yaml` 回到全文展开、漏展开 `host`、`agents/` 不再按员工处理、
+checksum 哈希展开结果），每一个都被对应断言杀死。
+
+第 6 节三个开放问题的裁定：`teams.yaml`/`channels.yaml` 退出展开范围（没有部署级字段）；`model.yaml` 的密钥
+本来就是 `credential_secret_ref`（变量名，不是值），不参与展开；部署文档的写法说明补在
+`docs/configuration.md`。
