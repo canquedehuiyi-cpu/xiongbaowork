@@ -20,9 +20,16 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
+import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
@@ -31,7 +38,6 @@ import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { browserKeys } from "@/lib/browser/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
-import { PRESET_IMAGES } from "@/components/portraits/preset-images";
 import { portraitKeys } from "@/lib/portraits/queries";
 import { quotaKeys } from "@/lib/quota/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
@@ -743,7 +749,9 @@ test("员工 splits into 已召唤 and 待召唤; a summoned preset's original s
       .getAllByRole("listitem")
       .map((row) => textOf(row)),
   ).toEqual(["我的分身召唤", "暖心医生医生召唤"]);
-  expect(within(pending).getAllByRole("button", { name: /^召唤/ })).toHaveLength(2);
+  expect(
+    within(pending).getAllByRole("button", { name: /^召唤/ }),
+  ).toHaveLength(2);
   // The original of the summoned preset is listed nowhere.
   expect(view.queryAllByText("专业律师")).toHaveLength(1);
 });
@@ -788,7 +796,9 @@ test("召唤 posts the summon, flips the card, then opens the returned conversat
       created: true,
     }),
   );
-  await waitFor(() => expect(overlay.getAttribute("data-phase")).toBe("reveal"));
+  await waitFor(() =>
+    expect(overlay.getAttribute("data-phase")).toBe("reveal"),
+  );
   await userEvent.click(overlay);
   await waitFor(() =>
     expect(router.state.location.pathname).toBe("/channel/c-doctor"),
@@ -846,4 +856,19 @@ test("after a preset is summoned its older conversations stay in 会话 while �
       .getAllByRole("link")
       .map((row) => hrefOf(row)),
   ).not.toContain("/channel/c-old-lawyer");
+});
+
+test("a second click on 召唤 while a summon is in flight sends no second request", async () => {
+  respond = () => new Promise<Response>(() => {});
+  const { view } = renderSidebar("/bots", { agents: SUMMON_AGENTS });
+  await chooseView(view, /^员工/);
+  const pending = await view.findByRole("list", { name: "待召唤" });
+  const button = within(pending).getByRole("button", { name: "召唤 暖心医生" });
+  await userEvent.click(button);
+  await view.findByRole("dialog", { name: "召唤员工" });
+  fireEvent.click(button);
+  fireEvent.click(
+    within(pending).getByRole("button", { name: "召唤 我的分身" }),
+  );
+  expect(sent.filter((request) => request.method === "POST")).toHaveLength(1);
 });

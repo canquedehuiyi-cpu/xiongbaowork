@@ -6,10 +6,7 @@ import {
   portraitIndex,
   portraitsQueryOptions,
 } from "@/lib/portraits/queries";
-import {
-  type AvatarMotionState,
-  PRESET_ANIMATIONS,
-} from "./preset-animations";
+import { type AvatarMotionState, PRESET_ANIMATIONS } from "./preset-animations";
 import { PRESET_IMAGES } from "./preset-images";
 
 /**

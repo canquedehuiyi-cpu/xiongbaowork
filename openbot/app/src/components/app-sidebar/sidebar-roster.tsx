@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, type RefObject, useMemo, useState } from "react";
+import logo256 from "@/assets/brand/xiongbao-logo-256.png";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import {
   attentionSummary,
@@ -16,7 +17,6 @@ import { SearchBox } from "@/components/layout/search-box";
 import { usePortraitSrc } from "@/components/portraits/use-portrait";
 import { SummonCardFlip } from "@/components/summon/summon-card-flip";
 import { Button } from "@/components/ui/button";
-import logo256 from "@/assets/brand/xiongbao-logo-256.png";
 import {
   type AgentProfile,
   agentListQueryOptions,

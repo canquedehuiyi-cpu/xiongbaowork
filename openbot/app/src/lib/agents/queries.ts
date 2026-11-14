@@ -5,8 +5,8 @@ import {
 } from "@tanstack/react-query";
 import { channelKeys } from "@/lib/channels/queries";
 import { client, tryClient } from "@/lib/client";
-import type { Persona } from "../../../../shared/persona";
 import type { PortraitPreset } from "@/lib/portraits/queries";
+import type { Persona } from "../../../../shared/persona";
 
 export type AgentVisibility = "public" | "private";
 
@@ -209,7 +209,6 @@ export function agentListQueryOptions(hidden = false) {
   });
 }
 
-/** Package-defined IDs remain one path segment without changing their stored or cache identity. */
 /** What summoning answers: the employee now on the roster, and the 1:1 conversation with it. */
 export type SummonResult = {
   agent: AgentProfile;
@@ -240,6 +239,7 @@ export function summonAgentMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/** Package-defined IDs remain one path segment without changing their stored or cache identity. */
 export function agentApiPath(agentId: string): string {
   return `/api/agents/${encodeURIComponent(agentId)}`;
 }
