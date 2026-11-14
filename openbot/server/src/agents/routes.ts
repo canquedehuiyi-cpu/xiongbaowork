@@ -55,6 +55,7 @@ type AgentInputObject = {
   platformModelRef?: unknown;
   persona?: unknown;
   bible?: unknown;
+  department?: unknown;
   avatarSeed?: unknown;
   roleTemplate?: unknown;
   isolated?: unknown;
@@ -64,6 +65,9 @@ type AgentInputObject = {
 
 /** The longest 工作手册 a coworker may carry (ROLE1, D3), in characters as the database counts them. */
 export const BIBLE_MAX_CHARACTERS = 8000;
+
+/** The longest department a coworker may carry (聊天工作台 Task 6), as the database's CHECK counts. */
+export const DEPARTMENT_MAX_CHARACTERS = 32;
 
 /**
  * What an avatar seed may be: what the form draws from and what every surface hands boring-avatars.
@@ -175,6 +179,8 @@ export function parseAgentInput(
   if (typeof persona === "string") return { ok: false, error: persona };
   const bible = parseBible(input.bible);
   if (typeof bible === "object" && bible !== null) return bible;
+  const department = parseDepartment(input.department);
+  if (typeof department === "object" && department !== null) return department;
 
   // Optional on create and on update alike. Absent means "the default" on a create and "leave it"
   // on an update, so a form that never showed the avatar cannot redraw it; anything sent is checked.
@@ -264,6 +270,8 @@ export function parseAgentInput(
       ...(persona === undefined ? {} : { persona }),
       // The same: a form that never showed the handbook leaves it alone.
       ...(bible === undefined ? {} : { bible }),
+      // And the department: absent leaves it, null or blank clears it.
+      ...(department === undefined ? {} : { department }),
       ...(avatarSeed === undefined ? {} : { avatarSeed }),
       ...(isolated === undefined ? {} : { isolated }),
       ...(instructions === undefined ? {} : { instructions }),
@@ -348,6 +356,28 @@ function parseBible(
     return {
       ok: false,
       error: `手册不能超过 ${BIBLE_MAX_CHARACTERS} 字。`,
+    };
+  }
+  return trimmed;
+}
+
+/**
+ * The department (聊天工作台 Task 6): absent leaves it, null or blank clears it, text up to 32
+ * characters writes it. Counted in code points, as the database's CHECK counts them.
+ */
+function parseDepartment(
+  value: unknown,
+): string | null | undefined | { ok: false; error: string } {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string")
+    return { ok: false, error: "部门必须是文字。" };
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if ([...trimmed].length > DEPARTMENT_MAX_CHARACTERS) {
+    return {
+      ok: false,
+      error: `部门不能超过 ${DEPARTMENT_MAX_CHARACTERS} 个字。`,
     };
   }
   return trimmed;
@@ -1394,6 +1424,8 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     // 召唤员工: where it was summoned from and its preset portrait; null for one made by hand.
     summonedFrom: agent.summonedFrom ?? null,
     presetPortrait: agent.presetPortrait ?? null,
+    // 聊天工作台: its department, or its preset's for a summoned copy without one; null for none.
+    department: agent.department ?? null,
     // The personal starter's, for its Setup page. No other Bot's DTO carries any.
     ...(agent.instructions ? { instructions: agent.instructions } : {}),
     // What runs it, by name, so a page can say that where it would otherwise show an address.

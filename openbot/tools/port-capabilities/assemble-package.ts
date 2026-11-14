@@ -832,10 +832,11 @@ function toYaml(value: unknown): string {
 }
 
 /**
- * The hand-written fields of an existing `agents/<id>.yaml` -- `portrait:` and `persona:` -- merged
- * into the pipeline's row. The pipeline knows neither, so without this a re-run silently drops them
- * and the next package sync clears the preset portrait and persona. Placed where the committed files
- * keep them (portrait after avatar_seed, persona after system_prompt) so a second run is byte-identical.
+ * The hand-written fields of an existing `agents/<id>.yaml` -- `portrait:`, `department:` and
+ * `persona:` -- merged into the pipeline's row. The pipeline knows none of them, so without this a
+ * re-run silently drops them and the next package sync clears the preset portrait, department and
+ * persona. Placed where the committed files keep them (portrait then department after avatar_seed,
+ * persona after system_prompt) so a second run is byte-identical.
  */
 export function keepAuthoredAgentFields(
   agent: AgentRow,
@@ -844,21 +845,22 @@ export function keepAuthoredAgentFields(
   if (existingText === null) return agent;
   const existing = parseYaml(existingText) as Record<string, unknown> | null;
   const kept: Record<string, unknown> = {};
-  for (const key of ["portrait", "persona"]) {
+  for (const key of ["portrait", "department", "persona"]) {
     if (existing?.[key] !== undefined && agent[key] === undefined) {
       kept[key] = existing[key];
     }
   }
   if (Object.keys(kept).length === 0) return agent;
-  const after: Record<string, string> = {
-    portrait: "avatar_seed",
-    persona: "system_prompt",
+  // Each anchor's fields, in the order they follow it.
+  const after: Record<string, string[]> = {
+    avatar_seed: ["portrait", "department"],
+    system_prompt: ["persona"],
   };
   const merged: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(agent)) {
     merged[key] = value;
-    for (const [field, anchor] of Object.entries(after)) {
-      if (key === anchor && field in kept) merged[field] = kept[field];
+    for (const field of after[key] ?? []) {
+      if (field in kept) merged[field] = kept[field];
     }
   }
   for (const [field, value] of Object.entries(kept)) {

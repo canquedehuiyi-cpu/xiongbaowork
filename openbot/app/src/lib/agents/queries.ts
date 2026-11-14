@@ -104,6 +104,11 @@ export type AgentProfile = {
   /** The preset portrait it uses, or null for none. Optional for the same reason. */
   presetPortrait?: PortraitPreset | null;
   /**
+   * Its department (聊天工作台 Task 6), what the address book groups by; null for none (未分组). A
+   * summoned copy without one of its own reads its preset's. Optional for the same reason.
+   */
+  department?: string | null;
+  /**
    * For the person asking: `preset` a shared package coworker, `avatar` their own 分身, null any other.
    * Optional on the type for the same reason; absent reads as null.
    */

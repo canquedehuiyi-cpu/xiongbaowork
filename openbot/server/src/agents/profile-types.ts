@@ -81,6 +81,11 @@ export type AgentProfile = {
   /** The preset portrait it uses, or null for none. Optional for the same reason. */
   presetPortrait?: PortraitPreset | null;
   /**
+   * Its department (聊天工作台 Task 6), what the address book groups by; null for none. A summoned
+   * copy without one of its own reads its preset's. Optional for the same reason.
+   */
+  department?: string | null;
+  /**
    * Whether its owner asked for it to have a computer of its own rather than share theirs.
    *
    * What was asked for, not what happens: an administrator can withdraw "Isolated Bots" from the
@@ -177,6 +182,11 @@ export type CreateAgentInput = Pick<
    * boring-avatars turns into one, so the parser keeps it to a short run of safe characters.
    */
   avatarSeed?: string;
+  /**
+   * The coworker's department (聊天工作台 Task 6). Absent on an update leaves it where it is; null
+   * clears it; text (at most 32 characters) replaces it.
+   */
+  department?: string | null;
 };
 
 /** The role content a template hands a coworker (ROLE1): identity, persona and Bible, nothing else. */

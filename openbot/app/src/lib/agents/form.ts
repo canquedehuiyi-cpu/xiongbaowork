@@ -78,6 +78,11 @@ export const agentFormSchema = z.object({
    */
   isolated: z.boolean().optional(),
   /**
+   * The coworker's department (聊天工作台 Task 6), which only the Setup row sends. Absent leaves it as
+   * it is; empty clears it. At most 32 characters, as the server allows.
+   */
+  department: z.string().trim().max(32, "部门不能超过 32 个字。").optional(),
+  /**
    * The starter Bot's instructions, which only its Setup page sends. Absent leaves them as they are.
    */
   instructions: z
@@ -131,6 +136,9 @@ export function agentInputFrom(values: AgentFormPatch) {
     ...(values.instructions === undefined
       ? {}
       : { instructions: values.instructions }),
+    ...(values.department === undefined
+      ? {}
+      : { department: values.department }),
   };
 }
 

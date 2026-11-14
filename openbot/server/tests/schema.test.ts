@@ -376,6 +376,16 @@ describe("OpenBot database schema", () => {
         hasDefault: false,
         primary: false,
       },
+      /*
+       * 聊天工作台 Task 6 (migration 0214): the coworker's department, at most 32 characters. Null
+       * means none.
+       */
+      {
+        name: "department",
+        notNull: false,
+        hasDefault: false,
+        primary: false,
+      },
       {
         name: "deleted_at",
         notNull: false,

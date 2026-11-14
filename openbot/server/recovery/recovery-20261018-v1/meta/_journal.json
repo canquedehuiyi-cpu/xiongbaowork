@@ -1359,6 +1359,13 @@
       "when": 1794572550898,
       "tag": "0213_agent_summon_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 214,
+      "version": "7",
+      "when": 1794572550899,
+      "tag": "0214_agent_department",
+      "breakpoints": true
     }
   ]
 }

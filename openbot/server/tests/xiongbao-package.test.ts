@@ -58,6 +58,24 @@ test("every preset coworker in the package carries a portrait that is one of the
   }
 });
 
+test("every preset coworker in the package sits in one of the seven departments", () => {
+  // 聊天工作台 Task 6: the address book groups by department, and a summoned copy carries it.
+  const departments = [
+    "研发部",
+    "产品部",
+    "设计部",
+    "测试部",
+    "运营部",
+    "行政部",
+    "总经办",
+  ];
+  for (const entry of loaded.agents) {
+    expect(departments, `agent ${entry.id}`).toContain(
+      entry.department as string,
+    );
+  }
+});
+
 test("every preset coworker in the package has a Chinese display name, not a raw handle or id", () => {
   for (const entry of loaded.agents) {
     expect(entry.name, `agent ${entry.id}`).toMatch(/\p{Script=Han}/u);

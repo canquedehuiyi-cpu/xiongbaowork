@@ -370,6 +370,13 @@ const joinedProjection = {
   isolated: agentProfiles.isolated,
   summonedFrom: agentProfiles.summonedFrom,
   presetPortrait: agentProfiles.presetPortrait,
+  /*
+   * Its own department, or, for a summoned copy without one, its preset's (聊天工作台 Task 6): copies
+   * summoned before the column existed carry none, and are read through rather than backfilled.
+   */
+  department: sql<
+    string | null
+  >`coalesce(${agentProfiles.department}, (select "department_source"."department" from "agent_profiles" "department_source" where "department_source"."agent_id" = ${agentProfiles.summonedFrom}))`,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
   configuration: agents.configuration,
@@ -432,6 +439,7 @@ function mapProfile(
     isolated: row.isolated,
     summonedFrom: row.summonedFrom ?? null,
     presetPortrait: row.presetPortrait ?? null,
+    department: row.department ?? null,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,
@@ -1100,6 +1108,7 @@ export function createAgentProfileStore(
           visibility: input.visibility,
           persona: input.persona ?? null,
           bible: input.bible ?? null,
+          department: input.department ?? null,
           // Recorded whatever it runs on: a new coworker is never the 分身 (D4, revised 2026-11-04).
           ...(input.roleTemplate
             ? await roleTemplateSource(transaction, input.roleTemplate)
@@ -1347,6 +1356,10 @@ export function createAgentProfileStore(
                 : { persona: input.persona }),
               // The same three-way: absent leaves it, null clears it. Never copied into systemPrompt.
               ...(input.bible === undefined ? {} : { bible: input.bible }),
+              // The same three-way for the department (聊天工作台 Task 6).
+              ...(input.department === undefined
+                ? {}
+                : { department: input.department }),
               // Absent leaves it alone; see `CreateAgentInput.isolated`.
               ...(input.isolated === undefined
                 ? {}
@@ -1437,6 +1450,8 @@ export function createAgentProfileStore(
           isolated: source.isolated && mayKeepIsolated,
           // The face it was shipped with travels with it, so a copy of a preset looks like the preset.
           presetPortrait: source.presetPortrait ?? null,
+          // So does its department (聊天工作台 Task 6): a summoned preset lands in the preset's.
+          department: source.department ?? null,
           ...(options.summonedFrom
             ? { summonedFrom: options.summonedFrom }
             : {}),
