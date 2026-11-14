@@ -8,6 +8,7 @@
  */
 import { afterAll, describe, expect, test } from "bun:test";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -20,12 +21,16 @@ import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   AUTH_OVERRIDES,
+  applyVerdictDowngrades,
   assemblePackage,
   buildAssetPlans,
+  computeAssetDowngrades,
   mergeSkillsYaml,
   parseAssembleArgs,
   readPipelineOutput,
+  renderGeneratedSkillEntry,
   renderPackageConnectorsYaml,
+  type AssetDowngrade,
   type SkillAssetPlan,
 } from "./assemble-package";
 import { verifyOutDir } from "./index";
@@ -547,5 +552,241 @@ describe("verifyOutDir audit-rule stamps (§6.4.1 mutations 3 and 4)", () => {
       writeFileSync(manifestPath, manifestOriginal, "utf8");
       writeFileSync(auditPath, auditOriginal, "utf8");
     }
+  });
+});
+
+// -------------------------------------------------------------------------------------------------
+// Attachment reachability.
+
+describe("asset downgrades — full must not promise files that did not ship", () => {
+  /** A generated skill row as the pipeline emits it (only the fields these functions read). */
+  function generatedSkill(input: {
+    slug: string;
+    instructions: string;
+    runnable?: string;
+    dropped?: string[];
+  }): Record<string, unknown> {
+    return {
+      slug: input.slug,
+      title: input.slug,
+      summary: "s",
+      instructions: input.instructions,
+      tools: [],
+      _porting: {
+        source: "workbuddy fixture:demo@1.0.0",
+        runnable: input.runnable ?? "full",
+        dropped: input.dropped ?? [],
+      },
+    };
+  }
+
+  function planOf(input: {
+    slug: string;
+    assets?: string[];
+    dropped?: string[];
+  }): SkillAssetPlan {
+    return {
+      slug: input.slug,
+      assets: (input.assets ?? []).map((path) => ({
+        path,
+        content: "",
+        bytes: 0,
+        checksum: sha256Hex(""),
+      })),
+      dropped: input.dropped ?? [],
+    };
+  }
+
+  const REFUSAL = "references/too-big.md（24.4KB，超过单文件 24KB 入仓上限）";
+  const CITING_BODY = "Read `references/too-big.md` before you start.\n";
+
+  test("a full skill citing a refused file is lowered to degraded", () => {
+    const downgrades = computeAssetDowngrades({
+      skills: [generatedSkill({ slug: "alpha", instructions: CITING_BODY })],
+      plans: new Map([["alpha", planOf({ slug: "alpha", dropped: [REFUSAL] })]]),
+    });
+    const downgrade = downgrades.get("alpha");
+    expect(downgrade?.runnable).toBe("degraded");
+    expect(downgrade?.reason).toBe("missing-asset-references");
+    expect(downgrade?.reasonRef).toContain("references/too-big.md");
+  });
+
+  test("a body that cites nothing absent is left alone", () => {
+    const downgrades = computeAssetDowngrades({
+      skills: [generatedSkill({ slug: "alpha", instructions: "Read `references/kept.md`.\n" })],
+      plans: new Map([
+        ["alpha", planOf({ slug: "alpha", assets: ["references/kept.md"], dropped: [REFUSAL] })],
+      ]),
+    });
+    expect(downgrades.size).toBe(0);
+  });
+
+  test("with no plan in hand it reads the row's own assets, so an assembled package judges the same way", () => {
+    // Re-reading an already-assembled package supplies no plan; the row's `assets:` carries the fact
+    // that P1 shipped references/. Without this fallback every references/ entry would look missing.
+    const skills = [
+      {
+        ...generatedSkill({ slug: "alpha", instructions: "Read `references/kept.md`.\n" }),
+        _porting: {
+          source: "workbuddy fixture:demo@1.0.0",
+          runnable: "full",
+          dropped: ["references/"],
+        },
+        assets: ["references/kept.md"],
+      },
+    ];
+    const downgrades = computeAssetDowngrades({ skills, plans: new Map() });
+    expect(downgrades.size).toBe(0);
+  });
+
+  test("a blocked skill is never rewritten — its licence reason outranks this one", () => {
+    const downgrades = computeAssetDowngrades({
+      skills: [
+        generatedSkill({ slug: "alpha", instructions: CITING_BODY, runnable: "blocked" }),
+      ],
+      plans: new Map([["alpha", planOf({ slug: "alpha", dropped: [REFUSAL] })]]),
+    });
+    expect(downgrades.size).toBe(0);
+  });
+
+  test("renderGeneratedSkillEntry writes the new verdict with its reason beside it", () => {
+    const text = renderGeneratedSkillEntry(
+      generatedSkill({ slug: "alpha", instructions: CITING_BODY }),
+      planOf({ slug: "alpha", dropped: [REFUSAL] }),
+      {
+        slug: "alpha",
+        runnable: "degraded",
+        reason: "missing-asset-references",
+        reasonRef: "文件 references/too-big.md 未入包",
+      },
+    );
+    // The entry is a YAML list item, so the document parses to a one-element array.
+    const parsed = (parseYaml(text) as Record<string, unknown>[])[0];
+    const porting = parsed._porting as Record<string, unknown>;
+    expect(porting.runnable).toBe("degraded");
+    expect(porting.reason).toBe("missing-asset-references");
+    expect(porting.reason_ref).toContain("references/too-big.md");
+    // Position, not just presence: the reason must be readable right under the verdict.
+    const lines = text.split("\n").map((line) => line.trim());
+    const runnableAt = lines.findIndex((line) => line === "runnable: degraded");
+    expect(lines[runnableAt + 1]).toBe("reason: missing-asset-references");
+    expect(lines[runnableAt + 2]).toStartWith("reason_ref:");
+  });
+
+  test("an existing reason is kept and this rule is appended, not substituted", () => {
+    const text = renderGeneratedSkillEntry(
+      generatedSkill({ slug: "alpha", instructions: CITING_BODY, runnable: "degraded" }),
+      planOf({ slug: "alpha", dropped: [REFUSAL] }),
+      {
+        slug: "alpha",
+        runnable: "degraded",
+        reason: "missing-asset-references",
+        reasonRef: "文件 references/too-big.md 未入包",
+      },
+    );
+    const parsed = (parseYaml(text) as Record<string, unknown>[])[0];
+    const porting = parsed._porting as Record<string, unknown>;
+    expect(porting.runnable).toBe("degraded");
+    expect(porting.reason).toBe("missing-asset-references");
+  });
+
+  test("without a downgrade the entry is byte-identical to before", () => {
+    const skill = generatedSkill({ slug: "alpha", instructions: CITING_BODY });
+    const plan = planOf({ slug: "alpha", dropped: [REFUSAL] });
+    expect(renderGeneratedSkillEntry(skill, plan, undefined)).toBe(
+      renderGeneratedSkillEntry(skill, plan),
+    );
+  });
+
+  test("the manifest row follows the verdict instead of disagreeing with skills.yaml", () => {
+    const rows: ManifestEntry[] = [
+      manifestRow({ kind: "skill", slug: "alpha", runnable: "full", slugSource: "raw" }),
+      manifestRow({ kind: "skill", slug: "beta", runnable: "full", slugSource: "raw" }),
+      manifestRow({ kind: "agent", slug: "alpha", runnable: "full" }),
+    ];
+    const downgrades = new Map<string, AssetDowngrade>([
+      [
+        "alpha",
+        {
+          slug: "alpha",
+          runnable: "degraded",
+          reason: "missing-asset-references",
+          reasonRef: "文件 references/too-big.md 未入包",
+        },
+      ],
+    ]);
+    const applied = applyVerdictDowngrades(rows, downgrades);
+    expect(applied.find((row) => row.kind === "skill" && row.slug === "alpha")?.runnable).toBe(
+      "degraded",
+    );
+    // Untouched rows keep their verdict, including an agent that happens to share the slug.
+    expect(applied.find((row) => row.kind === "skill" && row.slug === "beta")?.runnable).toBe(
+      "full",
+    );
+    expect(applied.find((row) => row.kind === "agent" && row.slug === "alpha")?.runnable).toBe(
+      "full",
+    );
+  });
+
+  test("an empty downgrade map returns the rows unchanged", () => {
+    const rows = [manifestRow({ kind: "skill", slug: "alpha", runnable: "full", slugSource: "raw" })];
+    expect(applyVerdictDowngrades(rows, new Map())).toEqual(rows);
+  });
+
+  test("a real assembler run lowers both files at once, and a second run is byte-identical", () => {
+    // End to end, on a private copy: the shared fixture's `alpha-skill` cites a file that P1 refuses
+    // only after the body is rewritten to point at it, so the downgrade cannot be pre-computed.
+    const copyRoot = mkdtempSync(join(tmpdir(), "port-capabilities-downgrade-"));
+    const fromDir = join(copyRoot, "pipeline");
+    const copySource = join(copyRoot, "source");
+    const copyPackage = join(copyRoot, "package");
+    cpSync(pipelineDir, fromDir, { recursive: true });
+    cpSync(sourceDir, copySource, { recursive: true });
+    cpSync(packageDir, copyPackage, { recursive: true });
+
+    const skillsPath = join(fromDir, "skills.yaml");
+    const doc = parseYaml(readFileSync(skillsPath, "utf8")) as {
+      skills: Record<string, unknown>[];
+    };
+    const alpha = doc.skills.find((skill) => skill.slug === "alpha-skill");
+    expect(alpha).toBeDefined();
+    if (alpha !== undefined) {
+      alpha.instructions = "先读 references/too-big.md 再做。";
+    }
+    writeFileSync(skillsPath, stringifyYaml(doc), "utf8");
+
+    const result = assemblePackage({
+      fromDir,
+      sourceRoot: copySource,
+      packageDir: copyPackage,
+    });
+    expect(result.assetDowngraded).toBe(1);
+
+    const shipped = parseYaml(
+      readFileSync(join(copyPackage, "skills.yaml"), "utf8"),
+    ) as { skills: Record<string, unknown>[] };
+    const shippedAlpha = shipped.skills.find((skill) => skill.slug === "alpha-skill");
+    const porting = shippedAlpha?._porting as Record<string, unknown> | undefined;
+    expect(porting?.runnable).toBe("degraded");
+    expect(porting?.reason).toBe("missing-asset-references");
+    // The sibling that cites only a file that did ship keeps its verdict.
+    const shippedBeta = shipped.skills.find((skill) => skill.slug === "beta-skill");
+    const betaPorting = shippedBeta?._porting as Record<string, unknown> | undefined;
+    expect(betaPorting?.runnable).toBe("full");
+
+    const manifest = parseYaml(
+      readFileSync(join(copyPackage, "capability-manifest.yaml"), "utf8"),
+    ) as ManifestEntry[];
+    const manifestAlpha = manifest.find(
+      (row) => row.kind === "skill" && row.slug === "alpha-skill",
+    );
+    expect(manifestAlpha?.runnable).toBe("degraded");
+
+    // Idempotency: re-running must not drift, or the package diff becomes noise.
+    const firstRun = readFileSync(join(copyPackage, "skills.yaml"), "utf8");
+    assemblePackage({ fromDir, sourceRoot: copySource, packageDir: copyPackage });
+    expect(readFileSync(join(copyPackage, "skills.yaml"), "utf8")).toBe(firstRun);
+
+    rmSync(copyRoot, { recursive: true, force: true });
   });
 });
