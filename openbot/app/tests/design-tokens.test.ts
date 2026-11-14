@@ -101,9 +101,11 @@ describe("default look tokens", () => {
 
   test("skins start with the empty-state pattern off", () => {
     expect(
-      declared(read("../src/skins/skins.css"), ":root[data-skin]").get(
-        "--empty-pattern-opacity",
-      ),
+      declared(
+        read("../src/skins/skins.css"),
+        // 「经典」 is the look with no skin, so the skin defaults leave it out.
+        ':root[data-skin]:where(:not([data-skin="classic"]))',
+      ).get("--empty-pattern-opacity"),
     ).toBe("0");
   });
 });

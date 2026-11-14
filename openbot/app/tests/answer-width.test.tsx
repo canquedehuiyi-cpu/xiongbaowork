@@ -108,12 +108,13 @@ test("a group conversation's answers are as wide as a conversation's", async () 
 });
 
 test("every skin keeps its answers and its composer in its own column", () => {
+  // Every skin but 「经典」, which is the look with no skin (its rules leave it out).
   const css = readFileSync(
     new URL("../src/skins/skins.css", import.meta.url),
     "utf8",
   ).replace(/\/\*[\s\S]*?\*\//g, "");
   const rule =
-    /:root\[data-skin\]\s+\[data-transcript-column\],\s*:root\[data-skin\]\s+\[data-slot="composer-column"\]\s*\{([^}]*)\}/.exec(
+    /:root\[data-skin\]:where\(:not\(\[data-skin="classic"\]\)\)\s+\[data-transcript-column\],\s*:root\[data-skin\]:where\(:not\(\[data-skin="classic"\]\)\)\s+\[data-slot="composer-column"\]\s*\{([^}]*)\}/.exec(
       css,
     );
   // `max-w-2xl`, read from the theme token.
@@ -121,7 +122,7 @@ test("every skin keeps its answers and its composer in its own column", () => {
   // OpenBot's `px-4` on the composer's column is taken off again, at a specificity a skin's own
   // padding outranks, so a skin's composer is as wide as it was drawn.
   const padding =
-    /:where\(:root\[data-skin\]\)\s+\[data-slot="composer-column"\]\s*\{([^}]*)\}/.exec(
+    /:where\(:root\[data-skin\]:where\(:not\(\[data-skin="classic"\]\)\)\)\s+\[data-slot="composer-column"\]\s*\{([^}]*)\}/.exec(
       css,
     );
   expect(padding?.[1]?.trim()).toBe("padding-inline: 0;");

@@ -12,6 +12,7 @@ export type ProactivePreference = "on" | "off";
  */
 export const SKIN_IDS = [
   "xiongbao",
+  "classic",
   "openduet",
   "opendots",
   "openmuse",

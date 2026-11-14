@@ -71,12 +71,32 @@ function useWaiting(agentId: string | undefined) {
   return {
     error: inbox.error,
     questions: (inbox.data?.questions ?? []).filter((question) =>
-      ours(question.conversationBotId ?? question.botId),
+      ours(questionBot(question)),
     ),
     pending: (inbox.data?.requests ?? []).filter(
-      (request) => request.status === "pending" && ours(request.action.botId),
+      (request) => isWaitingRequest(request) && ours(request.action.botId),
     ),
   };
+}
+
+/** Whose question it is: for a hand-off, the Bot whose conversation it is. */
+const questionBot = (question: WaitingQuestion) =>
+  question.conversationBotId ?? question.botId;
+
+const isWaitingRequest = (request: WaitingRequest) =>
+  request.status === "pending";
+
+/**
+ * The Bots something waits on the person for, by the same rules as {@link useWaitingByBot}, as ids
+ * only: for a list that marks many rows from one inbox read without building their board rows.
+ */
+export function waitingBotIds(inbox: ApprovalInboxData): ReadonlySet<string> {
+  return new Set([
+    ...inbox.questions.map(questionBot),
+    ...inbox.requests
+      .filter(isWaitingRequest)
+      .map((request) => request.action.botId),
+  ]);
 }
 
 /** A question a Bot asked mid-run, answered on the row's own footer line. */

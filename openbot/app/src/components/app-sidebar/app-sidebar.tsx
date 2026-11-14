@@ -222,7 +222,7 @@ const navRowClassName =
  * 审批收件箱（管理员还能在那里改团队规则、处理访问申请）。只画在熊宝自己的侧栏里，不进 `lib/navigation.ts`：
  * 那份清单是各皮肤共用的上游清单，皮肤照旧从员工页和设置里到达同样的内容。
  */
-type SidebarOnlyLink = {
+export type SidebarOnlyLink = {
   id: "team-bots" | "approvals";
   label: string;
   to: "/team-bots" | "/approvals";
@@ -230,7 +230,7 @@ type SidebarOnlyLink = {
   owns?: readonly string[];
 };
 
-const MORE_SIDEBAR_ONLY: readonly SidebarOnlyLink[] = [
+export const MORE_SIDEBAR_ONLY: readonly SidebarOnlyLink[] = [
   {
     id: "team-bots",
     label: "团队 Bot",
