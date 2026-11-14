@@ -57,7 +57,7 @@ agents:
 
   - id: qa-engineer
     name: 测试工程师
-    title: 测试工程
+    title: 测试工程师
     role_description: 把验收标准变成能跑的用例，报失败时带上复现步骤与实际输出。
     avatar_seed: qa-engineer
     portrait: test-engineer
