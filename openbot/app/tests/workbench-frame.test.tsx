@@ -148,6 +148,7 @@ function renderFrame(path: string, user: SignedIn = member) {
       page("/capabilities/skills", "技能页内容"),
       page("/bots", "人才市场页内容"),
       page("/channel/$channelId", "对话页内容"),
+      page("/me", "我页面内容"),
     ]),
     history: createMemoryHistory({ initialEntries: [path] }),
   });
@@ -260,10 +261,14 @@ describe("WorkbenchFrame", () => {
     ).toBe("/admin");
   });
 
-  test("「我」的列表栏是账户菜单里的项", async () => {
-    const { view, user } = renderFrame("/");
+  test("点「我」落到 /me，列表栏是取代账户菜单的那份菜单", async () => {
+    const { view, user, router } = renderFrame("/");
     await view.findByText("首页内容");
     await user.click(rail(view).getByRole("button", { name: "我" }));
+    // 「我」不只切列表栏，直接落到「我」页面（Task 5）。
+    await view.findByText("我页面内容");
+    expect(router.state.location.pathname).toBe("/me");
+    expect(pressed(view)).toEqual(["我"]);
     const list = within(view.getByRole("complementary", { name: "列表栏" }));
     expect(
       list.getByRole("link", { name: "套餐与用量" }).getAttribute("href"),
@@ -272,6 +277,17 @@ describe("WorkbenchFrame", () => {
       "/settings",
     );
     expect(list.queryByRole("link", { name: "管理" })).toBeNull();
+  });
+
+  test("已在 /me 时先看别的入口，再点「我」，列表栏回到「我」", async () => {
+    const { view, user } = renderFrame("/me");
+    await view.findByText("我页面内容");
+    await user.click(rail(view).getByRole("button", { name: "工作台" }));
+    expect(pressed(view)).toEqual(["工作台"]);
+    await user.click(rail(view).getByRole("button", { name: "我" }));
+    expect(pressed(view)).toEqual(["我"]);
+    const list = within(view.getByRole("complementary", { name: "列表栏" }));
+    expect(list.getByRole("heading", { name: "我" })).toBeTruthy();
   });
 
   test("「我」入口画这个人名字的第一个字", async () => {

@@ -36,6 +36,8 @@
     0 1px 0 var(--wb-line2) inset, 0 6px 16px rgba(0, 0, 0, 0.12);
   --wb-logo-shadow: 0 6px 18px rgba(255, 90, 74, 0.25);
   --wb-me-avatar: linear-gradient(135deg, #e6e7ec, #d5d7de);
+  --wb-plan: linear-gradient(135deg, #f2c46d, #d9963b);
+  --wb-plan-fg: #2a1a06;
   --wb-radius-frame: 18px;
   --wb-radius: 12px;
   --wb-radius-sm: 9px;
@@ -72,6 +74,8 @@
     0 1px 0 var(--wb-line2) inset, 0 6px 16px rgba(0, 0, 0, 0.12);
   --wb-logo-shadow: 0 6px 18px rgba(255, 90, 74, 0.25);
   --wb-me-avatar: linear-gradient(135deg, #3a3a44, #24242b);
+  --wb-plan: linear-gradient(135deg, #f2c46d, #d9963b);
+  --wb-plan-fg: #2a1a06;
   --wb-radius-frame: 18px;
   --wb-radius: 12px;
   --wb-radius-sm: 9px;

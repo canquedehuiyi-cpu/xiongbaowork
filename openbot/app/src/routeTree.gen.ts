@@ -23,6 +23,7 @@ import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
 import { Route as AuthedAppBrowserRouteImport } from './routes/_authed/_app/browser'
 import { Route as AuthedAppCapabilitiesRouteImport } from './routes/_authed/_app/capabilities'
 import { Route as AuthedAppKnowledgeRouteImport } from './routes/_authed/_app/knowledge'
+import { Route as AuthedAppMeRouteImport } from './routes/_authed/_app/me'
 import { Route as AuthedAppMemoryRouteImport } from './routes/_authed/_app/memory'
 import { Route as AuthedAppPipelinesRouteImport } from './routes/_authed/_app/pipelines'
 import { Route as AuthedAppPlansRouteImport } from './routes/_authed/_app/plans'
@@ -204,6 +205,11 @@ const AuthedAppCapabilitiesRoute = AuthedAppCapabilitiesRouteImport.update({
 const AuthedAppKnowledgeRoute = AuthedAppKnowledgeRouteImport.update({
   id: '/knowledge',
   path: '/knowledge',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppMeRoute = AuthedAppMeRouteImport.update({
+  id: '/me',
+  path: '/me',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppMemoryRoute = AuthedAppMemoryRouteImport.update({
@@ -848,6 +854,7 @@ export interface FileRoutesByFullPath {
   '/browser': typeof AuthedAppBrowserRoute
   '/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/knowledge': typeof AuthedAppKnowledgeRoute
+  '/me': typeof AuthedAppMeRoute
   '/memory': typeof AuthedAppMemoryRoute
   '/pipelines': typeof AuthedAppPipelinesRoute
   '/plans': typeof AuthedAppPlansRoute
@@ -972,6 +979,7 @@ export interface FileRoutesByTo {
   '/bot': typeof AuthedAppBotRoute
   '/browser': typeof AuthedAppBrowserRoute
   '/knowledge': typeof AuthedAppKnowledgeRoute
+  '/me': typeof AuthedAppMeRoute
   '/memory': typeof AuthedAppMemoryRoute
   '/pipelines': typeof AuthedAppPipelinesRoute
   '/plans': typeof AuthedAppPlansRoute
@@ -1101,6 +1109,7 @@ export interface FileRoutesById {
   '/_authed/_app/browser': typeof AuthedAppBrowserRoute
   '/_authed/_app/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/_authed/_app/knowledge': typeof AuthedAppKnowledgeRoute
+  '/_authed/_app/me': typeof AuthedAppMeRoute
   '/_authed/_app/memory': typeof AuthedAppMemoryRoute
   '/_authed/_app/pipelines': typeof AuthedAppPipelinesRoute
   '/_authed/_app/plans': typeof AuthedAppPlansRoute
@@ -1232,6 +1241,7 @@ export interface FileRouteTypes {
     | '/browser'
     | '/capabilities'
     | '/knowledge'
+    | '/me'
     | '/memory'
     | '/pipelines'
     | '/plans'
@@ -1356,6 +1366,7 @@ export interface FileRouteTypes {
     | '/bot'
     | '/browser'
     | '/knowledge'
+    | '/me'
     | '/memory'
     | '/pipelines'
     | '/plans'
@@ -1484,6 +1495,7 @@ export interface FileRouteTypes {
     | '/_authed/_app/browser'
     | '/_authed/_app/capabilities'
     | '/_authed/_app/knowledge'
+    | '/_authed/_app/me'
     | '/_authed/_app/memory'
     | '/_authed/_app/pipelines'
     | '/_authed/_app/plans'
@@ -1704,6 +1716,13 @@ declare module '@tanstack/react-router' {
       path: '/knowledge'
       fullPath: '/knowledge'
       preLoaderRoute: typeof AuthedAppKnowledgeRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/me': {
+      id: '/_authed/_app/me'
+      path: '/me'
+      fullPath: '/me'
+      preLoaderRoute: typeof AuthedAppMeRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/memory': {
@@ -2701,6 +2720,7 @@ interface AuthedAppRouteChildren {
   AuthedAppBrowserRoute: typeof AuthedAppBrowserRoute
   AuthedAppCapabilitiesRoute: typeof AuthedAppCapabilitiesRouteWithChildren
   AuthedAppKnowledgeRoute: typeof AuthedAppKnowledgeRoute
+  AuthedAppMeRoute: typeof AuthedAppMeRoute
   AuthedAppMemoryRoute: typeof AuthedAppMemoryRoute
   AuthedAppPipelinesRoute: typeof AuthedAppPipelinesRoute
   AuthedAppPlansRoute: typeof AuthedAppPlansRoute
@@ -2755,6 +2775,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppBrowserRoute: AuthedAppBrowserRoute,
   AuthedAppCapabilitiesRoute: AuthedAppCapabilitiesRouteWithChildren,
   AuthedAppKnowledgeRoute: AuthedAppKnowledgeRoute,
+  AuthedAppMeRoute: AuthedAppMeRoute,
   AuthedAppMemoryRoute: AuthedAppMemoryRoute,
   AuthedAppPipelinesRoute: AuthedAppPipelinesRoute,
   AuthedAppPlansRoute: AuthedAppPlansRoute,

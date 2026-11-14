@@ -2,32 +2,25 @@ import {
   type Icon,
   IconChalkboardTeacher,
   IconLogout,
-  IconMoon,
-  IconSun,
   IconUsers,
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps, useRouterState } from "@tanstack/react-router";
+import { useId } from "react";
 import { MORE_SIDEBAR_ONLY } from "@/components/app-sidebar/app-sidebar";
 import { EmployeeList } from "@/components/app-sidebar/sidebar-roster";
-import { useSignOut } from "@/components/app-sidebar/use-sign-out";
 import { TEACH_A_BOT } from "@/components/browser/browser-nav-item";
-import { useOptionalTheme } from "@/components/theme-provider";
-import { currentUserQueryOptions } from "@/lib/auth/queries";
-import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
-import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
 import { browserStateQueryOptions } from "@/lib/browser/queries";
 import {
-  AVATAR_MENU_ITEM,
   type NavigationItem,
   navigationOwns,
   type Rail,
   useNavigationItems,
 } from "@/lib/navigation";
-import { planSummaryQueryOptions } from "@/lib/quota/queries";
 import { cn } from "@/lib/utils";
 import { ListHead } from "./list-head";
+import { currentMeLink, useMeMenu } from "./me-page";
 import { MessageList } from "./message-list";
 
 /** 设计稿 `.row`：一行一个入口，12px 圆角，悬停铺 `--wb-hover`，当前页抬成一张卡。 */
@@ -59,6 +52,7 @@ function LinkRow({
   current?: boolean;
   exactSearch?: boolean;
 }) {
+  const detailId = useId();
   return (
     <li className="flex">
       <Link
@@ -66,13 +60,19 @@ function LinkRow({
         {...(current ? { "aria-current": "page" as const } : {})}
         activeOptions={{ exact: true, includeSearch: exactSearch }}
         activeProps={{}}
+        aria-describedby={detail ? detailId : undefined}
         className={rowClassName}
       >
         <Glyph aria-hidden="true" />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate font-medium">{label}</span>
+          {/* 第二行是描述，不算进链接的名字：读屏念「套餐与用量」，再念「Pro」。 */}
           {detail ? (
-            <span className="truncate text-(--wb-muted) text-[12px]">
+            <span
+              aria-hidden="true"
+              className="truncate text-(--wb-muted) text-[12px]"
+              id={detailId}
+            >
               {detail}
             </span>
           ) : null}
@@ -215,91 +215,80 @@ function WorkList() {
 }
 
 /**
- * 我：原来账户菜单里的东西——我的分身、套餐与用量（第二行写现在的套餐）、设置，再加主题切换和退出登录。
+ * 我：「我」页面（`/me`）的菜单缩在列表栏里。顶上是个人卡（头像、名字、套餐），点它回「我」页面；下面是
+ * 页面上那份菜单里各自是一页的行（个人资料、外观是设置页里某一段的捷径，只在页面上列，免得在设置页时
+ * 三行一起亮），最后是退出登录（只在有登录可退的部署上）。
  */
 function MeList() {
   const pathname = usePathname();
-  const user = useQuery(currentUserQueryOptions()).data;
-  const plan = useQuery(planSummaryQueryOptions()).data?.plan?.name;
-  const avatarAgentId = useQuery({
-    ...avatarSourcesQueryOptions(),
-    retry: false,
-    staleTime: Number.POSITIVE_INFINITY,
-  }).data?.agentId;
-  const mine = useNavigationItems().filter((item) => item.rail === "me");
-  const theme = useOptionalTheme();
-  const signOut = useSignOut();
-  const signOutOffered = useSignOutOffered();
-  const name = user?.name?.trim() || user?.email || "";
+  const menu = useMeMenu();
+  const current = currentMeLink(menu.groups, pathname);
+  const planId = useId();
   return (
     <>
       <ListHead rail="me" />
       <nav aria-label="我" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {name ? (
-          <p className="m-0 truncate px-[10px] pb-2 text-(--wb-muted) text-[12.5px]">
-            {name}
-          </p>
-        ) : null}
-        <ul className="m-0 flex list-none flex-col p-0">
-          {avatarAgentId ? (
-            <LinkRow
-              current={pathname === `/bots/${avatarAgentId}`}
-              icon={AVATAR_MENU_ITEM.icon}
-              label={AVATAR_MENU_ITEM.label}
-              params={{ agentId: avatarAgentId }}
-              to="/bots/$agentId"
-            />
-          ) : null}
-          {mine.map((item) => (
-            <LinkRow
-              current={
-                // 设置管着 `/settings/*`，套餐与用量在它下面：两项都认领时只亮更具体的那一项。
-                navigationOwns(item, pathname) &&
-                !mine.some(
-                  (other) =>
-                    other.to.length > item.to.length &&
-                    navigationOwns(other, pathname),
-                )
-              }
-              detail={item.id === "plans" ? plan : undefined}
-              icon={item.icon}
-              key={item.id}
-              label={item.label}
-              to={item.to}
-            />
-          ))}
-          {theme ? (
-            <li className="flex">
-              <button
-                className={rowClassName}
-                onClick={() => theme.setDark(!theme.dark)}
-                type="button"
+        <Link
+          {...(pathname === "/me" ? { "aria-current": "page" as const } : {})}
+          activeOptions={{ exact: true, includeSearch: false }}
+          activeProps={{}}
+          aria-describedby={menu.plan ? planId : undefined}
+          className={cn(rowClassName, "mb-1 min-h-[56px]")}
+          to="/me"
+        >
+          <span
+            aria-hidden="true"
+            className="grid size-9 shrink-0 place-items-center rounded-full bg-(image:--wb-me-avatar) font-semibold text-(--wb-fg) text-[14px]"
+          >
+            {menu.initial}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate font-semibold">{menu.name}</span>
+            {menu.plan ? (
+              <span
+                aria-hidden="true"
+                className="truncate text-(--wb-muted) text-[12px]"
+                id={planId}
               >
-                {theme.dark ? (
-                  <IconSun aria-hidden="true" />
-                ) : (
-                  <IconMoon aria-hidden="true" />
-                )}
-                <span className="truncate font-medium">
-                  {theme.dark ? "换成浅色" : "换成深色"}
-                </span>
-              </button>
-            </li>
-          ) : null}
-          {signOutOffered ? (
+                {menu.plan}
+              </span>
+            ) : null}
+          </span>
+        </Link>
+        {menu.groups.map((group) => (
+          <ul
+            className="m-0 flex list-none flex-col border-(--wb-line) border-t p-0 pt-1"
+            key={group[0]?.id}
+          >
+            {group
+              .filter((row) => row.claims)
+              .map((row) => (
+                <LinkRow
+                  {...row.link}
+                  current={current?.id === row.id}
+                  detail={row.detail}
+                  icon={row.icon}
+                  key={row.id}
+                  label={row.label}
+                />
+              ))}
+          </ul>
+        ))}
+        {menu.signOut.offered ? (
+          <ul className="m-0 flex list-none flex-col border-(--wb-line) border-t p-0 pt-1">
             <li className="flex">
               <button
                 className={cn(rowClassName, "disabled:opacity-60")}
-                disabled={signOut.pending}
-                onClick={signOut.run}
+                disabled={menu.signOut.pending}
+                onClick={menu.signOut.run}
                 type="button"
               >
                 <IconLogout aria-hidden="true" />
                 <span className="truncate font-medium">退出登录</span>
               </button>
             </li>
-          ) : null}
-        </ul>
+          </ul>
+        ) : null}
       </nav>
     </>
   );
