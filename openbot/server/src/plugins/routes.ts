@@ -3897,8 +3897,8 @@ export function createPluginRoutes(
    *
    * Answers `not-applicable` whenever this door does not open, so the caller falls through to the
    * rules that applied before and every refusal a person saw before is word for word the same:
-   *  - an entry nobody listed is still an administrator's (`mcp`) or still refused as the
-   *    deployment's (`skill`), and a person's own skill is still decided by the owner rule;
+   *  - an app nobody listed is still an administrator's (`mcp`), and a person's own skill is still
+   *    decided by the owner rule. A deployment skill needs no listing (Ruling 10, below);
    *  - an uninstall is allowed while the entry is listed, and after it is unlisted only for a grant
    *    this same person made: what an administrator granted stays the administrator's to remove.
    */
@@ -3920,7 +3920,13 @@ export function createPluginRoutes(
     }
     if (!listingRef) return "not-applicable";
 
-    const listed = await store.isInstallListed(kind, listingRef);
+    /*
+     * A deployment skill counts as listed without a row (Ruling 10, 召唤员工): a skill is instructions
+     * and reaches nothing, so the owner of a Waker may put one on it, or take one off, without an
+     * administrator listing it first. An app still needs its listing.
+     */
+    const listed =
+      kind === "skill" || (await store.isInstallListed(kind, listingRef));
     if (!listed && intent === "grant") return "not-applicable";
 
     /*
