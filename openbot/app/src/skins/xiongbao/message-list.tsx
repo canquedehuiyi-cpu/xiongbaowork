@@ -7,7 +7,7 @@ import {
 } from "@tabler/icons-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { ChannelMenu } from "@/components/app-sidebar/channel";
 import { ChannelPagination } from "@/components/app-sidebar/channel-pagination";
 import {
@@ -16,8 +16,8 @@ import {
   isUnread,
   matchingChannels,
 } from "@/components/app-sidebar/roster";
-import { useWaitingByBot } from "@/components/approvals/waiting";
-import { ChannelAvatar } from "@/components/channels/avatar";
+import { waitingBotIds } from "@/components/approvals/waiting";
+import { ChannelAvatar, TypingBadge } from "@/components/channels/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,22 +31,27 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { useBotNames } from "@/lib/agents/bot-names";
+import { approvalInboxOptions } from "@/lib/approvals";
 import { untitledLine } from "@/lib/channels/label";
 import {
   type ChannelSummary,
   channelListQueryOptions,
 } from "@/lib/channels/queries";
+import {
+  type MessageListEmphasis,
+  useMessageListEmphasis,
+} from "@/lib/settings/message-list";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { iconButtonClassName, ListHead } from "./list-head";
 
-/** 「消息」列表的筛选：全部、未读、待我确认、群聊。 */
+/** 「消息」列表的筛选：全部、未读、待我确认、群组。 */
 export type MessageFilter = "all" | "unread" | "needsMe" | "groups";
 
 const FILTERS: readonly { key: MessageFilter; label: string }[] = [
   { key: "all", label: "全部" },
   { key: "unread", label: "未读" },
   { key: "needsMe", label: "待我确认" },
-  { key: "groups", label: "群聊" },
+  { key: "groups", label: "群组" },
 ];
 
 /** 某个筛选下一行也没有时说的话。 */
@@ -62,7 +67,7 @@ function lastActivity(channel: ChannelSummary): string {
 }
 
 /**
- * 置顶的在前，其余按最后消息时间从新到旧，单聊和群聊混在一起排。服务端也是这个顺序，这里再排一次，是为了
+ * 置顶的在前，其余按最后消息时间从新到旧，单聊和群组混在一起排。服务端也是这个顺序，这里再排一次，是为了
  * 推送把一行改了却没挪位置的时候（和 `pinnedFirst` 同一个理由）。
  */
 function byRecency(channels: readonly ChannelSummary[]): ChannelSummary[] {
@@ -74,14 +79,15 @@ function byRecency(channels: readonly ChannelSummary[]): ChannelSummary[] {
 }
 
 /**
- * 一对一会话的那位员工有没有等你确认的事。群聊不算：「待我确认」按员工给出，一段群聊里有好几位员工，
- * 说不清是哪一位在等你。
+ * 一对一会话的那位员工有没有等你确认的事。群组不算：「待我确认」按员工给出，一个群组里有好几位员工，
+ * 说不清是哪一位在等你。`waiting` 为空是还不知道（在加载，或读失败了），一律不算。
  */
 function waitsOnMe(
   channel: ChannelSummary,
-  waiting: ReadonlySet<string>,
+  waiting: ReadonlySet<string> | undefined,
 ): boolean {
   return (
+    waiting !== undefined &&
     !isGroupChannel(channel) &&
     channel.agentIds.length === 1 &&
     waiting.has(channel.agentIds[0] ?? "")
@@ -92,7 +98,7 @@ function passes(
   channel: ChannelSummary,
   filter: MessageFilter,
   openChannelId: string | undefined,
-  waiting: ReadonlySet<string>,
+  waiting: ReadonlySet<string> | undefined,
 ): boolean {
   switch (filter) {
     case "all":
@@ -107,17 +113,25 @@ function passes(
 }
 
 /**
- * 有事等你确认的员工：在等你回答的提问、在等你批的审批，按员工归（`useWaitingByBot` 不传员工就是所有
- * 员工的），一次查询，不是每行一个。
+ * 有事等你确认的员工：在等你回答的提问、在等你批的审批，按员工归（和 `useWaitingByBot` 同一套规则），
+ * 整个列表一次审批收件箱查询，不是每行一个。
+ *
+ * `bots` 只在读到了、而且这次没出错时才有；在加载或读失败时是 `undefined`，谁也不标、「待我确认」也不说
+ * 「没有」——不知道的事不当成没有。
  */
-function useWaitingBots(): ReadonlySet<string> {
-  const { byBot } = useWaitingByBot(undefined);
-  return new Set(byBot.keys());
+function useWaitingBots() {
+  const inbox = useQuery({ ...approvalInboxOptions(), select: waitingBotIds });
+  return {
+    bots: inbox.isError ? undefined : inbox.data,
+    failed: inbox.isError,
+    retrying: inbox.isFetching,
+    retry: () => void inbox.refetch(),
+  };
 }
 
 /**
- * 消息：单聊和群聊合成一个列表，按最后消息时间倒序（置顶的在最前）。上面是搜索框和筛选标签「全部 / 未读 /
- * 待我确认 / 群聊」，右上「＋」收着「新对话」「新建群组」。点一行就是那段对话。
+ * 消息：单聊和群组合成一个列表，按最后消息时间倒序（置顶的在最前）。上面是搜索框和筛选标签「全部 / 未读 /
+ * 待我确认 / 群组」，右上「＋」收着「新对话」「新建群组」。点一行就是那段对话。
  *
  * 只画拿得到的东西：未读只有「有没有」，没有条数，所以是一个点，不是数字。
  */
@@ -125,11 +139,18 @@ export function MessageList() {
   const channels = useInfiniteQuery(channelListQueryOptions());
   const groups = useQuery(wakerGroupsQueryOptions());
   const waiting = useWaitingBots();
+  const emphasis = useMessageListEmphasis();
+  const botName = useBotNames();
+  const [filter, setFilter] = useState<MessageFilter>("all");
+  // Only the 未读 filter depends on which conversation is open; elsewhere switching conversations
+  // re-renders the rows whose open state changed, not the list.
   const openChannelId = useParams({
     strict: false,
-    select: (params) => (params as { channelId?: string }).channelId,
+    select: (params) =>
+      filter === "unread"
+        ? (params as { channelId?: string }).channelId
+        : undefined,
   });
-  const [filter, setFilter] = useState<MessageFilter>("all");
   const [search, setSearch] = useState("");
   const scrollRoot = useRef<HTMLDivElement>(null);
   const searching = search.trim().length > 0;
@@ -140,10 +161,12 @@ export function MessageList() {
   );
   const visible = byRecency(
     matchingChannels(channels.data, search).filter((channel) =>
-      passes(channel, filter, openChannelId, waiting),
+      passes(channel, filter, openChannelId, waiting.bots),
     ),
   );
   const loaded = channels.data !== undefined;
+  // 「待我确认」还不知道答案时，不说「没有」。
+  const waitingUnknown = filter === "needsMe" && waiting.bots === undefined;
   return (
     <>
       <ListHead rail="msg">
@@ -182,22 +205,19 @@ export function MessageList() {
       >
         <nav aria-label="会话" className="flex flex-col gap-px">
           {channels.isError && !loaded ? (
-            <p
-              className="m-0 px-[10px] py-2 text-(--wb-muted) text-[12.5px]"
-              role="alert"
+            <FailedNote
+              onRetry={() => void channels.refetch()}
+              retrying={channels.isFetching}
             >
               会话加载失败。
-              <button
-                className="ml-1 border-0 bg-transparent p-0 text-(--wb-accent) underline-offset-2 hover:underline disabled:opacity-60"
-                disabled={channels.isFetching}
-                onClick={() => void channels.refetch()}
-                type="button"
-              >
-                {channels.isFetching ? "正在重试…" : "重试"}
-              </button>
-            </p>
+            </FailedNote>
           ) : null}
-          {loaded && visible.length === 0 ? (
+          {filter === "needsMe" && waiting.failed ? (
+            <FailedNote onRetry={waiting.retry} retrying={waiting.retrying}>
+              待确认事项加载失败
+            </FailedNote>
+          ) : null}
+          {loaded && visible.length === 0 && !waitingUnknown ? (
             <EmptyNote
               filter={filter}
               more={channels.hasNextPage}
@@ -206,11 +226,12 @@ export function MessageList() {
           ) : null}
           {visible.map((channel) => (
             <MessageRow
+              botName={botName}
               channel={channel}
+              emphasis={emphasis}
               groupId={groupOfChannel.get(channel.id)}
               key={channel.id}
-              unread={isUnread(channel, openChannelId)}
-              waitsOnMe={waitsOnMe(channel, waiting)}
+              waitsOnMe={waitsOnMe(channel, waiting.bots)}
             />
           ))}
           <ChannelPagination
@@ -222,6 +243,34 @@ export function MessageList() {
         </nav>
       </div>
     </>
+  );
+}
+
+/** 一句「没读出来」和一个「重试」。 */
+function FailedNote({
+  children,
+  onRetry,
+  retrying,
+}: {
+  children: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  return (
+    <p
+      className="m-0 px-[10px] py-2 text-(--wb-muted) text-[12.5px]"
+      role="alert"
+    >
+      {children}
+      <button
+        className="ml-1 border-0 bg-transparent p-0 text-(--wb-accent) underline-offset-2 hover:underline disabled:opacity-60"
+        disabled={retrying}
+        onClick={onRetry}
+        type="button"
+      >
+        {retrying ? "正在重试…" : "重试"}
+      </button>
+    </p>
   );
 }
 
@@ -299,62 +348,111 @@ function EmptyNote({
   );
 }
 
-/** 设计稿 `.group-av`：群聊的头像是成员拼图，2×2 最多 4 格。 */
-function GroupMosaic({ memberIds }: { memberIds: readonly string[] }) {
+/**
+ * 设计稿 `.group-av`：群组的头像是成员拼图，2×2 最多 4 格。员工正在干活时，右下角和单聊一样有正在输入的
+ * 小标。
+ */
+function GroupMosaic({
+  memberIds,
+  busy,
+}: {
+  memberIds: readonly string[];
+  busy: boolean;
+}) {
   return (
-    <span
-      aria-hidden="true"
-      className="grid size-[42px] shrink-0 grid-cols-2 grid-rows-2 gap-[2px] rounded-(--wb-radius) bg-(--wb-card2) p-[3px]"
-      data-testid="group-mosaic"
-    >
-      {memberIds.slice(0, 4).map((id) => (
-        <span
-          className="block size-[17px] overflow-hidden rounded-[4px]"
-          data-mosaic-cell=""
-          key={id}
-        >
-          <ChannelAvatar participantIds={[id]} size={17} />
-        </span>
-      ))}
+    <span className="relative shrink-0">
+      <span
+        aria-hidden="true"
+        className="grid size-[42px] grid-cols-2 grid-rows-2 gap-[2px] rounded-(--wb-radius) bg-(--wb-card2) p-[3px]"
+        data-testid="group-mosaic"
+      >
+        {memberIds.slice(0, 4).map((id) => (
+          <span
+            className="block size-[17px] overflow-hidden rounded-[4px]"
+            data-mosaic-cell=""
+            key={id}
+          >
+            <ChannelAvatar participantIds={[id]} size={17} />
+          </span>
+        ))}
+      </span>
+      {busy ? <TypingBadge /> : null}
     </span>
   );
 }
 
 /**
- * 第二行：最后一条消息；没有时是会话的标题（命名前是开头那句）。群聊里员工说的，前面写是谁说的。
- * 都没有就不画这一行，不编。
+ * 最后一条消息是谁说的：员工说的写员工名（一对一会话就是会话名，群组里按员工 id 查名字，还没查到就不写），
+ * 自己说的写「我」。没有消息时为空。
  */
-function usePreview(channel: ChannelSummary): string {
-  const botName = useBotNames();
-  const last = channel.lastMessage?.trim();
-  if (last) {
-    const speaker =
-      isGroupChannel(channel) && channel.lastMessageAgentId
-        ? botName(channel.lastMessageAgentId)
-        : "";
-    return speaker ? `${speaker}：${last}` : last;
-  }
-  return (channel.summary || untitledLine(channel) || "").trim();
+function speakerOf(
+  channel: ChannelSummary,
+  botName: (botId: string) => string,
+): string {
+  if (!channel.lastMessageAgentId) return "我";
+  return isGroupChannel(channel)
+    ? botName(channel.lastMessageAgentId)
+    : channel.name;
 }
 
 /**
- * 设计稿 `.row`：头像（群聊是成员拼图）、名字和时间，下一行是最后一条消息，未读的右边一个点。打开着的那段
- * 抬成一张卡。右键是置顶、重命名、删除（和侧栏同一个菜单）。
+ * 一行的两行字，跟着「消息列表突出显示」设置（设置 › 外观，和侧栏同一个）：
+ * - 对话标题（`thread`，默认）：第一行是会话的标题（改过名的就是改的名），第二行「谁：最后一条消息」；
+ * - 员工名字（`agent`）：第一行是员工或群组的名字，第二行最后一条消息（群组里前面写是谁说的），和设计稿一样。
+ * 没有标题的会话第一行用名字；拿不到的不画，不编。
  */
-function MessageRow({
+function rowLines(
+  channel: ChannelSummary,
+  emphasis: MessageListEmphasis,
+  botName: (botId: string) => string,
+): { first: string; second: string } {
+  const group = isGroupChannel(channel);
+  const last = channel.lastMessage?.trim() ?? "";
+  const speaker = last ? speakerOf(channel, botName) : "";
+  const said = (prefixed: boolean) =>
+    prefixed && speaker ? `${speaker}：${last}` : last;
+  if (emphasis === "thread") {
+    const first =
+      channel.summary?.trim() || channel.opening?.trim() || channel.name;
+    // 第一行已经是员工名（会话还没标题）时，第二行不再重复一遍。
+    return { first, second: said(speaker !== first) };
+  }
+  return {
+    first: channel.name,
+    second:
+      said(group) || (channel.summary || untitledLine(channel) || "").trim(),
+  };
+}
+
+/**
+ * 设计稿 `.row`：头像（群组是成员拼图）、第一行和时间，下一行是最后一条消息，未读的右边一个点。打开着的那段
+ * 抬成一张卡。右键是置顶、重命名、删除（和侧栏同一个菜单）。
+ *
+ * Memoized, as the sidebar's row is: `use-channel-events` keeps an unchanged row's object, and whether
+ * this row is unread is read here as a boolean, so opening another conversation re-renders the rows
+ * whose answer changed rather than the whole list.
+ */
+const MessageRow = memo(function MessageRow({
   channel,
+  emphasis,
+  botName,
   groupId,
-  unread,
   waitsOnMe,
 }: {
   channel: ChannelSummary;
+  emphasis: MessageListEmphasis;
+  botName: (botId: string) => string;
   groupId?: string;
-  unread: boolean;
   /** 这位员工有事等你确认（只对一对一会话）。 */
   waitsOnMe: boolean;
 }) {
+  const unread = useParams({
+    strict: false,
+    select: (params) =>
+      isUnread(channel, (params as { channelId?: string }).channelId),
+  });
   const group = isGroupChannel(channel);
-  const preview = usePreview(channel);
+  const { first, second } = rowLines(channel, emphasis, botName);
   // A turn running, or work the conversation waits on between turns: a hop, a routine.
   const busy = (channel.busy ?? false) || (channel.work?.length ?? 0) > 0;
   return (
@@ -374,7 +472,7 @@ function MessageRow({
         to={group ? "/group/$channelId" : "/channel/$channelId"}
       >
         {group ? (
-          <GroupMosaic memberIds={channel.agentIds} />
+          <GroupMosaic busy={busy} memberIds={channel.agentIds} />
         ) : (
           <span className="shrink-0">
             <ChannelAvatar
@@ -388,10 +486,10 @@ function MessageRow({
           <span className="flex min-w-0 items-center gap-1.5 text-[14px]">
             <span
               className="min-w-0 truncate font-semibold"
-              data-message-name=""
-              title={channel.name}
+              data-message-first=""
+              title={first}
             >
-              {channel.name}
+              {first}
             </span>
             {channel.pinned ? (
               <IconPinFilled
@@ -408,14 +506,18 @@ function MessageRow({
               </time>
             ) : null}
           </span>
-          {preview || waitsOnMe || unread ? (
+          {second || waitsOnMe || unread ? (
             <span className="mt-[3px] flex min-w-0 items-center gap-1.5">
-              <span className="min-w-0 flex-1 truncate text-(--wb-muted) text-[12.5px]">
+              <span
+                className="min-w-0 flex-1 truncate text-(--wb-muted) text-[12.5px]"
+                data-message-second=""
+                title={second || undefined}
+              >
                 {waitsOnMe ? (
                   <em className="text-(--wb-accent) not-italic">[待你确认]</em>
                 ) : null}
-                {waitsOnMe && preview ? " " : null}
-                {preview}
+                {waitsOnMe && second ? " " : null}
+                {second}
               </span>
               {unread ? (
                 <span className="size-2 shrink-0 rounded-full bg-(--wb-accent)">
@@ -428,4 +530,4 @@ function MessageRow({
       </Link>
     </ChannelMenu>
   );
-}
+});

@@ -71,9 +71,6 @@ test("the app and the server say 员工, never 唤醒者, 数字员工 or Waker 
 const IM_CHATS = [
   "app/src/routes/_authed/_app/reachability.tsx",
   "app/src/components/reachability/",
-  // 聊天工作台的「消息」筛选标签「群聊」：设计稿和规格（docs/specs/2026-11-14-chat-workbench.md 目标 2）
-  // 照微信、钉钉的叫法定的，用户确认过。只这一个标签，别处照旧说群组。
-  "app/src/skins/xiongbao/message-list.tsx",
 ];
 
 test("the app and the server say 群组, never 群聊 (IM chats aside)", () => {

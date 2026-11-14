@@ -282,7 +282,7 @@ function GroupFaces({
  * avatar as a badge rather than floating over it. The staggered negative delays start each dot at
  * a different point in the same bounce, which is what makes the three read as one wave.
  */
-function TypingBadge() {
+export function TypingBadge() {
   return (
     <div className="absolute -bottom-0.5 -right-0.5 flex items-center gap-0.5 rounded-full bg-sidebar p-0.5 ring-2 ring-sidebar">
       <span className="sr-only">处理中…</span>

@@ -318,7 +318,8 @@ describe("WorkbenchFrame", () => {
       list.getByRole("button", { name: "新对话 / 新建群组" }),
     ).toBeTruthy();
     const conversations = list.getByRole("navigation", { name: "会话" });
-    expect(await within(conversations).findByText("代码熊")).toBeTruthy();
+    // 默认突出对话标题：第一行是会话标题（Task 4 评审）。
+    expect(await within(conversations).findByText("登录改版")).toBeTruthy();
   });
 });
 
