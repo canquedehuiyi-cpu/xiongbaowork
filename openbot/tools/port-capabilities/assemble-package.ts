@@ -90,6 +90,42 @@ export const AUTH_OVERRIDES: Readonly<
   "tencent-docs": "deployment-bearer",
 };
 
+/**
+ * Display names for ported coworkers whose source names them by the author's handle rather than by
+ * what they are: a person summoning one on 人才市场 reads a name, not a handle (召唤员工 Task 10). The
+ * id, the portrait, the persona and the author's attribution in the manifest stay as they are.
+ */
+export const AGENT_NAME_OVERRIDES: Readonly<Record<string, string>> = {
+  "xtgxiso-windows-pc-care": "电脑管家",
+};
+
+/**
+ * The pipeline's row with its `AGENT_NAME_OVERRIDES` name: `name:`, and the system prompt's opening
+ * `# <name>` heading, which the pipeline writes from the same name. Any other row is returned as is.
+ */
+export function withDisplayName(agent: AgentRow): AgentRow {
+  const id = typeof agent.id === "string" ? agent.id : "";
+  const name = AGENT_NAME_OVERRIDES[id];
+  if (name === undefined) return agent;
+  const prompt = agent.system_prompt;
+  return {
+    ...agent,
+    name,
+    ...(typeof prompt === "string" && typeof agent.name === "string"
+      ? {
+          system_prompt: prompt.replace(
+            new RegExp(`^# ${escapeRegExp(agent.name)}$`, "m"),
+            `# ${name}`,
+          ),
+        }
+      : {}),
+  };
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** Parsed command line for the assembler. */
 export interface AssembleCliOptions {
   fromDir: string;
@@ -826,7 +862,9 @@ export function assemblePackage(options: {
       : null;
     write(
       join("agents", `${id}.yaml`),
-      renderAgentFile(keepAuthoredAgentFields(agent, existing)),
+      renderAgentFile(
+        keepAuthoredAgentFields(withDisplayName(agent), existing),
+      ),
     );
     agentFiles.push(id);
   }

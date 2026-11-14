@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
+  AGENT_NAME_OVERRIDES,
   AUTH_OVERRIDES,
   assemblePackage,
   buildAssetPlans,
@@ -27,6 +28,7 @@ import {
   readPipelineOutput,
   renderPackageConnectorsYaml,
   type SkillAssetPlan,
+  withDisplayName,
 } from "./assemble-package";
 import { verifyOutDir } from "./index";
 import type { ManifestEntry } from "./manifest";
@@ -587,5 +589,29 @@ describe("verifyOutDir audit-rule stamps (§6.4.1 mutations 3 and 4)", () => {
       writeFileSync(manifestPath, manifestOriginal, "utf8");
       writeFileSync(auditPath, auditOriginal, "utf8");
     }
+  });
+});
+
+describe("withDisplayName", () => {
+  test("a coworker its source names by the author's handle gets its display name, heading included", () => {
+    expect(AGENT_NAME_OVERRIDES["xtgxiso-windows-pc-care"]).toBe("电脑管家");
+    const named = withDisplayName({
+      id: "xtgxiso-windows-pc-care",
+      name: "xtgxiso",
+      title: "电脑运维专家",
+      system_prompt: "# xtgxiso\n\n你是本团队的成员之一。",
+    });
+    expect(named.name).toBe("电脑管家");
+    expect(named.system_prompt).toBe("# 电脑管家\n\n你是本团队的成员之一。");
+    expect(named.title).toBe("电脑运维专家");
+  });
+
+  test("every other coworker is left exactly as the pipeline made it", () => {
+    const agent = {
+      id: "frontend-developer",
+      name: "像素匠",
+      system_prompt: "# 像素匠",
+    };
+    expect(withDisplayName(agent)).toBe(agent);
   });
 });

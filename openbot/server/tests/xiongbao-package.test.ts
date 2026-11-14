@@ -58,6 +58,18 @@ test("every preset coworker in the package carries a portrait that is one of the
   }
 });
 
+test("every preset coworker in the package has a Chinese display name, not a raw handle or id", () => {
+  for (const entry of loaded.agents) {
+    expect(entry.name, `agent ${entry.id}`).toMatch(/\p{Script=Han}/u);
+    expect(entry.persona?.principles ?? "", `agent ${entry.id}`).not.toContain(
+      "你是 xtgxiso",
+    );
+  }
+  expect(
+    loaded.agents.find((entry) => entry.id === "xtgxiso-windows-pc-care")?.name,
+  ).toBe("电脑管家");
+});
+
 test("every preset coworker in the package has a full persona in all three parts", () => {
   for (const entry of loaded.agents) {
     const persona = entry.persona;
