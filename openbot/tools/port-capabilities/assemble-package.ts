@@ -27,6 +27,12 @@ import { dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { auditCapability } from "./audit-toolrefs";
+import {
+  applyMissingAssetDowngrade,
+  findMissingAssetReferences,
+  formatMissingAssetEvidence,
+  MISSING_ASSET_RULE_ID,
+} from "./asset-reachability";
 import { renderManifestYaml } from "./emit-package";
 import { assertValidManifest, type ManifestEntry } from "./manifest";
 import {
@@ -465,22 +471,163 @@ export function stripGeneratedSkillBlocks(
   return output.join("\n");
 }
 
+/**
+ * A verdict the assembler lowered because the body points at attachments that did not ship.
+ *
+ * Why this lives in the assembler and not in the audit: the audit runs in P0, before any attachment
+ * decision exists. Only here are both refusals in hand — P0's directory list (inherited on the skill row)
+ * and P1's per-file list (`SkillAssetPlan.dropped`). A verdict that ignores either one lies about what the
+ * reader will find.
+ */
+export interface AssetDowngrade {
+  slug: string;
+  runnable: RunnableLevel;
+  /** Rule id recorded as `_porting.reason`. */
+  reason: string;
+  /** Human-readable evidence recorded as `_porting.reason_ref`. */
+  reasonRef: string;
+}
+
+/**
+ * Lower `full` to `degraded` for every skill whose body names a path the package does not contain.
+ *
+ * Only `full` moves (see {@link applyMissingAssetDowngrade}): a `blocked` skill already tells the reader
+ * not to rely on it, and rewriting it here would erase the licence reason it was blocked for.
+ */
+export function computeAssetDowngrades(input: {
+  skills: readonly SkillRow[];
+  plans: ReadonlyMap<string, SkillAssetPlan>;
+}): Map<string, AssetDowngrade> {
+  const downgrades = new Map<string, AssetDowngrade>();
+  for (const skill of input.skills) {
+    const slug = String(skill.slug);
+    const instructions =
+      typeof skill.instructions === "string" ? skill.instructions : "";
+    if (instructions === "") continue;
+    const porting = asRecord(
+      skill._porting ?? {},
+      `${slug} _porting`,
+    );
+    const inheritedDropped = Array.isArray(porting.dropped)
+      ? (porting.dropped as string[])
+      : [];
+    const plan = input.plans.get(slug);
+    // During assembly the plan is the truth; when this runs against an already-assembled package the
+    // plan is absent and the row's own `assets:` field carries the same fact. Falling back keeps the
+    // judgement identical in both directions instead of reporting every references/ as missing.
+    const assets =
+      plan !== undefined
+        ? plan.assets.map((asset) => asset.path)
+        : Array.isArray(skill.assets)
+          ? skill.assets.map((asset) => String(asset))
+          : [];
+    const missing = findMissingAssetReferences({
+      instructions,
+      dropped: [...inheritedDropped, ...(plan?.dropped ?? [])],
+      assets,
+    });
+    if (missing.length === 0) continue;
+    const current = porting.runnable === "degraded" || porting.runnable === "blocked"
+      ? porting.runnable
+      : "full";
+    const next = applyMissingAssetDowngrade(current, missing);
+    if (next === current) continue;
+    downgrades.set(slug, {
+      slug,
+      runnable: next,
+      reason: MISSING_ASSET_RULE_ID,
+      reasonRef: formatMissingAssetEvidence(missing),
+    });
+  }
+  return downgrades;
+}
+
+/**
+ * Apply a downgrade to a `_porting` record, keeping `reason`/`reason_ref` directly under `runnable`.
+ *
+ * The position matters only for readability, but the merge does too: a row that already carries a reason
+ * keeps it, and this rule is appended rather than replacing the audit's own finding.
+ */
+function applyDowngrade(
+  porting: Record<string, unknown>,
+  downgrade: AssetDowngrade,
+): Record<string, unknown> {
+  const previousReason =
+    typeof porting.reason === "string" && porting.reason !== ""
+      ? porting.reason
+      : undefined;
+  const previousRef =
+    typeof porting.reason_ref === "string" && porting.reason_ref !== ""
+      ? porting.reason_ref
+      : undefined;
+  const reason =
+    previousReason === undefined
+      ? downgrade.reason
+      : `${previousReason}+${downgrade.reason}`;
+  const reasonRef =
+    previousRef === undefined
+      ? downgrade.reasonRef
+      : `${previousRef}；${downgrade.reasonRef}`;
+
+  const output: Record<string, unknown> = {};
+  let placed = false;
+  for (const [key, value] of Object.entries(porting)) {
+    if (key === "reason" || key === "reason_ref") continue;
+    output[key] = key === "runnable" ? downgrade.runnable : value;
+    if (key === "runnable") {
+      output.reason = reason;
+      output.reason_ref = reasonRef;
+      placed = true;
+    }
+  }
+  if (!placed) {
+    output.runnable = downgrade.runnable;
+    output.reason = reason;
+    output.reason_ref = reasonRef;
+  }
+  return output;
+}
+
+/**
+ * Apply the verdict downgrades to the manifest rows.
+ *
+ * The manifest and `skills.yaml` are read by different consumers, so they cannot disagree about a
+ * verdict: a row that still says `full` while the YAML says `degraded` is the same lie told twice.
+ * Only `skill` rows are touched — the map is keyed by skill slug.
+ */
+export function applyVerdictDowngrades(
+  rows: readonly ManifestEntry[],
+  downgrades: ReadonlyMap<string, AssetDowngrade>,
+): ManifestEntry[] {
+  if (downgrades.size === 0) return [...rows];
+  return rows.map((row) => {
+    if (row.kind !== "skill") return row;
+    const downgrade = downgrades.get(row.slug);
+    return downgrade === undefined
+      ? row
+      : { ...row, runnable: downgrade.runnable };
+  });
+}
+
 /** One generated entry as list-item text, with its `assets:` and attachment refusals merged in. */
 export function renderGeneratedSkillEntry(
   skill: SkillRow,
   plan: SkillAssetPlan | undefined,
+  downgrade?: AssetDowngrade,
 ): string {
-  const porting = asRecord(
+  const rawPorting = asRecord(
     { ...(skill._porting as Record<string, unknown>) },
     `${String(skill.slug)} _porting`,
   );
-  const dropped = Array.isArray(porting.dropped)
-    ? [...(porting.dropped as string[])]
+  const dropped = Array.isArray(rawPorting.dropped)
+    ? [...(rawPorting.dropped as string[])]
     : [];
   if (plan) {
     dropped.push(...plan.dropped);
   }
-  porting.dropped = dropped;
+  rawPorting.dropped = dropped;
+  const porting =
+    downgrade === undefined ? rawPorting : applyDowngrade(rawPorting, downgrade);
   const entry: Record<string, unknown> = {
     slug: skill.slug,
     title: skill.title,
@@ -515,6 +662,8 @@ export function mergeSkillsYaml(options: {
   generatedSkills: readonly SkillRow[];
   plans: ReadonlyMap<string, SkillAssetPlan>;
   connectorIds: ReadonlySet<string>;
+  /** Verdicts lowered because the body names attachments that did not ship. */
+  downgrades?: ReadonlyMap<string, AssetDowngrade>;
 }): string {
   const { legacySkillsRaw, packageSkills, generatedSkills, plans } = options;
   const generatedSlugs = new Set(
@@ -553,7 +702,11 @@ export function mergeSkillsYaml(options: {
   }
   const generatedText = generatedSkills
     .map((skill) =>
-      renderGeneratedSkillEntry(skill, plans.get(String(skill.slug))),
+      renderGeneratedSkillEntry(
+        skill,
+        plans.get(String(skill.slug)),
+        options.downgrades?.get(String(skill.slug)),
+      ),
     )
     .join("\n");
   return generatedText === "" ? merged : `${merged}${generatedText}\n`;
@@ -695,6 +848,8 @@ export interface AssembleResult {
   mergedSkills: number;
   assetFiles: number;
   assetDropped: number;
+  /** Skills whose verdict dropped from `full` to `degraded` because the body cites absent attachments. */
+  assetDowngraded: number;
   connectors: number;
   teams: number;
   manifestRows: number;
@@ -731,12 +886,16 @@ export function assemblePackage(options: {
   }
 
   const plans = buildAssetPlans(pipeline.skills, options.sourceRoot);
+  // The pipeline's verdict knew nothing about attachment refusals — P0 ran before P1 decided what to
+  // carry. Both lists only meet here, so this is the one place the final verdict can be honest.
+  const downgrades = computeAssetDowngrades({ skills: pipeline.skills, plans });
   const skillsYaml = mergeSkillsYaml({
     legacySkillsRaw: legacy.skillsRaw,
     packageSkills: legacy.legacySkills,
     generatedSkills: pipeline.skills,
     plans,
     connectorIds,
+    downgrades,
   });
 
   // The manifest covers the WHOLE package, not just the port: `--verify` cross-checks its row count
@@ -770,7 +929,12 @@ export function assemblePackage(options: {
       }),
     );
   }
-  const manifestRows = [...legacyRows, ...pipeline.manifestRows];
+  // The manifest and `skills.yaml` must not disagree about a verdict: a reader who trusts the manifest
+  // would see `full` for a skill the YAML already downgraded, which is the same lie in a second place.
+  const manifestRows = applyVerdictDowngrades(
+    [...legacyRows, ...pipeline.manifestRows],
+    downgrades,
+  );
   assertValidManifest(manifestRows);
 
   const written: string[] = [];
@@ -807,6 +971,7 @@ export function assemblePackage(options: {
     mergedSkills: pipeline.skills.length + seedSkills.length,
     assetFiles,
     assetDropped,
+    assetDowngraded: downgrades.size,
     connectors: pipeline.connectors.length,
     teams: asRecordList(
       asRecord(parseYaml(pipeline.teamsYaml), "teams.yaml").teams,
@@ -844,6 +1009,11 @@ export function main(argv: readonly string[]): number {
         `附件 ${result.assetFiles} 个（丢弃 ${result.assetDropped}）/ 团 ${result.teams} / ` +
         `连接器 ${result.connectors} / manifest ${result.manifestRows} 行`,
     );
+    if (result.assetDowngraded > 0) {
+      console.log(
+        `[port:assemble] 档位下调 ${result.assetDowngraded} 项（full→degraded：正文引用未入包附件）`,
+      );
+    }
     console.log(
       `[port:assemble] 写出 ${result.files.length} 个文件 → ${options.packageDir}`,
     );
