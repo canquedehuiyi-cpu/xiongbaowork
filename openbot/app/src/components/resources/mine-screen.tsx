@@ -9,6 +9,7 @@ import {
   RunnableBadge,
   runnableGrade,
 } from "@/components/resources/runnable-badge";
+import { SkillViewLink } from "@/components/skills/skill-view";
 import {
   ConnectorCard,
   type ConnectorState,
@@ -47,11 +48,15 @@ import { cn } from "@/lib/utils";
  * 连接器块在 4d 之前只看 `hasCredential`——那是「部署手里有没有这一份凭据」。以本人身份访问的
  * 应用不是这样：凭据在每个人自己身上，于是已连上的人照样被画「待绑定」、照样被叫去连接。现在
  * 这类应用多读一次 `/api/plugins/connections`，读不到就说读不到，绝不替人断言没连。
+ *
+ * 团队块的卡片带一条进去的入口（`/channel/$channelId`，多员工的团由那条路由转给群聊）：这一页是
+ * 「我被给了什么」的清单，列表里的每一样都该能从这里走到去用它。
  */
 
 /**
- * 一档的筛选按钮：文案就是它的可访问名字（`暂不可用 36`），所以读屏念出来与眼睛看到的一致，
- * `aria-pressed` 说它当前是不是筛子。`null` 档（从没被移植审计过的手写技能）只在有这种技能时画。
+ * 一个收窄按钮：文案加条数就是它的可访问名字（`暂不可用 36`、`只看待连接的 1`），所以读屏念出来
+ * 与眼睛看到的一致，`aria-pressed` 说它当前是不是筛子。技能按档位用它，连接器按「要不要你去连」
+ * 也用它——两处的「一共多少、筛完多少」是同一个问题。
  */
 function GradeChip({
   active,
@@ -120,6 +125,7 @@ export function MineScreen() {
   const [grade, setGrade] = useState<GradeFilter>("all");
   const [query, setQuery] = useState("");
   const [shown, setShown] = useState(BATCH);
+  const [onlyPending, setOnlyPending] = useState(false);
   const [openReasons, setOpenReasons] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -210,6 +216,25 @@ export function MineScreen() {
     return server.hasCredential ? "settled" : "pending";
   };
 
+  /*
+   * 连接器块的筛子：一屏连接器里往往只有一两个是待办，要找出它们得先认一遍徽章。挑的条件就是上面
+   * 算好的状态，不另发请求。
+   *
+   * 只有「一部分要连、一部分不用」时才画这个开关：全都连好没什么可挑，全都待连接也无从挑，两种
+   * 情况下筛了跟没筛一样，画出来就是一个按了什么都不变的按钮。开关没了，筛选也不再作用——一张
+   * 管不住自己的清单比没有清单更糟。
+   */
+  const connectors = servers.map((server) => ({
+    server,
+    state: connectorState(server),
+  }));
+  const pendingConnectors = connectors.filter((row) => row.state === "pending");
+  const canPickPending =
+    pendingConnectors.length > 0 &&
+    pendingConnectors.length < connectors.length;
+  const shownConnectors =
+    onlyPending && canPickPending ? pendingConnectors : connectors;
+
   return (
     <div className="px-1 pb-6">
       <TabHeader
@@ -289,7 +314,20 @@ export function MineScreen() {
                             {skill.summary}
                           </p>
                         </div>
-                        <RunnableBadge runnable={skill.runnable} />
+                        <div className="flex shrink-0 flex-col items-end gap-[5px]">
+                          <RunnableBadge runnable={skill.runnable} />
+                          {/*
+                          卡片说得清「这条技能能干什么」，说不清「它教员工做什么」——正文在别处，
+                          而那一处只有一个读得开（技能页的编辑面板只对自己的技能开）。有正文就给
+                          一条路过去，没有正文的技能不画：那个地址打开只会说「没有正文」。
+                        */}
+                          {skill.instructions.trim() ? (
+                            <SkillViewLink
+                              slug={skill.slug}
+                              title={skill.title}
+                            />
+                          ) : null}
+                        </div>
                       </div>
                       {/*
                       R18：badged-but-unexplained 是 bug 不是状态。徽章打了非 full 就必须答
@@ -365,7 +403,20 @@ export function MineScreen() {
       </section>
 
       <section aria-labelledby="mine-connectors-head" className="mt-[16px]">
-        <SectionHead id="mine-connectors-head" title="连接器" />
+        <SectionHead
+          aside={
+            canPickPending ? (
+              <GradeChip
+                active={onlyPending}
+                count={pendingConnectors.length}
+                label="只看待连接的"
+                onClick={() => setOnlyPending((on) => !on)}
+              />
+            ) : undefined
+          }
+          id="mine-connectors-head"
+          title="连接器"
+        />
         <QueryState label="读不到你的连接器" query={page}>
           {servers.length === 0 ? (
             <TabEmpty
@@ -374,26 +425,23 @@ export function MineScreen() {
             />
           ) : (
             <CardGrid className="mt-[9px]" label="被给的连接器">
-              {servers.map((server) => {
-                const state = connectorState(server);
-                return (
-                  <ConnectorCard
-                    action={
-                      state === "pending" ? (
-                        <Link
-                          className="text-[11px] text-muted-foreground hover:text-foreground"
-                          to="/connections"
-                        >
-                          去连接
-                        </Link>
-                      ) : undefined
-                    }
-                    key={server.id}
-                    server={server}
-                    state={state}
-                  />
-                );
-              })}
+              {shownConnectors.map(({ server, state }) => (
+                <ConnectorCard
+                  action={
+                    state === "pending" ? (
+                      <Link
+                        className="text-[11px] text-muted-foreground hover:text-foreground"
+                        to="/connections"
+                      >
+                        去连接
+                      </Link>
+                    ) : undefined
+                  }
+                  key={server.id}
+                  server={server}
+                  state={state}
+                />
+              ))}
             </CardGrid>
           )}
         </QueryState>

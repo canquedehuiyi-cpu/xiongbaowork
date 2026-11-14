@@ -27,8 +27,8 @@ import { settleReactWork } from "./settle-react-work";
  * 这个人连上没有，其余看部署手里有没有凭据；都不画「已连接」）。团队块在 4b 由 `/api/teams`
  * 供给，这里不画。
  *
- * 渲染在自己的小路由上：`MineScreen` 的待绑定卡片链接到 `/connections`，那条地址在这棵树里以
- * 桩存在（连接页本身由 aggregate/parity 测试看管）。
+ * 渲染在自己的小路由上：`MineScreen` 的待绑定卡片链接到 `/connections`，团队卡拉到
+ * `/channel/$channelId`，这两条地址在这棵树里以桩存在（连接页与频道本身由各自的测试看管）。
  */
 let registeredHere = false;
 beforeAll(() => {
@@ -56,13 +56,17 @@ const skill = (
   title: string,
   runnable: string | null,
   reason?: { blockedReason: string; blockedReasonRef: string },
+  /**
+   * 正文。卡片只在有正文时给「看正文」——一条没有正文的技能，那个入口点开只会说「没有正文」。
+   */
+  instructions = "这位员工照着做就行。",
 ) => ({
   id: `s-${slug}`,
   slug,
   ownerUserId: null,
   title,
   summary: `${title}的说明。`,
-  instructions: "",
+  instructions,
   origin: "catalogue",
   installedBy: null,
   runnable,
@@ -185,10 +189,27 @@ const renderMine = async (
     path: "/connections",
     component: () => <p>连接页</p>,
   });
+  /*
+   * 团队卡的入口落在频道上：多员工的频道由 `/channel/$channelId` 统一转给群聊，所以卡片只认这一条
+   * 地址，不必自己判断团里有几个人。
+   */
+  const channel = createRoute({
+    getParentRoute: () => root,
+    path: "/channel/$channelId",
+    component: () => <p>团队频道</p>,
+  });
+  /*
+   * 技能卡的「看正文」落在技能页的只读面板上（`?view=<slug>`），地址参数由那张页自己解析。
+   */
+  const skillView = createRoute({
+    getParentRoute: () => root,
+    path: "/capabilities/skills",
+    component: () => <p>技能页</p>,
+  });
   const router = createRouter({
     context: { queryClient },
     history: createMemoryHistory({ initialEntries: ["/"] }),
-    routeTree: root.addChildren([mine, connections]),
+    routeTree: root.addChildren([mine, connections, channel, skillView]),
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -423,6 +444,113 @@ test("a person given no teams sees the team block say so, not a blank", async ()
 });
 
 /**
+ * 团队卡原先只画「叫什么、干什么、几个人」，理由是不去重复侧栏已有的频道链接。但这一页是「我被
+ * 给了什么」的清单：技能有连接入口、连接器有「去连接」，团队却是死路一条——一支在侧栏里得按名字
+ * 去找。清单里列出来的每一样，都该能从它自己走到去用它。
+ */
+test("a team card offers the way into that team's own channel", async () => {
+  const view = await renderMine(
+    page([], [], [team("gstack", "软件工坊", 6), team("design", "设计所", 2)]),
+  );
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+  const link = within(
+    view.getByText("软件工坊").closest("li") as HTMLElement,
+  ).getByRole("link", { name: "进入软件工坊" });
+  expect(link.getAttribute("href")).toBe("/channel/gstack");
+  // 每张卡指向自己那个团，不是同一个地址。
+  expect(
+    within(view.getByText("设计所").closest("li") as HTMLElement)
+      .getByRole("link", { name: "进入设计所" })
+      .getAttribute("href"),
+  ).toBe("/channel/design");
+});
+
+/**
+ * 连接器块把「已经连好的」和「还要你去连的」并排画在一起，四个里只有一个是待办：要找它得先认一遍
+ * 徽章。先挑出来的那个开关也一样从状态算，不另发请求。
+ */
+test("待连接的连接器可以先挑出来看，再点一次放开", async () => {
+  const view = await renderMine(
+    page(
+      [],
+      [
+        server("tapd", "TAPD", "deployment-bearer", false),
+        server("github", "GitHub", "deployment-bearer", true),
+        server("feishu", "飞书", "deployment-bearer", true),
+      ],
+      [],
+      [
+        listed("tapd", "deployment-bearer"),
+        listed("github", "deployment-bearer"),
+        listed("feishu", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(view.getAllByText("TAPD").length).toBeGreaterThan(0),
+  );
+  const toggle = () => view.getByRole("button", { name: /只看待连接的 1/ });
+  expect(toggle().getAttribute("aria-pressed")).toBe("false");
+
+  act(() => toggle().click());
+  await settleReactWork();
+  expect(view.getAllByText("TAPD").length).toBeGreaterThan(0);
+  expect(view.queryByText("GitHub")).toBeNull();
+  expect(view.queryByText("飞书")).toBeNull();
+  expect(toggle().getAttribute("aria-pressed")).toBe("true");
+
+  act(() => toggle().click());
+  await settleReactWork();
+  expect(view.getAllByText("GitHub").length).toBeGreaterThan(0);
+  expect(view.getAllByText("飞书").length).toBeGreaterThan(0);
+});
+
+/**
+ * 一个按了什么都不变的按钮不是功能。全都连好了就没什么可挑的，全都待连接也无从挑——两种情况下
+ * 这个开关都不画。
+ */
+test("没有可挑的就不画只看待连接的", async () => {
+  const connected = await renderMine(
+    page(
+      [],
+      [
+        server("github", "GitHub", "deployment-bearer", true),
+        server("feishu", "飞书", "deployment-bearer", true),
+      ],
+      [],
+      [
+        listed("github", "deployment-bearer"),
+        listed("feishu", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(connected.getAllByText("GitHub").length).toBeGreaterThan(0),
+  );
+  expect(connected.queryByRole("button", { name: /只看待连接的/ })).toBeNull();
+  cleanup();
+
+  const allPending = await renderMine(
+    page(
+      [],
+      [
+        server("tapd", "TAPD", "deployment-bearer", false),
+        server("notion", "Notion", "deployment-bearer", false),
+      ],
+      [],
+      [
+        listed("tapd", "deployment-bearer"),
+        listed("notion", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(allPending.getAllByText("TAPD").length).toBeGreaterThan(0),
+  );
+  expect(allPending.queryByRole("button", { name: /只看待连接的/ })).toBeNull();
+});
+
+/**
  * 109 条技能里 36 条暂不可用、11 条部分可用：这一页如果只给一个长列表，「我能用什么」要滚到底
  * 才数得出来。汇总先答数，点一下再按档位收窄——两者都从同一份 `/api/plugins` 读，不另发请求。
  */
@@ -581,4 +709,36 @@ test("a short reason draws no expand control, because there is nothing hidden", 
   await waitFor(() => expect(view.getByText("阻断乙")).toBeTruthy());
   const row = within(view.getByText("阻断乙").closest("li") as HTMLElement);
   expect(row.queryByRole("button", { name: "展开原因" })).toBeNull();
+});
+
+/**
+ * 技能卡说「这条技能能干什么」，但说不清「它到底教员工做什么」——正文（`instructions`）在这一页
+ * 从来没有一个读的地方，要看得去技能页，而那页翻开的是编辑面板、只有自己的技能点得开。清单里列
+ * 出来的每一样都该能走过去读，所以卡片给一条到正文的路：`/capabilities/skills?view=<slug>`。
+ *
+ * 没有正文的技能不画这个入口：那个地址打开只会说「这条技能没有正文」，画出来是个空承诺。
+ */
+test("a skill card gives the way to read its body, and one with no body draws none", async () => {
+  const view = await renderMine(
+    page(
+      [
+        skill("report-writer", "写周报", "full"),
+        skill("empty-body", "空技能", "full", undefined, "   "),
+      ],
+      [],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("写周报")).toBeTruthy());
+  const link = within(
+    view.getByText("写周报").closest("li") as HTMLElement,
+  ).getByRole("link", { name: "看正文：写周报" });
+  expect(link.getAttribute("href")).toBe(
+    "/capabilities/skills?view=report-writer",
+  );
+  expect(
+    within(view.getByText("空技能").closest("li") as HTMLElement).queryByRole(
+      "link",
+      { name: /看正文/ },
+    ),
+  ).toBeNull();
 });

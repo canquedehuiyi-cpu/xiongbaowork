@@ -50,16 +50,21 @@ const agent = (id: string, mine: boolean) => ({
   mine,
 });
 
-const skill = (id: string, grantedTo: string[]) => ({
+const skill = (id: string, grantedTo: string[], instructions = "照做。") => ({
   id,
   slug: id,
   ownerUserId: null,
   title: `技能 ${id}`,
   summary: "",
-  instructions: "",
+  instructions,
   origin: "manual",
   installedBy: null,
   grantedTo,
+  // 服务端每一行都带这两个字段；夹具缺了它们，只读面板列工具时会当场炸。
+  runnable: null,
+  blockedReason: null,
+  blockedReasonRef: null,
+  tools: [] as string[],
 });
 
 beforeEach(() => {
@@ -124,7 +129,7 @@ afterEach(() => {
   global.fetch = originalFetch;
 });
 
-function renderSkills() {
+function renderSkills(entry = "/capabilities/skills") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -150,7 +155,7 @@ function renderSkills() {
   ]);
   const router = createRouter({
     routeTree: tree,
-    history: createMemoryHistory({ initialEntries: ["/capabilities/skills"] }),
+    history: createMemoryHistory({ initialEntries: [entry] }),
   });
   return render(
     <QueryClientProvider client={client}>
@@ -208,4 +213,26 @@ test("a skill granted only to an employee of mine I hid still counts it", async 
   const view = renderSkills();
   expect(await view.findByText("已装到你的 1 个员工")).toBeTruthy();
   expect(view.getAllByText("未安装")).toHaveLength(1);
+});
+
+/*
+ * 正文（`instructions`）原来只能在这一页的编辑面板里看，而那条路只有自己的技能点得开。部署给的技能
+ * 于是谁都能列出、谁也读不到正文。`?view=<slug>` 是正文自己的地址：只读、可分享、可按后退关上，
+ * 与 `?edit=` 同一套机制；列表的卡片也给出同一个入口，否则关掉面板就没法再打开。
+ */
+test("?view=<slug> 打开一条技能的只读正文", async () => {
+  const view = renderSkills("/capabilities/skills?view=two");
+  expect(await view.findByText("照做。")).toBeTruthy();
+  // 面板自己的标题；`/two` 在列表卡片上也有一份，所以只断言它至少出现了两处。
+  expect(view.getByText("正文")).toBeTruthy();
+  expect(view.getAllByText("/two").length).toBeGreaterThan(1);
+  // 只读：这不是编辑面板，没有「保存改动」可按。
+  expect(view.queryByRole("button", { name: "保存改动" })).toBeNull();
+});
+
+test("列表的卡片给出看正文的入口，指向那条技能自己的地址", async () => {
+  const view = renderSkills();
+  await view.findByText("技能 two");
+  const link = view.getAllByRole("link", { name: "看正文：技能 two" })[0];
+  expect(link?.getAttribute("href")).toBe("/capabilities/skills?view=two");
 });
