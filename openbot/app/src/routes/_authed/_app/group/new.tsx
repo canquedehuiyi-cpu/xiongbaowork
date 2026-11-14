@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { CreateGroupForm } from "@/components/wakers/create-group-form";
 import { channelKeys } from "@/lib/channels/queries";
+import { searchTextEntry } from "@/lib/search-text";
 
 /**
  * 新建群组: name it, pick two or more employees in the order they will answer, and the group and its
@@ -13,11 +14,15 @@ import { channelKeys } from "@/lib/channels/queries";
  * 一起建）。用户找不到入口，所以页面恢复了，侧栏「新建群组」打开这里；新对话页的多选照旧保留。
  */
 export const Route = createFileRoute("/_authed/_app/group/new")({
+  // `?agent=` ticks that employee when the page opens (员工名片's 「拉进群」), as on 新对话.
+  validateSearch: (search: Record<string, unknown>): { agent?: string } =>
+    searchTextEntry("agent", search.agent),
   component: RouteComponent,
 });
 
 function RouteComponent() {
   const navigate = Route.useNavigate();
+  const { agent } = Route.useSearch();
   const queryClient = useQueryClient();
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -42,6 +47,9 @@ function RouteComponent() {
             </p>
           </header>
           <CreateGroupForm
+            // A different `?agent=` is a different starting point, not an edit of this one.
+            initialChosen={agent ? [agent] : undefined}
+            key={agent ?? ""}
             onCreated={({ channel }) => {
               queryClient.setQueryData(channelKeys.detail(channel.id), channel);
               void navigate({

@@ -34,15 +34,31 @@ export function CreateGroupForm({
   variant,
   onCreated,
   onCancel,
+  initialChosen,
 }: {
   variant: "page" | "dialog";
   onCreated: (result: { group: WakerGroup; channel: AgentChannel }) => void;
   onCancel?: () => void;
+  /**
+   * Employees ticked when the form opens (员工名片's 「拉进群」 sends one), first in the answering
+   * order. Applied once, when the list arrives, and only those the list offers: an id it does not
+   * hold is dropped rather than sent to be refused.
+   */
+  initialChosen?: readonly string[];
 }) {
   const queryClient = useQueryClient();
   const profiles = useQuery(agentListQueryOptions());
   const create = useMutation(createGroupWithChatMutationOptions(queryClient));
   const [chosen, setChosen] = useState<string[]>([]);
+  const [seeded, setSeeded] = useState(false);
+  if (!seeded && profiles.data) {
+    setSeeded(true);
+    const offered = new Set(profiles.data.map((profile) => profile.id));
+    const preset = [...new Set(initialChosen ?? [])]
+      .filter((id) => offered.has(id))
+      .slice(0, MOST_MEMBERS);
+    if (preset.length > 0) setChosen(preset);
+  }
   const [typedName, setTypedName] = useState<string | null>(null);
   const [purpose, setPurpose] = useState("");
 

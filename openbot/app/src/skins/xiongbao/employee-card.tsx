@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
 } from "react";
 import { latestDirectChannel } from "@/components/app-sidebar/roster";
 import { ChannelAvatar } from "@/components/channels/avatar";
@@ -162,6 +163,10 @@ function CardBody({
   }).data;
   const skills = useQuery(agentPluginsQueryOptions(agent.id)).data?.skills;
   const direct = latestDirectChannel(channels, agent.id);
+  // 最近的单聊，没有就开一段发给他的新对话，和侧栏员工行一样。
+  const talk: LinkProps = direct
+    ? { to: "/channel/$channelId", params: { channelId: direct.id } }
+    : { to: "/channel/new", search: { agent: agent.id } };
   const tone = firstSentence(agent.persona?.tone ?? "");
   const model = modelLabel(agent, library);
   const day = agent.createdAt ? joinedDay(agent.createdAt) : null;
@@ -192,7 +197,9 @@ function CardBody({
         )}
       >
         {facts.map((fact, index) => (
-          <span key={fact}>
+          // 职务和部门可能一字不差，所以按位置认。
+          // biome-ignore lint/suspicious/noArrayIndexKey: the list is rebuilt whole each render, never reordered.
+          <span key={index}>
             {index > 0 ? (
               <span aria-hidden="true" className="mr-1">
                 ·
@@ -246,26 +253,9 @@ function CardBody({
         </div>
       ) : null}
       <div className="mt-1 grid grid-cols-2 gap-2">
-        {/* 最近的单聊，没有就开一段发给他的新对话，和侧栏员工行一样。 */}
-        {direct ? (
-          <Action
-            onClick={onClose}
-            params={{ channelId: direct.id }}
-            primary
-            to="/channel/$channelId"
-          >
-            发消息
-          </Action>
-        ) : (
-          <Action
-            onClick={onClose}
-            primary
-            search={{ agent: agent.id }}
-            to="/channel/new"
-          >
-            发消息
-          </Action>
-        )}
+        <Action {...talk} onClick={onClose} primary>
+          发消息
+        </Action>
         <Action
           onClick={onClose}
           params={{ agentId: agent.id }}
@@ -273,11 +263,15 @@ function CardBody({
         >
           配置
         </Action>
-        {/* 任务看板不认「指派给谁」的参数，新建群组也不认预选的员工，所以只链到页面。 */}
-        <Action onClick={onClose} to="/tasks">
+        {/*
+         * 任务在对话里交代：和「发消息」去同一段对话。两个落点都会把光标放进输入框——已有的对话一打开就
+         * 聚焦输入框（ChannelChat 的 `autoFocus`），发给他的新对话有了收件人也聚焦输入框——所以到了就能
+         * 直接写任务。
+         */}
+        <Action {...talk} onClick={onClose}>
           交给他一个任务
         </Action>
-        <Action onClick={onClose} to="/group/new">
+        <Action onClick={onClose} search={{ agent: agent.id }} to="/group/new">
           拉进群
         </Action>
       </div>
@@ -302,25 +296,43 @@ export function EmployeeCard({
 }) {
   const agents = useQuery(agentListQueryOptions());
   const agent = agents.data?.find((candidate) => candidate.id === agentId);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  /*
+   * 打开它的那个元素，在这一张名片第一次渲染时记下：那时上一张名片（直接从 A 换到 B 时）还没收起，焦点
+   * 还在点的那张员工卡上。焦点在另一张名片里时不记，免得收起 B 后跳回 A。
+   */
+  const [opener] = useState(() => {
+    const active = document.activeElement;
+    return active instanceof HTMLElement &&
+      !active.closest("[data-employee-card]")
+      ? active
+      : null;
+  });
 
   useEffect(() => {
-    const opener =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
+    const drawer = drawerRef.current;
+    /** 焦点还归这张名片管：在它里面，或者哪儿都不在（落在 body 上）。 */
+    const ownsFocus = () => {
+      const active = document.activeElement;
+      return !active || active === document.body || !!drawer?.contains(active);
+    };
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCloseRef.current();
+      // 主区里的下拉框、对话框、输入框先处理过的 Esc 不算；焦点在别处时 Esc 也不是给名片的。
+      if (event.key !== "Escape" || event.defaultPrevented || !ownsFocus())
+        return;
+      onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      if (opener?.isConnected) opener.focus();
+      // 换到另一张名片、或者焦点已经被别处拿走时，不去抢。
+      if (ownsFocus() && opener?.isConnected) opener.focus();
     };
-  }, []);
+  }, [opener]);
 
   return (
     <div
@@ -333,6 +345,7 @@ export function EmployeeCard({
         TONE.fg,
       )}
       data-employee-card={agentId}
+      ref={drawerRef}
       role="dialog"
     >
       <div className="relative h-24 bg-muted bg-[image:var(--wb-cover,none)]">

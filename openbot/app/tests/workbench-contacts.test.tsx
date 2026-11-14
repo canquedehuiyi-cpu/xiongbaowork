@@ -430,9 +430,10 @@ describe("员工名片", () => {
       card.getByRole("link", { name }).getAttribute("href");
     await waitFor(() => expect(href("发消息")).toBe("/channel/c-direct"));
     expect(href("配置")).toBe("/bots/a1/setup");
-    // 任务看板和新建群组都不认带过去的员工参数（见报告），所以只链到页面。
-    expect(href("交给他一个任务")).toBe("/tasks");
-    expect(href("拉进群")).toBe("/group/new");
+    // 任务在对话里交代：和「发消息」去同一段对话（到了输入框就有光标）。
+    expect(href("交给他一个任务")).toBe("/channel/c-direct");
+    // 拉进群：新建群组页预先勾上他。
+    expect(href("拉进群")).toBe("/group/new?agent=a1");
   });
 
   test("没有单聊时「发消息」开一段发给他的新对话；读不到的不写", async () => {
@@ -440,6 +441,9 @@ describe("员工名片", () => {
     const card = await openCard(view, /熊大厨/);
     expect(
       card.getByRole("link", { name: "发消息" }).getAttribute("href"),
+    ).toBe("/channel/new?agent=a4");
+    expect(
+      card.getByRole("link", { name: "交给他一个任务" }).getAttribute("href"),
     ).toBe("/channel/new?agent=a4");
     expect(card.getByText("未分组")).toBeTruthy();
     // 没有人设、没有创建时间、没有技能：这几行都不出现。
@@ -486,6 +490,48 @@ describe("员工名片", () => {
     expect(card.getByRole("heading", { name: "阿木" })).toBeTruthy();
     await user.keyboard("{Escape}");
     expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull();
+  });
+
+  test("别处已经处理过的 Esc、或者焦点不在名片里时按的 Esc，不关名片", async () => {
+    const { view, user } = renderApp("/contacts");
+    const card = await openCard(view, /代码熊/);
+    // 名片里的焦点上，一个已被处理（preventDefault）的 Esc：不是给名片的。
+    const handled = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    handled.preventDefault();
+    card.getByRole("button", { name: "关闭" }).dispatchEvent(handled);
+    expect(view.getByRole("dialog", { name: "员工名片" })).toBeTruthy();
+
+    // 焦点挪到主区里的东西上，再按 Esc：也不关。
+    const tile = (await orgChart(view)).getByRole("button", { name: /阿木/ });
+    tile.focus();
+    await user.keyboard("{Escape}");
+    expect(view.getByRole("dialog", { name: "员工名片" })).toBeTruthy();
+  });
+
+  test("从 A 的名片直接换到 B 的，关上 B 后焦点回到 B 的员工卡", async () => {
+    const { view, user } = renderApp("/contacts");
+    const main = await orgChart(view);
+    await openCard(view, /代码熊/);
+    const tileB = main.getByRole("button", { name: /阿木/ });
+    await user.click(tileB);
+    const card = within(
+      await waitFor(() => {
+        const dialog = view.getByRole("dialog", { name: "员工名片" });
+        if (dialog.getAttribute("data-employee-card") !== "a2")
+          throw new Error("still on the first card");
+        return dialog;
+      }),
+    );
+    expect(document.activeElement).toBe(
+      card.getByRole("button", { name: "关闭" }),
+    );
+    await user.click(card.getByRole("button", { name: "关闭" }));
+    expect(view.queryByRole("dialog", { name: "员工名片" })).toBeNull();
+    expect(document.activeElement).toBe(tileB);
   });
 
   test("点名片里的「配置」去配置页，名片收起", async () => {
