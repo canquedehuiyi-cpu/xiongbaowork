@@ -137,9 +137,8 @@ function NewConversation({ composition }: { composition: string }) {
    * Who To: offers: everyone but a preset original (召唤员工), summoned or not — a person talks to
    * their own summoned copy, so a link naming the shared original picks nobody.
    */
-  const offered = profiles?.filter(
-    (profile) => profile.summonKind !== "preset",
-  );
+  const offerable = (profile: AgentProfile) => profile.summonKind !== "preset";
+  const offered = profiles?.filter(offerable);
   // Stale or private `?agent=` values are ignored because the roster is permission-filtered.
   const listed = offered?.find((profile) => profile.id === agent);
   const rostered = profiles?.some((profile) => profile.id === agent) ?? false;
@@ -167,7 +166,13 @@ function NewConversation({ composition }: { composition: string }) {
    * from the start that a Bot is needed, and Send with nobody picked says "Choose a Bot first."
    * and opens it again, keeping the message.
    */
-  const chosen = listed ?? (fetched?.id === agent ? fetched : undefined);
+  // The detail answers too (cached from its profile, or read because the person hid it), and a
+  // preset original it answers is no more a recipient than one in the roster (Codex review).
+  const chosen =
+    listed ??
+    (fetched && fetched.id === agent && offerable(fetched)
+      ? fetched
+      : undefined);
   const needsUrlAgentDetail =
     Boolean(agent) && profiles !== undefined && !rostered;
   const waitingForUrlAgent =

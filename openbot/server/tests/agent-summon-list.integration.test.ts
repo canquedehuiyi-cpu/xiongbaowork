@@ -359,6 +359,20 @@ describe("GET /api/agents 的召唤状态", () => {
     ).toMatchObject({ summonKind: "avatar", summoned: true });
   });
 
+  // Codex 评审（PR #607）：spec「会话删了以后」——一对一会话删了，员工本身还在「已召唤」里，分身也一样。
+  test("召唤分身后删掉它的一对一会话，分身仍是 summoned true", async () => {
+    const actor = await person();
+    const avatar = avatarAgentId(actor.id);
+    const body = await summoned(actor, avatar);
+    await runAsTenant(actor.id, () =>
+      channelStore.softDelete(actor, body.channelId, false),
+    );
+    expect(await listChannels(actor)).toEqual([]);
+    expect(
+      (await listAgents(actor)).find((row) => row.id === avatar),
+    ).toMatchObject({ summonKind: "avatar", summoned: true });
+  });
+
   test("本人手建的员工 summonKind 为 null、summoned 为 true", async () => {
     const actor = await person();
     const own = await privateAgent(actor);

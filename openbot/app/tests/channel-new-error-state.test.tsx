@@ -776,3 +776,46 @@ test("a link naming a preset original does not make it the recipient", async () 
     view.queryByRole("button", { hidden: true, name: "移除 Preset Doctor" }),
   ).toBeNull();
 });
+
+/*
+ * Codex 评审（PR #607）：链接点名的员工也可能从详情读回来——缓存里有（看过它的资料页），或者它不在默认名单里（本人
+ * 隐藏了它）。详情读回来的预设原件同样不能当收件人。
+ */
+const PRESET_DOCTOR = agent({
+  id: "preset-doctor",
+  name: "Preset Doctor",
+  mine: false,
+  visibility: "public",
+  summonKind: "preset",
+  summoned: false,
+});
+
+test("a link naming a preset original whose detail is cached does not make it the recipient", async () => {
+  const queryClient = queryClientWithAgents([GENERAL_ASSISTANT, PRESET_DOCTOR]);
+  queryClient.setQueryData(agentKeys.detail("preset-doctor"), PRESET_DOCTOR);
+  const view = renderChannelNew(
+    queryClient,
+    "/channel/new?agent=preset-doctor",
+  );
+  await expectPickerOpenAndFocused(view);
+  expect(
+    view.queryByRole("button", { hidden: true, name: "移除 Preset Doctor" }),
+  ).toBeNull();
+});
+
+test("a link naming a preset original the person hid does not make it the recipient", async () => {
+  // Not in the roster, so its detail is what the page reads (seeded, as the hidden-recipient tests do).
+  const queryClient = queryClientWithAgents([GENERAL_ASSISTANT]);
+  queryClient.setQueryData(agentKeys.detail("preset-doctor"), {
+    ...PRESET_DOCTOR,
+    hidden: true,
+  });
+  const view = renderChannelNew(
+    queryClient,
+    "/channel/new?agent=preset-doctor",
+  );
+  await expectPickerOpenAndFocused(view);
+  expect(
+    view.queryByRole("button", { hidden: true, name: "移除 Preset Doctor" }),
+  ).toBeNull();
+});
