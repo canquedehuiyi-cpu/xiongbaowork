@@ -16,9 +16,18 @@ const xiongbao: Skin = {
   botLook: "orb",
 };
 
+/** 原来的侧栏外观：没有自己的 Frame，`_app` 布局画回 AppShell。 */
+const classic: Skin = {
+  id: "classic",
+  name: "经典",
+  description: "原来的侧栏外观。",
+  botLook: "orb",
+};
+
 /** Keyed by every id in `SKIN_IDS`, so a skin cannot be listed without being registered. */
 export const SKINS: Record<SkinId, Skin> = {
   xiongbao,
+  classic,
   openduet,
   opendots,
   openmuse,
