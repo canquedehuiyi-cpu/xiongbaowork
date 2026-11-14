@@ -779,6 +779,19 @@ test("the page is 人才市场: 待召唤 cards with a portrait and 召唤, then
     PRESET_IMAGES.doctor,
   );
   expect(within(doctor).getByText("医生")).toBeTruthy();
+  // The page's own profile card (CoworkerCard's chrome), with 待召唤 where the status sits.
+  expect(doctor.querySelector("[data-card-index]")?.textContent).toMatch(
+    /Profile \/ \d\d/,
+  );
+  expect(doctor.querySelector("[data-status=pending]")?.textContent).toBe(
+    "待召唤",
+  );
+  expect(
+    within(doctor.querySelector("[data-card-footer]") as HTMLElement).getByRole(
+      "button",
+      { name: "召唤 暖心医生" },
+    ),
+  ).toBeTruthy();
 
   const headings = [...screen.container.querySelectorAll("h2")].map(
     (heading) => heading.textContent,

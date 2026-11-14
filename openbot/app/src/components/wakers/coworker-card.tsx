@@ -27,10 +27,10 @@ import {
   Fact,
   PERSONAL_SURFACE,
 } from "./card-chrome";
-import type { WakersSearch, WakerStatus } from "./wakers-search";
+import type { WakerStatus, WakersSearch } from "./wakers-search";
 
 /** The hairline and top highlight around a profile's face, over the face's own rounded clip. */
-const FACE_RING =
+export const FACE_RING =
   "inline-flex shrink-0 rounded-[13px] shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_13%,transparent)] [&_svg]:scale-[1.42]";
 
 /**
