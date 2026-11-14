@@ -10,6 +10,7 @@ import {
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import {
+  employeeNumber,
   SUMMON_MIN_CHARGE_MS,
   SUMMON_REVEAL_MS,
   SummonCardFlip,
@@ -17,9 +18,10 @@ import {
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * Summoning an employee plays a gacha-style card flip: the card back charges while the summon is in
- * flight, flips to the employee's portrait once it lands, and hands over about two seconds later.
- * The result gates the reveal: 「召唤成功」 is never shown for a summon that failed.
+ * Summoning an employee plays a gacha-style 招聘入职 scene: the card back charges while the summon
+ * is in flight, flips to the employee's 工牌 once it lands, a red 「已入职」 seal stamps onto it,
+ * 「召唤成功 · 欢迎入职」 appears, and the badge flies off toward the sidebar about 2.5 seconds later.
+ * The result gates the reveal: 「召唤成功」 and the seal are never shown for a summon that failed.
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -33,6 +35,7 @@ afterAll(async () => {
 });
 
 const employee = {
+  agentId: "preset-accountant",
   name: "小熊会计",
   title: "财务专员",
   portrait: "/assets/accountant.png",
@@ -92,14 +95,16 @@ test("while the summon is in flight the card charges and says nothing of success
   expect(dialog.dataset.phase).toBe("charging");
   expect(view.getByRole("status").textContent).toContain("小熊会计");
   expect(view.queryByText("召唤成功")).toBeNull();
+  expect(view.queryByRole("img", { name: "已入职" })).toBeNull();
 
   await advance(10_000);
   expect(view.queryByText("召唤成功")).toBeNull();
+  expect(view.queryByRole("img", { name: "已入职" })).toBeNull();
   expect(onDone).not.toHaveBeenCalled();
   expect(onFail).not.toHaveBeenCalled();
 });
 
-test("once it lands the card flips to the employee, says 召唤成功, and hands over about 2s later, once", async () => {
+test("once it lands the card flips to the 工牌, the seal stamps, 召唤成功 · 欢迎入职 shows, and it hands over about 2.5s later, once", async () => {
   jest.useFakeTimers();
   const { promise, resolve } = Promise.withResolvers<unknown>();
   const { view, onDone } = summon(promise);
@@ -110,15 +115,20 @@ test("once it lands the card flips to the employee, says 召唤成功, and hands
   await flush();
 
   expect(view.getByRole("dialog").dataset.phase).toBe("reveal");
-  expect(view.getByRole("status").textContent).toBe("召唤成功");
+  const status = view.getByRole("status").textContent ?? "";
+  expect(status).toContain("召唤成功");
+  expect(status).toContain("欢迎入职");
+  view.getByText("召唤成功");
+  view.getByRole("img", { name: "已入职" });
   expect(view.getByRole("img", { name: "小熊会计" }).getAttribute("src")).toBe(
     "/assets/accountant.png",
   );
   view.getByText("财务专员");
+  view.getByText(employeeNumber("preset-accountant"));
   expect(onDone).not.toHaveBeenCalled();
 
-  expect(SUMMON_REVEAL_MS).toBeGreaterThanOrEqual(1500);
-  expect(SUMMON_REVEAL_MS).toBeLessThanOrEqual(2500);
+  expect(SUMMON_REVEAL_MS).toBeGreaterThanOrEqual(2200);
+  expect(SUMMON_REVEAL_MS).toBeLessThanOrEqual(2800);
   await advance(SUMMON_REVEAL_MS - 1);
   expect(onDone).not.toHaveBeenCalled();
   await advance(1);
@@ -126,6 +136,14 @@ test("once it lands the card flips to the employee, says 召唤成功, and hands
 
   await advance(10_000);
   expect(onDone).toHaveBeenCalledTimes(1);
+});
+
+test("the 工号 is a stable XB- number drawn from the employee's id", () => {
+  const number = employeeNumber("preset-accountant");
+  expect(number).toMatch(/^XB-\d{4}$/);
+  expect(employeeNumber("preset-accountant")).toBe(number);
+  expect(employeeNumber("preset-doctor")).toMatch(/^XB-\d{4}$/);
+  expect(employeeNumber("preset-doctor")).not.toBe(number);
 });
 
 test("a summon that lands instantly still charges briefly before the flip", async () => {
@@ -141,11 +159,9 @@ test("a summon that lands instantly still charges briefly before the flip", asyn
 
   await advance(SUMMON_REVEAL_MS);
   expect(onDone).toHaveBeenCalledTimes(1);
-  // Under three seconds from start to hand-over.
-  expect(SUMMON_MIN_CHARGE_MS + SUMMON_REVEAL_MS).toBeLessThanOrEqual(3000);
 });
 
-test("a failed summon never reveals or says 召唤成功; onFail gets the error and onDone is never called", async () => {
+test("a failed summon never reveals, stamps or says 召唤成功; the overlay goes and onFail gets the error", async () => {
   jest.useFakeTimers();
   const { promise, reject } = Promise.withResolvers<unknown>();
   const { view, onDone, onFail } = summon(promise);
@@ -158,6 +174,8 @@ test("a failed summon never reveals or says 召唤成功; onFail gets the error 
   expect(onFail).toHaveBeenCalledTimes(1);
   expect(onFail.mock.calls[0]?.[0]).toBe(error);
   expect(view.queryByText("召唤成功")).toBeNull();
+  expect(view.queryByRole("img", { name: "已入职" })).toBeNull();
+  expect(view.queryByRole("dialog")).toBeNull();
 
   await advance(10_000);
   expect(view.queryByText("召唤成功")).toBeNull();
@@ -229,7 +247,7 @@ test("Escape or Enter skips the same way a click does", async () => {
   expect(onDone).toHaveBeenCalledTimes(1);
 });
 
-test("with reduced motion it shows the result card without animating and hands over as soon as it lands", async () => {
+test("with reduced motion it shows the 工牌 without animating, stamps it when the summon lands, and hands over at once", async () => {
   const restore = withReducedMotion(true);
   try {
     jest.useFakeTimers();
@@ -238,19 +256,74 @@ test("with reduced motion it shows the result card without animating and hands o
 
     const dialog = view.getByRole("dialog");
     expect(dialog.dataset.motion).toBe("reduced");
-    // The result card is up from the start: no card back to flip.
+    // The badge is up from the start: no card back to flip, but no seal until it is true.
     view.getByRole("img", { name: "小熊会计" });
     view.getByText("财务专员");
+    view.getByText(employeeNumber("preset-accountant"));
     expect(view.queryByText("召唤成功")).toBeNull();
+    expect(view.queryByRole("img", { name: "已入职" })).toBeNull();
 
     resolve("ok");
     await flush();
     view.getByText("召唤成功");
+    view.getByRole("img", { name: "已入职" });
     expect(onDone).toHaveBeenCalledTimes(1);
     await advance(10_000);
     expect(onDone).toHaveBeenCalledTimes(1);
   } finally {
     restore();
+  }
+});
+
+test("unmounted before the summon lands: no onDone when it resolves", async () => {
+  jest.useFakeTimers();
+  const { promise, resolve } = Promise.withResolvers<unknown>();
+  const { view, onDone, onFail } = summon(promise);
+  view.unmount();
+  resolve("ok");
+  await flush();
+  await advance(10_000);
+  expect(onDone).not.toHaveBeenCalled();
+  expect(onFail).not.toHaveBeenCalled();
+});
+
+test("unmounted before the summon lands: no onFail when it rejects", async () => {
+  jest.useFakeTimers();
+  const { promise, reject } = Promise.withResolvers<unknown>();
+  const { view, onDone, onFail } = summon(promise);
+  view.unmount();
+  reject(new Error("x"));
+  await flush();
+  await advance(10_000);
+  expect(onFail).not.toHaveBeenCalled();
+  expect(onDone).not.toHaveBeenCalled();
+});
+
+test("unmounted during the reveal: the hand-over timer does not fire", async () => {
+  jest.useFakeTimers();
+  const { promise, resolve } = Promise.withResolvers<unknown>();
+  const { view, onDone } = summon(promise);
+  await advance(SUMMON_MIN_CHARGE_MS);
+  resolve("ok");
+  await flush();
+  expect(view.getByRole("dialog").dataset.phase).toBe("reveal");
+  view.unmount();
+  await advance(10_000);
+  expect(onDone).not.toHaveBeenCalled();
+});
+
+test("focus goes back to where it was when the overlay closes", () => {
+  const before = document.createElement("button");
+  before.textContent = "召唤 小熊会计";
+  document.body.append(before);
+  try {
+    before.focus();
+    const { view } = summon(new Promise(() => {}));
+    expect(document.activeElement).toBe(view.getByRole("dialog"));
+    view.unmount();
+    expect(document.activeElement).toBe(before);
+  } finally {
+    before.remove();
   }
 });
 

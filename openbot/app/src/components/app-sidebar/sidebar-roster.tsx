@@ -386,6 +386,7 @@ function SummonFlight({
   const portrait = usePortraitSrc("coworker", agent.id);
   return (
     <SummonCardFlip
+      agentId={agent.id}
       name={agent.name}
       onDone={onDone}
       onFail={onFail}
