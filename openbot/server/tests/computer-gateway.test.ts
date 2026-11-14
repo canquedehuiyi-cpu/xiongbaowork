@@ -904,8 +904,8 @@ describe("the computer gateway", () => {
     expect(screenshotReq).toBeDefined();
     expect(screenshotReq?.url).toBe("http://agent-computer:4100/screenshot");
     expect(screenshotReq?.init?.headers).toMatchObject({
-      "x-openbot-bot-id": "bot-1",
-      "x-openbot-computer-token": "computer-secret",
+      "x-xiongbao-bot-id": "bot-1",
+      "x-xiongbao-computer-token": "computer-secret",
     });
   });
 
@@ -933,8 +933,8 @@ describe("the computer gateway", () => {
     const request = requests.find(({ url }) => url.includes("/files/download"));
     expect(request?.init?.method).toBe("GET");
     expect(request?.init?.headers).toMatchObject({
-      "x-openbot-bot-id": "bot-1",
-      "x-openbot-computer-token": "computer-secret",
+      "x-xiongbao-bot-id": "bot-1",
+      "x-xiongbao-computer-token": "computer-secret",
     });
     expect(new URL(request?.url ?? "").searchParams.get("path")).toBe(
       "reports/Q3 file.pdf",
@@ -1981,13 +1981,14 @@ describe("seats on a person's computer", () => {
     // Inside the computer the Bot picks the profile and folder; the person is the computer itself,
     // so it is not sent, and each Bot keeps the profile it has always had there.
     expect(
-      requests.map((request) => headersOf(request)["x-openbot-bot-id"]),
+      requests.map((request) => headersOf(request)["x-xiongbao-bot-id"]),
     ).toEqual(["sales", "notes"]);
+    // No person header under any name, new or old: a check on one spelling would pass for a person sent under the other.
     expect(
-      requests.every(
-        (request) => headersOf(request)["x-openbot-person-id"] === undefined,
+      requests.flatMap((request) =>
+        Object.keys(headersOf(request)).filter((name) => /person/i.test(name)),
       ),
-    ).toBe(true);
+    ).toEqual([]);
   });
 
   test("an isolated Bot reaches a computer of its own", async () => {
@@ -2010,7 +2011,7 @@ describe("seats on a person's computer", () => {
     const reset = requests.find((request) =>
       request.url.endsWith("/computers/reset"),
     );
-    expect(reset && headersOf(reset)["x-openbot-bot-id"]).toBe("sales");
+    expect(reset && headersOf(reset)["x-xiongbao-bot-id"]).toBe("sales");
     expect(await snapshots.load("person:ada/sales")).toBeUndefined();
     expect(await snapshots.load("person:ada/notes")).toBeDefined();
     expect(rows.at(-1)?.payload).toMatchObject({
@@ -2167,8 +2168,8 @@ describe("seats on the shared computer", () => {
     await gateway.snapshot(personSeat("bo", "pub-bot"));
     expect(
       requests.map((headers) => [
-        headers.get("x-openbot-person-id"),
-        headers.get("x-openbot-bot-id"),
+        headers.get("x-xiongbao-person-id"),
+        headers.get("x-xiongbao-bot-id"),
       ]),
     ).toEqual([
       ["ada", "pub-bot"],

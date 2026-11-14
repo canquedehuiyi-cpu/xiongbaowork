@@ -212,9 +212,9 @@ const computer = Bun.serve({
   port: COMPUTER_PORT,
   async fetch(request) {
     const url = new URL(request.url);
-    if (request.headers.get("x-openbot-computer-token") !== COMPUTER_TOKEN)
+    if (request.headers.get("x-xiongbao-computer-token") !== COMPUTER_TOKEN)
       return Response.json({ error: "Unauthorized." }, { status: 401 });
-    const id = request.headers.get("x-openbot-bot-id") ?? "";
+    const id = request.headers.get("x-xiongbao-bot-id") ?? "";
     asked.push(`${request.method} ${url.pathname} ${id}`);
     if (url.pathname === "/health") return Response.json({ status: "ok" });
     if (url.pathname === "/computers")
@@ -230,7 +230,7 @@ const computer = Bun.serve({
       return Response.json({ ok: true });
     }
     // A Bot's browser is a seat's, as on the real computer: the Bot, and on a computer people share, the person too.
-    const person = request.headers.get("x-openbot-person-id");
+    const person = request.headers.get("x-xiongbao-person-id");
     const bot = botOf(person ? `${id}/${person}` : id);
     const body =
       request.method === "POST" ? await request.json().catch(() => null) : null;

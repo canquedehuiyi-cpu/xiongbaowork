@@ -101,9 +101,9 @@ const computer = Bun.serve({
   port: COMPUTER_PORT,
   async fetch(request) {
     const url = new URL(request.url);
-    if (request.headers.get("x-openbot-computer-token") !== COMPUTER_TOKEN)
+    if (request.headers.get("x-xiongbao-computer-token") !== COMPUTER_TOKEN)
       return Response.json({ error: "Unauthorized." }, { status: 401 });
-    const id = request.headers.get("x-openbot-bot-id") ?? "";
+    const id = request.headers.get("x-xiongbao-bot-id") ?? "";
     const sent = request.method === "POST" ? await request.text() : "";
     const body = sent ? JSON.parse(sent) : undefined;
     asked.push({ line: `${request.method} ${url.pathname}`, body });
