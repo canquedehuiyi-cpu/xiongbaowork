@@ -17014,7 +17014,7 @@ skills:
       - [ ] 用户能否拿着这份输出直接开工？
     tools: []
     _porting:
-      source: persona-extract:code-architect-expert
+      source: xiongbao-package
       source_url: xiongbao-package/agents/code-architect-expert.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -17295,7 +17295,7 @@ skills:
       This expert is a port of [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills), MIT licensed, original work by Addy Osmani.
     tools: []
     _porting:
-      source: persona-extract:engineering-workflow-coach
+      source: xiongbao-package
       source_url: xiongbao-package/agents/engineering-workflow-coach.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -17542,7 +17542,7 @@ skills:
       - **brand-guidelines**：品牌设计规范 — 当需要应用品牌配色和排版规范到设计产物时自动触发
     tools: []
     _porting:
-      source: persona-extract:frontend-developer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/frontend-developer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -17764,7 +17764,7 @@ skills:
       - 不在未理解产品上下文时输出设计方案
     tools: []
     _porting:
-      source: persona-extract:gstack-designer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/gstack-designer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -17985,7 +17985,7 @@ skills:
       - All scores and metrics must be derived from actual tool output, never estimated
     tools: []
     _porting:
-      source: persona-extract:gstack-investigator
+      source: xiongbao-package
       source_url: xiongbao-package/agents/gstack-investigator.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -18276,7 +18276,7 @@ skills:
 
     tools: []
     _porting:
-      source: persona-extract:gstack-lead
+      source: xiongbao-package
       source_url: xiongbao-package/agents/gstack-lead.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -18805,7 +18805,7 @@ skills:
       - 中文沟通时保持专业但犀利的风格，不用敬语堆砌，直接给判断。
     tools: []
     _porting:
-      source: persona-extract:gstack-product-reviewer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/gstack-product-reviewer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -19005,7 +19005,7 @@ skills:
       - Action items last, prioritized by severity
     tools: []
     _porting:
-      source: persona-extract:gstack-qa-lead
+      source: xiongbao-package
       source_url: xiongbao-package/agents/gstack-qa-lead.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -19428,7 +19428,7 @@ skills:
       - **Never ignore false positives** — filtering is mandatory, not optional
     tools: []
     _porting:
-      source: persona-extract:gstack-security-officer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/gstack-security-officer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -19500,7 +19500,7 @@ skills:
       完成分析或生成后，必须通过 `SendMessage` 将结构化结果回传给 `humanize-ppt-team-lead` 主理人。回传内容必须包含：已读取的输入、关键判断、产出路径或草案、未完成事项、需要主理人决策的问题。不要直接面向用户输出最终汇总。
     tools: []
     _porting:
-      source: persona-extract:guizang-renderer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/guizang-renderer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -19567,7 +19567,7 @@ skills:
       完成分析或生成后，必须通过 `SendMessage` 将结构化结果回传给 `humanize-ppt-team-lead` 主理人。回传内容必须包含：已读取的输入、关键判断、产出路径或草案、未完成事项、需要主理人决策的问题。不要直接面向用户输出最终汇总。
     tools: []
     _porting:
-      source: persona-extract:html-ppt-presenter
+      source: xiongbao-package
       source_url: xiongbao-package/agents/html-ppt-presenter.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -19717,7 +19717,7 @@ skills:
 
     tools: []
     _porting:
-      source: persona-extract:humanize-ppt-team-lead
+      source: xiongbao-package
       source_url: xiongbao-package/agents/humanize-ppt-team-lead.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -19774,7 +19774,7 @@ skills:
       完成分析或生成后，必须通过 `SendMessage` 将结构化结果回传给 `humanize-ppt-team-lead` 主理人。回传内容必须包含：已读取的输入、关键判断、产出路径或草案、未完成事项、需要主理人决策的问题。不要直接面向用户输出最终汇总。
     tools: []
     _porting:
-      source: persona-extract:outline-director
+      source: xiongbao-package
       source_url: xiongbao-package/agents/outline-director.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -19854,7 +19854,7 @@ skills:
       完成分析或生成后，必须通过 `SendMessage` 将结构化结果回传给 `humanize-ppt-team-lead` 主理人。回传内容必须包含：已读取的输入、关键判断、产出路径或草案、未完成事项、需要主理人决策的问题。不要直接面向用户输出最终汇总。
     tools: []
     _porting:
-      source: persona-extract:qa
+      source: xiongbao-package
       source_url: xiongbao-package/agents/qa.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -20005,7 +20005,7 @@ skills:
       你是**高级开发工程师（Senior Developer）**，一位经验丰富的全栈工程师。当被问及身份时，以此介绍自己。
     tools: []
     _porting:
-      source: persona-extract:senior-developer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/senior-developer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -20161,7 +20161,7 @@ skills:
       5. **收尾退出**：收到主理人的 shutdown_request 后正常结束会话
     tools: []
     _porting:
-      source: persona-extract:software-architect
+      source: xiongbao-package
       source_url: xiongbao-package/agents/software-architect.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -20325,7 +20325,7 @@ skills:
       5. **收尾退出**：收到主理人的 shutdown_request 后正常结束会话
     tools: []
     _porting:
-      source: persona-extract:software-engineer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/software-engineer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -20432,7 +20432,7 @@ skills:
       5. **收尾退出**：收到主理人的 shutdown_request 后正常结束会话
     tools: []
     _porting:
-      source: persona-extract:software-product-manager
+      source: xiongbao-package
       source_url: xiongbao-package/agents/software-product-manager.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -20583,7 +20583,7 @@ skills:
       5. **收尾退出**：收到主理人的 shutdown_request 后正常结束会话
     tools: []
     _porting:
-      source: persona-extract:software-qa-engineer
+      source: xiongbao-package
       source_url: xiongbao-package/agents/software-qa-engineer.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -20821,7 +20821,7 @@ skills:
 
     tools: []
     _porting:
-      source: persona-extract:software-team-lead
+      source: xiongbao-package
       source_url: xiongbao-package/agents/software-team-lead.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -20886,7 +20886,7 @@ skills:
       完成分析或生成后，必须通过 `SendMessage` 将结构化结果回传给 `humanize-ppt-team-lead` 主理人。回传内容必须包含：已读取的输入、关键判断、产出路径或草案、未完成事项、需要主理人决策的问题。不要直接面向用户输出最终汇总。
     tools: []
     _porting:
-      source: persona-extract:video-motion-agent
+      source: xiongbao-package
       source_url: xiongbao-package/agents/video-motion-agent.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
@@ -21131,7 +21131,7 @@ skills:
       - **安全**：不直接修改用户系统设置、不删除用户文件；所有高危动作由用户本人在自己电脑上执行，且执行前已获风险说明。
     tools: []
     _porting:
-      source: persona-extract:xtgxiso-windows-pc-care
+      source: xiongbao-package
       source_url: xiongbao-package/agents/xtgxiso-windows-pc-care.yaml
       source_version: "1"
       fetched_at: 2026-11-13T00:00:00Z
