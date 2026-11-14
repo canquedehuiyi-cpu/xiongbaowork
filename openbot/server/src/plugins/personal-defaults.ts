@@ -86,6 +86,11 @@ export type PersonalDefaultsDeps = {
   tools(app: string): Promise<ListedTool[]>;
   /** 这个人能看见的每一位内置的普通员工（没有删除的；不含分身和远端员工）。 */
   bots(): Promise<string[]>;
+  /**
+   * 其中召唤来的员工（`summoned_from` 非空）。它们和别的员工一样拿到每个应用、能互相请教，只是带着预设的
+   * 技能，不经「每个技能给一次」也不收新技能广播（见 {@link skillBots}）。不给时当作没有。
+   */
+  summonedBots?(): Promise<string[]>;
   /** 一位员工在一个应用（键）上持有的授予 ref。 */
   granted(agentId: string, appKey: string): Promise<Set<string>>;
   /** 部署添加过的每个应用（行 id）。 */
@@ -175,15 +180,14 @@ export const EVERY_BOT_ASKS_REFUSAL =
 
 /**
  * 一位员工在不在个人默认的「每位员工」里：内置的普通员工在；分身（它的连接器来源只写只读工具，移除就收回，
- * 见 `avatar-sources.ts`）、远端员工（本人不控制的外部端点）和召唤来的员工（`summoned_from` 非空，授予由本人
- * 在自己的这份上决定）不在。和 `personalDefaultsDeps` 的 `bots()` 是同一条规则。
+ * 见 `avatar-sources.ts`）和远端员工（本人不控制的外部端点）不在。和 `personalDefaultsDeps` 的 `bots()` 是
+ * 同一条规则。
  */
 export function coveredByPersonalDefaults(
   agentId: string,
   type: string | undefined,
-  summoned = false,
 ): boolean {
-  return type === "built_in" && !summoned && !agentId.startsWith(AVATAR_PREFIX);
+  return type === "built_in" && !agentId.startsWith(AVATAR_PREFIX);
 }
 
 /**
@@ -199,11 +203,10 @@ export function personalRevokeRefusal(
   kind: string,
   ref: string,
   /** 收回的是哪位员工的授予；不给时按个人默认管着的员工答（只看授予本身时用）。 */
-  bot?: { id: string; type: string | undefined; summoned?: boolean },
+  bot?: { id: string; type: string | undefined },
 ): string | null {
   if (currentEdition() !== "personal") return null;
-  if (bot && !coveredByPersonalDefaults(bot.id, bot.type, bot.summoned))
-    return null;
+  if (bot && !coveredByPersonalDefaults(bot.id, bot.type)) return null;
   if (kind === "mcp" && isAlwaysOn(ref)) return ALWAYS_ON_REFUSAL;
   if (kind === "mcp" && isPerBotApp(ref)) return null;
   if (kind === "mcp") return EVERY_BOT_REFUSAL;
@@ -213,10 +216,7 @@ export function personalRevokeRefusal(
 
 /** {@link personalRevokeRefusal}，员工的类型从 store 读；团队版不读库。 */
 export async function personalRevokeRefusalFor(
-  store: {
-    agentType(agentId: string): Promise<string | undefined>;
-    agentSummoned?(agentId: string): Promise<boolean>;
-  },
+  store: { agentType(agentId: string): Promise<string | undefined> },
   kind: string,
   ref: string,
   agentId: string,
@@ -225,7 +225,6 @@ export async function personalRevokeRefusalFor(
   return personalRevokeRefusal(kind, ref, {
     id: agentId,
     type: await store.agentType(agentId),
-    summoned: (await store.agentSummoned?.(agentId)) ?? false,
   });
 }
 
@@ -281,13 +280,25 @@ async function giveEverySkillOnce(
   bots: string[],
 ): Promise<void> {
   if (currentEdition() !== "personal") return;
-  for (const bot of bots) {
+  for (const bot of await skillBots(deps, bots)) {
     if (await deps.skillsGiven(bot)) continue;
     const held = await deps.heldSkills(bot);
     for (const slug of await deps.skills())
       if (!held.has(slug)) await store.grant("skill", slug, bot, GRANTED_BY);
     await deps.rememberSkillsGiven(bot);
   }
+}
+
+/**
+ * 这些员工里，个人版自动给技能的那些：召唤来的员工不在其中，它们带着预设的技能（召唤时复制过来），本人
+ * 自己再装。
+ */
+async function skillBots(
+  deps: Pick<PersonalDefaultsDeps, "summonedBots">,
+  bots: string[],
+): Promise<string[]> {
+  const summoned = new Set((await deps.summonedBots?.()) ?? []);
+  return bots.filter((bot) => !summoned.has(bot));
 }
 
 /** 个人版启动时：给已有的每位员工每个技能，各一次。见 {@link giveEverySkillOnce}。 */
@@ -576,17 +587,15 @@ export function withPersonalDefaults<S extends Store>(
      */
     if (currentEdition() === "personal")
       await inPersonsFrame(deps, async () => {
-        // 召唤来的员工不在 bots() 里：不补工具和技能，但仍和别的员工一样进自动学习。
-        if ((await deps.bots()).includes(agentId)) {
-          await grantEveryTool(
-            this,
-            deps,
-            await everyBotApps(deps),
-            [agentId],
-            GRANTED_BY,
-          );
-          await giveEverySkillOnce(this, deps, [agentId]);
-        }
+        if (!(await deps.bots()).includes(agentId)) return;
+        await grantEveryTool(
+          this,
+          deps,
+          await everyBotApps(deps),
+          [agentId],
+          GRANTED_BY,
+        );
+        await giveEverySkillOnce(this, deps, [agentId]);
         const included = await deps.includeEveryBotInLearning();
         if (included.length > 0 && audit)
           await recordAuditEvent(audit, {
@@ -629,7 +638,8 @@ export function withPersonalDefaults<S extends Store>(
 
   /*
    * 个人版里新技能给每位员工，和新应用一样：写它的人就是这里唯一的人，一个没有员工提供的技能，在他找到开关
-   * 之前什么也做不了。只在它是新的时候：再保存一次是编辑，不能把他在技能页上为某位员工关掉的又打开。
+   * 之前什么也做不了。只在它是新的时候：再保存一次是编辑，不能把他在技能页上为某位员工关掉的又打开。召唤来的
+   * 员工除外（{@link skillBots}）。
    */
   const install = store.installSkill;
   store.installSkill = async function (
@@ -641,7 +651,7 @@ export function withPersonalDefaults<S extends Store>(
     await install.call(this, input);
     if (fresh)
       await inPersonsFrame(deps, async () => {
-        for (const bot of await deps.bots())
+        for (const bot of await skillBots(deps, await deps.bots()))
           await this.grant("skill", input.slug, bot, input.by || GRANTED_BY);
       });
   } as S["installSkill"];
@@ -704,8 +714,7 @@ export function personalDefaultsDeps(
     /*
      * 分身不算：它的连接器来源只写只读工具，移除来源就收回（`avatar-sources.ts`），给它全部工具会让来源失去
      * 意义，移除的也会在下一次运行时被加回来。远端员工不算：它们是本人不控制的外部端点，不该拿到本人全部
-     * 账号的全部工具。召唤来的员工不算（`summoned_from` 非空）：它带着预设的技能直接可用，别的授予由本人
-     * 在自己的这份上决定，默认授予（技能、全部工具、新技能广播）一概不给。
+     * 账号的全部工具。
      */
     bots: () =>
       framed(async () => {
@@ -716,9 +725,21 @@ export function personalDefaultsDeps(
           .where(
             and(
               isNull(agentProfiles.deletedAt),
-              isNull(agentProfiles.summonedFrom),
               eq(agents.type, "built_in"),
               notLike(agentProfiles.agentId, `${AVATAR_PREFIX}%`),
+            ),
+          );
+        return rows.map((row) => row.id);
+      }),
+    summonedBots: () =>
+      framed(async () => {
+        const rows = await database
+          .select({ id: agentProfiles.agentId })
+          .from(agentProfiles)
+          .where(
+            and(
+              isNull(agentProfiles.deletedAt),
+              isNotNull(agentProfiles.summonedFrom),
             ),
           );
         return rows.map((row) => row.id);

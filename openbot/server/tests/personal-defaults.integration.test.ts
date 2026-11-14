@@ -657,8 +657,8 @@ async function waitFor(condition: () => Promise<boolean>) {
 }
 
 /*
- * 召唤来的员工（`summoned_from` 非空）带着预设的技能直接可用；个人版的默认授予（技能、全部工具）一概不给它，
- * 普通员工照旧。
+ * 召唤来的员工（`summoned_from` 非空）是本人自己的员工：个人版里它和别的员工一样拿到每个已连接的应用、常开的
+ * Routines，能请其他员工帮忙（Ruling 9）；只有「每个技能给一次」和新技能广播不给它——它带着预设的技能。
  */
 describe("a summoned coworker in the personal edition", () => {
   const SUMMON_SKILL = `summon-skill-${suite}`;
@@ -672,7 +672,7 @@ describe("a summoned coworker in the personal edition", () => {
     );
   });
 
-  test("holds no skill grant after being listed or run, while an ordinary one is given them", async () => {
+  test("is not given every skill, nor a new one when it is written, while an ordinary one is", async () => {
     await asPlatform(() =>
       database
         .delete(enterpriseSettings)
@@ -680,6 +680,7 @@ describe("a summoned coworker in the personal edition", () => {
           like(enterpriseSettings.key, `personal_skills_given:pd-%${suite}`),
         ),
     );
+    // A new skill is broadcast to every Bot on its first save; the copy is not among them.
     await writeSkill(SUMMON_SKILL);
     await ensurePersonalSkills(store, deps);
     await asOwner(() => store.listForAgent(SUMMONED));
@@ -689,13 +690,11 @@ describe("a summoned coworker in the personal edition", () => {
     expect(await offers(ASSISTANT)).toContain(SUMMON_SKILL);
   });
 
-  test("holds no app tool grant after a run or a refresh, while an ordinary one is given them", async () => {
+  test("is given every connected app's tools after a run or a refresh, like an ordinary one", async () => {
     await restart();
-    expect(await held(SUMMONED)).toEqual([]);
+    expect(await held(SUMMONED)).toEqual(SEARCH);
     expect(await held(ASSISTANT)).toEqual(SEARCH);
 
-    const row = await asPlatform(() => serverAddress(PARALLEL));
-    expect(row).toBeDefined();
     const id = await asPlatform(async () => {
       const [found] = await database
         .select({ id: mcpServers.id })
@@ -703,49 +702,35 @@ describe("a summoned coworker in the personal edition", () => {
         .where(eq(mcpServers.catalogueKey, PARALLEL));
       return found?.id as string;
     });
-    await asPlatform(() => store.refreshTools(id));
-    expect(await held(SUMMONED)).toEqual([]);
-    const grants = await asOwner(() =>
-      database
-        .select({ ref: pluginGrants.ref })
-        .from(pluginGrants)
-        .where(
-          and(eq(pluginGrants.agentId, SUMMONED), eq(pluginGrants.kind, "mcp")),
-        ),
-    );
-    expect(grants).toEqual([]);
-    expect(await held(ASSISTANT)).toEqual(SEARCH);
-  });
-
-  test("an app granted to it by hand can be revoked; the same grant on an ordinary Bot is refused", async () => {
-    await restart();
-    await asOwner(() =>
-      store.grant("mcp", `${PARALLEL}/web_search`, SUMMONED, OWNER),
-    );
-    expect(
-      await asOwner(() =>
-        personalRevokeRefusalFor(
-          store,
-          "mcp",
-          `${PARALLEL}/web_search`,
-          SUMMONED,
-        ),
-      ),
-    ).toBeNull();
-    expect(
-      await asOwner(() =>
-        personalRevokeRefusalFor(
-          store,
-          "mcp",
-          `${PARALLEL}/web_search`,
-          ASSISTANT,
-        ),
-      ),
-    ).toBe(EVERY_BOT_REFUSAL);
     await asOwner(() =>
       store.revoke("mcp", `${PARALLEL}/web_search`, SUMMONED, OWNER),
     );
-    expect(await held(SUMMONED)).toEqual([]);
+    await asPlatform(() => store.refreshTools(id));
+    expect(await held(SUMMONED)).toEqual(SEARCH);
+  });
+
+  test("a connected app, Routines or another Bot cannot be taken from it, as from an ordinary one", async () => {
+    await restart();
+    for (const bot of [SUMMONED, ASSISTANT]) {
+      const refusal = (kind: string, ref: string) =>
+        asOwner(() => personalRevokeRefusalFor(store, kind, ref, bot));
+      expect(await refusal("mcp", `${PARALLEL}/web_search`)).toBe(
+        EVERY_BOT_REFUSAL,
+      );
+      expect(await refusal("mcp", "routines/create_routine")).toBe(
+        ALWAYS_ON_REFUSAL,
+      );
+      expect(await refusal("bot", ASSISTANT)).toBe(EVERY_BOT_ASKS_REFUSAL);
+    }
+  });
+
+  test("it can ask every other Bot, and every other Bot can ask it", async () => {
+    const fromCopy = await asOwner(() => store.botsReachableFrom(SUMMONED));
+    expect(fromCopy).toContain(ASSISTANT);
+    expect(fromCopy).not.toContain(SUMMONED);
+    expect(await asOwner(() => store.botsReachableFrom(ASSISTANT))).toContain(
+      SUMMONED,
+    );
   });
 
   test("its run still includes every Bot in Automatic Learning", async () => {
