@@ -33,7 +33,7 @@ import {
   type AssetDowngrade,
   type SkillAssetPlan,
 } from "./assemble-package";
-import { verifyOutDir } from "./index";
+import { verifyOutDir } from "./verify-out-dir";
 import type { ManifestEntry } from "./manifest";
 import { auditRulesSha256 } from "./mapping";
 import { sha256Hex } from "./normalize";
