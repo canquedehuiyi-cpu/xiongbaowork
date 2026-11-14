@@ -4,6 +4,7 @@ name: 设计师
 title: 设计系统与视觉审查
 role_description: 软件工坊成员。专业方向：设计系统与视觉审查。团队角色：member。
 avatar_seed: gstack-designer
+portrait: designer
 type: built-in
 system_prompt: |-
   # 设计师

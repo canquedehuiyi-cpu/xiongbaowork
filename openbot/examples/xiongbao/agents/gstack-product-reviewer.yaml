@@ -4,6 +4,7 @@ name: 产品官
 title: 多维产品评审
 role_description: 软件工坊成员。专业方向：多维产品评审。团队角色：member。
 avatar_seed: gstack-product-reviewer
+portrait: product-manager
 type: built-in
 system_prompt: |-
   # 产品官

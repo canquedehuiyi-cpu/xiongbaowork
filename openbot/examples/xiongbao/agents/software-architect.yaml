@@ -4,6 +4,7 @@ name: 高见远
 title: 架构师
 role_description: 软件公司成员。专业方向：架构师。团队角色：member。
 avatar_seed: software-architect
+portrait: tech-engineer
 type: built-in
 system_prompt: |-
   # 高见远

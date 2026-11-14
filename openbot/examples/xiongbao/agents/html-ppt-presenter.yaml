@@ -4,6 +4,7 @@ name: 演讲增强师
 title: 演讲模式 / html-ppt
 role_description: 卡尔的人感PPT专家团成员。专业方向：演讲模式 / html-ppt。团队角色：member。
 avatar_seed: html-ppt-presenter
+portrait: actor
 type: built-in
 system_prompt: |-
   # 演讲增强师

@@ -4,6 +4,7 @@ name: 质量门神
 title: QA测试与发布
 role_description: 软件工坊成员。专业方向：QA测试与发布。团队角色：member。
 avatar_seed: gstack-qa-lead
+portrait: test-engineer
 type: built-in
 system_prompt: |-
   # 质量门神

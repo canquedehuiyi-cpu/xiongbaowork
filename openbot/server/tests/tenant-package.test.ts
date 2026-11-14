@@ -401,6 +401,49 @@ describe("tenant YAML validation", () => {
     expect(tenantPackage.agents[1]?.avatarSeed).toBeUndefined();
   });
 
+  test("parses an agent's portrait preset and leaves an omitted one undefined", () => {
+    const tenantPackage = validateTenantPackage({
+      brand: "tenant: { id: fintech, product_name: Ledgerline }",
+      agents: `agents:
+  - id: knowledge
+    name: Knowledge
+    title: Company Knowledge
+    role_description: Answer company questions.
+    portrait: doctor
+    type: built-in
+    system_prompt: Answer from knowledge.
+  - id: risk
+    name: Risk
+    title: Risk & Compliance
+    role_description: Investigate policies and controls.
+    type: remote-ag-ui
+    endpoint: http://risk.internal/ag-ui`,
+      channels: "channels: []",
+      model:
+        "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+      knowledge: "sources: []",
+      themeCss: "",
+    });
+
+    expect(tenantPackage.agents[0]?.portrait).toBe("doctor");
+    expect(tenantPackage.agents[1]?.portrait).toBeUndefined();
+  });
+
+  test("rejects a portrait that is not a preset, naming the agent", () => {
+    expect(() =>
+      validateTenantPackage({
+        brand: "tenant: { id: fintech, product_name: Ledgerline }",
+        agents:
+          "agents: [{ id: knowledge, name: Knowledge, title: Company Knowledge, role_description: Answer company questions., portrait: not-a-preset, type: built-in, system_prompt: Answer from knowledge. }]",
+        channels: "channels: []",
+        model:
+          "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+        knowledge: "sources: []",
+        themeCss: "",
+      }),
+    ).toThrow(/knowledge.*portrait|portrait.*knowledge/);
+  });
+
   test("rejects an empty optional avatar seed", () => {
     expect(() =>
       validateTenantPackage({
@@ -794,6 +837,34 @@ describe("tenant package agent profile synchronization", () => {
         .from(agents)
         .where(eq(agents.id, agent.id));
       expect(applied).toBeDefined();
+    }));
+
+  test("writes the package portrait to the profile, and clears it when the package drops it", () =>
+    inCatalogue(async () => {
+      const agent = packageAgent({ portrait: "doctor" });
+      const tenantPackage = loadedPackage(agent);
+      const deploymentPackage = await synchronizeTenantPackage(
+        database,
+        tenantPackage,
+      );
+      createdAgentIds.push(agent.id);
+      createdPackageIds.push(deploymentPackage.id);
+      const read = async () =>
+        (
+          await database
+            .select()
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, agent.id))
+        )[0];
+      expect((await read())?.presetPortrait).toBe("doctor");
+
+      const { portrait: _dropped, ...withoutPortrait } = agent;
+      await synchronizeTenantPackage(database, {
+        ...tenantPackage,
+        agents: [withoutPortrait],
+        checksum: randomUUID(),
+      });
+      expect((await read())?.presetPortrait).toBeNull();
     }));
 
   test("resynchronizes and undeletes an existing package profile", () =>
@@ -2116,60 +2187,66 @@ describe("bundled personal starter", () => {
     },
   );
 
-  catalogueTest("restart and provider switch keep one starter and refresh its connection", async () => {
-    const tenantId = starterTestTenant();
-    const loaded = await loadStarter(tenantId, claude);
-    const pkg = await synchronizeTenantPackage(database, loaded);
-    await synchronizeTenantPackage(database, loaded);
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await ownedIds(pkg.id)).toEqual(["picked-harness"]);
-    expect(await profiles.get(actor, "picked-harness")).toMatchObject({
-      name: "Personal Assistant",
-      title: "Everyday life. Powered by LangChain.",
-      endpoint: langchain,
-    });
-    await synchronizeTenantPackage(database, await loadStarter(tenantId, ""));
-    expect(await ownedIds(pkg.id)).toEqual(["picked-harness"]);
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === "picked-harness"),
-    ).toMatchObject({ type: "remote_ag_ui", endpoint: langchain });
-    expect(await attachedSkills("picked-harness")).toEqual([
-      "bot-creator",
-      "skill-creator",
-    ]);
-    expect(await channelBots()).toEqual(["picked-harness"]);
-  });
+  catalogueTest(
+    "restart and provider switch keep one starter and refresh its connection",
+    async () => {
+      const tenantId = starterTestTenant();
+      const loaded = await loadStarter(tenantId, claude);
+      const pkg = await synchronizeTenantPackage(database, loaded);
+      await synchronizeTenantPackage(database, loaded);
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await ownedIds(pkg.id)).toEqual(["picked-harness"]);
+      expect(await profiles.get(actor, "picked-harness")).toMatchObject({
+        name: "Personal Assistant",
+        title: "Everyday life. Powered by LangChain.",
+        endpoint: langchain,
+      });
+      await synchronizeTenantPackage(database, await loadStarter(tenantId, ""));
+      expect(await ownedIds(pkg.id)).toEqual(["picked-harness"]);
+      expect(
+        (await runtime(actor)).find((agent) => agent.id === "picked-harness"),
+      ).toMatchObject({ type: "remote_ag_ui", endpoint: langchain });
+      expect(await attachedSkills("picked-harness")).toEqual([
+        "bot-creator",
+        "skill-creator",
+      ]);
+      expect(await channelBots()).toEqual(["picked-harness"]);
+    },
+  );
 
-  catalogueTest("starter attribution can be removed and stays edited after restart and harness switch", async () => {
-    const tenantId = starterTestTenant();
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    const starter = await profiles.get(actor, "picked-harness");
-    expect(starter?.systemOwned).toBe(false);
-    await profiles.update(actor, "picked-harness", {
-      name: "Personal Assistant",
-      title: "My everyday helper",
-      roleDescription: "Only research public sources.",
-      visibility: "public",
-    });
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await profiles.get(actor, "picked-harness")).toMatchObject({
-      title: "My everyday helper",
-      endpoint: langchain,
-    });
-  });
+  catalogueTest(
+    "starter attribution can be removed and stays edited after restart and harness switch",
+    async () => {
+      const tenantId = starterTestTenant();
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      const starter = await profiles.get(actor, "picked-harness");
+      expect(starter?.systemOwned).toBe(false);
+      await profiles.update(actor, "picked-harness", {
+        name: "Personal Assistant",
+        title: "My everyday helper",
+        roleDescription: "Only research public sources.",
+        visibility: "public",
+      });
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await profiles.get(actor, "picked-harness")).toMatchObject({
+        title: "My everyday helper",
+        endpoint: langchain,
+      });
+    },
+  );
 
   /*
    * What a conversation's header shows under the starter's name is its title and what it does, so
@@ -2404,152 +2481,164 @@ describe("bundled personal starter", () => {
     },
   );
 
-  catalogueTest("the starter's Setup page saves its instructions over HTTP", async () => {
-    const tenantId = starterTestTenant();
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    const userId = await createUser();
-    const signedIn = {
-      id: userId,
-      email: `${userId}@example.test`,
-      role: "admin" as const,
-    };
-    const starter = await profiles.get(signedIn, "picked-harness");
-    if (!starter) throw new Error("Missing starter");
-    const requireUser: MiddlewareHandler<{
-      Variables: AppVariables;
-    }> = async (context, next) => {
-      context.set("actor", signedIn);
-      await next();
-    };
-    const app = new Hono<{ Variables: AppVariables }>();
-    app.route("/api/agents", createAgentRoutes(profiles, requireUser, true));
-    const body = {
-      name: starter.name,
-      title: starter.title,
-      roleDescription: starter.roleDescription,
-      visibility: starter.visibility,
-      endpoint: starter.endpoint,
-    };
-    const read = await app.request("/api/agents/picked-harness");
-    expect((await read.json()).agent).toMatchObject({
-      roleDescription: starter.roleDescription,
-      instructions: starter.instructions,
-    });
-    const saved = await app.request("/api/agents/picked-harness", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...body, instructions: "Answer in French." }),
-    });
-    expect(saved.status).toBe(200);
-    expect((await saved.json()).agent).toMatchObject({
-      roleDescription: starter.roleDescription,
-      instructions: "Answer in French.",
-    });
-    const blank = await app.request("/api/agents/picked-harness", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...body, instructions: "  " }),
-    });
-    expect(blank.status).toBe(400);
-  });
-
-  catalogueTest("fresh external starters have no guessed attribution", async () => {
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(
-        starterTestTenant(),
-        "https://agents.example/run",
-        "An agent you already run",
-      ),
-    );
-    expect(await profiles.get(actor, "picked-harness")).toMatchObject({
-      title: "Everyday life.",
-    });
-  });
-
-  catalogueTest("a personally edited connection survives restart and installer harness switches", async () => {
-    const tenantId = starterTestTenant();
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    const starter = await profiles.get(actor, "picked-harness");
-    if (!starter) throw new Error("Missing starter");
-    await profiles.update(actor, starter.id, {
-      name: starter.name,
-      title: starter.title,
-      roleDescription: starter.roleDescription,
-      visibility: "public",
-      endpoint: "https://agents.example/run",
-    });
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await profiles.get(actor, starter.id)).toMatchObject({
-      endpoint: "https://agents.example/run",
-    });
-  });
-
-  catalogueTest("renaming the starter on its Setup page keeps it on the installer's harness", async () => {
-    const tenantId = starterTestTenant();
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    const userId = await createUser();
-    const signedIn = {
-      id: userId,
-      email: `${userId}@example.test`,
-      role: "admin" as const,
-    };
-    const starter = await profiles.get(signedIn, "picked-harness");
-    if (!starter) throw new Error("Missing starter");
-    const requireUser: MiddlewareHandler<{
-      Variables: AppVariables;
-    }> = async (context, next) => {
-      context.set("actor", signedIn);
-      await next();
-    };
-    const app = new Hono<{ Variables: AppVariables }>();
-    // A laptop's deployment, as OpenBot Desktop runs one.
-    app.route("/api/agents", createAgentRoutes(profiles, requireUser, true));
-    // What the Setup page sends for a new name and title: everything else as it showed it.
-    const response = await app.request("/api/agents/picked-harness", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: "Personal Assistant F5",
-        title: "Errands and research. Powered by Claude Agent SDK.",
+  catalogueTest(
+    "the starter's Setup page saves its instructions over HTTP",
+    async () => {
+      const tenantId = starterTestTenant();
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      const userId = await createUser();
+      const signedIn = {
+        id: userId,
+        email: `${userId}@example.test`,
+        role: "admin" as const,
+      };
+      const starter = await profiles.get(signedIn, "picked-harness");
+      if (!starter) throw new Error("Missing starter");
+      const requireUser: MiddlewareHandler<{
+        Variables: AppVariables;
+      }> = async (context, next) => {
+        context.set("actor", signedIn);
+        await next();
+      };
+      const app = new Hono<{ Variables: AppVariables }>();
+      app.route("/api/agents", createAgentRoutes(profiles, requireUser, true));
+      const body = {
+        name: starter.name,
+        title: starter.title,
         roleDescription: starter.roleDescription,
         visibility: starter.visibility,
         endpoint: starter.endpoint,
-      }),
-    });
-    expect(response.status).toBe(200);
-    const [edited] = await database
-      .select({ configuration: agents.configuration })
-      .from(agents)
-      .where(eq(agents.id, "picked-harness"));
-    expect(edited?.configuration).toMatchObject({ endpoint: claude });
-    expect(edited?.configuration).not.toHaveProperty("personalConnection");
+      };
+      const read = await app.request("/api/agents/picked-harness");
+      expect((await read.json()).agent).toMatchObject({
+        roleDescription: starter.roleDescription,
+        instructions: starter.instructions,
+      });
+      const saved = await app.request("/api/agents/picked-harness", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...body, instructions: "Answer in French." }),
+      });
+      expect(saved.status).toBe(200);
+      expect((await saved.json()).agent).toMatchObject({
+        roleDescription: starter.roleDescription,
+        instructions: "Answer in French.",
+      });
+      const blank = await app.request("/api/agents/picked-harness", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...body, instructions: "  " }),
+      });
+      expect(blank.status).toBe(400);
+    },
+  );
 
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await profiles.get(signedIn, "picked-harness")).toMatchObject({
-      name: "Personal Assistant F5",
-      endpoint: langchain,
-    });
-  });
+  catalogueTest(
+    "fresh external starters have no guessed attribution",
+    async () => {
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(
+          starterTestTenant(),
+          "https://agents.example/run",
+          "An agent you already run",
+        ),
+      );
+      expect(await profiles.get(actor, "picked-harness")).toMatchObject({
+        title: "Everyday life.",
+      });
+    },
+  );
+
+  catalogueTest(
+    "a personally edited connection survives restart and installer harness switches",
+    async () => {
+      const tenantId = starterTestTenant();
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      const starter = await profiles.get(actor, "picked-harness");
+      if (!starter) throw new Error("Missing starter");
+      await profiles.update(actor, starter.id, {
+        name: starter.name,
+        title: starter.title,
+        roleDescription: starter.roleDescription,
+        visibility: "public",
+        endpoint: "https://agents.example/run",
+      });
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await profiles.get(actor, starter.id)).toMatchObject({
+        endpoint: "https://agents.example/run",
+      });
+    },
+  );
+
+  catalogueTest(
+    "renaming the starter on its Setup page keeps it on the installer's harness",
+    async () => {
+      const tenantId = starterTestTenant();
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      const userId = await createUser();
+      const signedIn = {
+        id: userId,
+        email: `${userId}@example.test`,
+        role: "admin" as const,
+      };
+      const starter = await profiles.get(signedIn, "picked-harness");
+      if (!starter) throw new Error("Missing starter");
+      const requireUser: MiddlewareHandler<{
+        Variables: AppVariables;
+      }> = async (context, next) => {
+        context.set("actor", signedIn);
+        await next();
+      };
+      const app = new Hono<{ Variables: AppVariables }>();
+      // A laptop's deployment, as OpenBot Desktop runs one.
+      app.route("/api/agents", createAgentRoutes(profiles, requireUser, true));
+      // What the Setup page sends for a new name and title: everything else as it showed it.
+      const response = await app.request("/api/agents/picked-harness", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Personal Assistant F5",
+          title: "Errands and research. Powered by Claude Agent SDK.",
+          roleDescription: starter.roleDescription,
+          visibility: starter.visibility,
+          endpoint: starter.endpoint,
+        }),
+      });
+      expect(response.status).toBe(200);
+      const [edited] = await database
+        .select({ configuration: agents.configuration })
+        .from(agents)
+        .where(eq(agents.id, "picked-harness"));
+      expect(edited?.configuration).toMatchObject({ endpoint: claude });
+      expect(edited?.configuration).not.toHaveProperty("personalConnection");
+
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await profiles.get(signedIn, "picked-harness")).toMatchObject({
+        name: "Personal Assistant F5",
+        endpoint: langchain,
+      });
+    },
+  );
 
   catalogueTest.each([
     ["follows the installer again", false, langchain],
@@ -2599,79 +2688,87 @@ describe("bundled personal starter", () => {
     },
   );
 
-  catalogueTest("the starter's subtitle names the harness it runs on after a switch, around the person's own words", async () => {
-    const tenantId = starterTestTenant();
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    const starter = await profiles.get(actor, "picked-harness");
-    if (!starter) throw new Error("Missing starter");
-    await profiles.update(actor, starter.id, {
-      name: "Personal Assistant F5",
-      title: "Errands and research, edited on F5. Powered by Claude Agent SDK.",
-      roleDescription: starter.roleDescription,
-      visibility: starter.visibility,
-    });
+  catalogueTest(
+    "the starter's subtitle names the harness it runs on after a switch, around the person's own words",
+    async () => {
+      const tenantId = starterTestTenant();
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      const starter = await profiles.get(actor, "picked-harness");
+      if (!starter) throw new Error("Missing starter");
+      await profiles.update(actor, starter.id, {
+        name: "Personal Assistant F5",
+        title:
+          "Errands and research, edited on F5. Powered by Claude Agent SDK.",
+        roleDescription: starter.roleDescription,
+        visibility: starter.visibility,
+      });
 
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await profiles.get(actor, starter.id)).toMatchObject({
-      name: "Personal Assistant F5",
-      title: "Errands and research, edited on F5. Powered by LangChain.",
-      endpoint: langchain,
-    });
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await profiles.get(actor, starter.id)).toMatchObject({
+        name: "Personal Assistant F5",
+        title: "Errands and research, edited on F5. Powered by LangChain.",
+        endpoint: langchain,
+      });
 
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    expect(await profiles.get(actor, starter.id)).toMatchObject({
-      title: "Errands and research, edited on F5. Powered by Claude Agent SDK.",
-      endpoint: claude,
-    });
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      expect(await profiles.get(actor, starter.id)).toMatchObject({
+        title:
+          "Errands and research, edited on F5. Powered by Claude Agent SDK.",
+        endpoint: claude,
+      });
 
-    // An agent the person already runs is not a framework the installer can name.
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(
-        tenantId,
-        "https://agents.example/run",
-        "An agent you already run",
-      ),
-    );
-    expect(await profiles.get(actor, starter.id)).toMatchObject({
-      title: "Errands and research, edited on F5.",
-      endpoint: "https://agents.example/run",
-    });
-  });
+      // An agent the person already runs is not a framework the installer can name.
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(
+          tenantId,
+          "https://agents.example/run",
+          "An agent you already run",
+        ),
+      );
+      expect(await profiles.get(actor, starter.id)).toMatchObject({
+        title: "Errands and research, edited on F5.",
+        endpoint: "https://agents.example/run",
+      });
+    },
+  );
 
-  catalogueTest("a connection the person set keeps its subtitle through a harness switch", async () => {
-    const tenantId = starterTestTenant();
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    const starter = await profiles.get(actor, "picked-harness");
-    if (!starter) throw new Error("Missing starter");
-    await profiles.update(actor, starter.id, {
-      name: starter.name,
-      title: starter.title,
-      roleDescription: starter.roleDescription,
-      visibility: starter.visibility,
-      endpoint: "https://agents.example/run",
-    });
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await profiles.get(actor, starter.id)).toMatchObject({
-      title: "Everyday life. Powered by Claude Agent SDK.",
-      endpoint: "https://agents.example/run",
-    });
-  });
+  catalogueTest(
+    "a connection the person set keeps its subtitle through a harness switch",
+    async () => {
+      const tenantId = starterTestTenant();
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      const starter = await profiles.get(actor, "picked-harness");
+      if (!starter) throw new Error("Missing starter");
+      await profiles.update(actor, starter.id, {
+        name: starter.name,
+        title: starter.title,
+        roleDescription: starter.roleDescription,
+        visibility: starter.visibility,
+        endpoint: "https://agents.example/run",
+      });
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await profiles.get(actor, starter.id)).toMatchObject({
+        title: "Everyday life. Powered by Claude Agent SDK.",
+        endpoint: "https://agents.example/run",
+      });
+    },
+  );
 
   // Seeded by an earlier desktop, under a name the catalogue gave LangChain then.
   catalogueTest.each(["LangGraph", "LangChain (LangGraph)"])(
@@ -2723,26 +2820,31 @@ describe("bundled personal starter", () => {
     },
   );
 
-  catalogueTest("source installs keep the built-in fallback if a harness later appears", async () => {
-    const tenantId = starterTestTenant();
-    const pkg = await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, ""),
-    );
-    // It runs here, so it says it runs on OpenBot itself.
-    expect(await profiles.get(actor, "personal-assistant")).toMatchObject({
-      title: "Everyday life. Powered by XiongBao Work.",
-    });
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await ownedIds(pkg.id)).toEqual(["personal-assistant"]);
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === "personal-assistant"),
-    ).toMatchObject({ name: "Personal Assistant", type: "built_in" });
-    expect(await channelBots()).toEqual(["personal-assistant"]);
-  });
+  catalogueTest(
+    "source installs keep the built-in fallback if a harness later appears",
+    async () => {
+      const tenantId = starterTestTenant();
+      const pkg = await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, ""),
+      );
+      // It runs here, so it says it runs on OpenBot itself.
+      expect(await profiles.get(actor, "personal-assistant")).toMatchObject({
+        title: "Everyday life. Powered by XiongBao Work.",
+      });
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await ownedIds(pkg.id)).toEqual(["personal-assistant"]);
+      expect(
+        (await runtime(actor)).find(
+          (agent) => agent.id === "personal-assistant",
+        ),
+      ).toMatchObject({ name: "Personal Assistant", type: "built_in" });
+      expect(await channelBots()).toEqual(["personal-assistant"]);
+    },
+  );
 
   catalogueTest("concurrent initializers choose one starter", async () => {
     const tenantId = starterTestTenant();
@@ -2855,110 +2957,122 @@ describe("bundled personal starter", () => {
     },
   );
 
-  catalogueTest("restarting does not restore a deleted picked Bot", async () => {
-    const tenantId = starterTestTenant();
-    const pkg = await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, claude),
-    );
-    await database
-      .update(agentProfiles)
-      .set({ deletedAt: new Date() })
-      .where(eq(agentProfiles.agentId, "picked-harness"));
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await ownedIds(pkg.id)).toEqual(["picked-harness"]);
-    expect(await profiles.get(actor, "picked-harness")).toBeNull();
-    expect((await runtime(actor)).map(({ id }) => id)).not.toContain(
-      "picked-harness",
-    );
-  });
+  catalogueTest(
+    "restarting does not restore a deleted picked Bot",
+    async () => {
+      const tenantId = starterTestTenant();
+      const pkg = await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, claude),
+      );
+      await database
+        .update(agentProfiles)
+        .set({ deletedAt: new Date() })
+        .where(eq(agentProfiles.agentId, "picked-harness"));
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await ownedIds(pkg.id)).toEqual(["picked-harness"]);
+      expect(await profiles.get(actor, "picked-harness")).toBeNull();
+      expect((await runtime(actor)).map(({ id }) => id)).not.toContain(
+        "picked-harness",
+      );
+    },
+  );
 
-  catalogueTest("upgrading the former personal package carries its starter without reseeding", async () => {
-    const formerTenantId = "personal";
-    createdTenantIds.push(formerTenantId);
-    const legacy = await synchronizeTenantPackage(database, {
-      ...(await loadStarter(formerTenantId, "")),
-      formerTenantIds: [],
-    });
-    await database
-      .update(agents)
-      .set({ name: "My original Assistant" })
-      .where(eq(agents.id, "personal-assistant"));
-    const upgraded = await loadStarter(starterTestTenant(), langchain);
-    expect(await deploymentNameOf(database, upgraded)).toBe(formerTenantId);
-    const current = await synchronizeTenantPackage(database, upgraded);
-    await synchronizeTenantPackage(database, upgraded);
-    expect(await ownedIds(legacy.id)).toEqual([]);
-    expect(await ownedIds(current.id)).toEqual(["personal-assistant"]);
-    expect(await profiles.get(actor, "personal-assistant")).toMatchObject({
-      name: "My original Assistant",
-    });
-    expect(await attachedSkills("personal-assistant")).toEqual([
-      "bot-creator",
-      "skill-creator",
-    ]);
-    const [channel] = await database
-      .select({ packageId: channels.packageId })
-      .from(channels)
-      .where(eq(channels.id, "personal-assistant"));
-    expect(channel?.packageId).toBe(current.id);
-    expect(await channelBots()).toEqual(["personal-assistant"]);
-  });
+  catalogueTest(
+    "upgrading the former personal package carries its starter without reseeding",
+    async () => {
+      const formerTenantId = "personal";
+      createdTenantIds.push(formerTenantId);
+      const legacy = await synchronizeTenantPackage(database, {
+        ...(await loadStarter(formerTenantId, "")),
+        formerTenantIds: [],
+      });
+      await database
+        .update(agents)
+        .set({ name: "My original Assistant" })
+        .where(eq(agents.id, "personal-assistant"));
+      const upgraded = await loadStarter(starterTestTenant(), langchain);
+      expect(await deploymentNameOf(database, upgraded)).toBe(formerTenantId);
+      const current = await synchronizeTenantPackage(database, upgraded);
+      await synchronizeTenantPackage(database, upgraded);
+      expect(await ownedIds(legacy.id)).toEqual([]);
+      expect(await ownedIds(current.id)).toEqual(["personal-assistant"]);
+      expect(await profiles.get(actor, "personal-assistant")).toMatchObject({
+        name: "My original Assistant",
+      });
+      expect(await attachedSkills("personal-assistant")).toEqual([
+        "bot-creator",
+        "skill-creator",
+      ]);
+      const [channel] = await database
+        .select({ packageId: channels.packageId })
+        .from(channels)
+        .where(eq(channels.id, "personal-assistant"));
+      expect(channel?.packageId).toBe(current.id);
+      expect(await channelBots()).toEqual(["personal-assistant"]);
+    },
+  );
 
-  catalogueTest("switching from a copied package preserves its remote Bot across restarts", async () => {
-    const tenantId = starterTestTenant();
-    const customEndpoint = "https://example.test/custom-bot";
-    const custom = await loadStarter(tenantId, customEndpoint);
-    const pkg = await synchronizeTenantPackage(database, {
-      ...custom,
-      sourcePath: "/customer/personal",
-    });
-    const bundled = await loadStarter(tenantId, langchain);
-    await synchronizeTenantPackage(database, bundled);
-    await synchronizeTenantPackage(database, bundled);
-    expect(await ownedIds(pkg.id)).toEqual([
-      "personal-assistant",
-      "picked-harness",
-    ]);
-    expect(
-      (await runtime(actor)).find((agent) => agent.id === "picked-harness"),
-    ).toMatchObject({ type: "remote_ag_ui", endpoint: customEndpoint });
-  });
+  catalogueTest(
+    "switching from a copied package preserves its remote Bot across restarts",
+    async () => {
+      const tenantId = starterTestTenant();
+      const customEndpoint = "https://example.test/custom-bot";
+      const custom = await loadStarter(tenantId, customEndpoint);
+      const pkg = await synchronizeTenantPackage(database, {
+        ...custom,
+        sourcePath: "/customer/personal",
+      });
+      const bundled = await loadStarter(tenantId, langchain);
+      await synchronizeTenantPackage(database, bundled);
+      await synchronizeTenantPackage(database, bundled);
+      expect(await ownedIds(pkg.id)).toEqual([
+        "personal-assistant",
+        "picked-harness",
+      ]);
+      expect(
+        (await runtime(actor)).find((agent) => agent.id === "picked-harness"),
+      ).toMatchObject({ type: "remote_ag_ui", endpoint: customEndpoint });
+    },
+  );
 
-  catalogueTest("an existing user-owned picked-harness ID is left alone", async () => {
-    const tenantId = starterTestTenant();
-    const pkg = await createPackage(tenantId);
-    const owner = await createUser();
-    await database.insert(agents).values({
-      id: "picked-harness",
-      name: "Someone's Bot",
-      type: "remote_ag_ui",
-      configuration: { endpoint: "https://example.test/agent" },
-    });
-    await database.insert(agentProfiles).values({
-      agentId: "picked-harness",
-      ownerUserId: owner,
-      title: "Custom",
-      roleDescription: "My own role.",
-      avatarSeed: "mine",
-      visibility: "private",
-    });
-    await synchronizeTenantPackage(
-      database,
-      await loadStarter(tenantId, langchain),
-    );
-    expect(await ownedIds(pkg.id)).toEqual([]);
-    expect(
-      await profiles.get({ id: owner, role: "user" }, "picked-harness"),
-    ).toMatchObject({
-      name: "Someone's Bot",
-      endpoint: "https://example.test/agent",
-      ownerUserId: owner,
-    });
-  });
+  catalogueTest(
+    "an existing user-owned picked-harness ID is left alone",
+    async () => {
+      const tenantId = starterTestTenant();
+      const pkg = await createPackage(tenantId);
+      const owner = await createUser();
+      await database.insert(agents).values({
+        id: "picked-harness",
+        name: "Someone's Bot",
+        type: "remote_ag_ui",
+        configuration: { endpoint: "https://example.test/agent" },
+      });
+      await database.insert(agentProfiles).values({
+        agentId: "picked-harness",
+        ownerUserId: owner,
+        title: "Custom",
+        roleDescription: "My own role.",
+        avatarSeed: "mine",
+        visibility: "private",
+      });
+      await synchronizeTenantPackage(
+        database,
+        await loadStarter(tenantId, langchain),
+      );
+      expect(await ownedIds(pkg.id)).toEqual([]);
+      expect(
+        await profiles.get({ id: owner, role: "user" }, "picked-harness"),
+      ).toMatchObject({
+        name: "Someone's Bot",
+        endpoint: "https://example.test/agent",
+        ownerUserId: owner,
+      });
+    },
+  );
 });
 
 test("blank package endpoint disables only its owned agent and restores it when configured again", () =>
@@ -3175,13 +3289,16 @@ test("blank package endpoint disables only its owned agent and restores it when 
  * real deployment or another test could hold.
  */
 describe("upgrading a deployment set up under a package's former id", () => {
-  catalogueTest("the shipped personal package names `personal` as its former id", async () => {
-    const shipped = await loadTenantPackage(
-      fileURLToPath(new URL("../../examples/personal", import.meta.url)),
-    );
-    expect(shipped.tenantId).toBe("openbot");
-    expect(shipped.formerTenantIds).toEqual(["personal"]);
-  });
+  catalogueTest(
+    "the shipped personal package names `personal` as its former id",
+    async () => {
+      const shipped = await loadTenantPackage(
+        fileURLToPath(new URL("../../examples/personal", import.meta.url)),
+      );
+      expect(shipped.tenantId).toBe("openbot");
+      expect(shipped.formerTenantIds).toEqual(["personal"]);
+    },
+  );
 
   catalogueTest("a package may not name its own id as a former one", () => {
     expect(() =>
@@ -3198,166 +3315,177 @@ describe("upgrading a deployment set up under a package's former id", () => {
     ).toThrow('tenant.former_ids names "openbot"');
   });
 
-  catalogueTest("boots with its Bots, conversations and connections intact, under the name it had", async () => {
-    const suffix = randomUUID().slice(0, 8);
-    const rename = (id: string) => `${id}-${suffix}`;
-    const shipped = await loadTenantPackage(
-      fileURLToPath(new URL("../../examples/personal", import.meta.url)),
-    );
-    const formerId = rename(shipped.formerTenantIds[0] ?? "personal");
-    const currentId = rename(shipped.tenantId);
-    createdTenantIds.push(formerId, currentId);
-    const isolate = (
-      tenantId: string,
-      formerTenantIds: string[],
-    ): LoadedTenantPackage => ({
-      ...shipped,
-      tenantId,
-      formerTenantIds,
-      skills: [],
-      agents: shipped.agents.map((agent) => ({
-        ...agent,
-        id: rename(agent.id),
-        skills: [],
-      })),
-      channels: shipped.channels.map((channel) => ({
-        ...channel,
-        id: rename(channel.id),
-        permittedAgents: channel.permittedAgents.map(rename),
-      })),
-    });
-    // v0.3.1: the same package, under the id it had then.
-    const v031 = isolate(formerId, []);
-    // This release: renamed, and saying what it used to be called.
-    const upgraded = isolate(currentId, [formerId]);
-    const assistant = rename("personal-assistant");
-    const packageChannel = rename("personal-assistant");
-    createdAgentIds.push(assistant);
-    createdChannelIds.push(packageChannel);
-
-    await synchronizeTenantPackage(database, v031);
-    const userId = await createUser();
-    const actor = { id: userId, role: "user" as const };
-
-    // A Bot the person made, and a conversation with each Bot.
-    const ownBot = `agent_${suffix}`;
-    createdAgentIds.push(ownBot);
-    await database.insert(agents).values({
-      id: ownBot,
-      name: "Trip Planner",
-      type: "built_in",
-      configuration: { systemPrompt: "Plan my trips." },
-      packageId: null,
-    });
-    await database.insert(agentProfiles).values({
-      agentId: ownBot,
-      title: "Travel",
-      roleDescription: "Plan my trips.",
-      avatarSeed: ownBot,
-      visibility: "private",
-      ownerUserId: userId,
-    });
-    const conversations = [
-      { id: `channel_${suffix}-assistant`, agentId: assistant },
-      { id: `channel_${suffix}-own`, agentId: ownBot },
-    ];
-    for (const conversation of conversations) {
-      createdChannelIds.push(conversation.id);
-      await database.insert(channels).values({
-        id: conversation.id,
-        name: conversation.agentId,
-        description: "A conversation.",
-        allowedGroups: [],
-      });
-      await database
-        .insert(channelAgents)
-        .values({ channelId: conversation.id, agentId: conversation.agentId });
-      await database
-        .insert(channelMemberships)
-        .values({ channelId: conversation.id, userId });
-    }
-    // An app the person connected. (This tree's connections are Composio's alone: upstream's
-    // `brokered_connections` and its other brokers are not taken.)
-    await database.insert(composioConnections).values({
-      toolkit: `gmail-${suffix}`,
-      userId,
-      verified: true,
-    });
-
-    const snapshot = async () => ({
-      bots: (await createAgentProfileStore(database, undefined).list(actor))
-        .filter((bot) => bot.id === assistant || bot.id === ownBot)
-        .map((bot) => ({ id: bot.id, deletedAt: bot.deletedAt }))
-        .sort((a, b) => a.id.localeCompare(b.id)),
-      conversations: (
-        await database
-          .select({
-            channelId: channelMemberships.channelId,
-            agentId: channelAgents.agentId,
-          })
-          .from(channelMemberships)
-          .innerJoin(
-            channelAgents,
-            eq(channelAgents.channelId, channelMemberships.channelId),
-          )
-          .where(eq(channelMemberships.userId, userId))
-      ).sort((a, b) => a.channelId.localeCompare(b.channelId)),
-      connections: (
-        await database
-          .select({
-            app: composioConnections.toolkit,
-            verified: composioConnections.verified,
-          })
-          .from(composioConnections)
-          .where(eq(composioConnections.userId, userId))
-      ).sort((a, b) => a.app.localeCompare(b.app)),
-    });
-    const before = await snapshot();
-    expect(before.bots.map((bot) => bot.id).sort()).toEqual(
-      [assistant, ownBot].sort(),
-    );
-    expect(before.conversations).toHaveLength(2);
-    expect(before.connections).toHaveLength(1);
-
-    // The upgraded server names itself before it synchronises.
-    expect(await deploymentNameOf(database, upgraded)).toBe(formerId);
-
-    const row = await synchronizeTenantPackage(database, upgraded);
-    expect(row.tenantId).toBe(currentId);
-    expect(await snapshot()).toEqual(before);
-
-    // The package's Bot and channel are now the renamed package's; the person's Bot is still theirs.
-    const owners = await database
-      .select({ id: agents.id, packageId: agents.packageId })
-      .from(agents)
-      .where(inArray(agents.id, [assistant, ownBot]));
-    expect(Object.fromEntries(owners.map((a) => [a.id, a.packageId]))).toEqual({
-      [assistant]: row.id,
-      [ownBot]: null,
-    });
-    const [channel] = await database
-      .select({ packageId: channels.packageId })
-      .from(channels)
-      .where(eq(channels.id, packageChannel));
-    expect(channel?.packageId).toBe(row.id);
-
-    // And on every boot after: the same name, the same rows.
-    expect(await deploymentNameOf(database, upgraded)).toBe(formerId);
-    await synchronizeTenantPackage(database, upgraded);
-    expect(await snapshot()).toEqual(before);
-
-    await database
-      .delete(composioConnections)
-      .where(eq(composioConnections.userId, userId));
-  });
-
-  catalogueTest("a deployment that never had a former id is named by the package's id", async () => {
-    const tenantId = `fresh-${randomUUID().slice(0, 8)}`;
-    expect(
-      await deploymentNameOf(database, {
+  catalogueTest(
+    "boots with its Bots, conversations and connections intact, under the name it had",
+    async () => {
+      const suffix = randomUUID().slice(0, 8);
+      const rename = (id: string) => `${id}-${suffix}`;
+      const shipped = await loadTenantPackage(
+        fileURLToPath(new URL("../../examples/personal", import.meta.url)),
+      );
+      const formerId = rename(shipped.formerTenantIds[0] ?? "personal");
+      const currentId = rename(shipped.tenantId);
+      createdTenantIds.push(formerId, currentId);
+      const isolate = (
+        tenantId: string,
+        formerTenantIds: string[],
+      ): LoadedTenantPackage => ({
+        ...shipped,
         tenantId,
-        formerTenantIds: [`never-${randomUUID().slice(0, 8)}`],
-      }),
-    ).toBe(tenantId);
-  });
+        formerTenantIds,
+        skills: [],
+        agents: shipped.agents.map((agent) => ({
+          ...agent,
+          id: rename(agent.id),
+          skills: [],
+        })),
+        channels: shipped.channels.map((channel) => ({
+          ...channel,
+          id: rename(channel.id),
+          permittedAgents: channel.permittedAgents.map(rename),
+        })),
+      });
+      // v0.3.1: the same package, under the id it had then.
+      const v031 = isolate(formerId, []);
+      // This release: renamed, and saying what it used to be called.
+      const upgraded = isolate(currentId, [formerId]);
+      const assistant = rename("personal-assistant");
+      const packageChannel = rename("personal-assistant");
+      createdAgentIds.push(assistant);
+      createdChannelIds.push(packageChannel);
+
+      await synchronizeTenantPackage(database, v031);
+      const userId = await createUser();
+      const actor = { id: userId, role: "user" as const };
+
+      // A Bot the person made, and a conversation with each Bot.
+      const ownBot = `agent_${suffix}`;
+      createdAgentIds.push(ownBot);
+      await database.insert(agents).values({
+        id: ownBot,
+        name: "Trip Planner",
+        type: "built_in",
+        configuration: { systemPrompt: "Plan my trips." },
+        packageId: null,
+      });
+      await database.insert(agentProfiles).values({
+        agentId: ownBot,
+        title: "Travel",
+        roleDescription: "Plan my trips.",
+        avatarSeed: ownBot,
+        visibility: "private",
+        ownerUserId: userId,
+      });
+      const conversations = [
+        { id: `channel_${suffix}-assistant`, agentId: assistant },
+        { id: `channel_${suffix}-own`, agentId: ownBot },
+      ];
+      for (const conversation of conversations) {
+        createdChannelIds.push(conversation.id);
+        await database.insert(channels).values({
+          id: conversation.id,
+          name: conversation.agentId,
+          description: "A conversation.",
+          allowedGroups: [],
+        });
+        await database
+          .insert(channelAgents)
+          .values({
+            channelId: conversation.id,
+            agentId: conversation.agentId,
+          });
+        await database
+          .insert(channelMemberships)
+          .values({ channelId: conversation.id, userId });
+      }
+      // An app the person connected. (This tree's connections are Composio's alone: upstream's
+      // `brokered_connections` and its other brokers are not taken.)
+      await database.insert(composioConnections).values({
+        toolkit: `gmail-${suffix}`,
+        userId,
+        verified: true,
+      });
+
+      const snapshot = async () => ({
+        bots: (await createAgentProfileStore(database, undefined).list(actor))
+          .filter((bot) => bot.id === assistant || bot.id === ownBot)
+          .map((bot) => ({ id: bot.id, deletedAt: bot.deletedAt }))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+        conversations: (
+          await database
+            .select({
+              channelId: channelMemberships.channelId,
+              agentId: channelAgents.agentId,
+            })
+            .from(channelMemberships)
+            .innerJoin(
+              channelAgents,
+              eq(channelAgents.channelId, channelMemberships.channelId),
+            )
+            .where(eq(channelMemberships.userId, userId))
+        ).sort((a, b) => a.channelId.localeCompare(b.channelId)),
+        connections: (
+          await database
+            .select({
+              app: composioConnections.toolkit,
+              verified: composioConnections.verified,
+            })
+            .from(composioConnections)
+            .where(eq(composioConnections.userId, userId))
+        ).sort((a, b) => a.app.localeCompare(b.app)),
+      });
+      const before = await snapshot();
+      expect(before.bots.map((bot) => bot.id).sort()).toEqual(
+        [assistant, ownBot].sort(),
+      );
+      expect(before.conversations).toHaveLength(2);
+      expect(before.connections).toHaveLength(1);
+
+      // The upgraded server names itself before it synchronises.
+      expect(await deploymentNameOf(database, upgraded)).toBe(formerId);
+
+      const row = await synchronizeTenantPackage(database, upgraded);
+      expect(row.tenantId).toBe(currentId);
+      expect(await snapshot()).toEqual(before);
+
+      // The package's Bot and channel are now the renamed package's; the person's Bot is still theirs.
+      const owners = await database
+        .select({ id: agents.id, packageId: agents.packageId })
+        .from(agents)
+        .where(inArray(agents.id, [assistant, ownBot]));
+      expect(
+        Object.fromEntries(owners.map((a) => [a.id, a.packageId])),
+      ).toEqual({
+        [assistant]: row.id,
+        [ownBot]: null,
+      });
+      const [channel] = await database
+        .select({ packageId: channels.packageId })
+        .from(channels)
+        .where(eq(channels.id, packageChannel));
+      expect(channel?.packageId).toBe(row.id);
+
+      // And on every boot after: the same name, the same rows.
+      expect(await deploymentNameOf(database, upgraded)).toBe(formerId);
+      await synchronizeTenantPackage(database, upgraded);
+      expect(await snapshot()).toEqual(before);
+
+      await database
+        .delete(composioConnections)
+        .where(eq(composioConnections.userId, userId));
+    },
+  );
+
+  catalogueTest(
+    "a deployment that never had a former id is named by the package's id",
+    async () => {
+      const tenantId = `fresh-${randomUUID().slice(0, 8)}`;
+      expect(
+        await deploymentNameOf(database, {
+          tenantId,
+          formerTenantIds: [`never-${randomUUID().slice(0, 8)}`],
+        }),
+      ).toBe(tenantId);
+    },
+  );
 });

@@ -4,6 +4,7 @@ name: 视频动效师
 title: 视频与动效 / remotion-video-toolkit
 role_description: 卡尔的人感PPT专家团成员。专业方向：视频与动效 / remotion-video-toolkit。团队角色：member。
 avatar_seed: video-motion-agent
+portrait: creative-designer
 type: built-in
 system_prompt: |-
   # 视频动效师

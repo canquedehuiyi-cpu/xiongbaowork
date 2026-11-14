@@ -4,6 +4,7 @@ name: 严过关
 title: QA工程师
 role_description: 软件公司成员。专业方向：QA工程师。团队角色：member。
 avatar_seed: software-qa-engineer
+portrait: test-engineer
 type: built-in
 system_prompt: |-
   # 严过关

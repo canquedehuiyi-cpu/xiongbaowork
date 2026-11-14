@@ -4,6 +4,7 @@ name: 安全卫士
 title: OWASP+STRIDE安全审计
 role_description: 软件工坊成员。专业方向：OWASP+STRIDE安全审计。团队角色：member。
 avatar_seed: gstack-security-officer
+portrait: security-officer
 type: built-in
 system_prompt: |-
   # 安全卫士

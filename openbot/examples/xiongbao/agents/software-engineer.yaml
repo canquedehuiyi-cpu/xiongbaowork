@@ -4,6 +4,7 @@ name: 寇豆码
 title: 工程师
 role_description: 软件公司成员。专业方向：工程师。团队角色：member。
 avatar_seed: software-engineer
+portrait: programmer
 type: built-in
 system_prompt: |-
   # 寇豆码

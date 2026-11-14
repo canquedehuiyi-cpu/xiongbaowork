@@ -4,6 +4,7 @@ name: 沽思航
 title: 软件工坊CEO
 role_description: 软件工坊的负责人，负责调度与交付。专业方向：软件工坊CEO。
 avatar_seed: gstack-lead
+portrait: general-manager
 type: built-in
 system_prompt: |-
   # 沽思航

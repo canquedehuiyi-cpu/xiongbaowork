@@ -4,6 +4,7 @@ name: 排障手
 title: 调试与根因分析
 role_description: 软件工坊成员。专业方向：调试与根因分析。团队角色：member。
 avatar_seed: gstack-investigator
+portrait: tech-engineer
 type: built-in
 system_prompt: |-
   # 排障手

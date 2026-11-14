@@ -4,6 +4,7 @@ name: 工序达
 title: 工程实践专家
 role_description: 基于Google 工程师的《Agent Skills》打造的资深工程全流程教练：规约驱动、测试驱动、代码评审、CI/CD发布
 avatar_seed: engineering-workflow-coach
+portrait: automation-engineer
 type: built-in
 system_prompt: |-
   # 工序达

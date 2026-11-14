@@ -34,6 +34,7 @@ import {
   users,
 } from "./db/schema";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
+import { PORTRAIT_PRESETS, type PortraitPreset } from "./portraits/store";
 import { runAsTenant } from "./tenant/context";
 import { avatarAgentId, packageChannelId } from "./tenant/provisioning";
 import {
@@ -252,6 +253,8 @@ type TenantAgent = {
   title: string;
   roleDescription: string;
   avatarSeed?: string;
+  /** The preset face this coworker wears (`PORTRAIT_PRESETS`); unset means none. */
+  portrait?: PortraitPreset;
   type: "built_in" | "remote_ag_ui" | "remote_mastra";
   configuration: Record<string, unknown>;
   /**
@@ -453,6 +456,23 @@ function asList(value: unknown, name: string): unknown[] {
   return value;
 }
 
+/** An agent's `portrait:` -- absent is fine, anything but a preset key is refused by agent id. */
+function parsePortrait(
+  value: unknown,
+  agentId: string,
+): PortraitPreset | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    !(PORTRAIT_PRESETS as readonly string[]).includes(value)
+  ) {
+    throw new Error(
+      `agent "${agentId}": portrait must be one of the preset portraits, got ${JSON.stringify(value)}`,
+    );
+  }
+  return value as PortraitPreset;
+}
+
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${name} must be a non-empty string`);
@@ -601,6 +621,7 @@ function parseAgents(
           agent.avatar_seed === undefined
             ? undefined
             : requiredString(agent.avatar_seed, "agent.avatar_seed"),
+        portrait: parsePortrait(agent.portrait, id),
         type,
         configuration:
           type === "built_in"
@@ -982,7 +1003,11 @@ function parseTenantSkills(value: unknown): TenantSkill[] {
       runnable = "full";
     } else {
       runnable = requiredString(declared, "skill.runnable");
-      if (runnable !== "full" && runnable !== "degraded" && runnable !== "blocked") {
+      if (
+        runnable !== "full" &&
+        runnable !== "degraded" &&
+        runnable !== "blocked"
+      ) {
         throw new Error(
           `skill.runnable must be one of full, degraded, blocked; got "${runnable}"`,
         );
@@ -1899,6 +1924,7 @@ export async function synchronizeTenantPackage(
               title: agent.title,
               roleDescription: agent.roleDescription,
               avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
+              presetPortrait: agent.portrait ?? null,
               visibility,
               deletedAt: null,
               updatedAt,
@@ -1915,6 +1941,7 @@ export async function synchronizeTenantPackage(
                   title: agent.title,
                   roleDescription: agent.roleDescription,
                   avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
+                  presetPortrait: agent.portrait ?? null,
                   visibility,
                   deletedAt: null,
                   updatedAt,

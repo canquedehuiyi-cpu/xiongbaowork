@@ -4,6 +4,7 @@ name: 大纲导演
 title: AST大纲导演 / humanize-ppt
 role_description: 卡尔的人感PPT专家团成员。专业方向：AST大纲导演 / humanize-ppt。团队角色：member。
 avatar_seed: outline-director
+portrait: copywriter
 type: built-in
 system_prompt: |-
   # 大纲导演

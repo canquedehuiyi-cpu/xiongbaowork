@@ -11,6 +11,7 @@ import {
   skillAssets,
   skills,
 } from "../src/db/schema";
+import { PORTRAIT_PRESETS } from "../src/portraits/store";
 import { runAsTenant } from "../src/tenant/context";
 import {
   loadTenantPackage,
@@ -46,6 +47,15 @@ const PORTED_SKILLS_WITH_ASSETS = 30;
 const BOT_GRANT_EDGE_COUNT = 15;
 
 const loaded = await loadTenantPackage("../examples/xiongbao");
+
+test("every preset coworker in the package carries a portrait that is one of the presets", () => {
+  for (const entry of loaded.agents) {
+    expect(
+      PORTRAIT_PRESETS as readonly string[],
+      `agent ${entry.id}`,
+    ).toContain(entry.portrait as string);
+  }
+});
 
 test("the package declares the product, five seed coworkers, the ported twenty-three, and the navigation entries", () => {
   // collectAgents reads agents.yaml first, then agents/ in filename order, so the five seeds stay in

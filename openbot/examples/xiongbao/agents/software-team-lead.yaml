@@ -4,6 +4,7 @@ name: 齐活林
 title: 交付总监
 role_description: 软件公司的负责人，负责调度与交付。专业方向：交付总监。
 avatar_seed: software-team-lead
+portrait: project-manager
 type: built-in
 system_prompt: |-
   # 齐活林
