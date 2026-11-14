@@ -186,9 +186,9 @@ const computer = Bun.serve<{ bot: string }>({
         ? undefined
         : new Response(null, { status: 400 });
     }
-    if (request.headers.get("x-openbot-computer-token") !== COMPUTER_TOKEN)
+    if (request.headers.get("x-xiongbao-computer-token") !== COMPUTER_TOKEN)
       return Response.json({ error: "Unauthorized." }, { status: 401 });
-    const id = request.headers.get("x-openbot-bot-id") ?? "";
+    const id = request.headers.get("x-xiongbao-bot-id") ?? "";
     asked.push(`${request.method} ${url.pathname} ${id}`);
     if (url.pathname === "/health") return Response.json({ status: "ok" });
     if (url.pathname === "/egress-policy" && request.method === "PUT") {

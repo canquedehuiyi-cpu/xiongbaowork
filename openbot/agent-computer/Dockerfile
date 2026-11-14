@@ -72,6 +72,8 @@ COPY shared/file-download.ts shared/env-aliases.ts shared/apply-env-aliases.ts /
 # than a second install.
 COPY shared/openbot-browser.ts shared/bot-browser.ts /shared/
 COPY shared/recorder-extension.ts shared/recorder-extension.json /shared/
+# The header names the server sends and src/wire-headers.ts reads (both sides take them from here).
+COPY shared/wire-headers.ts /shared/
 RUN ln -s /app/node_modules /shared/node_modules
 
 # The built Recorder, put into every person's browser this computer opens. Without it the computer

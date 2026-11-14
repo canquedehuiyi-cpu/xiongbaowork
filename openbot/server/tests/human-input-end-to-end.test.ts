@@ -40,7 +40,7 @@ function serveComputer() {
     fetch: async (request) => {
       received.push({
         path: new URL(request.url).pathname,
-        token: request.headers.get("x-openbot-computer-token"),
+        token: request.headers.get("x-xiongbao-computer-token"),
         body: await request.json().catch(() => null),
       });
       return Response.json({ ok: true });

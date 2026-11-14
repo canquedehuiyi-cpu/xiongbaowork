@@ -8,7 +8,7 @@ import { personDigest } from "../learning/personal-space";
  * A person's own OpenBot browser, as a computer: `person-` and the same 32 hex digits their Learning space is named with
  * (learning/personal-space.ts). Hashed rather than copied for the same reasons: a user id is any text, the same person
  * always gets the same browser on every replica with nothing to look up, and two people never share one. Every way of
- * reaching a computer then carries it unchanged, with the id in `x-openbot-bot-id` as a Bot's is.
+ * reaching a computer then carries it unchanged, with the id in `x-xiongbao-bot-id` as a Bot's is.
  */
 export function personBrowserId(userId: string): string {
   return `${PERSON_BROWSER_PREFIX}${personDigest(userId)}`;

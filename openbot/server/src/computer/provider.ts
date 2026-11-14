@@ -1,3 +1,4 @@
+import { HEADER } from "../../../shared/wire-headers";
 import type { ComputerConfig } from "../config";
 import {
   type ComputerKey,
@@ -206,9 +207,9 @@ export function sharedSeatHeaders(target: {
   key: ComputerKey;
 }): Record<string, string> {
   return {
-    "x-openbot-bot-id": target.botId,
+    [HEADER.botId]: target.botId,
     ...(target.key.kind === "person"
-      ? { "x-openbot-person-id": target.key.personId }
+      ? { [HEADER.personId]: target.key.personId }
       : {}),
   };
 }
@@ -234,7 +235,7 @@ export function createSharedComputerProvider(
   }): Record<string, string> {
     return {
       ...(seat ? sharedSeatHeaders(seat) : {}),
-      ...(options.token ? { "x-openbot-computer-token": options.token } : {}),
+      ...(options.token ? { [HEADER.computerToken]: options.token } : {}),
     };
   }
 

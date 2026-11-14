@@ -1055,7 +1055,7 @@ test("a configured computer that refuses its policy is Needs setup, then recover
       fetchImpl: Object.assign(
         async (_url: string | URL | Request, init?: RequestInit) => {
           tokens.push(
-            new Headers(init?.headers).get("x-openbot-computer-token"),
+            new Headers(init?.headers).get("x-xiongbao-computer-token"),
           );
           return new Response(null, { status: ready ? 204 : 401 });
         },

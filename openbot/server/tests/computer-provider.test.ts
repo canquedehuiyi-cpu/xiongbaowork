@@ -43,7 +43,7 @@ function serveAgentComputer(
 ) {
   return serve(async (request) => {
     const url = new URL(request.url);
-    const token = request.headers.get("x-openbot-computer-token");
+    const token = request.headers.get("x-xiongbao-computer-token");
 
     if (
       options?.token &&
@@ -80,7 +80,7 @@ function serveAgentComputer(
 
     if (url.pathname === "/computers/reset" && request.method === "POST") {
       if (handlers.reset) return handlers.reset(request);
-      const botId = request.headers.get("x-openbot-bot-id") ?? "shared";
+      const botId = request.headers.get("x-xiongbao-bot-id") ?? "shared";
       return Response.json({ reset: true, botId });
     }
 
@@ -159,13 +159,13 @@ describe("shared computer provider", () => {
     const baseUrl = serveAgentComputer(
       {
         stop: (request) => {
-          const botId = request.headers.get("x-openbot-bot-id");
+          const botId = request.headers.get("x-xiongbao-bot-id");
           requests.push({
             path: new URL(request.url).pathname,
             method: request.method,
             botId,
-            person: request.headers.get("x-openbot-person-id"),
-            token: request.headers.get("x-openbot-computer-token"),
+            person: request.headers.get("x-xiongbao-person-id"),
+            token: request.headers.get("x-xiongbao-computer-token"),
           });
           const wasRunning = botId === "running-bot";
           return Response.json({ stopped: true, wasRunning });
@@ -216,12 +216,12 @@ describe("shared computer provider", () => {
     const baseUrl = serveAgentComputer(
       {
         reset: (request) => {
-          const botId = request.headers.get("x-openbot-bot-id");
+          const botId = request.headers.get("x-xiongbao-bot-id");
           requests.push({
             path: new URL(request.url).pathname,
             method: request.method,
             botId,
-            token: request.headers.get("x-openbot-computer-token"),
+            token: request.headers.get("x-xiongbao-computer-token"),
           });
           return Response.json({ reset: true, botId });
         },
@@ -335,8 +335,8 @@ describe("shared computer provider", () => {
         run: (request) => {
           asked.push({
             path: new URL(request.url).pathname,
-            botId: request.headers.get("x-openbot-bot-id"),
-            token: request.headers.get("x-openbot-computer-token"),
+            botId: request.headers.get("x-xiongbao-bot-id"),
+            token: request.headers.get("x-xiongbao-computer-token"),
           });
           return Response.json({ run: "d7c0f1" });
         },
@@ -359,7 +359,7 @@ describe("shared computer provider", () => {
     const baseUrl = serveAgentComputer({
       run: (request) =>
         Response.json({
-          run: `run-of-${request.headers.get("x-openbot-bot-id")}`,
+          run: `run-of-${request.headers.get("x-xiongbao-bot-id")}`,
         }),
     });
     const provider = createSharedComputerProvider({ baseUrl });
@@ -432,7 +432,7 @@ describe("seats on the shared computer", () => {
     const seen: string[] = [];
     const baseUrl = serveAgentComputer({
       run: (request) => {
-        const seat = `${request.headers.get("x-openbot-person-id")}~${request.headers.get("x-openbot-bot-id")}`;
+        const seat = `${request.headers.get("x-xiongbao-person-id")}~${request.headers.get("x-xiongbao-bot-id")}`;
         seen.push(seat);
         return Response.json({ run: `run-of-${seat}` });
       },
@@ -451,8 +451,8 @@ describe("seats on the shared computer", () => {
     const baseUrl = serveAgentComputer({
       carryOver: (request) => {
         asked.push([
-          request.headers.get("x-openbot-person-id"),
-          request.headers.get("x-openbot-bot-id"),
+          request.headers.get("x-xiongbao-person-id"),
+          request.headers.get("x-xiongbao-bot-id"),
         ]);
         return Response.json({ outcome: "moved" });
       },
@@ -502,7 +502,7 @@ describe("seats on the shared computer", () => {
         }),
       stop: (request) => {
         stopped.push(
-          `${request.headers.get("x-openbot-person-id")}~${request.headers.get("x-openbot-bot-id")}`,
+          `${request.headers.get("x-xiongbao-person-id")}~${request.headers.get("x-xiongbao-bot-id")}`,
         );
         return Response.json({ stopped: true, wasRunning: true });
       },
