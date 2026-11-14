@@ -642,6 +642,42 @@ function toYaml(value: unknown): string {
   return stringifyYaml(value, { lineWidth: 0 });
 }
 
+/**
+ * The hand-written fields of an existing `agents/<id>.yaml` -- `portrait:` and `persona:` -- merged
+ * into the pipeline's row. The pipeline knows neither, so without this a re-run silently drops them
+ * and the next package sync clears the preset portrait and persona. Placed where the committed files
+ * keep them (portrait after avatar_seed, persona after system_prompt) so a second run is byte-identical.
+ */
+export function keepAuthoredAgentFields(
+  agent: AgentRow,
+  existingText: string | null,
+): AgentRow {
+  if (existingText === null) return agent;
+  const existing = parseYaml(existingText) as Record<string, unknown> | null;
+  const kept: Record<string, unknown> = {};
+  for (const key of ["portrait", "persona"]) {
+    if (existing?.[key] !== undefined && agent[key] === undefined) {
+      kept[key] = existing[key];
+    }
+  }
+  if (Object.keys(kept).length === 0) return agent;
+  const after: Record<string, string> = {
+    portrait: "avatar_seed",
+    persona: "system_prompt",
+  };
+  const merged: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(agent)) {
+    merged[key] = value;
+    for (const [field, anchor] of Object.entries(after)) {
+      if (key === anchor && field in kept) merged[field] = kept[field];
+    }
+  }
+  for (const [field, value] of Object.entries(kept)) {
+    if (!(field in merged)) merged[field] = value;
+  }
+  return merged as AgentRow;
+}
+
 /** One `agents/<id>.yaml` file: the single-coworker form the PackageAgentFile contract accepts. */
 export function renderAgentFile(agent: AgentRow): string {
   const id = typeof agent.id === "string" ? agent.id : "";
@@ -784,7 +820,14 @@ export function assemblePackage(options: {
   const agentFiles: string[] = [];
   for (const agent of pipeline.agents) {
     const id = String(agent.id);
-    write(join("agents", `${id}.yaml`), renderAgentFile(agent));
+    const agentPath = join(options.packageDir, "agents", `${id}.yaml`);
+    const existing = existsSync(agentPath)
+      ? readFileSync(agentPath, "utf8")
+      : null;
+    write(
+      join("agents", `${id}.yaml`),
+      renderAgentFile(keepAuthoredAgentFields(agent, existing)),
+    );
     agentFiles.push(id);
   }
   write("skills.yaml", skillsYaml);
