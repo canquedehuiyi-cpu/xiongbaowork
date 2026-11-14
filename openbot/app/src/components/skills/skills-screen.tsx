@@ -8,7 +8,6 @@ import {
 } from "@/components/resources/capability-tabs";
 import {
   CardGrid,
-  grantedSentence,
   NoMatch,
   QueryState,
   TabHeader,
@@ -25,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { removeSkillMutationOptions } from "@/lib/plugins/mutations";
 import {
@@ -78,6 +78,7 @@ export function SkillsScreen({
   const plugins = useQuery(pluginsPageQueryOptions());
   const me = useQuery(currentUserQueryOptions());
   const listings = useQuery(installListingsQueryOptions());
+  const agents = useQuery(agentListQueryOptions());
   const [error, setError] = useState<string | null>(null);
   const removeSkill = useMutation({
     ...removeSkillMutationOptions(queryClient),
@@ -88,6 +89,11 @@ export function SkillsScreen({
   const showEdit = !creating && editing !== undefined;
   const skills = plugins.data?.skills ?? [];
   const meId = me.data?.id;
+  // Only the person's own employees (summoned ones included) count as having the skill installed;
+  // grants to shared preset employees or other people's employees are not theirs.
+  const myAgentIds = new Set(
+    (agents.data ?? []).filter((agent) => agent.mine).map((agent) => agent.id),
+  );
   const visible = skills.filter((skill) =>
     textMatch(
       query,
@@ -112,7 +118,9 @@ export function SkillsScreen({
       actions={
         <>
           <span className="text-[12px] text-muted-foreground">
-            {grantedSentence(skill.grantedTo.length)}
+            {installedSentence(
+              skill.grantedTo.filter((id) => myAgentIds.has(id)).length,
+            )}
           </span>
           {/*
            * Only on the person's own. A deployment skill is not theirs to edit or delete, and the
@@ -242,6 +250,11 @@ export function SkillsScreen({
       </QueryState>
     </DetailPanel>
   );
+}
+
+/** 「已装到你的 N 个员工」, or 「未安装」 when none of the person's own employees holds it. */
+function installedSentence(count: number): string {
+  return count > 0 ? `已装到你的 ${count} 个员工` : "未安装";
 }
 
 function SkillGroup({
