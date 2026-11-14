@@ -251,18 +251,23 @@ describe("the ported package, end to end", () => {
     expect(new Set(seeded.map((row) => row.seed)).size).toBe(28);
   });
 
-  test("the audit's grades reach the database: 35 blocked skills are blocked, not silently full", async () => {
+  test("the audit's grades reach the database: 36 blocked skills are blocked, not silently full", async () => {
     /*
      * The gap this chain exists to catch: the assembler writes the grade under `_porting`, the
      * loader used to read only a top-level `runnable`, and the whole package loaded as `full` —
      * 35 「暂不可用」skills advertised as 完整可用. `docs/porting/tool-ref-audit.md` is the table
-     * this count must agree with.
+     * this count must agree with; the 36th is `workbuddy-market-export`, blocked by the porting
+     * pipeline's host-specific rule (its body only describes WorkBuddy's own three marketplaces),
+     * which the static tool audit cannot see because there is no tool call in it to flag.
      */
     const blocked = loaded.skills.filter(
       (skill) => skill.runnable === "blocked",
     );
-    expect(blocked).toHaveLength(35);
+    expect(blocked).toHaveLength(36);
     expect(blocked.map((skill) => skill.slug)).toContain("bot-creator");
+    expect(blocked.map((skill) => skill.slug)).toContain(
+      "workbuddy-market-export",
+    );
 
     // Every slug the package declares landed, with the grade the audit gave it.
     const rows = await runAsTenant("platform", () =>
@@ -295,12 +300,24 @@ describe("the ported package, end to end", () => {
         .where(inArray(skillTable.id, packageSkillSlugs)),
     );
     const reasonRows = grades.filter((row) => row.runnable === "blocked");
-    expect(reasonRows).toHaveLength(35);
+    expect(reasonRows).toHaveLength(36);
     for (const row of reasonRows) {
       expect(row.blockedReason, row.id).toBeTruthy();
       expect(row.blockedReasonRef, row.id).toBeTruthy();
     }
     expect(reasonRows.map((row) => row.id)).toContain("bot-creator");
+
+    /*
+     * `degraded` 同理：部分可用必须说清缺什么。这一档是逐条按"正文引用了没随包附上的附件"
+     * 判出来的，理由行由 `port:verdict-refresh` 写在 `_porting.reason` / `reason_ref` 上；
+     * 一条没有理由的 degraded 和被静默升成 full 一样，都只是换了颜色的谎。
+     */
+    const degradedRows = grades.filter((row) => row.runnable === "degraded");
+    expect(degradedRows).toHaveLength(9);
+    for (const row of degradedRows) {
+      expect(row.blockedReason, row.id).toBe("missing-asset-references");
+      expect(row.blockedReasonRef, row.id).toBeTruthy();
+    }
     const fullWithReason = grades.filter(
       (row) => row.runnable === "full" && (row.blockedReason || row.blockedReasonRef),
     );
