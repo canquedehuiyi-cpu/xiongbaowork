@@ -204,6 +204,7 @@ function draw(entry = "/bots") {
       stub("/bots/$agentId"),
       stub("/bots/$agentId/setup"),
       stub("/channel/new"),
+      stub("/channel/$channelId"),
       stub("/capabilities/roles"),
       stub("/tasks"),
       stub("/pipelines"),
@@ -705,4 +706,75 @@ test("a group card opens its board and 组团流程", async () => {
   expect(
     within(card).getByRole("link", { name: "在看板上看" }).getAttribute("href"),
   ).toBe("/tasks?crew=agent-1");
+});
+
+/*
+ * 召唤员工: a preset original is never talked to directly. Its card summons it (the card flip,
+ * then the conversation), or, once summoned, its 进对话 opens the person's own copy's conversation —
+ * never a /channel/new that would not take the original.
+ */
+const presetDoctor: AgentProfile = {
+  ...base,
+  id: "preset-doctor",
+  name: "暖心医生",
+  title: "医生",
+  mine: false,
+  canManage: false,
+  visibility: "public",
+  summonKind: "preset",
+  summoned: false,
+};
+
+function servingSummon(posted: string[], answer: () => Promise<Response>) {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "POST" && url.endsWith("/summon")) {
+      posted.push(url);
+      return answer();
+    }
+    return Response.json({ error: "not served" }, { status: 404 });
+  }) as typeof fetch;
+}
+
+const cardOf = (screen: ReturnType<typeof render>, name: string) =>
+  within(
+    screen
+      .getAllByTestId("waker-card")
+      .find((node) => node.textContent?.includes(name)) as HTMLElement,
+  );
+
+test("a preset not summoned yet is summoned from its card, with the card flip", async () => {
+  const posted: string[] = [];
+  servingSummon(posted, () => new Promise<Response>(() => {}));
+  seed({ agents: [base, presetDoctor] });
+  const { screen } = draw();
+  await waitFor(() => expect(screen.getByText("暖心医生")).toBeTruthy());
+  const card = cardOf(screen, "暖心医生");
+  expect(card.queryByRole("link", { name: "进对话" })).toBeNull();
+  await userEvent.click(card.getByRole("button", { name: "召唤 暖心医生" }));
+  expect(
+    await within(document.body).findByRole("dialog", { name: "召唤员工" }),
+  ).toBeTruthy();
+  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
+});
+
+test("a summoned preset's 进对话 opens the person's own copy's conversation", async () => {
+  const posted: string[] = [];
+  servingSummon(posted, async () =>
+    Response.json({
+      agent: { ...base, id: "copy-doctor", name: "暖心医生" },
+      channelId: "c-doctor",
+      created: false,
+    }),
+  );
+  seed({ agents: [base, { ...presetDoctor, summoned: true }] });
+  const { screen, router } = draw();
+  await waitFor(() => expect(screen.getByText("暖心医生")).toBeTruthy());
+  const card = cardOf(screen, "暖心医生");
+  expect(card.queryByRole("link", { name: "进对话" })).toBeNull();
+  await userEvent.click(card.getByRole("button", { name: "进对话" }));
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe("/channel/c-doctor"),
+  );
+  expect(posted).toEqual(["/api/agents/preset-doctor/summon"]);
 });

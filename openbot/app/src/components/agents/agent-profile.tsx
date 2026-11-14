@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { AgentDialog } from "@/components/agents/agent-dialog";
+import { useSummon } from "@/components/summon/use-summon";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,6 +61,7 @@ export function AgentProfile({
   const [managing, setManaging] = useState(false);
   const navigate = useNavigate();
   const agent = useQuery(agentQueryOptions(agentId));
+  const summon = useSummon();
 
   if (agent.isPending) {
     return <ProfileSkeleton />;
@@ -110,14 +112,32 @@ export function AgentProfile({
       </section>
 
       <div className="flex flex-col gap-2">
+        {/*
+         * A preset original is talked to through the person's own summoned copy (召唤员工): this
+         * summons it, or opens that copy's conversation once it is summoned.
+         */}
         <Button
           className="w-full text-sm!"
+          disabled={summon.busy}
           onClick={() =>
-            void navigate({ search: { agent: agentId }, to: "/channel/new" })
+            profile.summonKind === "preset"
+              ? summon.start(profile)
+              : void navigate({
+                  search: { agent: agentId },
+                  to: "/channel/new",
+                })
           }
         >
-          开始新对话
+          {profile.summonKind === "preset" && !profile.summoned
+            ? `召唤 ${profile.name}`
+            : "开始新对话"}
         </Button>
+        {summon.problem ? (
+          <p className="text-sm text-destructive" role="alert">
+            {summon.problem.message}
+          </p>
+        ) : null}
+        {summon.overlay}
         <Button
           className="w-full text-sm!"
           onClick={() => setManaging(true)}
