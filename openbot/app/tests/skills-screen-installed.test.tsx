@@ -30,6 +30,11 @@ afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
 
 const originalFetch = global.fetch;
+/** How `/api/agents` answers: normally, never (until released), or with a 500. */
+let agentsMode: "ok" | "pending" | "fail" = "ok";
+beforeEach(() => {
+  agentsMode = "ok";
+});
 
 const agent = (id: string, mine: boolean) => ({
   id,
@@ -74,6 +79,12 @@ beforeEach(() => {
             onboarding: null,
           },
         });
+      }
+      if (path === "/api/agents" && agentsMode === "fail") {
+        return new Response(null, { status: 500 });
+      }
+      if (path === "/api/agents" && agentsMode === "pending") {
+        return new Promise<Response>(() => {});
       }
       if (path === "/api/agents") {
         return json({
@@ -165,4 +176,21 @@ test("a skill granted only to shared or other people's employees says 未安装"
   await view.findByText("已装到你的 2 个员工");
   expect(view.getByText("未安装")).toBeTruthy();
   expect(view.queryByText(/已授予/)).toBeNull();
+});
+
+test("no 未安装 is claimed while the employee list is still loading", async () => {
+  agentsMode = "pending";
+  const view = renderSkills();
+  expect(await view.findByText("技能 two")).toBeTruthy();
+  expect(view.queryByText("未安装")).toBeNull();
+  expect(view.queryByText(/已装到你的/)).toBeNull();
+});
+
+test("no 未安装 is claimed when the employee list fails to load", async () => {
+  agentsMode = "fail";
+  const view = renderSkills();
+  expect(await view.findByText("技能 two")).toBeTruthy();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(view.queryByText("未安装")).toBeNull();
+  expect(view.queryByText(/已装到你的/)).toBeNull();
 });

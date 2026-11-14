@@ -117,11 +117,14 @@ export function SkillsScreen({
     <ResourceCard
       actions={
         <>
-          <span className="text-[12px] text-muted-foreground">
-            {installedSentence(
-              skill.grantedTo.filter((id) => myAgentIds.has(id)).length,
-            )}
-          </span>
+          {/* No sentence until the roster is known: an empty set would read as 「未安装」. */}
+          {agents.isSuccess ? (
+            <span className="text-[12px] text-muted-foreground">
+              {installedSentence(
+                skill.grantedTo.filter((id) => myAgentIds.has(id)).length,
+              )}
+            </span>
+          ) : null}
           {/*
            * Only on the person's own. A deployment skill is not theirs to edit or delete, and the
            * server refuses either way; an affordance that only ever fails is a promise this screen
