@@ -3,6 +3,7 @@ import { type RefObject, useCallback, useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { BotOrb } from "@/components/agents/bot-orb";
 import { ChosenPortrait } from "@/components/channels/avatar";
+import { visibilityLabel } from "@/components/channels/visibility-tag";
 import type { AvatarMotionState } from "@/components/portraits/preset-animations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
@@ -68,7 +69,7 @@ export function ConversationIntro({
         {personal ? null : (
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="inline-flex h-6.5 items-center rounded-lg bg-muted px-2.5 font-semibold text-[13px] text-muted-foreground">
-              {agent.visibility === "public" ? "公开" : "仅自己"}
+              {visibilityLabel(agent.visibility)}
             </span>
           </div>
         )}
