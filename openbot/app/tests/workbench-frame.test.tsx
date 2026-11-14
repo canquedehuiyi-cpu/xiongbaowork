@@ -147,6 +147,7 @@ function renderFrame(path: string, user: SignedIn = member) {
       page("/", "首页内容"),
       page("/capabilities/skills", "技能页内容"),
       page("/bots", "人才市场页内容"),
+      page("/contacts", "组织架构页内容"),
       page("/channel/$channelId", "对话页内容"),
       page("/me", "我页面内容"),
     ]),
@@ -208,9 +209,9 @@ describe("WorkbenchFrame", () => {
     expect(list.getByRole("heading", { name: "通讯录" })).toBeTruthy();
     const market = list.getByRole("link", { name: "人才市场" });
     expect(market.getAttribute("href")).toBe("/bots");
-    // 主区不动，还是原来的页面。
-    expect(router.state.location.pathname).toBe("/");
-    expect(view.getByText("首页内容")).toBeTruthy();
+    // 「通讯录」和「我」一样直接落到自己的页面：主区是组织架构（Task 7）。
+    await view.findByText("组织架构页内容");
+    expect(router.state.location.pathname).toBe("/contacts");
 
     // 进了人才市场，地址所属的入口就是通讯录。
     await user.click(market);

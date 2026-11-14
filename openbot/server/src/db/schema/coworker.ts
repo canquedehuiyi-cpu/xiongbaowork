@@ -129,6 +129,12 @@ export const agentProfiles = pgTable(
     }),
     /** The preset portrait this coworker uses (migration 0213). Null means none. */
     presetPortrait: text("preset_portrait").$type<PortraitPreset>(),
+    /**
+     * The coworker's department (聊天工作台 Task 6, migration 0214): free text of at most 32
+     * characters, what the address book groups by. Null means none (未分组). A preset's comes from
+     * its package; a summoned copy takes its preset's.
+     */
+    department: text("department"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -154,6 +160,10 @@ export const agentProfiles = pgTable(
     check(
       "agent_profiles_role_template_pair",
       sql`(${table.roleTemplateId} IS NULL) = (${table.roleTemplateVersion} IS NULL)`,
+    ),
+    check(
+      "agent_profiles_department_length",
+      sql`${table.department} IS NULL OR char_length(${table.department}) <= 32`,
     ),
     check(
       "agent_profiles_role_template_version",

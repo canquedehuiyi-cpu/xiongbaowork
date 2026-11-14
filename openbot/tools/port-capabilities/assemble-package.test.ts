@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   AGENT_NAME_OVERRIDES,
+  AGENT_TITLE_OVERRIDES,
   AssembleError,
   AUTH_OVERRIDES,
   applyVerdictDowngrades,
@@ -485,17 +486,22 @@ describe("assemblePackage", () => {
     ).toEqual(before);
   });
 
-  test("a re-run keeps an existing agent file's portrait and persona unchanged", () => {
+  test("a re-run keeps an existing agent file's portrait, department and persona unchanged", () => {
     const file = join(packageDir, "agents", "alpha-agent.yaml");
     const generated = readFileSync(file, "utf8");
     const authored = parseYaml(generated) as Record<string, unknown>;
     authored.portrait = "doctor";
+    authored.department = "研发部";
     authored.persona = { tone: "冷静。", principles: "讲证据。", habits: "" };
     const ordered: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(authored)) {
-      if (key === "portrait" || key === "persona") continue;
+      if (key === "portrait" || key === "department" || key === "persona")
+        continue;
       ordered[key] = value;
-      if (key === "avatar_seed") ordered.portrait = authored.portrait;
+      if (key === "avatar_seed") {
+        ordered.portrait = authored.portrait;
+        ordered.department = authored.department;
+      }
       if (key === "system_prompt") ordered.persona = authored.persona;
     }
     const withFields = `${generated.split("\n")[0]}\n${stringifyYaml(ordered, { lineWidth: 0 })}`;
@@ -511,6 +517,7 @@ describe("assemblePackage", () => {
       unknown
     >;
     expect(kept.portrait).toBe("doctor");
+    expect(kept.department).toBe("研发部");
     expect(kept.persona).toEqual({
       tone: "冷静。",
       principles: "讲证据。",
@@ -611,6 +618,34 @@ describe("withDisplayName", () => {
     expect(named.name).toBe("电脑管家");
     expect(named.system_prompt).toBe("# 电脑管家\n\n你是本团队的成员之一。");
     expect(named.title).toBe("电脑运维专家");
+  });
+
+  test("a coworker whose source title is English or carries a skill slug gets its Chinese title", () => {
+    const titled = withDisplayName({
+      id: "guizang-renderer",
+      name: "归藏生成师",
+      title: "中文稳定版HTML PPT / guizang-ppt-skill",
+      system_prompt: "# 归藏生成师",
+    });
+    expect(titled.title).toBe("中文幻灯片生成");
+    expect(titled.name).toBe("归藏生成师");
+    expect(titled.system_prompt).toBe("# 归藏生成师");
+  });
+
+  test("every title override is what the committed package file says, so a re-run keeps it", () => {
+    const committed = join(
+      import.meta.dir,
+      "..",
+      "..",
+      "examples",
+      "xiongbao",
+      "agents",
+    );
+    for (const [id, title] of Object.entries(AGENT_TITLE_OVERRIDES)) {
+      expect(title, id).not.toMatch(/[A-Za-z/]/);
+      const file = readFileSync(join(committed, `${id}.yaml`), "utf8");
+      expect(file, id).toContain(`\ntitle: ${title}\n`);
+    }
   });
 
   test("every other coworker is left exactly as the pipeline made it", () => {

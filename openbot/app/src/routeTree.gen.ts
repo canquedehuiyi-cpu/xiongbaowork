@@ -22,6 +22,7 @@ import { Route as AuthedAppAutonomousRouteImport } from './routes/_authed/_app/a
 import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
 import { Route as AuthedAppBrowserRouteImport } from './routes/_authed/_app/browser'
 import { Route as AuthedAppCapabilitiesRouteImport } from './routes/_authed/_app/capabilities'
+import { Route as AuthedAppContactsRouteImport } from './routes/_authed/_app/contacts'
 import { Route as AuthedAppKnowledgeRouteImport } from './routes/_authed/_app/knowledge'
 import { Route as AuthedAppMeRouteImport } from './routes/_authed/_app/me'
 import { Route as AuthedAppMemoryRouteImport } from './routes/_authed/_app/memory'
@@ -200,6 +201,11 @@ const AuthedAppBrowserRoute = AuthedAppBrowserRouteImport.update({
 const AuthedAppCapabilitiesRoute = AuthedAppCapabilitiesRouteImport.update({
   id: '/capabilities',
   path: '/capabilities',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppContactsRoute = AuthedAppContactsRouteImport.update({
+  id: '/contacts',
+  path: '/contacts',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppKnowledgeRoute = AuthedAppKnowledgeRouteImport.update({
@@ -853,6 +859,7 @@ export interface FileRoutesByFullPath {
   '/bot': typeof AuthedAppBotRoute
   '/browser': typeof AuthedAppBrowserRoute
   '/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
+  '/contacts': typeof AuthedAppContactsRoute
   '/knowledge': typeof AuthedAppKnowledgeRoute
   '/me': typeof AuthedAppMeRoute
   '/memory': typeof AuthedAppMemoryRoute
@@ -978,6 +985,7 @@ export interface FileRoutesByTo {
   '/autonomous': typeof AuthedAppAutonomousRoute
   '/bot': typeof AuthedAppBotRoute
   '/browser': typeof AuthedAppBrowserRoute
+  '/contacts': typeof AuthedAppContactsRoute
   '/knowledge': typeof AuthedAppKnowledgeRoute
   '/me': typeof AuthedAppMeRoute
   '/memory': typeof AuthedAppMemoryRoute
@@ -1108,6 +1116,7 @@ export interface FileRoutesById {
   '/_authed/_app/bot': typeof AuthedAppBotRoute
   '/_authed/_app/browser': typeof AuthedAppBrowserRoute
   '/_authed/_app/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
+  '/_authed/_app/contacts': typeof AuthedAppContactsRoute
   '/_authed/_app/knowledge': typeof AuthedAppKnowledgeRoute
   '/_authed/_app/me': typeof AuthedAppMeRoute
   '/_authed/_app/memory': typeof AuthedAppMemoryRoute
@@ -1240,6 +1249,7 @@ export interface FileRouteTypes {
     | '/bot'
     | '/browser'
     | '/capabilities'
+    | '/contacts'
     | '/knowledge'
     | '/me'
     | '/memory'
@@ -1365,6 +1375,7 @@ export interface FileRouteTypes {
     | '/autonomous'
     | '/bot'
     | '/browser'
+    | '/contacts'
     | '/knowledge'
     | '/me'
     | '/memory'
@@ -1494,6 +1505,7 @@ export interface FileRouteTypes {
     | '/_authed/_app/bot'
     | '/_authed/_app/browser'
     | '/_authed/_app/capabilities'
+    | '/_authed/_app/contacts'
     | '/_authed/_app/knowledge'
     | '/_authed/_app/me'
     | '/_authed/_app/memory'
@@ -1709,6 +1721,13 @@ declare module '@tanstack/react-router' {
       path: '/capabilities'
       fullPath: '/capabilities'
       preLoaderRoute: typeof AuthedAppCapabilitiesRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/contacts': {
+      id: '/_authed/_app/contacts'
+      path: '/contacts'
+      fullPath: '/contacts'
+      preLoaderRoute: typeof AuthedAppContactsRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/knowledge': {
@@ -2719,6 +2738,7 @@ interface AuthedAppRouteChildren {
   AuthedAppBotRoute: typeof AuthedAppBotRoute
   AuthedAppBrowserRoute: typeof AuthedAppBrowserRoute
   AuthedAppCapabilitiesRoute: typeof AuthedAppCapabilitiesRouteWithChildren
+  AuthedAppContactsRoute: typeof AuthedAppContactsRoute
   AuthedAppKnowledgeRoute: typeof AuthedAppKnowledgeRoute
   AuthedAppMeRoute: typeof AuthedAppMeRoute
   AuthedAppMemoryRoute: typeof AuthedAppMemoryRoute
@@ -2774,6 +2794,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppBotRoute: AuthedAppBotRoute,
   AuthedAppBrowserRoute: AuthedAppBrowserRoute,
   AuthedAppCapabilitiesRoute: AuthedAppCapabilitiesRouteWithChildren,
+  AuthedAppContactsRoute: AuthedAppContactsRoute,
   AuthedAppKnowledgeRoute: AuthedAppKnowledgeRoute,
   AuthedAppMeRoute: AuthedAppMeRoute,
   AuthedAppMemoryRoute: AuthedAppMemoryRoute,

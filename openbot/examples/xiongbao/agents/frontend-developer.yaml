@@ -5,6 +5,7 @@ title: 前端开发工程师
 role_description: 精通现代Web技术和主流框架，以像素级精度构建响应式高性能Web应用
 avatar_seed: frontend-developer
 portrait: programmer
+department: 研发部
 type: built-in
 system_prompt: |-
   # 像素匠

@@ -38,6 +38,33 @@
   --wb-me-avatar: linear-gradient(135deg, #e6e7ec, #d5d7de);
   --wb-plan: linear-gradient(135deg, #f2c46d, #d9963b);
   --wb-plan-fg: #2a1a06;
+  /* 通讯录与员工名片（Task 7）：名片封面、封面上的关闭钮、抽屉的投影、人才市场的金色点缀。 */
+  --wb-cover:
+    radial-gradient(
+      120px 80px at 30% 40%,
+      rgba(185, 130, 28, 0.22),
+      transparent 70%
+    ),
+    linear-gradient(135deg, #fbe2db, #f6eee4);
+  --wb-cover-button: rgba(255, 255, 255, 0.72);
+  --wb-cover-button-fg: #1a1b1f;
+  --wb-drawer-shadow: -20px 0 40px rgba(20, 30, 60, 0.12);
+  --wb-tag-ai: linear-gradient(
+    135deg,
+    rgba(232, 64, 47, 0.12),
+    rgba(185, 130, 28, 0.14)
+  );
+  --wb-market-icon: linear-gradient(
+    135deg,
+    rgba(185, 130, 28, 0.22),
+    rgba(232, 64, 47, 0.16)
+  );
+  --wb-market-glow: radial-gradient(
+    160px 100px at 85% 0%,
+    rgba(185, 130, 28, 0.12),
+    transparent 70%
+  );
+  --wb-market-line: rgba(185, 130, 28, 0.28);
   --wb-radius-frame: 18px;
   --wb-radius: 12px;
   --wb-radius-sm: 9px;
@@ -76,6 +103,32 @@
   --wb-me-avatar: linear-gradient(135deg, #3a3a44, #24242b);
   --wb-plan: linear-gradient(135deg, #f2c46d, #d9963b);
   --wb-plan-fg: #2a1a06;
+  --wb-cover:
+    radial-gradient(
+      120px 80px at 30% 40%,
+      rgba(242, 196, 109, 0.35),
+      transparent 70%
+    ),
+    linear-gradient(135deg, #3a1714, #1a1012);
+  --wb-cover-button: rgba(0, 0, 0, 0.35);
+  --wb-cover-button-fg: #fff;
+  --wb-drawer-shadow: -20px 0 40px rgba(0, 0, 0, 0.25);
+  --wb-tag-ai: linear-gradient(
+    135deg,
+    rgba(255, 90, 74, 0.18),
+    rgba(242, 196, 109, 0.18)
+  );
+  --wb-market-icon: linear-gradient(
+    135deg,
+    rgba(242, 196, 109, 0.3),
+    rgba(255, 90, 74, 0.25)
+  );
+  --wb-market-glow: radial-gradient(
+    160px 100px at 85% 0%,
+    rgba(242, 196, 109, 0.18),
+    transparent 70%
+  );
+  --wb-market-line: rgba(242, 196, 109, 0.25);
   --wb-radius-frame: 18px;
   --wb-radius: 12px;
   --wb-radius-sm: 9px;

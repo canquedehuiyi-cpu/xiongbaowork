@@ -370,6 +370,20 @@ const joinedProjection = {
   isolated: agentProfiles.isolated,
   summonedFrom: agentProfiles.summonedFrom,
   presetPortrait: agentProfiles.presetPortrait,
+  /*
+   * Its own department, or, for a summoned copy that never had one written, its preset's (聊天工作台
+   * Task 6): copies summoned before the column existed carry NULL, and are read through rather than
+   * backfilled. Only NULL falls back: "" is the owner's explicit 未分组 and comes out as null below.
+   *
+   * The source is read whether or not it has since been soft-deleted, on purpose: the owner could see
+   * the preset when they summoned it, and the copy keeping the department it was grouped under is
+   * the intended behaviour, not a leak of a row they can no longer open.
+   */
+  department: sql<
+    string | null
+  >`coalesce(${agentProfiles.department}, (select "department_source"."department" from "agent_profiles" "department_source" where "department_source"."agent_id" = ${agentProfiles.summonedFrom}))`,
+  // When the coworker was made (a summoned copy: when it was summoned), for 入职第 N 天.
+  createdAt: agents.createdAt,
   /* The hash, only so a surface can say whether one exists. It never leaves this module. */
   callbackTokenHash: agentProfiles.callbackTokenHash,
   configuration: agents.configuration,
@@ -432,6 +446,9 @@ function mapProfile(
     isolated: row.isolated,
     summonedFrom: row.summonedFrom ?? null,
     presetPortrait: row.presetPortrait ?? null,
+    // "" is an explicit clear (未分组); the DTO says none as null either way.
+    department: row.department || null,
+    createdAt: row.createdAt,
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,
@@ -1100,6 +1117,7 @@ export function createAgentProfileStore(
           visibility: input.visibility,
           persona: input.persona ?? null,
           bible: input.bible ?? null,
+          department: input.department || null,
           // Recorded whatever it runs on: a new coworker is never the 分身 (D4, revised 2026-11-04).
           ...(input.roleTemplate
             ? await roleTemplateSource(transaction, input.roleTemplate)
@@ -1347,6 +1365,11 @@ export function createAgentProfileStore(
                 : { persona: input.persona }),
               // The same three-way: absent leaves it, null clears it. Never copied into systemPrompt.
               ...(input.bible === undefined ? {} : { bible: input.bible }),
+              // The same three-way for the department (聊天工作台 Task 6): "" is an explicit clear,
+              // kept as "" so a summoned copy does not fall back to its preset's.
+              ...(input.department === undefined
+                ? {}
+                : { department: input.department }),
               // Absent leaves it alone; see `CreateAgentInput.isolated`.
               ...(input.isolated === undefined
                 ? {}
@@ -1437,6 +1460,8 @@ export function createAgentProfileStore(
           isolated: source.isolated && mayKeepIsolated,
           // The face it was shipped with travels with it, so a copy of a preset looks like the preset.
           presetPortrait: source.presetPortrait ?? null,
+          // So does its department (聊天工作台 Task 6): a summoned preset lands in the preset's.
+          department: source.department ?? null,
           ...(options.summonedFrom
             ? { summonedFrom: options.summonedFrom }
             : {}),

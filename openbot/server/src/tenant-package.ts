@@ -271,6 +271,8 @@ type TenantAgent = {
   portrait?: PortraitPreset;
   /** The persona this coworker is summoned with; unset means none. */
   persona?: Persona;
+  /** Its department (`department:`, at most 32 characters), carried to a summoned copy; unset means none. */
+  department?: string;
   type: "built_in" | "remote_ag_ui" | "remote_mastra";
   configuration: Record<string, unknown>;
   /**
@@ -531,6 +533,29 @@ function parsePortrait(
     );
   }
   return value as PortraitPreset;
+}
+
+/** The longest department a coworker may carry: the same bound the profile column enforces. */
+const DEPARTMENT_MAX_CHARACTERS = 32;
+
+/**
+ * An agent's `department:` -- absent (or null) is fine; otherwise text of at most 32 characters,
+ * refused by agent id for anything else. Blank reads as none.
+ */
+function parseDepartment(value: unknown, agentId: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    throw new Error(
+      `agent "${agentId}": department must be text, got ${JSON.stringify(value)}`,
+    );
+  }
+  const trimmed = value.trim();
+  if ([...trimmed].length > DEPARTMENT_MAX_CHARACTERS) {
+    throw new Error(
+      `agent "${agentId}": department must be ${DEPARTMENT_MAX_CHARACTERS} characters or fewer`,
+    );
+  }
+  return trimmed || undefined;
 }
 
 function requiredString(value: unknown, name: string): string {
@@ -802,6 +827,7 @@ function parseAgents(
             : requiredString(agent.avatar_seed, "agent.avatar_seed"),
         portrait: parsePortrait(agent.portrait, id),
         persona: parseAgentPersona(agent.persona, id),
+        department: parseDepartment(agent.department, id),
         type,
         configuration:
           type === "built_in"
@@ -2134,6 +2160,7 @@ export async function synchronizeTenantPackage(
               avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
               presetPortrait: agent.portrait ?? null,
               persona: agent.persona ?? null,
+              department: agent.department ?? null,
               visibility,
               deletedAt: null,
               updatedAt,
@@ -2152,6 +2179,7 @@ export async function synchronizeTenantPackage(
                   avatarSeed: agent.avatarSeed ?? canonicalAgent.id,
                   presetPortrait: agent.portrait ?? null,
                   persona: agent.persona ?? null,
+                  department: agent.department ?? null,
                   visibility,
                   deletedAt: null,
                   updatedAt,

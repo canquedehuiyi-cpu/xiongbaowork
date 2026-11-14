@@ -107,16 +107,38 @@ export const AGENT_NAME_OVERRIDES: Readonly<Record<string, string>> = {
 };
 
 /**
- * The pipeline's row with its `AGENT_NAME_OVERRIDES` name: `name:`, and the system prompt's opening
- * `# <name>` heading, which the pipeline writes from the same name. Any other row is returned as is.
+ * Job titles (头衔) for ported coworkers whose source title is English, carries the internal skill
+ * slug it was ported from (`… / guizang-ppt-skill`), or is jargon a person would not read as a job:
+ * the title is the line under the name on 人才市场, the 通讯录 and the 员工名片 (工作台第二期). The
+ * source's own wording stays in the role description and the manifest.
+ */
+export const AGENT_TITLE_OVERRIDES: Readonly<Record<string, string>> = {
+  "frontend-slides-renderer": "幻灯片风格设计",
+  "gstack-lead": "软件工坊负责人",
+  "gstack-qa-lead": "测试与发布",
+  "gstack-security-officer": "安全审计",
+  "guizang-renderer": "中文幻灯片生成",
+  "html-ppt-presenter": "幻灯片演讲模式",
+  "outline-director": "大纲策划",
+  qa: "交付质检",
+  "software-qa-engineer": "测试工程师",
+  "video-motion-agent": "视频与动效",
+};
+
+/**
+ * The pipeline's row with its display overrides: an `AGENT_NAME_OVERRIDES` name (`name:`, and the
+ * system prompt's opening `# <name>` heading, which the pipeline writes from the same name) and an
+ * `AGENT_TITLE_OVERRIDES` title. A row with neither is returned as is.
  */
 export function withDisplayName(agent: AgentRow): AgentRow {
   const id = typeof agent.id === "string" ? agent.id : "";
+  const title = AGENT_TITLE_OVERRIDES[id];
+  const titled = title === undefined ? agent : { ...agent, title };
   const name = AGENT_NAME_OVERRIDES[id];
-  if (name === undefined) return agent;
+  if (name === undefined) return titled;
   const prompt = agent.system_prompt;
   return {
-    ...agent,
+    ...titled,
     name,
     ...(typeof prompt === "string" && typeof agent.name === "string"
       ? {
@@ -949,10 +971,11 @@ function toYaml(value: unknown): string {
 }
 
 /**
- * The hand-written fields of an existing `agents/<id>.yaml` -- `portrait:` and `persona:` -- merged
- * into the pipeline's row. The pipeline knows neither, so without this a re-run silently drops them
- * and the next package sync clears the preset portrait and persona. Placed where the committed files
- * keep them (portrait after avatar_seed, persona after system_prompt) so a second run is byte-identical.
+ * The hand-written fields of an existing `agents/<id>.yaml` -- `portrait:`, `department:` and
+ * `persona:` -- merged into the pipeline's row. The pipeline knows none of them, so without this a
+ * re-run silently drops them and the next package sync clears the preset portrait, department and
+ * persona. Placed where the committed files keep them (portrait then department after avatar_seed,
+ * persona after system_prompt) so a second run is byte-identical.
  */
 export function keepAuthoredAgentFields(
   agent: AgentRow,
@@ -961,21 +984,22 @@ export function keepAuthoredAgentFields(
   if (existingText === null) return agent;
   const existing = parseYaml(existingText) as Record<string, unknown> | null;
   const kept: Record<string, unknown> = {};
-  for (const key of ["portrait", "persona"]) {
+  for (const key of ["portrait", "department", "persona"]) {
     if (existing?.[key] !== undefined && agent[key] === undefined) {
       kept[key] = existing[key];
     }
   }
   if (Object.keys(kept).length === 0) return agent;
-  const after: Record<string, string> = {
-    portrait: "avatar_seed",
-    persona: "system_prompt",
+  // Each anchor's fields, in the order they follow it.
+  const after: Record<string, string[]> = {
+    avatar_seed: ["portrait", "department"],
+    system_prompt: ["persona"],
   };
   const merged: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(agent)) {
     merged[key] = value;
-    for (const [field, anchor] of Object.entries(after)) {
-      if (key === anchor && field in kept) merged[field] = kept[field];
+    for (const field of after[key] ?? []) {
+      if (field in kept) merged[field] = kept[field];
     }
   }
   for (const [field, value] of Object.entries(kept)) {

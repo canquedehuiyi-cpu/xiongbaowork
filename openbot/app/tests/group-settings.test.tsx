@@ -111,6 +111,8 @@ type World = {
   putMembers?: { status: number; body: Record<string, unknown> };
   /** How long the templates read takes, for the count that is still loading. */
   templatesDelay?: Promise<void>;
+  /** What `GET /api/agents` answers; defaults to `ROSTER`. */
+  agents?: Record<string, unknown>[];
 };
 let world: World;
 let sent: { method: string; path: string; body: unknown }[] = [];
@@ -155,7 +157,8 @@ function reset(patch: Partial<World> = {}) {
       return NativeResponse.json({
         user: { id: "me", role: "user", email: "me@example.test" },
       });
-    if (path === "/api/agents") return NativeResponse.json({ agents: ROSTER });
+    if (path === "/api/agents")
+      return NativeResponse.json({ agents: world.agents ?? ROSTER });
     if (path === "/api/waker-groups" && method === "GET")
       return NativeResponse.json({ groups: world.crews });
     if (path.startsWith("/api/waker-groups/for-channel/"))
@@ -395,6 +398,39 @@ test("only coworkers the person can use are offered to add", async () => {
       body: { agentIds: ["agent-a", "agent-b", "agent-c", "agent-d"] },
     }),
   );
+});
+
+test("an unsummoned preset is not offered to add; a summoned copy and a hand-made employee are", async () => {
+  reset({
+    agents: [
+      ...ROSTER.slice(0, 3),
+      {
+        ...agent("preset-ops", "运营助手"),
+        summonKind: "preset",
+        summoned: false,
+      },
+      {
+        ...agent("preset-gen", "通用助手"),
+        summonKind: "preset",
+        summoned: true,
+      },
+      {
+        ...agent("copy-gen", "通用助手（我的）"),
+        summonKind: null,
+        summoned: true,
+      },
+      agent("handmade", "自己建的员工"),
+    ],
+  });
+  const { view } = drawer();
+  const panel = await panelOf(view);
+  fireEvent.click(await panel.findByRole("button", { name: "添加员工" }));
+  expect(
+    await panel.findByRole("button", { name: "添加 通用助手（我的）" }),
+  ).toBeTruthy();
+  expect(panel.getByRole("button", { name: "添加 自己建的员工" })).toBeTruthy();
+  expect(panel.queryByRole("button", { name: "添加 运营助手" })).toBeNull();
+  expect(panel.queryByRole("button", { name: "添加 通用助手" })).toBeNull();
 });
 
 test("a 409 from saving shows the server's words", async () => {

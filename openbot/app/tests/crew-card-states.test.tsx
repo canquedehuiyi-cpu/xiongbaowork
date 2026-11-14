@@ -335,3 +335,40 @@ test("a chat that fails to start says why and stays on the wall", async () => {
   );
   expect(router.state.location.pathname).toBe("/bots");
 });
+
+test("管理成员 offers the person's own employees only; a preset original already inside can still be taken out", async () => {
+  const client = seed([
+    crewOf({
+      members: [
+        { agentId: "agent-a", position: 0 },
+        { agentId: "preset-in", position: 1 },
+      ],
+    }),
+  ]);
+  client.setQueryData(agentKeys.list(false), [
+    agent("agent-a", "员工a"),
+    {
+      ...agent("preset-in", "代码审核"),
+      summonKind: "preset",
+      summoned: false,
+    },
+    {
+      ...agent("preset-ops", "运营助手"),
+      summonKind: "preset",
+      summoned: false,
+    },
+    { ...agent("copy-gen", "我的通用助手"), summonKind: null, summoned: true },
+    agent("handmade", "自己建的员工"),
+  ]);
+  const { screen } = draw(client);
+  const card = await screen.findByTestId("crew-card");
+  await userEvent.click(within(card).getByRole("button", { name: "管理成员" }));
+  expect(
+    await within(card).findByRole("button", { name: "我的通用助手" }),
+  ).toBeTruthy();
+  expect(
+    within(card).getByRole("button", { name: "自己建的员工" }),
+  ).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "✓ 代码审核" })).toBeTruthy();
+  expect(within(card).queryByRole("button", { name: "运营助手" })).toBeNull();
+});

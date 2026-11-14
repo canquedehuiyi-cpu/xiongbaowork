@@ -2,6 +2,7 @@ import {
   type Icon,
   IconChalkboardTeacher,
   IconLogout,
+  IconSitemap,
   IconUsers,
   IconUsersGroup,
 } from "@tabler/icons-react";
@@ -9,8 +10,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps, useRouterState } from "@tanstack/react-router";
 import { useId } from "react";
 import { MORE_SIDEBAR_ONLY } from "@/components/app-sidebar/app-sidebar";
+import { isPendingSummon } from "@/components/app-sidebar/roster";
 import { EmployeeList } from "@/components/app-sidebar/sidebar-roster";
 import { TEACH_A_BOT } from "@/components/browser/browser-nav-item";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { browserStateQueryOptions } from "@/lib/browser/queries";
 import {
   type NavigationItem,
@@ -42,6 +45,7 @@ function LinkRow({
   icon: Glyph,
   label,
   detail,
+  tag,
   current,
   exactSearch = false,
   ...link
@@ -49,10 +53,16 @@ function LinkRow({
   icon: Icon;
   label: string;
   detail?: string;
+  /** 名字旁边的小标签（设计稿 `.tag.ai`），像第二行一样只算描述。 */
+  tag?: string;
   current?: boolean;
   exactSearch?: boolean;
 }) {
   const detailId = useId();
+  const tagId = useId();
+  const describedBy =
+    [tag ? tagId : "", detail ? detailId : ""].filter(Boolean).join(" ") ||
+    undefined;
   return (
     <li className="flex">
       <Link
@@ -60,12 +70,23 @@ function LinkRow({
         {...(current ? { "aria-current": "page" as const } : {})}
         activeOptions={{ exact: true, includeSearch: exactSearch }}
         activeProps={{}}
-        aria-describedby={detail ? detailId : undefined}
+        aria-describedby={describedBy}
         className={rowClassName}
       >
         <Glyph aria-hidden="true" />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium">{label}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-medium">{label}</span>
+            {tag ? (
+              <span
+                aria-hidden="true"
+                className="shrink-0 rounded-[5px] bg-(--wb-card2) bg-(image:--wb-tag-ai) px-1.5 py-px font-medium text-(--wb-gold) text-[10px]"
+                id={tagId}
+              >
+                {tag}
+              </span>
+            ) : null}
+          </span>
           {/* 第二行是描述，不算进链接的名字：读屏念「套餐与用量」，再念「Pro」。 */}
           {detail ? (
             <span
@@ -86,12 +107,22 @@ function usePathname() {
   return useRouterState({ select: (state) => state.location.pathname });
 }
 
-/** 通讯录：人才市场、我的群组两个入口，下面是现在侧栏里的员工列表。 */
+/** 人才市场里等着召唤的有几位：没召唤过的预设，加上还没召唤的分身。员工列表读到之前是 0。 */
+function usePendingSummons(): number {
+  const agents = useQuery(agentListQueryOptions()).data;
+  return (agents ?? []).filter(isPendingSummon).length;
+}
+
+/**
+ * 通讯录：人才市场（带待召唤人数）、我的群组、组织架构（`/contacts`，按部门分组的员工）三个入口，下面是
+ * 现在侧栏里的员工列表。
+ */
 function ContactsList() {
   const pathname = usePathname();
   const search = useRouterState({
     select: (state) => state.location.search as { tab?: string },
   });
+  const pending = usePendingSummons();
   const onBots = pathname === "/bots";
   return (
     <>
@@ -103,6 +134,7 @@ function ContactsList() {
             exactSearch
             icon={IconUsers}
             label="人才市场"
+            tag={pending > 0 ? `${pending} 位待召唤` : undefined}
             to="/bots"
           />
           <LinkRow
@@ -112,6 +144,12 @@ function ContactsList() {
             label="我的群组"
             search={{ tab: "groups" }}
             to="/bots"
+          />
+          <LinkRow
+            current={pathname === "/contacts"}
+            icon={IconSitemap}
+            label="组织架构"
+            to="/contacts"
           />
         </ul>
         <div className="px-0.5">

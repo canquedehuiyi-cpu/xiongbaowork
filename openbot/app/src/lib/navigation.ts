@@ -219,6 +219,7 @@ const RAIL_PREFIXES: readonly (readonly [string, Rail])[] = [
   ["/channel", "msg"],
   ["/group", "msg"],
   ["/bots", "contacts"],
+  ["/contacts", "contacts"],
   ["/assemble", "contacts"],
   ["/tasks", "work"],
   ["/autonomous", "work"],

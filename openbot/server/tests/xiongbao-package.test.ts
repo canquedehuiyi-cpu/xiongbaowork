@@ -58,6 +58,24 @@ test("every preset coworker in the package carries a portrait that is one of the
   }
 });
 
+test("every preset coworker in the package sits in one of the seven departments", () => {
+  // 聊天工作台 Task 6: the address book groups by department, and a summoned copy carries it.
+  const departments = [
+    "研发部",
+    "产品部",
+    "设计部",
+    "测试部",
+    "运营部",
+    "行政部",
+    "总经办",
+  ];
+  for (const entry of loaded.agents) {
+    expect(departments, `agent ${entry.id}`).toContain(
+      entry.department as string,
+    );
+  }
+});
+
 test("every preset coworker in the package has a Chinese display name, not a raw handle or id", () => {
   for (const entry of loaded.agents) {
     expect(entry.name, `agent ${entry.id}`).toMatch(/\p{Script=Han}/u);
@@ -68,6 +86,20 @@ test("every preset coworker in the package has a Chinese display name, not a raw
   expect(
     loaded.agents.find((entry) => entry.id === "xtgxiso-windows-pc-care")?.name,
   ).toBe("电脑管家");
+});
+
+test("every preset coworker in the package has a Chinese job title, with no English and no internal slug", () => {
+  // 工作台第二期: the title is the line under the name on the 通讯录 and the 员工名片.
+  for (const entry of loaded.agents) {
+    expect(entry.title, `agent ${entry.id}`).toMatch(/\p{Script=Han}/u);
+    expect(entry.title, `agent ${entry.id}`).not.toMatch(/[A-Za-z]/);
+    expect(entry.title, `agent ${entry.id}`).not.toContain("/");
+  }
+  const titleOf = (id: string) =>
+    loaded.agents.find((entry) => entry.id === id)?.title;
+  expect(titleOf("general-assistant")).toBe("通用助理");
+  expect(titleOf("ops-assistant")).toBe("运营专员");
+  expect(titleOf("guizang-renderer")).toBe("中文幻灯片生成");
 });
 
 test("every preset coworker in the package has a full persona in all three parts", () => {
@@ -106,7 +138,7 @@ test("the package declares the product, five seed coworkers, the ported twenty-t
   // The spec's engineer card is the one named in the objective, so it has to be in the seed.
   expect(
     loaded.agents.find((entry) => entry.id === "backend-engineer")?.title,
-  ).toBe("Backend Engineer");
+  ).toBe("后端开发");
   // Four declared channels plus one per ported team.
   expect(loaded.channels.length).toBe(7);
 });

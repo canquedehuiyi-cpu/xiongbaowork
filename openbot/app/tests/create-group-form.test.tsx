@@ -24,6 +24,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { CreateGroupForm } from "@/components/wakers/create-group-form";
 import { CreateCrewDialog } from "@/components/wakers/crews";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { portraitKeys } from "@/lib/portraits/queries";
@@ -315,4 +316,54 @@ test("the name box stops at 80 characters, as the server does", async () => {
     "群组名称",
   )) as HTMLInputElement;
   expect(name.maxLength).toBe(80);
+});
+
+test("only the person's own employees are offered: no preset original, no 分身 still 待召唤", async () => {
+  const { view } = renderPage([
+    ...AGENTS,
+    {
+      ...agent("preset-ops", "运营助手"),
+      summonKind: "preset",
+      summoned: false,
+    },
+    {
+      ...agent("preset-gen", "通用助手"),
+      summonKind: "preset",
+      summoned: true,
+    },
+    { ...agent("copy-gen", "我的通用助手"), summonKind: null, summoned: true },
+    { ...agent("avatar", "我的分身"), summonKind: "avatar", summoned: false },
+    agent("handmade", "自己建的员工"),
+  ]);
+  await view.findAllByRole("checkbox");
+  const offered = view
+    .getAllByRole("checkbox")
+    .map((box) => box.getAttribute("aria-label"));
+  expect(offered).toEqual([
+    "分析师",
+    "写手",
+    "审稿",
+    "我的通用助手",
+    "自己建的员工",
+  ]);
+});
+
+test("?agent= naming a preset original ticks nobody", async () => {
+  const queryClient = client([
+    ...AGENTS,
+    {
+      ...agent("preset-ops", "运营助手"),
+      summonKind: "preset",
+      summoned: false,
+    },
+  ]);
+  const { view } = renderIn(queryClient, () => (
+    <CreateGroupForm
+      initialChosen={["preset-ops"]}
+      onCreated={() => {}}
+      variant="page"
+    />
+  ));
+  await view.findAllByRole("checkbox");
+  expect(view.getByText("已选 0 位，至少还要 2 位")).toBeTruthy();
 });

@@ -6,6 +6,7 @@ import {
   IconNotes,
   IconPlugConnected,
   IconShieldCheck,
+  IconSitemap,
   IconStack2,
   IconTag,
   IconTextCaption,
@@ -69,7 +70,12 @@ import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { myCapabilitiesQueryOptions } from "@/lib/enterprise/queries";
 import { queryClient } from "@/query-client";
 
-type TextField = "name" | "title" | "roleDescription" | "instructions";
+type TextField =
+  | "name"
+  | "title"
+  | "department"
+  | "roleDescription"
+  | "instructions";
 
 const SAVE_FAILED = "没能保存，请再试一次。";
 
@@ -81,6 +87,8 @@ const TEXT_FIELDS: {
 }[] = [
   { field: "name", label: "名称", icon: IconId },
   { field: "title", label: "头衔", icon: IconTag },
+  // 聊天工作台 Task 6: what the address book groups this coworker under. Empty is 未分组.
+  { field: "department", label: "部门", icon: IconSitemap },
   {
     field: "roleDescription",
     // Not "Role": beside "Title" it read as a second job title, when it is the standing
@@ -103,6 +111,7 @@ const TEXT_FIELDS: {
 const TEXT_SCHEMAS: Record<TextField, ZodType<string>> = {
   name: agentFormSchema.shape.name,
   title: agentFormSchema.shape.title,
+  department: agentFormSchema.shape.department.unwrap(),
   roleDescription: agentFormSchema.shape.roleDescription,
   instructions: agentFormSchema.shape.instructions.unwrap(),
 };
@@ -145,7 +154,11 @@ export function SetupSections({ agent }: { agent: AgentProfile }) {
                 </ItemMedia>
                 <ItemContent>
                   <ItemTitle>{label}</ItemTitle>
-                  <ItemDescription>{agent[field]}</ItemDescription>
+                  <ItemDescription>
+                    {field === "department"
+                      ? agent.department || "未分组"
+                      : agent[field]}
+                  </ItemDescription>
                 </ItemContent>
                 {agent.canManage ? (
                   <ItemActions>

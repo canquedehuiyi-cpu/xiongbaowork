@@ -495,6 +495,63 @@ describe("tenant YAML validation", () => {
     );
   });
 
+  test("parses an agent's department and leaves an omitted one undefined", () => {
+    const tenantPackage = validateTenantPackage({
+      brand: "tenant: { id: fintech, product_name: Ledgerline }",
+      agents: `agents:
+  - id: knowledge
+    name: Knowledge
+    title: Company Knowledge
+    role_description: Answer company questions.
+    department: " 研发部 "
+    type: built-in
+    system_prompt: Answer from knowledge.
+  - id: risk
+    name: Risk
+    title: Risk & Compliance
+    role_description: Investigate policies and controls.
+    type: remote-ag-ui
+    endpoint: http://risk.internal/ag-ui`,
+      channels: "channels: []",
+      model:
+        "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+      knowledge: "sources: []",
+      themeCss: "",
+    });
+
+    expect(tenantPackage.agents[0]?.department).toBe("研发部");
+    const risk = tenantPackage.agents[1];
+    if (!risk) throw new Error("the second agent was not parsed");
+    expect(risk.id).toBe("risk");
+    expect(risk.department).toBeUndefined();
+  });
+
+  test("rejects a department that is not text or is over 32 characters, naming the agent", () => {
+    const withDepartment = (department: string) => () =>
+      validateTenantPackage({
+        brand: "tenant: { id: fintech, product_name: Ledgerline }",
+        agents: `agents:
+  - id: knowledge
+    name: Knowledge
+    title: Company Knowledge
+    role_description: Answer company questions.
+    department: ${department}
+    type: built-in
+    system_prompt: Answer from knowledge.`,
+        channels: "channels: []",
+        model:
+          "model: { provider: openai, credential_secret_ref: openai-key, default_model: gpt-5.6-terra }",
+        knowledge: "sources: []",
+        themeCss: "",
+      });
+    expect(withDepartment("3")).toThrow(/knowledge.*department/);
+    expect(withDepartment("[研发部]")).toThrow(/knowledge.*department/);
+    expect(withDepartment("{ name: 研发部 }")).toThrow(/knowledge.*department/);
+    expect(withDepartment("部".repeat(33))).toThrow(/knowledge.*department/);
+    // Exactly 32 is the limit, not over it.
+    expect(withDepartment("部".repeat(32))).not.toThrow();
+  });
+
   test("rejects a portrait that is not a preset, naming the agent", () => {
     expect(() =>
       validateTenantPackage({
@@ -931,6 +988,34 @@ describe("tenant package agent profile synchronization", () => {
         checksum: randomUUID(),
       });
       expect((await read())?.presetPortrait).toBeNull();
+    }));
+
+  test("writes the package department to the profile, and clears it when the package drops it", () =>
+    inCatalogue(async () => {
+      const agent = packageAgent({ department: "研发部" });
+      const tenantPackage = loadedPackage(agent);
+      const deploymentPackage = await synchronizeTenantPackage(
+        database,
+        tenantPackage,
+      );
+      createdAgentIds.push(agent.id);
+      createdPackageIds.push(deploymentPackage.id);
+      const read = async () =>
+        (
+          await database
+            .select({ department: agentProfiles.department })
+            .from(agentProfiles)
+            .where(eq(agentProfiles.agentId, agent.id))
+        )[0];
+      expect(await read()).toEqual({ department: "研发部" });
+
+      const { department: _dropped, ...withoutDepartment } = agent;
+      await synchronizeTenantPackage(database, {
+        ...tenantPackage,
+        agents: [withoutDepartment],
+        checksum: randomUUID(),
+      });
+      expect(await read()).toEqual({ department: null });
     }));
 
   test("writes the package persona to the profile, and clears it when the package drops it", () =>

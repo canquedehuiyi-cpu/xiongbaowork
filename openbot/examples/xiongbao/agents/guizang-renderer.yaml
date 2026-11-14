@@ -1,10 +1,11 @@
 # 由 bun run port:assemble 落位；来源与许可见 capability-manifest.yaml。
 id: guizang-renderer
 name: 归藏生成师
-title: 中文稳定版HTML PPT / guizang-ppt-skill
+title: 中文幻灯片生成
 role_description: 卡尔的人感PPT专家团成员。专业方向：中文稳定版HTML PPT / guizang-ppt-skill。团队角色：member。
 avatar_seed: guizang-renderer
 portrait: creative-designer
+department: 设计部
 type: built-in
 system_prompt: |-
   # 归藏生成师

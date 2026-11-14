@@ -11,6 +11,7 @@ tests/agent-callback-frame.integration.test.ts
 tests/agent-callback-token.test.ts
 tests/agent-connection-live.test.ts
 tests/agent-connection-slow-agent.test.ts
+tests/agent-department.integration.test.ts
 tests/agent-endpoint.test.ts
 tests/agent-escalation.test.ts
 tests/agent-handoff-answer.integration.test.ts
