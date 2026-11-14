@@ -77,8 +77,11 @@ COPY shared shared
 # The egress rules and their matcher. `server/src/computer/policy-network.ts` imports them from the
 # computer's source rather than keeping a copy, so the server checks a navigation against the same
 # rules the computer's filter enforces. It needs Node built-ins and `shared/`, nothing installed, so
-# the one file is enough. Without it the server exits on its first import.
+# the one file is enough. Without it the server exits on its first import. `egress.ts` imports its
+# header names from `wire-headers.ts` (since 0.2.11), so that sibling ships with it;
+# `tests/server-dockerfile-agent-computer.test.ts` holds every copied file's siblings to this.
 COPY agent-computer/src/egress.ts agent-computer/src/egress.ts
+COPY agent-computer/src/wire-headers.ts agent-computer/src/wire-headers.ts
 COPY toolkit toolkit
 COPY examples examples
 # Its source and manifest, not its tests. Run it with `bun ../worker/src/index.ts` from the working
