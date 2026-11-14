@@ -27,6 +27,7 @@
 | `bun run port:capabilities -- --verify ./examples/xiongbao` | 校验包：9 个许可字段齐备，且 `capability-manifest.yaml` 首行与 `tool-ref-audit.md` 头部的 `audit_rules_sha256` 一致，缺一 exit 1 |
 | `bun run port:assemble` | 把管道产物落位成品牌包文件（幂等：跑两次 `diff -r` 无差异） |
 | `bun run port:verdict-refresh -- --package examples/xiongbao` | 按包内 `_porting.dropped` 与 `assets` 重算档位，只改 `_porting.runnable` 及其 `reason`/`reason_ref` 三行、manifest 同名行同步（源侧漂移、管道跑不动时的兜底；`--check` 只报告不写盘，不一致 exit 1） |
+| `bun run port:audit-report -- --package examples/xiongbao` | 按包内记录的档位重写该包的 `tool-ref-audit.md`（证据优先取规则表重扫，扫不到的用 `_porting.reason_ref`）。包比审计更乐观直接报错；`--check` 只比对不写盘，不一致 exit 1 |
 
 转换器源码在 `tools/port-capabilities/`，与交付物同仓。
 
