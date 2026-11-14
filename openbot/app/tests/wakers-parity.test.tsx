@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -899,10 +899,14 @@ test("a second 召唤 while one is in flight sends no second request", async () 
 
 test("a link to a 待召唤 card's anchor brings that card into view, focused and lit, each time it is followed", async () => {
   const scrolled: string[] = [];
-  const original = Element.prototype.scrollIntoView;
-  Element.prototype.scrollIntoView = function (this: Element) {
+  // Spied on HTMLElement.prototype, as other files do: a spy restored there leaves its own copy on
+  // HTMLElement.prototype, which would shadow a replacement made on Element.prototype.
+  const scroll = spyOn(
+    HTMLElement.prototype,
+    "scrollIntoView",
+  ).mockImplementation(function (this: HTMLElement) {
     scrolled.push(this.id);
-  };
+  });
   try {
     seed({ agents: MARKET });
     const { screen, router } = draw("/bots#summon-preset-doctor");
@@ -912,14 +916,17 @@ test("a link to a 待召唤 card's anchor brings that card into view, focused an
     ) as HTMLElement;
     expect(document.activeElement).toBe(card);
     expect(card.getAttribute("tabindex")).toBe("-1");
-    expect(card.hasAttribute("data-highlighted")).toBe(true);
+    // The light is state set in the same effect, so it lands on the render after the scroll.
+    await waitFor(() =>
+      expect(card.hasAttribute("data-highlighted")).toBe(true),
+    );
     // The same link followed again (another 「去人才市场」 press) brings it back again.
     const before = scrolled.length;
     await router.navigate({ to: "/bots", hash: "summon-preset-doctor" });
     await waitFor(() => expect(scrolled.length).toBeGreaterThan(before));
     expect(new Set(scrolled)).toEqual(new Set(["summon-preset-doctor"]));
   } finally {
-    Element.prototype.scrollIntoView = original;
+    scroll.mockRestore();
   }
 });
 

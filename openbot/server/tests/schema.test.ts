@@ -360,6 +360,22 @@ describe("OpenBot database schema", () => {
         hasDefault: false,
         primary: false,
       },
+      /*
+       * 召唤员工 (migration 0213): the agent this coworker was summoned from, and the preset
+       * portrait it shows. Both null for a coworker made by hand.
+       */
+      {
+        name: "summoned_from",
+        notNull: false,
+        hasDefault: false,
+        primary: false,
+      },
+      {
+        name: "preset_portrait",
+        notNull: false,
+        hasDefault: false,
+        primary: false,
+      },
       {
         name: "deleted_at",
         notNull: false,
@@ -475,6 +491,14 @@ describe("OpenBot database schema", () => {
         onUpdate: "no action",
       },
       {
+        // Deleting the source of a summoned coworker keeps the coworker and clears the link (0213).
+        sourceColumns: ["summoned_from"],
+        targetTable: "agents",
+        targetColumns: ["id"],
+        onDelete: "set null",
+        onUpdate: "no action",
+      },
+      {
         sourceColumns: ["user_id"],
         targetTable: "users",
         targetColumns: ["id"],
@@ -512,6 +536,13 @@ describe("OpenBot database schema", () => {
         method: index.config.method,
       })),
     ).toEqual([
+      // One summoned copy per owner and source while it is live (0213).
+      {
+        name: "agent_profiles_owner_summoned_from_unique",
+        columns: ["owner_user_id", "summoned_from"],
+        unique: true,
+        method: "btree",
+      },
       {
         name: "agent_profiles_visibility_deleted_idx",
         columns: ["visibility", "deleted_at"],

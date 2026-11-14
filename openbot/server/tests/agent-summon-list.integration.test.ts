@@ -6,7 +6,7 @@ import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
 import type { SummonDeps } from "../src/agents/summon";
-import type { AuditEventInput, AuditStore } from "../src/audit";
+import type { AuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
 import {
   createChannelRoutes,
@@ -43,11 +43,9 @@ const channelStore = createChannelStore(
   createThreadIdentity("test-deployment"),
 );
 const quota = createQuotaService(database);
-const audit: AuditEventInput[] = [];
+// These tests read the roster, not the trail: the summon audit is asserted in agent-summon.integration.
 const auditStore: AuditStore = {
-  async insert(event) {
-    audit.push(event);
-  },
+  async insert() {},
 };
 
 const prefix = `summon-${randomUUID()}`;
@@ -56,7 +54,6 @@ const presetIds: string[] = [];
 const packageIds: string[] = [];
 
 afterEach(async () => {
-  audit.splice(0);
   await runAsTenant("platform", async () => {
     for (const tenant of tenants.splice(0)) {
       const owned = await database
