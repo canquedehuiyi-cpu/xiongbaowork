@@ -70,6 +70,15 @@ export interface GateDecision {
 /** The gate object: decide one unit, or count every decision at once. */
 export interface L1Gate {
   decide(slug: string, kind: LockKind): GateDecision;
+  /**
+   * Decide one flattened official-plugin skill unit by its provenance-preserving name
+   * (`<plugin>--skills--<subpath with "/" folded to "--">`, e.g. `all-skills--skills--artifacts-builder`).
+   * The lock row is the plugin; the whitelist may narrow at skill level with `pkg/subpath` entries.
+   */
+  decideOfficialPluginSkill(
+    unitName: string,
+    parsed: { pluginSlug: string; subpath: string },
+  ): GateDecision;
   /** `slug` → decision, for the dropped report. Only entries the caller asked about appear here. */
   decisions: ReadonlyMap<string, GateDecision>;
   /** How many units the caller asked about, and how many passed. */
@@ -113,6 +122,36 @@ export function isSafeLockOrigin(origin: unknown): origin is string {
       .split("/")
       .every((segment) => segment !== "" && segment !== "." && segment !== "..")
   );
+}
+
+/**
+ * Split an official-plugin skill unit's provenance-preserving name into its plugin slug and the
+ * skill's sub-path inside the plugin.
+ *
+ * The fetch script flattens official skill units into `skills/<unitName>` with
+ * `<plugin>--skills--<subpath with "/" folded to "--">` names (see `discoverOfficialSkillUnits` in
+ * `scripts/fetch-capabilities.ts`) — the lock records the plugin, so the unit maps to the plugin row
+ * plus this sub-path. Returns `undefined` for names without the marker: those are plain skills or
+ * whole plugins and match lock rows directly.
+ *
+ * The first `--skills--` marker wins. A plugin whose own name contains the marker would be ambiguous
+ * at the fetch layer already (the unit name grammar cannot express it), so none can exist.
+ */
+export function parseOfficialSkillUnitName(
+  unitName: string,
+): { pluginSlug: string; subpath: string } | undefined {
+  const marker = "--skills--";
+  const markerIndex = unitName.indexOf(marker);
+  if (markerIndex <= 0 || markerIndex + marker.length >= unitName.length) {
+    return undefined;
+  }
+  return {
+    pluginSlug: unitName.slice(0, markerIndex),
+    subpath: unitName
+      .slice(markerIndex + marker.length)
+      .split("--")
+      .join("/"),
+  };
 }
 
 /** Thrown when a lock document does not parse back into the shape the gate trusts. */
@@ -242,10 +281,52 @@ export function parseLockDocument(text: string): LockDocument {
 }
 
 /**
+ * Split whitelist entries into whole-package slugs and per-package skill sub-paths.
+ *
+ * `pkg` means "the whole package may enter"; `pkg/skill/sub` means "only that skill of the package".
+ * A package that appears only through sub-path entries is narrowed at skill level: its flattened
+ * skill units need their own listed sub-path, and the package as a unit (an `expert-package` row, a
+ * connector, or a plugin whose whole directory is one skill) still needs a plain entry to enter.
+ */
+function parseWhitelistEntries(
+  whitelist: readonly string[] | undefined,
+): { plain: Set<string> | undefined; sub: Map<string, Set<string>> } {
+  if (whitelist === undefined) {
+    return { plain: undefined, sub: new Map() };
+  }
+  const plain = new Set<string>();
+  const sub = new Map<string, Set<string>>();
+  for (const raw of whitelist) {
+    const entry = raw.trim();
+    if (entry === "") {
+      throw new Error("白名单条目不能为空字符串");
+    }
+    if (!/^[^\s/]+(\/[^\s/]+)*$/.test(entry)) {
+      throw new Error(
+        `白名单条目格式非法（应为 slug 或 slug/skill 子路径，禁空白与空路径段）：${JSON.stringify(raw)}`,
+      );
+    }
+    const slashIndex = entry.indexOf("/");
+    if (slashIndex === -1) {
+      plain.add(entry);
+    } else {
+      const pkg = entry.slice(0, slashIndex);
+      const rest = entry.slice(slashIndex + 1);
+      const set = sub.get(pkg) ?? new Set<string>();
+      set.add(rest);
+      sub.set(pkg, set);
+    }
+  }
+  return { plain, sub };
+}
+
+/**
  * Build the gate over a parsed lock document and an optional whitelist.
  *
  * The whitelist is a *narrowing* set of slugs: a unit must pass every rule above **and** appear in the
- * list when one is given. Passing `undefined` means "everything the licence rules allow".
+ * list when one is given. Passing `undefined` means "everything the licence rules allow". Entries of
+ * the form `pkg/skill` narrow at skill level for flattened official-plugin units (see
+ * {@link parseOfficialSkillUnitName}); plain `pkg` entries keep the whole-package meaning.
  */
 export function buildL1Gate(
   lock: LockDocument,
@@ -255,11 +336,16 @@ export function buildL1Gate(
   for (const entry of lock.entries) {
     index.set(`${entry.kind}:${entry.slug}`, entry);
   }
-  const allowedSlugs =
-    whitelist === undefined ? undefined : new Set(whitelist);
+  const { plain: allowedSlugs, sub: whitelistSub } =
+    parseWhitelistEntries(whitelist);
   const decisions = new Map<string, GateDecision>();
   const stats = { asked: 0, allowed: 0, refused: 0 };
-  const computeDecision = (slug: string, kind: LockKind): GateDecision => {
+  const computeDecision = (
+    slug: string,
+    kind: LockKind,
+    whitelistOk: (slug: string) => boolean = (candidate) =>
+      allowedSlugs === undefined || allowedSlugs.has(candidate),
+  ): GateDecision => {
     const entry = index.get(`${kind}:${slug}`);
     if (entry === undefined) {
       return {
@@ -282,7 +368,7 @@ export function buildL1Gate(
         entry,
       };
     }
-    if (allowedSlugs !== undefined && !allowedSlugs.has(slug)) {
+    if (allowedSlugs !== undefined && !whitelistOk(slug)) {
       return {
         code: "NOT_WHITELISTED",
         reason: `NOT_WHITELISTED: ${slug} 通过许可规则但不在本次白名单内`,
@@ -311,20 +397,99 @@ export function buildL1Gate(
     decisions.set(key, decision);
     return decision;
   };
-  return { decide, decisions, stats };
+  /**
+   * Decide one flattened official-plugin skill unit. The licence/exclusion/redistributable rules run
+   * against the plugin row; the whitelist passes when the plugin has a plain entry, or when the
+   * unit's own sub-path is listed under `plugin/subpath` — a package listed only through sub-paths
+   * never lets a unit through whose sub-path is missing.
+   */
+  const decideOfficialPluginSkill = (
+    unitName: string,
+    parsed: { pluginSlug: string; subpath: string },
+  ): GateDecision => {
+    const key = `official-plugin:${parsed.pluginSlug}#${parsed.subpath}`;
+    const cached = decisions.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    stats.asked += 1;
+    const pluginDecision = computeDecision(
+      parsed.pluginSlug,
+      "official-plugin",
+      (candidate) =>
+        allowedSlugs === undefined ||
+        allowedSlugs.has(candidate) ||
+        (whitelistSub.get(candidate)?.size ?? 0) > 0,
+    );
+    let decision: GateDecision;
+    if (pluginDecision.code === "NOT_WHITELISTED") {
+      decision = {
+        code: "NOT_WHITELISTED",
+        reason: `NOT_WHITELISTED: ${unitName}（官方插件 ${parsed.pluginSlug}）不在本次白名单内`,
+        entry: pluginDecision.entry,
+      };
+    } else if (pluginDecision.code !== "ALLOWED") {
+      decision = pluginDecision;
+    } else {
+      const subs = whitelistSub.get(parsed.pluginSlug);
+      decision =
+        subs !== undefined && !subs.has(parsed.subpath)
+          ? {
+              code: "NOT_WHITELISTED",
+              reason: `NOT_WHITELISTED: ${unitName} 通过许可规则，但白名单对 ${parsed.pluginSlug} 只放行 [${[...subs].sort().join(", ")}]，不含 ${parsed.subpath}`,
+              entry: pluginDecision.entry,
+            }
+          : pluginDecision;
+    }
+    if (decision.code === "ALLOWED") {
+      stats.allowed += 1;
+    } else {
+      stats.refused += 1;
+    }
+    decisions.set(key, decision);
+    return decision;
+  };
+  return { decide, decideOfficialPluginSkill, decisions, stats };
 }
 
 /** Thrown when the cached bytes of a locked unit no longer match the lock's checksum. */
 export class ChecksumMismatchError extends Error {}
 
 /**
- * Verify that the cached copy of one locked unit still hashes to the lock's value, and return the
+ * Verify that the cached copy of one lock entry still hashes to the entry's checksum, and return the
  * path that was verified.
  *
  * Directory units hash with the same canonicalisation the writer used ({@link directorySha256}), file
  * units with {@link fileSha256} — a mismatch means the cache drifted from the measured snapshot and
  * the unit must not enter a package.
  */
+export function assertEntryBytesMatchesLock(
+  cacheRoot: string,
+  entry: LockEntry,
+): string {
+  const unitRoot = join(
+    cacheRoot,
+    CACHE_CHANNEL_ROOTS[entry.channel],
+    ...entry.origin.split("/"),
+  );
+  if (!existsSync(unitRoot)) {
+    throw new ChecksumMismatchError(
+      `CHECKSUM_MISMATCH: ${entry.kind}/${entry.slug} 的缓存副本不存在：${posix.join(CACHE_CHANNEL_ROOTS[entry.channel], entry.origin)}`,
+    );
+  }
+  const isDirectory = statSync(unitRoot).isDirectory();
+  const actual = isDirectory
+    ? directorySha256(unitRoot)
+    : fileSha256(unitRoot);
+  if (actual !== entry.checksum_sha256) {
+    throw new ChecksumMismatchError(
+      `CHECKSUM_MISMATCH: ${entry.kind}/${entry.slug} 缓存字节与锁不符（期望 ${entry.checksum_sha256.slice(0, 12)}…，实测 ${actual.slice(0, 12)}…）`,
+    );
+  }
+  return unitRoot;
+}
+
+/** Verify that the cached copy of one locked unit still hashes to the lock's value. */
 export function assertCacheEntryMatchesLock(
   gate: L1Gate,
   cacheRoot: string,
@@ -335,27 +500,7 @@ export function assertCacheEntryMatchesLock(
   if (decision.entry === undefined) {
     throw new Error(decision.reason);
   }
-  const entry = decision.entry;
-  const unitRoot = join(
-    cacheRoot,
-    CACHE_CHANNEL_ROOTS[entry.channel],
-    ...entry.origin.split("/"),
-  );
-  if (!existsSync(unitRoot)) {
-    throw new ChecksumMismatchError(
-      `CHECKSUM_MISMATCH: ${kind}/${slug} 的缓存副本不存在：${posix.join(CACHE_CHANNEL_ROOTS[entry.channel], entry.origin)}`,
-    );
-  }
-  const isDirectory = statSync(unitRoot).isDirectory();
-  const actual = isDirectory
-    ? directorySha256(unitRoot)
-    : fileSha256(unitRoot);
-  if (actual !== entry.checksum_sha256) {
-    throw new ChecksumMismatchError(
-      `CHECKSUM_MISMATCH: ${kind}/${slug} 缓存字节与锁不符（期望 ${entry.checksum_sha256.slice(0, 12)}…，实测 ${actual.slice(0, 12)}…）`,
-    );
-  }
-  return unitRoot;
+  return assertEntryBytesMatchesLock(cacheRoot, decision.entry);
 }
 
 /** One snapshot unit the gate refused, ready for the dropped report. */
@@ -378,9 +523,11 @@ export interface GateFilterResult {
  * Filter a snapshot through the gate at source-unit granularity.
  *
  * Expert packages and connectors match the lock directly (package dir name / connector id is the lock
- * slug). Skills get a two-step kind probe — `skill`, then `official-plugin` — because official plugin
- * skill units are recorded at plugin granularity; anything neither record covers is `NOT_IN_LOCK`,
- * which is fail-closed by design: an unmeasured unit has no licence row, so it never enters a package.
+ * slug). Skill units get a three-step probe — `skill`, then the flattened official-plugin mapping
+ * (`<plugin>--skills--<sub>` → the plugin row + skill-level whitelist narrowing), then
+ * `official-plugin` for whole-plugin units — because official plugin skill units are recorded at
+ * plugin granularity; anything no probe covers is `NOT_IN_LOCK`, which is fail-closed by design: an
+ * unmeasured unit has no licence row, so it never enters a package.
  */
 export function filterSnapshotByGate(
   snapshot: WorkBuddySnapshot,
@@ -405,9 +552,13 @@ export function filterSnapshotByGate(
     ),
     userSkills: snapshot.userSkills.filter((skill) => {
       const unit = `skill:${skill.dirName}`;
-      const first = gate.decide(skill.dirName, "skill");
-      if (first.code !== "NOT_IN_LOCK") {
-        return record(unit, first);
+      const direct = gate.decide(skill.dirName, "skill");
+      if (direct.code !== "NOT_IN_LOCK") {
+        return record(unit, direct);
+      }
+      const parsed = parseOfficialSkillUnitName(skill.dirName);
+      if (parsed !== undefined) {
+        return record(unit, gate.decideOfficialPluginSkill(skill.dirName, parsed));
       }
       return record(unit, gate.decide(skill.dirName, "official-plugin"));
     }),
@@ -416,4 +567,93 @@ export function filterSnapshotByGate(
     ),
   };
   return { snapshot: filtered, dropped, stats: { allowed, refused: dropped.length, byCode } };
+}
+
+/** Outcome of the batch byte verification of every unit the gate allowed. */
+export interface GateVerification {
+  /** Distinct lock rows whose cached bytes were hashed and matched. */
+  verified: number;
+  /**
+   * Units skipped because their cache root does not exist. Only possible in non-strict mode — a live
+   * WorkBuddy home may not ship the marketplace bundle a lock row was measured from, while a fetch
+   * cache must contain every origin the lock records.
+   */
+  warnings: string[];
+}
+
+/**
+ * Batch-verify the cached bytes of every unit the gate allowed against the lock's checksums.
+ *
+ * Flattened official-plugin skill units verify their *plugin* directory once per plugin — the lock
+ * row measures the plugin, so one hash covers all of its skills. `strict` (a fetch cache: the
+ * `channel-provenance.json` marker file is present) turns a missing unit root into an error; in a
+ * live home the root may legitimately be absent and the unit is skipped with a warning instead.
+ * Present-but-drifted bytes throw in both modes: the lock is the measured truth.
+ */
+export function verifyAllowedUnits(
+  gated: GateFilterResult,
+  gate: L1Gate,
+  cacheRoot: string,
+  options: { strict: boolean },
+): GateVerification {
+  const verified = new Set<string>();
+  const warnings: string[] = [];
+  const verifyDecision = (decision: GateDecision, unit: string): void => {
+    if (decision.code !== "ALLOWED") {
+      throw new Error(
+        `verifyAllowedUnits: ${unit} 未被放行（${decision.code}）——闸门与校验状态不一致`,
+      );
+    }
+    const entry = decision.entry;
+    if (entry === undefined) {
+      throw new Error(`verifyAllowedUnits: ${unit} 无锁行——闸门与校验状态不一致`);
+    }
+    const rowKey = `${entry.channel}:${entry.origin}`;
+    if (verified.has(rowKey)) {
+      return;
+    }
+    const unitRoot = join(
+      cacheRoot,
+      CACHE_CHANNEL_ROOTS[entry.channel],
+      ...entry.origin.split("/"),
+    );
+    if (!existsSync(unitRoot)) {
+      if (options.strict) {
+        throw new ChecksumMismatchError(
+          `CHECKSUM_MISMATCH: ${entry.kind}/${entry.slug} 的缓存副本不存在：${posix.join(CACHE_CHANNEL_ROOTS[entry.channel], entry.origin)}`,
+        );
+      }
+      warnings.push(
+        `${entry.kind}/${entry.slug}：锁行来源 ${posix.join(CACHE_CHANNEL_ROOTS[entry.channel], entry.origin)} 在本机不存在，跳过字节校验`,
+      );
+      return;
+    }
+    assertEntryBytesMatchesLock(cacheRoot, entry);
+    verified.add(rowKey);
+  };
+  for (const pkg of gated.snapshot.packages) {
+    verifyDecision(
+      gate.decide(pkg.dirName, "expert-package"),
+      `expert-package:${pkg.dirName}`,
+    );
+  }
+  for (const connector of gated.snapshot.connectors) {
+    verifyDecision(gate.decide(connector.id, "connector"), `connector:${connector.id}`);
+  }
+  for (const skill of gated.snapshot.userSkills) {
+    const parsed = parseOfficialSkillUnitName(skill.dirName);
+    if (parsed !== undefined) {
+      verifyDecision(
+        gate.decideOfficialPluginSkill(skill.dirName, parsed),
+        `skill:${skill.dirName}`,
+      );
+      continue;
+    }
+    const direct = gate.decide(skill.dirName, "skill");
+    verifyDecision(
+      direct.code !== "NOT_IN_LOCK" ? direct : gate.decide(skill.dirName, "official-plugin"),
+      `skill:${skill.dirName}`,
+    );
+  }
+  return { verified: verified.size, warnings };
 }

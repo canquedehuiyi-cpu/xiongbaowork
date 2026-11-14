@@ -25,9 +25,12 @@ import {
   buildL1Gate,
   CACHE_CHANNEL_ROOTS,
   ChecksumMismatchError,
+  filterSnapshotByGate,
   isSafeLockOrigin,
   LockParseError,
   parseLockDocument,
+  parseOfficialSkillUnitName,
+  verifyAllowedUnits,
 } from "./l1-gate";
 import {
   directorySha256,
@@ -37,6 +40,7 @@ import {
   type LockEntry,
   renderLockDocument,
 } from "./lockfile";
+import type { RawSkill, WorkBuddySnapshot } from "./read-workbuddy";
 
 /** A valid entry, with every field the validator demands; tests mutate one field at a time. */
 function validEntry(overrides: Partial<LockEntry> = {}): LockEntry {
@@ -386,6 +390,315 @@ describe("CACHE_CHANNEL_ROOTS stays in lockstep with the fetch script", () => {
       );
       expect(match).not.toBeNull();
       expect(match![1]).toBe(cacheRoot);
+    }
+  });
+});
+
+/** A minimal snapshot skill unit; the gate only reads `dirName`. */
+function skillUnit(dirName: string): RawSkill {
+  return {
+    dirName,
+    skillMd: { path: "SKILL.md", content: "# x\n" } as unknown as RawSkill["skillMd"],
+    attachments: [],
+    hasReferencesDir: false,
+    referencesBytes: 0,
+    fetchedAt: "2026-11-14T00:00:00.000Z",
+    tier: "user",
+    packageDirName: null,
+  };
+}
+
+function snapshotWith(...skills: RawSkill[]): WorkBuddySnapshot {
+  return { sourceRoot: "/fake-source", packages: [], userSkills: skills, connectors: [] };
+}
+
+/** A redistributable official-plugin row, the granularity flattened skill units map to. */
+function officialPluginEntry(overrides: Partial<LockEntry> = {}): LockEntry {
+  return validEntry({
+    slug: "all-skills",
+    kind: "official-plugin",
+    channel: "official-plugins",
+    origin: "plugins/all-skills",
+    redistributable: true,
+    ...overrides,
+  });
+}
+
+describe("parseOfficialSkillUnitName", () => {
+  test("splits a flattened unit into plugin slug and skill sub-path", () => {
+    expect(parseOfficialSkillUnitName("all-skills--skills--artifacts-builder")).toEqual({
+      pluginSlug: "all-skills",
+      subpath: "artifacts-builder",
+    });
+  });
+
+  test("folds nested sub-paths back to slashes", () => {
+    expect(parseOfficialSkillUnitName("pkg--skills--nested--deep")).toEqual({
+      pluginSlug: "pkg",
+      subpath: "nested/deep",
+    });
+  });
+
+  test("returns undefined for plain skills, whole plugins and degenerate names", () => {
+    expect(parseOfficialSkillUnitName("agent-browser")).toBeUndefined();
+    expect(parseOfficialSkillUnitName("some-skill-row")).toBeUndefined();
+    expect(parseOfficialSkillUnitName("--skills--trailing")).toBeUndefined();
+    expect(parseOfficialSkillUnitName("plugin--skills--")).toBeUndefined();
+    expect(parseOfficialSkillUnitName("")).toBeUndefined();
+  });
+});
+
+describe("official-plugin skill mapping and skill-level whitelist", () => {
+  test("a flattened unit maps to its plugin row and is allowed without a whitelist", () => {
+    const gate = buildL1Gate(validLock([officialPluginEntry()]));
+    const gated = filterSnapshotByGate(
+      snapshotWith(skillUnit("all-skills--skills--artifacts-builder")),
+      gate,
+    );
+    expect(gated.snapshot.userSkills).toHaveLength(1);
+    expect(gated.stats.byCode.ALLOWED).toBe(1);
+    const decision = gate.decisions.get("official-plugin:all-skills#artifacts-builder");
+    expect(decision?.code).toBe("ALLOWED");
+    expect(decision?.entry?.slug).toBe("all-skills");
+  });
+
+  test("a real-shaped unit name maps too (plugin without 'skills' in its own name)", () => {
+    const gate = buildL1Gate(
+      validLock([
+        officialPluginEntry({ slug: "accessibility-compliance", origin: "external_plugins/accessibility-compliance" }),
+      ]),
+    );
+    const gated = filterSnapshotByGate(
+      snapshotWith(skillUnit("accessibility-compliance--skills--screen-reader-testing")),
+      gate,
+    );
+    expect(gated.snapshot.userSkills).toHaveLength(1);
+  });
+
+  test("a skill-level whitelist entry allows only the listed sub-path", () => {
+    const gate = buildL1Gate(validLock([officialPluginEntry()]), [
+      "all-skills/artifacts-builder",
+    ]);
+    const gated = filterSnapshotByGate(
+      snapshotWith(
+        skillUnit("all-skills--skills--artifacts-builder"),
+        skillUnit("all-skills--skills--file-organizer"),
+      ),
+      gate,
+    );
+    expect(gated.snapshot.userSkills.map((skill) => skill.dirName)).toEqual([
+      "all-skills--skills--artifacts-builder",
+    ]);
+    const refused = gated.dropped.find((dropped) =>
+      dropped.unit.endsWith("file-organizer"),
+    );
+    expect(refused?.code).toBe("NOT_WHITELISTED");
+    expect(refused?.reason).toContain("只放行 [artifacts-builder]");
+  });
+
+  test("a plain whitelist entry still admits every skill of the package", () => {
+    const gate = buildL1Gate(validLock([officialPluginEntry()]), ["all-skills"]);
+    const gated = filterSnapshotByGate(
+      snapshotWith(
+        skillUnit("all-skills--skills--artifacts-builder"),
+        skillUnit("all-skills--skills--file-organizer"),
+      ),
+      gate,
+    );
+    expect(gated.snapshot.userSkills).toHaveLength(2);
+  });
+
+  test("a package listed only through sub-paths refuses the whole-package unit", () => {
+    const gate = buildL1Gate(validLock([officialPluginEntry()]), [
+      "all-skills/artifacts-builder",
+    ]);
+    // The whole-plugin unit (a plugin whose own directory is one skill) is not any listed sub-path.
+    expect(gate.decide("all-skills", "official-plugin").code).toBe("NOT_WHITELISTED");
+    // …while its listed skill still passes.
+    expect(
+      gate.decideOfficialPluginSkill("all-skills--skills--artifacts-builder", {
+        pluginSlug: "all-skills",
+        subpath: "artifacts-builder",
+      }).code,
+    ).toBe("ALLOWED");
+  });
+
+  test("the licence rules run at plugin granularity before any whitelist narrowing", () => {
+    const gate = buildL1Gate(
+      validLock([officialPluginEntry({ redistributable: false })]),
+      ["all-skills/artifacts-builder"],
+    );
+    expect(
+      gate.decideOfficialPluginSkill("all-skills--skills--artifacts-builder", {
+        pluginSlug: "all-skills",
+        subpath: "artifacts-builder",
+      }).code,
+    ).toBe("NOT_REDISTRIBUTABLE");
+    const excluded = buildL1Gate(
+      validLock([officialPluginEntry({ slug: "taskmaster", origin: "plugins/taskmaster" })]),
+      ["taskmaster/anything"],
+    );
+    expect(
+      excluded.decideOfficialPluginSkill("taskmaster--skills--anything", {
+        pluginSlug: "taskmaster",
+        subpath: "anything",
+      }).code,
+    ).toBe("LICENSE_EXCLUDED");
+  });
+
+  test("a flattened unit whose plugin is not in the lock stays NOT_IN_LOCK (fail-closed)", () => {
+    const gate = buildL1Gate(validLock([officialPluginEntry()]));
+    const gated = filterSnapshotByGate(
+      snapshotWith(skillUnit("ghost-plugin--skills--secret")),
+      gate,
+    );
+    expect(gated.snapshot.userSkills).toHaveLength(0);
+    expect(gated.dropped[0]?.code).toBe("NOT_IN_LOCK");
+  });
+});
+
+describe("whitelist entry validation", () => {
+  test("refuses empty entries and malformed sub-paths before any decision", () => {
+    const lock = validLock([officialPluginEntry()]);
+    expect(() => buildL1Gate(lock, [""])).toThrow(/白名单条目不能为空/);
+    expect(() => buildL1Gate(lock, ["pkg/"])).toThrow(/白名单条目格式非法/);
+    expect(() => buildL1Gate(lock, ["pkg//x"])).toThrow(/白名单条目格式非法/);
+    expect(() => buildL1Gate(lock, ["pkg sub"])).toThrow(/白名单条目格式非法/);
+  });
+
+  test("an empty whitelist refuses everything it is asked about", () => {
+    const gate = buildL1Gate(validLock([officialPluginEntry()]), []);
+    expect(gate.decide("all-skills", "official-plugin").code).toBe("NOT_WHITELISTED");
+  });
+});
+
+describe("verifyAllowedUnits — batch byte closure of the gate", () => {
+  /** Build a fake fetch cache holding one official plugin with two skills. */
+  function cacheWithPlugin(): { dir: string; pluginRoot: string } {
+    const dir = mkdtempSync(join(tmpdir(), "l1gate-verify-"));
+    const pluginRoot = join(
+      dir,
+      "plugins/marketplaces/codebuddy-plugins-official/plugins/all-skills",
+    );
+    mkdirSync(join(pluginRoot, "skills/artifacts-builder"), { recursive: true });
+    writeFileSync(join(pluginRoot, "skills/artifacts-builder/SKILL.md"), "# a\n");
+    mkdirSync(join(pluginRoot, "skills/file-organizer"), { recursive: true });
+    writeFileSync(join(pluginRoot, "skills/file-organizer/SKILL.md"), "# b\n");
+    return { dir, pluginRoot };
+  }
+
+  test("two mapped units of one plugin verify the plugin row exactly once", () => {
+    const { dir, pluginRoot } = cacheWithPlugin();
+    try {
+      const lock = validLock([
+        officialPluginEntry({ checksum_sha256: directorySha256(pluginRoot) }),
+      ]);
+      const gate = buildL1Gate(lock);
+      const gated = filterSnapshotByGate(
+        snapshotWith(
+          skillUnit("all-skills--skills--artifacts-builder"),
+          skillUnit("all-skills--skills--file-organizer"),
+        ),
+        gate,
+      );
+      const verification = verifyAllowedUnits(gated, gate, dir, { strict: true });
+      expect(verification.verified).toBe(1);
+      expect(verification.warnings).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("drifted bytes are refused even though the gate allowed the unit", () => {
+    const { dir, pluginRoot } = cacheWithPlugin();
+    try {
+      const lock = validLock([
+        officialPluginEntry({ checksum_sha256: directorySha256(pluginRoot) }),
+      ]);
+      const gate = buildL1Gate(lock);
+      const gated = filterSnapshotByGate(
+        snapshotWith(skillUnit("all-skills--skills--artifacts-builder")),
+        gate,
+      );
+      writeFileSync(join(pluginRoot, "skills/artifacts-builder/SKILL.md"), "# tampered\n");
+      expect(() => verifyAllowedUnits(gated, gate, dir, { strict: true })).toThrow(
+        ChecksumMismatchError,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("strict mode (fetch cache) treats a missing unit root as fatal; home mode warns", () => {
+    const lock = validLock([officialPluginEntry()]);
+    const gate = buildL1Gate(lock);
+    const gated = filterSnapshotByGate(
+      snapshotWith(skillUnit("all-skills--skills--artifacts-builder")),
+      gate,
+    );
+    const empty = mkdtempSync(join(tmpdir(), "l1gate-empty-"));
+    try {
+      expect(() => verifyAllowedUnits(gated, gate, empty, { strict: true })).toThrow(
+        /缓存副本不存在/,
+      );
+      const homeMode = verifyAllowedUnits(gated, gate, empty, { strict: false });
+      expect(homeMode.verified).toBe(0);
+      expect(homeMode.warnings).toHaveLength(1);
+      expect(homeMode.warnings[0]).toContain("official-plugin/all-skills");
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  test("expert packages and connectors verify through the same path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "l1gate-mixed-"));
+    try {
+      const pkgRoot = join(dir, "plugins/marketplaces/experts/plugins/sample-package");
+      mkdirSync(pkgRoot, { recursive: true });
+      writeFileSync(join(pkgRoot, "plugin.json"), "{}\n");
+      const connectorFile = join(dir, "connectors-marketplace/connectors/github/mcp.json");
+      mkdirSync(join(connectorFile, ".."), { recursive: true });
+      writeFileSync(connectorFile, '{"mcpServers":{}}\n');
+      const lock = validLock([
+        validEntry({ redistributable: true, checksum_sha256: directorySha256(pkgRoot) }),
+        validEntry({
+          slug: "github",
+          kind: "connector",
+          channel: "connectors",
+          origin: "connectors/github/mcp.json",
+          redistributable: true,
+          checksum_sha256: fileSha256(connectorFile),
+        }),
+      ]);
+      const gate = buildL1Gate(lock);
+      const snapshot: WorkBuddySnapshot = {
+        sourceRoot: dir,
+        packages: [
+          {
+            dirName: "sample-package",
+            pluginJson: { path: "plugin.json", content: "{}\n" } as never,
+            plugin: {} as never,
+            agents: [],
+            skills: [],
+            attachments: [],
+            fetchedAt: "2026-11-14T00:00:00.000Z",
+          } as never,
+        ],
+        userSkills: [],
+        connectors: [
+          {
+            id: "github",
+            dirName: "github",
+            mcpJson: { path: "mcp.json", content: "{}\n" } as never,
+            server: {} as never,
+          } as never,
+        ],
+      };
+      const gated = filterSnapshotByGate(snapshot, gate);
+      const verification = verifyAllowedUnits(gated, gate, dir, { strict: true });
+      expect(verification.verified).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });
