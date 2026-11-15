@@ -31,7 +31,7 @@ import type { TaskProjector } from "../../tasks/projector";
 import { asPlatform, runAsTenant } from "../../tenant/context";
 import { ownerTenantOfBot } from "../bot-owner";
 import type { AcpPermissionRequest } from "./agent";
-import { commandAllowlisted } from "./command-allowlist";
+import { strictCharacters, strictlySafe } from "./command-allowlist";
 import {
   analyseCommand,
   type CommandAnalysis,
@@ -59,9 +59,11 @@ import { type AcpTurnStore, isFinalAcpTurnStatus } from "./turns";
  *     saying no: refused outright, the rule named in the conversation.
  *  3. A custom rule that asks (or hands off): asks.
  *  4. The employee's own five rules (`AcpRuleKey`); several matched, the strictest wins. Running
- *     commands "dangerous ones only" is an allowlist (command-allowlist.ts): only a clean line of
- *     listed read-only and everyday development commands that the SEC1 tables pass goes through;
- *     "directly" still asks about a line that does not come apart cleanly. Not a sandbox.
+ *     commands "dangerous ones only" lets through only a strictly safe line (command-allowlist.ts:
+ *     strict characters, a listed program, listed options, relative paths inside the working
+ *     folder) that nothing flags; "directly" lets through a line of strict characters in which
+ *     nothing is found (no floor, nothing risky or dangerous). Everything else asks. Not a sandbox:
+ *     floors on the command line are recognised as well as can be, not all of them.
  *  5. The hirer's global approvals switch (off by default) relaxes none of this: the five rules
  *     were set for this employee at hiring, so what they ask is always asked.
  * A kind XiongBao does not know (`other`, a misspelling) is asked every time; `switch_mode` is
@@ -374,29 +376,62 @@ function onceOnly(policy: ApprovalPolicyOutcome): ApprovalPolicyOutcome {
   };
 }
 
+const SPECIAL_CHARACTERS =
+  "这条命令含有特殊符号（引号、$、;、&、|、重定向、括号、通配、注释等），不同的 shell 读法不同，先问你。";
+
+/**
+ * Whether a command line is plain enough to be let through at all, or allowed for the conversation:
+ * strict characters only (command-allowlist.ts), clean, and nothing the SEC1 tables or the risky
+ * checks flag. Floors are asked before this is consulted.
+ */
+function plainCommand(
+  command: string | null,
+  analysis: CommandAnalysis,
+): boolean {
+  return (
+    command !== null &&
+    strictCharacters(command) &&
+    analysis.clean &&
+    !analysis.danger
+  );
+}
+
 /**
  * Why the rule for running commands asks about this command line, or undefined when it does not.
- * `direct`: only a line that does not come apart cleanly (floors and risky lines are asked before
- * this). `dangerous`: everything but a clean line of allowlisted commands the SEC1 tables pass
- * (command-allowlist.ts). `ask`, and anything that is not a choice: always.
+ * `direct`: a line of strict characters that is clean and that nothing flags goes through.
+ * `dangerous`: only a strictly safe line (command-allowlist.ts) that nothing flags. `ask`, and
+ * anything that is not a choice: always.
  */
 function runCommandAsks(
   value: string | undefined,
+  command: string | null,
   analysis: CommandAnalysis,
 ): string | undefined {
+  const why =
+    analysis.danger ??
+    (command !== null && !strictCharacters(command)
+      ? SPECIAL_CHARACTERS
+      : analysis.unclean
+        ? `这条命令${analysis.unclean}，先问你。`
+        : undefined);
   if (value === "direct")
-    return analysis.clean
-      ? undefined
-      : `这条命令${analysis.unclean ?? "拆不干净"}，先问你。`;
+    return plainCommand(command, analysis) ? undefined : (why ?? UNPLAIN);
   if (value === "dangerous") {
-    if (analysis.danger) return analysis.danger;
-    if (commandAllowlisted(analysis)) return undefined;
-    return analysis.clean
-      ? "这条命令不在常见只读和开发命令的名单里，先问你。"
-      : `这条命令${analysis.unclean ?? "拆不干净"}，先问你。`;
+    if (
+      command !== null &&
+      plainCommand(command, analysis) &&
+      strictlySafe(command)
+    )
+      return undefined;
+    return (
+      why ??
+      "这条命令不在严格安全的命令名单里（程序、选项和路径都要对得上），先问你。"
+    );
   }
   return `「${ACP_RULE_LABELS.runCommand}」设成了先问你。`;
 }
+
+const UNPLAIN = "看不清这条命令，先问你。";
 
 /** Said when a request is refused because it would leave the ask-first mode. */
 export const ACP_SWITCH_MODE_REFUSED =
@@ -509,12 +544,12 @@ export async function resolvePermission(input: {
       "其他操作",
     );
   /*
-   * "Allow for this conversation": a command only as exactly this command, only a clean one, and
-   * never one the SEC1 tables call dangerous or that names a file that may hold secrets; a file
-   * request only inside the working folder.
+   * "Allow for this conversation": a command only as exactly this command, only one of strict
+   * characters that is clean, and never one the SEC1 tables call dangerous or that names a file that
+   * may hold secrets; a file request only inside the working folder.
    */
   const standing = analysis
-    ? analysis.clean && !analysis.danger
+    ? plainCommand(classified.command, analysis)
     : !classified.rules.includes("touchOutside");
   const allowed = standing && input.threadAllows.has(acpAllowKey(candidate));
   // Layer 3: a custom rule, or the reviewer, asks. The engine's own "ask before changes" default
@@ -537,7 +572,7 @@ export async function resolvePermission(input: {
   for (const key of classified.rules) {
     const value = input.employeeRules[key];
     if (key === "runCommand" && analysis) {
-      const why = runCommandAsks(value, analysis);
+      const why = runCommandAsks(value, classified.command, analysis);
       if (why) asking.push({ label: ACP_RULE_LABELS.runCommand, reason: why });
       continue;
     }

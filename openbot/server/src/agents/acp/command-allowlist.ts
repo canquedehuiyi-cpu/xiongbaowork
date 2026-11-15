@@ -1,243 +1,228 @@
-import {
-  type CommandAnalysis,
-  type CommandPart,
-  SAFE_ENV_NAMES,
-} from "./command-analysis";
+import { DEFAULT_SENSITIVE_PATHS, sensitivePath } from "../../approvals/policy";
 
 /**
- * The commands an external employee may run without asking when its rule for running commands is
- * "dangerous ones only" (`runCommand: dangerous`): read-only commands and the everyday development
- * commands, with the subcommands and options that keep them so. Anything not named here is asked.
+ * Which command lines an external employee runs without asking under "dangerous ones only"
+ * (agents/acp/permissions.ts).
  *
- * A LIST, NOT A SANDBOX. `npm run build`, `make` and `git commit` run what the project says they run
+ * WHAT CAN BE PROVEN, NOT WHAT CAN BE GUESSED. Shells (bash, zsh, PowerShell, cmd) read the same
+ * line differently, and every program has options that run commands, write files or go online.
+ * Taking a line apart cannot keep up with that, so going through unasked is kept to the smallest
+ * set that can be checked by looking at the characters alone:
+ *
+ *  - STRICT CHARACTERS (`strictCharacters`): printable ASCII and plain spaces, and none of
+ *    `# ' " \` $ \ ^ ; & | < > ( ) { } [ ] * ? ~ !`, no newline, no tab. No shell reads such a line as
+ *    more than one program with plain words after it.
+ *  - STRICTLY SAFE (`strictlySafe`): strict characters; the first word is a program of
+ *    `STRICT_COMMANDS`, exactly as written there (no folder, no extension, same case); every word
+ *    starting with `-` is, exactly, one of that program's (or subcommand's) options (no
+ *    abbreviations, no clusters, no `--opt=` unless written so); every other word is a path relative
+ *    to the working folder (not absolute, no `..`, no drive) that no sensitive-path pattern matches.
+ *
+ * A LIST, NOT A SANDBOX. `npm test`, `make test`, `git commit` run what the project says they run
  * (scripts, recipes, hooks), which XiongBao cannot see; they are here because they are the work an
- * agent is hired for, and their files are the working folder's.
+ * agent is hired for.
  */
 
-type Check = (args: readonly string[]) => boolean;
+const BANNED = /[#'"`$\\^;&|<>(){}[\]*?~!]/;
 
-const any: Check = () => true;
-/** None of the arguments matches any of `bad`. */
-const without =
-  (...bad: RegExp[]): Check =>
-  (args) =>
-    !args.some((arg) => bad.some((pattern) => pattern.test(arg)));
-/** Exactly one of `forms`, nothing else. */
-const only =
-  (...forms: string[][]): Check =>
-  (args) =>
-    forms.some(
-      (form) =>
-        form.length === args.length &&
-        form.every((word, index) => word === args[index]?.toLowerCase()),
-    );
-/** The first argument is one of `subcommands`, and the rest pass `rest`. */
-const subcommand =
-  (subcommands: Record<string, Check>): Check =>
-  (args) => {
-    const [first, ...rest] = args;
-    const check =
-      first === undefined ? subcommands[""] : subcommands[first.toLowerCase()];
-    return check?.(rest) === true;
-  };
-
-const VERSION = only(["--version"], ["-v"], ["-version"], ["version"]);
-
-/** git's global options that change nothing about what runs (`-C dir`, `--no-pager`). */
-function gitCheck(args: readonly string[]): boolean {
-  let i = 0;
-  while (i < args.length && (args[i] as string).startsWith("-")) {
-    const option = args[i] as string;
-    if (option === "-C") i += 2;
-    else if (option === "--no-pager" || option === "-P") i += 1;
-    // `-c key=value` can make git run a program; any other global option is not looked into.
-    else return false;
-  }
-  return GIT_SUBCOMMANDS(args.slice(i));
+/** Printable ASCII and spaces only, none of the characters a shell gives meaning to. */
+export function strictCharacters(command: string): boolean {
+  return /^[\x20-\x7e]*$/.test(command) && !BANNED.test(command);
 }
-const noOutputFile = without(/^--output(=|$)/, /^--ext-diff$/, /^-O/);
-const GIT_SUBCOMMANDS = subcommand({
-  status: any,
-  log: noOutputFile,
-  diff: noOutputFile,
-  show: noOutputFile,
-  branch: without(
-    /^-[a-z]*[dDmMcCf]/,
-    /^--(delete|move|copy|force|set-upstream-to|unset-upstream|edit-description)/,
-  ),
-  add: any,
-  commit: any,
-  "rev-parse": any,
-  "ls-files": any,
-  blame: any,
-  grep: without(/^-O/, /^--open-files-in-pager/),
-  shortlog: any,
-  describe: any,
-  "--version": any,
-  version: any,
-});
 
-const JS_SCRIPTS: Record<string, Check> = {
-  test: any,
-  t: any,
-  tst: any,
-  run: any,
-  "run-script": any,
-  build: any,
-  lint: any,
-  install: any,
-  i: any,
-  ci: any,
-  ls: any,
-  list: any,
-  outdated: any,
-  why: any,
-  "--version": any,
-  "-v": any,
+/** What may follow a program, or one of its subcommands. */
+type Shape = {
+  /** Options allowed, each exactly as written. */
+  options?: readonly string[];
+  /** Plain words allowed after it: paths, none, or at most one of these exact words. */
+  words?: "paths" | "scripts" | "none" | readonly string[];
+  /** Subcommands, each with its own shape; a program with subcommands needs one. */
+  subcommands?: Readonly<Record<string, Shape>>;
 };
 
-/** Programs and what may follow them. Names are as `programName` gives them: lower case, no `.exe`. */
-export const COMMAND_ALLOWLIST: Readonly<Record<string, Check>> = {
+const READ: Shape = { words: "paths" };
+const VERSION: Shape = { options: ["--version"], words: "none" };
+/** `run <script>`: a script's name from the project's manifest, never a file of code. */
+const SCRIPT: Shape = { words: "scripts" };
+const JS_TOOL: Shape = {
+  subcommands: {
+    test: { words: "none" },
+    run: SCRIPT,
+    build: { words: "none" },
+    lint: { words: "none" },
+    install: { words: "none" },
+    ci: { words: "none" },
+    "--version": { words: "none" },
+  },
+};
+
+/** Programs, exactly as they must be written, and what may follow them. */
+export const STRICT_COMMANDS: Readonly<Record<string, Shape>> = {
   // Reading files and folders.
-  ls: any,
-  dir: any,
-  cat: any,
-  type: any,
-  head: any,
-  tail: any,
-  wc: any,
-  nl: any,
-  cut: any,
-  sort: without(/^-o/, /^--output/),
-  uniq: (args) => args.filter((arg) => !arg.startsWith("-")).length <= 1,
-  diff: without(/^--to-file/),
-  cmp: any,
-  comm: any,
-  file: any,
-  stat: any,
-  du: any,
-  df: any,
-  tree: without(/^-o$/),
-  realpath: any,
-  readlink: any,
-  dirname: any,
-  basename: any,
-  grep: any,
-  egrep: any,
-  fgrep: any,
-  rg: without(/^--pre(=|$)/, /^--pre-glob/),
-  find: without(
-    /^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)$/i,
-  ),
-  jq: any,
-  // Where and who.
-  pwd: any,
-  cd: any,
-  pushd: any,
-  popd: any,
-  echo: any,
-  printf: any,
-  which: any,
-  where: any,
-  whereis: any,
-  whoami: any,
-  uname: any,
-  date: any,
-  true: any,
-  false: any,
-  // PowerShell's reads.
-  "get-childitem": any,
-  gci: any,
-  "get-content": any,
-  gc: any,
-  "get-location": any,
-  gl: any,
-  "select-string": any,
-  sls: any,
-  "test-path": any,
-  "resolve-path": any,
-  "write-output": any,
-  "write-host": any,
-  "get-command": any,
-  gcm: any,
+  ls: {
+    options: ["-l", "-a", "-la", "-al", "-lh", "-lah", "-A", "-1", "-R"],
+    words: "paths",
+  },
+  dir: READ,
+  cat: { options: ["-n"], words: "paths" },
+  type: READ,
+  head: { options: ["-n"], words: "paths" },
+  tail: { options: ["-n"], words: "paths" },
+  wc: { options: ["-l", "-w", "-c"], words: "paths" },
+  grep: {
+    options: [
+      "-r",
+      "-n",
+      "-i",
+      "-l",
+      "-w",
+      "-v",
+      "-c",
+      "-rn",
+      "-ri",
+      "-rl",
+      "-E",
+      "-F",
+    ],
+    words: "paths",
+  },
+  rg: { options: ["-n", "-i", "-l", "-w", "-F", "--files"], words: "paths" },
+  find: {
+    options: ["-name", "-iname", "-type", "-maxdepth", "-mindepth"],
+    words: "paths",
+  },
+  pwd: { words: "none" },
+  echo: { words: "paths" },
+  which: { words: "paths" },
+  whoami: { words: "none" },
+  date: { words: "none" },
+  "Get-ChildItem": READ,
+  "Get-Content": READ,
   // Version control.
-  git: gitCheck,
+  git: {
+    subcommands: {
+      status: {
+        options: ["-s", "-sb", "--short", "--porcelain"],
+        words: "none",
+      },
+      log: {
+        options: [
+          "--oneline",
+          "--stat",
+          "--graph",
+          "-p",
+          "-1",
+          "-5",
+          "-10",
+          "-20",
+          "-50",
+        ],
+        words: "paths",
+      },
+      diff: {
+        options: [
+          "--stat",
+          "--cached",
+          "--staged",
+          "--name-only",
+          "--name-status",
+        ],
+        words: "paths",
+      },
+      show: { options: ["--stat", "--name-only"], words: "paths" },
+      branch: {
+        options: ["-a", "-r", "-v", "-vv", "--list", "--show-current"],
+        words: "none",
+      },
+      add: { options: ["-A", "-u"], words: "paths" },
+      commit: { options: ["-m", "-a", "-am"], words: "paths" },
+      "rev-parse": {
+        options: ["--show-toplevel", "--abbrev-ref", "--short"],
+        words: "paths",
+      },
+      "ls-files": { words: "paths" },
+      blame: { words: "paths" },
+      "--version": { words: "none" },
+    },
+  },
   // Building and testing.
-  npm: subcommand(JS_SCRIPTS),
-  pnpm: subcommand(JS_SCRIPTS),
-  yarn: subcommand({ ...JS_SCRIPTS, "": any }),
-  bun: subcommand({
-    test: any,
-    run: any,
-    build: any,
-    install: any,
-    i: any,
-    "--version": any,
-    "-v": any,
-  }),
-  cargo: subcommand({
-    build: any,
-    test: any,
-    check: any,
-    clippy: any,
-    fmt: any,
-    doc: any,
-    tree: any,
-    metadata: any,
-    "--version": any,
-    "-v": any,
-  }),
-  go: subcommand({
-    build: any,
-    test: any,
-    vet: any,
-    version: any,
-    list: any,
-    env: any,
-  }),
-  pytest: any,
-  tsc: any,
-  make: without(/^-f$/, /^--file/, /^--eval/),
-  eslint: any,
-  prettier: any,
-  jest: any,
-  vitest: any,
-  mypy: any,
-  ruff: subcommand({ check: any, format: any, "--version": any }),
+  npm: JS_TOOL,
+  pnpm: JS_TOOL,
+  yarn: JS_TOOL,
+  bun: {
+    subcommands: {
+      test: { words: "paths" },
+      run: SCRIPT,
+      "--version": { words: "none" },
+    },
+  },
+  make: { words: ["test", "build", "lint"] },
+  cargo: {
+    subcommands: { build: { words: "none" }, test: { words: "none" } },
+  },
+  go: {
+    subcommands: {
+      build: { words: ["./..."] },
+      test: { words: ["./..."] },
+      vet: { words: ["./..."] },
+    },
+  },
+  gofmt: { options: ["-l"], words: "paths" },
+  pytest: { options: ["-q", "-v", "-x"], words: "paths" },
+  tsc: { options: ["--noEmit"], words: "none" },
   // Versions only.
   node: VERSION,
-  deno: VERSION,
-  python: (args) => VERSION(args) || (args[0] === "-m" && args[1] === "pytest"),
-  python3: (args) =>
-    VERSION(args) || (args[0] === "-m" && args[1] === "pytest"),
-  java: VERSION,
-  rustc: VERSION,
+  python: VERSION,
+  python3: VERSION,
 };
 
-/** Wrappers that change nothing about what runs; with options of their own they are not. */
-const SAFE_WRAPPERS: ReadonlySet<string> = new Set(["env", "time"]);
+/** A plain word after a program: a path relative to the working folder that holds no secret. */
+function relativePath(word: string): boolean {
+  return (
+    !word.startsWith("/") &&
+    // A drive (`C:`), or a revision's path (`HEAD:.env`): not a plain path.
+    !word.includes(":") &&
+    !word.includes("..") &&
+    !sensitivePath(word, DEFAULT_SENSITIVE_PATHS)
+  );
+}
 
-function partAllowed(part: CommandPart): boolean {
-  if (part.nested) return false;
-  if (!part.wrappers.every((wrapper) => SAFE_WRAPPERS.has(wrapper)))
-    return false;
-  if (!part.env.every((name) => SAFE_ENV_NAMES.has(name))) return false;
-  const check = COMMAND_ALLOWLIST[part.program];
-  return check?.(part.args) === true;
+function fits(shape: Shape, words: readonly string[]): boolean {
+  if (shape.subcommands) {
+    const [first, ...rest] = words;
+    const sub =
+      first !== undefined && Object.hasOwn(shape.subcommands, first)
+        ? shape.subcommands[first]
+        : undefined;
+    return sub !== undefined && fits(sub, rest);
+  }
+  const plain: string[] = [];
+  for (const word of words) {
+    if (word.startsWith("-")) {
+      if (!shape.options?.includes(word)) return false;
+    } else plain.push(word);
+  }
+  const allowed = shape.words ?? "none";
+  if (allowed === "none") return plain.length === 0;
+  if (allowed === "paths") return plain.every(relativePath);
+  if (allowed === "scripts")
+    return (
+      plain.length === 1 &&
+      /^[A-Za-z0-9_:-]+$/.test(plain[0] as string) &&
+      !/^(ts|js|mjs|cjs|tsx|jsx|sh)$/.test(plain[0] as string)
+    );
+  // A fixed word (`make test`, `go test ./...`): at most one, exactly as listed.
+  return plain.length <= 1 && plain.every((word) => allowed.includes(word));
 }
 
 /**
- * Whether a command line is let through without asking under `runCommand: dangerous`: it comes
- * apart cleanly, writes no file by redirection, hits no floor and nothing risky, and every simple
- * command in it is on the list. The SEC1 tables are asked separately (`danger`).
+ * Whether a command line is strictly safe (see the top of this file): what "dangerous ones only"
+ * runs without asking. The floors and the SEC1 tables are asked separately.
  */
-export function commandAllowlisted(analysis: CommandAnalysis): boolean {
-  return (
-    analysis.clean &&
-    !analysis.writesFile &&
-    analysis.floor === undefined &&
-    analysis.risky === undefined &&
-    analysis.parts.length > 0 &&
-    analysis.parts.every(partAllowed)
-  );
+export function strictlySafe(command: string): boolean {
+  if (!strictCharacters(command)) return false;
+  const words = command.trim().split(/ +/);
+  const program = words[0];
+  if (!program || !Object.hasOwn(STRICT_COMMANDS, program)) return false;
+  return fits(STRICT_COMMANDS[program] as Shape, words.slice(1));
 }

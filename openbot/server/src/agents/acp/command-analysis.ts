@@ -30,8 +30,16 @@ import { DEFAULT_EMPLOYEE_SECURITY } from "../../approvals/types";
  *    alias, function, `.`/`source`, `trap`, no reserved words or control structures, no `{ }` or
  *    `( )`, no `&` (background, or PowerShell's call operator), no here-doc or here-string, no line
  *    continuation, no output written into a file (`>`, `>>`; the null device aside), and no
- *    variable in front of a command but those in `SAFE_ENV_NAMES` (`clean`). Only a clean line can be let through without asking (see
- *    command-allowlist.ts).
+ *    variable in front of a command but those in `SAFE_ENV_NAMES` (`clean`).
+ *
+ * WHAT GOES THROUGH UNASKED IS NOT DECIDED HERE. Shells read the same line differently (`#`
+ * comments, curly quotes, PowerShell's and cmd's escapes), so a reading here can be wrong. Only a
+ * line of strict characters, one no shell reads as more than plain words, can go through or be
+ * allowed for the conversation (command-allowlist.ts); everything found here (floors, risky lines,
+ * not clean) only ever makes a line ask, never lets it through.
+ *
+ * And a program that may run what it is given (`setsid`, `nodemon --exec`, `strace`, anything not
+ * known to take plain words) has its arguments judged as commands too, for the floors.
  */
 
 /**
@@ -133,6 +141,7 @@ const RISKY_RUNNER =
 const RISKY_DOTNET = "这条命令直接调用 .NET，看不清它要做什么，先问你。";
 const RISKY_REMOTE = "这条命令在别的电脑上执行命令，先问你。";
 const RISKY_CONFIG = "这条命令临时改了会执行命令的 git 设置，先问你。";
+const RISKY_DATABASE = "这条命令直接执行一段数据库语句，先问你。";
 const RISKY_DOWNLOADED = "这条命令先下载一个文件，再运行刚下载的文件，先问你。";
 
 /** The keys an `execute` request's "allow for this conversation" is matched by. */
@@ -533,8 +542,9 @@ const WRAPPERS: Record<string, Set<string>> = {
   chronic: new Set(),
   caffeinate: new Set(),
   unbuffer: new Set(),
-  // Windows: `start "" prog`.
+  // Windows: `start "" prog`, `call prog`.
   start: new Set(["/d"]),
+  call: new Set(),
   // Package runners: download a package and run its program.
   npx: new Set(["-p", "--package"]),
   pnpx: new Set(["-p", "--package"]),
@@ -564,6 +574,7 @@ const DELETE_PROGRAMS = new Set([
   "clear-content",
   "clc",
   "remove-itemproperty",
+  "clear-recyclebin",
 ]);
 const MAIL_PROGRAMS = new Set([
   "send-mailmessage",
@@ -618,6 +629,84 @@ const RUNNERS = new Set([
   "at",
 ]);
 const EVALUATORS = new Set(["eval", "iex", "invoke-expression"]);
+/** Programs known to take plain words, never a command to run: their arguments are not judged. */
+const NON_EXECUTING = new Set([
+  "echo",
+  "printf",
+  "grep",
+  "egrep",
+  "fgrep",
+  "rg",
+  "cat",
+  "type",
+  "ls",
+  "dir",
+  "head",
+  "tail",
+  "wc",
+  "git",
+  "mkdir",
+  "touch",
+  "cd",
+  "pwd",
+  "which",
+  "where",
+  "sort",
+  "uniq",
+  "cut",
+  "diff",
+  "file",
+  "stat",
+  "jq",
+  "write-output",
+  "write-host",
+  "get-content",
+  "get-childitem",
+  "find",
+  // Their words are scripts and packages, not commands (`exec`, `dlx`, `x` are judged as such).
+  "npm",
+  "pnpm",
+  "yarn",
+]);
+/** Names that, as a word of another program, may well be a command it is about to run. */
+const COMMAND_NAMES = new Set([
+  ...DELETE_PROGRAMS,
+  ...MAIL_PROGRAMS,
+  ...HTTP_PROGRAMS,
+  ...SOCKET_PROGRAMS,
+  ...REMOTE_COPY,
+  ...INTERPRETERS,
+  ...RUNNERS,
+  ...EVALUATORS,
+  ...Object.keys(WRAPPERS),
+  "git",
+  "gh",
+  "rsync",
+  "ssh",
+  "kubectl",
+  "terraform",
+  "aws",
+  "gcloud",
+  "az",
+  "docker",
+  "psql",
+  "mysql",
+  "sqlite3",
+  "mongosh",
+  "mongo",
+  "redis-cli",
+  "npm",
+  "pnpm",
+  "yarn",
+  "mv",
+  "cp",
+  "dd",
+  "chmod",
+  "chown",
+  "crontab",
+  "find",
+  "xargs",
+]);
 
 /** Installing dependencies or downloading: the network rule, read per simple command. */
 const NETWORK_COMMANDS = [
@@ -744,6 +833,36 @@ function uploads(program: string, args: string[]): boolean {
       (parameter(arg, "method", 1) &&
         (writing(arg.split(":")[1]) || writing(lower[index + 1]))),
   );
+}
+
+/** The statement a database client is given on its command line, if any. */
+function databaseStatement(
+  program: string,
+  args: string[],
+): string | undefined {
+  const option = (shortFlag: string, longFlag: string) => {
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+      if (arg === shortFlag || arg === longFlag) return args[i + 1] ?? "";
+      if (arg.startsWith(`${longFlag}=`)) return arg.slice(longFlag.length + 1);
+      if (
+        shortFlag &&
+        arg.startsWith(shortFlag) &&
+        arg.length > shortFlag.length
+      )
+        return arg.slice(shortFlag.length);
+    }
+    return undefined;
+  };
+  if (program === "psql") return option("-c", "--command");
+  if (program === "mysql" || program === "mariadb")
+    return option("-e", "--execute");
+  if (program === "mongo" || program === "mongosh") return option("", "--eval");
+  if (program === "sqlite3" || program === "duckdb") {
+    const plain = args.filter((arg) => !arg.startsWith("-"));
+    return plain.length >= 2 ? plain.slice(1).join(" ") : undefined;
+  }
+  return undefined;
 }
 
 /** A file's own name, lower case, without its folder or quotes. */
@@ -932,9 +1051,14 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
       if (valued.has(option)) words.shift();
     }
     wrappers.push(options ? `${name}-options` : name);
-    if (DOWNLOADERS.has(name)) facts.network = true;
+    // A package fetched and run in one go: downloaded, then run, unseen.
+    if (DOWNLOADERS.has(name)) {
+      facts.network = true;
+      risky(facts, RISKY_DOWNLOADED);
+    }
     if (name === "pipx" && (words[0] as Word | undefined)?.text === "run") {
       facts.network = true;
+      risky(facts, RISKY_DOWNLOADED);
       words.shift();
     }
     if (name === "timeout" && words.length > 0) words.shift();
@@ -979,6 +1103,17 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
     }
     return;
   }
+  // Renaming what a later word runs: `hash -p /bin/rm ls`, `Set-Alias ls Remove-Item`.
+  if (
+    ["hash", "set-alias", "sal", "new-alias", "nal", "set-item"].includes(
+      program,
+    )
+  ) {
+    dirty(facts, "改了命令的指向");
+    risky(facts, RISKY_RUNNER);
+  }
+  if (program === "enable" && args.some((arg) => /^-[a-z]*f/.test(arg)))
+    risky(facts, RISKY_RUNNER);
   if (program === "trap") {
     dirty(facts, "含 trap");
     if (args[0]) nested(args[0]);
@@ -1197,6 +1332,20 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
     )
       risky(facts, RISKY_CONFIG);
     if (sub === "rm") facts.floors.add("destructive_tool");
+    // `git grep --open-files-in-pager=<cmd>` (any prefix, or `-O` in a cluster) runs a command.
+    if (
+      sub === "grep" &&
+      rest.some((arg) => /^--op/.test(arg) || /^-[A-Za-z]*O/.test(arg))
+    )
+      risky(facts, RISKY_RUNNER);
+    // Throwing away changes nobody has kept: restore, checkout of files, stash drop, hard reset.
+    if (
+      sub === "restore" ||
+      (sub === "checkout" && (rest.includes("--") || rest.includes("."))) ||
+      (sub === "stash" && (rest[0] === "drop" || rest[0] === "clear")) ||
+      (sub === "reset" && rest.includes("--hard"))
+    )
+      facts.floors.add("destructive_tool");
     if (
       sub === "clean" &&
       rest.some((arg) => /^-[a-z]*f/i.test(arg) || arg === "--force")
@@ -1280,6 +1429,119 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
 
   if (NETWORK_COMMANDS.some((pattern) => pattern.test(text)))
     facts.network = true;
+
+  // A UNC path (`\\host\share`, `//host/share`) reaches another computer.
+  if (args.some((arg) => /^(\\\\|\/\/)[^\\/]/.test(arg))) facts.network = true;
+
+  // Downloaded and run in one go: an install from a URL or a repository, `npm exec`, `dlx`,
+  // `deno run <url>`, `uv run <url>`, `go run <module>@<version>`.
+  const firstArg = lower.find((arg) => !arg.startsWith("-"));
+  const remote = (arg: string) =>
+    /^(https?:|git\+|git:|github:|gitlab:|bitbucket:|ssh:)/.test(arg) ||
+    /\.(tgz|tar\.gz)$/.test(arg) ||
+    /^[\w.-]+\/[\w.-]+(#\S*)?$/.test(arg);
+  if (
+    ["npm", "pnpm", "yarn", "bun", "cnpm"].includes(program) &&
+    ((["install", "i", "add"].includes(firstArg ?? "") &&
+      lower.some(
+        (arg) => !arg.startsWith("-") && arg !== firstArg && remote(arg),
+      )) ||
+      ["exec", "dlx", "x"].includes(firstArg ?? ""))
+  ) {
+    facts.network = true;
+    risky(facts, RISKY_DOWNLOADED);
+  }
+  if (
+    ((program === "deno" || program === "uv") &&
+      firstArg === "run" &&
+      lower.some((arg) => /^https?:/.test(arg))) ||
+    (program === "go" &&
+      firstArg === "run" &&
+      lower.some((arg) => /@/.test(arg)))
+  ) {
+    facts.network = true;
+    risky(facts, RISKY_DOWNLOADED);
+  }
+
+  // Remote and cloud resources deleted.
+  if (
+    (program === "gh" &&
+      ["repo", "release"].includes(lower[0] ?? "") &&
+      lower[1] === "delete") ||
+    (program === "kubectl" && lower.includes("delete")) ||
+    (program === "terraform" &&
+      (lower.includes("destroy") || lower.includes("-destroy"))) ||
+    (program === "aws" &&
+      lower[0] === "s3" &&
+      ["rm", "rb"].includes(lower[1] ?? "")) ||
+    (program === "aws" && lower.some((arg) => /^delete-/.test(arg))) ||
+    ((program === "gcloud" || program === "az") && lower.includes("delete")) ||
+    (program === "docker" && lower.includes("prune")) ||
+    program === "clear-recyclebin"
+  )
+    facts.floors.add("destructive_tool");
+
+  // A database client's statement on the command line: a destructive one is a delete, any other
+  // runs unseen.
+  const statement = databaseStatement(program, args);
+  if (statement !== undefined) {
+    if (/\b(drop|delete|truncate|alter)\b/i.test(statement))
+      facts.floors.add("destructive_tool");
+    else risky(facts, RISKY_DATABASE);
+  }
+  if (
+    program === "redis-cli" &&
+    args.some((arg) => /^(flushall|flushdb|del|unlink)$/i.test(arg))
+  )
+    facts.floors.add("destructive_tool");
+
+  // Options of everyday tools that delete, send or run.
+  if (
+    program === "pytest" ||
+    (/^python[0-9.]*$/.test(program) && lower.includes("pytest"))
+  ) {
+    if (lower.some((arg) => arg.startsWith("--basetemp")))
+      facts.floors.add("destructive_tool");
+    if (lower.some((arg) => arg.startsWith("--pastebin")))
+      facts.floors.add("outbound_send");
+  }
+  // Code given on the command line by another name: a `data:` module, npm's shell or node options.
+  if (
+    (program === "node" || program === "bun" || program === "deno") &&
+    args.some((arg) => /\bdata:/.test(arg))
+  )
+    risky(facts, RISKY_INLINE);
+  if (
+    ["npm", "pnpm", "yarn"].includes(program) &&
+    lower.some((arg) => /^--(script-shell|node-options|shell)(=|$)/.test(arg))
+  )
+    risky(facts, RISKY_RUNNER);
+  if (
+    program === "sort" &&
+    lower.some((arg) => arg.startsWith("--compress-prog"))
+  )
+    risky(facts, RISKY_RUNNER);
+  if (program === "mypy" && lower.includes("--install-types"))
+    facts.network = true;
+
+  // A program that may run what it is given: its arguments are judged as commands too (`setsid rm
+  // x`, `nodemon --exec '…'`). Only the programs known to take plain words are spared.
+  if (!NON_EXECUTING.has(program))
+    for (let i = 0; i < argWords.length; i += 1) {
+      const word = argWords[i] as Word;
+      if (/\s/.test(word.text)) {
+        analyseInto(
+          word.text,
+          { ...context, nested: true, depth: context.depth + 1 },
+          facts,
+        );
+        continue;
+      }
+      if (COMMAND_NAMES.has(programName(word.text))) {
+        simpleCommand(argWords.slice(i), { ...context, nested: true }, facts);
+        break;
+      }
+    }
 }
 
 /** Every simple command of a command line, into `facts`. */
