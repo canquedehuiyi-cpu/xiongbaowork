@@ -49,6 +49,9 @@ afterEach(() => {
 
 const originalFetch = globalThis.fetch;
 
+/** 搜索框的可访问名字：它收窄的是这一页的三块，不只是技能。 */
+const SEARCH_LABEL = "搜索技能、团队和连接器";
+
 type Auth = PluginsPage["catalogue"][number]["auth"];
 
 const skill = (
@@ -610,14 +613,14 @@ test("搜索词收窄技能列表，一条都不匹配时给出清除筛选的�
   await waitFor(() => expect(view.getByText("导出市场")).toBeTruthy());
 
   const user = userEvent.setup({ document });
-  await user.type(view.getByRole("searchbox", { name: "搜索技能" }), "删除");
+  await user.type(view.getByRole("searchbox", { name: SEARCH_LABEL }), "删除");
   await settleReactWork();
   expect(view.getByText("修删除守卫")).toBeTruthy();
   expect(view.queryByText("导出市场")).toBeNull();
 
-  await user.clear(view.getByRole("searchbox", { name: "搜索技能" }));
+  await user.clear(view.getByRole("searchbox", { name: SEARCH_LABEL }));
   await user.type(
-    view.getByRole("searchbox", { name: "搜索技能" }),
+    view.getByRole("searchbox", { name: SEARCH_LABEL }),
     "没有这回事",
   );
   await settleReactWork();
@@ -839,4 +842,180 @@ test("a skill card gives the way to read its body, and one with no body draws no
       { name: /看正文/ },
     ),
   ).toBeNull();
+});
+
+/**
+ * 搜索框原先是「搜索技能」：这一页有三块，它只收窄其中一块，另外两块照旧铺满。人打了字，一半结果
+ * 响应、一半不动，比不搜更难懂——而且「这个部署里有没有和 X 有关的东西」本来就不是技能一个块的
+ * 问题。现在三块一起收窄。
+ *
+ * 措辞必须分得开：**一块被搜索词筛空，和它本来就没有，是两件事**。那个团还在，只是不叫这个名字；
+ * 这时候说「还没有被给的团队」是在陈述一个假事实，还会把人引去找管理员要东西。
+ */
+test("一次搜索同时收窄三块，被筛空的那些说没有匹配而不是还没有", async () => {
+  const view = await renderMine(
+    page(
+      [skill("report", "写周报", "full"), skill("meeting", "整理会议", "full")],
+      [server("github", "GitHub", "deployment-bearer", true)],
+      [team("gstack", "软件工坊", 6), team("design", "设计所", 2)],
+      [listed("github", "deployment-bearer")],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("写周报")).toBeTruthy());
+
+  const user = userEvent.setup({ document });
+  await user.type(view.getByRole("searchbox", { name: SEARCH_LABEL }), "软件");
+  await settleReactWork();
+
+  // 命中在这一块。
+  expect(view.getByText("软件工坊")).toBeTruthy();
+  expect(view.queryByText("设计所")).toBeNull();
+  // 另外两块一条都不匹配：说「没有匹配的」，不说「还没有被给的」。
+  expect(view.getByText("没有匹配的技能")).toBeTruthy();
+  expect(view.queryByText("还没有被给的技能")).toBeNull();
+  expect(view.getByText("没有匹配的连接器")).toBeTruthy();
+  expect(view.queryByText("还没有被给的连接器")).toBeNull();
+  // 总览答的是「被给了多少」，不是搜出多少——一搜就变小的数字是筛子自己的答案。
+  expect(view.getByText("2 条技能 · 2 支团队 · 1 个连接器")).toBeTruthy();
+
+  // 换一个只命中技能的词：现在轮到团队被筛空。
+  await user.clear(view.getByRole("searchbox", { name: SEARCH_LABEL }));
+  await user.type(view.getByRole("searchbox", { name: SEARCH_LABEL }), "周报");
+  await settleReactWork();
+  expect(view.getByText("写周报")).toBeTruthy();
+  expect(view.getByText("没有匹配的团队")).toBeTruthy();
+  expect(view.queryByText("还没有被给的团队")).toBeNull();
+  expect(view.getByText("没有匹配的连接器")).toBeTruthy();
+});
+
+/**
+ * 搜索框原先只在 `skills.length > 0` 时画。只有团队、没有技能的人拿不到搜索框——那是最需要搜的人：
+ * 团队一多，找一支团就得一张张认卡片。
+ */
+test("只有团队的人也有搜索框，并且搜得动", async () => {
+  const view = await renderMine(
+    page([], [], [team("gstack", "软件工坊", 6), team("design", "设计所", 2)]),
+  );
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+
+  const user = userEvent.setup({ document });
+  await user.type(view.getByRole("searchbox", { name: SEARCH_LABEL }), "设计");
+  await settleReactWork();
+  expect(view.getByText("设计所")).toBeTruthy();
+  expect(view.queryByText("软件工坊")).toBeNull();
+});
+
+/**
+ * 三块各有各的收窄：技能按档位、连接器按「要不要你去连」、三块都按搜索词。「清除筛选」不是一个块
+ * 自己的取消键，是这个人在说「我筛乱了，全放开」——所以它得把三块的收窄一起放掉，清一半等于把人
+ * 留在另一个空列表里。
+ */
+test("清除筛选把三块的收窄一起放开", async () => {
+  const view = await renderMine(
+    page(
+      [
+        skill("full-a", "完整甲", "full"),
+        skill("dead-a", "阻断甲", "blocked", {
+          blockedReason: "host-specific-skill",
+          blockedReasonRef: "正文只讲宿主平台的操作",
+        }),
+      ],
+      [
+        server("tapd", "TAPD", "deployment-bearer", false),
+        server("github", "GitHub", "deployment-bearer", true),
+      ],
+      [team("gstack", "软件工坊", 6), team("design", "设计所", 2)],
+      [
+        listed("tapd", "deployment-bearer"),
+        listed("github", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("完整甲")).toBeTruthy());
+
+  // 收窄到两处：技能只剩暂不可用，连接器只看待连接的。
+  const tally = within(view.getByRole("group", { name: "按档位筛选" }));
+  act(() => tally.getByRole("button", { name: /暂不可用 1/ }).click());
+  await settleReactWork();
+  act(() => view.getByRole("button", { name: /只看待连接的 1/ }).click());
+  await settleReactWork();
+  expect(view.queryByText("完整甲")).toBeNull();
+  expect(view.queryByText("GitHub")).toBeNull();
+
+  // 再叠一个搜索词，三块都被收窄。
+  const user = userEvent.setup({ document });
+  await user.type(view.getByRole("searchbox", { name: SEARCH_LABEL }), "软件");
+  await settleReactWork();
+  expect(view.getByText("没有匹配的技能")).toBeTruthy();
+  /*
+   * 连接器这一块此刻有两个收窄叠着：搜「软件」一条都不匹配，「只看待连接的」也还按着。挑出来的开关
+   * 得按**搜索后**那一份算——按全部算就会在「没有匹配」的位置画出那张待连接的卡，等于把一个被筛掉
+   * 的结果塞回列表。
+   */
+  expect(view.getByText("没有匹配的连接器")).toBeTruthy();
+  expect(view.queryByText("TAPD")).toBeNull();
+
+  // 一块的「清除筛选」放开的是全部，不是它自己那一块。
+  act(() => view.getAllByRole("button", { name: "清除筛选" })[0]?.click());
+  await settleReactWork();
+  expect(view.getByText("完整甲")).toBeTruthy();
+  expect(view.getByText("阻断甲")).toBeTruthy();
+  expect(view.getByText("软件工坊")).toBeTruthy();
+  expect(view.getByText("设计所")).toBeTruthy();
+  // 连接器卡上标题与厂商是同一个词，两处都写出来了。
+  expect(view.getAllByText("GitHub").length).toBeGreaterThan(0);
+  expect(view.getAllByText("TAPD").length).toBeGreaterThan(0);
+  expect(
+    tally
+      .getByRole("button", { name: /暂不可用 1/ })
+      .getAttribute("aria-pressed"),
+  ).toBe("false");
+  expect(
+    view
+      .getByRole("button", { name: /只看待连接的 1/ })
+      .getAttribute("aria-pressed"),
+  ).toBe("false");
+});
+
+/**
+ * 「只看待连接的」挑的是**搜索结果里**待连接的那几张。按全部算，就会把一张连搜索词都不匹配的
+ * 待连接卡画进结果里——搜索没漏掉它，是那个开关自己绕过筛子把它塞回来的。
+ */
+test("只看待连接的只在搜索结果里挑，不把被搜索筛掉的塞回来", async () => {
+  const view = await renderMine(
+    page(
+      [],
+      [
+        server("alpha", "Alpha", "deployment-bearer", false),
+        server("beta", "Beta", "deployment-bearer", false),
+        server("alpine", "Alpine", "deployment-bearer", true),
+        server("alger", "Alger", "deployment-bearer", true),
+      ],
+      [],
+      [
+        listed("alpha", "deployment-bearer"),
+        listed("beta", "deployment-bearer"),
+        listed("alpine", "deployment-bearer"),
+        listed("alger", "deployment-bearer"),
+      ],
+    ),
+  );
+  await waitFor(() =>
+    expect(view.getAllByText("Alpha").length).toBeGreaterThan(0),
+  );
+
+  act(() => view.getByRole("button", { name: /只看待连接的 2/ }).click());
+  await settleReactWork();
+  expect(view.getAllByText("Beta").length).toBeGreaterThan(0);
+
+  const user = userEvent.setup({ document });
+  await user.type(view.getByRole("searchbox", { name: SEARCH_LABEL }), "al");
+  await settleReactWork();
+  /*
+   * 三种卡各司其职：Alpha 既匹配又待连接，留下；Alpine 匹配但已连，被开关筛掉；Beta 待连接却
+   * 不匹配，被搜索筛掉。少任何一条筛子，剩下的那张都会出现在这里。
+   */
+  expect(view.getAllByText("Alpha").length).toBeGreaterThan(0);
+  expect(view.queryByText("Beta")).toBeNull();
+  expect(view.queryByText("Alpine")).toBeNull();
 });
