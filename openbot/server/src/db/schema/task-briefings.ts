@@ -26,6 +26,10 @@ export const taskBriefings = pgTable(
     localDay: date("local_day", { mode: "string" }).notNull(),
     /** How many places it was offered to; 0 when there was nothing to say, null while being sent. */
     offered: integer("offered"),
+    /**
+     * When the row was last claimed: inserted, or taken back from a claim left unsent past its lease
+     * (`tasks/briefing.ts` `BRIEFING_CLAIM_LEASE_MS`).
+     */
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

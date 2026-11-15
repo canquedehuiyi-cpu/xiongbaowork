@@ -6,6 +6,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   or,
   sql,
@@ -54,7 +55,8 @@ import { appendTaskEvent } from "./events";
  * ONCE A DAY, EVEN ACROSS RESTARTS. Each person's briefing is claimed by inserting its row in
  * `task_briefings` (person, kind, their local day) before it is built; a second replica, or this one
  * after a restart, finds the row and sends nothing. Nothing is held open while it is sent: the claim
- * commits on its own, and the outbox rows are written after.
+ * commits on its own, and the outbox rows are written after. A claim still unsent ten minutes on
+ * ({@link BRIEFING_CLAIM_LEASE_MS}: its server died before sending) may be taken back within the hour.
  *
  * WHEN. Every minute the pass reads each person's work hours: on a working day (Saturdays and Sundays
  * only if they said so), within an hour after their start or end time, the briefing of that kind is
@@ -69,6 +71,8 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 /** How long after the start or end time a briefing may still go out (a restart across the moment). */
 export { BRIEFING_WINDOW_MS };
+/** How long a briefing's claim may stay unsent before another pass may take it back. */
+export const BRIEFING_CLAIM_LEASE_MS = 10 * MINUTE;
 /** How far back a closed card or a 验收 line is read: enough to cover "today" on any zone. */
 const LOOKBACK_MS = 48 * HOUR;
 /** The statuses of a followed card that has not ended. */
@@ -456,18 +460,46 @@ export function createBriefings(deps: BriefingDeps) {
       const at = minuteOfClock(kind === "start" ? hours.start : hours.end);
       if (clock.minute < at || clock.minute >= at + BRIEFING_WINDOW_MS / MINUTE)
         continue;
-      // The claim, committed on its own: whoever inserts the row briefs; anybody after finds it there.
-      const [claimed] = await database
-        .insert(taskBriefings)
-        .values({ tenantId, kind, localDay: day })
-        .onConflictDoNothing()
-        .returning({ kind: taskBriefings.kind });
-      if (!claimed) continue;
       const claim = and(
         eq(taskBriefings.tenantId, tenantId),
         eq(taskBriefings.kind, kind),
         eq(taskBriefings.localDay, day),
       );
+      // The claim, committed on its own: whoever inserts the row briefs; anybody after finds it there.
+      const [claimed] = await database
+        .insert(taskBriefings)
+        .values({ tenantId, kind, localDay: day, createdAt: now })
+        .onConflictDoNothing()
+        .returning({ kind: taskBriefings.kind });
+      /*
+       * A claim nobody finished. A server that exits between the claim and the send (a deploy, a
+       * crash: no `catch` runs) leaves the row unsent (`offered` null) for good, and every pass after
+       * would find it there and skip that day's briefing, and the reminders it carries with it. So a
+       * claim is a lease: `created_at` is when it was last claimed, and one still unsent
+       * {@link BRIEFING_CLAIM_LEASE_MS} on is taken back by whichever pass gets the row first (one
+       * update: the row lock lets one through, and the next re-reads a fresh `created_at`). A send that
+       * is merely slow and then finishes cannot reach anybody twice either: each place's row is keyed
+       * by the person, the briefing and the place (`notifyPerson`), as for a retry after a failure.
+       */
+      const reclaimed = claimed
+        ? []
+        : await database
+            .update(taskBriefings)
+            .set({ createdAt: now })
+            .where(
+              and(
+                claim,
+                isNull(taskBriefings.offered),
+                lt(
+                  taskBriefings.createdAt,
+                  new Date(now.getTime() - BRIEFING_CLAIM_LEASE_MS),
+                ),
+              ),
+            )
+            .returning({ kind: taskBriefings.kind });
+      if (!claimed && reclaimed.length === 0) continue;
+      // This pass's own claim: one taken back from it later is not this pass's to let go.
+      const mine = and(claim, eq(taskBriefings.createdAt, now));
       let offered = 0;
       try {
         const composed = await compose(tenantId, kind, now, hours);
@@ -485,7 +517,7 @@ export function createBriefings(deps: BriefingDeps) {
          */
         await database
           .delete(taskBriefings)
-          .where(and(claim, isNull(taskBriefings.offered)));
+          .where(and(mine, isNull(taskBriefings.offered)));
         throw error;
       }
       await database.update(taskBriefings).set({ offered }).where(claim);

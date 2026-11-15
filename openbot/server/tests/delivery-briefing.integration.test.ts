@@ -25,6 +25,7 @@ import type {
   DeliveryScope,
 } from "../src/delivery/types";
 import {
+  BRIEFING_CLAIM_LEASE_MS,
   type Briefing,
   type BriefingKind,
   createBriefingRoutes,
@@ -1017,6 +1018,48 @@ test("a briefing that could not be sent is tried again within the hour, and goes
   ).toEqual(["push", "slack"]);
   // Both places were reached, by the first try; the retry wrote nothing new and failed at nothing.
   expect((await claims()).map((row) => row.offered)).toEqual([2]);
+});
+
+test("a claim left by a server that died before sending is taken back within the hour, and the briefing goes out once", async () => {
+  const lee = await person("crashed", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  await phone(lee);
+  await card(lee, { acceptedAt: at(MONDAY_9, -1 * HOUR) });
+  // The claim committed at 09:00, and the process exited before anything was sent: no catch ran.
+  await runAsTenant(lee.id, () =>
+    database.insert(taskBriefings).values({
+      tenantId: lee.id,
+      kind: "start",
+      localDay: "2026-11-16",
+      createdAt: MONDAY_9,
+    }),
+  );
+  const claims = () =>
+    runAsTenant(lee.id, () =>
+      database
+        .select()
+        .from(taskBriefings)
+        .where(eq(taskBriefings.tenantId, lee.id)),
+    );
+
+  // A minute on, the claim may still be somebody's send in flight: left alone.
+  const soon = briefingsFor([lee]);
+  await soon.runBriefings(at(MONDAY_9, MINUTE));
+  expect(soon.sent).toEqual([]);
+  expect((await claims()).map((row) => row.offered)).toEqual([null]);
+
+  // Once its lease has run out, inside the hour, the next pass takes it back and briefs.
+  // Two replicas at once: one of them takes it.
+  const replicas = [briefingsFor([lee]), briefingsFor([lee])];
+  const later = at(MONDAY_9, BRIEFING_CLAIM_LEASE_MS + MINUTE);
+  await Promise.all(replicas.map((replica) => replica.runBriefings(later)));
+  for (const replica of replicas) await replica.runBriefings(at(later, MINUTE));
+  expect(
+    replicas.flatMap((replica) => replica.sent.map((item) => item.kind)),
+  ).toEqual(["start"]);
+  expect((await outbox(lee, "briefing")).length).toBe(1);
+  expect((await claims()).map((row) => row.offered)).toEqual([1]);
 });
 
 test("two people on the same platform each get their own briefing that day", async () => {
