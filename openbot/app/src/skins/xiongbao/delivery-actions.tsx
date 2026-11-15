@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { useScheduleZone, useZoneNote } from "@/lib/settings/work-hours";
 import { taskAction } from "@/lib/tasks/actions";
 import {
   cancelTask,
@@ -69,6 +70,20 @@ const WB_FALLBACK = {
 /** 别的皮肤里给弹出层根元素的兜底令牌；默认皮肤为 undefined。 */
 export function useWbFallback(): CSSProperties | undefined {
   return useSkinId() === "xiongbao" ? undefined : WB_FALLBACK;
+}
+
+/**
+ * 作息时区和这台设备的钟不一样时，清点页、卡片详情顶上的一行小字：「时间按你的作息时区（中国标准时间）显示」。
+ * 一样时什么都不画。
+ */
+export function ZoneNote({ now }: { now?: Date }) {
+  const note = useZoneNote(now);
+  if (!note) return null;
+  return (
+    <p className="m-0 text-(--wb-muted) text-[12px]" data-zone-note>
+      {note}
+    </p>
+  );
 }
 
 /** 设计稿 1 的按钮：32px 高的灰按钮，`primary` 是验收那种蓝按钮。 */
@@ -409,7 +424,9 @@ export function ExtendDialog({
   const editing = mode === "edit";
   const events = useQuery(taskEventsQueryOptions(card.id));
   const pending = events.data ? pendingExtension(events.data) : null;
-  const requested = pending?.dueAt ? clockText(pending.dueAt, now) : "";
+  // 员工要的时间按作息时区写进输入框：提交的「16:00」服务器也按作息时区认。
+  const zone = useScheduleZone();
+  const requested = pending?.dueAt ? clockText(pending.dueAt, now, zone) : "";
   const [typed, setTyped] = useState<string | null>(null);
   const value = typed ?? requested;
   const settled = useSettled();

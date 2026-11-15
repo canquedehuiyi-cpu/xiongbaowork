@@ -8,12 +8,14 @@ import {
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
+import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
   canNudge,
   canReassign,
   clockText,
   deliveryLaneOf,
+  dueText,
   type EvidenceRow,
   eventLine,
   eventsInOrder,
@@ -38,6 +40,7 @@ import {
   useDeliveryWrites,
   useWbFallback,
   WriteFailure,
+  ZoneNote,
 } from "@/skins/xiongbao/delivery-actions";
 
 /**
@@ -229,6 +232,7 @@ function WatchSteps({
   title,
   nameOf,
   agentId,
+  timeZone,
 }: {
   history: TaskEvent[];
   events: { isError: boolean; isPending: boolean };
@@ -236,9 +240,15 @@ function WatchSteps({
   title: string;
   nameOf: (agentId: string) => string;
   agentId: string | null;
+  timeZone?: string;
 }) {
+  /*
+   * 「第 N 次」和上面「已催 N 次」同一个口径：你点的「再催」也算一次（规格第 8 节，它也占当天的 3 次），只是
+   * 它不列在这一段里。
+   */
   let nudges = 0;
   const steps = history.flatMap((event) => {
+    if (event.kind === "nudged") nudges += 1;
     const byServer = !event.actor.startsWith("user:");
     if (
       !(
@@ -248,9 +258,8 @@ function WatchSteps({
       )
     )
       return [];
-    const line = eventLine(event, { now, title, nameOf, agentId });
+    const line = eventLine(event, { now, title, nameOf, agentId, timeZone });
     if (!line) return [];
-    if (event.kind === "nudged") nudges += 1;
     return [
       {
         event,
@@ -282,7 +291,7 @@ function WatchSteps({
           {steps.map(({ event, text }) => (
             <li className="contents" key={event.id}>
               <time className="text-(--wb-muted)" dateTime={event.createdAt}>
-                {clockText(event.createdAt, now)}
+                {clockText(event.createdAt, now, timeZone)}
               </time>
               <span className="text-(--wb-fg) [overflow-wrap:anywhere]">
                 {text}
@@ -307,6 +316,8 @@ function TaskDetail({ taskId }: { taskId: string }) {
   const approval = useApprovalDecision();
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // 时刻按作息时区念，和推送、清点、服务器写的提醒同一个钟（作息还没读到时按浏览器的钟）。
+  const zone = useScheduleZone();
 
   if (card.isError)
     return (
@@ -339,6 +350,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
       title: task.title,
       nameOf,
       agentId: task.executorAgentId,
+      timeZone: zone,
     });
     return line ? [{ event, line }] : [];
   });
@@ -356,22 +368,23 @@ function TaskDetail({ taskId }: { taskId: string }) {
       sub: clockText(
         lastOf(history, "dispatched") ?? task.createdAt ?? task.updatedAt,
         now,
+        zone,
       ),
       reached: true,
     },
     {
       label: "已接下",
       sub: task.dueAt
-        ? `预计 ${clockText(task.dueAt, now)}`
+        ? `预计 ${dueText(task.dueAt, now, zone)}`
         : task.acceptedAt
-          ? `${clockText(task.acceptedAt, now)} 接下`
+          ? `${clockText(task.acceptedAt, now, zone)} 接下`
           : "—",
       reached: Boolean(task.acceptedAt) || handedIn,
     },
     {
       label: "已交成果",
       sub: handedIn
-        ? clockText(lastOf(history, "delivered") ?? task.updatedAt, now)
+        ? clockText(lastOf(history, "delivered") ?? task.updatedAt, now, zone)
         : "—",
       reached: handedIn,
     },
@@ -379,14 +392,14 @@ function TaskDetail({ taskId }: { taskId: string }) {
       label: "你验收",
       sub:
         status === "done"
-          ? clockText(lastOf(history, "reviewed") ?? task.updatedAt, now)
+          ? clockText(lastOf(history, "reviewed") ?? task.updatedAt, now, zone)
           : "—",
       reached: status === "done",
     },
   ];
   const where =
     task.open?.kind === "group"
-      ? { to: "/group/$channelId" as const, label: "来自群聊" }
+      ? { to: "/group/$channelId" as const, label: "来自群组" }
       : task.open?.kind === "channel"
         ? { to: "/channel/$channelId" as const, label: "来自单聊" }
         : null;
@@ -547,6 +560,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
         <SheetTitle className="m-0 font-semibold text-(--wb-fg) text-[18px] leading-[1.4] [overflow-wrap:anywhere]">
           {task.title}
         </SheetTitle>
+        <ZoneNote now={now} />
       </header>
 
       {followed ? (
@@ -560,7 +574,8 @@ function TaskDetail({ taskId }: { taskId: string }) {
       {status === "cancelled" ? (
         <p className="m-0 text-(--wb-muted) text-[13px]">
           这件活已取消（
-          {clockText(lastOf(history, "cancelled") ?? task.updatedAt, now)}）。
+          {clockText(lastOf(history, "cancelled") ?? task.updatedAt, now, zone)}
+          ）。
         </p>
       ) : null}
       {late !== null ||
@@ -583,7 +598,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
           {asking ? (
             <span className="text-(--wb-amber-fg)">
               {who}申请延期
-              {asking.dueAt ? `到 ${clockText(asking.dueAt, now)}` : ""}
+              {asking.dueAt ? `到 ${dueText(asking.dueAt, now, zone)}` : ""}
               ，等你答复。
             </span>
           ) : null}
@@ -600,6 +615,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
             逾期了，怎么办？
           </h3>
           <WatchSteps
+            timeZone={zone}
             agentId={task.executorAgentId}
             events={events}
             history={history}
@@ -672,7 +688,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
             {lines.map(({ event, line }) => (
               <li className="contents" key={event.id}>
                 <time className="text-(--wb-muted)" dateTime={event.createdAt}>
-                  {clockText(event.createdAt, now)}
+                  {clockText(event.createdAt, now, zone)}
                 </time>
                 <span className="text-(--wb-fg2) [overflow-wrap:anywhere]">
                   {line.text}

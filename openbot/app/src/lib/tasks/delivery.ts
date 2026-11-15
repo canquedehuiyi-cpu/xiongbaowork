@@ -6,7 +6,8 @@ import { client } from "../client";
  * 交付闭环（规格 `docs/specs/2026-11-15-delivery-loop.md`）在看板和卡片详情上要用的东西：在跟的卡分到
  * 哪一列、逾期多久、流水怎么念，以及卡片上那几个按钮背后的接口（`server/src/tasks/routes.ts`）。
  *
- * 时间都按浏览器的时钟念：服务器按你的作息时区算，浏览器的时区通常就是它。
+ * 时间都按你作息的时区念（`timeZone` 参数，来自作息设置）：服务器按它推送、写提醒，页面和推送说同一个钟；
+ * 作息还没读到时按浏览器的钟。
  */
 
 /** 在跟卡在看板列表里多带的字段；老服务端不带，全都可缺。 */
@@ -184,25 +185,118 @@ export function lengthText(minutes: number): string {
 export const overdueChip = (minutes: number, nudges: number): string =>
   `逾期 ${lengthText(minutes)} · 已催 ${nudges} 次`;
 
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
+/*
+ * 交付闭环里的时刻一律按你作息的时区念（规格第 10 节：服务器按它推清点、核对、换算「下午三点」），推送、
+ * 服务器写的提醒和页面说的是同一个钟。下面这些函数都收一个可选的 `timeZone`：不给（作息还没读到）或认不出
+ * 时按浏览器的钟。
+ */
 
-/** 今天的写「10:30」，别的日子写「11月14日 10:30」。 */
-export function clockText(at: string | Date, now: Date): string {
-  const instant = typeof at === "string" ? new Date(at) : at;
-  if (Number.isNaN(instant.getTime())) return "—";
-  const time = `${String(instant.getHours()).padStart(2, "0")}:${String(
-    instant.getMinutes(),
-  ).padStart(2, "0")}`;
-  return sameDay(instant, now)
-    ? time
-    : `${instant.getMonth() + 1}月${instant.getDate()}日 ${time}`;
+/** 某一刻在某个时区的钟上是哪年哪月哪日几点几分。 */
+type ZonedParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+const zonedFormats = new Map<string, Intl.DateTimeFormat>();
+
+function zonedFormat(timeZone: string): Intl.DateTimeFormat | null {
+  let format = zonedFormats.get(timeZone);
+  if (!format) {
+    try {
+      format = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        hourCycle: "h23",
+      });
+    } catch {
+      return null;
+    }
+    zonedFormats.set(timeZone, format);
+  }
+  return format;
 }
 
-export const isToday = (at: string | undefined, now: Date): boolean =>
-  at !== undefined && sameDay(new Date(at), now);
+export function zonedParts(instant: Date, timeZone?: string): ZonedParts {
+  const format = timeZone ? zonedFormat(timeZone) : null;
+  if (format) {
+    const parts = format.formatToParts(instant);
+    const of = (type: string) =>
+      Number(parts.find((part) => part.type === type)?.value ?? 0);
+    return {
+      year: of("year"),
+      month: of("month"),
+      day: of("day"),
+      hour: of("hour") % 24,
+      minute: of("minute"),
+    };
+  }
+  return {
+    year: instant.getFullYear(),
+    month: instant.getMonth() + 1,
+    day: instant.getDate(),
+    hour: instant.getHours(),
+    minute: instant.getMinutes(),
+  };
+}
+
+/** 日历上的第几天（只拿来比先后、算相隔几天）。 */
+const dayNumber = (parts: ZonedParts) =>
+  Date.UTC(parts.year, parts.month - 1, parts.day) / 86_400_000;
+
+const hhmm = (parts: ZonedParts) =>
+  `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+
+const toInstant = (at: string | Date) =>
+  typeof at === "string" ? new Date(at) : at;
+
+/** 今天的写「10:30」，别的日子写「11月14日 10:30」。 */
+export function clockText(
+  at: string | Date,
+  now: Date,
+  timeZone?: string,
+): string {
+  const instant = toInstant(at);
+  if (Number.isNaN(instant.getTime())) return "—";
+  const parts = zonedParts(instant, timeZone);
+  return dayNumber(parts) === dayNumber(zonedParts(now, timeZone))
+    ? hhmm(parts)
+    : `${parts.month}月${parts.day}日 ${hhmm(parts)}`;
+}
+
+/**
+ * 到期时间的说法（设计稿 4）：「今天 16:00」「明早 10:00」「明天 15:00」「昨天 18:00」，再远写「11月18日
+ * 10:00」。哪天是今天按 `timeZone` 的日历算。
+ */
+export function dueText(
+  at: string | Date,
+  now: Date,
+  timeZone?: string,
+): string {
+  const instant = toInstant(at);
+  if (Number.isNaN(instant.getTime())) return "—";
+  const parts = zonedParts(instant, timeZone);
+  const apart = dayNumber(parts) - dayNumber(zonedParts(now, timeZone));
+  if (apart === 0) return `今天 ${hhmm(parts)}`;
+  if (apart === 1) return `${parts.hour < 12 ? "明早" : "明天"} ${hhmm(parts)}`;
+  if (apart === -1) return `昨天 ${hhmm(parts)}`;
+  return `${parts.month}月${parts.day}日 ${hhmm(parts)}`;
+}
+
+export const isToday = (
+  at: string | undefined,
+  now: Date,
+  timeZone?: string,
+): boolean =>
+  at !== undefined &&
+  dayNumber(zonedParts(new Date(at), timeZone)) ===
+    dayNumber(zonedParts(now, timeZone));
 
 /** 交付物里能一项项列出来的东西（设计稿 2「交付物与证据」）。 */
 export type EvidenceRow =
@@ -349,6 +443,8 @@ export function eventLine(
     nameOf: (agentId: string) => string;
     /** 这张卡的员工，流水里系统写的行（核对器催办）用它的名字。 */
     agentId: string | null;
+    /** 作息时区：流水里的时刻按它念。 */
+    timeZone?: string;
   },
 ): EventLine | null {
   const detail = event.detail ?? {};
@@ -358,7 +454,7 @@ export function eventLine(
   };
   const at = (key: string) => {
     const value = text(key);
-    return value ? clockText(value, context.now) : undefined;
+    return value ? clockText(value, context.now, context.timeZone) : undefined;
   };
   const byUser = event.actor.startsWith("user:");
   const agent = event.actor.startsWith("agent:")
@@ -458,7 +554,7 @@ export function eventLine(
       const after = (detail.after ?? {}) as Record<string, unknown>;
       const due =
         typeof after.dueAt === "string"
-          ? clockText(after.dueAt, context.now)
+          ? clockText(after.dueAt, context.now, context.timeZone)
           : undefined;
       if (due)
         return {
@@ -517,23 +613,8 @@ export type Briefing = {
 export type BriefingKind = "start" | "end";
 
 /** 此刻在 `timeZone` 的钟上是几点（0–23）；不给时区或认不出时按浏览器的钟。 */
-export function hourIn(now: Date, timeZone?: string): number {
-  if (timeZone) {
-    try {
-      const hour = new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        hour: "numeric",
-        hourCycle: "h23",
-      })
-        .formatToParts(now)
-        .find((part) => part.type === "hour")?.value;
-      if (hour !== undefined) return Number(hour) % 24;
-    } catch {
-      // 认不出的时区：按浏览器的钟。
-    }
-  }
-  return now.getHours();
-}
+export const hourIn = (now: Date, timeZone?: string): number =>
+  zonedParts(now, timeZone).hour;
 
 /**
  * 看哪一份清点：按你作息的时区，上午看开工清点，过了中午看收工清点（服务器的清点接口要人说是哪一份，
@@ -544,20 +625,8 @@ export const briefingKindAt = (now: Date, timeZone?: string): BriefingKind =>
 
 /** 「11 月 15 日」，按 `timeZone` 的日历；不给时区按浏览器的。 */
 export function dayText(now: Date, timeZone?: string): string {
-  const parts = (zone?: string) =>
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: zone,
-      month: "numeric",
-      day: "numeric",
-    }).formatToParts(now);
-  let found: Intl.DateTimeFormatPart[];
-  try {
-    found = parts(timeZone);
-  } catch {
-    found = parts();
-  }
-  const of = (type: string) => found.find((part) => part.type === type)?.value;
-  return `${of("month")} 月 ${of("day")} 日`;
+  const parts = zonedParts(now, timeZone);
+  return `${parts.month} 月 ${parts.day} 日`;
 }
 
 /** 清点条上的一句话，拆成几段，数字单独加粗（设计稿 1）。 */
@@ -572,6 +641,8 @@ export function briefingPieces(
   now: Date,
   /** 逾期那件活是哪位员工在做（清点里没带名字）。 */
   agentOfTask: (taskId: string) => string | null,
+  /** 作息时区：最早到期的时间按它念。 */
+  timeZone?: string,
 ): BriefingPiece[] {
   const parts: BriefingPiece[][] = [];
   const working = briefing.inProgress.length + briefing.overdue.length;
@@ -584,7 +655,7 @@ export function briefingPieces(
       ...(soonest
         ? [
             { text: "，最早 " },
-            { text: clockText(soonest, now), strong: true },
+            { text: dueText(soonest, now, timeZone), strong: true },
             { text: " 到期" },
           ]
         : []),

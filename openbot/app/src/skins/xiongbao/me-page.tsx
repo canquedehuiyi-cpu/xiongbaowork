@@ -30,7 +30,13 @@ import {
   useNavigationItems,
 } from "@/lib/navigation";
 import { planSummaryQueryOptions } from "@/lib/quota/queries";
-import { useWorkHours, workHoursText } from "@/lib/settings/work-hours";
+import { browserTimeZone } from "@/lib/routines/form";
+import {
+  sameClock,
+  useWorkHours,
+  workHoursText,
+  zoneLongName,
+} from "@/lib/settings/work-hours";
 import { cn } from "@/lib/utils";
 import { initialOf } from "./rail";
 
@@ -145,8 +151,13 @@ export function useMeMenu(): MeMenu {
       label: "通知",
       icon: IconBell,
       // 作息读到了就写作息（开工、收工清点按它发），读不到写这一页是做什么的。
+      // 作息时区和这台设备的钟不一样时带上时区，免得当成本地时间。
       detail: workHours
-        ? `作息 ${workHoursText(workHours)}`
+        ? `作息 ${workHoursText(workHours)}${
+            sameClock(workHours.timeZone, browserTimeZone())
+              ? ""
+              : `（${zoneLongName(workHours.timeZone) ?? workHours.timeZone}）`
+          }`
         : "员工的更新在哪里收到",
       link: { to: "/settings/notifications" },
       path: "/settings/notifications",

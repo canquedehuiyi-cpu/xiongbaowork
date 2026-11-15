@@ -7,6 +7,7 @@ import {
   type OnBoardAnswer,
 } from "@/components/tasks/approval-actions";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   type Briefing,
   briefingPieces,
@@ -19,6 +20,7 @@ import {
   deadlineOf,
   deliverableLine,
   deliveryLaneOf,
+  dueText,
   type FollowedCard,
   isToday,
   overdueChip,
@@ -143,6 +145,10 @@ function DeliveryCard({
 }) {
   const place = deliveryLaneOf(card);
   const late = overdueMinutes(card, now);
+  // 时刻按作息时区念（和推送、清点同一个钟）；到期时间写「今天 16:00」「明早 10:00」。
+  const zone = useScheduleZone();
+  const at = (value: string | Date) => clockText(value, now, zone);
+  const due = (value: string | Date) => dueText(value, now, zone);
   const waitingOnYou = card.status === "needs_action";
   const error = card.lastError ? (
     <LastError className="text-[12px]" raw={card.lastError} />
@@ -169,7 +175,7 @@ function DeliveryCard({
       <article className={CARD} data-stage="pending_accept">
         <CardTitle card={card} />
         <Who coworker={coworker}>
-          {card.createdAt ? `${clockText(card.createdAt, now)} 派出` : "派出"}
+          {card.createdAt ? `${at(card.createdAt)} 派出` : "派出"}
         </Who>
         {waitingChip ?? (
           <span className={CHIP}>
@@ -193,7 +199,7 @@ function DeliveryCard({
         >
           <CardTitle card={card} />
           <Who coworker={coworker}>
-            {deadline ? `预计 ${clockText(deadline, now)} 交` : "已接下"}
+            {deadline ? `预计 ${due(deadline)} 交` : "已接下"}
           </Who>
           <span
             className={cn(CHIP, "bg-(--wb-danger-soft) text-(--wb-danger-fg)")}
@@ -230,16 +236,14 @@ function DeliveryCard({
       <article className={CARD} data-stage="accepted">
         <CardTitle card={card} />
         <Who coworker={coworker}>
-          {card.acceptedAt
-            ? `${clockText(card.acceptedAt, now)} 接下`
-            : "已接下"}
+          {card.acceptedAt ? `${at(card.acceptedAt)} 接下` : "已接下"}
         </Who>
         <span className={CHIP}>
           <ClockIcon />
           {card.dueAt
-            ? `已接下 · 预计 ${clockText(card.dueAt, now)} 交`
+            ? `已接下 · 预计 ${due(card.dueAt)} 交`
             : deadline
-              ? `已接下 · 没报预计时间，按 ${clockText(deadline, now)} 核对`
+              ? `已接下 · 没报预计时间，按 ${due(deadline)} 核对`
               : "已接下"}
         </span>
         {waitingChip}
@@ -256,7 +260,7 @@ function DeliveryCard({
         data-stage="delivered"
       >
         <CardTitle card={card} />
-        <Who coworker={coworker}>{clockText(card.updatedAt, now)} 交付</Who>
+        <Who coworker={coworker}>{at(card.updatedAt)} 交付</Who>
         {line ? (
           <span className="text-(--wb-fg2) text-[12.5px] leading-[1.5] [overflow-wrap:anywhere]">
             {line}
@@ -291,10 +295,10 @@ function DeliveryCard({
       <CardTitle card={card} />
       <Who coworker={coworker}>
         {card.status === "cancelled"
-          ? `${clockText(card.updatedAt, now)} 取消`
+          ? `${at(card.updatedAt)} 取消`
           : returns > 0
             ? `退回 ${returns} 次后验收`
-            : `你 ${clockText(card.updatedAt, now)} 验收`}
+            : `你 ${at(card.updatedAt)} 验收`}
       </Who>
     </article>
   );
@@ -316,6 +320,7 @@ function BriefingStrip({
   agentOfTask: (taskId: string) => string | null;
 }) {
   const navigate = useNavigate();
+  const zone = useScheduleZone();
   const label = kind === "start" ? "开工清点" : "收工清点";
   const anything =
     briefing.overdue.length +
@@ -330,7 +335,7 @@ function BriefingStrip({
       <ClockIcon className="shrink-0 text-(--wb-amber)" size={18} />
       <span className="min-w-0 flex-1 basis-[240px] text-(--wb-fg) text-[13.5px] leading-[1.6]">
         {label}：
-        {briefingPieces(briefing, now, agentOfTask).map((piece, index) =>
+        {briefingPieces(briefing, now, agentOfTask, zone).map((piece, index) =>
           piece.strong ? (
             <b
               className={cn(
@@ -385,6 +390,7 @@ export function DeliveryBoard({
     id ? coworkers.data?.find((coworker) => coworker.id === id) : undefined;
   // 开工还是收工清点：按你作息的时区（读不到作息时按浏览器的钟），和清点页同一个判断。
   const { kind } = useBriefingKind(now);
+  const zone = useScheduleZone();
   const briefing = useQuery({
     ...briefingQueryOptions(kind ?? "start"),
     enabled: kind !== undefined,
@@ -430,8 +436,9 @@ export function DeliveryBoard({
           三步收货
         </h2>
         <span className="text-(--wb-muted) text-[13px]">
-          今天派出 {cards.filter((card) => isToday(card.createdAt, now)).length}{" "}
-          件 · {count("accepted")} 件在做 · {count("delivered")} 件等你验收 ·{" "}
+          今天派出{" "}
+          {cards.filter((card) => isToday(card.createdAt, now, zone)).length} 件
+          · {count("accepted")} 件在做 · {count("delivered")} 件等你验收 ·{" "}
           {lateCount} 件逾期
         </span>
         <div className="ml-auto flex gap-2">

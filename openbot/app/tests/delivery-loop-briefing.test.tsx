@@ -17,16 +17,23 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { WorkHoursSection } from "@/components/settings/work-hours";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
-import { browserTimeZone } from "@/lib/routines/form";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
-import { briefingKindAt, hourIn } from "@/lib/tasks/delivery";
+import { BrowserTimeZoneSync } from "@/lib/settings/work-hours";
+import {
+  briefingKindAt,
+  clockText,
+  dueText,
+  hourIn,
+} from "@/lib/tasks/delivery";
 import { Route as BriefingRoute } from "@/routes/_authed/_app/briefing";
 import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
 import { Route as TaskDetailRoute } from "@/routes/_authed/_app/tasks.$taskId";
 import { setSkin } from "@/skins/store";
+import { BriefingPage } from "@/skins/xiongbao/briefing-page";
 import { GoalBody } from "@/skins/xiongbao/conversation-sidebar/goal";
 import type { SidebarGoal } from "../../shared/conversation-sidebar";
 import { settleReactWork } from "./settle-react-work";
@@ -39,7 +46,6 @@ import { settleReactWork } from "./settle-react-work";
  */
 let registeredHere = false;
 const originalFetch = globalThis.fetch;
-const originalWidth = globalThis.innerWidth;
 
 beforeAll(() => {
   if (!("document" in globalThis)) {
@@ -51,10 +57,6 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   globalThis.fetch = originalFetch;
-  Object.defineProperty(window, "innerWidth", {
-    configurable: true,
-    value: originalWidth,
-  });
   setSkin("xiongbao");
 });
 
@@ -99,47 +101,148 @@ const preferences = (hours: Record<string, unknown>) => ({
 
 // ---------------------------------------------------------------- 作息
 
-test("作息：第一次打开把浏览器时区告诉服务器，改了保存后回显服务器存下的", async () => {
+/** 设置时区的环境变量（happy-dom 和 Intl 都跟着它），用完放回去。 */
+async function inBrowserZone<T>(zone: string, run: () => Promise<T>) {
+  const before = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    return await run();
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
+}
+
+type Deferred = { resolve: () => void };
+
+/**
+ * 一个记着作息的假服务器，按服务器的规矩合并（`server/src/user-preferences.ts`）：浏览器时区只在没存过时
+ * 记下，存过的不改；`workHours` 照写。`hold` 为真时，浏览器时区那个请求的回包先压着，等测试放行。
+ */
+function preferencesServer(options: {
+  stored: Record<string, unknown>;
+  zoneSaved: boolean;
+  hold?: boolean;
+}) {
   const calls: Call[] = [];
-  let stored = workHours();
+  const held: Deferred[] = [];
+  let stored = options.stored;
+  let zoneSaved = options.zoneSaved;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     const body =
       typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     calls.push({ method, path: String(input), body });
     if (method === "PATCH") {
-      // 服务器只在没存过时区时收下浏览器的；这里已存过，所以只合并作息。
-      if (body.workHours) stored = { ...stored, ...body.workHours };
-      return json({ preferences: preferences(stored) });
+      if (body.browserTimeZone && !zoneSaved) {
+        stored = { ...stored, timeZone: body.browserTimeZone };
+        zoneSaved = true;
+      }
+      if (body.workHours) {
+        stored = { ...stored, ...body.workHours };
+        if (body.workHours.timeZone) zoneSaved = true;
+      }
+      const reply = json({ preferences: preferences(stored) });
+      if (body.browserTimeZone && options.hold)
+        await new Promise<void>((resolve) => held.push({ resolve }));
+      return reply;
     }
     return json({ preferences: preferences(stored) });
   }) as typeof fetch;
+  return {
+    calls,
+    patches: () => calls.filter((call) => call.method === "PATCH"),
+    release: () => {
+      for (const one of held.splice(0)) one.resolve();
+    },
+  };
+}
+
+function preferencesClient(userId: string, hours: Record<string, unknown>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(authKeys.currentUser(), { id: "user-hours-1" });
+  queryClient.setQueryData(authKeys.currentUser(), { id: userId });
   queryClient.setQueryData(
-    userPreferencesQueryOptions("user-hours-1").queryKey,
-    preferences(stored) as never,
+    userPreferencesQueryOptions(userId).queryKey,
+    preferences(hours) as never,
   );
+  return queryClient;
+}
+
+const cachedZone = (queryClient: QueryClient, userId: string) =>
+  (
+    queryClient.getQueryData(
+      userPreferencesQueryOptions(userId).queryKey,
+    ) as unknown as { workHours: { timeZone: string } }
+  ).workHours.timeZone;
+
+test("登录后（没打开过设置）就把浏览器时区告诉服务器，每次加载只发一次", async () => {
+  await inBrowserZone("America/Chicago", async () => {
+    const server = preferencesServer({
+      stored: workHours(),
+      zoneSaved: false,
+    });
+    const queryClient = preferencesClient("user-shell-1", workHours());
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <BrowserTimeZoneSync />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(server.patches()).toEqual([
+        {
+          method: "PATCH",
+          path: "/api/settings/preferences",
+          body: { browserTimeZone: "America/Chicago" },
+        },
+      ]),
+    );
+    // 服务器记下了：缓存里的作息时区跟着换成芝加哥。
+    await waitFor(() =>
+      expect(cachedZone(queryClient, "user-shell-1")).toBe("America/Chicago"),
+    );
+    // 同一次加载里再挂一次（换页面、外壳重挂）不再发。
+    view.unmount();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BrowserTimeZoneSync />
+      </QueryClientProvider>,
+    );
+    await settleReactWork();
+    expect(server.patches()).toHaveLength(1);
+  });
+});
+
+test("服务器已经存过时区：发了也不覆盖，缓存留着存下的那个", async () => {
+  await inBrowserZone("America/Chicago", async () => {
+    const saved = workHours({ timeZone: "Europe/London" });
+    const server = preferencesServer({ stored: saved, zoneSaved: true });
+    const queryClient = preferencesClient("user-shell-2", saved);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BrowserTimeZoneSync />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(server.patches()).toHaveLength(1));
+    await settleReactWork();
+    expect(cachedZone(queryClient, "user-shell-2")).toBe("Europe/London");
+  });
+});
+
+test("作息：改了保存后回显服务器存下的；开工晚于收工先拦住；设置页自己不再发浏览器时区", async () => {
+  const server = preferencesServer({ stored: workHours(), zoneSaved: true });
+  const queryClient = preferencesClient("user-hours-1", workHours());
   const view = render(
     <QueryClientProvider client={queryClient}>
       <WorkHoursSection />
     </QueryClientProvider>,
   );
-
-  await waitFor(() =>
-    expect(calls.filter((call) => call.method === "PATCH")).toEqual([
-      {
-        method: "PATCH",
-        path: "/api/settings/preferences",
-        body: { browserTimeZone: browserTimeZone() },
-      },
-    ]),
-  );
   expect(view.getByTestId("work-hours-now").textContent).toBe(
-    "现在：工作日 09:00–18:00，按 Asia/Shanghai 的时间。",
+    "现在：工作日 09:00–18:00，按中国标准时间。",
   );
+  await settleReactWork();
+  expect(server.patches()).toHaveLength(0);
   const save = view.getByRole("button", { name: "保存作息" });
   // 什么都没改时不能保存。
   expect((save as HTMLButtonElement).disabled).toBe(true);
@@ -152,7 +255,7 @@ test("作息：第一次打开把浏览器时区告诉服务器，改了保存�
   expect(view.getByRole("alert").textContent).toBe(
     "开工时间要早于收工时间（同一天内）。",
   );
-  expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1);
+  expect(server.patches()).toHaveLength(0);
 
   fireEvent.change(view.getByLabelText("开工时间"), {
     target: { value: "08:30" },
@@ -163,22 +266,80 @@ test("作息：第一次打开把浏览器时区告诉服务器，改了保存�
   await userEvent.click(view.getByRole("switch", { name: "周末也发" }));
   await userEvent.click(view.getByRole("button", { name: "保存作息" }));
 
-  await waitFor(() =>
-    expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(2),
-  );
-  expect(calls.filter((call) => call.method === "PATCH")[1]?.body).toEqual({
+  await waitFor(() => expect(server.patches()).toHaveLength(1));
+  expect(server.patches()[0]?.body).toEqual({
     workHours: { start: "08:30", end: "17:30", weekends: true },
   });
   // 回显的是服务器回来的那份。
   await waitFor(() =>
     expect(view.getByTestId("work-hours-now").textContent).toBe(
-      "现在：每天 08:30–17:30，按 Asia/Shanghai 的时间。",
+      "现在：每天 08:30–17:30，按中国标准时间。",
     ),
   );
   expect(view.getByRole("status").textContent).toBe("已保存。");
   expect((view.getByLabelText("开工时间") as HTMLInputElement).value).toBe(
     "08:30",
   );
+});
+
+test("浏览器时区的回包晚到：不冲掉正在填的开工时间，也不盖掉刚保存的时区", async () => {
+  await inBrowserZone("America/Chicago", async () => {
+    // 先：回包到的时候，表单正在改，没改的那一项（时区）跟着换，改了的（开工）留着。
+    const server = preferencesServer({
+      stored: workHours(),
+      zoneSaved: false,
+      hold: true,
+    });
+    const queryClient = preferencesClient("user-race-1", workHours());
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <BrowserTimeZoneSync />
+        <WorkHoursSection />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(server.patches()).toHaveLength(1));
+    fireEvent.change(view.getByLabelText("开工时间"), {
+      target: { value: "07:45" },
+    });
+    server.release();
+    await waitFor(() =>
+      expect(view.getByTestId("work-hours-now").textContent).toBe(
+        "现在：工作日 09:00–18:00，按北美中部标准时间。",
+      ),
+    );
+    expect((view.getByLabelText("开工时间") as HTMLInputElement).value).toBe(
+      "07:45",
+    );
+    expect((view.getByLabelText("时区") as HTMLSelectElement).value).toBe(
+      "America/Chicago",
+    );
+    cleanup();
+
+    // 再：浏览器时区的请求先发、回包压着；这期间你选了伦敦并保存，之后旧回包到了也不盖回去。
+    const second = preferencesServer({
+      stored: workHours(),
+      zoneSaved: false,
+      hold: true,
+    });
+    const client2 = preferencesClient("user-race-2", workHours());
+    const again = render(
+      <QueryClientProvider client={client2}>
+        <BrowserTimeZoneSync />
+        <WorkHoursSection />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(second.patches()).toHaveLength(1));
+    fireEvent.change(again.getByLabelText("时区"), {
+      target: { value: "Europe/London" },
+    });
+    await userEvent.click(again.getByRole("button", { name: "保存作息" }));
+    await waitFor(() =>
+      expect(cachedZone(client2, "user-race-2")).toBe("Europe/London"),
+    );
+    second.release();
+    await settleReactWork();
+    expect(cachedZone(client2, "user-race-2")).toBe("Europe/London");
+  });
 });
 
 // ---------------------------------------------------------------- 路由
@@ -214,6 +375,13 @@ const detailRoute = TaskDetailRoute.update({
   path: "$taskId",
   getParentRoute: () => tasksRoute,
 } as Wiring<typeof TaskDetailRoute>);
+/** 清点页挂在固定的「此刻」上（`fixedNow`），好把开工、收工两支都测到。 */
+let fixedNow = new Date();
+const fixedBriefingRoute = createRoute({
+  path: "/briefing-fixed",
+  getParentRoute: () => app,
+  component: () => <BriefingPage now={fixedNow} />,
+});
 const settingsRoute = createRoute({
   path: "/settings/notifications",
   getParentRoute: () => root,
@@ -222,7 +390,11 @@ const settingsRoute = createRoute({
 
 const routeTree = root.addChildren([
   authed.addChildren([
-    app.addChildren([briefingRoute, tasksRoute.addChildren([detailRoute])]),
+    app.addChildren([
+      briefingRoute,
+      fixedBriefingRoute,
+      tasksRoute.addChildren([detailRoute]),
+    ]),
   ]),
   settingsRoute,
 ]);
@@ -406,6 +578,107 @@ test("briefingKindAt：同一刻在不同时区里分开工、收工", () => {
   expect(hourIn(instant, "Mars/Olympus")).toBe(instant.getHours());
 });
 
+test("dueText / clockText：到期时间说成今天、明早、明天、昨天，日界按作息时区", () => {
+  // 上海 11 月 16 日 10:00（芝加哥还是 15 日 20:00）。
+  const now = new Date("2026-11-16T02:00:00Z");
+  const zone = "Asia/Shanghai";
+  expect(dueText("2026-11-16T08:00:00Z", now, zone)).toBe("今天 16:00");
+  expect(dueText("2026-11-17T02:00:00Z", now, zone)).toBe("明早 10:00");
+  expect(dueText("2026-11-17T07:00:00Z", now, zone)).toBe("明天 15:00");
+  expect(dueText("2026-11-15T10:00:00Z", now, zone)).toBe("昨天 18:00");
+  expect(dueText("2026-11-18T02:00:00Z", now, zone)).toBe("11月18日 10:00");
+  // 同一刻在芝加哥的日历上是「明天」：日界跟着时区走。
+  expect(dueText("2026-11-16T08:00:00Z", now, "America/Chicago")).toBe(
+    "明早 02:00",
+  );
+  expect(clockText("2026-11-16T01:30:00Z", now, zone)).toBe("09:30");
+  expect(clockText("2026-11-15T01:30:00Z", now, zone)).toBe("11月15日 09:30");
+});
+
+/** 一份按上海作息写的清点：服务器写的提醒也是上海的钟。 */
+const ZONED_BRIEFING = {
+  reviewed: 1,
+  awaitingReview: [
+    {
+      taskId: "z-review",
+      title: "客户回访名单",
+      agentName: "小助",
+      deliveredAt: "2026-11-16T01:30:00Z",
+    },
+  ],
+  inProgress: [
+    {
+      taskId: "z-doing-1",
+      title: "核对上月发票",
+      agentName: "小周",
+      dueAt: "2026-11-16T03:00:00Z",
+    },
+    {
+      taskId: "z-doing-2",
+      title: "合同条款比对",
+      agentName: "小周",
+      dueAt: "2026-11-17T01:00:00Z",
+    },
+  ],
+  overdue: [],
+  deferred: ["『核对上月发票』预计 11:00 交，还在做（小周）"],
+};
+
+test("芝加哥的浏览器、上海的作息：清点页标题日期、每件的时刻、服务器写的提醒都按上海的钟，顶上写明", async () => {
+  await inBrowserZone("America/Chicago", async () => {
+    // 开工那一支：上海 11 月 16 日 10:00（芝加哥 15 日 20:00）。
+    fixedNow = new Date("2026-11-16T02:00:00Z");
+    const calls: Call[] = [];
+    briefingFetch(calls, "Asia/Shanghai", ZONED_BRIEFING);
+    const { view } = draw("/briefing-fixed", "user-zone-start");
+    await view.findByRole("list", { name: "清点数字" });
+    expect(briefingKinds(calls)).toEqual(["start"]);
+    expect(view.getByRole("heading", { level: 1 }).textContent).toBe(
+      "开工清点 · 11 月 16 日",
+    );
+    expect(view.container.querySelector("[data-zone-note]")?.textContent).toBe(
+      "时间按你的作息时区（中国标准时间）显示",
+    );
+    const review = view.getByRole("region", { name: "等你验收" });
+    expect(within(review).getByRole("link").textContent).toBe(
+      "已交成果客户回访名单小助 · 09:30",
+    );
+    const doing = within(view.getByRole("region", { name: "还在做" }))
+      .getAllByRole("link")
+      .map((link) => link.textContent);
+    expect(doing).toEqual([
+      "已接下核对上月发票小周 · 今天 11:00 到期",
+      "已接下合同条款比对小周 · 明早 09:00 到期",
+    ]);
+    // 服务器写的提醒说「11:00」，同一件活的行也说「11:00」。
+    const held = view.getByRole("region", { name: "作息外攒下的提醒" });
+    expect(held.textContent).toContain("预计 11:00 交");
+    cleanup();
+
+    // 收工那一支：上海 19:00（芝加哥 05:00）。收工清点不列作息外的提醒。
+    fixedNow = new Date("2026-11-16T11:00:00Z");
+    const endCalls: Call[] = [];
+    briefingFetch(endCalls, "Asia/Shanghai", ZONED_BRIEFING);
+    const end = draw("/briefing-fixed", "user-zone-end").view;
+    await end.findByRole("list", { name: "清点数字" });
+    expect(briefingKinds(endCalls)).toEqual(["end"]);
+    expect(end.getByRole("heading", { level: 1 }).textContent).toBe(
+      "收工清点 · 11 月 16 日",
+    );
+    expect(end.queryByRole("region", { name: "作息外攒下的提醒" })).toBeNull();
+  });
+});
+
+test("作息时区和设备一样时不写那行说明", async () => {
+  await inBrowserZone("Asia/Shanghai", async () => {
+    fixedNow = new Date("2026-11-16T02:00:00Z");
+    briefingFetch([], "Asia/Shanghai", ZONED_BRIEFING);
+    const { view } = draw("/briefing-fixed", "user-zone-same");
+    await view.findByRole("list", { name: "清点数字" });
+    expect(view.container.querySelector("[data-zone-note]")).toBeNull();
+  });
+});
+
 test("看板清点条的「逐件看」打开清点页", async () => {
   const calls: Call[] = [];
   briefingFetch(calls, "Asia/Shanghai");
@@ -461,42 +734,39 @@ const OVERDUE_EVENTS = [
     detail: { dueAt: ago(40) },
     createdAt: ago(120),
   },
+  // 你自己点的「再催」：算一次（上面写「已催 2 次」），但不列在服务器替你盯的经过里。
   {
     id: "o2",
+    kind: "nudged",
+    actor: "user:me",
+    detail: { text: "先交做完的部分" },
+    createdAt: ago(38),
+  },
+  {
+    id: "o3",
     kind: "nudged",
     actor: "system",
     detail: { text: "到点了，进度怎么样？" },
     createdAt: ago(35),
   },
   {
-    id: "o3",
+    id: "o4",
     kind: "overdue",
     actor: "system",
     detail: { dueAt: ago(40), at: ago(5) },
     createdAt: ago(5),
   },
   {
-    id: "o4",
+    id: "o5",
     kind: "notified",
     actor: "system",
     detail: { kind: "overdue", text: "…", result: "sent" },
     createdAt: ago(5),
   },
-  // 你自己点的「再催」：在流水里，不算服务器替你盯的。
-  {
-    id: "o5",
-    kind: "nudged",
-    actor: "user:me",
-    detail: { text: "先交做完的部分" },
-    createdAt: ago(2),
-  },
 ];
 
-test("手机上逾期卡详情：服务器替你盯过的经过，和设计稿 5 的四个处理按钮", async () => {
-  Object.defineProperty(window, "innerWidth", {
-    configurable: true,
-    value: 390,
-  });
+/** 逾期卡详情用到的接口；作息在上海。 */
+function overdueFetch() {
   const calls: Call[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -527,6 +797,11 @@ test("手机上逾期卡详情：服务器替你盯过的经过，和设计稿 5
     if (path.startsWith("/api/devices")) return json({ devices: [] });
     return json({ agents: [] });
   }) as typeof fetch;
+  return calls;
+}
+
+test("逾期卡详情：服务器替你盯过的经过，和设计稿 5 的四个处理按钮（一列、44px 高）", async () => {
+  const calls = overdueFetch();
   const { view } = draw(`/tasks/${OVERDUE_CARD.id}`);
   const dialog = await view.findByRole("dialog");
   const block = await within(dialog).findByRole("region", {
@@ -539,12 +814,14 @@ test("手机上逾期卡详情：服务器替你盯过的经过，和设计稿 5
         .getAllByRole("listitem")
         .map((item) => item.querySelector("span")?.textContent),
     ).toEqual([
-      "叫醒小周，问进度（第 1 次）",
+      "叫醒小周，问进度（第 2 次）",
       "还没交 → 记为逾期，进看板「只看逾期」",
       "通知你",
     ]),
   );
   expect(watch.textContent).not.toContain("你催了");
+  // 「第 2 次」和上面的「已催 2 次」同一个口径。
+  expect(within(dialog).getByText(/^逾期 .* · 已催 2 次$/)).toBeTruthy();
 
   const buttons = within(block)
     .getAllByRole("button")
@@ -559,11 +836,17 @@ test("手机上逾期卡详情：服务器替你盯过的经过，和设计稿 5
   expect(
     within(dialog).getAllByRole("button", { name: "换个员工接手" }),
   ).toHaveLength(1);
-  // 一个一列、占满宽度，44px 高（设计稿 5）。
-  for (const name of buttons)
-    expect(
-      within(block).getByRole("button", { name: name ?? "" }).className,
-    ).toContain("w-full");
+  // 一个一列、占满宽度，44px 高（设计稿 5；不看屏幕宽度，逾期卡就是这样排）。
+  expect(
+    within(block).getAllByRole("button")[0]?.parentElement?.className,
+  ).not.toContain("sm:flex-row");
+  for (const name of buttons) {
+    const classes = within(block)
+      .getByRole("button", { name: name ?? "" })
+      .className.split(/\s+/);
+    expect(classes).toContain("w-full");
+    expect(classes).toContain("h-11");
+  }
 
   await userEvent.click(
     within(block).getByRole("button", {
@@ -581,6 +864,38 @@ test("手机上逾期卡详情：服务器替你盯过的经过，和设计稿 5
   );
 });
 
+test("芝加哥的浏览器、上海的作息：卡片详情顶上写明，流水和经过的时刻按上海的钟", async () => {
+  await inBrowserZone("America/Chicago", async () => {
+    overdueFetch();
+    const { view } = draw(`/tasks/${OVERDUE_CARD.id}`, "user-zone-detail");
+    const dialog = await view.findByRole("dialog");
+    await waitFor(() =>
+      expect(dialog.querySelector("[data-zone-note]")?.textContent).toBe(
+        "时间按你的作息时区（中国标准时间）显示",
+      ),
+    );
+    const watch = await within(dialog).findByRole("region", {
+      name: "服务器替你盯着",
+    });
+    const now = new Date();
+    await waitFor(() =>
+      expect(
+        within(watch)
+          .getAllByRole("listitem")
+          .map((item) => item.querySelector("time")?.textContent),
+      ).toEqual([
+        clockText(ago(35), now, "Asia/Shanghai"),
+        clockText(ago(5), now, "Asia/Shanghai"),
+        clockText(ago(5), now, "Asia/Shanghai"),
+      ]),
+    );
+    // 上海和芝加哥差 14 小时，按浏览器的钟念出来的是另一个时刻。
+    expect(clockText(ago(35), now, "Asia/Shanghai")).not.toBe(
+      clockText(ago(35), now),
+    );
+  });
+});
+
 // ---------------------------------------------------------------- 侧栏目标
 
 const goal = (over: Partial<NonNullable<SidebarGoal>>): SidebarGoal => ({
@@ -596,6 +911,14 @@ const goal = (over: Partial<NonNullable<SidebarGoal>>): SidebarGoal => ({
   ...over,
 });
 
+/** 侧栏目标读作息时区（「预计 … 交」），要有查询客户端；作息是上海。 */
+function renderGoal(ui: ReactElement) {
+  const queryClient = preferencesClient("user-goal", workHours());
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
+
 function segmentsOf(view: ReturnType<typeof render>) {
   const bar = view.container.querySelector<HTMLElement>("[data-goal-stages]");
   if (!bar) return null;
@@ -607,7 +930,7 @@ function segmentsOf(view: ReturnType<typeof render>) {
 }
 
 test("侧栏目标的四段进度按 stage 着色：做过的绿、走到的蓝、逾期的红、没到的灰", () => {
-  const delivered = render(
+  const delivered = renderGoal(
     <GoalBody
       goal={goal({ status: "awaiting_review", stage: "delivered", returns: 1 })}
       pending={null}
@@ -628,7 +951,7 @@ test("侧栏目标的四段进度按 stage 着色：做过的绿、走到的蓝�
   expect(delivered.getByText("退回过 1 次")).toBeTruthy();
   cleanup();
 
-  const late = render(
+  const late = renderGoal(
     <GoalBody
       goal={goal({ stage: "accepted", overdue: true, dueAt: ago(40) })}
       pending={null}
@@ -640,7 +963,7 @@ test("侧栏目标的四段进度按 stage 着色：做过的绿、走到的蓝�
   expect(late.getByText(/^预计 .* 交 · 已逾期$/)).toBeTruthy();
   cleanup();
 
-  const pendingAccept = render(
+  const pendingAccept = renderGoal(
     <GoalBody goal={goal({ stage: "pending_accept" })} pending={null} />,
   );
   expect(segmentsOf(pendingAccept)?.states).toEqual([
@@ -651,7 +974,7 @@ test("侧栏目标的四段进度按 stage 着色：做过的绿、走到的蓝�
   ]);
   cleanup();
 
-  const reviewed = render(
+  const reviewed = renderGoal(
     <GoalBody
       goal={goal({ status: "done", stage: "reviewed" })}
       pending={null}
@@ -666,7 +989,7 @@ test("侧栏目标的四段进度按 stage 着色：做过的绿、走到的蓝�
   expect(segmentsOf(reviewed)?.label).toBe("进度：你已验收");
   cleanup();
 
-  const cancelled = render(
+  const cancelled = renderGoal(
     <GoalBody
       goal={goal({ status: "cancelled", stage: "accepted" })}
       pending={null}
@@ -682,7 +1005,7 @@ test("侧栏目标的四段进度按 stage 着色：做过的绿、走到的蓝�
   cleanup();
 
   // 不在跟的卡没有四段进度，照原来的「第 N 轮 · 上次检查」。
-  const untracked = render(
+  const untracked = renderGoal(
     <GoalBody goal={goal({ stage: null, lastCheck: "在做" })} pending={null} />,
   );
   expect(segmentsOf(untracked)).toBeNull();

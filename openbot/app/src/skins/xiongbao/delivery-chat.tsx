@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
   clockText,
@@ -134,8 +135,12 @@ const Failure = ({ children }: { children: ReactNode }) => (
   </span>
 );
 
-function outcomeText(outcome: ChatOutcome, now: Date): string {
-  const at = clockText(outcome.at, now);
+function outcomeText(
+  outcome: ChatOutcome,
+  now: Date,
+  zone: string | undefined,
+): string {
+  const at = clockText(outcome.at, now, zone);
   switch (outcome.kind) {
     case "reviewed":
       return `你 ${at} 验收了`;
@@ -147,7 +152,7 @@ function outcomeText(outcome: ChatOutcome, now: Date): string {
       return `${at} 换了员工接手`;
     case "granted":
       return outcome.dueAt
-        ? `你 ${at} 准许了，延到 ${clockText(outcome.dueAt, now)}`
+        ? `你 ${at} 准许了，延到 ${clockText(outcome.dueAt, now, zone)}`
         : `你 ${at} 准许了延期`;
     case "denied":
       return `你 ${at} 没准，按原时间交`;
@@ -190,6 +195,8 @@ type CardState = {
   /** 对上的流水行；对不上或还没读到为 -1。 */
   index: number;
   now: Date;
+  /** 作息时区：卡上的时刻按它念，和推送、看板同一个钟。 */
+  zone: string | undefined;
 };
 
 /** 接活回执：预计几点交、验收标准，「改预计时间」「改验收标准」。 */
@@ -200,7 +207,7 @@ function AcceptedCard({
   event: Extract<ChatDeliveryEvent, { kind: "accepted" }>;
   state: CardState;
 }) {
-  const { card, mine, index, now } = state;
+  const { card, mine, index, now, zone } = state;
   const [dialog, setDialog] = useState<"due" | "criteria" | null>(null);
   const editable = mine && card !== undefined && index >= 0 && canExtend(card);
   const criteria = card?.criteria ?? event.criteria;
@@ -216,13 +223,13 @@ function AcceptedCard({
         {subject ? `${subject} · ` : null}
         {event.dueAt ? (
           <>
-            预计 <b>{clockText(event.dueAt, now)}</b> 交
+            预计 <b>{clockText(event.dueAt, now, zone)}</b> 交
           </>
         ) : (
           "没报预计时间，按接下后 2 小时核对"
         )}
         {moved && currentDue ? (
-          <Muted>（现在预计 {clockText(currentDue, now)} 交）</Muted>
+          <Muted>（现在预计 {clockText(currentDue, now, zone)} 交）</Muted>
         ) : null}
       </span>
       {criteria ? <Muted>验收标准：{criteria}</Muted> : null}
@@ -279,7 +286,7 @@ function ExtensionCard({
   event: Extract<ChatDeliveryEvent, { kind: "extension_requested" }>;
   state: CardState;
 }) {
-  const { card, mine, history, index, now } = state;
+  const { card, mine, history, index, now, zone } = state;
   const queryClient = useQueryClient();
   // 答复成功以后、流水重读回来之前，按钮就收起来，不让连点。
   const [answered, setAnswered] = useState(false);
@@ -311,18 +318,22 @@ function ExtensionCard({
     pendingExtension([...history]) !== null &&
     canExtend(card);
   const from = open && card ? deadlineOf(card) : null;
-  const to = clockText(event.dueAt, now);
+  const to = clockText(event.dueAt, now, zone);
   const busy = grant.isPending || deny.isPending;
   return (
     <CardFrame
       ariaLabel="延期申请"
       label={
-        from ? `申请延期 · ${clockText(from, now)} → ${to}` : `申请延期到 ${to}`
+        from
+          ? `申请延期 · ${clockText(from, now, zone)} → ${to}`
+          : `申请延期到 ${to}`
       }
       tone="amber"
     >
       {event.reason ? <Muted>原因：{event.reason}</Muted> : null}
-      {outcome ? <ResultLine>{outcomeText(outcome, now)}</ResultLine> : null}
+      {outcome ? (
+        <ResultLine>{outcomeText(outcome, now, zone)}</ResultLine>
+      ) : null}
       {!outcome && answered ? <ResultLine>已答复</ResultLine> : null}
       {!outcome && !answered && mine && card?.status === "awaiting_review" ? (
         <ResultLine>成果已经交了，这条申请先不用答复</ResultLine>
@@ -436,7 +447,7 @@ function DeliveredCard({
   event: Extract<ChatDeliveryEvent, { kind: "delivered" }>;
   state: CardState;
 }) {
-  const { card, mine, history, index, now } = state;
+  const { card, mine, history, index, now, zone } = state;
   const writes = useDeliveryWrites();
   const [returning, setReturning] = useState(false);
   const rows = evidenceOf(event.deliverable);
@@ -480,7 +491,9 @@ function DeliveredCard({
           自查：{checks.map((row) => row.label).join("；")}
         </span>
       ) : null}
-      {outcome ? <ResultLine>{outcomeText(outcome, now)}</ResultLine> : null}
+      {outcome ? (
+        <ResultLine>{outcomeText(outcome, now, zone)}</ResultLine>
+      ) : null}
       {open && card ? (
         <Buttons>
           <button
@@ -569,11 +582,12 @@ export function DeliveryChatCard({
     event.kind !== "bounced",
   );
   const index = history ? matchByContent(history, event) : -1;
+  const zone = useScheduleZone();
   return (
     <CardBody
       agentName={agentName}
       event={event}
-      state={{ card, mine, history, index, now }}
+      state={{ card, mine, history, index, now, zone }}
     />
   );
 }
@@ -599,13 +613,14 @@ export function GroupDeliveryMark({
   const owner = me != null && me.id === ownerId;
   const { card, mine, history } = useCardState(mark.taskId, owner);
   const index = history ? matchByMark(history, mark) : -1;
+  const zone = useScheduleZone();
   const line = index >= 0 && history ? history[index] : undefined;
   const event = line ? eventFromFlow(line, mark.taskId) : null;
   if (!owner || !event)
     return (
       <SystemLine kind="状态">
         {markLine(mark, agentName, owner ? "你" : ownerName, (at) =>
-          clockText(at, now),
+          clockText(at, now, zone),
         )}
       </SystemLine>
     );
@@ -613,7 +628,7 @@ export function GroupDeliveryMark({
     <CardBody
       agentName={agentName}
       event={event}
-      state={{ card, mine, history, index, now }}
+      state={{ card, mine, history, index, now, zone }}
     />
   );
 }

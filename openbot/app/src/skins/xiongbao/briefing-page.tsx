@@ -19,18 +19,21 @@ import {
   briefingQueryOptions,
   clockText,
   dayText,
+  dueText,
   firstBriefingTask,
   overdueChip,
 } from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
-import { deliveryButton, useWbFallback } from "./delivery-actions";
+import { deliveryButton, useWbFallback, ZoneNote } from "./delivery-actions";
 
 /*
  * 手机清点页（交付闭环 Task 10，设计稿 4，`/briefing`）：开工 / 收工清点的全文——已验收、等你验收、还在做、
  * 逾期四个数，下面逐件列出，点一件打开它的卡片详情。数字和列表都原样取自 `GET /api/me/briefing`，和推送、
  * 看板顶上的清点条是同一份。没有在跟的活时服务器不给清点，这里说清楚为什么是空的。
  *
- * 看哪一份按你作息的时区：上午开工清点，过了中午收工清点（`briefingKindAt`）。手机推送「清点」点开落到这里。
+ * 看哪一份按你作息的时区：上午开工清点，过了中午收工清点（`briefingKindAt`）；标题日期、每件的时刻、「今天 /
+ * 明早」也按它算，和推送正文、服务器写的「作息外攒下的提醒」同一个钟。作息时区和这台设备不一样时标题下写明。
+ * 手机推送「清点」点开落到这里。
  * 颜色只从 `--wb-*` 令牌取；在别的皮肤里打开时根上接上兜底令牌（`useWbFallback`）。
  */
 
@@ -126,10 +129,13 @@ function BriefingBody({
   briefing,
   kind,
   now,
+  timeZone,
 }: {
   briefing: Briefing;
   kind: BriefingKind;
   now: Date;
+  /** 作息时区：时刻和「今天 / 明早」都按它算，和推送、服务器写的提醒同一个钟。 */
+  timeZone?: string;
 }) {
   return (
     <>
@@ -164,7 +170,7 @@ function BriefingBody({
         <Group title="等你验收">
           {briefing.awaitingReview.map((item) => (
             <Row
-              aside={`${item.agentName} · ${clockText(item.deliveredAt, now)}`}
+              aside={`${item.agentName} · ${clockText(item.deliveredAt, now, timeZone)}`}
               key={item.taskId}
               tag="已交成果"
               tagClass="bg-(--wb-blue-soft) text-(--wb-blue-text)"
@@ -179,7 +185,9 @@ function BriefingBody({
           {briefing.inProgress.map((item) => (
             <Row
               aside={`${item.agentName} · ${
-                item.dueAt ? `${clockText(item.dueAt, now)} 到期` : "等它接下"
+                item.dueAt
+                  ? `${dueText(item.dueAt, now, timeZone)} 到期`
+                  : "等它接下"
               }`}
               key={item.taskId}
               tag={item.dueAt ? "已接下" : "待接下"}
@@ -237,6 +245,7 @@ export function BriefingPage({ now: fixedNow }: { now?: Date } = {}) {
           <h1 className="m-0 mt-1.5 font-semibold text-[18px]">
             {kind ? `${label} · ${dayText(now, timeZone)}` : "清点"}
           </h1>
+          <ZoneNote now={now} />
           {kind === undefined || briefing.isPending ? (
             <p className="m-0 text-(--wb-muted) text-[13px]">正在读清点…</p>
           ) : briefing.isError ? (
@@ -244,7 +253,12 @@ export function BriefingPage({ now: fixedNow }: { now?: Date } = {}) {
               读不到清点，稍后再试。
             </p>
           ) : data ? (
-            <BriefingBody briefing={data} kind={kind} now={now} />
+            <BriefingBody
+              briefing={data}
+              kind={kind}
+              now={now}
+              timeZone={timeZone}
+            />
           ) : (
             <section
               aria-label="没有清点"

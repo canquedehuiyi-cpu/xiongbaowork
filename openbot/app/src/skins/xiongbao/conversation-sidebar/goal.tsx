@@ -2,7 +2,8 @@ import { IconTarget } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { InlineApproval } from "@/components/approvals/inline-approval";
-import { clockText } from "@/lib/tasks/delivery";
+import { useScheduleZone } from "@/lib/settings/work-hours";
+import { dueText } from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
 import type {
   SidebarGoal,
@@ -92,6 +93,8 @@ export function goalSegments(goal: NonNullable<SidebarGoal>): Segment[] | null {
 }
 
 function GoalStages({ goal }: { goal: NonNullable<SidebarGoal> }) {
+  // 预计时间按作息时区念，「今天 16:00」「明早 10:00」。
+  const zone = useScheduleZone();
   const segments = goalSegments(goal);
   if (!segments) return null;
   const cancelled = goal.status === "cancelled";
@@ -104,7 +107,7 @@ function GoalStages({ goal }: { goal: NonNullable<SidebarGoal> }) {
     !cancelled &&
     goal.dueAt &&
     (goal.stage === "pending_accept" || goal.stage === "accepted")
-      ? `预计 ${clockText(goal.dueAt, new Date())} 交`
+      ? `预计 ${dueText(goal.dueAt, new Date(), zone)} 交`
       : null,
     goal.overdue && !cancelled ? "已逾期" : null,
     goal.returns > 0 ? `退回过 ${goal.returns} 次` : null,
