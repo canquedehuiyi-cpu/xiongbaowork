@@ -301,18 +301,18 @@ function DialogFailure({
   );
 }
 
+/**
+ * 弹层底部：「先不」，加上表单自己写的提交按钮（`children`）。提交按钮写在各自的 `<form>` 里，读代码（和表单
+ * 守卫 `tests/form-submit-controls.test.ts`）一眼就看得出这个表单由谁提交。
+ */
 function DialogButtons({
   onClose,
   busy,
-  disabled,
-  submit,
-  busyLabel,
+  children,
 }: {
   onClose: () => void;
   busy: boolean;
-  disabled: boolean;
-  submit: string;
-  busyLabel: string;
+  children: ReactNode;
 }) {
   return (
     <div className="flex justify-end gap-2.5">
@@ -324,16 +324,13 @@ function DialogButtons({
       >
         先不
       </button>
-      <button
-        className={deliveryButton(true, "md")}
-        disabled={disabled || busy}
-        type="submit"
-      >
-        {busy ? busyLabel : submit}
-      </button>
+      {children}
     </div>
   );
 }
+
+/** 弹层的提交按钮（蓝的）。 */
+const SUBMIT = deliveryButton(true, "md");
 
 const useSettled = () => {
   const queryClient = useQueryClient();
@@ -390,13 +387,15 @@ export function ReturnDialog({
           {text ? `${text.length} / 500` : "退回要写原因，写了才能提交。"}
         </span>
         <DialogFailure error={send.error} verb="return" />
-        <DialogButtons
-          busy={send.isPending}
-          busyLabel="正在退回…"
-          disabled={!text}
-          onClose={onClose}
-          submit="退回给员工"
-        />
+        <DialogButtons busy={send.isPending} onClose={onClose}>
+          <button
+            className={SUBMIT}
+            disabled={!text || send.isPending}
+            type="submit"
+          >
+            {send.isPending ? "正在退回…" : "退回给员工"}
+          </button>
+        </DialogButtons>
       </form>
     </ActionDialog>
   );
@@ -499,15 +498,21 @@ export function ExtendDialog({
             {deny.isPending ? "正在答复…" : "不批，按原时间交"}
           </button>
         ) : null}
-        <DialogButtons
-          busy={busy}
-          busyLabel="正在改…"
-          disabled={!value.trim() || events.isPending || unknown}
-          onClose={onClose}
-          submit={
-            editing ? (pending ? "按这个时间准许" : "改预计时间") : "准许延期"
-          }
-        />
+        <DialogButtons busy={busy} onClose={onClose}>
+          <button
+            className={SUBMIT}
+            disabled={!value.trim() || events.isPending || unknown || busy}
+            type="submit"
+          >
+            {busy
+              ? "正在改…"
+              : editing
+                ? pending
+                  ? "按这个时间准许"
+                  : "改预计时间"
+                : "准许延期"}
+          </button>
+        </DialogButtons>
       </form>
     </ActionDialog>
   );
@@ -560,13 +565,17 @@ export function CriteriaDialog({
           value={typed}
         />
         <DialogFailure error={send.error} verb="criteria" />
-        <DialogButtons
-          busy={send.isPending}
-          busyLabel="正在改…"
-          disabled={!text || text === (current ?? "").trim()}
-          onClose={onClose}
-          submit="改验收标准"
-        />
+        <DialogButtons busy={send.isPending} onClose={onClose}>
+          <button
+            className={SUBMIT}
+            disabled={
+              !text || text === (current ?? "").trim() || send.isPending
+            }
+            type="submit"
+          >
+            {send.isPending ? "正在改…" : "改验收标准"}
+          </button>
+        </DialogButtons>
       </form>
     </ActionDialog>
   );
@@ -620,13 +629,15 @@ export function ReassignDialog({
           ))}
         </select>
         <DialogFailure error={send.error} verb="reassign" />
-        <DialogButtons
-          busy={send.isPending}
-          busyLabel="正在换…"
-          disabled={!agentId}
-          onClose={onClose}
-          submit="换人接手"
-        />
+        <DialogButtons busy={send.isPending} onClose={onClose}>
+          <button
+            className={SUBMIT}
+            disabled={!agentId || send.isPending}
+            type="submit"
+          >
+            {send.isPending ? "正在换…" : "换人接手"}
+          </button>
+        </DialogButtons>
       </form>
     </ActionDialog>
   );
