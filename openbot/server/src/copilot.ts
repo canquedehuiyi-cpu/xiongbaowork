@@ -12,6 +12,7 @@ import {
   type ComputerGuidance,
   frameworkGuidance,
   modelGuidance,
+  NO_HANDOFF_GUIDANCE,
   promptSection,
   ROLE_SCOPE_GUIDANCE,
   type RunMode,
@@ -57,6 +58,7 @@ import {
 import { attributeBotAnswers } from "./agents/bot-answers";
 import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
+import { HANDOFF_TOOL } from "./agents/handoff-tool";
 import { takesModelChoice } from "./agents/harness-model";
 import {
   PlanModel,
@@ -1169,6 +1171,23 @@ export function builtInAgentConfiguration(
       ...promptSection("skills_held", heldSkills),
       // A routine or a check-in, with nobody watching. Nothing for a person's own turn.
       ...promptSection("run_mode", runModeGuidance(run.mode ?? "attended")),
+      /*
+       * 这一轮派不出去，就明说派不出去。
+       *
+       * 不给 `message_bot` 只挡住了「调用」，挡不住「许诺」：L4-2 例 2（2026-11-15，主理人，直连
+       * run，无 `message_bot`）把「我打算派」说成了「我已经交代下去」，而一条都没发出去。理由与措辞
+       * 见 `NO_HANDOFF_GUIDANCE`。
+       *
+       * 位置：跟着 `run_mode` 一起，落在 `skills_held` 之后。它随这一轮的 standing 变（授予了谁、
+       * 链上多深、部署有没有关），和随消息变的 `picked_skill` 不是一类，所以稳定前缀截止到
+       * `skills_held`。
+       */
+      ...promptSection(
+        "handing_over",
+        tools.some((tool) => tool.name === HANDOFF_TOOL)
+          ? undefined
+          : NO_HANDOFF_GUIDANCE,
+      ),
       /*
        * The model it answers on, as the person sees it named, and the date. Near the end: the model
        * changes only when the person picks another, and a new model starts a new cache anyway. The
