@@ -51,13 +51,24 @@ import { appendTaskEvent } from "./events";
  * - An external employee (`isExternal`) is nudged in words that name no tool it does not have: how the
  *   server reads its replies instead (`EXTERNAL_DELIVERY_GUIDE`).
  *
- * TWO REPLICAS, ONE NUDGE. Each card is claimed under its row lock (`for update skip locked`): what is
- * due is decided from the locked row and written to it (`last_nudged_at`, `overdue_at`,
- * `last_notified_at`, `notified_on` / `notified_count`, `reminder_held_at`) before anything leaves the
+ * TWO REPLICAS, ONE NUDGE -- THE CLAIM, NOT "RUNNING". Each card is claimed under its row lock
+ * (`for update skip locked`): what is due is decided from the locked row and written to it
+ * (`last_nudged_at`, `overdue_at`, `last_notified_at`, `notified_on` / `notified_count`,
+ * `reminder_held_at`) before anything leaves the
  * server, so a second checker on the same card skips it while it is held, and finds nothing due once it
  * is not. The nudge and the notification run after the claim commits -- a nudge waits for its turn to
  * start, and a row lock held over that would block the turn's own write to the card. A nudge that
  * finds the thread busy after all gives its claim back.
+ *
+ * DEPLOYMENT LIMIT: "RUNNING" IS ONE PROCESS'S WORD. The claim and its dedupe hold across replicas; the
+ * question "is a turn running on this thread?" ({@link threadRunning}, and the idle-only admission and
+ * `attachRun`'s `keepIfRunning` behind a nudge) is answered by this process's runner only, which knows
+ * nothing of a turn on another replica. With more than one server replica, a checker that claims a
+ * card while its coworker's turn runs on another replica sees the thread idle: it opens a nudge round
+ * there too, takes the card's `active_run_ref`, and the other round's `deliver_task` is then refused as
+ * no longer the card's round. Until a cross-replica "running" signal exists, the delivery loop is only
+ * reliable on a single server replica (the chart's default `server.replicaCount` is 2), as the
+ * runner's own thread store and stop button already are.
  *
  * WHOSE FRAME. The pass asks as `platform` which cards are followed and open, across every tenant, and
  * nothing else; each card is then checked, and every line written, in the tenant stamped on its own row.
