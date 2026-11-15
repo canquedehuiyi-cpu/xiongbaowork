@@ -22,6 +22,7 @@ import { appendFileSync, readFileSync } from "node:fs";
  *                    `after` updates are sent 50 ms later
  *   log              a file path: every message received is appended to it as one JSON line
  *   newSessionPad    `session/new` answers with an extra `_pad` string this long
+ *   ignoreCancel     `session/cancel` is logged and otherwise ignored (a turn waiting for it hangs)
  *
  * Steps of a turn:
  *   {update}          send `session/update` with this update
@@ -81,6 +82,7 @@ export type FakeAcpScript = {
   turns?: FakeTurn[];
   log?: string;
   newSessionPad?: number;
+  ignoreCancel?: boolean;
 };
 
 type Json = Record<string, unknown>;
@@ -261,6 +263,7 @@ function onMessage(message: Json) {
       void runTurn(id, String(params.sessionId));
       return;
     case "session/cancel": {
+      if (script.ignoreCancel) return;
       const sessionId = String(params.sessionId);
       cancelled.add(sessionId);
       cancelWaiters.get(sessionId)?.();

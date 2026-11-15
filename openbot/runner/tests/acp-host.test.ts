@@ -70,6 +70,7 @@ function setup(
     endedLimit?: { turns: number; bytes: number };
     apps?: (ref: string) => AppEntry | null;
     processEnv?: () => Promise<Record<string, string | undefined>>;
+    cancelGraceMs?: number;
   } = {},
 ): Setup {
   const frames: Frame[] = [];
@@ -82,6 +83,9 @@ function setup(
     apps: opts.apps ?? ((ref) => (ref === APP ? FAKE_APP : null)),
     adapterDir: ADAPTERS,
     ...(opts.processEnv ? { processEnv: opts.processEnv } : {}),
+    ...(opts.cancelGraceMs === undefined
+      ? {}
+      : { cancelGraceMs: opts.cancelGraceMs }),
     spawn: (spec, handlers, clientOpts) => {
       spawns.push(spec);
       const log = join(scratch, `log-${++logs}.jsonl`);
@@ -1650,3 +1654,65 @@ test("a session that leaves the ask mode for good ends its turn with ask_mode_lo
   ]);
   expect(t.spawns).toHaveLength(1);
 }, 20_000);
+
+test("an agent that ignores session/cancel is stopped after the grace and the turn ends interrupted", async () => {
+  const t = setup(
+    {
+      ignoreCancel: true,
+      turns: [{ steps: [{ update: chunk("busy") }, { waitForCancel: true }] }],
+    },
+    { cancelGraceMs: 200 },
+  );
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ofType(t.frames, "acp.update").length === 1);
+  const cancelledAt = Date.now();
+  await t.host.handle({
+    type: "acp.cancel",
+    agentId: "agent_1",
+    threadId: "th_1",
+    turnId: "turn_1",
+  });
+  await waitFor(() => ended(t.frames, "turn_1"));
+  expect(Date.now() - cancelledAt).toBeGreaterThanOrEqual(180);
+  expect(ofType(ofTurn(t.frames, "turn_1"), "acp.turn.end")).toEqual([
+    {
+      type: "acp.turn.end",
+      agentId: "agent_1",
+      threadId: "th_1",
+      turnId: "turn_1",
+      stopReason: "interrupted",
+      interrupted: true,
+    },
+  ]);
+  expect(t.clients[0]?.alive).toBe(false);
+  expect(
+    received(t.logs[0] ?? "").some((m) => m.method === "session/cancel"),
+  ).toBe(true);
+});
+
+test("an agent that honours session/cancel in time is left running", async () => {
+  const t = setup(
+    { turns: [{ steps: [{ waitForCancel: true }] }] },
+    { cancelGraceMs: 200 },
+  );
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => t.clients.length === 1);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await t.host.handle({
+    type: "acp.cancel",
+    agentId: "agent_1",
+    threadId: "th_1",
+    turnId: "turn_1",
+  });
+  await waitFor(() => ended(t.frames, "turn_1"));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(ofType(ofTurn(t.frames, "turn_1"), "acp.turn.end")[0]).toMatchObject({
+    stopReason: "cancelled",
+    interrupted: false,
+  });
+  expect(t.clients[0]?.alive).toBe(true);
+});

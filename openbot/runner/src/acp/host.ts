@@ -81,7 +81,8 @@ import { permissionFacts } from "./paths";
  * (and, when over, ended) again but never run twice. A turn ends with the agent's `stopReason`, with
  * `interrupted: true` when the adapter's process went away under it, or with `stopReason: "error"`
  * after an `acp.error` when it could not run. Cancelling a queued turn ends it at once; cancelling
- * the running one sends `session/cancel`, and the agent ends it.
+ * the running one sends `session/cancel`, and the agent ends it; one that has not ended it after
+ * `cancelGraceMs` (30 s) has its process stopped, which ends the turn `interrupted: true`.
  *
  * SESSIONS. Each employee's session id for a thread is remembered for the life of the runner. When a new process
  * starts for a thread and the agent can load sessions, the remembered id (else the server's
@@ -97,6 +98,8 @@ export const ACP_ENDED_LIMIT = { turns: 100, bytes: 50 * 1024 * 1024 };
  * the connection on a bigger one, and the frame would be replayed into the next connection forever.
  */
 export const ACP_FRAME_LIMIT = 1024 * 1024;
+/** How long an agent has to end a turn after `session/cancel` before its process is stopped. */
+export const ACP_CANCEL_GRACE_MS = 30_000;
 
 /** How many finished turns are remembered, so a resent `acp.prompt` is not run again. */
 const REMEMBERED_TURNS = 1000;
@@ -136,6 +139,8 @@ export type AcpHostDeps = {
   endedLimit?: { turns: number; bytes: number };
   /** No frame goes up bigger than this many bytes, serialized (`ACP_FRAME_LIMIT`). */
   frameLimit?: number;
+  /** `ACP_CANCEL_GRACE_MS`. */
+  cancelGraceMs?: number;
 };
 
 const HARNESSES: readonly AcpHarness[] = [
@@ -172,6 +177,8 @@ type Turn = {
   cancelled: boolean;
   seq: number;
   end?: AcpTurnEndFrame;
+  /** After a `session/cancel`: stops the adapter if the turn has not ended by then. */
+  backstop?: ReturnType<typeof setTimeout>;
 };
 
 type Proc = {
@@ -340,6 +347,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const limit = deps.bufferLimit ?? ACP_BUFFER_LIMIT;
   const endedLimit = deps.endedLimit ?? ACP_ENDED_LIMIT;
   const frameLimit = deps.frameLimit ?? ACP_FRAME_LIMIT;
+  const cancelGraceMs = deps.cancelGraceMs ?? ACP_CANCEL_GRACE_MS;
   /** Random per runner process: a new one tells the server every earlier turn is gone. */
   const instanceId = randomUUID();
 
@@ -575,6 +583,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   function endTurn(turn: Turn, stopReason: string, interrupted: boolean) {
     if (turn.state === "ended") return;
     turn.state = "ended";
+    if (turn.backstop) clearTimeout(turn.backstop);
     turn.end = {
       type: "acp.turn.end",
       agentId: turn.agentId,
@@ -1014,8 +1023,16 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       return;
     }
     const thread = threads.get(threadKey(turn.agentId, turn.threadId));
-    if (thread?.current === turn && thread.proc?.client && thread.sessionId)
-      thread.proc.client.cancel(thread.sessionId);
+    const proc = thread?.proc;
+    if (thread?.current !== turn || !proc?.client || !thread.sessionId) return;
+    proc.client.cancel(thread.sessionId);
+    // An agent that ignores the cancel would hold the thread for ever: its process is stopped,
+    // which ends the turn `interrupted` (and any other turn running in that process with it).
+    if (turn.backstop) return;
+    turn.backstop = setTimeout(() => {
+      if (turn.state !== "ended") void retire(proc);
+    }, cancelGraceMs);
+    turn.backstop.unref?.();
   }
 
   function onAnswer(frame: Frame) {
