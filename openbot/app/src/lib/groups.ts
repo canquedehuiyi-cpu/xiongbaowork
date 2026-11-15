@@ -87,22 +87,34 @@ export function groupQueryOptions(channelId: string) {
 }
 
 /**
- * How often the open group re-reads its transcript: while a turn is still owed an answer, while the
- * last line is a person's that no Bot has started on, and while an external employee waits on its
- * hirer's permission (外部员工 Task 12: that line is decided somewhere else, and the server's
- * "read again" signal may not reach this tab). Otherwise not at all.
+ * How often the open group re-reads its transcript: while a turn is still owed an answer, and while
+ * the last line is a person's that no Bot has started on, every 1.5 s. While an external employee
+ * waits on its hirer's permission (外部员工 Task 12: decided somewhere else, and the server's "read
+ * again" signal may not reach this tab), backing off with the newest waiting line's age: every 1.5 s
+ * for its first 30 s, every 5 s to 5 min, every 10 s to an hour, then not at all, so a line a crash
+ * left waiting does not keep the page polling. Otherwise not at all.
  */
 export function groupRefetchInterval(
   data: GroupConversation | undefined,
+  now: number = Date.now(),
 ): number | false {
-  return data?.messages.some(
-    (message) =>
-      message.status === "running" ||
-      message.status === "queued" ||
-      message.acpPermission?.status === "waiting",
-  ) || awaitingFirstReply(data)
-    ? 1_500
-    : false;
+  if (
+    data?.messages.some(
+      (message) => message.status === "running" || message.status === "queued",
+    ) ||
+    awaitingFirstReply(data)
+  )
+    return 1_500;
+  const waitingSince = (data?.messages ?? [])
+    .filter((message) => message.acpPermission?.status === "waiting")
+    .map((message) => Date.parse(message.createdAt))
+    .filter((at) => Number.isFinite(at));
+  if (waitingSince.length === 0) return false;
+  const age = now - Math.max(...waitingSince);
+  if (age < 30_000) return 1_500;
+  if (age < 5 * 60_000) return 5_000;
+  if (age < 60 * 60_000) return 10_000;
+  return false;
 }
 
 /**

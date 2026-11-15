@@ -827,8 +827,10 @@ describe("群里的许可状态行", () => {
     expect(mine.queryByRole("link", { name: "去确认" })).toBeNull();
   });
 
-  test("an open group keeps reading while a line waits on its hirer", () => {
-    const conversation = (line: GroupMessage) => ({
+  test("an open group keeps reading while a line waits on its hirer, backing off with its age", () => {
+    // 假时钟：这一行在 T 写下，问的是 T 之后各个时刻的轮询间隔。
+    const T = Date.parse("2026-11-15T08:01:00.000Z");
+    const conversation = (line: GroupMessage, extra: GroupMessage[] = []) => ({
       bots: [],
       people: [],
       messages: [
@@ -842,15 +844,41 @@ describe("群里的许可状态行", () => {
           // 很久以前的：不是「刚发的话还没人接」那种轮询。
           createdAt: "2026-01-01T00:00:00.000Z",
         },
+        ...extra,
         line,
       ],
     });
-    expect(groupRefetchInterval(conversation(statusLine("waiting")))).toBe(
-      1_500,
-    );
-    expect(groupRefetchInterval(conversation(statusLine("approved")))).toBe(
+    const waiting = conversation(statusLine("waiting"));
+    const at = (ms: number) => groupRefetchInterval(waiting, T + ms);
+    expect(at(0)).toBe(1_500);
+    expect(at(29_999)).toBe(1_500);
+    expect(at(30_000)).toBe(5_000);
+    expect(at(5 * 60_000 - 1)).toBe(5_000);
+    expect(at(5 * 60_000)).toBe(10_000);
+    expect(at(60 * 60_000 - 1)).toBe(10_000);
+    // 一小时还在等：多半是崩溃留下的，不再轮询。
+    expect(at(60 * 60_000)).toBe(false);
+    expect(at(3 * 60 * 60_000)).toBe(false);
+    // 结束的行不轮询。
+    expect(groupRefetchInterval(conversation(statusLine("approved")), T)).toBe(
       false,
     );
+    // 有员工在跑：照旧 1.5 秒，不管等待行多老。
+    const running: GroupMessage = {
+      id: "r1",
+      channelId: "g-1",
+      ownerUserId: MEMBER,
+      agentId: "a1",
+      text: "",
+      status: "running",
+      createdAt: "2026-11-15T08:00:30.000Z",
+    };
+    expect(
+      groupRefetchInterval(
+        conversation(statusLine("waiting"), [running]),
+        T + 3 * 60 * 60_000,
+      ),
+    ).toBe(1_500);
   });
 });
 
