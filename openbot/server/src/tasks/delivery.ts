@@ -632,35 +632,38 @@ export function createDelivery(database: Database): Delivery {
       }),
 
     attachRun: (tenantId, taskId, runId) =>
-      runAsTenant(tenantId, async () => {
-        /*
-         * A round still named here never reported its end -- its process died, or a newer turn on the
-         * thread superseded it. It is closed in the history as failed, which also makes its late
-         * `runEnded`, if one ever comes, a no-op (one end line per run).
-         */
-        // One statement: the row is locked, its old value read and the new one written together.
-        const old = database
-          .select({ id: tasks.id, previous: tasks.activeRunRef })
-          .from(tasks)
-          .where(openTracked(tenantId, taskId))
-          .for("update")
-          .as("old");
-        const [card] = await database
-          .update(tasks)
-          .set({ activeRunRef: runId, updatedAt: new Date() })
-          .from(old)
-          .where(eq(tasks.id, old.id))
-          .returning({ previous: old.previous });
-        if (!card) return;
-        if (card.previous && card.previous !== runId)
-          await appendTaskEvent(database, {
-            tenantId,
-            taskId,
-            kind: "run_failed",
-            actor: "system",
-            detail: { runId: card.previous, reason: "superseded" },
-          });
-      }),
+      runAsTenant(tenantId, () =>
+        // The card and the line that closes the round it replaces are written together, or neither is.
+        database.transaction(async (transaction) => {
+          /*
+           * A round still named here never reported its end -- its process died, or a newer turn on the
+           * thread superseded it. It is closed in the history as failed, which also makes its late
+           * `runEnded`, if one ever comes, a no-op (one end line per run).
+           */
+          // One statement: the row is locked, its old value read and the new one written together.
+          const old = transaction
+            .select({ id: tasks.id, previous: tasks.activeRunRef })
+            .from(tasks)
+            .where(openTracked(tenantId, taskId))
+            .for("update")
+            .as("old");
+          const [card] = await transaction
+            .update(tasks)
+            .set({ activeRunRef: runId, updatedAt: new Date() })
+            .from(old)
+            .where(eq(tasks.id, old.id))
+            .returning({ previous: old.previous });
+          if (!card) return;
+          if (card.previous && card.previous !== runId)
+            await appendTaskEvent(transaction, {
+              tenantId,
+              taskId,
+              kind: "run_failed",
+              actor: "system",
+              detail: { runId: card.previous, reason: "superseded" },
+            });
+        }),
+      ),
 
     runEnded: (tenantId, taskId, round) =>
       runAsTenant(tenantId, () =>
@@ -740,24 +743,27 @@ export function createDelivery(database: Database): Delivery {
         if (!card || card.tracked) return;
         const threadRef =
           options?.threadRef ?? (await threadOfCard(database, tenantId, card));
-        const marked = await database
-          .update(tasks)
-          .set({ tracked: true, threadRef, updatedAt: new Date() })
-          .where(
-            and(
-              eq(tasks.tenantId, tenantId),
-              eq(tasks.id, taskId),
-              eq(tasks.tracked, false),
-            ),
-          )
-          .returning({ id: tasks.id });
-        if (marked.length === 0) return;
-        await appendTaskEvent(database, {
-          tenantId,
-          taskId,
-          kind: "dispatched",
-          actor,
-          detail: threadRef ? { threadRef } : {},
+        // Followed and its 「派出」 line, together or not at all.
+        await database.transaction(async (transaction) => {
+          const marked = await transaction
+            .update(tasks)
+            .set({ tracked: true, threadRef, updatedAt: new Date() })
+            .where(
+              and(
+                eq(tasks.tenantId, tenantId),
+                eq(tasks.id, taskId),
+                eq(tasks.tracked, false),
+              ),
+            )
+            .returning({ id: tasks.id });
+          if (marked.length === 0) return;
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "dispatched",
+            actor,
+            detail: threadRef ? { threadRef } : {},
+          });
         });
       }),
 
@@ -1219,28 +1225,31 @@ export function createDelivery(database: Database): Delivery {
           .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
           .limit(1);
         if (!card?.tracked) return null;
-        const reviewed = await database
-          .update(tasks)
-          // The work is over, and so is any round still running on it: nothing parks it again.
-          .set({ status: "done", activeRunRef: null, updatedAt: new Date() })
-          .where(
-            and(
-              eq(tasks.tenantId, tenantId),
-              eq(tasks.id, taskId),
-              eq(tasks.tracked, true),
-              eq(tasks.status, "awaiting_review"),
-            ),
-          )
-          .returning({ id: tasks.id });
-        if (reviewed.length === 0) return false;
-        await appendTaskEvent(database, {
-          tenantId,
-          taskId,
-          kind: "reviewed",
-          actor,
-          detail: { via },
+        // 验收 and its 「验收」 line, together or not at all.
+        return await database.transaction(async (transaction) => {
+          const reviewed = await transaction
+            .update(tasks)
+            // The work is over, and so is any round still running on it: nothing parks it again.
+            .set({ status: "done", activeRunRef: null, updatedAt: new Date() })
+            .where(
+              and(
+                eq(tasks.tenantId, tenantId),
+                eq(tasks.id, taskId),
+                eq(tasks.tracked, true),
+                eq(tasks.status, "awaiting_review"),
+              ),
+            )
+            .returning({ id: tasks.id });
+          if (reviewed.length === 0) return false;
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "reviewed",
+            actor,
+            detail: { via },
+          });
+          return true;
         });
-        return true;
       }),
   };
 }

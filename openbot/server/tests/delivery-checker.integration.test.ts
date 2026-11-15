@@ -18,8 +18,9 @@ import {
   resetBotLifecycleForTests,
 } from "../src/agents/lifecycle";
 import type { AppVariables } from "../src/auth/guards";
-import { createDatabase } from "../src/db/client";
+import { createDatabase, type Database } from "../src/db/client";
 import {
+  taskEvents,
   tasks,
   threadRunEvents,
   threadRuns,
@@ -400,6 +401,81 @@ function routesFor(tenantId: string, options: TaskRouteOptions = {}) {
       };
     });
 }
+
+/**
+ * The database, except that no `task_events` line can be written through it -- in a transaction or
+ * out of one. What a write that records a line does when its line cannot be written.
+ */
+function withoutHistory(target: Database): Database {
+  return new Proxy(target, {
+    get(object, property, receiver) {
+      if (property === "insert")
+        return (table: unknown) => {
+          if (table === taskEvents) throw new Error("流水写不进去");
+          return object.insert(table as never);
+        };
+      if (property === "transaction")
+        return (work: (transaction: Database) => unknown, ...rest: unknown[]) =>
+          (object.transaction as (...args: unknown[]) => unknown)(
+            (transaction: Database) => work(withoutHistory(transaction)),
+            ...rest,
+          );
+      const value = Reflect.get(object, property, receiver);
+      return typeof value === "function" ? value.bind(object) : value;
+    },
+  });
+}
+
+test("a card write whose history line cannot be written leaves the card as it was", async () => {
+  const tenantId = await tenant("atomic");
+  const agentId = `agent-${suite}-atomic`;
+  const broken = createDelivery(withoutHistory(database));
+
+  // attachRun: the round it replaces is closed in the history, so the two go together or not at all.
+  const hung = await card(tenantId, {
+    executorAgentId: agentId,
+    threadRef: `thread-${suite}-atomic-hung`,
+    activeRunRef: "run-before",
+  });
+  expect(
+    await broken.attachRun(tenantId, hung, "run-after").catch(() => "refused"),
+  ).toBe("refused");
+  expect((await row(tenantId, hung)).activeRunRef).toBe("run-before");
+
+  // markTracked: a card followed with no 「派出」 line is not followed.
+  const plain = await card(tenantId, {
+    executorAgentId: agentId,
+    channelRef: `thread-${suite}-atomic-plain`,
+    tracked: false,
+  });
+  expect(
+    await broken
+      .markTracked(tenantId, plain, `user:${tenantId}`, {
+        threadRef: `thread-${suite}-atomic-plain`,
+      })
+      .catch(() => "refused"),
+  ).toBe("refused");
+  const unmarked = await row(tenantId, plain);
+  expect(unmarked.tracked).toBe(false);
+  expect(unmarked.threadRef).toBeNull();
+
+  // review: 验收 with no 「验收」 line has not happened.
+  const handedIn = await card(tenantId, {
+    executorAgentId: agentId,
+    threadRef: `thread-${suite}-atomic-review`,
+    acceptedAt: new Date(),
+    status: "awaiting_review",
+  });
+  expect(
+    await broken
+      .review(tenantId, handedIn, `user:${tenantId}`, "review")
+      .catch(() => "refused"),
+  ).toBe("refused");
+  expect((await row(tenantId, handedIn)).status).toBe("awaiting_review");
+
+  for (const id of [hung, plain, handedIn])
+    expect(await kinds(tenantId, id)).toEqual([]);
+});
 
 test("pending accept: nudge at 5 min, notify at 35 min", async () => {
   const tenantId = await tenant("pending");
