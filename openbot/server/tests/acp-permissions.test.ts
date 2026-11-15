@@ -96,7 +96,6 @@ const resolve = (
   options: {
     employeeRules?: Record<AcpRuleKey, string>;
     threadAllows?: Set<string>;
-    approvalsOn?: boolean;
     policy?: ReturnType<typeof engine>;
   } = {},
 ) =>
@@ -104,7 +103,6 @@ const resolve = (
     request,
     employeeRules: options.employeeRules ?? rules(),
     threadAllows: options.threadAllows ?? new Set(),
-    approvalsOn: options.approvalsOn ?? true,
     policy: options.policy ?? engine(),
   });
 
@@ -380,40 +378,32 @@ describe("floors", () => {
     expect(decided.policy.source).toBe("personal_rule");
   });
 
-  test("approvals switched off turns rule-level ask into allow but keeps floors", async () => {
-    // The default "ask before changes" of the engine is not one of the five rules: on or off,
-    // only the employee's own rules and the floors decide.
+  test("approvals switch (off by default) does not relax the employee's ask rules; floors still apply", async () => {
+    // The hirer's global "ask before changes" switch, off (the default) or on, is the engine's
+    // `askBeforeChanges`: only the employee's own rules, the floors and refusals decide.
     for (const askBeforeChanges of [false, true]) {
       const policy = engine({ askBeforeChanges });
       expect(
-        await resolve(run("git push origin main"), {
-          approvalsOn: false,
+        await resolve(run("git push origin main"), { policy }),
+      ).toMatchObject({ kind: "ask", offerConversation: true });
+      expect(
+        await resolve(ask({ facts: { insideWorkdir: false, paths: ["a"] } }), {
           policy,
         }),
-      ).toMatchObject({ kind: "allow" });
+      ).toMatchObject({ kind: "ask" });
+      expect(await resolve(ask({ kind: "delete" }), { policy })).toMatchObject({
+        kind: "ask",
+        offerConversation: false,
+      });
       expect(
-        await resolve(ask({ kind: "delete" }), { approvalsOn: false, policy }),
+        await resolve(run("git config credential.helper store"), { policy }),
       ).toMatchObject({ kind: "ask", offerConversation: false });
-      expect(
-        await resolve(run("git config credential.helper store"), {
-          approvalsOn: false,
-          policy,
-        }),
-      ).toMatchObject({ kind: "ask", offerConversation: false });
-      // Rules that say no, and rules that ask, are not the switch's either.
       expect(
         await resolve(ask(), {
-          approvalsOn: false,
           policy: engine({ personal: [rule("deny")], askBeforeChanges }),
         }),
       ).toMatchObject({ kind: "deny" });
-      expect(
-        await resolve(ask(), {
-          approvalsOn: false,
-          policy: engine({ personal: [rule("ask")], askBeforeChanges }),
-        }),
-      ).toMatchObject({ kind: "ask" });
-      // With approvals on, the default edit inside the folder still goes through.
+      // What the employee's rules let through goes through, switch or not.
       expect(await resolve(ask(), { policy })).toMatchObject({ kind: "allow" });
     }
   });

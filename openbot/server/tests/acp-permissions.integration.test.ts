@@ -162,9 +162,8 @@ async function harness(
   );
   const agentId = profile.id;
   createdAgents.push(agentId);
-  // The hirer's approvals switch is on: with it off, what the employee's rules ask goes through
-  // (spec layer 5), and only floors and refusals would be left to see here.
-  await runAsTenant(hirer.id, () => store.setEnabled(hirer.id, true));
+  // The hirer's approvals switch is left as it is by default (off): it does not relax what the
+  // employee's own rules ask (spec §4, layer 5).
   await runAsTenant("platform", () =>
     database
       .update(agents)

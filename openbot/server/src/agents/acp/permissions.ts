@@ -56,7 +56,8 @@ import { type AcpTurnStore, isFinalAcpTurnStatus } from "./turns";
  *     saying no: refused outright, the rule named in the conversation.
  *  3. A custom rule that asks (or hands off): asks.
  *  4. The employee's own five rules (`AcpRuleKey`); several matched, the strictest wins.
- *  5. Approvals switched off: what layer 4 asks goes through; layers 1–3 do not move.
+ *  5. The hirer's global approvals switch (off by default) relaxes none of this: the five rules
+ *     were set for this employee at hiring, so what they ask is always asked.
  * Floors and layer 2 never offer "allow for this conversation"; layers 3 and 4 do, and an answer of
  * that kind lets the same kind of request (`acpAllowKey`) through for the rest of the thread.
  *
@@ -429,14 +430,12 @@ function dangerous(classified: AcpClassified): string | undefined {
 /**
  * What XiongBao does with one permission request, layer by layer (see the top of this file).
  * `policy` is the deployment's engine for the hirer (`approvalService.policyOutcome`), which reads
- * the team's and the hirer's rules, the admin's settings and the employee's tool permissions;
- * `approvalsOn` is the hirer's approvals switch.
+ * the team's and the hirer's rules, the admin's settings and the employee's tool permissions.
  */
 export async function resolvePermission(input: {
   request: AcpPermissionAsk;
   employeeRules: Record<AcpRuleKey, string>;
   threadAllows: Set<string>;
-  approvalsOn: boolean;
   policy: (candidate: ApprovalCandidate) => Promise<ApprovalPolicyOutcome>;
 }): Promise<AcpPermissionDecision> {
   const classified = classifyRequest(input.request);
@@ -545,8 +544,6 @@ export async function resolvePermission(input: {
     });
   }
   if (asking.length === 0) return { kind: "allow", because: "规则允许" };
-  // Layer 5.
-  if (!input.approvalsOn) return { kind: "allow", because: "审批已关闭" };
   if (allowed) return { kind: "allow", because: "这次对话里已允许" };
   const labels = [...new Set(asking.map((entry) => entry.label))];
   return {
@@ -1011,7 +1008,6 @@ export function createAcpPermissionBridge(
       request: ask,
       employeeRules: employee.rules,
       threadAllows,
-      approvalsOn: await deps.approvals.enabled(request.ownerUserId),
       policy: async (candidate) =>
         (await deps.policy(candidate)) ?? {
           behaviour: "allow",
