@@ -31,27 +31,20 @@ import { isPersonTenant, runAsTenant } from "../tenant/context";
 export const AUTO_COMPACT_RESERVE = 0.1;
 
 /**
- * 单独报缓存的服务商家族：缓存读写数不含在 `input_tokens` 里，已用要加回来。按模型库 / 平台模型池 /
- * 部署配置的服务商名（`anthropic`）或运行时 SDK 报的名字（`anthropic.messages`）认。其余（OpenAI 及
- * 兼容接口、Gemini）把缓存算在输入里。
+ * 一次调用占用的上下文（token）= 计量记录的 `input_tokens`；没报时为 null。
+ *
+ * 对所有服务商都一样：AI SDK v3 报的输入总数已含缓存读写（如 `@ai-sdk/anthropic` 的
+ * `inputTokens.total = input + cacheCreation + cacheRead`），`token-metering.ts` 存的就是这个总数，
+ * 所以 `cached_input_tokens` / `cache_write_tokens` 不再另加，否则会重复计算。`provider` 与缓存两列留在
+ * 参数里，供接口稳定和日后核对。
  */
-function reportsCacheSeparately(provider: string): boolean {
-  const name = provider.trim().toLowerCase();
-  return name === "anthropic" || name.startsWith("anthropic.");
-}
-
-/** 一次调用占用的上下文（token）：输入没报时为 null。 */
 export function usedTokens(row: {
   provider: string;
   inputTokens: number | null;
   cachedInputTokens: number | null;
   cacheWriteTokens: number | null;
 }): number | null {
-  if (row.inputTokens === null) return null;
-  if (!reportsCacheSeparately(row.provider)) return row.inputTokens;
-  return (
-    row.inputTokens + (row.cachedInputTokens ?? 0) + (row.cacheWriteTokens ?? 0)
-  );
+  return row.inputTokens;
 }
 
 /** 模型库 / 平台模型池一行里上限相关的两列。 */

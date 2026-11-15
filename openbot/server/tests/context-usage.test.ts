@@ -17,24 +17,15 @@ import {
  */
 
 describe("used tokens", () => {
-  test("anthropic-family usage adds cached and cache-write tokens", () => {
+  test("used tokens are input_tokens; cached_input_tokens and cache_write_tokens are not added again", () => {
+    // AI SDK v3 的 Anthropic 用量：input_tokens 已是 1 000 + 30 000 + 2 000 的总数。
     const row = {
-      inputTokens: 1_000,
+      inputTokens: 33_000,
       cachedInputTokens: 30_000,
       cacheWriteTokens: 2_000,
     };
     expect(usedTokens({ provider: "anthropic", ...row })).toBe(33_000);
-    // 运行时 SDK 报的服务商名（`anthropic.messages`）也算同一家族。
     expect(usedTokens({ provider: "anthropic.messages", ...row })).toBe(33_000);
-    // 缓存数没报的按 0 算，不让已用变成未知。
-    expect(
-      usedTokens({
-        provider: "anthropic",
-        inputTokens: 1_000,
-        cachedInputTokens: null,
-        cacheWriteTokens: null,
-      }),
-    ).toBe(1_000);
   });
 
   test("openai-family usage takes input_tokens only", () => {

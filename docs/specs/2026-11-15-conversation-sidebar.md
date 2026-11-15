@@ -72,7 +72,7 @@
 **上下文**
 - 已用：本线程、本员工最近一次 `outcome = completed` 且 `usage_status` 为 reported 或 partial 的调用的 `input_tokens`（新增索引 `(tenant_id, thread_id, agent_id, started_at)`）。没有数时整块显示「还没有用量数据」。
 - 上限：模型库 `model_registry` 和 `platform_model_pool` 新增 `context_window integer` 列。新增模型时，从模型目录（models.dev 的 `limit.context`，`model-catalogue.ts` 解析时保留下来）预填，管理员可改。取值顺序（我的决定）：员工绑定的模型库行 → 平台模型池行 → 按实际调用的服务商和模型名到模型目录里查（覆盖用部署默认模型的员工）→ 都没有时只显示已用数，不显示百分比、不自动压缩。
-- 已用的口径（我的决定）：服务商把缓存命中单独报（`cached_input_tokens` / `cache_write_tokens` 不包含在 `input_tokens` 里，如 Anthropic）时，已用 = 三者之和；输入数已含缓存的（如 OpenAI 系）只取 `input_tokens`。按服务商家族判断，写在一个函数里并有测试。
+- 已用的口径（我的决定）：已用 = 计量记录的 input_tokens。AI SDK v3 报的输入总数已含缓存读写（如 Anthropic），不再另加缓存数。
 - 分类：组装 prompt 时（`builtInAgentConfiguration` 与之后的消息拼接处）按段统计字数：人设与系统提示（身份、人设、手册、指令等段）、工具（工具说明与 schema）、技能、记忆（个人记忆中间件注入的部分）、消息（对话历史，含压缩摘要）。每次运行把比例写进新表 `thread_context_breakdowns`（tenant_id、thread_id、agent_id、run_id、shares jsonb、created_at），侧栏用最近一行的比例乘已用总量得到各类数。
 - 自动压缩预留：上限的 10%。空余 = 上限 − 已用 − 预留，不小于 0。
 - 「距自动压缩还剩」= 空余。

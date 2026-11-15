@@ -229,7 +229,8 @@ describe("context usage", () => {
       provider: "anthropic",
       modelName: "claude-x",
       usage: {
-        inputTokens: { total: 1_000, cacheRead: 3_000, cacheWrite: 500 },
+        // AI SDK v3：total 已含缓存读写（1 000 + 3 000 + 500），已用就是它，不再另加。
+        inputTokens: { total: 4_500, cacheRead: 3_000, cacheWrite: 500 },
         outputTokens: { total: 10 },
       },
     });
