@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { groupTurnMessage, mentionedPeers } from "../src/channels/group";
+import {
+  groupFraming,
+  groupTurnMessage,
+  mentionedPeers,
+} from "../src/channels/group";
 
 test("group peer replies remain attributed quoted data in a genuine person turn", () => {
   const message = groupTurnMessage("person-message", "Compare the proposals", [
@@ -100,4 +104,37 @@ test("a longer name at the same @ is the one addressed, and an email address is 
   expect(ids("I, @Ops Lead, will do it", "lead")).toEqual([]);
   expect(ids("write to jo@sam.com")).toEqual([]);
   expect(ids("(@Sam) can you check")).toEqual(["sam"]);
+});
+
+/*
+ * Naming a peer is the one way round this conversation that actually reaches them: `relay` reads
+ * `@name` off the reply and starts that peer's turn, with no approval in between. `message_bot` is
+ * offered here too, and it is the one that looks like the right tool — a group turn ran on
+ * 2026-11-15 (L4-3) called it correctly, naming the Bot and the task, and then sat in `waiting` on
+ * an approval this conversation never shows anybody. The group turn has nobody's page open, so the
+ * approval is never given and the work is never sent, and the Bot still told the person it had
+ * dispatched everything. Both halves are said here, because a Bot told only the first reaches for
+ * the tool anyway.
+ */
+test("a group turn is told that naming a peer is what reaches them, and that the tool does not", () => {
+  const framing = groupFraming("Ada", ["Grace", "Ops"], { handoffTool: true });
+  // The example has to be a real peer, or the Bot writes "@Grace" in a room Grace is not in.
+  expect(framing).toContain("@Grace");
+  expect(framing).toContain("the only way a request reaches them");
+  // Said as what happens, not as a rule to obey: the turn really does wait for nobody.
+  expect(framing).toContain("never shows anybody");
+  expect(framing).toContain("message_bot");
+});
+
+test("a deployment with no handoff tool is not warned about one it cannot call", () => {
+  const framing = groupFraming("Ada", ["Grace"], { handoffTool: false });
+  expect(framing).toContain("@Grace");
+  expect(framing).toContain("the only way a request reaches them");
+  expect(framing).not.toContain("message_bot");
+});
+
+test("a Bot alone in the group is not told to address anybody", () => {
+  const framing = groupFraming("Ada", [], { handoffTool: true });
+  expect(framing).not.toContain("@");
+  expect(framing).toContain("Answer only your own part");
 });

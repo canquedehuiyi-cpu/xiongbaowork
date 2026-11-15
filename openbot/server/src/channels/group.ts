@@ -997,6 +997,41 @@ export function groupTurnMessage(
 }
 
 /**
+ * The framing every group turn opens with: who this Bot is among its peers, and how a request
+ * reaches one of them.
+ *
+ * A function rather than a template beside its call, so the wording is testable without a database
+ * and a queue, and so the two halves that must stay true together — "answer only your own part"
+ * and "here is how you reach a peer" — cannot drift apart in one place and not the other.
+ *
+ * WHY IT HAS TO SAY HOW. `relay` reads `@name` off a reply and starts that peer's turn; nothing
+ * else in a reply reaches anybody. But the same run also holds `message_bot`, which reads like the
+ * better tool for the job, and on 2026-11-15 (L4-3) a group turn called it correctly — the right
+ * Bot, the right task — and stopped on an approval this conversation never shows anybody. A group
+ * turn has nobody's page open, so the approval is never given, the work is never sent, and the Bot
+ * still told the person it had dispatched everything. A Bot told only "do not promise" reaches for
+ * the tool anyway; a Bot told which one works does not need the warning, so both are here.
+ *
+ * The example name is a real peer, and the rule is left out when there is none: a room of one has
+ * nobody to address, and an invented example is a name the Bot would write into a group that does
+ * not have that member.
+ */
+export function groupFraming(
+  self: string,
+  others: readonly string[],
+  options: { handoffTool?: boolean } = {},
+): string {
+  const peers = others.length ? ` with ${others.join(", ")}` : "";
+  const base = `You are ${self}, one of several Bots in this group conversation${peers}. Answer only your own part. The other Bots answer in their own turns, so do not write replies for them.`;
+  const [example] = others;
+  if (example === undefined) return base;
+  const reaching = `To have a peer take something on, name them in your reply as @ plus their whole name (for example @${example}): that is the only way a request reaches them, and telling the person a peer has been asked without naming them that way is not true.`;
+  // Nothing to warn off when this deployment offers no handoff tool at all.
+  if (!options.handoffTool) return `${base} ${reaching}`;
+  return `${base} ${reaching} Do not use message_bot to ask a peer here: this turn waits for an approval this conversation never shows anybody, so the work is never sent.`;
+}
+
+/**
  * The peers a reply addresses, in the order the reply names them.
  *
  * `@Name` with the whole name, case-insensitive, and not followed by more of a word, so a Bot called
@@ -1481,7 +1516,9 @@ export function createGroupConversations(deps: {
       .filter((candidate) => candidate.id !== agentId)
       .map((candidate) => candidate.name);
     // Each Bot speaks for itself: left unsaid, the first to answer writes everybody's part.
-    const role = `You are ${self}, one of several Bots in this group conversation${others.length ? ` with ${others.join(", ")}` : ""}. Answer only your own part. The other Bots answer in their own turns, so do not write replies for them.`;
+    const role = groupFraming(self, others, {
+      handoffTool: deps.caps.maxDepth > 0 && deps.caps.maxPerRun > 0,
+    });
     // An answer is told as one, with the question it answers, as a one-Bot conversation tells it.
     const said = turn.inResponseTo
       ? `In response to your question: ${turn.inResponseTo}\n\n${turn.text}`
