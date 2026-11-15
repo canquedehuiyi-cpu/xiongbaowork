@@ -806,6 +806,63 @@ test("去确认 follows the inbox's newest approval for this conversation", asyn
   }
 });
 
+test("去确认 ignores a card the phone page has covered and draws it in place", async () => {
+  inbox = [
+    {
+      id: "ap1",
+      status: "pending",
+      createdAt: "2026-11-15T08:00:00Z",
+      action: {
+        botId: "a1",
+        toolRef: "computer_click",
+        effect: "write",
+        scope: "browser",
+        threadId: "t1",
+        toolCallId: "call-1",
+        args: {},
+        target: null,
+        policy: { behaviour: "ask", source: "safety", reason: "先问你。" },
+      },
+    },
+  ];
+  const scrolled: string[] = [];
+  const original = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+    scrolled.push(this.dataset.approvalId ?? this.tagName);
+  };
+  try {
+    // 对话里的卡被全屏页盖住（`inert`），侧栏不在里面。
+    const { view, user } = draw(() => (
+      <>
+        <div data-testid="covered" inert>
+          <InlineApproval toolCallId="call-1" fallback={null} />
+        </div>
+        <ConversationSidebar source={{ threadId: "t1" }} variant="panel" />
+      </>
+    ));
+    const aside = await loaded(view);
+    await waitFor(() => {
+      if (
+        !view
+          .getByTestId("covered")
+          .querySelector('[data-approval-id="ap1"]')
+      )
+        throw new Error("no approval card yet");
+    });
+    const goal = aside.querySelector<HTMLElement>(
+      'section[aria-label="目标"]',
+    ) as HTMLElement;
+    await user.click(within(goal).getByRole("button", { name: "去确认" }));
+    await waitFor(() => {
+      if (!goal.querySelector('[data-approval-id="ap1"]'))
+        throw new Error("card not drawn in the goal yet");
+    });
+    expect(scrolled).toEqual([]);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = original;
+  }
+});
+
 test("去确认 shows the waiting card in place when it is not in the transcript", async () => {
   // 没有任务卡（目标为空），审批来自审批收件箱。
   sidebars.set("t1", sidebar({ goal: null }));

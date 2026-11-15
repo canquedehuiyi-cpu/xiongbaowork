@@ -31,11 +31,17 @@ export function GoalIcon() {
   return <IconTarget aria-hidden="true" className="size-[18px] stroke-[1.8]" />;
 }
 
-/** 对话里那张许可卡；找到就滚过去。 */
+/**
+ * 对话里那张许可卡；找到就滚过去。被盖住的卡（手机全屏侧栏打开时底下的对话设了 `inert`）不算：滚过去也看不见、
+ * 点不到，就当没找到，让「去确认」在侧栏里就地画卡。
+ */
 function scrollToApproval(id: string): boolean {
   const card = [
     ...document.querySelectorAll<HTMLElement>("[data-approval-id]"),
-  ].find((candidate) => candidate.dataset.approvalId === id);
+  ].find(
+    (candidate) =>
+      candidate.dataset.approvalId === id && !candidate.closest("[inert]"),
+  );
   if (!card) return false;
   card.scrollIntoView({ behavior: "smooth", block: "center" });
   return true;
