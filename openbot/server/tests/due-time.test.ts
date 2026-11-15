@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseDueTime, readDueTime } from "../src/tasks/due-time";
+import { dueSaidIn, parseDueTime, readDueTime } from "../src/tasks/due-time";
 
 /**
  * 员工报的预计交付时间（spec 2026-11-15-delivery-loop 第 4 节）：相对时长、钟点、上下午、明早，按
@@ -157,5 +157,29 @@ describe("parseDueTime", () => {
     expect(
       parseDueTime("15:00", lateNight, "America/Los_Angeles")?.toISOString(),
     ).toBe("2026-11-15T23:00:00.000Z");
+  });
+});
+
+describe("dueSaidIn", () => {
+  test("a time it gives is read, even right after a word ending in 原 or 之前", () => {
+    expect(dueSaidIn("数据还原预计 20 分钟。")).toBe("20 分钟");
+    expect(dueSaidIn("上线之前预计 30 分钟能好。")).toBe("30 分钟");
+    expect(dueSaidIn("先复原预计 16:00 交。")).toBe("16:00");
+    expect(dueSaidIn("收到，预计 40 分钟。")).toBe("40 分钟");
+  });
+
+  test("a time it only quotes is not one it gives", () => {
+    for (const quoted of [
+      "原定预计 16:00 交，我接着做。",
+      "原来预计 16:00，还在做。",
+      "原预计 16:00，还在做。",
+      "之前预计 16:00，还在做。",
+      "我之前预计 16:00，还在做。",
+      "你好，原预计 16:00 的那件还在做。",
+      "此前预计 16:00，还在做。",
+    ])
+      expect(dueSaidIn(quoted)).toBeUndefined();
+    expect(dueSaidIn("原预计 16:00，现在预计 17:30 交。")).toBe("17:30");
+    expect(dueSaidIn("之前预计 16:00，现在预计 17:30 交。")).toBe("17:30");
   });
 });
