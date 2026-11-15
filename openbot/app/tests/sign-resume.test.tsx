@@ -14,6 +14,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { authKeys } from "@/lib/auth/queries";
 import { resumeUrlFor } from "@/lib/auth/resume";
+import { safeReturnPath } from "@/lib/auth/return-to";
 
 /*
  * The Better Auth client is replaced at the module boundary: its fetch is captured when it is built,
@@ -144,6 +145,8 @@ function renderSignScreen(options: {
   providers: string[];
   sso: boolean;
   ssoRequired: boolean;
+  /** 打开的地址；不给是带着 `?flow_id=h1` 的那个。 */
+  entry?: string;
 }) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(authKeys.providers(), options);
@@ -159,7 +162,9 @@ function renderSignScreen(options: {
   const router = createRouter({
     routeTree: root.addChildren([sign]),
     context: { queryClient },
-    history: createMemoryHistory({ initialEntries: ["/sign?flow_id=h1"] }),
+    history: createMemoryHistory({
+      initialEntries: [options.entry ?? "/sign?flow_id=h1"],
+    }),
   } as never) as never;
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -300,4 +305,100 @@ test("a signed-in arrival with a handle lands on the verifier, not back on the h
       value: realLocation,
     });
   }
+});
+
+/*
+ * 登录完回到原来那一页（交付闭环整期审查 I3）：没登录时打开 `/tasks/<id>`、`/briefing`，先被送去登录，登录完
+ * 回到那里。回去的地址来自地址栏，只认本站的相对路径，不能被拿来把人送到别的站。
+ */
+test("safeReturnPath 只认本站的相对路径", () => {
+  expect(safeReturnPath("/tasks/abc")).toBe("/tasks/abc");
+  expect(safeReturnPath("/briefing?kind=start#top")).toBe(
+    "/briefing?kind=start#top",
+  );
+  for (const hostile of [
+    "//evil.example/x",
+    "/\\evil.example",
+    "/\\/evil.example",
+    "https://evil.example/",
+    "javascript:alert(1)",
+    "tasks/abc",
+    "",
+    " //evil.example",
+    "/\tevil",
+    "/sign",
+    "/sign?redirect=/tasks/abc",
+    "/",
+    `/${"x".repeat(3000)}`,
+    42,
+    null,
+  ])
+    expect(safeReturnPath(hostile)).toBeNull();
+});
+
+test("validateSearch 留下本站的 redirect，丢掉别的", () => {
+  const validate = Route.options.validateSearch as (s: unknown) => object;
+  expect(validate({ redirect: "/tasks/abc" })).toEqual({
+    redirect: "/tasks/abc",
+  });
+  expect(validate({ redirect: "//evil.example" })).toEqual({});
+  expect(validate({ redirect: "https://evil.example" })).toEqual({});
+});
+
+test("已登录时带着 redirect 来：回到那一页；带的是别的站：回首页", async () => {
+  const beforeLoad = Route.options.beforeLoad as (a: unknown) => Promise<void>;
+  const thrown = async (search: object) => {
+    try {
+      await beforeLoad({ context: signedInContext(), search });
+    } catch (error) {
+      return error as { options: { to?: string; href?: string } };
+    }
+    throw new Error("expected a redirect");
+  };
+  expect((await thrown({ redirect: "/tasks/abc" })).options.href).toBe(
+    "/tasks/abc",
+  );
+  const hostile = await thrown({ redirect: "//evil.example" });
+  expect(hostile.options.to).toBe("/");
+  expect(hostile.options.href).toBeUndefined();
+});
+
+test("没登录打开一张卡：送去登录时带上这一页；首页不带", async () => {
+  const { Route: Authed } = await import("@/routes/_authed");
+  const beforeLoad = Authed.options.beforeLoad as (a: unknown) => Promise<void>;
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(authKeys.currentUser(), null);
+  const thrown = async (href: string, pathname: string) => {
+    try {
+      await beforeLoad({
+        context: { queryClient },
+        location: { href, pathname },
+      });
+    } catch (error) {
+      return error as { options: { to?: string; search?: unknown } };
+    }
+    throw new Error("expected a redirect");
+  };
+  const card = await thrown("/tasks/abc?overdue=1", "/tasks/abc");
+  expect(card.options.to).toBe("/sign");
+  expect(card.options.search).toEqual({ redirect: "/tasks/abc?overdue=1" });
+  const home = await thrown("/", "/");
+  expect(home.options.to).toBe("/sign");
+  expect(home.options.search).toBeUndefined();
+});
+
+test("用身份提供方登录：回跳地址是原来那一页", async () => {
+  const asked: string[] = [];
+  signInSpy = async (_provider, _start, callbackURL) => {
+    asked.push(callbackURL ?? "");
+  };
+  const { view, user } = renderSignScreen({
+    providers: ["google"],
+    sso: false,
+    ssoRequired: false,
+    entry: "/sign?redirect=%2Fbriefing",
+  });
+  await user.click(await view.findByText(/使用 Google 继续/));
+  await waitFor(() => expect(asked).toHaveLength(1));
+  expect(asked[0]).toBe(`${window.location.origin}/briefing`);
 });

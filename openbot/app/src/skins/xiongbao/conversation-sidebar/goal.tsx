@@ -5,6 +5,7 @@ import { InlineApproval } from "@/components/approvals/inline-approval";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import { dueText } from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
+import { TrackButton } from "@/skins/xiongbao/delivery-actions";
 import type {
   SidebarGoal,
   SidebarGoalStage,
@@ -13,7 +14,8 @@ import type {
 /**
  * 「目标」：这个对话正在做的事（最近一张任务卡）、「第 N 轮 · 上次检查：…」，有待确认时一个「去确认」。
  * 在跟的活（交付闭环）多一条四段进度：派出 · 已接下 · 已交成果 · 你验收，按服务器给的 `stage` 着色
- * （设计稿 6），下面一句预计几点交、退回过几次、是否逾期。
+ * （设计稿 6），下面一句预计几点交、退回过几次、是否逾期。不在跟、还没结束的卡给「当作一件活来跟」（规格第 1
+ * 节，你手动跟）。
  *
  * 「去确认」把对话滚到那张许可卡（`InlineApproval` 上的 `data-approval-id`）。卡不在对话里（往上翻才有、
  * 或是任务卡指着的审批没画在这段对话里）时，就按审批 id 把同一条审批的卡画在这里，在侧栏里也能直接批（原来详情
@@ -188,6 +190,13 @@ export function GoalBody({
             {goal.title}
           </b>
           <GoalStages goal={goal} />
+          {goal.stage === null &&
+          goal.taskId &&
+          ["running", "needs_action", "awaiting_review"].includes(
+            goal.status,
+          ) ? (
+            <TrackButton className="mt-0.5" size="sm" taskId={goal.taskId} />
+          ) : null}
           <span
             className={`text-(--wb-fg2) text-[12.5px] leading-relaxed ${
               long && !more ? "line-clamp-2" : ""

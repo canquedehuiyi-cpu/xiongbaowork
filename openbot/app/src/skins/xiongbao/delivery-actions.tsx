@@ -23,6 +23,7 @@ import {
   reassignTask,
   returnTask,
   taskEventsQueryOptions,
+  trackTask,
 } from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
 import { useSkinId } from "@/skins/store";
@@ -83,6 +84,55 @@ export function ZoneNote({ now }: { now?: Date }) {
     <p className="m-0 text-(--wb-muted) text-[12px]" data-zone-note>
       {note}
     </p>
+  );
+}
+
+/**
+ * 「当作一件活来跟」（规格第 1 节，你手动跟）：卡片详情和对话侧栏的「目标」块上，给不在跟、还没结束的卡。
+ * 成功后看板、详情、侧栏一起重读，卡进「派出 · 待接下」；被拒时写服务器的中文原话（接活功能关着、已经
+ * 在跟、已经结束），说不清的换成按动作写好的中文。
+ */
+export function TrackButton({
+  taskId,
+  size = "md",
+  className,
+}: {
+  taskId: string;
+  size?: "sm" | "md";
+  className?: string;
+}) {
+  const queryClient = useQueryClient();
+  const track = useMutation({
+    mutationFn: () => trackTask(taskId),
+    retry: false,
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["tasks-briefing"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["conversation-sidebar"],
+      });
+    },
+  });
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <button
+        className={cn(deliveryButton(true, size), "self-start")}
+        disabled={track.isPending || track.isSuccess}
+        onClick={() => track.mutate()}
+        type="button"
+      >
+        {track.isPending
+          ? "正在加入三步收货…"
+          : track.isSuccess
+            ? "已经在跟了"
+            : "当作一件活来跟"}
+      </button>
+      {track.error ? (
+        <p className="m-0 text-(--wb-danger-fg) text-[12.5px]" role="alert">
+          {deliveryErrorText(track.error, "track")}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

@@ -855,6 +855,7 @@ export function createConversationSidebar(
             .where(inArray(threadRuns.threadId, [...threadIds]))
         : [{ value: 0 }];
     return {
+      taskId: card.id,
       title: card.title,
       status: card.status,
       stage: stageOf(card),

@@ -515,6 +515,7 @@ describe("conversation sidebar", () => {
       rounds: 3,
       lastCheck: "等你确认 · 我已经整理好了三张发票。",
       pendingApprovalId: approvalId,
+      taskId: expect.any(String),
       stage: null,
       dueAt: null,
       overdue: false,
@@ -836,6 +837,7 @@ describe("conversation sidebar", () => {
       rounds: 1,
       lastCheck: "进行中 · 初稿写好了！",
       pendingApprovalId: null,
+      taskId: expect.any(String),
       stage: null,
       dueAt: null,
       overdue: false,
@@ -1087,6 +1089,8 @@ describe("conversation sidebar", () => {
     const first = await routesFor(viewer).thread(threadId);
     expect(first.status).toBe(200);
     expect(first.body.goal).toMatchObject({
+      // 侧栏「当作一件活来跟」和「打开这张卡」按它找卡：是本线程那张在跟的卡，不是后来那张。
+      taskId,
       title: "核对三家发票",
       status: "running",
       stage: "accepted",

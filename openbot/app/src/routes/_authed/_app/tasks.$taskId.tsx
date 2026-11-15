@@ -13,6 +13,7 @@ import {
   canExtend,
   canNudge,
   canReassign,
+  canTrack,
   clockText,
   deliveryLaneOf,
   dueText,
@@ -37,6 +38,7 @@ import {
   LastError,
   type OpenDialog,
   TechnicalError,
+  TrackButton,
   useDeliveryWrites,
   useWbFallback,
   WriteFailure,
@@ -566,9 +568,14 @@ function TaskDetail({ taskId }: { taskId: string }) {
       {followed ? (
         <Progress finished={status === "done"} steps={steps} />
       ) : (
-        <p className="m-0 text-(--wb-muted) text-[13px]">
-          这件活没在跟，不走三步收货。
-        </p>
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-(--wb-muted) text-[13px]">
+            {canTrack(task)
+              ? "这件活没在跟，不走三步收货。当作一件活来跟以后，它进「派出 · 待接下」，员工下一轮先回接活回执，到点没交服务器会催。"
+              : "这件活没在跟，不走三步收货。"}
+          </p>
+          {canTrack(task) ? <TrackButton taskId={task.id} /> : null}
+        </div>
       )}
 
       {status === "cancelled" ? (

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { BotLookProvider } from "../components/agents/bot-look";
 import { QuotaGuidanceDialog } from "../components/quota/quota-guidance-dialog";
 import { currentUserQueryOptions, needsOnboarding } from "../lib/auth/queries";
+import { safeReturnPath } from "../lib/auth/return-to";
 import { CopilotProvider } from "../lib/copilot/provider";
 import { AppHotkeys } from "../lib/hotkeys/app-hotkeys";
 import { BrowserTimeZoneSync } from "../lib/settings/work-hours";
@@ -18,7 +19,12 @@ export const Route = createFileRoute("/_authed")({
     if (!user) {
       // WF9 (D9): a WakerFlow share link opened signed out is come back to after signing in.
       rememberShareImport(location.pathname);
-      throw redirect({ to: "/sign" });
+      // 登录完回到这一页（一张卡、清点页……），不落到首页；只带本站的相对路径（`safeReturnPath`）。
+      const back = safeReturnPath(location.href);
+      throw redirect({
+        to: "/sign",
+        ...(back ? { search: { redirect: back } } : {}),
+      });
     }
     /*
      * Somebody who has not finished onboarding goes there and nowhere else. Here rather than in

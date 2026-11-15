@@ -266,7 +266,7 @@ export function BriefingPage({ now: fixedNow }: { now?: Date } = {}) {
             >
               <b className="font-semibold text-[15px]">现在没有在跟的活</b>
               <p className="m-0 text-(--wb-fg2) text-[13px] leading-[1.6]">
-                没有在跟的活就不发清点。员工接下你派的活，或者你在对话里点「当作一件活来跟」，它就会出现在这里和看板上。
+                没有在跟的活就不发清点。员工接下你派的活，或者你在看板的卡上、卡片详情里、对话右侧的「目标」里点「当作一件活来跟」，它就会出现在这里和看板上。
               </p>
             </section>
           )}

@@ -953,9 +953,9 @@ test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」�
         <ExtendDialog card={OVERDUE_CARD} mode={mode} onClose={() => {}} />
       </QueryClientProvider>,
     );
-    const input = await view.findByRole<HTMLInputElement>("textbox", {
+    const input = (await view.findByRole("textbox", {
       name: mode === "edit" ? "改到几点" : "延到几点",
-    });
+    })) as HTMLInputElement;
     await waitFor(() => expect(input.value).toBe("明早 10:30"));
     await userEvent.click(
       view.getByRole("button", {
@@ -980,9 +980,9 @@ test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」�
       <ExtendDialog card={OVERDUE_CARD} onClose={() => {}} />
     </QueryClientProvider>,
   );
-  const input = await view.findByRole<HTMLInputElement>("textbox", {
+  const input = (await view.findByRole("textbox", {
     name: "延到几点",
-  });
+  })) as HTMLInputElement;
   await waitFor(() => expect(input.value).toBe("明早 10:30"));
   fireEvent.change(input, { target: { value: "明天下午三点" } });
   await userEvent.click(view.getByRole("button", { name: "准许延期" }));
@@ -1012,6 +1012,143 @@ test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」�
         .map((call) => call.body),
     ).toEqual([{ decision: "deny", requestedDueAt: asked }]),
   );
+});
+
+// ---------------------------------------------------------------- 当作一件活来跟
+
+/** 一张不在跟、员工还在做的卡（普通问答出来的）。 */
+const UNTRACKED_CARD = {
+  ...OVERDUE_CARD,
+  id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  title: "查一下竞品价格",
+  tracked: false,
+  stage: null,
+  acceptedAt: null,
+  dueAt: null,
+  originalDueAt: null,
+  dueReported: false,
+  overdueAt: null,
+  nudges: 0,
+};
+
+/**
+ * 跟进接口：`refuse` 给了就按它回 409；否则成功，之后这张卡读出来是在跟、派出 · 待接下。
+ */
+function trackFetch(refuse?: string) {
+  const calls: Call[] = [];
+  let tracked = false;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    const method = init?.method ?? "GET";
+    calls.push({ method, path, body: undefined });
+    const card = tracked
+      ? { ...UNTRACKED_CARD, tracked: true, stage: "pending_accept" }
+      : UNTRACKED_CARD;
+    if (method === "POST" && path === `/api/tasks/${UNTRACKED_CARD.id}/track`) {
+      if (refuse) return json({ error: refuse }, 409);
+      tracked = true;
+      return json({ ok: true, stage: "pending_accept" });
+    }
+    if (path === `/api/tasks/${UNTRACKED_CARD.id}/events`)
+      return json({ events: [] });
+    if (path === `/api/tasks/${UNTRACKED_CARD.id}`) return json({ task: card });
+    if (path.startsWith("/api/tasks")) return json({ tasks: [card] });
+    if (path.startsWith("/api/me/briefing"))
+      return json({ kind: "start", briefing: null });
+    if (path === "/api/settings/preferences")
+      return json({ preferences: preferences(workHours()) });
+    if (path === "/api/approvals")
+      return json({
+        enabled: true,
+        requests: [],
+        rules: [],
+        teamRules: [],
+        questions: [],
+      });
+    if (path.startsWith("/api/devices")) return json({ devices: [] });
+    return json({ agents: [] });
+  }) as typeof fetch;
+  return calls;
+}
+
+const tracks = (calls: Call[]) =>
+  calls.filter(
+    (call) =>
+      call.method === "POST" &&
+      call.path === `/api/tasks/${UNTRACKED_CARD.id}/track`,
+  );
+
+test("卡片详情：不在跟的卡点「当作一件活来跟」，发 POST /track，卡进三步", async () => {
+  const calls = trackFetch();
+  const { view } = draw(`/tasks/${UNTRACKED_CARD.id}`);
+  const dialog = await view.findByRole("dialog");
+  await userEvent.click(
+    await within(dialog).findByRole("button", { name: "当作一件活来跟" }),
+  );
+  await waitFor(() => expect(tracks(calls)).toHaveLength(1));
+  // 重读回来是在跟的卡：四步进度出来了，按钮没了。
+  await within(dialog).findByRole("list", { name: "进度" });
+  expect(
+    within(dialog).queryByRole("button", { name: "当作一件活来跟" }),
+  ).toBeNull();
+});
+
+test("当作一件活来跟被拒（接活功能关着）：说人话，不露工具名", async () => {
+  trackFetch("这位员工的接活工具（accept_task）已关闭，不能当作一件活来跟。");
+  const { view } = draw(`/tasks/${UNTRACKED_CARD.id}`);
+  const dialog = await view.findByRole("dialog");
+  await userEvent.click(
+    await within(dialog).findByRole("button", { name: "当作一件活来跟" }),
+  );
+  expect((await within(dialog).findByRole("alert")).textContent).toBe(
+    "这位员工的接活功能已关闭，不能当作一件活来跟。",
+  );
+  // 服务器给的不是中文原话时，按动作写好的中文。
+  cleanup();
+  trackFetch("Already followed.");
+  const again = draw(`/tasks/${UNTRACKED_CARD.id}`).view;
+  const second = await again.findByRole("dialog");
+  await userEvent.click(
+    await within(second).findByRole("button", { name: "当作一件活来跟" }),
+  );
+  expect((await within(second).findByRole("alert")).textContent).toBe(
+    "这件活现在不能当作一件活来跟：已经在跟、已经结束，或这位员工不接活。",
+  );
+});
+
+test("看板上不在三步里、还没结束的卡也有「当作一件活来跟」，跟了以后移进三步收货", async () => {
+  const calls = trackFetch();
+  const { view } = draw("/tasks");
+  const button = await view.findByRole("button", { name: "当作一件活来跟" });
+  await userEvent.click(button);
+  await waitFor(() => expect(tracks(calls)).toHaveLength(1));
+
+  // 跟了以后它从原来的列表移到上面「三步收货」里，原来那一行的按钮没了。
+  await waitFor(() =>
+    expect(view.queryByRole("button", { name: "当作一件活来跟" })).toBeNull(),
+  );
+});
+
+test("侧栏目标：不在跟、还没结束的卡给「当作一件活来跟」，在跟的、结束的不给", async () => {
+  const calls = trackFetch();
+  const view = renderGoal(
+    <GoalBody
+      goal={goal({ taskId: UNTRACKED_CARD.id, stage: null, status: "running" })}
+      pending={null}
+    />,
+  );
+  await userEvent.click(view.getByRole("button", { name: "当作一件活来跟" }));
+  await waitFor(() => expect(tracks(calls)).toHaveLength(1));
+  cleanup();
+  for (const shown of [
+    goal({ taskId: UNTRACKED_CARD.id, stage: "accepted" }),
+    goal({ taskId: UNTRACKED_CARD.id, stage: null, status: "done" }),
+    goal({ stage: null, status: "running" }),
+  ]) {
+    const other = renderGoal(<GoalBody goal={shown} pending={null} />);
+    expect(other.queryByRole("button", { name: "当作一件活来跟" })).toBeNull();
+    cleanup();
+  }
 });
 
 // ---------------------------------------------------------------- 侧栏目标

@@ -47,11 +47,16 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
-import { type FollowedFields, isFollowed } from "@/lib/tasks/delivery";
+import {
+  canTrack,
+  type FollowedFields,
+  isFollowed,
+} from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
-import { DeliveryBoard } from "@/skins/xiongbao/delivery-board";
 import { useSkinId } from "@/skins/store";
+import { TrackButton } from "@/skins/xiongbao/delivery-actions";
+import { DeliveryBoard } from "@/skins/xiongbao/delivery-board";
 
 /**
  * The board address, in full: which machine, which crew, which status, which words, how far back,
@@ -998,6 +1003,7 @@ function TaskCard({
   pendingIds: ReadonlySet<string>;
 } & ApprovalWiring) {
   const busy = pendingIds.has(task.id);
+  const workbench = useSkinId() === "xiongbao";
   /*
    * A3 asks the board to show which coworker did the work — its name and avatar, the same identity
    * every other screen uses. What was printed here was the first eight characters of its primary
@@ -1188,6 +1194,13 @@ function TaskCard({
               pending={decidingIds ?? NOTHING_DECIDING}
               task={task}
             />
+          ) : null}
+          {/*
+           * 交付闭环（规格第 1 节，你手动跟）：默认皮肤里，不在跟、还没结束的卡可以「当作一件活来跟」，跟了
+           * 以后它从这里移到上面「三步收货」的「派出 · 待接下」。
+           */}
+          {workbench && canTrack(task) ? (
+            <TrackButton size="sm" taskId={task.id} />
           ) : null}
         </div>
         <span

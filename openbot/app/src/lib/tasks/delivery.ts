@@ -838,7 +838,8 @@ export type DeliveryVerb =
   | "extend"
   | "deny"
   | "criteria"
-  | "reassign";
+  | "reassign"
+  | "track";
 
 /** 一个动作被服务器拒（409）时，没有中文原话可用的说法。 */
 const REFUSED: Record<DeliveryVerb, string> = {
@@ -850,6 +851,7 @@ const REFUSED: Record<DeliveryVerb, string> = {
   deny: "这条延期申请已经答复过了。",
   criteria: "这件活现在不能改验收标准（已交成果或已结束）。",
   reassign: "这件活现在不能换人。",
+  track: "这件活现在不能当作一件活来跟：已经在跟、已经结束，或这位员工不接活。",
 };
 
 /**
@@ -882,6 +884,26 @@ export function deliveryErrorText(error: unknown, verb: DeliveryVerb): string {
   if (status >= 500) return "服务器出了点问题，请稍后再试。";
   return "没收到服务器的回应，结果未确认，请刷新后核对。";
 }
+
+/** 不在跟、还没结束、有员工在做的卡，能「当作一件活来跟」（`POST /api/tasks/:id/track`，规格第 1 节）。 */
+export const canTrack = (card: {
+  tracked?: boolean;
+  status: string;
+  executorAgentId?: string | null;
+}): boolean =>
+  card.tracked !== true &&
+  Boolean(card.executorAgentId) &&
+  ["running", "needs_action", "awaiting_review"].includes(card.status);
+
+/**
+ * 当作一件活来跟：卡进「派出 · 待接下」，员工下一轮被要求补接活回执。员工的接活功能关着、已经在跟、已经
+ * 结束时服务器拒（409）。
+ */
+export const trackTask = (id: string) =>
+  client(`${cardPath(id)}/track`, {
+    method: "POST",
+    fallback: "没能当作一件活来跟，请稍后再试。",
+  });
 
 export const reassignTask = (id: string, agentId: string) =>
   client(`${cardPath(id)}/reassign`, {

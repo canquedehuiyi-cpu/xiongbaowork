@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
-import { BrandLogo } from "@/components/layout/brand-logo";
 import { ProviderLogo } from "@/components/auth/provider-logo";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -15,6 +15,7 @@ import {
   signUpWithEmail,
 } from "@/lib/auth/client";
 import { resumeUrlFor, verifierPathFor } from "@/lib/auth/resume";
+import { safeReturnPath } from "@/lib/auth/return-to";
 import { appConfig } from "@/lib/generated/application-config";
 import { searchTextEntry } from "@/lib/search-text";
 import { queryClient } from "@/query-client";
@@ -51,8 +52,18 @@ export const Route = createFileRoute("/sign")({
    * gives for `?connected=`: present-but-undefined makes `search` a required prop on every Link to
    * this route, which is a lot of ripple for a parameter only the verifier sets.
    */
-  validateSearch: (search: Record<string, unknown>): { flow_id?: string } =>
-    searchTextEntry("flow_id", search.flow_id),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { flow_id?: string; redirect?: string } => {
+    // 登录完回去的那一页：只留本站的相对路径（`safeReturnPath`），别的当没有。
+    const back = safeReturnPath(
+      searchTextEntry("redirect", search.redirect).redirect,
+    );
+    return {
+      ...searchTextEntry("flow_id", search.flow_id),
+      ...(back ? { redirect: back } : {}),
+    };
+  },
   beforeLoad: async ({ context, search }) => {
     const user = await context.queryClient.ensureQueryData(
       currentUserQueryOptions(),
@@ -72,9 +83,12 @@ export const Route = createFileRoute("/sign")({
        * the only kind that leaves the app and therefore the only kind that arrives.
        */
       const verifier = verifierPathFor(search.flow_id);
+      const back = safeReturnPath(search.redirect);
       throw verifier
         ? redirect({ href: verifier, reloadDocument: true })
-        : redirect({ to: "/" });
+        : back
+          ? redirect({ href: back })
+          : redirect({ to: "/" });
     }
     // Loaded here so the screen paints with its buttons rather than painting empty and then
     // growing them, which reads as "no providers" for exactly as long as the request takes.
@@ -84,7 +98,13 @@ export const Route = createFileRoute("/sign")({
 });
 
 function SignScreen() {
-  const { flow_id: flowId } = Route.useSearch();
+  const { flow_id: flowId, redirect: returnTo } = Route.useSearch();
+  /** 登录后回到哪里：带着的站内地址，没有就首页（交给身份提供方回跳时是完整网址）。 */
+  const back = safeReturnPath(returnTo);
+  const callbackFor = (origin: string) =>
+    verifierPathFor(flowId) || !back
+      ? resumeUrlFor(origin, flowId)
+      : `${origin}${back}`;
   // Which provider is being opened, rather than whether one is: with three buttons, a single
   // boolean would put "Opening…" on all of them.
   const [opening, setOpening] = useState<AuthProviderId | "sso" | null>(null);
@@ -122,7 +142,7 @@ function SignScreen() {
       await signInWithEmailDomain(
         email,
         undefined,
-        resumeUrlFor(window.location.origin, flowId),
+        callbackFor(window.location.origin),
       );
     } catch (caughtError) {
       setError(
@@ -142,7 +162,7 @@ function SignScreen() {
       await signInWith(
         provider,
         undefined,
-        resumeUrlFor(window.location.origin, flowId),
+        callbackFor(window.location.origin),
       );
     } catch (caughtError) {
       setError(
@@ -183,7 +203,7 @@ function SignScreen() {
         await signInWithEmail(passwordEmail.trim(), password);
       }
       queryClient.removeQueries({ queryKey: authKeys.all });
-      await navigate({ to: "/" });
+      await (back ? navigate({ href: back }) : navigate({ to: "/" }));
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
