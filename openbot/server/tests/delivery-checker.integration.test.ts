@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import {
   AbstractAgent,
@@ -37,7 +38,7 @@ import {
   createCardTurns,
   ThreadBusy,
 } from "../src/tasks/card-turns";
-import { createDelivery } from "../src/tasks/delivery";
+import { createDelivery, type Delivery } from "../src/tasks/delivery";
 import {
   type DeliveryCheckDeps,
   type DeliveryNotice,
@@ -309,7 +310,10 @@ class Working extends AbstractAgent {
 const runner = () => new PostgresAgentRunner(database, projector, quota);
 
 /** The deployment's unattended turn on the real runner, with the real admission and card scope. */
-function unattendedTurn(agent: (agentId: string) => AbstractAgent) {
+function unattendedTurn(
+  agent: (agentId: string) => AbstractAgent,
+  on: PostgresAgentRunner = runner(),
+) {
   return createTurnRunner({
     intelligence: {
       getOrCreateThread: async (params: { threadId: string }) => ({
@@ -328,7 +332,7 @@ function unattendedTurn(agent: (agentId: string) => AbstractAgent) {
       ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
       ɵcleanupThreadLock: async () => undefined,
     } as never,
-    runner: runner() as never,
+    runner: on as never,
     buildAgentFor: async ({ agentId }) => agent(agentId),
   });
 }
@@ -881,6 +885,103 @@ test("a nudge never supersedes a turn the person starts while the nudge is being
   expect(nudged.seen).toEqual([]);
   await runAsTenant(tenantId, () => runner().stop({ threadId, runId }));
   await turnDone;
+});
+
+test("a turn the person starts after a nudge was admitted, and gets in first, is not superseded by it", async () => {
+  const due = new Date(Date.now() - HOUR);
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "race-late",
+    { acceptedAt: at(due, -HOUR), dueAt: due },
+  );
+  const nudged = new Recorder(agentId, "收到。");
+  const working = new Working(agentId);
+  const runId = randomUUID();
+  let ended = false;
+  let turnDone: Promise<void> | undefined;
+  /*
+   * The nudge got past its admission and is on its way in -- hanging itself on the card -- when the
+   * person's message arrives, and the person's turn reaches the runtime first.
+   */
+  // The person's turn comes from outside the nudge's own turn (none of its markers).
+  const outside = AsyncLocalStorage.snapshot();
+  const hooked = runner();
+  const own = hooked as unknown as { delivery: Delivery };
+  const real = own.delivery;
+  let armed = true;
+  own.delivery = {
+    ...real,
+    attachRun: async (...args: Parameters<Delivery["attachRun"]>) => {
+      if (armed) {
+        armed = false;
+        turnDone = outside(() =>
+          personTurn({ tenantId, agent: working, threadId, runId }),
+        ).then(() => {
+          ended = true;
+        });
+        await working.running;
+        await until(
+          () => row(tenantId, taskId),
+          (found) => found.activeRunRef === runId,
+        );
+      }
+      return real.attachRun(...args);
+    },
+  };
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: unattendedTurn(() => nudged, hooked),
+    runner: runner(),
+  });
+  const outcome = await nudgeRuns.startNudgeRun(tenantId, taskId, "催一下");
+  await settle(150);
+  // The person's turn runs on, still the card's round; the nudge stood back and wrote nothing about it.
+  expect(ended).toBe(false);
+  expect(outcome).toBe("skipped_running");
+  expect(nudged.seen).toEqual([]);
+  expect((await row(tenantId, taskId)).activeRunRef).toBe(runId);
+  expect(
+    (await history(tenantId, taskId)).filter(
+      (event) => event.detail.runId === runId,
+    ),
+  ).toEqual([]);
+  await runAsTenant(tenantId, () => runner().stop({ threadId, runId }));
+  await turnDone;
+});
+
+test("a turn that fails before it reaches the runtime does not leave its thread looking busy", async () => {
+  const tenantId = await tenant("entering");
+  const agentId = `agent-${suite}-entering`;
+  const threadId = `thread-${suite}-entering`;
+  const broken = runner();
+  // No messages: the turn throws on its way in, after its admission and before the runtime takes it.
+  const outcome = await runAsTenant(
+    tenantId,
+    () =>
+      new Promise<string>((resolve) => {
+        broken
+          .run({
+            threadId,
+            agent: new Recorder(agentId),
+            input: {
+              runId: randomUUID(),
+              threadId,
+              state: {},
+              tools: [],
+              context: [],
+              forwardedProps: {},
+            } as unknown as RunAgentInput,
+          })
+          .subscribe({
+            complete: () => resolve("completed"),
+            error: () => resolve("failed"),
+          });
+        setTimeout(() => resolve("never ended"), 2000);
+      }),
+  );
+  expect(outcome).toBe("failed");
+  expect(
+    await runAsTenant(tenantId, () => runner().isRunning({ threadId })),
+  ).toBe(false);
 });
 
 test("nudge run attaches to the card, opens no card, does not push, does not touch wake-up quota or task quota", async () => {

@@ -85,8 +85,26 @@ export type Delivery = {
    * or a question raised in the round (filed under the run id) parks this card. The round's own
    * history line is written by {@link Delivery.runEnded}, with its run id. A round the column still
    * names, which never reported its end, is replaced and logged `run_failed {reason: "superseded"}`.
+   * False when nothing was hung: the card is not followed and open, or `keepIfRunning` kept the round
+   * it names.
    */
-  attachRun(tenantId: string, taskId: string, runId: string): Promise<void>;
+  attachRun(
+    tenantId: string,
+    taskId: string,
+    runId: string,
+    options?: {
+      /**
+       * For a round that may only start on an idle thread: the round the card names now is left alone,
+       * and nothing is written, when this says it is still running here. Asked under the row's lock.
+       */
+      keepIfRunning?: (runId: string) => boolean;
+    },
+  ): Promise<boolean>;
+  /**
+   * Take back an `attachRun` of a round that then did not start: `active_run_ref` is cleared while it
+   * still names `runId`. Nothing is written to the history; the round never ran.
+   */
+  detachRun(tenantId: string, taskId: string, runId: string): Promise<void>;
   /**
    * A round on the card ended. The card's status is not moved: a round ending is not a delivery
    * (`deliver_task` is), and a round failing is not the work failing (spec §3). A failure records
@@ -631,39 +649,58 @@ export function createDelivery(database: Database): Delivery {
         return row ?? null;
       }),
 
-    attachRun: (tenantId, taskId, runId) =>
+    attachRun: (tenantId, taskId, runId, options) =>
       runAsTenant(tenantId, () =>
         // The card and the line that closes the round it replaces are written together, or neither is.
         database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .select({ previous: tasks.activeRunRef })
+            .from(tasks)
+            .where(openTracked(tenantId, taskId))
+            .for("update");
+          if (!card) return false;
+          const previous = card.previous;
+          // A round still running here is not replaced by one that only starts on an idle thread.
+          if (
+            previous &&
+            previous !== runId &&
+            options?.keepIfRunning?.(previous)
+          )
+            return false;
+          await transaction
+            .update(tasks)
+            .set({ activeRunRef: runId, updatedAt: new Date() })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
           /*
            * A round still named here never reported its end -- its process died, or a newer turn on the
            * thread superseded it. It is closed in the history as failed, which also makes its late
            * `runEnded`, if one ever comes, a no-op (one end line per run).
            */
-          // One statement: the row is locked, its old value read and the new one written together.
-          const old = transaction
-            .select({ id: tasks.id, previous: tasks.activeRunRef })
-            .from(tasks)
-            .where(openTracked(tenantId, taskId))
-            .for("update")
-            .as("old");
-          const [card] = await transaction
-            .update(tasks)
-            .set({ activeRunRef: runId, updatedAt: new Date() })
-            .from(old)
-            .where(eq(tasks.id, old.id))
-            .returning({ previous: old.previous });
-          if (!card) return;
-          if (card.previous && card.previous !== runId)
+          if (previous && previous !== runId)
             await appendTaskEvent(transaction, {
               tenantId,
               taskId,
               kind: "run_failed",
               actor: "system",
-              detail: { runId: card.previous, reason: "superseded" },
+              detail: { runId: previous, reason: "superseded" },
             });
+          return true;
         }),
       ),
+
+    detachRun: (tenantId, taskId, runId) =>
+      runAsTenant(tenantId, async () => {
+        await database
+          .update(tasks)
+          .set({ activeRunRef: null, updatedAt: new Date() })
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.id, taskId),
+              eq(tasks.activeRunRef, runId),
+            ),
+          );
+      }),
 
     runEnded: (tenantId, taskId, round) =>
       runAsTenant(tenantId, () =>
