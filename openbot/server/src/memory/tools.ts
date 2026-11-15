@@ -17,6 +17,9 @@ import {
   memoryInputSchema,
 } from "./types";
 
+/** 个人记忆中间件放进 `RunAgentInput.context` 的那一条的描述；对话侧栏按它把这部分算作「记忆」。 */
+export const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
+
 /**
  * The server half of every ref OpenBot's own memory tools carry (`memory/recall_personal_memory`).
  *
@@ -64,10 +67,10 @@ export class PersonalMemoryMiddleware extends Middleware {
             ],
             context: [
               ...input.context.filter(
-                (entry) => entry.description !== "OpenBot personal memory",
+                (entry) => entry.description !== PERSONAL_MEMORY_CONTEXT,
               ),
               ...(content
-                ? [{ description: "OpenBot personal memory", value: content }]
+                ? [{ description: PERSONAL_MEMORY_CONTEXT, value: content }]
                 : []),
             ],
           },
