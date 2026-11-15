@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { brokeredAccounts, mcpServers } from "../src/db/schema";
+import { isUniqueViolation } from "../src/plugins/brokered-accounts";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -171,6 +172,90 @@ describe("brokered_accounts", () => {
         ),
       ),
     ).toMatch(/brokered_accounts_default_idx/);
+  });
+
+  test("a second default set by UPDATE is a unique violation the account book recognises", async () => {
+    // 与 settleDefault 一样：已有默认账号 ca_1 时，把另一行改成默认。错误是 drizzle 包装过的真实驱动错误。
+    await runAsTenant(person, () =>
+      database.insert(brokeredAccounts).values({
+        provider: "composio",
+        app,
+        userId: person,
+        vendorUserId: person,
+        accountId: "ca_settle",
+      }),
+    );
+    const failure = await runAsTenant(person, () =>
+      database
+        .update(brokeredAccounts)
+        .set({ isDefault: true })
+        .where(
+          and(
+            eq(brokeredAccounts.app, app),
+            eq(brokeredAccounts.accountId, "ca_settle"),
+          ),
+        ),
+    ).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    if (failure === undefined)
+      throw new Error("the second default was written");
+    // 顶层没有 code 与 errno，SQLSTATE 只在 cause.errno：旧判据读 code，永远判不中。
+    const wrapped = failure as Record<string, unknown> & {
+      cause: Record<string, unknown>;
+    };
+    expect("code" in wrapped && wrapped.code !== undefined).toBe(false);
+    expect("errno" in wrapped && wrapped.errno !== undefined).toBe(false);
+    expect({
+      code: wrapped.cause.code,
+      errno: wrapped.cause.errno,
+      constraint: wrapped.cause.constraint,
+    }).toEqual({
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: "23505",
+      constraint: "brokered_accounts_default_idx",
+    });
+    expect(isUniqueViolation(failure)).toBe(true);
+    // 后面的用例按这个人只有 ca_1 一行来断言。
+    await runAsTenant(person, () =>
+      database
+        .delete(brokeredAccounts)
+        .where(
+          and(
+            eq(brokeredAccounts.app, app),
+            eq(brokeredAccounts.accountId, "ca_settle"),
+          ),
+        ),
+    );
+  });
+
+  test("a check violation and an unwrapped driver error are told apart from a unique violation", async () => {
+    const checked = await runAsTenant(person, () =>
+      database.insert(brokeredAccounts).values({
+        provider: "zapier" as "composio",
+        app,
+        userId: person,
+        vendorUserId: person,
+      }),
+    ).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    if (checked === undefined)
+      throw new Error("the unknown provider was written");
+    expect((checked as { cause?: Record<string, unknown> }).cause?.errno).toBe(
+      "23514",
+    );
+    expect(isUniqueViolation(checked)).toBe(false);
+    // 不经 drizzle 时 Bun 的 PostgresError 本身带 errno（形状见实测）。
+    const bare = Object.assign(new Error("duplicate key value"), {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: "23505",
+    });
+    expect(isUniqueViolation(bare)).toBe(true);
+    expect(isUniqueViolation(new Error("network"))).toBe(false);
+    expect(isUniqueViolation(null)).toBe(false);
   });
 
   test("one account is one row", async () => {
