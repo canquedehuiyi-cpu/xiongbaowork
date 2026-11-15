@@ -598,9 +598,14 @@ export function MineScreen() {
                 <ConnectorCard
                   action={
                     state === "pending" ? (
+                      /*
+                       * 落在**这个应用**上，不是连接器列表：从「我被给了什么」过去的人已经认准了
+                       * 这一个，把他放到一张全表前面等于让他再找一遍。
+                       */
                       <Link
                         className="text-[11px] text-muted-foreground hover:text-foreground"
-                        to="/connections"
+                        params={{ key: appKeyOf(server) }}
+                        to="/connections/$key"
                       >
                         去连接
                       </Link>

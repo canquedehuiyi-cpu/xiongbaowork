@@ -16,6 +16,7 @@ import type {
   PluginConnection,
   PluginsPage,
   PluginTeam,
+  PluginTool,
 } from "@/lib/plugins/queries";
 import { settleReactWork } from "./settle-react-work";
 
@@ -82,6 +83,18 @@ const skill = (
   tools: [] as string[],
 });
 
+/** 一个工具行，按真实形状补全：这一页只用它的 `ref`（应用对外叫什么）。 */
+const tool = (serverId: string, ref: string): PluginTool => ({
+  serverId,
+  name: ref.split("/")[1] ?? ref,
+  description: "",
+  inputSchema: {},
+  ref,
+  effect: "read",
+  destructive: false,
+  grantedTo: [],
+});
+
 const server = (
   id: string,
   title: string,
@@ -94,6 +107,11 @@ const server = (
   /** `custom` 是管理员按地址加的行，`first-party` 是清单里的；broker 的来源另有一组字面量。 */
   provenance = "first-party",
   authScheme: string | null = null,
+  /**
+   * 这个应用对外叫什么，由工具名前面的那一段回答（`github/search_tools` → `github`）。真实的连接
+   * 器行 `id` 是内部 id，跟地址栏里那个 key 不是一回事。
+   */
+  tools: PluginTool[] = [],
 ) => ({
   id,
   title,
@@ -110,7 +128,7 @@ const server = (
   dynamicClient: false,
   adminConnectOnly: false,
   authScheme,
-  tools: [],
+  tools,
   withdrawn: [],
 });
 
@@ -198,6 +216,15 @@ const renderMine = async (
     component: () => <p>连接页</p>,
   });
   /*
+   * 「去连接」落在那个应用自己的页上，不是连接器列表——列表页是「所有应用」，从「我的」过去还得
+   * 再找一遍它。
+   */
+  const connectionDetail = createRoute({
+    getParentRoute: () => root,
+    path: "/connections/$key",
+    component: () => <p>连接详情</p>,
+  });
+  /*
    * 团队卡的入口落在频道上：多员工的频道由 `/channel/$channelId` 统一转给群聊，所以卡片只认这一条
    * 地址，不必自己判断团里有几个人。
    */
@@ -219,7 +246,13 @@ const renderMine = async (
     history: createMemoryHistory({
       initialEntries: [options.hash ? `/#${options.hash}` : "/"],
     }),
-    routeTree: root.addChildren([mine, connections, channel, skillView]),
+    routeTree: root.addChildren([
+      mine,
+      connections,
+      connectionDetail,
+      channel,
+      skillView,
+    ]),
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -290,6 +323,9 @@ test("a badged row answers 缺什么 under the badge; full and hand-written rows
 /**
  * 用部署那一份凭据的应用：缺凭据就是「待绑定」，并给出连接入口；已经有凭据的什么都不画——
  * 无事发生不需要一个徽章，也不需要按一下没有结果的动作。
+ *
+ * 入口要落在**这个应用**上（`/connections/<key>`），不是连接器列表：从「我被给了什么」过去的人
+ * 已经认准了这一个，把他放到一张全表前面等于让他再找一遍。
  */
 test("a connector short of the deployment's credential reads 待绑定 and offers the way in, one that has it draws neither", async () => {
   const view = await renderMine(
@@ -313,12 +349,49 @@ test("a connector short of the deployment's credential reads 待绑定 and offer
     view.getAllByText("TAPD")[0]?.closest("li") as HTMLElement,
   );
   expect(tapd.getByText("待绑定")).toBeTruthy();
-  expect(tapd.getByRole("link", { name: "去连接" })).toBeTruthy();
+  expect(tapd.getByRole("link", { name: "去连接" }).getAttribute("href")).toBe(
+    "/connections/tapd",
+  );
   const github = within(
     view.getAllByText("GitHub")[0]?.closest("li") as HTMLElement,
   );
   expect(github.queryByText("待绑定")).toBeNull();
   expect(github.queryByRole("link", { name: "去连接" })).toBeNull();
+});
+
+/**
+ * 连接器行的 `id` 是内部的，地址栏里那个 key 是应用自己的名字（`github/search_tools` → `github`）。
+ * 拿内部 id 拼地址，链接会指向一个不存在的应用——点下去是一片空白，而这正是「去连接」最不该有的
+ * 结果。
+ */
+test("去连接指向应用自己的 key，不是内部行 id", async () => {
+  const view = await renderMine(
+    page(
+      [],
+      [
+        server(
+          "srv-7f3a91",
+          "GitHub",
+          "deployment-bearer",
+          false,
+          "first-party",
+          null,
+          [tool("srv-7f3a91", "github/search_tools")],
+        ),
+      ],
+      [],
+      [listed("github", "deployment-bearer")],
+    ),
+  );
+  await waitFor(() =>
+    expect(view.getAllByText("GitHub").length).toBeGreaterThan(0),
+  );
+  const row = within(
+    view.getAllByText("GitHub")[0]?.closest("li") as HTMLElement,
+  );
+  expect(row.getByRole("link", { name: "去连接" }).getAttribute("href")).toBe(
+    "/connections/github",
+  );
 });
 
 /**
