@@ -40,6 +40,7 @@ import {
   replyTextOf,
   runErrorOf,
 } from "../tasks/delivery";
+import { withReceiptAsked } from "../tasks/delivery-tools";
 import { deliverableFromEvents, type TaskProjector } from "../tasks/projector";
 import { beginTurn, endTurn } from "../tasks/turn-cards";
 import {
@@ -456,15 +457,36 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             : null;
         const ceiling = cardIsTaken || followed ? undefined : quota;
         if (ceiling) await ceiling.assertCapacity(tenant, "tasksPerMonth");
+        /*
+         * A round of a card the person asked to follow that its coworker has not taken on yet (派出 ·
+         * 待接下): the card the runner found, or the one an entry (a group turn) hung this run on. The
+         * turn is asked for its 接活回执 in its instructions, not by a message nobody sent.
+         */
+        const receiptAsked =
+          this.board && (followed || cardIsTaken)
+            ? await this.delivery
+                .awaitsReceipt(tenant, {
+                  threadId: request.threadId,
+                  agentId,
+                  runId: request.input.runId,
+                  ...(followed ? { taskId: followed.id } : {}),
+                })
+                .catch((error) => {
+                  console.error("tracked card lookup failed", error);
+                  return false;
+                })
+            : false;
         // The thread's stored history goes into the store before this run is appended after it.
         await this.hydrate();
         await this.claim(request, tenant);
-        return followed;
+        return { followed, receiptAsked };
       })().then(
-        (followed) => {
+        ({ followed, receiptAsked }) => {
           if (closed) return;
           inner = this.stream(
-            request,
+            receiptAsked
+              ? { ...request, input: withReceiptAsked(request.input) }
+              : request,
             tenant,
             cardIsTaken || followed !== null,
             lane,

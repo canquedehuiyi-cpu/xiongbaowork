@@ -479,7 +479,12 @@ import {
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
 import { createDelivery } from "./tasks/delivery";
-import { deliveryTools, offeredDeliveryTools } from "./tasks/delivery-tools";
+import { createCardTurns } from "./tasks/card-turns";
+import {
+  ACCEPT_TASK_REF,
+  deliveryTools,
+  offeredDeliveryTools,
+} from "./tasks/delivery-tools";
 import { createEvidenceGate } from "./tasks/evidence-gate";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
@@ -5277,6 +5282,21 @@ await startupLifecycle.run(async (startup) => {
         ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       taskProjector,
+      {
+        /*
+         * A followed card's 退回 is said in its thread as the person and answered there, on the same
+         * unattended runner a dispatched `@` runs on; a 取消 stops the round through the runner's stop.
+         * External coworkers' turns (`cancelExternalTurn`) wait for their ACP runtime.
+         */
+        turns: createCardTurns({
+          runTurn: unattendedTurnRunner,
+          runner: localThreadRunner,
+        }),
+        acceptTaskDisabled: async (tenantId, agentId) =>
+          (await approvalService.disabledTools(tenantId, agentId))(
+            ACCEPT_TASK_REF,
+          ),
+      },
     ),
   );
 

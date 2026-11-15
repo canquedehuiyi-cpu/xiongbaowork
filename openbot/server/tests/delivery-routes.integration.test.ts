@@ -1,0 +1,1041 @@
+import { afterAll, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import {
+  AbstractAgent,
+  type AgentSubscriber,
+  type BaseEvent,
+  EventType,
+  type Message,
+  type RunAgentInput,
+  type RunAgentParameters,
+  type RunAgentResult,
+} from "@ag-ui/client";
+import { and, eq, inArray } from "drizzle-orm";
+import type { MiddlewareHandler } from "hono";
+import type { Observable } from "rxjs";
+import { toolDisabled } from "../src/approvals/policy";
+import type { AppVariables } from "../src/auth/guards";
+import { createDatabase } from "../src/db/client";
+import {
+  channels,
+  groupBotThreads,
+  intelligenceChannelMappings,
+  tasks,
+  threadRunEvents,
+  threadRuns,
+  threads,
+  users,
+} from "../src/db/schema";
+import { createQuotaService } from "../src/quota/limits";
+import { createTurnRunner } from "../src/routines/run-turn";
+import { createCardTurns } from "../src/tasks/card-turns";
+import { createDelivery } from "../src/tasks/delivery";
+import { ACCEPT_TASK_REF, RECEIPT_ASKED } from "../src/tasks/delivery-tools";
+import { listTaskEvents } from "../src/tasks/events";
+import { createTaskProjector } from "../src/tasks/projector";
+import { createTaskRoutes, type TaskRouteOptions } from "../src/tasks/routes";
+import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { suppressRunnerCard } from "../src/threads/unattended-card";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
+
+/**
+ * The person's side of a followed card (spec 2026-11-15-delivery-loop §6, §11): one card and its
+ * history, 退回, 取消, the answer to a 延期申请, changing the due time or criteria, and 当作一件活来跟.
+ *
+ * Through the real routes, the real runner and the real unattended turn: a 退回 is checked in the turn
+ * it starts (what the coworker was told), a 取消 against a round that is really running, and the
+ * receipt a followed card asks for in the instructions the next turn's coworker receives.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const quota = createQuotaService(database);
+const projector = createTaskProjector(database, undefined, quota);
+const delivery = createDelivery(database);
+const suite = randomUUID().slice(0, 8);
+const tenants: string[] = [];
+const createdChannels: { tenantId: string; id: string }[] = [];
+
+async function tenant(label: string): Promise<string> {
+  const id = `dr-${label}-${suite}`;
+  await runAsTenant(id, () =>
+    database.insert(users).values({ id, email: `${id}@example.test` }),
+  );
+  tenants.push(id);
+  return id;
+}
+
+const settle = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+async function until<T>(
+  read: () => Promise<T>,
+  done: (value: T) => boolean,
+): Promise<T> {
+  let value = await read();
+  for (let attempt = 0; attempt < 120 && !done(value); attempt++) {
+    await settle(25);
+    value = await read();
+  }
+  return value;
+}
+
+/** What the coworker of a turn was given: the conversation and the context its instructions carry. */
+type Seen = { messages: Message[]; context: { value: string }[] };
+
+/** A coworker that records what it was given, says `reply`, and finishes. */
+class Recorder extends AbstractAgent {
+  seen: Seen[] = [];
+  constructor(
+    agentId: string,
+    private readonly reply = "好的，我再看看。",
+  ) {
+    super({ agentId });
+  }
+  override async runAgent(
+    parameters?: RunAgentParameters,
+    subscriber?: AgentSubscriber,
+  ): Promise<RunAgentResult> {
+    const input = parameters as RunAgentInput;
+    this.seen.push({
+      messages: [...(input.messages ?? this.messages)],
+      context: [...(input.context ?? [])] as { value: string }[],
+    });
+    const messageId = `reply-${input.runId}`;
+    for (const event of [
+      {
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+      { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: this.reply },
+      { type: EventType.TEXT_MESSAGE_END, messageId },
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+    ])
+      await subscriber?.onEvent?.({ event } as Parameters<
+        NonNullable<AgentSubscriber["onEvent"]>
+      >[0]);
+    this.messages = [
+      ...this.messages,
+      { id: messageId, role: "assistant", content: this.reply },
+    ] as typeof this.messages;
+    return { result: undefined, newMessages: [] };
+  }
+  override run(): Observable<BaseEvent> {
+    throw new Error("runAgent is the only entry used here");
+  }
+  override clone(): Recorder {
+    return this;
+  }
+}
+
+/** The deployment's unattended turn, on the real runner, with `agent` as the coworker. */
+function unattendedTurn(agent: AbstractAgent) {
+  return createTurnRunner({
+    admission: async ({ signal }) => signal ?? new AbortController().signal,
+    intelligence: {
+      getOrCreateThread: async (params: { threadId: string }) => ({
+        thread: { id: params.threadId },
+        created: false,
+      }),
+      getThreadMessages: async () => ({ messages: [] }),
+      ɵacquireThreadLock: async (params: {
+        threadId: string;
+        runId: string;
+      }) => ({
+        threadId: params.threadId,
+        runId: params.runId,
+        joinToken: "test",
+      }),
+      ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+      ɵcleanupThreadLock: async () => undefined,
+    } as never,
+    runner: new PostgresAgentRunner(database, projector, quota) as never,
+    buildAgentFor: async () => agent,
+  });
+}
+
+function cardTurns(
+  agent: AbstractAgent,
+  extra: Partial<Parameters<typeof createCardTurns>[0]> = {},
+) {
+  return createCardTurns({
+    runTurn: unattendedTurn(agent),
+    runner: new PostgresAgentRunner(database, projector, quota),
+    ...extra,
+  });
+}
+
+/** The board's routes as `tenantId` reaches them, with the followed-card hooks given. */
+function routesFor(tenantId: string, options: TaskRouteOptions = {}) {
+  const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
+  ) => {
+    context.set("actor", {
+      id: tenantId,
+      email: `${tenantId}@example.test`,
+      role: "user" as const,
+    });
+    await next();
+  };
+  const routes = createTaskRoutes(database, requireUser, projector, options);
+  return (method: string, path: string, body?: unknown) =>
+    runAsTenant(tenantId, async () => {
+      const response = await routes.request(
+        new Request(`http://openbot.test/${path}`, {
+          method,
+          ...(body === undefined
+            ? {}
+            : {
+                body: JSON.stringify(body),
+                headers: { "content-type": "application/json" },
+              }),
+        }),
+      );
+      return {
+        status: response.status,
+        body: (await response.json()) as Record<string, unknown>,
+      };
+    });
+}
+
+/** A turn of the conversation through the real runner, as a person's browser sends one. */
+function turn(input: {
+  tenantId: string;
+  agent: AbstractAgent;
+  threadId: string;
+  ask: string;
+  runId?: string;
+  entry?: boolean;
+}): Promise<string> {
+  const runId = input.runId ?? randomUUID();
+  const runner = new PostgresAgentRunner(database, projector, quota);
+  const subscribe = () =>
+    new Promise<void>((resolve) => {
+      runner
+        .run({
+          threadId: input.threadId,
+          agent: input.agent,
+          input: {
+            runId,
+            threadId: input.threadId,
+            state: {},
+            tools: [],
+            context: [],
+            forwardedProps: {},
+            messages: [
+              { id: `msg-${randomUUID()}`, role: "user", content: input.ask },
+            ],
+          } as unknown as RunAgentInput,
+        })
+        .subscribe({
+          complete: () => void resolve(),
+          error: () => void resolve(),
+        });
+    });
+  return runAsTenant(input.tenantId, () =>
+    input.entry ? suppressRunnerCard(subscribe) : subscribe(),
+  ).then(() => runId);
+}
+
+type CardInput = Partial<typeof tasks.$inferInsert> & { agentId: string };
+
+async function card(tenantId: string, input: CardInput): Promise<string> {
+  const { agentId, ...rest } = input;
+  const [row] = await runAsTenant(tenantId, () =>
+    database
+      .insert(tasks)
+      .values({
+        title: "核对本周发票",
+        executorAgentId: agentId,
+        source: "chat",
+        status: "running",
+        ...rest,
+      })
+      .returning({ id: tasks.id }),
+  );
+  if (!row) throw new Error("no card");
+  return row.id;
+}
+
+/** A followed card its coworker has taken on, due in an hour. */
+async function acceptedCard(
+  label: string,
+  input: Partial<typeof tasks.$inferInsert> = {},
+) {
+  const tenantId = await tenant(label);
+  const agentId = `agent-${suite}-${label}`;
+  const threadId = `thread-${suite}-${label}`;
+  const due = new Date(Date.now() + 60 * 60_000);
+  const taskId = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: threadId,
+    channelRef: threadId,
+    acceptedAt: new Date(Date.now() - 10 * 60_000),
+    dueAt: due,
+    originalDueAt: due,
+    dueReported: true,
+    criteria: "必需：A家、B家",
+    ...input,
+  });
+  return { tenantId, agentId, threadId, taskId, due };
+}
+
+const row = (tenantId: string, taskId: string) =>
+  runAsTenant(tenantId, async () => {
+    const [found] = await database
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
+    return found;
+  });
+
+const history = (tenantId: string, taskId: string) =>
+  runAsTenant(tenantId, () => listTaskEvents(database, { tenantId, taskId }));
+
+/** The round `runId` has its end on the card. */
+const roundEnded = (tenantId: string, taskId: string, runId: string) =>
+  until(
+    () => history(tenantId, taskId),
+    (events) =>
+      events.some(
+        (event) =>
+          (event.kind === "run_ended" || event.kind === "run_failed") &&
+          (event.detail as { runId?: string }).runId === runId,
+      ),
+  );
+
+const storedEvents = (tenantId: string, threadId: string) =>
+  runAsTenant(tenantId, () =>
+    database
+      .select({ runId: threadRunEvents.runId, event: threadRunEvents.event })
+      .from(threadRunEvents)
+      .where(eq(threadRunEvents.threadId, threadId)),
+  );
+
+const cardsOf = (tenantId: string) =>
+  runAsTenant(tenantId, () =>
+    database
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(eq(tasks.tenantId, tenantId)),
+  );
+
+test("return moves awaiting_review to running, returns+1, posts the reason as the user's message and starts a turn", async () => {
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard("return", {
+    status: "awaiting_review",
+  });
+  const accepted = (await row(tenantId, taskId))?.acceptedAt;
+  const coworker = new Recorder(agentId);
+  const call = routesFor(tenantId, { turns: cardTurns(coworker) });
+
+  // A reason is required, and short.
+  expect((await call("POST", `${taskId}/return`, {})).status).toBe(400);
+  expect(
+    (await call("POST", `${taskId}/return`, { reason: "  " })).status,
+  ).toBe(400);
+  expect(
+    (await call("POST", `${taskId}/return`, { reason: "长".repeat(501) }))
+      .status,
+  ).toBe(400);
+
+  const response = await call("POST", `${taskId}/return`, {
+    reason: "缺 C 家的发票",
+  });
+  expect(response.status).toBe(200);
+  expect(response.body.returns).toBe(1);
+  const runId = response.body.runId as string;
+  expect(typeof runId).toBe("string");
+
+  const after = await row(tenantId, taskId);
+  expect(after?.status).toBe("running");
+  expect(after?.returns).toBe(1);
+  expect(after?.acceptedAt?.getTime()).toBe(accepted?.getTime());
+
+  // The turn ran on the card's thread, hung on this card, and its coworker was told the reason by the person.
+  const events = await roundEnded(tenantId, taskId, runId);
+  expect(coworker.seen.length).toBe(1);
+  const lastUser = coworker.seen[0]?.messages
+    .filter((m) => m.role === "user")
+    .at(-1);
+  expect(lastUser?.content).toBe("退回：缺 C 家的发票");
+  const returned = events.find((event) => event.kind === "returned");
+  expect(returned?.actor).toBe(`user:${tenantId}`);
+  expect(returned?.detail).toMatchObject({
+    reason: "缺 C 家的发票",
+    returns: 1,
+  });
+  expect(events.map((event) => event.kind)).toEqual([
+    "returned",
+    "progress",
+    "run_ended",
+  ]);
+  expect((await cardsOf(tenantId)).length).toBe(1);
+  // The person's line is in the stored conversation, in that run.
+  const stored = await until(
+    () => storedEvents(tenantId, threadId),
+    (rows) => rows.some((r) => r.runId === runId),
+  );
+  expect(
+    JSON.stringify(stored.filter((r) => r.runId === runId)).includes(
+      "退回：缺 C 家的发票",
+    ),
+  ).toBe(true);
+  expect((await row(tenantId, taskId))?.status).toBe("running");
+
+  // Not awaiting review any more: a second return is refused.
+  expect(
+    (await call("POST", `${taskId}/return`, { reason: "再看看" })).status,
+  ).toBe(409);
+});
+
+test("return on a group card says it in the coworker's group thread, not the channel", async () => {
+  const tenantId = await tenant("group-return");
+  const agentId = `agent-${suite}-gr`;
+  const channelId = `channel-${suite}-gr`;
+  const groupThread = `group-thread-${suite}-gr`;
+  await runAsTenant(tenantId, async () => {
+    await database
+      .insert(channels)
+      .values({ id: channelId, name: "群", description: "test" });
+    await database.insert(groupBotThreads).values({
+      ownerUserId: tenantId,
+      channelId,
+      agentId,
+      threadId: groupThread,
+    });
+  });
+  createdChannels.push({ tenantId, id: channelId });
+  const taskId = await card(tenantId, {
+    agentId,
+    channelRef: channelId,
+    status: "running",
+  });
+  const coworker = new Recorder(agentId);
+  const call = routesFor(tenantId, { turns: cardTurns(coworker) });
+
+  const tracked = await call("POST", `${taskId}/track`);
+  expect(tracked.status).toBe(200);
+  expect(tracked.body.threadRef).toBe(groupThread);
+  await delivery.accept(tenantId, taskId, {
+    runId: `accept-${suite}`,
+    threadRef: groupThread,
+    actor: `agent:${agentId}`,
+    dueAt: null,
+    criteria: "交一张表",
+  });
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ status: "awaiting_review" })
+      .where(eq(tasks.id, taskId)),
+  );
+
+  const response = await call("POST", `${taskId}/return`, {
+    reason: "表头不对",
+  });
+  expect(response.status).toBe(200);
+  await roundEnded(tenantId, taskId, response.body.runId as string);
+  const runs = await runAsTenant(tenantId, () =>
+    database
+      .select({ threadId: threadRuns.threadId })
+      .from(threadRuns)
+      .where(eq(threadRuns.id, response.body.runId as string)),
+  );
+  expect(runs.map((r) => r.threadId)).toEqual([groupThread]);
+});
+
+test("cancel stops a running turn and marks cancelled", async () => {
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard("cancel");
+  const externalCancels: { threadId: string; agentId: string }[] = [];
+  const call = routesFor(tenantId, {
+    turns: cardTurns(new Recorder(agentId), {
+      cancelExternalTurn: async (_tenant, turnOf) => {
+        externalCancels.push(turnOf);
+      },
+    }),
+  });
+
+  let started: () => void = () => {};
+  const running = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  /** A coworker that says a little, then works until it is stopped. */
+  class Working extends AbstractAgent {
+    private stop: () => void = () => {};
+    override async runAgent(
+      parameters?: RunAgentParameters,
+      subscriber?: AgentSubscriber,
+    ): Promise<RunAgentResult> {
+      const input = parameters as RunAgentInput;
+      await subscriber?.onEvent?.({
+        event: {
+          type: EventType.RUN_STARTED,
+          threadId: input.threadId,
+          runId: input.runId,
+        },
+      } as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
+      const stopped = new Promise<void>((resolve) => {
+        this.stop = resolve;
+      });
+      started();
+      await stopped;
+      return { result: undefined, newMessages: [] };
+    }
+    override abortRun(): void {
+      this.stop();
+    }
+    override run(): Observable<BaseEvent> {
+      throw new Error("runAgent is the only entry used here");
+    }
+    override clone(): Working {
+      return this;
+    }
+  }
+  const runId = randomUUID();
+  let ended = false;
+  const turnDone = turn({
+    tenantId,
+    agent: new Working({ agentId }),
+    threadId,
+    ask: "进度？",
+    runId,
+  }).then(() => {
+    ended = true;
+  });
+  await running;
+  await until(
+    () => row(tenantId, taskId),
+    (found) => found?.activeRunRef === runId,
+  );
+
+  const response = await call("POST", `${taskId}/cancel`);
+  expect(response.status).toBe(200);
+  await Promise.race([turnDone, settle(3000)]);
+  expect(ended).toBe(true);
+
+  const after = await row(tenantId, taskId);
+  expect(after?.status).toBe("cancelled");
+  expect(after?.activeRunRef).toBeNull();
+  await settle(200);
+  const events = await history(tenantId, taskId);
+  const cancelled = events.filter((event) => event.kind === "cancelled");
+  expect(cancelled.length).toBe(1);
+  expect(cancelled[0]?.actor).toBe(`user:${tenantId}`);
+  expect(cancelled[0]?.detail).toMatchObject({ runId });
+  // The stopped round's late end does not touch a card that is over.
+  expect(
+    events.some(
+      (event) => event.kind === "run_ended" || event.kind === "run_failed",
+    ),
+  ).toBe(false);
+  expect(externalCancels).toEqual([{ threadId, agentId }]);
+
+  // Over: nothing more to cancel.
+  expect((await call("POST", `${taskId}/cancel`)).status).toBe(409);
+});
+
+test("extension grant changes due_at, keeps original_due_at; deny keeps both", async () => {
+  const { tenantId, agentId, threadId, taskId, due } =
+    await acceptedCard("extension");
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+
+  // Nothing asked yet: nothing to answer.
+  expect(
+    (await call("POST", `${taskId}/extension`, { decision: "grant" })).status,
+  ).toBe(409);
+  expect(
+    (await call("POST", `${taskId}/extension`, { decision: "maybe" })).status,
+  ).toBe(400);
+
+  const asked = new Date(Date.now() + 3 * 60 * 60_000);
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: asked,
+    reason: "C 家还没回",
+    runId: `ext-${suite}`,
+  });
+  // A time in the past is not a due time.
+  const past = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+    dueAt: new Date(Date.now() - 60_000).toISOString(),
+  });
+  expect(past.status).toBe(400);
+
+  const granted = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+  });
+  expect(granted.status).toBe(200);
+  expect(granted.body.dueAt).toBe(asked.toISOString());
+  let after = await row(tenantId, taskId);
+  expect(after?.dueAt?.toISOString()).toBe(asked.toISOString());
+  expect(after?.originalDueAt?.toISOString()).toBe(due.toISOString());
+  // Answered: the same request is not answered twice.
+  expect(
+    (await call("POST", `${taskId}/extension`, { decision: "deny" })).status,
+  ).toBe(409);
+
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: new Date(Date.now() + 6 * 60 * 60_000),
+    reason: "还要再等",
+  });
+  const denied = await call("POST", `${taskId}/extension`, {
+    decision: "deny",
+  });
+  expect(denied.status).toBe(200);
+  after = await row(tenantId, taskId);
+  expect(after?.dueAt?.toISOString()).toBe(asked.toISOString());
+  expect(after?.originalDueAt?.toISOString()).toBe(due.toISOString());
+
+  const events = await history(tenantId, taskId);
+  expect(events.map((event) => event.kind)).toEqual([
+    "extension_requested",
+    "extension_granted",
+    "extension_requested",
+    "extension_denied",
+  ]);
+  expect(events[1]?.detail).toMatchObject({
+    dueAt: asked.toISOString(),
+    previousDueAt: due.toISOString(),
+    requestedDueAt: asked.toISOString(),
+  });
+  expect(events[1]?.actor).toBe(`user:${tenantId}`);
+
+  // Both answers are in the card's thread for the chat's card to show.
+  const stored = await until(
+    () => storedEvents(tenantId, threadId),
+    (rows) =>
+      rows.filter(
+        (r) =>
+          (r.event as { name?: string }).name === "delivery.extension_decided",
+      ).length === 2,
+  );
+  const decided = stored
+    .map(
+      (r) =>
+        r.event as {
+          type: string;
+          name?: string;
+          value?: Record<string, unknown>;
+        },
+    )
+    .filter((event) => event.name === "delivery.extension_decided");
+  expect(decided.map((event) => event.type)).toEqual([
+    EventType.CUSTOM,
+    EventType.CUSTOM,
+  ]);
+  expect(decided.map((event) => event.value?.decision).sort()).toEqual([
+    "deny",
+    "grant",
+  ]);
+  expect(decided.every((event) => event.value?.taskId === taskId)).toBe(true);
+  // A notice is not a round of the card, and opens no card of its own.
+  expect((await cardsOf(tenantId)).length).toBe(1);
+});
+
+test("PATCH after delivery is rejected; after a return it is allowed", async () => {
+  const { tenantId, agentId, taskId } = await acceptedCard("patch-return", {
+    status: "awaiting_review",
+  });
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+
+  const refused = await call("PATCH", taskId, { criteria: "必需：A家" });
+  expect(refused.status).toBe(409);
+  expect(
+    (
+      await call("PATCH", taskId, {
+        dueAt: new Date(Date.now() + 2 * 3600_000).toISOString(),
+      })
+    ).status,
+  ).toBe(409);
+  expect((await row(tenantId, taskId))?.criteria).toBe("必需：A家、B家");
+
+  const returned = await call("POST", `${taskId}/return`, {
+    reason: "补 C 家",
+  });
+  expect(returned.status).toBe(200);
+  await roundEnded(tenantId, taskId, returned.body.runId as string);
+
+  const edited = await call("PATCH", taskId, {
+    criteria: "必需：A家、B家、C家",
+  });
+  expect(edited.status).toBe(200);
+  expect(edited.body.criteria).toBe("必需：A家、B家、C家");
+  expect((await row(tenantId, taskId))?.criteria).toBe("必需：A家、B家、C家");
+  const line = (await history(tenantId, taskId)).find(
+    (event) => event.kind === "edited",
+  );
+  expect(line?.actor).toBe(`user:${tenantId}`);
+  expect(line?.detail).toEqual({
+    before: { criteria: "必需：A家、B家" },
+    after: { criteria: "必需：A家、B家、C家" },
+  });
+
+  // Done is over too.
+  await runAsTenant(tenantId, () =>
+    database.update(tasks).set({ status: "done" }).where(eq(tasks.id, taskId)),
+  );
+  expect((await call("PATCH", taskId, { criteria: "x" })).status).toBe(409);
+});
+
+test("PATCH by the user changes due_at but not original_due_at", async () => {
+  const { tenantId, taskId, due } = await acceptedCard("patch-due");
+  const call = routesFor(tenantId);
+  const later = new Date(Date.now() + 5 * 3600_000);
+  later.setMilliseconds(0);
+
+  const response = await call("PATCH", taskId, { dueAt: later.toISOString() });
+  expect(response.status).toBe(200);
+  expect(response.body.dueAt).toBe(later.toISOString());
+  const after = await row(tenantId, taskId);
+  expect(after?.dueAt?.toISOString()).toBe(later.toISOString());
+  expect(after?.originalDueAt?.toISOString()).toBe(due.toISOString());
+  const line = (await history(tenantId, taskId)).find(
+    (event) => event.kind === "edited",
+  );
+  expect(line?.detail).toEqual({
+    before: { dueAt: due.toISOString() },
+    after: { dueAt: later.toISOString() },
+  });
+
+  // A due time is a future moment within 30 days, and something has to change.
+  expect(
+    (
+      await call("PATCH", taskId, {
+        dueAt: new Date(Date.now() - 60_000).toISOString(),
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await call("PATCH", taskId, {
+        dueAt: new Date(Date.now() + 31 * 86400_000).toISOString(),
+      })
+    ).status,
+  ).toBe(400);
+  expect((await call("PATCH", taskId, { dueAt: "过几天" })).status).toBe(400);
+  expect((await call("PATCH", taskId, {})).status).toBe(400);
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    later.toISOString(),
+  );
+
+  // A card nobody follows has no due time to change.
+  const plain = await card(tenantId, { agentId: "someone" });
+  expect((await call("PATCH", plain, { criteria: "x" })).status).toBe(409);
+});
+
+test("track on an untracked card enters pending_accept and the next turn is asked for a receipt", async () => {
+  const tenantId = await tenant("track");
+  const agentId = `agent-${suite}-track`;
+  const threadId = `thread-${suite}-track`;
+  const coworker = new Recorder(agentId);
+  // A conversation turn the board carded as usual: not followed.
+  await turn({
+    tenantId,
+    agent: coworker,
+    threadId,
+    ask: "帮我看看这周的发票",
+  });
+  const [first] = await until(
+    () => cardsOf(tenantId),
+    (rows) => rows.length === 1,
+  );
+  const taskId = first?.id as string;
+  await until(
+    () => row(tenantId, taskId),
+    (found) => found?.status === "awaiting_review",
+  );
+  expect(coworker.seen[0]?.context.some((c) => c.value === RECEIPT_ASKED)).toBe(
+    false,
+  );
+
+  const call = routesFor(tenantId, {
+    acceptTaskDisabled: async () => false,
+  });
+  const tracked = await call("POST", `${taskId}/track`);
+  expect(tracked.status).toBe(200);
+  expect(tracked.body.stage).toBe("pending_accept");
+  const one = await call("GET", taskId);
+  expect(one.status).toBe(200);
+  const shown = one.body.task as Record<string, unknown>;
+  expect(shown.tracked).toBe(true);
+  expect(shown.threadRef).toBe(threadId);
+  expect(shown.acceptedAt).toBeNull();
+  expect(shown.stage).toBe("pending_accept");
+  // Nothing was handed in under the three steps: out of 查收结果, waiting to be taken on.
+  expect(shown.status).toBe("running");
+  const lines = await call("GET", `${taskId}/events`);
+  expect((lines.body.events as { kind: string }[]).map((e) => e.kind)).toEqual([
+    "dispatched",
+  ]);
+  // Followed already.
+  expect((await call("POST", `${taskId}/track`)).status).toBe(409);
+
+  // The next turn hangs on the card and is asked, in its instructions, for the receipt.
+  await turn({ tenantId, agent: coworker, threadId, ask: "怎么样了" });
+  expect(coworker.seen[1]?.context.map((c) => c.value)).toContain(
+    RECEIPT_ASKED,
+  );
+  // Not a message in the conversation.
+  expect(
+    coworker.seen[1]?.messages.some(
+      (m) => typeof m.content === "string" && m.content.includes(RECEIPT_ASKED),
+    ),
+  ).toBe(false);
+  expect((await cardsOf(tenantId)).length).toBe(1);
+
+  // A turn an entry hung on the card (as a group turn does) is asked too.
+  const hung = randomUUID();
+  await delivery.attachRun(tenantId, taskId, hung);
+  await turn({
+    tenantId,
+    agent: coworker,
+    threadId,
+    ask: "还在吗",
+    runId: hung,
+    entry: true,
+  });
+  expect(coworker.seen[2]?.context.map((c) => c.value)).toContain(
+    RECEIPT_ASKED,
+  );
+
+  // Taken on: the next turn is not asked any more.
+  await delivery.accept(tenantId, taskId, {
+    runId: `accept-${suite}-track`,
+    threadRef: threadId,
+    actor: `agent:${agentId}`,
+    dueAt: null,
+    criteria: "列出本周发票",
+  });
+  await turn({ tenantId, agent: coworker, threadId, ask: "继续" });
+  expect(coworker.seen[3]?.context.some((c) => c.value === RECEIPT_ASKED)).toBe(
+    false,
+  );
+  expect((await call("GET", taskId)).body.task).toMatchObject({
+    stage: "accepted",
+  });
+});
+
+test("track on a card filed under a one-to-one channel follows it on the person's thread of that channel", async () => {
+  const tenantId = await tenant("track-channel");
+  const agentId = `agent-${suite}-routine`;
+  const channelId = `channel-${suite}-routine`;
+  const threadId = `thread-${suite}-routine`;
+  await runAsTenant(tenantId, async () => {
+    await database
+      .insert(channels)
+      .values({ id: channelId, name: "例行", description: "test" });
+    await database
+      .insert(intelligenceChannelMappings)
+      .values({ userId: tenantId, channelId, threadId });
+  });
+  createdChannels.push({ tenantId, id: channelId });
+  // A routine's card names its channel, not the thread its turns run on.
+  const taskId = await card(tenantId, {
+    agentId,
+    source: "routine",
+    channelRef: channelId,
+    status: "awaiting_review",
+  });
+  const tracked = await routesFor(tenantId)("POST", `${taskId}/track`);
+  expect(tracked.status).toBe(200);
+  expect(tracked.body.threadRef).toBe(threadId);
+  expect(await delivery.openTrackedCard(tenantId, threadId, agentId)).toEqual({
+    id: taskId,
+  });
+});
+
+test("track is refused when the employee's accept_task is disabled", async () => {
+  const tenantId = await tenant("track-off");
+  const agentId = `agent-${suite}-off`;
+  const taskId = await card(tenantId, {
+    agentId,
+    channelRef: `thread-${suite}-off`,
+  });
+  const deny = {
+    botId: agentId,
+    toolRef: ACCEPT_TASK_REF,
+    behaviour: "deny",
+    effect: "*",
+    scope: "*",
+  } as unknown as Parameters<typeof toolDisabled>[1][number][number];
+  const call = routesFor(tenantId, {
+    acceptTaskDisabled: async (_tenant, botId) =>
+      toolDisabled({ botId, toolRef: ACCEPT_TASK_REF }, [[deny]]),
+  });
+
+  const refused = await call("POST", `${taskId}/track`);
+  expect(refused.status).toBe(409);
+  expect(String(refused.body.error)).toContain("accept_task");
+  expect((await row(tenantId, taskId))?.tracked).toBe(false);
+  expect(await history(tenantId, taskId)).toEqual([]);
+
+  // Another coworker of the same person, whose accept_task is on, can be followed.
+  const other = await card(tenantId, {
+    agentId: `${agentId}-on`,
+    channelRef: `thread-${suite}-on`,
+  });
+  expect((await call("POST", `${other}/track`)).status).toBe(200);
+});
+
+test("another tenant gets 404 on every endpoint, including a group owner on a member's card", async () => {
+  const owner = await tenant("owner");
+  const member = await tenant("member");
+  const agentId = `agent-${suite}-crew`;
+  const channelId = `channel-${suite}-crew`;
+  // The owner's group, where the member asked a coworker for something: the card is the member's.
+  await runAsTenant(owner, () =>
+    database
+      .insert(channels)
+      .values({ id: channelId, name: "群", description: "test" }),
+  );
+  createdChannels.push({ tenantId: owner, id: channelId });
+  const memberThread = `group-thread-${suite}-member`;
+  await runAsTenant(member, () =>
+    database.insert(groupBotThreads).values({
+      ownerUserId: member,
+      channelId,
+      agentId,
+      threadId: memberThread,
+    }),
+  );
+  const taskId = await card(member, {
+    agentId,
+    channelRef: channelId,
+    tracked: true,
+    threadRef: memberThread,
+    status: "awaiting_review",
+    acceptedAt: new Date(),
+  });
+  await delivery.requestExtension(member, taskId, {
+    dueAt: new Date(Date.now() + 3600_000),
+    reason: "再给一小时",
+  });
+  const before = await row(member, taskId);
+  const asOwner = routesFor(owner, {
+    turns: cardTurns(new Recorder(agentId)),
+    acceptTaskDisabled: async () => false,
+  });
+
+  const later = new Date(Date.now() + 2 * 3600_000).toISOString();
+  for (const [method, path, body] of [
+    ["GET", taskId],
+    ["GET", `${taskId}/events`],
+    ["POST", `${taskId}/return`, { reason: "不对" }],
+    ["POST", `${taskId}/cancel`],
+    ["POST", `${taskId}/extension`, { decision: "grant" }],
+    ["PATCH", taskId, { dueAt: later }],
+    ["POST", `${taskId}/track`],
+    ["POST", `${taskId}/review`],
+    ["GET", "not-a-uuid"],
+    ["POST", "not-a-uuid/cancel"],
+  ] as [string, string, unknown?][]) {
+    const response = await asOwner(method, path, body);
+    expect({ method, path, status: response.status }).toEqual({
+      method,
+      path,
+      status: 404,
+    });
+  }
+  // Nothing moved on the member's card.
+  const after = await row(member, taskId);
+  expect(after?.status).toBe(before?.status);
+  expect(after?.updatedAt.getTime()).toBe(before?.updatedAt.getTime());
+  expect((await history(member, taskId)).map((event) => event.kind)).toEqual([
+    "extension_requested",
+  ]);
+  // The member reaches it.
+  expect((await routesFor(member)("GET", taskId)).status).toBe(200);
+});
+
+test("overdue=1 lists only cards with overdue_at", async () => {
+  const tenantId = await tenant("overdue");
+  const agentId = `agent-${suite}-late`;
+  const late = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-late`,
+    acceptedAt: new Date(),
+    overdueAt: new Date(Date.now() - 60_000),
+    nudges: 2,
+  });
+  const onTime = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-ontime`,
+    acceptedAt: new Date(),
+  });
+  await card(tenantId, { agentId });
+  const call = routesFor(tenantId);
+
+  const overdue = await call("GET", "?overdue=1");
+  expect(overdue.status).toBe(200);
+  const listed = overdue.body.tasks as Record<string, unknown>[];
+  expect(listed.map((task) => task.id)).toEqual([late]);
+  expect(listed[0]).toMatchObject({
+    tracked: true,
+    threadRef: `thread-${suite}-late`,
+    nudges: 2,
+    returns: 0,
+    dueReported: false,
+    stage: "accepted",
+  });
+  for (const field of [
+    "acceptedAt",
+    "dueAt",
+    "originalDueAt",
+    "criteria",
+    "overdueAt",
+    "lastError",
+  ])
+    expect(field in (listed[0] ?? {})).toBe(true);
+
+  const all = (await call("GET", "")).body.tasks as Record<string, unknown>[];
+  expect(all.map((task) => task.id).sort()).toEqual(
+    [
+      late,
+      onTime,
+      ...all.filter((t) => t.tracked === false).map((t) => t.id as string),
+    ].sort(),
+  );
+  expect(all.find((task) => task.tracked === false)?.stage).toBeNull();
+});
+
+afterAll(async () => {
+  for (const id of tenants) {
+    await runAsTenant(id, async () => {
+      await database
+        .delete(groupBotThreads)
+        .where(eq(groupBotThreads.ownerUserId, id));
+      const own = database
+        .select({ id: threads.id })
+        .from(threads)
+        .where(eq(threads.tenantId, id));
+      await database
+        .delete(threadRunEvents)
+        .where(inArray(threadRunEvents.threadId, own));
+      await database
+        .delete(threadRuns)
+        .where(inArray(threadRuns.threadId, own));
+      await database.delete(threads).where(eq(threads.tenantId, id));
+      await database.delete(tasks).where(eq(tasks.tenantId, id));
+    });
+  }
+  for (const { tenantId, id } of createdChannels)
+    await runAsTenant(tenantId, async () => {
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, id));
+      await database.delete(channels).where(eq(channels.id, id));
+    });
+  // `task_events` is append-only for the application role; its rows stay, under tenants nobody has.
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, tenants)),
+  );
+  await database.$client.close();
+});

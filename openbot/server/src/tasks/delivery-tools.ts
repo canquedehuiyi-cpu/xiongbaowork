@@ -44,7 +44,30 @@ export const DELIVERY_EVENTS = {
   extensionRequested: "delivery.extension_requested",
   delivered: "delivery.delivered",
   bounced: "delivery.bounced",
+  /** The person's answer to a 延期申请, so the chat's card can say it was granted or not. */
+  extensionDecided: "delivery.extension_decided",
 } as const;
+
+/**
+ * Said, in its instructions, to a turn that is a round of a card the person asked to follow and the
+ * coworker has not taken on yet (派出 · 待接下, spec §1 「你手动跟」): one line, and only while the card
+ * waits. Not a message in the conversation -- nobody said it.
+ */
+export const RECEIPT_ASKED =
+  "这段对话里有一件活被当作一件活来跟，还在等你的接活回执：先调用 accept_task（写上预计几点交和验收标准），再接着做。";
+
+/** A run's input, carrying {@link RECEIPT_ASKED} in its context (which the Bot's instructions include). */
+export function withReceiptAsked<T extends { context?: readonly unknown[] }>(
+  input: T,
+): T {
+  return {
+    ...input,
+    context: [
+      ...(input.context ?? []),
+      { description: "交付闭环", value: RECEIPT_ASKED },
+    ],
+  };
+}
 
 /**
  * Said to a built-in coworker that holds `accept_task`, and to no other: a coworker whose 接活 is

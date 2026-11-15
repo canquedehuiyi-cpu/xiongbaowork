@@ -11,8 +11,14 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { groupBotThreads, taskEvents, tasks } from "../db/schema";
+import {
+  groupBotThreads,
+  intelligenceChannelMappings,
+  taskEvents,
+  tasks,
+} from "../db/schema";
 import { runAsTenant } from "../tenant/context";
+import { type DueRefusal, readDueTime } from "./due-time";
 import { appendTaskEvent, type TaskEventActor } from "./events";
 import { type DeliverableRef, isDeliverableRef } from "./projector";
 
@@ -95,8 +101,9 @@ export type Delivery = {
    * Start following a card: `tracked = true`, its thread recorded, and a `dispatched` line. A card
    * already followed is left alone. The thread is `threadRef` when the caller knows it; otherwise the
    * card's own record says: for a group card, its coworker's group thread with the card's person
-   * (`group_bot_threads`), never the channel; for a one-to-one card, its `channel_ref`, which is the
-   * thread.
+   * (`group_bot_threads`), never the channel; for a card filed under a one-to-one channel (a routine's,
+   * a dispatched `@`), this person's thread of that channel; for a conversation turn's card, its
+   * `channel_ref`, which is the thread.
    */
   markTracked(
     tenantId: string,
@@ -183,7 +190,117 @@ export type Delivery = {
       actor?: TaskEventActor;
     },
   ): Promise<boolean>;
+  /**
+   * Whether the turn about to run is a round of a card still waiting for its 接活回执 (派出 · 待接下):
+   * followed, open, not accepted, on this thread with this coworker, and either the card the runner
+   * found (`taskId`) or the one an entry hung the run on already (`active_run_ref = runId`). Such a
+   * turn is told, in its instructions, to answer with `accept_task` first.
+   */
+  awaitsReceipt(
+    tenantId: string,
+    turn: { threadId: string; agentId: string; runId: string; taskId?: string },
+  ): Promise<boolean>;
+  /**
+   * 当作一件活来跟 (`POST /api/tasks/:id/track`): an open card nobody follows yet becomes followed
+   * and waits for its coworker's 接活回执 (see {@link Delivery.markTracked} for the thread it hangs on);
+   * one in 查收结果 goes back to `running`, since nothing has been handed in under the three steps.
+   * Refused when the card is already followed, has ended, or names no coworker to take it on.
+   */
+  track(
+    tenantId: string,
+    taskId: string,
+    actor: TaskEventActor,
+  ): Promise<
+    | { ok: true; threadRef: string | null }
+    | { ok: false; why: "followed" | "ended" | "no_coworker" }
+  >;
+  /**
+   * 退回 (`POST /api/tasks/:id/return`): a followed card awaiting review goes back to `running`, with
+   * `returns + 1` and a `returned {reason}` line. `accepted_at`, `due_at` and what was handed in stay.
+   * The card's thread and coworker come back so the caller can post the reason there; null when the
+   * card is not a followed one awaiting review with both.
+   */
+  returnTask(
+    tenantId: string,
+    taskId: string,
+    input: { actor: TaskEventActor; reason: string },
+  ): Promise<{ threadRef: string; agentId: string; returns: number } | null>;
+  /**
+   * 取消 (`POST /api/tasks/:id/cancel`): a followed card in any state that has not ended becomes
+   * `cancelled`, its `active_run_ref` cleared, with a `cancelled` line. What comes back names the round
+   * that was running on it, for the caller to stop; null when the card is not followed and open.
+   */
+  cancelTask(
+    tenantId: string,
+    taskId: string,
+    actor: TaskEventActor,
+  ): Promise<{
+    threadRef: string | null;
+    agentId: string | null;
+    runId: string | null;
+  } | null>;
+  /**
+   * The person's answer to the coworker's 延期申请 (`POST /api/tasks/:id/extension`), only while the
+   * latest request has not been answered. Granting moves `due_at` to `dueAt` (or, absent, to the time
+   * asked for), read and checked as a due time is (future, at most 30 days); denying leaves it. One
+   * `extension_granted` / `extension_denied` line; `original_due_at` is never touched.
+   */
+  decideExtension(
+    tenantId: string,
+    taskId: string,
+    input: {
+      actor: TaskEventActor;
+      decision: "grant" | "deny";
+      dueAt?: string;
+      now: Date;
+      timeZone: string;
+    },
+  ): Promise<
+    | {
+        ok: true;
+        dueAt: Date | null;
+        threadRef: string | null;
+        agentId: string | null;
+        runId: string | null;
+      }
+    | { ok: false; why: "not_open" | "no_request" | DueRefusal }
+  >;
+  /**
+   * The person changes the card (`PATCH /api/tasks/:id`): `due_at` and/or `criteria`, while the work
+   * is with the coworker (`running` or `needs_action`) -- not once it is handed in, until a 退回 gives
+   * it back (spec §5.4). `original_due_at` is never touched. One `edited {before, after}` line naming
+   * the fields that changed.
+   */
+  editTask(
+    tenantId: string,
+    taskId: string,
+    input: { actor: TaskEventActor; dueAt?: Date; criteria?: string },
+  ): Promise<
+    | { ok: true; dueAt: Date | null; criteria: string | null }
+    | { ok: false; why: "not_followed" | "not_editable" }
+  >;
 };
+
+/**
+ * Where a followed card is in the three steps, as the board and the sidebar draw it; null for a card
+ * nobody follows.
+ */
+export type DeliveryStage =
+  | "pending_accept"
+  | "accepted"
+  | "delivered"
+  | "reviewed";
+
+export function stageOf(card: {
+  tracked: boolean;
+  status: string;
+  acceptedAt: Date | string | null;
+}): DeliveryStage | null {
+  if (!card.tracked) return null;
+  if (card.status === "done") return "reviewed";
+  if (card.status === "awaiting_review") return "delivered";
+  return card.acceptedAt ? "accepted" : "pending_accept";
+}
 
 export function createDelivery(database: Database): Delivery {
   return {
@@ -501,21 +618,8 @@ export function createDelivery(database: Database): Delivery {
           .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
           .limit(1);
         if (!card || card.tracked) return;
-        let threadRef = options?.threadRef ?? null;
-        if (!threadRef && card.channelRef && card.executorAgentId) {
-          const [group] = await database
-            .select({ threadId: groupBotThreads.threadId })
-            .from(groupBotThreads)
-            .where(
-              and(
-                eq(groupBotThreads.ownerUserId, tenantId),
-                eq(groupBotThreads.channelId, card.channelRef),
-                eq(groupBotThreads.agentId, card.executorAgentId),
-              ),
-            )
-            .limit(1);
-          threadRef = group?.threadId ?? card.channelRef;
-        }
+        const threadRef =
+          options?.threadRef ?? (await threadOfCard(database, tenantId, card));
         const marked = await database
           .update(tasks)
           .set({ tracked: true, threadRef, updatedAt: new Date() })
@@ -536,6 +640,276 @@ export function createDelivery(database: Database): Delivery {
           detail: threadRef ? { threadRef } : {},
         });
       }),
+
+    awaitsReceipt: (tenantId, turn) =>
+      runAsTenant(tenantId, async () => {
+        const [row] = await database
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.tracked, true),
+              eq(tasks.threadRef, turn.threadId),
+              eq(tasks.executorAgentId, turn.agentId),
+              inArray(tasks.status, [...OPEN_STATUSES]),
+              isNull(tasks.acceptedAt),
+              turn.taskId
+                ? eq(tasks.id, turn.taskId)
+                : eq(tasks.activeRunRef, turn.runId),
+            ),
+          )
+          .limit(1);
+        return Boolean(row);
+      }),
+
+    track: (tenantId, taskId, actor) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .select({
+              tracked: tasks.tracked,
+              status: tasks.status,
+              channelRef: tasks.channelRef,
+              executorAgentId: tasks.executorAgentId,
+            })
+            .from(tasks)
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
+            .for("update");
+          if (!card) return { ok: false, why: "ended" } as const;
+          if (card.tracked) return { ok: false, why: "followed" } as const;
+          if (!isOpen(card.status)) return { ok: false, why: "ended" } as const;
+          if (!card.executorAgentId)
+            return { ok: false, why: "no_coworker" } as const;
+          const threadRef = await threadOfCard(transaction, tenantId, card);
+          await transaction
+            .update(tasks)
+            .set({
+              tracked: true,
+              threadRef,
+              /*
+               * 派出 · 待接下: nothing has been handed in under the three steps yet, so a card an earlier
+               * turn left in 查收结果 is work waiting to be taken on. One waiting on the person stays so.
+               */
+              status:
+                card.status === "awaiting_review" ? "running" : card.status,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "dispatched",
+            actor,
+            detail: { via: "track", ...(threadRef ? { threadRef } : {}) },
+          });
+          return { ok: true, threadRef } as const;
+        }),
+      ),
+
+    returnTask: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          // The work is the coworker's again; what it was given, when it took it on, stays as it was.
+          const [card] = await transaction
+            .update(tasks)
+            .set({
+              status: "running",
+              returns: sql`${tasks.returns} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(tasks.tenantId, tenantId),
+                eq(tasks.id, taskId),
+                eq(tasks.tracked, true),
+                eq(tasks.status, "awaiting_review"),
+                isNotNull(tasks.threadRef),
+                isNotNull(tasks.executorAgentId),
+              ),
+            )
+            .returning({
+              threadRef: tasks.threadRef,
+              agentId: tasks.executorAgentId,
+              returns: tasks.returns,
+            });
+          if (!card?.threadRef || !card.agentId) return null;
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "returned",
+            actor: input.actor,
+            detail: { reason: input.reason, returns: card.returns },
+          });
+          return {
+            threadRef: card.threadRef,
+            agentId: card.agentId,
+            returns: card.returns,
+          };
+        }),
+      ),
+
+    cancelTask: (tenantId, taskId, actor) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .select({
+              threadRef: tasks.threadRef,
+              agentId: tasks.executorAgentId,
+              runId: tasks.activeRunRef,
+            })
+            .from(tasks)
+            .where(openTracked(tenantId, taskId))
+            .for("update");
+          if (!card) return null;
+          await transaction
+            .update(tasks)
+            // Over: the round running on it is the caller's to stop, and nothing parks it again.
+            .set({
+              status: "cancelled",
+              activeRunRef: null,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "cancelled",
+            actor,
+            detail: card.runId ? { runId: card.runId } : {},
+          });
+          return card;
+        }),
+      ),
+
+    decideExtension: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          // The row first, locked: two answers to the same request queue here, and the second sees the first's line.
+          const [card] = await transaction
+            .select({
+              threadRef: tasks.threadRef,
+              agentId: tasks.executorAgentId,
+              runId: tasks.activeRunRef,
+              dueAt: tasks.dueAt,
+            })
+            .from(tasks)
+            .where(openTracked(tenantId, taskId))
+            .for("update");
+          if (!card) return { ok: false, why: "not_open" } as const;
+          const [latest] = await transaction
+            .select({ kind: taskEvents.kind, detail: taskEvents.detail })
+            .from(taskEvents)
+            .where(
+              and(
+                eq(taskEvents.tenantId, tenantId),
+                eq(taskEvents.taskId, taskId),
+                inArray(taskEvents.kind, [
+                  "extension_requested",
+                  "extension_granted",
+                  "extension_denied",
+                ]),
+              ),
+            )
+            .orderBy(desc(taskEvents.createdAt), desc(taskEvents.id))
+            .limit(1);
+          if (latest?.kind !== "extension_requested")
+            return { ok: false, why: "no_request" } as const;
+          const requested = (latest.detail as { dueAt?: unknown }).dueAt;
+          const requestedDueAt =
+            typeof requested === "string" ? requested : null;
+          const previousDueAt = card.dueAt?.toISOString() ?? null;
+          const where = { tenantId, taskId, actor: input.actor };
+          if (input.decision === "deny") {
+            await appendTaskEvent(transaction, {
+              ...where,
+              kind: "extension_denied",
+              detail: { requestedDueAt, dueAt: previousDueAt },
+            });
+            return { ok: true, dueAt: card.dueAt, ...route(card) } as const;
+          }
+          const reading = readDueTime(
+            input.dueAt ?? requestedDueAt ?? "",
+            input.now,
+            input.timeZone,
+          );
+          if (!reading.at) return { ok: false, why: reading.why } as const;
+          await transaction
+            .update(tasks)
+            .set({ dueAt: reading.at, updatedAt: new Date() })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
+          await appendTaskEvent(transaction, {
+            ...where,
+            kind: "extension_granted",
+            detail: {
+              requestedDueAt,
+              previousDueAt,
+              dueAt: reading.at.toISOString(),
+            },
+          });
+          return { ok: true, dueAt: reading.at, ...route(card) } as const;
+        }),
+      ),
+
+    editTask: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .select({
+              tracked: tasks.tracked,
+              status: tasks.status,
+              dueAt: tasks.dueAt,
+              criteria: tasks.criteria,
+            })
+            .from(tasks)
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
+            .for("update");
+          if (!card?.tracked)
+            return { ok: false, why: "not_followed" } as const;
+          // Handed in, reviewed or over: what was promised is on record (spec §5.4); a 退回 reopens it.
+          if (card.status !== "running" && card.status !== "needs_action")
+            return { ok: false, why: "not_editable" } as const;
+          const before: Record<string, unknown> = {};
+          const after: Record<string, unknown> = {};
+          const changes: Partial<typeof tasks.$inferInsert> = {};
+          if (input.dueAt && input.dueAt.getTime() !== card.dueAt?.getTime()) {
+            before.dueAt = card.dueAt?.toISOString() ?? null;
+            after.dueAt = input.dueAt.toISOString();
+            changes.dueAt = input.dueAt;
+          }
+          if (
+            input.criteria !== undefined &&
+            input.criteria !== card.criteria
+          ) {
+            before.criteria = card.criteria;
+            after.criteria = input.criteria;
+            changes.criteria = input.criteria;
+          }
+          if (Object.keys(changes).length === 0)
+            return {
+              ok: true,
+              dueAt: card.dueAt,
+              criteria: card.criteria,
+            } as const;
+          const [edited] = await transaction
+            .update(tasks)
+            .set({ ...changes, updatedAt: new Date() })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
+            .returning({ dueAt: tasks.dueAt, criteria: tasks.criteria });
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "edited",
+            actor: input.actor,
+            detail: { before, after },
+          });
+          return {
+            ok: true,
+            dueAt: edited?.dueAt ?? null,
+            criteria: edited?.criteria ?? null,
+          } as const;
+        }),
+      ),
 
     review: (tenantId, taskId, actor, via) =>
       runAsTenant(tenantId, async () => {
@@ -616,6 +990,61 @@ function openTracked(tenantId: string, taskId: string) {
     eq(tasks.tracked, true),
     inArray(tasks.status, [...OPEN_STATUSES]),
   );
+}
+
+function isOpen(status: string): boolean {
+  return (OPEN_STATUSES as readonly string[]).includes(status);
+}
+
+/** Where a decision about the card is said: its thread, its coworker, and the round running on it. */
+function route(card: {
+  threadRef: string | null;
+  agentId: string | null;
+  runId: string | null;
+}) {
+  return {
+    threadRef: card.threadRef,
+    agentId: card.agentId,
+    runId: card.runId,
+  };
+}
+
+/**
+ * The thread a card's later rounds run on, from what the card records. A group card's `channel_ref`
+ * is the group's channel, and its coworker answers this person on their own group thread
+ * (`group_bot_threads`), never the channel. A routine's or a dispatched card's is a one-to-one
+ * channel, whose thread is this person's mapping of it. A conversation turn's card already names
+ * its thread.
+ */
+async function threadOfCard(
+  database: Pick<Database, "select">,
+  tenantId: string,
+  card: { channelRef: string | null; executorAgentId: string | null },
+): Promise<string | null> {
+  if (!card.channelRef || !card.executorAgentId) return card.channelRef;
+  const [group] = await database
+    .select({ threadId: groupBotThreads.threadId })
+    .from(groupBotThreads)
+    .where(
+      and(
+        eq(groupBotThreads.ownerUserId, tenantId),
+        eq(groupBotThreads.channelId, card.channelRef),
+        eq(groupBotThreads.agentId, card.executorAgentId),
+      ),
+    )
+    .limit(1);
+  if (group) return group.threadId;
+  const [mapped] = await database
+    .select({ threadId: intelligenceChannelMappings.threadId })
+    .from(intelligenceChannelMappings)
+    .where(
+      and(
+        eq(intelligenceChannelMappings.userId, tenantId),
+        eq(intelligenceChannelMappings.channelId, card.channelRef),
+      ),
+    )
+    .limit(1);
+  return mapped?.threadId ?? card.channelRef;
 }
 
 /**
