@@ -552,6 +552,9 @@ jobs:
       - name: Install agent-bot from its own frozen lockfile (no lifecycle scripts)
         working-directory: openbot/agent-bot
         run: bun install --frozen-lockfile --ignore-scripts
+      # The chart suites render charts/openbot, which needs its subcharts on disk, as chart-check.sh does.
+      - name: Fetch the chart's dependencies
+        run: helm dependency build charts/openbot
       - name: Repository tests
         run: bun test ./tests/ > "$RUNNER_TEMP/repo-tests.log" 2>&1
       - name: Zero-fail gate (head only, no baseline counterpart)
