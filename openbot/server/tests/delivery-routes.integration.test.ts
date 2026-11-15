@@ -209,12 +209,12 @@ class Working extends AbstractAgent {
 /**
  * The deployment's unattended turn, on the real runner, with the real admission (the pause switch
  * and the capability gate, `serverTurnAdmission`) and the real card scope. `agent` answers as every
- * coworker, or as the one named. `lockRefused` makes the thread's lock refuse, as it does while
+ * coworker, or as the one named. `lockHangs` makes the thread's lock never come. `lockRefused` makes the thread's lock refuse, as it does while
  * somebody else holds the thread.
  */
 function unattendedTurn(
   agent: AbstractAgent | ((agentId: string) => AbstractAgent),
-  options: { lockRefused?: boolean } = {},
+  options: { lockRefused?: boolean; lockHangs?: boolean } = {},
 ) {
   return createTurnRunner({
     intelligence: {
@@ -228,6 +228,7 @@ function unattendedTurn(
         runId: string;
       }) => {
         if (options.lockRefused) throw new Error("Thread lock denied");
+        if (options.lockHangs) await new Promise(() => {});
         return {
           threadId: params.threadId,
           runId: params.runId,
@@ -247,12 +248,13 @@ function cardTurns(
   agent: AbstractAgent,
   extra: Partial<Parameters<typeof createCardTurns>[0]> & {
     lockRefused?: boolean;
+    lockHangs?: boolean;
   } = {},
 ) {
-  const { lockRefused, ...rest } = extra;
+  const { lockRefused, lockHangs, ...rest } = extra;
   return createCardTurns({
     database,
-    runTurn: unattendedTurn(agent, { lockRefused }),
+    runTurn: unattendedTurn(agent, { lockRefused, lockHangs }),
     runner: new PostgresAgentRunner(database, projector, quota),
     ...rest,
   });
@@ -503,10 +505,30 @@ test("a return the coworker cannot hear is refused and leaves the card as it was
     const found = await row(tenantId, taskId);
     expect(found?.status).toBe("awaiting_review");
     expect(found?.returns).toBe(0);
+    // The 退回's claim is let go: the person can try again.
+    expect(found?.returnPendingAt).toBeNull();
     expect(
       (await history(tenantId, taskId)).some((e) => e.kind === "returned"),
     ).toBe(false);
   };
+
+  // The turn does not start in time (its lock never comes): given up, stopped, and refused.
+  {
+    const { tenantId, agentId, taskId } = await acceptedCard("return-slow", {
+      status: "awaiting_review",
+    });
+    const said = new Recorder(agentId);
+    const call = routesFor(tenantId, {
+      turns: cardTurns(said, { lockHangs: true, startTimeoutMs: 150 }),
+    });
+    const response = await call("POST", `${taskId}/return`, {
+      reason: "补 C 家",
+    });
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("员工这会儿正忙，稍后再试。");
+    await unchanged(tenantId, taskId);
+    expect(said.seen).toEqual([]);
+  }
 
   // The thread's lock is held by somebody else.
   {
@@ -595,6 +617,89 @@ test("a return the coworker cannot hear is refused and leaves the card as it was
     await unchanged(tenantId, taskId);
     expect(said.seen).toEqual([]);
   }
+});
+
+test("two returns at once: one is said and returned, the other is told a return is under way", async () => {
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "return-twice",
+    { status: "awaiting_review" },
+  );
+  const said = new Recorder(agentId);
+  const call = routesFor(tenantId, { turns: cardTurns(said) });
+
+  const responses = await Promise.all([
+    call("POST", `${taskId}/return`, { reason: "补 C 家" }),
+    call("POST", `${taskId}/return`, { reason: "补 C 家" }),
+  ]);
+  expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
+  const won = responses.find((r) => r.status === 200);
+  const lost = responses.find((r) => r.status === 409);
+  // Mostly while the first is still saying it; if the first had already finished, the card is no
+  // longer awaiting review. Either way it is not returned twice.
+  expect(["正在退回，稍等一下。", "这件活不在等你验收，不能退回。"]).toContain(
+    lost?.body.error as string,
+  );
+  const runId = won?.body.runId as string;
+
+  // One turn, hung on the card, which is back with the coworker once.
+  const events = await roundEnded(tenantId, taskId, runId);
+  expect(said.seen.length).toBe(1);
+  expect(events.filter((e) => e.kind === "returned").length).toBe(1);
+  const after = await row(tenantId, taskId);
+  expect(after?.status).toBe("running");
+  expect(after?.returns).toBe(1);
+  expect(after?.returnPendingAt).toBeNull();
+  // The reason is in the conversation once, in that turn.
+  const stored = await until(
+    () => storedEvents(tenantId, threadId),
+    (rows) => rows.some((r) => r.runId === runId),
+  );
+  const runsSayingIt = new Set(
+    stored
+      .filter((r) => JSON.stringify(r.event).includes("退回：补 C 家"))
+      .map((r) => r.runId),
+  );
+  expect([...runsSayingIt]).toEqual([runId]);
+  const runs = await runAsTenant(tenantId, () =>
+    database
+      .select({ id: threadRuns.id })
+      .from(threadRuns)
+      .where(eq(threadRuns.threadId, threadId)),
+  );
+  expect(runs.map((r) => r.id)).toEqual([runId]);
+});
+
+test("a return's claim on the card holds for two minutes, then a new return may take it", async () => {
+  const { tenantId, agentId, taskId } = await acceptedCard("return-claim", {
+    status: "awaiting_review",
+  });
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+
+  // A return under way right now holds the card.
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ returnPendingAt: new Date() })
+      .where(eq(tasks.id, taskId)),
+  );
+  const held = await call("POST", `${taskId}/return`, { reason: "补 C 家" });
+  expect(held.status).toBe(409);
+  expect(held.body.error).toBe("正在退回，稍等一下。");
+  expect((await row(tenantId, taskId))?.status).toBe("awaiting_review");
+
+  // One that died three minutes ago does not.
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ returnPendingAt: new Date(Date.now() - 3 * 60_000) })
+      .where(eq(tasks.id, taskId)),
+  );
+  const taken = await call("POST", `${taskId}/return`, { reason: "补 C 家" });
+  expect(taken.status).toBe(200);
+  await roundEnded(tenantId, taskId, taken.body.runId as string);
+  const after = await row(tenantId, taskId);
+  expect(after?.status).toBe("running");
+  expect(after?.returnPendingAt).toBeNull();
 });
 
 test("return and the extension answer on a group card are said in the group, and the coworker's turn hangs on the card", async () => {

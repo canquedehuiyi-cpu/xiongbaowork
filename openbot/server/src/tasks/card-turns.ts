@@ -36,7 +36,8 @@ export type CardTurns = {
   /**
    * Say `text` as the person to `agentId` in the card's conversation, and have it answer. Resolves
    * once the message is in: for a one-to-one card, when the coworker's turn has started (past its
-   * admission, holding the thread); for a group card, when the group has taken the message and queued
+   * admission, holding the thread; a turn not started within {@link START_TIMEOUT_MS} is stopped and
+   * refused); for a group card, when the group has taken the message and queued
    * its turn. Throws {@link CardTurnRefused} when it could not be said -- the thread is busy, the
    * coworker is paused, the group is gone -- and then nothing was said.
    */
@@ -98,6 +99,8 @@ export type CardTurnsDeps = {
       runId?: string;
     }): Promise<boolean | undefined>;
   };
+  /** How long a turn may take to start before it is given up (default {@link START_TIMEOUT_MS}). */
+  startTimeoutMs?: number;
   /** Posting to a group, for a group card. Without it a group card's message is refused. */
   groupSend?: GroupSend;
   /** The coworker's name as this person sees it, for the `@Name` a group message starts with. */
@@ -114,6 +117,8 @@ export type CardTurnsDeps = {
 };
 
 const BUSY = "员工这会儿正忙，稍后再试。";
+/** How long a 退回's turn may take to start (admission, the thread's lock) before it is given up. */
+export const START_TIMEOUT_MS = 30_000;
 const PAUSED = "这位员工已暂停，恢复后再试。";
 const GROUP_GONE = "这个群已经不在了，或这位员工已不在群里。";
 
@@ -241,9 +246,21 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
         content: text,
       };
       let began = false;
+      // A turn that has not started in time (a lock that never comes) is given up, and stopped.
+      const giveUp = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
       await new Promise<void>((started, refused) => {
+        timer = setTimeout(() => {
+          if (began) return;
+          refused(new CardTurnRefused(BUSY));
+          giveUp.abort();
+          void runAsTenant(tenantId, () =>
+            deps.runner.stop({ threadId: to.threadId, runId }),
+          ).catch(() => undefined);
+        }, deps.startTimeoutMs ?? START_TIMEOUT_MS);
         runAsTenant(tenantId, () =>
           deps.runTurn({
+            signal: giveUp.signal,
             ownerUserId: tenantId,
             routineId: options?.source ?? "task-card",
             agentId: to.agentId,
@@ -271,9 +288,11 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
             });
           },
         );
-      }).catch((error) => {
-        throw refusalOf(error);
-      });
+      })
+        .catch((error) => {
+          throw refusalOf(error);
+        })
+        .finally(() => clearTimeout(timer));
       return { runId, groupMessageId: null };
     },
 

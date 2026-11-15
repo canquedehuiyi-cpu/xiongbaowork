@@ -6,7 +6,8 @@
  *   2. `tasks` 加在跟卡的列：`tracked`（是否走三步收货，默认 false，不在跟的卡行为不变）、`thread_ref`、
  *      `accepted_at`、`due_at`、`original_due_at`（员工第一次报的预计时间，永不改写）、`overdue_at`、
  *      `due_reported`、`criteria`、`last_error`、`nudges`、`returns`、`active_run_ref`（在跟卡上正在跑的那一轮，
- *      挂上时写、本轮结束时清空，审批按它找到卡）。已有的行全部取默认值，即不在跟。
+ *      挂上时写、本轮结束时清空，审批按它找到卡）、`return_pending_at`（一次退回正在把原因说进对话时占住这张卡，
+ *      说进去或说不出去都清空；超过 2 分钟的占位视为失效）。已有的行全部取默认值，即不在跟。
  *   3. 两个索引：核对器按 `(tenant_id, tracked, status, due_at)` 扫在跟且未结束的卡；
  *      一件活一张卡按 `(tenant_id, thread_ref, executor_agent_id)` 找本线程这位员工的在跟卡。
  *   4. 新表 `task_events`：每件活的流水，谁在什么时候做了什么。只追加。
@@ -15,7 +16,7 @@
  * - 行级安全：同其他租户表，本租户或 platform 读写；`FORCE` 让表主人也受约束。
  * - 注意：`ALTER TYPE ... ADD VALUE` 单独一句，不能和使用新值的语句同一事务。
  *
- * 回滚：删表 `task_events`，删上述各列（含 `active_run_ref`）和两个索引；枚举值 PostgreSQL 不支持删除，保留 `cancelled` 无害
+ * 回滚：删表 `task_events`，删上述各列（含 `active_run_ref`、`return_pending_at`）和两个索引；枚举值 PostgreSQL 不支持删除，保留 `cancelled` 无害
  * （旧代码不会写入）。
  */
 ALTER TYPE "public"."task_status" ADD VALUE IF NOT EXISTS 'cancelled';
@@ -43,6 +44,8 @@ ALTER TABLE "public"."tasks" ADD COLUMN "nudges" integer DEFAULT 0 NOT NULL;
 ALTER TABLE "public"."tasks" ADD COLUMN "returns" integer DEFAULT 0 NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "public"."tasks" ADD COLUMN "active_run_ref" text;
+--> statement-breakpoint
+ALTER TABLE "public"."tasks" ADD COLUMN "return_pending_at" timestamp with time zone;
 --> statement-breakpoint
 CREATE INDEX "tasks_tracked_due_idx" ON "public"."tasks" USING btree ("tenant_id","tracked","status","due_at");
 --> statement-breakpoint

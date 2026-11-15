@@ -6,6 +6,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   ne,
   or,
   sql,
@@ -40,6 +41,8 @@ import { type DeliverableRef, isDeliverableRef } from "./projector";
 /** A followed card that has not ended: only the person's 验收 or 取消 ends one (spec §3). */
 const OPEN_STATUSES = ["running", "needs_action", "awaiting_review"] as const;
 
+/** How long a 退回's claim on its card holds (`return_pending_at`) before it counts as a request that died. */
+export const RETURN_CLAIM_MS = 2 * 60_000;
 /** How long a progress line may be (spec §7: the reply's first sentence, cut to 60 characters). */
 const PROGRESS_CHARS = 60;
 /** How long `last_error` may be: one sentence, not a stack trace. */
@@ -218,22 +221,34 @@ export type Delivery = {
    * 退回 (`POST /api/tasks/:id/return`): a followed card awaiting review goes back to `running`, with
    * `returns + 1` and a `returned {reason}` line. `accepted_at`, `due_at` and what was handed in stay.
    * The card's thread and coworker come back so the caller can post the reason there; null when the
-   * card is not a followed one awaiting review with both.
+   * card is not a followed one awaiting review with both. With `claimedAt`, only while that claim
+   * (`claimReturn`) still holds the card; the claim is cleared either way it succeeds.
    */
   returnTask(
     tenantId: string,
     taskId: string,
-    input: { actor: TaskEventActor; reason: string },
+    input: { actor: TaskEventActor; reason: string; claimedAt?: Date },
   ): Promise<{ threadRef: string; agentId: string; returns: number } | null>;
   /**
-   * Where a 退回 of this card would be said -- its thread and coworker -- when it can be returned now
-   * (followed, awaiting review, with both); null otherwise. Asked before the reason is said, so a
-   * reason that cannot be said leaves the card as it was.
+   * Take the card for a 退回 before its reason is said (`return_pending_at`): only a followed card
+   * awaiting review with a thread and a coworker, and only when no other 退回 holds it -- a claim older
+   * than {@link RETURN_CLAIM_MS} is a request that died, and is taken over. Two returns at once: one
+   * gets the card, the other `pending`. What comes back is where to say the reason, and the claim's
+   * stamp that {@link Delivery.returnTask} and {@link Delivery.releaseReturn} name it by.
    */
-  returnable(
+  claimReturn(
     tenantId: string,
     taskId: string,
-  ): Promise<{ threadRef: string; agentId: string } | null>;
+  ): Promise<
+    | { ok: true; threadRef: string; agentId: string; claimedAt: Date }
+    | { ok: false; why: "pending" | "not_returnable" }
+  >;
+  /** The reason could not be said: the claim `claimedAt` is let go, and the card is as it was. */
+  releaseReturn(
+    tenantId: string,
+    taskId: string,
+    claimedAt: Date,
+  ): Promise<void>;
   /**
    * 取消 (`POST /api/tasks/:id/cancel`): a followed card in any state that has not ended becomes
    * `cancelled`, its `active_run_ref` cleared, with a `cancelled` line. What comes back names the round
@@ -725,6 +740,7 @@ export function createDelivery(database: Database): Delivery {
             .set({
               status: "running",
               returns: sql`${tasks.returns} + 1`,
+              returnPendingAt: null,
               updatedAt: new Date(),
             })
             .where(
@@ -735,6 +751,9 @@ export function createDelivery(database: Database): Delivery {
                 eq(tasks.status, "awaiting_review"),
                 isNotNull(tasks.threadRef),
                 isNotNull(tasks.executorAgentId),
+                ...(input.claimedAt
+                  ? [eq(tasks.returnPendingAt, input.claimedAt)]
+                  : []),
               ),
             )
             .returning({
@@ -758,26 +777,63 @@ export function createDelivery(database: Database): Delivery {
         }),
       ),
 
-    returnable: (tenantId, taskId) =>
+    claimReturn: (tenantId, taskId) =>
       runAsTenant(tenantId, async () => {
+        const claimedAt = new Date();
+        const returnable = and(
+          eq(tasks.tenantId, tenantId),
+          eq(tasks.id, taskId),
+          eq(tasks.tracked, true),
+          eq(tasks.status, "awaiting_review"),
+          isNotNull(tasks.threadRef),
+          isNotNull(tasks.executorAgentId),
+        );
         const [card] = await database
-          .select({
+          .update(tasks)
+          .set({ returnPendingAt: claimedAt })
+          .where(
+            and(
+              returnable,
+              or(
+                isNull(tasks.returnPendingAt),
+                lt(
+                  tasks.returnPendingAt,
+                  new Date(claimedAt.getTime() - RETURN_CLAIM_MS),
+                ),
+              ),
+            ),
+          )
+          .returning({
             threadRef: tasks.threadRef,
             agentId: tasks.executorAgentId,
-          })
+          });
+        if (card?.threadRef && card.agentId)
+          return {
+            ok: true,
+            threadRef: card.threadRef,
+            agentId: card.agentId,
+            claimedAt,
+          } as const;
+        const [held] = await database
+          .select({ id: tasks.id })
           .from(tasks)
+          .where(returnable)
+          .limit(1);
+        return { ok: false, why: held ? "pending" : "not_returnable" } as const;
+      }),
+
+    releaseReturn: (tenantId, taskId, claimedAt) =>
+      runAsTenant(tenantId, async () => {
+        await database
+          .update(tasks)
+          .set({ returnPendingAt: null })
           .where(
             and(
               eq(tasks.tenantId, tenantId),
               eq(tasks.id, taskId),
-              eq(tasks.tracked, true),
-              eq(tasks.status, "awaiting_review"),
+              eq(tasks.returnPendingAt, claimedAt),
             ),
-          )
-          .limit(1);
-        return card?.threadRef && card.agentId
-          ? { threadRef: card.threadRef, agentId: card.agentId }
-          : null;
+          );
       }),
 
     cancelTask: (tenantId, taskId, actor) =>

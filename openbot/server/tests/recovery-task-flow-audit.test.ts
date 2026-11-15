@@ -355,6 +355,7 @@ const ADDED_AFTER_CAPSULE: Record<
       "nudges",
       "returns",
       "active_run_ref",
+      "return_pending_at",
     ],
     indexes: [
       "tasks_channel_ref_idx",

@@ -119,6 +119,13 @@ export const tasks = pgTable(
      * at a time, so one column is enough).
      */
     activeRunRef: text("active_run_ref"),
+    /**
+     * A 退回 in progress: set when the person's reason starts being said in the card's conversation,
+     * cleared when it is in (the card goes back to `running`) or could not be said. Two returns at
+     * once cannot both say it; a claim older than two minutes is a request that died, and may be
+     * taken again.
+     */
+    returnPendingAt: timestamp("return_pending_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -694,20 +694,43 @@ export function createTaskRoutes(
      * coworker and the reason only in the history. So a reason that cannot be said refuses the whole
      * 退回, and the card stays where it was, with nothing written.
      */
-    const card = await delivery.returnable(tenantId, taskId);
-    if (!card)
-      return context.json({ error: "这件活不在等你验收，不能退回。" }, 409);
     if (!options.turns)
       return context.json({ error: "现在退回不了，稍后再试。" }, 503);
+    const turns = options.turns;
+    /*
+     * The card is taken for this 退回 first (`return_pending_at`): two at once -- a double click --
+     * would otherwise both say the reason and both start a turn. The one that does not get it is told
+     * a 退回 is under way. The claim is let go on every way out below that does not return the card.
+     */
+    const claim = await delivery.claimReturn(tenantId, taskId);
+    if (!claim.ok)
+      return context.json(
+        {
+          error:
+            claim.why === "pending"
+              ? "正在退回，稍等一下。"
+              : "这件活不在等你验收，不能退回。",
+        },
+        409,
+      );
+    const card = { threadRef: claim.threadRef, agentId: claim.agentId };
+    const release = () =>
+      delivery.releaseReturn(tenantId, taskId, claim.claimedAt).catch((error) =>
+        log("task-return-release-failed", {
+          taskId,
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
     let said: { runId: string | null; groupMessageId: string | null };
     try {
-      said = await options.turns.sendAsUser(
+      said = await turns.sendAsUser(
         tenantId,
         { threadId: card.threadRef, agentId: card.agentId },
         `退回：${reason}`,
         { source: `task-return:${taskId}` },
       );
     } catch (error) {
+      await release();
       if (error instanceof CardTurnRefused)
         return context.json({ error: error.message }, 409);
       log("task-return-turn-failed", {
@@ -719,12 +742,14 @@ export function createTaskRoutes(
     const returned = await delivery.returnTask(tenantId, taskId, {
       actor: `user:${tenantId}`,
       reason,
+      claimedAt: claim.claimedAt,
     });
     if (!returned) {
-      // Reviewed or cancelled in the moment between: the turn just started is stopped (a group's
-      // message, already in the transcript, stays).
+      // Reviewed or cancelled in the moment between (or the claim ran out and another 退回 took it):
+      // the turn just started is stopped (a group's message, already in the transcript, stays).
+      await release();
       if (said.runId)
-        await options.turns.stopRound(tenantId, {
+        await turns.stopRound(tenantId, {
           threadId: card.threadRef,
           agentId: card.agentId,
           runId: said.runId,
