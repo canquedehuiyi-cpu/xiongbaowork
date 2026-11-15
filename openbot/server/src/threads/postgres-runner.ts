@@ -615,12 +615,17 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
          * through `active_run_ref` -- which `runEnded` then clears.
          */
         void (async () => {
-          // biome-ignore lint/style/noNonNullAssertion: a followed card is only looked up with a board
-          await this.board!.finished({
-            tenantId: tenant,
-            runRef: runId,
-            failed,
-          });
+          // A close that fails is logged and the round still ends: `runEnded` must always run.
+          try {
+            // biome-ignore lint/style/noNonNullAssertion: a followed card is only looked up with a board
+            await this.board!.finished({
+              tenantId: tenant,
+              runRef: runId,
+              failed,
+            });
+          } catch (error) {
+            console.error("task projection failed", error);
+          }
           await roundEnded(followed.id, failed, thrown);
         })().catch((error) => console.error("task projection failed", error));
         return;

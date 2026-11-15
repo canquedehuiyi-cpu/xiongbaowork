@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   AbstractAgent,
@@ -954,6 +954,39 @@ describe("one tracked piece of work, one card", () => {
     );
   });
 
+  test("a board close that throws does not stop a hung round from ending on its card", async () => {
+    const { tenantId, agentId, threadId, cardId } =
+      await trackedThread("broken-close");
+    const quiet = spyOn(console, "error").mockImplementation(() => {});
+    let closes = 0;
+    try {
+      const round = await turn({
+        tenantId,
+        agentId,
+        threadId,
+        ask: "继续核对",
+        events: reply("核对到第二家了。"),
+        board: {
+          ...projector,
+          finished: async () => {
+            closes++;
+            throw new Error("看板写不进去");
+          },
+        },
+      });
+      const lines = await roundLogged(tenantId, cardId, round);
+      expect(closes).toBe(1);
+      expect(
+        lines
+          .filter((line) => line.detail.runId === round)
+          .map((line) => line.kind),
+      ).toEqual(["progress", "run_ended"]);
+      expect((await cardRow(tenantId, cardId))?.activeRunRef).toBeNull();
+    } finally {
+      quiet.mockRestore();
+    }
+  });
+
   test("untracked cards keep one card per turn", async () => {
     const tenantId = await tenant("untracked");
     const agentId = `agent-${suite}-e`;
@@ -1335,6 +1368,7 @@ describe("group", () => {
       let accept = false;
       let asked = "";
       let ask = false;
+      let breakClose = false;
       const conversations = createGroupConversations({
         store: createGroupStore(database, () => threadIdentity.mint()),
         queue: createWorkQueue(database),
@@ -1378,7 +1412,13 @@ describe("group", () => {
         auditStore: { insert: async () => undefined },
         progressEveryMs: 0,
         // As the deployment wires it: a question a turn left open parks its card after the close.
-        board: parkingBoard,
+        board: {
+          ...parkingBoard,
+          finished: async (input) => {
+            if (breakClose) throw new Error("看板写不进去");
+            await parkingBoard.finished(input);
+          },
+        },
         delivery,
       });
       const drain = async () => {
@@ -1470,6 +1510,32 @@ describe("group", () => {
             ),
           ),
       );
+
+      // A board close that throws: the round on Ada's card still ends there.
+      breakClose = true;
+      const quiet = spyOn(console, "error").mockImplementation(() => {});
+      try {
+        await conversations.send(ownerId, channel.id, {
+          id: `${prefix}-m5`,
+          text: "@Ada 还差几家？",
+        });
+        await drain();
+      } finally {
+        quiet.mockRestore();
+        breakClose = false;
+      }
+      const broken = calls.at(-1);
+      expect(broken?.agentId).toBe(ada);
+      const brokenLines = (await eventsOf(ownerId, adaCard.id)).filter(
+        (line) => line.detail.runId === broken?.runId,
+      );
+      expect(brokenLines.map((line) => line.kind)).toEqual([
+        "progress",
+        "run_ended",
+      ]);
+      expect(
+        (await cardsOf(ownerId, eq(tasks.id, adaCard.id)))[0]?.activeRunRef,
+      ).toBeNull();
     });
   });
 });

@@ -1318,26 +1318,7 @@ export function createGroupConversations(deps: {
     round?: { taskId: string | null; said?: string },
   ): Promise<void> {
     if (!deps.board) return;
-    try {
-      /*
-       * Called for a round hung on a followed card too, and before `runEnded`: the board's close is
-       * where a question the round left open parks the card (`withQuestionParking`), and the card is
-       * found by the round's run id only while `active_run_ref` still names it.
-       */
-      await deps.board.finished({
-        tenantId: turn.ownerUserId,
-        runRef: runId,
-        failed,
-      });
-      if (round?.taskId && deps.delivery)
-        await deps.delivery.runEnded(turn.ownerUserId, round.taskId, {
-          runId,
-          failed,
-          ...(failed
-            ? { error: round.said }
-            : { firstSentence: firstSentenceOf(round.said ?? "") }),
-        });
-    } catch (error) {
+    const logged = (error: unknown) =>
       console.error(
         JSON.stringify({
           type: "group-board-close-failed",
@@ -1347,6 +1328,32 @@ export function createGroupConversations(deps: {
           reason: error instanceof Error ? error.message : String(error),
         }),
       );
+    /*
+     * Called for a round hung on a followed card too, and before `runEnded`: the board's close is
+     * where a question the round left open parks the card (`withQuestionParking`), and the card is
+     * found by the round's run id only while `active_run_ref` still names it. A close that fails is
+     * logged and the round still ends.
+     */
+    try {
+      await deps.board.finished({
+        tenantId: turn.ownerUserId,
+        runRef: runId,
+        failed,
+      });
+    } catch (error) {
+      logged(error);
+    }
+    if (!round?.taskId || !deps.delivery) return;
+    try {
+      await deps.delivery.runEnded(turn.ownerUserId, round.taskId, {
+        runId,
+        failed,
+        ...(failed
+          ? { error: round.said }
+          : { firstSentence: firstSentenceOf(round.said ?? "") }),
+      });
+    } catch (error) {
+      logged(error);
     }
   }
 

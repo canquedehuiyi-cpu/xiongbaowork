@@ -123,16 +123,20 @@ export function createDelivery(database: Database): Delivery {
          * thread superseded it. It is closed in the history as failed, which also makes its late
          * `runEnded`, if one ever comes, a no-op (one end line per run).
          */
-        const [card] = await database
-          .select({ previous: tasks.activeRunRef })
+        // One statement: the row is locked, its old value read and the new one written together.
+        const old = database
+          .select({ id: tasks.id, previous: tasks.activeRunRef })
           .from(tasks)
           .where(openTracked(tenantId, taskId))
-          .limit(1);
-        if (!card) return;
-        await database
+          .for("update")
+          .as("old");
+        const [card] = await database
           .update(tasks)
           .set({ activeRunRef: runId, updatedAt: new Date() })
-          .where(openTracked(tenantId, taskId));
+          .from(old)
+          .where(eq(tasks.id, old.id))
+          .returning({ previous: old.previous });
+        if (!card) return;
         if (card.previous && card.previous !== runId)
           await appendTaskEvent(database, {
             tenantId,
