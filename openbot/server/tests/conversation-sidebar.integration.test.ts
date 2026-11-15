@@ -8,6 +8,7 @@ import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
   agents,
+  approvalRequests,
   attachments,
   channelAgents,
   channelMemberships,
@@ -29,7 +30,10 @@ import {
   users,
 } from "../src/db/schema";
 import { TEAM_TENANT } from "../src/db/schema/tenant";
-import { meteringTenantFor } from "../src/models/runtime-resolver";
+import {
+  meteringTenantFor,
+  meteringTenantsFor,
+} from "../src/models/runtime-resolver";
 import {
   buildModelTokenCallRow,
   type MeteredBinding,
@@ -58,6 +62,7 @@ const channelIds: string[] = [];
 afterAll(async () => {
   await runAsTenant("platform", async () => {
     for (const table of [
+      approvalRequests,
       modelTokenCalls,
       threadContextBreakdowns,
       threadCompactions,
@@ -285,6 +290,27 @@ async function upload(
   return row?.id as string;
 }
 
+/** 一个还挂着的审批，在 `owner` 名下。 */
+async function pendingApprovalRow(
+  owner: string,
+  status: "pending" | "approved" = "pending",
+): Promise<string> {
+  const id = `${suite}-approval-${randomUUID()}`;
+  await runAsTenant(owner, () =>
+    database.insert(approvalRequests).values({
+      id,
+      ownerUserId: owner,
+      runId: `run-${randomUUID()}`,
+      toolCallId: `call-${randomUUID()}`,
+      actionDigest: sha256Hex(id),
+      action: { tool: "computer_click", input: {} } as never,
+      status,
+      createdAt: tick(),
+    }),
+  );
+  return id;
+}
+
 const noCatalogue = async () => undefined;
 
 function routesFor(viewer: string, deps: Partial<SidebarDeps> = {}) {
@@ -293,7 +319,7 @@ function routesFor(viewer: string, deps: Partial<SidebarDeps> = {}) {
     runtime: "cloud",
     deploymentModelLabel: "openai/gpt-default",
     contextWindowFor: noCatalogue,
-    meteringTenant: (agentId) => meteringTenantFor(database, agentId),
+    meteringTenants: (agentIds) => meteringTenantsFor(database, agentIds),
     ...deps,
   });
   const guard: MiddlewareHandler<{ Variables: AppVariables }> = async (
@@ -420,11 +446,12 @@ describe("conversation sidebar", () => {
       modelRef: model,
     });
     const file = await upload(viewer, channelId, "发票汇总.xlsx");
+    const approvalId = await pendingApprovalRow(viewer);
     await card(viewer, {
       title: "整理报销",
       channelRef: threadId,
       status: "needs_action",
-      pendingApprovalId: "approval-1",
+      pendingApprovalId: approvalId,
       executorAgentId: agentId,
       deliverableRef: {
         kind: "deliverable",
@@ -435,7 +462,10 @@ describe("conversation sidebar", () => {
 
     const { status, body } = await routesFor(viewer, {
       runtime: "device",
-      machineOf: async () => ({ tenantId: viewer, deviceId: "desk-1" }),
+      machinesOf: async (ids) =>
+        new Map(
+          ids.map((id) => [id, { tenantId: viewer, deviceId: "desk-1" }]),
+        ),
     }).thread(threadId);
     expect(status).toBe(200);
     expect(body.environment).toEqual({
@@ -450,7 +480,7 @@ describe("conversation sidebar", () => {
       status: "needs_action",
       rounds: 3,
       lastCheck: "等你确认 · 我已经整理好了三张发票。",
-      pendingApprovalId: "approval-1",
+      pendingApprovalId: approvalId,
     });
     expect(body.context.usage?.used).toBe(32_000);
     expect(body.context.usage?.limit).toBe(128_000);
@@ -472,7 +502,10 @@ describe("conversation sidebar", () => {
     // 同一对话按频道问，答案一样。
     const byChannel = await routesFor(viewer, {
       runtime: "device",
-      machineOf: async () => ({ tenantId: viewer, deviceId: "desk-1" }),
+      machinesOf: async (ids) =>
+        new Map(
+          ids.map((id) => [id, { tenantId: viewer, deviceId: "desk-1" }]),
+        ),
     }).channel(channelId);
     expect(byChannel.status).toBe(200);
     expect(byChannel.body).toEqual(body);
@@ -670,8 +703,12 @@ describe("conversation sidebar", () => {
       (body.context.perAgent ?? []).map((entry) => [entry.agentId, entry]),
     );
     expect(perAgent.get(writer)?.percent).toBe(25);
+    expect(perAgent.get(writer)?.used).toBe(25_000);
+    expect(perAgent.get(writer)?.limit).toBe(100_000);
     expect(perAgent.get(writer)?.compactedAt).toBeNull();
     expect(perAgent.get(checker)?.percent).toBe(25);
+    expect(perAgent.get(checker)?.used).toBe(50_000);
+    expect(perAgent.get(checker)?.limit).toBe(200_000);
     expect(perAgent.get(checker)?.compactedAt).toEqual(expect.any(String));
     expect(body.context.usage).toBeUndefined();
     expect(body.goal).toEqual({
@@ -688,6 +725,10 @@ describe("conversation sidebar", () => {
     expect(detail.body.context.usage?.used).toBe(25_000);
     expect(detail.body.context.usage?.limit).toBe(100_000);
     expect(detail.body.context.lastCompaction).toBeNull();
+
+    // 不在这个群里的员工：当作看不到。
+    const outsider = await employee(viewer, "群外员工");
+    expect((await routes.channel(channelId, outsider)).status).toBe(404);
 
     // 按查看者自己的群组线程问，就是那位员工的明细。
     const byThread = await routes.thread(mine.checker);
@@ -798,7 +839,11 @@ describe("conversation sidebar", () => {
     await card(viewer, {
       title: "第一轮",
       channelRef: threadId,
-      deliverableRef: deliverable([a]),
+      // 和第二张卡上的报告同名，但是另一份交付物：各算一条。
+      deliverableRef: deliverable(
+        [a],
+        [{ name: "showActivityReport", args: { title: "周报", week: 1 } }],
+      ),
     });
     await card(viewer, {
       title: "第二轮",
@@ -822,7 +867,7 @@ describe("conversation sidebar", () => {
 
     const { status, body } = await routesFor(viewer).thread(threadId);
     expect(status).toBe(200);
-    expect(body.outputs.total).toBe(4);
+    expect(body.outputs.total).toBe(5);
     expect(body.outputs.items.map((item) => item.title)).toEqual([
       "c.csv",
       "a.csv",
@@ -848,7 +893,8 @@ describe("conversation sidebar", () => {
     );
 
     const { status, body } = await routesFor(viewer, {
-      meteringTenant: async (asked) => (asked === agentId ? owner : null),
+      meteringTenants: async (asked) =>
+        new Map(asked.map((id) => [id, id === agentId ? owner : null])),
     }).thread(threadId);
     expect(status).toBe(200);
     expect(body.context.usage?.used).toBe(40_000);
@@ -859,9 +905,149 @@ describe("conversation sidebar", () => {
 
     // 看不到这个对话的人，问不出主人名下的用量。
     const outsider = await routesFor(owner, {
-      meteringTenant: async () => owner,
+      meteringTenants: async (asked) => new Map(asked.map((id) => [id, owner])),
     }).thread(threadId);
     expect(outsider.status).toBe(404);
+  });
+
+  test("a pending approval on an older card still shows when the newest card is running", async () => {
+    const viewer = await person();
+    const agentId = await employee(viewer, "审批员工");
+    const { channelId, threadId } = await directChat(viewer, agentId);
+    const decided = await pendingApprovalRow(viewer, "approved");
+    const waiting = await pendingApprovalRow(viewer);
+    await card(viewer, {
+      title: "已批过的",
+      channelRef: threadId,
+      status: "done",
+      pendingApprovalId: decided,
+    });
+    await card(viewer, {
+      title: "等确认的旧卡",
+      channelRef: channelId,
+      status: "needs_action",
+      pendingApprovalId: waiting,
+    });
+    await card(viewer, { title: "新的一轮", channelRef: threadId });
+
+    const { status, body } = await routesFor(viewer).thread(threadId);
+    expect(status).toBe(200);
+    expect(body.goal?.title).toBe("新的一轮");
+    expect(body.goal?.status).toBe("running");
+    expect(body.goal?.pendingApprovalId).toBe(waiting);
+  });
+
+  test("a group's query count does not grow with its employees", async () => {
+    /** 一个群组：每位员工有查看者的线程、一次计量、一行比例、一次压缩。 */
+    async function groupOf(
+      viewer: string,
+      size: number,
+    ): Promise<{ channelId: string; ids: string[] }> {
+      const model = await libraryModel(viewer, `模型-${size}`, 100_000);
+      const ids: string[] = [];
+      for (let index = 0; index < size; index += 1)
+        ids.push(await employee(viewer, `员工${index}`, { modelRef: model }));
+      const channelId = `${suite}-group-${randomUUID()}`;
+      channelIds.push(channelId);
+      const threadOf = new Map(ids.map((id) => [id, randomUUID()]));
+      await runAsTenant(viewer, async () => {
+        await database
+          .insert(channels)
+          .values({ id: channelId, name: "群组", description: "" });
+        await database
+          .insert(channelMemberships)
+          .values({ channelId, userId: viewer });
+        await database
+          .insert(channelAgents)
+          .values(ids.map((agentId) => ({ channelId, agentId })));
+        await database.insert(groupBotThreads).values(
+          ids.map((agentId) => ({
+            ownerUserId: viewer,
+            channelId,
+            agentId,
+            threadId: threadOf.get(agentId) as string,
+          })),
+        );
+        await database.insert(threadContextBreakdowns).values(
+          ids.map((agentId) => ({
+            threadId: threadOf.get(agentId) as string,
+            agentId,
+            runId: "run",
+            shares: { messages: 1, system: 0, tools: 0, skills: 0, memory: 0 },
+          })),
+        );
+        await database.insert(threadCompactions).values(
+          ids.map((agentId) => ({
+            threadId: threadOf.get(agentId) as string,
+            agentId,
+            uptoMessageId: "m",
+            summary: "摘要。",
+            auto: true,
+          })),
+        );
+      });
+      for (const agentId of ids)
+        await call({
+          tenantId: viewer,
+          threadId: threadOf.get(agentId) as string,
+          agentId,
+          inputTokens: 10_000,
+          modelRef: model,
+        });
+      await card(viewer, { title: "群组的活", channelRef: channelId });
+      return { channelId, ids };
+    }
+
+    /** 数一次请求里发到数据库的语句（每条语句借一次连接）。 */
+    async function statements(work: () => Promise<unknown>): Promise<number> {
+      const client = database.$client as unknown as {
+        reserve: (...args: unknown[]) => Promise<unknown>;
+      };
+      const original = client.reserve;
+      let calls = 0;
+      client.reserve = (...args: unknown[]) => {
+        calls += 1;
+        return original.apply(client, args);
+      };
+      try {
+        await work();
+      } finally {
+        client.reserve = original;
+      }
+      return calls;
+    }
+
+    const viewer = await person();
+    const small = await groupOf(viewer, 2);
+    const large = await groupOf(viewer, 20);
+    const routes = routesFor(viewer, {
+      runtime: "device",
+      machinesOf: async (ids) =>
+        new Map(ids.map((id) => [id, { tenantId: viewer, deviceId: "none" }])),
+    });
+    const smallCount = await statements(async () => {
+      const { status, body } = await routes.channel(small.channelId);
+      expect(status).toBe(200);
+      expect(body.context.perAgent).toHaveLength(2);
+    });
+    const largeCount = await statements(async () => {
+      const { status, body } = await routes.channel(large.channelId);
+      expect(status).toBe(200);
+      expect(body.context.perAgent).toHaveLength(20);
+      expect(
+        body.context.perAgent?.every(
+          (entry) => entry.used === 10_000 && entry.compactedAt,
+        ),
+      ).toBe(true);
+    });
+    expect(largeCount).toBe(smallCount);
+    expect(largeCount).toBeLessThan(40);
+    // 明细复用算好的那一份：带 ?agentId= 不多查用量。
+    const detailCount = await statements(async () => {
+      const { body } = await routes.channel(large.channelId, large.ids[7]);
+      expect(body.context.usage?.used).toBe(10_000);
+    });
+    expect(detailCount).toBeLessThanOrEqual(largeCount + 1);
   });
 
   test("meteringTenantFor answers what the model resolver meters under", async () => {

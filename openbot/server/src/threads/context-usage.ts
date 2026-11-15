@@ -183,95 +183,243 @@ export async function readContextUsage(
   deps: ReadContextUsageDeps,
   options: { sharesTenantId?: string } = {},
 ): Promise<ContextUsage> {
-  const sharesTenantId = options.sharesTenantId ?? tenantId;
-  const { database } = deps;
-  return runAsTenant(tenantId, async () => {
-    const [call] = await database
-      .select({
-        provider: modelTokenCalls.provider,
-        modelName: modelTokenCalls.modelName,
-        modelRef: modelTokenCalls.modelRef,
-        credentialId: modelTokenCalls.credentialId,
-        inputTokens: modelTokenCalls.inputTokens,
-        cachedInputTokens: modelTokenCalls.cachedInputTokens,
-        cacheWriteTokens: modelTokenCalls.cacheWriteTokens,
-      })
-      .from(modelTokenCalls)
-      .where(
-        and(
-          eq(modelTokenCalls.tenantId, tenantId),
-          eq(modelTokenCalls.threadId, threadId),
-          eq(modelTokenCalls.agentId, agentId),
-          eq(modelTokenCalls.outcome, "completed"),
-          inArray(modelTokenCalls.usageStatus, ["reported", "partial"]),
-        ),
-      )
-      .orderBy(desc(modelTokenCalls.startedAt))
-      .limit(1);
-    if (!call)
-      return contextUsageFrom({
-        used: null,
-        limit: null,
-        shares: null,
-        lastModel: null,
-      });
+  const usages = await readContextUsages(
+    [{ tenantId, threadId, agentId }],
+    deps,
+    options,
+  );
+  return usages.get(contextUsageKey(threadId, agentId)) as ContextUsage;
+}
 
-    const deployment = call.modelRef === DEPLOYMENT_MODEL_REF;
-    const pooled = !deployment && call.credentialId === call.modelRef;
-    const limit = await resolveContextLimit(
-      {
-        modelRef: deployment || pooled ? null : call.modelRef,
-        platformModelRef: pooled ? call.modelRef : null,
-        provider: call.provider,
-        modelName: call.modelName,
-      },
-      {
-        registryRow: async (id) => {
-          const [row] = await database
-            .select({
-              contextWindow: modelRegistry.contextWindow,
-              baseUrl: modelRegistry.baseUrl,
-            })
-            .from(modelRegistry)
-            .where(eq(modelRegistry.id, id))
-            .limit(1);
-          return row ?? null;
-        },
-        poolRow: async (id) => {
-          const [row] = await database
-            .select({
-              contextWindow: platformModelPool.contextWindow,
-              baseUrl: platformModelPool.baseUrl,
-            })
-            .from(platformModelPool)
-            .where(eq(platformModelPool.id, id))
-            .limit(1);
-          return row ?? null;
-        },
-        catalogue: deps.contextWindowFor,
-      },
+/** 一次要读的一位员工在一条线程里的用量，以及它的计量行写在哪个租户。 */
+export type ContextUsageRequest = {
+  tenantId: string;
+  threadId: string;
+  agentId: string;
+};
+
+/** {@link readContextUsages} 结果的键。 */
+export function contextUsageKey(threadId: string, agentId: string): string {
+  return `${threadId}\u0000${agentId}`;
+}
+
+const NO_USAGE = (): ContextUsage =>
+  contextUsageFrom({ used: null, limit: null, shares: null, lastModel: null });
+
+/**
+ * {@link readContextUsage} 一次读一批（侧栏群组每位员工一条线程）：每个计量租户读一次最近调用
+ * （`DISTINCT ON (thread_id, agent_id)`）、一次模型库行、一次平台模型池行；每个比例租户读一次最近比例。
+ * 查询条数不随员工数增长。每个请求都在结果里，键是 {@link contextUsageKey}；同一线程 + 员工只读一份。
+ */
+export async function readContextUsages(
+  requests: readonly ContextUsageRequest[],
+  deps: ReadContextUsageDeps,
+  options: { sharesTenantId?: string } = {},
+): Promise<Map<string, ContextUsage>> {
+  const { database } = deps;
+  const result = new Map<string, ContextUsage>();
+  for (const request of requests)
+    result.set(contextUsageKey(request.threadId, request.agentId), NO_USAGE());
+
+  const byTenant = new Map<string, ContextUsageRequest[]>();
+  for (const request of requests)
+    byTenant.set(request.tenantId, [
+      ...(byTenant.get(request.tenantId) ?? []),
+      request,
+    ]);
+
+  type Call = {
+    threadId: string | null;
+    agentId: string;
+    provider: string;
+    modelName: string;
+    modelRef: string;
+    credentialId: string;
+    inputTokens: number | null;
+    cachedInputTokens: number | null;
+    cacheWriteTokens: number | null;
+  };
+  const found: {
+    request: ContextUsageRequest;
+    call: Call;
+    limit: number | null;
+  }[] = [];
+  for (const [tenantId, batch] of byTenant) {
+    const wanted = new Set(
+      batch.map((request) =>
+        contextUsageKey(request.threadId, request.agentId),
+      ),
     );
-    const [breakdown] = await runAsTenant(sharesTenantId, () =>
-      database
-        .select({ shares: threadContextBreakdowns.shares })
-        .from(threadContextBreakdowns)
-        .where(
-          and(
-            eq(threadContextBreakdowns.tenantId, sharesTenantId),
-            eq(threadContextBreakdowns.threadId, threadId),
-            eq(threadContextBreakdowns.agentId, agentId),
-          ),
-        )
-        .orderBy(desc(threadContextBreakdowns.createdAt))
-        .limit(1),
-    );
-    return contextUsageFrom({
-      used: usedTokens(call),
-      limit,
-      shares: breakdown?.shares ?? null,
-      lastModel: { provider: call.provider, name: call.modelName },
+    await runAsTenant(tenantId, async () => {
+      const calls = (
+        await database
+          .selectDistinctOn(
+            [modelTokenCalls.threadId, modelTokenCalls.agentId],
+            {
+              threadId: modelTokenCalls.threadId,
+              agentId: modelTokenCalls.agentId,
+              provider: modelTokenCalls.provider,
+              modelName: modelTokenCalls.modelName,
+              modelRef: modelTokenCalls.modelRef,
+              credentialId: modelTokenCalls.credentialId,
+              inputTokens: modelTokenCalls.inputTokens,
+              cachedInputTokens: modelTokenCalls.cachedInputTokens,
+              cacheWriteTokens: modelTokenCalls.cacheWriteTokens,
+            },
+          )
+          .from(modelTokenCalls)
+          .where(
+            and(
+              eq(modelTokenCalls.tenantId, tenantId),
+              inArray(modelTokenCalls.threadId, [
+                ...new Set(batch.map((request) => request.threadId)),
+              ]),
+              inArray(modelTokenCalls.agentId, [
+                ...new Set(batch.map((request) => request.agentId)),
+              ]),
+              eq(modelTokenCalls.outcome, "completed"),
+              inArray(modelTokenCalls.usageStatus, ["reported", "partial"]),
+            ),
+          )
+          .orderBy(
+            modelTokenCalls.threadId,
+            modelTokenCalls.agentId,
+            desc(modelTokenCalls.startedAt),
+          )
+      ).filter(
+        (call) =>
+          call.threadId !== null &&
+          wanted.has(contextUsageKey(call.threadId, call.agentId)),
+      );
+      if (calls.length === 0) return;
+
+      const kindOf = (call: Call) => {
+        const deployment = call.modelRef === DEPLOYMENT_MODEL_REF;
+        const pooled = !deployment && call.credentialId === call.modelRef;
+        return { deployment, pooled };
+      };
+      const registryIds = [
+        ...new Set(
+          calls.flatMap((call) => {
+            const { deployment, pooled } = kindOf(call);
+            return deployment || pooled ? [] : [call.modelRef];
+          }),
+        ),
+      ];
+      const poolIds = [
+        ...new Set(
+          calls.flatMap((call) => (kindOf(call).pooled ? [call.modelRef] : [])),
+        ),
+      ];
+      const registryRows = new Map(
+        registryIds.length > 0
+          ? (
+              await database
+                .select({
+                  id: modelRegistry.id,
+                  contextWindow: modelRegistry.contextWindow,
+                  baseUrl: modelRegistry.baseUrl,
+                })
+                .from(modelRegistry)
+                .where(inArray(modelRegistry.id, registryIds))
+            ).map((row) => [row.id, row])
+          : [],
+      );
+      const poolRows = new Map(
+        poolIds.length > 0
+          ? (
+              await database
+                .select({
+                  id: platformModelPool.id,
+                  contextWindow: platformModelPool.contextWindow,
+                  baseUrl: platformModelPool.baseUrl,
+                })
+                .from(platformModelPool)
+                .where(inArray(platformModelPool.id, poolIds))
+            ).map((row) => [row.id, row])
+          : [],
+      );
+      for (const call of calls) {
+        const { deployment, pooled } = kindOf(call);
+        const limit = await resolveContextLimit(
+          {
+            modelRef: deployment || pooled ? null : call.modelRef,
+            platformModelRef: pooled ? call.modelRef : null,
+            provider: call.provider,
+            modelName: call.modelName,
+          },
+          {
+            registryRow: async (id) => registryRows.get(id) ?? null,
+            poolRow: async (id) => poolRows.get(id) ?? null,
+            catalogue: deps.contextWindowFor,
+          },
+        );
+        const request = batch.find(
+          (entry) =>
+            entry.threadId === call.threadId && entry.agentId === call.agentId,
+        ) as ContextUsageRequest;
+        found.push({ request, call, limit });
+      }
     });
-  });
+  }
+  if (found.length === 0) return result;
+
+  // 比例只为有用量的线程 + 员工读，按比例所在的租户一次读完。
+  const bySharesTenant = new Map<string, typeof found>();
+  for (const entry of found) {
+    const tenant = options.sharesTenantId ?? entry.request.tenantId;
+    bySharesTenant.set(tenant, [...(bySharesTenant.get(tenant) ?? []), entry]);
+  }
+  for (const [tenant, batch] of bySharesTenant) {
+    const shares = new Map(
+      (
+        await runAsTenant(tenant, () =>
+          database
+            .selectDistinctOn(
+              [
+                threadContextBreakdowns.threadId,
+                threadContextBreakdowns.agentId,
+              ],
+              {
+                threadId: threadContextBreakdowns.threadId,
+                agentId: threadContextBreakdowns.agentId,
+                shares: threadContextBreakdowns.shares,
+              },
+            )
+            .from(threadContextBreakdowns)
+            .where(
+              and(
+                eq(threadContextBreakdowns.tenantId, tenant),
+                inArray(threadContextBreakdowns.threadId, [
+                  ...new Set(batch.map((entry) => entry.request.threadId)),
+                ]),
+                inArray(threadContextBreakdowns.agentId, [
+                  ...new Set(batch.map((entry) => entry.request.agentId)),
+                ]),
+              ),
+            )
+            .orderBy(
+              threadContextBreakdowns.threadId,
+              threadContextBreakdowns.agentId,
+              desc(threadContextBreakdowns.createdAt),
+            ),
+        )
+      ).map((row) => [contextUsageKey(row.threadId, row.agentId), row.shares]),
+    );
+    for (const { request, call, limit } of batch) {
+      const key = contextUsageKey(request.threadId, request.agentId);
+      result.set(
+        key,
+        contextUsageFrom({
+          used: usedTokens(call),
+          limit,
+          shares: shares.get(key) ?? null,
+          lastModel: { provider: call.provider, name: call.modelName },
+        }),
+      );
+    }
+  }
+  return result;
 }
 
 /** 一段 prompt 的类别和字数。 */

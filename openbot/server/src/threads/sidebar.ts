@@ -20,6 +20,7 @@ import {
   isNull,
   min,
 } from "drizzle-orm";
+import { ownerOfBotRow } from "../agents/bot-owner";
 import { readAgentPresence } from "../agents/presence";
 import { agentAccessFilter } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
@@ -27,6 +28,7 @@ import type { Database } from "../db/client";
 import {
   agentProfiles,
   agents,
+  approvalRequests,
   attachments,
   channelAgents,
   channelMemberships,
@@ -51,8 +53,9 @@ import { isDeliverableRef } from "../tasks/projector";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
 import {
   contextUsageFrom,
+  contextUsageKey,
   type ReadContextUsageDeps,
-  readContextUsage,
+  readContextUsages,
 } from "./context-usage";
 
 /**
@@ -63,11 +66,14 @@ import {
  * 不说为什么。
  *
  * 所有读都在查看者自己的租户帧里（行级安全照常生效），只有一处例外：员工的计量行写在哪个租户就去哪个
- * 租户读（{@link SidebarDeps.meteringTenant}，员工用主人的模型库时是主人），而且只在上面的可见性检查过了
+ * 租户读（{@link SidebarDeps.meteringTenants}，员工用主人的模型库时是主人），而且只在上面的可见性检查过了
  * 之后、只按这条线程 + 这位员工过滤。分类比例仍在查看者名下读（它记在发起运行的人名下）。
  *
- * 群组的口径：环境的成员列表、目标、输出内容按群组频道取；上下文按「查看者 × 每位员工」各自那条
- * `group_bot_threads` 线程取。任务卡和附件按行级安全只看得到查看者自己名下的。
+ * 群组的口径：环境的成员列表按群组频道取；目标、输出内容按查看者取（频道 + 他自己的各条员工线程上、他
+ * 名下的任务卡）；上下文按「查看者 × 每位员工」各自那条 `group_bot_threads` 线程取。
+ *
+ * 前端每 15 秒刷新一次，所以群组按线程批量读：计量租户、用量、比例、压缩记录、设备各一次，查询条数不随
+ * 员工数增长；带 `?agentId=` 的明细直接用算好的那一份。读接口不改任何状态（设备只 peek，不挑）。
  */
 
 export type SidebarDeps = {
@@ -78,11 +84,18 @@ export type SidebarDeps = {
   deploymentModelLabel: string | null;
   contextWindowFor: ReadContextUsageDeps["contextWindowFor"];
   /**
-   * 员工这一轮的模型调用记在哪个租户名下，在查看者的帧里问（`meteringTenantFor`）；null 时按查看者。
+   * 每位员工这一轮的模型调用记在哪个租户名下，在查看者的帧里一次问完（`meteringTenantsFor`）；不是个人
+   * 租户的答案按查看者读。按员工当前的绑定判断：换绑前记在别的租户的调用，下一轮跑之前看不到。
    */
-  meteringTenant: (agentId: string) => Promise<string | null>;
-  /** 设备模式下内置员工的动作落在哪台电脑（`deviceSelector.forBot`）；云端模式不给。 */
-  machineOf?: (agentId: string) => Promise<MachineTarget | null>;
+  meteringTenants: (
+    agentIds: readonly string[],
+  ) => Promise<Map<string, string | null>>;
+  /**
+   * 设备模式下内置员工的动作会落在哪台电脑，只读（`deviceSelector.peek`，不留下选择）；云端模式不给。
+   */
+  machinesOf?: (
+    agentIds: readonly string[],
+  ) => Promise<Map<string, MachineTarget>>;
 };
 
 export type ConversationSidebarService = {
@@ -108,6 +121,8 @@ type Employee = {
   configuration: unknown;
   modelRef: string | null;
   platformModelRef: string | null;
+  /** 员工的主人（个人租户），外部员工的电脑在他名下。 */
+  owner: string | null;
 };
 
 /** 查看者能看到的一个频道。 */
@@ -134,6 +149,21 @@ type ExternalConfiguration = {
   workdirRef: string | null;
 };
 
+/** 一位员工在哪：所在电脑（查看者看得到时），设备模式内置员工另带电脑主人。 */
+type Place = {
+  device: Device | null;
+  /** 设备模式内置员工那台电脑的主人；项目绑定在他名下。 */
+  machineTenant: string | null;
+  onComputer: boolean;
+};
+
+/** 一位员工在一条线程上的上下文，算一次，单聊、群组成员行和明细共用。 */
+type AgentContext = {
+  managedBy?: string;
+  usage?: ContextUsage;
+  compaction: { id: string; auto: boolean; at: string } | null;
+};
+
 const HARNESS_LABELS: Readonly<Record<string, string>> = {
   codex: "Codex",
   "claude-code": "Claude Code",
@@ -150,9 +180,17 @@ const STATUS_WORDS: Readonly<Record<SidebarGoalStatus, string>> = {
 
 /** 「上次检查」里员工回复第一句的长度上限（字）。 */
 const LAST_CHECK_SENTENCE_LIMIT = 60;
-/** 输出内容最多看这么多张卡：侧栏只要最近的几条和总数。 */
+/**
+ * 输出内容最多看这么多张卡：侧栏只要最近的几条和总数。超过时 `total` 只数到这些卡为止（偏小）。
+ */
 const OUTPUT_CARD_LIMIT = 100;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const NO_USAGE = (): ContextUsage =>
+  contextUsageFrom({ used: null, limit: null, shares: null, lastModel: null });
+
+const deviceKey = (tenantId: string, deviceId: string) =>
+  `${tenantId}\u0000${deviceId}`;
 
 function textOf(value: unknown): string {
   if (typeof value === "string") return value;
@@ -207,6 +245,15 @@ function namedEntries(value: unknown): { ref: string; name: string }[] {
       ? [{ ref, name }]
       : [];
   });
+}
+
+/** 外部员工的 harness 名：三家用固定名，custom 用设备上报的 app 名，取不到就用员工名。 */
+function harnessLabel(employee: Employee, on: Device | null): string {
+  const configuration = externalConfiguration(employee.configuration);
+  if (configuration.harness && HARNESS_LABELS[configuration.harness])
+    return HARNESS_LABELS[configuration.harness] as string;
+  const app = on?.apps.find((entry) => entry.ref === configuration.appRef);
+  return app?.name ?? employee.name;
 }
 
 export function createConversationSidebar(
@@ -267,6 +314,8 @@ export function createConversationSidebar(
         name: agents.name,
         type: agents.type,
         configuration: agents.configuration,
+        tenantId: agents.tenantId,
+        ownerUserId: agentProfiles.ownerUserId,
         modelRef: agentProfiles.modelRef,
         platformModelRef: agentProfiles.platformModelRef,
       })
@@ -279,16 +328,27 @@ export function createConversationSidebar(
           agentAccessFilter(viewer),
         ),
       );
-    return new Map(rows.map((row) => [row.id, row]));
+    return new Map(
+      rows.map(({ tenantId, ownerUserId, ...row }) => [
+        row.id,
+        { ...row, owner: ownerOfBotRow({ tenantId, ownerUserId }) },
+      ]),
+    );
   }
 
-  async function device(
-    tenantId: string,
-    deviceId: string,
-  ): Promise<Device | null> {
-    const [row] = await database
+  /** 一批电脑（主人租户 + 设备 id），一条查询；查看者看不到的不在结果里。 */
+  async function devices(
+    wanted: readonly { tenantId: string; deviceId: string }[],
+  ): Promise<Map<string, Device>> {
+    if (wanted.length === 0) return new Map();
+    const keys = new Set(
+      wanted.map((entry) => deviceKey(entry.tenantId, entry.deviceId)),
+    );
+    const rows = await database
       .select({
         rowId: registeredDevices.id,
+        tenantId: registeredDevices.tenantId,
+        deviceId: registeredDevices.deviceId,
         name: registeredDevices.name,
         lastSeenAt: registeredDevices.lastSeenAt,
         roots: registeredDevices.roots,
@@ -297,48 +357,79 @@ export function createConversationSidebar(
       .from(registeredDevices)
       .where(
         and(
-          eq(registeredDevices.tenantId, tenantId),
-          eq(registeredDevices.deviceId, deviceId),
+          inArray(registeredDevices.tenantId, [
+            ...new Set(wanted.map((entry) => entry.tenantId)),
+          ]),
+          inArray(registeredDevices.deviceId, [
+            ...new Set(wanted.map((entry) => entry.deviceId)),
+          ]),
         ),
-      )
-      .limit(1);
-    if (!row) return null;
-    return {
-      rowId: row.rowId,
-      name: row.name,
-      online:
-        row.lastSeenAt !== null &&
-        Date.now() - row.lastSeenAt.getTime() < OFFLINE_AFTER_MS,
-      roots: namedEntries(row.roots),
-      apps: namedEntries(row.apps),
-    };
+      );
+    return new Map(
+      rows
+        .filter((row) => keys.has(deviceKey(row.tenantId, row.deviceId)))
+        .map((row) => [
+          deviceKey(row.tenantId, row.deviceId),
+          {
+            rowId: row.rowId,
+            name: row.name,
+            online:
+              row.lastSeenAt !== null &&
+              Date.now() - row.lastSeenAt.getTime() < OFFLINE_AFTER_MS,
+            roots: namedEntries(row.roots),
+            apps: namedEntries(row.apps),
+          },
+        ]),
+    );
   }
 
   /**
-   * 内置员工在设备模式下动作落在的那台电脑（`tenantId` 是电脑主人），连同查看者看得到时的设备记录。
-   * 云端模式、没有电脑可选时为 null。
+   * 每位员工在哪：外部员工是它配置里那台电脑（在员工主人名下找），设备模式内置员工是它的动作会落在的
+   * 那台；电脑一次读完。
    */
-  async function machineOf(
-    agentId: string,
-  ): Promise<{ tenantId: string; device: Device | null } | null> {
-    if (deps.runtime !== "device" || !deps.machineOf) return null;
-    const machine = await deps.machineOf(agentId).catch(() => null);
-    if (!machine) return null;
-    return {
-      tenantId: machine.tenantId,
-      device: await device(machine.tenantId, machine.deviceId),
-    };
-  }
-
-  function harnessLabel(
-    employee: Employee,
-    configuration: ExternalConfiguration,
-    on: Device | null,
-  ): string {
-    if (configuration.harness && HARNESS_LABELS[configuration.harness])
-      return HARNESS_LABELS[configuration.harness] as string;
-    const app = on?.apps.find((entry) => entry.ref === configuration.appRef);
-    return app?.name ?? employee.name;
+  async function placesOf(
+    people: readonly Employee[],
+  ): Promise<Map<string, Place>> {
+    const builtIns =
+      deps.runtime === "device"
+        ? people.filter((person) => person.type === "built_in")
+        : [];
+    const machines =
+      builtIns.length > 0 && deps.machinesOf
+        ? await deps
+            .machinesOf(builtIns.map((person) => person.id))
+            .catch(() => new Map<string, MachineTarget>())
+        : new Map<string, MachineTarget>();
+    const targets = new Map<string, MachineTarget>();
+    for (const person of people) {
+      if (person.type === "device_acp") {
+        const { deviceId } = externalConfiguration(person.configuration);
+        if (deviceId && person.owner)
+          targets.set(person.id, { tenantId: person.owner, deviceId });
+      } else {
+        const machine = machines.get(person.id);
+        if (machine) targets.set(person.id, machine);
+      }
+    }
+    const found = await devices([...targets.values()]);
+    return new Map(
+      people.map((person) => {
+        const target = targets.get(person.id);
+        return [
+          person.id,
+          {
+            device: target
+              ? (found.get(deviceKey(target.tenantId, target.deviceId)) ?? null)
+              : null,
+            machineTenant:
+              person.type === "built_in" ? (target?.tenantId ?? null) : null,
+            onComputer:
+              person.type === "device_acp" ||
+              (person.type === "built_in" && deps.runtime === "device"),
+          },
+        ];
+      }),
+    );
   }
 
   async function modelLabel(employee: Employee): Promise<string | null> {
@@ -389,27 +480,25 @@ export function createConversationSidebar(
     return row ?? null;
   }
 
+  /** 单聊的环境：一位员工在哪、项目或工作文件夹、模型。 */
   async function environmentFor(
-    viewer: AgentActor,
     employee: Employee | undefined,
+    place: Place | undefined,
   ): Promise<SidebarEnvironment> {
     if (!employee)
       return {
         kind: deps.runtime === "device" ? "device" : "cloud",
         model: null,
       };
+    const on = place?.device ?? null;
     if (employee.type === "device_acp") {
-      const configuration = externalConfiguration(employee.configuration);
-      const on = configuration.deviceId
-        ? await device(viewer.id, configuration.deviceId)
-        : null;
-      const harness = harnessLabel(employee, configuration, on);
+      const harness = harnessLabel(employee, on);
+      const { workdirRef } = externalConfiguration(employee.configuration);
       return {
         kind: "device",
         ...(on ? { deviceName: on.name, online: on.online } : {}),
         workdirName:
-          on?.roots.find((root) => root.ref === configuration.workdirRef)
-            ?.name ?? null,
+          on?.roots.find((root) => root.ref === workdirRef)?.name ?? null,
         model: {
           label: `外部员工 · ${harness} · 用你自己的订阅`,
           external: { harness },
@@ -421,125 +510,179 @@ export function createConversationSidebar(
     const model = label ? { label } : null;
     if (deps.runtime !== "device")
       return { kind: "cloud", project: null, model };
-    const machine = await machineOf(employee.id);
-    const on = machine?.device ?? null;
     return {
       kind: "device",
       ...(on ? { deviceName: on.name, online: on.online } : {}),
       project:
-        machine && on
-          ? await project(machine.tenantId, employee.id, on.rowId)
+        on && place?.machineTenant
+          ? await project(place.machineTenant, employee.id, on.rowId)
           : null,
       model,
     };
   }
 
-  async function lastCompaction(
+  /**
+   * 一批「员工 × 线程」的上下文：外部员工只说谁在管；其余的计量租户一次问完、用量和比例按租户批量读、
+   * 压缩记录一条查询读完（在查看者名下）。
+   */
+  async function contextsOf(
     viewer: AgentActor,
-    threadId: string,
-    agentId: string,
-  ): Promise<{ id: string; auto: boolean; at: string } | null> {
-    const [row] = await database
-      .select({
-        id: threadCompactions.id,
-        auto: threadCompactions.auto,
-        createdAt: threadCompactions.createdAt,
-      })
-      .from(threadCompactions)
-      .where(
-        and(
-          eq(threadCompactions.tenantId, viewer.id),
-          eq(threadCompactions.threadId, threadId),
-          eq(threadCompactions.agentId, agentId),
-        ),
-      )
-      .orderBy(desc(threadCompactions.createdAt))
-      .limit(1);
-    return row
-      ? { id: row.id, auto: row.auto, at: row.createdAt.toISOString() }
-      : null;
-  }
-
-  /** 某员工在某线程里的用量：计量行在它写入的租户读，分类比例在查看者名下读。 */
-  async function usageOf(
-    viewer: AgentActor,
-    threadId: string | null,
-    agentId: string,
-  ): Promise<ContextUsage> {
-    if (!threadId)
-      return contextUsageFrom({
-        used: null,
-        limit: null,
-        shares: null,
-        lastModel: null,
-      });
-    // 计量只写在某个人名下（计量表拒收别的租户），所以别的答案都按查看者读。
-    const answered = await deps.meteringTenant(agentId);
-    const metered = isPersonTenant(answered) ? answered : viewer.id;
-    return readContextUsage(
-      metered,
-      threadId,
-      agentId,
+    rows: readonly {
+      agentId: string;
+      employee: Employee | undefined;
+      threadId: string | null;
+    }[],
+    places: Map<string, Place>,
+  ): Promise<Map<string, AgentContext>> {
+    const result = new Map<string, AgentContext>();
+    const metered = rows.filter(
+      (row): row is typeof row & { threadId: string } =>
+        row.employee?.type !== "device_acp" && row.threadId !== null,
+    );
+    const tenants =
+      metered.length > 0
+        ? await deps.meteringTenants([
+            ...new Set(metered.map((row) => row.agentId)),
+          ])
+        : new Map<string, string | null>();
+    const usages = await readContextUsages(
+      metered.map((row) => {
+        // 计量只写在某个人名下（计量表拒收别的租户），所以别的答案都按查看者读。
+        const answered = tenants.get(row.agentId);
+        return {
+          tenantId: isPersonTenant(answered) ? answered : viewer.id,
+          threadId: row.threadId,
+          agentId: row.agentId,
+        };
+      }),
       { database, contextWindowFor: deps.contextWindowFor },
       { sharesTenantId: viewer.id },
     );
+    const compactions =
+      metered.length > 0
+        ? new Map(
+            (
+              await database
+                .selectDistinctOn(
+                  [threadCompactions.threadId, threadCompactions.agentId],
+                  {
+                    id: threadCompactions.id,
+                    threadId: threadCompactions.threadId,
+                    agentId: threadCompactions.agentId,
+                    auto: threadCompactions.auto,
+                    createdAt: threadCompactions.createdAt,
+                  },
+                )
+                .from(threadCompactions)
+                .where(
+                  and(
+                    eq(threadCompactions.tenantId, viewer.id),
+                    inArray(threadCompactions.threadId, [
+                      ...new Set(metered.map((row) => row.threadId)),
+                    ]),
+                    inArray(threadCompactions.agentId, [
+                      ...new Set(metered.map((row) => row.agentId)),
+                    ]),
+                  ),
+                )
+                .orderBy(
+                  threadCompactions.threadId,
+                  threadCompactions.agentId,
+                  desc(threadCompactions.createdAt),
+                )
+            ).map((row) => [
+              contextUsageKey(row.threadId, row.agentId),
+              {
+                id: row.id,
+                auto: row.auto,
+                at: row.createdAt.toISOString(),
+              },
+            ]),
+          )
+        : new Map<string, { id: string; auto: boolean; at: string }>();
+    for (const row of rows) {
+      if (row.employee?.type === "device_acp") {
+        result.set(row.agentId, {
+          managedBy: harnessLabel(
+            row.employee,
+            places.get(row.agentId)?.device ?? null,
+          ),
+          compaction: null,
+        });
+        continue;
+      }
+      const key = row.threadId
+        ? contextUsageKey(row.threadId, row.agentId)
+        : null;
+      result.set(row.agentId, {
+        usage: (key && usages.get(key)) || NO_USAGE(),
+        compaction: (key && compactions.get(key)) || null,
+      });
+    }
+    return result;
   }
 
-  /** 一位员工在一条线程里的上下文：外部员工只说谁在管，其余给用量和最近一次压缩。 */
-  async function contextOf(
-    viewer: AgentActor,
-    threadId: string | null,
-    agentId: string,
-    employee: Employee | undefined,
-  ): Promise<SidebarContext> {
-    if (employee?.type === "device_acp") {
-      const configuration = externalConfiguration(employee.configuration);
-      const on = configuration.deviceId
-        ? await device(viewer.id, configuration.deviceId)
-        : null;
-      return { managedBy: harnessLabel(employee, configuration, on) };
-    }
+  function perAgentOf(
+    people: readonly Employee[],
+    contexts: Map<string, AgentContext>,
+  ): NonNullable<SidebarContext["perAgent"]> {
+    return people.map((person) => {
+      const context = contexts.get(person.id);
+      if (context?.managedBy)
+        return {
+          agentId: person.id,
+          name: person.name,
+          used: null,
+          limit: null,
+          percent: null,
+          managedBy: context.managedBy,
+        };
+      return {
+        agentId: person.id,
+        name: person.name,
+        used: context?.usage?.used ?? null,
+        limit: context?.usage?.limit ?? null,
+        percent: context?.usage?.percent ?? null,
+        compactedAt: context?.compaction?.at ?? null,
+      };
+    });
+  }
+
+  /** 明细：外部员工只有 `managedBy`，其余是用量和最近一次压缩。 */
+  function detailOf(context: AgentContext | undefined): SidebarContext {
+    if (context?.managedBy) return { managedBy: context.managedBy };
     return {
-      usage: await usageOf(viewer, threadId, agentId),
-      lastCompaction: threadId
-        ? await lastCompaction(viewer, threadId, agentId)
-        : null,
+      usage: context?.usage ?? NO_USAGE(),
+      lastCompaction: context?.compaction ?? null,
     };
   }
 
-  /** 每位员工一行（群组：查看者和它的那条线程；单聊：同一条线程）。 */
-  async function perAgentOf(
+  /**
+   * 这些任务卡上最新一个还挂着的审批（查看者自己的）。审批没记线程，挂在卡的 `pending_approval_id` 上，
+   * 所以不只看最新那张卡：旧卡上挂着的也算。
+   */
+  async function pendingApproval(
     viewer: AgentActor,
-    rows: { employee: Employee; threadId: string | null }[],
-  ): Promise<NonNullable<SidebarContext["perAgent"]>> {
-    return Promise.all(
-      rows.map(async ({ employee, threadId }) => {
-        if (employee.type === "device_acp") {
-          const context = await contextOf(
-            viewer,
-            threadId,
-            employee.id,
-            employee,
-          );
-          return {
-            agentId: employee.id,
-            name: employee.name,
-            percent: null,
-            ...(context.managedBy ? { managedBy: context.managedBy } : {}),
-          };
-        }
-        const usage = await usageOf(viewer, threadId, employee.id);
-        const compaction = threadId
-          ? await lastCompaction(viewer, threadId, employee.id)
-          : null;
-        return {
-          agentId: employee.id,
-          name: employee.name,
-          percent: usage.percent,
-          compactedAt: compaction?.at ?? null,
-        };
-      }),
-    );
+    refs: readonly string[],
+  ): Promise<string | null> {
+    const [row] = await database
+      .select({ id: approvalRequests.id })
+      .from(tasks)
+      .innerJoin(
+        approvalRequests,
+        eq(approvalRequests.id, tasks.pendingApprovalId),
+      )
+      .where(
+        and(
+          eq(tasks.tenantId, viewer.id),
+          inArray(tasks.channelRef, [...refs]),
+          eq(approvalRequests.ownerUserId, viewer.id),
+          eq(approvalRequests.status, "pending"),
+        ),
+      )
+      .orderBy(desc(approvalRequests.createdAt))
+      .limit(1);
+    return row?.id ?? null;
   }
 
   async function goalOf(
@@ -549,11 +692,7 @@ export function createConversationSidebar(
     reply: () => Promise<string | null>,
   ): Promise<SidebarGoal> {
     const [card] = await database
-      .select({
-        title: tasks.title,
-        status: tasks.status,
-        pendingApprovalId: tasks.pendingApprovalId,
-      })
+      .select({ title: tasks.title, status: tasks.status })
       .from(tasks)
       .where(
         and(
@@ -580,8 +719,7 @@ export function createConversationSidebar(
       lastCheck: [STATUS_WORDS[card.status], sentence]
         .filter(Boolean)
         .join(" · "),
-      pendingApprovalId:
-        card.status === "needs_action" ? card.pendingApprovalId : null,
+      pendingApprovalId: await pendingApproval(viewer, refs),
     };
   }
 
@@ -640,13 +778,17 @@ export function createConversationSidebar(
     return row?.text.trim() || null;
   }
 
-  /** 这些任务卡留下的输出：按卡的时间倒序，一张卡里附件在前，去重后取前几条和总数。 */
+  /**
+   * 这些任务卡留下的输出：按卡的时间倒序，一张卡里附件在前。附件按 id 去重（同一个文件被几张卡带上只算
+   * 一次）；组件按「卡 + 组件」去重，不同卡上的同名组件各算一条。取前几条和总数。
+   */
   async function outputsOf(
     viewer: AgentActor,
     refs: readonly string[],
   ): Promise<ConversationSidebar["outputs"]> {
     const cards = await database
       .select({
+        id: tasks.id,
         executorAgentId: tasks.executorAgentId,
         deliverableRef: tasks.deliverableRef,
         updatedAt: tasks.updatedAt,
@@ -718,8 +860,11 @@ export function createConversationSidebar(
             : kind === "table"
               ? "表格"
               : "报告";
-        // 组件画在看板那张卡上，没有自己的地址。
-        add(`${kind}:${title}`, { kind, title, href: "/tasks", at, ...by });
+        // 组件画在看板那张卡上，没有自己的地址；同一张卡里画了两遍一模一样的只算一次。
+        add(
+          `component:${card.id}:${component.name}:${JSON.stringify(component.args ?? {})}`,
+          { kind, title, href: "/tasks", at, ...by },
+        );
       }
     }
     return { items: items.slice(0, SIDEBAR_OUTPUT_LIMIT), total: items.length };
@@ -762,16 +907,33 @@ export function createConversationSidebar(
     const agentId = requested ?? chat.agentIds[0];
     if (!agentId || !ids.includes(agentId)) return null;
     const people = await employees(viewer, ids);
-    const employee = people.get(agentId);
-    const refs = threadId ? [threadId, chat.channelId] : [chat.channelId];
-    const context = await contextOf(viewer, threadId, agentId, employee);
-    const others = ids.flatMap((id) => {
-      const known = people.get(id);
-      return known ? [{ employee: known, threadId }] : [];
+    const known = ids.flatMap((id) => {
+      const person = people.get(id);
+      return person ? [person] : [];
     });
-    if (others.length > 1) context.perAgent = await perAgentOf(viewer, others);
+    const places = await placesOf(known);
+    const contexts = await contextsOf(
+      viewer,
+      [
+        { agentId, employee: people.get(agentId), threadId },
+        ...known
+          .filter((person) => person.id !== agentId)
+          .map((person) => ({
+            agentId: person.id,
+            employee: person,
+            threadId,
+          })),
+      ],
+      places,
+    );
+    const context = detailOf(contexts.get(agentId));
+    if (known.length > 1) context.perAgent = perAgentOf(known, contexts);
+    const refs = threadId ? [threadId, chat.channelId] : [chat.channelId];
     return {
-      environment: await environmentFor(viewer, employee),
+      environment: await environmentFor(
+        people.get(agentId),
+        places.get(agentId),
+      ),
       goal: await goalOf(viewer, refs, threadId ? [threadId] : [], () =>
         directReply(threadId, chat.channelId),
       ),
@@ -807,8 +969,8 @@ export function createConversationSidebar(
     };
     const bots = chat.agentIds
       .flatMap((id) => {
-        const employee = people.get(id);
-        return employee ? [employee] : [];
+        const person = people.get(id);
+        return person ? [person] : [];
       })
       .sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id));
     if (requested && !bots.some((bot) => bot.id === requested)) return null;
@@ -838,55 +1000,39 @@ export function createConversationSidebar(
         )
       ).map((row) => [row.agentId, row]),
     );
-    const members = await Promise.all(
-      bots.map(async (bot) => {
-        const on =
-          bot.type === "device_acp"
-            ? await (async () => {
-                const { deviceId } = externalConfiguration(bot.configuration);
-                return deviceId ? device(viewer.id, deviceId) : null;
-              })()
-            : bot.type === "built_in"
-              ? ((await machineOf(bot.id))?.device ?? null)
-              : null;
-        const onComputer =
-          bot.type === "device_acp" ||
-          (bot.type === "built_in" && deps.runtime === "device");
-        const now = presence.get(bot.id);
-        let status: SidebarMemberStatus = now?.status ?? "unknown";
-        if (status !== "paused" && on && !on.online) status = "offline";
-        return {
-          agentId: bot.id,
-          name: bot.name,
-          status,
-          where: on?.name ?? (onComputer ? "电脑" : "云端"),
-          doing: status === "working" ? (now?.doing ?? null) : null,
-        };
-      }),
+    const places = await placesOf(bots);
+    const contexts = await contextsOf(
+      viewer,
+      bots.map((bot) => ({
+        agentId: bot.id,
+        employee: bot,
+        threadId: mine.get(bot.id) ?? null,
+      })),
+      places,
     );
+    const members = bots.map((bot) => {
+      const place = places.get(bot.id);
+      const now = presence.get(bot.id);
+      let status: SidebarMemberStatus = now?.status ?? "unknown";
+      if (status !== "paused" && place?.device && !place.device.online)
+        status = "offline";
+      return {
+        agentId: bot.id,
+        name: bot.name,
+        status,
+        where: place?.device?.name ?? (place?.onComputer ? "电脑" : "云端"),
+        doing: status === "working" ? (now?.doing ?? null) : null,
+      };
+    });
 
     const threadIds = requested
       ? [mine.get(requested)].filter((id): id is string => Boolean(id))
       : [...mine.values()];
     const refs = [chat.channelId, ...mine.values()];
-    const context: SidebarContext = {
-      perAgent: await perAgentOf(
-        viewer,
-        bots.map((bot) => ({
-          employee: bot,
-          threadId: mine.get(bot.id) ?? null,
-        })),
-      ),
-    };
-    if (requested) {
-      const detail = await contextOf(
-        viewer,
-        mine.get(requested) ?? null,
-        requested,
-        people.get(requested),
-      );
-      Object.assign(context, detail);
-    }
+    const context: SidebarContext = requested
+      ? detailOf(contexts.get(requested))
+      : {};
+    context.perAgent = perAgentOf(bots, contexts);
     return {
       environment: {
         kind: deps.runtime === "device" ? "device" : "cloud",

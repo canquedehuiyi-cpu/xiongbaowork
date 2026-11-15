@@ -19,7 +19,8 @@ import { agentProfiles, agents } from "../db/schema";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { asPlatform, isPersonTenant } from "../tenant/context";
 
-function ownerOf(row: {
+/** The person a Bot row belongs to: its own tenant, or a team Bot's profile owner; null for nobody. */
+export function ownerOfBotRow(row: {
   tenantId: string;
   ownerUserId: string | null;
 }): string | null {
@@ -45,7 +46,7 @@ export async function ownerTenantOfBot(
       .where(eq(agents.id, agentId))
       .limit(1),
   );
-  return row ? ownerOf(row) : null;
+  return row ? ownerOfBotRow(row) : null;
 }
 
 /** {@link ownerTenantOfBot} for many Bots in one read. A Bot with no row is absent from the map. */
@@ -65,5 +66,5 @@ export async function ownerTenantsOfBots(
       .leftJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
       .where(inArray(agents.id, agentIds)),
   );
-  return new Map(rows.map((row) => [row.id, ownerOf(row)] as const));
+  return new Map(rows.map((row) => [row.id, ownerOfBotRow(row)] as const));
 }

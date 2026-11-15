@@ -24,7 +24,7 @@ import {
   CoworkerUnavailableError,
   createActorAgentResolver,
 } from "./agents/agent-resolver";
-import { ownerTenantOfBot } from "./agents/bot-owner";
+import { ownerTenantOfBot, ownerTenantsOfBots } from "./agents/bot-owner";
 import {
   mintRunAssertion,
   type RunAssertion,
@@ -317,7 +317,7 @@ import { installDeepSeekThinkingOff } from "./models/deepseek-thinking";
 import { createModelRoutes, createModelShelf } from "./models/routes";
 import {
   createNamedAgentModelResolver,
-  meteringTenantFor,
+  meteringTenantsFor,
   modelOf,
 } from "./models/runtime-resolver";
 import { databaseTokenCallSink } from "./models/token-metering";
@@ -5155,11 +5155,31 @@ await startupLifecycle.run(async (startup) => {
       deploymentModelLabel: runtimeModel.label ?? runtimeModel.defaultModel,
       contextWindowFor: (provider, modelName, baseUrl) =>
         modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
-      meteringTenant: (agentId) => meteringTenantFor(database, agentId),
+      meteringTenants: (agentIds) => meteringTenantsFor(database, agentIds),
       ...(config.tenantRuntime === "device"
         ? {
-            machineOf: (agentId: string) =>
-              deviceSelector.forBot(agentId).catch(() => null),
+            // Read only: where each Bot's actions would go, without making a pick (`peek`).
+            machinesOf: async (agentIds: readonly string[]) => {
+              const owners = await ownerTenantsOfBots(database, [...agentIds]);
+              const machinesByOwner = new Map<
+                string,
+                Awaited<ReturnType<typeof deviceStore.list>>
+              >();
+              for (const owner of new Set(owners.values()))
+                if (owner) machinesByOwner.set(owner, await deviceStore.list(owner));
+              const result = new Map<string, { tenantId: string; deviceId: string }>();
+              for (const agentId of agentIds) {
+                const owner = owners.get(agentId);
+                if (!owner) continue;
+                const target = deviceSelector.peek(
+                  agentId,
+                  owner,
+                  machinesByOwner.get(owner) ?? [],
+                );
+                if (target) result.set(agentId, target);
+              }
+              return result;
+            },
           }
         : {}),
     }),

@@ -87,7 +87,7 @@ export type SidebarGoal = {
   rounds: number;
   /** 状态一句话，加员工最近一条回复的第一句（截 60 字）。 */
   lastCheck: string;
-  /** 卡在等人确认时挂着的审批；否则为 null。 */
+  /** 这个对话（群组里是查看者自己的线程）里最新一个还挂着的审批；没有时为 null。 */
   pendingApprovalId: string | null;
 } | null;
 
@@ -99,6 +99,9 @@ export type SidebarContext = {
   perAgent?: {
     agentId: string;
     name: string;
+    /** 已用与上限（token），同 `ContextUsage`；外部员工与取不到时为 null。 */
+    used: number | null;
+    limit: number | null;
     percent: number | null;
     managedBy?: string;
     compactedAt?: string | null;

@@ -3,7 +3,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { CredentialSecretReader } from "../credentials";
 import { openCredential } from "../credentials";
 import type { Database } from "../db/client";
@@ -181,66 +181,159 @@ async function bindingFor(
   agentId: string,
   environment: PoolKeyEnvironment,
 ): Promise<Binding | null> {
-  const [profile] = await database
+  return (
+    (await bindingsFor(database, [agentId], environment)).get(agentId) ?? null
+  );
+}
+
+/**
+ * {@link bindingFor} for many coworkers in a fixed number of reads: one for the profiles, one for the
+ * library rows, one for the pool rows, and one plan read per paying tenant. Every coworker asked about
+ * is in the map, `null` where it has no usable binding. The decision per coworker is exactly
+ * {@link bindingFor}'s.
+ */
+async function bindingsFor(
+  database: Database,
+  agentIds: readonly string[],
+  environment: PoolKeyEnvironment,
+): Promise<Map<string, Binding | null>> {
+  const ids = [...new Set(agentIds)];
+  const result = new Map<string, Binding | null>(ids.map((id) => [id, null]));
+  if (ids.length === 0) return result;
+  const profiles = await database
     .select({
+      agentId: agentProfiles.agentId,
       tenantId: agentProfiles.tenantId,
       ownerUserId: agentProfiles.ownerUserId,
       modelRef: agentProfiles.modelRef,
       platformModelRef: agentProfiles.platformModelRef,
     })
     .from(agentProfiles)
-    .where(eq(agentProfiles.agentId, agentId))
-    .limit(1);
-  if (!profile) return null;
-  /*
-   * A TEAM Bot (G01-E, plan §2.4) is stamped `team`, which is nobody and cannot be billed. Its
-   * owner's private library model is the owner's key, so it is used only when the owner is the one
-   * asking; a teammate falls back to the deployment default. A pool model is paid by whoever invokes
-   * it — the person in the frame — and under `platform` (background work) by the owner.
-   */
-  const team = profile.tenantId === TEAM_TENANT;
-  // Asked only for a team Bot: a private Bot's binding never depends on who is asking.
-  const frame = team ? currentTenant() : "";
-  const owner = isPersonTenant(profile.ownerUserId)
-    ? profile.ownerUserId
-    : null;
-  if (!profile.modelRef) {
-    if (!profile.platformModelRef) return null;
-    const payer = !team
-      ? profile.tenantId
-      : isPersonTenant(frame)
-        ? frame
-        : frame === PLATFORM_TENANT
-          ? owner
-          : null;
-    return payer
-      ? poolBindingFor(database, payer, profile.platformModelRef, environment)
+    .where(inArray(agentProfiles.agentId, ids));
+
+  /** What each coworker would be bound to, before the rows behind it are read. */
+  const library: {
+    agentId: string;
+    modelRef: string;
+    expected: string | null;
+  }[] = [];
+  const pool: { agentId: string; payer: string; poolId: string }[] = [];
+  for (const profile of profiles) {
+    /*
+     * A TEAM Bot (G01-E, plan §2.4) is stamped `team`, which is nobody and cannot be billed. Its
+     * owner's private library model is the owner's key, so it is used only when the owner is the one
+     * asking; a teammate falls back to the deployment default. A pool model is paid by whoever invokes
+     * it — the person in the frame — and under `platform` (background work) by the owner.
+     */
+    const team = profile.tenantId === TEAM_TENANT;
+    // Asked only for a team Bot: a private Bot's binding never depends on who is asking.
+    const frame = team ? currentTenant() : "";
+    const owner = isPersonTenant(profile.ownerUserId)
+      ? profile.ownerUserId
       : null;
+    if (!profile.modelRef) {
+      if (!profile.platformModelRef) continue;
+      const payer = !team
+        ? profile.tenantId
+        : isPersonTenant(frame)
+          ? frame
+          : frame === PLATFORM_TENANT
+            ? owner
+            : null;
+      // A tenant that is nobody's gets no pool model: its calls could not be metered to anybody.
+      if (payer && isPersonTenant(payer))
+        pool.push({
+          agentId: profile.agentId,
+          payer,
+          poolId: profile.platformModelRef,
+        });
+      continue;
+    }
+    if (team && (!owner || frame !== owner)) continue;
+    library.push({
+      agentId: profile.agentId,
+      modelRef: profile.modelRef,
+      expected: team ? owner : profile.tenantId,
+    });
   }
-  if (team && (!owner || frame !== owner)) return null;
-  const [entry] = await database
-    .select({
-      tenantId: modelRegistry.tenantId,
-      provider: modelRegistry.provider,
-      baseUrl: modelRegistry.baseUrl,
-      modelName: modelRegistry.modelName,
-      credentialId: modelRegistry.credentialId,
-      enabled: modelRegistry.enabled,
-    })
-    .from(modelRegistry)
-    .where(eq(modelRegistry.id, profile.modelRef))
-    .limit(1);
-  if (!entry?.enabled || !entry.credentialId) return null;
-  if (entry.tenantId !== (team ? owner : profile.tenantId)) return null;
-  return {
-    kind: "library",
-    tenantId: entry.tenantId,
-    modelRef: profile.modelRef,
-    provider: entry.provider,
-    baseUrl: entry.baseUrl,
-    modelName: entry.modelName,
-    credentialId: entry.credentialId,
-  };
+
+  if (library.length > 0) {
+    const entries = new Map(
+      (
+        await database
+          .select({
+            id: modelRegistry.id,
+            tenantId: modelRegistry.tenantId,
+            provider: modelRegistry.provider,
+            baseUrl: modelRegistry.baseUrl,
+            modelName: modelRegistry.modelName,
+            credentialId: modelRegistry.credentialId,
+            enabled: modelRegistry.enabled,
+          })
+          .from(modelRegistry)
+          .where(
+            inArray(modelRegistry.id, [
+              ...new Set(library.map((wanted) => wanted.modelRef)),
+            ]),
+          )
+      ).map((entry) => [entry.id, entry]),
+    );
+    for (const wanted of library) {
+      const entry = entries.get(wanted.modelRef);
+      if (!entry?.enabled || !entry.credentialId) continue;
+      if (entry.tenantId !== wanted.expected) continue;
+      result.set(wanted.agentId, {
+        kind: "library",
+        tenantId: entry.tenantId,
+        modelRef: wanted.modelRef,
+        provider: entry.provider,
+        baseUrl: entry.baseUrl,
+        modelName: entry.modelName,
+        credentialId: entry.credentialId,
+      });
+    }
+  }
+
+  if (pool.length > 0) {
+    const entries = new Map(
+      (
+        await database
+          .select({
+            id: platformModelPool.id,
+            provider: platformModelPool.provider,
+            baseUrl: platformModelPool.baseUrl,
+            modelName: platformModelPool.modelName,
+            apiKeyEnv: platformModelPool.apiKeyEnv,
+            tiers: platformModelPool.tiers,
+            enabled: platformModelPool.enabled,
+          })
+          .from(platformModelPool)
+          .where(
+            inArray(platformModelPool.id, [
+              ...new Set(pool.map((wanted) => wanted.poolId)),
+            ]),
+          )
+      ).map((entry) => [entry.id, entry]),
+    );
+    const plans = new Map<string, string>();
+    for (const wanted of pool) {
+      const binding = await poolBindingFrom(
+        entries.get(wanted.poolId),
+        wanted.payer,
+        environment,
+        async (tenantId) => {
+          let plan = plans.get(tenantId);
+          if (plan === undefined) {
+            plan = await planIdFor(database, tenantId);
+            plans.set(tenantId, plan);
+          }
+          return plan;
+        },
+      );
+      result.set(wanted.agentId, binding);
+    }
+  }
+  return result;
 }
 
 /**
@@ -276,30 +369,27 @@ async function planIdFor(
  * tenant's plan is not one of the row's tiers, the row names no pool key, or the deployment has no
  * value for that key. Each of those falls back to the deployment default, as a library binding does.
  * A tenant that is nobody's (`system`, `platform`, `team`) gets none: its calls could not be metered
- * to anybody.
+ * to anybody. The plan is asked only for a row that is switched on.
  */
-async function poolBindingFor(
-  database: Database,
+async function poolBindingFrom(
+  entry:
+    | {
+        id: string;
+        provider: string;
+        baseUrl: string | null;
+        modelName: string;
+        apiKeyEnv: string;
+        tiers: unknown;
+        enabled: boolean;
+      }
+    | undefined,
   tenantId: string,
-  poolId: string,
   environment: PoolKeyEnvironment,
+  planOf: (tenantId: string) => Promise<string>,
 ): Promise<PoolBinding | null> {
   if (!isPersonTenant(tenantId)) return null;
-  const [entry] = await database
-    .select({
-      id: platformModelPool.id,
-      provider: platformModelPool.provider,
-      baseUrl: platformModelPool.baseUrl,
-      modelName: platformModelPool.modelName,
-      apiKeyEnv: platformModelPool.apiKeyEnv,
-      tiers: platformModelPool.tiers,
-      enabled: platformModelPool.enabled,
-    })
-    .from(platformModelPool)
-    .where(eq(platformModelPool.id, poolId))
-    .limit(1);
   if (!entry?.enabled) return null;
-  const plan = await planIdFor(database, tenantId);
+  const plan = await planOf(tenantId);
   if (!(entry.tiers as readonly string[]).includes(plan)) return null;
   // The CHECK already holds this; asking again keeps a row from ever naming DATABASE_URL.
   if (!PLATFORM_POOL_KEY_ENV.test(entry.apiKeyEnv)) return null;
@@ -357,30 +447,65 @@ export async function boundModelName(
  * person's). Reads no key: a binding whose vault row is gone or revoked falls back, as the run does.
  *
  * For readers of usage (the conversation sidebar), which must look for a coworker's calls where they
- * were written, not where the person asking happens to be.
+ * were written, not where the person asking happens to be. It follows the CURRENT binding: calls made
+ * under an earlier binding in another tenant are not where this points.
  */
 export async function meteringTenantFor(
   database: Database,
   agentId: string,
   environment: PoolKeyEnvironment = process.env,
 ): Promise<string | null> {
-  const binding = await bindingFor(database, agentId, environment).catch(
+  return (
+    (await meteringTenantsFor(database, [agentId], environment)).get(agentId) ??
+    null
+  );
+}
+
+/** {@link meteringTenantFor} for many coworkers, in a fixed number of reads. */
+export async function meteringTenantsFor(
+  database: Database,
+  agentIds: readonly string[],
+  environment: PoolKeyEnvironment = process.env,
+): Promise<Map<string, string | null>> {
+  const bindings = await bindingsFor(database, agentIds, environment).catch(
     (error) => {
       if (error instanceof TenantContextError) throw error;
-      return null;
+      return new Map<string, Binding | null>();
     },
   );
-  if (binding?.kind === "pool") return binding.tenantId;
-  if (binding?.kind === "library") {
-    const [secret] = await database
-      .select({ revokedAt: credentialRows.revokedAt })
-      .from(credentialRows)
-      .where(eq(credentialRows.id, binding.credentialId))
-      .limit(1);
-    if (secret && !secret.revokedAt) return binding.tenantId;
-  }
+  const credentialIds = [
+    ...new Set(
+      [...bindings.values()].flatMap((binding) =>
+        binding?.kind === "library" ? [binding.credentialId] : [],
+      ),
+    ),
+  ];
+  const usable = new Set(
+    credentialIds.length > 0
+      ? (
+          await database
+            .select({
+              id: credentialRows.id,
+              revokedAt: credentialRows.revokedAt,
+            })
+            .from(credentialRows)
+            .where(inArray(credentialRows.id, credentialIds))
+        )
+          .filter((secret) => !secret.revokedAt)
+          .map((secret) => secret.id)
+      : [],
+  );
   const frame = currentTenant();
-  return isPersonTenant(frame) ? frame : null;
+  const fallback = isPersonTenant(frame) ? frame : null;
+  return new Map(
+    [...new Set(agentIds)].map((agentId) => {
+      const binding = bindings.get(agentId);
+      if (binding?.kind === "pool") return [agentId, binding.tenantId];
+      if (binding?.kind === "library" && usable.has(binding.credentialId))
+        return [agentId, binding.tenantId];
+      return [agentId, fallback];
+    }),
+  );
 }
 
 /** The model a coworker's run will speak with, and its `provider/model` name, decided together. */
