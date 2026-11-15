@@ -59,11 +59,11 @@ import {
   runAsClaimedTenant,
   runAsTenant,
 } from "../tenant/context";
-import { roundHungByEntry } from "../threads/unattended-card";
 import {
   COMPACTION_DONE_EVENT,
   COMPACTION_FAILED_EVENT,
 } from "../threads/compaction";
+import { roundHungByEntry } from "../threads/unattended-card";
 import type { WorkQueue } from "../work/queue";
 import {
   GROUP_PERSON_SPEAKER,
@@ -385,6 +385,7 @@ async function writeOrder(
  * (0128), stamped with them.
  */
 const SHARED_DETAILS: ReadonlySet<string> = new Set([
+  "acpPermission",
   "agentIds",
   "answeredBy",
   "compaction",
@@ -409,6 +410,60 @@ function compactionNoteOf(name: string): GroupCompactionNote | null {
   if (name === COMPACTION_DONE_EVENT) return { outcome: "done" };
   if (name === COMPACTION_FAILED_EVENT) return { outcome: "failed" };
   return null;
+}
+
+/**
+ * 外部员工在群里请求许可时，群转录里那一行（外部员工 Task 12）：只说谁在等谁确认、结果如何。命令、路径、
+ * 改动的文件、命中的规则、审批 id 一律不放：许可只有招聘人批（spec §6），内容在他自己的审批里，群里其他
+ * 人只该知道「在等」。
+ */
+export type GroupAcpPermission = {
+  kind: "acp.permission";
+  agentId: string;
+  hirerUserId: string;
+  hirerName: string;
+  status: "waiting" | "approved" | "denied" | "expired";
+};
+
+const ACP_PERMISSION_STATUSES = new Set<GroupAcpPermission["status"]>([
+  "waiting",
+  "approved",
+  "denied",
+  "expired",
+]);
+
+/** 读回来时只认这几个键，别的（万一写进了什么）一律不交出去。 */
+export function groupAcpPermissionOf(
+  value: unknown,
+): GroupAcpPermission | null {
+  if (!value || typeof value !== "object") return null;
+  const line = value as Record<string, unknown>;
+  if (
+    line.kind !== "acp.permission" ||
+    typeof line.agentId !== "string" ||
+    typeof line.hirerUserId !== "string" ||
+    typeof line.hirerName !== "string" ||
+    !ACP_PERMISSION_STATUSES.has(line.status as GroupAcpPermission["status"])
+  )
+    return null;
+  return {
+    kind: "acp.permission",
+    agentId: line.agentId,
+    hirerUserId: line.hirerUserId,
+    hirerName: line.hirerName,
+    status: line.status as GroupAcpPermission["status"],
+  };
+}
+
+/**
+ * 那一行的 id：由审批 id 派生、但看不出审批 id（行 id 每个成员都读得到，审批 id 是把一次决定接回那一轮的
+ * 钥匙，只属于招聘人）。
+ */
+export function groupAcpPermissionRowId(approvalId: string): string {
+  return `acp-permission:${createHash("sha256")
+    .update(approvalId)
+    .digest("hex")
+    .slice(0, 32)}`;
 }
 
 function splitDetails(details: Record<string, unknown>) {
@@ -2263,6 +2318,57 @@ export function createGroupConversations(deps: {
         }),
       );
     },
+    /**
+     * 外部员工在群里请求许可（外部员工 Task 12）：许可桥给群线程里的一轮开审批时写一行「在等 <招聘人> 确认」，
+     * 审批有了结果时改成 approved / denied / expired。只有状态，没有内容，所以和分享检查无关（同交付闭环
+     * 第 9 项的做法）；写在招聘人的租户里、记成招聘人的行，和它在群里的回答一样（`announceHandoff`）。
+     * 不是群线程、或线程不是这位员工的：什么都不写，答 false。
+     */
+    async acpPermission(input: {
+      threadId: string;
+      agentId: string;
+      hirerUserId: string;
+      approvalId: string;
+      status: GroupAcpPermission["status"];
+    }): Promise<boolean> {
+      const thread = await deps.store.threadRow(input.threadId);
+      if (!thread || thread.agentId !== input.agentId) return false;
+      return runAsTenant(input.hirerUserId, async () => {
+        // 群里别处怎么称呼人，这里就怎么称呼：名字，没有名字时邮箱（group-chat 的 `people`）。
+        const hirer = (await deps.store.people(thread.channelId)).find(
+          (person) => person.userId === input.hirerUserId,
+        );
+        // 招聘人不在这个群里了：没人能在这里确认，不写。
+        if (!hirer) return false;
+        const line: GroupAcpPermission = {
+          kind: "acp.permission",
+          agentId: input.agentId,
+          hirerUserId: input.hirerUserId,
+          hirerName: hirer.name ?? hirer.email,
+          status: input.status,
+        };
+        const id = groupAcpPermissionRowId(input.approvalId);
+        if (input.status === "waiting")
+          return deps.store.append({
+            id,
+            ownerUserId: input.hirerUserId,
+            channelId: thread.channelId,
+            agentId: input.agentId,
+            threadId: input.threadId,
+            text: "",
+            status: "completed",
+            details: { acpPermission: line },
+          });
+        try {
+          await deps.store.finish(id, "", "completed", { acpPermission: line });
+          return true;
+        } catch (error) {
+          // 那一行没写成（招聘人当时不在群里）或已经没了：没什么可改的。
+          if (error instanceof GroupNotFoundError) return false;
+          throw error;
+        }
+      });
+    },
     async list(owner: string, channel: string) {
       const bots = await roster(owner, channel);
       const messages = await deps.store.list(channel);
@@ -2289,6 +2395,10 @@ export function createGroupConversations(deps: {
             : {}),
           ...(details.consent && typeof details.consent === "object"
             ? { consent: details.consent }
+            : {}),
+          // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。
+          ...(groupAcpPermissionOf(details.acpPermission)
+            ? { acpPermission: groupAcpPermissionOf(details.acpPermission) }
             : {}),
           // 压的是发起人和这位员工的线程：只告诉他自己。
           ...(message.ownerUserId === owner &&

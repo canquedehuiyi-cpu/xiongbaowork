@@ -8,9 +8,21 @@ import { client } from "@/lib/client";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
 /** One line of a group conversation: a person's message (`agentId` null) or one Bot's reply. */
+/**
+ * 外部员工在群里请求许可时群转录里的那一行（外部员工 Task 12）：只有谁在等谁确认、结果如何，没有内容。
+ */
+export type GroupAcpPermission = {
+  kind: "acp.permission";
+  agentId: string;
+  hirerUserId: string;
+  hirerName: string;
+  status: "waiting" | "approved" | "denied" | "expired";
+};
 export type GroupMessage = {
   id: string;
   channelId: string;
+  /** 员工这一行所在的线程（它在这个群里的那条）。人的话没有。 */
+  threadId?: string | null;
   /** Who sent it, for a person's line; whose run it was, for a Bot's. */
   ownerUserId: string;
   agentId: string | null;
@@ -33,6 +45,8 @@ export type GroupMessage = {
    * 这一轮开始前，这位员工在你和它那条线程上的上下文自动压缩了（`done`）或没压成（`failed`）。只给发起的人。
    */
   compaction?: { outcome: "done" | "failed" };
+  /** 外部员工在等它的招聘人确认一个操作（见 {@link GroupAcpPermission}）。 */
+  acpPermission?: GroupAcpPermission;
 };
 export type GroupPerson = {
   userId: string;

@@ -13,12 +13,12 @@ import {
   guardDeliveryStore,
   guardHostAccess,
   headlessTurnRefusal,
-  summaryCallRefusal,
   installEnterpriseControls,
   modelNamedIn,
   proactiveAdmin,
   skillSharingAllowed,
   skillSharingInSnapshot,
+  summaryCallRefusal,
 } from "./admin/controls";
 import { fixSettings } from "./admin/settings-store";
 import {
@@ -35,6 +35,7 @@ import { createAcpContextLoader } from "./agents/acp/context";
 import { externalEmployeesAmong, externalHirerOf } from "./agents/acp/external";
 import {
   type AcpPermissionBridge,
+  type AcpPermissionBridgeDeps,
   createAcpApprovalHirer,
   createAcpEmployeeLoader,
   createAcpPermissionBridge,
@@ -360,33 +361,16 @@ import { createPipelineRoutes } from "./pipeline/routes";
 import { createPipelineStore } from "./pipeline/store";
 import { createPipelineStepRunner } from "./pipeline/turn-channel";
 import { createPlatformRoutes } from "./platform/routes";
+import { BROKERED_PROFILE } from "./plugins/access";
+import { createAccountModeSwitch } from "./plugins/account-mode";
 import { appAccessTools } from "./plugins/app-access-tool";
-import { showAppAccessTools } from "./plugins/show-app-access-tool";
+import { useArcadeClient } from "./plugins/arcade";
+import { asComposioBroker, createArcadeClient } from "./plugins/arcade-adapter";
+import { connectionOwners, connectionsHeldBy } from "./plugins/arcade-attempts";
+import { assertActivatable, providerDecision } from "./plugins/broker";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useStaffingTools } from "./plugins/builtin-staffing";
 import { useComposioClient } from "./plugins/composio";
-import { useSkillAssetTools } from "./skills/read-tool";
-import { createAccountModeSwitch } from "./plugins/account-mode";
-import { useArcadeClient } from "./plugins/arcade";
-import { asComposioBroker, createArcadeClient } from "./plugins/arcade-adapter";
-import { BROKERED_PROFILE } from "./plugins/access";
-import { connectionOwners, connectionsHeldBy } from "./plugins/arcade-attempts";
-import { assertActivatable, providerDecision } from "./plugins/broker";
-import {
-  ensureSingleUserIdentity,
-  underOwnName,
-  vendorNameFor,
-} from "./plugins/single-user-identity";
-import {
-  arcadeVerifierNotice,
-  ownsBrokerProject,
-  selectProviderWiring,
-  storedProvider,
-} from "./plugins/provider-wiring";
-import {
-  createSharedAudience,
-  createSharedUseStore,
-} from "./plugins/shared-use-store";
 import {
   brokerWithAccounts,
   createComposioClient,
@@ -394,7 +378,6 @@ import {
 import { openBotResources } from "./plugins/entra-access";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
-import { startBrokeredRelist } from "./plugins/relist";
 import {
   ensureAlwaysOnApp,
   ensurePersonalAskBeforeChanges,
@@ -407,6 +390,23 @@ import {
   startPersonalDefaultApps,
   withPersonalDefaults,
 } from "./plugins/personal-defaults";
+import {
+  arcadeVerifierNotice,
+  ownsBrokerProject,
+  selectProviderWiring,
+  storedProvider,
+} from "./plugins/provider-wiring";
+import { startBrokeredRelist } from "./plugins/relist";
+import {
+  createSharedAudience,
+  createSharedUseStore,
+} from "./plugins/shared-use-store";
+import { showAppAccessTools } from "./plugins/show-app-access-tool";
+import {
+  ensureSingleUserIdentity,
+  underOwnName,
+  vendorNameFor,
+} from "./plugins/single-user-identity";
 import { createPluginStore, type PluginStore } from "./plugins/store";
 import {
   grantedSkills,
@@ -492,6 +492,7 @@ import {
 import { createSelfHostBanner } from "./self-host-banner";
 import { createSetupSources, modelKeyOf } from "./setup/checklist";
 import { createComputerCheck } from "./setup/computer-check";
+import { useSkillAssetTools } from "./skills/read-tool";
 import {
   ensureStaffingServer,
   staffingAppMemory,
@@ -503,8 +504,8 @@ import {
   createThreadVisibility,
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
-import { createDelivery } from "./tasks/delivery";
 import { createCardTurns } from "./tasks/card-turns";
+import { createDelivery } from "./tasks/delivery";
 import {
   ACCEPT_TASK_REF,
   deliveryTools,
@@ -931,6 +932,8 @@ await startupLifecycle.run(async (startup) => {
   let startAcpTurn: AcpTurnStarter | undefined;
   // The permission bridge, built further down once the approval service exists.
   let acpPermissionBridge: AcpPermissionBridge | undefined;
+  /** The group service's `acpPermission`, once it is built (below). */
+  let acpGroupLine: AcpPermissionBridgeDeps["groupLine"];
   const acpRelay = createAcpRelay({
     channel: deviceChannel,
     turns: acpTurnStore,
@@ -1480,6 +1483,10 @@ await startupLifecycle.run(async (startup) => {
         policy: (candidate) => approvalService.policyOutcome(candidate),
         board: taskProjector,
         employee: createAcpEmployeeLoader(database, deviceStore),
+        // A turn asked in a group: a status-only line in its transcript (Task 12). Bound late: the
+        // group service is built further down.
+        groupLine: async (input) =>
+          acpGroupLine ? acpGroupLine(input) : false,
       }),
     (bridge) => bridge.dispose(),
   );
@@ -4519,6 +4526,7 @@ await startupLifecycle.run(async (startup) => {
     baseGroupConversations,
     wakerGroupLink,
   );
+  acpGroupLine = (input) => groupConversations.acpPermission(input);
   startup.acquireSync(
     () =>
       repeatAfterEach(async () => {

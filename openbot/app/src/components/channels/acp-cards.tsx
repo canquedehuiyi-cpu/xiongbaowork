@@ -159,7 +159,11 @@ export function AcpDiffCard({ files }: { files: readonly AcpDiffFile[] }) {
   );
 }
 
-/** 中断卡（规格第 3 节）：电脑关机，这一轮没做完；「重新派」把原话作为新的一轮再发一次。 */
+/**
+ * 中断卡（规格第 3 节）：电脑关机，这一轮没做完；「重新派」把原话作为新的一轮再发一次。「电脑关机，这件活中断了。」
+ * 服务器已经在对话里说过（`agent.ts` 的 note），卡上不再重复，只给一句补充和按钮。没有原话、或没有地方发时
+ * 卡片什么都不画，那句话就够了。
+ */
 export function AcpInterruptedCard({
   prompt,
   resent,
@@ -168,7 +172,7 @@ export function AcpInterruptedCard({
   prompt: string;
   /** 这张卡已经重新派过了。 */
   resent?: boolean;
-  /** 不给时（读不到原话、没有可发的地方）只说中断了，不画按钮。 */
+  /** 不给时（没有可发的地方）不画这张卡。 */
   onResend?: () => unknown;
 }) {
   const [state, setState] = useState<"idle" | "sending" | "sent">(
@@ -176,6 +180,7 @@ export function AcpInterruptedCard({
   );
   const [error, setError] = useState<string | null>(null);
   const canResend = prompt !== "" && onResend !== undefined;
+  if (!canResend) return null;
   return (
     <section
       aria-label="这件活中断了"
@@ -185,10 +190,8 @@ export function AcpInterruptedCard({
       )}
       data-acp-card="interrupted"
     >
-      <span>
-        {canResend
-          ? "电脑关机，这件活中断了，重新派？"
-          : "电脑关机，这件活中断了。"}
+      <span className="text-[color:var(--wb-fg2,var(--muted-foreground))]">
+        电脑开机后可以重新派。
       </span>
       {canResend ? (
         <div className="flex flex-wrap items-center gap-2.5">

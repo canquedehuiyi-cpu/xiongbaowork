@@ -34,11 +34,13 @@ import {
   ChatTranscript,
   type TranscriptAcpCards,
 } from "@/components/channels/chat-transcript";
+import { GroupChat } from "@/components/channels/group-chat";
 import {
   type AcpCard,
   type AcpCardTracker,
   createAcpCardTracker,
 } from "@/lib/channels/acp-events";
+import type { GroupMessage } from "@/lib/groups";
 import { queryClient } from "@/query-client";
 import { Route as ApprovalsRoute } from "@/routes/_authed/_app/approvals";
 import { settleReactWork } from "./settle-react-work";
@@ -497,7 +499,9 @@ describe("中断卡", () => {
     const card = within(
       await view.findByRole("region", { name: "这件活中断了" }),
     );
-    expect(card.getByText("电脑关机，这件活中断了，重新派？")).toBeTruthy();
+    expect(card.getByText("电脑开机后可以重新派。")).toBeTruthy();
+    // 「电脑关机，这件活中断了。」是服务器那句话，卡上不再说一遍。
+    expect(card.queryByText(/电脑关机/)).toBeNull();
     const user = userEvent.setup({ document });
     await user.click(card.getByRole("button", { name: "重新派" }));
     expect(resent).toHaveLength(1);
@@ -542,7 +546,7 @@ describe("中断卡", () => {
     expect(attempts).toBe(2);
   });
 
-  test("without the original words the card only says it was interrupted", async () => {
+  test("without the original words there is no card: the server's sentence says it all", async () => {
     const tracker = createAcpCardTracker();
     feed(tracker, "run-1", [
       { name: "acp.interrupted", value: { turnId: "turn-1" }, upto: 3 },
@@ -551,11 +555,9 @@ describe("中断卡", () => {
       cards: tracker.cards(),
       onResend: () => undefined,
     });
-    const card = within(
-      await view.findByRole("region", { name: "这件活中断了" }),
-    );
-    expect(card.getByText("电脑关机，这件活中断了。")).toBeTruthy();
-    expect(card.queryByRole("button")).toBeNull();
+    await view.findByText("我先看看登录相关的代码。");
+    expect(view.queryByRole("region", { name: "这件活中断了" })).toBeNull();
+    expect(view.queryByRole("button", { name: "重新派" })).toBeNull();
   });
 });
 
@@ -693,5 +695,150 @@ describe("手机审批页", () => {
       await view.findByText("这条请求不在你这里，或者已经没有了。"),
     ).toBeTruthy();
     expect(view.queryByRole("button", { name: "批准" })).toBeNull();
+  });
+});
+
+describe("群里的许可状态行", () => {
+  const HIRER = "user-he";
+  const MEMBER = "user-li";
+  const GROUP_THREAD = "t-group-codex";
+
+  /** 服务器给每个成员的那一行：只有谁在等谁确认、结果如何。 */
+  const statusLine = (
+    status: "waiting" | "approved" | "denied" | "expired",
+  ): GroupMessage => ({
+    id: "acp-permission:0f3c",
+    channelId: "g-1",
+    ownerUserId: HIRER,
+    agentId: "ext-codex",
+    threadId: GROUP_THREAD,
+    text: "",
+    status: "completed",
+    createdAt: "2026-11-15T08:01:00.000Z",
+    acpPermission: {
+      kind: "acp.permission",
+      agentId: "ext-codex",
+      hirerUserId: HIRER,
+      hirerName: "何总",
+      status,
+    },
+  });
+
+  function openGroup(reader: string, line: GroupMessage) {
+    single.set("/api/me", {
+      user: { id: reader, role: "user", email: `${reader}@example.test` },
+    });
+    single.set("/api/groups/g-1", {
+      bots: [
+        { id: "ext-codex", name: "代码熊" },
+        { id: "a1", name: "产品官" },
+      ],
+      people: [
+        {
+          userId: HIRER,
+          email: "he@example.test",
+          name: "何总",
+          creator: true,
+        },
+        {
+          userId: MEMBER,
+          email: "li@example.test",
+          name: "小李",
+          creator: false,
+        },
+      ],
+      messages: [
+        {
+          id: "m1",
+          channelId: "g-1",
+          ownerUserId: MEMBER,
+          agentId: null,
+          text: "@代码熊 登录接口偶尔报 401，你看一下。",
+          status: "completed",
+          createdAt: "2026-11-15T08:00:00.000Z",
+        },
+        line,
+      ],
+    });
+    const root = createRootRoute({ component: Outlet });
+    const page = createRoute({
+      getParentRoute: () => root,
+      path: "/",
+      component: () => <GroupChat channelId="g-1" />,
+    });
+    const approvals = createRoute({
+      getParentRoute: () => root,
+      path: "/approvals",
+      component: () => null,
+    });
+    const router = createRouter({
+      routeTree: root.addChildren([page, approvals]),
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router as never} />
+      </QueryClientProvider>,
+    );
+  }
+
+  test("a member sees who the employee waits on, and nothing to press", async () => {
+    // 招聘人的审批在他自己那里；成员的收件箱里没有。
+    inbox = [];
+    const view = openGroup(MEMBER, statusLine("waiting"));
+    const line = await view.findByText("代码熊在等 何总 确认一个操作");
+    const row = line.closest("[data-acp-group-line]") as HTMLElement;
+    expect(within(row).queryAllByRole("button")).toHaveLength(0);
+    expect(within(row).queryByRole("link", { name: "去确认" })).toBeNull();
+    expect(within(row).queryByRole("region", { name: "请求许可" })).toBeNull();
+    // 不去审批接口试探：成员读别人的审批一律 404。
+    expect(
+      sent.some((request) => request.url.startsWith("/api/approvals/")),
+    ).toBe(false);
+  });
+
+  test("the hirer sees the same line with 去确认 and decides from their own approval", async () => {
+    inbox = [
+      {
+        ...acpApproval("ap-g"),
+        action: { ...acpApproval("ap-g").action, threadId: GROUP_THREAD },
+      },
+    ];
+    const view = openGroup(HIRER, statusLine("waiting"));
+    await view.findByText("代码熊在等你确认一个操作");
+    const go = await view.findByRole("link", { name: "去确认" });
+    await waitFor(() =>
+      expect(go.getAttribute("href")).toBe("/approvals?id=ap-g"),
+    );
+    // 卡片内容来自他自己的收件箱：命令原文和三个按钮。
+    const card = within(await view.findByRole("region", { name: "请求许可" }));
+    expect(card.getByText("git push origin fix/login")).toBeTruthy();
+    const user = userEvent.setup({ document });
+    await user.click(card.getByRole("button", { name: "批准" }));
+    await waitFor(() =>
+      expect(sent.find((request) => request.method === "POST")).toMatchObject({
+        url: "/api/approvals/ap-g/decision",
+        body: { decision: "allow_once" },
+      }),
+    );
+  });
+
+  test("once decided the line says how it ended, for everyone", async () => {
+    inbox = [];
+    const approved = openGroup(MEMBER, statusLine("approved"));
+    expect(
+      await approved.findByText("何总批准了代码熊的一个操作"),
+    ).toBeTruthy();
+    cleanup();
+    queryClient.clear();
+    const expired = openGroup(MEMBER, statusLine("expired"));
+    expect(
+      await expired.findByText("代码熊等确认的一个操作已作废"),
+    ).toBeTruthy();
+    cleanup();
+    queryClient.clear();
+    const mine = openGroup(HIRER, statusLine("denied"));
+    expect(await mine.findByText("你拒绝了代码熊的一个操作")).toBeTruthy();
+    expect(mine.queryByRole("link", { name: "去确认" })).toBeNull();
   });
 });

@@ -38,6 +38,7 @@ import { newId } from "@/lib/new-id";
 import { startRunMutationOptions } from "@/lib/pipelines/mutations";
 import { pipelineTemplatesQueryOptions } from "@/lib/pipelines/queries";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
+import { AcpGroupPermissionLine } from "./acp-group-line";
 import { ChannelAvatar } from "./avatar";
 import {
   Composer,
@@ -245,6 +246,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
                   : undefined
               }
               mine={message.ownerUserId === me?.id}
+              meId={me?.id}
             />
           ))}
         </div>
@@ -394,12 +396,35 @@ function GroupLine({
   name,
   answeredBy,
   mine,
+  meId,
 }: {
   message: GroupMessage;
   name: string;
   answeredBy?: string;
   mine: boolean;
+  /** 读这一页的人，外部员工的许可状态行要知道他是不是招聘人。 */
+  meId?: string;
 }) {
+  // 外部员工在等它的招聘人确认一个操作（Task 12）：只有状态，没有内容。
+  if (message.acpPermission && message.agentId)
+    return (
+      <MessageRow align="start" data-speaker={message.agentId}>
+        <div className="shrink-0 pt-0.5">
+          <ChannelAvatar participantIds={[message.agentId]} size={24} />
+        </div>
+        <MessageContent className="w-full">
+          <MessageHeader className="px-0 font-medium text-[12px] text-muted-foreground">
+            {name}
+          </MessageHeader>
+          <AcpGroupPermissionLine
+            employee={name}
+            line={message.acpPermission}
+            meId={meId}
+            threadId={message.threadId}
+          />
+        </MessageContent>
+      </MessageRow>
+    );
   if (message.agentId === null)
     return (
       <MessageRow align={mine ? "end" : "start"}>

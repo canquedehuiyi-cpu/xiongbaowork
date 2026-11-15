@@ -758,6 +758,19 @@ const parseOptions = (value: unknown): AcpPermissionOptionFrame[] =>
       })
     : [];
 
+/** How a group's line for an external employee's approval reads (`groupLine`). */
+export type AcpGroupLineStatus = "waiting" | "approved" | "denied" | "expired";
+
+/** How a settled approval ended, as the group's line says it. */
+export function groupLineStatusOf(
+  request: Pick<ApprovalRecord, "status" | "decision" | "result">,
+): AcpGroupLineStatus | null {
+  const answer = answerOf(request);
+  if (answer === null) return null;
+  if (answer === "allow_once" || answer === "allow_always") return "approved";
+  return request.decision === "deny" ? "denied" : "expired";
+}
+
 export type AcpEmployeeForPermission = {
   name: string;
   /** The computer's name, as the hirer paired it. */
@@ -821,6 +834,18 @@ export type AcpPermissionBridgeDeps = {
   employee: (
     request: AcpPermissionRequest,
   ) => Promise<AcpEmployeeForPermission | null>;
+  /**
+   * A group's line for an approval of a turn asked in a group (Task 12): `waiting` when it is opened,
+   * then how it ended. Status only, never what the approval is about. Answers false for a thread
+   * that is not a group's. Never awaited by anything that answers the agent.
+   */
+  groupLine?: (input: {
+    threadId: string;
+    agentId: string;
+    hirerUserId: string;
+    approvalId: string;
+    status: AcpGroupLineStatus;
+  }) => Promise<boolean>;
   /** Calls `tick` every `ms` until stopped. Injected for a test's clock. */
   every?: (ms: number, tick: () => void) => () => void;
   /** How often settled approvals, unsent answers and ended turns are looked for. */
@@ -898,6 +923,30 @@ export function createAcpPermissionBridge(
   };
   const inTenant = <T>(entry: Entry, work: () => Promise<T>) =>
     runAsTenant(entry.request.tenantId, work);
+  /** The group's line for an approval (Task 12): never fails anything, only logged. */
+  const groupLine = (
+    line: {
+      threadId: string;
+      agentId: string;
+      hirerUserId: string;
+      approvalId: string;
+    },
+    status: AcpGroupLineStatus,
+  ) =>
+    deps.groupLine
+      ? deps.groupLine({ ...line, status }).catch((error: unknown) => {
+          log(
+            `acp permissions: the group line of approval ${line.approvalId} could not be written: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return false;
+        })
+      : Promise.resolve(false);
+  const lineOf = (entry: Entry, approvalId: string) => ({
+    threadId: entry.request.threadId,
+    agentId: entry.request.agentId,
+    hirerUserId: entry.request.ownerUserId,
+    approvalId,
+  });
 
   function forget(entry: Entry) {
     entry.state = "over";
@@ -949,6 +998,8 @@ export function createAcpPermissionBridge(
     if (!wanted) return;
     answer(entry, optionFor(entry.options, wanted));
     await unpark(entry);
+    const status = groupLineStatusOf(request);
+    if (status) await groupLine(lineOf(entry, request.id), status);
   }
 
   /**
@@ -959,8 +1010,9 @@ export function createAcpPermissionBridge(
     forget(entry);
     if (!entry.approvalId || entry.answer !== undefined) return;
     const { toolCallId, runId } = entry;
+    const approvalId = entry.approvalId;
     await inTenant(entry, async () => {
-      await deps.approvals.policy?.withdrawPending(
+      const withdrawn = await deps.approvals.policy?.withdrawPending(
         entry.request.ownerUserId,
         ACP_PERMISSION_EXPIRED,
         (action) =>
@@ -969,6 +1021,8 @@ export function createAcpPermissionBridge(
           action.runId === runId,
         { resume: false },
       );
+      if (withdrawn?.includes(approvalId))
+        await groupLine(lineOf(entry, approvalId), "expired");
     }).catch((error: unknown) =>
       log(
         `acp permissions: approval ${entry.approvalId} could not be expired: ${error instanceof Error ? error.message : String(error)}`,
@@ -1147,6 +1201,12 @@ export function createAcpPermissionBridge(
     entry.runId = runId;
     entry.toolCallId = toolCallId;
     const opened = await deps.approvals.open(action);
+    /*
+     * A turn asked in a group: the group sees a line saying who it waits on, nothing more. Written
+     * before the entry can be settled, so the line's ending never lands before its start.
+     */
+    if (opened.status === "pending")
+      await groupLine(lineOf(entry, opened.id), "waiting");
     entry.approvalId = opened.id;
     byApproval.set(opened.id, entry);
     entry.state = "waiting";
@@ -1220,7 +1280,23 @@ export function createAcpPermissionBridge(
     if (!isAcpAction(request.action)) return;
     const entry = byApproval.get(request.id);
     if (entry) void settle(entry, request);
-    else answerFromApproval(request);
+    else {
+      answerFromApproval(request);
+      // Opened by another server or before a restart: its group line is still told how it ended.
+      const status = groupLineStatusOf(request);
+      if (status)
+        void runAsTenant(request.ownerUserId, () =>
+          groupLine(
+            {
+              threadId: request.action.threadId,
+              agentId: request.action.botId,
+              hirerUserId: request.ownerUserId,
+              approvalId: request.id,
+            },
+            status,
+          ),
+        );
+    }
   });
 
   let polling = false;
@@ -1301,12 +1377,26 @@ export function createAcpPermissionBridge(
       const runId = `acp:${turn.turnId}`;
       // Opened before a restart, or on another server: found by the turn they were opened for.
       await runAsTenant(turn.tenantId, async () => {
-        await deps.approvals.policy?.withdrawPending(
-          turn.tenantId,
-          ACP_PERMISSION_EXPIRED,
-          (action) => isAcpAction(action) && action.runId === runId,
-          { resume: false },
-        );
+        const withdrawn =
+          (await deps.approvals.policy?.withdrawPending(
+            turn.tenantId,
+            ACP_PERMISSION_EXPIRED,
+            (action) => isAcpAction(action) && action.runId === runId,
+            { resume: false },
+          )) ?? [];
+        if (withdrawn.length === 0 || !deps.groupLine) return;
+        const row = await deps.turns.get(turn.tenantId, turn.turnId);
+        if (!row) return;
+        for (const approvalId of withdrawn)
+          await groupLine(
+            {
+              threadId: row.threadId,
+              agentId: row.agentId,
+              hirerUserId: turn.tenantId,
+              approvalId,
+            },
+            "expired",
+          );
       }).catch((error: unknown) =>
         log(
           `acp permissions: the approvals of turn ${turn.turnId} could not be expired: ${error instanceof Error ? error.message : String(error)}`,
