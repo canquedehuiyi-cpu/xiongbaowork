@@ -21,6 +21,7 @@ import { appendFileSync } from "node:fs";
  *
  * Steps of a turn:
  *   {update}          send `session/update` with this update
+ *   {burst}           send `burst.update` `burst.times` times (a long stream, without a long script)
  *   {permission}      ask `session/request_permission` ({toolCall, options}) and wait for the answer,
  *                     then report it as the update {sessionUpdate: "fake_permission_outcome", outcome};
  *                     with `exitAfterMs`, exit with code 4 that long after asking, still waiting
@@ -36,6 +37,7 @@ import { appendFileSync } from "node:fs";
 
 export type FakeStep =
   | { update: unknown }
+  | { burst: { update: unknown; times: number } }
   | {
       permission: {
         toolCall: unknown;
@@ -105,7 +107,10 @@ async function runTurn(id: unknown, sessionId: string) {
   cancelled.delete(sessionId);
   for (const step of turn.steps ?? []) {
     if ("update" in step) update(sessionId, step.update);
-    else if ("permission" in step) {
+    else if ("burst" in step) {
+      for (let i = 0; i < step.burst.times; i++)
+        update(sessionId, step.burst.update);
+    } else if ("permission" in step) {
       const answer = ask("session/request_permission", {
         sessionId,
         ...step.permission,

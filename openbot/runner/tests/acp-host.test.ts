@@ -275,14 +275,28 @@ test("updates sent while detached are replayed in order on attach", async () => 
   expect(ended(t.frames, "turn_1")).toBe(false);
 
   t.host.attach(t.send);
-  const replayed = t.frames.slice(before);
+  // Every frame of the turn comes again in order, the ones that went up before the detach too.
+  const replayed = ofTurn(t.frames.slice(before), "turn_1");
   expect(replayed.map((frame) => [frame.type, frame.seq])).toEqual([
+    ["acp.turn.ack", undefined],
+    ["acp.update", 1],
     ["acp.update", 2],
     ["acp.update", 3],
     ["acp.turn.end", undefined],
   ]);
-  const seqs = ofType(t.frames, "acp.update").map((frame) => frame.seq);
-  expect(seqs).toEqual([1, 2, 3]);
+  expect(ofType(t.frames.slice(before), "acp.session")).toHaveLength(1);
+
+  // The end was replayed once: the next attach sends it once more, the one after nothing.
+  t.host.detach();
+  let mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(t.frames.slice(mark).map((frame) => frame.type)).toEqual([
+    "acp.turn.end",
+  ]);
+  t.host.detach();
+  mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(t.frames.slice(mark)).toEqual([]);
 });
 
 test("a send that throws keeps the frame for the next attach", async () => {
@@ -691,4 +705,256 @@ test("closeAll stops every adapter and refuses later opens", async () => {
   await t.host.handle(open("th_2"));
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(t.spawns).toHaveLength(1);
+});
+
+test("frames sent on a socket that silently drops are replayed on the next attach", async () => {
+  const t = setup({
+    turns: [
+      {
+        steps: [
+          { update: chunk("1") },
+          { update: chunk("2") },
+          { waitForCancel: true },
+        ],
+      },
+    ],
+  });
+  // Half-open: the socket still says OPEN, and nothing sent on it arrives.
+  const lost: Frame[] = [];
+  t.host.attach((frame) => lost.push(frame));
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ofType(lost, "acp.update").length === 2);
+
+  t.host.detach();
+  t.host.attach(t.send);
+  expect(ofType(t.frames, "acp.session")).toHaveLength(1);
+  expect(
+    ofTurn(t.frames, "turn_1").map((frame) => [frame.type, frame.seq]),
+  ).toEqual([
+    ["acp.turn.ack", undefined],
+    ["acp.update", 1],
+    ["acp.update", 2],
+  ]);
+
+  // Still not over: the next attach replays all of it again.
+  t.host.detach();
+  let mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(
+    ofTurn(t.frames.slice(mark), "turn_1").map((frame) => frame.seq),
+  ).toEqual([undefined, 1, 2]);
+  // The session went up on the attach before: not again.
+  expect(ofType(t.frames.slice(mark), "acp.session")).toHaveLength(0);
+
+  // The turn ends on a socket that drops it again.
+  t.host.detach();
+  const lostAgain: Frame[] = [];
+  t.host.attach((frame) => lostAgain.push(frame));
+  await t.host.handle({
+    type: "acp.cancel",
+    threadId: "th_1",
+    turnId: "turn_1",
+  });
+  await waitFor(() => ended(lostAgain, "turn_1"));
+  t.host.detach();
+  mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(ofTurn(t.frames.slice(mark), "turn_1")).toEqual([
+    {
+      type: "acp.turn.end",
+      threadId: "th_1",
+      turnId: "turn_1",
+      stopReason: "cancelled",
+      interrupted: false,
+    },
+  ]);
+  // Replayed once: the next attach leaves the ended turn alone.
+  t.host.detach();
+  mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(ofTurn(t.frames.slice(mark), "turn_1")).toEqual([]);
+});
+
+test("past the limit, text updates are dropped without compacting again", async () => {
+  let compactions = 0;
+  const frames: Frame[] = [];
+  const host = createAcpHost({
+    roots: (ref) => (ref === ROOT ? work : null),
+    apps: (ref) => (ref === APP ? FAKE_APP : null),
+    spawn: (spec, handlers, opts) =>
+      createAcpClient(
+        {
+          ...spec,
+          env: {
+            FAKE_ACP_SCRIPT: JSON.stringify({
+              turns: [
+                {
+                  steps: [
+                    {
+                      update: {
+                        sessionUpdate: "tool_call",
+                        toolCallId: "call_1",
+                        title: "Edit a",
+                        kind: "edit",
+                        status: "pending",
+                      },
+                    },
+                    { burst: { update: chunk("x"), times: 2000 } },
+                    {
+                      update: {
+                        sessionUpdate: "tool_call_update",
+                        toolCallId: "call_1",
+                        status: "completed",
+                      },
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+        },
+        handlers,
+        opts,
+      ),
+    bufferLimit: { count: 3, bytes: 5_000_000 },
+    onCompact: () => {
+      compactions += 1;
+    },
+  });
+  hosts.push(host);
+  await host.handle(open("th_1"));
+  await host.handle(prompt("th_1", "turn_1"));
+  // Detached throughout; the end is kept, so attaching shows when the turn is over.
+  await waitFor(() => {
+    host.attach((frame) => frames.push(frame));
+    host.detach();
+    return ended(frames, "turn_1");
+  });
+  // Once, when the fourth update arrived; the other 1997 chunks were simply not kept.
+  expect(compactions).toBe(1);
+  const last = frames.slice(
+    frames.findLastIndex((frame) => frame.type === "acp.turn.ack"),
+  );
+  expect(ofType(last, "acp.update").map((frame) => frame.update)).toEqual([
+    {
+      sessionUpdate: "tool_call",
+      toolCallId: "call_1",
+      title: "Edit a",
+      kind: "edit",
+      status: "pending",
+    },
+    {
+      sessionUpdate: "tool_call_update",
+      toolCallId: "call_1",
+      status: "completed",
+    },
+  ]);
+});
+
+test("an answer naming an option not offered is answered cancelled and reported", async () => {
+  const t = setup({
+    turns: [
+      {
+        steps: [
+          {
+            permission: {
+              toolCall: { toolCallId: "call_1", kind: "edit", title: "Edit" },
+              options: [
+                { optionId: "opt-allow", name: "Allow", kind: "allow_once" },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ofType(t.frames, "acp.permission.request").length === 1);
+  const asked = ofType(t.frames, "acp.permission.request")[0] as Frame;
+  await t.host.handle({
+    type: "acp.permission.answer",
+    requestId: asked.requestId,
+    optionId: "opt-always",
+  });
+  await waitFor(() => ended(t.frames, "turn_1"));
+  expect(ofType(t.frames, "acp.error")).toMatchObject([
+    { threadId: "th_1", turnId: "turn_1", code: "bad_option" },
+  ]);
+  const outcome = ofType(t.frames, "acp.update").find(
+    (frame) =>
+      (frame.update as Frame).sessionUpdate === "fake_permission_outcome",
+  );
+  expect((outcome?.update as Frame | undefined)?.outcome).toEqual({
+    outcome: "cancelled",
+  });
+  // Settled: not asked again on the next connection.
+  t.host.detach();
+  t.host.attach(t.send);
+  expect(ofType(t.frames, "acp.permission.request")).toHaveLength(1);
+});
+
+test("a repeated prompt for a turn whose end is still kept adds no second end", async () => {
+  const t = setup({ turns: [{ steps: [{ update: chunk("x") }] }] });
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => t.settled() === 1);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  t.host.attach(t.send);
+  expect(ofType(ofTurn(t.frames, "turn_1"), "acp.turn.end")).toHaveLength(1);
+});
+
+test("a turn cancelled while its session is being made ends cancelled", async () => {
+  const frames: Frame[] = [];
+  const host = createAcpHost({
+    roots: (ref) => (ref === ROOT ? work : null),
+    apps: (ref) => (ref === APP ? FAKE_APP : null),
+    // An agent that takes a while to fail to start.
+    spawn: () => ({
+      initialize: () =>
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("no start")), 150),
+        ),
+      newSession: async () => "never",
+      loadSession: async () => false,
+      prompt: async () => ({ stopReason: "end_turn" }),
+      cancel: () => {},
+      close: async () => {},
+      alive: true,
+    }),
+  });
+  hosts.push(host);
+  host.attach((frame) => frames.push(frame));
+  await host.handle(open("th_1"));
+  await host.handle(prompt("th_1", "turn_1"));
+  // The open's own start failed; the turn is now starting the agent again.
+  await waitFor(() => ofType(frames, "acp.error").length === 1);
+  await host.handle({ type: "acp.cancel", threadId: "th_1", turnId: "turn_1" });
+  await waitFor(() => ended(frames, "turn_1"));
+  expect(ofType(ofTurn(frames, "turn_1"), "acp.turn.end")[0]).toMatchObject({
+    stopReason: "cancelled",
+    interrupted: false,
+  });
+  expect(ofType(ofTurn(frames, "turn_1"), "acp.error")).toHaveLength(0);
+});
+
+test("an open with an unknown workdirRef leaves the thread's session in place", async () => {
+  const t = setup({ turns: [{ steps: [{ update: chunk("x") }] }] });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1);
+  await t.host.handle(open("th_1", { workdirRef: `fld_${"z".repeat(22)}` }));
+  expect(ofType(t.frames, "acp.error")).toMatchObject([
+    { threadId: "th_1", code: "unknown_workdir" },
+  ]);
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  expect(ofType(ofTurn(t.frames, "turn_1"), "acp.turn.end")[0]).toMatchObject({
+    stopReason: "end_turn",
+  });
+  expect(t.spawns).toHaveLength(1);
+  expect(ofType(t.frames, "acp.session")).toHaveLength(1);
 });

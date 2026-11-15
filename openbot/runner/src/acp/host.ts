@@ -38,12 +38,19 @@ import { permissionFacts } from "./paths";
  * Chinese sentences, and permission facts carry only folder-relative paths (paths.ts).
  *
  * THE HOST OUTLIVES CONNECTIONS. The runner `attach`es each connection's sender and `detach`es it
- * when the connection closes; adapters and turns keep running in between. Frames produced while
- * detached (or whose send threw) wait here in order and go up on the next `attach`. Past
- * `bufferLimit` updates or bytes for one turn, that turn's waiting updates are compacted to the
- * latest plan and each tool call's last state (its `tool_call` and updates merged into one); turn
- * acks, ends, sessions and errors are never dropped. A permission request still waiting for its
- * answer is sent again on every `attach`, with the same `requestId`.
+ * when the connection closes; adapters and turns keep running in between. A socket can look open
+ * for minutes after a laptop slept or changed network, and what is sent on it then is lost, so a
+ * sent frame is not taken as delivered: every frame of a turn not over yet is kept, sent or not,
+ * and every `attach` replays all kept frames in the order they were made (the server drops repeats
+ * by `(turnId, seq)`). A turn's end, once it has gone up, leaves only itself of that turn, kept
+ * until the next `attach` has replayed it once; a frame of no turn (`acp.session`, an open's
+ * `acp.error`) is kept the same way. Past `bufferLimit` updates or bytes for one turn, that turn's
+ * kept updates are compacted to the latest plan and each tool call's last state (its `tool_call`
+ * and updates merged into one); after that, updates of other kinds still go up live but are not
+ * kept, and only a plan or tool-call update compacts again. Acks, ends, sessions and errors are
+ * never compacted away. A permission request still waiting for its answer is sent again after the
+ * replay on every `attach`, with the same `requestId`; an answer naming an option the agent did not
+ * offer is answered `cancelled` and reported as `acp.error` `bad_option`.
  *
  * TURNS. `acp.turn.ack` goes up as soon as a turn arrives; a `turnId` seen before is acknowledged
  * (and, when over, ended) again but never run twice. A turn ends with the agent's `stopReason`, with
@@ -80,6 +87,8 @@ export type AcpHostDeps = {
   spawn?: typeof createAcpClient;
   idleMs?: number;
   bufferLimit?: { count: number; bytes: number };
+  /** Told each time a turn's kept updates are compacted (tests). */
+  onCompact?: (turnId: string) => void;
 };
 
 const HARNESSES: readonly AcpHarness[] = [
@@ -96,6 +105,7 @@ const MESSAGES: Record<AcpErrorCode, string> = {
   not_open: "这个对话还没有在这台电脑上打开。",
   start_failed: "智能体没能在这台电脑上启动，请确认它已安装并登录。",
   turn_failed: "智能体这一轮出错了。",
+  bad_option: "这个回答不是智能体给出的选项之一，已按取消处理。",
 };
 
 class HostError extends Error {
@@ -138,7 +148,21 @@ type Thread = {
   tail: Promise<void>;
 };
 
-type Waiting = { frame: Frame; turnId: string | null; bytes: number };
+/**
+ * A frame kept for replay. `turn`: a frame of a turn not over yet (kept, sent or not, until its end
+ * has gone up). `end` and `once` (a frame of no turn): kept until the first attach after it first
+ * went up has replayed it.
+ */
+type Entry = {
+  frame: Frame;
+  turnId: string | null;
+  kind: "turn" | "end" | "once";
+  bytes: number;
+  delivered: boolean;
+};
+
+/** A turn's kept updates, and whether they were compacted already. */
+type Held = { count: number; bytes: number; compacted: boolean };
 
 type Pending = {
   frame: AcpPermissionRequestFrame;
@@ -167,7 +191,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   /** Each thread's latest session id, kept after its process has gone. */
   const known = new Map<string, string>();
   const pending = new Map<string, Pending>();
-  let waiting: Waiting[] = [];
+  let outbox: Entry[] = [];
+  const held = new Map<string, Held>();
   let send: ((frame: Frame) => void) | null = null;
   let closed = false;
 
@@ -185,64 +210,120 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
   }
 
-  function emit(frame: Frame, turnId: string | null = null) {
-    if (waiting.length === 0 && trySend(frame)) return;
-    waiting.push({ frame, turnId, bytes: sizeOf(frame) });
-    if (turnId === null || frame.type !== "acp.update") return;
-    let count = 0;
-    let bytes = 0;
-    for (const entry of waiting) {
-      if (entry.turnId === turnId && entry.frame.type === "acp.update") {
-        count += 1;
-        bytes += entry.bytes;
-      }
-    }
-    if (count > limit.count || bytes > limit.bytes) compact(turnId);
+  /**
+   * A turn's end, or a frame of no turn, has gone up once: an end leaves only itself of its turn,
+   * and either is kept until the next attach has replayed it.
+   */
+  function delivered(entry: Entry) {
+    if (entry.kind === "turn" || entry.delivered) return;
+    entry.delivered = true;
+    if (entry.kind !== "end" || entry.turnId === null) return;
+    const turnId = entry.turnId;
+    outbox = outbox.filter(
+      (other) => other.turnId !== turnId || other.kind !== "turn",
+    );
+    held.delete(turnId);
   }
 
-  /** The turn's waiting updates cut to the latest plan and each tool call's last state. */
+  /** Kept, so the next attach replays it whether or not this send got through. */
+  function emit(frame: Frame, turnId: string | null = null) {
+    const kind: Entry["kind"] =
+      frame.type === "acp.turn.end" ? "end" : turnId === null ? "once" : "turn";
+    const entry: Entry = {
+      frame,
+      turnId,
+      kind,
+      bytes: sizeOf(frame),
+      delivered: false,
+    };
+    if (!(kind === "turn" && frame.type === "acp.update" && turnId !== null))
+      outbox.push(entry);
+    else if (!hold(entry, turnId)) {
+      // Past the limit, a chunk of text is not kept; it still goes up now if it can.
+      trySend(frame);
+      return;
+    }
+    if (trySend(frame)) delivered(entry);
+  }
+
+  /** Sent now if possible, never kept (a repeated acknowledgement). */
+  function sendLive(frame: Frame) {
+    trySend(frame);
+  }
+
+  /** An update kept for its turn, compacted past the limit; false when it is not kept at all. */
+  function hold(entry: Entry, turnId: string): boolean {
+    const stats = held.get(turnId) ?? { count: 0, bytes: 0, compacted: false };
+    held.set(turnId, stats);
+    if (stats.compacted && !keptKind(entry.frame.update)) return false;
+    outbox.push(entry);
+    stats.count += 1;
+    stats.bytes += entry.bytes;
+    if (stats.count > limit.count || stats.bytes > limit.bytes) compact(turnId);
+    return true;
+  }
+
+  /** Plans and tool-call states survive compaction; everything else of a turn does not. */
+  function keptKind(update: unknown): boolean {
+    if (!isRecord(update)) return false;
+    const kind = update.sessionUpdate;
+    return (
+      kind === "plan" ||
+      ((kind === "tool_call" || kind === "tool_call_update") &&
+        typeof update.toolCallId === "string")
+    );
+  }
+
+  /** The turn's kept updates cut to the latest plan and each tool call's last state. */
   function compact(turnId: string) {
-    let plan: Waiting | undefined;
+    deps.onCompact?.(turnId);
+    const isMine = (entry: Entry) =>
+      entry.turnId === turnId &&
+      entry.kind === "turn" &&
+      entry.frame.type === "acp.update";
+    let plan: Entry | undefined;
     const calls = new Map<
       string,
-      { last: Waiting; merged: Frame; created: boolean }
+      { last: Entry; merged: Frame; created: boolean }
     >();
-    for (const entry of waiting) {
-      if (entry.turnId !== turnId || entry.frame.type !== "acp.update")
-        continue;
+    for (const entry of outbox) {
+      if (!isMine(entry)) continue;
       const update = entry.frame.update;
-      if (!isRecord(update)) continue;
-      const kind = update.sessionUpdate;
-      if (kind === "plan") plan = entry;
-      else if (
-        (kind === "tool_call" || kind === "tool_call_update") &&
-        typeof update.toolCallId === "string"
-      ) {
-        const before = calls.get(update.toolCallId);
-        const created = (before?.created ?? false) || kind === "tool_call";
-        calls.set(update.toolCallId, {
-          last: entry,
-          created,
-          merged: {
-            ...before?.merged,
-            ...update,
-            sessionUpdate: created ? "tool_call" : "tool_call_update",
-          },
-        });
+      if (!keptKind(update) || !isRecord(update)) continue;
+      if (update.sessionUpdate === "plan") {
+        plan = entry;
+        continue;
       }
+      const id = update.toolCallId as string;
+      const before = calls.get(id);
+      const created =
+        (before?.created ?? false) || update.sessionUpdate === "tool_call";
+      calls.set(id, {
+        last: entry,
+        created,
+        merged: {
+          ...before?.merged,
+          ...update,
+          sessionUpdate: created ? "tool_call" : "tool_call_update",
+        },
+      });
     }
-    const kept = new Map<Waiting, Waiting>();
+    const kept = new Map<Entry, Entry>();
     if (plan) kept.set(plan, plan);
     for (const { last, merged } of calls.values()) {
       const frame = { ...last.frame, update: merged };
-      kept.set(last, { frame, turnId, bytes: sizeOf(frame) });
+      kept.set(last, { ...last, frame, bytes: sizeOf(frame) });
     }
-    waiting = waiting.flatMap((entry) => {
-      if (entry.turnId !== turnId || entry.frame.type !== "acp.update")
-        return [entry];
+    const stats = { count: 0, bytes: 0, compacted: true };
+    outbox = outbox.flatMap((entry) => {
+      if (!isMine(entry)) return [entry];
       const replacement = kept.get(entry);
-      return replacement ? [replacement] : [];
+      if (!replacement) return [];
+      stats.count += 1;
+      stats.bytes += replacement.bytes;
+      return [replacement];
     });
+    held.set(turnId, stats);
   }
 
   function emitError(threadId: string, code: AcpErrorCode, turnId?: string) {
@@ -374,8 +455,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
             () => settle({ outcome: "cancelled" }),
             { once: true },
           );
-          // Not kept in `waiting`: every attach sends what is still pending.
-          if (waiting.length === 0) trySend(frame);
+          // Not in the outbox: every attach sends what is still pending, after the replay.
+          trySend(frame);
         });
       },
     };
@@ -519,7 +600,12 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     try {
       opened = await session(thread, false);
     } catch (error) {
-      failTurn(turn, error instanceof HostError ? error.code : "start_failed");
+      if (turn.cancelled) endTurn(turn, "cancelled", false);
+      else
+        failTurn(
+          turn,
+          error instanceof HostError ? error.code : "start_failed",
+        );
       return;
     }
     const { proc, client, sessionId } = opened;
@@ -566,7 +652,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     try {
       target(open);
     } catch (error) {
-      threads.delete(threadId);
+      // A thread already open keeps its session and its turns; only this open is refused.
       emitError(threadId, (error as HostError).code);
       return;
     }
@@ -603,8 +689,11 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     if (!threadId || !turnId) return;
     const seen = turns.get(turnId);
     if (seen) {
-      emit({ type: "acp.turn.ack", turnId }, turnId);
-      if (seen.end) emit(seen.end, turnId);
+      sendLive({ type: "acp.turn.ack", turnId });
+      if (!seen.end) return;
+      // An end still in the outbox goes up again on the next attach anyway.
+      if (outbox.some((entry) => entry.frame === seen.end)) sendLive(seen.end);
+      else emit(seen.end, turnId);
       return;
     }
     const turn: Turn = {
@@ -641,9 +730,17 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     const waitingFor = pending.get(str(frame.requestId) ?? "");
     if (!waitingFor) return;
     const optionId = str(frame.optionId);
-    waitingFor.settle(
-      optionId ? { outcome: "selected", optionId } : { outcome: "cancelled" },
-    );
+    if (optionId === null) {
+      waitingFor.settle({ outcome: "cancelled" });
+      return;
+    }
+    const { threadId, turnId, options } = waitingFor.frame;
+    if (!options.some((option) => option.optionId === optionId)) {
+      waitingFor.settle({ outcome: "cancelled" });
+      emitError(threadId, "bad_option", turnId);
+      return;
+    }
+    waitingFor.settle({ outcome: "selected", optionId });
   }
 
   return {
@@ -659,11 +756,22 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
 
     attach(sender) {
       send = sender;
-      while (waiting.length > 0) {
-        const next = waiting[0] as Waiting;
-        if (!trySend(next.frame)) return;
-        waiting.shift();
+      // Everything kept, in the order it was made: the server drops what it already has by seq.
+      const replayed = new Set<Entry>();
+      let through = true;
+      for (const entry of [...outbox]) {
+        if (!trySend(entry.frame)) {
+          through = false;
+          break;
+        }
+        if (entry.kind === "turn") continue;
+        if (entry.delivered) replayed.add(entry);
+        else delivered(entry);
       }
+      // Ends and frames of no turn that went up before this attach have now been replayed once.
+      if (replayed.size > 0)
+        outbox = outbox.filter((entry) => !replayed.has(entry));
+      if (!through) return;
       for (const { frame } of pending.values()) {
         if (!trySend(frame)) return;
       }

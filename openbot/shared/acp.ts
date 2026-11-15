@@ -87,8 +87,10 @@ export type AcpTurnAckFrame = { type: "acp.turn.ack"; turnId: string };
 
 /**
  * Device → server: one `session/update` of a turn, as the agent sent it. `seq` counts from 1 per
- * turn. While the device is offline the updates wait on the device; past 1000 updates or 5 MB a
- * turn keeps only the latest plan and each tool call's last state, so `seq` may then skip.
+ * turn. The device keeps every frame of a turn that is not over and sends them all again, in order,
+ * each time it reconnects, so the same `(turnId, seq)` can arrive more than once: drop repeats.
+ * Past 1000 updates or 5 MB a turn keeps only the latest plan and each tool call's last state, so
+ * `seq` may then skip.
  */
 export type AcpUpdateFrame = {
   type: "acp.update";
@@ -161,7 +163,9 @@ export type AcpErrorCode =
   | "unknown_app"
   | "not_open"
   | "start_failed"
-  | "turn_failed";
+  | "turn_failed"
+  /** An `acp.permission.answer` named an option the agent did not offer; answered `cancelled`. */
+  | "bad_option";
 
 /** Device → server: `acp.open` or `acp.prompt` failed. `message` is Chinese, for a person. */
 export type AcpErrorFrame = {
