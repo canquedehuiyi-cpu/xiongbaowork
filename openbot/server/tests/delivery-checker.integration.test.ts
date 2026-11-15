@@ -1768,6 +1768,63 @@ test("after a hand-over only the person's later change of the due time stands ov
   );
 });
 
+test("a 延期申请 the first coworker made is closed by the hand-over: deciding it later does nothing", async () => {
+  const { tenantId, taskId } = await acceptedCard("handover-extension", {
+    acceptedAt: new Date(Date.now() - 10 * MINUTE),
+    dueAt: new Date(Date.now() + HOUR),
+  });
+  const asked = new Date(Date.now() + 5 * HOUR);
+  expect(
+    await delivery.requestExtension(tenantId, taskId, {
+      dueAt: asked,
+      reason: "B 家还没回",
+    }),
+  ).toBe(true);
+  const newAgent = `agent-${suite}-handover-extension-new`;
+  const newThread = `thread-${suite}-handover-extension-new`;
+  const moved = await delivery.reassign(tenantId, taskId, {
+    agentId: newAgent,
+    threadRef: newThread,
+    actor: `user:${tenantId}`,
+  });
+  expect(moved.ok).toBe(true);
+
+  // Granted after the hand-over: the old coworker's time is nobody's deadline, and nothing is said.
+  const decide = (decision: "grant" | "deny") =>
+    delivery.decideExtension(tenantId, taskId, {
+      actor: `user:${tenantId}`,
+      decision,
+      now: new Date(),
+      timeZone: "UTC",
+    });
+  expect(await decide("grant")).toEqual({ ok: false, why: "no_request" });
+  expect(await decide("deny")).toEqual({ ok: false, why: "no_request" });
+  const card = await row(tenantId, taskId);
+  expect(card.dueAt).toBeNull();
+  expect(card.dueReported).toBe(false);
+  const lines = await kinds(tenantId, taskId);
+  expect(lines).not.toContain("extension_granted");
+  expect(lines).not.toContain("extension_denied");
+
+  // The new coworker's own request is decided as any.
+  const own = new Date(Date.now() + 6 * HOUR);
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: own,
+    reason: "刚接手，要重看",
+    actor: `agent:${newAgent}`,
+  });
+  const granted = await decide("grant");
+  expect(granted).toMatchObject({
+    ok: true,
+    dueAt: own,
+    threadRef: newThread,
+    agentId: newAgent,
+  });
+  expect((await row(tenantId, taskId)).dueAt?.toISOString()).toBe(
+    own.toISOString(),
+  );
+});
+
 test("reassign is refused while the card waits on the person", async () => {
   const { tenantId, taskId } = await acceptedCard("reassign-waiting", {
     acceptedAt: new Date(Date.now() - 10 * MINUTE),

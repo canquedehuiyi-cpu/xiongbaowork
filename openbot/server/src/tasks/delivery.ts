@@ -323,7 +323,8 @@ export type Delivery = {
   } | null>;
   /**
    * The person's answer to the coworker's 延期申请 (`POST /api/tasks/:id/extension`), only while the
-   * latest request has not been answered. Granting moves `due_at` to `dueAt` (or, absent, to the time
+   * latest request has not been answered and was made by the coworker that has the work now (after
+   * the latest `reassigned` line, if any). Granting moves `due_at` to `dueAt` (or, absent, to the time
    * asked for), read and checked as a due time is (future, at most 30 days); denying leaves it. One
    * `extension_granted` / `extension_denied` line; `original_due_at` is never touched. Not on a card
    * already handed in (`handed_in`): its due time is on record, as for `editTask`.
@@ -1135,10 +1136,17 @@ export function createDelivery(database: Database): Delivery {
               and(
                 eq(taskEvents.tenantId, tenantId),
                 eq(taskEvents.taskId, taskId),
+                /*
+                 * A hand-over closes a request still open: it was the coworker the work was taken from
+                 * asking for its own time, and the new coworker takes the work on afresh (spec §8), its
+                 * due time cleared. Deciding it afterwards would set the old coworker's time on the new
+                 * one's card and say so on the new thread; only a request made since counts.
+                 */
                 inArray(taskEvents.kind, [
                   "extension_requested",
                   "extension_granted",
                   "extension_denied",
+                  "reassigned",
                 ]),
               ),
             )
