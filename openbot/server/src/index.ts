@@ -5285,12 +5285,20 @@ await startupLifecycle.run(async (startup) => {
       {
         /*
          * A followed card's 退回 is said in its thread as the person and answered there, on the same
-         * unattended runner a dispatched `@` runs on; a 取消 stops the round through the runner's stop.
+         * unattended runner a dispatched `@` runs on (a group card's, in the group); a 取消 stops the
+         * round through the runner's stop.
          * External coworkers' turns (`cancelExternalTurn`) wait for their ACP runtime.
          */
         turns: createCardTurns({
+          database,
           runTurn: unattendedTurnRunner,
           runner: localThreadRunner,
+          // A group card's words go to the group, through the group's own send, as the person.
+          groupSend: (ownerUserId, channelId, input) =>
+            groupConversations.send(ownerUserId, channelId, input),
+          botName: async (tenantId, agentId) =>
+            (await agentProfileStore.get(await actorFor(tenantId), agentId))
+              ?.name ?? null,
         }),
         acceptTaskDisabled: async (tenantId, agentId) =>
           (await approvalService.disabledTools(tenantId, agentId))(

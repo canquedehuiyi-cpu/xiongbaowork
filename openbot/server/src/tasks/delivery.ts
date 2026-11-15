@@ -226,6 +226,15 @@ export type Delivery = {
     input: { actor: TaskEventActor; reason: string },
   ): Promise<{ threadRef: string; agentId: string; returns: number } | null>;
   /**
+   * Where a 退回 of this card would be said -- its thread and coworker -- when it can be returned now
+   * (followed, awaiting review, with both); null otherwise. Asked before the reason is said, so a
+   * reason that cannot be said leaves the card as it was.
+   */
+  returnable(
+    tenantId: string,
+    taskId: string,
+  ): Promise<{ threadRef: string; agentId: string } | null>;
+  /**
    * 取消 (`POST /api/tasks/:id/cancel`): a followed card in any state that has not ended becomes
    * `cancelled`, its `active_run_ref` cleared, with a `cancelled` line. What comes back names the round
    * that was running on it, for the caller to stop; null when the card is not followed and open.
@@ -748,6 +757,28 @@ export function createDelivery(database: Database): Delivery {
           };
         }),
       ),
+
+    returnable: (tenantId, taskId) =>
+      runAsTenant(tenantId, async () => {
+        const [card] = await database
+          .select({
+            threadRef: tasks.threadRef,
+            agentId: tasks.executorAgentId,
+          })
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.id, taskId),
+              eq(tasks.tracked, true),
+              eq(tasks.status, "awaiting_review"),
+            ),
+          )
+          .limit(1);
+        return card?.threadRef && card.agentId
+          ? { threadRef: card.threadRef, agentId: card.agentId }
+          : null;
+      }),
 
     cancelTask: (tenantId, taskId, actor) =>
       runAsTenant(tenantId, () =>

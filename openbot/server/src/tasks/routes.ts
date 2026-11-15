@@ -31,7 +31,7 @@ import {
   wakerGroupMembers,
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
-import type { CardTurns } from "./card-turns";
+import { CardTurnRefused, type CardTurns } from "./card-turns";
 import { createDelivery, stageOf } from "./delivery";
 import { DEFAULT_TIME_ZONE, DELIVERY_EVENTS } from "./delivery-tools";
 import { dueRefusalText, readDueTime } from "./due-time";
@@ -343,6 +343,27 @@ const editBody = z
     criteria: z.string().trim().min(1).max(CRITERIA_CHARS).optional(),
   })
   .refine((body) => body.dueAt !== undefined || body.criteria !== undefined);
+
+/** A due time as the person reads it: 「15:30」 today, 「11月16日 15:30」 on another day. */
+export function clockOf(at: Date, now: Date, timeZone: string): string {
+  const day = (instant: Date) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(instant);
+  const time = new Intl.DateTimeFormat("zh-CN", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(at);
+  if (day(at) === day(now)) return time;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(at);
+  const part = (type: string) =>
+    parts.find((piece) => piece.type === type)?.value ?? "";
+  return `${part("month")}月${part("day")}日 ${time}`;
+}
 
 /** What the followed-card routes need beyond the board: the card's conversation, and the person's rules. */
 export type TaskRouteOptions = {
@@ -667,32 +688,55 @@ export function createTaskRoutes(
         400,
       );
     const reason = body.data.reason;
-    const returned = await delivery.returnTask(tenantId, taskId, {
-      actor: `user:${tenantId}`,
-      reason,
-    });
-    if (!returned)
+    /*
+     * The reason is said first, and the card moves only once it is in: a 退回 the coworker never
+     * hears -- the thread busy, the coworker paused, the group gone -- would leave the card with the
+     * coworker and the reason only in the history. So a reason that cannot be said refuses the whole
+     * 退回, and the card stays where it was, with nothing written.
+     */
+    const card = await delivery.returnable(tenantId, taskId);
+    if (!card)
       return context.json({ error: "这件活不在等你验收，不能退回。" }, 409);
-    let runId: string | null = null;
+    if (!options.turns)
+      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
+    let said: { runId: string | null; groupMessageId: string | null };
     try {
-      runId =
-        (
-          await options.turns?.sendAsUser(
-            tenantId,
-            returned.threadRef,
-            returned.agentId,
-            `退回：${reason}`,
-            { source: `task-return:${taskId}` },
-          )
-        )?.runId ?? null;
+      said = await options.turns.sendAsUser(
+        tenantId,
+        { threadId: card.threadRef, agentId: card.agentId },
+        `退回：${reason}`,
+        { source: `task-return:${taskId}` },
+      );
     } catch (error) {
-      // The card is back with the coworker either way; the checker's nudge reaches it if this did not.
+      if (error instanceof CardTurnRefused)
+        return context.json({ error: error.message }, 409);
       log("task-return-turn-failed", {
         taskId,
         reason: error instanceof Error ? error.message : String(error),
       });
+      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
     }
-    return context.json({ ok: true, returns: returned.returns, runId });
+    const returned = await delivery.returnTask(tenantId, taskId, {
+      actor: `user:${tenantId}`,
+      reason,
+    });
+    if (!returned) {
+      // Reviewed or cancelled in the moment between: the turn just started is stopped (a group's
+      // message, already in the transcript, stays).
+      if (said.runId)
+        await options.turns.stopRound(tenantId, {
+          threadId: card.threadRef,
+          agentId: card.agentId,
+          runId: said.runId,
+        });
+      return context.json({ error: "这件活不在等你验收，不能退回。" }, 409);
+    }
+    return context.json({
+      ok: true,
+      returns: returned.returns,
+      runId: said.runId,
+      groupMessageId: said.groupMessageId,
+    });
   });
 
   /** 取消 (spec §6): the work is over, and the round running on it is stopped. */
@@ -756,6 +800,10 @@ export function createTaskRoutes(
             name: DELIVERY_EVENTS.extensionDecided,
             value: { taskId, decision: body.data.decision, dueAt },
           } as BaseEvent,
+          // In a group, said in the group: the transcript is where the person and the coworker read it.
+          body.data.decision === "grant" && decided.dueAt
+            ? `准许延期到 ${clockOf(decided.dueAt, now(), zoneOf(tenantId))}`
+            : "延期不批，按原时间交",
         )
         .catch((error) =>
           log("task-extension-notice-failed", {

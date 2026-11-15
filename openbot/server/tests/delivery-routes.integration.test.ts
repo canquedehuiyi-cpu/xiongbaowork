@@ -10,21 +10,38 @@ import {
   type RunAgentParameters,
   type RunAgentResult,
 } from "@ag-ui/client";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { Observable } from "rxjs";
+import {
+  configureBotLifecycle,
+  resetBotLifecycleForTests,
+} from "../src/agents/lifecycle";
+import { createAgentProfileStore } from "../src/agents/profile-store";
+import type { AgentActor } from "../src/agents/profile-types";
 import { toolDisabled } from "../src/approvals/policy";
 import type { AppVariables } from "../src/auth/guards";
+import {
+  createGroupConversations,
+  createGroupStore,
+} from "../src/channels/group";
+import { createChannelStore } from "../src/channels/routes";
+import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
 import {
+  agentProfiles,
+  agents,
+  botLifecycle,
   channels,
   groupBotThreads,
+  groupMessages,
   intelligenceChannelMappings,
   tasks,
   threadRunEvents,
   threadRuns,
   threads,
   users,
+  workItems,
 } from "../src/db/schema";
 import { createQuotaService } from "../src/quota/limits";
 import { createTurnRunner } from "../src/routines/run-turn";
@@ -33,10 +50,15 @@ import { createDelivery } from "../src/tasks/delivery";
 import { ACCEPT_TASK_REF, RECEIPT_ASKED } from "../src/tasks/delivery-tools";
 import { listTaskEvents } from "../src/tasks/events";
 import { createTaskProjector } from "../src/tasks/projector";
-import { createTaskRoutes, type TaskRouteOptions } from "../src/tasks/routes";
+import {
+  clockOf,
+  createTaskRoutes,
+  type TaskRouteOptions,
+} from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { suppressRunnerCard } from "../src/threads/unattended-card";
+import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -54,6 +76,17 @@ const delivery = createDelivery(database);
 const suite = randomUUID().slice(0, 8);
 const tenants: string[] = [];
 const createdChannels: { tenantId: string; id: string }[] = [];
+const createdGroupChannels: string[] = [];
+const createdAgents: string[] = [];
+const groupPrefix = `dr-group-${suite}`;
+const profileStore = createAgentProfileStore(
+  database,
+  new URL("https://managed.example.test/ag-ui"),
+);
+const threadIdentity = createThreadIdentity("test-deployment");
+const channelStore = createChannelStore(database, profileStore, threadIdentity);
+// The pause switch reads this database, as the deployment wires it at start-up.
+configureBotLifecycle({ database });
 
 async function tenant(label: string): Promise<string> {
   const id = `dr-${label}-${suite}`;
@@ -133,10 +166,57 @@ class Recorder extends AbstractAgent {
   }
 }
 
-/** The deployment's unattended turn, on the real runner, with `agent` as the coworker. */
-function unattendedTurn(agent: AbstractAgent) {
+/** A coworker that starts, then works until it is stopped. */
+class Working extends AbstractAgent {
+  private stop: () => void = () => {};
+  private started: () => void = () => {};
+  readonly running = new Promise<void>((resolve) => {
+    this.started = resolve;
+  });
+  constructor(agentId: string) {
+    super({ agentId });
+  }
+  override async runAgent(
+    parameters?: RunAgentParameters,
+    subscriber?: AgentSubscriber,
+  ): Promise<RunAgentResult> {
+    const input = parameters as RunAgentInput;
+    await subscriber?.onEvent?.({
+      event: {
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+    } as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
+    const stopped = new Promise<void>((resolve) => {
+      this.stop = resolve;
+    });
+    this.started();
+    await stopped;
+    return { result: undefined, newMessages: [] };
+  }
+  override abortRun(): void {
+    this.stop();
+  }
+  override run(): Observable<BaseEvent> {
+    throw new Error("runAgent is the only entry used here");
+  }
+  override clone(): Working {
+    return this;
+  }
+}
+
+/**
+ * The deployment's unattended turn, on the real runner, with the real admission (the pause switch
+ * and the capability gate, `serverTurnAdmission`) and the real card scope. `agent` answers as every
+ * coworker, or as the one named. `lockRefused` makes the thread's lock refuse, as it does while
+ * somebody else holds the thread.
+ */
+function unattendedTurn(
+  agent: AbstractAgent | ((agentId: string) => AbstractAgent),
+  options: { lockRefused?: boolean } = {},
+) {
   return createTurnRunner({
-    admission: async ({ signal }) => signal ?? new AbortController().signal,
     intelligence: {
       getOrCreateThread: async (params: { threadId: string }) => ({
         thread: { id: params.threadId },
@@ -146,27 +226,35 @@ function unattendedTurn(agent: AbstractAgent) {
       ɵacquireThreadLock: async (params: {
         threadId: string;
         runId: string;
-      }) => ({
-        threadId: params.threadId,
-        runId: params.runId,
-        joinToken: "test",
-      }),
+      }) => {
+        if (options.lockRefused) throw new Error("Thread lock denied");
+        return {
+          threadId: params.threadId,
+          runId: params.runId,
+          joinToken: "test",
+        };
+      },
       ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
       ɵcleanupThreadLock: async () => undefined,
     } as never,
     runner: new PostgresAgentRunner(database, projector, quota) as never,
-    buildAgentFor: async () => agent,
+    buildAgentFor: async ({ agentId }) =>
+      typeof agent === "function" ? agent(agentId) : agent,
   });
 }
 
 function cardTurns(
   agent: AbstractAgent,
-  extra: Partial<Parameters<typeof createCardTurns>[0]> = {},
+  extra: Partial<Parameters<typeof createCardTurns>[0]> & {
+    lockRefused?: boolean;
+  } = {},
 ) {
+  const { lockRefused, ...rest } = extra;
   return createCardTurns({
-    runTurn: unattendedTurn(agent),
+    database,
+    runTurn: unattendedTurn(agent, { lockRefused }),
     runner: new PostgresAgentRunner(database, projector, quota),
-    ...extra,
+    ...rest,
   });
 }
 
@@ -395,60 +483,298 @@ test("return moves awaiting_review to running, returns+1, posts the reason as th
   ).toBe(409);
 });
 
-test("return on a group card says it in the coworker's group thread, not the channel", async () => {
-  const tenantId = await tenant("group-return");
-  const agentId = `agent-${suite}-gr`;
-  const channelId = `channel-${suite}-gr`;
-  const groupThread = `group-thread-${suite}-gr`;
-  await runAsTenant(tenantId, async () => {
-    await database
-      .insert(channels)
-      .values({ id: channelId, name: "群", description: "test" });
-    await database.insert(groupBotThreads).values({
-      ownerUserId: tenantId,
-      channelId,
-      agentId,
-      threadId: groupThread,
-    });
-  });
-  createdChannels.push({ tenantId, id: channelId });
-  const taskId = await card(tenantId, {
-    agentId,
-    channelRef: channelId,
-    status: "running",
-  });
-  const coworker = new Recorder(agentId);
-  const call = routesFor(tenantId, { turns: cardTurns(coworker) });
+/** A coworker of `owner`'s, as the people's own Bot builder makes one: an agent row and a profile. */
+async function coworker(owner: string, name: string): Promise<string> {
+  const actor: AgentActor = { id: owner, role: "user" };
+  const profile = await runAsTenant(owner, () =>
+    profileStore.create(actor, {
+      name,
+      title: "Tester",
+      roleDescription: "Answer briefly.",
+      visibility: "private",
+    }),
+  );
+  createdAgents.push(profile.id);
+  return profile.id;
+}
 
+test("a return the coworker cannot hear is refused and leaves the card as it was", async () => {
+  const unchanged = async (tenantId: string, taskId: string) => {
+    const found = await row(tenantId, taskId);
+    expect(found?.status).toBe("awaiting_review");
+    expect(found?.returns).toBe(0);
+    expect(
+      (await history(tenantId, taskId)).some((e) => e.kind === "returned"),
+    ).toBe(false);
+  };
+
+  // The thread's lock is held by somebody else.
+  {
+    const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+      "return-locked",
+      { status: "awaiting_review" },
+    );
+    const said = new Recorder(agentId);
+    const call = routesFor(tenantId, {
+      turns: cardTurns(said, { lockRefused: true }),
+    });
+    const response = await call("POST", `${taskId}/return`, {
+      reason: "补 C 家",
+    });
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("员工这会儿正忙，稍后再试。");
+    await unchanged(tenantId, taskId);
+    expect(said.seen).toEqual([]);
+    expect(
+      (await storedEvents(tenantId, threadId)).some((r) =>
+        JSON.stringify(r.event).includes("补 C 家"),
+      ),
+    ).toBe(false);
+  }
+
+  // A turn of the conversation is running right now: it is not superseded.
+  {
+    const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+      "return-busy",
+      { status: "awaiting_review" },
+    );
+    const working = new Working(agentId);
+    const runId = randomUUID();
+    const running = turn({
+      tenantId,
+      agent: working,
+      threadId,
+      ask: "在吗",
+      runId,
+    });
+    await working.running;
+    const said = new Recorder(agentId);
+    const response = await routesFor(tenantId, { turns: cardTurns(said) })(
+      "POST",
+      `${taskId}/return`,
+      { reason: "补 C 家" },
+    );
+    expect(response.status).toBe(409);
+    await unchanged(tenantId, taskId);
+    expect(said.seen).toEqual([]);
+    await runAsTenant(tenantId, () =>
+      new PostgresAgentRunner(database, projector, quota).stop({
+        threadId,
+        runId,
+      }),
+    );
+    await running;
+  }
+
+  // The coworker is paused: the real admission refuses the turn.
+  {
+    const tenantId = await tenant("return-paused");
+    const agentId = await coworker(tenantId, "Paused");
+    const threadId = `thread-${suite}-paused`;
+    const taskId = await card(tenantId, {
+      agentId,
+      tracked: true,
+      threadRef: threadId,
+      channelRef: threadId,
+      acceptedAt: new Date(),
+      status: "awaiting_review",
+    });
+    await runAsTenant(tenantId, () =>
+      database
+        .insert(botLifecycle)
+        .values({ ownerUserId: tenantId, agentId, pausedAt: new Date() }),
+    );
+    const said = new Recorder(agentId);
+    const response = await routesFor(tenantId, { turns: cardTurns(said) })(
+      "POST",
+      `${taskId}/return`,
+      { reason: "补 C 家" },
+    );
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("这位员工已暂停，恢复后再试。");
+    await unchanged(tenantId, taskId);
+    expect(said.seen).toEqual([]);
+  }
+});
+
+test("return and the extension answer on a group card are said in the group, and the coworker's turn hangs on the card", async () => {
+  const ownerId = await tenant("group-return");
+  const owner: AgentActor = { id: ownerId, role: "user" };
+  const ada = await coworker(ownerId, "Ada");
+  const grace = await coworker(ownerId, "Grace");
+  const channel = await runAsTenant(ownerId, () =>
+    channelStore.create(owner, [ada, grace]),
+  );
+  createdGroupChannels.push(channel.id);
+  const recorders = new Map([
+    [ada, new Recorder(ada, "收到，我改表头。")],
+    [grace, new Recorder(grace)],
+  ]);
+  const agentFor = (agentId: string) => {
+    const found = recorders.get(agentId);
+    if (!found) throw new Error(`no coworker ${agentId}`);
+    return found;
+  };
+  // The group as the deployment builds it: its own store and queue, the real unattended turn with the
+  // real admission, the board and the followed cards.
+  const runTurn = unattendedTurn(agentFor);
+  const conversations = createGroupConversations({
+    store: createGroupStore(database, () => threadIdentity.mint()),
+    queue: createWorkQueue(database),
+    owner: `${groupPrefix}-replica`,
+    roster: async (ownerUserId, channelId) => {
+      const actor: AgentActor = { id: ownerUserId, role: "user" };
+      const found = await channelStore.get(actor, channelId);
+      if (!found || found.agentIds.length < 2) return null;
+      const bots = [];
+      for (const agentId of found.agentIds) {
+        const profile = await profileStore.get(actor, agentId);
+        if (profile) bots.push({ id: agentId, name: profile.name });
+      }
+      return bots;
+    },
+    runTurn,
+    caps: { maxDepth: 0, maxPerRun: 2 },
+    mayAddress: async () => false,
+    auditStore: { insert: async () => undefined },
+    progressEveryMs: 0,
+    board: projector,
+    delivery,
+  });
+  const drain = () =>
+    runAsTenant("platform", async () => {
+      for (let i = 0; i < 10 && (await conversations.sweep()); i++) {}
+    });
+  const groupLines = () =>
+    runAsTenant(ownerId, () =>
+      database
+        .select({
+          id: groupMessages.id,
+          text: groupMessages.text,
+          agentId: groupMessages.agentId,
+        })
+        .from(groupMessages)
+        .where(eq(groupMessages.channelId, channel.id)),
+    );
+
+  // The person asks Ada in the group; the board carded it as usual, and the person follows it.
+  await runAsTenant(ownerId, () =>
+    conversations.send(ownerId, channel.id, {
+      id: `${groupPrefix}-ask`,
+      text: "@Ada 做一张供应商对账表",
+    }),
+  );
+  await drain();
+  const [adaCard] = await runAsTenant(ownerId, () =>
+    database
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.tenantId, ownerId), eq(tasks.executorAgentId, ada))),
+  );
+  const taskId = adaCard?.id as string;
+  const call = routesFor(ownerId, {
+    acceptTaskDisabled: async () => false,
+    turns: createCardTurns({
+      database,
+      runTurn,
+      runner: new PostgresAgentRunner(database, projector, quota),
+      groupSend: (ownerUserId, channelId, input) =>
+        conversations.send(ownerUserId, channelId, input),
+      botName: async (tenantId, agentId) =>
+        (await profileStore.get({ id: tenantId, role: "user" }, agentId))
+          ?.name ?? null,
+    }),
+  });
   const tracked = await call("POST", `${taskId}/track`);
   expect(tracked.status).toBe(200);
-  expect(tracked.body.threadRef).toBe(groupThread);
-  await delivery.accept(tenantId, taskId, {
-    runId: `accept-${suite}`,
+  const groupThread = tracked.body.threadRef as string;
+  expect(groupThread).not.toBe(channel.id);
+  await delivery.accept(ownerId, taskId, {
+    runId: `accept-${suite}-group`,
     threadRef: groupThread,
-    actor: `agent:${agentId}`,
-    dueAt: null,
-    criteria: "交一张表",
+    actor: `agent:${ada}`,
+    dueAt: new Date(Date.now() + 3600_000),
+    criteria: "一张表",
   });
-  await runAsTenant(tenantId, () =>
+  // That round is over: the card waits for the person.
+  await delivery.runEnded(ownerId, taskId, {
+    runId: `accept-${suite}-group`,
+    failed: false,
+  });
+  await runAsTenant(ownerId, () =>
     database
       .update(tasks)
       .set({ status: "awaiting_review" })
       .where(eq(tasks.id, taskId)),
   );
+  const adaTurnsBefore = recorders.get(ada)?.seen.length ?? 0;
 
-  const response = await call("POST", `${taskId}/return`, {
+  const returned = await call("POST", `${taskId}/return`, {
     reason: "表头不对",
   });
-  expect(response.status).toBe(200);
-  await roundEnded(tenantId, taskId, response.body.runId as string);
-  const runs = await runAsTenant(tenantId, () =>
+  expect(returned.status).toBe(200);
+  expect(returned.body.runId).toBeNull();
+  const messageId = returned.body.groupMessageId as string;
+  // In the group's transcript, as the person's own message to Ada.
+  const posted = (await groupLines()).find((line) => line.id === messageId);
+  expect(posted?.text).toBe("@Ada 退回：表头不对");
+  expect(posted?.agentId).toBeNull();
+  const after = await row(ownerId, taskId);
+  expect(after?.status).toBe("running");
+  expect(after?.returns).toBe(1);
+
+  await drain();
+  // Ada answered it in her group turn, which hung on the card: no second card, the round on its history.
+  const adaSeen = recorders.get(ada)?.seen ?? [];
+  expect(adaSeen.length).toBe(adaTurnsBefore + 1);
+  expect(JSON.stringify(adaSeen.at(-1)?.messages)).toContain("退回：表头不对");
+  const adaCards = await runAsTenant(ownerId, () =>
     database
-      .select({ threadId: threadRuns.threadId })
-      .from(threadRuns)
-      .where(eq(threadRuns.id, response.body.runId as string)),
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.tenantId, ownerId), eq(tasks.executorAgentId, ada))),
   );
-  expect(runs.map((r) => r.threadId)).toEqual([groupThread]);
+  expect(adaCards.map((c) => c.id)).toEqual([taskId]);
+  const kinds = (await history(ownerId, taskId)).map((event) => event.kind);
+  expect(kinds.slice(kinds.indexOf("returned"))).toEqual([
+    "returned",
+    "progress",
+    "run_ended",
+  ]);
+  expect(
+    (await groupLines()).some((line) => line.text === "收到，我改表头。"),
+  ).toBe(true);
+
+  // The answer to a 延期申请 is said in the group too.
+  const asked = new Date(Date.now() + 3 * 3600_000);
+  await delivery.requestExtension(ownerId, taskId, {
+    dueAt: asked,
+    reason: "C 家没回",
+  });
+  const granted = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+  });
+  expect(granted.status).toBe(200);
+  await delivery.requestExtension(ownerId, taskId, {
+    dueAt: new Date(Date.now() + 5 * 3600_000),
+    reason: "还要等",
+  });
+  expect(
+    (await call("POST", `${taskId}/extension`, { decision: "deny" })).status,
+  ).toBe(200);
+  const texts = (await groupLines()).map((line) => line.text);
+  expect(texts).toContain(
+    `@Ada 准许延期到 ${clockOf(asked, new Date(), "Asia/Shanghai")}`,
+  );
+  expect(texts).toContain("@Ada 延期不批，按原时间交");
+  // Not a notice run on the hidden thread.
+  expect(
+    (await storedEvents(ownerId, groupThread)).some(
+      (r) =>
+        (r.event as { name?: string }).name === "delivery.extension_decided",
+    ),
+  ).toBe(false);
+  await drain();
 });
 
 test("cancel stops a running turn and marks cancelled", async () => {
@@ -462,54 +788,19 @@ test("cancel stops a running turn and marks cancelled", async () => {
     }),
   });
 
-  let started: () => void = () => {};
-  const running = new Promise<void>((resolve) => {
-    started = resolve;
-  });
-  /** A coworker that says a little, then works until it is stopped. */
-  class Working extends AbstractAgent {
-    private stop: () => void = () => {};
-    override async runAgent(
-      parameters?: RunAgentParameters,
-      subscriber?: AgentSubscriber,
-    ): Promise<RunAgentResult> {
-      const input = parameters as RunAgentInput;
-      await subscriber?.onEvent?.({
-        event: {
-          type: EventType.RUN_STARTED,
-          threadId: input.threadId,
-          runId: input.runId,
-        },
-      } as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
-      const stopped = new Promise<void>((resolve) => {
-        this.stop = resolve;
-      });
-      started();
-      await stopped;
-      return { result: undefined, newMessages: [] };
-    }
-    override abortRun(): void {
-      this.stop();
-    }
-    override run(): Observable<BaseEvent> {
-      throw new Error("runAgent is the only entry used here");
-    }
-    override clone(): Working {
-      return this;
-    }
-  }
+  const working = new Working(agentId);
   const runId = randomUUID();
   let ended = false;
   const turnDone = turn({
     tenantId,
-    agent: new Working({ agentId }),
+    agent: working,
     threadId,
     ask: "进度？",
     runId,
   }).then(() => {
     ended = true;
   });
-  await running;
+  await working.running;
   await until(
     () => row(tenantId, taskId),
     (found) => found?.activeRunRef === runId,
@@ -1007,6 +1298,21 @@ test("overdue=1 lists only cards with overdue_at", async () => {
 });
 
 afterAll(async () => {
+  resetBotLifecycleForTests();
+  await runAsTenant("platform", async () => {
+    await database
+      .delete(workItems)
+      .where(like(workItems.key, `${groupPrefix}%`));
+    for (const id of createdGroupChannels) {
+      await database
+        .delete(groupMessages)
+        .where(eq(groupMessages.channelId, id));
+      await database
+        .delete(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.channelId, id));
+      await database.delete(channels).where(eq(channels.id, id));
+    }
+  });
   for (const id of tenants) {
     await runAsTenant(id, async () => {
       await database
@@ -1032,6 +1338,13 @@ afterAll(async () => {
         .delete(intelligenceChannelMappings)
         .where(eq(intelligenceChannelMappings.channelId, id));
       await database.delete(channels).where(eq(channels.id, id));
+    });
+  if (createdAgents.length)
+    await runAsTenant("platform", async () => {
+      await database
+        .delete(agentProfiles)
+        .where(inArray(agentProfiles.agentId, createdAgents));
+      await database.delete(agents).where(inArray(agents.id, createdAgents));
     });
   // `task_events` is append-only for the application role; its rows stay, under tenants nobody has.
   await runAsTenant("platform", () =>

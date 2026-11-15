@@ -6,8 +6,11 @@ import {
   type Message,
 } from "@ag-ui/client";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { and, eq } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { PERSON_INITIATOR } from "../audit";
+import type { Database } from "../db/client";
+import { groupBotThreads } from "../db/schema";
 import type { NoticeRunner } from "../devices/queued-results";
 import { runAsTenant } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
@@ -15,50 +18,77 @@ import { suppressRunnerCard } from "../threads/unattended-card";
 
 /**
  * What the person's decisions on a followed card do in its conversation (spec 2026-11-15-delivery-loop
- * §6): a 退回 is said in the card's thread as the person's own message and the coworker answers it, a
- * 取消 stops the round running on the card, and an answer to a 延期申请 is put in the thread for the
- * chat's card to show. The card itself is written by `tasks/delivery.ts`; this is only the thread.
+ * §6): a 退回 is said in the card's conversation as the person's own message and the coworker answers
+ * it, a 取消 stops the round running on the card, and an answer to a 延期申请 is put where the chat's
+ * card can show it. The card itself is written by `tasks/delivery.ts`; this is only the conversation.
  *
  * Every call takes the card's tenant and works in its frame: the thread is that tenant's, and so are
- * the turn's grants, its usage and its audit trail. A group card's thread is the coworker's group
- * thread with that person (`thread_ref`), never the group's channel.
+ * the turn's grants, its usage and its audit trail.
+ *
+ * TWO KINDS OF CONVERSATION. A one-to-one card's thread is the conversation the person reads, so a
+ * message goes straight into it as a turn. A group card's thread (`group_bot_threads`, the coworker's
+ * thread with this person) is not: the group's transcript is `group_messages`, and only what is posted
+ * to the group is seen there. So in a group the person's words are posted to the group itself, by the
+ * group's own send (`channels/group.ts`), addressed to the coworker -- the transcript shows them, and
+ * the group's turn runs on that same thread, where it hangs on the card like any later round.
  */
 export type CardTurns = {
   /**
-   * Say `text` in `threadId` as the person, and have `agentId` answer it there: a turn of that
-   * conversation like one the person started, through the same unattended runner a dispatched `@` runs
-   * on (`channels/dispatch.ts`). Started, not awaited: the reply is the coworker's, in its own time. The
-   * runner hangs the turn on the open followed card of the thread, as it does any later round.
+   * Say `text` as the person to `agentId` in the card's conversation, and have it answer. Resolves
+   * once the message is in: for a one-to-one card, when the coworker's turn has started (past its
+   * admission, holding the thread); for a group card, when the group has taken the message and queued
+   * its turn. Throws {@link CardTurnRefused} when it could not be said -- the thread is busy, the
+   * coworker is paused, the group is gone -- and then nothing was said.
    */
   sendAsUser(
     tenantId: string,
-    threadId: string,
-    agentId: string,
+    to: { threadId: string; agentId: string },
     text: string,
     options?: { source?: string },
-  ): Promise<{ runId: string }>;
+  ): Promise<{ runId: string | null; groupMessageId: string | null }>;
   /**
    * Stop the round `runId` running on the card's thread, through the runner's own stop -- the one the
    * conversation's stop button uses -- and an external coworker's turn on it, when this deployment can.
+   *
+   * THIS REPLICA ONLY: the runner's live runs are in this process's memory, so a round running on
+   * another replica is not reached (its card is cancelled all the same, and its late end writes nothing).
    */
   stopRound(
     tenantId: string,
     round: { threadId: string; agentId: string | null; runId: string | null },
   ): Promise<void>;
   /**
-   * Put one of the server's `delivery.*` events in the card's thread: into the round running on the
-   * card when it is open here, otherwise as a run of its own that says nothing else, so the
-   * conversation stores and replays it like every other event. A thread with somebody else's turn in
-   * flight is left alone (the runner would supersede it).
+   * Tell the card's conversation what the person decided. One-to-one: the server's `delivery.*` event,
+   * into the round running on the card when it is open here, otherwise as a run of its own that says
+   * nothing else, so the conversation stores and replays it (a thread with somebody else's turn in
+   * flight is left alone: the runner would supersede it). In a group: `groupText`, posted to the group
+   * as the person, addressed to the coworker.
    */
   say(
     tenantId: string,
     where: { threadId: string; agentId: string; runId: string | null },
     event: BaseEvent,
+    groupText: string,
   ): Promise<void>;
 };
 
+/** A message that could not be said, and why, in words for the person. Nothing was said. */
+export class CardTurnRefused extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CardTurnRefused";
+  }
+}
+
+/** The group's own send (`createGroupConversations(...).send`): a person's message and its queued turn. */
+export type GroupSend = (
+  ownerUserId: string,
+  channelId: string,
+  input: { id: string; text: string; agentId: string },
+) => Promise<unknown>;
+
 export type CardTurnsDeps = {
+  database: Database;
   /** The unattended turn (`routines/run-turn.ts`'s `createTurnRunner`), as a dispatched `@` uses it. */
   runTurn: TurnRunner;
   /** The deployment's thread runner (`threads/postgres-runner.ts`). */
@@ -68,6 +98,10 @@ export type CardTurnsDeps = {
       runId?: string;
     }): Promise<boolean | undefined>;
   };
+  /** Posting to a group, for a group card. Without it a group card's message is refused. */
+  groupSend?: GroupSend;
+  /** The coworker's name as this person sees it, for the `@Name` a group message starts with. */
+  botName?: (tenantId: string, agentId: string) => Promise<string | null>;
   /**
    * Cancel an external coworker's queued or running turn on the thread (spec §6: 外部员工排队或进行中
    * 的轮次一并取消). The ACP runtime that runs those turns (`DeviceAcpAgent`, external coworkers phase
@@ -79,11 +113,27 @@ export type CardTurnsDeps = {
   ) => Promise<void>;
 };
 
+const BUSY = "员工这会儿正忙，稍后再试。";
+const PAUSED = "这位员工已暂停，恢复后再试。";
+const GROUP_GONE = "这个群已经不在了，或这位员工已不在群里。";
+
 const log = (type: string, detail: Record<string, unknown>) =>
   console.error(JSON.stringify({ type, ...detail }));
 
 const reasonOf = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+/** Why a turn did not start, as the person is told it. */
+function refusalOf(error: unknown): CardTurnRefused {
+  if (error instanceof CardTurnRefused) return error;
+  const name = error instanceof Error ? error.name : "";
+  if (name === "BotPausedError") return new CardTurnRefused(PAUSED);
+  // "Use Bots" switched off, or the model is not on the allowlist: the gate's own sentence.
+  if (name === "CapabilityRefusedError" && error instanceof Error)
+    return new CardTurnRefused(error.message);
+  // The thread is held (somebody's turn), or the turn could not take it: try again later.
+  return new CardTurnRefused(BUSY);
+}
 
 /** A run that carries one server event and nothing else. */
 class ServerNotice extends AbstractAgent {
@@ -116,8 +166,73 @@ class ServerNotice extends AbstractAgent {
 }
 
 export function createCardTurns(deps: CardTurnsDeps): CardTurns {
+  /** The group a card's thread belongs to, when it is a coworker's group thread with this person. */
+  const groupOf = (tenantId: string, threadId: string, agentId: string) =>
+    runAsTenant(tenantId, async () => {
+      const [row] = await deps.database
+        .select({ channelId: groupBotThreads.channelId })
+        .from(groupBotThreads)
+        .where(
+          and(
+            eq(groupBotThreads.ownerUserId, tenantId),
+            eq(groupBotThreads.threadId, threadId),
+            eq(groupBotThreads.agentId, agentId),
+          ),
+        )
+        .limit(1);
+      return row?.channelId ?? null;
+    });
+
+  /** Post to the group as the person, addressed to the coworker; refused in words when it cannot be. */
+  const postToGroup = async (
+    tenantId: string,
+    channelId: string,
+    agentId: string,
+    text: string,
+  ): Promise<string> => {
+    if (!deps.groupSend) throw new CardTurnRefused(GROUP_GONE);
+    const name = await deps.botName?.(tenantId, agentId).catch(() => null);
+    const id = randomUUID();
+    try {
+      await runAsTenant(tenantId, () =>
+        // biome-ignore lint/style/noNonNullAssertion: checked above
+        deps.groupSend!(tenantId, channelId, {
+          id,
+          text: name ? `@${name} ${text}` : text,
+          agentId,
+        }),
+      );
+    } catch (error) {
+      log("task-card-group-post-refused", {
+        channelId,
+        reason: reasonOf(error),
+      });
+      throw new CardTurnRefused(GROUP_GONE);
+    }
+    return id;
+  };
+
   return {
-    async sendAsUser(tenantId, threadId, agentId, text, options) {
+    async sendAsUser(tenantId, to, text, options) {
+      const channelId = await groupOf(tenantId, to.threadId, to.agentId);
+      if (channelId)
+        return {
+          runId: null,
+          groupMessageId: await postToGroup(
+            tenantId,
+            channelId,
+            to.agentId,
+            text,
+          ),
+        };
+
+      // A turn already in flight on the thread would be superseded by this one: refused, not replaced.
+      const busy = await runAsTenant(tenantId, async () => {
+        await deps.runner.hydrate();
+        return deps.runner.isRunning({ threadId: to.threadId });
+      });
+      if (busy) throw new CardTurnRefused(BUSY);
+
       // A uuid, because the thread lock wants one.
       const runId = randomUUID();
       const userMessage: Message = {
@@ -125,28 +240,41 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
         role: "user",
         content: text,
       };
-      void runAsTenant(tenantId, () =>
-        deps.runTurn({
-          ownerUserId: tenantId,
-          routineId: options?.source ?? "task-card",
-          agentId,
-          threadId,
-          instruction: text,
-          userMessage,
-          runId,
-          tenantId,
-          initiator: PERSON_INITIATOR,
-          telemetry: { trigger: "human" },
-        }),
-      ).catch((error) =>
-        // A turn parked on a person's decision throws too; the card it hangs on is parked by its run id.
-        log("task-card-turn-ended-early", {
-          runId,
-          threadId,
-          reason: reasonOf(error),
-        }),
-      );
-      return { runId };
+      let began = false;
+      await new Promise<void>((started, refused) => {
+        runAsTenant(tenantId, () =>
+          deps.runTurn({
+            ownerUserId: tenantId,
+            routineId: options?.source ?? "task-card",
+            agentId: to.agentId,
+            threadId: to.threadId,
+            instruction: text,
+            userMessage,
+            runId,
+            tenantId,
+            initiator: PERSON_INITIATOR,
+            telemetry: { trigger: "human" },
+            onStarted: () => {
+              began = true;
+              started();
+            },
+          }),
+        ).then(
+          () => started(),
+          (error) => {
+            // Before the start, the caller hears why and says so; after it, the card records the round.
+            if (!began) return refused(error);
+            log("task-card-turn-ended-early", {
+              runId,
+              threadId: to.threadId,
+              reason: reasonOf(error),
+            });
+          },
+        );
+      }).catch((error) => {
+        throw refusalOf(error);
+      });
+      return { runId, groupMessageId: null };
     },
 
     async stopRound(tenantId, round) {
@@ -175,7 +303,12 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
       }
     },
 
-    async say(tenantId, where, event) {
+    async say(tenantId, where, event, groupText) {
+      const channelId = await groupOf(tenantId, where.threadId, where.agentId);
+      if (channelId) {
+        await postToGroup(tenantId, channelId, where.agentId, groupText);
+        return;
+      }
       if (where.runId && emitRunEvent(where.runId, event)) return;
       await runAsTenant(tenantId, async () => {
         await deps.runner.hydrate();
