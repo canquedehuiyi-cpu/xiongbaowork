@@ -1,20 +1,22 @@
 import { IconTarget } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ConversationApprovals } from "@/components/approvals/inline-approval";
+import { InlineApproval } from "@/components/approvals/inline-approval";
 import type { SidebarGoal } from "../../../../../shared/conversation-sidebar";
 
 /**
  * 「目标」：这个对话正在做的事（最近一张任务卡）、「第 N 轮 · 上次检查：…」，有待确认时一个「去确认」。
  *
  * 「去确认」把对话滚到那张许可卡（`InlineApproval` 上的 `data-approval-id`）。卡不在对话里（往上翻才有、
- * 或是任务卡指着的审批没画在这段对话里）时，卡就画在这里，在侧栏里也能直接批（原来详情抽屉里的
- * `ConversationApprovals` 并到了这里）。
+ * 或是任务卡指着的审批没画在这段对话里）时，就把同一条审批的卡画在这里，在侧栏里也能直接批（原来详情
+ * 抽屉里的 `ConversationApprovals` 并到了这里）；那条审批没有对应的工具调用、画不出卡时，给审批页的链接。
  */
 
 /** 「上次检查」长过这么多字时先收成两行，给「显示更多」。 */
 const LONG_CHECK = 44;
 
-export type PendingApproval = { id: string } | null;
+/** 「去确认」指向的那条审批；`toolCallId` 有才能就地画出它的卡。 */
+export type PendingApproval = { id: string; toolCallId?: string } | null;
 
 /** 收起时标题右边的一句。 */
 export function goalSummary(
@@ -42,12 +44,9 @@ function scrollToApproval(id: string): boolean {
 export function GoalBody({
   goal,
   pending,
-  threadId,
 }: {
   goal: SidebarGoal;
   pending: PendingApproval;
-  /** 单聊的线程：卡不在对话里时，在这里把这个对话的待确认画出来。 */
-  threadId?: string;
 }) {
   const [more, setMore] = useState(false);
   const [inPlace, setInPlace] = useState(false);
@@ -99,11 +98,30 @@ export function GoalBody({
           去确认
         </button>
       ) : null}
-      {pending && inPlace && threadId ? (
+      {pending && inPlace ? (
         <div className="mt-1">
-          <ConversationApprovals threadId={threadId} />
+          {pending.toolCallId ? (
+            <InlineApproval
+              fallback={<ApprovalsLink />}
+              toolCallId={pending.toolCallId}
+            />
+          ) : (
+            <ApprovalsLink />
+          )}
         </div>
       ) : null}
     </>
+  );
+}
+
+/** 画不出那张卡时：去审批页确认。 */
+function ApprovalsLink() {
+  return (
+    <Link
+      className="text-(--wb-accent2) text-[12.5px] outline-none hover:underline focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+      to="/approvals"
+    >
+      到审批页确认
+    </Link>
   );
 }

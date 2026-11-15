@@ -17,6 +17,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -26,6 +27,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { InlineApproval } from "@/components/approvals/inline-approval";
+import { DetailPanel } from "@/components/layout/detail-panel";
 import type { ConnectedModel, ModelLibrary } from "@/lib/models/queries";
 import { Route as ModelsTabRoute } from "@/routes/_authed/_app/capabilities.models";
 import {
@@ -542,6 +544,185 @@ test("去确认 scrolls to the pending approval card", async () => {
     });
     await user.click(view.getByRole("button", { name: "去确认" }));
     expect(scrolled).toEqual(["ap1"]);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = original;
+  }
+});
+
+/** 只记下被观察的元素，由测试报出宽度（happy-dom 不排版）。 */
+class Observer implements ResizeObserver {
+  static targets = new Map<Element, Observer>();
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element) {
+    Observer.targets.set(target, this);
+  }
+  unobserve(target: Element) {
+    Observer.targets.delete(target);
+  }
+  disconnect() {
+    for (const [target, observer] of Observer.targets)
+      if (observer === this) Observer.targets.delete(target);
+  }
+  static resizeAll(width: number) {
+    for (const [target, observer] of Observer.targets)
+      observer.callback(
+        [
+          {
+            target,
+            contentRect: new DOMRect(0, 0, width, 800),
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          },
+        ],
+        observer,
+      );
+  }
+}
+
+/**
+ * 真实的 `DetailPanel` 里放侧栏和顶栏按钮，像单聊页那样；`width` 是对话区加侧栏那一行量出来的宽度
+ * （1440 窗口约 1072，1000 窗口约 632，800 窗口约 432）。
+ */
+async function drawInPanel(width: number) {
+  const original = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = Observer;
+  const drawn = draw(() => (
+    <DetailPanel
+      aside={
+        <ConversationSidebar source={{ threadId: "t1" }} variant="panel" />
+      }
+      onClose={() => {}}
+      open={false}
+    >
+      <SidebarCollapseButton collapseKey="t1" />
+      <p>对话</p>
+    </DetailPanel>
+  ));
+  await drawn.view.findByText("对话");
+  act(() => Observer.resizeAll(width));
+  return {
+    ...drawn,
+    restore: () => {
+      globalThis.ResizeObserver = original;
+      Observer.targets.clear();
+    },
+  };
+}
+
+test("a conversation remembered open shows the strip in a 1000px window", async () => {
+  window.localStorage.setItem(
+    "xiongbao-conversation-sidebar:t1",
+    JSON.stringify({ collapsed: false, closed: [] }),
+  );
+  const wide = await drawInPanel(1072);
+  try {
+    const aside = await loaded(wide.view);
+    expect(aside.dataset.collapsed).toBe("false");
+    expect(wide.view.getByRole("button", { name: "收起侧栏" })).toBeTruthy();
+  } finally {
+    wide.restore();
+  }
+  cleanup();
+
+  const narrow = await drawInPanel(632);
+  try {
+    const aside = await loaded(narrow.view);
+    // 对话区放不下展开的侧栏：只画图标条，按钮点不开，顶栏也没有收起按钮。
+    expect(aside.dataset.collapsed).toBe("true");
+    expect(aside.dataset.forced).toBe("true");
+    expect(aside.style.width).toBe("56px");
+    const expand = within(aside).getByRole("button", { name: "展开侧栏" });
+    expect((expand as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      within(aside).getByRole("button", { name: "上下文：已使用 42%" }),
+    ).toBeTruthy();
+    expect(
+      narrow.view.container.querySelector("[data-sidebar-toggle]"),
+    ).toBeNull();
+    // 记住的「展开」没被改掉。
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("xiongbao-conversation-sidebar:t1") ?? "{}",
+      ).collapsed,
+    ).toBe(false);
+  } finally {
+    narrow.restore();
+  }
+});
+
+test("too narrow for even the strip: no sidebar and no header button", async () => {
+  const tight = await drawInPanel(432);
+  try {
+    await waitFor(() => {
+      if (!tight.view.getByText("对话")) throw new Error("not drawn");
+    });
+    expect(
+      tight.view.container.querySelector("[data-conversation-sidebar]"),
+    ).toBeNull();
+    expect(
+      tight.view.container.querySelector("[data-sidebar-toggle]"),
+    ).toBeNull();
+    expect(tight.view.queryByRole("button", { name: /侧栏/ })).toBeNull();
+  } finally {
+    tight.restore();
+  }
+});
+
+test("去确认 follows the inbox's newest approval for this conversation", async () => {
+  // 服务器从任务卡读到的是另一条（已经不在收件箱里）；以收件箱里本对话最新的为准。
+  sidebars.set(
+    "t1",
+    sidebar({
+      goal: {
+        title: "整理本周周报，下午给我",
+        status: "needs_action",
+        rounds: 6,
+        lastCheck: "等你确认",
+        pendingApprovalId: "ap-stale",
+      },
+    }),
+  );
+  const request = (id: string, toolCallId: string, createdAt: string) => ({
+    id,
+    status: "pending",
+    createdAt,
+    action: {
+      botId: "a1",
+      toolRef: "computer_click",
+      effect: "write",
+      scope: "browser",
+      threadId: "t1",
+      toolCallId,
+      args: {},
+      target: null,
+      policy: { behaviour: "ask", source: "safety", reason: "先问你。" },
+    },
+  });
+  inbox = [
+    request("ap-old", "call-old", "2026-11-15T07:00:00Z"),
+    request("ap-new", "call-new", "2026-11-15T08:00:00Z"),
+  ];
+  const scrolled: string[] = [];
+  const original = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+    scrolled.push(this.dataset.approvalId ?? this.tagName);
+  };
+  try {
+    const { view, user } = draw(() => (
+      <>
+        <InlineApproval toolCallId="call-old" fallback={null} />
+        <InlineApproval toolCallId="call-new" fallback={null} />
+        <ConversationSidebar source={{ threadId: "t1" }} variant="panel" />
+      </>
+    ));
+    await loaded(view);
+    await waitFor(() => {
+      if (!view.container.querySelector('[data-approval-id="ap-new"]'))
+        throw new Error("no approval card yet");
+    });
+    await user.click(view.getByRole("button", { name: "去确认" }));
+    expect(scrolled).toEqual(["ap-new"]);
   } finally {
     HTMLElement.prototype.scrollIntoView = original;
   }

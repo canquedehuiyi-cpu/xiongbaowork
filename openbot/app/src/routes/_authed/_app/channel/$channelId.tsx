@@ -64,7 +64,9 @@ function RouteComponent() {
   const { settings, watch } = Route.useSearch();
   const channel = useQuery(channelQueryOptions(channelId));
   const navigate = Route.useNavigate();
-  const isSettingsOpen = settings === true;
+  const workbench = useSkinId() === "xiongbao";
+  // 默认皮肤没有员工资料抽屉了：旧链接、浏览器历史里残留的 `?settings` 不读，不再压住自动看屏幕。
+  const isSettingsOpen = settings === true && !workbench;
   const prefersReducedMotion = useReducedMotion();
   const isWatching = watch === true;
   /** Channel routing currently supports one coworker. */
@@ -80,7 +82,6 @@ function RouteComponent() {
    * 顶栏的齿轮换成「收起侧栏 / 展开侧栏」。手机上这一期不画侧栏。别的皮肤照旧是齿轮打开员工资料。
    */
   const phone = useIsMobile();
-  const workbench = useSkinId() === "xiongbao";
   const sidebarThread =
     workbench && channel.data?.agentIds.length === 1
       ? channel.data.threadId
@@ -124,9 +125,7 @@ function RouteComponent() {
   return (
     <DetailPanel
       onClose={() => show(null)}
-      open={
-        (isWatching || (isSettingsOpen && !workbench)) && agentId !== undefined
-      }
+      open={(isWatching || isSettingsOpen) && agentId !== undefined}
       aside={
         sidebarThread ? (
           <ConversationSidebar

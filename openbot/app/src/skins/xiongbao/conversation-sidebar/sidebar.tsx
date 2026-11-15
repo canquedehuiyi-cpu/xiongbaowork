@@ -5,6 +5,7 @@ import {
   IconLayoutSidebarRight,
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
+import { useDetailPanelWidth } from "@/components/layout/detail-panel";
 import {
   type SidebarSource,
   useConversationSidebar,
@@ -33,6 +34,10 @@ import { OutputsBody, OutputsIcon, outputsSummary } from "./outputs";
  *   百分比小条，输出内容带数量）。每块单独收起时标题右边留一句摘要。收起状态按对话记住（`collapse.ts`）。
  * - `page`：手机上的全屏页，四块同样排列，没有图标条。
  *
+ * 画成什么样还看对话区留得出多宽（`DetailPanel` 用 ResizeObserver 量的宽度，{@link sidebarRoom}）：
+ * 展开后对话区不足 640px 时只画图标条（记住的「展开」不改，窗口放宽了就回来）；连图标条加 400px 对话区
+ * 都放不下时整栏不画，顶栏的收起按钮也不画。
+ *
  * 颜色只取 `--wb-*` 令牌（`skin.css`）。
  */
 
@@ -45,6 +50,22 @@ const SECTION_NAMES: Record<SidebarSection, string> = {
 
 const PANEL_WIDTH = 300;
 const STRIP_WIDTH = 56;
+/** 侧栏展开时，对话区至少要留这么宽，否则只画图标条。 */
+const MIN_CONVERSATION_BESIDE_PANEL = 640;
+/** 图标条旁边的对话区至少这么宽（同 `DetailPanel` 的主区下限），否则侧栏不画。 */
+const MIN_CONVERSATION_BESIDE_STRIP = 400;
+const TOO_NARROW = "窗口再宽一些才能展开侧栏";
+
+/**
+ * 按对话区和侧栏合起来的宽度（`DetailPanel` 量的；不在 `DetailPanel` 里时为 null，不受限）决定侧栏能画
+ * 成什么：`panel` 可以展开，`strip` 只能是图标条，`none` 不画。
+ */
+export function sidebarRoom(width: number | null): "panel" | "strip" | "none" {
+  if (width === null) return "panel";
+  if (width >= PANEL_WIDTH + MIN_CONVERSATION_BESIDE_PANEL) return "panel";
+  if (width >= STRIP_WIDTH + MIN_CONVERSATION_BESIDE_STRIP) return "strip";
+  return "none";
+}
 
 /** 收起键：单聊是线程 id，群组是频道 id。 */
 export function collapseKeyOf(source: SidebarSource): string {
@@ -62,20 +83,33 @@ export function ConversationSidebar({
   agentId?: string;
 }) {
   const collapse = useSidebarCollapse(collapseKeyOf(source));
+  const room = sidebarRoom(useDetailPanelWidth());
   const { sidebar, pending: inboxPending } = useConversationSidebar(source);
   const data = sidebar.data;
-  const pending: PendingApproval = data?.goal?.pendingApprovalId
-    ? { id: data.goal.pendingApprovalId }
-    : inboxPending;
-  const collapsed = variant === "panel" && collapse.whole.collapsed;
-  const threadId = "threadId" in source ? source.threadId : undefined;
+  /*
+   * 「去确认」指向哪一条：审批收件箱里这个对话最新的那条为准（对话里那张卡就是按它画的，点了一定滚得到
+   * 或就地画得出）；收件箱里没有时才用服务器从任务卡读到的那条。
+   */
+  const pending: PendingApproval =
+    inboxPending ??
+    (data?.goal?.pendingApprovalId
+      ? { id: data.goal.pendingApprovalId }
+      : null);
+  // 只能画图标条：不改记住的「展开」，图标条上的按钮也点不开。
+  const forced = variant === "panel" && room === "strip";
+  const collapsed = variant === "panel" && (collapse.whole.collapsed || forced);
+
+  if (variant === "panel" && room === "none") return null;
 
   if (collapsed) {
+    const reveal = (name: SidebarSection) =>
+      forced ? undefined : () => collapse.reveal(name);
     return (
       <aside
         aria-label="对话侧栏"
         className="flex h-full shrink-0 flex-col items-center gap-2 overflow-y-auto border-(--wb-line) border-l bg-(--wb-list) px-2 py-3.5 text-(--wb-fg2)"
         data-collapsed="true"
+        data-forced={forced ? "true" : undefined}
         data-conversation-sidebar=""
         data-loaded={data ? "true" : "false"}
         style={{ width: STRIP_WIDTH }}
@@ -84,9 +118,11 @@ export function ConversationSidebar({
           aria-label="展开侧栏"
           className={cn(
             STRIP_BUTTON,
-            "border border-(--wb-line2) bg-(--wb-card2) text-(--wb-fg)",
+            "border border-(--wb-line2) bg-(--wb-card2) text-(--wb-fg) disabled:opacity-50 disabled:hover:bg-(--wb-card2)",
           )}
+          disabled={forced}
           onClick={collapse.whole.toggle}
+          title={forced ? TOO_NARROW : undefined}
           type="button"
         >
           <IconChevronsLeft aria-hidden="true" className="size-4 stroke-[2]" />
@@ -96,7 +132,9 @@ export function ConversationSidebar({
             data ? `环境：${environmentSummary(data.environment)}` : "环境"
           }
           className={STRIP_BUTTON}
-          onClick={() => collapse.reveal("environment")}
+          disabled={forced}
+          onClick={reveal("environment")}
+          title={forced ? TOO_NARROW : undefined}
           type="button"
         >
           <EnvironmentIcon environment={data?.environment} />
@@ -104,7 +142,9 @@ export function ConversationSidebar({
         <button
           aria-label={pending ? "目标：等你确认" : "目标"}
           className={STRIP_BUTTON}
-          onClick={() => collapse.reveal("goal")}
+          disabled={forced}
+          onClick={reveal("goal")}
+          title={forced ? TOO_NARROW : undefined}
           type="button"
         >
           <GoalIcon />
@@ -119,7 +159,9 @@ export function ConversationSidebar({
         <button
           aria-label={contextMeterLabel(data?.context)}
           className={cn(STRIP_BUTTON, "flex-col gap-[3px] text-[10px]")}
-          onClick={() => collapse.reveal("context")}
+          disabled={forced}
+          onClick={reveal("context")}
+          title={forced ? TOO_NARROW : undefined}
           type="button"
         >
           <ContextMeter context={data?.context} />
@@ -129,7 +171,9 @@ export function ConversationSidebar({
             data ? `输出内容：${outputsSummary(data.outputs)}` : "输出内容"
           }
           className={STRIP_BUTTON}
-          onClick={() => collapse.reveal("outputs")}
+          disabled={forced}
+          onClick={reveal("outputs")}
+          title={forced ? TOO_NARROW : undefined}
           type="button"
         >
           <OutputsIcon count={data?.outputs.total} />
@@ -220,7 +264,6 @@ export function ConversationSidebar({
           data={data}
           section={section}
           pending={pending}
-          threadId={threadId}
           agentId={agentId}
         />
       ) : null}
@@ -229,13 +272,12 @@ export function ConversationSidebar({
 }
 
 const STRIP_BUTTON =
-  "relative flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-0 bg-transparent text-(--wb-fg2) outline-none hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-(--wb-accent)";
+  "relative flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-0 bg-transparent text-(--wb-fg2) outline-none hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-(--wb-accent) disabled:cursor-default disabled:hover:bg-transparent";
 
 function Sections({
   data,
   section,
   pending,
-  threadId,
   agentId,
 }: {
   data: SidebarData;
@@ -245,7 +287,6 @@ function Sections({
     body: ReactNode,
   ) => ReactNode;
   pending: PendingApproval;
-  threadId?: string;
   agentId?: string;
 }) {
   return (
@@ -258,7 +299,7 @@ function Sections({
       {section(
         "goal",
         goalSummary(data.goal, pending),
-        <GoalBody goal={data.goal} pending={pending} threadId={threadId} />,
+        <GoalBody goal={data.goal} pending={pending} />,
       )}
       {section(
         "context",
@@ -283,6 +324,9 @@ export function SidebarCollapseButton({
   collapseKey: string;
 }) {
   const { whole } = useSidebarCollapse(collapseKey);
+  const room = sidebarRoom(useDetailPanelWidth());
+  // 只能画图标条或根本不画侧栏时，这个按钮点了没有用，不画。
+  if (room !== "panel") return null;
   return (
     <button
       aria-label={whole.collapsed ? "展开侧栏" : "收起侧栏"}
