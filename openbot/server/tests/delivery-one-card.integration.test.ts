@@ -1,16 +1,24 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
-  type AbstractAgent,
+  AbstractAgent,
+  type AgentSubscriber,
   type BaseEvent,
   EventType,
   type RunAgentInput,
+  type RunAgentParameters,
+  type RunAgentResult,
 } from "@ag-ui/client";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, eq, inArray, like } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
+import { EMPTY } from "rxjs";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import {
+  createApprovalQuestions,
+  withQuestionParking,
+} from "../src/approvals/questions";
 import { createApprovalStore } from "../src/approvals/store";
 import { approvalAction } from "../src/approvals/types";
 import type { AppVariables } from "../src/auth/guards";
@@ -39,9 +47,13 @@ import {
 import type { PipelineStepStateRow } from "../src/db/schema/pipeline";
 import { reapAbandonedPipelineRuns } from "../src/pipeline/reap";
 import { createQuotaService } from "../src/quota/limits";
+import { createTurnRunner } from "../src/routines/run-turn";
 import { createDelivery, firstSentenceOf } from "../src/tasks/delivery";
 import { listTaskEvents } from "../src/tasks/events";
-import { createTaskProjector } from "../src/tasks/projector";
+import {
+  createTaskProjector,
+  type TaskProjector,
+} from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
@@ -61,6 +73,10 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const quota = createQuotaService(database);
 const projector = createTaskProjector(database, undefined, quota);
 const delivery = createDelivery(database);
+/** The board as the deployment wires it: a question a run left open parks its card after the close. */
+const questions = createApprovalQuestions(database, async () => {}, projector);
+const parkingBoard = withQuestionParking(projector, questions);
+const approvals = createApprovalStore(database, projector);
 const suite = randomUUID().slice(0, 8);
 const tenants: string[] = [];
 
@@ -124,9 +140,14 @@ async function turn(input: {
   ask: string;
   events: BaseEvent[];
   during?: (runId: string) => Promise<void>;
+  board?: TaskProjector;
 }): Promise<string> {
   const runId = `run-${suite}-${randomUUID().slice(0, 8)}`;
-  const runner = new PostgresAgentRunner(database, projector, quota);
+  const runner = new PostgresAgentRunner(
+    database,
+    input.board ?? projector,
+    quota,
+  );
   const agent = {
     agentId: input.agentId,
     messages: [],
@@ -216,6 +237,87 @@ const acceptInTurn =
         .where(eq(tasks.id, card.id)),
     );
   };
+
+/** An approval the gate would open inside the round named by `runId`, on `threadId`. */
+const openApproval = (
+  tenantId: string,
+  agentId: string,
+  threadId: string,
+  runId: string,
+  label: string,
+) =>
+  runAsTenant(tenantId, () =>
+    approvals.open(
+      approvalAction({
+        actorId: tenantId,
+        botId: agentId,
+        toolRef: "computer_write_file",
+        effect: "write",
+        scope: "project",
+        args: { path: `${label}.txt`, contents: "saved" },
+        target: { filePath: `project/${label}.txt` },
+        continuation: {
+          runId,
+          threadId,
+          toolCallId: `call-${label}-${suite}`,
+          toolName: "computer_write_file",
+          args: { path: `${label}.txt`, contents: "saved" },
+          messages: [],
+          state: {},
+          context: [],
+          forwardedProps: {},
+        },
+      }),
+    ),
+  );
+
+/** The question `ask_person` saves when the round named by `runId` stops to ask the person. */
+const askPerson = async (
+  tenantId: string,
+  agentId: string,
+  threadId: string,
+  runId: string,
+  label: string,
+) => {
+  const key = `question-${label}-${suite}-${randomUUID().slice(0, 6)}`;
+  await runAsTenant(tenantId, () =>
+    database.insert(workItems).values({
+      kind: "person.question",
+      key,
+      payload: {
+        actorId: tenantId,
+        botId: agentId,
+        threadId,
+        runId,
+        question: `${label}：发给哪位联系人？`,
+        mode: "completed_question",
+      },
+    }),
+  );
+  return key;
+};
+
+const cardRow = async (tenantId: string, taskId: string) =>
+  (await cardsOf(tenantId, eq(tasks.id, taskId)))[0];
+
+/** A thread whose coworker has taken on one piece of work, as the first test sets it up. */
+async function trackedThread(label: string) {
+  const tenantId = await tenant(label);
+  const agentId = `agent-${suite}-${label}`;
+  const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+  const first = await turn({
+    tenantId,
+    agentId,
+    threadId,
+    ask: "整理并发出周报",
+    events: reply("已接下。"),
+    during: acceptInTurn(tenantId, agentId, threadId),
+  });
+  const card = await cardOfRun(tenantId, first);
+  if (!card) throw new Error("no card");
+  await roundLogged(tenantId, card.id, first);
+  return { tenantId, agentId, threadId, cardId: card.id };
+}
 
 describe("one tracked piece of work, one card", () => {
   test("follow-up, nudge-like and return-like turns on a tracked card's thread add no new card and charge quota once", async () => {
@@ -552,18 +654,319 @@ describe("one tracked piece of work, one card", () => {
     );
   });
 
+  test("a round that outlives the person's 验收 cannot pull the card back", async () => {
+    const { tenantId, agentId, threadId, cardId } = await trackedThread("late");
+    // Delivered: the card waits on the person (Task 3's `deliver_task` puts it here).
+    await runAsTenant(tenantId, () =>
+      database
+        .update(tasks)
+        .set({ status: "awaiting_review" })
+        .where(eq(tasks.id, cardId)),
+    );
+    let approvalId = "";
+    const round = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "再把附件也发我一份",
+      events: reply("好的，我需要先写一个文件。"),
+      during: async (runId) => {
+        expect((await cardRow(tenantId, cardId))?.activeRunRef).toBe(runId);
+        // While the round runs, the person reviews the delivery…
+        expect(
+          await delivery.review(tenantId, cardId, `user:${tenantId}`, "review"),
+        ).toBe(true);
+        // …and then the round stops to ask for an approval.
+        approvalId = (
+          await openApproval(tenantId, agentId, threadId, runId, "late")
+        ).id;
+        await settle(50);
+      },
+    });
+    await settle(100);
+    let row = await cardRow(tenantId, cardId);
+    expect(row?.status).toBe("done");
+    expect(row?.pendingApprovalId).toBeNull();
+    expect(row?.activeRunRef).toBeNull();
+    await runAsTenant(tenantId, () =>
+      approvals.decide(tenantId, approvalId, "allow_once"),
+    );
+    await settle(100);
+    row = await cardRow(tenantId, cardId);
+    expect(row?.status).toBe("done");
+    // The round's end is not written on a card that is over.
+    const lines = await eventsOf(tenantId, cardId);
+    expect(lines.some((line) => line.detail.runId === round)).toBe(false);
+    await runAsTenant(tenantId, () =>
+      database
+        .delete(approvalRequests)
+        .where(eq(approvalRequests.id, approvalId)),
+    );
+  });
+
+  test("a round left named on the card by a crash is closed as superseded when the next round hangs on it", async () => {
+    const { tenantId, agentId, threadId, cardId } =
+      await trackedThread("crash");
+    const crashed = `run-${suite}-crashed`;
+    await runAsTenant(tenantId, () =>
+      database
+        .update(tasks)
+        .set({ activeRunRef: crashed })
+        .where(eq(tasks.id, cardId)),
+    );
+    const next = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "继续",
+      events: reply("继续做。"),
+    });
+    await roundLogged(tenantId, cardId, next);
+    const superseded = (await eventsOf(tenantId, cardId)).filter(
+      (line) => line.detail.runId === crashed,
+    );
+    expect(superseded.map((line) => [line.kind, line.detail])).toEqual([
+      ["run_failed", { runId: crashed, reason: "superseded" }],
+    ]);
+    // Its end, should it ever arrive, writes nothing more.
+    await delivery.runEnded(tenantId, cardId, {
+      runId: crashed,
+      failed: false,
+      firstSentence: "晚到的一句。",
+    });
+    expect(
+      (await eventsOf(tenantId, cardId)).filter(
+        (line) => line.detail.runId === crashed,
+      ),
+    ).toHaveLength(1);
+    expect((await cardRow(tenantId, cardId))?.activeRunRef).toBeNull();
+  });
+
+  test("ask_person in a round hung on a tracked card parks the card, and the answer brings it back", async () => {
+    const { tenantId, agentId, threadId, cardId } = await trackedThread("ask");
+    let key = "";
+    const round = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "把周报发出去",
+      events: reply("发给谁？我先问一下你。"),
+      board: parkingBoard,
+      during: async (runId) => {
+        key = await askPerson(tenantId, agentId, threadId, runId, "ask");
+      },
+    });
+    await roundLogged(tenantId, cardId, round);
+    const parked = await until(
+      () => cardRow(tenantId, cardId),
+      (row) => row?.status === "needs_action",
+    );
+    expect(parked?.status).toBe("needs_action");
+    expect(parked?.pendingApprovalId).toBe(key);
+    expect(parked?.activeRunRef).toBeNull();
+
+    await runAsTenant(tenantId, () =>
+      questions.respond(tenantId, key, "发给王经理"),
+    );
+    const back = await cardRow(tenantId, cardId);
+    expect(back?.status).toBe("running");
+    expect(back?.pendingApprovalId).toBeNull();
+    expect(
+      (await cardsOf(tenantId, eq(tasks.executorAgentId, agentId))).length,
+    ).toBe(1);
+    await runAsTenant(tenantId, () =>
+      database
+        .delete(workItems)
+        .where(
+          and(
+            inArray(workItems.kind, ["person.question", "person.response"]),
+            eq(workItems.key, key),
+          ),
+        ),
+    );
+  });
+
+  /**
+   * The approval resume loop carries a parked round on through the server's headless turn runner
+   * (`approvals/resume-sweep.ts`): a new turn on the same thread, with a run id of its own and no
+   * card of its own (`cardOwnedByCaller` unset). It reaches the thread runner like any turn, so it
+   * hangs on the followed card under ITS run id -- the id the gate files the next approval under --
+   * and reports its end there.
+   */
+  test("the approval continuation of a hung round hangs on the card, parks it on a new approval and logs its end", async () => {
+    const { tenantId, agentId, threadId, cardId } =
+      await trackedThread("resume");
+    let firstApproval = "";
+    const parkedRound = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "把文件写进项目目录",
+      events: reply("需要你批准写文件。"),
+      during: async (runId) => {
+        firstApproval = (
+          await openApproval(tenantId, agentId, threadId, runId, "resume-1")
+        ).id;
+      },
+    });
+    await roundLogged(tenantId, cardId, parkedRound);
+    expect((await cardRow(tenantId, cardId))?.status).toBe("needs_action");
+    await runAsTenant(tenantId, () =>
+      approvals.decide(tenantId, firstApproval, "allow_once"),
+    );
+    await until(
+      () => cardRow(tenantId, cardId),
+      (row) => row?.status === "running",
+    );
+
+    let continuationRun = "";
+    let secondApproval = "";
+    class ContinuingAgent extends AbstractAgent {
+      override async runAgent(
+        parameters?: RunAgentParameters,
+        subscriber?: AgentSubscriber,
+      ): Promise<RunAgentResult> {
+        const input = parameters as RunAgentInput;
+        continuationRun = input.runId;
+        secondApproval = (
+          await openApproval(
+            tenantId,
+            agentId,
+            threadId,
+            input.runId,
+            "resume-2",
+          )
+        ).id;
+        await until(
+          () => cardRow(tenantId, cardId),
+          (row) => row?.pendingApprovalId === secondApproval,
+        );
+        const messageId = `reply-${input.runId}`;
+        const emit = (event: BaseEvent) =>
+          subscriber?.onEvent?.({ event } as Parameters<
+            NonNullable<AgentSubscriber["onEvent"]>
+          >[0]);
+        emit({
+          type: EventType.RUN_STARTED,
+          threadId: input.threadId,
+          runId: input.runId,
+        });
+        emit({
+          type: EventType.TEXT_MESSAGE_START,
+          messageId,
+          role: "assistant",
+        });
+        emit({
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta: "第一个文件写好了。还要再写一个。",
+        });
+        emit({ type: EventType.TEXT_MESSAGE_END, messageId });
+        emit({
+          type: EventType.RUN_FINISHED,
+          threadId: input.threadId,
+          runId: input.runId,
+        });
+        this.messages = [
+          ...this.messages,
+          {
+            id: messageId,
+            role: "assistant",
+            content: "第一个文件写好了。还要再写一个。",
+          },
+        ] as typeof this.messages;
+        return { result: undefined, newMessages: [] };
+      }
+      run() {
+        return EMPTY;
+      }
+    }
+    const continuationRunner = createTurnRunner({
+      admission: async ({ signal }) => signal ?? new AbortController().signal,
+      // The platform client, inert: a headless turn needs a thread and a lock, neither under test here.
+      intelligence: {
+        getOrCreateThread: async (params: { threadId: string }) => ({
+          thread: { id: params.threadId },
+          created: false,
+        }),
+        getThreadMessages: async () => ({ messages: [] }),
+        ɵacquireThreadLock: async (params: {
+          threadId: string;
+          runId: string;
+        }) => ({
+          threadId: params.threadId,
+          runId: params.runId,
+          joinToken: "test",
+        }),
+        ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+        ɵcleanupThreadLock: async () => undefined,
+      } as never,
+      runner: new PostgresAgentRunner(database, projector, quota) as never,
+      buildAgentFor: async () => new ContinuingAgent({ agentId }),
+    });
+    const usedBefore = await tasksUsed(tenantId);
+    // The resume loop's own call (`approvals/resume-sweep.ts`), with the parked round's snapshot.
+    await runAsTenant(tenantId, () =>
+      continuationRunner({
+        ownerUserId: tenantId,
+        routineId: "approval",
+        agentId,
+        threadId,
+        instruction: "",
+        continuation: {
+          snapshot: {
+            runId: parkedRound,
+            threadId,
+            toolCallId: `call-resume-1-${suite}`,
+            toolName: "computer_write_file",
+            args: { path: "resume-1.txt", contents: "saved" },
+            messages: [],
+            state: {},
+            context: [],
+            forwardedProps: {},
+          },
+          result: { content: "saved" },
+          messageId: `resume-${randomUUID()}`,
+        },
+      }),
+    );
+    await roundLogged(tenantId, cardId, continuationRun);
+    expect(continuationRun).not.toBe(parkedRound);
+    const row = await cardRow(tenantId, cardId);
+    // The approval the continuation raised holds the card; the round's end did not release it.
+    expect(row?.status).toBe("needs_action");
+    expect(row?.pendingApprovalId).toBe(secondApproval);
+    expect(row?.activeRunRef).toBeNull();
+    const ended = (await eventsOf(tenantId, cardId)).filter(
+      (line) => line.detail.runId === continuationRun,
+    );
+    expect(ended.map((line) => line.kind)).toEqual(["progress", "run_ended"]);
+    expect(ended[0]?.detail.text).toBe("第一个文件写好了。");
+    // No second card, no second charge.
+    expect(
+      (await cardsOf(tenantId, eq(tasks.executorAgentId, agentId))).length,
+    ).toBe(1);
+    expect(await tasksUsed(tenantId)).toBe(usedBefore);
+    await runAsTenant(tenantId, () =>
+      database
+        .delete(approvalRequests)
+        .where(inArray(approvalRequests.id, [firstApproval, secondApproval])),
+    );
+  });
+
   test("untracked cards keep one card per turn", async () => {
     const tenantId = await tenant("untracked");
     const agentId = `agent-${suite}-e`;
     const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
     const before = await tasksUsed(tenantId);
     const runs = [
+      // The same chart the unrelated turn above draws on a tracked card: here it IS the deliverable.
       await turn({
         tenantId,
         agentId,
         threadId,
-        ask: "一加一等于几？",
-        events: reply("等于二。"),
+        ask: "一加一等于几？画个图。",
+        events: [...chart(), ...reply("等于二。")],
       }),
       await turn({
         tenantId,
@@ -582,12 +985,17 @@ describe("one tracked piece of work, one card", () => {
     expect(rows.map((row) => row.runRef)).toEqual(runs);
     expect(rows.every((row) => row.status === "awaiting_review")).toBe(true);
     expect(rows.every((row) => !row.tracked)).toBe(true);
+    expect(rows[0]?.deliverableRef).toMatchObject({
+      kind: "deliverable",
+      components: [{ name: "showBarChart" }],
+    });
+    expect(rows[1]?.deliverableRef).toBeNull();
     expect(await tasksUsed(tenantId)).toBe(before + 2);
     for (const row of rows)
       expect(await eventsOf(tenantId, row.id)).toEqual([]);
   });
 
-  test("a cancelled card stays cancelled: a late finished(), approval park or resume does not move it", async () => {
+  test("a cancelled or reviewed card stays ended: a late finished(), approval park or resume does not move it", async () => {
     const tenantId = await tenant("cancel");
     const runRef = `run-${suite}-${randomUUID().slice(0, 8)}`;
     const approvalId = `ap-${randomUUID()}`;
@@ -613,6 +1021,28 @@ describe("one tracked piece of work, one card", () => {
     expect(await projector.archived({ tenantId, taskId: id })).toBe(false);
     const [row] = await cardsOf(tenantId, eq(tasks.id, id));
     expect(row?.status).toBe("cancelled");
+
+    // A reviewed card is over in the same way.
+    const doneRun = `run-${suite}-${randomUUID().slice(0, 8)}`;
+    const doneId = await projector.opened({
+      tenantId,
+      title: "验收过的活",
+      executorAgentId: `agent-${suite}-f`,
+      source: "chat",
+      runRef: doneRun,
+    });
+    await runAsTenant(tenantId, () =>
+      database
+        .update(tasks)
+        .set({ status: "done", pendingApprovalId: approvalId })
+        .where(eq(tasks.id, doneId)),
+    );
+    await projector.needsAction({ tenantId, runRef: doneRun, approvalId });
+    await projector.resumed({ tenantId, approvalId, failed: true });
+    await projector.finished({ tenantId, runRef: doneRun, failed: false });
+    expect((await cardsOf(tenantId, eq(tasks.id, doneId)))[0]?.status).toBe(
+      "done",
+    );
 
     // A cancelled tracked card is over: the next turn on its thread is not hung on it.
     await delivery.markTracked(tenantId, id, `user:${tenantId}`);
@@ -903,6 +1333,8 @@ describe("group", () => {
 
       const calls: Parameters<TurnRunner>[0][] = [];
       let accept = false;
+      let asked = "";
+      let ask = false;
       const conversations = createGroupConversations({
         store: createGroupStore(database, () => threadIdentity.mint()),
         queue: createWorkQueue(database),
@@ -927,6 +1359,15 @@ describe("group", () => {
             if (!card) throw new Error("Ada's turn opened no card");
             await delivery.markTracked(ownerId, card.id, `agent:${ada}`);
           }
+          if (ask && input.agentId === ada)
+            // `ask_person` in a later round on Ada's card: the question names this round's run.
+            asked = await askPerson(
+              ownerId,
+              ada,
+              input.threadId ?? "",
+              input.runId ?? "",
+              "group",
+            );
           return {
             replyText:
               input.agentId === ada ? "核对中。还差 C 家。" : "我来看看。",
@@ -936,7 +1377,8 @@ describe("group", () => {
         mayAddress: async () => false,
         auditStore: { insert: async () => undefined },
         progressEveryMs: 0,
-        board: projector,
+        // As the deployment wires it: a question a turn left open parks its card after the close.
+        board: parkingBoard,
         delivery,
       });
       const drain = async () => {
@@ -1002,6 +1444,32 @@ describe("group", () => {
       expect(graceCards[0]?.status).toBe("awaiting_review");
       // Ada's card once, Grace's once; the follow-up on Ada's card charged nothing.
       expect(await tasksUsed(ownerId)).toBe(usedBefore + 2);
+
+      // A later round on Ada's card stops to ask the person: the card waits on them.
+      ask = true;
+      await conversations.send(ownerId, channel.id, {
+        id: `${prefix}-m4`,
+        text: "@Ada 发出去吧",
+      });
+      await drain();
+      ask = false;
+      const parked = (
+        await cardsOf(ownerId, eq(tasks.executorAgentId, ada))
+      )[0];
+      expect(parked?.id).toBe(adaCard.id);
+      expect(parked?.status).toBe("needs_action");
+      expect(parked?.pendingApprovalId).toBe(asked);
+      expect(parked?.activeRunRef).toBeNull();
+      await runAsTenant(ownerId, () =>
+        database
+          .delete(workItems)
+          .where(
+            and(
+              eq(workItems.kind, "person.question"),
+              eq(workItems.key, asked),
+            ),
+          ),
+      );
     });
   });
 });

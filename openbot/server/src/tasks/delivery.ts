@@ -42,8 +42,9 @@ export type Delivery = {
   ): Promise<{ id: string } | null>;
   /**
    * Hang a turn on the card: its `active_run_ref` names the run until the round ends, so an approval
-   * raised in the round (filed under the run id) parks this card. The round's own history line is
-   * written by {@link Delivery.runEnded}, with its run id.
+   * or a question raised in the round (filed under the run id) parks this card. The round's own
+   * history line is written by {@link Delivery.runEnded}, with its run id. A round the column still
+   * names, which never reported its end, is replaced and logged `run_failed {reason: "superseded"}`.
    */
   attachRun(tenantId: string, taskId: string, runId: string): Promise<void>;
   /**
@@ -78,7 +79,8 @@ export type Delivery = {
     options?: { threadRef?: string },
   ): Promise<void>;
   /**
-   * 验收 of a followed card: `awaiting_review` → `done`, and a `reviewed` line saying how. `null` when
+   * 验收 of a followed card: `awaiting_review` → `done` (clearing `active_run_ref`), and a `reviewed`
+   * line saying how. `null` when
    * the card is not a followed one -- the caller's own path applies -- and `false` when it is followed
    * but not awaiting review.
    */
@@ -116,10 +118,29 @@ export function createDelivery(database: Database): Delivery {
 
     attachRun: (tenantId, taskId, runId) =>
       runAsTenant(tenantId, async () => {
+        /*
+         * A round still named here never reported its end -- its process died, or a newer turn on the
+         * thread superseded it. It is closed in the history as failed, which also makes its late
+         * `runEnded`, if one ever comes, a no-op (one end line per run).
+         */
+        const [card] = await database
+          .select({ previous: tasks.activeRunRef })
+          .from(tasks)
+          .where(openTracked(tenantId, taskId))
+          .limit(1);
+        if (!card) return;
         await database
           .update(tasks)
           .set({ activeRunRef: runId, updatedAt: new Date() })
           .where(openTracked(tenantId, taskId));
+        if (card.previous && card.previous !== runId)
+          await appendTaskEvent(database, {
+            tenantId,
+            taskId,
+            kind: "run_failed",
+            actor: "system",
+            detail: { runId: card.previous, reason: "superseded" },
+          });
       }),
 
     runEnded: (tenantId, taskId, round) =>
@@ -234,7 +255,8 @@ export function createDelivery(database: Database): Delivery {
         if (!card?.tracked) return null;
         const reviewed = await database
           .update(tasks)
-          .set({ status: "done", updatedAt: new Date() })
+          // The work is over, and so is any round still running on it: nothing parks it again.
+          .set({ status: "done", activeRunRef: null, updatedAt: new Date() })
           .where(
             and(
               eq(tasks.tenantId, tenantId),

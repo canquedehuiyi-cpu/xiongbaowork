@@ -1313,18 +1313,22 @@ export function createGroupConversations(deps: {
     /**
      * The card this turn is a round of, and what the round said (its reply, or why it failed). A
      * followed card -- one this turn hung on, or the card it opened and followed while it ran -- keeps
-     * its status and records the round instead (`tasks/delivery.ts`).
+     * its status (`finished` skips it) and records the round instead (`tasks/delivery.ts`).
      */
-    round?: { taskId: string | null; hung: boolean; said?: string },
+    round?: { taskId: string | null; said?: string },
   ): Promise<void> {
     if (!deps.board) return;
     try {
-      if (!round?.hung)
-        await deps.board.finished({
-          tenantId: turn.ownerUserId,
-          runRef: runId,
-          failed,
-        });
+      /*
+       * Called for a round hung on a followed card too, and before `runEnded`: the board's close is
+       * where a question the round left open parks the card (`withQuestionParking`), and the card is
+       * found by the round's run id only while `active_run_ref` still names it.
+       */
+      await deps.board.finished({
+        tenantId: turn.ownerUserId,
+        runRef: runId,
+        failed,
+      });
       if (round?.taskId && deps.delivery)
         await deps.delivery.runEnded(turn.ownerUserId, round.taskId, {
           runId,
@@ -1448,7 +1452,6 @@ export function createGroupConversations(deps: {
     const carded = cardId !== null;
     const round = (said?: string) => ({
       taskId: cardId,
-      hung: followed !== null,
       ...(said ? { said } : {}),
     });
     /*

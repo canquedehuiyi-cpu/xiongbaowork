@@ -609,9 +609,20 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       });
     const finish = (failed: boolean, thrown?: unknown) => {
       if (followed) {
-        void roundEnded(followed.id, failed, thrown).catch((error) =>
-          console.error("task projection failed", error),
-        );
+        /*
+         * The board's close first, though it leaves a followed card's status alone: it is where a
+         * question the round left open parks the card (`withQuestionParking`), found by this run id
+         * through `active_run_ref` -- which `runEnded` then clears.
+         */
+        void (async () => {
+          // biome-ignore lint/style/noNonNullAssertion: a followed card is only looked up with a board
+          await this.board!.finished({
+            tenantId: tenant,
+            runRef: runId,
+            failed,
+          });
+          await roundEnded(followed.id, failed, thrown);
+        })().catch((error) => console.error("task projection failed", error));
         return;
       }
       if (!card) return;

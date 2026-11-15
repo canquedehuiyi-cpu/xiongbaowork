@@ -1,5 +1,5 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
-import { and, count, eq, lt, ne, or, sql } from "drizzle-orm";
+import { and, count, eq, lt, notInArray, or, sql } from "drizzle-orm";
 import { NOT_SHOWN } from "../../../shared/component-markers";
 import { attachmentIdsIn } from "../channels/attachment-parts";
 import { HEADLESS_COMPONENTS } from "../components/headless";
@@ -35,7 +35,7 @@ export type TriggerSource =
  * A followed card (`tracked = true`, the delivery loop) is the exception: it spans
  * turns, and its reads and writes live in `tasks/delivery.ts`. The transitions here
  * leave it to that module -- `finished` skips it, and the reclaim pass never closes
- * it. A `cancelled` card is over, and no transition here moves it.
+ * it. A `done` or `cancelled` card is over, and no run fact here moves it.
  *
  * Callers pass the tenant explicitly rather than trusting ambient scope,
  * because a routine fires outside any person's request -- the same reason the
@@ -297,6 +297,12 @@ export function deliverableFromEvents(
 }
 
 /**
+ * A card that is over: the person reviewed it or cancelled it. No run fact moves it again -- not a late
+ * close, not an approval or a question a round raised after the person ended the work.
+ */
+const ENDED = ["done", "cancelled"] as const;
+
+/**
  * The card a run's facts belong to: the card the run opened (`run_ref`), or the followed card the run
  * is a round of right now (`active_run_ref`, written by `tasks/delivery.ts`'s `attachRun`).
  */
@@ -442,7 +448,7 @@ export function createTaskProjector(
             and(
               eq(tasks.tenantId, input.tenantId),
               runOf(input.runRef),
-              ne(tasks.status, "cancelled"),
+              notInArray(tasks.status, [...ENDED]),
               ...(input.pipelineRunId
                 ? [
                     sql`exists (select 1 from ${groupTaskRuns} where ${groupTaskRuns.id} = ${input.pipelineRunId} and ${groupTaskRuns.tenantId} = ${input.tenantId} and ${groupTaskRuns.status} = 'awaiting_action')`,
@@ -473,7 +479,7 @@ export function createTaskProjector(
             and(
               eq(tasks.tenantId, input.tenantId),
               eq(tasks.pendingApprovalId, input.approvalId),
-              ne(tasks.status, "cancelled"),
+              notInArray(tasks.status, [...ENDED]),
             ),
           );
         announce(input.tenantId);
@@ -485,8 +491,8 @@ export function createTaskProjector(
         /*
          * Not a followed card: one of its rounds ending is not the work ending (spec 2026-11-15-delivery-loop
          * §3), so its status and its hand-in stay as they are, and the round's line is written by
-         * `tasks/delivery.ts`'s `runEnded`. Not a cancelled card either: a run that ends after the person
-         * cancelled must not bring the card back.
+         * `tasks/delivery.ts`'s `runEnded`. Not an ended card either (reviewed or cancelled): a run that
+         * ends after the person ended the work must not bring the card back.
          */
         await database
           .update(tasks)
@@ -501,7 +507,7 @@ export function createTaskProjector(
               eq(tasks.tenantId, input.tenantId),
               runOf(input.runRef),
               eq(tasks.tracked, false),
-              ne(tasks.status, "cancelled"),
+              notInArray(tasks.status, [...ENDED]),
               ...(input.onlyUnsettled
                 ? [sql`${tasks.status} in ('running', 'needs_action')`]
                 : []),
