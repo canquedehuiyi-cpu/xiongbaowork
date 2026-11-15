@@ -5,13 +5,13 @@ import {
   EventType,
   type Message,
 } from "@ag-ui/client";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, eq } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { PERSON_INITIATOR } from "../audit";
 import type { Database } from "../db/client";
 import { groupBotThreads } from "../db/schema";
 import type { NoticeRunner } from "../devices/queued-results";
+import type { TurnRunner } from "../routines/run-turn";
 import { runAsTenant } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
 import { suppressRunnerCard } from "../threads/unattended-card";

@@ -232,6 +232,16 @@ export function readDueTime(
 
   const iso = ISO.exec(rest);
   if (iso) {
+    // A day the month does not have (2026-02-31) is not read as a later day of the next month.
+    const [isoYear, isoMonth, isoDay] = iso.slice(1, 4).map(Number);
+    if (
+      !isoYear ||
+      !isoMonth ||
+      isoMonth > 12 ||
+      !isoDay ||
+      isoDay > new Date(Date.UTC(isoYear, isoMonth, 0)).getUTCDate()
+    )
+      return unreadable;
     if (iso[6]) {
       const instant = Date.parse(rest.replace(" ", "T"));
       return Number.isNaN(instant) ? unreadable : moment(new Date(instant));

@@ -454,7 +454,13 @@ export function createTaskProjector(
         await database
           .update(tasks)
           .set({
-            status: "needs_action",
+            /*
+             * Except a followed card already handed in (已交成果): a later round on it -- a follow-up
+             * the person asked after the hand-in -- waiting on them does not take the hand-in back.
+             * The card stays awaiting review, and `pending_approval_id` says it also waits on them
+             * (spec 2026-11-15-delivery-loop §3: 「等你操作」 is added to the card, not a lane).
+             */
+            status: sql`case when ${tasks.tracked} and ${tasks.status} = 'awaiting_review' then ${tasks.status} else 'needs_action'::task_status end`,
             pendingApprovalId: input.approvalId,
             updatedAt: new Date(),
           })
@@ -481,11 +487,12 @@ export function createTaskProjector(
           .set({
             /*
              * A denial fails an untracked card's run, and with it the card. A followed card is not
-             * ended by one round: it goes back to its coworker (spec 2026-11-15-delivery-loop §3).
+             * ended by one round: it goes back to its coworker (spec 2026-11-15-delivery-loop §3) --
+             * unless it was handed in, which a round after the hand-in does not undo (`needsAction`).
              */
             status: input.failed
-              ? sql`case when ${tasks.tracked} then 'running'::task_status else 'failed'::task_status end`
-              : "running",
+              ? sql`case when ${tasks.tracked} and ${tasks.status} = 'awaiting_review' then ${tasks.status} when ${tasks.tracked} then 'running'::task_status else 'failed'::task_status end`
+              : sql`case when ${tasks.tracked} and ${tasks.status} = 'awaiting_review' then ${tasks.status} else 'running'::task_status end`,
             pendingApprovalId: null,
             updatedAt: new Date(),
           })

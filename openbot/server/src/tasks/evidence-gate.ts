@@ -91,14 +91,16 @@ function httpAddress(ref: string): string | undefined {
 const nameOf = (item: DeliveryItem) => item.title?.trim() || item.ref.trim();
 
 /**
- * The required items criteria list after 「必需：」 (or 「必需:」), split on 、，, ; and the like.
- * Empty when the criteria name none.
+ * The required items criteria list after 「必需：」 (or 「必需:」), split on punctuation (、，, / and the
+ * like), and on 「和」「及」 only when they stand apart, spaces on both sides: inside a word they are
+ * part of it -- 「涉及金额」 is one item, not 「涉」 and 「金额」, and a one-character item would be
+ * too easy to meet. Empty when the criteria name none.
  */
 export function requiredItemsOf(criteria: string | null | undefined): string[] {
   const marked = /必需\s*[：:]\s*([^。\n；;]*)/.exec(criteria ?? "");
   if (!marked) return [];
   return (marked[1] ?? "")
-    .split(/[、，,／/]|\s+和\s*|\s*及\s*/)
+    .split(/[、，,／/]|\s+(?:和|及)\s+/)
     .map((item) => item.trim().replace(/等$/, "").trim())
     .filter((item) => item.length > 0);
 }

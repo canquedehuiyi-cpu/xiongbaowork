@@ -1,7 +1,7 @@
-import { runTimeZone } from "@openbot/shared/person-time-zone";
 import { currentApprovalContext } from "@openbot/toolkit/continuation";
 import { cutAtCodeUnits } from "../channels/text";
 import { appsPage } from "../edition";
+import { runTimeZone } from "../person-time-zone";
 import {
   callGoalTool,
   GOAL_TOOLS,

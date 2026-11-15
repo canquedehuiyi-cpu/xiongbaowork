@@ -57,7 +57,10 @@ import {
 } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
-import { suppressRunnerCard } from "../src/threads/unattended-card";
+import {
+  roundHungByEntry,
+  suppressRunnerCard,
+} from "../src/threads/unattended-card";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -329,7 +332,10 @@ function turn(input: {
         });
     });
   return runAsTenant(input.tenantId, () =>
-    input.entry ? suppressRunnerCard(subscribe) : subscribe(),
+    // As a group turn runs: its own card, and the round hung on the followed card before it starts.
+    input.entry
+      ? roundHungByEntry(() => suppressRunnerCard(subscribe))
+      : subscribe(),
   ).then(() => runId);
 }
 
@@ -1034,6 +1040,64 @@ test("extension grant changes due_at, keeps original_due_at; deny keeps both", a
   expect((await cardsOf(tenantId)).length).toBe(1);
 });
 
+test("a 延期申请 is not answered once the work is handed in", async () => {
+  const { tenantId, agentId, taskId, due } =
+    await acceptedCard("ext-handed-in");
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: new Date(Date.now() + 3 * 3600_000),
+    reason: "C 家没回",
+  });
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ status: "awaiting_review" })
+      .where(eq(tasks.id, taskId)),
+  );
+  const refused = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+  });
+  expect(refused.status).toBe(409);
+  expect(refused.body.error).toBe("成果已交，退回之后才能答复延期。");
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    due.toISOString(),
+  );
+  expect((await history(tenantId, taskId)).map((e) => e.kind)).toEqual([
+    "extension_requested",
+  ]);
+});
+
+test("the person's due time set while the card waits stands when the coworker takes it on", async () => {
+  const tenantId = await tenant("patch-pending");
+  const agentId = `agent-${suite}-pending`;
+  const threadId = `thread-${suite}-pending`;
+  const taskId = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: threadId,
+    channelRef: threadId,
+  });
+  const mine = new Date(Date.now() + 4 * 3600_000);
+  mine.setMilliseconds(0);
+  expect(
+    (await routesFor(tenantId)("PATCH", taskId, { dueAt: mine.toISOString() }))
+      .status,
+  ).toBe(200);
+  const theirs = new Date(Date.now() + 3600_000);
+  await delivery.accept(tenantId, taskId, {
+    runId: `accept-${suite}-pending`,
+    threadRef: threadId,
+    actor: `agent:${agentId}`,
+    dueAt: theirs,
+    criteria: "列出本周发票",
+  });
+  const after = await row(tenantId, taskId);
+  expect(after?.dueAt?.toISOString()).toBe(mine.toISOString());
+  // What the coworker said is still on record as its first word.
+  expect(after?.originalDueAt?.toISOString()).toBe(theirs.toISOString());
+  expect(after?.dueReported).toBe(true);
+});
+
 test("PATCH after delivery is rejected; after a return it is allowed", async () => {
   const { tenantId, agentId, taskId } = await acceptedCard("patch-return", {
     status: "awaiting_review",
@@ -1243,6 +1307,7 @@ test("track on a card filed under a one-to-one channel follows it on the person'
   expect(tracked.body.threadRef).toBe(threadId);
   expect(await delivery.openTrackedCard(tenantId, threadId, agentId)).toEqual({
     id: taskId,
+    acceptedAt: null,
   });
 });
 

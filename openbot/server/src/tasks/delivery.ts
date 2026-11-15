@@ -74,7 +74,7 @@ export type Delivery = {
     tenantId: string,
     threadRef: string,
     agentId: string,
-  ): Promise<{ id: string } | null>;
+  ): Promise<{ id: string; acceptedAt: Date | null } | null>;
   /**
    * Hang a turn on the card: its `active_run_ref` names the run until the round ends, so an approval
    * or a question raised in the round (filed under the run id) parks this card. The round's own
@@ -267,7 +267,8 @@ export type Delivery = {
    * The person's answer to the coworker's 延期申请 (`POST /api/tasks/:id/extension`), only while the
    * latest request has not been answered. Granting moves `due_at` to `dueAt` (or, absent, to the time
    * asked for), read and checked as a due time is (future, at most 30 days); denying leaves it. One
-   * `extension_granted` / `extension_denied` line; `original_due_at` is never touched.
+   * `extension_granted` / `extension_denied` line; `original_due_at` is never touched. Not on a card
+   * already handed in (`handed_in`): its due time is on record, as for `editTask`.
    */
   decideExtension(
     tenantId: string,
@@ -287,7 +288,7 @@ export type Delivery = {
         agentId: string | null;
         runId: string | null;
       }
-    | { ok: false; why: "not_open" | "no_request" | DueRefusal }
+    | { ok: false; why: "not_open" | "handed_in" | "no_request" | DueRefusal }
   >;
   /**
    * The person changes the card (`PATCH /api/tasks/:id`): `due_at` and/or `criteria`, while the work
@@ -382,7 +383,19 @@ export function createDelivery(database: Database): Delivery {
                */
               status: sql`case when ${tasks.status} = 'awaiting_review' then 'running'::task_status else ${tasks.status} end`,
               acceptedAt: now,
-              dueAt: input.dueAt ?? sql`${tasks.dueAt}`,
+              /*
+               * The person's own due time, set while the card waited (`editTask`), stands: 「你改的直接
+               * 生效」. The coworker's still goes into `original_due_at` below.
+               */
+              dueAt: input.dueAt
+                ? sql`case when exists (
+                    select 1 from ${taskEvents}
+                    where ${taskEvents.tenantId} = ${tenantId}
+                      and ${taskEvents.taskId} = ${tasks.id}
+                      and ${taskEvents.kind} = 'edited'
+                      and ${taskEvents.detail}->'after'->>'dueAt' is not null
+                  ) then ${tasks.dueAt} else ${input.dueAt.toISOString()}::timestamptz end`
+                : sql`${tasks.dueAt}`,
               originalDueAt: sql`coalesce(${tasks.originalDueAt}, ${input.dueAt?.toISOString() ?? null}::timestamptz)`,
               dueReported: input.dueAt ? true : sql`${tasks.dueReported}`,
               criteria: input.criteria,
@@ -516,7 +529,7 @@ export function createDelivery(database: Database): Delivery {
     openTrackedCard: (tenantId, threadRef, agentId) =>
       runAsTenant(tenantId, async () => {
         const [row] = await database
-          .select({ id: tasks.id })
+          .select({ id: tasks.id, acceptedAt: tasks.acceptedAt })
           .from(tasks)
           .where(
             and(
@@ -532,7 +545,7 @@ export function createDelivery(database: Database): Delivery {
             desc(tasks.createdAt),
           )
           .limit(1);
-        return row ? { id: row.id } : null;
+        return row ?? null;
       }),
 
     attachRun: (tenantId, taskId, runId) =>
@@ -879,11 +892,15 @@ export function createDelivery(database: Database): Delivery {
               agentId: tasks.executorAgentId,
               runId: tasks.activeRunRef,
               dueAt: tasks.dueAt,
+              status: tasks.status,
             })
             .from(tasks)
             .where(openTracked(tenantId, taskId))
             .for("update");
           if (!card) return { ok: false, why: "not_open" } as const;
+          // Handed in: the due time is on record and no longer moves (spec §5.4), until a 退回.
+          if (card.status === "awaiting_review")
+            return { ok: false, why: "handed_in" } as const;
           const [latest] = await transaction
             .select({ kind: taskEvents.kind, detail: taskEvents.detail })
             .from(taskEvents)

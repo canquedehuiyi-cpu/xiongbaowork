@@ -49,7 +49,11 @@ import {
   isTenantFramed,
   runAsTenant,
 } from "../tenant/context";
-import { runnerCardSuppressed, suppressedCardRef } from "./unattended-card";
+import {
+  entryHungRound,
+  runnerCardSuppressed,
+  suppressedCardRef,
+} from "./unattended-card";
 
 /**
  * Which tenant owns a thread id, as this process has learned it.
@@ -414,6 +418,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const cardIsTaken = runnerCardSuppressed();
     // The key of that card, when the entry filed it under something other than the run id.
     const entryCardRef = suppressedCardRef();
+    // Whether that entry hung the turn on a followed card first (a group turn), read here for the same reason.
+    const hungByEntry = cardIsTaken && entryHungRound();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
     /*
@@ -462,14 +468,14 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
          * 待接下): the card the runner found, or the one an entry (a group turn) hung this run on. The
          * turn is asked for its 接活回执 in its instructions, not by a message nobody sent.
          */
-        const receiptAsked =
-          this.board && (followed || cardIsTaken)
+        const receiptAsked = followed
+          ? followed.acceptedAt === null
+          : this.board && hungByEntry
             ? await this.delivery
                 .awaitsReceipt(tenant, {
                   threadId: request.threadId,
                   agentId,
                   runId: request.input.runId,
-                  ...(followed ? { taskId: followed.id } : {}),
                 })
                 .catch((error) => {
                   console.error("tracked card lookup failed", error);
@@ -701,7 +707,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       };
       const deliverableRef = failed ? undefined : produced();
       void card
-        .then(async (taskId) => {
+        .then(async () => {
           // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
           await this.board!.finished({
             tenantId: tenant,
@@ -709,8 +715,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             failed,
             deliverableRef,
           });
-          if (taskId) await roundEnded(taskId, failed, thrown);
-          await otherRounds(taskId);
+          /*
+           * The card this turn opened is nobody's followed card -- unless `accept_task` took it on
+           * during the turn, and then it is among the turn's rounds, written there. A plain turn's
+           * card asks nothing more of the delivery loop.
+           */
+          await otherRounds();
         })
         .catch((error) => console.error("task projection failed", error));
     };

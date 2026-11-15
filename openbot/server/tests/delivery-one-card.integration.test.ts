@@ -55,6 +55,7 @@ import {
   type TaskProjector,
 } from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
+import { roundOnCard } from "../src/tasks/turn-cards";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { createWorkQueue } from "../src/work/queue";
@@ -236,6 +237,8 @@ const acceptInTurn =
         .set({ acceptedAt: new Date() })
         .where(eq(tasks.id, card.id)),
     );
+    // As `accept_task` does: this round is the card's now, and its end is written there.
+    roundOnCard(runId, tenantId, card.id);
   };
 
 /** An approval the gate would open inside the round named by `runId`, on `threadId`. */
@@ -466,9 +469,9 @@ describe("one tracked piece of work, one card", () => {
       },
     });
     await roundLogged(tenantId, cardA.id, second);
-    expect(await delivery.openTrackedCard(tenantId, threadId, agentId)).toEqual(
-      { id: cardB },
-    );
+    expect(
+      (await delivery.openTrackedCard(tenantId, threadId, agentId))?.id,
+    ).toBe(cardB);
 
     const third = await turn({
       tenantId,

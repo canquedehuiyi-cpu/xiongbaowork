@@ -26,7 +26,11 @@ import { filter, Observable } from "rxjs";
 export function isServerOnlyEvent(event: BaseEvent): boolean {
   if (event.type !== EventType.CUSTOM) return false;
   const name = (event as BaseEvent & { name?: unknown }).name;
-  return typeof name === "string" && name.startsWith("delivery.");
+  // However it is cased or padded: the chat would draw " Delivery.delivered" as the same card.
+  return (
+    typeof name === "string" &&
+    name.trim().toLowerCase().startsWith("delivery.")
+  );
 }
 
 /** An agent's own stream without the events only the server may send. */

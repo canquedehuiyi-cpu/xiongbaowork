@@ -52,3 +52,20 @@ export function runnerCardSuppressed(): boolean {
 export function suppressedCardRef(): string | undefined {
   return store.getStore()?.cardRef;
 }
+
+const hung = new AsyncLocalStorage<true>();
+
+/**
+ * Run `body` -- an entry's turn -- as a round the entry has already hung on a followed card
+ * (`tasks/delivery.ts` `attachRun`), as a group turn does before it starts. The runner asks whether
+ * such a round's card still waits for its 接活回执 only then: no other entry that owns its card hangs
+ * the turn on a followed one, so for them the question is not asked at all.
+ */
+export function roundHungByEntry<T>(body: () => T): T {
+  return hung.run(true, body);
+}
+
+/** Whether the turn running here is one an entry hung on a followed card first. */
+export function entryHungRound(): boolean {
+  return hung.getStore() === true;
+}

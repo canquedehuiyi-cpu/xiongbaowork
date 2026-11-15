@@ -112,6 +112,19 @@ describe("parseDueTime", () => {
       at: null,
       why: "too_far",
     });
+    // A day the month does not have is not rolled into the next month, with or without an offset.
+    for (const text of [
+      "2026-11-31T10:00",
+      "2026-11-31T10:00:00+08:00",
+      "2027-02-29T10:00:00Z",
+    ])
+      expect(readDueTime(text, morning, SHANGHAI)).toEqual({
+        at: null,
+        why: "unreadable",
+      });
+    expect(
+      readDueTime("2026-11-30T10:00", morning, SHANGHAI).at?.toISOString(),
+    ).toBe("2026-11-30T02:00:00.000Z");
   });
 
   test("evening twelve said in the evening is that night's midnight", () => {

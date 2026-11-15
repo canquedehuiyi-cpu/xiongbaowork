@@ -823,6 +823,8 @@ export function createTaskRoutes(
     if (!decided.ok) {
       if (decided.why === "not_open")
         return context.json({ error: "这件活不在跟或已经结束。" }, 409);
+      if (decided.why === "handed_in")
+        return context.json({ error: "成果已交，退回之后才能答复延期。" }, 409);
       if (decided.why === "no_request")
         return context.json({ error: "没有待答复的延期申请。" }, 409);
       return context.json({ error: `${dueRefusalText(decided.why)}。` }, 400);

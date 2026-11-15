@@ -1,5 +1,3 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   IconActivity,
   IconArrowsExchange,
@@ -15,6 +13,8 @@ import {
   IconStack2,
   IconUsersGroup,
 } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { LabeledSelect } from "@/components/layout/labeled-select";
@@ -158,7 +158,7 @@ export const boardQuery = (
   if (trigger) axes.push(`source=${trigger.sources.join(",")}`);
   const scope = [`period=${search.period}`, ...axes];
   const list = [`period=${search.listPeriod ?? search.period}`, ...axes];
-  // `ended` is three statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
+  // `ended` is four statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
   if (search.status && search.status !== "ended")
     list.push(`status=${encodeURIComponent(search.status)}`);
   if (search.q) list.push(`q=${encodeURIComponent(search.q)}`);

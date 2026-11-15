@@ -15,12 +15,19 @@ import { Observable, of } from "rxjs";
 import { z } from "zod";
 import { toolDisabled } from "../src/approvals/policy";
 import {
+  createApprovalQuestions,
+  withQuestionParking,
+} from "../src/approvals/questions";
+import { createApprovalStore } from "../src/approvals/store";
+import { approvalAction } from "../src/approvals/types";
+import {
   buildAgents,
   builtInAgentConfiguration,
   registeredAgentFromRow,
 } from "../src/copilot";
 import { createDatabase } from "../src/db/client";
 import {
+  approvalRequests,
   attachments,
   channels,
   intelligenceChannelMappings,
@@ -29,6 +36,7 @@ import {
   threadRuns,
   threads,
   users,
+  workItems,
 } from "../src/db/schema";
 import { withModelRun } from "../src/models/token-metering";
 import type { GrantedTool } from "../src/plugins/tools";
@@ -37,13 +45,16 @@ import { createTurnRunner } from "../src/routines/run-turn";
 import { createDelivery } from "../src/tasks/delivery";
 import {
   ACCEPT_TASK_REF,
-  DELIVERY_PROTOCOL,
+  deliveryProtocol,
   deliveryTools,
   offeredDeliveryTools,
 } from "../src/tasks/delivery-tools";
 import { listTaskEvents } from "../src/tasks/events";
 import { createEvidenceGate } from "../src/tasks/evidence-gate";
-import { createTaskProjector } from "../src/tasks/projector";
+import {
+  createTaskProjector,
+  type TaskProjector,
+} from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { withRunSideEvents } from "../src/threads/run-side-events";
@@ -212,9 +223,15 @@ async function turn(input: {
   /** An entry that filed its own card first: the runner files none. */
   entry?: { cardRef?: string };
   runId?: string;
+  /** The board the runner writes through; the plain projector by default. */
+  board?: TaskProjector;
 }): Promise<{ runId: string; results: string[] }> {
   const runId = input.runId ?? `run-${suite}-${randomUUID().slice(0, 8)}`;
-  const runner = new PostgresAgentRunner(database, projector, quota);
+  const runner = new PostgresAgentRunner(
+    database,
+    input.board ?? projector,
+    quota,
+  );
   const agent = new ScriptedCoworker(
     toolsFor(input.tenantId, input.agentId),
     input.work ?? (async () => {}),
@@ -1294,7 +1311,7 @@ describe("switching the loop off", () => {
         ) as { prompt?: string }
       ).prompt ?? "";
     const holding = prompt(granted);
-    expect(holding).toContain(DELIVERY_PROTOCOL);
+    expect(holding).toContain(deliveryProtocol());
     expect(holding).toContain("问一句答一句的普通对话不要用这三个工具");
     expect(prompt(offered)).not.toContain("【熊宝交付规约】");
   });
@@ -1481,6 +1498,207 @@ describe("where the cards come from, and how a round ends", () => {
     const row = await cardRow(card.tenantId, card.cardId);
     expect(row?.status).toBe("running");
     expect(row?.activeRunRef).toBeNull();
+  });
+});
+
+/**
+ * The whole life of a piece of work, through the real tools and the real runner: taken on, handed in,
+ * then a follow-up the person asks after the hand-in stops to wait on them -- an approval, a question
+ * -- and is answered. The hand-in is not taken back by it (only the person's 退回 does that), so the
+ * card is still 已交成果 and the person reviews it. One card, one charge against the month.
+ */
+describe("after the hand-in", () => {
+  const approvals = createApprovalStore(database, projector);
+  const questions = createApprovalQuestions(
+    database,
+    async () => {},
+    projector,
+  );
+  const parkingBoard = withQuestionParking(projector, questions);
+  const opened: string[] = [];
+  const asked: string[] = [];
+
+  afterAll(async () => {
+    for (const tenantId of tenants)
+      await runAsTenant(tenantId, async () => {
+        if (opened.length)
+          await database
+            .delete(approvalRequests)
+            .where(inArray(approvalRequests.id, opened));
+        if (asked.length)
+          await database.delete(workItems).where(inArray(workItems.key, asked));
+      });
+  });
+
+  /** Taken on in one turn, handed in in the next; the card is returned, and the month as it was before. */
+  async function handedIn(label: string) {
+    const tenantId = await tenant(label);
+    const before = (await quota.usageFor(tenantId)).tasks;
+    const agentId = `agent-${suite}-${label}`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const first = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "核对三家供应商的发票",
+      reply: "已接下。",
+      work: async (run) => {
+        await run.call("accept_task", {
+          due_at: "40 分钟",
+          criteria: "三家都核对，结论写清楚。",
+        });
+      },
+    });
+    const [card] = await cardsOf(tenantId, agentId);
+    if (!card) throw new Error("no card");
+    await roundLogged(tenantId, card.id, first.runId);
+    const handed = await deliverOnThread(
+      { tenantId, agentId, threadId, cardId: card.id },
+      {
+        items: [
+          { kind: "note", ref: "三家都对得上，C 家少开一张。", title: "结论" },
+        ],
+        checks: ["逐张对过原始发票"],
+      },
+    );
+    expect(parsed(handed.result).delivered).toBe(true);
+    expect((await cardRow(tenantId, card.id))?.status).toBe("awaiting_review");
+    return { tenantId, agentId, threadId, cardId: card.id, before };
+  }
+
+  async function reviewedOnce(card: Awaited<ReturnType<typeof handedIn>>) {
+    expect(
+      await delivery.review(
+        card.tenantId,
+        card.cardId,
+        `user:${card.tenantId}`,
+        "review",
+      ),
+    ).toBe(true);
+    const row = await cardRow(card.tenantId, card.cardId);
+    expect(row?.status).toBe("done");
+    expect((await cardsOf(card.tenantId, card.agentId)).length).toBe(1);
+    expect((await quota.usageFor(card.tenantId)).tasks).toBe(card.before + 1);
+    const kinds = (await eventsOf(card.tenantId, card.cardId)).map(
+      (line) => line.kind,
+    );
+    expect(
+      kinds.filter((kind) => kind !== "progress" && kind !== "run_ended"),
+    ).toEqual(["accepted", "delivered", "reviewed"]);
+  }
+
+  test("an approval in a follow-up after the hand-in leaves the card awaiting review, and it is reviewed", async () => {
+    const card = await handedIn("after-approval");
+    let approvalId = "";
+    // The person asks for one more thing; the round stops on an approval, filed as the gate files it.
+    const followUp = await turn({
+      tenantId: card.tenantId,
+      agentId: card.agentId,
+      threadId: card.threadId,
+      ask: "顺便把结论发给 Bob",
+      reply: "发给 Bob 之前要你批准一下。",
+      work: async (run) => {
+        const request = await runAsTenant(card.tenantId, () =>
+          approvals.open(
+            approvalAction({
+              actorId: card.tenantId,
+              botId: card.agentId,
+              toolRef: "computer_write_file",
+              effect: "write",
+              scope: "project",
+              args: { path: "bob.txt", contents: "结论" },
+              target: { filePath: "project/bob.txt" },
+              continuation: {
+                runId: run.runId,
+                threadId: card.threadId,
+                toolCallId: `call-bob-${suite}`,
+                toolName: "computer_write_file",
+                args: { path: "bob.txt", contents: "结论" },
+                messages: [],
+                state: {},
+                context: [],
+                forwardedProps: {},
+              },
+            }),
+          ),
+        );
+        approvalId = request.id;
+        opened.push(approvalId);
+        // The gate's park lands while the round still waits on the decision, as a real round does.
+        await until(
+          () => cardRow(card.tenantId, card.cardId),
+          (row) => row?.pendingApprovalId === approvalId,
+        );
+      },
+    });
+    await roundLogged(card.tenantId, card.cardId, followUp.runId);
+    const waiting = await until(
+      () => cardRow(card.tenantId, card.cardId),
+      (row) => row?.pendingApprovalId === approvalId,
+    );
+    // Still handed in; it also waits on the person.
+    expect(waiting?.status).toBe("awaiting_review");
+    expect(waiting?.pendingApprovalId).toBe(approvalId);
+
+    await runAsTenant(card.tenantId, () =>
+      approvals.decide(card.tenantId, approvalId, "allow_once"),
+    );
+    // The decision moves the board after it is saved, not before it answers.
+    const decided = await until(
+      () => cardRow(card.tenantId, card.cardId),
+      (row) => row?.pendingApprovalId === null,
+    );
+    expect(decided?.status).toBe("awaiting_review");
+    expect(decided?.pendingApprovalId).toBeNull();
+    await reviewedOnce(card);
+  });
+
+  test("ask_person in a follow-up after the hand-in leaves the card awaiting review, and it is reviewed", async () => {
+    const card = await handedIn("after-question");
+    let key = "";
+    const followUp = await turn({
+      tenantId: card.tenantId,
+      agentId: card.agentId,
+      threadId: card.threadId,
+      ask: "顺便发给财务",
+      reply: "发给财务的哪位？我先问一下你。",
+      // As the deployment wires the board: a question the round left open parks the card after it ends.
+      board: parkingBoard,
+      work: async (run) => {
+        // The question `ask_person` files for the person, under this round's run id.
+        key = `question-${suite}-${randomUUID().slice(0, 6)}`;
+        asked.push(key);
+        await runAsTenant(card.tenantId, () =>
+          database.insert(workItems).values({
+            kind: "person.question",
+            key,
+            payload: {
+              actorId: card.tenantId,
+              botId: card.agentId,
+              threadId: card.threadId,
+              runId: run.runId,
+              question: "发给财务的哪位？",
+              mode: "completed_question",
+            },
+          }),
+        );
+      },
+    });
+    await roundLogged(card.tenantId, card.cardId, followUp.runId);
+    const waiting = await until(
+      () => cardRow(card.tenantId, card.cardId),
+      (row) => row?.pendingApprovalId === key,
+    );
+    expect(waiting?.status).toBe("awaiting_review");
+    expect(waiting?.pendingApprovalId).toBe(key);
+
+    await runAsTenant(card.tenantId, () =>
+      questions.respond(card.tenantId, key, "发给王经理"),
+    );
+    const answered = await cardRow(card.tenantId, card.cardId);
+    expect(answered?.status).toBe("awaiting_review");
+    expect(answered?.pendingApprovalId).toBeNull();
+    await reviewedOnce(card);
   });
 });
 

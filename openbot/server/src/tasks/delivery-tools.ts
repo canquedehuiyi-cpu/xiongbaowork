@@ -1,8 +1,9 @@
 import { type BaseEvent, EventType } from "@ag-ui/client";
-import { runTimeZone } from "@openbot/shared/person-time-zone";
-import { currentApprovalContext } from "@openbot/toolkit/continuation";
 import { z } from "zod";
+import { currentApprovalContext } from "../approvals/types";
+import { shortName } from "../brand";
 import { currentModelRun, UNSCOPED } from "../models/token-metering";
+import { runTimeZone } from "../person-time-zone";
 import { type GrantedTool, REFUSAL_MARKER } from "../plugins/tools";
 import { TenantContextError } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
@@ -33,9 +34,13 @@ export const ACCEPT_TASK_REF = `${DELIVERY_TOOLS_SERVER}/${ACCEPT_TASK}`;
 export const DELIVER_TASK_REF = `${DELIVERY_TOOLS_SERVER}/${DELIVER_TASK}`;
 export const REQUEST_EXTENSION_REF = `${DELIVERY_TOOLS_SERVER}/${REQUEST_EXTENSION}`;
 
-/** The four rules, word for word as the design shows them; also the external coworkers' prefix. */
-export const DELIVERY_PROTOCOL =
-  "【熊宝交付规约】1 接活先回：已接下 + 预计几点交　2 做完再交：交付物 + 你怎么查过的　3 交不了就说：缺什么、要延到几点　4 没被验收前，不要说「做完了」";
+/**
+ * The four rules, word for word as the design shows them, under this deployment's own name (the
+ * brand exit, `brand.ts`); also the external coworkers' prefix.
+ */
+export function deliveryProtocol(): string {
+  return `【${shortName()}交付规约】1 接活先回：已接下 + 预计几点交　2 做完再交：交付物 + 你怎么查过的　3 交不了就说：缺什么、要延到几点　4 没被验收前，不要说「做完了」`;
+}
 const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工具";
 
 /** The card-drawing events the chat renders (Task 9). */
@@ -77,7 +82,7 @@ export function deliveryProtocolGuidance(
   toolNames: readonly string[],
 ): string | undefined {
   return toolNames.includes(ACCEPT_TASK)
-    ? `${DELIVERY_PROTOCOL}\n${PLAIN_QUESTIONS}`
+    ? `${deliveryProtocol()}\n${PLAIN_QUESTIONS}`
     : undefined;
 }
 

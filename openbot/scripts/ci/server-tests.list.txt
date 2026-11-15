@@ -375,6 +375,7 @@ tests/entra-profile.test.ts
 tests/env-alias-dockerfiles.test.ts
 tests/env-aliases.test.ts
 tests/env-name.test.ts
+tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
@@ -715,6 +716,7 @@ tests/run-built-agent-cancellation.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
 tests/run-model.test.ts
+tests/run-side-events.test.ts
 tests/runner-browser-probe.test.ts
 tests/runner-browser.test.ts
 tests/runner-channel.test.ts

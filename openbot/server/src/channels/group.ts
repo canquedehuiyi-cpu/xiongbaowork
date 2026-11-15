@@ -55,6 +55,7 @@ import type { CheckPrivateShare } from "../proactive/private-share";
 import { type Delivery, firstSentenceOf } from "../tasks/delivery";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsClaimedTenant } from "../tenant/context";
+import { roundHungByEntry } from "../threads/unattended-card";
 import type { WorkQueue } from "../work/queue";
 import {
   GROUP_PERSON_SPEAKER,
@@ -1493,49 +1494,55 @@ export function createGroupConversations(deps: {
         });
     };
     try {
-      const result = await deps.runTurn({
-        ...(turn.depth ? { depth: turn.depth } : {}),
-        onText: (text) => {
-          latest = text;
-          flush();
-        },
-        ownerUserId: turn.ownerUserId,
-        telemetry: {
-          trigger: turn.fromAgentId ? "subagent" : "human",
-          surface: "web",
-          rootTaskId: `group:${turn.channelId}:${turn.messageId}`,
-        },
-        routineId: `group:${turn.channelId}`,
-        runId,
-        // `openCard` above filed this answer under the same run id (or the turn hangs on a followed card),
-        // so the runner files nothing — and when neither happened (no board, or the write failed), the
-        // runner's card is the only record there is.
-        cardOwnedByCaller: carded,
-        agentId,
-        threadId,
-        instruction,
-        ...(skill ? { skill } : {}),
-        userMessage: groupTurnMessage(
-          `group-user:${id}`,
+      // A round hung on a followed card says so, so the runner asks whether that card still waits.
+      const hungOn = followed
+        ? roundHungByEntry
+        : <T>(body: () => T): T => body();
+      const result = await hungOn(async () =>
+        deps.runTurn({
+          ...(turn.depth ? { depth: turn.depth } : {}),
+          onText: (text) => {
+            latest = text;
+            flush();
+          },
+          ownerUserId: turn.ownerUserId,
+          telemetry: {
+            trigger: turn.fromAgentId ? "subagent" : "human",
+            surface: "web",
+            rootTaskId: `group:${turn.channelId}:${turn.messageId}`,
+          },
+          routineId: `group:${turn.channelId}`,
+          runId,
+          // `openCard` above filed this answer under the same run id (or the turn hangs on a followed card),
+          // so the runner files nothing — and when neither happened (no board, or the write failed), the
+          // runner's card is the only record there is.
+          cardOwnedByCaller: carded,
+          agentId,
+          threadId,
           instruction,
-          // Another person's reply in progress has not been through its owner's share check, so this
-          // Bot is not handed it, as that person's teammates do not see it either.
-          (await deps.store.list(turn.channelId)).filter(
-            (message) =>
-              !(
-                deps.privateShare &&
-                message.agentId &&
-                message.status === "running" &&
-                message.ownerUserId !== turn.ownerUserId
-              ),
+          ...(skill ? { skill } : {}),
+          userMessage: groupTurnMessage(
+            `group-user:${id}`,
+            instruction,
+            // Another person's reply in progress has not been through its owner's share check, so this
+            // Bot is not handed it, as that person's teammates do not see it either.
+            (await deps.store.list(turn.channelId)).filter(
+              (message) =>
+                !(
+                  deps.privateShare &&
+                  message.agentId &&
+                  message.status === "running" &&
+                  message.ownerUserId !== turn.ownerUserId
+                ),
+            ),
+            names,
+            exclude,
           ),
-          names,
-          exclude,
-        ),
-        initiator: turn.fromAgentId
-          ? handoffInitiator(turn.fromAgentId, PERSON_INITIATOR)
-          : PERSON_INITIATOR,
-      });
+          initiator: turn.fromAgentId
+            ? handoffInitiator(turn.fromAgentId, PERSON_INITIATOR)
+            : PERSON_INITIATOR,
+        }),
+      );
       await writing;
       const gate = await shareGate({
         ownerUserId: turn.ownerUserId,
