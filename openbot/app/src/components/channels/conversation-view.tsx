@@ -11,6 +11,7 @@ import { useBotLook } from "@/components/agents/bot-look";
 import {
   ChatTranscript,
   skillLabels,
+  type TranscriptAcpCards,
   type TranscriptCompaction,
   type Typist,
 } from "@/components/channels/chat-transcript";
@@ -32,6 +33,7 @@ import { newId } from "../../lib/new-id";
 export function ConversationView({
   messages,
   threadId,
+  acp,
   compaction,
   busy = false,
   notice,
@@ -62,6 +64,8 @@ export function ConversationView({
 }: {
   messages: readonly Message[];
   threadId?: string;
+  /** 外部员工的进度、改动和中断卡；见 `ChatTranscript`。 */
+  acp?: TranscriptAcpCards;
   /** 压缩会话的分隔线（默认皮肤）；见 `ChatTranscript`。 */
   compaction?: TranscriptCompaction | null;
   busy?: boolean;
@@ -477,6 +481,7 @@ export function ConversationView({
          * conversation to change nothing.
          */}
         <ChatTranscript
+          {...(acp ? { acp } : {})}
           compaction={compaction}
           threadId={threadId}
           busy={busy}

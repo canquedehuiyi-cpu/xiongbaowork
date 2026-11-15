@@ -1,7 +1,9 @@
 import { ruleTitle } from "@openbot/shared/tool-name";
 import { IconLock } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { acpCardOf } from "@/components/channels/acp-cards";
 import { CARD_FACE, Tag } from "@/components/resources/resource-kit";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -275,6 +277,16 @@ export function ApprovalInbox({
                   <p className="text-[12px] text-muted-foreground">
                     {approvalTargetName(request.action)}
                   </p>
+                  {/* 外部员工的请求有一页详情（设计稿第 5 屏）：命令原文、这一轮改的文件，手机上按钮大。 */}
+                  {acpCardOf(request.action) ? (
+                    <Link
+                      className="w-fit text-[13px] underline underline-offset-2"
+                      search={{ id: request.id }}
+                      to="/approvals"
+                    >
+                      看详情
+                    </Link>
+                  ) : null}
                   {request.action.policy ? (
                     <p className="text-[13px]">
                       {request.action.policy.behaviour === "hand_off"

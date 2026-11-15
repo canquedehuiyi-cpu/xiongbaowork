@@ -41,7 +41,10 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
-import { InlineApproval } from "@/components/approvals/inline-approval";
+import {
+  InlineApproval,
+  UnplacedAcpApprovals,
+} from "@/components/approvals/inline-approval";
 import {
   ArgumentsArrivingContext,
   TurnInFlightContext,
@@ -74,6 +77,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import type { AcpCard } from "@/lib/channels/acp-events";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import { readResponsibilityTurn } from "@/lib/channels/responsibility-turn";
 import { readFiring } from "@/lib/channels/routine-firing";
@@ -112,6 +116,7 @@ import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
 import { useSkinId } from "@/skins/store";
+import { AcpCardView } from "./acp-cards";
 import {
   AppAccessCard,
   AppAccessRequestCard,
@@ -197,9 +202,56 @@ export function compactionRowId(
   return row?.id ?? null;
 }
 
+/**
+ * 外部员工一轮里的进度、改动和中断卡（`lib/channels/acp-events.ts`），各画在它第一次出现时对话里最后那条
+ * 消息所在的那一行下面。
+ */
+export type TranscriptAcpCards = {
+  cards: readonly AcpCard[];
+  /** 已经重新派过的中断卡（按 `key`）。 */
+  resent?: ReadonlySet<string>;
+  /** 中断卡上的「重新派」：把原话作为新的一轮发出去。不给时不画按钮。 */
+  onResend?: (card: Extract<AcpCard, { kind: "interrupted" }>) => unknown;
+};
+
+/** 对话里画出来的工具调用 id。 */
+function drawnToolCallIds(
+  messages: ReadonlyArray<Readonly<Message>>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const message of messages)
+    if (message.role === "assistant")
+      for (const call of message.toolCalls ?? []) ids.add(call.id);
+  return ids;
+}
+
+/** 每张卡画在哪一行后面（行的 id → 卡）；它跟着的那条消息这里找不到时不画。 */
+export function acpCardRows(
+  messages: ReadonlyArray<Readonly<Message>>,
+  items: readonly TranscriptItem[],
+  cards: readonly AcpCard[],
+): Map<string, AcpCard[]> {
+  const rows = new Map<string, AcpCard[]>();
+  const lastRow = items.at(-1)?.id ?? null;
+  for (const card of cards) {
+    const row =
+      card.anchor === null
+        ? lastRow
+        : compactionRowId(messages, items, {
+            uptoMessageId: card.anchor,
+            summarizedCount: null,
+          });
+    if (row === null) continue;
+    rows.set(row, [...(rows.get(row) ?? []), card]);
+  }
+  return rows;
+}
+
 type ChatTranscriptProps = {
   /** Server-owned thread identity, used only to correlate rendered result messages. */
   threadId?: string;
+  /** 外部员工的进度、改动和中断卡；见 {@link TranscriptAcpCards}。 */
+  acp?: TranscriptAcpCards;
   /** 压缩会话的分隔线；见 {@link TranscriptCompaction}。 */
   compaction?: TranscriptCompaction | null;
   busy?: boolean;
@@ -2213,6 +2265,7 @@ function TranscriptRenderersWatch({
 
 export function ChatTranscript({
   threadId,
+  acp,
   compaction = null,
   busy = false,
   commandLabels = "",
@@ -2352,8 +2405,30 @@ export function ChatTranscript({
   const dividerRow = compaction
     ? compactionRowId(messages, items, compaction)
     : null;
-  const after = (id: string) =>
-    id === dividerRow ? (compaction?.divider ?? null) : null;
+  const acpRows =
+    acp && acp.cards.length > 0
+      ? acpCardRows(messages, items, acp.cards)
+      : null;
+  const after = (id: string) => {
+    const divider = id === dividerRow ? (compaction?.divider ?? null) : null;
+    const cards = acpRows?.get(id);
+    if (!cards) return divider;
+    return (
+      <>
+        {divider}
+        <div className="mt-3 flex flex-col gap-3" data-acp-cards="">
+          {cards.map((card) => (
+            <AcpCardView
+              card={card}
+              key={card.key}
+              onResend={acp?.onResend}
+              resent={acp?.resent?.has(card.key)}
+            />
+          ))}
+        </div>
+      </>
+    );
+  };
 
   /*
    * Decided once, from the rows present when the scroller mounts, and forgotten while restoring so
@@ -2783,6 +2858,13 @@ export function ChatTranscript({
                       <Thinking typist={typist} />
                     ) : null}
                     {working}
+                    {/* 只在给了外部员工卡片的对话里（`acp`，对话页总是给）：别处画转录的不读审批收件箱。 */}
+                    {acp && threadId ? (
+                      <UnplacedAcpApprovals
+                        threadId={threadId}
+                        toolCallIds={drawnToolCallIds(messages)}
+                      />
+                    ) : null}
                     {queued.map((message) => (
                       <Queued
                         attachments={message.attachments}

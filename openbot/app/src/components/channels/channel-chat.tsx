@@ -13,6 +13,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { BotOrb } from "@/components/agents/bot-orb";
 import { ConversationAllowances } from "@/components/approvals/conversation-allowances";
@@ -53,6 +54,10 @@ import {
   approvalInboxOptions,
   carryingOnAfterApproval,
 } from "@/lib/approvals";
+import {
+  type AcpCardTracker,
+  createAcpCardTracker,
+} from "@/lib/channels/acp-events";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import {
   dispatchedNotice,
@@ -583,6 +588,31 @@ export function ChannelChat({
   useEffect(() => {
     if (isReady) openReadyGate.current();
   }, [isReady]);
+
+  /*
+   * 外部员工一轮里的进度、改动和中断卡（Task 12）：从代理的事件流里记下 `acp.*` 的 CUSTOM 事件。一个代理一份，
+   * 换了对话就重新记。订阅写在加入线程的那个 effect 前面：`connect` 只把它开始时已有的订阅者交给重放。
+   */
+  const acpTrackerRef = useRef<{
+    agent: unknown;
+    tracker: AcpCardTracker;
+  } | null>(null);
+  if (acpTrackerRef.current?.agent !== agent)
+    acpTrackerRef.current = { agent, tracker: createAcpCardTracker() };
+  const acpTracker = acpTrackerRef.current.tracker;
+  useEffect(() => {
+    const subscription = agent.subscribe?.(acpTracker.subscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent, acpTracker]);
+  const acpCards = useSyncExternalStore(
+    acpTracker.listen,
+    acpTracker.cards,
+    acpTracker.cards,
+  );
+  /** 已经按过「重新派」的中断卡（按卡的 `key`）。 */
+  const [acpResent, setAcpResent] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   // Join the gateway socket, restore durable history, then release the first-message gate.
   useEffect(() => {
@@ -1491,6 +1521,29 @@ export function ChannelChat({
             // Remounted per conversation, so opening one puts the caret in its composer once.
             autoFocus
             threadId={channel.threadId}
+            acp={{
+              cards: acpCards,
+              resent: acpResent,
+              /*
+               * 「重新派」：把这一轮派的原话作为新的一轮发出去（规格第 3 节）。按下就记成已派，没发出去
+               * （它还在忙）时退回，卡上写原因。
+               */
+              ...(channel.active
+                ? {
+                    onResend: (card: { key: string; prompt: string }) => {
+                      setAcpResent((shown) => new Set(shown).add(card.key));
+                      return say(card.prompt).catch((error: unknown) => {
+                        setAcpResent((shown) => {
+                          const next = new Set(shown);
+                          next.delete(card.key);
+                          return next;
+                        });
+                        throw error;
+                      });
+                    },
+                  }
+                : {}),
+            }}
             compaction={compaction}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
             // Only once the profile is read: until then nobody knows it is not an external employee.

@@ -427,3 +427,10 @@
   [data-slot="hire-back"] {
   display: none;
 }
+
+/* 审批详情（外部员工 Task 12）：手机上工作台页头已经有「返回」，详情页自己的那个收起来。 */
+:root:not([data-skin])
+  [data-workbench-frame][data-workbench-phone]
+  [data-slot="approval-back"] {
+  display: none;
+}

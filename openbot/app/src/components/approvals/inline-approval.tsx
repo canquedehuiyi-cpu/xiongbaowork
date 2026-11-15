@@ -3,6 +3,12 @@ import { approvalPhrase } from "@openbot/shared/tool-name";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useState } from "react";
+import {
+  type AcpChoice,
+  AcpPermissionCard,
+  acpCardOf,
+  acpRawText,
+} from "@/components/channels/acp-cards";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import type { Tone } from "@/components/gallery/frame";
 import {
@@ -120,11 +126,18 @@ export function InlineApproval({
     : toolCallId
       ? inbox.data?.requests.find(
           (candidate) =>
-            candidate.action.toolCallId === toolCallId &&
+            /*
+             * 外部员工的审批以设备的请求命名（`acp:<设备>:<请求>`），对话里的那一步用的是它自己的工具调用
+             * id，记在卡片数据里（`target.acp.toolCallId`），两个都认。
+             */
+            (candidate.action.toolCallId === toolCallId ||
+              acpCardOf(candidate.action)?.toolCallId === toolCallId) &&
             (threadId === undefined || candidate.action.threadId === threadId),
         )
       : undefined;
   const pending = request?.status === "pending";
+  // 外部员工请求许可（Task 12）：画它自己的卡，三个按钮对应 ACP 的 allow_once / allow_always / reject_once。
+  const acp = request ? acpCardOf(request.action) : null;
   const handOff = request?.action.policy?.behaviour === "hand_off";
   const choices: ApprovalDecision[] = !request
     ? []
@@ -156,32 +169,49 @@ export function InlineApproval({
               ease: EASE_OUT,
             }}
           >
-            <DecisionCard
-              answer={
-                answered
-                  ? {
-                      label: CHOICE_WORDS[answered].done,
-                      tone: CHOICE_WORDS[answered].tone,
-                    }
-                  : undefined
-              }
-              caption={
-                request.action.policy?.reason ??
-                (handOff ? "这一步需要你来做。" : undefined)
-              }
-              error={decision.error?.message ?? null}
-              onSubmit={(value) => decision.mutate(value as ApprovalDecision)}
-              options={choices.map((choice) => ({
-                value: choice,
-                label:
-                  handOff && choice === "deny"
-                    ? "别做"
-                    : CHOICE_WORDS[choice].label,
-                description: CHOICE_WORDS[choice].description,
-              }))}
-              submitting={decision.isPending}
-              title={title.charAt(0).toUpperCase() + title.slice(1)}
-            />
+            {acp ? (
+              <AcpPermissionCard
+                answered={
+                  answered === "allow_once" ||
+                  answered === "deny" ||
+                  answered === "allow_conversation"
+                    ? answered
+                    : null
+                }
+                card={acp}
+                error={decision.error?.message ?? null}
+                onDecide={(choice: AcpChoice) => decision.mutate(choice)}
+                raw={acpRawText(request.action.args)}
+                submitting={decision.isPending}
+              />
+            ) : (
+              <DecisionCard
+                answer={
+                  answered
+                    ? {
+                        label: CHOICE_WORDS[answered].done,
+                        tone: CHOICE_WORDS[answered].tone,
+                      }
+                    : undefined
+                }
+                caption={
+                  request.action.policy?.reason ??
+                  (handOff ? "这一步需要你来做。" : undefined)
+                }
+                error={decision.error?.message ?? null}
+                onSubmit={(value) => decision.mutate(value as ApprovalDecision)}
+                options={choices.map((choice) => ({
+                  value: choice,
+                  label:
+                    handOff && choice === "deny"
+                      ? "别做"
+                      : CHOICE_WORDS[choice].label,
+                  description: CHOICE_WORDS[choice].description,
+                }))}
+                submitting={decision.isPending}
+                title={title.charAt(0).toUpperCase() + title.slice(1)}
+              />
+            )}
           </motion.section>
         ) : null}
       </AnimatePresence>
@@ -230,7 +260,11 @@ export function PendingApprovals({
     (inbox.data?.requests ?? [])
       .filter((request) => request.status === "pending")
       .flatMap((request) =>
-        request.action.toolCallId ? [request.action.toolCallId] : [],
+        // 外部员工的审批，对话里那一步的 id 在卡片数据里。
+        [
+          request.action.toolCallId,
+          acpCardOf(request.action)?.toolCallId,
+        ].filter((id): id is string => Boolean(id)),
       ),
   );
   const ids = toolCallIds.filter((id) => waiting.has(id));
@@ -239,6 +273,38 @@ export function PendingApprovals({
     <div className="mt-2 space-y-2">
       {ids.map((id) => (
         <InlineApproval key={id} toolCallId={id} fallback={null} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 外部员工在这段对话里请求许可、但对话里找不到它说的那一步的（智能体请求许可前没先报这个工具调用，或者
+ * 那一步还没传到这个页面）：卡片画在对话最后，不让它没处可批。找得到那一步的照旧画在那一步的位置。
+ */
+export function UnplacedAcpApprovals({
+  threadId,
+  toolCallIds,
+}: {
+  threadId: string;
+  /** 这段对话里画出来的工具调用。 */
+  toolCallIds: ReadonlySet<string>;
+}) {
+  const inbox = useQuery(approvalInboxOptions());
+  const ids = (inbox.data?.requests ?? []).flatMap((request) => {
+    if (request.status !== "pending" || request.action.threadId !== threadId)
+      return [];
+    const card = acpCardOf(request.action);
+    if (!card) return [];
+    return card.toolCallId && toolCallIds.has(card.toolCallId)
+      ? []
+      : [request.id];
+  });
+  if (ids.length === 0) return null;
+  return (
+    <div className="space-y-2" data-acp-unplaced="">
+      {ids.map((id) => (
+        <InlineApproval fallback={null} key={id} requestId={id} />
       ))}
     </div>
   );
