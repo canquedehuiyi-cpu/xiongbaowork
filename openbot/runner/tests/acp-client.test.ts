@@ -48,7 +48,7 @@ type Seen = { updates: Array<{ sessionId: string; update: unknown }> };
 function start(
   script: FakeAcpScript,
   handlers: Partial<AcpHandlers> = {},
-  extra: { sessionMode?: string } = {},
+  extra: { sessionMode?: string | null } = {},
 ): { client: AcpClient; seen: Seen; log: string } {
   const log = join(scratch, `log-${++logs}.jsonl`);
   const seen: Seen = { updates: [] };
@@ -58,7 +58,7 @@ function start(
       args: [fixture],
       env: { FAKE_ACP_SCRIPT: JSON.stringify({ ...script, log }) },
       cwd: scratch,
-      ...extra,
+      sessionMode: extra.sessionMode ?? null,
     },
     {
       onUpdate: (sessionId, update) => seen.updates.push({ sessionId, update }),
@@ -193,9 +193,13 @@ test("permission request is answered with the option the handler picks", async (
       request: {
         toolCall: EDIT_CALL,
         options: [ALLOW_ONCE, ALLOW_ALWAYS, REJECT_ONCE],
+        signal: expect.any(AbortSignal),
       },
     },
   ]);
+  // Answered by the handler itself: nothing was withdrawn.
+  const handled = asked[0]?.request as { signal?: AbortSignal } | undefined;
+  expect(handled?.signal?.aborted).toBe(false);
   expect(seen.updates.map((u) => u.update)).toEqual([
     {
       sessionUpdate: "fake_permission_outcome",
@@ -237,6 +241,7 @@ test("cancel sends session/cancel and pending permission resolves cancelled", as
   });
   let answerLate: (value: { outcome: "selected"; optionId: string }) => void =
     () => {};
+  let withdrawn: AbortSignal | undefined;
   const { client, seen, log } = start(
     {
       turns: [
@@ -254,7 +259,8 @@ test("cancel sends session/cancel and pending permission resolves cancelled", as
     },
     {
       // Nobody answers in time: the handler's promise is still open when the turn is cancelled.
-      onPermission: () => {
+      onPermission: (_sessionId, request) => {
+        withdrawn = request.signal;
         asked();
         return new Promise((resolve) => {
           answerLate = resolve;
@@ -266,7 +272,10 @@ test("cancel sends session/cancel and pending permission resolves cancelled", as
   const sessionId = await client.newSession(scratch);
   const turn = client.prompt(sessionId, []);
   await permissionAsked;
+  expect(withdrawn?.aborted).toBe(false);
   client.cancel(sessionId);
+  // Whoever shows the request learns at once that it is gone.
+  expect(withdrawn?.aborted).toBe(true);
   expect(await turn).toEqual({ stopReason: "cancelled" });
   // The person's answer arriving afterwards changes nothing and is not sent.
   answerLate({ outcome: "selected", optionId: "opt-allow" });
@@ -284,6 +293,62 @@ test("cancel sends session/cancel and pending permission resolves cancelled", as
   ).toEqual([{ sessionId }]);
   // Exactly one answer went back to the permission request.
   expect(messages.filter((m) => m.method === undefined)).toHaveLength(1);
+});
+
+/** A turn whose permission request nobody answers; resolves with its signal once asked. */
+function unansweredPermission(exitAfterMs?: number) {
+  let asked: (signal: AbortSignal) => void = () => {};
+  const signal = new Promise<AbortSignal>((resolve) => {
+    asked = resolve;
+  });
+  const started = start(
+    {
+      turns: [
+        {
+          steps: [
+            {
+              permission: { toolCall: EDIT_CALL, options: [ALLOW_ONCE] },
+              ...(exitAfterMs === undefined ? {} : { exitAfterMs }),
+            },
+          ],
+        },
+      ],
+    },
+    {
+      onPermission: (_sessionId, request) => {
+        asked(request.signal);
+        return new Promise(() => {});
+      },
+    },
+  );
+  return { ...started, signal };
+}
+
+test("child exit settles a waiting permission request as cancelled", async () => {
+  const { client, signal } = unansweredPermission(200);
+  await client.initialize();
+  const sessionId = await client.newSession(scratch);
+  const turn = client.prompt(sessionId, []);
+  const asked = await signal;
+  expect(asked.aborted).toBe(false);
+  await expect(turn).rejects.toThrow(/exited/);
+  expect(asked.aborted).toBe(true);
+  expect(client.alive).toBe(false);
+});
+
+test("close settles a waiting permission request as cancelled", async () => {
+  const { client, signal } = unansweredPermission();
+  await client.initialize();
+  const sessionId = await client.newSession(scratch);
+  const turn = client.prompt(sessionId, []);
+  const asked = await signal;
+  const ended = turn.then(
+    () => "resolved",
+    (error: Error) => error.message,
+  );
+  await client.close();
+  expect(asked.aborted).toBe(true);
+  expect(await ended).toMatch(/closed/);
 });
 
 test("child exit rejects in-flight calls and alive becomes false", async () => {
@@ -394,6 +459,32 @@ test("a sessionMode is set on every new or loaded session, and a refusal fails i
   );
   await refused.client.initialize();
   await expect(refused.client.newSession(scratch)).rejects.toThrow(/mode/);
+});
+
+test("a spec with a sessionMode the agent will not take yields no session, new or loaded", async () => {
+  // Neither set_mode nor the "mode" config option: the agent cannot be made to ask first.
+  const { client, log } = start(
+    { loadSession: true },
+    {},
+    { sessionMode: "read-only" },
+  );
+  await client.initialize();
+  await expect(client.newSession(scratch)).rejects.toThrow(/read-only/);
+  await expect(client.loadSession("sess_old", scratch)).rejects.toThrow(
+    /read-only/,
+  );
+  const methods = received(log).map((m) => m.method);
+  expect(methods).toContain("session/set_mode");
+  expect(methods).toContain("session/set_config_option");
+  expect(methods).not.toContain("session/prompt");
+
+  // `null` (an owner's own agent) is an explicit choice: no switch is attempted.
+  const custom = start({ loadSession: true }, {}, { sessionMode: null });
+  await custom.client.initialize();
+  expect(await custom.client.newSession(scratch)).toBe("sess_1");
+  expect(
+    received(custom.log).some((m) => m.method === "session/set_mode"),
+  ).toBe(false);
 });
 
 test("close stops the child and alive becomes false", async () => {

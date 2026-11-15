@@ -21,11 +21,15 @@ import {
  * Asking. Each permission request goes to `handlers.onPermission`; its answer is sent back only if
  * it names one of the options the agent offered (anything else is answered `cancelled`). `cancel`
  * sends `session/cancel` and, as the spec requires, answers every permission request of that
- * session still waiting with `cancelled` at once; the handler's later answer is dropped.
+ * session still waiting with `cancelled` at once. When the connection ends (`close`, or the child
+ * exits) every request still waiting is settled `cancelled` too. Either way the request's `signal`
+ * is aborted, so whoever shows it can withdraw it, and the handler's later answer is dropped.
  *
- * Ask mode. With `spec.sessionMode`, every session `newSession` creates and `loadSession` loads is
- * switched to that mode (`session/set_mode`, else the `mode` config option) before it is handed
- * out; a session that cannot be switched is refused with an error, never used.
+ * Ask mode. `spec.sessionMode` is required, so no caller can forget it: a mode id, and every
+ * session `newSession` creates and `loadSession` loads is switched to that mode
+ * (`session/set_mode`, else the `mode` config option) before it is handed out, a session that
+ * cannot be switched being refused with an error, never used; or `null` (an owner's own agent,
+ * whose modes are unknown). `adapterLaunch` (manifest.ts) gives the right one for a known agent.
  *
  * Errors are the transport's `McpAppError` (`start`, `connect` once the child has gone, `timeout`,
  * `protocol` when the agent answered an error). `prompt` has no time limit: a turn may wait hours
@@ -47,7 +51,12 @@ export type AcpHandlers = {
   onUpdate(sessionId: string, update: unknown): void;
   onPermission(
     sessionId: string,
-    request: { toolCall: unknown; options: AcpPermissionOption[] },
+    request: {
+      toolCall: unknown;
+      options: AcpPermissionOption[];
+      /** Aborted when the request was settled without the handler: cancelled turn, ended connection. */
+      signal: AbortSignal;
+    },
   ): Promise<AcpPermissionAnswer>;
 };
 
@@ -56,8 +65,11 @@ export type AcpSpawnSpec = {
   args: string[];
   env: Record<string, string>;
   cwd: string;
-  /** The session mode that makes the agent ask before acting (see `ACP_MANIFEST`). */
-  sessionMode?: string;
+  /**
+   * The session mode that makes the agent ask before acting (see `ACP_MANIFEST`); `null` only for
+   * an agent whose modes are unknown (`custom`). Required on purpose: never left out by accident.
+   */
+  sessionMode: string | null;
 };
 
 export type AcpClient = {
@@ -133,6 +145,12 @@ export function createAcpClient(
   };
   const transport: StdioTransport = new StdioTransport(launch, {
     onMessage: (message) => onMessage(message),
+    // Nobody can answer any more: what still waits is withdrawn.
+    onEnd: () => {
+      for (const pending of [...waiting.values()]) {
+        pending.settle({ outcome: "cancelled" });
+      }
+    },
     cancelNotice: (requestId) => ({
       method: "$/cancel_request",
       params: { requestId },
@@ -185,10 +203,12 @@ export function createAcpClient(
       return;
     }
     let answered = false;
-    const settle = (answer: AcpPermissionAnswer) => {
+    const withdrawn = new AbortController();
+    const settle = (answer: AcpPermissionAnswer, byHandler = false) => {
       if (answered) return;
       answered = true;
       waiting.delete(id);
+      if (!byHandler) withdrawn.abort();
       const offered =
         answer.outcome === "selected" &&
         options.some((option) => option.optionId === answer.optionId);
@@ -205,14 +225,23 @@ export function createAcpClient(
     };
     waiting.set(id, { sessionId, settle });
     Promise.resolve()
-      .then(() => handlers.onPermission(sessionId, { toolCall, options }))
-      .then(settle, () => settle({ outcome: "cancelled" }));
+      .then(() =>
+        handlers.onPermission(sessionId, {
+          toolCall,
+          options,
+          signal: withdrawn.signal,
+        }),
+      )
+      .then(
+        (answer) => settle(answer, true),
+        () => settle({ outcome: "cancelled" }, true),
+      );
   }
 
   /** Puts the session in the ask mode, or throws: such a session must not be used. */
   async function applyMode(sessionId: string, answered: unknown) {
     const mode = spec.sessionMode;
-    if (mode === undefined || alreadyIn(answered, mode)) return;
+    if (mode === null || alreadyIn(answered, mode)) return;
     try {
       await transport.request(
         "session/set_mode",

@@ -403,6 +403,8 @@ export type StdioHooks = {
   cancelNotice?:
     | ((requestId: number, reason: string) => { method: string; params: Json })
     | null;
+  /** Once, when the connection ends: closed by us, the child exited or could not start. */
+  onEnd?: () => void;
 };
 
 export class StdioTransport implements Transport {
@@ -485,6 +487,7 @@ export class StdioTransport implements Transport {
     this.dead = new McpAppError(kind, message, this.stderrTail());
     for (const pending of this.pending.values()) pending.reject(this.dead);
     this.pending.clear();
+    this.hooks.onEnd?.();
   }
 
   private onStdout(chunk: Buffer) {

@@ -22,7 +22,8 @@ import { appendFileSync } from "node:fs";
  * Steps of a turn:
  *   {update}          send `session/update` with this update
  *   {permission}      ask `session/request_permission` ({toolCall, options}) and wait for the answer,
- *                     then report it as the update {sessionUpdate: "fake_permission_outcome", outcome}
+ *                     then report it as the update {sessionUpdate: "fake_permission_outcome", outcome};
+ *                     with `exitAfterMs`, exit with code 4 that long after asking, still waiting
  *   {request}         send any other request ({method, params}) and report the whole response as
  *                     {sessionUpdate: "fake_request_result", response}
  *   {waitForCancel}   wait until `session/cancel` arrives
@@ -40,6 +41,7 @@ export type FakeStep =
         toolCall: unknown;
         options: { optionId: string; name: string; kind: string }[];
       };
+      exitAfterMs?: number;
     }
   | { request: { method: string; params?: unknown } }
   | { waitForCancel: true }
@@ -104,10 +106,15 @@ async function runTurn(id: unknown, sessionId: string) {
   for (const step of turn.steps ?? []) {
     if ("update" in step) update(sessionId, step.update);
     else if ("permission" in step) {
-      const response = await ask("session/request_permission", {
+      const answer = ask("session/request_permission", {
         sessionId,
         ...step.permission,
       });
+      if (step.exitAfterMs !== undefined) {
+        const delay = step.exitAfterMs;
+        setTimeout(() => process.exit(4), delay);
+      }
+      const response = await answer;
       const result = response.result as { outcome?: unknown } | undefined;
       update(sessionId, {
         sessionUpdate: "fake_permission_outcome",

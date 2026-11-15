@@ -1,4 +1,6 @@
 import type { AcpHarness } from "../../../shared/acp";
+import type { AcpSpawnSpec } from "./client";
+import { acpProcessEnv } from "./login-path";
 
 /**
  * How each known agent is reached over ACP, checked against each adapter's own source and docs on
@@ -98,27 +100,31 @@ export const ACP_MANIFEST: Record<
 /**
  * The spec `createAcpClient` takes to start `harness`'s adapter in `cwd` so that it asks before
  * acting: the adapter's arguments with `askMode`, `env` (the owner's own, if any) with `askEnv`
- * laid over it, and `askSessionMode`.
+ * laid over it, and `askSessionMode`. On darwin and linux `env.PATH` is the owner's login-shell
+ * PATH ahead of the inherited one (login-path.ts), so an adapter or `npx` installed through
+ * Homebrew or npm is found even when the app was opened from Finder.
  */
-export function adapterLaunch(
+export async function adapterLaunch(
   harness: Exclude<AcpHarness, "custom">,
   cwd: string,
-  env: Record<string, string> = {},
-): {
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-  cwd: string;
-  sessionMode?: string;
-} {
+  opts: {
+    env?: Record<string, string>;
+    /** The environment whose PATH the adapter is looked up in; this process's with the login PATH. */
+    processEnv?: () => Promise<Record<string, string | undefined>>;
+  } = {},
+): Promise<AcpSpawnSpec> {
   const entry = ACP_MANIFEST[harness];
+  const processEnv = await (opts.processEnv ?? acpProcessEnv)();
+  const env: Record<string, string> = { ...opts.env, ...entry.askEnv };
+  // Set only when it differs, so Windows (and a PATH with nothing to add) is left exactly as it was.
+  if (processEnv.PATH !== undefined && processEnv.PATH !== process.env.PATH) {
+    env.PATH = processEnv.PATH;
+  }
   return {
     command: entry.adapter.command,
     args: [...entry.adapter.args, ...entry.askMode],
-    env: { ...env, ...entry.askEnv },
+    env,
     cwd,
-    ...(entry.askSessionMode === null
-      ? {}
-      : { sessionMode: entry.askSessionMode }),
+    sessionMode: entry.askSessionMode,
   };
 }

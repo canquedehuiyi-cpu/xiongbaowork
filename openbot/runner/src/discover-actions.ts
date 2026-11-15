@@ -4,6 +4,7 @@ import {
   discoverAgents,
   machineProbeDeps,
 } from "./acp/discover";
+import { acpProcessEnv } from "./acp/login-path";
 import { AppHostError, type createAppHost } from "./app-host";
 import {
   APP_NAME_LIMIT,
@@ -327,7 +328,10 @@ export function createDiscoverActions(opts: {
         action === "agents.discover"
           ? {
               ok: true as const,
-              output: await discoverAgents(opts.agents ?? machineProbeDeps()),
+              output: await discoverAgents(
+                // The login shell's PATH too: what Finder-opened apps miss on macOS.
+                opts.agents ?? machineProbeDeps(await acpProcessEnv()),
+              ),
             }
           : await discover(body);
       // Only reads were done, so a stop is a plain failure: nothing to check on the device.

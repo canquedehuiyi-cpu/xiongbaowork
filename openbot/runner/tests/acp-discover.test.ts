@@ -224,8 +224,12 @@ test("every manifest entry names its binary, adapter and ask mode", () => {
   }
 });
 
-test("adapterLaunch carries the ask mode, and a Windows npx shim goes through cmd.exe", () => {
-  const codex = adapterLaunch("codex", "/work", { OWN: "1" });
+test("adapterLaunch carries the ask mode and the login PATH, and a Windows npx shim goes through cmd.exe", async () => {
+  const sameEnv = async () => ({ ...process.env });
+  const codex = await adapterLaunch("codex", "/work", {
+    env: { OWN: "1" },
+    processEnv: sameEnv,
+  });
   expect(codex).toEqual({
     command: "npx",
     args: [...ACP_MANIFEST.codex.adapter.args, ...ACP_MANIFEST.codex.askMode],
@@ -233,11 +237,21 @@ test("adapterLaunch carries the ask mode, and a Windows npx shim goes through cm
     cwd: "/work",
     sessionMode: "read-only",
   });
-  expect(adapterLaunch("claude-code", "/work").sessionMode).toBe("default");
-  expect(adapterLaunch("hermes", "/work")).toMatchObject({
-    command: "hermes",
-    args: ["acp"],
+  expect(
+    (await adapterLaunch("claude-code", "/work", { processEnv: sameEnv }))
+      .sessionMode,
+  ).toBe("default");
+  expect(
+    await adapterLaunch("hermes", "/work", { processEnv: sameEnv }),
+  ).toMatchObject({ command: "hermes", args: ["acp"], sessionMode: "default" });
+  // The login shell's PATH reaches the adapter's environment, where npx is looked up.
+  const withLogin = await adapterLaunch("claude-code", "/work", {
+    processEnv: async () => ({
+      ...process.env,
+      PATH: `/opt/homebrew/bin:${process.env.PATH ?? ""}`,
+    }),
   });
+  expect(withLogin.env.PATH?.startsWith("/opt/homebrew/bin:")).toBe(true);
   const npx = "C:\\Program Files\\nodejs\\npx.cmd";
   const spec = launchSpec(
     codex,
