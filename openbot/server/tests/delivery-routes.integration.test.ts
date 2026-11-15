@@ -1673,6 +1673,47 @@ test("overdue=1 lists only cards with overdue_at", async () => {
   expect(all.find((task) => task.tracked === false)?.stage).toBeNull();
 });
 
+test("overdue=1 leaves out a card given more time (due moved later) and one handed in; overdue_at stays", async () => {
+  const tenantId = await tenant("overdue-extended");
+  const agentId = `agent-${suite}-extended`;
+  const recorded = new Date(Date.now() - 60_000);
+  const taken = new Date(Date.now() - 3 * 60 * 60_000);
+  const late = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-still-late`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 40 * 60_000),
+    overdueAt: recorded,
+  });
+  const extended = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-extended`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() + 60 * 60_000),
+    overdueAt: recorded,
+  });
+  const handedIn = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-handed-in`,
+    status: "awaiting_review",
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 40 * 60_000),
+    overdueAt: recorded,
+  });
+
+  const listed = (await routesFor(tenantId)("GET", "?overdue=1")).body
+    .tasks as Record<string, unknown>[];
+  expect(listed.map((task) => task.id)).toEqual([late]);
+  // Not overdue now, but the record that it once was is kept.
+  for (const id of [extended, handedIn])
+    expect((await row(tenantId, id))?.overdueAt?.getTime()).toBe(
+      recorded.getTime(),
+    );
+});
+
 afterAll(async () => {
   resetBotLifecycleForTests();
   await runAsTenant("platform", async () => {

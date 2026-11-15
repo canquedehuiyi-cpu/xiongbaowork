@@ -7,7 +7,6 @@ import {
   getTableColumns,
   gte,
   inArray,
-  isNotNull,
   isNull,
   like,
   or,
@@ -37,6 +36,7 @@ import { DEFAULT_TIME_ZONE, DELIVERY_EVENTS } from "./delivery-tools";
 import { clockOf, dueRefusalText, readDueTime } from "./due-time";
 import { listTaskEvents } from "./events";
 import type { NudgeRuns } from "./nudge-run";
+import { overdueNowCondition } from "./overdue";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
@@ -476,9 +476,12 @@ export function createTaskRoutes(
       }
     }
     if (search) conditions.push(like(tasks.title, `%${search}%`));
-    // 逾期 (spec 2026-11-15-delivery-loop §11): a card the checker once found overdue stays so.
+    /*
+     * 逾期 (spec 2026-11-15-delivery-loop §11): overdue NOW, by the one rule in `overdue.ts` -- a card
+     * given more time (an extension, a later due time) is not, though its `overdue_at` stays recorded.
+     */
     if (context.req.query("overdue") === "1")
-      conditions.push(isNotNull(tasks.overdueAt));
+      conditions.push(overdueNowCondition(now()));
     if (deviceId) conditions.push(eq(tasks.deviceId, deviceId));
     const window = PERIODS[period ?? ""];
     if (window)

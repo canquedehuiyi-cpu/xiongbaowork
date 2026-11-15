@@ -1037,7 +1037,8 @@ describe("conversation sidebar", () => {
     const viewer = await person();
     const agentId = await employee(viewer, "对账员工");
     const { threadId } = await directChat(viewer, agentId);
-    const due = new Date(Date.now() + 3600_000);
+    // Due ten minutes ago and recorded overdue: overdue now.
+    const due = new Date(Date.now() - 600_000);
     const [followed] = await runAsTenant(viewer, () =>
       database
         .insert(tasks)
@@ -1095,6 +1096,28 @@ describe("conversation sidebar", () => {
       // The newest line that says something; a round's bare end does not.
       lastCheck: "退回：缺 C 家",
     });
+
+    // Given more time (due moved an hour ahead): not overdue now, though `overdue_at` stays.
+    const later = new Date(Date.now() + 3600_000);
+    await runAsTenant(viewer, () =>
+      database
+        .update(tasks)
+        .set({ dueAt: later })
+        .where(inArray(tasks.id, [taskId])),
+    );
+    const extended = await routesFor(viewer).thread(threadId);
+    expect(extended.body.goal).toMatchObject({
+      title: "核对三家发票",
+      dueAt: later.toISOString(),
+      overdue: false,
+    });
+    const [kept] = await runAsTenant(viewer, () =>
+      database
+        .select({ overdueAt: tasks.overdueAt })
+        .from(tasks)
+        .where(inArray(tasks.id, [taskId])),
+    );
+    expect(kept?.overdueAt).toBeInstanceOf(Date);
 
     // Handed in: the stage moves, and so does the line.
     await runAsTenant(viewer, () =>
