@@ -985,6 +985,8 @@ describe("auto compaction before a turn", () => {
     messages: Message[];
     summarize: Summarize;
     autoTimeoutMs?: number;
+    /** 这么久之后按 Stop（`abortRun()`，生产里 `runner.stop()` 走的就是它）。 */
+    stopAfterMs?: number;
   }) {
     const recorder = new LLMock();
     const originalBase = process.env.OPENAI_BASE_URL;
@@ -1034,12 +1036,17 @@ describe("auto compaction before a turn", () => {
       if (!agent) throw new Error("buildAgents returned no agent");
       agent.threadId = input.threadId;
       for (const message of input.messages) agent.addMessage(message);
+      const stop =
+        input.stopAfterMs === undefined
+          ? undefined
+          : setTimeout(() => agent.abortRun(), input.stopAfterMs);
       await runAsTenant(input.tenantId, () =>
         agent.runAgent(
           { runId: `run-${randomUUID()}` },
           { onEvent: ({ event }) => void events.push(event) },
         ),
       );
+      clearTimeout(stop);
       sent = JSON.stringify(recorder.getRequests().map((entry) => entry.body));
     } finally {
       if (originalBase === undefined) delete process.env.OPENAI_BASE_URL;
@@ -1217,6 +1224,43 @@ describe("auto compaction before a turn", () => {
     expect(result.sent).toContain("用户第 0 句");
     expect(result.notices).toHaveLength(1);
     expect(result.notices[0]).toMatchObject({ name: COMPACTION_FAILED_EVENT });
+    expect(await compactionRows(viewer, threadId)).toHaveLength(0);
+  });
+
+  test("Stop during an auto compaction aborts the summary, writes nothing and ends the turn", async () => {
+    const { viewer, agentId, threadId } = await nearlyFull(95_000, 100_000);
+    let aborted = false;
+    const summarize: Summarize = ({ signal }) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => {
+          aborted = true;
+          reject(new Error("aborted"));
+        });
+      });
+    const errors = console.error;
+    console.error = () => {};
+    let result: Awaited<ReturnType<typeof turn>>;
+    const started = Date.now();
+    try {
+      result = await turn({
+        tenantId: viewer,
+        agentId,
+        threadId,
+        messages: history(21),
+        summarize,
+        stopAfterMs: 300,
+      });
+    } finally {
+      console.error = errors;
+    }
+    expect(aborted).toBe(true);
+    // 远早于 30 秒的上限：是 Stop 停住的，不是超时。
+    expect(Date.now() - started).toBeLessThan(10_000);
+    // 被停下的这一轮不再调用模型，开始和结束照常报完。
+    expect(result.sent).toBe("[]");
+    const types = result.events.map((event) => event.type);
+    expect(types[0]).toBe(EventType.RUN_STARTED);
+    expect(types[types.length - 1]).toBe(EventType.RUN_FINISHED);
     expect(await compactionRows(viewer, threadId)).toHaveLength(0);
   });
 });

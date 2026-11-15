@@ -157,7 +157,11 @@ import {
   runAsTenant,
   TenantContextError,
 } from "./tenant/context";
-import { CompactionMiddleware, type RunCompaction } from "./threads/compaction";
+import {
+  CompactionMiddleware,
+  type RunCompaction,
+  stoppingCompactionOnAbort,
+} from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
 import { inlineToolImages } from "./tool-images";
@@ -1472,11 +1476,16 @@ export async function buildAgents(
          * 压缩排在个人记忆前面：中间件按加入的顺序从外往里跑，它要看到浏览器送来的原历史，替换完再让
          * 个人记忆往前插它那一行。外部员工和远程员工的上下文不归这里管。
          */
-        if (compaction && agent.type === "built_in")
+        const compacting = compaction && agent.type === "built_in";
+        if (compacting)
           built.use(new CompactionMiddleware(agent.id, compaction));
         if (loadPersonalMemory)
           built.use(new PersonalMemoryMiddleware(agent.id, loadPersonalMemory));
-        return [agent.id, built];
+        // Stop（`abortRun`）也要停住还在准备（等总结）的那一轮。
+        return [
+          agent.id,
+          compacting ? stoppingCompactionOnAbort(built, agent.id) : built,
+        ];
       }),
     ),
   );
