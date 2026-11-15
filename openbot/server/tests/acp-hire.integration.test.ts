@@ -833,5 +833,40 @@ describe("an external employee in a group", () => {
       conversations.list(creator.id, channel.id),
     )) as { bots: { id: string }[] };
     expect(bots.map((b) => b.id)).not.toContain(agent.id);
+    // Unlinked, not just hidden: no orphan link the creator cannot remove and the floor still counts.
+    expect(
+      await runAsTenant(creator.id, () => conversations.store.bots(channel.id)),
+    ).toEqual(expect.not.arrayContaining([agent.id]));
+    expect(
+      await runAsTenant(creator.id, () => conversations.store.bots(channel.id)),
+    ).toEqual(expect.arrayContaining([writer, reviewer]));
+  });
+
+  test("its link goes when the group's creator takes its hirer out", async () => {
+    const creator = await person();
+    const hirer = await person();
+    const conversations = groups();
+    const device = await computer(hirer);
+    const { agent } = await hired(hirer, device);
+    const writer = await bot(creator, "Writer");
+    const reviewer = await bot(creator, "Reviewer");
+    const channel = await runAsTenant(creator.id, () =>
+      conversations.create(creator.id, { agentIds: [writer, reviewer] }),
+    );
+    groupIds.push(channel.id);
+    await runAsTenant(creator.id, () =>
+      conversations.addMember(creator.id, channel.id, { email: hirer.email }),
+    );
+    await runAsTenant(hirer.id, () =>
+      conversations.addBots(hirer.id, channel.id, [agent.id]),
+    );
+    await runAsTenant(creator.id, () =>
+      conversations.removeMember(creator.id, channel.id, hirer.id),
+    );
+    const left = await runAsTenant(creator.id, () =>
+      conversations.store.bots(channel.id),
+    );
+    expect(left).not.toContain(agent.id);
+    expect(left).toEqual(expect.arrayContaining([writer, reviewer]));
   });
 });

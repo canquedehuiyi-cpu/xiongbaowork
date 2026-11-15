@@ -683,7 +683,8 @@ const messageOf = (error: unknown) =>
 type LinkedGroupWrites = Pick<
   GroupConversations,
   "create" | "addBots" | "removeBots" | "reorder" | "removeMember"
->;
+> &
+  Partial<Pick<GroupConversations, "unlinkOwnExternal">>;
 
 /**
  * 4.2 写入口：群聊服务的四个写操作在上游成功之后同步群组。上游的校验（创建者、可用员工、2–20 位）
@@ -752,6 +753,8 @@ export function withWakerGroupLink<T extends LinkedGroupWrites>(
       reconciled(channel, groups.reorder(owner, channel, input)),
     async removeMember(owner: string, channel: string, userId: string) {
       if (userId !== owner) return groups.removeMember(owner, channel, userId);
+      // The creator's own external employees leave with them (before the membership goes: 0218).
+      await groups.unlinkOwnExternal?.(owner, channel);
       const left = await link.leave(owner, channel);
       if (left === null) return groups.removeMember(owner, channel, userId);
       if (left.heir) {

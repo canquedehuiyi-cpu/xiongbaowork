@@ -231,8 +231,22 @@ export type GroupStore = {
   people(
     channelId: string,
   ): Promise<{ userId: string; email: string; name: string | null }[]>;
-  /** Take a person out of the group: their membership, and their own mapping when they leave. */
-  removeMember(channelId: string, userId: string): Promise<void>;
+  /**
+   * Take a person out of the group: their membership, and their own mapping when they leave. `unlink`
+   * names their own external employees in it, unlinked in the same transaction before the
+   * membership goes (0218 lets a member unlink their own `device_acp` only while still a member; the
+   * creator may unlink any Bot, 0128).
+   */
+  removeMember(
+    channelId: string,
+    userId: string,
+    unlink?: readonly string[],
+  ): Promise<void>;
+  /**
+   * Unlink these Bots from the group as the caller's frame may (no floor: a person leaving takes
+   * their own external employees with them). How many rows went.
+   */
+  unlinkBots(channelId: string, agentIds: readonly string[]): Promise<number>;
 };
 
 /** The executor `database.transaction` hands its callback, which reads like the database itself. */
@@ -716,8 +730,31 @@ export function createGroupStore(
         .where(eq(channelMemberships.channelId, channelId))
         .orderBy(asc(channelMemberships.createdAt), asc(users.email));
     },
-    async removeMember(channelId, userId) {
+    async unlinkBots(channelId, agentIds) {
+      if (agentIds.length === 0) return 0;
+      const removed = await database
+        .delete(channelAgents)
+        .where(
+          and(
+            eq(channelAgents.channelId, channelId),
+            inArray(channelAgents.agentId, [...agentIds]),
+          ),
+        )
+        .returning({ agentId: channelAgents.agentId });
+      return removed.length;
+    },
+    async removeMember(channelId, userId, unlink = []) {
       await database.transaction(async (tx) => {
+        // Their own external employees first, while row security still counts them a member.
+        if (unlink.length > 0)
+          await tx
+            .delete(channelAgents)
+            .where(
+              and(
+                eq(channelAgents.channelId, channelId),
+                inArray(channelAgents.agentId, [...unlink]),
+              ),
+            );
         /*
          * Row security decides who may: the member themselves, or the person who started the group
          * while still in it (0122). A refusal deletes nothing and says so, rather than reporting a
@@ -1624,6 +1661,17 @@ export function createGroupConversations(deps: {
     }
   }
 
+  /** The group's Bots that are this person's own external employees. */
+  const externalOf = async (
+    channel: string,
+    userId: string,
+  ): Promise<string[]> => {
+    if (!deps.externalHirer) return [];
+    const own: string[] = [];
+    for (const id of await deps.store.bots(channel))
+      if ((await deps.externalHirer(id)) === userId) own.push(id);
+    return own;
+  };
   /** Only the person who started the group changes its Bots; the same refusal `removeMember` gives. */
   const creatorOnly = async (owner: string, channel: string) => {
     await roster(owner, channel);
@@ -1884,7 +1932,20 @@ export function createGroupConversations(deps: {
         );
       if (!people.some((person) => person.userId === userId))
         throw new GroupNotFoundError();
-      await deps.store.removeMember(channel, userId);
+      // A person who leaves takes their external employees with them: nobody else may unlink them.
+      await deps.store.removeMember(
+        channel,
+        userId,
+        await externalOf(channel, userId),
+      );
+    },
+    /**
+     * Unlink the caller's own external employees from a group they are about to leave by a path that
+     * does not go through `removeMember` (the creator handing a shared group over). Idempotent.
+     */
+    async unlinkOwnExternal(owner: string, channel: string): Promise<void> {
+      const own = await externalOf(channel, owner);
+      if (own.length > 0) await deps.store.unlinkBots(channel, own);
     },
     /**
      * An approval that paused a group turn was decided: run the continuation, then write what the Bot
