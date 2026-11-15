@@ -309,8 +309,16 @@ function mastraAgent(): RegisteredAgent {
  * The standing role `mastraAgent` is sent: its own, then the day the server tells every remote Bot
  * (`todayGuidance`), in UTC when the run carries no time zone.
  */
+/*
+ * 服务端自己写的那条角色，第一次运行时的原文：先是 Bot 的角色，然后是它握着的技能（这个 Bot 握着
+ * drive-audit 和 slack-digest 两条），最后是日期。
+ *
+ * 技能这一段是契约的一部分：`heldSkillsGuidance` 把它放在「不随消息变的东西」之后、日期之前，
+ * 日期是每天会变的那一段。所以这里不写成「角色之后紧跟日期」——那会逼着把清单挪到日期后面，
+ * 每天多一次缓存失效。
+ */
 const STANDING_ROLE_WITH_TODAY =
-  /^You are Risk Mastra\.\n\n<model_and_date>\nToday is \w+, \d{4}-\d{2}-\d{2} \(UTC\)\. /;
+  /^You are Risk Mastra\.\n\n<skills_held>\nThese are the skills you hold\.[\s\S]*?\n<\/skills_held>\n\n<model_and_date>\nToday is \w+, \d{4}-\d{2}-\d{2} \(UTC\)\. /;
 
 /**
  * Run one Bot the way the runtime does, including the clone.
