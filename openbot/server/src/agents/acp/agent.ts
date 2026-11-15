@@ -20,8 +20,11 @@ import { createAcpTranslator } from "./translate";
 import {
   type AcpTurnRow,
   type AcpTurnStore,
+  acpPromptOf,
   isFinalAcpTurnStatus,
 } from "./turns";
+
+export { acpPromptOf };
 
 /**
  * The AG-UI transport of an external employee (`device_acp`: Codex, Claude Code, Hermes or the
@@ -184,6 +187,28 @@ export type AcpPermissionRequest = {
 
 export type AcpPermissionHook = (request: AcpPermissionRequest) => void;
 
+/**
+ * A permission request of a turn no run carries (the relay's `permission`), as the bridge takes it:
+ * the turn's tenant is its hirer's, and its approval parks on the card the turn answers for.
+ */
+export function acpPermissionRequestOf(
+  row: AcpTurnRow,
+  frame: Record<string, unknown>,
+): AcpPermissionRequest {
+  const runRef = acpPromptOf(row).runRef ?? `acp-${row.turnId}`;
+  return {
+    frame,
+    tenantId: row.tenantId,
+    ownerUserId: row.tenantId,
+    agentId: row.agentId,
+    deviceId: row.deviceId,
+    threadId: row.threadId,
+    turnId: row.turnId,
+    runId: runRef,
+    runRef,
+  };
+}
+
 type AcpLane = { tenantId: string; agentId: string; threadId: string };
 
 /**
@@ -241,6 +266,12 @@ export type DeviceAcpAgentConfig = {
    * and `started` settles once its prompt is written (`startQueuedTurn`).
    */
   claimed?: AcpTurnRow;
+  /**
+   * With `claimed`: the turn is already on the device and no run follows it (the server restarted,
+   * or its device reconnected here from another server). This run sends nothing: it follows the
+   * turn from now on, and `started` settles once it does (the relay's `adoptTurn`).
+   */
+  adopted?: boolean;
   waitingMs?: number;
   /**
    * Whether the computer is connected to another server of this deployment (`reachable` asks only
@@ -279,29 +310,6 @@ function startHandle(): StartHandle {
   // Nobody has to wait for it: a run that is not a claimed turn's never is.
   promise.catch(() => undefined);
   return { promise, resolve, reject };
-}
-
-/**
- * A stored turn's prompt: `{content, runRef?}` (`runRef`: the card of the run that queued it), or
- * the bare content of a turn stored before it carried one.
- */
-export function acpPromptOf(row: Pick<AcpTurnRow, "prompt">): {
-  content: unknown[];
-  runRef?: string;
-} {
-  const { prompt } = row;
-  if (Array.isArray(prompt)) return { content: prompt };
-  if (prompt && typeof prompt === "object") {
-    const { content, runRef } = prompt as {
-      content?: unknown;
-      runRef?: unknown;
-    };
-    return {
-      content: Array.isArray(content) ? content : [],
-      ...(typeof runRef === "string" && runRef ? { runRef } : {}),
-    };
-  }
-  return { content: [] };
 }
 
 /** What the person asked: the last user message, as ACP content blocks. */
@@ -515,6 +523,8 @@ class AcpRun {
       }
     }
     if (this.isOver()) {
+      // An adopted turn is the device's: nothing to put back, and a stop already told the device.
+      if (config.adopted) return;
       // Stopped while it was being claimed: cancelled. Merely let go of: back in its lane.
       if (this.aborted)
         await turns.setStatus(config.tenantId, turnId, "cancelled");
@@ -522,7 +532,15 @@ class AcpRun {
       return;
     }
     this.turnId = turnId;
-    this.unsubscribe = relay.subscribe(turnId, (frame) => this.onFrame(frame));
+    this.unsubscribe = relay.subscribe(turnId, (frame) => this.onFrame(frame), {
+      run: true,
+    });
+    if (config.adopted) {
+      // Already on the device: what it does from here on comes to this run.
+      this.phase = "running";
+      this.handle.resolve();
+      return;
+    }
     this.phase = "opening";
     const opened = new Promise<OpenOutcome>((resolve) => {
       this.opened = resolve;
@@ -986,6 +1004,7 @@ export function deviceAcpAgentFor(
     sessions: runtime.sessions,
     onPermission: (request) => runtime.onPermission?.(request),
     ...(options.claimed ? { claimed: options.claimed } : {}),
+    ...(options.claimed && options.adopted ? { adopted: true } : {}),
   });
 }
 
@@ -1023,7 +1042,18 @@ export type AcpThreadRunner = {
  *
  * Once the run is over, `announce` is told its answer, or that it failed (to bump the roster, or put
  * it in a group's shared transcript). A run that only found the turn queued again says nothing.
+ *
+ * `adopt` (the relay's `adoptTurn`): the same, for a turn ALREADY ON THE DEVICE that no run of this
+ * process follows (after a restart, or a reconnect from another server). The run sends nothing: it
+ * follows the turn from now on, finishes the card the turn answers for, and its answer is announced
+ * the same way. Resolves true once it follows the turn; false, changing nothing, when the turn has no
+ * employee, computer or thread to go on in (the relay then cancels it); throws when the thread is
+ * mid-run here (tried again on the device's next replay).
  */
+export type AcpTurnStarter = ((row: AcpTurnRow) => Promise<void>) & {
+  adopt: (row: AcpTurnRow) => Promise<boolean>;
+};
+
 export function createAcpTurnStarter(options: {
   database: Database;
   turns: AcpTurnStore;
@@ -1032,7 +1062,8 @@ export function createAcpTurnStarter(options: {
   agentFor?: (
     employee: DeviceAcpEmployee,
     row: AcpTurnRow,
-  ) => AbstractAgent | DeviceAcpAgent;
+    adopted: boolean,
+  ) => AbstractAgent | DeviceAcpAgent | null;
   announce?: (input: {
     tenantId: string;
     agentId: string;
@@ -1043,14 +1074,19 @@ export function createAcpTurnStarter(options: {
   }) => Promise<void>;
   abandoned?: (row: AcpTurnRow, runRef: string | undefined) => Promise<void>;
   log?: (message: string) => void;
-}): (row: AcpTurnRow) => Promise<void> {
+}): AcpTurnStarter {
   const { database, turns, runner } = options;
   const log = options.log ?? ((message: string) => console.warn(message));
   const agentFor =
     options.agentFor ??
-    ((employee: DeviceAcpEmployee, row: AcpTurnRow) =>
-      deviceAcpAgentFor(employee, { tenantId: row.tenantId, claimed: row }));
-  return (row) =>
+    ((employee: DeviceAcpEmployee, row: AcpTurnRow, adopted: boolean) =>
+      deviceAcpAgentFor(employee, {
+        tenantId: row.tenantId,
+        claimed: row,
+        adopted,
+      }));
+  /** False: the turn has nowhere to go on (not started, nothing changed). */
+  const post = (row: AcpTurnRow, adopted: boolean): Promise<boolean> =>
     runAsTenant(row.tenantId, async () => {
       const { runRef } = acpPromptOf(row);
       const employee = await options.employeeFor(row);
@@ -1066,14 +1102,15 @@ export function createAcpTurnStarter(options: {
         (thread &&
           (thread.tenantId !== row.tenantId || thread.agentId !== row.agentId))
       ) {
+        if (adopted) return false;
         log(
           `acp: queued turn ${row.turnId} has no employee, computer or thread to run in any more; cancelled`,
         );
         await turns.setStatus(row.tenantId, row.turnId, "cancelled");
         await options.abandoned?.(row, runRef)?.catch(() => undefined);
-        return;
+        return false;
       }
-      const agent = agentFor(employee, row);
+      const agent = agentFor(employee, row, adopted);
       if (!(agent instanceof DeviceAcpAgent))
         throw new Error("external employees cannot run on this server");
       await runner.hydrate();
@@ -1164,5 +1201,11 @@ export function createAcpTurnStarter(options: {
         },
       });
       await Promise.race([agent.started, failed]);
+      return true;
     });
+  const starter = (async (row: AcpTurnRow) => {
+    await post(row, false);
+  }) as AcpTurnStarter;
+  starter.adopt = (row) => post(row, true);
+  return starter;
 }

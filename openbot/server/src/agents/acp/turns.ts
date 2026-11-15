@@ -49,6 +49,29 @@ export function isFinalAcpTurnStatus(status: string): boolean {
 
 export type AcpTurnRow = typeof acpTurns.$inferSelect;
 
+/**
+ * A stored turn's prompt: `{content, runRef?}` (`runRef`: the card of the run that queued it), or
+ * the bare content of a turn stored before it carried one.
+ */
+export function acpPromptOf(row: Pick<AcpTurnRow, "prompt">): {
+  content: unknown[];
+  runRef?: string;
+} {
+  const { prompt } = row;
+  if (Array.isArray(prompt)) return { content: prompt };
+  if (prompt && typeof prompt === "object") {
+    const { content, runRef } = prompt as {
+      content?: unknown;
+      runRef?: unknown;
+    };
+    return {
+      content: Array.isArray(content) ? content : [],
+      ...(typeof runRef === "string" && runRef ? { runRef } : {}),
+    };
+  }
+  return { content: [] };
+}
+
 export type AcpTurnStore = {
   /** Queue a turn. A `turnId` already stored is left as it is. */
   enqueue(turn: {

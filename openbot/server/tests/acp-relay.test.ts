@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createAcpRelay } from "../src/agents/acp/relay";
+import { type AcpRelayDeps, createAcpRelay } from "../src/agents/acp/relay";
 import type { AcpTurnRow } from "../src/agents/acp/turns";
 import { createDeviceChannel } from "../src/devices/channel";
 import { runnerClose, runnerMessage, runnerOpen } from "../src/devices/socket";
@@ -14,7 +14,14 @@ import { createMemoryAcpTurnStore } from "./support/acp-turns-memory";
 type Frame = Record<string, unknown>;
 const target = { tenantId: "tenant-a", deviceId: "laptop" };
 
-function setup(options: { startFails?: boolean } = {}) {
+function setup(
+  options: {
+    startFails?: boolean;
+    deps?: (
+      turns: ReturnType<typeof createMemoryAcpTurnStore>,
+    ) => Partial<AcpRelayDeps>;
+  } = {},
+) {
   const turns = createMemoryAcpTurnStore();
   const down: Frame[] = [];
   const logs: string[] = [];
@@ -36,6 +43,7 @@ function setup(options: { startFails?: boolean } = {}) {
       started.push(row);
     },
     log: (message) => logs.push(message),
+    ...(options.deps?.(turns) ?? {}),
   });
   const heard = (turnId: string) => {
     const frames: Frame[] = [];
@@ -887,5 +895,346 @@ describe("runner socket and acp frames", () => {
     expect(sent).toEqual([]);
     expect(closed).toEqual([1011]);
     expect(channel.isAttached(ws.data.connection as string)).toBeFalse();
+  });
+});
+
+const permissionRequest = (turnId: string, requestId = "req-1"): Frame => ({
+  type: "acp.permission.request",
+  agentId: "agent-1",
+  threadId: "thread-1",
+  turnId,
+  requestId,
+  toolCall: { toolCallId: "call-1", kind: "execute", title: "git push" },
+  options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
+});
+
+describe("acp relay: turns nobody here follows", () => {
+  /** A relay whose `adoptTurn` starts a "run" (a run listener) unless told otherwise. */
+  function orphans(
+    adopt: "run" | "impossible" | "throws" | "none" = "run",
+    jobTimeoutMs?: number,
+  ) {
+    const adopted: AcpTurnRow[] = [];
+    const runFrames: Frame[] = [];
+    const permissions: { row: AcpTurnRow; frame: Frame }[] = [];
+    const closed: {
+      turnId: string;
+      runRef?: string;
+      followed: boolean;
+      status: string;
+    }[] = [];
+    const mode = { adopt };
+    const t = setup({
+      deps: () => ({
+        ...(mode.adopt === "none"
+          ? {}
+          : {
+              adoptTurn: async (row: AcpTurnRow) => {
+                adopted.push(row);
+                if (mode.adopt === "throws") throw new Error("thread mid-run");
+                if (mode.adopt === "impossible") return false;
+                t.relay.subscribe(
+                  row.turnId,
+                  (frame) => runFrames.push(frame),
+                  {
+                    run: true,
+                  },
+                );
+                return true;
+              },
+            }),
+        permission: (row: AcpTurnRow, frame: Frame) =>
+          permissions.push({ row, frame }),
+        closed: async (turn, info) => {
+          closed.push({
+            turnId: turn.turnId,
+            ...(turn.runRef ? { runRef: turn.runRef } : {}),
+            followed: info.followed,
+            status: turn.status,
+          });
+        },
+        ...(jobTimeoutMs ? { jobTimeoutMs } : {}),
+      }),
+    });
+    const running = async (
+      turnId: string,
+      status: AcpTurnRow["status"] = "running",
+    ) => {
+      await t.turns.enqueue({
+        tenantId: target.tenantId,
+        agentId: "agent-1",
+        threadId: "thread-1",
+        deviceId: target.deviceId,
+        turnId,
+        prompt: {
+          content: [{ type: "text", text: turnId }],
+          runRef: `card-${turnId}`,
+        },
+      });
+      if (status !== "queued")
+        await t.turns.setStatus(target.tenantId, turnId, status);
+    };
+    return { ...t, adopted, runFrames, permissions, closed, mode, running };
+  }
+  const cancels = (down: Frame[]) =>
+    down.filter((frame) => frame.type === "acp.cancel");
+
+  test("after a restart, a replayed frame of a live turn starts a run that follows it, and the answer reaches it", async () => {
+    const t = orphans();
+    await t.running("turn-1");
+    // A fresh relay (the restarted server): nothing subscribed. The device replays.
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    t.relay.fromRunner(t.from(), update("turn-1", 2));
+    t.relay.fromRunner(t.from(), end("turn-1"));
+    expect(await t.settle()).toBeTrue();
+    // Adopted once, from the stored row; every frame went to the run, the end included.
+    expect(t.adopted.map((row) => row.turnId)).toEqual(["turn-1"]);
+    expect(t.runFrames.map((frame) => frame.type)).toEqual([
+      "acp.update",
+      "acp.update",
+      "acp.turn.end",
+    ]);
+    expect(t.statusOf("turn-1")).toBe("done");
+    // The run closes its own card: nothing else is told to.
+    expect(t.closed).toEqual([]);
+    expect(cancels(t.down)).toEqual([]);
+  });
+
+  test("an inventory listing a live turn nobody follows adopts it at once", async () => {
+    const t = orphans();
+    await t.running("turn-1", "awaiting");
+    t.relay.fromRunner(
+      t.from(),
+      inventory([{ turnId: "turn-1", state: "awaiting" }]),
+    );
+    expect(await t.settle()).toBeTrue();
+    expect(t.adopted.map((row) => row.turnId)).toEqual(["turn-1"]);
+    // A replayed permission request then reaches the run, and the bridge only through it.
+    t.relay.fromRunner(t.from(), permissionRequest("turn-1"));
+    expect(await t.settle()).toBeTrue();
+    expect(t.runFrames.map((frame) => frame.type)).toEqual([
+      "acp.permission.request",
+    ]);
+    expect(t.permissions).toEqual([]);
+  });
+
+  test("a permission request with no run to carry it goes straight to the bridge", async () => {
+    const t = orphans("none");
+    await t.running("turn-1");
+    t.relay.fromRunner(t.from(), permissionRequest("turn-1"));
+    expect(await t.settle()).toBeTrue();
+    expect(t.permissions).toHaveLength(1);
+    expect(t.permissions[0]?.row.turnId).toBe("turn-1");
+    expect(t.permissions[0]?.frame.requestId).toBe("req-1");
+    expect(t.statusOf("turn-1")).toBe("awaiting");
+  });
+
+  test("a turn that cannot be adopted is cancelled on the device, ended interrupted, and its card and approvals closed", async () => {
+    const t = orphans("impossible");
+    await t.running("turn-1");
+    t.relay.fromRunner(t.from(), permissionRequest("turn-1"));
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    expect(await t.settle()).toBeTrue();
+    expect(cancels(t.down)).toEqual([
+      {
+        type: "acp.cancel",
+        agentId: "agent-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+      },
+    ]);
+    expect(t.statusOf("turn-1")).toBe("interrupted");
+    expect(t.closed).toEqual([
+      {
+        turnId: "turn-1",
+        runRef: "card-turn-1",
+        followed: false,
+        status: "interrupted",
+      },
+    ]);
+    // Neither frame was taken in, the request reached no bridge, and the update asks no second
+    // cancel on this connection.
+    expect(t.runFrames).toEqual([]);
+    expect(t.permissions).toEqual([]);
+    expect(t.adopted).toHaveLength(1);
+  });
+
+  test("an adoption that throws takes nothing in: drain fails and the replay adopts it later", async () => {
+    const t = orphans("throws");
+    await t.running("turn-1");
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    expect(await t.settle()).toBeFalse();
+    expect(t.turns.rows[0]?.lastSeq).toBe(0);
+    expect(t.statusOf("turn-1")).toBe("running");
+    // The device reconnects and replays; this time the thread is free.
+    t.mode.adopt = "run";
+    t.relay.fromRunner(t.from("conn-2"), update("turn-1", 1));
+    expect(
+      await t.relay.drain({ ...target, connectionId: "conn-2" }),
+    ).toBeTrue();
+    expect(t.runFrames.map((frame) => frame.seq)).toEqual([1]);
+  });
+
+  test("an inventory turn gone from the device with nobody following it closes its card", async () => {
+    const t = orphans();
+    await t.running("turn-1", "sent");
+    t.relay.fromRunner(t.from(), inventory([]));
+    expect(await t.settle()).toBeTrue();
+    expect(t.statusOf("turn-1")).toBe("interrupted");
+    expect(t.closed).toEqual([
+      {
+        turnId: "turn-1",
+        runRef: "card-turn-1",
+        followed: false,
+        status: "interrupted",
+      },
+    ]);
+  });
+
+  test("stopped while the device was away: its inventory still lists the turn, and it is cancelled there", async () => {
+    const t = orphans();
+    await t.running("turn-1");
+    // Stop while the computer was away: the row is cancelled here only.
+    await t.turns.setStatus(target.tenantId, "turn-1", "cancelled");
+    t.relay.fromRunner(
+      t.from(),
+      inventory([{ turnId: "turn-1", state: "running" }]),
+    );
+    expect(await t.settle()).toBeTrue();
+    expect(cancels(t.down)).toEqual([
+      {
+        type: "acp.cancel",
+        agentId: "agent-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+      },
+    ]);
+    // Its frames are not taken in, nothing is adopted, and a replay asks no second cancel on this
+    // connection; a permission request of it is never opened.
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    t.relay.fromRunner(t.from(), permissionRequest("turn-1"));
+    expect(await t.settle()).toBeTrue();
+    expect(cancels(t.down)).toHaveLength(1);
+    expect(t.adopted).toEqual([]);
+    expect(t.permissions).toEqual([]);
+    // On the next connection, the device is told again.
+    t.state.connection = "conn-2";
+    t.relay.fromRunner(t.from("conn-2"), permissionRequest("turn-1"));
+    expect(
+      await t.relay.drain({ ...target, connectionId: "conn-2" }),
+    ).toBeTrue();
+    expect(cancels(t.down)).toHaveLength(2);
+  });
+
+  test("another tenant's or another device's turn listed in an inventory is never cancelled", async () => {
+    const t = orphans();
+    await t.turns.enqueue({
+      tenantId: "tenant-b",
+      agentId: "agent-1",
+      threadId: "thread-1",
+      deviceId: target.deviceId,
+      turnId: "turn-b",
+      prompt: [],
+    });
+    await t.turns.setStatus("tenant-b", "turn-b", "cancelled");
+    t.relay.fromRunner(
+      t.from(),
+      inventory([{ turnId: "turn-b", state: "running" }]),
+    );
+    expect(await t.settle()).toBeTrue();
+    expect(cancels(t.down)).toEqual([]);
+  });
+
+  test("cancelTurn: a queued turn never runs and its card closes", async () => {
+    const t = orphans();
+    await t.running("turn-1", "queued");
+    expect(await t.relay.cancelTurn(target.tenantId, "turn-1")).toBe(
+      "cancelled",
+    );
+    expect(t.statusOf("turn-1")).toBe("cancelled");
+    // Nothing on the device to stop.
+    expect(cancels(t.down)).toEqual([]);
+    expect(t.closed).toEqual([
+      {
+        turnId: "turn-1",
+        runRef: "card-turn-1",
+        followed: false,
+        status: "cancelled",
+      },
+    ]);
+    // It is not started on the next heartbeat.
+    await t.relay.resumeQueued(target);
+    expect(t.started).toEqual([]);
+    expect(await t.relay.cancelTurn(target.tenantId, "turn-1")).toBe("over");
+    expect(await t.relay.cancelTurn(target.tenantId, "no-such-turn")).toBe(
+      "missing",
+    );
+    expect(await t.relay.cancelTurn("tenant-b", "turn-1")).toBe("missing");
+  });
+
+  test("cancelTurn: a running turn is cancelled on the device and its run told at once", async () => {
+    const t = orphans();
+    await t.running("turn-1");
+    const run: Frame[] = [];
+    t.relay.subscribe("turn-1", (frame) => run.push(frame), { run: true });
+    expect(await t.relay.cancelTurn(target.tenantId, "turn-1")).toBe(
+      "cancelled",
+    );
+    expect(cancels(t.down)).toEqual([
+      {
+        type: "acp.cancel",
+        agentId: "agent-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+      },
+    ]);
+    expect(run).toEqual([
+      {
+        type: "acp.turn.end",
+        agentId: "agent-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        stopReason: "cancelled",
+      },
+    ]);
+    expect(t.statusOf("turn-1")).toBe("cancelled");
+    // Its approvals expire; its card is its run's to close.
+    expect(t.closed).toEqual([
+      {
+        turnId: "turn-1",
+        runRef: "card-turn-1",
+        followed: true,
+        status: "cancelled",
+      },
+    ]);
+    // The device's own end, when it comes, changes nothing.
+    t.relay.fromRunner(t.from(), end("turn-1", { stopReason: "cancelled" }));
+    expect(await t.settle()).toBeTrue();
+    expect(run).toHaveLength(1);
+  });
+
+  test("a job past its deadline fails the drain and the device's chain goes on", async () => {
+    const t = orphans("none", 50);
+    await t.running("turn-1");
+    await t.running("turn-2");
+    const stuck = t.turns.get.bind(t.turns);
+    let hang = true;
+    t.turns.get = (tenantId, turnId) =>
+      hang && turnId === "turn-1"
+        ? new Promise(() => undefined)
+        : stuck(tenantId, turnId);
+    const two = t.heard("turn-2");
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    t.relay.fromRunner(t.from(), update("turn-2", 1));
+    // The stuck query does not hold the device: the drain answers, false (send it again).
+    expect(await t.settle()).toBeFalse();
+    expect(seqs(two)).toEqual([1]);
+    expect(t.logs.some((line) => line.includes("given up on"))).toBeTrue();
+    // Once the database answers again, the replay is taken in.
+    hang = false;
+    const one = t.heard("turn-1");
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    expect(await t.settle()).toBeTrue();
+    expect(seqs(one)).toEqual([1]);
   });
 });

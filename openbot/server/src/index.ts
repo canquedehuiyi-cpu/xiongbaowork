@@ -21,6 +21,8 @@ import {
 } from "./admin/controls";
 import { fixSettings } from "./admin/settings-store";
 import {
+  type AcpTurnStarter,
+  acpPermissionRequestOf,
   createAcpGroupTurn,
   createAcpSessionHints,
   createAcpTurnStarter,
@@ -31,13 +33,14 @@ import {
 import { createAcpContextLoader } from "./agents/acp/context";
 import { externalEmployeesAmong, externalHirerOf } from "./agents/acp/external";
 import {
+  type AcpPermissionBridge,
   createAcpApprovalHirer,
   createAcpEmployeeLoader,
   createAcpPermissionBridge,
 } from "./agents/acp/permissions";
 import { createAcpRelay } from "./agents/acp/relay";
 import { createExternalAgentRoutes } from "./agents/acp/routes";
-import { type AcpTurnRow, createAcpTurnStore } from "./agents/acp/turns";
+import { createAcpTurnStore } from "./agents/acp/turns";
 import {
   CoworkerUnavailableError,
   createActorAgentResolver,
@@ -905,7 +908,9 @@ await startupLifecycle.run(async (startup) => {
    * runner built further down; until that exists, a claimed turn goes back to the queue.
    */
   const acpTurnStore = createAcpTurnStore(database);
-  let startAcpTurn: ((row: AcpTurnRow) => Promise<void>) | undefined;
+  let startAcpTurn: AcpTurnStarter | undefined;
+  // The permission bridge, built further down once the approval service exists.
+  let acpPermissionBridge: AcpPermissionBridge | undefined;
   const acpRelay = createAcpRelay({
     channel: deviceChannel,
     turns: acpTurnStore,
@@ -913,6 +918,34 @@ await startupLifecycle.run(async (startup) => {
       if (!startAcpTurn)
         throw new Error("外部员工的轮次在这台服务器上还不能运行。");
       await startAcpTurn(row);
+    },
+    /*
+     * A turn still on its computer that no run of this process follows (this server restarted, or
+     * the computer reconnected here from another server): a run is started that follows it, so its
+     * answer and its card complete; one that cannot go on is cancelled on the computer.
+     */
+    adoptTurn: async (row) => {
+      if (!startAcpTurn)
+        throw new Error("外部员工的轮次在这台服务器上还不能运行。");
+      return startAcpTurn.adopt(row);
+    },
+    // A permission request no run carries still reaches its hirer.
+    permission: (row, frame) => {
+      void acpPermissionBridge?.onRequest(acpPermissionRequestOf(row, frame));
+    },
+    /*
+     * A turn ended here: its open approvals expire, and, when no run followed it, the card it answers
+     * for is closed (failed: it did not finish its work).
+     */
+    closed: async (turn, { followed }) => {
+      await acpPermissionBridge?.expireTurn(turn);
+      if (!followed && turn.runRef)
+        await taskProjector.finished({
+          tenantId: turn.tenantId,
+          runRef: turn.runRef,
+          failed: true,
+          onlyUnsettled: true,
+        });
     },
   });
   /*
@@ -1430,6 +1463,7 @@ await startupLifecycle.run(async (startup) => {
       }),
     (bridge) => bridge.dispose(),
   );
+  acpPermissionBridge = acpPermissions;
   const acpRuntime = deviceAcpRuntime();
   if (acpRuntime)
     acpRuntime.onPermission = (request) => {
@@ -5412,6 +5446,9 @@ await startupLifecycle.run(async (startup) => {
         : createRequireUser(auth as AuthService, roleRepository),
       quota,
       auditStore: bootAuditStore,
+      // The hirer's stop of a queued or running turn (spec §44, §131).
+      turns: acpTurnStore,
+      cancelTurn: (tenantId, turnId) => acpRelay.cancelTurn(tenantId, turnId),
     }),
   );
 

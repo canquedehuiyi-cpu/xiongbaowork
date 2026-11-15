@@ -2,6 +2,7 @@ import type { DeviceChannel, DispatchTarget } from "../../devices/channel";
 import {
   type AcpTurnRow,
   type AcpTurnStore,
+  acpPromptOf,
   isFinalAcpTurnStatus,
 } from "./turns";
 
@@ -39,6 +40,31 @@ import {
  * Whoever follows a turn ended this way gets an `acp.turn.end` with `interrupted: true` and
  * `reconciled: true`. One cancel can stop an employee's whole process, so several turns of one
  * employee can end `interrupted` together; each is ended once.
+ *
+ * NOBODY FOLLOWS IT HERE (an orphan). A turn's run lives in the process that started it. After this
+ * server restarted (every deploy of a single replica), or when the device reconnects to another
+ * server of the deployment, a frame or an inventory entry can arrive for a turn that is still live in
+ * the database with no run of this process following it (`subscribe` with `run: true`) and none
+ * being started. Its frames are not swallowed: `adoptTurn` starts a run that follows the turn from
+ * here on (posted into its thread, finishing the board card the turn answers for), and the frame is
+ * then taken in for it. A permission request with no run to carry it goes straight to `permission`
+ * (the bridge), so its hirer still gets the card. A turn that cannot be adopted (its employee is
+ * gone, moved, or the thread is not its own any more) is cancelled on the device (`acp.cancel`) and
+ * ended `interrupted`. An adoption that throws takes nothing in (the device sends it all again).
+ *
+ * WHEN NOBODY WAS FOLLOWING A TURN THAT ENDS, `closed` is told (its open approvals expire, the card
+ * the turn answers for is closed). `cancelTurn` (the hirer's stop of a queued or running turn, also
+ * the way out of anything left stuck) ends a turn `cancelled` here and tells the device.
+ *
+ * STOPPED HERE, STILL RUNNING THERE. A turn the server already ended (`cancelled`, or `interrupted`)
+ * that the device still works on (its inventory lists it running or awaiting, or it sends updates or
+ * permission requests for it) is cancelled on the device: once per connection, so the device's lane
+ * is not held behind a turn nobody waits for.
+ *
+ * EVERY JOB HAS A DEADLINE (`jobTimeoutMs`). A query that hangs must not hold one device's chain for
+ * ever (every later frame and heartbeat of the device waits on it, reconnecting included): past the
+ * deadline the job counts as failed (its frame is not taken in, so `drain` answers false and the
+ * device sends it again on its next connection) and the chain goes on.
  */
 
 /** Where an up frame came from: the socket's tenant and device, and which connection of it. */
@@ -53,8 +79,13 @@ export type AcpRelay = {
    * Every frame taken in for this turn, from now on: its own (ack, updates, permission requests,
    * errors, its end, once) and those of no turn of its lane while it is not over (`acp.session`, an
    * open's `acp.error`). A turn the inventory shows gone gets a made-up end (`reconciled: true`).
+   * `run: true`: this listener is the run that carries the turn (an orphan is one with none).
    */
-  subscribe(turnId: string, listener: AcpFrameListener): () => void;
+  subscribe(
+    turnId: string,
+    listener: AcpFrameListener,
+    options?: { run?: boolean },
+  ): () => void;
   /** Writes a frame to the device from this process now; false when it is not connected here. */
   send(target: DispatchTarget, frame: Record<string, unknown>): boolean;
   /**
@@ -70,7 +101,31 @@ export type AcpRelay = {
    * connection's last `drain`, true otherwise.
    */
   drain(target: AcpFrameSource): Promise<boolean>;
+  /**
+   * Stops one of the tenant's turns: a queued one never runs, a running one is cancelled on its
+   * device (`acp.cancel`, when connected here) and ended `cancelled` here at once, so its lane goes
+   * on. Whoever follows it gets an `acp.turn.end` with `stopReason: "cancelled"`; `closed` is told.
+   */
+  cancelTurn(tenantId: string, turnId: string): Promise<AcpCancelOutcome>;
 };
+
+/** `cancelTurn`: stopped now, already over, or no such turn of this tenant. */
+export type AcpCancelOutcome = "cancelled" | "over" | "missing";
+
+/** A turn that ended here, for `closed`. */
+export type AcpClosedTurn = {
+  tenantId: string;
+  deviceId: string;
+  agentId: string;
+  threadId: string;
+  turnId: string;
+  /** The board card the turn answers for (`acpPromptOf(row).runRef`). */
+  runRef?: string;
+  status: AcpTurnRow["status"];
+};
+
+/** A deadline for one job of a device's chain (see the header). */
+export const ACP_RELAY_JOB_TIMEOUT_MS = 10_000;
 
 export type AcpRelayDeps = {
   channel: Pick<DeviceChannel, "notify" | "isReachable" | "connectionOf">;
@@ -80,6 +135,21 @@ export type AcpRelayDeps = {
    * resolves once the prompt is written (not when the turn ends). A throw puts the turn back.
    */
   startQueuedTurn: (row: AcpTurnRow) => Promise<void>;
+  /**
+   * A live turn no run of this process follows (see the header): starts one that follows it and
+   * resolves true once it is subscribed, or false when the turn cannot go on (the relay cancels
+   * it). A throw takes the frame not in. Absent: frames are taken in for whoever listens, as before.
+   */
+  adoptTurn?: (row: AcpTurnRow) => Promise<boolean>;
+  /** A permission request taken in with no run to carry it: straight to the permission bridge. */
+  permission?: (row: AcpTurnRow, frame: Record<string, unknown>) => void;
+  /**
+   * A turn ended here: `followed` says whether a run of this process was following it (that run
+   * closes its card; nobody else does otherwise). Never throws into the relay.
+   */
+  closed?: (turn: AcpClosedTurn, info: { followed: boolean }) => Promise<void>;
+  /** `ACP_RELAY_JOB_TIMEOUT_MS` unless set. */
+  jobTimeoutMs?: number;
   log?: (message: string) => void;
 };
 
@@ -94,6 +164,10 @@ type Turn = {
   turnId: string;
   status: AcpTurnRow["status"];
   lastSeq: number;
+  /** The board card the turn answers for. */
+  runRef?: string;
+  /** Kept to hand to `adoptTurn` / `permission` without reading it again. */
+  row: AcpTurnRow;
   /** Permission requests waiting for an answer. */
   requests: Set<string>;
   /** Errors taken in for this turn, serialized: a replay of one is dropped. */
@@ -106,6 +180,43 @@ type Turn = {
 const ENDED_GRACE_BEATS = 2;
 /** Frames of no turn remembered per lane, to drop their replays. */
 const TURNLESS_KEPT = 32;
+/** Turns found over, remembered so a replay of their frames does not ask the database each time. */
+const FINALS_KEPT = 1000;
+/** (connection, turn) pairs a cancel already went to, remembered at most. */
+const CANCELS_KEPT = 1000;
+
+class RelayJobTimeout extends Error {
+  override name = "RelayJobTimeout";
+}
+
+/** `work`, or a rejection once `ms` have passed (`work` itself is left to settle on its own). */
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new RelayJobTimeout(
+            `a job took longer than ${ms} ms and was given up on`,
+          ),
+        ),
+      ms,
+    );
+    timer.unref?.();
+  });
+  // A late failure of the abandoned job is not an unhandled rejection.
+  work.catch(() => undefined);
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
+function remember<K, V>(map: Map<K, V>, key: K, value: V, limit: number) {
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > limit) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+}
 
 const text = (value: unknown): string | null =>
   typeof value === "string" && value !== "" ? value : null;
@@ -131,6 +242,7 @@ const TURN_FRAMES = new Set([
 export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   const { channel, turns, startQueuedTurn } = deps;
   const log = deps.log ?? ((message: string) => console.warn(message));
+  const jobTimeoutMs = deps.jobTimeoutMs ?? ACP_RELAY_JOB_TIMEOUT_MS;
 
   const chains = new Map<string, Promise<void>>();
   /**
@@ -143,6 +255,12 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     source.connectionId === undefined ? "" : source.connectionId;
   const known = new Map<string, Turn>();
   const listeners = new Map<string, Set<AcpFrameListener>>();
+  /** turnId → how many of its listeners are runs carrying it (`subscribe` with `run: true`). */
+  const runs = new Map<string, number>();
+  /** turnId → a turn found over (see `FINALS_KEPT`). */
+  const finals = new Map<string, Turn>();
+  /** `[connection, turnId]` → a cancel already sent there for a turn the server ended. */
+  const cancelled = new Map<string, true>();
   /** turnId → the connection its `acp.prompt` last went out on. */
   const promptedOn = new Map<string, string | null>();
   /** Claimed by `resumeQueued`, `startQueuedTurn` not settled yet. */
@@ -163,7 +281,9 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     critical: boolean,
   ): Promise<T> {
     const key = keyOf(target);
-    const run = (chains.get(key) ?? Promise.resolve()).then(job);
+    const run = (chains.get(key) ?? Promise.resolve()).then(() =>
+      withDeadline(job(), jobTimeoutMs),
+    );
     const tail = run.then(
       () => undefined,
       (error) => {
@@ -196,6 +316,8 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     }
   }
 
+  const followed = (turnId: string) => (runs.get(turnId) ?? 0) > 0;
+
   const fromRow = (row: AcpTurnRow): Turn => ({
     tenantId: row.tenantId,
     deviceId: row.deviceId,
@@ -204,6 +326,8 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     turnId: row.turnId,
     status: row.status,
     lastSeq: row.lastSeq,
+    ...(acpPromptOf(row).runRef ? { runRef: acpPromptOf(row).runRef } : {}),
+    row,
     requests: new Set(),
     errors: new Set(),
     saving: false,
@@ -213,6 +337,8 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   /** Everything held about a turn that is over. */
   function forget(turn: Turn) {
     if (known.get(turn.turnId) === turn) known.delete(turn.turnId);
+    if (isFinalAcpTurnStatus(turn.status))
+      remember(finals, turn.turnId, turn, FINALS_KEPT);
     promptedOn.delete(turn.turnId);
     for (const requestId of turn.requests)
       requestTurn.delete(requestKey(turn, requestId));
@@ -227,11 +353,14 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     turnId: string,
   ): Promise<Turn | null> {
     let turn = known.get(turnId);
+    const over = finals.get(turnId);
+    if (!turn && over && over.tenantId === from.tenantId) turn = over;
     if (!turn) {
       const row = await turns.get(from.tenantId, turnId);
       if (!row) return null;
       turn = fromRow(row);
       if (!isFinalAcpTurnStatus(row.status)) known.set(turnId, turn);
+      else remember(finals, turnId, turn, FINALS_KEPT);
     }
     if (
       turn.tenantId !== from.tenantId ||
@@ -283,16 +412,90 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       });
   }
 
-  /** The turn is over: final in the database first, then told, then forgotten. */
+  /**
+   * The turn is over: final in the database first, then told, then forgotten. Nobody following it
+   * here (`closed`), or `always`: `closed` is told too.
+   */
   async function finish(
     turn: Turn,
     status: AcpTurnRow["status"],
     frame: Frame,
+    always = false,
   ): Promise<void> {
+    const carried = followed(turn.turnId);
     if (!(await setStatus(turn, status))) return;
     deliver(turn.turnId, frame);
     forget(turn);
+    if (!carried || always) await tellClosed(turn, carried);
     void resume(turn, false).catch(() => undefined);
+  }
+
+  async function tellClosed(turn: Turn, carried: boolean) {
+    if (!deps.closed) return;
+    try {
+      await deps.closed(
+        {
+          tenantId: turn.tenantId,
+          deviceId: turn.deviceId,
+          agentId: turn.agentId,
+          threadId: turn.threadId,
+          turnId: turn.turnId,
+          ...(turn.runRef ? { runRef: turn.runRef } : {}),
+          status: turn.status,
+        },
+        { followed: carried },
+      );
+    } catch (error) {
+      log(
+        `acp: what turn ${turn.turnId} left behind could not be closed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Tells the device to stop a turn the server no longer waits for. `force`: whatever was sent
+   * before; otherwise once per connection (a replay of its frames would ask again and again).
+   */
+  function cancelOnDevice(target: DispatchTarget, turn: Turn, force = false) {
+    const connection = channel.connectionOf(target);
+    const key = JSON.stringify([connection, turn.turnId]);
+    if (!force && cancelled.has(key)) return;
+    const sent = channel.notify(target, {
+      type: "acp.cancel",
+      agentId: turn.agentId,
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+    });
+    if (sent) remember(cancelled, key, true, CANCELS_KEPT);
+  }
+
+  /**
+   * A run of this process follows this live turn, or it is ended here (false: its frame is not taken
+   * in). See NOBODY FOLLOWS IT HERE in the header.
+   */
+  async function follow(from: DispatchTarget, turn: Turn): Promise<boolean> {
+    if (!deps.adoptTurn) return true;
+    if (followed(turn.turnId) || starting.has(turn.turnId)) return true;
+    // Read again: it may have ended on another server, and the adopted run starts from the stored row.
+    const row = await turns.get(turn.tenantId, turn.turnId);
+    if (!row || isFinalAcpTurnStatus(row.status)) {
+      if (row) turn.status = row.status;
+      forget(turn);
+      if (row?.status === "cancelled" || row?.status === "interrupted")
+        cancelOnDevice(from, turn);
+      return false;
+    }
+    turn.row = row;
+    if (await deps.adoptTurn(row)) {
+      if (followed(turn.turnId)) return true;
+      throw new Error(`turn ${turn.turnId}: the run that adopted it is gone`);
+    }
+    log(
+      `acp: turn ${turn.turnId} has no run, employee or thread to go on in any more; cancelled on its device`,
+    );
+    cancelOnDevice(from, turn, true);
+    await interrupt(turn);
+    return false;
   }
 
   async function interrupt(turn: Turn): Promise<void> {
@@ -326,8 +529,24 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       );
       return;
     }
-    // A turn that is over takes nothing in: what comes now is a replay.
-    if (isFinalAcpTurnStatus(turn.status)) return;
+    // A turn that is over takes nothing in: what comes now is a replay. A device still working on a
+    // turn the server stopped (it sends updates or asks) is told to stop.
+    if (isFinalAcpTurnStatus(turn.status)) {
+      if (
+        (type === "acp.update" || type === "acp.permission.request") &&
+        (turn.status === "cancelled" || turn.status === "interrupted")
+      )
+        cancelOnDevice(from, turn);
+      return;
+    }
+    // An update already taken in needs nobody: a replay is dropped before anything is adopted.
+    if (
+      type === "acp.update" &&
+      typeof frame.seq === "number" &&
+      frame.seq <= turn.lastSeq
+    )
+      return;
+    if (!(await follow(from, turn))) return;
 
     if (type === "acp.turn.ack") {
       if (!arrived(turn)) return;
@@ -362,6 +581,8 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       // Every report, repeats included: one the device sends again after a reconnect is still
       // waiting. Whoever opens the approval keys it by `requestId`.
       deliver(turnId, frame);
+      // No run to carry it (nothing adopts here): the bridge gets it all the same.
+      if (!followed(turnId)) deps.permission?.(turn.row, frame);
       return;
     }
     if (type === "acp.error") {
@@ -439,7 +660,9 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
           ? item.state
           : null;
       if (state === "running" || state === "awaiting") {
-        if (turn.status !== state) await setStatus(turn, state);
+        if (turn.status !== state && !(await setStatus(turn, state))) continue;
+        // Still working on the device: somebody here follows it from now on, or it is stopped.
+        await follow(from, turn);
         continue;
       }
       if (state === "ended") {
@@ -453,6 +676,17 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       await interrupt(turn);
     }
     endedPending.set(keyOf(from), pending);
+    // Listed as still working, but over on the server (stopped while the device was away): stopped.
+    const active = new Set(rows.map((row) => row.turnId));
+    for (const [turnId, item] of listed) {
+      if (active.has(turnId)) continue;
+      if (item.state !== "running" && item.state !== "awaiting") continue;
+      const agentId = text(item.agentId);
+      const threadId = text(item.threadId);
+      if (!agentId || !threadId) continue;
+      const turn = await own(from, agentId, threadId, turnId);
+      if (turn && isFinalAcpTurnStatus(turn.status)) cancelOnDevice(from, turn);
+    }
   }
 
   /** A heartbeat: turns listed `ended` by an inventory whose end has not come since. */
@@ -551,14 +785,26 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       void serial(from, job, true).catch(() => undefined);
     },
 
-    subscribe(turnId, listener) {
+    subscribe(turnId, listener, options) {
       const set = listeners.get(turnId) ?? new Set<AcpFrameListener>();
+      // The same function twice is one listener (a Set), and one run.
+      const fresh = !set.has(listener);
       set.add(listener);
       listeners.set(turnId, set);
+      const isRun = options?.run === true && fresh;
+      if (isRun) runs.set(turnId, (runs.get(turnId) ?? 0) + 1);
+      let done = false;
       return () => {
+        if (done) return;
+        done = true;
         set.delete(listener);
         if (set.size === 0 && listeners.get(turnId) === set)
           listeners.delete(turnId);
+        if (isRun) {
+          const left = (runs.get(turnId) ?? 1) - 1;
+          if (left > 0) runs.set(turnId, left);
+          else runs.delete(turnId);
+        }
       };
     },
 
@@ -604,6 +850,37 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
 
     resumeQueued(target) {
       return resume(target, true);
+    },
+
+    async cancelTurn(tenantId, turnId) {
+      const found = await turns.get(tenantId, turnId);
+      if (!found) return "missing";
+      const target = { tenantId, deviceId: found.deviceId };
+      return serial(
+        target,
+        async (): Promise<AcpCancelOutcome> => {
+          const row = await turns.get(tenantId, turnId);
+          if (!row) return "missing";
+          if (isFinalAcpTurnStatus(row.status)) return "over";
+          const turn = known.get(turnId) ?? fromRow(row);
+          // On the device already (or being started there): it is told to stop.
+          if (row.status !== "queued") cancelOnDevice(target, turn, true);
+          await finish(
+            turn,
+            "cancelled",
+            {
+              type: "acp.turn.end",
+              agentId: turn.agentId,
+              threadId: turn.threadId,
+              turnId,
+              stopReason: "cancelled",
+            },
+            true,
+          );
+          return turn.status === "cancelled" ? "cancelled" : "over";
+        },
+        false,
+      );
     },
 
     async drain(target) {

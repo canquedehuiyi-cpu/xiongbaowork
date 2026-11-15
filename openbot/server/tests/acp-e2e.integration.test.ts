@@ -16,6 +16,8 @@ import { createAcpClient } from "../../runner/src/acp/client";
 import { type AcpHost, createAcpHost } from "../../runner/src/acp/host";
 import type { FakeAcpScript } from "../../runner/tests/fixtures/fake-acp-agent";
 import {
+  type AcpTurnStarter,
+  acpPermissionRequestOf,
   createAcpSessionHints,
   createAcpTurnStarter,
   deviceAcpAgentFor,
@@ -24,13 +26,14 @@ import {
 } from "../src/agents/acp/agent";
 import { createAcpContextLoader } from "../src/agents/acp/context";
 import {
+  type AcpPermissionBridge,
   createAcpApprovalHirer,
   createAcpEmployeeLoader,
   createAcpPermissionBridge,
 } from "../src/agents/acp/permissions";
 import { createAcpRelay } from "../src/agents/acp/relay";
 import { createExternalAgentRoutes } from "../src/agents/acp/routes";
-import { type AcpTurnRow, createAcpTurnStore } from "../src/agents/acp/turns";
+import { createAcpTurnStore } from "../src/agents/acp/turns";
 import {
   type AgentPresence,
   type PresenceDeviceReachable,
@@ -306,23 +309,96 @@ const SCRIPT: FakeAcpScript = {
   ],
 };
 
+/** The person's computer: the runner's ACP host, with the fake agent wherever Codex would start. */
+function newComputer(script: FakeAcpScript): DeviceSide {
+  const log = join(scratch, `agent-${randomUUID()}.jsonl`);
+  const scriptFile = join(scratch, `script-${randomUUID()}.json`);
+  writeFileSync(scriptFile, JSON.stringify({ ...script, log }));
+  const spawns: string[] = [];
+  const host = createAcpHost({
+    roots: () => work,
+    apps: () => null,
+    adapterDir: join(scratch, "adapters"),
+    processEnv: async () => ({ ...process.env }),
+    idleMs: 120_000,
+    spawn: (spec, handlers, options) => {
+      spawns.push(spec.sessionMode ?? "");
+      return createAcpClient(
+        {
+          ...spec,
+          command: process.execPath,
+          args: [fixture],
+          env: { FAKE_ACP_SCRIPT_FILE: scriptFile },
+          cwd: work,
+        },
+        handlers,
+        options,
+      );
+    },
+  });
+  hosts.push(host);
+  const received = (): Frame[] => {
+    try {
+      return readFileSync(log, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Frame);
+    } catch {
+      return [];
+    }
+  };
+  return { host, received, spawns };
+}
+
+/** The computer's side of a deployment: kept across a server restart. */
+type DeviceSide = {
+  host: AcpHost;
+  received: () => Frame[];
+  spawns: string[];
+};
+
 /**
  * Everything production wires for external employees (index.ts), on this database, and the
- * computer: the runner's ACP host with the fake agent standing in for Codex.
+ * computer: the runner's ACP host with the fake agent standing in for Codex (`computer`: a computer
+ * that outlives a previous server).
  */
-async function deployment(hirer: AgentActor, device: { deviceId: string }) {
+async function deployment(
+  hirer: AgentActor,
+  device: { deviceId: string },
+  options: { script?: FakeAcpScript; computer?: DeviceSide } = {},
+) {
   const target = { tenantId: hirer.id, deviceId: device.deviceId };
+  const announced: { threadId: string; text: string; failed: boolean }[] = [];
   const channel = createDeviceChannel();
   const turns = createAcpTurnStore(database);
   const projector = createTaskProjector(database, undefined, quota);
   const runner = new PostgresAgentRunner(database, projector);
-  let startAcpTurn: ((row: AcpTurnRow) => Promise<void>) | undefined;
+  let startAcpTurn: AcpTurnStarter | undefined;
+  let bridgeLate: AcpPermissionBridge | undefined;
+  // As index.ts wires it.
   const relay = createAcpRelay({
     channel,
     turns,
     startQueuedTurn: async (row) => {
       if (!startAcpTurn) throw new Error("not yet");
       await startAcpTurn(row);
+    },
+    adoptTurn: async (row) => {
+      if (!startAcpTurn) throw new Error("not yet");
+      return startAcpTurn.adopt(row);
+    },
+    permission: (row, frame) => {
+      void bridgeLate?.onRequest(acpPermissionRequestOf(row, frame));
+    },
+    closed: async (turn, { followed }) => {
+      await bridgeLate?.expireTurn(turn);
+      if (!followed && turn.runRef)
+        await projector.finished({
+          tenantId: turn.tenantId,
+          runRef: turn.runRef,
+          failed: true,
+          onlyUnsettled: true,
+        });
     },
     log: () => undefined,
   });
@@ -360,6 +436,7 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
     employee: createAcpEmployeeLoader(database, deviceStore),
     log: () => undefined,
   });
+  bridgeLate = bridge;
   cleanups.push(() => bridge.dispose());
   const runtime = deviceAcpRuntime();
   if (!runtime) throw new Error("no runtime");
@@ -371,6 +448,18 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
     turns,
     runner,
     employeeFor: (row) => loadDeviceAcpEmployee(database, row.agentId),
+    announce: async ({ threadId, text, failed }) => {
+      announced.push({ threadId, text, failed });
+    },
+    abandoned: async (row, runRef) => {
+      if (runRef)
+        await projector.finished({
+          tenantId: row.tenantId,
+          runRef,
+          failed: true,
+          onlyUnsettled: true,
+        });
+    },
     log: () => undefined,
   });
   const routes = new Hono();
@@ -382,6 +471,8 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
       devices: deviceStore,
       requireUser: signedIn(hirer),
       quota,
+      turns,
+      cancelTurn: (tenantId, turnId) => relay.cancelTurn(tenantId, turnId),
     }),
   );
   routes.route("/approvals", createApprovalRoutes(approvals, signedIn(hirer)));
@@ -399,42 +490,9 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
     );
 
   // The computer: the runner's ACP host, starting the fake agent wherever it would start Codex.
-  const log = join(scratch, `agent-${randomUUID()}.jsonl`);
-  const scriptFile = join(scratch, `script-${randomUUID()}.json`);
-  writeFileSync(scriptFile, JSON.stringify({ ...SCRIPT, log }));
-  const spawns: string[] = [];
-  const host = createAcpHost({
-    roots: () => work,
-    apps: () => null,
-    adapterDir: join(scratch, "adapters"),
-    processEnv: async () => ({ ...process.env }),
-    idleMs: 120_000,
-    spawn: (spec, handlers, options) => {
-      spawns.push(spec.sessionMode ?? "");
-      return createAcpClient(
-        {
-          ...spec,
-          command: process.execPath,
-          args: [fixture],
-          env: { FAKE_ACP_SCRIPT_FILE: scriptFile },
-          cwd: work,
-        },
-        handlers,
-        options,
-      );
-    },
-  });
-  hosts.push(host);
-  const received = (): Frame[] => {
-    try {
-      return readFileSync(log, "utf8")
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line) as Frame);
-    } catch {
-      return [];
-    }
-  };
+  const computerSide =
+    options.computer ?? newComputer(options.script ?? SCRIPT);
+  const { host, received, spawns } = computerSide;
 
   /*
    * One runner connection. The device's credential check is not this test's (device-apps covers
@@ -446,7 +504,7 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
   } as DeviceStore;
   const down: Frame[] = [];
   let socket: RunnerSocketLike | null = null;
-  const options = { acp: relay };
+  const socketOptions = { acp: relay };
   const connect = async () => {
     const ws: RunnerSocketLike = {
       data: {
@@ -477,7 +535,7 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
         channel,
         JSON.stringify(frame),
         undefined,
-        options,
+        socketOptions,
       );
     });
   };
@@ -491,7 +549,7 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
       channel,
       JSON.stringify({ type: "heartbeat" }),
       undefined,
-      options,
+      socketOptions,
     );
   };
   const disconnect = () => {
@@ -576,6 +634,51 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
         .where(eq(acpTurns.agentId, agentId)),
     );
 
+  /** A run of this server driven directly (no thread runner), its card opened as a run's would be. */
+  const sayDirect = async (agentId: string, threadId: string, text: string) => {
+    const employee = await runAsTenant(hirer.id, () =>
+      loadDeviceAcpEmployee(database, agentId),
+    );
+    if (!employee) throw new Error("no employee");
+    const agent = deviceAcpAgentFor(employee, { tenantId: hirer.id });
+    if (!agent) throw new Error("no external employee runtime");
+    const runId = `${prefix}-run-${randomUUID().slice(0, 8)}`;
+    await projector.opened({
+      tenantId: hirer.id,
+      title: text,
+      executorAgentId: agentId,
+      source: "chat",
+      channelRef: threadId,
+      runRef: runId,
+    });
+    const events: BaseEvent[] = [];
+    const subscription = runAsTenant(hirer.id, () =>
+      agent
+        .run({
+          threadId,
+          runId,
+          messages: [
+            { id: `user-${randomUUID()}`, role: "user", content: text },
+          ],
+          tools: [],
+          context: [],
+          state: {},
+          forwardedProps: {},
+        })
+        .subscribe({ next: (event) => events.push(event) }),
+    );
+    return { runId, events, subscription };
+  };
+  const threadEvents = (threadId: string) =>
+    runAsTenant(hirer.id, () =>
+      database
+        .select({ events: threadRunEvents.event })
+        .from(threadRunEvents)
+        .where(eq(threadRunEvents.threadId, threadId)),
+    );
+  const stop = (threadId: string) =>
+    runAsTenant(hirer.id, () => runner.stop({ threadId }));
+
   return {
     target,
     call,
@@ -583,6 +686,13 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
     beat,
     disconnect,
     say,
+    sayDirect,
+    stop,
+    threadEvents,
+    announced,
+    computer: computerSide,
+    relay,
+    bridge,
     presence,
     card,
     approvalRows,
@@ -770,5 +880,373 @@ describe("an external employee, end to end", () => {
     expect(await d.presence(agentId)).toEqual([
       { agentId, status: "resting", doing: null },
     ]);
+  }, 60_000);
+
+  /** Hires Codex on the computer, the way the hire page does. */
+  const hire = async (
+    d: Awaited<ReturnType<typeof deployment>>,
+    device: {
+      deviceId: string;
+      workdirRef: string;
+    },
+  ) => {
+    const hired = await d.call("POST", "/agents/external", {
+      deviceId: device.deviceId,
+      harness: "codex",
+      name: "小码",
+      workdirRef: device.workdirRef,
+      rules: {
+        editInside: "direct",
+        touchOutside: "ask",
+        runCommand: "dangerous",
+        network: "ask",
+        push: "ask",
+      },
+    });
+    expect(hired.status).toBe(201);
+    return ((await hired.json()) as { agent: { id: string } }).agent.id;
+  };
+  const push = {
+    permission: {
+      toolCall: {
+        toolCallId: "push-1",
+        kind: "execute",
+        title: "git push origin main",
+        rawInput: { command: "git push origin main" },
+      },
+      options: [
+        { optionId: "allow", name: "Allow", kind: "allow_once" },
+        { optionId: "reject", name: "Reject", kind: "reject_once" },
+      ],
+    },
+  };
+  const eventTexts = (rows: { events: unknown }[]) => JSON.stringify(rows);
+
+  test("the server restarts mid-turn: the computer replays, a run adopts the turn, the answer lands and the card closes", async () => {
+    const hirer = await person();
+    const device = await computer(hirer);
+    const script: FakeAcpScript = {
+      ...SCRIPT,
+      turns: [
+        {
+          steps: [
+            { update: chunk("我先看看代码。") },
+            { sleepMs: 800 },
+            { update: chunk("改好了，测试也过了。") },
+          ],
+        },
+      ],
+    };
+    const before = await deployment(hirer, device, { script });
+    const agentId = await hire(before, device);
+    await before.connect();
+    await before.beat();
+    const threadId = `${prefix}-thread-${randomUUID().slice(0, 8)}`;
+    const first = await before.sayDirect(agentId, threadId, "修一下登录页");
+    await until(
+      () => texts(first.events).includes("我先看看代码。"),
+      "the first words",
+    );
+
+    // The server goes away: its socket, its run and its bridge with it. The computer keeps working.
+    before.disconnect();
+    first.subscription.unsubscribe();
+    before.bridge.dispose();
+
+    // A new server process, nothing in memory; the computer reconnects and replays.
+    const after = await deployment(hirer, device, {
+      computer: before.computer,
+    });
+    await after.connect();
+    await after.beat();
+    await until(
+      async () =>
+        (await after.card(first.runId))[0]?.status === "awaiting_review",
+      "the card to close",
+    );
+    // One card for the piece of work, closed by the run that adopted the turn.
+    expect(await after.card(first.runId)).toHaveLength(1);
+    expect((await after.turnRows(agentId)).map((row) => row.status)).toEqual([
+      "done",
+    ]);
+    // The answer reached the conversation: announced, and in the thread's stored run.
+    await until(() => after.announced.length > 0, "the answer to be announced");
+    expect(after.announced[0]?.text).toContain("改好了，测试也过了。");
+    expect(after.announced[0]?.failed).toBe(false);
+    expect(eventTexts(await after.threadEvents(threadId))).toContain(
+      "改好了，测试也过了。",
+    );
+    // Nothing was cancelled, and the turn was prompted once, by the server before the restart.
+    expect(after.down.filter((frame) => frame.type === "acp.cancel")).toEqual(
+      [],
+    );
+    expect(
+      before.down.filter((frame) => frame.type === "acp.prompt"),
+    ).toHaveLength(1);
+    expect(after.down.filter((frame) => frame.type === "acp.prompt")).toEqual(
+      [],
+    );
+  }, 60_000);
+
+  test("a permission asked while the server restarts reaches its hirer, is answered, and the turn completes", async () => {
+    const hirer = await person();
+    const device = await computer(hirer);
+    const script: FakeAcpScript = {
+      ...SCRIPT,
+      turns: [
+        {
+          steps: [
+            { update: chunk("我先修登录页。") },
+            { sleepMs: 500 },
+            push,
+            { update: chunk("已推送。") },
+          ],
+        },
+      ],
+    };
+    const before = await deployment(hirer, device, { script });
+    const agentId = await hire(before, device);
+    await before.connect();
+    await before.beat();
+    const threadId = `${prefix}-thread-${randomUUID().slice(0, 8)}`;
+    const first = await before.sayDirect(agentId, threadId, "修好登录页再推送");
+    await until(
+      () => texts(first.events).includes("我先修登录页。"),
+      "the first words",
+    );
+    // Restart before the agent asks: the old server never sees the request.
+    before.disconnect();
+    first.subscription.unsubscribe();
+    before.bridge.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(await before.approvalRows()).toEqual([]);
+
+    const after = await deployment(hirer, device, {
+      computer: before.computer,
+    });
+    await after.connect();
+    await after.beat();
+    // The hirer gets the card, and the turn's one board card waits on it.
+    await until(
+      async () => (await after.approvalRows()).length === 1,
+      "the approval",
+    );
+    const [approval] = await after.approvalRows();
+    if (!approval) throw new Error("no approval");
+    expect(approval.status).toBe("pending");
+    expect(approval.action.args).toEqual({ command: "git push origin main" });
+    await until(
+      async () => (await after.card(first.runId))[0]?.status === "needs_action",
+      "the card to wait",
+    );
+    expect((await after.card(first.runId))[0]?.pendingApprovalId).toBe(
+      approval.id,
+    );
+
+    const decided = await after.call(
+      "POST",
+      `/approvals/${approval.id}/decision`,
+      { decision: "allow_once" },
+    );
+    expect(decided.status).toBe(200);
+    await until(
+      async () =>
+        (await after.card(first.runId))[0]?.status === "awaiting_review",
+      "the card to close",
+    );
+    const answers = after.down.filter(
+      (frame) => frame.type === "acp.permission.answer",
+    );
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).toMatchObject({ agentId, optionId: "allow" });
+    await until(() => after.announced.length > 0, "the answer");
+    expect(after.announced[0]?.text).toContain("已推送。");
+    expect((await after.turnRows(agentId)).map((row) => row.status)).toEqual([
+      "done",
+    ]);
+    expect((await after.approvalRows())[0]?.status).toBe("approved");
+  }, 60_000);
+
+  test("stopped while its computer was away: when the computer is back the turn is cancelled there, and the lane's next turn runs", async () => {
+    const hirer = await person();
+    const device = await computer(hirer);
+    const script: FakeAcpScript = {
+      ...SCRIPT,
+      turns: [
+        {
+          steps: [
+            { update: chunk("开始推送。") },
+            push,
+            { update: chunk("不该出现。") },
+          ],
+        },
+        { steps: [{ update: chunk("第二件做完了。") }] },
+      ],
+    };
+    const d = await deployment(hirer, device, { script });
+    const agentId = await hire(d, device);
+    await d.connect();
+    await d.beat();
+    const threadId = `${prefix}-thread-${randomUUID().slice(0, 8)}`;
+    const first = await d.say(agentId, threadId, "推送一下");
+    await until(
+      async () => (await d.approvalRows()).length === 1,
+      "the approval",
+    );
+
+    // The computer goes away for good (no server hears it), and the hirer presses stop.
+    d.disconnect();
+    await runAsTenant(hirer.id, () =>
+      database
+        .update(registeredDevices)
+        .set({ lastSeenAt: new Date(Date.now() - OFFLINE_AFTER_MS - 1_000) })
+        .where(eq(registeredDevices.id, device.id)),
+    );
+    await d.stop(threadId);
+    await until(() => first.state.done, "the stopped run to end");
+    await until(
+      async () => (await d.turnRows(agentId))[0]?.status === "cancelled",
+      "the turn to be cancelled here",
+    );
+    // The next message in the same conversation waits for the computer.
+    const second = await d.say(agentId, threadId, "再做第二件");
+    await until(() => second.state.done, "the queued answer");
+    expect(texts(second.events)).toContain("这件活已排队");
+
+    // The computer is back: its inventory still has the stopped turn waiting; it is cancelled there,
+    // and the lane is not held behind it.
+    await d.connect();
+    await d.beat();
+    await until(
+      async () => (await d.card(second.runId))[0]?.status === "awaiting_review",
+      "the second turn's card to close",
+    );
+    const firstTurn = (await d.turnRows(agentId)).find(
+      (row) => row.status === "cancelled",
+    );
+    if (!firstTurn) throw new Error("no cancelled turn");
+    const cancelAt = d.down.findIndex(
+      (frame) =>
+        frame.type === "acp.cancel" && frame.turnId === firstTurn.turnId,
+    );
+    const promptAt = d.down.findIndex(
+      (frame) =>
+        frame.type === "acp.prompt" && frame.turnId !== firstTurn.turnId,
+    );
+    expect(cancelAt).toBeGreaterThanOrEqual(0);
+    expect(promptAt).toBeGreaterThan(cancelAt);
+    // The agent got session/cancel, never said what came after the permission, and did the second.
+    const received = d.computer.received();
+    expect(
+      received.some((message) => message.method === "session/cancel"),
+    ).toBe(true);
+    expect(JSON.stringify(received)).not.toContain("不该出现。");
+    expect((await d.turnRows(agentId)).map((row) => row.status).sort()).toEqual(
+      ["cancelled", "done"],
+    );
+    // Its approval did not stay open.
+    await d.bridge.poll();
+    await until(
+      async () => (await d.approvalRows())[0]?.status !== "pending",
+      "the approval to expire",
+    );
+    // Nothing was answered on the computer for it.
+    expect(
+      d.down.filter((frame) => frame.type === "acp.permission.answer"),
+    ).toEqual([]);
+  }, 60_000);
+
+  test("the hirer cancels a queued turn: it never runs, its card closes; a running one is cancelled on the computer", async () => {
+    const hirer = await person();
+    const device = await computer(hirer);
+    const script: FakeAcpScript = {
+      ...SCRIPT,
+      turns: [
+        { steps: [{ update: chunk("在做。") }, { waitForCancel: true }] },
+      ],
+    };
+    const d = await deployment(hirer, device, { script });
+    const agentId = await hire(d, device);
+    const threadId = `${prefix}-thread-${randomUUID().slice(0, 8)}`;
+
+    // Queued while the computer is away.
+    await runAsTenant(hirer.id, () =>
+      database
+        .update(registeredDevices)
+        .set({ lastSeenAt: new Date(Date.now() - OFFLINE_AFTER_MS - 1_000) })
+        .where(eq(registeredDevices.id, device.id)),
+    );
+    const queued = await d.say(agentId, threadId, "排着的活");
+    await until(() => queued.state.done, "the queued answer");
+    const [row] = await d.turnRows(agentId);
+    if (!row) throw new Error("no turn");
+    expect(row.status).toBe("queued");
+    // A turn that is not this employee's: 404.
+    expect(
+      (
+        await d.call(
+          "POST",
+          `/agents/external/${agentId}/turns/no-such-turn/cancel`,
+        )
+      ).status,
+    ).toBe(404);
+    const cancelled = await d.call(
+      "POST",
+      `/agents/external/${agentId}/turns/${row.turnId}/cancel`,
+    );
+    expect(cancelled.status).toBe(200);
+    expect(await cancelled.json()).toEqual({
+      turnId: row.turnId,
+      status: "cancelled",
+    });
+    expect((await d.turnRows(agentId))[0]?.status).toBe("cancelled");
+    expect((await d.card(queued.runId))[0]?.status).toBe("failed");
+    // Again: already over.
+    expect(
+      (
+        await d.call(
+          "POST",
+          `/agents/external/${agentId}/turns/${row.turnId}/cancel`,
+        )
+      ).status,
+    ).toBe(409);
+    // The computer comes back: nothing of it runs.
+    await d.connect();
+    await d.beat();
+    await d.beat();
+    expect(d.down.filter((frame) => frame.type === "acp.prompt")).toEqual([]);
+
+    // A running one: cancelled on the computer, the run says so, the card closes.
+    const running = await d.say(agentId, threadId, "正在做的活");
+    await until(() => texts(running.events).includes("在做。"), "the work");
+    const live = (await d.turnRows(agentId)).find(
+      (turn) => turn.status === "running",
+    );
+    if (!live) throw new Error("no running turn");
+    const stopped = await d.call(
+      "POST",
+      `/agents/external/${agentId}/turns/${live.turnId}/cancel`,
+    );
+    expect(stopped.status).toBe(200);
+    await until(() => running.state.done, "the run to end");
+    expect(texts(running.events)).toContain("这件活已取消。");
+    expect(
+      d.down.some(
+        (frame) => frame.type === "acp.cancel" && frame.turnId === live.turnId,
+      ),
+    ).toBe(true);
+    await until(
+      () =>
+        d.computer
+          .received()
+          .some((message) => message.method === "session/cancel"),
+      "the agent to be told",
+    );
+    await until(
+      async () =>
+        (await d.card(running.runId))[0]?.status !== "running" &&
+        (await d.card(running.runId))[0]?.status !== undefined,
+      "the card to close",
+    );
   }, 60_000);
 });

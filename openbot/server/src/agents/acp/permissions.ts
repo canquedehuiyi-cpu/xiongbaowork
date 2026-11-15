@@ -836,6 +836,11 @@ export type AcpPermissionBridge = {
   onRequest(request: AcpPermissionRequest): Promise<void>;
   /** One pass of what the timer does: answers decided elsewhere, unsent answers, ended turns. */
   poll(): Promise<void>;
+  /**
+   * The turn is over (ended where no run followed it, or stopped by its hirer): every approval still
+   * open for it expires, the ones this process opened and the ones opened before a restart alike.
+   */
+  expireTurn(turn: { tenantId: string; turnId: string }): Promise<void>;
   dispose(): void;
 };
 
@@ -1271,6 +1276,9 @@ export function createAcpPermissionBridge(
       const key = keyOf(request, requestId);
       const known = entries.get(key);
       if (known) {
+        // Reported first with no run to carry it, now by the run that follows the turn: its voice.
+        if (!known.request.say && request.say)
+          known.request = { ...known.request, say: request.say };
         await again(known).catch((error: unknown) =>
           log(
             `acp permissions: ${error instanceof Error ? error.message : String(error)}`,
@@ -1291,6 +1299,23 @@ export function createAcpPermissionBridge(
       await decide(entry);
     },
     poll,
+    async expireTurn(turn) {
+      await endTurn(turn.turnId);
+      const runId = `acp:${turn.turnId}`;
+      // Opened before a restart, or on another server: found by the turn they were opened for.
+      await runAsTenant(turn.tenantId, async () => {
+        await deps.approvals.policy?.withdrawPending(
+          turn.tenantId,
+          ACP_PERMISSION_EXPIRED,
+          (action) => isAcpAction(action) && action.runId === runId,
+          { resume: false },
+        );
+      }).catch((error: unknown) =>
+        log(
+          `acp permissions: the approvals of turn ${turn.turnId} could not be expired: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    },
     dispose() {
       stopPolling();
       stopListening();

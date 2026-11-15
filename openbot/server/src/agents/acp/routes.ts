@@ -26,6 +26,8 @@ import {
 import type { AgentActor, AgentProfile } from "../profile-types";
 import { externalHirerOf } from "./external";
 import { acpRulesOf } from "./permissions";
+import type { AcpCancelOutcome } from "./relay";
+import type { AcpTurnStore } from "./turns";
 
 type Ctx = { Variables: AppVariables };
 
@@ -40,6 +42,11 @@ type Ctx = { Variables: AppVariables };
  *
  * `PATCH /:agentId` changes its name, department, computer, folder and rules (never which agent it
  * is): only its hirer (403 for anyone else; an id that is no external employee is 404).
+ *
+ * `POST /:agentId/turns/:turnId/cancel` stops one of its turns (spec §44, §131): a queued one never
+ * runs, a running one is cancelled on the computer and ended here at once, its board card closed and
+ * its open approvals expired (the relay's `cancelTurn`). Only its hirer: anyone else, and a turn that
+ * is not this employee's, is 404; a turn already over is 409.
  *
  * Paths and commands never reach this server: a folder is the computer's `fld_…` reference and an
  * own agent its `app_…` reference, resolved on the computer.
@@ -140,6 +147,10 @@ export function createExternalAgentRoutes(deps: {
   /** The plan's coworker seats, when this deployment counts them: a hire takes one. */
   quota?: QuotaService;
   auditStore?: AuditStore;
+  /** The employee's turns, read in the hirer's frame; with `cancelTurn`, the cancel route. */
+  turns?: Pick<AcpTurnStore, "get">;
+  /** The relay's `cancelTurn`. */
+  cancelTurn?: (tenantId: string, turnId: string) => Promise<AcpCancelOutcome>;
 }) {
   const { database, profiles, devices, requireUser, quota } = deps;
   const routes = new Hono<Ctx>();
@@ -343,6 +354,31 @@ export function createExternalAgentRoutes(deps: {
       return refusedBy(context, error);
     }
   });
+
+  routes.post(
+    "/:agentId/turns/:turnId/cancel",
+    requireUser,
+    async (context) => {
+      const actor = context.var.actor;
+      const agentId = context.req.param("agentId");
+      const turnId = context.req.param("turnId");
+      const missing = () =>
+        context.json({ error: "找不到这件活。" }, 404 as const);
+      if (!deps.turns || !deps.cancelTurn) return missing();
+      // Nobody but its hirer learns the employee or the turn exists.
+      if ((await externalHirerOf(database, agentId)) !== actor.id)
+        return missing();
+      const row = await runAsTenant(actor.id, () =>
+        (deps.turns as Pick<AcpTurnStore, "get">).get(actor.id, turnId),
+      );
+      if (!row || row.agentId !== agentId) return missing();
+      const outcome = await deps.cancelTurn(actor.id, turnId);
+      if (outcome === "missing") return missing();
+      if (outcome === "over")
+        return context.json({ error: "这件活已经结束了。" }, 409);
+      return context.json({ turnId, status: "cancelled" });
+    },
+  );
 
   return routes;
 }

@@ -7,6 +7,7 @@ import {
   externalHirerOf,
 } from "../src/agents/acp/external";
 import { createExternalAgentRoutes } from "../src/agents/acp/routes";
+import { createAcpTurnStore } from "../src/agents/acp/turns";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
@@ -22,6 +23,7 @@ import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
 import {
+  acpTurns,
   agentProfiles,
   agents,
   channels,
@@ -162,6 +164,10 @@ async function computer(
   return { deviceId, workdirRef: roots[0]?.ref ?? folder(), apps };
 }
 
+const acpTurnStore = createAcpTurnStore(database);
+/** What the cancel route handed the relay. */
+const cancelsAsked: { tenantId: string; turnId: string }[] = [];
+
 /** Everything a person reaches here, behind a guard that signs them in. */
 function server(
   actor: AgentActor,
@@ -188,6 +194,11 @@ function server(
       requireUser: guard,
       quota,
       auditStore,
+      turns: acpTurnStore,
+      cancelTurn: async (tenantId, turnId) => {
+        cancelsAsked.push({ tenantId, turnId });
+        return "cancelled";
+      },
     }),
   );
   routes.route(
@@ -553,6 +564,50 @@ describe("an external employee's configuration", () => {
     );
     expect(mine.map((row) => row.id)).toEqual([agent.id]);
     expect(await externalHirerOf(database, agent.id)).toBe(owner.id);
+  });
+});
+
+describe("stopping an external employee's turn", () => {
+  test("only its hirer can, and only a turn of that employee; anyone else gets 404", async () => {
+    const owner = await person();
+    const someone = await person();
+    const device = await computer(owner);
+    const { agent } = await hired(owner, device);
+    const { agent: second } = await hired(owner, device, { name: "小测" });
+    const turnId = `turn-${randomUUID()}`;
+    await acpTurnStore.enqueue({
+      tenantId: owner.id,
+      agentId: agent.id,
+      threadId: `thread-${randomUUID()}`,
+      deviceId: device.deviceId,
+      turnId,
+      prompt: { content: [] },
+    });
+    try {
+      cancelsAsked.length = 0;
+      const path = `/agents/external/${agent.id}/turns/${turnId}/cancel`;
+      // Someone else: as if neither existed.
+      expect((await call(someone, "POST", path)).status).toBe(404);
+      // The hirer, through another of their employees: not that one's turn.
+      expect(
+        (
+          await call(
+            owner,
+            "POST",
+            `/agents/external/${second.id}/turns/${turnId}/cancel`,
+          )
+        ).status,
+      ).toBe(404);
+      expect(cancelsAsked).toEqual([]);
+      const done = await call(owner, "POST", path);
+      expect(done.status).toBe(200);
+      expect(await done.json()).toEqual({ turnId, status: "cancelled" });
+      expect(cancelsAsked).toEqual([{ tenantId: owner.id, turnId }]);
+    } finally {
+      await runAsTenant(owner.id, () =>
+        database.delete(acpTurns).where(eq(acpTurns.turnId, turnId)),
+      );
+    }
   });
 });
 
