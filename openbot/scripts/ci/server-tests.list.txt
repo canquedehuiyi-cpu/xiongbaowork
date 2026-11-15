@@ -316,6 +316,7 @@ tests/delivery-attention.integration.test.ts
 tests/delivery-link-audit.test.ts
 tests/delivery-one-card.integration.test.ts
 tests/delivery-providers.test.ts
+tests/delivery-return-failure.test.ts
 tests/delivery-router.test.ts
 tests/delivery-routes.integration.test.ts
 tests/delivery-routes.test.ts

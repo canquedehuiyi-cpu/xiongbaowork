@@ -209,8 +209,8 @@ class Working extends AbstractAgent {
 /**
  * The deployment's unattended turn, on the real runner, with the real admission (the pause switch
  * and the capability gate, `serverTurnAdmission`) and the real card scope. `agent` answers as every
- * coworker, or as the one named. `lockHangs` makes the thread's lock never come. `lockRefused` makes the thread's lock refuse, as it does while
- * somebody else holds the thread.
+ * coworker, or as the one named. `lockRefused` makes the thread's lock refuse, as it does while
+ * somebody else holds the thread; `lockHangs` makes it never answer at all.
  */
 function unattendedTurn(
   agent: AbstractAgent | ((agentId: string) => AbstractAgent),

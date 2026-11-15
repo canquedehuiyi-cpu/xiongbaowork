@@ -32,7 +32,7 @@ import {
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
 import { CardTurnRefused, type CardTurns } from "./card-turns";
-import { createDelivery, stageOf } from "./delivery";
+import { createDelivery, type Delivery, stageOf } from "./delivery";
 import { DEFAULT_TIME_ZONE, DELIVERY_EVENTS } from "./delivery-tools";
 import { dueRefusalText, readDueTime } from "./due-time";
 import { listTaskEvents } from "./events";
@@ -378,6 +378,8 @@ export type TaskRouteOptions = {
   /** The person's time zone, for a due time written without one. */
   timeZone?: (tenantId: string) => string;
   now?: () => Date;
+  /** The followed cards' writes; a test may stand in for them. Absent: `createDelivery(database)`. */
+  delivery?: Delivery;
 };
 
 /**
@@ -394,7 +396,7 @@ export function createTaskRoutes(
   options: TaskRouteOptions = {},
 ) {
   const routes = new Hono<Ctx>();
-  const delivery = createDelivery(database);
+  const delivery = options.delivery ?? createDelivery(database);
   const now = options.now ?? (() => new Date());
   const zoneOf = options.timeZone ?? (() => DEFAULT_TIME_ZONE);
   const log = (type: string, detail: Record<string, unknown>) =>
@@ -739,14 +741,8 @@ export function createTaskRoutes(
       });
       return context.json({ error: "现在退回不了，稍后再试。" }, 503);
     }
-    const returned = await delivery.returnTask(tenantId, taskId, {
-      actor: `user:${tenantId}`,
-      reason,
-      claimedAt: claim.claimedAt,
-    });
-    if (!returned) {
-      // Reviewed or cancelled in the moment between (or the claim ran out and another 退回 took it):
-      // the turn just started is stopped (a group's message, already in the transcript, stays).
+    /** The reason was said but the card did not move: let the claim go and stop the turn just started. */
+    const undo = async () => {
       await release();
       if (said.runId)
         await turns.stopRound(tenantId, {
@@ -754,6 +750,27 @@ export function createTaskRoutes(
           agentId: card.agentId,
           runId: said.runId,
         });
+    };
+    let returned: Awaited<ReturnType<typeof delivery.returnTask>>;
+    try {
+      returned = await delivery.returnTask(tenantId, taskId, {
+        actor: `user:${tenantId}`,
+        reason,
+        claimedAt: claim.claimedAt,
+      });
+    } catch (error) {
+      // The card could not be written (a database fault): undone as if the reason was never said.
+      log("task-return-write-failed", {
+        taskId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      await undo();
+      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
+    }
+    if (!returned) {
+      // Reviewed or cancelled in the moment between (or the claim ran out and another 退回 took it):
+      // the turn just started is stopped (a group's message, already in the transcript, stays).
+      await undo();
       return context.json({ error: "这件活不在等你验收，不能退回。" }, 409);
     }
     return context.json({
