@@ -16,6 +16,7 @@ import {
   users,
   wakerGroups,
 } from "../src/db/schema";
+import { createDelivery } from "../src/tasks/delivery";
 import { createTaskProjector } from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
@@ -250,6 +251,48 @@ test("a hand-off card opens the group conversation whose coworker thread it ran 
 
   const open = (await openByTask()).get(id);
   expect(open).toEqual({ kind: "group", id: channelId });
+});
+
+test("a followed card handed to another coworker opens the new coworker's conversation, not the old one", async () => {
+  const before = await makeAgent("reassign-from");
+  const after = await makeAgent("reassign-to");
+  const beforeThread = `thread_${randomUUID()}`;
+  const afterThread = `thread_${randomUUID()}`;
+  const beforeChannel = await makeChannel(tenant, [before], beforeThread);
+  const afterChannel = await makeChannel(tenant, [after], afterThread);
+  const id = await projector.opened({
+    tenantId: tenant,
+    title: `open-target reassign ${randomUUID().slice(0, 8)}`,
+    executorAgentId: before,
+    source: "chat",
+    channelRef: beforeThread,
+  });
+  await runAsTenant(tenant, async () => {
+    await database
+      .update(tasks)
+      .set({ tracked: true, threadRef: beforeThread })
+      .where(eq(tasks.id, id));
+  });
+  expect((await openByTask()).get(id)).toEqual({
+    kind: "channel",
+    id: beforeChannel,
+  });
+
+  /*
+   * 换人接手 moves the card onto the new coworker's one-to-one conversation (`tasks/nudge-run.ts`
+   * `reassignTask` asks for it). The board's 打开 follows the card there: the old coworker's
+   * conversation is where the work was taken from, not where it is being done.
+   */
+  const moved = await createDelivery(database).reassign(tenant, id, {
+    agentId: after,
+    threadRef: afterThread,
+    actor: `user:${tenant}`,
+  });
+  expect(moved.ok).toBe(true);
+  expect((await openByTask()).get(id)).toEqual({
+    kind: "channel",
+    id: afterChannel,
+  });
 });
 
 test("a crew's parent and its step both open the run, and the step does not open itself", async () => {

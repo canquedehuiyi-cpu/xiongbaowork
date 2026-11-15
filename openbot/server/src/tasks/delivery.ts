@@ -365,7 +365,8 @@ export type Delivery = {
   /**
    * 换人接手 (`POST /api/tasks/:id/reassign`, spec §8): a followed card the coworker has (`running`)
    * goes to `agentId`, on `threadRef` -- the new coworker's thread with
-   * the person -- and back to 派出 · 待接下 (`accepted_at` cleared, `running`): the new coworker takes it
+   * the person, which is also the conversation the card now belongs to (`channel_ref`, where the board
+   * opens it) -- and back to 派出 · 待接下 (`accepted_at` cleared, `running`): the new coworker takes it
    * on with its own `accept_task`, on its own clock: `due_at` (with any time the person set for the
    * first coworker), `due_reported`, `overdue_at`, `last_nudged_at`, the day's nudges,
    * `last_notified_at` and `reminder_held_at` are cleared, so the new coworker's first time counts and,
@@ -1248,6 +1249,7 @@ export function createDelivery(database: Database): Delivery {
             .select({
               agentId: tasks.executorAgentId,
               threadRef: tasks.threadRef,
+              channelRef: tasks.channelRef,
               runId: tasks.activeRunRef,
               status: tasks.status,
               title: tasks.title,
@@ -1285,6 +1287,14 @@ export function createDelivery(database: Database): Delivery {
             .set({
               executorAgentId: input.agentId,
               threadRef: input.threadRef,
+              /*
+               * And the conversation the card belongs to: the board's 打开 (`tasks/routes.ts`
+               * `openTargetsFor`), the sidebar and a first turn's context all find the card by
+               * `channel_ref`, and the work is now done on the new coworker's conversation. A thread id
+               * is one of the shapes `channel_ref` already takes (the conversation runner writes one),
+               * and resolves to its channel at read. The `reassigned` line keeps where it was.
+               */
+              channelRef: input.threadRef,
               // 派出 · 待接下 again: the new coworker answers with its own 接活回执.
               acceptedAt: null,
               /*
@@ -1336,6 +1346,7 @@ export function createDelivery(database: Database): Delivery {
               to: input.agentId,
               previousThreadRef: card.threadRef,
               threadRef: input.threadRef,
+              previousChannelRef: card.channelRef,
               previousDueAt: card.dueAt?.toISOString() ?? null,
               previousOverdueAt: card.overdueAt?.toISOString() ?? null,
             },
