@@ -1415,6 +1415,13 @@
       "when": 1794572550907,
       "tag": "0221_delivery_nudge_cap",
       "breakpoints": true
+    },
+    {
+      "idx": 222,
+      "version": "7",
+      "when": 1794572550908,
+      "tag": "0222_task_handover_pending",
+      "breakpoints": true
     }
   ]
 }

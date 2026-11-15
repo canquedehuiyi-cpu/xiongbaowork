@@ -332,7 +332,7 @@ function metadata(table: PgTable): Table {
 }
 /**
  * What `tasks` gained after the 0121 capsule (migrations 0216, the conversation sidebar, 0217, the
- * delivery loop, 0219, the delivery checker, and 0221, its daily nudge cap). The capsule is a frozen record of what this
+ * delivery loop, 0219, the delivery checker, 0221, its daily nudge cap, and 0222, a hand-over waiting to go out). The capsule is a frozen record of what this
  * migration's target tables looked like, so later additions are removed from the live Drizzle table
  * before it is compared, rather than rewriting the capsule. Only these named objects are removed; everything else is still compared in
  * full.
@@ -363,6 +363,7 @@ const ADDED_AFTER_CAPSULE: Record<
       "reminder_held_at",
       "nudged_on",
       "nudged_count",
+      "handover_pending_at",
     ],
     indexes: [
       "tasks_channel_ref_idx",

@@ -9,11 +9,15 @@ import {
   ThreadBusy,
 } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
-import { localDay, nudgeTextOf, waitingSinceOf } from "./delivery-checker";
-import { EXTERNAL_DELIVERY_GUIDE } from "./delivery-tools";
-import { diffTitle } from "./diff-summary";
+import {
+  handoverText,
+  localDay,
+  nudgeTextOf,
+  waitingSinceOf,
+} from "./delivery-checker";
 import type { TaskEventActor } from "./events";
-import type { DeliverableRef } from "./projector";
+
+export { handoverText };
 
 /**
  * The rounds the server itself starts on a followed card (spec 2026-11-15-delivery-loop §8): the
@@ -124,43 +128,6 @@ const log = (type: string, detail: Record<string, unknown>) =>
 
 const reasonOf = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
-
-/** What the new coworker is told on a hand-over; an external employee is told what to write, not which tool to call. */
-export function handoverText(
-  card: {
-    title: string;
-    criteria: string | null;
-    deliverable: DeliverableRef | null;
-    progress: string | null;
-  },
-  options: { external?: boolean } = {},
-): string {
-  const handedIn = card.deliverable
-    ? [
-        ...(card.deliverable.notes ?? []).map((note) => `结论：${note}`),
-        ...(card.deliverable.links ?? []).map(
-          (link) => `链接：${link.title ? `${link.title} ` : ""}${link.url}`,
-        ),
-        ...(card.deliverable.attachments ?? []).map((id) => `附件 ${id}`),
-        ...(card.deliverable.components ?? []).map(
-          (component) => `组件 ${component.name}`,
-        ),
-        ...(card.deliverable.diffs ?? []).map((diff) => diffTitle(diff)),
-        ...(card.deliverable.checks ?? []).map((check) => `自查：${check}`),
-      ]
-    : [];
-  return [
-    `【系统转交】这件活从另一位员工那里转给你：『${card.title}』。`,
-    `验收标准：${card.criteria ?? "（没写）"}`,
-    handedIn.length
-      ? `已经交过的：${handedIn.join("；")}`
-      : "已经交过的：还没有",
-    `上一位员工最后的进度：${card.progress ?? "（没有记录）"}`,
-    options.external
-      ? `先在回复里说已接下，并写「预计 HH:MM」或「预计 N 分钟」（换成真实的时间），再接着做。\n${EXTERNAL_DELIVERY_GUIDE}`
-      : "先调用 accept_task 接下（预计几点交、验收标准），再接着做。",
-  ].join("\n");
-}
 
 export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
   const delivery = deps.delivery ?? createDelivery(deps.database);
@@ -365,12 +332,17 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
             }),
           )) === "started";
       } catch (error) {
-        // Handed over all the same: the checker nudges the new coworker five minutes on.
         log("task-reassign-handover-not-started", {
           taskId,
           reason: reasonOf(error),
         });
       }
+      /*
+       * Said: the hand-over no longer waits. Not said (the new coworker's thread busy, or the round
+       * refused): handed over all the same, and the hand-over waits on the card (`handover_pending_at`)
+       * for the checker, which says it -- not a plain nudge -- once the thread is free.
+       */
+      if (started) await delivery.handedOver(tenantId, taskId, moved.pendingAt);
       return { ok: true, threadRef, started };
     },
   };

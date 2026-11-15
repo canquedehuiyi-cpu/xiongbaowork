@@ -7,6 +7,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  lte,
   ne,
   or,
   sql,
@@ -396,12 +397,35 @@ export type Delivery = {
         deliverable: DeliverableRef | null;
         /** The first coworker's latest progress line. */
         progress: string | null;
+        /** The hand-over waiting to go out (`handover_pending_at`), until its round starts. */
+        pendingAt: Date;
       }
     | {
         ok: false;
         why: "not_open" | "handed_in" | "waiting_on_you" | "same_coworker";
       }
   >;
+  /**
+   * What the new coworker is to be told on a hand-over still waiting to go out (`handover_pending_at`
+   * set): the card's title, criteria and what was handed in, and the first coworker's latest progress
+   * line before the latest `reassigned` one. Null when no hand-over waits, or the card is not followed
+   * and open.
+   */
+  handoverOf(
+    tenantId: string,
+    taskId: string,
+  ): Promise<{
+    pendingAt: Date;
+    title: string;
+    criteria: string | null;
+    deliverable: DeliverableRef | null;
+    progress: string | null;
+  } | null>;
+  /**
+   * The hand-over's round started: `handover_pending_at` cleared, if it is still the hand-over
+   * `pendingAt` names (a later hand-over waits on its own).
+   */
+  handedOver(tenantId: string, taskId: string, pendingAt: Date): Promise<void>;
   /**
    * A nudge the coworker was given (the checker's, or the person's 再催): `nudges + 1`,
    * `last_nudged_at = at`, one more on `day`'s count (`nudged_on` / `nudged_count`: `day` is the
@@ -564,6 +588,8 @@ export function createDelivery(database: Database): Delivery {
                */
               status: sql`case when ${tasks.status} = 'awaiting_review' then 'running'::task_status else ${tasks.status} end`,
               acceptedAt: now,
+              // Taken on: a hand-over still waiting to go out is not asked for again.
+              handoverPendingAt: null,
               /*
                * The person's own due time, set while the card waited (`editTask`), stands: 「你改的直接
                * 生效」. The coworker's still goes into `original_due_at` below. One set before a hand-over
@@ -1277,19 +1303,8 @@ export function createDelivery(database: Database): Delivery {
             return { ok: false, why: "waiting_on_you" } as const;
           if (card.agentId === input.agentId)
             return { ok: false, why: "same_coworker" } as const;
-          const [latest] = await transaction
-            .select({ detail: taskEvents.detail })
-            .from(taskEvents)
-            .where(
-              and(
-                eq(taskEvents.tenantId, tenantId),
-                eq(taskEvents.taskId, taskId),
-                eq(taskEvents.kind, "progress"),
-              ),
-            )
-            .orderBy(desc(taskEvents.createdAt), desc(taskEvents.id))
-            .limit(1);
-          const said = latest?.detail.text;
+          const progress = await latestProgress(transaction, tenantId, taskId);
+          const pendingAt = new Date();
           await transaction
             .update(tasks)
             .set({
@@ -1332,6 +1347,12 @@ export function createDelivery(database: Database): Delivery {
               activeRunRef: null,
               lastError: null,
               returnPendingAt: null,
+              /*
+               * The hand-over's message has not reached the new coworker yet: cleared once its round
+               * starts (`tasks/nudge-run.ts` `reassignTask`, or the checker's next look when the new
+               * coworker's thread was busy), so a busy thread delays the hand-over, never loses it.
+               */
+              handoverPendingAt: pendingAt,
               updatedAt: new Date(),
             })
             .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
@@ -1371,10 +1392,72 @@ export function createDelivery(database: Database): Delivery {
             deliverable: isDeliverableRef(card.deliverableRef)
               ? card.deliverableRef
               : null,
-            progress: typeof said === "string" && said.trim() ? said : null,
+            progress,
+            pendingAt,
           } as const;
         }),
       ),
+
+    handoverOf: (tenantId, taskId) =>
+      runAsTenant(tenantId, async () => {
+        const [card] = await database
+          .select({
+            pendingAt: tasks.handoverPendingAt,
+            title: tasks.title,
+            criteria: tasks.criteria,
+            deliverableRef: tasks.deliverableRef,
+          })
+          .from(tasks)
+          .where(
+            and(
+              openTracked(tenantId, taskId),
+              isNotNull(tasks.handoverPendingAt),
+            ),
+          )
+          .limit(1);
+        if (!card?.pendingAt) return null;
+        const [handed] = await database
+          .select({ at: taskEvents.createdAt })
+          .from(taskEvents)
+          .where(
+            and(
+              eq(taskEvents.tenantId, tenantId),
+              eq(taskEvents.taskId, taskId),
+              eq(taskEvents.kind, "reassigned"),
+            ),
+          )
+          .orderBy(desc(taskEvents.createdAt), desc(taskEvents.id))
+          .limit(1);
+        return {
+          pendingAt: card.pendingAt,
+          title: card.title,
+          criteria: card.criteria,
+          deliverable: isDeliverableRef(card.deliverableRef)
+            ? card.deliverableRef
+            : null,
+          // What the first coworker last said, as the hand-over itself read it: nothing said since.
+          progress: await latestProgress(
+            database,
+            tenantId,
+            taskId,
+            handed?.at,
+          ),
+        };
+      }),
+
+    handedOver: (tenantId, taskId, pendingAt) =>
+      runAsTenant(tenantId, async () => {
+        await database
+          .update(tasks)
+          .set({ handoverPendingAt: null })
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.id, taskId),
+              eq(tasks.handoverPendingAt, pendingAt),
+            ),
+          );
+      }),
 
     nudged: (tenantId, taskId, input) =>
       runAsTenant(tenantId, () =>
@@ -1496,6 +1579,30 @@ function personSetDue(tenantId: string) {
           and handed.kind = 'reassigned'
       ), '-infinity'::timestamptz)
   )`;
+}
+
+/** The card's latest progress line (at or before `until`, when given): its words, or null. */
+async function latestProgress(
+  database: Pick<Database, "select">,
+  tenantId: string,
+  taskId: string,
+  until?: Date,
+): Promise<string | null> {
+  const [latest] = await database
+    .select({ detail: taskEvents.detail })
+    .from(taskEvents)
+    .where(
+      and(
+        eq(taskEvents.tenantId, tenantId),
+        eq(taskEvents.taskId, taskId),
+        eq(taskEvents.kind, "progress"),
+        ...(until ? [lte(taskEvents.createdAt, until)] : []),
+      ),
+    )
+    .orderBy(desc(taskEvents.createdAt), desc(taskEvents.id))
+    .limit(1);
+  const said = latest?.detail.text;
+  return typeof said === "string" && said.trim() ? said : null;
 }
 
 /** The card, when it is followed and has not ended. */

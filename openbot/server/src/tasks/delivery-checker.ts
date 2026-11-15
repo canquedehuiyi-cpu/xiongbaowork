@@ -16,8 +16,10 @@ import {
 import { TurnNotStarted } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
 import { EXTERNAL_DELIVERY_GUIDE } from "./delivery-tools";
+import { diffTitle } from "./diff-summary";
 import { clockOf } from "./due-time";
 import { appendTaskEvent } from "./events";
+import type { DeliverableRef } from "./projector";
 
 /**
  * The delivery checker (spec 2026-11-15-delivery-loop §8): the server's own clock over every followed
@@ -247,6 +249,7 @@ type CheckedCard = {
   reminderHeldAt: Date | null;
   nudgedOn: string | null;
   nudgedCount: number;
+  handoverPendingAt: Date | null;
   createdAt: Date;
 };
 
@@ -266,6 +269,7 @@ const checkedColumns = {
   reminderHeldAt: tasks.reminderHeldAt,
   nudgedOn: tasks.nudgedOn,
   nudgedCount: tasks.nudgedCount,
+  handoverPendingAt: tasks.handoverPendingAt,
   createdAt: tasks.createdAt,
 };
 
@@ -304,10 +308,24 @@ function scheduleOf(card: CheckedCard, waitingSince: Date): Schedule {
   );
   return {
     deadline,
-    nudgeAt,
+    /*
+     * A hand-over whose message did not go out (the new coworker's thread was busy) is said at the
+     * first look that finds the thread free, not five minutes on: it is the person's own hand-over,
+     * late. When the person is told stays as for any card waiting to be taken on.
+     */
+    nudgeAt: handoverWaits(card)
+      ? new Date(Math.min(nudgeAt.getTime(), card.handoverPendingAt.getTime()))
+      : nudgeAt,
     noticeAt: new Date(nudgeAt.getTime() + NOTIFY_AFTER_NUDGE_MS),
     waitingSince,
   };
+}
+
+/** A hand-over still to be said to a new coworker that has not taken the work on. */
+function handoverWaits(
+  card: Pick<CheckedCard, "acceptedAt" | "handoverPendingAt">,
+): card is CheckedCard & { handoverPendingAt: Date } {
+  return card.acceptedAt === null && card.handoverPendingAt !== null;
 }
 
 /**
@@ -411,6 +429,43 @@ export function nudgeTextOf(
   return late > 0
     ? `【系统催办】${title}${promised}，已经过了 ${lengthOf(late)}。${what}`
     : `【系统催办】${title}${promised}，进展如何？${what}`;
+}
+
+/** What the new coworker is told on a hand-over; an external employee is told what to write, not which tool to call. */
+export function handoverText(
+  card: {
+    title: string;
+    criteria: string | null;
+    deliverable: DeliverableRef | null;
+    progress: string | null;
+  },
+  options: { external?: boolean } = {},
+): string {
+  const handedIn = card.deliverable
+    ? [
+        ...(card.deliverable.notes ?? []).map((note) => `结论：${note}`),
+        ...(card.deliverable.links ?? []).map(
+          (link) => `链接：${link.title ? `${link.title} ` : ""}${link.url}`,
+        ),
+        ...(card.deliverable.attachments ?? []).map((id) => `附件 ${id}`),
+        ...(card.deliverable.components ?? []).map(
+          (component) => `组件 ${component.name}`,
+        ),
+        ...(card.deliverable.diffs ?? []).map((diff) => diffTitle(diff)),
+        ...(card.deliverable.checks ?? []).map((check) => `自查：${check}`),
+      ]
+    : [];
+  return [
+    `【系统转交】这件活从另一位员工那里转给你：『${card.title}』。`,
+    `验收标准：${card.criteria ?? "（没写）"}`,
+    handedIn.length
+      ? `已经交过的：${handedIn.join("；")}`
+      : "已经交过的：还没有",
+    `上一位员工最后的进度：${card.progress ?? "（没有记录）"}`,
+    options.external
+      ? `先在回复里说已接下，并写「预计 HH:MM」或「预计 N 分钟」（换成真实的时间），再接着做。\n${EXTERNAL_DELIVERY_GUIDE}`
+      : "先调用 accept_task 接下（预计几点交、验收标准），再接着做。",
+  ].join("\n");
 }
 
 /** What the person is told about the card. */
@@ -664,21 +719,36 @@ async function checkCard(
 
   if (claim.due.notify && inHours)
     await remind(deps, tenantId, claim.notice, now, today);
-  if (claim.due.nudge)
+  if (claim.due.nudge) {
+    /*
+     * The hand-over the new coworker never got, rather than a plain nudge: the plain one names the
+     * work and asks for a receipt, and the new coworker would never hear what was done before it.
+     */
+    const handover = handoverWaits(claim.card)
+      ? await delivery.handoverOf(tenantId, taskId)
+      : null;
     await nudgeCoworker(
       deps,
       delivery,
       tenantId,
       taskId,
-      nudgeTextOf(
-        claim.card,
+      handover
+        ? handoverText(handover, { external })
+        : nudgeTextOf(
+            claim.card,
+            now,
+            hours.timeZone,
+            claim.schedule.waitingSince,
+            { external },
+          ),
+      {
         now,
-        hours.timeZone,
-        claim.schedule.waitingSince,
-        { external },
-      ),
-      { now, previous: claim.card.lastNudgedAt, today },
+        previous: claim.card.lastNudgedAt,
+        today,
+        handover: handover?.pendingAt ?? null,
+      },
     );
+  }
 }
 
 function noticeDetail(notice: DeliveryNotice) {
@@ -743,7 +813,13 @@ async function nudgeCoworker(
   tenantId: string,
   taskId: string,
   text: string,
-  claim: { now: Date; previous: Date | null; today: string },
+  claim: {
+    now: Date;
+    previous: Date | null;
+    today: string;
+    /** The hand-over this round says, cleared from the card once the round starts. */
+    handover?: Date | null;
+  },
 ): Promise<void> {
   let outcome: "started" | "skipped_running";
   try {
@@ -772,6 +848,8 @@ async function nudgeCoworker(
       at: claim.now,
       day: claim.today,
     });
+    if (claim.handover)
+      await delivery.handedOver(tenantId, taskId, claim.handover);
     return;
   }
   await deps.database

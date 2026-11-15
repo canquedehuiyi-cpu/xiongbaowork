@@ -145,6 +145,12 @@ export const tasks = pgTable(
     nudgedOn: date("nudged_on", { mode: "string" }),
     /** How many nudges went out on `nudged_on`: the checker opens no fourth that day. */
     nudgedCount: integer("nudged_count").notNull().default(0),
+    /**
+     * A hand-over (换人接手) whose message has not reached the new coworker yet (migration 0222): set
+     * with the hand-over, cleared once its round starts or the new coworker takes the work on. The
+     * checker hands the work over, not a plain nudge, while it is set.
+     */
+    handoverPendingAt: timestamp("handover_pending_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

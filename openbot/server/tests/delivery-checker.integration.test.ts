@@ -1535,6 +1535,8 @@ test("reassign stops the old turn, swaps executor and thread, back to pending_ac
   expect(moved.acceptedAt).toBeNull();
   expect(moved.status).toBe("running");
   expect(moved.originalDueAt?.toISOString()).toBe(due.toISOString());
+  // Said at once: no hand-over waits for the checker.
+  expect(moved.handoverPendingAt).toBeNull();
 
   // The newcomer is handed the work, and asked for its own 接活回执.
   await until(
@@ -1583,6 +1585,72 @@ test("reassign stops the old turn, swaps executor and thread, back to pending_ac
     (await call("POST", `${taskId}/reassign`, { agentId: newAgent })).status,
   ).toBe(409);
   expect(threadAsks).toBe(asked);
+});
+
+test("a hand-over the new coworker's busy thread refused is handed over once the thread is free, not replaced by a nudge", async () => {
+  const { tenantId, agentId, taskId } = await acceptedCard("handover-busy", {
+    acceptedAt: new Date(Date.now() - 10 * MINUTE),
+    dueAt: new Date(Date.now() + HOUR),
+  });
+  await runAsTenant(tenantId, () =>
+    appendTaskEvent(database, {
+      tenantId,
+      taskId,
+      kind: "progress",
+      actor: `agent:${agentId}`,
+      detail: { runId: "earlier", text: "A 家已核对，B 家还在等回复" },
+    }),
+  );
+  const newAgent = `agent-${suite}-handover-busy-new`;
+  const newThread = `thread-${suite}-handover-busy-new`;
+  // The new coworker is busy on its thread with the person when the work is handed to it.
+  let busy = true;
+  const real = runner();
+  const watched = {
+    hydrate: () => real.hydrate(),
+    stop: (request: { threadId: string; runId?: string }) => real.stop(request),
+    isRunning: async (request: { threadId: string }) =>
+      (busy && request.threadId === newThread) || real.isRunning(request),
+  } as unknown as PostgresAgentRunner;
+  const newcomer = new Recorder(newAgent, "收到，我接着做。");
+  const runTurn = unattendedTurn(() => newcomer);
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn,
+    runner: watched,
+    coworkerThread: async () => newThread,
+  });
+  const moved = await nudgeRuns.reassignTask(
+    tenantId,
+    taskId,
+    newAgent,
+    `user:${tenantId}`,
+  );
+  expect(moved).toEqual({ ok: true, threadRef: newThread, started: false });
+  expect(newcomer.seen).toEqual([]);
+
+  // Its turn ends; the checker's next look hands the work over -- with what the first coworker left.
+  busy = false;
+  const { check } = checker([tenantId], {
+    nudge: (tenant, task, text) => nudgeRuns.startNudgeRun(tenant, task, text),
+    turnRunning: async (_tenant, threadId) => watched.isRunning({ threadId }),
+  });
+  await check(new Date(Date.now() + 6 * MINUTE));
+  await until(
+    async () => newcomer.seen.length,
+    (count) => count > 0,
+  );
+  expect(newcomer.seen.length).toBe(1);
+  const [handed] = newcomer.seen;
+  if (!handed) throw new Error("nothing handed over");
+  const words = String(handed.messages.at(-1)?.content ?? "");
+  expect(words).toContain("【系统转交】");
+  expect(words).toContain("A 家已核对，B 家还在等回复");
+  expect(words).toContain("必需：A家、B家");
+  expect(words).not.toContain("【系统催办】");
+  expect(handed.context.map((item) => item.value)).toContain(RECEIPT_ASKED);
+  // Handed over once: the next look, the hand-over is no longer waiting to go out.
+  expect((await row(tenantId, taskId)).handoverPendingAt).toBeNull();
 });
 
 test("after a hand-over the new coworker is on its own clock: not nudged or recorded overdue on the old one", async () => {
