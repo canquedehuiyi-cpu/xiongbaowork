@@ -894,13 +894,26 @@ test("总览只给有内容的块画跳转，没被给的块不画入口", async
 /**
  * 带 `#mine-teams` 从别处进来（一条分享出去的链接、一次刷新）就该落在团队块上，并且焦点也交给它：
  * 别人的链接指过来的是一块内容，不是一句「往下滚一点」。浏览器自己做前半步，焦点得这里补。
+ *
+ * 焦点落在一块内容上本来没有可见痕迹（默认的大框被关掉了，否则整块套一圈），所以落点要亮一下。
+ * 这里只验「亮的是落点那一块」：亮多久是时序不是契约，把测试拖慢一秒去等也证明不了更多。
  */
-test("地址上带 #块名 进来，落在那一块并把焦点交过去", async () => {
+test("地址上带 #块名 进来，落在那一块、把焦点交过去，并只点亮那一块", async () => {
   const view = await renderMine(page([], [], [team("gstack", "软件工坊", 6)]), {
     hash: "mine-teams",
   });
   await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
   expect(document.activeElement?.id).toBe("mine-teams");
+  expect(document.getElementById("mine-teams")?.getAttribute("data-lit")).toBe(
+    "true",
+  );
+  // 三块一起亮等于什么都没说。
+  expect(
+    document.getElementById("mine-skills")?.getAttribute("data-lit"),
+  ).toBeNull();
+  expect(
+    document.getElementById("mine-connectors")?.getAttribute("data-lit"),
+  ).toBeNull();
 });
 
 /**
