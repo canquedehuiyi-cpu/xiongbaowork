@@ -111,23 +111,15 @@ describe("external agents schema (0215)", () => {
     ).rejects.toThrow();
   });
 
-  test("personal tenants backfill paired_by_user_id", async () => {
+  /*
+   * 回填在迁移条件下跑：registered_devices 是 FORCE RLS，迁移者带着空的 app.tenant_id 进来、
+   * 不一定有 BYPASSRLS。这里以本测试的 NOBYPASSRLS 角色、空租户帧，在一个最后回滚的事务里
+   * 执行迁移文件里的那条回填语句，回滚是为了不动别的用例的行。
+   */
+  test("personal tenants backfill paired_by_user_id under migration conditions", async () => {
     const owner = await person();
-    const deviceId = `${suite}-dev-${randomUUID()}`;
-    await runAsTenant(owner, () =>
-      database.insert(registeredDevices).values({
-        tenantId: owner,
-        deviceId,
-        name: "laptop",
-        tokenHash: "hash",
-      }),
-    );
-    // 迁移前的设备没有认主人：把列清空，再重放迁移里的回填语句。
-    await runAsTenant("platform", () =>
-      database.execute(
-        `UPDATE registered_devices SET paired_by_user_id = NULL WHERE device_id = '${deviceId}'`,
-      ),
-    );
+    const other = await person();
+    const team = `${suite}-team-${randomUUID()}`;
     const sqlText = await readFile(
       join(
         import.meta.dir,
@@ -138,16 +130,51 @@ describe("external agents schema (0215)", () => {
     const backfill = sqlText
       .split("--> statement-breakpoint")
       .map((s) => s.trim())
-      .find((s) => /^UPDATE\s+"?(public"?\.)?"?registered_devices/i.test(s));
+      .find((s) =>
+        /"paired_by_user_id"\s*=\s*"(registered_devices"\.")?tenant_id"/.test(
+          s,
+        ),
+      );
     expect(backfill).toBeDefined();
-    await runAsTenant("platform", () => database.execute(backfill as string));
-    const [row] = await runAsTenant(owner, () =>
-      database
-        .select()
-        .from(registeredDevices)
-        .where(eq(registeredDevices.deviceId, deviceId)),
+    const devices = {
+      mine: `${suite}-dev-${randomUUID()}`,
+      team: `${suite}-dev-${randomUUID()}`,
+      claimed: `${suite}-dev-${randomUUID()}`,
+    };
+    const rollback = new Error("rollback the migration fixture");
+    let seen: { frame: unknown; rows: unknown[] } | undefined;
+    await expect(
+      database.$client.begin(async (tx) => {
+        await tx`select set_config('app.tenant_id', 'platform', true)`;
+        await tx`insert into registered_devices (tenant_id, device_id, name, token_hash) values (${owner}, ${devices.mine}, 'laptop', 'hash')`;
+        await tx`insert into registered_devices (tenant_id, device_id, name, token_hash) values (${team}, ${devices.team}, 'shared', 'hash')`;
+        await tx`insert into registered_devices (tenant_id, device_id, name, token_hash, paired_by_user_id) values (${owner}, ${devices.claimed}, 'desk', 'hash', ${other})`;
+        // The frame a migrator arrives with.
+        await tx`select set_config('app.tenant_id', '', true)`;
+        await tx.unsafe(backfill as string);
+        const [frame] =
+          await tx`select current_setting('app.tenant_id', true) as tenant`;
+        await tx`select set_config('app.tenant_id', 'platform', true)`;
+        const rows =
+          await tx`select device_id, paired_by_user_id from registered_devices where device_id in (${devices.mine}, ${devices.team}, ${devices.claimed}) order by device_id`;
+        seen = {
+          frame: (frame as { tenant: unknown }).tenant,
+          rows: Array.from(rows as ArrayLike<unknown>),
+        };
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+    // The frame it found is the frame it leaves: a later migration does not inherit `platform`.
+    expect(seen?.frame).toBe("");
+    const expected = [
+      { device_id: devices.mine, paired_by_user_id: owner },
+      { device_id: devices.team, paired_by_user_id: null },
+      { device_id: devices.claimed, paired_by_user_id: other },
+    ].sort((a, b) => a.device_id.localeCompare(b.device_id));
+    const rows = [...((seen?.rows ?? []) as Array<{ device_id: string }>)].sort(
+      (a, b) => a.device_id.localeCompare(b.device_id),
     );
-    expect(row?.pairedByUserId).toBe(owner);
+    expect(rows).toEqual(expected);
   });
 
   test("device_pair_codes has a nullable minted_by_user_id", async () => {
