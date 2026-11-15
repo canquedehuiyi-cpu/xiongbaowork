@@ -1,8 +1,15 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import {
+  AbstractAgent,
+  type BaseEvent,
+  EventType,
+  type RunAgentInput,
+} from "@ag-ui/client";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
+import { Observable } from "rxjs";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import type { AuditEventInput } from "../src/audit";
@@ -33,9 +40,15 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
+import { createTurnRunner } from "../src/routines/run-turn";
 import { createTaskProjector } from "../src/tasks/projector";
 import { createTeamBots } from "../src/team-bots/team-bots";
 import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import {
+  emitRunEvent,
+  withRunSideEvents,
+} from "../src/threads/run-side-events";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -126,6 +139,8 @@ function service(options: {
   activity?: Parameters<typeof createGroupConversations>[0]["activity"];
   /** The board, attached only by the cases that are about the cards it holds. */
   board?: Parameters<typeof createGroupConversations>[0]["board"];
+  /** A real turn runner in place of the scripted replies, for the cases about what a run carries. */
+  runTurn?: TurnRunner;
 }) {
   const calls: Parameters<TurnRunner>[0][] = [];
   const audit: AuditEventInput[] = [];
@@ -147,6 +162,7 @@ function service(options: {
     },
     runTurn: async (input) => {
       calls.push(input);
+      if (options.runTurn) return options.runTurn(input);
       const reply = options.replies[input.agentId];
       if (!reply) throw new Error(`unexpected Bot ${input.agentId}`);
       return { replyText: await reply(input) };
@@ -750,6 +766,8 @@ describe("group conversations in PostgreSQL", () => {
     const owner = await person();
     const teammate = await person();
     const ada = await as(owner, () => bot(owner, "Ada"));
+    // 群组至少两位员工；Grace 这一轮什么卡也没发，它的回复不带 `delivery`。
+    const grace = await as(owner, () => bot(owner, "Grace"));
     const accepted = {
       taskId: "11111111-1111-4111-8111-111111111111",
       dueAt: "2026-11-15T02:30:00.000Z",
@@ -776,10 +794,11 @@ describe("group conversations in PostgreSQL", () => {
           input.onCustom?.({ name: "delivery.bounced", value: bounced });
           return "已接下";
         },
+        [grace]: () => "g",
       },
     });
     const channel = await as(owner, () =>
-      conversations.create(owner.id, { agentIds: [ada] }),
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
     );
     await as(owner, async () => {
       await conversations.addMember(owner.id, channel.id, {
@@ -807,16 +826,150 @@ describe("group conversations in PostgreSQL", () => {
     ).toEqual([
       [null, owner.id, null],
       [ada, owner.id, cards],
+      [grace, owner.id, null],
     ]);
     // 同事读到同样的卡，也读得到这一轮是谁发起的（界面据此不给他按钮）。
     const theirs = await as(teammate, () =>
       conversations.list(teammate.id, channel.id),
     );
-    expect(theirs.messages.at(-1)).toMatchObject({
+    expect(theirs.messages.find((row) => row.agentId === ada)).toMatchObject({
       agentId: ada,
       ownerUserId: owner.id,
       delivery: cards,
     });
+  });
+
+  test("员工这一轮里服务器放的交付卡，经真实的轮次跑到群回复的 details.delivery 上", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const card = {
+      taskId: randomUUID(),
+      dueAt: "2026-11-15T02:30:00.000Z",
+      criteria: "三家全部在售款",
+    };
+    /*
+     * 一位员工的一轮：说一句、调接活，工具执行时服务器用 `emitRunEvent` 放回执卡（内置员工的流由
+     * `withRunSideEvents` 包着，`copilot.ts`），工具答复。Grace 什么卡也不放。
+     */
+    class Coworker extends AbstractAgent {
+      constructor(private readonly drawsCard: boolean) {
+        super({ agentId: "coworker" });
+      }
+      run(input: RunAgentInput): Observable<BaseEvent> {
+        const said = `said-${input.runId}`;
+        const call = `call-${input.runId}`;
+        const draws = this.drawsCard;
+        const source = new Observable<BaseEvent>((stream) => {
+          void (async () => {
+            const next = (event: Record<string, unknown>) =>
+              stream.next(event as unknown as BaseEvent);
+            next({
+              type: EventType.RUN_STARTED,
+              threadId: input.threadId,
+              runId: input.runId,
+            });
+            next({
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: said,
+              role: "assistant",
+            });
+            next({
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: said,
+              delta: draws ? "好的，我接下了。" : "g",
+            });
+            next({ type: EventType.TEXT_MESSAGE_END, messageId: said });
+            if (draws) {
+              next({
+                type: EventType.TOOL_CALL_START,
+                toolCallId: call,
+                toolCallName: "accept_task",
+                parentMessageId: said,
+              });
+              next({ type: EventType.TOOL_CALL_END, toolCallId: call });
+              await Promise.resolve();
+              emitRunEvent(input.runId, {
+                type: EventType.CUSTOM,
+                name: "delivery.accepted",
+                value: card,
+              } as BaseEvent);
+              next({
+                type: EventType.TOOL_CALL_RESULT,
+                toolCallId: call,
+                messageId: `result-${input.runId}`,
+                content: "{}",
+              });
+            }
+            next({
+              type: EventType.RUN_FINISHED,
+              threadId: input.threadId,
+              runId: input.runId,
+            });
+            stream.complete();
+          })().catch((error) => stream.error(error));
+        });
+        return withRunSideEvents(input.runId, source);
+      }
+    }
+    const runTurn = createTurnRunner({
+      admission: async ({ signal }) => signal ?? new AbortController().signal,
+      // The platform client, inert: a headless turn needs a thread and a lock, neither under test here.
+      intelligence: {
+        getOrCreateThread: async (params: { threadId: string }) => ({
+          thread: { id: params.threadId },
+          created: false,
+        }),
+        getThreadMessages: async () => ({ messages: [] }),
+        ɵacquireThreadLock: async (params: {
+          threadId: string;
+          runId: string;
+        }) => ({
+          threadId: params.threadId,
+          runId: params.runId,
+          joinToken: "test",
+        }),
+        ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+        ɵcleanupThreadLock: async () => undefined,
+      } as never,
+      runner: new PostgresAgentRunner(database) as never,
+      buildAgentFor: async ({ agentId }) => new Coworker(agentId === ada),
+    });
+    const { conversations } = service({ replies: {}, runTurn });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-delivery-real`,
+        text: "把竞品价格整理成表",
+      });
+      await drain(conversations);
+    });
+    const theirs = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(
+      theirs.messages.map((row) => [
+        row.agentId,
+        row.status,
+        row.ownerUserId,
+        row.delivery ?? null,
+      ]),
+    ).toEqual([
+      [null, "completed", owner.id, null],
+      [
+        ada,
+        "completed",
+        owner.id,
+        [{ name: "delivery.accepted", value: card }],
+      ],
+      [grace, "completed", owner.id, null],
+    ]);
   });
 
   test("a member can add another signed-in person, who then reads the shared transcript", async () => {

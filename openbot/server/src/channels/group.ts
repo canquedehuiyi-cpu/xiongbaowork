@@ -53,7 +53,6 @@ import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { type Delivery, firstSentenceOf } from "../tasks/delivery";
-import { DELIVERY_EVENTS } from "../tasks/delivery-tools";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
@@ -413,11 +412,15 @@ function compactionNoteOf(name: string): GroupCompactionNote | null {
  */
 type GroupDeliveryNote = { name: string; value: Record<string, unknown> };
 
-const GROUP_DELIVERY_EVENTS: ReadonlySet<string> = new Set([
-  DELIVERY_EVENTS.accepted,
-  DELIVERY_EVENTS.extensionRequested,
-  DELIVERY_EVENTS.delivered,
-  DELIVERY_EVENTS.bounced,
+/*
+ * 写成字面量、不从 `tasks/delivery-tools.ts` 引 `DELIVERY_EVENTS`：那边经由 `turn-cards` 等又引回本模块，
+ * 模块初始化时会读到还没定义的常量（循环引用）。`delivery-chat-replay.integration` 核对两边一致。
+ */
+export const GROUP_DELIVERY_EVENTS: ReadonlySet<string> = new Set([
+  "delivery.accepted",
+  "delivery.extension_requested",
+  "delivery.delivered",
+  "delivery.bounced",
 ]);
 
 function deliveryNoteOf(
