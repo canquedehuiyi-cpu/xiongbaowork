@@ -277,6 +277,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/responsibilities/trigger-routes.ts": { 'runAsTenant("platform"': 1 },
   "src/routines/runner.ts": { 'runAsTenant("platform"': 1 },
   "src/routines/store.ts": { 'runAsTenant("platform"': 6 },
+  // The delivery checker (spec 2026-11-15-delivery-loop §8) asks as `platform` which cards are followed
+  // and open, ids and tenants only, across every tenant; each card is then checked, claimed and written
+  // in the tenant stamped on its own row (`assertPersonTenant`), never as `platform`.
+  "src/tasks/delivery-checker.ts": { "asPlatform(": 1 },
   "src/tasks/projector.ts": { 'runAsTenant("platform"': 1 },
   "src/team-bots/routes.ts": { "adminActAsOwner(": 1, "asAdminPlatform(": 5 },
   // The catalogue sync writes the deployment's own `system` rows (package-declared Bots).

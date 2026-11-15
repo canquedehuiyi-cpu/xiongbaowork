@@ -120,7 +120,8 @@ export function taskEventSentence(
     case "overdue":
       return "已逾期";
     case "notified":
-      return "已提醒你";
+      // Held outside the person's work hours: it comes with the next start briefing (spec §8).
+      return detail.result === "deferred" ? "提醒留到开工清点" : "已提醒你";
     case "reviewed":
       return "已验收";
     case "returned":

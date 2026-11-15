@@ -481,11 +481,17 @@ import { createStaffingProposalStore } from "./staffing/store";
 import { createDelivery } from "./tasks/delivery";
 import { createCardTurns } from "./tasks/card-turns";
 import {
+  readDefaultWorkHours,
+  runDeliveryCheck,
+  threadRunning,
+} from "./tasks/delivery-checker";
+import {
   ACCEPT_TASK_REF,
   deliveryTools,
   offeredDeliveryTools,
 } from "./tasks/delivery-tools";
 import { createEvidenceGate } from "./tasks/evidence-gate";
+import { createNudgeRuns } from "./tasks/nudge-run";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
@@ -4317,6 +4323,78 @@ await startupLifecycle.run(async (startup) => {
     baseGroupConversations,
     wakerGroupLink,
   );
+  /*
+   * A followed card's conversation (spec 2026-11-15-delivery-loop §6): a 退回 is said in its thread as
+   * the person and answered there, on the same unattended runner a dispatched `@` runs on (a group
+   * card's, in the group); a 取消 or a hand-over stops the round through the runner's stop.
+   * External coworkers' turns (`cancelExternalTurn`) wait for their ACP runtime.
+   */
+  const cardTurns = createCardTurns({
+    database,
+    runTurn: unattendedTurnRunner,
+    runner: localThreadRunner,
+    // A group card's words go to the group, through the group's own send, as the person.
+    groupSend: (ownerUserId, channelId, input, options) =>
+      groupConversations.send(ownerUserId, channelId, input, options),
+    botName: async (tenantId, agentId) =>
+      (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
+      null,
+  });
+  /*
+   * The server's own rounds on a followed card (spec §8, `tasks/nudge-run.ts`): the checker's nudge,
+   * the person's 再催, and the hand-over to a new coworker -- one turn on the card's thread in the
+   * server's voice, on the same unattended runner, hung on the card: no card of its own, no push, no
+   * wake-up allowance, no month's quota.
+   */
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: unattendedTurnRunner,
+    runner: localThreadRunner,
+    turns: cardTurns,
+    // A hand-over goes to a coworker this person can use, on their one-to-one conversation with it.
+    coworkerThread: async (tenantId, agentId) => {
+      const actor = await actorFor(tenantId);
+      if (!(await agentProfileStore.get(actor, agentId))) return null;
+      return (await channelStore.direct(actor, agentId)).threadId;
+    },
+  });
+  /*
+   * The delivery checker (spec §8, `tasks/delivery-checker.ts`): once a minute, every followed card
+   * that has not ended -- the coworker nudged, the card recorded overdue, the person told. Each card is
+   * claimed under its row lock, so replicas checking at once nudge and notify once, and is checked in
+   * the tenant stamped on its row. Work hours are the defaults on the person's saved zone, and the
+   * reminders are held for the start briefing, until Task 6 brings the person's own hours and the push.
+   */
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await runDeliveryCheck(
+            {
+              database,
+              workHours: readDefaultWorkHours(database),
+              notify: async () => "deferred",
+              nudge: (tenantId, taskId, text) =>
+                nudgeRuns.startNudgeRun(tenantId, taskId, text),
+              turnRunning: threadRunning(localThreadRunner),
+              agentName: async (tenantId, agentId) =>
+                (await agentProfileStore.get(await actorFor(tenantId), agentId))
+                  ?.name ?? null,
+            },
+            new Date(),
+          );
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "delivery-check-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 60_000),
+    (resource) => resource.stop(),
+  );
   startup.acquireSync(
     () =>
       repeatAfterEach(async () => {
@@ -5288,23 +5366,10 @@ await startupLifecycle.run(async (startup) => {
         : createRequireUser(auth as AuthService, roleRepository),
       taskProjector,
       {
-        /*
-         * A followed card's 退回 is said in its thread as the person and answered there, on the same
-         * unattended runner a dispatched `@` runs on (a group card's, in the group); a 取消 stops the
-         * round through the runner's stop.
-         * External coworkers' turns (`cancelExternalTurn`) wait for their ACP runtime.
-         */
-        turns: createCardTurns({
-          database,
-          runTurn: unattendedTurnRunner,
-          runner: localThreadRunner,
-          // A group card's words go to the group, through the group's own send, as the person.
-          groupSend: (ownerUserId, channelId, input, options) =>
-            groupConversations.send(ownerUserId, channelId, input, options),
-          botName: async (tenantId, agentId) =>
-            (await agentProfileStore.get(await actorFor(tenantId), agentId))
-              ?.name ?? null,
-        }),
+        // A followed card's conversation: 退回 and 取消 (see `cardTurns` above).
+        turns: cardTurns,
+        // 再催 and 换人接手: the server's own rounds on a card, as the checker's nudges run.
+        rounds: nudgeRuns,
         acceptTaskDisabled: async (tenantId, agentId) =>
           (await approvalService.disabledTools(tenantId, agentId))(
             ACCEPT_TASK_REF,

@@ -166,12 +166,18 @@ export type Delivery = {
    * The evidence gate passed (`deliver_task`): an accepted, running card -- or one already awaiting
    * review, handed more -- goes to `awaiting_review`, with this hand-in merged into its
    * `deliverable_ref`. One `delivered` line. Null when the card is in no state to take a hand-in.
+   *
+   * Only from the card's coworker (`executor_agent_id = agentId`) in the card's current round
+   * (`active_run_ref = runId`), asked under the row's lock: a hand-in from a coworker the work was
+   * taken away from (换人接手, spec §8), or from a round the card no longer runs, moves nothing --
+   * however it got past the lookup before the change.
    */
   delivered(
     tenantId: string,
     taskId: string,
     input: {
       runId: string;
+      agentId: string;
       actor: TaskEventActor;
       deliverable: DeliverableRef;
     },
@@ -312,6 +318,45 @@ export type Delivery = {
     | { ok: true; dueAt: Date | null; criteria: string | null }
     | { ok: false; why: "not_followed" | "not_editable" }
   >;
+  /**
+   * 换人接手 (`POST /api/tasks/:id/reassign`, spec §8): a followed card the coworker still has
+   * (`running` or `needs_action`) goes to `agentId`, on `threadRef` -- the new coworker's thread with
+   * the person -- and back to 派出 · 待接下 (`accepted_at` cleared, `running`): the new coworker takes it
+   * on with its own `accept_task`. `original_due_at`, `due_at`, `overdue_at` and what was handed in
+   * stay. The round running on the card is let go (`active_run_ref` cleared) and closed in the history
+   * as `run_failed {reason: "reassigned"}`, so its late end writes nothing; one `reassigned` line.
+   * What comes back is the round to stop and what the new coworker is to be told.
+   */
+  reassign(
+    tenantId: string,
+    taskId: string,
+    input: { agentId: string; threadRef: string; actor: TaskEventActor },
+  ): Promise<
+    | {
+        ok: true;
+        previous: {
+          agentId: string | null;
+          threadRef: string | null;
+          runId: string | null;
+        };
+        title: string;
+        criteria: string | null;
+        deliverable: DeliverableRef | null;
+        /** The first coworker's latest progress line. */
+        progress: string | null;
+      }
+    | { ok: false; why: "not_open" | "handed_in" | "same_coworker" }
+  >;
+  /**
+   * A nudge the coworker was given (the checker's, or the person's 再催): `nudges + 1`,
+   * `last_nudged_at = at`, and one `nudged` line with what it was told. False when the card is not
+   * followed and open.
+   */
+  nudged(
+    tenantId: string,
+    taskId: string,
+    input: { actor: TaskEventActor; text: string; at: Date },
+  ): Promise<{ nudges: number } | null>;
 };
 
 /**
@@ -481,6 +526,9 @@ export function createDelivery(database: Database): Delivery {
                 openTracked(tenantId, taskId),
                 isNotNull(tasks.acceptedAt),
                 inArray(tasks.status, ["running", "awaiting_review"]),
+                // The card's coworker, in the card's round: not one the work was taken from.
+                eq(tasks.executorAgentId, input.agentId),
+                eq(tasks.activeRunRef, input.runId),
               ),
             )
             .for("update");
@@ -1042,6 +1090,119 @@ export function createDelivery(database: Database): Delivery {
             dueAt: edited?.dueAt ?? null,
             criteria: edited?.criteria ?? null,
           } as const;
+        }),
+      ),
+
+    reassign: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .select({
+              agentId: tasks.executorAgentId,
+              threadRef: tasks.threadRef,
+              runId: tasks.activeRunRef,
+              status: tasks.status,
+              title: tasks.title,
+              criteria: tasks.criteria,
+              deliverableRef: tasks.deliverableRef,
+            })
+            .from(tasks)
+            .where(openTracked(tenantId, taskId))
+            .for("update");
+          if (!card) return { ok: false, why: "not_open" } as const;
+          // Handed in: the work is the person's to review or send back, not anybody's to take over.
+          if (card.status === "awaiting_review")
+            return { ok: false, why: "handed_in" } as const;
+          if (card.agentId === input.agentId)
+            return { ok: false, why: "same_coworker" } as const;
+          const [latest] = await transaction
+            .select({ detail: taskEvents.detail })
+            .from(taskEvents)
+            .where(
+              and(
+                eq(taskEvents.tenantId, tenantId),
+                eq(taskEvents.taskId, taskId),
+                eq(taskEvents.kind, "progress"),
+              ),
+            )
+            .orderBy(desc(taskEvents.createdAt), desc(taskEvents.id))
+            .limit(1);
+          const said = latest?.detail.text;
+          await transaction
+            .update(tasks)
+            .set({
+              executorAgentId: input.agentId,
+              threadRef: input.threadRef,
+              // 派出 · 待接下 again: the new coworker answers with its own 接活回执.
+              acceptedAt: null,
+              status: "running",
+              // Whatever the old round was waiting on (an approval, a question) went with it.
+              pendingApprovalId: null,
+              activeRunRef: null,
+              lastError: null,
+              returnPendingAt: null,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
+          // The old round's own end, if it ever comes, is then a second end of the same run: a no-op.
+          if (card.runId)
+            await appendTaskEvent(transaction, {
+              tenantId,
+              taskId,
+              kind: "run_failed",
+              actor: "system",
+              detail: { runId: card.runId, reason: "reassigned" },
+            });
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "reassigned",
+            actor: input.actor,
+            detail: {
+              from: card.agentId,
+              to: input.agentId,
+              previousThreadRef: card.threadRef,
+              threadRef: input.threadRef,
+            },
+          });
+          return {
+            ok: true,
+            previous: {
+              agentId: card.agentId,
+              threadRef: card.threadRef,
+              runId: card.runId,
+            },
+            title: card.title,
+            criteria: card.criteria,
+            deliverable: isDeliverableRef(card.deliverableRef)
+              ? card.deliverableRef
+              : null,
+            progress: typeof said === "string" && said.trim() ? said : null,
+          } as const;
+        }),
+      ),
+
+    nudged: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .update(tasks)
+            .set({
+              nudges: sql`${tasks.nudges} + 1`,
+              lastNudgedAt: input.at,
+              updatedAt: new Date(),
+            })
+            .where(openTracked(tenantId, taskId))
+            .returning({ nudges: tasks.nudges });
+          if (!card) return null;
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "nudged",
+            actor: input.actor,
+            detail: { text: input.text, at: input.at.toISOString() },
+          });
+          return { nudges: card.nudges };
         }),
       ),
 

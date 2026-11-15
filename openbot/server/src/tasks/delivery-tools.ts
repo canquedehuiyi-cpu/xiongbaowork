@@ -345,11 +345,12 @@ export function deliveryTools(options: {
         }
         const merged = await delivery.delivered(tenantId, card.id, {
           runId: run.runId,
+          agentId,
           actor,
           deliverable: verdict.ref,
         });
         if (!merged)
-          return `${REFUSAL_MARKER} 这件活现在交不了：它已经结束，或还在等对方处理。`;
+          return `${REFUSAL_MARKER} 这件活现在交不了：它已经结束、还在等对方处理，或已经换给别的员工。`;
         said(run.runId, DELIVERY_EVENTS.delivered, {
           taskId: card.id,
           deliverable: verdict.ref,

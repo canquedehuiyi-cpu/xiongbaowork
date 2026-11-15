@@ -1,0 +1,1244 @@
+import { afterAll, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import {
+  AbstractAgent,
+  type AgentSubscriber,
+  type BaseEvent,
+  EventType,
+  type Message,
+  type RunAgentInput,
+  type RunAgentParameters,
+  type RunAgentResult,
+} from "@ag-ui/client";
+import { and, eq, inArray } from "drizzle-orm";
+import type { MiddlewareHandler } from "hono";
+import type { Observable } from "rxjs";
+import { configureBotLifecycle } from "../src/agents/lifecycle";
+import type { AppVariables } from "../src/auth/guards";
+import { createDatabase } from "../src/db/client";
+import {
+  tasks,
+  threadRunEvents,
+  threadRuns,
+  threads,
+  users,
+  workItems,
+} from "../src/db/schema";
+import { withinModelRun } from "../src/models/token-metering";
+import { REFUSAL_MARKER } from "../src/plugins/tools";
+import { createQuotaService } from "../src/quota/limits";
+import { createTurnRunner } from "../src/routines/run-turn";
+import { createCardTurns } from "../src/tasks/card-turns";
+import { createDelivery } from "../src/tasks/delivery";
+import {
+  type DeliveryCheckDeps,
+  type DeliveryNotice,
+  readDefaultWorkHours,
+  runDeliveryCheck,
+  threadRunning,
+  type WorkHours,
+} from "../src/tasks/delivery-checker";
+import { deliveryTools, RECEIPT_ASKED } from "../src/tasks/delivery-tools";
+import {
+  appendTaskEvent,
+  listTaskEvents,
+  taskEventSentence,
+} from "../src/tasks/events";
+import type { EvidenceGate } from "../src/tasks/evidence-gate";
+import { createNudgeRuns } from "../src/tasks/nudge-run";
+import { createTaskProjector } from "../src/tasks/projector";
+import { createTaskRoutes, type TaskRouteOptions } from "../src/tasks/routes";
+import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
+
+/**
+ * The delivery checker (spec 2026-11-15-delivery-loop §8): the server's own clock over every followed
+ * card that has not ended -- nudging the coworker, recording a card overdue, telling the person -- and
+ * the two things the person does about a stalled card: 换人接手 and 再催.
+ *
+ * The clock is injected (`runDeliveryCheck(deps, now)`), and so are the two ends that leave the
+ * server: the nudge (a fake that counts, except in the test of the nudge run itself, which runs a real
+ * turn through the real runner) and the notification (Task 6 wires the real push). Everything else is
+ * the real database: the claims, the history, and the tenant frames each card is checked in.
+ */
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const quota = createQuotaService(database);
+const projector = createTaskProjector(database, undefined, quota);
+const delivery = createDelivery(database);
+const suite = randomUUID().slice(0, 8);
+const tenants: string[] = [];
+configureBotLifecycle({ database });
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const at = (base: Date, ms: number) => new Date(base.getTime() + ms);
+
+/** Every hour of every day, on `timeZone`'s clock: the work-hours rule out of the way. */
+const always = (timeZone = "UTC"): WorkHours => ({
+  start: "00:00",
+  end: "24:00",
+  weekends: true,
+  timeZone,
+});
+
+async function tenant(
+  label: string,
+  preferences?: Record<string, unknown>,
+): Promise<string> {
+  const id = `dc-${label}-${suite}`;
+  await runAsTenant(id, () =>
+    database.insert(users).values({
+      id,
+      email: `${id}@example.test`,
+      ...(preferences ? { preferences } : {}),
+    }),
+  );
+  tenants.push(id);
+  return id;
+}
+
+const settle = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+async function until<T>(
+  read: () => Promise<T>,
+  done: (value: T) => boolean,
+): Promise<T> {
+  let value = await read();
+  for (let attempt = 0; attempt < 120 && !done(value); attempt++) {
+    await settle(25);
+    value = await read();
+  }
+  return value;
+}
+
+/** A followed card, written straight into the table; open (`running`) unless said otherwise. */
+async function card(
+  tenantId: string,
+  input: Partial<typeof tasks.$inferInsert> & { executorAgentId: string },
+): Promise<string> {
+  const [row] = await runAsTenant(tenantId, () =>
+    database
+      .insert(tasks)
+      .values({
+        title: "核对发票",
+        source: "chat",
+        status: "running",
+        tracked: true,
+        ...input,
+      })
+      .returning({ id: tasks.id }),
+  );
+  if (!row) throw new Error("no card");
+  return row.id;
+}
+
+/** A card its coworker took on at `acceptedAt`, due at `dueAt` (null: no time reported). */
+async function acceptedCard(
+  label: string,
+  input: { acceptedAt: Date; dueAt: Date | null; tenantId?: string },
+) {
+  const tenantId = input.tenantId ?? (await tenant(label));
+  const agentId = `agent-${suite}-${label}`;
+  const threadId = `thread-${suite}-${label}-${randomUUID().slice(0, 6)}`;
+  const taskId = await card(tenantId, {
+    executorAgentId: agentId,
+    threadRef: threadId,
+    channelRef: threadId,
+    acceptedAt: input.acceptedAt,
+    dueAt: input.dueAt,
+    originalDueAt: input.dueAt,
+    dueReported: input.dueAt !== null,
+    criteria: "必需：A家、B家",
+  });
+  return { tenantId, agentId, threadId, taskId };
+}
+
+const row = async (tenantId: string, taskId: string) => {
+  const [found] = await runAsTenant(tenantId, () =>
+    database
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId))),
+  );
+  if (!found) throw new Error("card gone");
+  return found;
+};
+
+const history = (tenantId: string, taskId: string) =>
+  runAsTenant(tenantId, () => listTaskEvents(database, { tenantId, taskId }));
+
+const kinds = async (tenantId: string, taskId: string) =>
+  (await history(tenantId, taskId)).map((event) => event.kind);
+
+/**
+ * The checker with counting fakes for the two ends that leave the server, scoped to the test's own
+ * people (`onlyTenants`) so a pass never touches another test's cards in the shared database.
+ */
+function checker(people: string[], overrides: Partial<DeliveryCheckDeps> = {}) {
+  const nudges: { tenantId: string; taskId: string; text: string }[] = [];
+  const notices: { tenantId: string; notice: DeliveryNotice; at: Date }[] = [];
+  let clock = new Date(0);
+  const deps: DeliveryCheckDeps = {
+    database,
+    workHours: async () => always(),
+    notify: async (tenantId, notice) => {
+      notices.push({ tenantId, notice, at: clock });
+      return "sent";
+    },
+    nudge: async (tenantId, taskId, text) => {
+      nudges.push({ tenantId, taskId, text });
+      return "started";
+    },
+    turnRunning: async () => false,
+    agentName: async () => "小财",
+    onlyTenants: people,
+    ...overrides,
+  };
+  return {
+    deps,
+    nudges,
+    notices,
+    check: async (now: Date) => {
+      clock = now;
+      await runDeliveryCheck(deps, now);
+    },
+  };
+}
+
+/** A coworker that records what it was given, says `reply`, and finishes. */
+class Recorder extends AbstractAgent {
+  seen: { messages: Message[]; context: { value: string }[] }[] = [];
+  constructor(
+    agentId: string,
+    private readonly reply = "收到，我这就看。",
+  ) {
+    super({ agentId });
+  }
+  override async runAgent(
+    parameters?: RunAgentParameters,
+    subscriber?: AgentSubscriber,
+  ): Promise<RunAgentResult> {
+    const input = parameters as RunAgentInput;
+    this.seen.push({
+      messages: [...(input.messages ?? this.messages)],
+      context: [...(input.context ?? [])] as { value: string }[],
+    });
+    const messageId = `reply-${input.runId}`;
+    for (const event of [
+      {
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+      { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: this.reply },
+      { type: EventType.TEXT_MESSAGE_END, messageId },
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+    ])
+      await subscriber?.onEvent?.({ event } as Parameters<
+        NonNullable<AgentSubscriber["onEvent"]>
+      >[0]);
+    this.messages = [
+      ...this.messages,
+      { id: messageId, role: "assistant", content: this.reply },
+    ] as typeof this.messages;
+    return { result: undefined, newMessages: [] };
+  }
+  override run(): Observable<BaseEvent> {
+    throw new Error("runAgent is the only entry used here");
+  }
+  override clone(): Recorder {
+    return this;
+  }
+}
+
+/** A coworker that starts, then works until it is stopped. */
+class Working extends AbstractAgent {
+  private stop: () => void = () => {};
+  private started: () => void = () => {};
+  readonly running = new Promise<void>((resolve) => {
+    this.started = resolve;
+  });
+  constructor(agentId: string) {
+    super({ agentId });
+  }
+  override async runAgent(
+    parameters?: RunAgentParameters,
+    subscriber?: AgentSubscriber,
+  ): Promise<RunAgentResult> {
+    const input = parameters as RunAgentInput;
+    await subscriber?.onEvent?.({
+      event: {
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+    } as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
+    const stopped = new Promise<void>((resolve) => {
+      this.stop = resolve;
+    });
+    this.started();
+    await stopped;
+    return { result: undefined, newMessages: [] };
+  }
+  override abortRun(): void {
+    this.stop();
+  }
+  override run(): Observable<BaseEvent> {
+    throw new Error("runAgent is the only entry used here");
+  }
+  override clone(): Working {
+    return this;
+  }
+}
+
+const runner = () => new PostgresAgentRunner(database, projector, quota);
+
+/** The deployment's unattended turn on the real runner, with the real admission and card scope. */
+function unattendedTurn(agent: (agentId: string) => AbstractAgent) {
+  return createTurnRunner({
+    intelligence: {
+      getOrCreateThread: async (params: { threadId: string }) => ({
+        thread: { id: params.threadId },
+        created: false,
+      }),
+      getThreadMessages: async () => ({ messages: [] }),
+      ɵacquireThreadLock: async (params: {
+        threadId: string;
+        runId: string;
+      }) => ({
+        threadId: params.threadId,
+        runId: params.runId,
+        joinToken: "test",
+      }),
+      ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+      ɵcleanupThreadLock: async () => undefined,
+    } as never,
+    runner: runner() as never,
+    buildAgentFor: async ({ agentId }) => agent(agentId),
+  });
+}
+
+/** A person's turn through the real runner, as a browser sends one; resolves when it ends. */
+function personTurn(input: {
+  tenantId: string;
+  agent: AbstractAgent;
+  threadId: string;
+  runId: string;
+}): Promise<void> {
+  return runAsTenant(
+    input.tenantId,
+    () =>
+      new Promise<void>((resolve) => {
+        runner()
+          .run({
+            threadId: input.threadId,
+            agent: input.agent,
+            input: {
+              runId: input.runId,
+              threadId: input.threadId,
+              state: {},
+              tools: [],
+              context: [],
+              forwardedProps: {},
+              messages: [
+                { id: `msg-${randomUUID()}`, role: "user", content: "进度？" },
+              ],
+            } as unknown as RunAgentInput,
+          })
+          .subscribe({
+            complete: () => void resolve(),
+            error: () => void resolve(),
+          });
+      }),
+  );
+}
+
+/** The board's routes as `tenantId` reaches them. */
+function routesFor(tenantId: string, options: TaskRouteOptions = {}) {
+  const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
+  ) => {
+    context.set("actor", {
+      id: tenantId,
+      email: `${tenantId}@example.test`,
+      role: "user" as const,
+    });
+    await next();
+  };
+  const routes = createTaskRoutes(database, requireUser, projector, options);
+  return (method: string, path: string, body?: unknown) =>
+    runAsTenant(tenantId, async () => {
+      const response = await routes.request(
+        new Request(`http://openbot.test/${path}`, {
+          method,
+          ...(body === undefined
+            ? {}
+            : {
+                body: JSON.stringify(body),
+                headers: { "content-type": "application/json" },
+              }),
+        }),
+      );
+      return {
+        status: response.status,
+        body: (await response.json()) as Record<string, unknown>,
+      };
+    });
+}
+
+test("pending accept: nudge at 5 min, notify at 35 min", async () => {
+  const tenantId = await tenant("pending");
+  const agentId = `agent-${suite}-pending`;
+  const threadId = `thread-${suite}-pending`;
+  const taskId = await card(tenantId, {
+    executorAgentId: agentId,
+    channelRef: threadId,
+    tracked: false,
+  });
+  // 当作一件活来跟: the card waits for its 接活回执 from the moment it is followed.
+  await delivery.markTracked(tenantId, taskId, `user:${tenantId}`, {
+    threadRef: threadId,
+  });
+  const [dispatched] = await history(tenantId, taskId);
+  expect(dispatched?.kind).toBe("dispatched");
+  if (!dispatched) throw new Error("no dispatched line");
+  const opened = dispatched.createdAt;
+  const { nudges, notices, check } = checker([tenantId]);
+
+  await check(at(opened, 5 * MINUTE - 1000));
+  expect(nudges).toEqual([]);
+
+  await check(at(opened, 5 * MINUTE));
+  expect(nudges.map((nudge) => nudge.taskId)).toEqual([taskId]);
+  const [nudge] = nudges;
+  expect(nudge).toBeDefined();
+  expect(nudge?.tenantId).toBe(tenantId);
+  expect(nudge?.text).toContain("核对发票");
+  expect(nudge?.text).toContain("accept_task");
+  expect(notices).toEqual([]);
+  expect((await row(tenantId, taskId)).nudges).toBe(1);
+
+  // Once is once: the next minutes say nothing more.
+  await check(at(opened, 6 * MINUTE));
+  await check(at(opened, 35 * MINUTE - 1000));
+  expect(nudges.length).toBe(1);
+  expect(notices).toEqual([]);
+
+  await check(at(opened, 35 * MINUTE));
+  expect(notices.length).toBe(1);
+  const [notice] = notices;
+  expect(notice).toBeDefined();
+  expect(notice?.tenantId).toBe(tenantId);
+  expect(notice?.notice).toMatchObject({ kind: "pending_accept", taskId });
+  expect(notice?.notice.text).toBe("小财还没接下『核对发票』");
+  await check(at(opened, 36 * MINUTE));
+  expect(notices.length).toBe(1);
+  expect(nudges.length).toBe(1);
+
+  const events = await history(tenantId, taskId);
+  expect(events.map((event) => event.kind)).toEqual([
+    "dispatched",
+    "nudged",
+    "notified",
+  ]);
+  const notified = events.find((event) => event.kind === "notified");
+  expect(notified).toBeDefined();
+  expect(notified?.actor).toBe("system");
+  expect(notified?.detail).toMatchObject({
+    kind: "pending_accept",
+    result: "sent",
+  });
+  // Not accepted, so nothing is overdue: 逾期 is about a promised time.
+  expect((await row(tenantId, taskId)).overdueAt).toBeNull();
+});
+
+test("accepted: nudge at due+5, overdue_at and notify at due+35, overdue_at kept after delivery", async () => {
+  const due = new Date("2026-11-16T03:00:00Z");
+  const { tenantId, agentId, taskId } = await acceptedCard("due", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const { nudges, notices, check } = checker([tenantId]);
+
+  await check(at(due, 5 * MINUTE - 1000));
+  expect(nudges).toEqual([]);
+  await check(at(due, 5 * MINUTE));
+  expect(nudges.map((nudge) => nudge.taskId)).toEqual([taskId]);
+  const [nudge] = nudges;
+  expect(nudge).toBeDefined();
+  expect(nudge?.text).toContain("deliver_task");
+  expect(nudge?.text).toContain("request_extension");
+
+  await check(at(due, 35 * MINUTE - 1000));
+  expect((await row(tenantId, taskId)).overdueAt).toBeNull();
+  expect(notices).toEqual([]);
+
+  await check(at(due, 35 * MINUTE));
+  const overdue = await row(tenantId, taskId);
+  expect(overdue.overdueAt?.toISOString()).toBe(
+    at(due, 35 * MINUTE).toISOString(),
+  );
+  expect(notices.length).toBe(1);
+  const [notice] = notices;
+  expect(notice).toBeDefined();
+  expect(notice?.notice).toMatchObject({ kind: "overdue", taskId });
+  expect(notice?.notice.text).toContain("核对发票");
+  expect(notice?.notice.text).toContain("已逾期");
+  expect(await kinds(tenantId, taskId)).toEqual([
+    "nudged",
+    "overdue",
+    "notified",
+  ]);
+
+  // Handed in: the card is the person's now, and the record of the missed time stays.
+  const runId = `run-${randomUUID()}`;
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ activeRunRef: runId })
+      .where(eq(tasks.id, taskId)),
+  );
+  const handedIn = await delivery.delivered(tenantId, taskId, {
+    runId,
+    agentId,
+    actor: `agent:${agentId}`,
+    deliverable: { kind: "deliverable", notes: ["三家都核对了"] },
+  });
+  expect(handedIn).not.toBeNull();
+  await check(at(due, 3 * HOUR));
+  await check(at(due, 6 * HOUR));
+  expect(nudges.length).toBe(1);
+  expect(notices.length).toBe(1);
+  const after = await row(tenantId, taskId);
+  expect(after.status).toBe("awaiting_review");
+  expect(after.overdueAt?.toISOString()).toBe(
+    at(due, 35 * MINUTE).toISOString(),
+  );
+  // One overdue line, ever.
+  expect(
+    (await kinds(tenantId, taskId)).filter((kind) => kind === "overdue"),
+  ).toEqual(["overdue"]);
+});
+
+test("reminders at most every 2 hours and 3 notifications per day", async () => {
+  // 01:00-13:00 UTC on one UTC day: every reminder below falls on the same day.
+  const due = new Date("2026-11-16T01:00:00Z");
+  const { tenantId, taskId } = await acceptedCard("cap", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const { nudges, notices, check } = checker([tenantId]);
+  const nudgedAt: Date[] = [];
+  for (let step = 0; step <= 12 * 12; step++) {
+    const now = at(due, step * 5 * MINUTE);
+    const before = nudges.length;
+    await check(now);
+    if (nudges.length > before) nudgedAt.push(now);
+  }
+  const offsets = (times: Date[]) =>
+    times.map((time) => (time.getTime() - due.getTime()) / MINUTE);
+  // The first at due+5, then one every two hours.
+  expect(offsets(nudgedAt)).toEqual([5, 125, 245, 365, 485, 605]);
+  // The first at due+35, then one every two hours -- and no fourth in a day.
+  expect(offsets(notices.map((notice) => notice.at))).toEqual([35, 155, 275]);
+  const card = await row(tenantId, taskId);
+  expect(card.nudges).toBe(6);
+  expect(card.notifiedCount).toBe(3);
+  expect(card.notifiedOn).toBe("2026-11-16");
+  expect(
+    (await kinds(tenantId, taskId)).filter((kind) => kind === "notified")
+      .length,
+  ).toBe(3);
+});
+
+test("the daily cap resets at the user's local midnight, not UTC", async () => {
+  /*
+   * Asia/Shanghai is UTC+8. Every moment below is on 2026-11-16 by UTC; on the person's clock the last
+   * one is 00:30 on the 17th, a new day, so a fourth reminder goes out. The same timeline read on
+   * UTC's clock stays capped.
+   */
+  const due = new Date("2026-11-16T08:25:00Z"); // 16:25 in Shanghai
+  const shanghai = await acceptedCard("shanghai", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const utc = await acceptedCard("utc", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const zones: Record<string, string> = {
+    [shanghai.tenantId]: "Asia/Shanghai",
+    [utc.tenantId]: "UTC",
+  };
+  const { notices, check } = checker([shanghai.tenantId, utc.tenantId], {
+    workHours: async (userId) => always(zones[userId] ?? "UTC"),
+  });
+  const sentAt = (tenantId: string) =>
+    notices
+      .filter((notice) => notice.tenantId === tenantId)
+      .map((notice) => notice.at.toISOString());
+  for (const moment of [
+    "2026-11-16T09:00:00Z", // 17:00 Shanghai
+    "2026-11-16T11:00:00Z", // 19:00
+    "2026-11-16T13:00:00Z", // 21:00
+    "2026-11-16T15:00:00Z", // 23:00: a fourth on the same local day -- capped
+    "2026-11-16T16:30:00Z", // 00:30 on the 17th in Shanghai: a new day
+  ])
+    await check(new Date(moment));
+  expect(sentAt(shanghai.tenantId)).toEqual([
+    "2026-11-16T09:00:00.000Z",
+    "2026-11-16T11:00:00.000Z",
+    "2026-11-16T13:00:00.000Z",
+    "2026-11-16T16:30:00.000Z",
+  ]);
+  expect(sentAt(utc.tenantId)).toEqual([
+    "2026-11-16T09:00:00.000Z",
+    "2026-11-16T11:00:00.000Z",
+    "2026-11-16T13:00:00.000Z",
+  ]);
+  const card = await row(shanghai.tenantId, shanghai.taskId);
+  expect(card.notifiedOn).toBe("2026-11-17");
+  expect(card.notifiedCount).toBe(1);
+});
+
+test("no due reported → checked at accepted_at + 2h", async () => {
+  const accepted = new Date("2026-11-16T02:00:00Z");
+  const { tenantId, taskId } = await acceptedCard("unreported", {
+    acceptedAt: accepted,
+    dueAt: null,
+  });
+  const { nudges, notices, check } = checker([tenantId]);
+  // Two hours stand in for the time the coworker never named; the usual five and thirty-five minutes follow.
+  await check(at(accepted, 2 * HOUR));
+  await check(at(accepted, 2 * HOUR + 5 * MINUTE - 1000));
+  expect(nudges).toEqual([]);
+  await check(at(accepted, 2 * HOUR + 5 * MINUTE));
+  expect(nudges.length).toBe(1);
+  const [nudge] = nudges;
+  expect(nudge).toBeDefined();
+  expect(nudge?.text).toContain("没报预计时间");
+  await check(at(accepted, 2 * HOUR + 35 * MINUTE));
+  expect(notices.length).toBe(1);
+  expect((await row(tenantId, taskId)).overdueAt?.toISOString()).toBe(
+    at(accepted, 2 * HOUR + 35 * MINUTE).toISOString(),
+  );
+});
+
+test("outside work hours: not pushed, kept for the next start briefing", async () => {
+  /*
+   * The default work hours (09:00-18:00, weekends off), on the zone the person's preferences hold.
+   * 2026-11-16 is a Monday; 2026-11-21 a Saturday.
+   */
+  const tenantId = await tenant("hours", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  const workHours = readDefaultWorkHours(database);
+  expect(await workHours(tenantId)).toEqual({
+    start: "09:00",
+    end: "18:00",
+    weekends: false,
+    timeZone: "Asia/Shanghai",
+  });
+  // Somebody whose preferences name no zone is read on UTC.
+  expect((await workHours(await tenant("no-zone"))).timeZone).toBe("UTC");
+
+  const evening = await acceptedCard("evening", {
+    tenantId,
+    acceptedAt: new Date("2026-11-16T10:00:00Z"),
+    dueAt: new Date("2026-11-16T11:25:00Z"), // 19:25 Monday in Shanghai
+  });
+  const saturday = await acceptedCard("saturday", {
+    tenantId,
+    acceptedAt: new Date("2026-11-21T01:00:00Z"),
+    dueAt: new Date("2026-11-21T02:25:00Z"), // 10:25 Saturday
+  });
+  const { nudges, notices, check } = checker([tenantId], { workHours });
+
+  await check(new Date("2026-11-16T11:30:00Z")); // 19:30: the coworker is nudged all the same
+  expect(nudges.map((nudge) => nudge.taskId)).toEqual([evening.taskId]);
+  await check(new Date("2026-11-16T12:00:00Z")); // 20:00: overdue, and not pushed
+  await check(new Date("2026-11-16T14:00:00Z")); // 22:00: still one reminder kept, not two
+  await check(new Date("2026-11-21T03:00:00Z")); // 11:00 Saturday: not pushed either
+  expect(notices).toEqual([]);
+
+  for (const kept of [evening.taskId, saturday.taskId]) {
+    const card = await row(tenantId, kept);
+    expect(card.overdueAt).not.toBeNull();
+    // What the next start briefing reads (Task 6): the card's held reminder and its line.
+    expect(card.reminderHeldAt).not.toBeNull();
+    expect(card.notifiedCount).toBe(0);
+    const held = (await history(tenantId, kept)).filter(
+      (event) => event.kind === "notified",
+    );
+    expect(held.length).toBe(1);
+    const [line] = held;
+    expect(line).toBeDefined();
+    expect(line?.detail).toMatchObject({ kind: "overdue", result: "deferred" });
+    expect(String(line?.detail.text)).toContain("核对发票");
+    if (!line) throw new Error("no held line");
+    expect(
+      taskEventSentence(line, { now: new Date(), timeZone: "Asia/Shanghai" }),
+    ).toBe("提醒留到开工清点");
+  }
+});
+
+test("a running turn is skipped, no event written", async () => {
+  const due = new Date(Date.now() - 2 * HOUR);
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "running",
+    { acceptedAt: at(due, -HOUR), dueAt: due },
+  );
+  // The coworker's round really running, on the real runner, hung on the card.
+  const working = new Working(agentId);
+  const runId = randomUUID();
+  const turnDone = personTurn({ tenantId, agent: working, threadId, runId });
+  await working.running;
+  await until(
+    () => row(tenantId, taskId),
+    (found) => found.activeRunRef === runId,
+  );
+  const before = await row(tenantId, taskId);
+  const { nudges, notices, check } = checker([tenantId], {
+    turnRunning: threadRunning(runner()),
+  });
+  await check(new Date());
+  expect(nudges).toEqual([]);
+  expect(notices).toEqual([]);
+  const after = await row(tenantId, taskId);
+  expect(after.nudges).toBe(before.nudges);
+  expect(after.overdueAt).toBeNull();
+  expect(after.lastNudgedAt).toBeNull();
+  expect(after.lastNotifiedAt).toBeNull();
+  expect(await kinds(tenantId, taskId)).toEqual([]);
+
+  // Once the round is over, the next pass does its work.
+  await runAsTenant(tenantId, () => runner().stop({ threadId, runId }));
+  await turnDone;
+  await until(
+    () => row(tenantId, taskId),
+    (found) => found.activeRunRef === null,
+  );
+  await check(new Date());
+  expect(nudges.map((nudge) => nudge.taskId)).toEqual([taskId]);
+  expect(notices.length).toBe(1);
+});
+
+test("a stale active_run_ref left by a crash does not hold the checker back", async () => {
+  // The server died mid-round: the card still names the round, and nothing is running it.
+  const due = new Date(Date.now() - 2 * HOUR);
+  const { tenantId, taskId } = await acceptedCard("crashed", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ activeRunRef: `run-before-the-crash-${suite}` })
+      .where(eq(tasks.id, taskId)),
+  );
+  const { nudges, notices, check } = checker([tenantId], {
+    turnRunning: threadRunning(runner()),
+  });
+  await check(new Date());
+  expect(nudges.map((nudge) => nudge.taskId)).toEqual([taskId]);
+  expect(notices.length).toBe(1);
+  expect((await row(tenantId, taskId)).overdueAt).not.toBeNull();
+});
+
+test("nudge run attaches to the card, opens no card, does not push, does not touch wake-up quota or task quota", async () => {
+  const due = new Date(Date.now() - HOUR);
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard("nudge", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const recorder = new Recorder(agentId, "在做，B 家还差一张。");
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: unattendedTurn(() => recorder),
+    runner: runner(),
+  });
+  const cardsOf = () =>
+    runAsTenant(tenantId, () =>
+      database
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.tenantId, tenantId)),
+    );
+  const queued = () =>
+    runAsTenant("platform", () =>
+      database
+        .select({ kind: workItems.kind })
+        .from(workItems)
+        .where(eq(workItems.tenantId, tenantId)),
+    );
+  const usageBefore = await quota.usageFor(tenantId);
+
+  const text = "【系统催办】『核对发票』预计已过，先交做完的部分。";
+  expect(await nudgeRuns.startNudgeRun(tenantId, taskId, text)).toBe("started");
+  const events = await until(
+    () => history(tenantId, taskId),
+    (rows) => rows.some((event) => event.kind === "run_ended"),
+  );
+  // A round of THIS card: its progress and its end are on it.
+  expect(events.map((event) => event.kind)).toEqual(["progress", "run_ended"]);
+  const [progress] = events;
+  expect(progress).toBeDefined();
+  expect(progress?.detail).toMatchObject({ text: "在做，B 家还差一张。" });
+  // The coworker heard the server's words, and no person's.
+  expect(recorder.seen.length).toBe(1);
+  const [seen] = recorder.seen;
+  expect(seen).toBeDefined();
+  const said = seen?.messages.at(-1);
+  expect(said).toBeDefined();
+  expect(said?.role).toBe("user");
+  expect(said?.content).toBe(text);
+  // No second card, no charge, nothing queued: no wake-up and no push.
+  expect((await cardsOf()).map((found) => found.id)).toEqual([taskId]);
+  expect((await quota.usageFor(tenantId)).tasks).toBe(usageBefore.tasks);
+  expect(await queued()).toEqual([]);
+  expect((await row(tenantId, taskId)).activeRunRef).toBeNull();
+
+  // A round already running on the thread is never superseded by a nudge.
+  const working = new Working(agentId);
+  const runId = randomUUID();
+  let ended = false;
+  const turnDone = personTurn({
+    tenantId,
+    agent: working,
+    threadId,
+    runId,
+  }).then(() => {
+    ended = true;
+  });
+  await working.running;
+  expect(await nudgeRuns.startNudgeRun(tenantId, taskId, text)).toBe(
+    "skipped_running",
+  );
+  await settle(100);
+  expect(ended).toBe(false);
+  expect(recorder.seen.length).toBe(1);
+  await runAsTenant(tenantId, () => runner().stop({ threadId, runId }));
+  await turnDone;
+});
+
+test("what the nudge and the notice report back is recorded as it happened", async () => {
+  const due = new Date("2026-11-16T03:00:00Z");
+  const { tenantId, taskId } = await acceptedCard("outcomes", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  let nudge: () => Promise<"started" | "skipped_running"> = async () =>
+    "skipped_running";
+  let result: "sent" | "deferred" | "capped" = "deferred";
+  const { check } = checker([tenantId], {
+    nudge: () => nudge(),
+    notify: async () => result,
+  });
+
+  // The thread turned out busy: the claim is given back, nothing is written, the next minute tries again.
+  await check(at(due, 5 * MINUTE));
+  expect((await row(tenantId, taskId)).lastNudgedAt).toBeNull();
+  expect(await kinds(tenantId, taskId)).toEqual([]);
+
+  // Refused for another reason (the coworker paused): one quiet line, and no retry every minute.
+  let tries = 0;
+  nudge = async () => {
+    tries++;
+    throw new Error("这位员工已暂停，恢复后再试。");
+  };
+  await check(at(due, 6 * MINUTE));
+  await check(at(due, 7 * MINUTE));
+  expect(tries).toBe(1);
+  const skipped = (await history(tenantId, taskId)).filter(
+    (event) => event.kind === "nudge_skipped",
+  );
+  expect(skipped.length).toBe(1);
+  const [line] = skipped;
+  expect(line).toBeDefined();
+  expect(line?.detail).toMatchObject({
+    reason: "这位员工已暂停，恢复后再试。",
+  });
+  expect((await row(tenantId, taskId)).nudges).toBe(0);
+
+  // The sender held the reminder back: it does not count towards the day's three, and is kept.
+  await check(at(due, 35 * MINUTE));
+  const held = await row(tenantId, taskId);
+  expect(held.notifiedCount).toBe(0);
+  expect(held.reminderHeldAt?.toISOString()).toBe(
+    at(due, 35 * MINUTE).toISOString(),
+  );
+  const notified = (await history(tenantId, taskId)).filter(
+    (event) => event.kind === "notified",
+  );
+  expect(notified.length).toBe(1);
+  const [deferred] = notified;
+  expect(deferred).toBeDefined();
+  expect(deferred?.detail).toMatchObject({
+    kind: "overdue",
+    result: "deferred",
+  });
+
+  // Pushed two hours on: counted, and nothing is held any more.
+  result = "sent";
+  await check(at(due, 155 * MINUTE));
+  const sent = await row(tenantId, taskId);
+  expect(sent.notifiedCount).toBe(1);
+  expect(sent.reminderHeldAt).toBeNull();
+});
+
+test("two concurrent checks nudge and notify once", async () => {
+  const due = new Date("2026-11-16T03:00:00Z");
+  const { tenantId, taskId } = await acceptedCard("replicas", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  let nudged = 0;
+  let notified = 0;
+  // Two replicas: separate checkers, the same database, the same minute.
+  const replica = () =>
+    checker([tenantId], {
+      nudge: async () => {
+        nudged++;
+        await settle(100);
+        return "started";
+      },
+      notify: async () => {
+        notified++;
+        await settle(100);
+        return "sent";
+      },
+    });
+  const now = at(due, 40 * MINUTE);
+  await Promise.all([replica().check(now), replica().check(now)]);
+  await Promise.all([replica().check(now), replica().check(now)]);
+  expect(nudged).toBe(1);
+  expect(notified).toBe(1);
+  expect((await kinds(tenantId, taskId)).sort()).toEqual([
+    "notified",
+    "nudged",
+    "overdue",
+  ]);
+  const card = await row(tenantId, taskId);
+  expect(card.nudges).toBe(1);
+  expect(card.notifiedCount).toBe(1);
+});
+
+test("reassign stops the old turn, swaps executor and thread, back to pending_accept, keeps original_due_at", async () => {
+  const due = new Date(Date.now() + HOUR);
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "reassign",
+    { acceptedAt: new Date(Date.now() - 10 * MINUTE), dueAt: due },
+  );
+  const newAgent = `agent-${suite}-newcomer`;
+  const newThread = `thread-${suite}-newcomer`;
+  await runAsTenant(tenantId, () =>
+    appendTaskEvent(database, {
+      tenantId,
+      taskId,
+      kind: "progress",
+      actor: `agent:${agentId}`,
+      detail: { runId: "earlier", text: "A 家已核对，B 家还在等回复" },
+    }),
+  );
+
+  // The first coworker's round is running on the card when the person hands the work over.
+  const working = new Working(agentId);
+  const runId = randomUUID();
+  let ended = false;
+  const turnDone = personTurn({
+    tenantId,
+    agent: working,
+    threadId,
+    runId,
+  }).then(() => {
+    ended = true;
+  });
+  await working.running;
+  await until(
+    () => row(tenantId, taskId),
+    (found) => found.activeRunRef === runId,
+  );
+
+  const newcomer = new Recorder(newAgent, "我先看看。");
+  const runTurn = unattendedTurn(() => newcomer);
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn,
+    runner: runner(),
+    turns: createCardTurns({ database, runTurn, runner: runner() }),
+    coworkerThread: async (_tenantId, coworker) =>
+      coworker === newAgent ? newThread : null,
+  });
+  const call = routesFor(tenantId, { rounds: nudgeRuns });
+
+  // Nobody the person has: refused, and the card is as it was.
+  expect(
+    (await call("POST", `${taskId}/reassign`, { agentId: "nobody" })).status,
+  ).toBe(404);
+  expect((await row(tenantId, taskId)).executorAgentId).toBe(agentId);
+  // Another person's card is not here.
+  expect(
+    (
+      await routesFor(await tenant("stranger"), { rounds: nudgeRuns })(
+        "POST",
+        `${taskId}/reassign`,
+        { agentId: newAgent },
+      )
+    ).status,
+  ).toBe(404);
+
+  const response = await call("POST", `${taskId}/reassign`, {
+    agentId: newAgent,
+  });
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({
+    ok: true,
+    stage: "pending_accept",
+    threadRef: newThread,
+    started: true,
+  });
+
+  // The old round is stopped.
+  await Promise.race([turnDone, settle(3000)]);
+  expect(ended).toBe(true);
+
+  const moved = await row(tenantId, taskId);
+  expect(moved.executorAgentId).toBe(newAgent);
+  expect(moved.threadRef).toBe(newThread);
+  expect(moved.acceptedAt).toBeNull();
+  expect(moved.status).toBe("running");
+  expect(moved.originalDueAt?.toISOString()).toBe(due.toISOString());
+
+  // The newcomer is handed the work, and asked for its own 接活回执.
+  await until(
+    async () => newcomer.seen.length,
+    (count) => count > 0,
+  );
+  expect(newcomer.seen.length).toBe(1);
+  const [handed] = newcomer.seen;
+  expect(handed).toBeDefined();
+  const handover = String(handed?.messages.at(-1)?.content ?? "");
+  expect(handover).toContain("核对发票");
+  expect(handover).toContain("必需：A家、B家");
+  expect(handover).toContain("A 家已核对，B 家还在等回复");
+  expect(handed?.context.map((item) => item.value)).toContain(RECEIPT_ASKED);
+
+  const events = await until(
+    () => history(tenantId, taskId),
+    (rows) => rows.some((event) => event.kind === "run_ended"),
+  );
+  const reassigned = events.filter((event) => event.kind === "reassigned");
+  expect(reassigned.length).toBe(1);
+  const [line] = reassigned;
+  expect(line).toBeDefined();
+  expect(line?.actor).toBe(`user:${tenantId}`);
+  expect(line?.detail).toMatchObject({
+    from: agentId,
+    to: newAgent,
+    previousThreadRef: threadId,
+    threadRef: newThread,
+  });
+  // The stopped round is closed on the card once, as handed over; its late end writes nothing.
+  const oldRound = events.filter((event) => event.detail.runId === runId);
+  expect(oldRound.map((event) => event.kind)).toEqual(["run_failed"]);
+  const [closed] = oldRound;
+  expect(closed).toBeDefined();
+  expect(closed?.detail).toMatchObject({ reason: "reassigned" });
+
+  // The same coworker again: nothing to hand over.
+  expect(
+    (await call("POST", `${taskId}/reassign`, { agentId: newAgent })).status,
+  ).toBe(409);
+});
+
+test("a late deliver_task from the old employee after reassign is refused", async () => {
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "late-deliver",
+    {
+      acceptedAt: new Date(Date.now() - 10 * MINUTE),
+      dueAt: new Date(Date.now() + HOUR),
+    },
+  );
+  const newAgent = `agent-${suite}-late-newcomer`;
+  const runId = `run-${randomUUID()}`;
+  // The old coworker's round is the card's current round.
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ activeRunRef: runId })
+      .where(eq(tasks.id, taskId)),
+  );
+  const handOver = async () => {
+    const moved = await delivery.reassign(tenantId, taskId, {
+      agentId: newAgent,
+      threadRef: `thread-${suite}-late-newcomer`,
+      actor: `user:${tenantId}`,
+    });
+    expect(moved.ok).toBe(true);
+  };
+  /*
+   * The person hands the work over WHILE the old coworker's hand-in is in the evidence gate: the card
+   * was looked up as the old coworker's, and by the time the gate says yes it is not any more.
+   */
+  let gated = 0;
+  const gate: EvidenceGate = {
+    async checkEvidence() {
+      gated++;
+      if (gated === 1) await handOver();
+      return {
+        ok: true,
+        ref: {
+          kind: "deliverable",
+          notes: ["三家都核对了"],
+          checks: ["逐张对过金额"],
+        },
+      };
+    },
+  };
+  const [deliver] = deliveryTools({
+    delivery,
+    gate,
+    board: projector,
+    ownerUserId: tenantId,
+    agentId,
+    timeZone: () => "Asia/Shanghai",
+    emit: () => {},
+  }).filter((tool) => tool.name === "deliver_task");
+  if (!deliver) throw new Error("no deliver_task");
+  const handIn = () =>
+    withinModelRun({ runId, threadId }, async () =>
+      String(
+        await deliver.execute({
+          items: [{ kind: "note", ref: "三家都核对了", title: "结论" }],
+          checks: ["逐张对过金额"],
+        }),
+      ),
+    );
+
+  const racing = await handIn();
+  expect(gated).toBe(1);
+  expect(racing.startsWith(REFUSAL_MARKER)).toBe(true);
+  // And once more, well after the hand-over.
+  const late = await handIn();
+  expect(late.startsWith(REFUSAL_MARKER)).toBe(true);
+
+  const after = await row(tenantId, taskId);
+  expect(after.status).toBe("running");
+  expect(after.executorAgentId).toBe(newAgent);
+  expect(after.acceptedAt).toBeNull();
+  expect(after.deliverableRef).toBeNull();
+  expect(await kinds(tenantId, taskId)).not.toContain("delivered");
+});
+
+test("a hand-in is taken only from the card's executor, in the card's current round", async () => {
+  const { tenantId, agentId, taskId } = await acceptedCard("current-round", {
+    acceptedAt: new Date(Date.now() - 10 * MINUTE),
+    dueAt: new Date(Date.now() + HOUR),
+  });
+  const current = `run-${randomUUID()}`;
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ activeRunRef: current })
+      .where(eq(tasks.id, taskId)),
+  );
+  const handIn = (input: { runId: string; agentId: string }) =>
+    delivery.delivered(tenantId, taskId, {
+      ...input,
+      actor: `agent:${input.agentId}`,
+      deliverable: { kind: "deliverable", notes: ["三家都核对了"] },
+    });
+  // Another coworker, in the card's round: not its executor.
+  expect(await handIn({ runId: current, agentId: "someone-else" })).toBeNull();
+  // The executor, from a round the card no longer runs (superseded, or ended).
+  expect(await handIn({ runId: "run-superseded", agentId })).toBeNull();
+  expect((await row(tenantId, taskId)).status).toBe("running");
+  // The executor, in the card's round.
+  expect(await handIn({ runId: current, agentId })).not.toBeNull();
+  expect((await row(tenantId, taskId)).status).toBe("awaiting_review");
+});
+
+test("再催 nudges the coworker now, as the person, and is refused while a round runs", async () => {
+  const due = new Date(Date.now() + HOUR);
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "nudge-now",
+    { acceptedAt: new Date(Date.now() - 10 * MINUTE), dueAt: due },
+  );
+  const recorder = new Recorder(agentId, "马上交。");
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: unattendedTurn(() => recorder),
+    runner: runner(),
+  });
+  const call = routesFor(tenantId, { rounds: nudgeRuns });
+  // Another person's card is not here: nobody else may nudge on it.
+  expect(
+    (
+      await routesFor(await tenant("nudge-stranger"), { rounds: nudgeRuns })(
+        "POST",
+        `${taskId}/nudge`,
+      )
+    ).status,
+  ).toBe(404);
+  expect(recorder.seen).toEqual([]);
+  const response = await call("POST", `${taskId}/nudge`);
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({ ok: true, nudges: 1 });
+  await until(
+    () => history(tenantId, taskId),
+    (rows) => rows.some((event) => event.kind === "run_ended"),
+  );
+  expect(recorder.seen.length).toBe(1);
+  const nudged = (await history(tenantId, taskId)).filter(
+    (event) => event.kind === "nudged",
+  );
+  expect(nudged.length).toBe(1);
+  const [line] = nudged;
+  expect(line).toBeDefined();
+  expect(line?.actor).toBe(`user:${tenantId}`);
+  const card = await row(tenantId, taskId);
+  expect(card.nudges).toBe(1);
+  expect(card.lastNudgedAt).not.toBeNull();
+
+  const working = new Working(agentId);
+  const runId = randomUUID();
+  const turnDone = personTurn({ tenantId, agent: working, threadId, runId });
+  await working.running;
+  const busy = await call("POST", `${taskId}/nudge`);
+  expect(busy.status).toBe(409);
+  expect((await row(tenantId, taskId)).nudges).toBe(1);
+  await runAsTenant(tenantId, () => runner().stop({ threadId, runId }));
+  await turnDone;
+});
+
+afterAll(async () => {
+  for (const id of tenants) {
+    await runAsTenant(id, async () => {
+      const own = database
+        .select({ id: threads.id })
+        .from(threads)
+        .where(eq(threads.tenantId, id));
+      await database
+        .delete(threadRunEvents)
+        .where(inArray(threadRunEvents.threadId, own));
+      await database
+        .delete(threadRuns)
+        .where(inArray(threadRuns.threadId, own));
+      await database.delete(threads).where(eq(threads.tenantId, id));
+      await database.delete(tasks).where(eq(tasks.tenantId, id));
+    });
+  }
+  // `task_events` is append-only for the application role; its rows stay, under tenants nobody has.
+  await runAsTenant("platform", () =>
+    database.delete(users).where(inArray(users.id, tenants)),
+  );
+  await database.$client.close();
+});
