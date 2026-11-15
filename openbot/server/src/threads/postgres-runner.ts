@@ -15,6 +15,7 @@ import {
 import { asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   EMPTY,
+  filter,
   from,
   Observable,
   type Subscription,
@@ -925,7 +926,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
    */
   override connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
     if (!ownedBy(request.threadId, currentTenant())) return EMPTY;
-    return super.connect({ ...request, ...storeScope(request.threadId) });
+    // A reconnect replays what the thread said, not the heartbeats of a run (`transient`).
+    return super
+      .connect({ ...request, ...storeScope(request.threadId) })
+      .pipe(filter((event) => !transient(event)));
   }
 
   /** Whether somebody else's thread is mid-turn is not this caller's to learn. */

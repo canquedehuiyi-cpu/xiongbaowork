@@ -235,7 +235,6 @@ import {
 import { createDatabase } from "./db/client";
 import { ROLE_FACTS_SQL } from "./db/rls-role";
 import {
-  agents,
   channelAgents,
   channelMemberships,
   channels,
@@ -3182,13 +3181,7 @@ await startupLifecycle.run(async (startup) => {
     },
     announce: async ({ threadId, agentId, ownerUserId, text }) => {
       if (
-        await groupConversations.announceHandoff({
-          threadId,
-          actorId: ownerUserId,
-          agentId,
-          text,
-          via: "device_acp",
-        })
+        await groupConversations.announceExternal({ threadId, agentId, text })
       )
         return;
       const [mapped] = await database
@@ -4287,21 +4280,24 @@ await startupLifecycle.run(async (startup) => {
    * the group does not wait for it: it is queued and started like a turn that waited for its
    * computer, and its answer is posted into the group when it ends (`createAcpGroupTurn`).
    */
+  /*
+   * A group's external employee, read in its hirer's frame whoever asked: a group member's own frame
+   * need not see a private employee's row. Whose it is comes from `ownerTenantOfBot`.
+   */
+  const externalEmployee = async (agentId: string) => {
+    const owner = await ownerTenantOfBot(database, agentId);
+    return owner
+      ? runAsTenant(owner, () => loadDeviceAcpEmployee(database, agentId))
+      : null;
+  };
   const groupTurnRunner = routeExternalTurns({
-    isExternal: async (agentId) => {
-      const [row] = await database
-        .select({ type: agents.type })
-        .from(agents)
-        .where(eq(agents.id, agentId))
-        .limit(1);
-      return row?.type === "device_acp";
-    },
+    isExternal: async (agentId) => (await externalEmployee(agentId)) !== null,
     normal: createTurnRunner(groupTurnOptions),
     external: createAcpGroupTurn({
       turns: acpTurnStore,
       relay: acpRelay,
       channel: deviceChannel,
-      employeeFor: (agentId) => loadDeviceAcpEmployee(database, agentId),
+      employeeFor: externalEmployee,
       onlineElsewhere: deviceOnlineElsewhere,
     }),
   });

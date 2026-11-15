@@ -13,7 +13,7 @@ import { Observable, type Subscriber } from "rxjs";
 import type { Database } from "../../db/client";
 import { threads } from "../../db/schema";
 import type { DeviceChannel } from "../../devices/channel";
-import { currentTenant, runAsTenant } from "../../tenant/context";
+import { runAsTenant } from "../../tenant/context";
 import { adoptRunnerCard } from "../../threads/postgres-runner";
 import { type AcpContextLoader, messageText } from "./context";
 import type { AcpRelay } from "./relay";
@@ -46,8 +46,10 @@ import {
  * turn is started there, and the sentence says so. A group never waits for an external employee at
  * all (`createAcpGroupTurn`).
  *
- * AWAY TOO LONG. A computer away for 30 minutes (here and elsewhere) while its turn is on it ends
- * the turn `interrupted`; Stop while it is away cancels the row here.
+ * AWAY. A computer whose network dropped while its turn is on it keeps running it (spec §3): the
+ * run stays open, a permission request keeps waiting, and the device replays what it kept when it
+ * reconnects (its inventory reconciles a turn its runner lost). Stop while it is away (and not
+ * connected to another server) cancels the row here, so the lane's next message is not held.
  *
  * HOW A RUN ENDS. With the device's `acp.turn.end`: `RUN_FINISHED` (a cancelled turn says so first);
  * `stopReason: "error"` → `RUN_ERROR` with the device's own sentence (`acp.error`); interrupted (the
@@ -67,9 +69,6 @@ import {
 
 /** How often an open run says it is still waiting. */
 export const ACP_WAITING_MS = 20_000;
-
-/** A computer away this long while its turn is on it ends the turn `interrupted`. */
-export const ACP_UNREACHABLE_MS = 30 * 60_000;
 
 /**
  * A group's turn runner: an external employee's turns go to `external` (`createAcpGroupTurn`, which
@@ -116,13 +115,17 @@ export function createAcpGroupTurn(options: {
   instruction: string;
   userMessage?: Message;
   runId?: string;
-  tenantId?: string;
 }) => Promise<{ replyText: string; detached: true }> {
   const log = options.log ?? ((message: string) => console.warn(message));
   return async (input) => {
     const employee = await options.employeeFor(input.agentId);
     if (!employee) throw new Error("That Bot is not available to this owner.");
-    const tenantId = input.tenantId ?? currentTenant();
+    /*
+     * The turn is the employee's, in the tenant its hirer hired it and paired its computer in,
+     * whoever asked in the group: that is where the relay finds its device's queue. The answer still
+     * goes back to the group thread it was asked in (`announceExternal`).
+     */
+    const tenantId = employee.ownerUserId;
     const target = { tenantId, deviceId: employee.deviceId };
     const text = messageText(input.userMessage?.content) || input.instruction;
     await options.turns.enqueue({
@@ -168,6 +171,12 @@ export type AcpPermissionRequest = {
   threadId: string;
   turnId: string;
   runId: string;
+  /**
+   * The board card this turn answers for (`tasks.run_ref`), which is where its approval parks: the
+   * run's own id, or, for a turn that waited in the queue (or was asked in a group), the card of the
+   * run that queued it (`adoptRunnerCard`).
+   */
+  runRef: string;
 };
 
 export type AcpPermissionHook = (request: AcpPermissionRequest) => void;
@@ -235,7 +244,6 @@ export type DeviceAcpAgentConfig = {
    * this process). Absent: it is not.
    */
   onlineElsewhere?: () => Promise<boolean>;
-  now?: () => number;
   /** Calls `tick` every `ms` until the returned function is called. Injected for a test's clock. */
   every?: (ms: number, tick: () => void) => () => void;
   newTurnId?: () => string;
@@ -331,10 +339,10 @@ class AcpRun {
   private unsubscribe: (() => void) | null = null;
   private notes = 0;
   private aborted = false;
+  /** The board card this run answers for: its own, or the one the run that queued it left open. */
+  private readonly cardRef: string;
   /** The heartbeat before found the turn over with no end told to this run. */
   private endedUnseen = false;
-  /** Since when the computer has been away while the turn is on it. */
-  private unreachableSince: number | null = null;
 
   constructor(
     private readonly config: DeviceAcpAgentConfig,
@@ -349,6 +357,9 @@ class AcpRun {
       threadId: input.threadId,
     };
     this.target = { tenantId: config.tenantId, deviceId: config.deviceId };
+    this.cardRef =
+      (config.claimed ? acpPromptOf(config.claimed).runRef : undefined) ??
+      input.runId;
   }
 
   private log(message: string) {
@@ -431,7 +442,6 @@ class AcpRun {
         value: { turnId: this.turnId },
       } as BaseEvent);
       void this.checkEnded();
-      void this.checkReachable();
     });
     this.begin().catch((error: unknown) => {
       const reason = error instanceof Error ? error : new Error(String(error));
@@ -475,6 +485,7 @@ class AcpRun {
           (await this.onlineElsewhere())
             ? `${this.name}的这件活已排队，马上开始。`
             : `${this.name}的电脑现在离线，这件活已排队，电脑回来后自动继续。`,
+          turnId,
         );
         return;
       }
@@ -490,6 +501,7 @@ class AcpRun {
       ) {
         this.queued(
           `${this.name}在这个对话里还有一件活没做完，这件活已排队，前面的做完后自动继续。`,
+          turnId,
         );
         return;
       }
@@ -524,7 +536,7 @@ class AcpRun {
     if (outcome === "session" && !this.loaded) {
       try {
         content = [
-          ...(await config.context(input.threadId, input.runId)),
+          ...(await config.context(input.threadId, this.cardRef)),
           ...this.prompt,
         ];
       } catch (error) {
@@ -550,8 +562,15 @@ class AcpRun {
    * The turn waits in its lane: said in one sentence, and the run is over. `acp.queued` tells the
    * thread runner to leave this run's card open for the run that will do the work.
    */
-  private queued(text: string) {
+  private queued(text: string, turnId: string | null = this.turnId) {
     this.handle.reject(new Error("the turn is still queued"));
+    // Stopped while the sentence was being decided: the queued row goes too.
+    if (this.aborted && turnId) {
+      void this.config.turns
+        .setStatus(this.config.tenantId, turnId, "cancelled")
+        .catch(() => undefined);
+      return;
+    }
     this.finish([
       ...this.note(text),
       {
@@ -642,6 +661,7 @@ class AcpRun {
             threadId: this.input.threadId,
             turnId: this.turnId as string,
             runId: this.input.runId,
+            runRef: this.cardRef,
           });
         } catch (error) {
           this.log(
@@ -729,36 +749,6 @@ class AcpRun {
     });
   }
 
-  /**
-   * A computer away for `ACP_UNREACHABLE_MS` on end (not connected here nor to another server of
-   * this deployment) while its turn is on it: the turn is ended `interrupted`, so the conversation
-   * is not held open, and its lane not blocked, by a computer that is not coming back. If it does
-   * come back with the turn, what it sends is dropped (the row is final).
-   */
-  private async checkReachable() {
-    const { turnId } = this;
-    if (!turnId || (this.phase !== "opening" && this.phase !== "running"))
-      return;
-    if (this.config.reachable() || (await this.onlineElsewhere())) {
-      this.unreachableSince = null;
-      return;
-    }
-    const now = (this.config.now ?? Date.now)();
-    this.unreachableSince ??= now;
-    if (now - this.unreachableSince < ACP_UNREACHABLE_MS || this.isOver())
-      return;
-    this.log(`turn ${turnId}: the computer has been away too long`);
-    await this.config.turns
-      .setStatus(this.config.tenantId, turnId, "interrupted")
-      .catch(() => false);
-    this.end({
-      type: "acp.turn.end",
-      turnId,
-      stopReason: "interrupted",
-      interrupted: true,
-    });
-  }
-
   /** Stop: the device is told to cancel, and the run ends here now. */
   abort() {
     if (this.phase === "over") return;
@@ -775,8 +765,12 @@ class AcpRun {
         threadId: this.input.threadId,
         turnId,
       });
-      // Not connected here: ended here, so the lane's next message is not held behind it.
-      if (!sent) cancelHere(turnId);
+      // Not connected here, nor to another server: ended here, so the lane's next message is not
+      // held behind it. Connected elsewhere, the turn is left to the device (no cross-server cancel).
+      if (!sent)
+        void this.onlineElsewhere().then((elsewhere) => {
+          if (!elsewhere) cancelHere(turnId);
+        });
     }
     // Its prompt never went out: the device has nothing to cancel, the row is ended here.
     else if (turnId && this.phase === "opening") cancelHere(turnId);
@@ -1108,7 +1102,8 @@ export function createAcpTurnStarter(options: {
         },
         complete: () => {
           runFailed(new Error("the run ended before its prompt was written"));
-          if (queuedAgain) return;
+          // Before its prompt went out the turn is back in the queue: nothing to say yet.
+          if (queuedAgain || !prompted) return;
           const text = said.join("").trim();
           if (error) tell(text ? `${text}\n\n${error}` : error, true);
           else if (text) tell(text, false);

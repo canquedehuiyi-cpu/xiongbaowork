@@ -9,6 +9,7 @@ import {
 import { eq } from "drizzle-orm";
 import { EMPTY } from "rxjs";
 import {
+  type AcpPermissionRequest,
   createAcpSessionHints,
   createAcpTurnStarter,
   DeviceAcpAgent,
@@ -297,6 +298,7 @@ describe("DeviceAcpAgent", () => {
     await device(chunk(1, turnId, "我来改登录页。"));
     await device(editUpdate(2, turnId));
     await device(chunk(3, turnId, "改好了。"));
+    t.tick();
     await device(end(turnId));
     await until(() => completed, "the run to complete");
 
@@ -341,6 +343,26 @@ describe("DeviceAcpAgent", () => {
       components: [diff],
       attachments: [],
     });
+    // The heartbeat went out live, and a reconnect does not replay it.
+    const isWaiting = (event: Loose) =>
+      event.type === EventType.CUSTOM && event.name === "acp.waiting";
+    expect(events.some(isWaiting)).toBe(true);
+    const replayed: Loose[] = [];
+    await runAsTenant(dbTenant, async () => {
+      await new Promise<void>((resolve) => {
+        runner
+          .connect({ threadId } as Parameters<typeof runner.connect>[0])
+          .subscribe({
+            next: (event) => replayed.push(event as Loose),
+            complete: resolve,
+            error: () => resolve(),
+          });
+      });
+    });
+    expect(
+      replayed.some((event) => event.type === EventType.RUN_FINISHED),
+    ).toBe(true);
+    expect(replayed.some(isWaiting)).toBe(false);
   });
 
   test("unreachable run queues the turn and answers the queued sentence", async () => {
@@ -395,9 +417,9 @@ describe("DeviceAcpAgent", () => {
       now: () => now,
       onStall: (stream) => stalled.push(stream.id),
     });
-    const permissions: Frame[] = [];
+    const permissions: AcpPermissionRequest[] = [];
     const agent = t.agent({
-      onPermission: (request) => permissions.push(request.frame),
+      onPermission: (request) => permissions.push(request),
     });
     const runInput = input("推送到远端");
     watchdog.open({ id: "acp-run", botId: "agent-1" });
@@ -429,7 +451,9 @@ describe("DeviceAcpAgent", () => {
     });
     expect(t.turns.rows[0]?.status).toBe("awaiting");
     expect(permissions).toHaveLength(1);
-    expect(permissions[0]?.requestId).toBe("req-1");
+    expect(permissions[0]?.frame.requestId).toBe("req-1");
+    // Its own card: the run's id.
+    expect(permissions[0]?.runRef).toBe(runInput.runId);
 
     // Three hours, in 20-second steps: the heartbeat goes out, the watch is swept.
     for (let step = 0; step < (3 * 60 * 60) / 20; step += 1) {
@@ -1097,12 +1121,10 @@ test("stopped while being queued for an away computer, the turn is cancelled", a
   expect(texts(run.events)).toBe("这件活已停止。");
 });
 
-test("a computer away for 30 minutes while its turn is on it ends the turn interrupted", async () => {
+test("a computer away for more than 30 minutes keeps its turn: it runs on, to be reconciled when it is back", async () => {
   const t = setup();
-  let now = 0;
-  let elsewhere = false;
   const run = watch(
-    t.agent({ now: () => now, onlineElsewhere: async () => elsewhere }),
+    t.agent({ onlineElsewhere: async () => false }),
     input("长任务"),
   );
   await until(() => t.sent("acp.open").length === 1, "acp.open");
@@ -1110,37 +1132,34 @@ test("a computer away for 30 minutes while its turn is on it ends the turn inter
   await until(() => t.sent("acp.prompt").length === 1, "acp.prompt");
   const turnId = String(t.sent("acp.prompt")[0]?.turnId);
   await t.device({ type: "acp.turn.ack", turnId });
-  const beat = async (ms: number) => {
-    now += ms;
+  t.state.reachable = false;
+  // An hour of heartbeats with the computer away (20 seconds each).
+  for (let beat = 0; beat < 180; beat += 1) {
     t.tick();
-    await new Promise((resolve) => setTimeout(resolve, 2));
-  };
-  t.state.reachable = false;
-  await beat(0);
-  // Connected to another server for a while: that time does not count.
-  elsewhere = true;
-  await beat(20 * 60_000);
-  elsewhere = false;
-  await beat(0);
-  await beat(29 * 60_000);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
   expect(run.state.done).toBe(false);
-  // Back for a moment: the clock starts again.
+  expect(t.turns.rows[0]?.status).toBe("running");
+  // Back, with what it did meanwhile: the run goes on to its end.
   t.state.reachable = true;
-  await beat(1000);
-  t.state.reachable = false;
-  await beat(0);
-  await beat(29 * 60_000);
-  expect(run.state.done).toBe(false);
-  await beat(60_000);
+  await t.device(chunk(1, turnId, "断网期间做完了。"));
+  await t.device(end(turnId));
   await until(() => run.state.done, "the run to end");
-  expect(texts(run.events)).toBe("电脑关机，这件活中断了。");
-  expect(
-    run.events.some(
-      (event) =>
-        event.type === EventType.CUSTOM && event.name === "acp.interrupted",
-    ),
-  ).toBe(true);
-  expect(t.turns.rows[0]?.status).toBe("interrupted");
+  expect(texts(run.events)).toBe("断网期间做完了。");
+});
+
+test("stopping a turn while its computer is connected to another server leaves the row to the device", async () => {
+  const t = setup();
+  const agent = t.agent({ onlineElsewhere: async () => true });
+  const run = watch(agent, input("长任务"));
+  await until(() => t.sent("acp.open").length === 1, "acp.open");
+  await t.device({ type: "acp.session", sessionId: "s", loaded: true });
+  await until(() => t.sent("acp.prompt").length === 1, "acp.prompt");
+  t.state.reachable = false;
+  agent.abortRun();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(run.state.done).toBe(true);
+  expect(t.turns.rows[0]?.status).toBe("sent");
 });
 
 test("stopping a turn while its computer is away cancels the row here", async () => {
@@ -1256,4 +1275,25 @@ test("a resumed run that ends before its prompt went out puts the turn back", as
   });
   expect(await t.relay.resumeQueued(t.target)).toBe(0);
   expect(t.turns.rows[0]?.status).toBe("queued");
+});
+
+test("stopped while it is being decided whether the computer is elsewhere, the queued turn is cancelled", async () => {
+  const t = setup({ reachable: false });
+  let answer!: (elsewhere: boolean) => void;
+  let asked = false;
+  const agent = t.agent({
+    onlineElsewhere: () => {
+      asked = true;
+      return new Promise<boolean>((resolve) => {
+        answer = resolve;
+      });
+    },
+  });
+  const run = watch(agent, input("算了吧"));
+  await until(() => asked, "the question");
+  agent.abortRun();
+  answer(false);
+  await until(() => t.turns.rows[0]?.status === "cancelled", "the cancel");
+  expect(run.state.done).toBe(true);
+  expect(texts(run.events)).toBe("这件活已停止。");
 });

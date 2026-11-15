@@ -53,7 +53,11 @@ import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import type { TaskProjector } from "../tasks/projector";
-import { currentTenant, runAsClaimedTenant } from "../tenant/context";
+import {
+  currentTenant,
+  runAsClaimedTenant,
+  runAsTenant,
+} from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
 
 export const GROUP_TURN_KIND = "group.turn";
@@ -1612,6 +1616,91 @@ export function createGroupConversations(deps: {
     return agentIds;
   };
 
+  /**
+   * A `message_bot` answer relayed into a Bot's group thread, shown in the shared transcript in that
+   * Bot's voice (the only voice its thread admits) and naming the Bot that answered. Returns false
+   * for a thread that is not a group's, so the caller can announce it the ordinary way.
+   */
+  async function announceHandoff(input: {
+    threadId: string;
+    actorId: string;
+    agentId: string;
+    text: string;
+    /**
+     * `device_acp`: not a relayed answer but an external employee's own, from a turn the group
+     * did not wait for (`createAcpGroupTurn`), posted from its own group thread whoever asked in it.
+     */
+    via?: "device_acp";
+  }): Promise<boolean> {
+    const thread = await deps.store.threadRow(input.threadId);
+    if (
+      !thread ||
+      (input.via === "device_acp"
+        ? thread.agentId !== input.agentId
+        : thread.ownerUserId !== input.actorId)
+    )
+      return false;
+    const bots = await orderedRoster(thread.ownerUserId, thread.channelId);
+    if (!bots?.some((bot) => bot.id === thread.agentId)) return true;
+    const id = `handoff:${createHash("sha256")
+      .update(`${input.threadId}\n${input.agentId}\n${input.text}`)
+      .digest("hex")
+      .slice(0, 32)}`;
+    const gate = await shareGate({
+      ownerUserId: thread.ownerUserId,
+      channelId: thread.channelId,
+      agentId: thread.agentId,
+      threadId: input.threadId,
+      rowId: id,
+      runId: runIdFor(id),
+      text: input.text,
+    });
+    const relayed = {
+      via: input.via ?? "message_bot",
+      answeredBy: input.agentId,
+    };
+    if (gate.status !== "allowed") {
+      await deps.store.append({
+        id,
+        ownerUserId: thread.ownerUserId,
+        channelId: thread.channelId,
+        agentId: thread.agentId,
+        threadId: input.threadId,
+        ...(gate.status === "pending"
+          ? {
+              text: "",
+              status: "waiting",
+              details: { ...relayed, ...gate.details },
+            }
+          : { text: gate.message, status: "failed", details: relayed }),
+      });
+      return true;
+    }
+    const added = await deps.store.append({
+      id,
+      ownerUserId: thread.ownerUserId,
+      channelId: thread.channelId,
+      agentId: thread.agentId,
+      threadId: input.threadId,
+      text: input.text,
+      details: relayed,
+    });
+    if (added)
+      await deps.activity?.(
+        {
+          ownerUserId: thread.ownerUserId,
+          channelId: thread.channelId,
+          messageId: id,
+          agentIds: [thread.agentId],
+          text: input.text,
+        },
+        thread.agentId,
+        input.text,
+        `group:${id}`,
+      );
+    return true;
+  }
+
   return {
     store: deps.store,
     /** Start a group with Bots in the order the person chose them. */
@@ -1865,89 +1954,28 @@ export function createGroupConversations(deps: {
         throw error;
       }
     },
+    announceHandoff,
     /**
-     * A `message_bot` answer relayed into a Bot's group thread, shown in the shared transcript in that
-     * Bot's voice (the only voice its thread admits) and naming the Bot that answered. Returns false
-     * for a thread that is not a group's, so the caller can announce it the ordinary way.
+     * An external employee's own answer, from a turn its group did not wait for
+     * (agents/acp/agent.ts `createAcpGroupTurn`), into the group it was asked in: posted in the
+     * frame of whoever owns that group thread (who asked, possibly not its hirer), whatever frame
+     * the turn ran in.
      */
-    async announceHandoff(input: {
+    async announceExternal(input: {
       threadId: string;
-      actorId: string;
       agentId: string;
       text: string;
-      /**
-       * `device_acp`: not a relayed answer but an external employee's own, from a turn the group
-       * did not wait for (`createAcpGroupTurn`), posted from its own group thread whoever asked in it.
-       */
-      via?: "device_acp";
     }): Promise<boolean> {
+      // The hirer, whose frame the turn ran in, is a member of the group: its thread rows are theirs to read.
       const thread = await deps.store.threadRow(input.threadId);
-      if (
-        !thread ||
-        (input.via === "device_acp"
-          ? thread.agentId !== input.agentId
-          : thread.ownerUserId !== input.actorId)
-      )
-        return false;
-      const bots = await orderedRoster(thread.ownerUserId, thread.channelId);
-      if (!bots?.some((bot) => bot.id === thread.agentId)) return true;
-      const id = `handoff:${createHash("sha256")
-        .update(`${input.threadId}\n${input.agentId}\n${input.text}`)
-        .digest("hex")
-        .slice(0, 32)}`;
-      const gate = await shareGate({
-        ownerUserId: thread.ownerUserId,
-        channelId: thread.channelId,
-        agentId: thread.agentId,
-        threadId: input.threadId,
-        rowId: id,
-        runId: runIdFor(id),
-        text: input.text,
-      });
-      const relayed = {
-        via: input.via ?? "message_bot",
-        answeredBy: input.agentId,
-      };
-      if (gate.status !== "allowed") {
-        await deps.store.append({
-          id,
-          ownerUserId: thread.ownerUserId,
-          channelId: thread.channelId,
-          agentId: thread.agentId,
-          threadId: input.threadId,
-          ...(gate.status === "pending"
-            ? {
-                text: "",
-                status: "waiting",
-                details: { ...relayed, ...gate.details },
-              }
-            : { text: gate.message, status: "failed", details: relayed }),
-        });
-        return true;
-      }
-      const added = await deps.store.append({
-        id,
-        ownerUserId: thread.ownerUserId,
-        channelId: thread.channelId,
-        agentId: thread.agentId,
-        threadId: input.threadId,
-        text: input.text,
-        details: relayed,
-      });
-      if (added)
-        await deps.activity?.(
-          {
-            ownerUserId: thread.ownerUserId,
-            channelId: thread.channelId,
-            messageId: id,
-            agentIds: [thread.agentId],
-            text: input.text,
-          },
-          thread.agentId,
-          input.text,
-          `group:${id}`,
-        );
-      return true;
+      if (!thread || thread.agentId !== input.agentId) return false;
+      return runAsTenant(thread.ownerUserId, () =>
+        announceHandoff({
+          ...input,
+          actorId: thread.ownerUserId,
+          via: "device_acp",
+        }),
+      );
     },
     async list(owner: string, channel: string) {
       const bots = await roster(owner, channel);

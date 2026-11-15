@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { eq, inArray, like } from "drizzle-orm";
 import {
+  type AcpPermissionRequest,
   createAcpGroupTurn,
   createAcpTurnStarter,
   DeviceAcpAgent,
@@ -128,141 +129,188 @@ async function until(
   throw new Error(`timed out waiting for ${what}`);
 }
 
-describe("an external employee in a group", () => {
-  test("answers into the group without holding the group's sweep, while others answer as usual", async () => {
-    const owner = await person();
-    const external = await bot(owner, "小码");
-    const writer = await bot(owner, "Writer");
-    const reviewer = await bot(owner, "Reviewer");
-    // Hired from a computer: what Task 8 writes for an external employee.
-    await runAsTenant("platform", () =>
-      database
-        .update(agents)
-        .set({
-          type: "device_acp",
-          configuration: {
-            deviceId: "laptop",
-            harness: "codex",
-            workdirRef: "fld_work",
-          },
-        })
-        .where(eq(agents.id, external)),
-    );
-    const employee: DeviceAcpEmployee = {
-      id: external,
-      name: "小码",
-      ownerUserId: owner.id,
-      deviceId: "laptop",
-      harness: "codex",
-      workdirRef: "fld_work",
-      persona: "",
-    };
-
-    const turns = createMemoryAcpTurnStore();
-    const down: Frame[] = [];
-    const target = { tenantId: owner.id, deviceId: "laptop" };
-    let startQueuedTurn: ((row: AcpTurnRow) => Promise<void>) | undefined;
-    const relay = createAcpRelay({
-      channel: {
-        notify: (_target, frame) => {
-          down.push(frame);
-          return true;
-        },
-        isReachable: () => true,
-        connectionOf: () => "conn-1",
-      },
-      turns,
-      startQueuedTurn: async (row) => {
-        if (!startQueuedTurn) throw new Error("not yet");
-        await startQueuedTurn(row);
-      },
-      log: () => undefined,
-    });
-    const projector = createTaskProjector(database);
-    const runner = new PostgresAgentRunner(database, projector);
-    const builtIn: string[] = [];
-    const normal: TurnRunner = async (input) => {
-      builtIn.push(input.agentId);
-      return {
-        replyText: `${input.agentId === writer ? "Writer" : "Reviewer"} 看过了。`,
-      };
-    };
-    const conversations = createGroupConversations({
-      store: createGroupStore(database, () => threadIdentity.mint()),
-      queue: createWorkQueue(database),
-      owner: `${prefix}-replica`,
-      roster: async (ownerUserId, channelId) => {
-        const actor: AgentActor = { id: ownerUserId, role: "user" };
-        const channel = await channelStore.get(actor, channelId);
-        if (!channel || channel.agentIds.length < 2) return null;
-        const bots = [];
-        for (const agentId of channel.agentIds) {
-          const profile = await profileStore.get(actor, agentId);
-          if (profile) bots.push({ id: agentId, name: profile.name });
-        }
-        return bots;
-      },
-      runTurn: routeExternalTurns({
-        isExternal: async (agentId) => agentId === external,
-        normal,
-        external: createAcpGroupTurn({
-          turns,
-          relay,
-          channel: { isReachable: () => true },
-          employeeFor: async (agentId) =>
-            agentId === external ? employee : null,
-          log: () => undefined,
-        }),
-      }),
-      caps: { maxDepth: 1, maxPerRun: 2 },
-      mayAddress: async () => true,
-      auditStore: { insert: async () => undefined },
-      progressEveryMs: 0,
-      board: projector,
-    });
-    startQueuedTurn = createAcpTurnStarter({
-      database,
-      turns,
-      runner,
-      employeeFor: async () => employee,
-      agentFor: (_employee, row) =>
-        new DeviceAcpAgent({
-          agentId: external,
-          ownerUserId: owner.id,
-          tenantId: row.tenantId,
+/** A hirer's external employee and two built-in employees, the group service and a computer. */
+async function harness(owner: AgentActor) {
+  const external = await bot(owner, "小码");
+  const writer = await bot(owner, "Writer");
+  const reviewer = await bot(owner, "Reviewer");
+  // Hired from a computer: what Task 8 writes for an external employee.
+  await runAsTenant("platform", () =>
+    database
+      .update(agents)
+      .set({
+        type: "device_acp",
+        configuration: {
           deviceId: "laptop",
           harness: "codex",
           workdirRef: "fld_work",
-          name: "小码",
-          relay,
-          turns,
-          reachable: () => true,
-          context: async () => [],
-          claimed: row,
-          every: () => () => undefined,
-          log: () => undefined,
-        }),
-      announce: ({ threadId, agentId, ownerUserId, text }) =>
-        conversations
-          .announceHandoff({
-            threadId,
-            actorId: ownerUserId,
-            agentId,
-            text,
-            via: "device_acp",
-          })
-          .then(() => undefined),
-      log: () => undefined,
-    });
-    const from = { ...target, connectionId: "conn-1" };
-    const device = async (frame: Frame) => {
-      relay.fromRunner(from, { agentId: external, ...frame });
-      await relay.drain(from);
-    };
-    const sweepAll = async () => {
-      for (let i = 0; i < 10 && (await conversations.sweep()); i++) {}
-    };
+        },
+      })
+      .where(eq(agents.id, external)),
+  );
+  const employee: DeviceAcpEmployee = {
+    id: external,
+    name: "小码",
+    ownerUserId: owner.id,
+    deviceId: "laptop",
+    harness: "codex",
+    workdirRef: "fld_work",
+    persona: "",
+  };
 
+  const permissions: AcpPermissionRequest[] = [];
+  const turns = createMemoryAcpTurnStore();
+  const down: Frame[] = [];
+  const target = { tenantId: owner.id, deviceId: "laptop" };
+  let startQueuedTurn: ((row: AcpTurnRow) => Promise<void>) | undefined;
+  const relay = createAcpRelay({
+    channel: {
+      notify: (_target, frame) => {
+        down.push(frame);
+        return true;
+      },
+      isReachable: () => true,
+      connectionOf: () => "conn-1",
+    },
+    turns,
+    startQueuedTurn: async (row) => {
+      if (!startQueuedTurn) throw new Error("not yet");
+      await startQueuedTurn(row);
+    },
+    log: () => undefined,
+  });
+  const projector = createTaskProjector(database);
+  const runner = new PostgresAgentRunner(database, projector);
+  const builtIn: string[] = [];
+  const normal: TurnRunner = async (input) => {
+    builtIn.push(input.agentId);
+    return {
+      replyText: `${input.agentId === writer ? "Writer" : "Reviewer"} 看过了。`,
+    };
+  };
+  const conversations = createGroupConversations({
+    store: createGroupStore(database, () => threadIdentity.mint()),
+    queue: createWorkQueue(database),
+    owner: `${prefix}-replica`,
+    /*
+     * The group's Bots as the asker may use them, except that the hirer's external employee is
+     * usable by every member of a group the hirer put it in (spec §1, §6; the roster rule is Task 8's).
+     */
+    roster: async (ownerUserId, channelId) => {
+      const actor: AgentActor = { id: ownerUserId, role: "user" };
+      const channel = await runAsTenant(ownerUserId, () =>
+        channelStore.get(actor, channelId),
+      );
+      if (!channel || channel.agentIds.length < 2) return null;
+      const bots = [];
+      for (const agentId of channel.agentIds) {
+        const profile = await runAsTenant(
+          agentId === external ? owner.id : ownerUserId,
+          () => profileStore.get(agentId === external ? owner : actor, agentId),
+        );
+        if (profile) bots.push({ id: agentId, name: profile.name });
+      }
+      return bots;
+    },
+    runTurn: routeExternalTurns({
+      isExternal: async (agentId) => agentId === external,
+      normal,
+      external: createAcpGroupTurn({
+        turns,
+        relay,
+        channel: { isReachable: () => true },
+        employeeFor: async (agentId) =>
+          agentId === external ? employee : null,
+        log: () => undefined,
+      }),
+    }),
+    caps: { maxDepth: 1, maxPerRun: 2 },
+    mayAddress: async () => true,
+    auditStore: { insert: async () => undefined },
+    progressEveryMs: 0,
+    board: projector,
+    createChannel: async (ownerUserId, agentIds, options) => {
+      const made = await channelStore.create(
+        { id: ownerUserId, role: "user" },
+        agentIds,
+        options,
+      );
+      return made;
+    },
+  });
+  startQueuedTurn = createAcpTurnStarter({
+    database,
+    turns,
+    runner,
+    employeeFor: async () => employee,
+    agentFor: (_employee, row) =>
+      new DeviceAcpAgent({
+        agentId: external,
+        ownerUserId: owner.id,
+        tenantId: row.tenantId,
+        deviceId: "laptop",
+        harness: "codex",
+        workdirRef: "fld_work",
+        name: "小码",
+        relay,
+        turns,
+        reachable: () => true,
+        context: async () => [],
+        claimed: row,
+        every: () => () => undefined,
+        onPermission: (request) => permissions.push(request),
+        log: () => undefined,
+      }),
+    // As index.ts announces it: into the group thread's owner's frame, whoever that is.
+    announce: ({ threadId, agentId, text }) =>
+      conversations
+        .announceExternal({ threadId, agentId, text })
+        .then(() => undefined),
+    log: () => undefined,
+  });
+  const from = { ...target, connectionId: "conn-1" };
+  const device = async (frame: Frame) => {
+    relay.fromRunner(from, { agentId: external, ...frame });
+    await relay.drain(from);
+  };
+  const sweepAll = async () => {
+    for (let i = 0; i < 10 && (await conversations.sweep()); i++) {}
+  };
+
+  const list = (channelId: string, reader: AgentActor = owner) =>
+    runAsTenant(reader.id, () => conversations.list(reader.id, channelId));
+  return {
+    builtIn,
+    external,
+    writer,
+    reviewer,
+    turns,
+    down,
+    permissions,
+    projector,
+    conversations,
+    device,
+    sweepAll,
+    list,
+  };
+}
+
+describe("an external employee in a group", () => {
+  test("answers into the group without holding the group's sweep, while others answer as usual", async () => {
+    const owner = await person();
+    const {
+      builtIn,
+      external,
+      writer,
+      reviewer,
+      turns,
+      down,
+      permissions,
+      conversations,
+      device,
+      sweepAll,
+      list,
+    } = await harness(owner);
     const groupA = await runAsTenant(owner.id, () =>
       channelStore.create(owner, [external, writer]),
     );
@@ -270,8 +318,6 @@ describe("an external employee in a group", () => {
       channelStore.create(owner, [writer, reviewer]),
     );
     createdChannels.push(groupA.id, groupB.id);
-    const list = (channelId: string) =>
-      runAsTenant(owner.id, () => conversations.list(owner.id, channelId));
 
     // Group A: both employees are asked. The sweep is over before the computer has said anything.
     await runAsTenant(owner.id, () =>
@@ -326,17 +372,19 @@ describe("an external employee in a group", () => {
       facts: { insideWorkdir: true, paths: [] },
     });
     expect(turns.rows[0]?.status).toBe("awaiting");
-    // Its card stays open while it works.
-    const card = async () =>
-      (
-        await runAsTenant(owner.id, () =>
-          database
-            .select({ status: tasks.status })
-            .from(tasks)
-            .where(eq(tasks.runRef, prompt.runRef)),
-        )
-      )[0]?.status;
-    expect(await card()).toBe("running");
+    // The request names the one card this work has, where its approval parks (Task 7).
+    const cards = () =>
+      runAsTenant(owner.id, () =>
+        database
+          .select({ runRef: tasks.runRef, status: tasks.status })
+          .from(tasks)
+          .where(eq(tasks.executorAgentId, external)),
+      );
+    expect(permissions.map((request) => request.runRef)).toEqual([
+      prompt.runRef,
+    ]);
+    expect((await cards()).map((card) => card.runRef)).toEqual([prompt.runRef]);
+    const card = async () => (await cards())[0]?.status;
 
     // Meanwhile group B, and group A's built-in employee, answer as usual.
     await runAsTenant(owner.id, () =>
@@ -405,5 +453,114 @@ describe("an external employee in a group", () => {
       async () => (await card()) === "awaiting_review",
       "the card to close",
     );
+  });
+
+  test("asked by another member of the group, it works in its hirer's queue and answers into the group", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const {
+      external,
+      writer,
+      turns,
+      down,
+      permissions,
+      conversations,
+      device,
+      sweepAll,
+      list,
+    } = await harness(owner);
+    const channel = await runAsTenant(owner.id, () =>
+      conversations.create(owner.id, { agentIds: [external, writer] }),
+    );
+    createdChannels.push(channel.id);
+    const [{ email } = { email: "" }] = await runAsTenant(teammate.id, () =>
+      database
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, teammate.id)),
+    );
+    await runAsTenant(owner.id, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+
+    await runAsTenant(teammate.id, () =>
+      conversations.send(teammate.id, channel.id, {
+        id: `${prefix}-t1`,
+        text: "@小码 帮我看下构建为什么失败",
+      }),
+    );
+    await sweepAll();
+    expect(
+      (await list(channel.id, teammate)).messages.map(
+        (message) => message.text,
+      ),
+    ).toContain("小码开始干这件活了，做完会在群里回复。");
+    // Queued in its hirer's tenant, where its computer is: the relay claims it.
+    expect(turns.rows).toHaveLength(1);
+    const turn = turns.rows[0] as AcpTurnRow;
+    expect(turn.tenantId).toBe(owner.id);
+    await until(
+      () => down.some((frame) => frame.type === "acp.open"),
+      "acp.open",
+    );
+    await device({
+      type: "acp.session",
+      threadId: turn.threadId,
+      sessionId: "s",
+      loaded: true,
+    });
+    await until(
+      () => down.some((frame) => frame.type === "acp.prompt"),
+      "acp.prompt",
+    );
+    expect(turns.rows[0]?.status).toBe("sent");
+    await device({
+      type: "acp.turn.ack",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+    });
+    // Its permission requests go to its hirer (Task 7 decides who may answer).
+    await device({
+      type: "acp.permission.request",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      requestId: "req-t",
+      toolCall: { toolCallId: "c", kind: "execute", title: "bun run build" },
+      options: [{ optionId: "allow", kind: "allow_once", name: "Allow" }],
+      facts: { insideWorkdir: true, paths: [] },
+    });
+    expect(permissions[0]).toMatchObject({
+      tenantId: owner.id,
+      ownerUserId: owner.id,
+    });
+    await device({
+      type: "acp.update",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      seq: 1,
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "构建缺一个环境变量，已补上。" },
+      },
+    });
+    await device({
+      type: "acp.turn.end",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      stopReason: "end_turn",
+      interrupted: false,
+    });
+    // The answer is in the group, for the member who asked and for the hirer.
+    for (const reader of [teammate, owner])
+      await until(
+        async () =>
+          (await list(channel.id, reader)).messages.some(
+            (message) =>
+              message.agentId === external &&
+              message.text === "构建缺一个环境变量，已补上。",
+          ),
+        "the answer in the group",
+      );
+    expect(turns.rows[0]?.status).toBe("done");
   });
 });
