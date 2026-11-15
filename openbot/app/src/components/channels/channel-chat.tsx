@@ -46,7 +46,8 @@ import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
-import { agentListQueryOptions } from "@/lib/agents/queries";
+import { takesUnattendedWork } from "@/lib/agents/external";
+import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import {
   answerPersonQuestionMutationOptions,
   approvalInboxOptions,
@@ -1492,11 +1493,7 @@ export function ChannelChat({
             threadId={channel.threadId}
             compaction={compaction}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
-            routine={
-              channel.active
-                ? { agentId: runtimeAgentId, channelId: channel.id }
-                : undefined
-            }
+            routine={routineTarget(channel, runtimeAgentId, botProfile)}
             voiceCall={
               call.available
                 ? {
@@ -1631,7 +1628,15 @@ export function ChannelChat({
                 <HandoffResumeNotice
                   botId={runtimeAgentId}
                   agent={agent}
-                  ready={isReady && !restoring && channel.active}
+                  // An external employee hands nothing over on a computer of ours: no polling it
+                  // (on a cloud deployment that would locate, and wake, a cloud computer for it).
+                  ready={
+                    isReady &&
+                    !restoring &&
+                    channel.active &&
+                    agentProfiles !== undefined &&
+                    !botProfile?.external
+                  }
                   run={async () => {
                     setRunsInFlight((count) => count + 1);
                     try {
@@ -1843,4 +1848,19 @@ export function ChannelChat({
       </ConversationProvider>
     </CopilotChatConfigurationProvider>
   );
+}
+
+/**
+ * Where the composer's clock (「设一条定时任务」) points: a routine for the Bot this conversation talks
+ * to, posting here. None in an ended conversation, and none for an external employee, which takes no
+ * routines yet (外部员工规格「不做」: nobody would be there to answer its permission requests).
+ */
+export function routineTarget(
+  channel: Pick<AgentChannel, "id" | "active">,
+  agentId: string,
+  profile: Pick<AgentProfile, "external"> | undefined,
+): { agentId: string; channelId: string } | undefined {
+  return channel.active && takesUnattendedWork(profile ?? {})
+    ? { agentId, channelId: channel.id }
+    : undefined;
 }

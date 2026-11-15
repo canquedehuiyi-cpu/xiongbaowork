@@ -14,7 +14,11 @@ import {
   SidebarToggleBar,
   useSidebarToggleVisible,
 } from "@/components/layout/sidebar-toggle";
-import { externalMark, useExternalDevices } from "@/lib/agents/external";
+import {
+  externalMark,
+  hiredRun,
+  useExternalDevices,
+} from "@/lib/agents/external";
 import {
   knownPresence,
   type Presence,
@@ -281,11 +285,7 @@ function OrgChart({ onOpen }: { onOpen: (agentId: string) => void }) {
                   {group.members.map((agent) => (
                     <EmployeeTile
                       agent={agent}
-                      device={
-                        agent.external
-                          ? devices.get(agent.external.deviceId)
-                          : undefined
-                      }
+                      device={devices.get(hiredRun(agent)?.deviceId ?? "")}
                       key={agent.id}
                       onOpen={onOpen}
                       presence={presence.get(agent.id)}

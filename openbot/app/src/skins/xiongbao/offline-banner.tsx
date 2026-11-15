@@ -1,3 +1,4 @@
+import { hiredRun } from "@/lib/agents/external";
 import type { Presence } from "@/lib/agents/presence";
 import type { AgentProfile } from "@/lib/agents/queries";
 import type { RegisteredDevice } from "@/lib/devices/queries";
@@ -20,7 +21,7 @@ export function offlineComputers(
 ): OfflineComputer[] {
   const byDevice = new Map<string, OfflineComputer>();
   for (const agent of agents) {
-    const external = agent.external;
+    const external = hiredRun(agent);
     const now = presence.get(agent.id);
     if (!external || now?.status !== "offline") continue;
     const entry = byDevice.get(external.deviceId) ?? {

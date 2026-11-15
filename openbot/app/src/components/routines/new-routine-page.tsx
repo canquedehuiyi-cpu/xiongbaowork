@@ -2,6 +2,7 @@ import { useForm } from "@tanstack/react-form";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { ExternalUnattendedNote } from "@/components/agents/external/external-marks";
 import { PageCard, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -133,6 +134,21 @@ export function NewRoutinePage({
   const botItems = Object.fromEntries(
     (agents.data ?? []).map((agent) => [agent.id, agent.name]),
   ) as Record<string, string>;
+
+  // 从外部员工的地方带进来的（旧链接、书签）：它这一步不接定时任务，不给表单，只说明。
+  if (
+    presetAgentId &&
+    agents.data?.some((agent) => agent.id === presetAgentId && agent.external)
+  )
+    return (
+      <PageShell
+        backButton={{ label: "定时任务", linkProps: ROUTINES_LIST }}
+        description="选一位员工，说说要做什么，再定好时间。它每次做完都会在和你的对话里说一声。"
+        title="新建定时任务"
+      >
+        <ExternalUnattendedNote />
+      </PageShell>
+    );
 
   return (
     <PageShell

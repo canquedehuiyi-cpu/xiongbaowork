@@ -5,6 +5,7 @@ import { AssembleSections } from "@/components/bot-profile/assemble";
 import { BotSubpage } from "@/components/bot-profile/bot-subpage";
 import { SetupSections } from "@/components/bot-profile/setup";
 import { ProjectSection } from "@/components/bot-profile/waker-detail-sections";
+import { hiredRun } from "@/lib/agents/external";
 
 const setupSearchSchema = z.object({
   /** 外部员工：打开招聘设置的编辑态（电脑、工作文件夹、五项规则）。别的员工不认它。 */
@@ -35,18 +36,20 @@ function SetupPage() {
       description="修改这位员工的身份、可见性和运行方式，以及它用的模型、人设和能碰到的东西，从下一轮开始生效。"
       title="设置"
     >
-      {(agent) =>
-        agent.external && edit === "run" && agent.canManage ? (
+      {(agent) => {
+        // 只有招它的人读得到它怎么跑、也只有他能改（服务器对别人一律拒绝，管理员也一样）。
+        const run = hiredRun(agent);
+        return run && edit === "run" && agent.mine ? (
           <div className="mt-6">
             <HireSettings
-              deviceId={agent.external.deviceId}
+              deviceId={run.deviceId}
               editing={{
                 agentId: agent.id,
                 name: agent.name,
                 department: agent.department ?? null,
-                external: agent.external,
+                external: run,
               }}
-              harness={agent.external.harness}
+              harness={run.harness}
               onCancel={leaveEdit}
               onHired={leaveEdit}
             />
@@ -57,8 +60,8 @@ function SetupPage() {
             {agent.external ? null : <ProjectSection profile={agent} />}
             <AssembleSections profile={agent} />
           </>
-        )
-      }
+        );
+      }}
     </BotSubpage>
   );
 }

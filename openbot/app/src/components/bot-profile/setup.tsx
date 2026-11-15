@@ -50,6 +50,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   externalHarnessName,
   externalWorkdirName,
+  hiredRun,
   mayNeverAsk,
   RULE_ROWS,
   RULE_VALUE_LABEL,
@@ -77,6 +78,7 @@ import {
 import { shortName } from "@/lib/brand";
 import { isComposing } from "@/lib/composing";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
+import { devicesQueryOptions } from "@/lib/devices/queries";
 import { myCapabilitiesQueryOptions } from "@/lib/enterprise/queries";
 import { queryClient } from "@/query-client";
 
@@ -539,45 +541,63 @@ function ConnectionSection({ agent }: { agent: AgentProfile }) {
  */
 function ExternalConnectionSection({ agent }: { agent: AgentProfile }) {
   const device = useExternalDevice(agent);
+  const devices = useQuery({
+    ...devicesQueryOptions(),
+    enabled: Boolean(hiredRun(agent)),
+  });
   const external = agent.external;
   if (!external) return null;
-  const workdir = externalWorkdirName(external, device);
-  const asks = RULE_ROWS.filter((row) => external.rules[row.key] !== "direct")
-    .map(
-      (row) =>
-        `${row.label}${external.rules[row.key] === "dangerous" ? `（${RULE_VALUE_LABEL.dangerous}）` : ""}`,
-    )
-    .join("、");
+  const run = hiredRun(agent);
   const rows: { icon: typeof IconStack2; title: string; value: string }[] = [
     {
       icon: IconStack2,
       title: "智能体",
       value: `外部员工 · ${externalHarnessName(external, device)} · 用它自己的模型和订阅`,
     },
-    {
-      icon: IconDeviceDesktop,
-      title: "电脑",
-      value: device
-        ? device.online
-          ? device.name
-          : `${device.name}（离线，派给它的活会排队）`
-        : "读不到这台电脑",
-    },
-    {
-      icon: IconNotes,
-      title: "工作文件夹",
-      value: workdir ?? "这台电脑不再共享这个文件夹，请重新选一个",
-    },
-    {
-      icon: IconShieldCheck,
-      title: "先问你",
-      value: asks || "都直接做（底线仍然每次交给你）",
-    },
   ];
+  if (run) {
+    const asks = RULE_ROWS.filter((row) => run.rules[row.key] !== "direct")
+      .map(
+        (row) =>
+          `${row.label}${run.rules[row.key] === "dangerous" ? `（${RULE_VALUE_LABEL.dangerous}）` : ""}`,
+      )
+      .join("、");
+    // 电脑列表还没读到、或者读失败时说读不到，不说文件夹不再共享。
+    const readable = devices.isSuccess;
+    const workdir = externalWorkdirName(run, device);
+    rows.push(
+      {
+        icon: IconDeviceDesktop,
+        title: "电脑",
+        value: device
+          ? device.online
+            ? device.name
+            : `${device.name}（离线，派给它的活会排队）`
+          : readable
+            ? "找不到这台电脑，请换一台"
+            : "读不到这台电脑",
+      },
+      {
+        icon: IconNotes,
+        title: "工作文件夹",
+        value:
+          workdir ??
+          (device
+            ? "这台电脑不再共享这个文件夹，请重新选一个"
+            : "读不到这台电脑"),
+      },
+      {
+        icon: IconShieldCheck,
+        title: "先问你",
+        value: asks || "都直接做（底线仍然每次交给你）",
+      },
+    );
+  }
   return (
     <PageSection
       action={
-        agent.canManage ? (
+        // 只有招它的人能改（服务器对别人一律拒绝），管理员也只能看。
+        run && agent.mine ? (
           <Button
             render={
               <Link
@@ -613,6 +633,11 @@ function ExternalConnectionSection({ agent }: { agent: AgentProfile }) {
           </Fragment>
         ))}
       </PageRows>
+      {run ? null : (
+        <p className="mt-3 text-[13px] text-muted-foreground">
+          它在招它的人自己的电脑上干活；在哪台电脑、哪个文件夹、哪些事先问，只有招它的人看得到、改得了。
+        </p>
+      )}
       {mayNeverAsk(external) ? <NoPermissionWarning className="mt-3" /> : null}
     </PageSection>
   );

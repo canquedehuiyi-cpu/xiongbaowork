@@ -28,12 +28,17 @@ import {
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
+import { AgentDialog } from "@/components/agents/agent-dialog";
 import { HireSettings } from "@/components/agents/external/hire-settings";
+import { AutomationForm } from "@/components/automations/automation-form";
+import { AssembleSections } from "@/components/bot-profile/assemble";
 import { BotSettingsRows } from "@/components/bot-profile/settings-rows";
+import { SetupSections } from "@/components/bot-profile/setup";
+import { routineTarget } from "@/components/channels/channel-chat";
 import { ConversationHeaderCard } from "@/components/channels/conversation-header-card";
 import { externalSubtitle, takesUnattendedWork } from "@/lib/agents/external";
 import { type Presence, usePresence } from "@/lib/agents/presence";
-import type { AgentProfile } from "@/lib/agents/queries";
+import type { AgentProfile, ExternalRun } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import {
   type AgentChannel,
@@ -175,6 +180,12 @@ function agent(overrides: Partial<AgentProfile>): AgentProfile {
   };
 }
 
+const CODEX_RUN: ExternalRun = {
+  harness: "codex",
+  deviceId: "dev-mac",
+  workdirRef: "fld_shop",
+  rules: { ...RULES },
+};
 const CODEX = agent({
   id: "ext-codex",
   name: "代码熊",
@@ -395,15 +406,8 @@ describe("对话顶栏", () => {
     );
   });
 
-  test("看它的屏幕 opens the device screen viewer", async () => {
-    const chat: AgentChannel = {
-      id: "c-ext",
-      name: "代码熊",
-      agentIds: ["ext-codex"],
-      threadId: "t-ext",
-      active: true,
-      lastMessageAt: "2026-11-15T08:00:00.000Z",
-    };
+  /** The conversation's real route, under the workbench frame's card drawer. */
+  function openConversation(chat: AgentChannel, entry = `/channel/${chat.id}`) {
     queryClient.setQueryData(channelKeys.detail(chat.id), chat);
     const rootRoute = createRootRoute({ component: Outlet });
     const authed = createRoute({
@@ -429,13 +433,12 @@ describe("对话顶栏", () => {
       routeTree: rootRoute.addChildren([
         authed.addChildren([app.addChildren([conversation])]),
       ]),
-      history: createMemoryHistory({ initialEntries: [`/channel/${chat.id}`] }),
+      history: createMemoryHistory({ initialEntries: [entry] }),
     });
     const opened: string[] = [];
     const view = render(
       <QueryClientProvider client={queryClient}>
         <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
-          {/* The workbench frame's card drawer, which the header's 名片 opens. */}
           <EmployeeCardContext.Provider
             value={{ openEmployeeCard: (id) => opened.push(id) }}
           >
@@ -444,30 +447,65 @@ describe("对话顶栏", () => {
         </CopilotKitProvider>
       </QueryClientProvider>,
     );
-    const user = userEvent.setup({ document });
-    const watch = await view.findByRole("button", { name: "看它的屏幕" });
-    // An external employee has no browser of ours to take over: the computer controls give way.
-    expect(view.queryByRole("button", { name: "打开电脑" })).toBeNull();
-    expect(view.queryByRole("button", { name: "接管" })).toBeNull();
-    // 名片 is the button the header already had: it opens this employee's card.
-    await user.click(view.getByRole("button", { name: "名片" }));
-    expect(opened).toEqual(["ext-codex"]);
-    expect(view.queryByRole("region", { name: "电脑侧栏" })).toBeNull();
+    return { view, router, opened, user: userEvent.setup({ document }) };
+  }
 
-    await user.click(watch);
-    await waitFor(() =>
-      expect(router.state.location.search).toMatchObject({ watch: true }),
+  const chatWith = (agentId: string, id: string): AgentChannel => ({
+    id,
+    name: agentId,
+    agentIds: [agentId],
+    threadId: `t-${id}`,
+    active: true,
+    lastMessageAt: "2026-11-15T08:00:00.000Z",
+  });
+
+  /*
+   * 「看它的屏幕」 is held back until the device can show one (round 1 ruling): the live screen
+   * viewer locates a computer by the Bot's id, and on a cloud deployment that starts a cloud
+   * computer for an employee that never works on one.
+   */
+  test("看它的屏幕 is not offered until the device can show its screen, and no computer is opened for it", async () => {
+    const { view, router, opened, user } = openConversation(
+      chatWith("ext-codex", "c-ext"),
+      "/channel/c-ext?watch=true",
     );
-    // The live screen viewer every employee has, in the shared detail pane.
-    expect(await view.findByRole("region", { name: "电脑侧栏" })).toBeTruthy();
-    expect(watch.getAttribute("aria-pressed")).toBe("true");
-    // And the same button closes it.
-    await user.click(watch);
+    const card = await view.findByRole("button", { name: "名片" });
     await waitFor(() =>
       expect(
-        (router.state.location.search as { watch?: boolean }).watch,
-      ).toBeUndefined(),
+        view.container.querySelector("[data-external-mark]")?.textContent,
+      ).toBe("外部员工 · Codex"),
     );
+    expect(view.queryByRole("button", { name: "看它的屏幕" })).toBeNull();
+    // No computer of ours: neither its controls nor, from a stale `?watch`, its viewer.
+    expect(view.queryByRole("button", { name: "打开电脑" })).toBeNull();
+    expect(view.queryByRole("button", { name: "接管" })).toBeNull();
+    expect(view.queryByRole("region", { name: "电脑侧栏" })).toBeNull();
+    // Past the composer's handover poll (once a second for any other employee): nothing asked of a
+    // computer for it.
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    expect(
+      sent.some((request) =>
+        request.url.startsWith("/api/computers/ext-codex"),
+      ),
+    ).toBe(false);
+    // 名片 is the button the header already had: it opens this employee's card.
+    await user.click(card);
+    expect(opened).toEqual(["ext-codex"]);
+    expect(router.state.location.pathname).toBe("/channel/c-ext");
+  });
+
+  test("an external employee's chat has no routine clock; any other employee's has", () => {
+    const chat = { id: "c-ext", active: true };
+    // The composer draws 「设一条定时任务」 exactly when this says where it points.
+    expect(routineTarget(chat, "ext-codex", CODEX)).toBeUndefined();
+    expect(routineTarget(chat, "a1", BUILT_IN)).toEqual({
+      agentId: "a1",
+      channelId: "c-ext",
+    });
+    // An ended conversation has none either way.
+    expect(
+      routineTarget({ ...chat, active: false }, "a1", BUILT_IN),
+    ).toBeUndefined();
   });
 });
 
@@ -605,6 +643,96 @@ describe("没人在场的活", () => {
   });
 });
 
+describe("别处的入口", () => {
+  test("the employee dialog has no 定时任务 tab for an external employee", async () => {
+    answers.set("GET /api/agents/ext-codex", { agent: CODEX });
+    answers.set("GET /api/agents/a1", { agent: BUILT_IN });
+    renderAt("/", () => (
+      <AgentDialog agentId="ext-codex" onClose={() => {}} open />
+    ));
+    const body = within(document.body);
+    await body.findAllByText("管理");
+    expect(body.getAllByText("交接").length).toBeGreaterThan(0);
+    expect(body.queryAllByText("定时任务")).toHaveLength(0);
+    cleanup();
+    renderAt("/", () => <AgentDialog agentId="a1" onClose={() => {}} open />);
+    await body.findAllByText("管理");
+    expect(body.getAllByText("定时任务").length).toBeGreaterThan(0);
+  });
+
+  test("a new automation cannot pick an external employee, not even by default", async () => {
+    // The external employees come first in the list: the default would have been one of them.
+    answers.set("GET /api/agents", { agents: [CODEX, CUSTOM, BUILT_IN] });
+    answers.set("GET /api/automations/capabilities", { wakerflow: false });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <AutomationForm onCreated={() => {}} />
+      </QueryClientProvider>,
+    );
+    const picker = (await waitFor(() => {
+      const found = view.getByLabelText("选择 Waker") as HTMLSelectElement;
+      if (found.options.length === 0) throw new Error("no roster yet");
+      return found;
+    })) as HTMLSelectElement;
+    expect([...picker.options].map((option) => option.value)).toEqual(["a1"]);
+    expect(picker.value).toBe("a1");
+  });
+
+  test("someone other than its hirer sees which agent it is, and nothing to change", async () => {
+    // What an administrator reads: only which agent it is.
+    const seen = agent({
+      id: "ext-codex",
+      name: "代码熊",
+      title: "外部员工 · Codex",
+      mine: false,
+      canManage: true,
+      external: { harness: "codex" },
+    });
+    const { view } = renderAt("/", () => <SetupSections agent={seen} />);
+    const run = await view.findByText("运行方式");
+    const section = run.closest("section") as HTMLElement;
+    expect(
+      section.querySelector('[data-external-run="智能体"]')?.textContent,
+    ).toBe("外部员工 · Codex · 用它自己的模型和订阅");
+    expect(section.querySelector('[data-external-run="电脑"]')).toBeNull();
+    expect(section.querySelector('[data-external-run="先问你"]')).toBeNull();
+    expect(within(section).queryByText("改电脑、文件夹和规则")).toBeNull();
+    // No computer list is read for it.
+    expect(sent.some((request) => request.url === "/api/devices")).toBe(false);
+    cleanup();
+    // Its hirer, with the devices list not read yet: says so, not that the folder went away.
+    answers.delete("GET /api/devices");
+    const hirer = renderAt("/", () => <SetupSections agent={CODEX} />);
+    const own = (await hirer.view.findByText("运行方式")).closest(
+      "section",
+    ) as HTMLElement;
+    await waitFor(() =>
+      expect(
+        own.querySelector('[data-external-run="工作文件夹"]')?.textContent,
+      ).toBe("读不到这台电脑"),
+    );
+    expect(
+      within(own).getByRole("button", { name: "改电脑、文件夹和规则" }),
+    ).toBeTruthy();
+  });
+});
+
+describe("设置页", () => {
+  test("an external employee's settings keep its persona and drop what it never uses", async () => {
+    const { view } = renderAt("/", () => <AssembleSections profile={CODEX} />);
+    expect(await view.findByRole("heading", { name: "人设" })).toBeTruthy();
+    // Its turns carry no model of ours, no tools and no MCP servers (see AssembleSections).
+    const unused = ["模型", "技能", "可自助安装的工具", "连接器", "知识库"];
+    for (const name of unused)
+      expect(view.queryByRole("heading", { name })).toBeNull();
+    cleanup();
+    const other = renderAt("/", () => <AssembleSections profile={BUILT_IN} />);
+    await other.view.findByRole("heading", { name: "人设" });
+    for (const name of unused)
+      expect(other.view.getByRole("heading", { name })).toBeTruthy();
+  });
+});
+
 describe("招聘设置的编辑态", () => {
   test("opens with what it has now and saves only what changed", async () => {
     answers.set("PATCH /api/agents/external/ext-codex", {
@@ -618,7 +746,7 @@ describe("招聘设置的编辑态", () => {
           agentId: "ext-codex",
           name: "代码熊",
           department: "研发部",
-          external: CODEX.external as NonNullable<AgentProfile["external"]>,
+          external: CODEX_RUN,
         }}
         harness="codex"
         onHired={(id) => {

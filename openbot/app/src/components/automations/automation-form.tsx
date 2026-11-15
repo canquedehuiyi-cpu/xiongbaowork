@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FlowInputFields } from "@/components/wakerflow/flow-input-fields";
+import { takesUnattendedWork } from "@/lib/agents/external";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   type AutomationTarget,
@@ -80,7 +81,8 @@ export function AutomationForm({
   const capabilities = useQuery(automationCapabilitiesQueryOptions());
   const canFlow = capabilities.data?.wakerflow === true;
   const flows = useQuery(wakerflowChoicesQueryOptions(canFlow));
-  const roster = agents.data ?? [];
+  // 外部员工这一步不接定时触发（外部员工规格「不做」：没人在场批它的许可），不列它，也不会被默认选上。
+  const roster = (agents.data ?? []).filter(takesUnattendedWork);
   const field = useId();
 
   const [name, setName] = useState("");

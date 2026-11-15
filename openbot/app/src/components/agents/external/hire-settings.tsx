@@ -489,6 +489,13 @@ export function HireSettings({
                 这台电脑还没有共享文件夹。请先在桌面端添加一个，再回来招。
               </p>
             )}
+            {editing &&
+            device?.deviceId === editing.external.deviceId &&
+            !roots.some((root) => root.ref === editing.external.workdirRef) ? (
+              <Warning>
+                原来的工作文件夹这台电脑不再共享了，请重新选一个再保存。
+              </Warning>
+            ) : null}
             <span className="text-[12px] text-muted-foreground">
               只列出这台电脑在桌面端共享的文件夹；要用新文件夹，请先在桌面端添加。
             </span>
@@ -589,7 +596,7 @@ export function HireSettings({
       <div className="flex flex-wrap items-center gap-3">
         <span className="flex-[1_1_300px] text-[13px] text-muted-foreground">
           {editing
-            ? "换不了它是哪个智能体；要用别的，请重新招一位。"
+            ? "改好的规则从它下一次请求许可起就生效。换不了它是哪个智能体；要用别的，请重新招一位。"
             : "招进来后它会出现在通讯录、可以拉进群组；电脑关机时它的活会排队，开机后自动继续。"}
         </span>
         {onCancel ? (

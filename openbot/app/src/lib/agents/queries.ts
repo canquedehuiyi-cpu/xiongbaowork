@@ -146,10 +146,14 @@ export type AgentProfile = {
   framework?: string;
   /**
    * 外部员工（`device_acp`）在哪台电脑上、是哪个智能体、在哪个工作文件夹、五项规则，都只是引用（外部员工
-   * 规格第 1 节）。别的员工没有这一项。外部员工只归招它的人，只有招聘人读得到它。
+   * 规格第 1 节）。别的员工没有这一项。招聘人读到全部；别人（能读到它的只有管理员）只读到是哪一家
+   * （{@link ExternalHarness}），够画标记，读不到电脑、文件夹和规则。要全部的用 `hiredRun`。
    */
-  external?: ExternalRun;
+  external?: ExternalRun | ExternalHarness;
 };
+
+/** 非招聘人读到的外部员工：只有是哪一家。 */
+export type ExternalHarness = { harness: AcpHarness };
 
 /** {@link AgentProfile.external}：外部员工怎么跑。 */
 export type ExternalRun = {

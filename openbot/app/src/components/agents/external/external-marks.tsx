@@ -1,6 +1,6 @@
 import { IconAlertTriangle } from "@tabler/icons-react";
+import type { AcpHarness } from "@/lib/agents/external";
 import { EXTERNAL_UNATTENDED_NOTE, externalMark } from "@/lib/agents/external";
-import type { ExternalRun } from "@/lib/agents/queries";
 import { shortName } from "@/lib/brand";
 import type { RegisteredDevice } from "@/lib/devices/queries";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,7 @@ export function ExternalMark({
   device,
   className,
 }: {
-  external: Pick<ExternalRun, "harness" | "appRef">;
+  external: { harness: AcpHarness; appRef?: string };
   /** 它所在的电脑：本机智能体从这里读登记的名字。 */
   device?: Pick<RegisteredDevice, "apps">;
   className?: string;

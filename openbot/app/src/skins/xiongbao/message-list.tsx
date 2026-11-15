@@ -32,7 +32,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { useBotNames } from "@/lib/agents/bot-names";
-import { useExternalDevices } from "@/lib/agents/external";
+import { hiredRun, useExternalDevices } from "@/lib/agents/external";
 import {
   knownPresence,
   type Presence,
@@ -183,16 +183,17 @@ export function MessageList() {
   );
   // 整个列表一次读出已经载入的单聊员工此刻的状态，不是每行一个。取全部载入的会话（按最近排、截到上限），
   // 不取筛选、搜索之后剩下的：换筛选或敲一个字不换这一批，不重新问。
-  // 外部员工也在这一批里（没有单聊的也算）：有谁的电脑离线了，顶上要有提示条。
+  // 外部员工也在这一批里（没有单聊的也算）：有谁的电脑离线了，顶上要有提示条。排在最前，单聊再多、
+  // 一批截到上限时也不会把它们截掉。
   const externals = useQuery({
     ...agentListQueryOptions(),
-    select: (agents) => agents.filter((agent) => agent.external),
+    select: (agents) => agents.filter((agent) => hiredRun(agent)),
   }).data;
   const presence = usePresence([
+    ...(externals ?? []).map((agent) => agent.id),
     ...byRecency(channels.data ?? []).flatMap(
       (channel) => directAgentId(channel) ?? [],
     ),
-    ...(externals ?? []).map((agent) => agent.id),
   ]);
   const devices = useExternalDevices(externals ?? []);
   const offline = offlineComputers(externals ?? [], presence, devices);

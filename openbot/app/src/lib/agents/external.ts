@@ -19,6 +19,17 @@ import {
 import { type AgentProfile, agentKeys, type ExternalRun } from "./queries";
 
 /**
+ * 招聘人读到的外部员工怎么跑（电脑、文件夹、规则）；不是外部员工、或者读的人不是招聘人（只读得到是哪
+ * 一家）时是 undefined。
+ */
+export function hiredRun(
+  agent: Pick<AgentProfile, "external"> | undefined,
+): ExternalRun | undefined {
+  const external = agent?.external;
+  return external && "deviceId" in external ? external : undefined;
+}
+
+/**
  * 从我的电脑招（外部员工，Task 10）：把用户电脑上已经装好的 Codex、Claude Code、Hermes（或在桌面端登记的
  * 本机智能体）招进来当员工。
  *
@@ -178,7 +189,7 @@ export function hireExternalMutationOptions(queryClient: QueryClient) {
 
 /** 外部员工用的是哪一家：三家照名字；本机智能体用电脑上登记的名字，读不到时写「本机智能体」。 */
 export function externalHarnessName(
-  external: Pick<ExternalRun, "harness" | "appRef">,
+  external: { harness: AcpHarness; appRef?: string },
   device?: Pick<RegisteredDevice, "apps">,
 ): string {
   if (external.harness !== "custom") return HARNESS_LABEL[external.harness];
@@ -190,7 +201,7 @@ export function externalHarnessName(
 
 /** 标记文案「外部员工 · Codex」（Global Constraints）。 */
 export function externalMark(
-  external: Pick<ExternalRun, "harness" | "appRef">,
+  external: { harness: AcpHarness; appRef?: string },
   device?: Pick<RegisteredDevice, "apps">,
 ): string {
   return `外部员工 · ${externalHarnessName(external, device)}`;
@@ -251,7 +262,7 @@ const NO_DEVICES: ReadonlyMap<string, RegisteredDevice> = new Map();
 export function useExternalDevices(
   agents: readonly (Pick<AgentProfile, "external"> | undefined)[],
 ): ReadonlyMap<string, RegisteredDevice> {
-  const any = agents.some((agent) => agent?.external);
+  const any = agents.some((agent) => hiredRun(agent));
   const devices = useQuery({ ...devicesQueryOptions(), enabled: any });
   const rows = any && !devices.isError ? devices.data : undefined;
   return useMemo(
@@ -268,7 +279,8 @@ export function useExternalDevice(
   agent: Pick<AgentProfile, "external"> | undefined,
 ): RegisteredDevice | undefined {
   const devices = useExternalDevices([agent]);
-  return agent?.external ? devices.get(agent.external.deviceId) : undefined;
+  const run = hiredRun(agent);
+  return run ? devices.get(run.deviceId) : undefined;
 }
 
 export type ExternalEdit = {

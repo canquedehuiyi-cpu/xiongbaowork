@@ -20,6 +20,7 @@ import { employeeNumber } from "@/components/summon/summon-card-flip";
 import {
   externalMark,
   externalWorkdirName,
+  hiredRun,
   mayNeverAsk,
   useExternalDevice,
 } from "@/lib/agents/external";
@@ -218,7 +219,8 @@ function CardBody({
   const external = agent.external;
   const device = useExternalDevice(agent);
   const mark = external ? externalMark(external, device) : null;
-  const workdir = external ? externalWorkdirName(external, device) : null;
+  const run = hiredRun(agent);
+  const workdir = run ? externalWorkdirName(run, device) : null;
   // 电脑离线时写「离线 · 2 件排队中」（规格第 44 行）；在忙照旧是「此刻」。
   const offline =
     presence?.status === "offline" ? presenceSummary(presence) : "";
@@ -317,7 +319,8 @@ function CardBody({
           ) : null}
         </dl>
       ) : null}
-      {skills && skills.length > 0 ? (
+      {/* 外部员工用它自己的工具，熊宝的技能到不了它那里（它的一轮不带工具）。 */}
+      {!external && skills && skills.length > 0 ? (
         <div>
           <p
             className={cn("m-0 mb-1.5 text-[12.5px]", TONE.muted)}
@@ -351,8 +354,8 @@ function CardBody({
         <Action
           onClick={onLeave}
           params={{ agentId: agent.id }}
-          // 外部员工的「配置」是招聘设置的编辑态：电脑、工作文件夹和五项规则。
-          search={external ? { edit: "run" } : undefined}
+          // 外部员工的「配置」是招聘设置的编辑态：电脑、工作文件夹和五项规则（只有招它的人能改）。
+          search={run && agent.mine ? { edit: "run" } : undefined}
           to="/bots/$agentId/setup"
         >
           配置
