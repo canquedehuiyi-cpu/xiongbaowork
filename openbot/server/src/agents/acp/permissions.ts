@@ -69,8 +69,10 @@ import { type AcpTurnStore, isFinalAcpTurnStatus } from "./turns";
  * engine, a request is asked.
  *
  * "ALLOW FOR THIS CONVERSATION" is never offered for a floor, layer 2, a kind XiongBao does not
- * know, a file outside the working folder, or a command the SEC1 tables call dangerous (or that
- * names a file that may hold secrets). A command is let through again only as exactly the same
+ * know, a file outside the working folder, a command line that is not clean (command-analysis.ts:
+ * substitutions, a variable as the program, writing a file by `>`/`>>`, control structures, script
+ * blocks, here-docs, continuations, a variable in front that decides what runs), or a command the
+ * SEC1 tables call dangerous (or that names a file that may hold secrets). A command is let through again only as exactly the same
  * command (`acpAllowKey`: the command line as sent, trimmed, runs of spaces outside quotes made
  * one); a file request inside the working folder by its kind.
  *
@@ -507,12 +509,12 @@ export async function resolvePermission(input: {
       "其他操作",
     );
   /*
-   * "Allow for this conversation": a command only as exactly this command, and never one the SEC1
-   * tables call dangerous or that names a file that may hold secrets; a file request only inside the
-   * working folder.
+   * "Allow for this conversation": a command only as exactly this command, only a clean one, and
+   * never one the SEC1 tables call dangerous or that names a file that may hold secrets; a file
+   * request only inside the working folder.
    */
   const standing = analysis
-    ? !analysis.danger
+    ? analysis.clean && !analysis.danger
     : !classified.rules.includes("touchOutside");
   const allowed = standing && input.threadAllows.has(acpAllowKey(candidate));
   // Layer 3: a custom rule, or the reviewer, asks. The engine's own "ask before changes" default

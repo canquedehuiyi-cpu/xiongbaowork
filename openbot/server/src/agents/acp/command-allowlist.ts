@@ -1,4 +1,8 @@
-import type { CommandAnalysis, CommandPart } from "./command-analysis";
+import {
+  type CommandAnalysis,
+  type CommandPart,
+  SAFE_ENV_NAMES,
+} from "./command-analysis";
 
 /**
  * The commands an external employee may run without asking when its rule for running commands is
@@ -209,34 +213,6 @@ export const COMMAND_ALLOWLIST: Readonly<Record<string, Check>> = {
   java: VERSION,
   rustc: VERSION,
 };
-
-/**
- * Environment variables a command may be given in front of it (`NODE_ENV=test npm test`). Not
- * `PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `*_PRELOAD` or anything else that decides
- * which code runs.
- */
-export const SAFE_ENV_NAMES: ReadonlySet<string> = new Set([
-  "CI",
-  "NODE_ENV",
-  "FORCE_COLOR",
-  "NO_COLOR",
-  "TERM",
-  "LANG",
-  "LC_ALL",
-  "LC_CTYPE",
-  "TZ",
-  "DEBUG",
-  "RUST_BACKTRACE",
-  "RUST_LOG",
-  "GOOS",
-  "GOARCH",
-  "CGO_ENABLED",
-  "PYTHONUNBUFFERED",
-  "PYTHONDONTWRITEBYTECODE",
-  "NODE_NO_WARNINGS",
-  "VERBOSE",
-  "PORT",
-]);
 
 /** Wrappers that change nothing about what runs; with options of their own they are not. */
 const SAFE_WRAPPERS: ReadonlySet<string> = new Set(["env", "time"]);

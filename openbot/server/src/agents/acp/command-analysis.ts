@@ -29,9 +29,38 @@ import { DEFAULT_EMPLOYEE_SECURITY } from "../../approvals/types";
  *    at run time or wraps one in a structure: no `$( )` or backticks, no variable as the program, no
  *    alias, function, `.`/`source`, `trap`, no reserved words or control structures, no `{ }` or
  *    `( )`, no `&` (background, or PowerShell's call operator), no here-doc or here-string, no line
- *    continuation (`clean`). Only a clean line can be let through without asking (see
+ *    continuation, no output written into a file (`>`, `>>`; the null device aside), and no
+ *    variable in front of a command but those in `SAFE_ENV_NAMES` (`clean`). Only a clean line can be let through without asking (see
  *    command-allowlist.ts).
  */
+
+/**
+ * Environment variables a command may be given in front of it (`NODE_ENV=test npm test`). Not
+ * `PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `*_PRELOAD` or anything else that decides
+ * which code runs.
+ */
+export const SAFE_ENV_NAMES: ReadonlySet<string> = new Set([
+  "CI",
+  "NODE_ENV",
+  "FORCE_COLOR",
+  "NO_COLOR",
+  "TERM",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TZ",
+  "DEBUG",
+  "RUST_BACKTRACE",
+  "RUST_LOG",
+  "GOOS",
+  "GOARCH",
+  "CGO_ENABLED",
+  "PYTHONUNBUFFERED",
+  "PYTHONDONTWRITEBYTECODE",
+  "NODE_NO_WARNINGS",
+  "VERBOSE",
+  "PORT",
+]);
 
 /** Longer than this is not read at all: asked every time, and never handed to a pattern. */
 export const MAX_ANALYSED_COMMAND = 4000;
@@ -104,6 +133,7 @@ const RISKY_RUNNER =
 const RISKY_DOTNET = "这条命令直接调用 .NET，看不清它要做什么，先问你。";
 const RISKY_REMOTE = "这条命令在别的电脑上执行命令，先问你。";
 const RISKY_CONFIG = "这条命令临时改了会执行命令的 git 设置，先问你。";
+const RISKY_DOWNLOADED = "这条命令先下载一个文件，再运行刚下载的文件，先问你。";
 
 /** The keys an `execute` request's "allow for this conversation" is matched by. */
 export function commandKey(command: string): string {
@@ -716,6 +746,75 @@ function uploads(program: string, args: string[]): boolean {
   );
 }
 
+/** A file's own name, lower case, without its folder or quotes. */
+const fileName = (path: string) =>
+  (path.split(/[\\/]/).pop() ?? "").toLowerCase();
+
+/** The last segment of a URL's path: the name `curl -O` and `wget` save it under. */
+function remoteName(args: readonly string[]): string[] {
+  const url = args.find((arg) => /^(https?|ftp):\/\//i.test(arg));
+  if (!url) return [];
+  try {
+    const name = new URL(url).pathname.split("/").pop();
+    return name ? [name] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The files an HTTP client call saves (`-o`, `-O`, `--output-document`, `-OutFile`, …). */
+function downloadsOf(program: string, args: string[]): string[] {
+  const files: string[] = [];
+  if (program === "curl") {
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+      if (arg === "--output" || arg === "-o") files.push(args[i + 1] ?? "");
+      else if (arg.startsWith("--output=")) files.push(arg.slice(9));
+      else if (arg === "--remote-name" || arg === "--remote-name-all")
+        files.push(...remoteName(args));
+      else if (/^-[A-Za-z]+$/.test(arg) && !arg.startsWith("--")) {
+        if (arg.endsWith("o")) files.push(args[i + 1] ?? "");
+        else if (/o/.test(arg)) files.push(arg.slice(arg.indexOf("o") + 1));
+        if (arg.includes("O")) files.push(...remoteName(args));
+      }
+    }
+  } else if (program === "wget") {
+    let named = false;
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+      if (arg === "-O" || arg === "--output-document") {
+        named = true;
+        files.push(args[i + 1] ?? "");
+      } else if (arg.startsWith("--output-document=")) {
+        named = true;
+        files.push(arg.slice(18));
+      } else if (/^-O./.test(arg)) {
+        named = true;
+        files.push(arg.slice(2));
+      }
+    }
+    if (!named) files.push(...remoteName(args));
+  } else if (program === "aria2c") {
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+      if (arg === "-o" || arg === "--out") files.push(args[i + 1] ?? "");
+      else if (arg.startsWith("--out=")) files.push(arg.slice(6));
+    }
+    files.push(...remoteName(args));
+  } else
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+      const bare = arg.replace(/^-/, "").split(":");
+      if (
+        arg.startsWith("-") &&
+        (bare[0] as string).length >= 1 &&
+        "outfile".startsWith((bare[0] as string).toLowerCase())
+      )
+        files.push(bare[1] ?? args[i + 1] ?? "");
+    }
+  return files.filter((file) => file !== "" && file !== "-");
+}
+
 /** A remote end of `rsync`: `host:path`, `user@host:path`, `host::module`, `rsync://` (not `C:\…`). */
 const remoteArg = (arg: string) =>
   !arg.startsWith("-") &&
@@ -746,6 +845,8 @@ const PS_VALUED = [
 
 type Facts = {
   parts: CommandPart[];
+  /** Files this line downloads (their names, lower case), to catch running them afterwards. */
+  downloads: Set<string>;
   floors: Set<CommandFloor["source"]>;
   unclean?: string;
   risky?: string;
@@ -763,6 +864,8 @@ const risky = (facts: Facts, why: string) => {
 
 /** How a simple command was reached: piped into, fed a file, inside something else. */
 type Context = {
+  /** Files the simple command's output is redirected into. */
+  outputs?: string[];
   pipedInto: boolean;
   stdin: boolean;
   nested: boolean;
@@ -797,6 +900,9 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
       /^[A-Za-z_][A-Za-z0-9_]*=/.test((words[0] as Word).text)
     )
       env.push((words.shift() as Word).text.split("=")[0] as string);
+    for (const name of env)
+      if (!SAFE_ENV_NAMES.has(name))
+        dirty(facts, `设了会影响运行什么的环境变量 ${name}`);
     const name = programName((words[0] as Word | undefined)?.text ?? "");
     const valued = WRAPPERS[name];
     if (!valued) break;
@@ -1033,6 +1139,21 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
   )
     risky(facts, RISKY_PIPE);
 
+  // Running what this line downloaded: a file of `downloads`, as the program or an interpreter's script.
+  if (
+    facts.downloads.size > 0 &&
+    (facts.downloads.has(fileName(head.text)) ||
+      (INTERPRETERS.has(program) &&
+        args.some((arg) => facts.downloads.has(fileName(arg)))))
+  )
+    risky(facts, RISKY_DOWNLOADED);
+  if (HTTP_PROGRAMS.has(program))
+    for (const file of [
+      ...downloadsOf(program, args),
+      ...(context.outputs ?? []),
+    ])
+      if (fileName(file)) facts.downloads.add(fileName(file));
+
   facts.parts.push({ program, args, wrappers, env, nested: context.nested });
   const text = [program, ...args].join(" ");
 
@@ -1182,12 +1303,14 @@ function analyseInto(command: string, context: Context, facts: Facts): void {
   let words: Word[] = [];
   let pipedInto = false;
   let stdin = false;
+  let outputs: string[] = [];
   let redirect: string | null = null;
   const flush = (next: Op | null) => {
     if (words.length > 0)
-      simpleCommand(words, { ...context, pipedInto, stdin }, facts);
+      simpleCommand(words, { ...context, pipedInto, stdin, outputs }, facts);
     words = [];
     stdin = false;
+    outputs = [];
     pipedInto = next?.op === "|";
   };
   for (const item of lexed.items) {
@@ -1211,8 +1334,11 @@ function analyseInto(command: string, context: Context, facts: Facts): void {
           facts.floors.add("outbound_send");
         else if (
           !/^(\/dev\/null|nul|\$null|\/dev\/stdout|\/dev\/stderr)$/.test(target)
-        )
+        ) {
           facts.writesFile = true;
+          dirty(facts, "往文件里写");
+          outputs.push(item.text);
+        }
       } else if (redirect.startsWith("<")) stdin = true;
       redirect = null;
       continue;
@@ -1255,6 +1381,7 @@ export function analyseCommand(command: string | null): CommandAnalysis {
   const line = plain(command);
   const facts: Facts = {
     parts: [],
+    downloads: new Set(),
     floors: new Set(),
     writesFile: false,
     network: false,
