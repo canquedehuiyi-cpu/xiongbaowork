@@ -1,4 +1,15 @@
-import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
 import type { Database } from "../db/client";
@@ -20,6 +31,7 @@ import {
 } from "../tenant/context";
 import { minuteOfClock, type WorkHours } from "../user-preferences";
 import {
+  BRIEFING_WINDOW_MS,
   type DeliveryNotice,
   localDay,
   type NoticeResult,
@@ -27,6 +39,7 @@ import {
   withinWorkHours,
 } from "./delivery-checker";
 import { clockOf } from "./due-time";
+import { appendTaskEvent } from "./events";
 
 /**
  * 开工 / 收工清点 (spec 2026-11-15-delivery-loop §10), and the way out for what the delivery checker
@@ -55,7 +68,7 @@ import { clockOf } from "./due-time";
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 /** How long after the start or end time a briefing may still go out (a restart across the moment). */
-export const BRIEFING_WINDOW_MS = HOUR;
+export { BRIEFING_WINDOW_MS };
 /** How far back a closed card or a 验收 line is read: enough to cover "today" on any zone. */
 const LOOKBACK_MS = 48 * HOUR;
 /** The statuses of a followed card that has not ended. */
@@ -90,6 +103,13 @@ export type Briefing = {
   overdue: { taskId: string; title: string; minutes: number; nudges: number }[];
   /** The reminders held back outside work hours (start briefing only). */
   deferred: string[];
+};
+
+/** A reminder held outside work hours that a start briefing carries: its card, words and kind. */
+type Carried = {
+  taskId: string;
+  text: string;
+  kind: DeliveryNotice["kind"];
 };
 
 export type BriefingDeps = {
@@ -194,7 +214,7 @@ export function createBriefings(deps: BriefingDeps) {
     kind: BriefingKind,
     now: Date,
     hours: WorkHours,
-  ): Promise<{ briefing: Briefing; carried: string[] } | null> {
+  ): Promise<{ briefing: Briefing; carried: Carried[] } | null> {
     const today = localDay(now, hours.timeZone);
     const since = new Date(now.getTime() - LOOKBACK_MS);
     const cards = await database
@@ -317,9 +337,10 @@ export function createBriefings(deps: BriefingDeps) {
     overdue.sort((a, b) => b.minutes - a.minutes);
 
     const deferred: string[] = [];
+    const carried: Carried[] = [];
     const held = working.filter((card) => card.reminderHeldAt !== null);
     if (kind === "start" && held.length) {
-      const said = new Map<string, string>();
+      const said = new Map<string, { text: string; kind: unknown }>();
       for (const line of await database
         .select({ taskId: taskEvents.taskId, detail: taskEvents.detail })
         .from(taskEvents)
@@ -334,17 +355,29 @@ export function createBriefings(deps: BriefingDeps) {
           ),
         )
         .orderBy(desc(taskEvents.createdAt))) {
-        const detail = line.detail as { result?: unknown; text?: unknown };
+        const detail = line.detail as {
+          result?: unknown;
+          text?: unknown;
+          kind?: unknown;
+        };
         if (
           !said.has(line.taskId) &&
           detail.result === "deferred" &&
           typeof detail.text === "string" &&
           detail.text
         )
-          said.set(line.taskId, detail.text);
+          said.set(line.taskId, { text: detail.text, kind: detail.kind });
       }
-      for (const card of held)
-        deferred.push(said.get(card.id) ?? `『${card.title}』有一条提醒`);
+      for (const card of held) {
+        const held = said.get(card.id);
+        const text = held?.text ?? `『${card.title}』有一条提醒`;
+        deferred.push(text);
+        carried.push({
+          taskId: card.id,
+          text,
+          kind: held?.kind === "pending_accept" ? "pending_accept" : "overdue",
+        });
+      }
     }
 
     return {
@@ -355,8 +388,62 @@ export function createBriefings(deps: BriefingDeps) {
         overdue,
         deferred,
       },
-      carried: kind === "start" ? held.map((card) => card.id) : [],
+      carried,
     };
+  }
+
+  /**
+   * The held reminders went out with the start briefing: each card's reminder is no longer held (the
+   * next start briefing does not carry it again), and the person was told about it now -- one of the
+   * day's three (`notified_on` / `notified_count`, the person's `day`) and the moment the next
+   * reminder is two hours from (`last_notified_at`), so the checker does not push it again at the
+   * same moment (`tasks/delivery-checker.ts`). One `notified {result: "sent", via: "start_briefing"}`
+   * line each, with the card's write.
+   */
+  async function toldInBriefing(
+    tenantId: string,
+    carried: Carried[],
+    now: Date,
+    day: string,
+  ): Promise<void> {
+    await database.transaction(async (transaction) => {
+      const told = await transaction
+        .update(tasks)
+        .set({
+          reminderHeldAt: null,
+          lastNotifiedAt: now,
+          notifiedCount: sql`case when ${tasks.notifiedOn} = ${day}::date then ${tasks.notifiedCount} + 1 else 1 end`,
+          notifiedOn: day,
+        })
+        .where(
+          and(
+            eq(tasks.tenantId, tenantId),
+            inArray(
+              tasks.id,
+              carried.map((item) => item.taskId),
+            ),
+            isNotNull(tasks.reminderHeldAt),
+            lte(tasks.reminderHeldAt, now),
+          ),
+        )
+        .returning({ id: tasks.id });
+      for (const { id } of told) {
+        const item = carried.find((each) => each.taskId === id);
+        await appendTaskEvent(transaction, {
+          tenantId,
+          taskId: id,
+          kind: "notified",
+          actor: "system",
+          detail: {
+            kind: item?.kind ?? "overdue",
+            text: item?.text ?? "",
+            result: "sent",
+            via: "start_briefing",
+            at: now.toISOString(),
+          },
+        });
+      }
+    });
   }
 
   /** One person's briefings due now, each claimed once for their local day. */
@@ -386,18 +473,8 @@ export function createBriefings(deps: BriefingDeps) {
         const composed = await compose(tenantId, kind, now, hours);
         if (composed && deps.send) {
           offered = await deps.send(tenantId, kind, composed.briefing, now);
-          // The held reminders went out with it: the next start briefing does not carry them again.
           if (composed.carried.length && offered > 0)
-            await database
-              .update(tasks)
-              .set({ reminderHeldAt: null })
-              .where(
-                and(
-                  eq(tasks.tenantId, tenantId),
-                  inArray(tasks.id, composed.carried),
-                  lte(tasks.reminderHeldAt, now),
-                ),
-              );
+            await toldInBriefing(tenantId, composed.carried, now, day);
         }
       } catch (error) {
         /*

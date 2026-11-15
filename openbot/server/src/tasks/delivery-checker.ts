@@ -36,6 +36,11 @@ import { appendTaskEvent } from "./events";
  * - Outside the person's work hours nothing is pushed and nobody is nudged: the reminder is held
  *   (`reminder_held_at`, and a `notified {result: "deferred"}` line) for the next start briefing, one
  *   per card until it is pushed, and the nudge waits for the first pass inside their hours.
+ * - A held reminder is the next start briefing's (`tasks/briefing.ts`), which carries it and records
+ *   it told (`last_notified_at`, one of the day's three). In the hour that briefing may go out in
+ *   ({@link BRIEFING_WINDOW_MS} from the start of work) the checker leaves a held reminder alone, so
+ *   the person is not told twice at 09:00 whichever of the two loops gets there first; one the briefing
+ *   did not carry is pushed once that hour is over.
  * - While a turn is running on the card's thread nothing is done and nothing is written; the next pass
  *   looks again. "Running" is the runner's answer about the thread, never `active_run_ref` alone: a
  *   server that died mid-round leaves the column naming a round nothing runs any more.
@@ -72,6 +77,11 @@ export const UNREPORTED_DUE_MS = 2 * HOUR;
 export const DAILY_NOTICES = 3;
 /** Nudges the coworker is given about one card in one of the person's days. */
 export const DAILY_NUDGES = 3;
+/**
+ * How long after the start (or the end) of the person's work hours that day's briefing may still go out
+ * (a restart across the moment): the hour in which a held reminder is the start briefing's.
+ */
+export const BRIEFING_WINDOW_MS = HOUR;
 /** Cards one pass checks, soonest-due first; the rest wait a minute. */
 const CARDS_PER_PASS = 500;
 
@@ -164,6 +174,21 @@ const minutesOf = (clock: string): number => {
   const [hours, minutes] = clock.split(":").map(Number);
   return (hours ?? 0) * 60 + (minutes ?? 0);
 };
+
+/** Whether `now` is in the hour the person's start briefing may go out in, on their clock. */
+export function inStartBriefingHour(hours: WorkHours, now: Date): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: hours.timeZone,
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const part = (type: string) =>
+    Number(parts.find((piece) => piece.type === type)?.value ?? 0);
+  const minute = part("hour") * 60 + part("minute");
+  const start = minutesOf(hours.start);
+  return minute >= start && minute < start + BRIEFING_WINDOW_MS / MINUTE;
+}
 
 /** Whether `now` is inside the person's work hours, on their clock. */
 export function withinWorkHours(hours: WorkHours, now: Date): boolean {
@@ -310,7 +335,7 @@ function dueOn(
   card: CheckedCard,
   schedule: Schedule,
   now: Date,
-  clock: { inHours: boolean; today: string },
+  clock: { inHours: boolean; today: string; startBriefing: boolean },
 ) {
   // Only in the person's work hours, and not a fourth time in their day.
   const nudge =
@@ -328,7 +353,10 @@ function dueOn(
   const notify =
     reminder &&
     (clock.inHours
-      ? card.notifiedOn !== clock.today || card.notifiedCount < DAILY_NOTICES
+      ? (card.notifiedOn !== clock.today ||
+          card.notifiedCount < DAILY_NOTICES) &&
+        // Held for the start briefing, which is going out now: it says it, not a push of its own.
+        !(card.reminderHeldAt !== null && clock.startBriefing)
       : // Held already: one reminder waits for the briefing, not one every two hours of the night.
         card.reminderHeldAt === null);
   return { nudge, overdue, notify };
@@ -503,6 +531,7 @@ async function checkCard(
 
   const hours = await deps.workHours(tenantId);
   const inHours = withinWorkHours(hours, now);
+  const startBriefing = inHours && inStartBriefingHour(hours, now);
   const today = localDay(now, hours.timeZone);
   const name =
     (await deps
@@ -522,7 +551,7 @@ async function checkCard(
       card,
       await waitingSinceOf(transaction, tenantId, card),
     );
-    const due = dueOn(card, schedule, now, { inHours, today });
+    const due = dueOn(card, schedule, now, { inHours, today, startBriefing });
     if (queued) due.nudge = false;
     if (!due.nudge && !due.overdue && !due.notify) return null;
     const notice = noticeOf(card, schedule, now, name, queued);

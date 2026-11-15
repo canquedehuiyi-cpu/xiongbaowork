@@ -124,7 +124,11 @@ export function taskEventSentence(
       return "已逾期";
     case "notified":
       // Held outside the person's work hours: it comes with the next start briefing (spec §8).
-      return detail.result === "deferred" ? "提醒留到开工清点" : "已提醒你";
+      if (detail.result === "deferred") return "提醒留到开工清点";
+      // The held reminder went out with the start briefing.
+      return detail.via === "start_briefing"
+        ? "开工清点里提醒了你"
+        : "已提醒你";
     case "reviewed":
       return "已验收";
     case "returned":

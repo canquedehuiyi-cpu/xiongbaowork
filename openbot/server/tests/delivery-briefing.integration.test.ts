@@ -38,6 +38,7 @@ import {
   runDeliveryCheck,
   savedWorkHours,
 } from "../src/tasks/delivery-checker";
+import { listTaskEvents, taskEventSentence } from "../src/tasks/events";
 import { createTaskProjector } from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
@@ -547,6 +548,122 @@ test("start briefing carries reminders deferred overnight", async () => {
   );
   expect(evening?.deferred).toEqual([]);
   expect(evening?.overdue.map((item) => item.taskId)).toEqual([taskId]);
+});
+
+test("at 09:00 a reminder held overnight goes out once: the briefing first, then the checker", async () => {
+  const cai = await person("held-briefing-first", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  await phone(cai);
+  await bound(cai, "slack");
+  // Due Monday 21:00 in Shanghai; at 22:00 it is overdue and the reminder is held for the morning.
+  const taskId = await card(cai, {
+    acceptedAt: at(MONDAY_9, 10 * HOUR),
+    dueAt: at(MONDAY_9, 12 * HOUR),
+    dueReported: true,
+  });
+  const checker = checkerFor([cai]);
+  await checker.check(at(MONDAY_9, 13 * HOUR));
+  expect((await cardRow(cai, taskId)).reminderHeldAt).not.toBeNull();
+
+  const tuesday9 = at(MONDAY_9, 24 * HOUR);
+  const pass = briefingsFor([cai]);
+  await pass.runBriefings(tuesday9);
+  // Both minute loops at the same moment, and the next few minutes.
+  await checker.check(tuesday9);
+  await checker.check(at(tuesday9, MINUTE));
+  await checker.check(at(tuesday9, 30 * MINUTE));
+  await sweep(cai);
+  expect(pass.sent.map((item) => item.briefing.deferred)).toEqual([
+    [expect.stringContaining("『核对发票』已逾期")],
+  ]);
+  expect((await outbox(cai, "briefing")).length).toBe(2);
+  // Not pushed a second time on its own.
+  expect(await outbox(cai, "overdue")).toEqual([]);
+  // The briefing told the person: it counts as today's first reminder, and the next is two hours on.
+  const told = await cardRow(cai, taskId);
+  expect(told.reminderHeldAt).toBeNull();
+  expect(told.lastNotifiedAt?.toISOString()).toBe(tuesday9.toISOString());
+  expect(told.notifiedOn).toBe("2026-11-17");
+  expect(told.notifiedCount).toBe(1);
+  const carried = (
+    await runAsTenant(cai.id, () =>
+      listTaskEvents(database, { tenantId: cai.id, taskId }),
+    )
+  ).filter((event) => event.kind === "notified");
+  expect(carried.map((event) => event.detail.result)).toEqual([
+    "deferred",
+    "sent",
+  ]);
+  const [, sentLine] = carried;
+  if (!sentLine) throw new Error("no line for the briefing");
+  expect(sentLine.detail).toMatchObject({
+    kind: "overdue",
+    via: "start_briefing",
+  });
+  expect(
+    taskEventSentence(sentLine, { now: tuesday9, timeZone: "Asia/Shanghai" }),
+  ).toBe("开工清点里提醒了你");
+
+  await checker.check(at(tuesday9, 2 * HOUR));
+  await sweep(cai);
+  expect((await outbox(cai, "overdue")).length).toBe(2);
+  expect((await cardRow(cai, taskId)).notifiedCount).toBe(2);
+});
+
+test("at 09:00 a reminder held overnight goes out once: the checker first, the briefing after", async () => {
+  const lin = await person("held-checker-first", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  await phone(lin);
+  const taskId = await card(lin, {
+    acceptedAt: at(MONDAY_9, 10 * HOUR),
+    dueAt: at(MONDAY_9, 12 * HOUR),
+    dueReported: true,
+  });
+  const checker = checkerFor([lin]);
+  await checker.check(at(MONDAY_9, 13 * HOUR));
+
+  const tuesday9 = at(MONDAY_9, 24 * HOUR);
+  const pass = briefingsFor([lin]);
+  // The checker gets there first: the start briefing is about to carry it, so it leaves it.
+  await checker.check(tuesday9);
+  await pass.runBriefings(at(tuesday9, MINUTE));
+  await checker.check(at(tuesday9, MINUTE));
+  await checker.check(at(tuesday9, 5 * MINUTE));
+  await sweep(lin);
+  expect(pass.sent.map((item) => item.briefing.deferred)).toEqual([
+    [expect.stringContaining("『核对发票』已逾期")],
+  ]);
+  expect((await outbox(lin, "briefing")).length).toBe(1);
+  expect(await outbox(lin, "overdue")).toEqual([]);
+  expect((await cardRow(lin, taskId)).notifiedCount).toBe(1);
+});
+
+test("a held reminder the start briefing never carried is pushed once the briefing's hour is over", async () => {
+  const mo = await person("held-not-carried", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  await phone(mo);
+  const taskId = await card(mo, {
+    acceptedAt: at(MONDAY_9, 10 * HOUR),
+    dueAt: at(MONDAY_9, 12 * HOUR),
+    dueReported: true,
+  });
+  const checker = checkerFor([mo]);
+  await checker.check(at(MONDAY_9, 13 * HOUR));
+  const tuesday9 = at(MONDAY_9, 24 * HOUR);
+  // No briefing pass ran (the person's briefing loop was down): the checker waits out its hour only.
+  await checker.check(tuesday9);
+  await checker.check(at(tuesday9, 59 * MINUTE));
+  await sweep(mo);
+  expect(await outbox(mo, "overdue")).toEqual([]);
+  await checker.check(at(tuesday9, HOUR));
+  await sweep(mo);
+  expect((await outbox(mo, "overdue")).length).toBe(1);
+  const pushed = await cardRow(mo, taskId);
+  expect(pushed.reminderHeldAt).toBeNull();
+  expect(pushed.notifiedCount).toBe(1);
 });
 
 test("weekends off by default", async () => {

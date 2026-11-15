@@ -1258,8 +1258,11 @@ test("with no time zone saved, the day and the work hours are the product's defa
   expect(evening.reminderHeldAt?.toISOString()).toBe(
     "2026-11-16T10:30:00.000Z",
   );
-  // 09:00 the next morning in Shanghai: a new day of the person's, so a push goes out again.
+  // 09:00 the next morning in Shanghai: the held reminder is the start briefing's, not a push.
   await check(new Date("2026-11-17T01:00:00Z"));
+  expect(sent().length).toBe(3);
+  // 10:00: no briefing carried it, and it is a new day of the person's, so a push goes out again.
+  await check(new Date("2026-11-17T02:00:00Z"));
   expect(sent().length).toBe(4);
   const next = await row(tenantId, taskId);
   expect(next.notifiedOn).toBe("2026-11-17");
