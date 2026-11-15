@@ -54,7 +54,11 @@ import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { type Delivery, firstSentenceOf } from "../tasks/delivery";
 import type { TaskProjector } from "../tasks/projector";
-import { currentTenant, runAsClaimedTenant } from "../tenant/context";
+import {
+  currentTenant,
+  runAsClaimedTenant,
+  runAsTenant,
+} from "../tenant/context";
 import { roundHungByEntry } from "../threads/unattended-card";
 import {
   COMPACTION_DONE_EVENT,
@@ -69,7 +73,15 @@ import {
 export const GROUP_TURN_KIND = "group.turn";
 
 export type GroupMessage = typeof groupMessages.$inferSelect;
-export type GroupBot = { id: string; name: string };
+export type GroupBot = {
+  id: string;
+  name: string;
+  /**
+   * An external employee's hirer (`device_acp`): its work, its card and its quota are that
+   * person's, whoever in the group asked (spec §6).
+   */
+  hiredBy?: string;
+};
 
 /**
  * One queued turn: who it is for, which Bots answer it, and how deep in a Bot-to-Bot chain it is.
@@ -236,8 +248,17 @@ export type GroupStore = {
   people(
     channelId: string,
   ): Promise<{ userId: string; email: string; name: string | null }[]>;
-  /** Take a person out of the group: their membership, and their own mapping when they leave. */
-  removeMember(channelId: string, userId: string): Promise<void>;
+  /**
+   * Take a person out of the group: their membership, and their own mapping when they leave. `unlink`
+   * names their own external employees in it, unlinked in the same transaction before the
+   * membership goes (0218 lets a member unlink their own `device_acp` only while still a member; the
+   * creator may unlink any Bot, 0128).
+   */
+  removeMember(
+    channelId: string,
+    userId: string,
+    unlink?: readonly string[],
+  ): Promise<void>;
 };
 
 /** The executor `database.transaction` hands its callback, which reads like the database itself. */
@@ -740,8 +761,18 @@ export function createGroupStore(
         .where(eq(channelMemberships.channelId, channelId))
         .orderBy(asc(channelMemberships.createdAt), asc(users.email));
     },
-    async removeMember(channelId, userId) {
+    async removeMember(channelId, userId, unlink = []) {
       await database.transaction(async (tx) => {
+        // Their own external employees first, while row security still counts them a member.
+        if (unlink.length > 0)
+          await tx
+            .delete(channelAgents)
+            .where(
+              and(
+                eq(channelAgents.channelId, channelId),
+                inArray(channelAgents.agentId, [...unlink]),
+              ),
+            );
         /*
          * Row security decides who may: the member themselves, or the person who started the group
          * while still in it (0122). A refusal deletes nothing and says so, rather than reporting a
@@ -1066,6 +1097,11 @@ export function createGroupConversations(deps: {
    * to add Bots to an existing group.
    */
   canUseBot?: (ownerUserId: string, agentId: string) => Promise<boolean>;
+  /**
+   * The hirer of an external employee (`device_acp`), null for any other Bot. Only its hirer brings
+   * it into a group or takes it out, whoever started the group (spec §6).
+   */
+  externalHirer?: (agentId: string) => Promise<string | null>;
   /** How often a running reply's partial text is written for the transcript to show. */
   progressEveryMs?: number;
   /**
@@ -1461,6 +1497,12 @@ export function createGroupConversations(deps: {
     );
     const runId = runIdFor(id);
     /*
+     * An external employee's card is its hirer's, whoever asked: its turn runs in the hirer's queue
+     * and the run that does the work finishes the card it finds there (`adoptRunnerCard`). One card,
+     * one charge, in that tenant (spec §1, §6). Every other Bot's card is the asker's.
+     */
+    const cardTurn = bot.hiredBy ? { ...turn, ownerUserId: bot.hiredBy } : turn;
+    /*
      * The board's card for this answer, opened here and not when the message was queued.
      *
      * Everything above is a turn that never reached a Bot: it left the conversation, its earlier turn
@@ -1472,7 +1514,9 @@ export function createGroupConversations(deps: {
      * Unless it is a round of work already on the board (一件活一张卡): a person's message to a coworker
      * that holds an open followed card on this person's thread with it hangs on that card, opens none
      * and charges nothing (the runner is told the card is taken, as for any card the caller owns). A
-     * peer's hop is the hand-off it is, with a card of its own, as the runner treats a hop.
+     * peer's hop is the hand-off it is, with a card of its own, as the runner treats a hop. An external
+     * employee's card is its hirer's (`cardTurn` above) and not followed this way yet: its delivery
+     * terms come with the delivery loop's own part for external employees (spec 2026-11-15-delivery-loop §9).
      */
     /*
      * A lookup or a hang that fails is said, and the round is then an ordinary one with its card
@@ -1491,7 +1535,7 @@ export function createGroupConversations(deps: {
         }),
       );
     let followed =
-      deps.board && deps.delivery && !turn.fromAgentId
+      deps.board && deps.delivery && !turn.fromAgentId && !bot.hiredBy
         ? await deps.delivery
             .openTrackedCard(turn.ownerUserId, threadId, agentId, turn.taskId)
             .catch((error: unknown) => {
@@ -1503,7 +1547,8 @@ export function createGroupConversations(deps: {
       const hung = await deps.delivery
         .attachRun(turn.ownerUserId, followed.id, runId)
         .then(
-          () => true,
+          // False: the card ended between the lookup and the hang -- not hung either.
+          (attached) => attached,
           (error: unknown) => {
             trackedCardFault("group-turn-attach-failed", error);
             return false;
@@ -1513,7 +1558,7 @@ export function createGroupConversations(deps: {
     }
     const cardId = followed
       ? followed.id
-      : await openCard(turn, agentId, runId);
+      : await openCard(cardTurn, agentId, runId);
     const carded = cardId !== null;
     const round = (said?: string) => ({
       taskId: cardId,
@@ -1605,15 +1650,23 @@ export function createGroupConversations(deps: {
         }),
       );
       await writing;
-      const gate = await shareGate({
-        ownerUserId: turn.ownerUserId,
-        channelId: turn.channelId,
-        agentId,
-        threadId,
-        rowId: id,
-        runId,
-        text: result.replyText,
-      });
+      /*
+       * A detached turn (an external employee's, `createAcpGroupTurn`) answers only this server's own
+       * notice that it started: nothing of anyone's to hold back. Its real answer is gated when it is
+       * posted (`announceHandoff`), with its hirer.
+       */
+      const detached = (result as { detached?: boolean }).detached === true;
+      const gate = detached
+        ? ({ status: "allowed" } as const)
+        : await shareGate({
+            ownerUserId: turn.ownerUserId,
+            channelId: turn.channelId,
+            agentId,
+            threadId,
+            rowId: id,
+            runId,
+            text: result.replyText,
+          });
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
@@ -1634,11 +1687,23 @@ export function createGroupConversations(deps: {
         : {};
       if (gate.status === "denied") {
         await deps.store.finish(id, gate.message, "failed", compaction);
-        await closeCard(turn, agentId, runId, true, round(gate.message));
+        await closeCard(cardTurn, agentId, runId, true, round(gate.message));
         return;
       }
       await deps.store.finish(id, result.replyText, "completed", compaction);
-      await closeCard(turn, agentId, runId, false, round(result.replyText));
+      /*
+       * An external employee's turn answers at once that it started and goes on on its owner's
+       * computer (agents/acp/agent.ts `createAcpGroupTurn`): its card stays open for the run that
+       * does the work, which finishes it and announces its answer here (`announceHandoff`).
+       */
+      if (!detached)
+        await closeCard(
+          cardTurn,
+          agentId,
+          runId,
+          false,
+          round(result.replyText),
+        );
       saved = true;
       savedReply = result.replyText;
       await deps.activity?.(turn, agentId, result.replyText, `group:${id}`);
@@ -1710,21 +1775,57 @@ export function createGroupConversations(deps: {
           typeof error.waiting.approvalId === "string" &&
           error.waiting.approvalId.length > 0;
         if (!heldForApproval)
-          await closeCard(turn, agentId, runId, false, round());
+          await closeCard(cardTurn, agentId, runId, false, round());
       } else {
         const message = error instanceof Error ? error.message : String(error);
         await deps.store.finish(id, message, "failed");
-        await closeCard(turn, agentId, runId, true, round(message));
+        await closeCard(cardTurn, agentId, runId, true, round(message));
       }
     }
   }
 
+  /** The group's Bots that are this person's own external employees. */
+  const externalOf = async (
+    channel: string,
+    userId: string,
+  ): Promise<string[]> => {
+    if (!deps.externalHirer) return [];
+    const own: string[] = [];
+    for (const id of await deps.store.bots(channel))
+      if ((await deps.externalHirer(id)) === userId) own.push(id);
+    return own;
+  };
   /** Only the person who started the group changes its Bots; the same refusal `removeMember` gives. */
   const creatorOnly = async (owner: string, channel: string) => {
     await roster(owner, channel);
     const creator = (await deps.store.people(channel))[0]?.userId;
     if (owner !== creator)
       throw new GroupRefusedError("只有发起这个群组的人才能调整群里的员工。");
+  };
+  /**
+   * Who may add or remove these Bots: the group's creator for ordinary Bots, and for an external
+   * employee its hirer and nobody else, the creator included. A change naming only the caller's own
+   * external employees needs them to be in the group, not to have started it.
+   */
+  const hirerOrCreator = async (
+    owner: string,
+    channel: string,
+    agentIds: readonly string[],
+    change: "add" | "remove",
+  ) => {
+    let others = false;
+    for (const id of agentIds) {
+      const hirer = (await deps.externalHirer?.(id)) ?? null;
+      if (hirer === null) others = true;
+      else if (hirer !== owner)
+        throw new GroupRefusedError(
+          change === "add"
+            ? "外部员工只能由招它的人拉进群组。"
+            : "外部员工只能由招它的人移出群组，群主也不行。",
+        );
+    }
+    if (others) await creatorOnly(owner, channel);
+    else await roster(owner, channel);
   };
   const botList = (input: unknown) => {
     const agentIds = z
@@ -1736,6 +1837,119 @@ export function createGroupConversations(deps: {
       throw new GroupRefusedError("每位员工只能出现一次。");
     return agentIds;
   };
+
+  /**
+   * A `message_bot` answer relayed into a Bot's group thread, shown in the shared transcript in that
+   * Bot's voice (the only voice its thread admits) and naming the Bot that answered. Returns false
+   * for a thread that is not a group's, so the caller can announce it the ordinary way.
+   */
+  async function announceHandoff(input: {
+    threadId: string;
+    actorId: string;
+    agentId: string;
+    text: string;
+    /**
+     * `device_acp`: not a relayed answer but an external employee's own, from a turn the group
+     * did not wait for (`createAcpGroupTurn`), posted from its own group thread whoever asked in it.
+     */
+    via?: "device_acp";
+  }): Promise<boolean> {
+    const thread = await deps.store.threadRow(input.threadId);
+    if (
+      !thread ||
+      (input.via === "device_acp"
+        ? thread.agentId !== input.agentId
+        : thread.ownerUserId !== input.actorId)
+    )
+      return false;
+    const bots = await orderedRoster(thread.ownerUserId, thread.channelId);
+    const speaking = bots?.find((bot) => bot.id === thread.agentId);
+    if (!speaking) return true;
+    /*
+     * Whose words these are. An external employee answers from its hirer's computer and files, so
+     * its hirer is asked whether they may reach the group, and its line is the hirer's: written in
+     * the hirer's frame, held in the hirer's private row, resumed by the hirer's decision
+     * (`continueWaiting` finds only the decider's own rows). Anyone else's relayed answer is the
+     * thread owner's, as before.
+     */
+    const owner =
+      input.via === "device_acp" && speaking.hiredBy
+        ? speaking.hiredBy
+        : thread.ownerUserId;
+    return owner === thread.ownerUserId
+      ? postAnswer(input, thread, owner)
+      : runAsTenant(owner, () => postAnswer(input, thread, owner));
+  }
+
+  /** The rest of `announceHandoff`: the share gate and the line, as `owner`'s, in `owner`'s frame. */
+  async function postAnswer(
+    input: {
+      threadId: string;
+      agentId: string;
+      text: string;
+      via?: "device_acp";
+    },
+    thread: { channelId: string; agentId: string },
+    owner: string,
+  ): Promise<boolean> {
+    const id = `handoff:${createHash("sha256")
+      .update(`${input.threadId}\n${input.agentId}\n${input.text}`)
+      .digest("hex")
+      .slice(0, 32)}`;
+    const gate = await shareGate({
+      ownerUserId: owner,
+      channelId: thread.channelId,
+      agentId: thread.agentId,
+      threadId: input.threadId,
+      rowId: id,
+      runId: runIdFor(id),
+      text: input.text,
+    });
+    const relayed = {
+      via: input.via ?? "message_bot",
+      answeredBy: input.agentId,
+    };
+    if (gate.status !== "allowed") {
+      await deps.store.append({
+        id,
+        ownerUserId: owner,
+        channelId: thread.channelId,
+        agentId: thread.agentId,
+        threadId: input.threadId,
+        ...(gate.status === "pending"
+          ? {
+              text: "",
+              status: "waiting",
+              details: { ...relayed, ...gate.details },
+            }
+          : { text: gate.message, status: "failed", details: relayed }),
+      });
+      return true;
+    }
+    const added = await deps.store.append({
+      id,
+      ownerUserId: owner,
+      channelId: thread.channelId,
+      agentId: thread.agentId,
+      threadId: input.threadId,
+      text: input.text,
+      details: relayed,
+    });
+    if (added)
+      await deps.activity?.(
+        {
+          ownerUserId: owner,
+          channelId: thread.channelId,
+          messageId: id,
+          agentIds: [thread.agentId],
+          text: input.text,
+        },
+        thread.agentId,
+        input.text,
+        `group:${id}`,
+      );
+    return true;
+  }
 
   return {
     store: deps.store,
@@ -1760,14 +1974,17 @@ export function createGroupConversations(deps: {
       await deps.store.seedOrder(owner, channel.id, body.agentIds);
       return channel;
     },
-    /** Add Bots to a group the caller started; they answer after the Bots already in it. */
+    /**
+     * Add Bots to a group the caller started; they answer after the Bots already in it. An external
+     * employee is brought in by its hirer alone, who need only be in the group (spec §6).
+     */
     async addBots(
       owner: string,
       channel: string,
       input: string[],
     ): Promise<{ added: string[] }> {
       const agentIds = botList(input);
-      await creatorOnly(owner, channel);
+      await hirerOrCreator(owner, channel, agentIds, "add");
       const current = new Set(await deps.store.bots(channel));
       const again = agentIds.find((id) => current.has(id));
       if (again) throw new GroupRefusedError(`员工 ${again} 已经在群里了。`);
@@ -1781,14 +1998,17 @@ export function createGroupConversations(deps: {
       await deps.store.addBots(owner, channel, agentIds);
       return { added: agentIds };
     },
-    /** Take Bots out of a group the caller started, leaving it at least two. */
+    /**
+     * Take Bots out of a group the caller started, leaving it at least two. An external employee is
+     * taken out by its hirer alone, not by whoever started the group (spec §6).
+     */
     async removeBots(
       owner: string,
       channel: string,
       input: string[],
     ): Promise<{ removed: string[] }> {
       const agentIds = botList(input);
-      await creatorOnly(owner, channel);
+      await hirerOrCreator(owner, channel, agentIds, "remove");
       const current = await deps.store.bots(channel);
       const missing = agentIds.find((id) => !current.includes(id));
       if (missing)
@@ -1835,7 +2055,12 @@ export function createGroupConversations(deps: {
         );
       if (!people.some((person) => person.userId === userId))
         throw new GroupNotFoundError();
-      await deps.store.removeMember(channel, userId);
+      // A person who leaves takes their external employees with them: nobody else may unlink them.
+      await deps.store.removeMember(
+        channel,
+        userId,
+        await externalOf(channel, userId),
+      );
     },
     /**
      * An approval that paused a group turn was decided: run the continuation, then write what the Bot
@@ -1990,75 +2215,28 @@ export function createGroupConversations(deps: {
         throw error;
       }
     },
+    announceHandoff,
     /**
-     * A `message_bot` answer relayed into a Bot's group thread, shown in the shared transcript in that
-     * Bot's voice (the only voice its thread admits) and naming the Bot that answered. Returns false
-     * for a thread that is not a group's, so the caller can announce it the ordinary way.
+     * An external employee's own answer, from a turn its group did not wait for
+     * (agents/acp/agent.ts `createAcpGroupTurn`), into the group it was asked in: posted in the
+     * frame of whoever owns that group thread (who asked, possibly not its hirer), whatever frame
+     * the turn ran in.
      */
-    async announceHandoff(input: {
+    async announceExternal(input: {
       threadId: string;
-      actorId: string;
       agentId: string;
       text: string;
     }): Promise<boolean> {
+      // The hirer, whose frame the turn ran in, is a member of the group: its thread rows are theirs to read.
       const thread = await deps.store.threadRow(input.threadId);
-      if (!thread || thread.ownerUserId !== input.actorId) return false;
-      const bots = await orderedRoster(thread.ownerUserId, thread.channelId);
-      if (!bots?.some((bot) => bot.id === thread.agentId)) return true;
-      const id = `handoff:${createHash("sha256")
-        .update(`${input.threadId}\n${input.agentId}\n${input.text}`)
-        .digest("hex")
-        .slice(0, 32)}`;
-      const gate = await shareGate({
-        ownerUserId: thread.ownerUserId,
-        channelId: thread.channelId,
-        agentId: thread.agentId,
-        threadId: input.threadId,
-        rowId: id,
-        runId: runIdFor(id),
-        text: input.text,
-      });
-      const relayed = { via: "message_bot", answeredBy: input.agentId };
-      if (gate.status !== "allowed") {
-        await deps.store.append({
-          id,
-          ownerUserId: thread.ownerUserId,
-          channelId: thread.channelId,
-          agentId: thread.agentId,
-          threadId: input.threadId,
-          ...(gate.status === "pending"
-            ? {
-                text: "",
-                status: "waiting",
-                details: { ...relayed, ...gate.details },
-              }
-            : { text: gate.message, status: "failed", details: relayed }),
-        });
-        return true;
-      }
-      const added = await deps.store.append({
-        id,
-        ownerUserId: thread.ownerUserId,
-        channelId: thread.channelId,
-        agentId: thread.agentId,
-        threadId: input.threadId,
-        text: input.text,
-        details: relayed,
-      });
-      if (added)
-        await deps.activity?.(
-          {
-            ownerUserId: thread.ownerUserId,
-            channelId: thread.channelId,
-            messageId: id,
-            agentIds: [thread.agentId],
-            text: input.text,
-          },
-          thread.agentId,
-          input.text,
-          `group:${id}`,
-        );
-      return true;
+      if (!thread || thread.agentId !== input.agentId) return false;
+      return runAsTenant(thread.ownerUserId, () =>
+        announceHandoff({
+          ...input,
+          actorId: thread.ownerUserId,
+          via: "device_acp",
+        }),
+      );
     },
     async list(owner: string, channel: string) {
       const bots = await roster(owner, channel);

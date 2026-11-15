@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { ExternalEmployeeWorkRefusedError } from "../agents/acp/external";
 import type { AppVariables } from "../auth/guards";
 import type { ResponsibilityBindingStore } from "./bindings";
 import { inboundAddressFor } from "./email";
@@ -27,6 +28,8 @@ export function createResponsibilityRoutes(
       return context.json({ error: error.message }, 404);
     if (error instanceof ResponsibilityRefusedError)
       return context.json({ error: error.message }, 400);
+    if (error instanceof ExternalEmployeeWorkRefusedError)
+      return context.json({ error: error.message }, 409);
     console.error(
       JSON.stringify({
         type: "responsibility-route-error",

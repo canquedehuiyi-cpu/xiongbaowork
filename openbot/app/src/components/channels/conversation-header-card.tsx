@@ -5,9 +5,8 @@ import { VisibilityTag } from "@/components/channels/visibility-tag";
 import type { AvatarMotionState } from "@/components/portraits/preset-animations";
 import {
   knownPresence,
-  PRESENCE_WORD,
   type Presence,
-  presenceDoing,
+  presenceSummary,
 } from "@/lib/agents/presence";
 import type { AgentProfile } from "@/lib/agents/queries";
 
@@ -39,10 +38,7 @@ export function ConversationHeaderCard({
   presence?: Presence;
 }) {
   const known = knownPresence(presence);
-  const doing = presenceDoing(known);
-  const now = known
-    ? [PRESENCE_WORD[known.status], doing].filter(Boolean).join(" · ")
-    : "";
+  const now = presenceSummary(known);
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <span className="block size-10 shrink-0">

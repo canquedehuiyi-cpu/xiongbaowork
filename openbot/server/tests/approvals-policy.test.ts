@@ -1660,6 +1660,31 @@ describe("SEC1: the dangerous-command classifier (§4.3)", () => {
       id: "too_long",
     });
   });
+  test("a long line is read in linear time: no pattern backtracks over it", () => {
+    for (const command of [
+      "git push ".repeat(2200),
+      "git reset ".repeat(1990),
+      "git clean ".repeat(1990),
+      "chmod -R ".repeat(2200),
+      "chmod 777 ".repeat(1990),
+    ]) {
+      const started = performance.now();
+      dangerousCommand(command);
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+    // Still found, once the step holds them.
+    expect(dangerousCommand("git -C repo push --force origin main")).toEqual({
+      id: "force_push",
+    });
+    expect(dangerousCommand("git reset --hard HEAD~1")).toEqual({
+      id: "hard_reset",
+    });
+    expect(dangerousCommand("git clean -xdf")).toEqual({ id: "git_clean" });
+    expect(dangerousCommand("chmod -R 777 .")).toEqual({
+      id: "world_writable",
+    });
+    expect(dangerousCommand("git push; ls -f")).toBeUndefined();
+  });
 });
 
 describe("SEC1: sensitive paths (§4.4)", () => {
@@ -1869,6 +1894,54 @@ describe("SEC1: the floors in the decision (§4.2)", () => {
         })
       ).behaviour,
     ).toBe("allow");
+  });
+
+  test("an external employee's file request is held by the same floor, over every path it names", async () => {
+    const acp = (kind: string, paths: unknown) =>
+      candidate({
+        toolRef: `acp/${kind}`,
+        effect: kind === "read" ? "read" : "write",
+        scope: "editInside",
+        args: { paths },
+      });
+    for (const kind of ["read", "edit", "move", "delete", "search"]) {
+      // Any one of its paths: the second here.
+      expect(
+        securityFloor(acp(kind, ["src/a.ts", "config/.env.local"]), security)
+          ?.source,
+      ).toBe("sensitive_path");
+      // None it can read: asked, not waved through.
+      expect(securityFloor(acp(kind, []), security)?.source).toBe(
+        "sensitive_path",
+      );
+      expect(securityFloor(acp(kind, ["src/a.ts"]), security)).toBeUndefined();
+      expect(
+        securityFloor(acp(kind, [".env"]), {
+          ...security,
+          sensitivePaths: "off",
+        }),
+      ).toBeUndefined();
+    }
+    // The person's "ask before changes" default does not stand in for it: the floor is the answer.
+    expect(
+      await decideAction({
+        ...base,
+        askBeforeChanges: true,
+        candidate: acp("edit", [".env"]),
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "sensitive_path" });
+    // For any other tool, an ask that came first is left as it was.
+    const file = candidate({
+      toolRef: "computer_write_file",
+      effect: "write",
+      scope: "workspace",
+      args: {},
+      target: { filePath: ".env" },
+    });
+    expect(
+      (await decideAction({ ...base, askBeforeChanges: true, candidate: file }))
+        .source,
+    ).toBe("default");
   });
 
   test("a command that names a sensitive file asks too", async () => {

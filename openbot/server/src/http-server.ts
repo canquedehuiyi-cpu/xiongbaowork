@@ -1,5 +1,6 @@
 import { DICTATION_HTTP_IDLE_SECONDS } from "@openbot/shared/dictation";
 import { serve } from "bun";
+import type { AcpRelay } from "./agents/acp/relay";
 import { computerAccessCheck } from "./agents/computer-access";
 import type { AgentProfileStore } from "./agents/profile-store";
 import type { OpenBotRole } from "./auth/roles";
@@ -236,6 +237,8 @@ export function startHttpServer(deps: {
     store: DeviceStore;
     channel: DeviceChannel;
     screens: DeviceScreens;
+    /** The external agents' `acp.*` frames on the runner sockets (agents/acp/relay.ts). */
+    acp?: AcpRelay;
   };
   app: {
     fetch: (
@@ -253,7 +256,10 @@ export function startHttpServer(deps: {
     devices,
     app,
   } = deps;
-  const runnerOptions = runnerMessageOptions(computerGateway);
+  const runnerOptions: RunnerMessageOptions = {
+    ...runnerMessageOptions(computerGateway),
+    ...(devices?.acp ? { acp: devices.acp } : {}),
+  };
 
   /**
    * The live screen, proxied.
@@ -414,6 +420,7 @@ export function startHttpServer(deps: {
             devices.store,
             devices.channel,
             devices.screens,
+            devices.acp,
           ).catch(() => ws.close(1008, "Device access could not be verified."));
           return;
         }

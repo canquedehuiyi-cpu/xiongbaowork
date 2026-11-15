@@ -45,6 +45,7 @@ import type {
   Persona,
 } from "./profile-types";
 import { englishName } from "../brand";
+import type { AcpHarness, AcpRuleKey, AcpRuleValue } from "../../../shared/acp";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DatabaseExecutor = Pick<Database, "select"> | Pick<Transaction, "select">;
@@ -91,13 +92,25 @@ export type AgentProfileStore = {
        * (D4); the content the form sent is saved either way.
        */
       roleTemplate?: { id: string; version: number };
+      /**
+       * An external employee hired from the person's computer (`POST /api/agents/external`): written
+       * as `device_acp`, private to the hirer whatever `visibility` says. The route has checked the
+       * computer and its references; nothing else sends this.
+       */
+      external?: ExternalAgentRun;
     },
     admit?: (transaction: Transaction) => Promise<void>,
   ): Promise<AgentProfile>;
   update(
     actor: AgentActor,
     id: string,
-    input: CreateAgentInput,
+    input: CreateAgentInput & {
+      /**
+       * An external employee's new computer, folder and rules (`PATCH /api/agents/external/:id`).
+       * Only its hirer changes them, and what agent it is never changes.
+       */
+      external?: Omit<ExternalAgentRun, "harness">;
+    },
     /**
      * Refuse with {@link AgentChangedError} unless the profile still carries this `updated_at`, read
      * under the same row lock the write takes. A caller that decided what to write from an earlier
@@ -321,6 +334,32 @@ export class OwnerlessBotPrivateError extends Error {
       `Nobody owns Bot ${id} any more, so it cannot be made private or unpublished: nobody could reach it. Keep it shared, or delete it.`,
     );
     this.name = "OwnerlessBotPrivateError";
+  }
+}
+
+/**
+ * What an external employee (`device_acp`) runs on, as `agents.configuration` keeps it (spec §1):
+ * the computer, which agent, and the working folder and (for `custom`) the owner's own agent, by
+ * the device's references only; never a path or a command. `permissions` are its five rules.
+ */
+export type ExternalAgentRun = {
+  deviceId: string;
+  harness: AcpHarness;
+  workdirRef: string;
+  appRef?: string;
+  permissions: Record<AcpRuleKey, AcpRuleValue>;
+  /** `custom` only: the hirer confirmed it was hired knowing it may never ask (Review Focus 5). */
+  noPermissionAcknowledged?: true;
+};
+
+/**
+ * An external employee is made only by `POST /api/agents/external` and stays its hirer's alone: it
+ * is never copied, never shared, never pointed at an address, and nobody else changes how it runs.
+ */
+export class ExternalAgentRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ExternalAgentRefusedError";
   }
 }
 
@@ -573,6 +612,20 @@ function promptOf(
   if (typeof prompt !== "string") return null;
   const trimmed = prompt.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/** An external employee's `agents.configuration`, written whole: only the fields it runs on. */
+function externalConfiguration(run: ExternalAgentRun): Record<string, unknown> {
+  return {
+    deviceId: run.deviceId,
+    harness: run.harness,
+    workdirRef: run.workdirRef,
+    ...(run.harness === "custom" && run.appRef ? { appRef: run.appRef } : {}),
+    permissions: { ...run.permissions },
+    ...(run.harness === "custom" && run.noPermissionAcknowledged
+      ? { noPermissionAcknowledged: true }
+      : {}),
+  };
 }
 
 /** What a coworker is, and what it runs on: the two `agents` columns a copy has to reproduce. */
@@ -1056,7 +1109,23 @@ export function createAgentProfileStore(
           ? { endpoint: input.endpoint }
           : managedConfiguration;
         const systemPrompt = input.systemPrompt?.trim();
-        if (endpoint) {
+        const external = input.external;
+        if (external) {
+          /*
+           * Hired from the person's own computer. Nothing about an address or a key applies: it runs
+           * through the runner socket, as its hirer's alone (spec §1), so it is private below too.
+           */
+          if (input.endpoint || input.auth || input.isolated === true)
+            throw new ExternalAgentRefusedError(
+              "外部员工在你的电脑上干活，不接地址、密钥或独立电脑。",
+            );
+          await transaction.insert(agents).values({
+            id,
+            name: input.name,
+            type: "device_acp",
+            configuration: externalConfiguration(external),
+          });
+        } else if (endpoint) {
           await transaction.insert(agents).values({
             id,
             name: input.name,
@@ -1118,7 +1187,7 @@ export function createAgentProfileStore(
           roleDescription: input.roleDescription,
           // The face the person picked in the form, or the id when nothing was picked.
           avatarSeed: input.avatarSeed ?? id,
-          visibility: input.visibility,
+          visibility: external ? "private" : input.visibility,
           persona: input.persona ?? null,
           bible: input.bible ?? null,
           department: input.department || null,
@@ -1133,7 +1202,7 @@ export function createAgentProfileStore(
           transaction,
           id,
           currentTenant(),
-          input.visibility,
+          external ? "private" : input.visibility,
           actor.id,
         );
 
@@ -1202,6 +1271,32 @@ export function createAgentProfileStore(
             string,
             unknown
           >;
+          /*
+           * An external employee is its hirer's alone (spec §1): nobody else changes it, not even an
+           * administrator acting as its owner, it stays private, and it never takes an address, a
+           * key or a model of ours. Its computer, folder and rules change only through `external`.
+           */
+          const isExternal = row?.type === "device_acp";
+          if (isExternal) {
+            if (profile.ownerUserId !== actor.id)
+              throw new AgentNotManageableError(id);
+            if (input.visibility !== "private")
+              throw new ExternalAgentRefusedError(
+                "外部员工只归招它的人，不能公开或分享。",
+              );
+            if (
+              (input.endpoint !== undefined && input.endpoint !== "") ||
+              input.auth ||
+              input.isolated === true
+            )
+              throw new ExternalAgentRefusedError(
+                "外部员工在你的电脑上干活，不接地址、密钥或独立电脑。",
+              );
+          } else if (input.external) {
+            throw new ExternalAgentRefusedError(
+              "只有外部员工才有电脑和工作文件夹的设置。",
+            );
+          }
           /**
            * A coworker that runs here runs on its role description, so editing one has to move both.
            *
@@ -1244,6 +1339,12 @@ export function createAgentProfileStore(
             !sameAddress(input.endpoint, profile.endpoint);
           const configuration: Record<string, unknown> = {
             ...previous,
+            ...(isExternal && input.external
+              ? externalConfiguration({
+                  ...input.external,
+                  harness: previous.harness as ExternalAgentRun["harness"],
+                })
+              : {}),
             ...(!starter && row?.type === "built_in" && described
               ? { systemPrompt: input.roleDescription }
               : {}),
@@ -1428,6 +1529,11 @@ export function createAgentProfileStore(
           .where(eq(agents.id, id))
           .limit(1);
         if (!stored) throw new AgentNotFoundError(id);
+        // An external employee is one agent on one computer, hired there (spec §1): never copied.
+        if (stored.type === "device_acp")
+          throw new ExternalAgentRefusedError(
+            "外部员工不能复制。要再招一位，请到「从我的电脑招」。",
+          );
 
         // `auth` is a vault reference and is deliberately not carried: see `runForDuplicate`.
         const run = runForDuplicate(stored, managedConfiguration);

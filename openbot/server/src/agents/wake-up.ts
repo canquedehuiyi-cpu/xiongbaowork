@@ -33,6 +33,10 @@ import {
 } from "../tenant/context";
 import { fileRunnerCardAs } from "../threads/postgres-runner";
 import type { WorkQueue } from "../work/queue";
+import {
+  EXTERNAL_UNATTENDED_REFUSAL,
+  isExternalEmployee,
+} from "./acp/external";
 import { BotPausedError } from "./lifecycle";
 import type { AgentActor } from "./profile-types";
 
@@ -209,6 +213,9 @@ export function createWakeUpStore(
        * frame, or from another person's would either never run or run for the wrong person.
        */
       assertPersonTenant(requireTenant(), input.ownerUserId);
+      // A follow-up runs with nobody there to answer an external employee's permission requests.
+      if (await isExternalEmployee(database, input.ownerUserId, input.agentId))
+        throw new WakeUpRefusedError(EXTERNAL_UNATTENDED_REFUSAL);
       const delay = input.dueAt.getTime() - now().getTime();
       if (!Number.isFinite(delay) || delay < WAKE_UP_MIN_DELAY_MS - 1_000)
         throw new WakeUpRefusedError(

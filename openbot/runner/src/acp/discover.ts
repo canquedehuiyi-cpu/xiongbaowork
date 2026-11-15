@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, win32 } from "node:path";
 import type { AcpHarness } from "../../../shared/acp";
 import {
   childEnv,
@@ -27,7 +27,10 @@ import { ACP_MANIFEST } from "./manifest";
  * command may print an account's email or a masked key; none of it is passed on).
  *
  * BOUNDED. Every probe runs with stdin closed (a CLI that waits for input reads end-of-file) and is
- * stopped, with its whole process tree, after `timeoutMs`. The agents are probed at once.
+ * stopped, with its whole process tree, after `timeoutMs`. A probe that exits while something it
+ * started still holds its output pipes (a daemon it spawned, a wrapper's grandchild) does not wait
+ * for the timeout: what it started is stopped with its process group, and the answer is read from
+ * what came out. The agents are probed at once.
  */
 
 export type AgentReport = {
@@ -172,6 +175,40 @@ export function whichPosix(
   return undefined;
 }
 
+/** After the probe exits, how long its pipes may stay open before what holds them is stopped. */
+export const PROBE_EXIT_GRACE_MS = 100;
+
+/**
+ * Stops what a probe started, by its process group, even once the probe itself has exited (unlike
+ * `killProcessTree`, which leaves a child that has exited alone). POSIX: the group the detached probe
+ * leads (`kill -pid`). Windows: `taskkill /T` on its id, best effort (a tree whose root is gone may
+ * not be found; the pipes are let go of either way).
+ */
+function killProbeGroup(child: ChildProcess, platform: NodeJS.Platform) {
+  const { pid } = child;
+  if (pid === undefined) return;
+  if (platform === "win32") {
+    const systemRoot =
+      process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
+    try {
+      const killer = spawn(
+        win32.join(systemRoot, "System32", "taskkill.exe"),
+        ["/PID", String(pid), "/T", "/F"],
+        { windowsHide: true, stdio: "ignore" },
+      );
+      killer.once("error", () => undefined);
+    } catch {
+      // Nothing to stop it with: the pipes are let go of below anyway.
+    }
+    return;
+  }
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // The group is already gone.
+  }
+}
+
 function appendCapped(kept: Buffer, chunk: Buffer): Buffer {
   if (kept.length >= OUTPUT_LIMIT_BYTES) return kept;
   return Buffer.concat([kept, chunk]).subarray(0, OUTPUT_LIMIT_BYTES);
@@ -238,6 +275,22 @@ export function runProbe(
       child.stderr.on("error", () => {});
       child.once("error", () => finish(null));
       child.once("close", (code) => finish(code));
+      /*
+       * The probe exited but its pipes are still open: something it started holds them. That group
+       * is stopped while the pipes are open (its id cannot have been reused yet), and the answer is
+       * what came out, without waiting for the timeout.
+       */
+      child.once("exit", (code) => {
+        setTimeout(() => {
+          if (done) return;
+          killProbeGroup(child, platform);
+          setTimeout(() => {
+            child.stdout?.destroy();
+            child.stderr?.destroy();
+            finish(code);
+          }, PROBE_EXIT_GRACE_MS).unref?.();
+        }, PROBE_EXIT_GRACE_MS).unref?.();
+      });
     } catch {
       // Not on PATH (Windows `launchSpec`), or spawn refused outright.
       finish(null);

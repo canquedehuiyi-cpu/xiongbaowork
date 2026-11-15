@@ -1,4 +1,13 @@
 tests/account-argument.test.ts
+tests/acp-agent.test.ts
+tests/acp-e2e.integration.test.ts
+tests/acp-group.integration.test.ts
+tests/acp-hire.integration.test.ts
+tests/acp-permissions.integration.test.ts
+tests/acp-permissions.test.ts
+tests/acp-relay.test.ts
+tests/acp-translate.test.ts
+tests/acp-turns.integration.test.ts
 tests/activity-folder-actions.integration.test.ts
 tests/activity-plumbing-rows.integration.test.ts
 tests/activity-report-counts.integration.test.ts
@@ -392,6 +401,7 @@ tests/group-bots-change.integration.test.ts
 tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
 tests/guards.test.ts
+tests/handoff-availability-prompt.test.ts
 tests/handoff-caps-defaults.test.ts
 tests/handoff-child-card.test.ts
 tests/handoff-origin.test.ts

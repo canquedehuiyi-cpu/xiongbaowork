@@ -297,6 +297,33 @@ test("a probe that never exits is stopped in time", async () => {
   expect(Date.now() - started).toBeLessThan(3000);
 });
 
+test.skipIf(process.platform === "win32")(
+  "a probe that exits while what it started holds its pipes answers at once and stops that group",
+  async () => {
+    const started = Date.now();
+    // The shell prints its background child's pid and exits; the child keeps stdout open.
+    const result = await runProbe("/bin/sh", ["-c", "sleep 30 & echo $!"], {
+      timeoutMs: 10_000,
+    });
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(result).toMatchObject({ code: 0, timedOut: false });
+    const pid = Number(result.stdout.trim());
+    expect(Number.isInteger(pid) && pid > 0).toBe(true);
+    // The grandchild went with the probe's group.
+    const deadline = Date.now() + 2000;
+    let alive = true;
+    while (alive && Date.now() < deadline) {
+      try {
+        process.kill(pid, 0);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      } catch {
+        alive = false;
+      }
+    }
+    expect(alive).toBe(false);
+  },
+);
+
 test("a probe's stdin is closed, so a CLI waiting for input reads nothing and goes on", async () => {
   const result = await runProbe(
     process.execPath,

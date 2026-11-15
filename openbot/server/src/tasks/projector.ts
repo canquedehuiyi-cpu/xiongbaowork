@@ -254,10 +254,11 @@ export function deliverableFromEvents(
       ),
     );
   }
-  const components = drawnComponents(events).map(({ name, args }) => ({
-    name,
-    args,
-  }));
+  const components: DeliverableComponent[] = drawnComponents(events).map(
+    ({ name, args }) => ({ name, args }),
+  );
+  const files = editedFiles(events);
+  if (files.length > 0) components.push({ name: ACP_DIFF, args: { files } });
   return deliverableRefOf({ components, attachments });
 }
 
@@ -328,6 +329,61 @@ const ENDED = ["done", "cancelled"] as const;
  */
 function runOf(runRef: string) {
   return or(eq(tasks.runRef, runRef), eq(tasks.activeRunRef, runRef));
+}
+
+/**
+ * What an external employee changed (`CUSTOM acp.diff`, agents/acp/translate.ts), on its card as
+ * one `acp.diff` component: `{files: {path, added, removed}[]}`, summed per file over its tool
+ * calls. A tool call reports the same diff again as it progresses, so only its latest count of each
+ * file is kept.
+ */
+const ACP_DIFF = "acp.diff";
+
+type EditedFile = { path: string; added: number; removed: number };
+
+function collectEdits(value: unknown, edits: Map<string, EditedFile>) {
+  if (!value || typeof value !== "object") return;
+  const { toolCallId, files } = value as {
+    toolCallId?: unknown;
+    files?: unknown;
+  };
+  if (!Array.isArray(files)) return;
+  for (const file of files) {
+    const { path, added, removed } = (file ?? {}) as Record<string, unknown>;
+    if (
+      typeof path !== "string" ||
+      !path ||
+      typeof added !== "number" ||
+      typeof removed !== "number"
+    )
+      continue;
+    edits.set(JSON.stringify([String(toolCallId ?? ""), path]), {
+      path,
+      added,
+      removed,
+    });
+  }
+}
+
+function editedFiles(events: readonly BaseEvent[]): EditedFile[] {
+  /** Per tool call and file, its latest count. */
+  const edits = new Map<string, EditedFile>();
+  for (const event of events) {
+    if (event.type !== EventType.CUSTOM) continue;
+    const { name, value } = event as BaseEvent & {
+      name?: string;
+      value?: unknown;
+    };
+    if (name === ACP_DIFF) collectEdits(value, edits);
+  }
+  const files = new Map<string, EditedFile>();
+  for (const { path, added, removed } of edits.values()) {
+    const file = files.get(path) ?? { path, added: 0, removed: 0 };
+    file.added += added;
+    file.removed += removed;
+    files.set(path, file);
+  }
+  return [...files.values()];
 }
 
 export function createTaskProjector(

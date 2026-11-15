@@ -2398,3 +2398,59 @@ describe("for-channel hand-over", () => {
     });
   });
 });
+
+describe("the creator's own external employee when the creator leaves", () => {
+  /** One of the creator's Bots made an external employee (`device_acp`), linked to the group. */
+  async function externalIn(owner: AgentActor, channelId: string) {
+    const id = await bot(owner, "小码");
+    await runAsTenant("platform", async () => {
+      await database.execute(
+        sql`update agents set type = 'device_acp' where id = ${id}`,
+      );
+      await database.execute(
+        sql`insert into channel_agents (channel_id, agent_id, tenant_id) values (${channelId}, ${id}, 'team')`,
+      );
+    });
+    return id;
+  }
+  const linked = async (channelId: string) =>
+    (
+      (await runAsTenant("platform", () =>
+        database.execute(
+          sql`select agent_id from channel_agents where channel_id = ${channelId}`,
+        ),
+      )) as unknown as { agent_id: string }[]
+    ).map((row) => row.agent_id);
+
+  test("a refused leave keeps the link; a leave that goes through takes it along", async () => {
+    const alice = await person("alice");
+    const bob = await person("bob");
+    const { channelId, groupId } = await linkedGroup(alice, [bob]);
+    const external = await externalIn(alice, channelId);
+    const groups = withWakerGroupLink(conversations(), linkCore(), () => {});
+    const flow = await runWithCards(alice, groupId, "running");
+
+    // A crew run is still going: the leave is refused, and the unlink rolls back with it.
+    await expect(
+      runAsTenant(alice.id, () =>
+        groups.removeMember(alice.id, channelId, alice.id),
+      ),
+    ).rejects.toThrow("有组团流程正在运行");
+    expect(await membersOf(channelId)).toEqual([alice.id, bob.id]);
+    expect(await linked(channelId)).toContain(external);
+
+    // Once it is over, the leave goes through and the link goes with her.
+    await runAsTenant(alice.id, () =>
+      database
+        .update(groupTaskRuns)
+        .set({ status: "done" })
+        .where(eq(groupTaskRuns.id, flow.runId)),
+    );
+    await runAsTenant(alice.id, () =>
+      groups.removeMember(alice.id, channelId, alice.id),
+    );
+    expect(await membersOf(channelId)).toEqual([bob.id]);
+    expect(await linked(channelId)).not.toContain(external);
+    expect((await linked(channelId)).length).toBe(2);
+  });
+});

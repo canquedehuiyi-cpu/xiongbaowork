@@ -22,6 +22,7 @@ import {
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeeSecuritySettings,
   type HostCommandPolicy,
+  isAcpAction,
   type RuleBehaviour,
   TIGHTENING_BEHAVIOURS,
 } from "./types";
@@ -903,7 +904,37 @@ function elementName(candidate: ApprovalCandidate): string {
  * program, so `rm a; ls -R` is not a recursive delete, while `rm -f -r x` is.
  */
 const STEP = String.raw`[^;&|\n]*`;
-const DANGEROUS_COMMANDS: readonly { id: string; pattern: RegExp }[] = [
+/**
+ * `git <…> <subcommand> <…> <flag>` within one step, without a regular expression that backtracks:
+ * the command is cut into steps at `;` `&` `|` and newlines first, each step into words, and the
+ * words are looked through once (a step of a few thousand words is still read in linear time).
+ */
+function gitStep(
+  command: string,
+  subcommand: RegExp,
+  flag: (word: string) => boolean,
+): boolean {
+  for (const step of command.split(/[;&|\n]/)) {
+    const words = step.split(/\s+/);
+    const git = words.findIndex((word) => /\bgit\b/i.test(word));
+    if (git < 0) continue;
+    let sub = -1;
+    for (let i = git + 1; i < words.length; i += 1)
+      if (subcommand.test(words[i] as string)) {
+        sub = i;
+        break;
+      }
+    if (sub < 0) continue;
+    for (let i = sub + 1; i < words.length; i += 1)
+      if (flag(words[i] as string)) return true;
+  }
+  return false;
+}
+
+type DangerousCommand =
+  | { id: string; pattern: RegExp }
+  | { id: string; test: (command: string) => boolean };
+const DANGEROUS_COMMANDS: readonly DangerousCommand[] = [
   // rm with -r / -R / -rf / -fr / --recursive, or --no-preserve-root, anywhere in its own step.
   {
     id: "recursive_delete",
@@ -912,20 +943,45 @@ const DANGEROUS_COMMANDS: readonly { id: string; pattern: RegExp }[] = [
       "i",
     ),
   },
-  { id: "find_delete", pattern: new RegExp(String.raw`\bfind\b${STEP}\s-delete\b`, "i") },
-  { id: "make_filesystem", pattern: /\bmkfs(\.[a-z0-9]+)?\b|\bwipefs\b|\bformat-volume\b/i },
-  { id: "disk_write", pattern: new RegExp(String.raw`\bdd\b${STEP}\bof=`, "i") },
+  {
+    id: "find_delete",
+    pattern: new RegExp(String.raw`\bfind\b${STEP}\s-delete\b`, "i"),
+  },
+  {
+    id: "make_filesystem",
+    pattern: /\bmkfs(\.[a-z0-9]+)?\b|\bwipefs\b|\bformat-volume\b/i,
+  },
+  {
+    id: "disk_write",
+    pattern: new RegExp(String.raw`\bdd\b${STEP}\bof=`, "i"),
+  },
   { id: "shred", pattern: /\bshred\b/i },
-  { id: "raw_device_write", pattern: />\s*\/dev\/(sd|hd|nvme|disk|mmcblk|xvd)/i },
+  {
+    id: "raw_device_write",
+    pattern: />\s*\/dev\/(sd|hd|nvme|disk|mmcblk|xvd)/i,
+  },
   {
     id: "world_writable",
-    pattern: new RegExp(
-      String.raw`\bchmod\b${STEP}(\s-[a-z]*R[a-z]*\b|\s--recursive\b)${STEP}\b(0?777|a\+rwx|o\+w)\b|\bchmod\b${STEP}\b(0?777|a\+rwx)\b${STEP}(\s-[a-z]*R[a-z]*\b|\s--recursive\b)`,
-    ),
+    // Linear, step by step (see `gitStep`): a recursive chmod that opens files to everyone.
+    test: (command) =>
+      command.split(/[;&|\n]/).some((step) => {
+        const words = step.split(/\s+/);
+        const chmod = words.findIndex((word) => /\bchmod\b/.test(word));
+        if (chmod < 0) return false;
+        const after = words.slice(chmod + 1);
+        return (
+          after.some(
+            (word) =>
+              /^-[a-z]*R[a-z]*\b/.test(word) || /^--recursive\b/.test(word),
+          ) && after.some((word) => /^(0?777|a\+rwx|o\+w)\b/.test(word))
+        );
+      }),
   },
   {
     id: "recursive_chown",
-    pattern: new RegExp(String.raw`\bchown\b${STEP}(\s-[a-z]*R[a-z]*\b|\s--recursive\b)`),
+    pattern: new RegExp(
+      String.raw`\bchown\b${STEP}(\s-[a-z]*R[a-z]*\b|\s--recursive\b)`,
+    ),
   },
   // Anything piped into a shell, and a shell fed a download: `curl … | sh`, `bash <(curl …)`.
   {
@@ -934,20 +990,38 @@ const DANGEROUS_COMMANDS: readonly { id: string; pattern: RegExp }[] = [
       /\|\s*(sudo\s+|env\s+)?(ba|z|k|da|fi|c|tc)?sh\b|\|\s*(sudo\s+)?(python[0-9.]*|perl|ruby|node)\s*(-\s*)?($|[;&|])|<\(\s*(curl|wget)\b|\b(ba|z)?sh\s+-c\s+["']?\$\(\s*(curl|wget)\b/i,
   },
   { id: "eval", pattern: /(^|[\s;&|(`])eval\s/i },
-  { id: "privilege", pattern: /(^|[\s;&|(`])(sudo|doas|pkexec)\b|(^|[\s;&|(`])su(\s+-\s*|\s+root\b|\s*$)/i },
+  {
+    id: "privilege",
+    pattern:
+      /(^|[\s;&|(`])(sudo|doas|pkexec)\b|(^|[\s;&|(`])su(\s+-\s*|\s+root\b|\s*$)/i,
+  },
   {
     id: "power",
-    pattern: /\b(shutdown|reboot|poweroff|halt)\b|(^|[\s;&|])init\s+[06]\b|\bstop-computer\b|\brestart-computer\b/i,
+    pattern:
+      /\b(shutdown|reboot|poweroff|halt)\b|(^|[\s;&|])init\s+[06]\b|\bstop-computer\b|\brestart-computer\b/i,
   },
   {
     id: "force_push",
-    pattern: new RegExp(
-      String.raw`\bgit\b${STEP}\bpush\b${STEP}(\s--force(-with-lease)?\b|\s-[a-z]*f[a-z]*\b|\s\+[^\s]+)`,
-      "i",
-    ),
+    test: (command) =>
+      gitStep(
+        command,
+        /\bpush\b/i,
+        (word) =>
+          /^--force(-with-lease)?\b/i.test(word) ||
+          /^-[a-z]*f[a-z]*\b/i.test(word) ||
+          /^\+\S+/.test(word),
+      ),
   },
-  { id: "hard_reset", pattern: new RegExp(String.raw`\bgit\b${STEP}\breset\b${STEP}--hard\b`, "i") },
-  { id: "git_clean", pattern: new RegExp(String.raw`\bgit\b${STEP}\bclean\b${STEP}\s-[a-z]*f`, "i") },
+  {
+    id: "hard_reset",
+    test: (command) =>
+      gitStep(command, /\breset\b/i, (word) => /^--hard\b/i.test(word)),
+  },
+  {
+    id: "git_clean",
+    test: (command) =>
+      gitStep(command, /\bclean\b/i, (word) => /^-[a-z]*f/i.test(word)),
+  },
   // Windows: recursive deletes in cmd and PowerShell, formatting a drive, deleting registry keys.
   {
     id: "windows_recursive_delete",
@@ -958,7 +1032,10 @@ const DANGEROUS_COMMANDS: readonly { id: string; pattern: RegExp }[] = [
   },
   // `format C:`, never a bare `format`: `git log --format=%h` and `npm run format` are not this.
   { id: "format_drive", pattern: /(^|[\s;&|(])format(\.com)?\s+["']?[a-z]:/i },
-  { id: "registry_delete", pattern: /\breg(\.exe)?\s+delete\b|\bremove-itemproperty\b/i },
+  {
+    id: "registry_delete",
+    pattern: /\breg(\.exe)?\s+delete\b|\bremove-itemproperty\b/i,
+  },
   // Writing into the system's own configuration: `> /etc/…`, `tee /etc/…`, `> C:\Windows\…`.
   {
     id: "system_config_write",
@@ -978,7 +1055,9 @@ export function dangerousCommand(command: unknown): { id: string } | undefined {
   try {
     if (typeof command !== "string") return { id: "unreadable" };
     if (command.length > MAX_CLASSIFIED_COMMAND) return { id: "too_long" };
-    const hit = DANGEROUS_COMMANDS.find((entry) => entry.pattern.test(command));
+    const hit = DANGEROUS_COMMANDS.find((entry) =>
+      "test" in entry ? entry.test(command) : entry.pattern.test(command),
+    );
     return hit ? { id: hit.id } : undefined;
   } catch {
     return { id: "unclassifiable" };
@@ -1068,7 +1147,10 @@ export function sensitivePath(
 
 /** The patterns in force for a Bot: the defaults it has not switched off, then the ones it added. */
 export function sensitivePathsInForce(
-  settings: Pick<EmployeeSecuritySettings, "extraSensitivePaths" | "disabledDefaultPaths">,
+  settings: Pick<
+    EmployeeSecuritySettings,
+    "extraSensitivePaths" | "disabledDefaultPaths"
+  >,
 ): string[] {
   return [
     ...DEFAULT_SENSITIVE_PATHS.filter(
@@ -1078,10 +1160,14 @@ export function sensitivePathsInForce(
   ];
 }
 
-/** The tools whose subject is a command, and the ones whose subject is a file path. */
+/**
+ * The tools whose subject is a command, and the ones whose subject is a file path: the computer's and
+ * the host's file tools, and an external employee's file requests (`acp/<kind>`, agents/acp), whose
+ * paths come as `args.paths`.
+ */
 const COMMAND_TOOLS = /^(computer_run_command|host\/run_command)$/;
 const PATH_TOOLS =
-  /^(computer_(read_file|write_file|list_files|download_file)|host\/(read_file|write_file|list_files))$/;
+  /^(computer_(read_file|write_file|list_files|download_file)|host\/(read_file|write_file|list_files)|acp\/(read|edit|move|delete|search))$/;
 
 function field(value: unknown, key: string): unknown {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -1096,15 +1182,19 @@ function commandOf(candidate: ApprovalCandidate): unknown {
     : field(candidate.args, "command");
 }
 
-/** The path a file call names, or `undefined` when it names none this code can find. */
-function pathOf(candidate: ApprovalCandidate): unknown {
-  if (candidate.subject?.path !== undefined) return candidate.subject.path;
+/**
+ * The paths a file call names: the one path of a computer or host file tool, or every path of a
+ * request that names several (`args.paths`). Empty when it names none this code can find.
+ */
+function pathsOf(candidate: ApprovalCandidate): unknown[] {
+  if (candidate.subject?.path !== undefined) return [candidate.subject.path];
   for (const source of [candidate.target, candidate.args])
     for (const key of ["filePath", "relativePath", "path"]) {
       const value = field(source, key);
-      if (value !== undefined) return value;
+      if (value !== undefined) return [value];
     }
-  return undefined;
+  const several = field(candidate.args, "paths");
+  return Array.isArray(several) ? several : [];
 }
 
 /** The words of a command that could name a file, for the sensitive-path floor. */
@@ -1141,7 +1231,9 @@ export function securityFloor(
       return {
         source: "dangerous_command",
         reason:
-          hit.id === "unreadable" || hit.id === "too_long" || hit.id === "unclassifiable"
+          hit.id === "unreadable" ||
+          hit.id === "too_long" ||
+          hit.id === "unclassifiable"
             ? "This command could not be checked for dangerous operations, so it needs approval before it runs."
             : "This command can delete data, change the system or hand the computer to someone else, so it needs approval before it runs.",
       };
@@ -1149,14 +1241,16 @@ export function securityFloor(
   if (security.sensitivePaths === "off") return undefined;
   const patterns = sensitivePathsInForce(security);
   if (PATH_TOOLS.test(candidate.toolRef)) {
-    const path = pathOf(candidate);
+    const paths = pathsOf(candidate);
     // A file call that names no path this code can read is asked about, not waved through.
-    const hit = sensitivePath(path === undefined ? null : path, patterns);
-    if (hit)
-      return {
-        source: "sensitive_path",
-        reason: `This touches a file that may hold secrets (${hit.pattern}), so it needs approval first.`,
-      };
+    for (const path of paths.length === 0 ? [null] : paths) {
+      const hit = sensitivePath(path, patterns);
+      if (hit)
+        return {
+          source: "sensitive_path",
+          reason: `This touches a file that may hold secrets (${hit.pattern}), so it needs approval first.`,
+        };
+    }
   }
   if (commandTool) {
     if (typeof command !== "string")
@@ -1936,7 +2030,7 @@ export async function decideAction(input: {
           ),
         }
       : undefined) ??
-  // --- end app discovery ---
+    // --- end app discovery ---
     // --- desktop control (sub-project 2) ---
     /*
      * The window floor, the per-action floor, then the session floor (see `desktopFloors`). Blank
@@ -1977,9 +2071,18 @@ export async function decideAction(input: {
   // 公开发布）多做一步：规则、偏好或审查本来就要问的，也改记为这条底线，卡片才不会给出一条存了也
   // 永远用不上的「总是允许」或「在这段对话里都允许」；原来的理由接在后面保留。
   // --- desktop control (sub-project 2): the desktop's once-only floors (a session) are restated too ---
+  /*
+   * An external employee's request (`acp/…`): its bridge never lets the person's "ask before changes"
+   * default or a rule's ask stand for a floor (the employee's own rules decide there), so a floor that
+   * caught it is what the answer says, whatever asked first.
+   */
   const restated =
     floor !== undefined &&
-    (floor === onceOnly || desktopOnceOnly(floor)) &&
+    (floor === onceOnly ||
+      desktopOnceOnly(floor) ||
+      (isAcpAction(candidate) &&
+        (floor.source === "sensitive_path" ||
+          floor.source === "dangerous_command"))) &&
     decided.behaviour === "ask";
   // --- end desktop control ---
   const outcome: ApprovalPolicyOutcome =

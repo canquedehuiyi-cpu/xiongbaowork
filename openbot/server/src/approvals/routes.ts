@@ -7,6 +7,7 @@ import {
   ACTION_KIND_POLICIES,
   ACTION_KINDS,
   APPROVAL_DECISIONS,
+  ApprovalForbiddenError,
   ApprovalNotFoundError,
   ApprovalRefusedError,
   RULE_BEHAVIOURS,
@@ -116,14 +117,17 @@ export function createApprovalRoutes(
         refusedByDatabase(error)
         ? context.json({ error: "Administrator access required." }, 403)
         : context.json(
-          { error: error.message },
-          error instanceof ApprovalNotFoundError
-            ? 404
-            : error instanceof ApprovalRefusedError ||
-                error instanceof z.ZodError
-              ? 400
-              : 500,
-        ),
+            { error: error.message },
+            error instanceof ApprovalNotFoundError
+              ? 404
+              : // Somebody else's to answer: an external employee's permission is its hirer's.
+                error instanceof ApprovalForbiddenError
+                ? 403
+                : error instanceof ApprovalRefusedError ||
+                    error instanceof z.ZodError
+                  ? 400
+                  : 500,
+          ),
   );
   routes.get("/", async (context) =>
     context.json(await service.inbox(context.var.actor.id)),

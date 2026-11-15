@@ -156,7 +156,12 @@ export type ApprovalPolicyOutcome = {
      * "Ask before making changes" says (tasks/turn.ts). Kept apart from `default` so turning that
      * switch off, or saving an allow rule, never withdraws what a task is waiting on.
      */
-    | "task";
+    | "task"
+    /**
+     * One of an external employee's own five rules asked (agents/acp/permissions.ts): answerable
+     * once, or for the rest of the conversation.
+     */
+    | "acp_rule";
   reason: string;
   ruleId?: string;
   /** The kind of action OpenBot recognised this as, where it is one (see `ActionKind`). */
@@ -683,6 +688,24 @@ export class ApprovalAlreadyAnsweredError extends ApprovalRefusedError {
     super(message);
     this.name = "ApprovalAlreadyAnsweredError";
   }
+}
+/**
+ * The approval exists and is not this person's to answer: an external employee's permission request
+ * is answered by the person who hired it, and nobody else (a group's other members, its owner).
+ */
+export class ApprovalForbiddenError extends Error {
+  constructor(message = "只有招聘这位外部员工的人能批它的许可。") {
+    super(message);
+    this.name = "ApprovalForbiddenError";
+  }
+}
+/**
+ * An external employee's permission request (`acp/<kind>`, agents/acp/permissions.ts). It is answered
+ * to the agent on the hirer's computer by the permission bridge, never carried out or continued by
+ * the approval resume loop.
+ */
+export function isAcpAction(action: { toolRef: string }): boolean {
+  return action.toolRef.startsWith("acp/");
 }
 export class ApprovalNotFoundError extends Error {
   constructor() {
