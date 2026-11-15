@@ -27,6 +27,7 @@ import { NameContextMiddleware } from "../people/name-context";
 import { isProactiveInitiator } from "../proactive/initiator";
 import { computerGuidanceForRun } from "../proactive/restriction";
 import type { ProductTelemetry } from "../telemetry/product";
+import type { RecordContextBreakdown } from "../threads/context-usage";
 import type { AgentActor } from "./profile-types";
 
 export type AgentResolutionContext = {
@@ -124,6 +125,8 @@ export type ActorAgentResolverDependencies = {
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources;
   /** Each Bot's current project (story RES2), per actor. */
   loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject;
+  /** 每次内置运行开始时记上下文分类比例，记在发起的人名下（对话侧栏）。 */
+  recordContextBreakdownForActor?: (actorId: string) => RecordContextBreakdown;
 };
 
 /**
@@ -196,6 +199,7 @@ export function createActorAgentResolver(
       deps.resolveAgentModel,
       deps.loadAvatarSourcesForActor?.(actor.id),
       deps.loadCurrentProjectForActor?.(actor.id),
+      deps.recordContextBreakdownForActor?.(actor.id),
     ).then((agents) => {
       const loadName = deps.loadNameForActor;
       if (loadName) {

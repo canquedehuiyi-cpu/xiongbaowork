@@ -501,6 +501,7 @@ import {
   loadTenantPackage,
   synchronizeTenantPackage,
 } from "./tenant-package";
+import { contextBreakdownRecorder } from "./threads/context-usage";
 import {
   createLocalThreadPlatform,
   createLocalThreadReader,
@@ -3460,6 +3461,9 @@ await startupLifecycle.run(async (startup) => {
     loadAvatarSourcesForActor,
     // The project each coworker works in on the person's machine (story RES2).
     loadCurrentProjectForActor,
+    // 对话侧栏的上下文分类：每次内置运行开始时记一行比例，记在发起的人名下。
+    recordContextBreakdownForActor: (actorId) =>
+      contextBreakdownRecorder(database, actorId),
     // Published Automatic Learning skills, only with a connected Intelligence.
     acquireLearnedSkills: learning?.acquire,
   });

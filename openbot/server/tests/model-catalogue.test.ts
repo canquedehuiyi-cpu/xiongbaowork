@@ -7,6 +7,7 @@ import {
   createModelCatalogue,
   createModelRoutes,
   isModelUnavailableMessage,
+  lookupContextWindow,
   type ModelOption,
   modelLabel,
   modelsUrl,
@@ -14,6 +15,7 @@ import {
   parseCapabilities,
   REFRESH_MS,
   reportModelRejected,
+  templateVendors,
 } from "../src/model-catalogue";
 
 const KEY = "sk-proj-not-a-real-key-0123456789";
@@ -1548,5 +1550,34 @@ describe("model context window", () => {
       new Promise((resolve) => setTimeout(() => resolve("waited"), 500)),
     ]);
     expect(answer).toBe(128_000);
+  });
+
+  /*
+   * 模型库的服务商模板 id（provider_templates，迁移 0063 写入）：每个都要能认出 models.dev 的厂商，
+   * 否则同名模型在多个厂商下时查不到上限。custom 没有固定厂商，靠接口地址的域名认。
+   * 真库里的模板表另在 context-usage.integration.test.ts 核对。
+   */
+  test("every seeded provider template names a models.dev vendor", () => {
+    for (const id of [
+      "openai",
+      "anthropic",
+      "google",
+      "openrouter",
+      "deepseek",
+      "zhipu",
+      "moonshot",
+    ])
+      expect(templateVendors(id).length).toBeGreaterThan(0);
+    expect(templateVendors("custom")).toEqual([]);
+  });
+
+  test("an OpenRouter model resolves to OpenRouter's own entry, not the namesake vendor's", () => {
+    const table = new Map([
+      ["openrouter/anthropic/claude-x", 1_000],
+      ["anthropic/claude-x", 2_000],
+    ]);
+    expect(lookupContextWindow(table, "openrouter", "anthropic/claude-x")).toBe(
+      1_000,
+    );
   });
 });

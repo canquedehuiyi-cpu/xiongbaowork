@@ -716,12 +716,19 @@ export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = {
   "glm-4.5-air": 131_072,
 };
 
-/** models.dev vendor ids a provider template id names, first one that has the model wins. */
+/**
+ * models.dev vendor ids a provider template id names, first one that has the model wins. Keys cover
+ * every id seeded in `provider_templates` (migration 0063: openai, anthropic, google, openrouter,
+ * deepseek, zhipu, moonshot; `custom` has no vendor and is matched by its base URL's host), plus
+ * names an operator may give a platform pool row.
+ */
 const TEMPLATE_VENDORS: Record<string, string[]> = {
   openai: ["openai"],
   anthropic: ["anthropic"],
   google: ["google"],
   xai: ["xai"],
+  // OpenRouter names its models `vendor/model`, and models.dev lists them under `openrouter/`.
+  openrouter: ["openrouter"],
   deepseek: ["deepseek"],
   qwen: ["alibaba", "alibaba-cn"],
   alibaba: ["alibaba", "alibaba-cn"],
@@ -734,8 +741,14 @@ const TEMPLATE_VENDORS: Record<string, string[]> = {
   bigmodel: ["zhipuai"],
 };
 
+/** The models.dev vendors a provider template id names; none for an unknown id or `custom`. */
+export function templateVendors(providerId: string): readonly string[] {
+  return TEMPLATE_VENDORS[providerId.toLowerCase()] ?? [];
+}
+
 /** The same, by the host of a custom base URL. */
 const HOST_VENDORS: [RegExp, string[]][] = [
+  [/(^|\.)openrouter\.ai$/, ["openrouter"]],
   [/(^|\.)deepseek\.com$/, ["deepseek"]],
   [
     /(^|\.)(dashscope[\w-]*\.aliyuncs\.com|aliyuncs\.com|aliyun\.com)$/,
@@ -757,7 +770,7 @@ export function lookupContextWindow(
 ): number | undefined {
   const bare = modelName.split("/").at(-1) ?? modelName;
   if (table) {
-    const vendors = [...(TEMPLATE_VENDORS[providerId.toLowerCase()] ?? [])];
+    const vendors = [...templateVendors(providerId)];
     if (baseUrl) {
       try {
         const host = new URL(baseUrl).hostname.toLowerCase();

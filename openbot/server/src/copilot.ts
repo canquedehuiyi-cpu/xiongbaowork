@@ -157,6 +157,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "./tenant/context";
+import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
@@ -1356,6 +1357,11 @@ export async function buildAgents(
   loadAvatarSources?: LoadAvatarSources,
   /** The current project of each built-in Bot (story RES2). Appended last; absent tells none. */
   loadCurrentProject?: LoadCurrentProject,
+  /**
+   * 每次内置运行开始时记一行上下文分类比例（对话侧栏，`threads/context-usage.ts`）。追加在最后，原因同上；
+   * 不传则不记。
+   */
+  recordContextBreakdown?: RecordContextBreakdown,
 ): Promise<Record<string, AbstractAgent>> {
   let vendors: readonly string[] = [];
   try {
@@ -1454,6 +1460,7 @@ export async function buildAgents(
           pickedModel,
           botNames,
           resolveAgentModel,
+          recordContextBreakdown,
         );
         if (loadPersonalMemory)
           built.use(new PersonalMemoryMiddleware(agent.id, loadPersonalMemory));
@@ -1734,6 +1741,8 @@ async function buildAgent(
   botNames: ReadonlyMap<string, string> = new Map(),
   /** Which model a built-in coworker was bound to. See {@link buildAgents}. */
   resolveAgentModel?: AgentModelResolver,
+  /** 运行开始时记上下文分类比例。见 {@link buildAgents}。 */
+  recordContextBreakdown?: RecordContextBreakdown,
 ): Promise<AbstractAgent> {
   if (agent.type === "unavailable") {
     return new UnavailableAgent(agent);
@@ -2138,6 +2147,13 @@ async function buildAgent(
       );
     const runToolNames = input?.tools.map((tool) => tool.name);
     const configuration = configurationFor(runToolNames);
+    /*
+     * 构建时还不知道这次运行带不带浏览器工具（它们随 RunAgentInput.tools 才来），所以备好一份含
+     * 公开网页搜索引导的配置，运行时带了就换用它。已按某次运行构建的（有 input）不需要。
+     */
+    const browserConfiguration = runToolNames
+      ? undefined
+      : configurationFor(BROWSER_SEARCH_TOOLS);
     // What really waits: nothing, when the model could not be wrapped and is sent every tool.
     const held = searchesTools(
       "model" in configuration ? configuration.model : undefined,
@@ -2154,8 +2170,25 @@ async function buildAgent(
        * `provider-refusal.ts`. And around both, the run's ids reach the metered model through this
        * scope; see `models/token-metering`.
        */
-      observe: (stream, runInput) =>
-        sayingProviderRefusals(
+      observe: (stream, runInput) => {
+        /*
+         * 这次运行发给模型的各部分各占多少字（对话侧栏的上下文分类）。用这次实际用的那份配置；
+         * 记录器自己推迟到下一轮事件循环、从不抛错，运行不等它。
+         */
+        const ran =
+          browserConfiguration &&
+          holdsBrowserSearchTools(runInput.tools.map((tool) => tool.name))
+            ? browserConfiguration
+            : configuration;
+        recordContextBreakdown?.({
+          runId: runInput.runId,
+          threadId: runInput.threadId,
+          agentId: agent.id,
+          configuration: "factory" in ran ? {} : ran,
+          input: runInput,
+          waiting: held,
+        });
+        return sayingProviderRefusals(
           withModelRun(
             { runId: runInput.runId, threadId: runInput.threadId },
             observeModelConnection(stream, { refusalsSaidByCaller: true }),
@@ -2163,7 +2196,8 @@ async function buildAgent(
           agent,
           refusingProvider(runModel),
           { untilError: true },
-        ),
+        );
+      },
       ...(admit ? { admitTools: admit } : {}),
       ...(held.size > 0 ? { waiting: held } : {}),
       /*
@@ -2185,17 +2219,13 @@ async function buildAgent(
             : messages,
         ),
     };
-    /*
-     * 构建时还不知道这次运行带不带浏览器工具（它们随 RunAgentInput.tools 才来），所以备好一份含
-     * 公开网页搜索引导的配置，运行时带了就换用它。已按某次运行构建的（有 input）不需要。
-     */
-    return runToolNames
-      ? new BuiltInAgentWithSaneHistory(configuration, hooks)
-      : new BuiltInAgentSearchingWithBrowser(
+    return browserConfiguration
+      ? new BuiltInAgentSearchingWithBrowser(
           configuration,
-          configurationFor(BROWSER_SEARCH_TOOLS),
+          browserConfiguration,
           hooks,
-        );
+        )
+      : new BuiltInAgentWithSaneHistory(configuration, hooks);
   };
 
   const whole = withTools(granted);
@@ -3279,6 +3309,8 @@ export async function resolveRuntimeAgents(
   loadAvatarSources?: LoadAvatarSources,
   /** Each built-in Bot's current project (story RES2). Appended last; see {@link buildAgents}. */
   loadCurrentProject?: LoadCurrentProject,
+  /** 运行开始时记上下文分类比例。追加在最后；见 {@link buildAgents}。 */
+  recordContextBreakdown?: RecordContextBreakdown,
 ): Promise<Record<string, AbstractAgent>> {
   const all = await loadAgents();
   if (all.length === 0) {
@@ -3327,6 +3359,7 @@ export async function resolveRuntimeAgents(
     resolveAgentModel,
     loadAvatarSources,
     loadCurrentProject,
+    recordContextBreakdown,
   );
 }
 

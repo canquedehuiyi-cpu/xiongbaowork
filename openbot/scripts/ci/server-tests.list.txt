@@ -289,6 +289,8 @@ tests/connection-siblings.integration.test.ts
 tests/connections-upstream-shape.integration.test.ts
 tests/connector-tokens-never-reach-computer.test.ts
 tests/content-governance.test.ts
+tests/context-usage.integration.test.ts
+tests/context-usage.test.ts
 tests/continuation-target-local.test.ts
 tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts
