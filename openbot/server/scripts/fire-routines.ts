@@ -14,6 +14,7 @@
  */
 
 import { workOwner } from "@openbot/shared/work-owner";
+import { checkRlsReadiness } from "../src/auth/role-writer-lifecycle";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { reapAbandonedPipelineRuns } from "../src/pipeline/reap";
@@ -65,6 +66,15 @@ if (!serverInternalUrl) {
 }
 
 const database = createDatabase(config.databaseUrl);
+
+/*
+ * The server's tenant-isolation preflight, before the sweep writes anything (audit #633 C1). This job
+ * connects with the API's own `DATABASE_URL` and writes run rows, the queue and the routines' clocks
+ * through it, so it answers to the same gate under the same mode: the chart hands it the API's
+ * environment, `config.extraEnv` included.
+ */
+await checkRlsReadiness({ database, environment: process.env });
+
 const queue = createWorkQueue(database);
 const routineStore = createRoutineStore(database);
 

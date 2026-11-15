@@ -134,6 +134,7 @@ import {
   checkServerReadiness,
   createRoleWriterLifecycle,
   createStartupLifecycle,
+  reportReadiness,
   resolveRlsEnforcementMode,
 } from "./auth/role-writer-lifecycle";
 import { initializeRoleWriter, stopRoleWriter } from "./auth/roles";
@@ -615,6 +616,16 @@ checkDatabaseCredential({
       ? console.error(JSON.stringify(event))
       : console.warn(JSON.stringify(event)),
 });
+// The role writer's too: the compose file's default for it is the same public word.
+checkDatabaseCredential({
+  url: roleWriterUrl,
+  production,
+  variable: "ROLE_WRITER_DATABASE_URL",
+  report: (event) =>
+    production
+      ? console.error(JSON.stringify(event))
+      : console.warn(JSON.stringify(event)),
+});
 const database = createDatabase(config.databaseUrl);
 const roleWriterLifecycle = createRoleWriterLifecycle({
   application: database,
@@ -650,11 +661,7 @@ await startupLifecycle.run(async (startup) => {
     checkServerReadiness({
       read: async () => database.execute(sql.raw(ROLE_FACTS_SQL)),
       mode: rlsEnforcement,
-      report: (event) => {
-        if (event.type === "rls-role-check-unavailable")
-          console.warn(JSON.stringify(event));
-        else console.error(JSON.stringify(event));
-      },
+      report: reportReadiness,
     }),
   );
   // After the readiness gate: a deployment pointed at the owner or a BYPASSRLS role must be refused as

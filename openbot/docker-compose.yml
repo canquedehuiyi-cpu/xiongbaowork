@@ -70,13 +70,27 @@ services:
     # will skip a migration stamped below what the database has already recorded and still report
     # success (see server/src/db/migration-reach.ts). The local stack is a developer's database and
     # therefore one of the places that happens.
-    command: ["bun", "scripts/migrate.ts"]
+    #
+    # Then the role writer's password, as the chart's migration Job and the embedded image's
+    # `docker/s6/scripts/migrate.sh` set it: by the owner, straight after the migrations, because
+    # 0109 creates `openbot_role_writer` as a login with no password and the server refuses to start
+    # without a URL that logs in as it. A script rather than `psql`, which this image does not have.
+    command:
+      - sh
+      - -ec
+      - bun scripts/migrate.ts && bun scripts/role-writer-password.ts
     environment:
-      # The owner, and only here. `0054_app_role.sql` creates the role the server runs as, and
-      # creating a role is not something a data privilege can do. The server's own `DATABASE_URL`
-      # names `openbot_app` (see `.env.example`), because a superuser is not bound by row-level
-      # security and tenant isolation would silently collapse to the application layer alone.
+      # The owner, and only here, which is legitimate and the one place it is. `0054_app_role.sql`
+      # creates the role the server runs as, 0109 the role writer, and the step above sets that one's
+      # password; creating a role or setting a password is not something a data privilege can do.
+      # The server and the worker connect as `openbot_app` instead (below, and `.env.example`),
+      # because a superuser is not bound by row-level security and tenant isolation would silently
+      # collapse to the application layer alone.
       DATABASE_URL: postgres://openbot:openbot@postgres:5432/openbot
+      # Letters and digits only, since it goes into a SQL literal. The default is public, like every
+      # password in this file, and the server refuses it under NODE_ENV=production; set your own and
+      # the server's `ROLE_WRITER_DATABASE_URL` below follows it.
+      ROLE_WRITER_PASSWORD: ${ROLE_WRITER_PASSWORD:-openbot}
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,7 +140,14 @@ services:
       NODE_ENV: ""
       # Every address below names a service on this network rather than the loopback port the host
       # server reaches it on.
-      DATABASE_URL: postgres://openbot:openbot@postgres:5432/openbot
+      #
+      # The application role, not the owner: the server refuses a connection row-level security
+      # does not bind (its tenant isolation preflight), and the owner is a superuser. The password
+      # is 0054's public default, as in `.env.example`; with a changed one, override this.
+      DATABASE_URL: postgres://openbot_app:openbot@postgres:5432/openbot
+      # The one login allowed to write identity roles (migration 0109); the server refuses to start
+      # without it. Its password is the one `migrate` installs above.
+      ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:${ROLE_WRITER_PASSWORD:-openbot}@postgres:5432/openbot
       AGENT_COMPUTER_URL: http://agent-computer:4100
       # Per-Bot computers too, which is not automatic: the supervisor publishes each on a loopback
       # port unless `COMPUTER_NETWORK` names this project's `default` network, and a loopback port on
@@ -248,7 +269,10 @@ services:
     # Its three settings and nothing else. It is handed no `.env`: it does not read the deployment's
     # configuration, and the less this process holds, the less a mistake in it can spend.
     environment:
-      DATABASE_URL: postgres://openbot:openbot@postgres:5432/openbot
+      # The application role, as the server's. The worker writes run rows, the queue and the
+      # routines' clocks through this pool, and runs the server's tenant isolation preflight before
+      # its first tick: the image says NODE_ENV=production, so a superuser here is refused.
+      DATABASE_URL: postgres://openbot_app:openbot@postgres:5432/openbot
       SERVER_INTERNAL_URL: http://server:3001
       # REQUIRED, AND NO DEFAULT. The value `scripts/start.sh` falls back to is printed in this
       # repository, and whoever holds it can hand the server a routine run to fire. Generate one

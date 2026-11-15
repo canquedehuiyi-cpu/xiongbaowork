@@ -700,6 +700,7 @@ tests/role-generation.integration.test.ts
 tests/role-profile-markdown.test.ts
 tests/role-templates.integration.test.ts
 tests/role-writer-lifecycle.test.ts
+tests/role-writer-password.test.ts
 tests/roles.test.ts
 tests/route-ids-validation.test.ts
 tests/routine-conversation.integration.test.ts

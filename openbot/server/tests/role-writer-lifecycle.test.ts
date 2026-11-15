@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  checkRlsReadiness,
   createRoleWriterLifecycle,
   createStartupLifecycle,
+  type ReadinessDiagnostic,
 } from "../src/auth/role-writer-lifecycle";
 import { initializeRoleWriter, stopRoleWriter } from "../src/auth/roles";
 import { loadConfig } from "../src/config";
@@ -554,6 +556,45 @@ describe("role writer startup frame (G01-E P3)", () => {
     } finally {
       await lifecycle.stop();
       await application.$client.close();
+    }
+  });
+});
+
+/*
+ * Audit #633 C1: the gate the routines worker and the CronJob's sweep run before their first write,
+ * over real pools. The application role is enforced and passes under `refuse`; the owner, a
+ * superuser, is refused, and the reason names it.
+ */
+describe("the readiness gate a sweep runs, against the real database", () => {
+  test("the application role passes and the owner is refused", async () => {
+    const adminUrl = process.env.TEST_DATABASE_ADMIN_URL?.trim();
+    if (!adminUrl)
+      throw new Error(
+        "TEST_DATABASE_ADMIN_URL must connect as the database owner, as CI sets it.",
+      );
+    const application = createDatabase(testDatabaseUrl(), TEST_POOL);
+    const owner = createDatabase(adminUrl, { max: 1 });
+    try {
+      const passed: ReadinessDiagnostic[] = [];
+      await checkRlsReadiness({
+        database: application,
+        environment: { NODE_ENV: "production" },
+        report: (event) => passed.push(event),
+      });
+      expect(passed).toEqual([]);
+
+      const refused: ReadinessDiagnostic[] = [];
+      await expect(
+        checkRlsReadiness({
+          database: owner,
+          environment: { NODE_ENV: "production" },
+          report: (event) => refused.push(event),
+        }),
+      ).rejects.toThrow("Tenant isolation preflight refused startup.");
+      expect(refused.map((event) => event.type)).toEqual(["rls-not-enforced"]);
+    } finally {
+      await application.$client.close();
+      await owner.$client.close();
     }
   });
 });
