@@ -30,6 +30,7 @@ const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-acp-host-"));
 const work = join(scratch, "work");
 mkdirSync(work, { recursive: true });
 
+const ADAPTERS = join(scratch, "data", "acp-adapters");
 const ROOT = `fld_${"a".repeat(22)}`;
 const APP = `app_${"b".repeat(22)}`;
 const FAKE_APP: AppEntry = {
@@ -68,6 +69,7 @@ function setup(
     bufferLimit?: { count: number; bytes: number };
     endedLimit?: { turns: number; bytes: number };
     apps?: (ref: string) => AppEntry | null;
+    processEnv?: () => Promise<Record<string, string | undefined>>;
   } = {},
 ): Setup {
   const frames: Frame[] = [];
@@ -78,6 +80,8 @@ function setup(
   const host = createAcpHost({
     roots: (ref) => (ref === ROOT ? work : null),
     apps: opts.apps ?? ((ref) => (ref === APP ? FAKE_APP : null)),
+    adapterDir: ADAPTERS,
+    ...(opts.processEnv ? { processEnv: opts.processEnv } : {}),
     spawn: (spec, handlers, clientOpts) => {
       spawns.push(spec);
       const log = join(scratch, `log-${++logs}.jsonl`);
@@ -713,11 +717,18 @@ test("a known agent is started from adapterLaunch with its ask mode", async () =
   await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
   expect(t.spawns[0]).toMatchObject({
     command: "npx",
-    args: ["-y", "@agentclientprotocol/codex-acp@2"],
-    cwd: work,
+    args: ["-y", "@agentclientprotocol/codex-acp@2.6.0"],
+    // Started in the runner's own folder; the working folder is only the session's.
+    cwd: ADAPTERS,
     sessionMode: "read-only",
   });
+  expect(t.spawns[0]?.cwd).not.toBe(work);
   expect(t.spawns[0]?.env.INITIAL_AGENT_MODE).toBe("read-only");
+  expect(t.spawns[0]?.env.npm_config_registry).toBeDefined();
+  const created = received(t.logs[0] ?? "").filter(
+    (message) => message.method === "session/new",
+  );
+  expect((created[0]?.params as Frame | undefined)?.cwd).toBe(work);
   const modes = received(t.logs[0] ?? "").filter(
     (message) => message.method === "session/set_mode",
   );
@@ -866,6 +877,7 @@ test("past the limit, text updates are dropped without compacting again", async 
   const host = createAcpHost({
     roots: (ref) => (ref === ROOT ? work : null),
     apps: (ref) => (ref === APP ? FAKE_APP : null),
+    adapterDir: ADAPTERS,
     spawn: (spec, handlers, opts) =>
       createAcpClient(
         {
@@ -1008,6 +1020,7 @@ test("a turn cancelled while its session is being made ends cancelled", async ()
   const host = createAcpHost({
     roots: (ref) => (ref === ROOT ? work : null),
     apps: (ref) => (ref === APP ? FAKE_APP : null),
+    adapterDir: ADAPTERS,
     // An agent that takes a while to fail to start.
     spawn: () => ({
       initialize: () =>
@@ -1551,3 +1564,28 @@ test("a permission request over 1 MB is cut, keeps its options and can still be 
   });
   await waitFor(() => ended(t.frames, "turn_1"));
 }, 20_000);
+
+test("an owner's own agent gets the login shell's PATH too", async () => {
+  const loginPath = `/opt/login/bin:${process.env.PATH ?? ""}`;
+  const t = setup(
+    {},
+    { processEnv: async () => ({ ...process.env, PATH: loginPath }) },
+  );
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1);
+  expect(t.spawns[0]?.env.PATH).toBe(loginPath);
+  // A PATH the owner set on the app is the owner's choice.
+  const own = setup(
+    {},
+    {
+      processEnv: async () => ({ ...process.env, PATH: loginPath }),
+      apps: (ref) =>
+        ref === APP ? { ...FAKE_APP, env: { PATH: "/owner/bin" } } : null,
+    },
+  );
+  own.host.attach(own.send);
+  await own.host.handle(open("th_1"));
+  await waitFor(() => ofType(own.frames, "acp.session").length === 1);
+  expect(own.spawns[0]?.env.PATH).toBe("/owner/bin");
+});

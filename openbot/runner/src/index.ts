@@ -116,6 +116,11 @@ const DESKTOP_ENGINES: ReadonlySet<string> = new Set<DesktopEngine>([
   "agent-desktop",
 ]);
 
+/** Where the external employees' adapters start (acp/manifest.ts): a folder of the runner's own. */
+export function acpAdapterDir(dataDir: string): string {
+  return join(dataDir, "acp-adapters");
+}
+
 /** Where agent-desktop's state lives inside the data directory. */
 function desktopStateDir(dataDir: string): string {
   return join(dataDir, "agent-desktop-state");
@@ -456,6 +461,8 @@ function runnerPrivatePaths(paths: RunnerPaths, profileRoot: string): string[] {
     // Control names and the values of fields agent-desktop read.
     desktopStateDir(paths.dataDir),
     // --- end desktop control ---
+    // A shared folder there could plant an `.npmrc` or `node_modules` for the adapters.
+    acpAdapterDir(paths.dataDir),
     ...(paths.explicitDataDir ? [paths.dataDir] : []),
   ];
 }
@@ -1194,6 +1201,7 @@ export async function main(
   const acpHost = createAcpHost({
     roots: (ref) => roots.list().find((root) => root.ref === ref)?.path ?? null,
     apps: (ref) => apps.byRef(ref) ?? null,
+    adapterDir: acpAdapterDir(parsed.paths.dataDir),
   });
   runningAcp = acpHost;
 

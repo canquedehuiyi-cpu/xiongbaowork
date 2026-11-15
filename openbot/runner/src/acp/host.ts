@@ -16,7 +16,8 @@ import {
   type AcpSpawnSpec,
   createAcpClient,
 } from "./client";
-import { adapterLaunch } from "./manifest";
+import { acpProcessEnv } from "./login-path";
+import { adapterLaunch, withProcessPath } from "./manifest";
 import { permissionFacts } from "./paths";
 
 /**
@@ -33,8 +34,10 @@ import { permissionFacts } from "./paths";
  * sees (or `session/load`s) the other's session. Every frame up names its employee.
  *
  * WHAT STARTS. Codex, Claude Code and Hermes are started only from `adapterLaunch` (manifest.ts),
- * which carries the mode that makes them ask before acting; an owner's own agent (`custom`) from the
- * app the owner registered on this machine (`app_…`), with no session mode. The working folder is a
+ * which carries the mode that makes them ask before acting and starts them in the runner's own
+ * `adapterDir`, the working folder going only to `session/new` / `session/load`; an owner's own
+ * agent (`custom`) from the app the owner registered on this machine (`app_…`), with no session
+ * mode, in the app's own folder (else the working folder). Both get the login shell's PATH. The working folder is a
  * root the owner shared (`fld_…`). Both references are looked up on every start, so a folder or app
  * removed a moment ago is refused, and nothing is spawned for a reference this machine does not
  * have. No path or command ever comes from the server, and none goes back up: errors are generic
@@ -111,6 +114,13 @@ export type AcpHostDeps = {
   roots: (ref: string) => string | null;
   /** A registered app, by its `app_…` reference. */
   apps: (ref: string) => AppEntry | null;
+  /**
+   * The runner's own folder adapters are started in (`<data dir>/acp-adapters`), never a working
+   * folder (manifest.ts, SUPPLY CHAIN).
+   */
+  adapterDir: string;
+  /** This process's environment with the login shell's PATH (login-path.ts); tests inject one. */
+  processEnv?: () => Promise<Record<string, string | undefined>>;
   spawn?: typeof createAcpClient;
   idleMs?: number;
   bufferLimit?: { count: number; bytes: number };
@@ -317,6 +327,7 @@ export function capFrame(frame: Frame, limit = ACP_FRAME_LIMIT): Frame {
 
 export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const spawn = deps.spawn ?? createAcpClient;
+  const processEnv = deps.processEnv ?? acpProcessEnv;
   const idleMs = deps.idleMs ?? IDLE_MS;
   const limit = deps.bufferLimit ?? ACP_BUFFER_LIMIT;
   const endedLimit = deps.endedLimit ?? ACP_ENDED_LIMIT;
@@ -693,13 +704,15 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
           ? {
               command: app.command,
               args: app.args,
-              env: app.env,
+              // Found on the owner's login PATH like the known agents, unless the app sets PATH.
+              env: withProcessPath(app.env, await processEnv()),
               cwd: app.cwd ?? workdir,
               sessionMode: null,
             }
           : await adapterLaunch(
               harness as Exclude<AcpHarness, "custom">,
-              workdir,
+              { adapterDir: deps.adapterDir, workdir },
+              { processEnv },
             );
       if (closed) throw new HostError("start_failed");
       proc.client = spawn(spec, handlersFor(proc));

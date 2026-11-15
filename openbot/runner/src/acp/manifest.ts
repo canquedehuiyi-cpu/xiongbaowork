@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { AcpHarness } from "../../../shared/acp";
 import type { AcpSpawnSpec } from "./client";
 import { acpProcessEnv } from "./login-path";
@@ -19,7 +21,18 @@ import { acpProcessEnv } from "./login-path";
  * NONE OF THE THREE ADAPTERS TAKES A COMMAND-LINE FLAG FOR THIS: `askMode` is empty for all of them,
  * and the guarantee comes from `askEnv` and `askSessionMode`. Use `adapterLaunch` to get a spec that
  * carries all three.
+ *
+ * SUPPLY CHAIN. The npm adapters are pinned to the exact version checked (no range, so a new release
+ * is never picked up unreviewed), and `npx` runs them from a folder of the runner's own
+ * (`<data dir>/acp-adapters`, marked as a project root with an empty `package.json`), never from the
+ * working folder: a repository's `.npmrc` or `node_modules/.bin` there could otherwise replace the
+ * adapter. The working folder reaches the agent only as the `cwd` of `session/new` / `session/load`.
+ * The registry is set explicitly (`XIONGBAO_NPM_REGISTRY`, default the public npm registry), and any
+ * inherited `npm_config_*` variable that points into the working folder is unset; the owner's
+ * user-level npm config is kept.
  */
+
+export const DEFAULT_NPM_REGISTRY = "https://registry.npmjs.org/";
 
 export type AcpManifestEntry = {
   binary: string;
@@ -48,7 +61,7 @@ export const ACP_MANIFEST: Record<
     binary: "codex",
     adapter: {
       command: "npx",
-      args: ["-y", "@agentclientprotocol/codex-acp@2"],
+      args: ["-y", "@agentclientprotocol/codex-acp@2.6.0"],
     },
     askMode: [],
     askEnv: { INITIAL_AGENT_MODE: "read-only" },
@@ -64,13 +77,12 @@ export const ACP_MANIFEST: Record<
    * session starts in "auto" (a classifier decides, mostly without asking), so the session is
    * switched to "default": Claude Code's standard mode, which asks before edits and commands. It is
    * still the owner's settings (`permissions.allow`) that may pre-approve some tools.
-   * The npm package is 0.x, so the range is pinned to its current minor.
    */
   "claude-code": {
     binary: "claude",
     adapter: {
       command: "npx",
-      args: ["-y", "@agentclientprotocol/claude-agent-acp@0.107"],
+      args: ["-y", "@agentclientprotocol/claude-agent-acp@0.107.0"],
     },
     askMode: [],
     askEnv: {},
@@ -97,16 +109,65 @@ export const ACP_MANIFEST: Record<
   },
 };
 
+/** Where an adapter is started and which working folder its sessions are for. */
+export type AdapterPlace = {
+  /** The runner's own folder for adapters (`<data dir>/acp-adapters`); created when missing. */
+  adapterDir: string;
+  /** The shared working folder: only `session/new` / `session/load` get it, never the process. */
+  workdir: string;
+};
+
 /**
- * The spec `createAcpClient` takes to start `harness`'s adapter in `cwd` so that it asks before
- * acting: the adapter's arguments with `askMode`, `env` (the owner's own, if any) with `askEnv`
- * laid over it, and `askSessionMode`. On darwin and linux `env.PATH` is the owner's login-shell
- * PATH ahead of the inherited one (login-path.ts), so an adapter or `npx` installed through
- * Homebrew or npm is found even when the app was opened from Finder.
+ * `dir` made ready to start adapters in: created (owner only) with an empty `package.json`, so npm
+ * takes it as the project root and reads no `.npmrc` or `node_modules` from a folder above it.
+ */
+export function prepareAdapterDir(dir: string): void {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const manifest = join(dir, "package.json");
+  if (!existsSync(manifest)) {
+    writeFileSync(
+      manifest,
+      `${JSON.stringify({ name: "xiongbao-acp-adapters", private: true }, null, 2)}\n`,
+    );
+  }
+}
+
+function inside(folder: string, path: string): boolean {
+  const rel = relative(resolve(folder), resolve(path));
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+/**
+ * `env` with PATH = `processEnv.PATH` (this process's with the login shell's ahead of it,
+ * login-path.ts) when that differs from this process's own PATH and `env` sets none itself.
+ */
+export function withProcessPath(
+  env: Record<string, string>,
+  processEnv: Record<string, string | undefined>,
+): Record<string, string> {
+  // Set only when it differs, so Windows (and a PATH with nothing to add) is left exactly as it was.
+  if (
+    env.PATH === undefined &&
+    processEnv.PATH !== undefined &&
+    processEnv.PATH !== process.env.PATH
+  ) {
+    return { ...env, PATH: processEnv.PATH };
+  }
+  return env;
+}
+
+/**
+ * The spec `createAcpClient` takes to start `harness`'s adapter so that it asks before acting: the
+ * adapter's arguments with `askMode`, `env` (the owner's own, if any) with `askEnv` laid over it,
+ * and `askSessionMode`. It starts in `place.adapterDir`, never in the working folder, with the npm
+ * registry set and the working folder's npm settings unset (see SUPPLY CHAIN above). On darwin and
+ * linux `env.PATH` is the owner's login-shell PATH ahead of the inherited one (login-path.ts), so an
+ * adapter or `npx` installed through Homebrew or npm is found even when the app was opened from
+ * Finder.
  */
 export async function adapterLaunch(
   harness: Exclude<AcpHarness, "custom">,
-  cwd: string,
+  place: AdapterPlace,
   opts: {
     env?: Record<string, string>;
     /** The environment whose PATH the adapter is looked up in; this process's with the login PATH. */
@@ -115,16 +176,33 @@ export async function adapterLaunch(
 ): Promise<AcpSpawnSpec> {
   const entry = ACP_MANIFEST[harness];
   const processEnv = await (opts.processEnv ?? acpProcessEnv)();
-  const env: Record<string, string> = { ...opts.env, ...entry.askEnv };
-  // Set only when it differs, so Windows (and a PATH with nothing to add) is left exactly as it was.
-  if (processEnv.PATH !== undefined && processEnv.PATH !== process.env.PATH) {
-    env.PATH = processEnv.PATH;
-  }
+  prepareAdapterDir(place.adapterDir);
+  const registry =
+    processEnv.XIONGBAO_NPM_REGISTRY?.trim() || DEFAULT_NPM_REGISTRY;
+  const env: Record<string, string> = {
+    ...withProcessPath({ ...opts.env }, processEnv),
+    ...entry.askEnv,
+    npm_config_registry: registry,
+  };
+  // npm reads `npm_config_*` in any case: another spelling of the registry must not win, and
+  // nothing inherited may point npm into the working folder.
+  const unsetEnv = Object.entries(processEnv)
+    .filter(
+      ([key, value]) =>
+        /^npm_config_/i.test(key) &&
+        key !== "npm_config_registry" &&
+        (key.toLowerCase() === "npm_config_registry" ||
+          (value !== undefined &&
+            isAbsolute(value) &&
+            inside(place.workdir, value))),
+    )
+    .map(([key]) => key);
   return {
     command: entry.adapter.command,
     args: [...entry.adapter.args, ...entry.askMode],
     env,
-    cwd,
+    unsetEnv,
+    cwd: place.adapterDir,
     sessionMode: entry.askSessionMode,
   };
 }

@@ -64,6 +64,9 @@ export type AcpSpawnSpec = {
   command: string;
   args: string[];
   env: Record<string, string>;
+  /** Inherited variables the child must not get (see `StdioLaunch.unsetEnv`). */
+  unsetEnv?: string[];
+  /** Where the process starts; the sessions' own folder goes to `newSession` / `loadSession`. */
   cwd: string;
   /**
    * The session mode that makes the agent ask before acting (see `ACP_MANIFEST`); `null` only for
@@ -146,6 +149,7 @@ export function createAcpClient(
     args: spec.args,
     env: spec.env,
     cwd: spec.cwd,
+    ...(spec.unsetEnv?.length ? { unsetEnv: spec.unsetEnv } : {}),
   };
   const transport: StdioTransport = new StdioTransport(launch, {
     onMessage: (message) => onMessage(message),

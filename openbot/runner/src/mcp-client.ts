@@ -150,16 +150,19 @@ function rpcError(method: string, error: unknown): McpAppError {
 
 /**
  * The parent's environment without anything of ours (`XIONGBAO_*` carries the runner's token and
- * server settings), with the entry's own `env` laid over it. The entry's `env` is the owner's
- * choice, so it is applied as given.
+ * server settings) and without the names in `unset`, with the entry's own `env` laid over it. The
+ * entry's `env` is the owner's choice, so it is applied as given.
  */
 export function childEnv(
   parent: Record<string, string | undefined>,
   entryEnv: Record<string, string>,
+  unset: readonly string[] = [],
 ): Record<string, string> {
+  const dropped = new Set(unset);
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(parent)) {
-    if (value === undefined || key.startsWith("XIONGBAO_")) continue;
+    if (value === undefined || key.startsWith("XIONGBAO_") || dropped.has(key))
+      continue;
     env[key] = value;
   }
   return { ...env, ...entryEnv };
@@ -274,6 +277,8 @@ export type StdioLaunch = {
   command: string;
   args: string[];
   env: Record<string, string>;
+  /** Variables of the parent's environment the child does not get (the entry's own `env` still applies). */
+  unsetEnv?: string[];
   cwd?: string;
   runtime?: "bundled";
 };
@@ -440,7 +445,7 @@ export class StdioTransport implements Transport {
   ) {
     if ("url" in entry) throw new Error("stdio entry expected");
     // The command is looked up in the PATH the child will have, which the entry may extend.
-    const env = childEnv(process.env, entry.env);
+    const env = childEnv(process.env, entry.env, entry.unsetEnv);
     const spec = launchSpec(entry, process.platform, env);
     // --- app discovery (sub-project 3) ---
     // The runtime's own variables (BUN_BE_BUN) go over the entry's: without them it is not bun.

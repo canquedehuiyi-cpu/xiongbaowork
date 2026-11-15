@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -15,7 +15,7 @@ import {
   createDiscoverActions,
   DISCOVER_ACTIONS,
 } from "../src/discover-actions";
-import { launchSpec } from "../src/mcp-client";
+import { childEnv, launchSpec } from "../src/mcp-client";
 
 /*
  * `agents.discover`: which of Codex, Claude Code and Hermes this machine has, whether their ACP
@@ -225,27 +225,37 @@ test("every manifest entry names its binary, adapter and ask mode", () => {
 });
 
 test("adapterLaunch carries the ask mode and the login PATH, and a Windows npx shim goes through cmd.exe", async () => {
-  const sameEnv = async () => ({ ...process.env });
-  const codex = await adapterLaunch("codex", "/work", {
+  const sameEnv = async () => {
+    const env: Record<string, string | undefined> = { ...process.env };
+    delete env.XIONGBAO_NPM_REGISTRY;
+    return env;
+  };
+  const where = { adapterDir: join(scratch, "adapters"), workdir: "/work" };
+  const codex = await adapterLaunch("codex", where, {
     env: { OWN: "1" },
     processEnv: sameEnv,
   });
   expect(codex).toEqual({
     command: "npx",
     args: [...ACP_MANIFEST.codex.adapter.args, ...ACP_MANIFEST.codex.askMode],
-    env: { OWN: "1", INITIAL_AGENT_MODE: "read-only" },
-    cwd: "/work",
+    env: {
+      OWN: "1",
+      INITIAL_AGENT_MODE: "read-only",
+      npm_config_registry: "https://registry.npmjs.org/",
+    },
+    unsetEnv: [],
+    cwd: where.adapterDir,
     sessionMode: "read-only",
   });
   expect(
-    (await adapterLaunch("claude-code", "/work", { processEnv: sameEnv }))
+    (await adapterLaunch("claude-code", where, { processEnv: sameEnv }))
       .sessionMode,
   ).toBe("default");
   expect(
-    await adapterLaunch("hermes", "/work", { processEnv: sameEnv }),
+    await adapterLaunch("hermes", where, { processEnv: sameEnv }),
   ).toMatchObject({ command: "hermes", args: ["acp"], sessionMode: "default" });
   // The login shell's PATH reaches the adapter's environment, where npx is looked up.
-  const withLogin = await adapterLaunch("claude-code", "/work", {
+  const withLogin = await adapterLaunch("claude-code", where, {
     processEnv: async () => ({
       ...process.env,
       PATH: `/opt/homebrew/bin:${process.env.PATH ?? ""}`,
@@ -302,4 +312,59 @@ test("a probe of a missing command answers instead of throwing", async () => {
     timeoutMs: 2000,
   });
   expect(result).toMatchObject({ code: null, timedOut: false });
+});
+
+test("npx adapters are pinned to exact versions", () => {
+  for (const entry of Object.values(ACP_MANIFEST)) {
+    if (entry.adapter.command !== "npx") continue;
+    const spec = entry.adapter.args.find((arg) => arg.startsWith("@"));
+    // A scoped package at major.minor.patch: no range, no partial version, no tag.
+    expect(spec).toMatch(/^@[a-z0-9-]+\/[a-z0-9-]+@\d+\.\d+\.\d+$/);
+  }
+  expect(ACP_MANIFEST.codex.adapter.args).toContain(
+    "@agentclientprotocol/codex-acp@2.6.0",
+  );
+  expect(ACP_MANIFEST["claude-code"].adapter.args).toContain(
+    "@agentclientprotocol/claude-agent-acp@0.107.0",
+  );
+});
+
+test("an adapter starts outside the working folder, from the registry, without the project's npm config", async () => {
+  const workdir = join(scratch, "repo");
+  const adapterDir = join(scratch, "data", "acp-adapters");
+  const spec = await adapterLaunch(
+    "codex",
+    { adapterDir, workdir },
+    {
+      processEnv: async () => ({
+        PATH: process.env.PATH,
+        XIONGBAO_NPM_REGISTRY: "https://npm.example.test/",
+        // What `npm run` in the working folder would leave behind: pointing into it.
+        npm_config_userconfig: join(workdir, ".npmrc"),
+        npm_config_globalconfig: join(workdir, "etc", "npmrc"),
+        npm_config_local_prefix: workdir,
+        NPM_CONFIG_REGISTRY: "https://evil.example.test/",
+        // The owner's own user-level config is kept.
+        npm_config_cache: "/home/owner/.npm",
+      }),
+    },
+  );
+  expect(spec.cwd).toBe(adapterDir);
+  expect(spec.cwd).not.toBe(workdir);
+  // A folder of its own, marked as a project root so npm looks no further up for config.
+  expect(existsSync(join(adapterDir, "package.json"))).toBe(true);
+  expect(spec.env.npm_config_registry).toBe("https://npm.example.test/");
+  expect([...(spec.unsetEnv ?? [])].sort()).toEqual([
+    "NPM_CONFIG_REGISTRY",
+    "npm_config_globalconfig",
+    "npm_config_local_prefix",
+    "npm_config_userconfig",
+  ]);
+  // And unset in the child for real.
+  const env = childEnv(
+    { npm_config_userconfig: join(workdir, ".npmrc"), KEEP: "1" },
+    {},
+    ["npm_config_userconfig"],
+  );
+  expect(env).toEqual({ KEEP: "1" });
 });
