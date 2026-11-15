@@ -1,7 +1,8 @@
 import * as Notifications from "expo-notifications";
 import { router, Stack } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef } from "react";
-import { authClient } from "../src/auth";
+import { authClient, serverUrl } from "../src/auth";
 import { notificationDestination } from "../src/links";
 
 Notifications.setNotificationHandler({
@@ -23,7 +24,11 @@ export default function Layout() {
       pending.current = response.notification.request.content.data;
       if (session) {
         const destination = notificationDestination(pending.current);
-        if (destination) router.push(destination);
+        if (destination && "webPath" in destination)
+          void WebBrowser.openBrowserAsync(
+            `${serverUrl}${destination.webPath}`,
+          );
+        else if (destination) router.push(destination);
         handled.current = id;
         pending.current = null;
       }
