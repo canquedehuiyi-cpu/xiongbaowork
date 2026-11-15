@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { ProbeResult } from "../src/acp/discover";
 import { runProbe } from "../src/acp/discover";
 import {
+  createAcpProcessEnv,
   type LoginPathDeps,
   mergePaths,
   pathFromOutput,
@@ -60,7 +61,7 @@ test("the login shell is asked once, bounded, and only the marked line is believ
   expect(command).toBe("/bin/zsh");
   expect(args[0]).toBe("-ilc");
   expect(args[1]).toContain("/usr/bin/printenv PATH");
-  expect(timeoutMs).toBe(3000);
+  expect(timeoutMs).toBe(10_000);
 
   const merged = await withLoginPath(deps);
   expect(merged.PATH).toBe("/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin");
@@ -133,4 +134,40 @@ test("a login shell that hangs is stopped in time and the inherited PATH is used
 test("pathFromOutput wants the markers right around one line", () => {
   expect(pathFromOutput(`${START}\r\n/usr/bin\r\n${END}\r\n`)).toBe("/usr/bin");
   expect(pathFromOutput(`${END}\n/usr/bin\n${START}\n`)).toBe(undefined);
+});
+
+test("only a login PATH that was found is kept; after a failure the shell is asked again", async () => {
+  const good = `${START}\n/opt/homebrew/bin:/usr/bin\n${END}\n`;
+  const answers: Array<Partial<ProbeResult>> = [
+    { code: 1 },
+    { timedOut: true, code: null },
+    { code: 0, stdout: good },
+  ];
+  const calls: string[] = [];
+  const deps: LoginPathDeps = {
+    platform: "darwin",
+    env: { SHELL: "/bin/zsh", PATH: "/usr/bin:/bin" },
+    run: async (command) => {
+      calls.push(command);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return {
+        code: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        ...answers.shift(),
+      };
+    },
+  };
+  const processEnv = createAcpProcessEnv(() => deps);
+  // A failure, then a timeout: the inherited PATH each time, and not remembered.
+  expect((await processEnv()).PATH).toBe("/usr/bin:/bin");
+  expect((await processEnv()).PATH).toBe("/usr/bin:/bin");
+  // Callers at the same moment share one ask.
+  const [first, second] = await Promise.all([processEnv(), processEnv()]);
+  expect(first.PATH).toBe("/opt/homebrew/bin:/usr/bin:/bin");
+  expect(second).toBe(first);
+  // Found once, it is kept: the shell is not asked again.
+  expect((await processEnv()).PATH).toBe("/opt/homebrew/bin:/usr/bin:/bin");
+  expect(calls).toHaveLength(3);
 });

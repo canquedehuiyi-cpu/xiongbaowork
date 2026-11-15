@@ -7,12 +7,13 @@ import { type ProbeResult, runProbe } from "./discover";
  * installed through Homebrew, npm or `~/.local/bin` would look absent and the npx adapters could
  * not start. Linux desktop sessions can miss what a login shell's profile adds in the same way.
  *
- * On darwin and linux the owner's login shell (`$SHELL`, else zsh on macOS) is asked once per
- * runner process: `$SHELL -ilc` printing PATH between two markers with the external `printenv`,
- * which reads the exported variable whatever the shell's syntax is (fish included). Only the one
- * line between the markers is believed, and only when every entry is an absolute folder; anything
- * the profile prints around it is ignored. It runs with stdin closed and is stopped after 3 s. On
- * any failure the inherited PATH is used as it is. Windows is left unchanged: GUI apps there get
+ * On darwin and linux the owner's login shell (`$SHELL`, else zsh on macOS) is asked: `$SHELL -ilc`
+ * printing PATH between two markers with the external `printenv`, which reads the exported variable
+ * whatever the shell's syntax is (fish included). Only the one line between the markers is
+ * believed, and only when every entry is an absolute folder; anything the profile prints around it
+ * is ignored. It runs with stdin closed and is stopped after 10 s (a heavy profile, nvm and the
+ * like, can take seconds). On any failure the inherited PATH is used as it is, for that call only:
+ * a PATH found is kept for the life of the runner process, a failure is asked again next time. Windows is left unchanged: GUI apps there get
  * the user's PATH from the registry.
  *
  * The login PATH goes first, then whatever the runner inherited that it lacks.
@@ -20,7 +21,7 @@ import { type ProbeResult, runProbe } from "./discover";
 
 const START = "__XIONGBAO_PATH_START__";
 const END = "__XIONGBAO_PATH_END__";
-export const LOGIN_PATH_TIMEOUT_MS = 3000;
+export const LOGIN_PATH_TIMEOUT_MS = 10_000;
 
 export type LoginPathDeps = {
   platform: NodeJS.Platform;
@@ -98,16 +99,34 @@ export async function withLoginPath(
   return { ...deps.env, PATH: mergePaths(login, deps.env.PATH) };
 }
 
-let cached: Promise<Record<string, string | undefined>> | undefined;
-
-/** This process's environment with the login PATH, worked out once per runner process. */
-export function acpProcessEnv(): Promise<Record<string, string | undefined>> {
-  if (cached === undefined) {
-    cached = withLoginPath({
-      platform: process.platform,
-      env: process.env,
-      run: (command, args, timeoutMs) => runProbe(command, args, { timeoutMs }),
+/**
+ * `deps().env` with the login PATH, the shell asked until it once answers: a PATH found is kept and
+ * the shell never asked again; a failure (or a timeout) answers the inherited environment for that
+ * call and is not remembered. Callers at the same moment share one ask.
+ */
+export function createAcpProcessEnv(
+  deps: () => LoginPathDeps,
+): () => Promise<Record<string, string | undefined>> {
+  let found: Record<string, string | undefined> | undefined;
+  let asking: Promise<Record<string, string | undefined>> | undefined;
+  return () => {
+    if (found) return Promise.resolve(found);
+    asking ??= (async () => {
+      const current = deps();
+      const login = await readLoginShellPath(current);
+      if (login === undefined) return current.env;
+      found = { ...current.env, PATH: mergePaths(login, current.env.PATH) };
+      return found;
+    })().finally(() => {
+      asking = undefined;
     });
-  }
-  return cached;
+    return asking;
+  };
 }
+
+/** This process's environment with the login PATH (`createAcpProcessEnv`). */
+export const acpProcessEnv = createAcpProcessEnv(() => ({
+  platform: process.platform,
+  env: process.env,
+  run: (command, args, timeoutMs) => runProbe(command, args, { timeoutMs }),
+}));
