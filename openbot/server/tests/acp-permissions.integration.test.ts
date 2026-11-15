@@ -442,15 +442,65 @@ describe("an external employee's permission requests", () => {
     expect(answers()).toEqual([
       expect.objectContaining({ requestId: "req-1", optionId: "always" }),
     ]);
-    // The next push in this thread is let through, once, with no new approval.
-    await request("req-2", "git push origin feature");
+    // The same command asked again in this thread is let through, once, with no new approval.
+    await request("req-2", "git push  origin main");
     expect(answers()).toHaveLength(2);
     expect(answers()[1]).toMatchObject({ requestId: "req-2", optionId: "yes" });
     expect(await approvals()).toHaveLength(1);
-    // Another kind of request still asks.
-    await request("req-3", "pnpm add zod");
-    expect(await approvals()).toHaveLength(2);
+    // Any other command still asks: another push, another kind of request.
+    await request("req-3", "git push origin feature");
+    await request("req-4", "pnpm add zod");
+    expect(await approvals()).toHaveLength(3);
     expect(answers()).toHaveLength(2);
+  });
+
+  test("after rm -rf build was allowed once, rm -rf ~ still asks", async () => {
+    const hirer = await person("hirer");
+    const { request, approvals, answers } = await harness(hirer, {
+      runCommand: "direct",
+    });
+    await request("req-1", "rm -rf build");
+    const [row] = await approvals();
+    if (!row) throw new Error("expected an approval");
+    // A floor: only allow once.
+    expect(row.action.policy?.source).toBe("destructive_tool");
+    expect(
+      (row.action.target as { acp: AcpApprovalCard }).acp.offerConversation,
+    ).toBe(false);
+    expect((await decide(hirer.id, row.id, "allow_conversation")).status).toBe(
+      400,
+    );
+    expect((await decide(hirer.id, row.id, "allow_once")).status).toBe(200);
+    expect(answers()).toEqual([
+      expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
+    ]);
+    await request("req-2", "rm -rf ~");
+    await request("req-3", "rm -rf build");
+    const rows = await approvals();
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((entry) => entry.status === "pending")).toHaveLength(2);
+    expect(answers()).toHaveLength(1);
+  });
+
+  test("switch_mode is refused at once, with no approval", async () => {
+    const hirer = await person("hirer");
+    const { device, turnId, approvals, answers } = await harness(hirer);
+    await device({
+      type: "acp.permission.request",
+      turnId,
+      requestId: "req-mode",
+      toolCall: {
+        toolCallId: "m",
+        kind: "switch_mode",
+        title: "Auto-accept edits",
+      },
+      options: OPTIONS,
+      facts: { insideWorkdir: null, paths: [] },
+    });
+    expect(await approvals()).toHaveLength(0);
+    expect(answers()).toEqual([
+      expect.objectContaining({ requestId: "req-mode", optionId: "no" }),
+    ]);
   });
 
   test("deny answers reject_once", async () => {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   ACP_RULE_DEFAULTS,
   type AcpPermissionOptionFrame,
@@ -14,6 +15,8 @@ import {
 } from "@openbot/shared/standing-rule";
 import { eq, sql } from "drizzle-orm";
 import {
+  DESTRUCTIVE_TOOL_REASON,
+  dangerousCommand,
   OUTBOUND_SEND_REASON,
   PUBLISH_POST_REASON,
   SHARE_ACCESS_REASON,
@@ -49,17 +52,27 @@ import { type AcpTurnStore, isFinalAcpTurnStatus } from "./turns";
  * THE SAME POLICY ENGINE, FIVE LAYERS, STRICTEST FIRST (spec「和现有审批层的关系」):
  *  1. Every floor this deployment has: deleting asks every time and only "allow once" (#398); paying,
  *     credentials and security settings; sending to people; sharing and publishing. A floor the
- *     engine would hand to the person is asked here instead (the agent cannot be "done by you").
- *     The engine names its floors by the words of the action; commands that send, share or publish
- *     have no app name to go by, so this file recognises those itself (`commandFloor`).
+ *     engine would hand to the person is asked here instead (the agent cannot be "done by you"),
+ *     and the built-in floors are read here again, not only from the engine's answer. A command
+ *     line has no app name for the engine to go by, so it is taken apart here (`analyseCommand`:
+ *     wrappers and shells off, every simple command judged, the strictest kept) and its deletes,
+ *     sends, shares and publishes are the same floors. A command that does not come apart, a
+ *     download run straight away, `eval`, anything piped into a shell: asked, once at a time.
  *  2. The admin's action kinds left to people themselves, a disabled tool (SEC1), a custom rule
  *     saying no: refused outright, the rule named in the conversation.
  *  3. A custom rule that asks (or hands off): asks.
  *  4. The employee's own five rules (`AcpRuleKey`); several matched, the strictest wins.
  *  5. The hirer's global approvals switch (off by default) relaxes none of this: the five rules
  *     were set for this employee at hiring, so what they ask is always asked.
- * Floors and layer 2 never offer "allow for this conversation"; layers 3 and 4 do, and an answer of
- * that kind lets the same kind of request (`acpAllowKey`) through for the rest of the thread.
+ * A kind XiongBao does not know (`other`, a misspelling) is asked every time; `switch_mode` is
+ * refused outright (the agent may not leave the mode that makes it ask). With no answer from the
+ * engine, a request is asked.
+ *
+ * "ALLOW FOR THIS CONVERSATION" is never offered for a floor, layer 2, a kind XiongBao does not
+ * know, a file outside the working folder, or a command the SEC1 tables call dangerous (or that
+ * names a file that may hold secrets). A command is let through again only as exactly the same
+ * command (`acpAllowKey`: its normalized simple commands); a file request inside the working folder
+ * by its kind.
  *
  * ASKING. An approval is opened in the hirer's tenant, for the hirer (a group's other members
  * neither see nor answer it: the approval service refuses them, `externalAgentHirer`), with what the
@@ -133,9 +146,13 @@ export const ACP_EMPLOYEE_GONE = "这位外部员工已不在了，许可请求�
 export const ACP_BAD_OPTION =
   "外部员工没有认出这个回答，已按取消处理。请让它再试一次。";
 
+/**
+ * A request's kind, lower case: one XiongBao knows, `switch_mode`, or else `other` (a kind it does
+ * not know, misspelt, or not a kind at all), which is asked about every time.
+ */
 export function kindOfRequest(value: unknown): string {
-  const kind = typeof value === "string" ? value : "";
-  return /^[a-z_]{1,32}$/.test(kind) ? kind : "other";
+  const kind = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return KNOWN_KINDS.has(kind) || kind === "switch_mode" ? kind : "other";
 }
 
 /** A permission request as the rules read it. */
@@ -185,11 +202,11 @@ const urlOf = (rawInput: unknown): string | null => {
   return str(raw?.url) ?? str(raw?.uri);
 };
 
-/** Installing dependencies or downloading: the network rule. */
+/** Installing dependencies or downloading: the network rule, read per simple command. */
 const NETWORK_COMMANDS = [
   /\b(npm|pnpm|yarn|bun|cnpm)\s+(install|i|add|ci|update|upgrade|up|dlx|x)\b/i,
-  /\b(npx|pnpx|bunx|uvx|pipx)\s+\S/i,
-  /\byarn\s*($|[;&|])/i,
+  /^(npx|pnpx|bunx|uvx|pipx)\s+\S/i,
+  /^yarn$/i,
   /\bpip3?\s+(install|download)\b/i,
   /\bpython3?\s+-m\s+pip\s+install\b/i,
   /\buv\s+(pip\s+install|add|sync|tool\s+install)\b/i,
@@ -201,55 +218,688 @@ const NETWORK_COMMANDS = [
   /\b(brew|apt|apt-get|yum|dnf|apk|pacman|zypper|choco|winget|scoop|port)\s+(install|add|upgrade|-S)\b/i,
   /\bcomposer\s+(install|require|update)\b/i,
   /\bdotnet\s+(add\s+package|restore)\b/i,
-  /\b(curl|wget|aria2c|invoke-webrequest|iwr)\b/i,
-  /\bgit\s+(clone|fetch|pull)\b/i,
 ];
 
-/** `git` with its global options (`-C dir`, `-c key=value`, `--no-pager`) before the subcommand. */
-const GIT = String.raw`\bgit(?:\s+(?:-C|-c|--git-dir|--work-tree|--namespace)\s+\S+|\s+--?[\w-]+(?:=\S+)?)*`;
-/** Committing and pushing code: the push rule. `git stash push` stays on the computer. */
-const PUSH_COMMANDS = [
-  new RegExp(`${GIT}\\s+push\\b`, "i"),
-  /\bgh\s+pr\s+(create|merge)\b/i,
-  /\b(hg|jj\s+git)\s+push\b/i,
-  /\bsvn\s+(commit|ci)\b/i,
-];
+/** A command line cut into words, its simple commands, and what they do. */
+export type CommandAnalysis = {
+  /** Every simple command, wrappers and shells unwrapped, words joined by one space. */
+  segments: string[];
+  /** The command as "allow for this conversation" matches it: the segments, in order. */
+  normalized: string;
+  /** A floor a simple command hits: deleting, sending to people, sharing, publishing. */
+  floor?: CommandFloor;
+  /**
+   * Asked every time whatever the rules say: a command that could not be taken apart, a download
+   * run straight away, `eval`, anything piped into a shell or interpreter, an encoded command.
+   */
+  risky?: string;
+  /** The dangerous-command or sensitive-path tables of SEC1 (`runCommand: dangerous`). */
+  danger?: string;
+  network: boolean;
+  push: boolean;
+};
 
-/** Where a command line starts, so a word in an argument is not taken for the program. */
-const AT_START = String.raw`(?:^|[;&|(\n]\s*|\bsudo\s+)`;
+export type CommandFloor = {
+  source:
+    | "destructive_tool"
+    | "outbound_send"
+    | "share_access"
+    | "publish_post";
+  reason: string;
+};
+
+const FLOOR_ORDER: CommandFloor["source"][] = [
+  "destructive_tool",
+  "outbound_send",
+  "share_access",
+  "publish_post",
+];
+const FLOOR_REASONS: Record<CommandFloor["source"], string> = {
+  destructive_tool: DESTRUCTIVE_TOOL_REASON,
+  outbound_send: OUTBOUND_SEND_REASON,
+  share_access: SHARE_ACCESS_REASON,
+  publish_post: PUBLISH_POST_REASON,
+};
+const floorOf = (source: CommandFloor["source"]): CommandFloor => ({
+  source,
+  reason: FLOOR_REASONS[source],
+});
+
+/** Longer than this is not taken apart: asked about, as SEC1 does. */
+const MAX_COMMAND = 20_000;
+/** Shells inside shells inside shells: past this, asked about. */
+const MAX_DEPTH = 4;
+
+const UNPARSEABLE = "这条命令拆不开，看不清它要做什么，先问你。";
+const UNREADABLE = "看不到这条命令的内容，先问你。";
+const RISKY_PIPE =
+  "这条命令把内容直接交给解释器执行（比如下载后立刻运行），先问你。";
+const RISKY_EVAL =
+  "这条命令会执行一段临时拼出来的代码（eval / Invoke-Expression），先问你。";
+const RISKY_ENCODED = "这条命令是编码过的，看不清它要做什么，先问你。";
+
+type Word = string;
+type Op = { op: string };
+type Lexed = { items: (Word | Op)[]; subs: string[] } | null;
+
+const isOp = (item: Word | Op): item is Op => typeof item !== "string";
+
+/** The index of the `)` closing the `(` at `open`, skipping quoted text; -1 when there is none. */
+function closing(input: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < input.length; i += 1) {
+    const c = input[i];
+    if (c === "'") {
+      const end = input.indexOf("'", i + 1);
+      if (end < 0) return -1;
+      i = end;
+    } else if (c === '"') {
+      const end = input.indexOf('"', i + 1);
+      if (end < 0) return -1;
+      i = end;
+    } else if (c === "(") depth += 1;
+    else if (c === ")") {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
 
 /**
- * Commands that send to people, share or publish, which the engine's name-based floors cannot see
- * (they read an app tool's name; a command has none): the same three floors, by the command line.
+ * A command line as words and separators, the way a POSIX shell (and, near enough, cmd and
+ * PowerShell) cuts it: quotes kept together, `;` `&&` `||` `|` `&` newlines and parentheses
+ * separate commands, and `$( )`, `<( )`, `>( )` and backticks are commands of their own (`subs`).
+ * A backslash escapes only a space, a quote or a separator, so a Windows path keeps its `\`.
+ * Null when it does not close (a quote, a parenthesis or a backtick left open).
  */
-const COMMAND_FLOORS: {
-  source: "outbound_send" | "share_access" | "publish_post";
-  reason: string;
-  pattern: RegExp;
-}[] = [
-  {
-    source: "outbound_send",
-    reason: OUTBOUND_SEND_REASON,
-    pattern: new RegExp(
-      `${AT_START}(mail|mailx|sendmail|mutt|msmtp|swaks)\\b` +
-        String.raw`|\bgh\s+(issue|pr)\s+(comment|review)\b|\bgh\s+issue\s+create\b` +
-        String.raw`|hooks\.slack\.com|slack\.com/api/chat\.|discord(app)?\.com/api/webhooks|api\.telegram\.org/bot|oapi\.dingtalk\.com|qyapi\.weixin\.qq\.com|open\.feishu\.cn/open-apis/bot|api\.twilio\.com|api\.sendgrid\.com|api\.mailgun\.net|\bsmtps?://`,
-      "i",
-    ),
-  },
-  {
-    source: "share_access",
-    reason: SHARE_ACCESS_REASON,
-    pattern:
-      /\bgh\s+repo\s+edit\b.*--visibility\b|\bgh\s+gist\s+create\b.*(--public|\s-p\b)|\bgh\s+api\b.*\/collaborators\//i,
-  },
-  {
-    source: "publish_post",
-    reason: PUBLISH_POST_REASON,
-    pattern:
-      /\b(npm|pnpm|yarn)\s+publish\b|\b(cargo|poetry|vsce|ovsx)\s+publish\b|\btwine\s+upload\b|\bgem\s+push\b|\bgh\s+release\s+create\b|\bdocker\s+push\b/i,
-  },
-];
+function lex(input: string): Lexed {
+  const items: (Word | Op)[] = [];
+  const subs: string[] = [];
+  let word = "";
+  let has = false;
+  const end = () => {
+    if (has) items.push(word);
+    word = "";
+    has = false;
+  };
+  for (let i = 0; i < input.length; ) {
+    const c = input[i] as string;
+    if (c === "'") {
+      const stop = input.indexOf("'", i + 1);
+      if (stop < 0) return null;
+      word += input.slice(i + 1, stop);
+      has = true;
+      i = stop + 1;
+      continue;
+    }
+    if (c === '"') {
+      i += 1;
+      while (i < input.length && input[i] !== '"') {
+        if (input[i] === "\\" && i + 1 < input.length) {
+          word += input[i + 1];
+          i += 2;
+          continue;
+        }
+        if (input[i] === "`") {
+          const stop = input.indexOf("`", i + 1);
+          if (stop < 0) return null;
+          subs.push(input.slice(i + 1, stop));
+          word += "$SUB";
+          i = stop + 1;
+          continue;
+        }
+        if (input.startsWith("$(", i)) {
+          const stop = closing(input, i + 1);
+          if (stop < 0) return null;
+          subs.push(input.slice(i + 2, stop));
+          word += "$SUB";
+          i = stop + 1;
+          continue;
+        }
+        word += input[i];
+        i += 1;
+      }
+      if (i >= input.length) return null;
+      has = true;
+      i += 1;
+      continue;
+    }
+    if (
+      c === "\\" &&
+      i + 1 < input.length &&
+      /[\s'"`;&|()<>\\$]/.test(input[i + 1] as string)
+    ) {
+      word += input[i + 1];
+      has = true;
+      i += 2;
+      continue;
+    }
+    if (c === "`") {
+      const stop = input.indexOf("`", i + 1);
+      if (stop < 0) return null;
+      subs.push(input.slice(i + 1, stop));
+      word += "$SUB";
+      has = true;
+      i = stop + 1;
+      continue;
+    }
+    if (
+      input.startsWith("$(", i) ||
+      input.startsWith("<(", i) ||
+      input.startsWith(">(", i)
+    ) {
+      const stop = closing(input, i + 1);
+      if (stop < 0) return null;
+      subs.push(input.slice(i + 2, stop));
+      word += c === "$" ? "$SUB" : "<SUB>";
+      has = true;
+      i = stop + 1;
+      continue;
+    }
+    const two = input.slice(i, i + 2);
+    if (two === "&&" || two === "||" || two === "|&") {
+      end();
+      items.push({ op: two === "|&" ? "|" : two });
+      i += 2;
+      continue;
+    }
+    if (
+      c === ";" ||
+      c === "|" ||
+      c === "&" ||
+      c === "\n" ||
+      c === "\r" ||
+      c === "(" ||
+      c === ")"
+    ) {
+      end();
+      items.push({ op: c === "\r" ? "\n" : c });
+      i += 1;
+      continue;
+    }
+    if (c === ">" || c === "<") {
+      end();
+      let redirect = "";
+      while (i < input.length && /[<>&]/.test(input[i] as string)) {
+        redirect += input[i];
+        i += 1;
+      }
+      items.push(redirect);
+      continue;
+    }
+    if (/\s/.test(c)) {
+      end();
+      i += 1;
+      continue;
+    }
+    word += c;
+    has = true;
+    i += 1;
+  }
+  end();
+  return { items, subs };
+}
+
+/** A program as it is called: its file name, lower case, without `.exe`. */
+const programName = (word: string) =>
+  (word.split(/[\\/]/).pop() ?? word)
+    .toLowerCase()
+    .replace(/\.(exe|cmd|bat|com)$/, "");
+
+const SHELL_PROGRAMS = new Set([
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "ash",
+  "csh",
+  "tcsh",
+]);
+const INTERPRETERS = new Set([
+  ...SHELL_PROGRAMS,
+  "python",
+  "python3",
+  "python2",
+  "perl",
+  "ruby",
+  "node",
+  "deno",
+  "php",
+  "lua",
+  "powershell",
+  "pwsh",
+  "cmd",
+  "iex",
+  "invoke-expression",
+  "source",
+  ".",
+]);
+/** Commands that run the rest of their words as a command, with how many words their options take. */
+const WRAPPERS: Record<string, Set<string>> = {
+  env: new Set(["-u", "--unset", "-C", "--chdir"]),
+  sudo: new Set([
+    "-u",
+    "-g",
+    "-U",
+    "-C",
+    "-h",
+    "-p",
+    "-r",
+    "-t",
+    "-D",
+    "--user",
+    "--group",
+  ]),
+  doas: new Set(["-u", "-C"]),
+  nohup: new Set(),
+  command: new Set(),
+  exec: new Set(["-a"]),
+  builtin: new Set(),
+  time: new Set(["-f", "-o"]),
+  nice: new Set(["-n"]),
+  ionice: new Set(["-c", "-n"]),
+  stdbuf: new Set(["-i", "-o", "-e"]),
+  timeout: new Set(["-s", "-k", "--signal", "--kill-after"]),
+  xargs: new Set([
+    "-I",
+    "-i",
+    "-n",
+    "-P",
+    "-L",
+    "-l",
+    "-d",
+    "-s",
+    "-E",
+    "-e",
+    "-a",
+  ]),
+  watch: new Set(["-n", "-d"]),
+};
+const DELETE_PROGRAMS = new Set([
+  "rm",
+  "rmdir",
+  "unlink",
+  "shred",
+  "srm",
+  "wipe",
+  "truncate",
+  "del",
+  "erase",
+  "rd",
+  "remove-item",
+  "ri",
+  "clear-content",
+  "clc",
+]);
+const MAIL_PROGRAMS = new Set([
+  "send-mailmessage",
+  "send-mgusermail",
+  "sendmail",
+  "mail",
+  "mailx",
+  "mutt",
+  "neomutt",
+  "msmtp",
+  "swaks",
+  "ssmtp",
+]);
+const HTTP_PROGRAMS = new Set([
+  "curl",
+  "wget",
+  "invoke-webrequest",
+  "invoke-restmethod",
+  "iwr",
+  "irm",
+  "http",
+  "https",
+  "xh",
+  "aria2c",
+]);
+const REMOTE_COPY = new Set([
+  "scp",
+  "sftp",
+  "ftp",
+  "lftp",
+  "tftp",
+  "ncftp",
+  "smbclient",
+]);
+/** Where a messaging service takes posts: anything aimed there sends to people. */
+const MESSAGING_HOSTS =
+  /hooks\.slack\.com|slack\.com\/api\/chat\.|discord(app)?\.com\/api\/webhooks|api\.telegram\.org\/bot|oapi\.dingtalk\.com|qyapi\.weixin\.qq\.com|open\.feishu\.cn\/open-apis\/bot|api\.twilio\.com|api\.sendgrid\.com|api\.mailgun\.net|graph\.microsoft\.com\/[^\s]*\/sendmail|\bsmtps?:\/\//i;
+
+/** The subcommand of `git`, past its global options (`-C dir`, `-c key=value`, `--no-pager`). */
+function gitSubcommand(args: string[]): { sub: string; rest: string[] } {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i] as string;
+    if (/^(-C|-c|--git-dir|--work-tree|--namespace)$/.test(arg)) {
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("-")) continue;
+    return { sub: arg.toLowerCase(), rest: args.slice(i + 1) };
+  }
+  return { sub: "", rest: [] };
+}
+
+/** Whether an HTTP client call sends something: data, a form, an upload, or a writing method. */
+function uploads(program: string, args: string[]): boolean {
+  const writing = (method: string | undefined) =>
+    /^(post|put|patch|delete)$/i.test(method ?? "");
+  if (program === "curl")
+    return args.some(
+      (arg, index) =>
+        /^--(data|data-[a-z]+|form|form-string|upload-file|json)(=|$)/.test(
+          arg,
+        ) ||
+        // Short options, case as curl reads it: -d data, -F form, -T upload (`-fsSL` is none).
+        (/^-[A-Za-z]/.test(arg) &&
+          !arg.startsWith("--") &&
+          /^-[A-Za-z]*[dFT]/.test(arg)) ||
+        /^-X(post|put|patch|delete)$/i.test(arg) ||
+        ((arg === "-X" || arg === "--request") && writing(args[index + 1])) ||
+        /^--request=(post|put|patch|delete)$/i.test(arg),
+    );
+  if (program === "wget")
+    return args.some((arg) =>
+      /^--(post-data|post-file|body-data|body-file)(=|$)|^--method=(post|put|patch|delete)$/i.test(
+        arg,
+      ),
+    );
+  if (program === "http" || program === "https" || program === "xh")
+    return args.some(
+      (arg) =>
+        writing(arg) ||
+        /^(-f|--form|--raw)(=|$)/.test(arg) ||
+        /^[\w.-]+(:=|=|@)/.test(arg),
+    );
+  if (program === "aria2c") return false;
+  // PowerShell: -Body, -InFile, -Method Post|Put|Patch, -Method:Post.
+  const lower = args.map((arg) => arg.toLowerCase());
+  return lower.some(
+    (arg, index) =>
+      /^-(body|infile)(:|$)/.test(arg) ||
+      /^-method:(post|put|patch|delete)$/.test(arg) ||
+      (arg === "-method" && writing(lower[index + 1])),
+  );
+}
+
+/** A remote end of `rsync`: `host:path`, `user@host:path`, `rsync://` (not `C:\…`). */
+const remoteArg = (arg: string) =>
+  !arg.startsWith("-") &&
+  !/^[a-z]:[\\/]/i.test(arg) &&
+  (/^[^/\\\s]+:/.test(arg) || /^rsync:\/\//i.test(arg));
+
+type Facts = {
+  segments: string[];
+  floors: Set<CommandFloor["source"]>;
+  risky?: string;
+  network: boolean;
+  push: boolean;
+};
+
+/** One simple command: what it is, after its wrappers and shells are taken off. */
+function simpleCommand(
+  words: string[],
+  pipedInto: boolean,
+  depth: number,
+  facts: Facts,
+): void {
+  const rest = [...words];
+  // Wrappers and assignments in front of the program: `env A=1`, `sudo -u x`, `nohup`, `xargs -0`.
+  for (let guard = 0; guard < 20 && rest.length > 0; guard += 1) {
+    while (
+      rest.length > 0 &&
+      /^[A-Za-z_][A-Za-z0-9_]*=/.test(rest[0] as string)
+    )
+      rest.shift();
+    const name = programName(rest[0] ?? "");
+    const takesValue = WRAPPERS[name];
+    if (!takesValue) break;
+    rest.shift();
+    while (rest.length > 0 && (rest[0] as string).startsWith("-")) {
+      const option = rest.shift() as string;
+      if (option === "--") break;
+      if (name === "env" && (option === "-S" || option === "--split-string")) {
+        const script = rest.shift();
+        if (script !== undefined) analyseInto(script, depth + 1, facts);
+        return;
+      }
+      if (takesValue.has(option)) rest.shift();
+    }
+    if (name === "timeout" && rest.length > 0) rest.shift();
+  }
+  if (rest.length === 0) return;
+  const program = programName(rest[0] as string);
+  const args = rest.slice(1);
+  const lowerArgs = args.map((arg) => arg.toLowerCase());
+  // A shell given a script: the script is commands of its own.
+  if (SHELL_PROGRAMS.has(program)) {
+    const flag = args.findIndex((arg) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg));
+    if (flag >= 0) {
+      const script = args[flag + 1];
+      if (script === undefined) facts.risky ??= UNPARSEABLE;
+      else analyseInto(script, depth + 1, facts);
+      return;
+    }
+  }
+  if (program === "powershell" || program === "pwsh") {
+    const encoded = lowerArgs.findIndex((arg) =>
+      /^[-/](encodedcommand|enc|ec|e)$/.test(arg),
+    );
+    if (encoded >= 0) {
+      facts.risky ??= RISKY_ENCODED;
+      return;
+    }
+    const flag = lowerArgs.findIndex((arg) => /^[-/](command|c)$/.test(arg));
+    if (flag >= 0) {
+      analyseInto(args.slice(flag + 1).join(" "), depth + 1, facts);
+      return;
+    }
+  }
+  if (program === "cmd") {
+    const flag = lowerArgs.findIndex((arg) => /^\/[ck]$/.test(arg));
+    if (flag >= 0) {
+      analyseInto(args.slice(flag + 1).join(" "), depth + 1, facts);
+      return;
+    }
+  }
+  const text = [program, ...args].join(" ");
+  facts.segments.push(text);
+
+  // Run as it arrives: piped into an interpreter, `eval`, `iex`, a shell fed `<( … )`.
+  if (
+    program === "eval" ||
+    program === "iex" ||
+    program === "invoke-expression"
+  )
+    facts.risky ??= RISKY_EVAL;
+  if (
+    pipedInto &&
+    INTERPRETERS.has(program) &&
+    !args.some((arg) => !arg.startsWith("-") && arg !== "<SUB>")
+  )
+    facts.risky ??= RISKY_PIPE;
+  if (INTERPRETERS.has(program) && args.includes("<SUB>"))
+    facts.risky ??= RISKY_PIPE;
+
+  // Deleting.
+  if (DELETE_PROGRAMS.has(program)) facts.floors.add("destructive_tool");
+  if (program === "find") {
+    const exec = lowerArgs.findIndex((arg) =>
+      /^-(exec|execdir|ok|okdir)$/.test(arg),
+    );
+    if (
+      lowerArgs.includes("-delete") ||
+      (exec >= 0 && DELETE_PROGRAMS.has(programName(args[exec + 1] ?? "")))
+    )
+      facts.floors.add("destructive_tool");
+  }
+  if (program === "git") {
+    const { sub, rest: gitArgs } = gitSubcommand(args);
+    if (sub === "rm") facts.floors.add("destructive_tool");
+    if (
+      sub === "clean" &&
+      gitArgs.some((arg) => /^-[a-z]*f/i.test(arg) || arg === "--force")
+    )
+      facts.floors.add("destructive_tool");
+    if (sub === "send-email") facts.floors.add("outbound_send");
+    if (sub === "push") facts.push = true;
+    if (sub === "clone" || sub === "fetch" || sub === "pull")
+      facts.network = true;
+  }
+  if (
+    (program === "hg" && lowerArgs[0] === "push") ||
+    (program === "jj" && lowerArgs[0] === "git" && lowerArgs[1] === "push")
+  )
+    facts.push = true;
+  if (program === "svn" && (lowerArgs[0] === "commit" || lowerArgs[0] === "ci"))
+    facts.push = true;
+
+  // Sending to people.
+  if (MAIL_PROGRAMS.has(program)) facts.floors.add("outbound_send");
+  if (HTTP_PROGRAMS.has(program)) {
+    facts.network = true;
+    if (uploads(program, args) || MESSAGING_HOSTS.test(text))
+      facts.floors.add("outbound_send");
+  }
+  if (REMOTE_COPY.has(program)) {
+    facts.network = true;
+    facts.floors.add("outbound_send");
+  }
+  if (program === "rsync" && args.some(remoteArg)) {
+    facts.network = true;
+    facts.floors.add("outbound_send");
+  }
+  if (program === "gh") {
+    const [area, verb] = lowerArgs;
+    if (
+      (area === "issue" || area === "pr") &&
+      (verb === "comment" || verb === "review")
+    )
+      facts.floors.add("outbound_send");
+    if (area === "issue" && verb === "create")
+      facts.floors.add("outbound_send");
+    if (area === "pr" && (verb === "create" || verb === "merge"))
+      facts.push = true;
+    if (area === "release" && verb === "create")
+      facts.floors.add("publish_post");
+    if (
+      area === "repo" &&
+      verb === "edit" &&
+      lowerArgs.some((arg) => arg.startsWith("--visibility"))
+    )
+      facts.floors.add("share_access");
+    if (
+      area === "gist" &&
+      verb === "create" &&
+      lowerArgs.some((arg) => arg === "--public" || arg === "-p")
+    )
+      facts.floors.add("share_access");
+  }
+
+  // Publishing.
+  if (
+    (["npm", "pnpm", "yarn", "cargo", "poetry", "vsce", "ovsx"].includes(
+      program,
+    ) &&
+      lowerArgs[0] === "publish") ||
+    (program === "twine" && lowerArgs[0] === "upload") ||
+    (program === "gem" && lowerArgs[0] === "push") ||
+    (program === "docker" && lowerArgs[0] === "push")
+  )
+    facts.floors.add("publish_post");
+
+  if (NETWORK_COMMANDS.some((pattern) => pattern.test(text)))
+    facts.network = true;
+}
+
+/** Every simple command of a command line, into `facts`. */
+function analyseInto(command: string, depth: number, facts: Facts): void {
+  if (depth > MAX_DEPTH || command.length > MAX_COMMAND) {
+    facts.risky ??= UNPARSEABLE;
+    return;
+  }
+  const lexed = lex(command);
+  if (!lexed) {
+    facts.risky ??= UNPARSEABLE;
+    return;
+  }
+  for (const sub of lexed.subs) analyseInto(sub, depth + 1, facts);
+  let words: string[] = [];
+  let pipedInto = false;
+  const flush = (next: Op | null) => {
+    if (words.length > 0) simpleCommand(words, pipedInto, depth, facts);
+    words = [];
+    pipedInto = next?.op === "|";
+  };
+  for (const item of lexed.items) {
+    if (isOp(item)) flush(item);
+    else words.push(item);
+  }
+  flush(null);
+}
+
+/**
+ * What an `execute` request's command line does, simple command by simple command: wrappers
+ * (`env`, `sudo`, `nohup`, `xargs`, `command`, `exec`, …) and shells (`sh -c '…'`, `pwsh -Command`,
+ * `cmd /c`) taken off, `;` `&&` `||` `|` newlines `$( )` and backticks cut apart, the strictest of
+ * them kept. A command that does not come apart is risky: asked every time.
+ */
+export function analyseCommand(command: string | null): CommandAnalysis {
+  if (command === null)
+    return {
+      segments: [],
+      normalized: "",
+      risky: UNREADABLE,
+      network: false,
+      push: false,
+    };
+  const facts: Facts = {
+    segments: [],
+    floors: new Set(),
+    network: false,
+    push: false,
+  };
+  analyseInto(command, 0, facts);
+  // The SEC1 table read over the whole line too: what it calls piping to a shell or `eval` is risky.
+  const table = dangerousCommand(command);
+  if (table?.id === "pipe_to_shell") facts.risky ??= RISKY_PIPE;
+  if (table?.id === "eval") facts.risky ??= RISKY_EVAL;
+  const normalized = facts.segments.join(" ; ");
+  const danger =
+    facts.risky ??
+    [command, ...facts.segments]
+      .map(
+        (text) =>
+          securityFloor(
+            {
+              actorId: "",
+              botId: "",
+              toolRef: "computer_run_command",
+              effect: "write",
+              scope: "",
+              args: { command: text },
+            },
+            DEFAULT_EMPLOYEE_SECURITY,
+            true,
+          )?.reason,
+      )
+      .find((reason) => reason !== undefined);
+  const source = FLOOR_ORDER.find((entry) => facts.floors.has(entry));
+  return {
+    segments: facts.segments,
+    normalized,
+    ...(source ? { floor: floorOf(source) } : {}),
+    ...(facts.risky ? { risky: facts.risky } : {}),
+    ...(danger ? { danger } : {}),
+    network: facts.network,
+    push: facts.push,
+  };
+}
 
 export type AcpClassified = {
   /** The rules the request falls under, in name order. */
@@ -258,19 +908,27 @@ export type AcpClassified = {
   kind: string;
   /** For `execute`: the command line, or null when it could not be read. */
   command: string | null;
+  /** For `execute`: what the command line does. */
+  analysis?: CommandAnalysis;
   url: string | null;
   paths: string[];
-  /** A kind none of the five rules is about (`other`, `switch_mode`, …): asked. */
+  /** A kind XiongBao does not know (`other`, a misspelling): asked every time. */
   unrecognised: boolean;
 };
 
 const PATH_KINDS = new Set(["read", "edit", "move", "delete", "search"]);
 
+/** A short, stable name for a normalized command line, for the conversation answer's `scope`. */
+const commandKey = (normalized: string) =>
+  createHash("sha256").update(normalized).digest("hex").slice(0, 32);
+
 /**
  * Which of the five rules a request falls under, and the action the policy engine weighs: the tool
  * `acp/<kind>`, the command in `args.command` (as `computer_run_command` carries it), a path
  * request's paths (relative to the working folder; a file name only, outside it) or a fetch's URL.
- * A path the device could not place (`insideWorkdir: null`) is outside.
+ * A path the device could not place (`insideWorkdir: null`) is outside. An `execute` request's
+ * `scope` names its exact command (`<rules>:<hash of the normalized command>`), so "allow for this
+ * conversation" covers that command and no other.
  */
 export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
   const kind = kindOfRequest(req.kind);
@@ -279,6 +937,7 @@ export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
     (path): path is string => typeof path === "string",
   );
   const command = kind === "execute" ? commandOf(req.rawInput) : null;
+  const analysis = kind === "execute" ? analyseCommand(command) : undefined;
   const url = kind === "fetch" ? urlOf(req.rawInput) : null;
   const rules = new Set<AcpRuleKey>();
   if (kind === "edit" || kind === "move" || kind === "delete")
@@ -287,16 +946,13 @@ export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
     rules.add("touchOutside");
   else if (kind === "execute") {
     rules.add("runCommand");
-    if (command !== null) {
-      if (NETWORK_COMMANDS.some((pattern) => pattern.test(command)))
-        rules.add("network");
-      if (PUSH_COMMANDS.some((pattern) => pattern.test(command)))
-        rules.add("push");
-    }
+    if (analysis?.network) rules.add("network");
+    if (analysis?.push) rules.add("push");
     if (req.facts.insideWorkdir === false) rules.add("touchOutside");
   } else if (kind === "fetch") rules.add("network");
   const unrecognised = !KNOWN_KINDS.has(kind);
   const sorted = [...rules].sort();
+  const ruleScope = sorted.join("+") || "none";
   const args: Loose =
     kind === "execute"
       ? command === null
@@ -313,6 +969,7 @@ export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
     rules: sorted,
     kind,
     command,
+    ...(analysis ? { analysis } : {}),
     url,
     paths,
     unrecognised,
@@ -324,7 +981,11 @@ export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
         kind === "read" || kind === "search" || kind === "think"
           ? "read"
           : "write",
-      scope: unrecognised ? "other" : sorted.join("+") || "none",
+      scope: unrecognised
+        ? "other"
+        : analysis
+          ? `${ruleScope}:${analysis.normalized ? commandKey(analysis.normalized) : "unreadable"}`
+          : ruleScope,
       args,
       ...(kind === "delete" ? { destructive: true as const } : {}),
       ...(req.continuation ? { continuation: req.continuation } : {}),
@@ -414,37 +1075,42 @@ function onceOnly(policy: ApprovalPolicyOutcome): ApprovalPolicyOutcome {
   };
 }
 
-/** A runCommand rule of `dangerous`: the dangerous-command and sensitive-path tables of SEC1. */
-function dangerous(classified: AcpClassified): string | undefined {
-  return securityFloor(
-    {
-      ...classified.candidate,
-      toolRef: "computer_run_command",
-      args: { command: classified.command },
-    },
-    DEFAULT_EMPLOYEE_SECURITY,
-    true,
-  )?.reason;
-}
+/** Said when a request is refused because it would leave the ask-first mode. */
+export const ACP_SWITCH_MODE_REFUSED =
+  "外部员工不能自己离开「先请求许可」的模式，已拒绝。";
 
 /**
  * What XiongBao does with one permission request, layer by layer (see the top of this file).
  * `policy` is the deployment's engine for the hirer (`approvalService.policyOutcome`), which reads
- * the team's and the hirer's rules, the admin's settings and the employee's tool permissions.
+ * the team's and the hirer's rules, the admin's settings and the employee's tool permissions; with
+ * no answer from it, the request is asked about, once.
  */
 export async function resolvePermission(input: {
   request: AcpPermissionAsk;
   employeeRules: Record<AcpRuleKey, string>;
   threadAllows: Set<string>;
-  policy: (candidate: ApprovalCandidate) => Promise<ApprovalPolicyOutcome>;
+  policy: (
+    candidate: ApprovalCandidate,
+  ) => Promise<ApprovalPolicyOutcome | undefined>;
 }): Promise<AcpPermissionDecision> {
   const classified = classifyRequest(input.request);
-  const { candidate } = classified;
+  const { candidate, analysis } = classified;
+  // The agent may not leave the mode that makes it ask: refused, whoever would have said yes.
+  if (classified.kind === "switch_mode")
+    return { kind: "deny", reason: ACP_SWITCH_MODE_REFUSED };
   const outcome = await input.policy(candidate);
-  const allowed = input.threadAllows.has(acpAllowKey(candidate));
+  const once = (
+    policy: ApprovalPolicyOutcome,
+    because: string,
+  ): AcpPermissionDecision => ({
+    kind: "ask",
+    offerConversation: false,
+    policy: onceOnly(policy),
+    because,
+  });
 
   // Layer 2: refused outright, the rule named.
-  if (outcome.behaviour === "deny") {
+  if (outcome?.behaviour === "deny") {
     const by = REFUSED_BY[outcome.source] ?? "管理员的设置";
     return {
       kind: "deny",
@@ -452,7 +1118,7 @@ export async function resolvePermission(input: {
     };
   }
   const floor = safetyRequirement(candidate);
-  if (outcome.behaviour === "hand_off") {
+  if (outcome?.behaviour === "hand_off") {
     // The admin left this kind of action to people themselves: an agent cannot do it for them.
     if (
       outcome.source === "safety" &&
@@ -466,44 +1132,71 @@ export async function resolvePermission(input: {
       };
     // Layer 1 (paying, credentials, security settings), or a rule or the reviewer handing it to
     // the person: the person decides, once.
-    return {
-      kind: "ask",
-      offerConversation: false,
-      policy: onceOnly(outcome),
-      because:
-        outcome.source === "safety"
-          ? (FLOOR_NAMES.safety as string)
-          : (REFUSED_BY[outcome.source] ?? "审查"),
-    };
+    return once(
+      outcome,
+      outcome.source === "safety"
+        ? (FLOOR_NAMES.safety as string)
+        : (REFUSED_BY[outcome.source] ?? "审查"),
+    );
   }
-  // Layer 1: the engine's floors.
-  if (outcome.behaviour === "ask" && FLOOR_SOURCES.has(outcome.source))
-    return {
-      kind: "ask",
-      offerConversation: false,
-      policy: onceOnly(outcome),
-      because: FLOOR_NAMES[outcome.source] ?? "底线",
-    };
-  // Layer 1: a command that sends, shares or publishes.
-  const text = [classified.command, classified.url].filter(Boolean).join(" ");
-  const commandFloor = text
-    ? COMMAND_FLOORS.find((entry) => entry.pattern.test(text))
-    : undefined;
-  if (commandFloor)
-    return {
-      kind: "ask",
-      offerConversation: false,
-      policy: {
+  // Layer 1: the engine's floors, then the same floors read here again, and the command's own.
+  if (outcome?.behaviour === "ask" && FLOOR_SOURCES.has(outcome.source))
+    return once(outcome, FLOOR_NAMES[outcome.source] ?? "底线");
+  if (floor) {
+    const source = floor.behaviour === "hand_off" ? "safety" : floor.id;
+    return once(
+      { behaviour: "ask", source, reason: floor.reason },
+      FLOOR_NAMES[source] ?? "底线",
+    );
+  }
+  if (analysis?.floor)
+    return once(
+      {
         behaviour: "ask",
-        source: commandFloor.source,
-        reason: commandFloor.reason,
+        source: analysis.floor.source,
+        reason: analysis.floor.reason,
       },
-      because: FLOOR_NAMES[commandFloor.source] as string,
-    };
+      FLOOR_NAMES[analysis.floor.source] as string,
+    );
+  if (analysis?.risky)
+    return once(
+      { behaviour: "ask", source: "acp_rule", reason: analysis.risky },
+      "危险命令",
+    );
+  // No answer from the engine: asked, never let through.
+  if (!outcome)
+    return once(
+      {
+        behaviour: "ask",
+        source: "acp_rule",
+        reason: "拿不到审批策略，先问你。",
+      },
+      "审批策略",
+    );
+  // A kind XiongBao does not know may be anything, a floor included: asked, every time.
+  if (classified.unrecognised)
+    return once(
+      {
+        behaviour: "ask",
+        source: "acp_rule",
+        reason: "这个操作不在五项规则里，每次都先问你。",
+      },
+      "其他操作",
+    );
+  /*
+   * "Allow for this conversation": a command only as exactly this command, and never one the SEC1
+   * tables call dangerous or that names a file that may hold secrets; a file request only inside the
+   * working folder.
+   */
+  const standing = analysis
+    ? !analysis.danger
+    : !classified.rules.includes("touchOutside");
+  const allowed = standing && input.threadAllows.has(acpAllowKey(candidate));
   // Layer 3: a custom rule, or the reviewer, asks. The engine's own "ask before changes" default
-  // is not one: for an external employee the switch is layer 5.
+  // is not one: the employee's five rules decide instead.
   if (outcome.behaviour === "ask" && outcome.source !== "default") {
-    const offerConversation = offersStandingRule({ policy: outcome });
+    const offerConversation =
+      standing && offersStandingRule({ policy: outcome });
     if (offerConversation && allowed)
       return { kind: "allow", because: "这次对话里已允许" };
     return {
@@ -513,27 +1206,17 @@ export async function resolvePermission(input: {
       because: REFUSED_BY[outcome.source] ?? "审查",
     };
   }
-  // Layer 4: the employee's own rules, strictest first.
+  // Layer 4: the employee's own rules, strictest first. The hirer's global approvals switch does
+  // not relax them (spec layer 5).
   const asking: { label: string; reason: string }[] = [];
-  if (classified.unrecognised)
-    asking.push({
-      label: "其他操作",
-      reason: "这个操作不在五项规则里，先问你。",
-    });
-  else if (classified.kind === "execute" && classified.command === null)
-    asking.push({
-      label: ACP_RULE_LABELS.runCommand,
-      reason: "看不到这条命令的内容，先问你。",
-    });
   for (const key of classified.rules) {
     const value = input.employeeRules[key];
     if (value === "direct") continue;
     if (value === "dangerous" && key === "runCommand") {
-      const why = classified.command === null ? null : dangerous(classified);
-      if (why === undefined) continue;
+      if (!analysis?.danger) continue;
       asking.push({
         label: ACP_RULE_LABELS.runCommand,
-        reason: why ?? "看不到这条命令的内容，先问你。",
+        reason: analysis.danger,
       });
       continue;
     }
@@ -548,11 +1231,12 @@ export async function resolvePermission(input: {
   const labels = [...new Set(asking.map((entry) => entry.label))];
   return {
     kind: "ask",
-    offerConversation: true,
+    offerConversation: standing,
     policy: {
       behaviour: "ask",
       source: "acp_rule",
       reason: [...new Set(asking.map((entry) => entry.reason))].join(""),
+      ...(standing ? {} : { closed: true as const }),
     },
     because: labels.join("、"),
   };
@@ -1008,12 +1692,7 @@ export function createAcpPermissionBridge(
       request: ask,
       employeeRules: employee.rules,
       threadAllows,
-      policy: async (candidate) =>
-        (await deps.policy(candidate)) ?? {
-          behaviour: "allow",
-          source: "default",
-          reason: "No rule or preference asks about this.",
-        },
+      policy: (candidate) => deps.policy(candidate),
     });
     if (turnEnded(entry)) return;
     if (decided.kind === "allow") {
