@@ -28,7 +28,9 @@ export function ComputerPane({
 }) {
   const agents = useQuery(agentListQueryOptions());
   const [chosen, setChosen] = useState<string | undefined>();
-  const bots = agents.data ?? [];
+  // 外部员工（`device_acp`）在招它的人自己的电脑上干活，没有我们这边的电脑（服务器对它的电脑请求一律
+  // 拒绝），所以不列、也不会默认选上它。
+  const bots = (agents.data ?? []).filter((agent) => !agent.external);
   const bot =
     bots.find((agent) => agent.id === chosen) ??
     bots.find((agent) => agent.id === defaultBotId) ??

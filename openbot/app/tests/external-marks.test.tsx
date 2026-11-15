@@ -48,6 +48,7 @@ import {
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { queryClient } from "@/query-client";
 import { Route as ChannelRoute } from "@/routes/_authed/_app/channel/$channelId";
+import { ComputerPane } from "@/skins/opendots/computer-pane";
 import { ContactsPage } from "@/skins/xiongbao/contacts";
 import { EmployeeCardContext } from "@/skins/xiongbao/employee-card";
 import { MessageList } from "@/skins/xiongbao/message-list";
@@ -658,6 +659,23 @@ describe("别处的入口", () => {
     renderAt("/", () => <AgentDialog agentId="a1" onClose={() => {}} open />);
     await body.findAllByText("管理");
     expect(body.getAllByText("定时任务").length).toBeGreaterThan(0);
+  });
+
+  test("the opendots computer pane never shows an external employee's computer", async () => {
+    // Asked for the external employee, first in the list: the pane falls back to another employee.
+    answers.set("GET /api/agents", { agents: [CODEX, CUSTOM, BUILT_IN] });
+    const { view } = renderAt("/", () => (
+      <ComputerPane defaultBotId="ext-codex" onClose={() => {}} />
+    ));
+    const pane = await view.findByTestId("opendots-computer-pane");
+    await waitFor(() =>
+      expect(within(pane).getByText("小熊会计的电脑")).toBeTruthy(),
+    );
+    expect(within(pane).queryByText(/代码熊|双子/)).toBeNull();
+    await settleReactWork();
+    expect(
+      sent.some((request) => /^\/api\/computers\/ext-/.test(request.url)),
+    ).toBe(false);
   });
 
   test("a new automation cannot pick an external employee, not even by default", async () => {

@@ -121,6 +121,11 @@ export type AgentProfile = {
    * not named so here, where `update`'s input already has an `external` of its own shape.
    */
   externalRun?: AgentExternalRun;
+  /**
+   * What runs it (`agents.type`). The store always sets it; optional only so profiles written by hand
+   * in tests still check. The computer routes read it: an external employee has no computer of ours.
+   */
+  type?: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
 };
 
 /** What {@link AgentProfile.externalRun} carries: `agents.configuration` of a `device_acp` Bot, read back. */

@@ -512,6 +512,7 @@ function mapProfile(
     // wipe one by saving an unrelated edit; showing the value would put a secret in a screenshot.
     hasAuth: authFromConfiguration(row.configuration) !== null,
     instructions: starterInstructionsOf(row),
+    type: row.type,
     ...frameworkField(row),
     ...externalField(row),
   };

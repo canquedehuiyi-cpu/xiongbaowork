@@ -1493,7 +1493,12 @@ export function ChannelChat({
             threadId={channel.threadId}
             compaction={compaction}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
-            routine={routineTarget(channel, runtimeAgentId, botProfile)}
+            // Only once the profile is read: until then nobody knows it is not an external employee.
+            routine={
+              agentProfiles === undefined
+                ? undefined
+                : routineTarget(channel, runtimeAgentId, botProfile)
+            }
             voiceCall={
               call.available
                 ? {
