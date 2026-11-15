@@ -123,6 +123,7 @@ import {
 import { useVoiceCall } from "@/lib/voice/use-voice-call";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { queryClient } from "@/query-client";
+import { useSkinId } from "@/skins/store";
 import type { SidebarContext } from "../../../../shared/conversation-sidebar";
 import { newId } from "../../lib/new-id";
 
@@ -459,6 +460,7 @@ export function ChannelChat({
   const botProfile = agentProfiles?.find(
     (profile) => profile.id === runtimeAgentId,
   );
+  const workbench = useSkinId() === "xiongbao";
   // 运行事件里的自动压缩只在默认皮肤（给了分隔线的）处理；见 `onCustomEvent`。
   const compactingHere = useRef(false);
   compactingHere.current = compactionDivider !== undefined;
@@ -1537,9 +1539,23 @@ export function ChannelChat({
                 />
               ) : undefined
             }
+            /*
+             * 默认皮肤：顶栏已经有员工的头像、名字、可见范围和状态（电脑、接管、名片也在那里），对话开头不再
+             * 放一张介绍卡，滚动后也不再折成一条窄条，只在空对话里留一行淡淡的提示。完整资料从「名片」打开。
+             */
+            empty={
+              workbench ? (
+                <p
+                  className="m-0 pt-2 text-center text-(--wb-muted) text-[13px]"
+                  data-conversation-empty-hint=""
+                >
+                  跟{botName}说点什么吧
+                </p>
+              ) : undefined
+            }
             intro={
               /* From the roster this screen already reads; nothing while it loads. */
-              botProfile ? (
+              botProfile && !workbench ? (
                 <ConversationIntro
                   agent={botProfile}
                   motion={
@@ -1551,7 +1567,7 @@ export function ChannelChat({
               ) : undefined
             }
             introBar={
-              botProfile
+              botProfile && !workbench
                 ? (away) => (
                     <ConversationIntroBar
                       agent={botProfile}
@@ -1799,7 +1815,13 @@ export function ChannelChat({
              * finds them mid-turn waits and is tried again.
              */
             working={
-              agent.isRunning || turnsInFlight > 0 ? null : (
+              /*
+               * Nothing at all when there is nothing waiting: an empty fragment still counts as
+               * something drawn, and the transcript would never show an empty conversation's hint.
+               */
+              agent.isRunning ||
+              turnsInFlight > 0 ||
+              (!readingAnswer && !channel.work?.length) ? null : (
                 <>
                   {readingAnswer ? (
                     <ProgressRow
