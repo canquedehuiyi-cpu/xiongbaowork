@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   connectsPerPerson,
   textMatch,
@@ -160,24 +160,33 @@ export function MineScreen() {
   /*
    * 页首那一行点下去落在哪一块。浏览器自己会把 `#mine-teams` 滚到位，但它不会把焦点交出去：键盘
    * 用户跳过去之后按 Tab 还是从页首那个链接接着走。所以这里补上半步——滚到位，再把焦点放到那块
-   * 上（section 带 `tabIndex={-1}` 就为这一刻）。`hash` 在没有跳转时是空串，什么都不做。
+   * 上（section 带 `tabIndex={-1}` 就为这一刻）。
    *
    * 焦点落在一块内容上本来是看不见的（下面把默认那个大框关掉了），所以落过去之后让那块亮一下再
    * 熄掉：人是被一句话送到这里的，得知道落的是哪一截。人才市场的「去人才市场」用同一个做法。
+   *
+   * 走两条路是因为「地址变了」不等于「人要跳」：带 `#` 进来与第一次点，地址变了；滚回页首再点同一
+   * 个入口，地址一模一样，可人是真的点了。所以点击自己也走一遍，不能只等地址。
    */
   const hash = useLocation({ select: (location) => location.hash });
   const [lit, setLit] = useState<string | null>(null);
-  useEffect(() => {
-    const id = hash.replace(/^#/, "");
-    if (!id) return;
+  const litTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpTo = useCallback((id: string) => {
     const target = document.getElementById(id);
     if (!target) return;
     target.scrollIntoView?.({ block: "start" });
     target.focus({ preventScroll: true });
     setLit(id);
-    const done = setTimeout(() => setLit(null), LIT_MS);
-    return () => clearTimeout(done);
-  }, [hash]);
+    if (litTimer.current) clearTimeout(litTimer.current);
+    litTimer.current = setTimeout(() => setLit(null), LIT_MS);
+  }, []);
+  useEffect(() => {
+    const id = hash.replace(/^#/, "");
+    if (id) jumpTo(id);
+    return () => {
+      if (litTimer.current) clearTimeout(litTimer.current);
+    };
+  }, [hash, jumpTo]);
 
   const counts = { full: 0, degraded: 0, blocked: 0, unevaluated: 0 };
   for (const skill of skills) {
@@ -365,6 +374,7 @@ export function MineScreen() {
               <a
                 className="underline-offset-2 hover:text-foreground hover:underline"
                 href={`#${entry.target}`}
+                onClick={() => jumpTo(entry.target)}
               >
                 {entry.label}
               </a>
