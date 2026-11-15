@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { applyEnvironmentAliases, envName } from "@openbot/shared/env-aliases";
 import { intelligenceApiKey } from "@openbot/shared/intelligence-key";
 import {
@@ -679,6 +680,38 @@ function keyEncryptionKey(environment: Environment): string {
     );
   }
 
+  return value;
+}
+
+/**
+ * SHA-256 of the worker secret `scripts/start.sh` falls back to on a developer's machine.
+ *
+ * That value is printed in this repository, so a server that accepts it has a door to
+ * `/internal/routines/run` anybody can open. Compared by digest, as the `PLACEHOLDER_KEY` above is
+ * compared by value, only because the literal spells the upstream name this source no longer does.
+ */
+const PUBLIC_WORKER_SECRET_SHA256 =
+  "ca6b3d72aae76178e9bfe1b82c3df887e856fc793eb4807064159a5ffe9f4472";
+
+/**
+ * The worker's secret: refused in production when it is the public development default, warned
+ * everywhere else, as `KEY_ENCRYPTION_KEY`'s placeholder is and as `checkDatabaseCredential` treats
+ * the public database password. Absent stays absent: the endpoint then refuses everything.
+ */
+function workerSharedSecret(environment: Environment): string | undefined {
+  const value = optional(environment, "WORKER_SHARED_SECRET");
+  if (value === undefined) return undefined;
+  const digest = createHash("sha256").update(value).digest("hex");
+  if (digest === PUBLIC_WORKER_SECRET_SHA256) {
+    if (isProduction(environment)) {
+      throw new Error(
+        "WORKER_SHARED_SECRET is the public development default from scripts/start.sh; refusing to start in production. Generate one with: openssl rand -hex 32",
+      );
+    }
+    console.warn(
+      "WORKER_SHARED_SECRET is the public development default from scripts/start.sh. Fine locally. Set a random one before deploying: openssl rand -hex 32",
+    );
+  }
   return value;
 }
 
@@ -1818,7 +1851,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
       `GITHUB_APP_CLIENT_ID needs ${envName("PUBLIC_URL")} (or BETTER_AUTH_URL) so GitHub can send people back to this server.`,
     );
   }
-  const workerSharedSecret = optional(environment, "WORKER_SHARED_SECRET");
+  const workerSecret = workerSharedSecret(environment);
   warnOnInertModelConfiguration(environment);
   const deploymentKey = keyEncryptionKey(environment);
   const webBotAuth = webBotAuthFromEnv(environment, {
@@ -1925,7 +1958,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     ...(optional(environment, "AGENT_TOOL_TOKEN")
       ? { agentToolToken: optional(environment, "AGENT_TOOL_TOKEN") as string }
       : {}),
-    ...(workerSharedSecret ? { workerSharedSecret } : {}),
+    ...(workerSecret ? { workerSharedSecret: workerSecret } : {}),
   };
   // Read once the rest has been, so a deployment missing something more basic is told that first.
   const config: DeploymentConfig = {

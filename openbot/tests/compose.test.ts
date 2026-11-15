@@ -903,6 +903,23 @@ test("puts the server beside the database and the Bots, and the worker beside th
   );
 });
 
+/**
+ * The worker secret has no default (audit #633 M2): the development value is public and opens the
+ * endpoint that fires routines. Unset, Compose still reads the file, so every other command keeps
+ * working, and the worker is handed an empty value it refuses to start on (`worker/src/env.ts`).
+ */
+test("gives the worker secret no default, and still reads the file without one", () => {
+  expect(composeFile()).not.toContain("dev-worker-secret");
+  const unset = runComposeConfig({}).services;
+  expect(unset.server.environment.WORKER_SHARED_SECRET).toBe("");
+  expect(unset.worker.environment.WORKER_SHARED_SECRET).toBe("");
+  const given = runComposeConfig({
+    WORKER_SHARED_SECRET: "s3cret-from-env",
+  }).services;
+  expect(given.server.environment.WORKER_SHARED_SECRET).toBe("s3cret-from-env");
+  expect(given.worker.environment.WORKER_SHARED_SECRET).toBe("s3cret-from-env");
+});
+
 test("hands the desktop's host-access token to the server and nothing else", () => {
   const holders = Object.entries(composeServices())
     .filter(([, service]) =>

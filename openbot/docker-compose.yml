@@ -163,13 +163,15 @@ services:
       # Compose reads for these `${...}` and the host server reads for itself. OpenBot Desktop keeps
       # them out of that file and hands them to Compose in its environment, so they reach this
       # container only by being named here. The defaults are the ones every other service in this
-      # file and `scripts/start.sh` agree on.
+      # file and `scripts/start.sh` agree on, except the worker secret's, which has none.
       AGENT_TOOL_TOKEN: ${AGENT_TOOL_TOKEN:-}
       COMPUTER_TOKEN: ${COMPUTER_TOKEN:-openbot-dev-computer-token}
       KEY_ENCRYPTION_KEY: ${KEY_ENCRYPTION_KEY:-}
       MANAGED_AGENT_TOKEN: ${MANAGED_AGENT_TOKEN:-}
       SUPERVISOR_TOKEN: ${SUPERVISOR_TOKEN:-openbot-dev-supervisor-token}
-      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-openbot-dev-worker-secret}
+      # No default: the development value `scripts/start.sh` falls back to is public, and this
+      # endpoint fires routines. See the worker below for why this is empty rather than `:?`.
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-}
       INTELLIGENCE_API_KEY: ${INTELLIGENCE_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -248,7 +250,19 @@ services:
     environment:
       DATABASE_URL: postgres://openbot:openbot@postgres:5432/openbot
       SERVER_INTERNAL_URL: http://server:3001
-      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-openbot-dev-worker-secret}
+      # REQUIRED, AND NO DEFAULT. The value `scripts/start.sh` falls back to is printed in this
+      # repository, and whoever holds it can hand the server a routine run to fire. Generate one
+      # (`openssl rand -hex 32`) and give it to Compose in the environment or in `.env`; the server
+      # and this worker read the same variable. Unset, this worker refuses to start and says so
+      # (`worker/src/env.ts`), and the server's endpoint refuses every caller.
+      #
+      # Empty rather than `${WORKER_SHARED_SECRET:?...}`, deliberately: Compose interpolates the
+      # whole file before it looks at profiles or at the services named, so a `:?` here would make
+      # every command fail without it, `docker compose up -d postgres` from `scripts/start.sh`,
+      # `ps`, `logs` and `down` (`scripts/stop.sh`) included, and so would every status call the
+      # desktop shell makes with no secrets in hand. Its refusal belongs to the process that needs
+      # the secret.
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
