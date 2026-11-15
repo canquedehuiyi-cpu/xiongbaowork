@@ -97,6 +97,8 @@ describe("migration 0120 platform model pool", () => {
       ["enabled", "boolean", "NO"],
       ["created_at", "timestamp with time zone", "NO"],
       ["updated_at", "timestamp with time zone", "NO"],
+      // 0216：模型的上下文窗口，后加的列排在最后。
+      ["context_window", "integer", "YES"],
     ]);
     expect(columns.some((c) => c.name === "tenant_id")).toBe(false);
     const byName = new Map(columns.map((c) => [c.name, c.fallback ?? ""]));

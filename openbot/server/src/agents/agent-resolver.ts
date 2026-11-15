@@ -27,6 +27,8 @@ import { NameContextMiddleware } from "../people/name-context";
 import { isProactiveInitiator } from "../proactive/initiator";
 import { computerGuidanceForRun } from "../proactive/restriction";
 import type { ProductTelemetry } from "../telemetry/product";
+import type { RunCompaction } from "../threads/compaction";
+import type { RecordContextBreakdown } from "../threads/context-usage";
 import type { AgentActor } from "./profile-types";
 
 export type AgentResolutionContext = {
@@ -124,6 +126,10 @@ export type ActorAgentResolverDependencies = {
   loadAvatarSourcesForActor?: (actorId: string) => LoadAvatarSources;
   /** Each Bot's current project (story RES2), per actor. */
   loadCurrentProjectForActor?: (actorId: string) => LoadCurrentProject;
+  /** 每次内置运行开始时记上下文分类比例，记在发起的人名下（对话侧栏）。 */
+  recordContextBreakdownForActor?: (actorId: string) => RecordContextBreakdown;
+  /** 压缩会话：内置员工每一轮开始前按需自动压缩、换上摘要，记录在发起的人名下。 */
+  compactionForActor?: (actorId: string) => RunCompaction;
 };
 
 /**
@@ -196,6 +202,9 @@ export function createActorAgentResolver(
       deps.resolveAgentModel,
       deps.loadAvatarSourcesForActor?.(actor.id),
       deps.loadCurrentProjectForActor?.(actor.id),
+      deps.recordContextBreakdownForActor?.(actor.id),
+      // 子代理在自己的线程里跑一段，它的历史不压缩。
+      context?.subagent ? undefined : deps.compactionForActor?.(actor.id),
     ).then((agents) => {
       const loadName = deps.loadNameForActor;
       if (loadName) {

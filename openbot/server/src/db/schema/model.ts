@@ -3,12 +3,13 @@ import {
   boolean,
   check,
   index,
-  uniqueIndex,
-  unique,
-  uuid,
+  integer,
+  pgTable,
   text,
   timestamp,
-  pgTable,
+  unique,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { credentials } from "./core";
 import { tenantId } from "./tenant";
@@ -33,6 +34,8 @@ export const modelRegistry = pgTable(
     }),
     modelName: text("model_name").notNull(),
     label: text("label"),
+    /** The model's context window in tokens (0216): the sidebar's usage bar divides by it. Null: unknown. */
+    contextWindow: integer("context_window"),
     enabled: boolean("enabled").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -42,6 +45,10 @@ export const modelRegistry = pgTable(
       .defaultNow(),
   },
   (table) => [
+    check(
+      "model_registry_context_window_positive",
+      sql`${table.contextWindow} > 0`,
+    ),
     uniqueIndex("model_registry_tenant_model_idx").on(
       table.tenantId,
       table.provider,
@@ -85,6 +92,8 @@ export const platformModelPool = pgTable(
     baseUrl: text("base_url"),
     modelName: text("model_name").notNull(),
     label: text("label").notNull(),
+    /** The model's context window in tokens (0216). Null: unknown. */
+    contextWindow: integer("context_window"),
     apiKeyEnv: text("api_key_env").notNull(),
     tiers: text("tiers")
       .array()
@@ -100,6 +109,10 @@ export const platformModelPool = pgTable(
       .defaultNow(),
   },
   (table) => [
+    check(
+      "platform_model_pool_context_window_positive",
+      sql`${table.contextWindow} > 0`,
+    ),
     unique("platform_model_pool_provider_model_unique").on(
       table.provider,
       table.modelName,

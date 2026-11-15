@@ -13,6 +13,7 @@ import {
   guardDeliveryStore,
   guardHostAccess,
   headlessTurnRefusal,
+  summaryCallRefusal,
   installEnterpriseControls,
   modelNamedIn,
   proactiveAdmin,
@@ -24,7 +25,7 @@ import {
   CoworkerUnavailableError,
   createActorAgentResolver,
 } from "./agents/agent-resolver";
-import { ownerTenantOfBot } from "./agents/bot-owner";
+import { ownerTenantOfBot, ownerTenantsOfBots } from "./agents/bot-owner";
 import {
   mintRunAssertion,
   type RunAssertion,
@@ -317,6 +318,7 @@ import { installDeepSeekThinkingOff } from "./models/deepseek-thinking";
 import { createModelRoutes, createModelShelf } from "./models/routes";
 import {
   createNamedAgentModelResolver,
+  meteringTenantsFor,
   modelOf,
 } from "./models/runtime-resolver";
 import { databaseTokenCallSink } from "./models/token-metering";
@@ -502,11 +504,21 @@ import {
   synchronizeTenantPackage,
 } from "./tenant-package";
 import {
+  advisoryThreadLock,
+  type CompactionDeps,
+  compactThread,
+  modelSummarizer,
+  runCompaction,
+} from "./threads/compaction";
+import { contextBreakdownRecorder } from "./threads/context-usage";
+import {
   createLocalThreadPlatform,
   createLocalThreadReader,
   type ThreadPlatform,
 } from "./threads/local-platform";
 import { PostgresAgentRunner } from "./threads/postgres-runner";
+import { createConversationSidebar } from "./threads/sidebar";
+import { createSidebarRoutes } from "./threads/sidebar-routes";
 import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
@@ -3381,6 +3393,35 @@ await startupLifecycle.run(async (startup) => {
    * `buildAgentFor` above around the owner.
    */
 
+  /*
+   * 压缩会话（threads/compaction.ts）：用员工自己的模型总结较早的消息，像本地学习那样经 `resolveAgentModel`
+   * 计量，算在本线程；记录写在发起的人名下。手动压缩从线程存储读历史，自动压缩用这一轮的历史。同一个人 ×
+   * 线程 × 员工同时只压一次：咨询锁拿在一条自己的连接上，跨副本也成立，不占连接池。
+   */
+  const compactionDeps: CompactionDeps = {
+    database,
+    contextWindowFor: (provider, modelName, baseUrl) =>
+      modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
+    meteringTenant: async (agentId) =>
+      (await meteringTenantsFor(database, [agentId])).get(agentId) ?? null,
+    loadMessages: async ({ threadId }) => {
+      // 线程存储重启后是冷的，先装回这个人的线程（同 `history`）。
+      await localThreadRunner.hydrate();
+      return localThreadRunner.getThreadMessages(threadId);
+    },
+    summarize: modelSummarizer(async (agentId) => {
+      const key = await resolveRuntimeModelApiKey();
+      return resolveAgentModel(
+        agentId,
+        key ? deploymentModel(runtimeModel, key) : undefined,
+      );
+    }),
+    lock: advisoryThreadLock(config.databaseUrl),
+    // 总结调用和运行一样过企业管控：「使用员工」与总结实际用的模型是否在白名单里。
+    admit: ({ tenantId, threadId, agentId }) =>
+      summaryCallRefusal({ ownerUserId: tenantId, agentId, threadId }),
+  };
+
   const actorAgentResolver = createActorAgentResolver({
     productTelemetry,
     loadAgents: runtimeAgentsForActor,
@@ -3460,6 +3501,16 @@ await startupLifecycle.run(async (startup) => {
     loadAvatarSourcesForActor,
     // The project each coworker works in on the person's machine (story RES2).
     loadCurrentProjectForActor,
+    // 对话侧栏的上下文分类：每次内置运行开始时记一行比例，记在发起的人名下。
+    recordContextBreakdownForActor: (actorId) =>
+      contextBreakdownRecorder(database, actorId),
+    // 压缩会话：每一轮开始前换上摘要；部署开关 `SIDEBAR_AUTO_COMPACTION`（默认关）打开时先按需自动压缩。
+    compactionForActor: (actorId) =>
+      runCompaction({
+        ...compactionDeps,
+        tenantId: actorId,
+        auto: config.sidebarAutoCompaction,
+      }),
     // Published Automatic Learning skills, only with a connected Intelligence.
     acquireLearnedSkills: learning?.acquire,
   });
@@ -5137,6 +5188,64 @@ await startupLifecycle.run(async (startup) => {
   );
 
   /*
+   * The conversation sidebar (环境 · 目标 · 上下文 · 输出内容): `GET /api/threads/:threadId/sidebar` and
+   * `GET /api/channels/:channelId/sidebar`, read in the caller's own frame; a coworker's usage is read
+   * where its calls were metered (`meteringTenantFor`), once the caller is known to see the conversation.
+   * Beside them, `POST .../compact` (压缩会话) for the caller's own thread with one coworker.
+   */
+  const sidebarRoutes = createSidebarRoutes(
+    createConversationSidebar({
+      database,
+      runtime: config.tenantRuntime,
+      deploymentModelLabel: runtimeModel.label ?? runtimeModel.defaultModel,
+      contextWindowFor: (provider, modelName, baseUrl) =>
+        modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
+      meteringTenants: (agentIds) => meteringTenantsFor(database, agentIds),
+      ...(config.tenantRuntime === "device"
+        ? {
+            // Read only: where each Bot's actions would go, without making a pick (`peek`).
+            machinesOf: async (agentIds: readonly string[]) => {
+              const owners = await ownerTenantsOfBots(database, [...agentIds]);
+              const machinesByOwner = new Map<
+                string,
+                Awaited<ReturnType<typeof deviceStore.list>>
+              >();
+              for (const owner of new Set(owners.values()))
+                if (owner)
+                  machinesByOwner.set(owner, await deviceStore.list(owner));
+              const result = new Map<
+                string,
+                { tenantId: string; deviceId: string }
+              >();
+              for (const agentId of agentIds) {
+                const owner = owners.get(agentId);
+                if (!owner) continue;
+                const target = deviceSelector.peek(
+                  agentId,
+                  owner,
+                  machinesByOwner.get(owner) ?? [],
+                );
+                if (target) result.set(agentId, target);
+              }
+              return result;
+            },
+          }
+        : {}),
+    }),
+    config.singleUser
+      ? createDevRequireUser(config.singleUserAccess)
+      : createRequireUser(auth as AuthService, roleRepository),
+    // 手动压缩：查看者在对话里和这位员工的那条线程，记在查看者名下。
+    (viewer, target) =>
+      compactThread(
+        { tenantId: viewer.id, ...target, auto: false },
+        compactionDeps,
+      ),
+  );
+  app.route("/api/threads", sidebarRoutes.threads);
+  app.route("/api/channels", sidebarRoutes.channels);
+
+  /*
    * The task board (ticket 007): the projector is the only writer, these
    * routes are the read side, and both run under the caller's tenant scope.
    */
@@ -5165,7 +5274,11 @@ await startupLifecycle.run(async (startup) => {
       credentialStore,
       config.keyEncryptionKey,
       quota,
-      { outbound: modelOutbound },
+      {
+        outbound: modelOutbound,
+        contextWindowFor: (provider, modelName, baseUrl) =>
+          modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
+      },
     ),
   );
 

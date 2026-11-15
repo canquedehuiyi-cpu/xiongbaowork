@@ -93,6 +93,11 @@ export const tasks = pgTable(
     ),
     index("tasks_executor_idx").on(table.executorAgentId, table.updatedAt),
     index("tasks_run_ref_idx").on(table.runRef),
+    index("tasks_channel_ref_idx").on(
+      table.tenantId,
+      table.channelRef,
+      table.updatedAt,
+    ),
   ],
 );
 

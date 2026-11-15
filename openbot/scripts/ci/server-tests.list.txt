@@ -224,6 +224,8 @@ tests/channel-titler.test.ts
 tests/channel-work.integration.test.ts
 tests/check-in-offer.test.ts
 tests/comments-say-the-reason.test.ts
+tests/compaction.integration.test.ts
+tests/compaction.test.ts
 tests/component-catalogue-entries.test.ts
 tests/component-catalogue.test.ts
 tests/component-decision-functions.test.ts
@@ -289,10 +291,14 @@ tests/connection-siblings.integration.test.ts
 tests/connections-upstream-shape.integration.test.ts
 tests/connector-tokens-never-reach-computer.test.ts
 tests/content-governance.test.ts
+tests/context-usage.integration.test.ts
+tests/context-usage.test.ts
 tests/continuation-target-local.test.ts
 tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts
 tests/conversation-rename.integration.test.ts
+tests/conversation-sidebar-schema.integration.test.ts
+tests/conversation-sidebar.integration.test.ts
 tests/conversation-title.integration.test.ts
 tests/copilot-forwarded-headers.test.ts
 tests/copilot-runtime-frames.integration.test.ts

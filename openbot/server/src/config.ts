@@ -520,6 +520,12 @@ export type DeploymentConfig = {
    */
   localLearning: boolean;
   /**
+   * 对话侧栏的自动压缩：一轮开始前，上一轮已用 ≥ 上限 − 预留时先压缩再跑。默认关，
+   * `SIDEBAR_AUTO_COMPACTION=true`（或 `1`）打开；界面的分隔线和「看摘要」做完再开。手动压缩和侧栏读取
+   * 不受影响。
+   */
+  sidebarAutoCompaction: boolean;
+  /**
    * Where a coworker's actions are carried out: this deployment's own container, or a machine the
    * tenant owns. `device` refuses when no machine is reachable rather than running the work here.
    */
@@ -1899,6 +1905,9 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
     localLearning:
       optional(environment, "OPENBOT_LOCAL_LEARNING")?.toLowerCase() !== "off",
+    sidebarAutoCompaction: ["true", "1"].includes(
+      optional(environment, "SIDEBAR_AUTO_COMPACTION")?.toLowerCase() ?? "",
+    ),
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own
      * container, which is what a development machine runs. `device` sends them to the tenant's

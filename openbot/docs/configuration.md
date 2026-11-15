@@ -482,6 +482,12 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 | ------------------------ | ------- |
 | `OPENBOT_LOCAL_LEARNING` | 默认开。每人每天从自己最近的对话里提出技能草案，本人在设置「学习」里批准后才交给员工；对话不出库，提草案用的是那位员工自己的模型、计入这个人的用量，本月任务额度用完时跳过。设为 `off` 整个部署关掉。每个人也可以在设置「学习」里自己关掉。 |
 
+## 对话侧栏（熊宝）
+
+| Variable                  | Meaning |
+| ------------------------- | ------- |
+| `SIDEBAR_AUTO_COMPACTION` | 默认关。设为 `true` 或 `1` 时，内置员工每一轮开始前，若上一轮已用 ≥ 上限 − 预留（上限的 10%），先把较早的消息压缩成摘要再跑。关着时手动「压缩会话」和侧栏读取照常可用，手动压缩的摘要照样生效。 |
+
 ## Authentication
 
 | Variable                     | Meaning                                                                                |
