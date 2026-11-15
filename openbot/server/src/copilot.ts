@@ -441,6 +441,22 @@ const BROUGHT_BOT_GUIDANCE = `\n\n${workingGuidance({
 }).join("\n\n")}`;
 
 /**
+ * An external employee is never run on the owner's computer for a run nobody asked for (a check-in, a
+ * title): that would spend the owner's own subscription and land in its agent's history. It answers
+ * here, as itself, from its standing role.
+ */
+function deviceAcpAnsweredHere(
+  agent: RegisteredDeviceAcpAgent,
+): RegisteredAgent {
+  return {
+    id: agent.id,
+    name: agent.name,
+    type: "built_in",
+    systemPrompt: agent.standingMessage.content,
+  };
+}
+
+/**
  * A Bot as OpenBot's own runner builds it, whatever it runs on elsewhere: what a check-in runs.
  *
  * A CHECK-IN NEVER CALLS A BOT'S OWN ENDPOINT. A Bot on another framework (a harness, an agent an
@@ -454,18 +470,7 @@ const BROUGHT_BOT_GUIDANCE = `\n\n${workingGuidance({
  * A built-in Bot, or one OpenBot cannot run at all, is returned as it is.
  */
 export function onOpenBotRunner(agent: RegisteredAgent): RegisteredAgent {
-  /*
-   * An external employee is never run on the owner's computer for a run nobody asked for (a
-   * check-in, a title): that would spend the owner's own subscription and land in its agent's
-   * history. It answers here, as itself, from its standing role.
-   */
-  if (agent.type === "device_acp")
-    return {
-      id: agent.id,
-      name: agent.name,
-      type: "built_in",
-      systemPrompt: agent.standingMessage.content,
-    };
+  if (agent.type === "device_acp") return deviceAcpAnsweredHere(agent);
   if (agent.type !== "remote_ag_ui" && agent.type !== "remote_mastra")
     return agent;
   return {
@@ -1831,7 +1836,7 @@ async function buildAgent(
         asked(input)
           ? device.clone()
           : buildAgent(
-              onOpenBotRunner(agent),
+              deviceAcpAnsweredHere(agent),
               model,
               apiKey,
               stallGuard,

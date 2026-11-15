@@ -127,7 +127,7 @@
   {
     "rule": "identifier",
     "scope": "server/src",
-    "lines": 177
+    "lines": 176
   },
   {
     "rule": "identifier",
