@@ -13,7 +13,8 @@ import { Observable, type Subscriber } from "rxjs";
 import type { Database } from "../../db/client";
 import { threads } from "../../db/schema";
 import type { DeviceChannel } from "../../devices/channel";
-import { runAsTenant } from "../../tenant/context";
+import { currentTenant, runAsTenant } from "../../tenant/context";
+import { adoptRunnerCard } from "../../threads/postgres-runner";
 import { type AcpContextLoader, messageText } from "./context";
 import type { AcpRelay } from "./relay";
 import { createAcpTranslator } from "./translate";
@@ -37,10 +38,16 @@ import {
  * the thread's last 20 messages, the task card. What comes back is translated into the thread's
  * own events (translate.ts) until `acp.turn.end`, which ends the run.
  *
- * NOT REACHABLE, OR THE LANE IS BUSY. The turn stays queued and the run answers one sentence and
- * ends. When the computer is back (or the lane frees), the relay claims it and `startQueuedTurn`
- * (`createAcpTurnStarter`) posts it into the same thread as a run of its own, so its output lands
- * in the conversation like any other answer.
+ * NOT REACHABLE, OR THE LANE IS BUSY. The turn stays queued and the run answers one sentence
+ * (`CUSTOM acp.queued`: its board card stays open) and ends. When the computer is back (or the lane
+ * frees), the relay claims it and `startQueuedTurn` (`createAcpTurnStarter`) posts it into the same
+ * thread as a run of its own, which finishes that card, so its output lands in the conversation like
+ * any other answer. A computer connected to another server of this deployment is not "away": the
+ * turn is started there, and the sentence says so. A group never waits for an external employee at
+ * all (`createAcpGroupTurn`).
+ *
+ * AWAY TOO LONG. A computer away for 30 minutes (here and elsewhere) while its turn is on it ends
+ * the turn `interrupted`; Stop while it is away cancels the row here.
  *
  * HOW A RUN ENDS. With the device's `acp.turn.end`: `RUN_FINISHED` (a cancelled turn says so first);
  * `stopReason: "error"` → `RUN_ERROR` with the device's own sentence (`acp.error`); interrupted (the
@@ -61,16 +68,12 @@ import {
 /** How often an open run says it is still waiting. */
 export const ACP_WAITING_MS = 20_000;
 
-/**
- * How long a headless turn of an external employee may run (a group turn): a turn waits for a
- * permission answer as long as the owner takes, so this is a backstop, not a budget.
- */
-export const ACP_TURN_TIMEOUT_MS = 7 * 24 * 60 * 60_000;
+/** A computer away this long while its turn is on it ends the turn `interrupted`. */
+export const ACP_UNREACHABLE_MS = 30 * 60_000;
 
 /**
- * A headless turn runner (a group's) that runs an external employee's turns on `external`, made with
- * `ACP_TURN_TIMEOUT_MS`, and every other Bot's on `normal`: the default five-minute deadline would
- * stop a turn that is only waiting for its owner's permission.
+ * A group's turn runner: an external employee's turns go to `external` (`createAcpGroupTurn`, which
+ * never holds the group's sweep), every other Bot's to `normal`.
  */
 export function routeExternalTurns<
   Input extends { agentId: string },
@@ -84,6 +87,75 @@ export function routeExternalTurns<
     (await options.isExternal(input.agentId))
       ? options.external(input)
       : options.normal(input);
+}
+
+/**
+ * An external employee's turn in a group, ASYNCHRONOUS. A group answers its Bots one after another
+ * on one sweep, and an external employee's turn can take hours (a permission answer the owner has
+ * not given yet), so the group never waits for it: the turn is queued in the employee's own group
+ * thread (its lane), the group is told at once that it started (`detached: true`: the group leaves
+ * the turn's card open), and the relay starts it (`resumeQueued` now, else the next heartbeat).
+ * `createAcpTurnStarter` runs it in that thread, finishes the card, and its answer reaches the group
+ * through `announce` (the group's own share check). The prompt is the group's framed message: who
+ * said what since, and who is in the group.
+ */
+export function createAcpGroupTurn(options: {
+  turns: AcpTurnStore;
+  relay: Pick<AcpRelay, "resumeQueued">;
+  channel: Pick<DeviceChannel, "isReachable">;
+  employeeFor: (agentId: string) => Promise<DeviceAcpEmployee | null>;
+  onlineElsewhere?: (target: {
+    tenantId: string;
+    deviceId: string;
+  }) => Promise<boolean>;
+  newTurnId?: () => string;
+  log?: (message: string) => void;
+}): (input: {
+  agentId: string;
+  threadId: string;
+  instruction: string;
+  userMessage?: Message;
+  runId?: string;
+  tenantId?: string;
+}) => Promise<{ replyText: string; detached: true }> {
+  const log = options.log ?? ((message: string) => console.warn(message));
+  return async (input) => {
+    const employee = await options.employeeFor(input.agentId);
+    if (!employee) throw new Error("That Bot is not available to this owner.");
+    const tenantId = input.tenantId ?? currentTenant();
+    const target = { tenantId, deviceId: employee.deviceId };
+    const text = messageText(input.userMessage?.content) || input.instruction;
+    await options.turns.enqueue({
+      tenantId,
+      agentId: employee.id,
+      threadId: input.threadId,
+      deviceId: employee.deviceId,
+      turnId: (options.newTurnId ?? randomUUID)(),
+      prompt: {
+        content: [{ type: "text", text }],
+        ...(input.runId ? { runRef: input.runId } : {}),
+      },
+    });
+    let replyText: string;
+    if (options.channel.isReachable(target)) {
+      replyText = `${employee.name}开始干这件活了，做完会在群里回复。`;
+      void options.relay
+        .resumeQueued(target)
+        .catch((error: unknown) =>
+          log(
+            `acp: a group turn of ${employee.id} waits for the next heartbeat: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+    } else if (
+      await (options.onlineElsewhere?.(target) ?? Promise.resolve(false)).catch(
+        () => false,
+      )
+    )
+      replyText = `${employee.name}的这件活已排队，马上开始。`;
+    else
+      replyText = `${employee.name}的电脑现在离线，这件活已排队，电脑回来后自动继续。`;
+    return { replyText, detached: true };
+  };
 }
 
 /** A permission request of a turn, with the run it belongs to: what the permission bridge gets. */
@@ -158,6 +230,12 @@ export type DeviceAcpAgentConfig = {
    */
   claimed?: AcpTurnRow;
   waitingMs?: number;
+  /**
+   * Whether the computer is connected to another server of this deployment (`reachable` asks only
+   * this process). Absent: it is not.
+   */
+  onlineElsewhere?: () => Promise<boolean>;
+  now?: () => number;
   /** Calls `tick` every `ms` until the returned function is called. Injected for a test's clock. */
   every?: (ms: number, tick: () => void) => () => void;
   newTurnId?: () => string;
@@ -190,6 +268,29 @@ function startHandle(): StartHandle {
   // Nobody has to wait for it: a run that is not a claimed turn's never is.
   promise.catch(() => undefined);
   return { promise, resolve, reject };
+}
+
+/**
+ * A stored turn's prompt: `{content, runRef?}` (`runRef`: the card of the run that queued it), or
+ * the bare content of a turn stored before it carried one.
+ */
+export function acpPromptOf(row: Pick<AcpTurnRow, "prompt">): {
+  content: unknown[];
+  runRef?: string;
+} {
+  const { prompt } = row;
+  if (Array.isArray(prompt)) return { content: prompt };
+  if (prompt && typeof prompt === "object") {
+    const { content, runRef } = prompt as {
+      content?: unknown;
+      runRef?: unknown;
+    };
+    return {
+      content: Array.isArray(content) ? content : [],
+      ...(typeof runRef === "string" && runRef ? { runRef } : {}),
+    };
+  }
+  return { content: [] };
 }
 
 /** What the person asked: the last user message, as ACP content blocks. */
@@ -232,6 +333,8 @@ class AcpRun {
   private aborted = false;
   /** The heartbeat before found the turn over with no end told to this run. */
   private endedUnseen = false;
+  /** Since when the computer has been away while the turn is on it. */
+  private unreachableSince: number | null = null;
 
   constructor(
     private readonly config: DeviceAcpAgentConfig,
@@ -328,6 +431,7 @@ class AcpRun {
         value: { turnId: this.turnId },
       } as BaseEvent);
       void this.checkEnded();
+      void this.checkReachable();
     });
     this.begin().catch((error: unknown) => {
       const reason = error instanceof Error ? error : new Error(String(error));
@@ -348,9 +452,7 @@ class AcpRun {
     let turnId: string;
     if (config.claimed) {
       turnId = config.claimed.turnId;
-      this.prompt = Array.isArray(config.claimed.prompt)
-        ? config.claimed.prompt
-        : [];
+      this.prompt = acpPromptOf(config.claimed).content;
     } else {
       turnId = (config.newTurnId ?? randomUUID)();
       this.prompt = promptOf(input.messages);
@@ -360,12 +462,19 @@ class AcpRun {
         threadId: input.threadId,
         deviceId: config.deviceId,
         turnId,
-        prompt: this.prompt,
+        // This run's card waits for the run that does the work (`acp.queued`, `adoptRunnerCard`).
+        prompt: { content: this.prompt, runRef: input.runId },
       };
       if (!config.reachable()) {
         await turns.enqueue(turn);
+        if (this.aborted) {
+          await turns.setStatus(config.tenantId, turnId, "cancelled");
+          return;
+        }
         this.queued(
-          `${this.name}的电脑现在离线，这件活已排队，电脑回来后自动继续。`,
+          (await this.onlineElsewhere())
+            ? `${this.name}的这件活已排队，马上开始。`
+            : `${this.name}的电脑现在离线，这件活已排队，电脑回来后自动继续。`,
         );
         return;
       }
@@ -437,10 +546,30 @@ class AcpRun {
     this.handle.resolve();
   }
 
-  /** The turn waits in its lane: said in one sentence, and the run is over. */
+  /**
+   * The turn waits in its lane: said in one sentence, and the run is over. `acp.queued` tells the
+   * thread runner to leave this run's card open for the run that will do the work.
+   */
   private queued(text: string) {
     this.handle.reject(new Error("the turn is still queued"));
-    this.finish([...this.note(text), this.finished()]);
+    this.finish([
+      ...this.note(text),
+      {
+        type: EventType.CUSTOM,
+        name: "acp.queued",
+        value: { turnId: this.turnId },
+      } as BaseEvent,
+      this.finished(),
+    ]);
+  }
+
+  /** Connected to another server of this deployment (its socket is there): it will be started there. */
+  private async onlineElsewhere(): Promise<boolean> {
+    try {
+      return (await this.config.onlineElsewhere?.()) ?? false;
+    } catch {
+      return false;
+    }
   }
 
   /** The computer went away before the turn reached it: back in the queue, said so. */
@@ -451,7 +580,9 @@ class AcpRun {
         .unclaim(this.config.tenantId, turnId)
         .catch(() => undefined);
     this.queued(
-      `${this.name}的电脑现在离线，这件活已排队，电脑回来后自动继续。`,
+      (await this.onlineElsewhere())
+        ? `${this.name}的这件活已排队，马上开始。`
+        : `${this.name}的电脑现在离线，这件活已排队，电脑回来后自动继续。`,
     );
   }
 
@@ -598,23 +729,57 @@ class AcpRun {
     });
   }
 
+  /**
+   * A computer away for `ACP_UNREACHABLE_MS` on end (not connected here nor to another server of
+   * this deployment) while its turn is on it: the turn is ended `interrupted`, so the conversation
+   * is not held open, and its lane not blocked, by a computer that is not coming back. If it does
+   * come back with the turn, what it sends is dropped (the row is final).
+   */
+  private async checkReachable() {
+    const { turnId } = this;
+    if (!turnId || (this.phase !== "opening" && this.phase !== "running"))
+      return;
+    if (this.config.reachable() || (await this.onlineElsewhere())) {
+      this.unreachableSince = null;
+      return;
+    }
+    const now = (this.config.now ?? Date.now)();
+    this.unreachableSince ??= now;
+    if (now - this.unreachableSince < ACP_UNREACHABLE_MS || this.isOver())
+      return;
+    this.log(`turn ${turnId}: the computer has been away too long`);
+    await this.config.turns
+      .setStatus(this.config.tenantId, turnId, "interrupted")
+      .catch(() => false);
+    this.end({
+      type: "acp.turn.end",
+      turnId,
+      stopReason: "interrupted",
+      interrupted: true,
+    });
+  }
+
   /** Stop: the device is told to cancel, and the run ends here now. */
   abort() {
     if (this.phase === "over") return;
     this.aborted = true;
     const { turnId } = this;
-    if (turnId && this.phase === "running")
-      this.config.relay.send(this.target, {
+    const cancelHere = (id: string) =>
+      void this.config.turns
+        .setStatus(this.config.tenantId, id, "cancelled")
+        .catch(() => undefined);
+    if (turnId && this.phase === "running") {
+      const sent = this.config.relay.send(this.target, {
         type: "acp.cancel",
         agentId: this.config.agentId,
         threadId: this.input.threadId,
         turnId,
       });
+      // Not connected here: ended here, so the lane's next message is not held behind it.
+      if (!sent) cancelHere(turnId);
+    }
     // Its prompt never went out: the device has nothing to cancel, the row is ended here.
-    else if (turnId && this.phase === "opening")
-      void this.config.turns
-        .setStatus(this.config.tenantId, turnId, "cancelled")
-        .catch(() => undefined);
+    else if (turnId && this.phase === "opening") cancelHere(turnId);
     this.handle.reject(new Error("the run was stopped"));
     this.finish([...this.note("这件活已停止。"), this.finished()]);
   }
@@ -698,6 +863,11 @@ export type DeviceAcpRuntime = {
   channel: Pick<DeviceChannel, "isReachable">;
   sessions: AcpSessionHints;
   context: AcpContextLoader;
+  /** Whether a device is connected to another server of this deployment. */
+  onlineElsewhere?: (target: {
+    tenantId: string;
+    deviceId: string;
+  }) => Promise<boolean>;
   /** Set by the permission bridge; read on every request, so it can be attached after boot. */
   onPermission?: AcpPermissionHook;
 };
@@ -747,6 +917,16 @@ export function deviceAcpAgentFor(
     relay: runtime.relay,
     turns: runtime.turns,
     reachable: () => runtime.channel.isReachable(target),
+    ...(runtime.onlineElsewhere
+      ? {
+          onlineElsewhere: () =>
+            (
+              runtime.onlineElsewhere as NonNullable<
+                DeviceAcpRuntime["onlineElsewhere"]
+              >
+            )(target),
+        }
+      : {}),
     context: (threadId, runId) =>
       runtime.context({
         tenantId,
@@ -782,16 +962,19 @@ export type AcpThreadRunner = {
 };
 
 /**
- * `startQueuedTurn` (relay.ts): a turn queued while the computer was away (or its lane busy), now
- * claimed, is posted into its own thread as a run of its own, through the runner a person's turn
- * runs through (as `queued-results.ts` posts a queued action's outcome), so its output is in the
- * transcript, the history the next turn reads, and on the board. Resolves once its prompt is on the
- * device; throws (the turn goes back in the queue, tried again on the next heartbeat) when the
- * thread is mid-run or the device went away again. An employee that is gone, has moved to another
- * computer, or a thread that is not that employee's in that tenant cancels the turn.
+ * `startQueuedTurn` (relay.ts): a turn queued while the computer was away (or its lane busy, or by
+ * a group, which never waits for an external employee: `createAcpGroupTurn`), now claimed, is posted
+ * into its own thread as a run of its own, through the runner a person's turn runs through (as
+ * `queued-results.ts` posts a queued action's outcome), so its output is in the transcript, the
+ * history the next turn reads, and on the board, where it finishes the card of the run that queued
+ * it (`adoptRunnerCard`): one card for one piece of work. Resolves once its prompt is on the device;
+ * throws (the turn goes back in the queue, tried again on the next heartbeat) when the thread is
+ * mid-run or the device went away again. An employee that is gone or moved to another computer, or
+ * a thread that is another tenant's or another employee's, cancels the turn (`abandoned` is told,
+ * to close the card it left open).
  *
- * Once the run is over, `announce` is told its answer (to bump the roster, or put it in a group's
- * shared transcript).
+ * Once the run is over, `announce` is told its answer, or that it failed (to bump the roster, or put
+ * it in a group's shared transcript). A run that only found the turn queued again says nothing.
  */
 export function createAcpTurnStarter(options: {
   database: Database;
@@ -808,7 +991,9 @@ export function createAcpTurnStarter(options: {
     threadId: string;
     ownerUserId: string;
     text: string;
+    failed: boolean;
   }) => Promise<void>;
+  abandoned?: (row: AcpTurnRow, runRef: string | undefined) => Promise<void>;
   log?: (message: string) => void;
 }): (row: AcpTurnRow) => Promise<void> {
   const { database, turns, runner } = options;
@@ -819,23 +1004,25 @@ export function createAcpTurnStarter(options: {
       deviceAcpAgentFor(employee, { tenantId: row.tenantId, claimed: row }));
   return (row) =>
     runAsTenant(row.tenantId, async () => {
+      const { runRef } = acpPromptOf(row);
       const employee = await options.employeeFor(row);
       const [thread] = await database
         .select({ agentId: threads.agentId, tenantId: threads.tenantId })
         .from(threads)
         .where(eq(threads.id, row.threadId))
         .limit(1);
+      // A thread not stored yet (an employee's first turn in a group) is made by the run itself.
       if (
         !employee ||
         employee.deviceId !== row.deviceId ||
-        !thread ||
-        thread.tenantId !== row.tenantId ||
-        thread.agentId !== row.agentId
+        (thread &&
+          (thread.tenantId !== row.tenantId || thread.agentId !== row.agentId))
       ) {
         log(
           `acp: queued turn ${row.turnId} has no employee, computer or thread to run in any more; cancelled`,
         );
         await turns.setStatus(row.tenantId, row.turnId, "cancelled");
+        await options.abandoned?.(row, runRef)?.catch(() => undefined);
         return;
       }
       const agent = agentFor(employee, row);
@@ -849,13 +1036,39 @@ export function createAcpTurnStarter(options: {
       agent.setMessages(history);
       const runId = `acp-${row.turnId}-${randomUUID().slice(0, 8)}`;
       const said: string[] = [];
+      let error: string | null = null;
+      let queuedAgain = false;
+      let prompted = false;
+      agent.started.then(
+        () => {
+          prompted = true;
+        },
+        () => undefined,
+      );
       let runFailed!: (error: unknown) => void;
       const failed = new Promise<never>((_resolve, reject) => {
         runFailed = reject;
       });
       failed.catch(() => undefined);
-      runner
-        .run({
+      const tell = (text: string, failedRun: boolean) => {
+        if (!options.announce) return;
+        void runAsTenant(row.tenantId, () =>
+          (options.announce as NonNullable<typeof options.announce>)({
+            tenantId: row.tenantId,
+            agentId: row.agentId,
+            threadId: row.threadId,
+            ownerUserId: employee.ownerUserId,
+            text,
+            failed: failedRun,
+          }),
+        ).catch((reason: unknown) =>
+          log(
+            `acp: the answer of turn ${row.turnId} could not be announced: ${reason instanceof Error ? reason.message : String(reason)}`,
+          ),
+        );
+      };
+      const start = () =>
+        runner.run({
           threadId: row.threadId,
           agent,
           input: {
@@ -867,35 +1080,40 @@ export function createAcpTurnStarter(options: {
             state: {},
             forwardedProps: {},
           },
-        })
-        .subscribe({
-          next: (event) => {
-            const { delta } = event as { delta?: unknown };
-            if (
-              event.type === EventType.TEXT_MESSAGE_CONTENT &&
-              typeof delta === "string"
-            )
-              said.push(delta);
-          },
-          error: (error) => runFailed(error),
-          complete: () => {
-            const text = said.join("").trim();
-            if (!text || !options.announce) return;
-            void runAsTenant(row.tenantId, () =>
-              (options.announce as NonNullable<typeof options.announce>)({
-                tenantId: row.tenantId,
-                agentId: row.agentId,
-                threadId: row.threadId,
-                ownerUserId: employee.ownerUserId,
-                text,
-              }),
-            ).catch((error: unknown) =>
-              log(
-                `acp: the answer of turn ${row.turnId} could not be announced: ${error instanceof Error ? error.message : String(error)}`,
-              ),
-            );
-          },
         });
+      (runRef ? adoptRunnerCard(runRef, start) : start()).subscribe({
+        next: (event) => {
+          const { delta, message, name } = event as {
+            delta?: unknown;
+            message?: unknown;
+            name?: unknown;
+          };
+          if (
+            event.type === EventType.TEXT_MESSAGE_CONTENT &&
+            typeof delta === "string"
+          )
+            said.push(delta);
+          else if (event.type === EventType.RUN_ERROR)
+            error =
+              typeof message === "string" && message
+                ? message
+                : `${employee.name}没能完成这件活。`;
+          else if (event.type === EventType.CUSTOM && name === "acp.queued")
+            queuedAgain = true;
+        },
+        error: (reason) => {
+          runFailed(reason);
+          // Before its prompt went out it goes back in the queue and is tried again: nothing to say.
+          if (prompted) tell(`${employee.name}没能完成这件活。`, true);
+        },
+        complete: () => {
+          runFailed(new Error("the run ended before its prompt was written"));
+          if (queuedAgain) return;
+          const text = said.join("").trim();
+          if (error) tell(text ? `${text}\n\n${error}` : error, true);
+          else if (text) tell(text, false);
+        },
+      });
       await Promise.race([agent.started, failed]);
     });
 }

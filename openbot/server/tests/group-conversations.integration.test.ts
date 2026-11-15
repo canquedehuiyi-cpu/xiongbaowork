@@ -126,22 +126,12 @@ function service(options: {
   activity?: Parameters<typeof createGroupConversations>[0]["activity"];
   /** The board, attached only by the cases that are about the cards it holds. */
   board?: Parameters<typeof createGroupConversations>[0]["board"];
-  leaseRenewEveryMs?: number;
-  /** Told of every renewal of a turn's lease. */
-  onRenew?: (key: string) => void;
 }) {
   const calls: Parameters<TurnRunner>[0][] = [];
   const audit: AuditEventInput[] = [];
-  const queue = createWorkQueue(database);
   const conversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
-    queue: {
-      ...queue,
-      renew: async (input) => {
-        options.onRenew?.(input.key);
-        return queue.renew(input);
-      },
-    },
+    queue: createWorkQueue(database),
     owner: `${prefix}-replica`,
     // The production wiring's roster, against the real channel and profile stores.
     roster: async (ownerUserId, channelId) => {
@@ -185,9 +175,6 @@ function service(options: {
       : {}),
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.board ? { board: options.board } : {}),
-    ...(options.leaseRenewEveryMs
-      ? { leaseRenewEveryMs: options.leaseRenewEveryMs }
-      : {}),
   });
   return { conversations, calls, audit };
 }
@@ -245,47 +232,6 @@ async function emailOf(actor: AgentActor) {
 }
 
 describe("group conversations in PostgreSQL", () => {
-  test("a Bot answering for longer than the renewal interval keeps the turn's lease", async () => {
-    const owner = await person();
-    await as(owner, async () => {
-      const ada = await bot(owner, "Ada");
-      const grace = await bot(owner, "Grace");
-      const channel = await channelStore.create(owner, [ada, grace]);
-      createdChannels.push(channel.id);
-      const renewals: string[] = [];
-      let answering = false;
-      const during: number[] = [];
-      const { conversations } = service({
-        replies: {
-          // An external employee at work, or waiting for its owner's permission.
-          [ada]: async () => {
-            answering = true;
-            await new Promise((resolve) => setTimeout(resolve, 150));
-            answering = false;
-            return "Done after a long while.";
-          },
-          [grace]: () => "Fine.",
-        },
-        leaseRenewEveryMs: 20,
-        onRenew: (key) => {
-          renewals.push(key);
-          if (answering) during.push(renewals.length);
-        },
-      });
-      await conversations.send(owner.id, channel.id, {
-        id: `${prefix}-lease`,
-        text: "Take your time",
-      });
-      await drain(conversations);
-      expect(during.length).toBeGreaterThanOrEqual(3);
-      expect(new Set(renewals).size).toBe(1);
-      // No renewal outlives the turn.
-      const after = renewals.length;
-      await new Promise((resolve) => setTimeout(resolve, 60));
-      expect(renewals.length).toBe(after);
-    });
-  });
-
   test("two Bots answer one person, see each other, and answer each other within the depth cap", async () => {
     const owner = await person();
     await as(owner, async () => {

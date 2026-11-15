@@ -21,7 +21,7 @@ import {
 } from "./admin/controls";
 import { fixSettings } from "./admin/settings-store";
 import {
-  ACP_TURN_TIMEOUT_MS,
+  createAcpGroupTurn,
   createAcpSessionHints,
   createAcpTurnStarter,
   routeExternalTurns,
@@ -907,6 +907,18 @@ await startupLifecycle.run(async (startup) => {
       await startAcpTurn(row);
     },
   });
+  /*
+   * Whether a computer not connected to this process is connected to another server of this
+   * deployment: heard from within `OFFLINE_AFTER_MS` (its heartbeat writes `last_seen_at`). Its
+   * queued turns are started there.
+   */
+  const deviceOnlineElsewhere = async (target: {
+    tenantId: string;
+    deviceId: string;
+  }) =>
+    (await deviceStore.list(target.tenantId)).some(
+      (device) => device.deviceId === target.deviceId && device.online,
+    );
   // What `device_acp` agents are built with, deep inside the runtime (copilot.ts).
   useDeviceAcp({
     relay: acpRelay,
@@ -914,6 +926,7 @@ await startupLifecycle.run(async (startup) => {
     channel: deviceChannel,
     sessions: createAcpSessionHints(),
     context: createAcpContextLoader(database),
+    onlineElsewhere: deviceOnlineElsewhere,
   });
   /*
    * Who holds the wheel of a coworker's browser on one of those machines. The gateway asks it before
@@ -3157,6 +3170,16 @@ await startupLifecycle.run(async (startup) => {
     turns: acpTurnStore,
     runner: localThreadRunner,
     employeeFor: (row) => loadDeviceAcpEmployee(database, row.agentId),
+    // A card the queueing run left open, for a turn that will now never run, is closed failed.
+    abandoned: async (row, runRef) => {
+      if (runRef)
+        await taskProjector.finished({
+          tenantId: row.tenantId,
+          runRef,
+          failed: true,
+          onlyUnsettled: true,
+        });
+    },
     announce: async ({ threadId, agentId, ownerUserId, text }) => {
       if (
         await groupConversations.announceHandoff({
@@ -3164,6 +3187,7 @@ await startupLifecycle.run(async (startup) => {
           actorId: ownerUserId,
           agentId,
           text,
+          via: "device_acp",
         })
       )
         return;
@@ -4259,8 +4283,9 @@ await startupLifecycle.run(async (startup) => {
   };
   /*
    * An external employee in a group runs through the same transport as in its own chat, in its own
-   * group thread (its lane is that thread). Its turn may wait hours for its owner's permission, so it
-   * gets the long backstop instead of the five-minute deadline every other Bot's group turn has.
+   * group thread (its lane is that thread). Its turn may wait hours for its owner's permission, so
+   * the group does not wait for it: it is queued and started like a turn that waited for its
+   * computer, and its answer is posted into the group when it ends (`createAcpGroupTurn`).
    */
   const groupTurnRunner = routeExternalTurns({
     isExternal: async (agentId) => {
@@ -4272,9 +4297,12 @@ await startupLifecycle.run(async (startup) => {
       return row?.type === "device_acp";
     },
     normal: createTurnRunner(groupTurnOptions),
-    external: createTurnRunner({
-      ...groupTurnOptions,
-      turnTimeoutMs: ACP_TURN_TIMEOUT_MS,
+    external: createAcpGroupTurn({
+      turns: acpTurnStore,
+      relay: acpRelay,
+      channel: deviceChannel,
+      employeeFor: (agentId) => loadDeviceAcpEmployee(database, agentId),
+      onlineElsewhere: deviceOnlineElsewhere,
     }),
   });
   const baseGroupConversations = createGroupConversations({

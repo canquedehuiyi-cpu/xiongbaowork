@@ -1,5 +1,6 @@
 tests/account-argument.test.ts
 tests/acp-agent.test.ts
+tests/acp-group.integration.test.ts
 tests/acp-relay.test.ts
 tests/acp-translate.test.ts
 tests/acp-turns.integration.test.ts

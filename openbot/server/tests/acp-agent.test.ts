@@ -7,6 +7,7 @@ import {
   type RunAgentInput,
 } from "@ag-ui/client";
 import { eq } from "drizzle-orm";
+import { EMPTY } from "rxjs";
 import {
   createAcpSessionHints,
   createAcpTurnStarter,
@@ -351,8 +352,10 @@ describe("DeviceAcpAgent", () => {
       EventType.TEXT_MESSAGE_START,
       EventType.TEXT_MESSAGE_CONTENT,
       EventType.TEXT_MESSAGE_END,
+      EventType.CUSTOM,
       EventType.RUN_FINISHED,
     ]);
+    expect(run.events.at(-2)?.name).toBe("acp.queued");
     expect(texts(run.events)).toBe(
       "小码的电脑现在离线，这件活已排队，电脑回来后自动继续。",
     );
@@ -363,7 +366,10 @@ describe("DeviceAcpAgent", () => {
       threadId: "thread-1",
       deviceId: "laptop",
       status: "queued",
-      prompt: [{ type: "text", text: "跑一下测试" }],
+      prompt: {
+        content: [{ type: "text", text: "跑一下测试" }],
+        runRef: run.events[0]?.runId,
+      },
     });
     expect(t.down).toHaveLength(0);
     expect(t.ticks.size).toBe(0);
@@ -659,7 +665,8 @@ describe("startQueuedTurn", () => {
       runner,
       employeeFor: async () => employee,
       agentFor: (_employee, row) => t.agent({ claimed: row }),
-      announce: async ({ text, threadId: announcedIn }) => {
+      announce: async ({ text, threadId: announcedIn, failed }) => {
+        expect(failed).toBe(false);
         announced.push({ text, threadId: announcedIn });
       },
     });
@@ -698,11 +705,44 @@ describe("startQueuedTurn", () => {
       type: "text",
       text: "把依赖升级一下",
     });
+    // The queued answer's card waits, open, for this run: one card for the work.
+    const cards = () =>
+      runAsTenant(dbTenant, () =>
+        database
+          .select({
+            runRef: tasks.runRef,
+            status: tasks.status,
+            deliverableRef: tasks.deliverableRef,
+          })
+          .from(tasks)
+          .where(eq(tasks.channelRef, threadId)),
+      );
+    expect(await cards()).toEqual([
+      { runRef: runOffline.runId, status: "running", deliverableRef: null },
+    ]);
     await device({ type: "acp.turn.ack", turnId });
+    t.tick();
     await device(chunk(1, String(turnId), "依赖已升级。"));
+    await device(editUpdate(2, String(turnId)));
+    t.tick();
     await device(end(String(turnId)));
     await until(() => announced.length === 1, "the answer to be announced");
     expect(announced[0]).toEqual({ text: "依赖已升级。", threadId });
+    let card = (await cards())[0];
+    for (
+      let attempt = 0;
+      attempt < 100 && card?.status === "running";
+      attempt++
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      card = (await cards())[0];
+    }
+    expect(await cards()).toHaveLength(1);
+    expect(card).toMatchObject({
+      runRef: runOffline.runId,
+      status: "awaiting_review",
+      deliverableRef: { kind: "deliverable" },
+    });
     expect(t.turns.rows[0]?.status).toBe("done");
 
     // Both runs are the thread's: the queued answer, then the turn itself.
@@ -717,6 +757,19 @@ describe("startQueuedTurn", () => {
       );
     }
     expect(runs).toHaveLength(2);
+    // The heartbeats went out live and were not kept.
+    const kept = await runAsTenant(dbTenant, () =>
+      database
+        .select({ event: threadRunEvents.event })
+        .from(threadRunEvents)
+        .where(eq(threadRunEvents.threadId, threadId)),
+    );
+    expect(kept.length).toBeGreaterThan(0);
+    expect(
+      kept.some(
+        ({ event }) => (event as { name?: unknown }).name === "acp.waiting",
+      ),
+    ).toBe(false);
     const history = runAsTenant(dbTenant, () =>
       runner.getThreadMessages(threadId),
     );
@@ -931,7 +984,7 @@ describe("device_acp in the runtime", () => {
   });
 });
 
-test("a group sends an external employee's turns to the runner with the long deadline", async () => {
+test("a group sends an external employee's turns to its own runner", async () => {
   const ran: string[] = [];
   const route = routeExternalTurns({
     isExternal: async (agentId) => agentId === "codex-1",
@@ -1021,4 +1074,186 @@ test("a new session's context is read from the thread's stored messages and its 
   })) as { text: string }[];
   expect(other?.text).not.toContain("第 24 条");
   expect(other?.text).not.toContain("升级依赖");
+});
+
+test("a computer connected to another server is not called away: the turn is queued to start there", async () => {
+  const t = setup({ reachable: false });
+  const run = watch(
+    t.agent({ onlineElsewhere: async () => true }),
+    input("开工"),
+  );
+  await until(() => run.state.done, "the run to end");
+  expect(texts(run.events)).toBe("小码的这件活已排队，马上开始。");
+  expect(t.turns.rows[0]?.status).toBe("queued");
+});
+
+test("stopped while being queued for an away computer, the turn is cancelled", async () => {
+  const t = setup({ reachable: false });
+  const agent = t.agent();
+  const run = watch(agent, input("算了"));
+  agent.abortRun();
+  await until(() => t.turns.rows[0]?.status === "cancelled", "the cancel");
+  expect(run.state.done).toBe(true);
+  expect(texts(run.events)).toBe("这件活已停止。");
+});
+
+test("a computer away for 30 minutes while its turn is on it ends the turn interrupted", async () => {
+  const t = setup();
+  let now = 0;
+  let elsewhere = false;
+  const run = watch(
+    t.agent({ now: () => now, onlineElsewhere: async () => elsewhere }),
+    input("长任务"),
+  );
+  await until(() => t.sent("acp.open").length === 1, "acp.open");
+  await t.device({ type: "acp.session", sessionId: "s", loaded: true });
+  await until(() => t.sent("acp.prompt").length === 1, "acp.prompt");
+  const turnId = String(t.sent("acp.prompt")[0]?.turnId);
+  await t.device({ type: "acp.turn.ack", turnId });
+  const beat = async (ms: number) => {
+    now += ms;
+    t.tick();
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  };
+  t.state.reachable = false;
+  await beat(0);
+  // Connected to another server for a while: that time does not count.
+  elsewhere = true;
+  await beat(20 * 60_000);
+  elsewhere = false;
+  await beat(0);
+  await beat(29 * 60_000);
+  expect(run.state.done).toBe(false);
+  // Back for a moment: the clock starts again.
+  t.state.reachable = true;
+  await beat(1000);
+  t.state.reachable = false;
+  await beat(0);
+  await beat(29 * 60_000);
+  expect(run.state.done).toBe(false);
+  await beat(60_000);
+  await until(() => run.state.done, "the run to end");
+  expect(texts(run.events)).toBe("电脑关机，这件活中断了。");
+  expect(
+    run.events.some(
+      (event) =>
+        event.type === EventType.CUSTOM && event.name === "acp.interrupted",
+    ),
+  ).toBe(true);
+  expect(t.turns.rows[0]?.status).toBe("interrupted");
+});
+
+test("stopping a turn while its computer is away cancels the row here", async () => {
+  const t = setup();
+  const agent = t.agent();
+  const run = watch(agent, input("长任务"));
+  await until(() => t.sent("acp.open").length === 1, "acp.open");
+  await t.device({ type: "acp.session", sessionId: "s", loaded: true });
+  await until(() => t.sent("acp.prompt").length === 1, "acp.prompt");
+  t.state.reachable = false;
+  agent.abortRun();
+  await until(() => t.turns.rows[0]?.status === "cancelled", "the cancel");
+  expect(run.state.done).toBe(true);
+  // The next message in the thread is not held behind it.
+  t.state.reachable = true;
+  watch(t.agent(), input("下一件"));
+  await until(() => t.sent("acp.open").length === 2, "the next open");
+});
+
+test("a resumed turn that fails says so where it was asked", async () => {
+  const runner = new PostgresAgentRunner(
+    database,
+    createTaskProjector(database),
+  );
+  const threadId = `thread-${suite}-fails`;
+  const told: { text: string; failed: boolean }[] = [];
+  const t = setup({ tenantId: dbTenant });
+  await t.turns.enqueue({
+    tenantId: dbTenant,
+    agentId: "agent-1",
+    threadId,
+    deviceId: "laptop",
+    turnId: `turn-fails-${suite}`,
+    prompt: { content: [{ type: "text", text: "跑测试" }] },
+  });
+  t.state.startQueuedTurn = createAcpTurnStarter({
+    database,
+    turns: t.turns,
+    runner,
+    employeeFor: async () => ({
+      id: "agent-1",
+      name: "小码",
+      ownerUserId: "user-1",
+      deviceId: "laptop",
+      harness: "codex",
+      workdirRef: "fld_work",
+      persona: "",
+    }),
+    agentFor: (_employee, row) => t.agent({ claimed: row }),
+    announce: async ({ text, failed }) => {
+      told.push({ text, failed });
+    },
+  });
+  const resumed = t.relay.resumeQueued(t.target);
+  const device = (frame: Frame) => t.device({ threadId, ...frame });
+  await until(() => t.sent("acp.open").length === 1, "acp.open");
+  await device({ type: "acp.session", sessionId: "s", loaded: true });
+  await until(() => t.sent("acp.prompt").length === 1, "acp.prompt");
+  expect(await resumed).toBe(1);
+  const turnId = `turn-fails-${suite}`;
+  await device({
+    type: "acp.error",
+    turnId,
+    code: "turn_failed",
+    message: "测试命令没能运行。",
+  });
+  await device(end(turnId, { stopReason: "error" }));
+  await until(() => told.length === 1, "the failure to be told");
+  expect(told[0]).toEqual({ text: "测试命令没能运行。", failed: true });
+  // Let the run's write-through land before the suite's rows are cleared.
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const [stored] = await runAsTenant(dbTenant, () =>
+      database
+        .select({ id: threadRuns.id })
+        .from(threadRuns)
+        .where(eq(threadRuns.threadId, threadId)),
+    );
+    if (stored) break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+});
+
+test("a resumed run that ends before its prompt went out puts the turn back", async () => {
+  const t = setup({ tenantId: dbTenant });
+  await t.turns.enqueue({
+    tenantId: dbTenant,
+    agentId: "agent-1",
+    threadId: `thread-${suite}-empty`,
+    deviceId: "laptop",
+    turnId: `turn-empty-${suite}`,
+    prompt: { content: [{ type: "text", text: "空跑" }] },
+  });
+  t.state.startQueuedTurn = createAcpTurnStarter({
+    database,
+    turns: t.turns,
+    runner: {
+      hydrate: async () => undefined,
+      isRunning: async () => false,
+      getThreadMessages: () => [],
+      // A runner that refused the run quietly: the agent never ran.
+      run: () => EMPTY,
+    },
+    employeeFor: async () => ({
+      id: "agent-1",
+      name: "小码",
+      ownerUserId: "user-1",
+      deviceId: "laptop",
+      harness: "codex",
+      workdirRef: "fld_work",
+      persona: "",
+    }),
+    agentFor: (_employee, row) => t.agent({ claimed: row }),
+  });
+  expect(await t.relay.resumeQueued(t.target)).toBe(0);
+  expect(t.turns.rows[0]?.status).toBe("queued");
 });

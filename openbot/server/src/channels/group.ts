@@ -1031,11 +1031,6 @@ export function createGroupConversations(deps: {
   /** How often a running reply's partial text is written for the transcript to show. */
   progressEveryMs?: number;
   /**
-   * How often the claimed turn's lease is renewed while one Bot is answering. An external employee
-   * (`device_acp`) can work, or wait for its owner's permission, far longer than the lease.
-   */
-  leaseRenewEveryMs?: number;
-  /**
    * The owner's permission before a Bot's words reach other people in the group. A Bot run as this
    * person can draw on their private memory and conversations, and nothing can prove a reply did
    * not, so with anyone else in the group the owner is asked once per Bot and group (or always).
@@ -1510,7 +1505,13 @@ export function createGroupConversations(deps: {
         return;
       }
       await deps.store.finish(id, result.replyText, "completed");
-      await closeCard(turn, agentId, runId, false);
+      /*
+       * An external employee's turn answers at once that it started and goes on on its owner's
+       * computer (agents/acp/agent.ts `createAcpGroupTurn`): its card stays open for the run that
+       * does the work, which finishes it and announces its answer here (`announceHandoff`).
+       */
+      if (!(result as { detached?: boolean }).detached)
+        await closeCard(turn, agentId, runId, false);
       saved = true;
       savedReply = result.replyText;
       await deps.activity?.(turn, agentId, result.replyText, `group:${id}`);
@@ -1874,9 +1875,20 @@ export function createGroupConversations(deps: {
       actorId: string;
       agentId: string;
       text: string;
+      /**
+       * `device_acp`: not a relayed answer but an external employee's own, from a turn the group
+       * did not wait for (`createAcpGroupTurn`), posted from its own group thread whoever asked in it.
+       */
+      via?: "device_acp";
     }): Promise<boolean> {
       const thread = await deps.store.threadRow(input.threadId);
-      if (!thread || thread.ownerUserId !== input.actorId) return false;
+      if (
+        !thread ||
+        (input.via === "device_acp"
+          ? thread.agentId !== input.agentId
+          : thread.ownerUserId !== input.actorId)
+      )
+        return false;
       const bots = await orderedRoster(thread.ownerUserId, thread.channelId);
       if (!bots?.some((bot) => bot.id === thread.agentId)) return true;
       const id = `handoff:${createHash("sha256")
@@ -1892,7 +1904,10 @@ export function createGroupConversations(deps: {
         runId: runIdFor(id),
         text: input.text,
       });
-      const relayed = { via: "message_bot", answeredBy: input.agentId };
+      const relayed = {
+        via: input.via ?? "message_bot",
+        answeredBy: input.agentId,
+      };
       if (gate.status !== "allowed") {
         await deps.store.append({
           id,
@@ -2052,30 +2067,7 @@ export function createGroupConversations(deps: {
                 }))
               )
                 throw new Error("The group turn lease was lost.");
-              /*
-               * Kept while the Bot answers, too: a turn that outlives its lease would be claimed and
-               * run again by another sweep while this one is still running it.
-               */
-              const keep = setInterval(
-                () => {
-                  void deps.queue
-                    .renew({
-                      kind: item.kind,
-                      key: item.key,
-                      owner: deps.owner,
-                      leaseMs: 15 * 60_000,
-                    })
-                    .catch(() => false);
-                },
-                deps.leaseRenewEveryMs ?? 5 * 60_000,
-              );
-              keep.unref?.();
-              let failed: string | undefined;
-              try {
-                failed = await runBot(turn, agentId);
-              } finally {
-                clearInterval(keep);
-              }
+              const failed = await runBot(turn, agentId);
               if (failed) unrecorded.push(failed);
             }
             /*

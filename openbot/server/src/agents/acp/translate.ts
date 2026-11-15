@@ -14,6 +14,7 @@ import { type BaseEvent, EventType } from "@ag-ui/client";
  *   END at once, then one RESULT when it is `completed` or `failed`. A call the turn closes on
  *   without one gets a result anyway, so no browser ever takes it for a tool of its own to run.
  * - `plan` → `CUSTOM acp.plan` with the plan's entries.
+ * Tool call ids are the agent's, prefixed with the run's (`<runId>:<id>`), like the message ids.
  * - a diff in a tool call's content (`edit`, mostly) → `CUSTOM acp.diff` `{toolCallId, files: {path,
  *   added, removed}[]}`, which the board's deliverable sums per file (`deliverableFromEvents`).
  *
@@ -210,8 +211,11 @@ export function createAcpTranslator(
   };
 
   function toolCall(update: Loose): BaseEvent[] {
-    const toolCallId = str(update.toolCallId);
-    if (!toolCallId) return [];
+    const agentCallId = str(update.toolCallId);
+    if (!agentCallId) return [];
+    // The agent's id is unique only within its session, and an adapter that restarted starts a new
+    // one: the run's prefix keeps two turns' calls apart in the thread's history.
+    const toolCallId = `${prefix}:${agentCallId}`;
     const events: BaseEvent[] = [];
     if (!calls.has(toolCallId)) {
       events.push(...endMessage());

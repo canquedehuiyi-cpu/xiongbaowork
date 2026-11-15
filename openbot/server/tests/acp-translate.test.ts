@@ -112,7 +112,7 @@ describe("translateUpdate", () => {
       EventType.TOOL_CALL_ARGS,
       EventType.TOOL_CALL_END,
     ]);
-    expect(started[0]?.toolCallId).toBe("call-7");
+    expect(started[0]?.toolCallId).toBe("run-1:call-7");
     expect(started[0]?.toolCallName).toBe("acp/execute");
     expect(JSON.parse(String(started[1]?.delta))).toMatchObject({
       title: "Run bun test",
@@ -137,7 +137,7 @@ describe("translateUpdate", () => {
       ],
     }) as Loose[];
     expect(types(done)).toEqual([EventType.TOOL_CALL_RESULT]);
-    expect(done[0]?.toolCallId).toBe("call-7");
+    expect(done[0]?.toolCallId).toBe("run-1:call-7");
     expect(done[0]?.role).toBe("tool");
     expect(String(done[0]?.content)).toContain("12 pass");
     expect(
@@ -176,11 +176,12 @@ describe("translateUpdate", () => {
     });
     const closed = translator.close() as Loose[];
     expect(types(closed)).toEqual([EventType.TOOL_CALL_RESULT]);
-    expect(closed[0]?.toolCallId).toBe("call-9");
+    expect(closed[0]?.toolCallId).toBe("run-1:call-9");
   });
 
   test("edit diffs are summarised per file with added/removed counts", () => {
-    const events = translateUpdate({
+    const translator = createAcpTranslator({ idPrefix: "run-2" });
+    const events = translator.update({
       sessionUpdate: "tool_call",
       toolCallId: "call-3",
       title: "Edit login.ts",
@@ -211,7 +212,7 @@ describe("translateUpdate", () => {
       (event) => event.type === EventType.CUSTOM && event.name === "acp.diff",
     );
     expect(diff?.value).toEqual({
-      toolCallId: "call-3",
+      toolCallId: "run-2:call-3",
       files: [
         { path: "src/login.ts", added: 2, removed: 1 },
         { path: "src/new.ts", added: 3, removed: 0 },

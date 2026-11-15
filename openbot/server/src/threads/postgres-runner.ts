@@ -170,6 +170,39 @@ export function fileRunnerCardAs<T>(lane: RunnerCardLane, body: () => T): T {
   return runnerLane.run(lane, body);
 }
 
+const adoptedCard = new AsyncLocalStorage<string>();
+
+/**
+ * Run `body`, and let the turn it starts finish the card already on the board under `runRef` instead
+ * of filing one of its own: an external employee's turn that waited in the queue (agents/acp/agent.ts)
+ * is the same piece of work as the run that queued it, which left its card open (`acp.queued`). No
+ * second card, no second charge. Read at `run()`, like `fileRunnerCardAs`.
+ */
+export function adoptRunnerCard<T>(runRef: string, body: () => T): T {
+  return adoptedCard.run(runRef, body);
+}
+
+/**
+ * Events of an external employee's run that are kept out of the thread's stored history:
+ * `acp.waiting` says every 20 seconds that a run is still open, which means nothing once it is over,
+ * and a turn waiting days for a permission answer would otherwise store one row per beat.
+ */
+function transient(event: BaseEvent): boolean {
+  return (
+    event.type === EventType.CUSTOM &&
+    (event as { name?: unknown }).name === "acp.waiting"
+  );
+}
+
+/** A run that answered "queued": its card stays open for the run that does the work. */
+function leftQueued(events: readonly BaseEvent[]): boolean {
+  return events.some(
+    (event) =>
+      event.type === EventType.CUSTOM &&
+      (event as { name?: unknown }).name === "acp.queued",
+  );
+}
+
 /**
  * Local-mode thread persistence (`INTELLIGENCE_MODE=local`).
  *
@@ -400,6 +433,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const cardIsTaken = runnerCardSuppressed();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
+    const adopted = adoptedCard.getStore();
     /*
      * A thread id another tenant holds here is refused before anything else is asked: the parent's
      * `run` would supersede that tenant's live turn, append this run to their history, and the
@@ -410,7 +444,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       return new Observable((subscriber) =>
         subscriber.error(new ThreadUnavailableError()),
       );
-    const ceiling = cardIsTaken ? undefined : quota;
+    // A card already filed (and charged) is not asked about again.
+    const ceiling = cardIsTaken || adopted ? undefined : quota;
     /*
      * Two questions before the model is called, each deferred rather than awaited because a runner
      * answers with a stream, and a refusal has to arrive as that stream failing — which is how the
@@ -431,9 +466,13 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       })().then(
         () => {
           if (closed) return;
-          inner = this.stream(request, tenant, cardIsTaken, lane).subscribe(
-            subscriber,
-          );
+          inner = this.stream(
+            request,
+            tenant,
+            cardIsTaken,
+            lane,
+            adopted,
+          ).subscribe(subscriber);
         },
         (thrown: unknown) => subscriber.error(thrown),
       );
@@ -498,9 +537,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     cardIsTaken: boolean,
     /** An unattended entry's lane for the card filed here; absent is a person's `chat` turn. */
     lane?: RunnerCardLane,
+    /** The card this turn finishes instead of filing its own (`adoptRunnerCard`). */
+    adopted?: string,
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
+    const cardRef = adopted ?? runId;
     // `RunAgentInput` carries no agent id, so the agent instance is the only place it lives; the
     // fallback is honest about a caller that ran an anonymous agent rather than inventing one.
     const agentId = request.agent.agentId ?? "unknown";
@@ -536,7 +578,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
                 source: lane?.source ?? "chat",
                 triggerSource: lane?.triggerSource ?? null,
                 channelRef: threadId,
-                runRef: runId,
+                runRef: cardRef,
                 deviceId: deviceId ?? null,
               }),
             )
@@ -548,6 +590,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         : undefined;
     const finish = (failed: boolean) => {
       if (!card) return;
+      // Only queued: the run that does the work finishes this card (`adoptRunnerCard`).
+      if (!failed && leftQueued(events)) return;
       /*
        * What the turn produced rides on the card (spec A9), read from the stream before it is handed
        * on. A failed turn's half-drawn output is not something to review, so it carries none.
@@ -570,7 +614,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
           this.board!.finished({
             tenantId: tenant,
-            runRef: runId,
+            runRef: cardRef,
             failed,
             deliverableRef,
           }),
@@ -580,7 +624,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const stream = () =>
       super.run(asStoreOwner(request, tenant)).pipe(
         tap({
-          next: (event) => events.push(event),
+          // What the thread keeps; a heartbeat is passed on and not kept (`transient`).
+          next: (event) => {
+            if (!transient(event)) events.push(event);
+          },
           complete: () => {
             /*
              * Which branch the stream took says nothing about whether the turn answered. A run can fail
@@ -744,6 +791,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         .orderBy(asc(threadRunEvents.runId), asc(threadRunEvents.seq));
       const eventsOf = new Map<string, BaseEvent[]>();
       for (const row of eventRows) {
+        if (transient(row.event as BaseEvent)) continue;
         const list = eventsOf.get(row.runId) ?? [];
         list.push(row.event as BaseEvent);
         eventsOf.set(row.runId, list);
