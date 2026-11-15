@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,6 +10,7 @@ import {
 import {
   baseRef,
   type Git,
+  removeScratchDirs,
   type SyncPoint,
   verifySyncPoint,
 } from "../../scripts/brand/guard/new-lines";
@@ -20,6 +21,9 @@ import {
   ratchetBase,
   ratchetProblems,
 } from "../../scripts/brand/guard/ratchet";
+
+// loadRatchetInput reads the upstream through a scratch repository; bun test runs no exit handlers.
+afterAll(removeScratchDirs);
 
 const entry = (over: Partial<AllowEntry> = {}): AllowEntry => ({
   file: "server/src/a.ts",

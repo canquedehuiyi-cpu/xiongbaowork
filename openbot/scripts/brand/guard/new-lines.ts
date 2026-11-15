@@ -3,7 +3,7 @@
  * included, unless the upstream already has the same line at the same path (a sync brings those in).
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -214,20 +214,91 @@ export function readSyncPoint(): SyncPoint {
 }
 
 export type Git = (args: string[]) => string; // throws when git fails
+export type ScratchGit = Git & { dispose: () => void };
+
+/** Scratch repositories are named `brand-upstream-<pid>-*` so a later process can tell whose they are. */
+export const SCRATCH_PREFIX = "brand-upstream-";
+const scratchDirs = new Set<string>();
+const removeDir = (dir: string) => {
+  rmSync(dir, { recursive: true, force: true });
+  scratchDirs.delete(dir);
+};
+
+/** Removes every scratch repository this process made and has not removed yet. */
+export function removeScratchDirs(): void {
+  for (const dir of [...scratchDirs]) {
+    try {
+      removeDir(dir);
+    } catch {
+      // best effort: the next process's sweep retries
+    }
+  }
+}
+
+/**
+ * Removes the scratch repositories of processes that are gone: a kill, a crash or `bun test` (which runs no
+ * exit handlers) skips this process's own cleanup. A directory whose process may still run is left alone.
+ */
+function sweepDeadScratchDirs(): void {
+  let names: string[];
+  try {
+    names = readdirSync(tmpdir());
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const owner = new RegExp(`^${SCRATCH_PREFIX}(\\d+)-`).exec(name);
+    if (!owner || Number(owner[1]) === process.pid) continue;
+    try {
+      process.kill(Number(owner[1]), 0);
+      continue; // alive
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") continue; // e.g. EPERM: alive, not ours
+    }
+    try {
+      rmSync(join(tmpdir(), name), { recursive: true, force: true });
+    } catch {
+      // another process got there first, or it is not removable: leave it
+    }
+  }
+}
+
+let exitHook = false;
 
 /**
  * A git that runs in a scratch bare repository, made on first use: fetched upstream commits land there,
- * never in this repository, so a shallow fetch cannot cut its history.
+ * never in this repository, so a shallow fetch cannot cut its history. The repository is removed by
+ * `dispose()`, by `removeScratchDirs()`, or when the process exits (`bun test` does not run exit handlers:
+ * a test file calls removeScratchDirs in afterAll, and the next process sweeps what a dead one left).
  */
-export function scratchGit(): Git {
+export function scratchGit(): ScratchGit {
   let dir: string | undefined;
-  return (args) => {
+  const run = ((args: string[]) => {
     if (dir === undefined) {
-      dir = mkdtempSync(join(tmpdir(), "brand-upstream-"));
-      git(["init", "--bare", "-q"], dir);
+      if (!exitHook) {
+        exitHook = true;
+        process.on("exit", removeScratchDirs);
+      }
+      sweepDeadScratchDirs();
+      const made = mkdtempSync(
+        join(tmpdir(), `${SCRATCH_PREFIX}${process.pid}-`),
+      );
+      scratchDirs.add(made);
+      try {
+        git(["init", "--bare", "-q"], made);
+      } catch (error) {
+        removeDir(made);
+        throw error;
+      }
+      dir = made;
     }
     return git(args, dir);
+  }) as ScratchGit;
+  run.dispose = () => {
+    if (dir !== undefined) removeDir(dir);
+    dir = undefined;
   };
+  return run;
 }
 
 const fetchError = (sync: SyncPoint, why: unknown) =>
