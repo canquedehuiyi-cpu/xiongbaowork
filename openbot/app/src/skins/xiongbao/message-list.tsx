@@ -34,9 +34,8 @@ import {
 import { useBotNames } from "@/lib/agents/bot-names";
 import {
   knownPresence,
-  PRESENCE_WORD,
   type Presence,
-  presenceDoing,
+  presenceSummary,
   usePresence,
 } from "@/lib/agents/presence";
 import { approvalInboxOptions } from "@/lib/approvals";
@@ -482,7 +481,6 @@ const MessageRow = memo(function MessageRow({
   // A turn running, or work the conversation waits on between turns: a hop, a routine.
   const busy = (channel.busy ?? false) || (channel.work?.length ?? 0) > 0;
   const known = group ? undefined : knownPresence(presence);
-  const doing = presenceDoing(known);
   return (
     <ChannelMenu
       canRename={channel.canRename ?? false}
@@ -513,13 +511,7 @@ const MessageRow = memo(function MessageRow({
               <StatusDot
                 overlay
                 status={known?.status}
-                title={
-                  known
-                    ? [PRESENCE_WORD[known.status], doing]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : undefined
-                }
+                title={known ? presenceSummary(known) : undefined}
               />
             )}
           </span>

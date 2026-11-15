@@ -927,6 +927,15 @@ await startupLifecycle.run(async (startup) => {
     (await deviceStore.list(target.tenantId)).some(
       (device) => device.deviceId === target.deviceId && device.online,
     );
+  /**
+   * Whether a computer can be reached by this deployment at all: connected here, or online on
+   * another server. An external employee whose computer is neither shows as offline (presence).
+   */
+  const deviceReachableAnywhere = async (target: {
+    tenantId: string;
+    deviceId: string;
+  }) =>
+    deviceChannel.isReachable(target) || (await deviceOnlineElsewhere(target));
   // What `device_acp` agents are built with, deep inside the runtime (copilot.ts).
   useDeviceAcp({
     relay: acpRelay,
@@ -5159,9 +5168,13 @@ await startupLifecycle.run(async (startup) => {
         database,
         direct: (actor, agentId) => channelStore.direct(actor, agentId),
       },
-      // 员工此刻: the same pause row and running tasks the per-Bot reads use, for a batch at once.
+      // 员工此刻: the same pause row and running tasks the per-Bot reads use, for a batch at once;
+      // an external employee whose computer cannot be reached anywhere is offline.
       presence: {
-        read: (actor, agentIds) => readAgentPresence(database, actor, agentIds),
+        read: (actor, agentIds) =>
+          readAgentPresence(database, actor, agentIds, {
+            deviceReachable: deviceReachableAnywhere,
+          }),
       },
       // AUT3: the WakerFlow target is registered above, so the form may offer it.
       wakerflowAutomations: true,

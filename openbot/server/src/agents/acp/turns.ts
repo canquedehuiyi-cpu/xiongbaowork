@@ -27,6 +27,15 @@ export const ACTIVE_ACP_TURN_STATUSES = [
   "awaiting",
 ] as const satisfies readonly AcpTurnStatus[];
 
+/**
+ * Not on the device yet: the queue (spec §3, a turn leaves it when the device says it started). What
+ * `countQueued` and an offline employee's 「N 件排队中」 count.
+ */
+export const WAITING_ACP_TURN_STATUSES = [
+  "queued",
+  "sent",
+] as const satisfies readonly AcpTurnStatus[];
+
 /** Over. A row in one of these is never changed again. */
 export const FINAL_ACP_TURN_STATUSES = [
   "done",
@@ -197,7 +206,7 @@ export function createAcpTurnStore(database: Database): AcpTurnStore {
             and(
               eq(acpTurns.tenantId, tenantId),
               eq(acpTurns.agentId, agentId),
-              inArray(acpTurns.status, ["queued", "sent"]),
+              inArray(acpTurns.status, [...WAITING_ACP_TURN_STATUSES]),
             ),
           ),
       );

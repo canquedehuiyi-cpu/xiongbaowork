@@ -15,13 +15,22 @@ import { agentKeys } from "./queries";
  * 一个界面一次调用：列表、通讯录、对话顶栏各自把画出来的员工 id 合成一批，不是每行一个。
  */
 
-export type PresenceStatus = "working" | "resting" | "paused" | "unknown";
+export type PresenceStatus =
+  | "working"
+  | "resting"
+  | "paused"
+  | "offline"
+  | "unknown";
 
 export type Presence = {
   agentId: string;
   status: PresenceStatus;
   /** 正在做的那件事（运行中任务的标题），不在忙时为 null。 */
   doing: string | null;
+  /**
+   * 外部员工的电脑离线时排着几件活。只有离线时、只有招聘人读得到；群里的其他成员看到的离线没有它。
+   */
+  queued?: number;
 };
 
 /** 服务端一次最多回答这么多位，多出来的不问。 */
@@ -83,6 +92,7 @@ export const PRESENCE_WORD: Record<
   working: "忙碌",
   resting: "空闲",
   paused: "已暂停",
+  offline: "离线",
 };
 
 /** 这位员工画不画得出状态：拿到了、而且不是 `unknown`。 */
@@ -101,4 +111,20 @@ export function presenceDoing(presence: Presence | undefined): string | null {
   return presence?.status === "working" && presence.doing?.trim()
     ? presence.doing.trim()
     : null;
+}
+
+/**
+ * 状态的一句话：那个词，忙碌时跟着正在做的事（「忙碌 · 跑登录页的测试」），离线时跟着排队数（「离线 · 2 件
+ * 排队中」，没有排队、或读的人不是招聘人时只写「离线」）。拿不到、`unknown` 时是空的。
+ */
+export function presenceSummary(presence: Presence | undefined): string {
+  const known = knownPresence(presence);
+  if (!known) return "";
+  const queued =
+    known.status === "offline" && known.queued && known.queued > 0
+      ? `${known.queued} 件排队中`
+      : null;
+  return [PRESENCE_WORD[known.status], presenceDoing(known) ?? queued]
+    .filter(Boolean)
+    .join(" · ");
 }
