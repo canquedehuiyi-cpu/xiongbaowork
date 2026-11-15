@@ -93,6 +93,13 @@ export const canExtend = (card: {
 export const canReassign = (card: { status: string }): boolean =>
   card.status === "running";
 
+/**
+ * 到期后多久才算逾期：核对器先在到期 5 分钟后催员工（`NUDGE_AFTER_MS`），再过 30 分钟记逾期并提醒你
+ * （`NOTIFY_AFTER_NUDGE_MS`），合起来就是服务器 `server/src/tasks/delivery-checker.ts` 的
+ * `OVERDUE_AFTER_DUE_MS`。浏览器这边没法引用服务器代码，所以照那两个值在这里写一份，两边要一起改。
+ */
+export const OVERDUE_AFTER_DUE_MS = (5 + 30) * 60_000;
+
 /** 还在员工手上、没交没结束的状态（逾期口径用，和服务器 `tasks/overdue.ts` 一致）。 */
 const OVERDUE_OPEN_STATUSES = ["running", "needs_action"];
 
@@ -121,8 +128,15 @@ export function overdueMinutes(
     !OVERDUE_OPEN_STATUSES.includes(card.status)
   )
     return null;
-  // 准许延期、预计时间改到将来以后，此刻不算逾期（`overdue_at` 不清，流水里的记录照旧）。
-  if (card.dueAt && new Date(card.dueAt).getTime() > now.getTime()) return null;
+  /*
+   * 准许延期、预计时间改到将来以后，新时间过了核对器同样的宽限才重新算逾期（`overdue_at` 不清，流水里的
+   * 记录照旧）。
+   */
+  if (
+    card.dueAt &&
+    now.getTime() < new Date(card.dueAt).getTime() + OVERDUE_AFTER_DUE_MS
+  )
+    return null;
   const deadline = deadlineOf(card) ?? new Date(card.overdueAt);
   return Math.max(0, Math.floor((now.getTime() - deadline.getTime()) / 60000));
 }

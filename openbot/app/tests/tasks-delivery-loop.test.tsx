@@ -12,6 +12,7 @@ import {
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
+import { overdueMinutes } from "@/lib/tasks/delivery";
 import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
 import { Route as TaskDetailRoute } from "@/routes/_authed/_app/tasks.$taskId";
 import { setSkin } from "@/skins/store";
@@ -867,4 +868,17 @@ test("别的皮肤不画四列：在跟的卡照原来的列走", async () => {
   const sheet = await draw(`/tasks/${DELIVERED.id}`).view.findByRole("dialog");
   expect(sheet.style.getPropertyValue("--wb-list")).toBe("var(--popover)");
   expect(sheet.style.getPropertyValue("--wb-fg")).toBe("var(--foreground)");
+});
+
+test("延期后的逾期沿用核对器的 35 分钟宽限：新时间过了 10 分钟不算逾期，过了 36 分钟算", () => {
+  const now = new Date(NOW);
+  const moved = (minutesPast: number) => ({
+    tracked: true,
+    status: "running",
+    acceptedAt: ago(240),
+    dueAt: ago(minutesPast),
+    overdueAt: ago(180),
+  });
+  expect(overdueMinutes(moved(10), now)).toBeNull();
+  expect(overdueMinutes(moved(36), now)).toBe(36);
 });

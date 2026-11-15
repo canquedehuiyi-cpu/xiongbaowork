@@ -1673,6 +1673,33 @@ test("overdue=1 lists only cards with overdue_at", async () => {
   expect(all.find((task) => task.tracked === false)?.stage).toBeNull();
 });
 
+test("overdue=1 after a later due time keeps the checker's grace: 10 minutes past it is not overdue, 36 is", async () => {
+  const tenantId = await tenant("overdue-grace");
+  const agentId = `agent-${suite}-grace`;
+  const recorded = new Date(Date.now() - 2 * 60 * 60_000);
+  const taken = new Date(Date.now() - 4 * 60 * 60_000);
+  const justPast = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-grace-10`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 10 * 60_000),
+    overdueAt: recorded,
+  });
+  const pastGrace = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-grace-36`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 36 * 60_000),
+    overdueAt: recorded,
+  });
+  const listed = (await routesFor(tenantId)("GET", "?overdue=1")).body
+    .tasks as Record<string, unknown>[];
+  expect(listed.map((task) => task.id)).toEqual([pastGrace]);
+  expect(listed.map((task) => task.id)).not.toContain(justPast);
+});
+
 test("overdue=1 leaves out a card given more time (due moved later) and one handed in; overdue_at stays", async () => {
   const tenantId = await tenant("overdue-extended");
   const agentId = `agent-${suite}-extended`;

@@ -1037,8 +1037,8 @@ describe("conversation sidebar", () => {
     const viewer = await person();
     const agentId = await employee(viewer, "对账员工");
     const { threadId } = await directChat(viewer, agentId);
-    // Due ten minutes ago and recorded overdue: overdue now.
-    const due = new Date(Date.now() - 600_000);
+    // Due forty minutes ago (past the checker's 35-minute grace) and recorded overdue: overdue now.
+    const due = new Date(Date.now() - 40 * 60_000);
     const [followed] = await runAsTenant(viewer, () =>
       database
         .insert(tasks)

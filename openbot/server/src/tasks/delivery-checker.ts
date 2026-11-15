@@ -82,6 +82,12 @@ const HOUR = 60 * MINUTE;
 export const NUDGE_AFTER_MS = 5 * MINUTE;
 /** How long after the first nudge's moment the person is told (and an accepted card is overdue). */
 export const NOTIFY_AFTER_NUDGE_MS = 30 * MINUTE;
+/**
+ * How long past its due time an accepted card still with its coworker is recorded overdue: the nudge,
+ * then the reminder (`scheduleOf`'s `noticeAt`). `tasks/overdue.ts` gives a card moved to a later due
+ * time the same grace before it counts as overdue again; the app mirrors it (`app/src/lib/tasks/delivery.ts`).
+ */
+export const OVERDUE_AFTER_DUE_MS = NUDGE_AFTER_MS + NOTIFY_AFTER_NUDGE_MS;
 /** The least time between two nudges, and between two reminders, about one card. */
 export const REPEAT_MS = 2 * HOUR;
 /** The due time of a card whose coworker named none: this long after it was taken on. */
