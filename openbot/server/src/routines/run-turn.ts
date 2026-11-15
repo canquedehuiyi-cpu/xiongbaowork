@@ -10,6 +10,8 @@
  * Below that, the local continuation targets of the approvals work, which drive the local
  * PostgreSQL runner directly and have no counterpart upstream.
  */
+
+import type { TurnAnswered, TurnScope } from "@openbot/toolkit/ports";
 import {
   createTurnRunner as createToolkitTurnRunner,
   type DrawnComponent,
@@ -18,7 +20,6 @@ import {
   type RunnerLike,
   type TurnRunner,
 } from "@openbot/toolkit/run-turn";
-import type { TurnAnswered, TurnScope } from "@openbot/toolkit/ports";
 import {
   headlessTurnRefusal,
   modelNamedIn,
@@ -31,8 +32,8 @@ import { producedAttachments } from "../tasks/projector";
 import { currentTenant } from "../tenant/context";
 import { suppressRunnerCard } from "../threads/unattended-card";
 
-export { frameFiring };
 export type { DrawnComponent, IntelligenceLike, RunnerLike, TurnRunner };
+export { frameFiring };
 
 /**
  * The model this run answered with, on the row its board card reads (story H4), and the files it
@@ -69,9 +70,12 @@ export const serverTurnAnswered: TurnAnswered = async ({
  * one of them is unattended, and every one of them is what the person reads on the board, so the
  * runner must write the transcript and nothing else. An entry that owns no card leaves it unset and
  * keeps the card the runner files, which is why this cannot simply be "any turn started here".
+ *
+ * The card's key goes with it when the caller filed the card under something other than the run id (a
+ * routine under its firing), so `accept_task` inside the turn can find the turn's own card.
  */
 export const serverTurnScope: TurnScope = (input, run) =>
-  input.cardOwnedByCaller ? suppressRunnerCard(run) : run();
+  input.cardOwnedByCaller ? suppressRunnerCard(run, input.runRef) : run();
 
 type ToolkitOptions = Parameters<typeof createToolkitTurnRunner>[0];
 

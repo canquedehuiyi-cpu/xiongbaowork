@@ -238,16 +238,39 @@ export function deliverableFromEvents(
   events: readonly BaseEvent[],
   earlier: ReadonlySet<string> = new Set(),
 ): DeliverableRef | undefined {
+  const attachments: string[] = [];
+  for (const event of events) {
+    if (event.type !== EventType.MESSAGES_SNAPSHOT) continue;
+    const messages = (event as BaseEvent & { messages?: Message[] }).messages;
+    attachments.push(
+      ...producedAttachments(
+        (messages ?? []).filter((message) => !earlier.has(message.id)),
+      ),
+    );
+  }
+  const components = drawnComponents(events).map(({ name, args }) => ({
+    name,
+    args,
+  }));
+  return deliverableRefOf({ components, attachments });
+}
+
+/**
+ * The display components a stream drew, each with the id of the call that drew it, in the order the
+ * calls started. A component counts when its call named a display component and carried JSON
+ * arguments, and no result in the same stream refused it (see {@link deliverableFromEvents}).
+ */
+export function drawnComponents(
+  events: readonly BaseEvent[],
+): (DeliverableComponent & { toolCallId: string })[] {
   const calls = new Map<string, { name: string; args: string }>();
   const refused = new Set<string>();
-  const attachments: string[] = [];
   for (const event of events) {
     const value = event as BaseEvent & {
       toolCallId?: string;
       toolCallName?: string;
       delta?: string;
       content?: unknown;
-      messages?: Message[];
     };
     switch (event.type) {
       case EventType.TOOL_CALL_START:
@@ -276,24 +299,15 @@ export function deliverableFromEvents(
         )
           refused.add(value.toolCallId);
         break;
-      case EventType.MESSAGES_SNAPSHOT:
-        attachments.push(
-          ...producedAttachments(
-            (value.messages ?? []).filter(
-              (message) => !earlier.has(message.id),
-            ),
-          ),
-        );
-        break;
     }
   }
-  const components: DeliverableComponent[] = [];
-  for (const [id, call] of calls) {
-    if (!DISPLAY_COMPONENTS.has(call.name) || refused.has(id)) continue;
+  const components: (DeliverableComponent & { toolCallId: string })[] = [];
+  for (const [toolCallId, call] of calls) {
+    if (!DISPLAY_COMPONENTS.has(call.name) || refused.has(toolCallId)) continue;
     const args = parsedArgs(call.args);
-    if (args) components.push({ name: call.name, args });
+    if (args) components.push({ toolCallId, name: call.name, args });
   }
-  return deliverableRefOf({ components, attachments });
+  return components;
 }
 
 /**

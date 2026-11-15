@@ -1,9 +1,20 @@
 import { type BaseEvent, EventType } from "@ag-ui/client";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "../db/client";
 import { groupBotThreads, taskEvents, tasks } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { appendTaskEvent, type TaskEventActor } from "./events";
+import { type DeliverableRef, isDeliverableRef } from "./projector";
 
 /**
  * The delivery loop's followed cards (spec 2026-11-15-delivery-loop §1-§3): the one module that
@@ -29,6 +40,21 @@ const PROGRESS_CHARS = 60;
 const ERROR_CHARS = 200;
 /** Said when a round failed without a message of its own. */
 const UNNAMED_FAILURE = "这一轮出错了";
+
+/** The card a run belongs to, as the delivery tools need it (`cardOfRun`). */
+export type RunCard = {
+  id: string;
+  tracked: boolean;
+  status: (typeof tasks.$inferSelect)["status"];
+  acceptedAt: Date | null;
+  title: string;
+  source: (typeof tasks.$inferSelect)["source"];
+  triggerSource: string | null;
+  channelRef: string | null;
+  deviceId: string | null;
+  threadRef: string | null;
+  criteria: string | null;
+};
 
 export type Delivery = {
   /**
@@ -90,10 +116,262 @@ export type Delivery = {
     actor: TaskEventActor,
     via: "archive" | "review",
   ): Promise<boolean | null>;
+  /**
+   * The open card a coworker's run belongs to, followed or not: the followed card the run hangs on
+   * (`active_run_ref`), the card the run opened (`run_ref`), or the card the turn's entry filed under
+   * its own key (`entryRef`, a routine's firing). The newest-accepted first when there are several.
+   */
+  cardOfRun(
+    tenantId: string,
+    run: { runId: string; agentId: string; entryRef?: string },
+  ): Promise<RunCard | null>;
+  /**
+   * The coworker takes the work on (`accept_task`): the card becomes followed on `threadRef` (kept when
+   * it already has one), `accepted_at` is now, the criteria are the coworker's, and the round running
+   * now is the card's (`active_run_ref`; no other card holds it any more). `dueAt` null means no time
+   * was given: `due_reported` false, checked two hours after acceptance. `original_due_at` keeps the
+   * first time ever reported. One `accepted` line. Null when the card is not open and not yet accepted.
+   */
+  accept(
+    tenantId: string,
+    taskId: string,
+    input: {
+      runId: string;
+      threadRef: string;
+      actor: TaskEventActor;
+      title?: string;
+      dueAt: Date | null;
+      criteria: string;
+    },
+  ): Promise<{ taskId: string; dueAt: Date | null; criteria: string } | null>;
+  /**
+   * The evidence gate passed (`deliver_task`): an accepted, running card -- or one already awaiting
+   * review, handed more -- goes to `awaiting_review`, with this hand-in merged into its
+   * `deliverable_ref`. One `delivered` line. Null when the card is in no state to take a hand-in.
+   */
+  delivered(
+    tenantId: string,
+    taskId: string,
+    input: {
+      runId: string;
+      actor: TaskEventActor;
+      deliverable: DeliverableRef;
+    },
+  ): Promise<DeliverableRef | null>;
+  /** The evidence gate refused a hand-in: one `bounced` line, and the card is not touched. */
+  bounced(
+    tenantId: string,
+    taskId: string,
+    input: {
+      runId: string;
+      actor: TaskEventActor;
+      reason: string;
+      missing?: string[];
+    },
+  ): Promise<void>;
+  /**
+   * The coworker asks for more time (`request_extension`): one `extension_requested` line. `due_at` is
+   * not touched; only the person granting it moves it. False when the card is not followed and open.
+   */
+  requestExtension(
+    tenantId: string,
+    taskId: string,
+    input: {
+      dueAt: Date;
+      reason: string;
+      runId?: string;
+      actor?: TaskEventActor;
+    },
+  ): Promise<boolean>;
 };
 
 export function createDelivery(database: Database): Delivery {
   return {
+    cardOfRun: (tenantId, run) =>
+      runAsTenant(tenantId, async () => {
+        const ofRun = or(
+          eq(tasks.activeRunRef, run.runId),
+          eq(tasks.runRef, run.runId),
+          ...(run.entryRef ? [eq(tasks.runRef, run.entryRef)] : []),
+        );
+        const [row] = await database
+          .select({
+            id: tasks.id,
+            tracked: tasks.tracked,
+            status: tasks.status,
+            acceptedAt: tasks.acceptedAt,
+            title: tasks.title,
+            source: tasks.source,
+            triggerSource: tasks.triggerSource,
+            channelRef: tasks.channelRef,
+            deviceId: tasks.deviceId,
+            threadRef: tasks.threadRef,
+            criteria: tasks.criteria,
+          })
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.executorAgentId, run.agentId),
+              inArray(tasks.status, [...OPEN_STATUSES]),
+              ofRun,
+            ),
+          )
+          .orderBy(
+            desc(sql`${tasks.activeRunRef} is not distinct from ${run.runId}`),
+            desc(sql`coalesce(${tasks.acceptedAt}, ${tasks.createdAt})`),
+            desc(tasks.createdAt),
+          )
+          .limit(1);
+        return row ?? null;
+      }),
+
+    accept: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const now = new Date();
+          const [card] = await transaction
+            .update(tasks)
+            .set({
+              tracked: true,
+              threadRef: sql`coalesce(${tasks.threadRef}, ${input.threadRef})`,
+              /*
+               * Nothing has been handed in on a card not yet accepted: one an earlier turn left in 查收结果
+               * is work in progress now. A card waiting on the person (an approval) stays waiting.
+               */
+              status: sql`case when ${tasks.status} = 'awaiting_review' then 'running'::task_status else ${tasks.status} end`,
+              acceptedAt: now,
+              dueAt: input.dueAt ?? sql`${tasks.dueAt}`,
+              originalDueAt: sql`coalesce(${tasks.originalDueAt}, ${input.dueAt?.toISOString() ?? null}::timestamptz)`,
+              dueReported: input.dueAt ? true : sql`${tasks.dueReported}`,
+              criteria: input.criteria,
+              ...(input.title ? { title: input.title.slice(0, 200) } : {}),
+              activeRunRef: input.runId,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(tasks.tenantId, tenantId),
+                eq(tasks.id, taskId),
+                inArray(tasks.status, [...OPEN_STATUSES]),
+                isNull(tasks.acceptedAt),
+              ),
+            )
+            .returning({ dueAt: tasks.dueAt, title: tasks.title });
+          if (!card) return null;
+          // The round is this card's now: an approval it raises parks this card, not one taken on before.
+          await transaction
+            .update(tasks)
+            .set({ activeRunRef: null, updatedAt: now })
+            .where(
+              and(
+                eq(tasks.tenantId, tenantId),
+                eq(tasks.activeRunRef, input.runId),
+                ne(tasks.id, taskId),
+              ),
+            );
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "accepted",
+            actor: input.actor,
+            detail: {
+              runId: input.runId,
+              title: card.title,
+              dueAt: input.dueAt?.toISOString() ?? null,
+              dueReported: input.dueAt !== null,
+              criteria: input.criteria,
+            },
+          });
+          return { taskId, dueAt: card.dueAt, criteria: input.criteria };
+        }),
+      ),
+
+    delivered: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .select({ deliverableRef: tasks.deliverableRef })
+            .from(tasks)
+            .where(
+              and(
+                openTracked(tenantId, taskId),
+                isNotNull(tasks.acceptedAt),
+                inArray(tasks.status, ["running", "awaiting_review"]),
+              ),
+            )
+            .for("update");
+          if (!card) return null;
+          const merged = mergeDeliverables(
+            isDeliverableRef(card.deliverableRef)
+              ? card.deliverableRef
+              : undefined,
+            input.deliverable,
+          );
+          await transaction
+            .update(tasks)
+            .set({
+              status: "awaiting_review",
+              deliverableRef: merged,
+              lastError: null,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "delivered",
+            actor: input.actor,
+            detail: { runId: input.runId, deliverable: input.deliverable },
+          });
+          return merged;
+        }),
+      ),
+
+    bounced: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, async () => {
+        const [card] = await database
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(openTracked(tenantId, taskId))
+          .limit(1);
+        if (!card) return;
+        await appendTaskEvent(database, {
+          tenantId,
+          taskId,
+          kind: "bounced",
+          actor: input.actor,
+          detail: {
+            runId: input.runId,
+            reason: input.reason,
+            ...(input.missing?.length ? { missing: input.missing } : {}),
+          },
+        });
+      }),
+
+    requestExtension: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, async () => {
+        const [card] = await database
+          .select({ agentId: tasks.executorAgentId })
+          .from(tasks)
+          .where(openTracked(tenantId, taskId))
+          .limit(1);
+        if (!card) return false;
+        await appendTaskEvent(database, {
+          tenantId,
+          taskId,
+          kind: "extension_requested",
+          actor:
+            input.actor ?? (card.agentId ? `agent:${card.agentId}` : "system"),
+          detail: {
+            ...(input.runId ? { runId: input.runId } : {}),
+            dueAt: input.dueAt.toISOString(),
+            reason: input.reason,
+          },
+        });
+        return true;
+      }),
+
     openTrackedCard: (tenantId, threadRef, agentId) =>
       runAsTenant(tenantId, async () => {
         const [row] = await database
@@ -148,58 +426,68 @@ export function createDelivery(database: Database): Delivery {
       }),
 
     runEnded: (tenantId, taskId, round) =>
-      runAsTenant(tenantId, async () => {
-        const error = round.failed
-          ? (round.error?.trim() || UNNAMED_FAILURE).slice(0, ERROR_CHARS)
-          : null;
-        /*
-         * One statement: the card is followed and open, and this run has not already been recorded on
-         * it. For the card of a turn nobody follows it matches nothing, which is what most turns are.
-         */
-        const [card] = await database
-          .update(tasks)
-          .set({
-            lastError: error,
-            // The round is over; a later round of the card writes its own.
-            activeRunRef: sql`case when ${tasks.activeRunRef} = ${round.runId} then null else ${tasks.activeRunRef} end`,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              openTracked(tenantId, taskId),
-              sql`not exists (
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          const error = round.failed
+            ? (round.error?.trim() || UNNAMED_FAILURE).slice(0, ERROR_CHARS)
+            : null;
+          /*
+           * The row first, locked: two ends of the same round (the runner's and an entry's own, for a
+           * card taken on mid-turn) queue here, and the second one's check below then sees the lines the
+           * first wrote. For a card nobody follows this matches nothing, which is what most turns are.
+           */
+          const [open] = await transaction
+            .select({ id: tasks.id })
+            .from(tasks)
+            .where(openTracked(tenantId, taskId))
+            .for("update");
+          if (!open) return;
+          // The card is followed and open, and this run has not already been recorded on it.
+          const [card] = await transaction
+            .update(tasks)
+            .set({
+              lastError: error,
+              // The round is over; a later round of the card writes its own.
+              activeRunRef: sql`case when ${tasks.activeRunRef} = ${round.runId} then null else ${tasks.activeRunRef} end`,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                openTracked(tenantId, taskId),
+                sql`not exists (
                 select 1 from ${taskEvents}
                 where ${taskEvents.tenantId} = ${tenantId}
                   and ${taskEvents.taskId} = ${tasks.id}
                   and ${taskEvents.kind} in ('run_ended', 'run_failed')
                   and ${taskEvents.detail}->>'runId' = ${round.runId}
               )`,
-            ),
-          )
-          .returning({ agentId: tasks.executorAgentId });
-        if (!card) return;
-        const sentence = round.firstSentence
-          ? firstSentenceOf(round.firstSentence)
-          : undefined;
-        if (sentence)
-          await appendTaskEvent(database, {
+              ),
+            )
+            .returning({ agentId: tasks.executorAgentId });
+          if (!card) return;
+          const sentence = round.firstSentence
+            ? firstSentenceOf(round.firstSentence)
+            : undefined;
+          if (sentence)
+            await appendTaskEvent(transaction, {
+              tenantId,
+              taskId,
+              kind: "progress",
+              actor: card.agentId ? `agent:${card.agentId}` : "system",
+              detail: { runId: round.runId, text: sentence },
+            });
+          await appendTaskEvent(transaction, {
             tenantId,
             taskId,
-            kind: "progress",
-            actor: card.agentId ? `agent:${card.agentId}` : "system",
-            detail: { runId: round.runId, text: sentence },
+            kind: error === null ? "run_ended" : "run_failed",
+            actor: "system",
+            detail:
+              error === null
+                ? { runId: round.runId }
+                : { runId: round.runId, error },
           });
-        await appendTaskEvent(database, {
-          tenantId,
-          taskId,
-          kind: error === null ? "run_ended" : "run_failed",
-          actor: "system",
-          detail:
-            error === null
-              ? { runId: round.runId }
-              : { runId: round.runId, error },
-        });
-      }),
+        }),
+      ),
 
     markTracked: (tenantId, taskId, actor, options) =>
       runAsTenant(tenantId, async () => {
@@ -281,6 +569,43 @@ export function createDelivery(database: Database): Delivery {
         return true;
       }),
   };
+}
+
+/**
+ * One hand-in added to what the card already holds: each list concatenated, the same attachment,
+ * link or line not twice.
+ */
+export function mergeDeliverables(
+  held: DeliverableRef | undefined,
+  added: DeliverableRef,
+): DeliverableRef {
+  const unique = <T>(items: T[], key: (item: T) => string) => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const value = key(item);
+      if (seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+  };
+  const both = <K extends Exclude<keyof DeliverableRef, "kind">>(key: K) =>
+    [...(held?.[key] ?? []), ...(added[key] ?? [])] as NonNullable<
+      DeliverableRef[K]
+    >;
+  const merged: DeliverableRef = { kind: "deliverable" };
+  const components = both("components");
+  const attachments = unique(both("attachments"), (id) => id);
+  const links = unique(both("links"), (link) => link.url);
+  const diffs = unique(both("diffs"), (diff) => diff.ref);
+  const notes = unique(both("notes"), (note) => note);
+  const checks = unique(both("checks"), (check) => check);
+  if (components.length) merged.components = components;
+  if (attachments.length) merged.attachments = attachments;
+  if (links.length) merged.links = links;
+  if (diffs.length) merged.diffs = diffs;
+  if (notes.length) merged.notes = notes;
+  if (checks.length) merged.checks = checks;
+  return merged;
 }
 
 /** The card, when it is followed and has not ended. */

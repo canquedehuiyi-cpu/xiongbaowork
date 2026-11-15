@@ -15,6 +15,7 @@ import {
 import { asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   EMPTY,
+  finalize,
   from,
   Observable,
   type Subscription,
@@ -40,13 +41,14 @@ import {
   runErrorOf,
 } from "../tasks/delivery";
 import { deliverableFromEvents, type TaskProjector } from "../tasks/projector";
+import { beginTurn, endTurn } from "../tasks/turn-cards";
 import {
   currentTenant,
   isPersonTenant,
   isTenantFramed,
   runAsTenant,
 } from "../tenant/context";
-import { runnerCardSuppressed } from "./unattended-card";
+import { runnerCardSuppressed, suppressedCardRef } from "./unattended-card";
 
 /**
  * Which tenant owns a thread id, as this process has learned it.
@@ -409,6 +411,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * this turn neither re-asks it nor files a second row.
      */
     const cardIsTaken = runnerCardSuppressed();
+    // The key of that card, when the entry filed it under something other than the run id.
+    const entryCardRef = suppressedCardRef();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
     /*
@@ -465,6 +469,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             cardIsTaken || followed !== null,
             lane,
             followed ?? undefined,
+            entryCardRef,
           ).subscribe(subscriber);
         },
         (thrown: unknown) => subscriber.error(thrown),
@@ -532,6 +537,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     lane?: RunnerCardLane,
     /** The followed card this turn is a round of, when it is one (`cardIsTaken` is then true). */
     followed?: { id: string },
+    /** The key the entry's own card is filed under, when it is not the run id. */
+    entryCardRef?: string,
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
@@ -595,8 +602,13 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * and followed while it ran (`accept_task`): its status stays, and the card records the round and
      * the reply's first sentence. For a card nobody follows `runEnded` matches nothing.
      */
-    const roundEnded = (taskId: string, failed: boolean, thrown?: unknown) =>
-      this.delivery.runEnded(tenant, taskId, {
+    const roundEnded = (
+      taskId: string,
+      failed: boolean,
+      thrown?: unknown,
+      tenantId = tenant,
+    ) =>
+      this.delivery.runEnded(tenantId, taskId, {
         runId,
         failed,
         ...(failed
@@ -608,6 +620,18 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           : { firstSentence: firstSentenceOf(replyTextOf(events)) }),
       });
     const finish = (failed: boolean, thrown?: unknown) => {
+      /*
+       * The cards taken on during this turn (`accept_task`, `tasks/turn-cards.ts`): above all the card
+       * an entry opened for itself -- a routine's, a hop's -- which the entry closes with `finished`,
+       * and `finished` leaves a followed card alone. Their round ends here, after this turn's own card,
+       * which is skipped (one end per round; a second `runEnded` would write nothing anyway).
+       */
+      const rounds = endTurn(runId);
+      const otherRounds = async (done?: string | null) => {
+        for (const round of rounds)
+          if (round.taskId !== done)
+            await roundEnded(round.taskId, failed, thrown, round.tenantId);
+      };
       if (followed) {
         /*
          * The board's close first, though it leaves a followed card's status alone: it is where a
@@ -627,10 +651,16 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             console.error("task projection failed", error);
           }
           await roundEnded(followed.id, failed, thrown);
+          await otherRounds(followed.id);
         })().catch((error) => console.error("task projection failed", error));
         return;
       }
-      if (!card) return;
+      if (!card) {
+        void otherRounds().catch((error) =>
+          console.error("task projection failed", error),
+        );
+        return;
+      }
       /*
        * What the turn produced rides on the card (spec A9), read from the stream before it is handed
        * on. A failed turn's half-drawn output is not something to review, so it carries none.
@@ -658,11 +688,14 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             deliverableRef,
           });
           if (taskId) await roundEnded(taskId, failed, thrown);
+          await otherRounds(taskId);
         })
         .catch((error) => console.error("task projection failed", error));
     };
-    const stream = () =>
-      super.run(asStoreOwner(request, tenant)).pipe(
+    const stream = () => {
+      // Open for the delivery tools from here to the turn's end (`finish`, or a stop: `finalize`).
+      beginTurn(runId, entryCardRef);
+      return super.run(asStoreOwner(request, tenant)).pipe(
         tap({
           next: (event) => events.push(event),
           complete: () => {
@@ -691,7 +724,9 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             finish(true, thrown);
           },
         }),
+        finalize(() => endTurn(runId)),
       );
+    };
     const before = card ?? attached;
     return before ? from(before).pipe(switchMap(stream)) : stream();
   }

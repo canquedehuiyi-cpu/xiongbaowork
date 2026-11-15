@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   type TaskEventActor,
@@ -19,7 +19,8 @@ export type TaskEvent = typeof taskEvents.$inferSelect;
  * line can never land under a frame it was not written for (row security refuses the mismatch).
  */
 export async function appendTaskEvent(
-  database: Database,
+  // A transaction will do: a line written with the change it records stands or falls with it.
+  database: Pick<Database, "insert">,
   input: {
     tenantId: string;
     taskId: string;
@@ -34,6 +35,11 @@ export async function appendTaskEvent(
     kind: input.kind,
     actor: input.actor,
     detail: input.detail ?? {},
+    /*
+     * The wall clock, not the transaction's start: two lines written in one transaction (a round's
+     * progress, then its end) keep the order they were written in.
+     */
+    createdAt: sql`clock_timestamp()`,
   });
 }
 

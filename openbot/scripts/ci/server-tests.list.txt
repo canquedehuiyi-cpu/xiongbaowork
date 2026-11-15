@@ -320,6 +320,7 @@ tests/delivery-router.test.ts
 tests/delivery-routes.test.ts
 tests/delivery-schema.integration.test.ts
 tests/delivery-store.integration.test.ts
+tests/delivery-tools.integration.test.ts
 tests/delivery-turn.test.ts
 tests/demoted-admin-enterprise.integration.test.ts
 tests/demoted-admin-platform-writes.integration.test.ts
@@ -348,6 +349,7 @@ tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
 tests/dockerfile-runtime-tree.test.ts
+tests/due-time.test.ts
 tests/duplicate-run.test.ts
 tests/edition-routes.test.ts
 tests/egress-policy-delivery.integration.test.ts

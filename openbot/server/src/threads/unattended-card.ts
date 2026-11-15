@@ -22,7 +22,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * this turn was asked for. Asking the store after that point would answer `false` for a turn that is
  * unattended, which is the bug wearing the shape of a flake.
  */
-const store = new AsyncLocalStorage<true>();
+const store = new AsyncLocalStorage<{ cardRef?: string }>();
 
 /**
  * Run `body`, and let the turns it starts write the thread without also filing a card.
@@ -31,11 +31,24 @@ const store = new AsyncLocalStorage<true>();
  * the entries wrap the region that SUBSCRIBES to the run rather than the expression that builds the
  * observable: `Observable` is lazy, and the card is opened at subscribe time.
  */
-export function suppressRunnerCard<T>(body: () => T): T {
-  return store.run(true, body);
+export function suppressRunnerCard<T>(
+  body: () => T,
+  /**
+   * The key the entry filed its card under (`tasks.run_ref`), when that is not the turn's run id: a
+   * routine's card is keyed by its firing, not by the turn. Read by the delivery loop's `accept_task`,
+   * which follows the turn's own card. Absent, the card is keyed by the run id.
+   */
+  cardRef?: string,
+): T {
+  return store.run(cardRef ? { cardRef } : {}, body);
 }
 
 /** Whether the turn now being accepted belongs to an entry that already opened its own card. */
 export function runnerCardSuppressed(): boolean {
-  return store.getStore() === true;
+  return store.getStore() !== undefined;
+}
+
+/** The key of the entry's own card, when the entry named one; read where `runnerCardSuppressed` is. */
+export function suppressedCardRef(): string | undefined {
+  return store.getStore()?.cardRef;
 }

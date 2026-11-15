@@ -149,6 +149,7 @@ import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { withQuotaRunErrors } from "./quota/limits";
 import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
+import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
 import {
@@ -167,6 +168,7 @@ import {
 } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
+import { withRunSideEvents } from "./threads/run-side-events";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { withBrowserWireCodeRunner } from "./wire-codes";
@@ -1134,6 +1136,14 @@ export function builtInAgentConfiguration(
       }),
       // M3: the fork's guidance; see the note on the plugins imports.
       ...promptSection("apps", holdings),
+      /*
+       * The delivery loop's four rules, for a coworker that holds `accept_task` and only then: one whose
+       * 接活 is switched off does not work in three steps (spec 2026-11-15-delivery-loop §4).
+       */
+      ...promptSection(
+        "delivery",
+        deliveryProtocolGuidance(tools.map((tool) => tool.name)),
+      ),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
@@ -2232,14 +2242,22 @@ async function buildAgent(
           input: runInput,
           waiting: held,
         });
-        return sayingProviderRefusals(
-          withModelRun(
-            { runId: runInput.runId, threadId: runInput.threadId },
-            observeModelConnection(stream, { refusalsSaidByCaller: true }),
+        /*
+         * Outermost, the events the run's own tools add for the person to see (the delivery loop's
+         * cards), sent in this stream so they are stored and replayed with the run. See
+         * `threads/run-side-events.ts`.
+         */
+        return withRunSideEvents(
+          runInput.runId,
+          sayingProviderRefusals(
+            withModelRun(
+              { runId: runInput.runId, threadId: runInput.threadId },
+              observeModelConnection(stream, { refusalsSaidByCaller: true }),
+            ),
+            agent,
+            refusingProvider(runModel),
+            { untilError: true },
           ),
-          agent,
-          refusingProvider(runModel),
-          { untilError: true },
         );
       },
       ...(admit ? { admitTools: admit } : {}),
