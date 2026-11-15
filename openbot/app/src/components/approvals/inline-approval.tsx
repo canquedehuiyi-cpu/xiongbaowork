@@ -8,6 +8,7 @@ import {
   AcpPermissionCard,
   acpCardOf,
   acpRawText,
+  decisionErrorText,
 } from "@/components/channels/acp-cards";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import type { Tone } from "@/components/gallery/frame";
@@ -120,6 +121,8 @@ export function InlineApproval({
       if (watched) noteWatched(watched);
       return cache.invalidateQueries({ queryKey: ["approvals"] });
     },
+    // Decided somewhere else meanwhile: read the inbox again, and the card goes.
+    onError: () => cache.invalidateQueries({ queryKey: ["approvals"] }),
   });
   const request = requestId
     ? inbox.data?.requests.find((candidate) => candidate.id === requestId)
@@ -179,7 +182,7 @@ export function InlineApproval({
                     : null
                 }
                 card={acp}
-                error={decision.error?.message ?? null}
+                error={decisionErrorText(decision.error)}
                 onDecide={(choice: AcpChoice) => decision.mutate(choice)}
                 raw={acpRawText(request.action.args)}
                 submitting={decision.isPending}

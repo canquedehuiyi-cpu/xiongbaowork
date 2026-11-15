@@ -247,6 +247,20 @@ export function AcpCardView({
 }) {
   if (card.kind === "plan") return <AcpPlanCard entries={card.entries} />;
   if (card.kind === "diff") return <AcpDiffCard files={card.files} />;
+  // 之后又开始过别的轮次：不再给「重新派」。
+  if (card.superseded)
+    return (
+      <section
+        aria-label="这件活中断了"
+        className={cn(ACP_CARD, "py-3")}
+        data-acp-card="interrupted"
+        data-superseded=""
+      >
+        <span className={MUTED_TEXT}>
+          {resent ? "已重新派。" : "这件活已有后续。"}
+        </span>
+      </section>
+    );
   return (
     <AcpInterruptedCard
       onResend={onResend ? () => onResend(card) : undefined}
@@ -333,6 +347,21 @@ export function acpRawText(args: unknown): string | null {
   return null;
 }
 
+/**
+ * 决定没能保存时卡上说的话。别处（手机、另一个窗口、规则撤回）已经决定过的，服务器回一句英文「This request
+ * was already decided.」，这里说成中文；别的照服务器原话。
+ */
+export function decisionErrorText(error: unknown): string | null {
+  if (!error) return null;
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    (error as { status?: unknown }).status === 409 ||
+    /already decided/i.test(message)
+  )
+    return "这条请求已经处理过了。";
+  return message || "你的决定没能保存。";
+}
+
 /** 熊宝的三个选项，按钮上的字；对应 ACP 的 allow_once / allow_always / reject_once。 */
 export const ACP_CHOICES = {
   allow_once: "批准",
@@ -358,15 +387,16 @@ export function acpChoicesFor(
 
 /**
  * 请求许可卡（设计稿第 3 屏）：谁请求许可、命中了哪条规则，命令或路径的原文，说明，三个按钮（底线只有两个），
- * 底下一行「已同时推到你的手机」。
+ * 底下一行说手机上也会收到。只画给招它的人：群里其他成员看到的是不带内容的状态行（`acp-group-line.tsx`）。
  *
- * 只有招它的人批得了：别人（群里的其他成员）给 `waitingFor`，卡上写「等 <招聘人> 确认」，不画按钮。判断
- * 只看卡片自带的数据，不去调审批接口试探（成员调用一律 404）。
+ * 手机那一句不说死：前端分不出这个人有没有可用的手机推送（这个部署只有浏览器通知，没有已登记的手机通道），
+ * 所以写「也会推到你的手机（如果开了通知）」。
  */
+export const ACP_PHONE_NOTE = "也会推到你的手机（如果开了通知）";
+
 export function AcpPermissionCard({
   card,
   raw,
-  waitingFor,
   answered,
   submitting = false,
   error,
@@ -375,14 +405,11 @@ export function AcpPermissionCard({
   card: AcpApprovalCard;
   /** 命令或路径的原文（`acpRawText`）。 */
   raw: string | null;
-  /** 看卡的人不是招聘人时：招聘人的名字。 */
-  waitingFor?: string;
   answered?: AcpChoice | null;
   submitting?: boolean;
   error?: string | null;
   onDecide?: (choice: AcpChoice) => void;
 }) {
-  const hirer = waitingFor === undefined;
   const who = card.employee || "这位外部员工";
   return (
     <section
@@ -405,15 +432,7 @@ export function AcpPermissionCard({
       <span className={cn("leading-relaxed", SECONDARY_TEXT)}>
         {raw ? card.reason || card.action : card.action || card.reason}
       </span>
-      {!hirer ? (
-        <p
-          className={cn("m-0 text-[13px]", SECONDARY_TEXT)}
-          data-acp-waiting=""
-          role="status"
-        >
-          等 {waitingFor} 确认
-        </p>
-      ) : answered ? (
+      {answered ? (
         <p className="m-0 text-[13px]" role="status">
           {ANSWERED_WORDS[answered]}
         </p>
@@ -447,7 +466,7 @@ export function AcpPermissionCard({
             </p>
           ) : null}
           <span className={cn("text-[12px]", MUTED_TEXT)}>
-            已同时推到你的手机
+            {ACP_PHONE_NOTE}
           </span>
         </>
       )}

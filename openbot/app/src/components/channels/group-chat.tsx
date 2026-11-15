@@ -417,10 +417,10 @@ function GroupLine({
             {name}
           </MessageHeader>
           <AcpGroupPermissionLine
+            approvalId={message.approvalId}
             employee={name}
             line={message.acpPermission}
             meId={meId}
-            threadId={message.threadId}
           />
         </MessageContent>
       </MessageRow>

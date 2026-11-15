@@ -5,8 +5,9 @@ import {
   AcpPermissionCard,
   acpCardOf,
   acpRawText,
+  decisionErrorText,
 } from "@/components/channels/acp-cards";
-import { approvalInboxOptions, decideApproval } from "@/lib/approvals";
+import { approvalRequestOptions, decideApproval } from "@/lib/approvals";
 import { type GroupAcpPermission, groupKeys } from "@/lib/groups";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,8 @@ import { cn } from "@/lib/utils";
  * 结果如何（服务器 `channels/group.ts` 的 `acpPermission`），命令、路径、改动的文件、规则名、审批 id 都不在里面。
  *
  * 群里其他人：只有这一行，没有按钮。招聘人：同一行，另有「去确认」（他自己的审批详情页），并在这里直接给出
- * 请求许可卡——卡片的内容取自他自己读得到的审批收件箱，不是群转录。
+ * 请求许可卡。他那条审批的 id 只交给他本人（服务器放在这一行的私有部分），卡片内容按这个 id 从他自己的
+ * 审批接口读，不在群转录里。
  */
 
 const LINE =
@@ -39,14 +41,14 @@ function sentence(
 export function AcpGroupPermissionLine({
   line,
   employee,
-  threadId,
+  approvalId,
   meId,
 }: {
   line: GroupAcpPermission;
   /** 员工的名字。 */
   employee: string;
-  /** 这一行所在的那条线程：招聘人在自己的审批里按它找到这一条。 */
-  threadId?: string | null;
+  /** 招聘人本人读到的、这一行等的那条审批；别人读不到。 */
+  approvalId?: string;
   meId?: string;
 }) {
   const hirerIsMe = meId !== undefined && meId === line.hirerUserId;
@@ -67,74 +69,47 @@ export function AcpGroupPermissionLine({
         />
         <span>{sentence(line, employee, hirerIsMe)}</span>
         {hirerIsMe && waiting ? (
-          <HirerLink line={line} threadId={threadId} />
+          <Link
+            className="font-medium text-[color:var(--wb-accent2,var(--primary))] underline underline-offset-2"
+            {...(approvalId ? { search: { id: approvalId } } : {})}
+            to="/approvals"
+          >
+            去确认
+          </Link>
         ) : null}
       </p>
-      {hirerIsMe && waiting ? (
-        <HirerCard line={line} threadId={threadId} />
+      {hirerIsMe && waiting && approvalId ? (
+        // 换了一条请求就是一张新卡：上一条的答复不会留在下一条上。
+        <HirerCard approvalId={approvalId} key={approvalId} />
       ) : null}
     </div>
   );
 }
 
-/** 招聘人自己收件箱里，这一行等的那一条（同一位员工、同一条线程、还在等）。 */
-function useOwnRequest(line: GroupAcpPermission, threadId?: string | null) {
-  const inbox = useQuery(approvalInboxOptions());
-  return inbox.data?.requests.find(
-    (request) =>
-      request.status === "pending" &&
-      request.action.botId === line.agentId &&
-      (threadId == null || request.action.threadId === threadId) &&
-      acpCardOf(request.action) !== null,
-  );
-}
-
-function HirerLink({
-  line,
-  threadId,
-}: {
-  line: GroupAcpPermission;
-  threadId?: string | null;
-}) {
-  const request = useOwnRequest(line, threadId);
-  return (
-    <Link
-      className="font-medium text-[color:var(--wb-accent2,var(--primary))] underline underline-offset-2"
-      {...(request ? { search: { id: request.id } } : {})}
-      to="/approvals"
-    >
-      去确认
-    </Link>
-  );
-}
-
-function HirerCard({
-  line,
-  threadId,
-}: {
-  line: GroupAcpPermission;
-  threadId?: string | null;
-}) {
+function HirerCard({ approvalId }: { approvalId: string }) {
   const cache = useQueryClient();
-  const request = useOwnRequest(line, threadId);
+  const request = useQuery({
+    ...approvalRequestOptions(approvalId),
+    retry: false,
+  });
   const decision = useMutation({
-    mutationFn: (choice: AcpChoice) =>
-      decideApproval(request?.id ?? "", choice),
-    onSuccess: () =>
+    mutationFn: (choice: AcpChoice) => decideApproval(approvalId, choice),
+    onSettled: () =>
       Promise.all([
         cache.invalidateQueries({ queryKey: ["approvals"] }),
         cache.invalidateQueries({ queryKey: groupKeys.all }),
       ]),
   });
-  const card = request ? acpCardOf(request.action) : null;
-  if (!request || !card) return null;
+  const data = request.data;
+  const card = data ? acpCardOf(data.action) : null;
+  if (!data || !card || data.status !== "pending") return null;
   return (
     <AcpPermissionCard
       answered={decision.isSuccess ? decision.variables : null}
       card={card}
-      error={decision.error?.message ?? null}
+      error={decisionErrorText(decision.error)}
       onDecide={(choice) => decision.mutate(choice)}
-      raw={acpRawText(request.action.args)}
+      raw={acpRawText(data.action.args)}
       submitting={decision.isPending}
     />
   );

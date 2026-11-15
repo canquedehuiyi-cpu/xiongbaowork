@@ -22,6 +22,7 @@ import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
+import type { ChannelActivityEvent } from "../src/channels/events";
 import {
   createGroupConversations,
   createGroupStore,
@@ -77,8 +78,10 @@ const prefix = `acp-group-${randomUUID()}`;
 const createdUsers: string[] = [];
 const createdAgents: string[] = [];
 const createdChannels: string[] = [];
+const cleanups: (() => void)[] = [];
 
 afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) cleanup();
   await runAsTenant("platform", async () => {
     await database.delete(workItems).where(like(workItems.key, `${prefix}%`));
     for (const id of createdChannels.splice(0)) {
@@ -166,7 +169,10 @@ async function until(
 /** A hirer's external employee and two built-in employees, the group service and a computer. */
 async function harness(
   owner: AgentActor,
-  options: { privateShare?: CheckPrivateShare } = {},
+  options: {
+    privateShare?: CheckPrivateShare;
+    announce?: (event: ChannelActivityEvent) => Promise<void>;
+  } = {},
 ) {
   const external = await bot(owner, "小码");
   const writer = await bot(owner, "Writer");
@@ -254,6 +260,7 @@ async function harness(
     }),
     caps: { maxDepth: 1, maxPerRun: 2 },
     ...(options.privateShare ? { privateShare: options.privateShare } : {}),
+    ...(options.announce ? { announce: options.announce } : {}),
     mayAddress: async () => true,
     auditStore: { insert: async () => undefined },
     progressEveryMs: 0,
@@ -746,7 +753,12 @@ describe("an external employee in a group", () => {
       ).toBe(true);
     expect(opened.every((ask) => ask.actorId === owner.id)).toBe(true);
   });
-  test("its permission request in the group shows every member a status-only line, then how it ended", async () => {
+  /**
+   * A group with the hirer and a teammate, the teammate's @ starting the employee's turn on the
+   * computer, and the permission bridge as index.ts wires it: its group line goes to the group
+   * service, and the group's announcements are kept. `tick` runs the bridge's poll, as its timer does.
+   */
+  async function permissionGroup() {
     const owner = await person();
     const teammate = await person();
     await runAsTenant(owner.id, () =>
@@ -755,24 +767,20 @@ describe("an external employee in a group", () => {
         .set({ name: "何总" })
         .where(eq(users.id, owner.id)),
     );
-    const {
-      relay,
-      external,
-      writer,
-      turns,
-      down,
-      permissions,
-      projector,
-      conversations,
-      device,
-      sweepAll,
-      list,
-    } = await harness(owner);
-    // The permission bridge as index.ts wires it: its group line goes to the group service.
+    const announced: ChannelActivityEvent[] = [];
+    const parts = await harness(owner, {
+      announce: async (event) => {
+        announced.push(event);
+      },
+    });
+    const { relay, external, writer, turns, down, permissions, projector } =
+      parts;
+    const { conversations, device, sweepAll, list } = parts;
     const approvalStore = createApprovalStore(database, projector);
     const service = createApprovalService(approvalStore, undefined, undefined, {
       externalAgentHirer: createAcpApprovalHirer(database),
     });
+    const ticks: (() => void)[] = [];
     const bridge = createAcpPermissionBridge({
       relay,
       turns,
@@ -784,165 +792,265 @@ describe("an external employee in a group", () => {
         list: async () => [{ deviceId: "laptop", name: "何总的 MacBook Pro" }],
       }),
       groupLine: (input) => conversations.acpPermission(input),
-      every: () => () => undefined,
+      every: (_ms, tick) => {
+        ticks.push(tick);
+        return () => undefined;
+      },
       log: () => undefined,
     });
-    try {
-      const channel = await runAsTenant(owner.id, () =>
-        conversations.create(owner.id, { agentIds: [external, writer] }),
-      );
-      createdChannels.push(channel.id);
-      const [{ email } = { email: "" }] = await runAsTenant(teammate.id, () =>
-        database
-          .select({ email: users.email })
-          .from(users)
-          .where(eq(users.id, teammate.id)),
-      );
-      await runAsTenant(owner.id, () =>
-        conversations.addMember(owner.id, channel.id, { email }),
-      );
-      await runAsTenant(teammate.id, () =>
-        conversations.send(teammate.id, channel.id, {
-          id: `${prefix}-l1`,
-          text: "@小码 修好推到 fix/secret-branch",
-        }),
-      );
-      await sweepAll();
-      const turn = turns.rows[0] as AcpTurnRow;
-      await until(
-        () => down.some((frame) => frame.type === "acp.open"),
-        "acp.open",
-      );
+    cleanups.push(() => bridge.dispose());
+    const channel = await runAsTenant(owner.id, () =>
+      conversations.create(owner.id, { agentIds: [external, writer] }),
+    );
+    createdChannels.push(channel.id);
+    const [{ email } = { email: "" }] = await runAsTenant(teammate.id, () =>
+      database
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, teammate.id)),
+    );
+    await runAsTenant(owner.id, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+    await runAsTenant(teammate.id, () =>
+      conversations.send(teammate.id, channel.id, {
+        id: `${prefix}-l-${randomUUID().slice(0, 6)}`,
+        text: "@小码 修好推到 fix/secret-branch",
+      }),
+    );
+    await sweepAll();
+    const turn = turns.rows[0] as AcpTurnRow;
+    await until(
+      () => down.some((frame) => frame.type === "acp.open"),
+      "acp.open",
+    );
+    await device({
+      type: "acp.session",
+      threadId: turn.threadId,
+      sessionId: "s",
+      loaded: true,
+    });
+    await until(
+      () => down.some((frame) => frame.type === "acp.prompt"),
+      "acp.prompt",
+    );
+    await device({
+      type: "acp.turn.ack",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+    });
+    const ask = async (requestId: string, command: string) => {
       await device({
-        type: "acp.session",
-        threadId: turn.threadId,
-        sessionId: "s",
-        loaded: true,
-      });
-      await until(
-        () => down.some((frame) => frame.type === "acp.prompt"),
-        "acp.prompt",
-      );
-      await device({
-        type: "acp.turn.ack",
+        type: "acp.permission.request",
         threadId: turn.threadId,
         turnId: turn.turnId,
+        requestId,
+        toolCall: {
+          toolCallId: `call-${requestId}`,
+          kind: "execute",
+          title: command,
+          rawInput: { command },
+        },
+        options: [
+          { optionId: "yes", kind: "allow_once", name: "Allow" },
+          { optionId: "no", kind: "reject_once", name: "Reject" },
+        ],
+        facts: { insideWorkdir: true, paths: ["src/secret-config.ts"] },
       });
-      const ask = async (requestId: string, command: string) => {
-        await device({
-          type: "acp.permission.request",
-          threadId: turn.threadId,
-          turnId: turn.turnId,
-          requestId,
-          toolCall: {
-            toolCallId: `call-${requestId}`,
-            kind: "execute",
-            title: command,
-            rawInput: { command },
-          },
-          options: [
-            { optionId: "yes", kind: "allow_once", name: "Allow" },
-            { optionId: "no", kind: "reject_once", name: "Reject" },
-          ],
-          facts: { insideWorkdir: true, paths: ["src/secret-config.ts"] },
-        });
-        const request = permissions.at(-1);
-        if (!request) throw new Error("expected a permission request");
-        await bridge.onRequest(request);
-      };
-      await ask("req-1", "git push origin fix/secret-branch");
-      const [approval] = await runAsTenant(owner.id, () =>
+      const request = permissions.at(-1);
+      if (!request) throw new Error("expected a permission request");
+      await bridge.onRequest(request);
+    };
+    const approvals = () =>
+      runAsTenant(owner.id, () =>
         database
-          .select({ id: approvalRequests.id, status: approvalRequests.status })
+          .select({
+            id: approvalRequests.id,
+            status: approvalRequests.status,
+            action: approvalRequests.action,
+          })
           .from(approvalRequests)
           .where(eq(approvalRequests.ownerUserId, owner.id)),
       );
-      if (!approval) throw new Error("expected an approval");
-      expect(approval.status).toBe("pending");
+    const lines = async (reader: AgentActor) =>
+      (await list(channel.id, reader)).messages.filter(
+        (message) => "acpPermission" in message,
+      );
+    const answers = () =>
+      down.filter((frame) => frame.type === "acp.permission.answer");
+    return {
+      owner,
+      teammate,
+      external,
+      channel,
+      turn,
+      service,
+      announced,
+      ask,
+      approvals,
+      lines,
+      list,
+      device,
+      answers,
+      tick: () => {
+        for (const tick of ticks) tick();
+      },
+    };
+  }
 
-      const lines = async (reader: AgentActor) =>
-        (await list(channel.id, reader)).messages.filter(
-          (message) => "acpPermission" in message,
-        );
-      // Every member reads the same line: who waits on whom. Nothing of what it would do.
-      for (const reader of [teammate, owner]) {
-        const found = await lines(reader);
-        expect(found).toHaveLength(1);
-        expect(found[0]).toMatchObject({
+  test("its permission request in the group shows every member a status-only line, then how it ended", async () => {
+    const group = await permissionGroup();
+    const { owner, teammate, external, channel, turn, service } = group;
+    const { announced, ask, approvals, lines, list, device, answers } = group;
+    await ask("req-1", "git push origin fix/secret-branch");
+    const [approval] = await approvals();
+    if (!approval) throw new Error("expected an approval");
+    expect(approval.status).toBe("pending");
+
+    // Every member reads the same line: who waits on whom. Nothing of what it would do.
+    for (const reader of [teammate, owner]) {
+      const found = await lines(reader);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({
+        agentId: external,
+        ownerUserId: owner.id,
+        text: "",
+        acpPermission: {
+          kind: "acp.permission",
           agentId: external,
-          ownerUserId: owner.id,
-          text: "",
-          acpPermission: {
-            kind: "acp.permission",
-            agentId: external,
-            hirerUserId: owner.id,
-            hirerName: "何总",
-            status: "waiting",
-          },
-        });
-        expect(found[0]).not.toHaveProperty("approvalId");
-      }
-      const memberRead = JSON.stringify(await list(channel.id, teammate));
-      for (const secret of [
-        "git push",
-        "secret-config",
-        approval.id,
-        "提交并推送代码",
-      ])
-        expect(memberRead).not.toContain(secret);
-      // The asker's own message still says what they asked; the line itself names no branch.
-      expect(memberRead).toContain("@小码 修好推到 fix/secret-branch");
-      expect(JSON.stringify(await lines(teammate))).not.toContain("secret");
-      expect(
-        (await list(channel.id, teammate)).messages.some(
-          (message) => "approvalId" in message,
-        ),
-      ).toBe(false);
-
-      // The hirer allows it: the line says so, for everyone.
-      await runAsTenant(owner.id, () =>
-        service.decide(owner.id, approval.id, "allow_once"),
-      );
-      for (const reader of [teammate, owner])
-        await until(
-          async () =>
-            (await lines(reader))[0]?.acpPermission?.status === "approved",
-          "the line to say approved",
-        );
-      expect(
-        down.filter((frame) => frame.type === "acp.permission.answer"),
-      ).toEqual([
-        expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
-      ]);
-
-      // A second request still waiting when the turn ends: its line says it expired.
-      await ask("req-2", "git push --force origin fix/secret-branch");
-      await until(
-        async () =>
-          (await lines(teammate)).filter(
-            (line) => line.acpPermission?.status === "waiting",
-          ).length === 1,
-        "a second waiting line",
-      );
-      await device({
-        type: "acp.turn.end",
-        threadId: turn.threadId,
-        turnId: turn.turnId,
-        stopReason: "end_turn",
-        interrupted: false,
+          hirerUserId: owner.id,
+          hirerName: "何总",
+          status: "waiting",
+        },
       });
+    }
+    // The approval's id is the hirer's alone: his own line carries it, the member's does not.
+    expect((await lines(owner))[0]).toMatchObject({ approvalId: approval.id });
+    expect((await lines(teammate))[0]).not.toHaveProperty("approvalId");
+    const memberRead = JSON.stringify(await list(channel.id, teammate));
+    for (const secret of [
+      "git push",
+      "secret-config",
+      approval.id,
+      "提交并推送代码",
+    ])
+      expect(memberRead).not.toContain(secret);
+    // The asker's own message still says what they asked; the line itself names no branch.
+    expect(memberRead).toContain("@小码 修好推到 fix/secret-branch");
+    expect(JSON.stringify(await lines(teammate))).not.toContain("secret");
+    expect(
+      (await list(channel.id, teammate)).messages.some(
+        (message) => "approvalId" in message,
+      ),
+    ).toBe(false);
+
+    // The group was told to read its transcript again, with nothing in the telling.
+    expect(announced).toHaveLength(1);
+    expect(announced[0]).toEqual({
+      channelId: channel.id,
+      memberIds: expect.arrayContaining([owner.id, teammate.id]),
+      lastMessage: null,
+      lastMessageAt: null,
+      lastMessageAgentId: null,
+      groupTranscript: true,
+    });
+    for (const secret of ["git push", "secret", approval.id])
+      expect(JSON.stringify(announced)).not.toContain(secret);
+
+    // The hirer allows it: the line says so, for everyone, and the group is told again.
+    await runAsTenant(owner.id, () =>
+      service.decide(owner.id, approval.id, "allow_once"),
+    );
+    for (const reader of [teammate, owner])
       await until(
         async () =>
-          (await lines(teammate))
-            .map((line) => line.acpPermission?.status)
-            .join() === "approved,expired",
-        "the second line to say expired",
+          (await lines(reader))[0]?.acpPermission?.status === "approved",
+        "the line to say approved",
       );
-      expect(JSON.stringify(await list(channel.id, teammate))).not.toContain(
-        "--force",
+    expect((await lines(owner))[0]).not.toHaveProperty("approvalId");
+    expect(answers()).toEqual([
+      expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
+    ]);
+    await until(() => announced.length === 2, "a second announcement");
+    expect(JSON.stringify(announced)).not.toContain(approval.id);
+
+    // A second request still waiting when the turn ends: its line says it expired.
+    await ask("req-2", "git push --force origin fix/secret-branch");
+    await until(
+      async () =>
+        (await lines(teammate)).filter(
+          (line) => line.acpPermission?.status === "waiting",
+        ).length === 1,
+      "a second waiting line",
+    );
+    await device({
+      type: "acp.turn.end",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      stopReason: "end_turn",
+      interrupted: false,
+    });
+    await until(
+      async () =>
+        (await lines(teammate))
+          .map((line) => line.acpPermission?.status)
+          .join() === "approved,expired",
+      "the second line to say expired",
+    );
+    expect(JSON.stringify(await list(channel.id, teammate))).not.toContain(
+      "--force",
+    );
+    expect(JSON.stringify(announced)).not.toContain("--force");
+  });
+
+  test("a request the hirer's new allow rule withdraws is settled by the poll, in the hirer's frame", async () => {
+    const group = await permissionGroup();
+    const { owner, teammate, external, service } = group;
+    const { ask, approvals, lines, answers, tick } = group;
+    // The hirer asks about this employee's commands himself: its approvals are his own rule's.
+    await runAsTenant(owner.id, () =>
+      service.store.policy?.createRule(owner.id, {
+        botId: external,
+        toolRef: "acp/execute",
+        effect: "*",
+        scope: "*",
+        behaviour: "ask",
+      }),
+    );
+    await ask("req-1", "git push origin fix/secret-branch");
+    const [approval] = await approvals();
+    if (!approval) throw new Error("expected an approval");
+    expect(
+      (approval.action as { policy?: { source?: string } }).policy?.source,
+    ).toBe("personal_rule");
+    expect((await lines(teammate))[0]?.acpPermission?.status).toBe("waiting");
+
+    // Now he allows them: the waiting request is withdrawn (no decision is announced for it).
+    await runAsTenant(owner.id, async () => {
+      await service.createRule(owner.id, {
+        botId: external,
+        toolRef: "acp/execute",
+        effect: "*",
+        scope: "*",
+        behaviour: "allow",
+      });
+    });
+    await until(
+      async () => (await approvals())[0]?.status !== "pending",
+      "the request withdrawn",
+    );
+    expect((await lines(teammate))[0]?.acpPermission?.status).toBe("waiting");
+
+    // Only the poll finds it settled: the agent is answered and the line written, in the hirer's frame.
+    tick();
+    for (const reader of [teammate, owner])
+      await until(
+        async () =>
+          (await lines(reader))[0]?.acpPermission?.status === "approved",
+        "the line to say approved",
       );
-    } finally {
-      bridge.dispose();
-    }
+    expect(answers()).toEqual([
+      expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
+    ]);
   });
 });

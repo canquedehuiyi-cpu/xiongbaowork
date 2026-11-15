@@ -65,6 +65,7 @@ import {
 } from "../threads/compaction";
 import { roundHungByEntry } from "../threads/unattended-card";
 import type { WorkQueue } from "../work/queue";
+import type { ChannelActivityEvent } from "./events";
 import {
   GROUP_PERSON_SPEAKER,
   GROUP_TRANSCRIPT_HEADER,
@@ -466,6 +467,24 @@ export function groupAcpPermissionRowId(approvalId: string): string {
     .slice(0, 32)}`;
 }
 
+/**
+ * 「群的转录变了，重读一下」：不带任何内容（没有预览、没有说话人），前端只拿它去重读这个群
+ * （`groupTranscript`，app 的 `use-channel-events.ts`）。
+ */
+export function groupTranscriptEvent(
+  channelId: string,
+  memberIds: string[],
+): ChannelActivityEvent {
+  return {
+    channelId,
+    memberIds,
+    lastMessage: null,
+    lastMessageAt: null,
+    lastMessageAgentId: null,
+    groupTranscript: true,
+  };
+}
+
 function splitDetails(details: Record<string, unknown>) {
   const shared: Record<string, unknown> = {};
   const held: Record<string, unknown> = {};
@@ -803,7 +822,9 @@ export function createGroupStore(
           })
           .onConflictDoNothing()
           .returning({ id: groupMessages.id });
-        if (created.length > 0 && waiting)
+        // A waiting line's text and details, or a finished line's private part (a status line's
+        // approval id): its sender's alone.
+        if (created.length > 0 && (waiting || Object.keys(held).length > 0))
           await holdBack(tx, {
             messageId: row.id,
             ownerUserId: row.ownerUserId,
@@ -1192,6 +1213,8 @@ export function createGroupConversations(deps: {
     sourceId: string,
   ) => Promise<void>;
   busy?: (turn: GroupTurn, busy: boolean) => Promise<void>;
+  /** Tell the group's members to read the transcript again (a status line changed). Content-free. */
+  announce?: (event: ChannelActivityEvent) => Promise<void>;
   /** Make the channel a group is, as the ordinary channel store does, refusing Bots they cannot see. */
   createChannel?: (
     ownerUserId: string,
@@ -2333,40 +2356,77 @@ export function createGroupConversations(deps: {
     }): Promise<boolean> {
       const thread = await deps.store.threadRow(input.threadId);
       if (!thread || thread.agentId !== input.agentId) return false;
+      const { channelId } = thread;
       return runAsTenant(input.hirerUserId, async () => {
         // 群里别处怎么称呼人，这里就怎么称呼：名字，没有名字时邮箱（group-chat 的 `people`）。
-        const hirer = (await deps.store.people(thread.channelId)).find(
+        const hirer = (await deps.store.people(channelId)).find(
           (person) => person.userId === input.hirerUserId,
         );
-        // 招聘人不在这个群里了：没人能在这里确认，不写。
-        if (!hirer) return false;
-        const line: GroupAcpPermission = {
-          kind: "acp.permission",
-          agentId: input.agentId,
-          hirerUserId: input.hirerUserId,
-          hirerName: hirer.name ?? hirer.email,
-          status: input.status,
-        };
         const id = groupAcpPermissionRowId(input.approvalId);
-        if (input.status === "waiting")
-          return deps.store.append({
-            id,
-            ownerUserId: input.hirerUserId,
-            channelId: thread.channelId,
-            agentId: input.agentId,
-            threadId: input.threadId,
-            text: "",
-            status: "completed",
-            details: { acpPermission: line },
+        const row = (status: GroupAcpPermission["status"], name: string) => ({
+          id,
+          ownerUserId: input.hirerUserId,
+          channelId,
+          agentId: input.agentId,
+          threadId: input.threadId,
+          text: "",
+          status: "completed" as const,
+          details: {
+            acpPermission: {
+              kind: "acp.permission",
+              agentId: input.agentId,
+              hirerUserId: input.hirerUserId,
+              hirerName: name,
+              status,
+            } satisfies GroupAcpPermission,
+          } as Record<string, unknown>,
+        });
+        let written: boolean;
+        if (input.status === "waiting") {
+          // 招聘人不在这个群里了：没人能在这里确认，不写。
+          if (!hirer) return false;
+          const waiting = row("waiting", hirer.name ?? hirer.email);
+          written = await deps.store.append({
+            ...waiting,
+            /*
+             * 审批 id 只给招聘人本人：放在这一行的私有部分（`group_message_private`，只有行主人读得到），
+             * 「去确认」和他群里的卡靠它落到那一条。成员读到的这一行里没有它。
+             */
+            details: { ...waiting.details, acpApprovalId: input.approvalId },
           });
-        try {
-          await deps.store.finish(id, "", "completed", { acpPermission: line });
-          return true;
-        } catch (error) {
-          // 那一行没写成（招聘人当时不在群里）或已经没了：没什么可改的。
-          if (error instanceof GroupNotFoundError) return false;
-          throw error;
+        } else {
+          // 招聘人后来离开了群：结果照样写，名字沿用这一行原来的。
+          const name =
+            (hirer ? (hirer.name ?? hirer.email) : null) ??
+            groupAcpPermissionOf(
+              (await deps.store.list(channelId)).find(
+                (message) => message.id === id,
+              )?.details.acpPermission,
+            )?.hirerName ??
+            "招聘人";
+          const ended = row(input.status, name);
+          try {
+            // 结束了：私有部分（审批 id）随之删掉。
+            await deps.store.finish(id, "", "completed", ended.details);
+            written = true;
+          } catch (error) {
+            if (!(error instanceof GroupNotFoundError)) throw error;
+            /*
+             * 「在等」那一行还没写成（结果比开头先到）：直接写结束的这一行。之后迟到的「在等」撞上同一个
+             * id，什么都不写。
+             */
+            written = await deps.store.append(ended);
+          }
         }
+        // 告诉群里每个人「重读一下」：不带内容，不改会话列表的预览。
+        if (written && deps.announce)
+          await deps.announce(
+            groupTranscriptEvent(
+              channelId,
+              await deps.store.members(channelId),
+            ),
+          );
+        return written;
       });
     },
     async list(owner: string, channel: string) {
@@ -2398,7 +2458,16 @@ export function createGroupConversations(deps: {
             : {}),
           // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。
           ...(groupAcpPermissionOf(details.acpPermission)
-            ? { acpPermission: groupAcpPermissionOf(details.acpPermission) }
+            ? {
+                acpPermission: groupAcpPermissionOf(details.acpPermission),
+                // 还在等时，招聘人本人拿到他那条审批的 id（私有部分，只有行主人读得到）。
+                ...(message.ownerUserId === owner &&
+                groupAcpPermissionOf(details.acpPermission)?.status ===
+                  "waiting" &&
+                typeof held?.acpApprovalId === "string"
+                  ? { approvalId: held.acpApprovalId }
+                  : {}),
+              }
             : {}),
           // 压的是发起人和这位员工的线程：只告诉他自己。
           ...(message.ownerUserId === owner &&

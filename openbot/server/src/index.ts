@@ -188,6 +188,7 @@ import {
 import {
   announceTaskUpdate,
   createChannelEventHub,
+  notifyChannelActivity,
   startChannelActivityListener,
 } from "./channels/events";
 import {
@@ -4503,6 +4504,8 @@ await startupLifecycle.run(async (startup) => {
         { text, agentId, at: new Date() },
         { id: sourceId },
       ),
+    // A status line changed (an external employee's permission, Task 12): members read it again.
+    announce: (event) => notifyChannelActivity(database, event),
     busy: async (turn, busy) =>
       channelStore.signalChannelBusy(
         await actorFor(turn.ownerUserId),

@@ -30,7 +30,16 @@ type CardBase = {
 export type AcpCard =
   | (CardBase & { kind: "plan"; entries: AcpPlanEntry[] })
   | (CardBase & { kind: "diff"; files: AcpDiffFile[] })
-  | (CardBase & { kind: "interrupted"; turnId: string | null; prompt: string });
+  | (CardBase & {
+      kind: "interrupted";
+      turnId: string | null;
+      prompt: string;
+      /**
+       * 这一轮之后对话里又开始过别的轮次（重新派过，或者又说了别的）：只有最后一轮的中断卡能「重新派」，
+       * 重放历史时也一样，免得几天前的活被再派一遍。
+       */
+      superseded: boolean;
+    });
 
 type Loose = Record<string, unknown>;
 
@@ -104,6 +113,8 @@ export type AcpCardTracker = {
   cards(): readonly AcpCard[];
   /** 卡片变了时通知（`useSyncExternalStore`）。 */
   listen(listener: () => void): () => void;
+  /** 一轮开始了（`subscriber` 收到 RUN_STARTED 时也是走这里）。 */
+  started(runId: string): void;
   /** 直接喂一个事件；`subscriber` 也是走这里。测试和重放都用得上。 */
   take(input: {
     runId: string;
@@ -129,6 +140,20 @@ export function createAcpCardTracker(): AcpCardTracker {
       next[at] = { ...card, anchor: cards[at]?.anchor ?? card.anchor };
       cards = next;
     }
+    for (const listener of listeners) listener();
+  };
+
+  /** 一轮开始了：它之前的中断卡都有了后续。 */
+  const supersede = (started: string) => {
+    let changed = false;
+    const next = cards.map((card) => {
+      if (card.kind !== "interrupted" || card.superseded) return card;
+      if (card.runId === started) return card;
+      changed = true;
+      return { ...card, superseded: true };
+    });
+    if (!changed) return;
+    cards = next;
     for (const listener of listeners) listener();
   };
 
@@ -175,6 +200,7 @@ export function createAcpCardTracker(): AcpCardTracker {
         anchor,
         turnId: typeof body?.turnId === "string" ? body.turnId : null,
         prompt,
+        superseded: false,
       });
     }
   };
@@ -183,6 +209,7 @@ export function createAcpCardTracker(): AcpCardTracker {
     subscriber: {
       onRunStartedEvent: ({ event }) => {
         runId = event.runId;
+        supersede(runId);
       },
       onCustomEvent: ({ event, messages }) => {
         if (typeof event.name !== "string" || !event.name.startsWith("acp."))
@@ -196,6 +223,10 @@ export function createAcpCardTracker(): AcpCardTracker {
       },
     },
     cards: () => cards,
+    started(started) {
+      runId = started;
+      supersede(started);
+    },
     listen(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

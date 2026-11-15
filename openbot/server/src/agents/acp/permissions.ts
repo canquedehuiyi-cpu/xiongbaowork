@@ -923,7 +923,11 @@ export function createAcpPermissionBridge(
   };
   const inTenant = <T>(entry: Entry, work: () => Promise<T>) =>
     runAsTenant(entry.request.tenantId, work);
-  /** The group's line for an approval (Task 12): never fails anything, only logged. */
+  /**
+   * The group's line for an approval (Task 12): never fails anything, only logged. Always in its
+   * hirer's frame, whichever path got here (a decision, the poll, a report again, an expiry): the
+   * line is the hirer's, and a statement with no frame is refused.
+   */
   const groupLine = (
     line: {
       threadId: string;
@@ -932,15 +936,23 @@ export function createAcpPermissionBridge(
       approvalId: string;
     },
     status: AcpGroupLineStatus,
-  ) =>
-    deps.groupLine
-      ? deps.groupLine({ ...line, status }).catch((error: unknown) => {
-          log(
-            `acp permissions: the group line of approval ${line.approvalId} could not be written: ${error instanceof Error ? error.message : String(error)}`,
-          );
-          return false;
-        })
-      : Promise.resolve(false);
+  ): Promise<boolean> => {
+    const write = deps.groupLine;
+    if (!write) return Promise.resolve(false);
+    const failed = (error: unknown) => {
+      log(
+        `acp permissions: the group line of approval ${line.approvalId} could not be written: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    };
+    try {
+      return runAsTenant(line.hirerUserId, () =>
+        write({ ...line, status }),
+      ).catch(failed);
+    } catch (error) {
+      return Promise.resolve(failed(error));
+    }
+  };
   const lineOf = (entry: Entry, approvalId: string) => ({
     threadId: entry.request.threadId,
     agentId: entry.request.agentId,
@@ -1285,16 +1297,14 @@ export function createAcpPermissionBridge(
       // Opened by another server or before a restart: its group line is still told how it ended.
       const status = groupLineStatusOf(request);
       if (status)
-        void runAsTenant(request.ownerUserId, () =>
-          groupLine(
-            {
-              threadId: request.action.threadId,
-              agentId: request.action.botId,
-              hirerUserId: request.ownerUserId,
-              approvalId: request.id,
-            },
-            status,
-          ),
+        void groupLine(
+          {
+            threadId: request.action.threadId,
+            agentId: request.action.botId,
+            hirerUserId: request.ownerUserId,
+            approvalId: request.id,
+          },
+          status,
         );
     }
   });

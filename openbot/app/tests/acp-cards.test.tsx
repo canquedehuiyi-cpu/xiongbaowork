@@ -29,7 +29,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AcpPermissionCard } from "@/components/channels/acp-cards";
+import { ACP_PHONE_NOTE } from "@/components/channels/acp-cards";
 import {
   ChatTranscript,
   type TranscriptAcpCards,
@@ -40,7 +40,7 @@ import {
   type AcpCardTracker,
   createAcpCardTracker,
 } from "@/lib/channels/acp-events";
-import type { GroupMessage } from "@/lib/groups";
+import { type GroupMessage, groupRefetchInterval } from "@/lib/groups";
 import { queryClient } from "@/query-client";
 import { Route as ApprovalsRoute } from "@/routes/_authed/_app/approvals";
 import { settleReactWork } from "./settle-react-work";
@@ -51,6 +51,8 @@ const originalFetch = globalThis.fetch;
 let originalMatchMedia: typeof window.matchMedia;
 let inbox: unknown[] = [];
 let single: Map<string, unknown>;
+/** 别处已经决定过了：决定接口照服务器的样子回 400。 */
+let decided = false;
 
 beforeAll(() => {
   GlobalRegistrator.register({ url: "http://localhost/" });
@@ -61,6 +63,7 @@ beforeEach(() => {
   sent.length = 0;
   inbox = [];
   single = new Map();
+  decided = false;
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://localhost/");
@@ -81,7 +84,12 @@ beforeEach(() => {
       if (method === "GET" && url.pathname === "/api/agents")
         return Response.json({ agents: [CODEX] });
       if (method === "POST" && url.pathname.endsWith("/decision"))
-        return Response.json({ ok: true });
+        return decided
+          ? Response.json(
+              { error: "This request was already decided." },
+              { status: 400 },
+            )
+          : Response.json({ ok: true });
       if (method === "GET" && single.has(url.pathname))
         return Response.json(single.get(url.pathname));
       return Response.json({ error: "not served" }, { status: 404 });
@@ -378,7 +386,9 @@ describe("请求许可卡", () => {
     expect(
       card.getByText("把这次的 2 个文件改动推送到远端仓库的 fix/login 分支。"),
     ).toBeTruthy();
-    expect(card.getByText("已同时推到你的手机")).toBeTruthy();
+    // 手机推送不说死：分不出这个人有没有可用的手机通道。
+    expect(card.getByText(ACP_PHONE_NOTE)).toBeTruthy();
+    expect(ACP_PHONE_NOTE).toBe("也会推到你的手机（如果开了通知）");
     expect(
       card.getAllByRole("button").map((button) => button.textContent),
     ).toEqual(["批准", "拒绝", "这次对话里都允许"]);
@@ -444,35 +454,6 @@ describe("请求许可卡", () => {
       ),
     );
     expect(other.queryByRole("region", { name: "请求许可" })).toBeNull();
-  });
-
-  test("non-hirer sees 等 X 确认 and no buttons", () => {
-    const decided: string[] = [];
-    const view = render(
-      <AcpPermissionCard
-        card={{
-          employee: "代码熊",
-          computer: "何总的 MacBook Pro",
-          action: "代码熊想要运行命令：git push origin fix/login",
-          hit: "「提交并推送代码」设成了先问你",
-          reason: "把这次的 2 个文件改动推送到远端仓库的 fix/login 分支。",
-          summary: "",
-          files: [],
-          offerConversation: true,
-        }}
-        onDecide={(choice) => decided.push(choice)}
-        raw="git push origin fix/login"
-        waitingFor="何总"
-      />,
-    );
-    const card = within(view.getByRole("region", { name: "请求许可" }));
-    expect(card.getByRole("status").textContent).toBe("等 何总 确认");
-    expect(card.queryAllByRole("button")).toHaveLength(0);
-    // 推到手机的是招聘人的手机，别人看不到这一行。
-    expect(card.queryByText("已同时推到你的手机")).toBeNull();
-    // 看得到它要做什么。
-    expect(card.getByText("git push origin fix/login")).toBeTruthy();
-    expect(decided).toEqual([]);
   });
 });
 
@@ -561,61 +542,62 @@ describe("中断卡", () => {
   });
 });
 
+/** 窗口按 390 宽的手机回答 `useIsMobile` 问的那条媒体查询。 */
+function asPhone() {
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes("max-width"),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 390,
+  });
+}
+
+function openApproval(id: string) {
+  const rootRoute = createRootRoute({ component: Outlet });
+  const authed = createRoute({
+    id: "/_authed",
+    getParentRoute: () => rootRoute,
+    component: Outlet,
+  });
+  const app = createRoute({
+    id: "/_app",
+    getParentRoute: () => authed,
+    component: Outlet,
+  });
+  const approvals = ApprovalsRoute.update({
+    id: "/approvals",
+    path: "/approvals",
+    getParentRoute: () => app,
+  } as Parameters<typeof ApprovalsRoute.update>[0] & {
+    id: string;
+    path: string;
+    getParentRoute: () => typeof app;
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([
+      authed.addChildren([app.addChildren([approvals])]),
+    ]),
+    history: createMemoryHistory({
+      initialEntries: [`/approvals?id=${id}`],
+    }),
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
+}
+
 describe("手机审批页", () => {
-  /** 窗口按 390 宽的手机回答 `useIsMobile` 问的那条媒体查询。 */
-  function asPhone() {
-    window.matchMedia = ((query: string) => ({
-      matches: query.includes("max-width"),
-      media: query,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    })) as typeof window.matchMedia;
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 390,
-    });
-  }
-
-  function openApproval(id: string) {
-    const rootRoute = createRootRoute({ component: Outlet });
-    const authed = createRoute({
-      id: "/_authed",
-      getParentRoute: () => rootRoute,
-      component: Outlet,
-    });
-    const app = createRoute({
-      id: "/_app",
-      getParentRoute: () => authed,
-      component: Outlet,
-    });
-    const approvals = ApprovalsRoute.update({
-      id: "/approvals",
-      path: "/approvals",
-      getParentRoute: () => app,
-    } as Parameters<typeof ApprovalsRoute.update>[0] & {
-      id: string;
-      path: string;
-      getParentRoute: () => typeof app;
-    });
-    const router = createRouter({
-      routeTree: rootRoute.addChildren([
-        authed.addChildren([app.addChildren([approvals])]),
-      ]),
-      history: createMemoryHistory({
-        initialEntries: [`/approvals?id=${id}`],
-      }),
-    });
-    return render(
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router as never} />
-      </QueryClientProvider>,
-    );
-  }
-
+  // happy-dom 不排版：这里断言的是贴底的那一栏和按钮的样式类，内容会不会被挡住靠 390 宽的截图验证。
   test("phone approval page has a fixed bottom 批准 button at 390px", async () => {
     asPhone();
     single.set("/api/approvals/ap-1", acpApproval("ap-1"));
@@ -782,7 +764,7 @@ describe("群里的许可状态行", () => {
     );
   }
 
-  test("a member sees who the employee waits on, and nothing to press", async () => {
+  test("non-hirer sees 等 X 确认 and no buttons", async () => {
     // 招聘人的审批在他自己那里；成员的收件箱里没有。
     inbox = [];
     const view = openGroup(MEMBER, statusLine("waiting"));
@@ -798,19 +780,22 @@ describe("群里的许可状态行", () => {
   });
 
   test("the hirer sees the same line with 去确认 and decides from their own approval", async () => {
-    inbox = [
-      {
-        ...acpApproval("ap-g"),
-        action: { ...acpApproval("ap-g").action, threadId: GROUP_THREAD },
-      },
-    ];
-    const view = openGroup(HIRER, statusLine("waiting"));
+    // 收件箱里没有它（比如已经挤出最新 100 条）：卡片照样按这一行带的审批 id 读到。
+    inbox = [];
+    single.set("/api/approvals/ap-g", {
+      ...acpApproval("ap-g"),
+      action: { ...acpApproval("ap-g").action, threadId: GROUP_THREAD },
+    });
+    const view = openGroup(HIRER, {
+      ...statusLine("waiting"),
+      approvalId: "ap-g",
+    });
     await view.findByText("代码熊在等你确认一个操作");
     const go = await view.findByRole("link", { name: "去确认" });
     await waitFor(() =>
       expect(go.getAttribute("href")).toBe("/approvals?id=ap-g"),
     );
-    // 卡片内容来自他自己的收件箱：命令原文和三个按钮。
+    // 卡片内容来自他自己的审批：命令原文和三个按钮。
     const card = within(await view.findByRole("region", { name: "请求许可" }));
     expect(card.getByText("git push origin fix/login")).toBeTruthy();
     const user = userEvent.setup({ document });
@@ -840,5 +825,103 @@ describe("群里的许可状态行", () => {
     const mine = openGroup(HIRER, statusLine("denied"));
     expect(await mine.findByText("你拒绝了代码熊的一个操作")).toBeTruthy();
     expect(mine.queryByRole("link", { name: "去确认" })).toBeNull();
+  });
+
+  test("an open group keeps reading while a line waits on its hirer", () => {
+    const conversation = (line: GroupMessage) => ({
+      bots: [],
+      people: [],
+      messages: [
+        {
+          id: "m1",
+          channelId: "g-1",
+          ownerUserId: MEMBER,
+          agentId: null,
+          text: "@代码熊 看一下",
+          status: "completed" as const,
+          // 很久以前的：不是「刚发的话还没人接」那种轮询。
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+        line,
+      ],
+    });
+    expect(groupRefetchInterval(conversation(statusLine("waiting")))).toBe(
+      1_500,
+    );
+    expect(groupRefetchInterval(conversation(statusLine("approved")))).toBe(
+      false,
+    );
+  });
+});
+
+describe("第 1 轮修复", () => {
+  test("only the last turn's interrupted card can be sent again, on a replay too", async () => {
+    const tracker = createAcpCardTracker();
+    feed(tracker, "run-1", [
+      {
+        name: "acp.interrupted",
+        value: { turnId: "turn-1", prompt: "修 401" },
+        upto: 3,
+      },
+    ]);
+    // 那之后又开始过一轮（重新派过，或者说了别的）：重放历史也是这个顺序。
+    tracker.started("run-2");
+    const [card] = tracker.cards();
+    expect(card).toMatchObject({ kind: "interrupted", superseded: true });
+    const view = drawTranscript({
+      cards: tracker.cards(),
+      onResend: () => undefined,
+    });
+    const shown = within(
+      await view.findByRole("region", { name: "这件活中断了" }),
+    );
+    expect(shown.getByText("这件活已有后续。")).toBeTruthy();
+    expect(shown.queryByRole("button")).toBeNull();
+
+    // 最后一轮的中断卡照旧能重新派。
+    cleanup();
+    const last = createAcpCardTracker();
+    last.started("run-1");
+    feed(last, "run-2", [
+      {
+        name: "acp.interrupted",
+        value: { turnId: "turn-2", prompt: "修 401" },
+        upto: 3,
+      },
+    ]);
+    expect(last.cards()[0]).toMatchObject({ superseded: false });
+    const again = drawTranscript({
+      cards: last.cards(),
+      onResend: () => undefined,
+    });
+    expect(await again.findByRole("button", { name: "重新派" })).toBeTruthy();
+  });
+
+  test("deciding what was already decided elsewhere says so in Chinese", async () => {
+    single.set("/api/approvals/ap-1", acpApproval("ap-1"));
+    decided = true;
+    const view = openApproval("ap-1");
+    const user = userEvent.setup({ document });
+    await user.click(await view.findByRole("button", { name: "批准" }));
+    expect((await view.findByRole("alert")).textContent).toBe(
+      "这条请求已经处理过了。",
+    );
+    expect(view.queryByText(/already decided/)).toBeNull();
+  });
+
+  test("the phone page does not decide other kinds of request", async () => {
+    single.set("/api/approvals/ap-x", {
+      ...acpApproval("ap-x"),
+      action: {
+        ...acpApproval("ap-x").action,
+        toolRef: "computer_run_command",
+        target: {},
+        policy: { behaviour: "hand_off", source: "safety", reason: "交给你。" },
+      },
+    });
+    const view = openApproval("ap-x");
+    expect(await view.findByText(/这条请求请到审批列表里处理/)).toBeTruthy();
+    expect(view.queryByRole("button")).toBeNull();
+    expect(view.queryByText(/"command"/)).toBeNull();
   });
 });

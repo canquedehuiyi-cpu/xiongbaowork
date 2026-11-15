@@ -10,6 +10,7 @@ import {
   acpCardOf,
   acpChoicesFor,
   acpRawText,
+  decisionErrorText,
 } from "@/components/channels/acp-cards";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { externalMark } from "@/lib/agents/external";
@@ -25,7 +26,7 @@ import { cn } from "@/lib/utils";
  * 屏幕」不做：要等设备端能推画面（外部员工 Task 11）。
  *
  * 读的是 `GET /api/approvals/:id`：只有这条审批的主人读得到，别人（群里的其他成员）读到 404，这里就说「不在
- * 你这里」。外部员工以外的审批也能在这里批，画得简单一些。
+ * 你这里」。外部员工以外的审批不在这里批，指去审批列表。
  */
 
 const LABEL =
@@ -50,6 +51,8 @@ export function ApprovalDetail({ id }: { id: string }) {
       setAnswered(choice);
       return cache.invalidateQueries({ queryKey: ["approvals"] });
     },
+    // 别处已经决定过了：重读这一条，按钮随之收起。
+    onError: () => cache.invalidateQueries({ queryKey: ["approvals"] }),
   });
 
   const data = request.data;
@@ -59,9 +62,7 @@ export function ApprovalDetail({ id }: { id: string }) {
   );
   const raw = data ? acpRawText(data.action.args) : null;
   const waiting = data?.status === "pending" && answered === null;
-  const choices: AcpChoice[] = card
-    ? acpChoicesFor(card)
-    : ["allow_once", "deny"];
+  const choices: AcpChoice[] = card ? acpChoicesFor(card) : [];
   const who = card?.employee || agent?.name || "这位员工";
   const headline =
     card?.action ||
@@ -103,6 +104,17 @@ export function ApprovalDetail({ id }: { id: string }) {
         >
           这条请求不在你这里，或者已经没有了。
         </p>
+      ) : !card ? (
+        // 外部员工以外的请求（交给你做的、参数要看全的）在审批列表里处理，这一页只画外部员工的。
+        <p
+          className="px-4 py-6 text-[color:var(--wb-fg2,var(--muted-foreground))]"
+          role="status"
+        >
+          这条请求请到审批列表里处理。{" "}
+          <Link className="underline underline-offset-2" to="/approvals">
+            打开审批列表
+          </Link>
+        </p>
       ) : (
         <>
           {/* 手机上按钮贴在底部，内容留出按钮那么高的空白，最后一行不会被盖住。 */}
@@ -119,17 +131,11 @@ export function ApprovalDetail({ id }: { id: string }) {
               </div>
             </div>
 
-            {card ? (
-              raw ? (
-                <pre className="m-0 whitespace-pre-wrap break-all rounded-[10px] bg-[color:var(--wb-rail,var(--muted))] p-3 font-mono text-[13px]">
-                  {raw}
-                </pre>
-              ) : null
-            ) : (
-              <pre className="m-0 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-[10px] bg-[color:var(--wb-rail,var(--muted))] p-3 font-mono text-[12px]">
-                {JSON.stringify(data.action.args, null, 2)}
+            {raw ? (
+              <pre className="m-0 whitespace-pre-wrap break-all rounded-[10px] bg-[color:var(--wb-rail,var(--muted))] p-3 font-mono text-[13px]">
+                {raw}
               </pre>
-            )}
+            ) : null}
 
             {card && card.files.length > 0 ? (
               <div className="flex flex-col gap-2">
@@ -208,7 +214,7 @@ export function ApprovalDetail({ id }: { id: string }) {
                     className="m-0 text-[13px] text-[color:var(--wb-amber-fg,var(--signal-ink))]"
                     role="alert"
                   >
-                    {decision.error.message}
+                    {decisionErrorText(decision.error)}
                   </p>
                 ) : null}
               </>

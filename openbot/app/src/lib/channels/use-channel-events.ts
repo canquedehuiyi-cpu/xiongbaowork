@@ -111,6 +111,11 @@ export type ChannelActivityEvent = {
   /** The tenant's task board changed somewhere; the tasks cache refetches. */
   taskUpdated?: true;
   /**
+   * A group's shared transcript changed with nothing said (an external employee's permission line,
+   * 外部员工 Task 12): the open group re-reads. Carries nothing else, and patches no roster row.
+   */
+  groupTranscript?: true;
+  /**
    * Everything the channel is waiting on now, replacing what the row held. Absent on an ordinary
    * activity event. Rides on every busy event, and alone on the one the server sends when a hop
    * settles without a turn starting or ending.
@@ -361,6 +366,8 @@ export function useChannelEvents() {
         void queryClient.invalidateQueries({
           queryKey: ["groups", activity.channelId],
         });
+        // Nothing else to it: no preview, no order, no notice.
+        if (activity.groupTranscript) return;
 
         /*
          * The list is paged, so the cache holds pages rather than one array.

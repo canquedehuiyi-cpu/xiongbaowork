@@ -82,14 +82,27 @@ export function groupQueryOptions(channelId: string) {
       );
       return (await response.json()) as GroupConversation;
     },
-    refetchInterval: (query) =>
-      query.state.data?.messages.some(
-        (message) =>
-          message.status === "running" || message.status === "queued",
-      ) || awaitingFirstReply(query.state.data)
-        ? 1_500
-        : false,
+    refetchInterval: (query) => groupRefetchInterval(query.state.data),
   });
+}
+
+/**
+ * How often the open group re-reads its transcript: while a turn is still owed an answer, while the
+ * last line is a person's that no Bot has started on, and while an external employee waits on its
+ * hirer's permission (外部员工 Task 12: that line is decided somewhere else, and the server's
+ * "read again" signal may not reach this tab). Otherwise not at all.
+ */
+export function groupRefetchInterval(
+  data: GroupConversation | undefined,
+): number | false {
+  return data?.messages.some(
+    (message) =>
+      message.status === "running" ||
+      message.status === "queued" ||
+      message.acpPermission?.status === "waiting",
+  ) || awaitingFirstReply(data)
+    ? 1_500
+    : false;
 }
 
 /**
