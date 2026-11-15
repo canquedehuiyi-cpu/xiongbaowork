@@ -1,20 +1,14 @@
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { Link, useLocation } from "@tanstack/react-router";
+import { Fragment, useEffect, useState } from "react";
 import {
   connectsPerPerson,
   textMatch,
 } from "@/components/resources/capability-tabs";
 import {
-  RunnableBadge,
-  runnableGrade,
-} from "@/components/resources/runnable-badge";
-import { SkillViewLink } from "@/components/skills/skill-view";
-import {
   ConnectorCard,
   type ConnectorState,
 } from "@/components/resources/connector-card";
-import { TeamCard } from "@/components/resources/team-card";
 import {
   CardGrid,
   NoMatch,
@@ -24,13 +18,19 @@ import {
   TabHeader,
   TabSearch,
 } from "@/components/resources/resource-kit";
+import {
+  RunnableBadge,
+  runnableGrade,
+} from "@/components/resources/runnable-badge";
+import { TeamCard } from "@/components/resources/team-card";
+import { SkillViewLink } from "@/components/skills/skill-view";
 import { Button } from "@/components/ui/button";
 import {
   appKeyOf,
   connectionsQueryOptions,
+  type PluginServer,
   personalConnections,
   pluginsPageQueryOptions,
-  type PluginServer,
 } from "@/lib/plugins/queries";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,11 @@ import { cn } from "@/lib/utils";
  *
  * 团队块的卡片带一条进去的入口（`/channel/$channelId`，多员工的团由那条路由转给群聊）：这一页是
  * 「我被给了什么」的清单，列表里的每一样都该能从这里走到去用它。
+ *
+ * 页首那一行原先只是把三块念一遍，念完还是得自己滚：109 条技能铺满第一屏，团队和连接器在三十张卡
+ * 之外，三块里只有一块够得到。现在每一样都是它那一块的锚点（`#mine-teams`、`#mine-connectors`），
+ * 点一下落过去、焦点也交过去——否则跳完按 Tab 还留在页首。同一行仍是一句话，读屏听的是三个链接
+ * 而不是三段被拆散的碎片。
  */
 
 /**
@@ -111,6 +116,24 @@ const REASON_FOLD = 60;
  */
 const BATCH = 30;
 
+/**
+ * 三块各自的锚点 id。section 用它接住页首那一行的跳转，`SectionHead` 用 `<id>-head` 接
+ * `aria-labelledby`——两件事，两个 id。
+ */
+const SKILLS_ID = "mine-skills";
+const TEAMS_ID = "mine-teams";
+const CONNECTORS_ID = "mine-connectors";
+
+/** 落到哪一块之后那块亮多久：够看见，不够等到让人以为它一直在那儿。 */
+const LIT_MS = 1200;
+
+/**
+ * 一块亮了就描一圈。描边是 `ring`（不占位置），所以亮与不亮之间版面不动——否则跳过去的一瞬间
+ * 整块会挪一下，人刚被送到这里就被推走。
+ */
+const LIT_RING =
+  "ring-1 ring-foreground/15 ring-offset-4 ring-offset-background";
+
 export function MineScreen() {
   const page = useQuery(pluginsPageQueryOptions());
 
@@ -133,6 +156,28 @@ export function MineScreen() {
   const [openReasons, setOpenReasons] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+
+  /*
+   * 页首那一行点下去落在哪一块。浏览器自己会把 `#mine-teams` 滚到位，但它不会把焦点交出去：键盘
+   * 用户跳过去之后按 Tab 还是从页首那个链接接着走。所以这里补上半步——滚到位，再把焦点放到那块
+   * 上（section 带 `tabIndex={-1}` 就为这一刻）。`hash` 在没有跳转时是空串，什么都不做。
+   *
+   * 焦点落在一块内容上本来是看不见的（下面把默认那个大框关掉了），所以落过去之后让那块亮一下再
+   * 熄掉：人是被一句话送到这里的，得知道落的是哪一截。人才市场的「去人才市场」用同一个做法。
+   */
+  const hash = useLocation({ select: (location) => location.hash });
+  const [lit, setLit] = useState<string | null>(null);
+  useEffect(() => {
+    const id = hash.replace(/^#/, "");
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView?.({ block: "start" });
+    target.focus({ preventScroll: true });
+    setLit(id);
+    const done = setTimeout(() => setLit(null), LIT_MS);
+    return () => clearTimeout(done);
+  }, [hash]);
 
   const counts = { full: 0, degraded: 0, blocked: 0, unevaluated: 0 };
   for (const skill of skills) {
@@ -268,6 +313,9 @@ export function MineScreen() {
    *
    * 只说有的那几样：「0 支团队」是三块的空态已经在回答的事，再说一遍是噪音。待连接的数只在每个连接器
    * 都答得上来时才写——有一次读不到，写「0 个待连接」就是替人断言没连，那正是 4d 修掉的那个错。
+   *
+   * 每一样都是它那一块的入口：技能一多，团队和连接器就在三十张卡下面，而这一行是整页唯一同时提到
+   * 三块的地方。没被给的那块没有入口——点下去只会落在「还没有被给的」上。
    */
   const pendingCount =
     connectors.length > 0 &&
@@ -276,15 +324,19 @@ export function MineScreen() {
     )
       ? pendingConnectors.length
       : null;
-  const overview: string[] = [];
-  if (skills.length > 0) overview.push(`${skills.length} 条技能`);
-  if (teams.length > 0) overview.push(`${teams.length} 支团队`);
+  const overview: { label: string; note?: string; target: string }[] = [];
+  if (skills.length > 0) {
+    overview.push({ label: `${skills.length} 条技能`, target: SKILLS_ID });
+  }
+  if (teams.length > 0) {
+    overview.push({ label: `${teams.length} 支团队`, target: TEAMS_ID });
+  }
   if (servers.length > 0) {
-    overview.push(
-      pendingCount
-        ? `${servers.length} 个连接器（${pendingCount} 个待连接）`
-        : `${servers.length} 个连接器`,
-    );
+    overview.push({
+      label: `${servers.length} 个连接器`,
+      note: pendingCount ? `（${pendingCount} 个待连接）` : undefined,
+      target: CONNECTORS_ID,
+    });
   }
 
   return (
@@ -303,12 +355,35 @@ export function MineScreen() {
       />
 
       {overview.length > 0 ? (
-        <p className="mt-[14px] text-[12px] text-muted-foreground">
-          {overview.join(" · ")}
-        </p>
+        <nav
+          aria-label="跳到这一页的各块"
+          className="mt-[14px] text-[12px] text-muted-foreground"
+        >
+          {overview.map((entry, index) => (
+            <Fragment key={entry.target}>
+              {index > 0 ? " · " : null}
+              <a
+                className="underline-offset-2 hover:text-foreground hover:underline"
+                href={`#${entry.target}`}
+              >
+                {entry.label}
+              </a>
+              {entry.note}
+            </Fragment>
+          ))}
+        </nav>
       ) : null}
 
-      <section aria-labelledby="mine-skills-head" className="mt-[16px]">
+      <section
+        aria-labelledby="mine-skills-head"
+        className={cn(
+          "mt-[16px] scroll-mt-[12px] rounded-[13px] outline-none transition-shadow",
+          lit === SKILLS_ID && LIT_RING,
+        )}
+        data-lit={lit === SKILLS_ID ? "true" : undefined}
+        id={SKILLS_ID}
+        tabIndex={-1}
+      >
         <SectionHead
           aside={
             skills.length > 0 ? (
@@ -446,7 +521,16 @@ export function MineScreen() {
         </QueryState>
       </section>
 
-      <section aria-labelledby="mine-teams-head" className="mt-[16px]">
+      <section
+        aria-labelledby="mine-teams-head"
+        className={cn(
+          "mt-[16px] scroll-mt-[12px] rounded-[13px] outline-none transition-shadow",
+          lit === TEAMS_ID && LIT_RING,
+        )}
+        data-lit={lit === TEAMS_ID ? "true" : undefined}
+        id={TEAMS_ID}
+        tabIndex={-1}
+      >
         <SectionHead id="mine-teams-head" title="团队" />
         <QueryState label="读不到你的团队" query={page}>
           {teams.length === 0 ? (
@@ -466,7 +550,16 @@ export function MineScreen() {
         </QueryState>
       </section>
 
-      <section aria-labelledby="mine-connectors-head" className="mt-[16px]">
+      <section
+        aria-labelledby="mine-connectors-head"
+        className={cn(
+          "mt-[16px] scroll-mt-[12px] rounded-[13px] outline-none transition-shadow",
+          lit === CONNECTORS_ID && LIT_RING,
+        )}
+        data-lit={lit === CONNECTORS_ID ? "true" : undefined}
+        id={CONNECTORS_ID}
+        tabIndex={-1}
+      >
         <SectionHead
           aside={
             canPickPending ? (
