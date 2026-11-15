@@ -34,7 +34,7 @@ import { taskArchives } from "../db/schema/task-archives";
 import { CardTurnRefused, type CardTurns } from "./card-turns";
 import { createDelivery, type Delivery, stageOf } from "./delivery";
 import { DEFAULT_TIME_ZONE, DELIVERY_EVENTS } from "./delivery-tools";
-import { dueRefusalText, readDueTime } from "./due-time";
+import { clockOf, dueRefusalText, readDueTime } from "./due-time";
 import { listTaskEvents } from "./events";
 import type { TaskProjector } from "./projector";
 
@@ -344,26 +344,7 @@ const editBody = z
   })
   .refine((body) => body.dueAt !== undefined || body.criteria !== undefined);
 
-/** A due time as the person reads it: 「15:30」 today, 「11月16日 15:30」 on another day. */
-export function clockOf(at: Date, now: Date, timeZone: string): string {
-  const day = (instant: Date) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone }).format(instant);
-  const time = new Intl.DateTimeFormat("zh-CN", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(at);
-  if (day(at) === day(now)) return time;
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    month: "numeric",
-    day: "numeric",
-  }).formatToParts(at);
-  const part = (type: string) =>
-    parts.find((piece) => piece.type === type)?.value ?? "";
-  return `${part("month")}月${part("day")}日 ${time}`;
-}
+export { clockOf };
 
 /** What the followed-card routes need beyond the board: the card's conversation, and the person's rules. */
 export type TaskRouteOptions = {

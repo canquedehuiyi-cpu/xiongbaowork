@@ -80,13 +80,34 @@ export type SidebarGoalStatus =
   | "failed"
   | "cancelled";
 
-/** 目标：最近一张任务卡；没有卡时为 null。 */
+/**
+ * 在跟的活（交付闭环）走到了三步里的哪一步：派出 · 待接下、已接下、已交成果、已验收；不在跟的卡为 null。
+ * 与看板的 `stage` 同一个推法。
+ */
+export type SidebarGoalStage =
+  | "pending_accept"
+  | "accepted"
+  | "delivered"
+  | "reviewed";
+
+/** 目标：这个对话里未结束的在跟卡，没有时取最近一张任务卡；没有卡时为 null。 */
 export type SidebarGoal = {
   title: string;
   status: SidebarGoalStatus;
+  /** 在跟的活走到哪一步；不在跟为 null。 */
+  stage: SidebarGoalStage | null;
+  /** 当前生效的预计交付时间（ISO）；没有时为 null。 */
+  dueAt: string | null;
+  /** 是否记过逾期（`overdue_at` 有值）。 */
+  overdue: boolean;
+  /** 退回过几次。 */
+  returns: number;
   /** 这个对话跑过几轮（`thread_runs` 计数）。 */
   rounds: number;
-  /** 状态一句话，加员工最近一条回复的第一句（截 60 字）。 */
+  /**
+   * 在跟的卡：最近一条流水的一句话（如「退回：缺 C 家」「已交成果，等你验收」）；不在跟的卡：状态一句话，
+   * 加员工最近一条回复的第一句（截 60 字）。
+   */
   lastCheck: string;
   /** 这个对话（群组里是查看者自己的线程）里最新一个还挂着的审批；没有时为 null。 */
   pendingApprovalId: string | null;

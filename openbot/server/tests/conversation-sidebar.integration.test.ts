@@ -40,6 +40,7 @@ import {
   type MeteredBinding,
   sha256Hex,
 } from "../src/models/token-metering";
+import { appendTaskEvent, type TaskEventKind } from "../src/tasks/events";
 import { runAsTenant } from "../src/tenant/context";
 import {
   createConversationSidebar,
@@ -507,6 +508,10 @@ describe("conversation sidebar", () => {
       rounds: 3,
       lastCheck: "等你确认 · 我已经整理好了三张发票。",
       pendingApprovalId: approvalId,
+      stage: null,
+      dueAt: null,
+      overdue: false,
+      returns: 0,
     });
     expect(body.context.usage?.used).toBe(32_000);
     expect(body.context.usage?.limit).toBe(128_000);
@@ -779,6 +784,10 @@ describe("conversation sidebar", () => {
       rounds: 1,
       lastCheck: "进行中 · 初稿写好了！",
       pendingApprovalId: null,
+      stage: null,
+      dueAt: null,
+      overdue: false,
+      returns: 0,
     });
 
     // 点名字看明细：查看者自己和写手那条线程。
@@ -970,6 +979,105 @@ describe("conversation sidebar", () => {
       meteringTenants: async (asked) => new Map(asked.map((id) => [id, owner])),
     }).thread(threadId);
     expect(outsider.status).toBe(404);
+  });
+
+  test("sidebar goal prefers the open tracked card and reports stage", async () => {
+    const viewer = await person();
+    const agentId = await employee(viewer, "对账员工");
+    const { threadId } = await directChat(viewer, agentId);
+    const due = new Date(Date.now() + 3600_000);
+    const [followed] = await runAsTenant(viewer, () =>
+      database
+        .insert(tasks)
+        .values({
+          title: "核对三家发票",
+          source: "chat",
+          status: "running",
+          channelRef: threadId,
+          executorAgentId: agentId,
+          tracked: true,
+          threadRef: threadId,
+          acceptedAt: new Date(Date.now() - 3600_000),
+          dueAt: due,
+          originalDueAt: due,
+          dueReported: true,
+          overdueAt: new Date(),
+          returns: 1,
+          updatedAt: tick(),
+        })
+        .returning({ id: tasks.id }),
+    );
+    const taskId = followed?.id as string;
+    const line = (kind: TaskEventKind, detail: Record<string, unknown> = {}) =>
+      runAsTenant(viewer, () =>
+        appendTaskEvent(database, {
+          tenantId: viewer,
+          taskId,
+          kind,
+          actor: "system",
+          detail,
+        }),
+      );
+    await line("accepted", { dueAt: due.toISOString() });
+    await line("progress", { text: "开始核对。" });
+    await line("run_ended");
+    await line("returned", { reason: "缺 C 家" });
+    await line("run_ended");
+    // A newer card in the same conversation, nobody's followed work: an unrelated question.
+    await card(viewer, {
+      title: "随口问一句",
+      channelRef: threadId,
+      status: "awaiting_review",
+      executorAgentId: agentId,
+    });
+
+    const first = await routesFor(viewer).thread(threadId);
+    expect(first.status).toBe(200);
+    expect(first.body.goal).toMatchObject({
+      title: "核对三家发票",
+      status: "running",
+      stage: "accepted",
+      dueAt: due.toISOString(),
+      overdue: true,
+      returns: 1,
+      // The newest line that says something; a round's bare end does not.
+      lastCheck: "退回：缺 C 家",
+    });
+
+    // Handed in: the stage moves, and so does the line.
+    await runAsTenant(viewer, () =>
+      database
+        .update(tasks)
+        .set({ status: "awaiting_review" })
+        .where(inArray(tasks.id, [taskId])),
+    );
+    await line("delivered", { deliverable: { kind: "deliverable" } });
+    const handed = await routesFor(viewer).thread(threadId);
+    expect(handed.body.goal).toMatchObject({
+      title: "核对三家发票",
+      stage: "delivered",
+      lastCheck: "已交成果，等你验收",
+    });
+
+    // Over (cancelled): the goal is the newest card again, nobody's followed work. Cards here
+    // carry the suite clock's `updatedAt` (`tick()`), not the wall clock, so the cancelled one is
+    // put before that clock to stay the older card.
+    await runAsTenant(viewer, () =>
+      database
+        .update(tasks)
+        .set({ status: "cancelled", updatedAt: new Date(clock - 3600_000) })
+        .where(inArray(tasks.id, [taskId])),
+    );
+    const over = await routesFor(viewer).thread(threadId);
+    expect(over.body.goal).toMatchObject({
+      title: "随口问一句",
+      status: "awaiting_review",
+      stage: null,
+      dueAt: null,
+      overdue: false,
+      returns: 0,
+      lastCheck: "已完成，待查收",
+    });
   });
 
   test("a pending approval on an older card still shows when the newest card is running", async () => {
