@@ -25,7 +25,10 @@ import {
 import { isExternalEmployee } from "../src/agents/acp/external";
 import { createAcpRelay } from "../src/agents/acp/relay";
 import { type AcpTurnRow, createAcpTurnStore } from "../src/agents/acp/turns";
-import { configureBotLifecycle } from "../src/agents/lifecycle";
+import {
+  configureBotLifecycle,
+  resetBotLifecycleForTests,
+} from "../src/agents/lifecycle";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createDatabase } from "../src/db/client";
 import {
@@ -110,6 +113,8 @@ async function until(
 }
 
 afterAll(async () => {
+  // The pause switch reads this file's database, which closes below: later suites must not inherit it.
+  resetBotLifecycleForTests();
   for (const id of tenants) {
     await runAsTenant(id, async () => {
       await database.delete(acpTurns).where(eq(acpTurns.tenantId, id));
