@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AcpErrorCode,
   AcpHarness,
+  AcpInventoryFrame,
   AcpOpenFrame,
   AcpPermissionRequestFrame,
   AcpTurnEndFrame,
@@ -44,14 +45,17 @@ import { permissionFacts } from "./paths";
  * for minutes after a laptop slept or changed network, and what is sent on it then is lost, so a
  * sent frame is not taken as delivered: every frame of a turn not over yet is kept, sent or not,
  * and every `attach` replays all kept frames in the order they were made (the server drops repeats
- * by `(turnId, seq)`). Once a turn has ended, all its kept frames (its end included) stay until one
- * `attach` has replayed them, then the turn is forgotten; a frame of no turn (`acp.session`, an
- * open's `acp.error`) is kept the same way. On a connection that stays up for days the heartbeat
- * releases them instead: the runner tells the host when a beat went up (`heartbeatSent`) and when
- * the server acked one (`acked`, one ack per beat, in order), and since the socket is ordered, the
- * ack of a beat proves that every frame sent on this connection before that beat arrived; those of
- * ended turns and of no turn are then dropped. As a backstop, past `endedLimit` (100 ended turns or
- * 50 MB) the oldest ended turns are dropped first. Past `bufferLimit` updates or bytes for one turn, that turn's
+ * by `(turnId, seq)`). Before the replay, every `attach` sends `acp.inventory`: this process's
+ * random `instanceId`, every turn it remembers with its state, and the permission requests it waits
+ * on, so the server can reconcile (a new `instanceId` means the runner restarted). Once a turn has
+ * ended, all its kept frames (its end included) stay, and are replayed on every `attach`, until
+ * there is proof they arrived; a frame of no turn (`acp.session`, an open's `acp.error`) is kept the
+ * same way. A replay is not that proof (the socket it went on may already be dead). The heartbeat
+ * is: the runner tells the host when a beat went up (`heartbeatSent`) and when the server acked one
+ * (`acked`, one ack per beat, in order), and since the socket is ordered, the ack of a beat proves
+ * that every frame sent (or replayed, which re-stamps it) on this connection before that beat
+ * arrived; those of ended turns and of no turn are then dropped. As a backstop, past `endedLimit`
+ * (100 ended turns or 50 MB) the oldest ended turns are dropped first. Past `bufferLimit` updates or bytes for one turn, that turn's
  * kept updates are compacted to the latest plan and each tool call's last state (its `tool_call`
  * and updates merged into one); after that, updates of other kinds still go up live but are not
  * kept, and only a plan or tool-call update compacts again. Acks, ends, sessions and errors are
@@ -166,9 +170,9 @@ type Thread = {
 };
 
 /**
- * A frame kept for replay. `turn`: a frame of a turn not over yet, kept (sent or not) and replayed
- * on every attach. `once`: a frame of a turn that has ended (its end included), or of no turn;
- * kept until one attach has replayed it.
+ * A frame kept for replay, replayed on every attach. `turn`: a frame of a turn not over yet, kept
+ * (sent or not) until the turn ends. `once`: a frame of a turn that has ended (its end included), or
+ * of no turn; kept until a heartbeat's ack proves it arrived (or the ended-turn cap drops it).
  */
 type Entry = {
   frame: Frame;
@@ -208,6 +212,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const idleMs = deps.idleMs ?? IDLE_MS;
   const limit = deps.bufferLimit ?? ACP_BUFFER_LIMIT;
   const endedLimit = deps.endedLimit ?? ACP_ENDED_LIMIT;
+  /** Random per runner process: a new one tells the server every earlier turn is gone. */
+  const instanceId = randomUUID();
 
   const procs = new Map<string, Proc>();
   const threads = new Map<string, Thread>();
@@ -250,7 +256,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
 
   /**
    * Kept, so the next attach replays it whether or not this send got through. A turn's end turns
-   * all its kept frames into `once`: the next attach replays the whole turn, then forgets it.
+   * all its kept frames into `once`: replayed whole on every attach until a beat's ack lets it go.
    */
   function emit(frame: Frame, turnId: string | null = null) {
     const isEnd = frame.type === "acp.turn.end";
@@ -718,6 +724,29 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
   }
 
+  /** `acp.inventory`: this process, every turn it remembers, and the requests it waits on. */
+  function inventory(): AcpInventoryFrame {
+    const awaiting = new Set(
+      [...pending.values()].map(({ frame }) => frame.turnId),
+    );
+    return {
+      type: "acp.inventory",
+      instanceId,
+      turns: [...turns.values()].map((turn) => ({
+        agentId: turn.agentId,
+        threadId: turn.threadId,
+        turnId: turn.turnId,
+        state:
+          turn.state === "ended"
+            ? "ended"
+            : awaiting.has(turn.turnId)
+              ? "awaiting"
+              : "running",
+      })),
+      requestIds: [...pending.keys()],
+    };
+  }
+
   // --- frames from the server ---
 
   function onOpen(frame: Frame) {
@@ -870,20 +899,14 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     attach(sender) {
       send = sender;
       connection += 1;
+      // First what this process is and has, so the server can reconcile before the replay.
+      if (!trySend(inventory())) return;
       // Everything kept, in the order it was made: the server drops what it already has by seq.
-      const replayed = new Set<Entry>();
-      let through = true;
-      for (const entry of [...outbox]) {
-        if (!trySend(entry.frame)) {
-          through = false;
-          break;
-        }
+      // Nothing is let go for having been replayed: only a beat's ack (or the cap) does that.
+      for (const entry of outbox) {
+        if (!trySend(entry.frame)) return;
         stamp(entry);
-        if (entry.kind === "once") replayed.add(entry);
       }
-      // Ended turns and frames of no turn have now been replayed once.
-      if (replayed.size > 0) drop((entry) => replayed.has(entry));
-      if (!through) return;
       for (const { frame } of pending.values()) {
         if (!trySend(frame)) return;
       }

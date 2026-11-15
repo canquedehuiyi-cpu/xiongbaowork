@@ -298,11 +298,20 @@ test("updates sent while detached are replayed in order on attach", async () => 
   ]);
   expect(ofType(t.frames.slice(before), "acp.session")).toHaveLength(1);
 
-  // The ended turn was replayed once: the next attach sends nothing.
+  // Replayed is not delivered: the next attach replays it again, until a beat's ack proves it.
   t.host.detach();
-  const mark = t.frames.length;
+  let mark = t.frames.length;
   t.host.attach(t.send);
-  expect(t.frames.slice(mark)).toEqual([]);
+  expect(ended(t.frames.slice(mark), "turn_1")).toBe(true);
+  t.host.heartbeatSent();
+  t.host.acked();
+  t.host.detach();
+  mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(ofType(t.frames.slice(mark), "acp.inventory")).toHaveLength(1);
+  expect(
+    t.frames.slice(mark).filter((f) => f.type !== "acp.inventory"),
+  ).toEqual([]);
 });
 
 test("a send that throws keeps the frame for the next attach", async () => {
@@ -756,8 +765,8 @@ test("frames sent on a socket that silently drops are replayed on the next attac
   expect(
     ofTurn(t.frames.slice(mark), "turn_1").map((frame) => frame.seq),
   ).toEqual([undefined, 1, 2]);
-  // The session went up on the attach before: not again.
-  expect(ofType(t.frames.slice(mark), "acp.session")).toHaveLength(0);
+  // The session frame too: nothing proved the attach before delivered it.
+  expect(ofType(t.frames.slice(mark), "acp.session")).toHaveLength(1);
 
   // The turn ends on a socket that swallows its last update and its end.
   t.host.detach();
@@ -792,7 +801,9 @@ test("frames sent on a socket that silently drops are replayed on the next attac
     stopReason: "cancelled",
     interrupted: false,
   });
-  // Replayed once: the next attach leaves the ended turn alone.
+  // Kept until a beat sent after the replay is acked; then the next attach leaves it alone.
+  t.host.heartbeatSent();
+  t.host.acked();
   t.host.detach();
   mark = t.frames.length;
   t.host.attach(t.send);
@@ -824,10 +835,21 @@ test("a frame arriving after a turn's end is neither sent nor kept", async () =>
     ["acp.update", 1],
     ["acp.turn.end", undefined],
   ]);
+  // Replayed again, still without the late updates, until a beat's ack lets the turn go.
   t.host.detach();
   mark = t.frames.length;
   t.host.attach(t.send);
-  expect(t.frames.slice(mark)).toEqual([]);
+  expect(ofType(ofTurn(t.frames.slice(mark), "turn_1"), "acp.update")).toEqual([
+    expect.objectContaining({ seq: 1 }),
+  ]);
+  t.host.heartbeatSent();
+  t.host.acked();
+  t.host.detach();
+  mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(
+    t.frames.slice(mark).filter((f) => f.type !== "acp.inventory"),
+  ).toEqual([]);
 });
 
 test("past the limit, text updates are dropped without compacting again", async () => {
@@ -961,7 +983,9 @@ test("a repeated prompt for a turn whose end is still kept adds no second end", 
   t.host.attach(t.send);
   expect(ofType(ofTurn(t.frames, "turn_1"), "acp.turn.end")).toHaveLength(1);
 
-  // Once the kept end is gone, a repeat keeps one new end, not one per repeat.
+  // Once the kept end is gone (a beat's ack), a repeat keeps one new end, not one per repeat.
+  t.host.heartbeatSent();
+  t.host.acked();
   for (let i = 0; i < 5; i++) await t.host.handle(prompt("th_1", "turn_1"));
   const mark = t.frames.length;
   t.host.detach();
@@ -1040,7 +1064,9 @@ test("an ack for a heartbeat sent after a turn's end releases the turn", async (
   const mark = t.frames.length;
   t.host.attach(t.send);
   // The turn and the session frame were both sent before the beat: nothing to replay.
-  expect(t.frames.slice(mark)).toEqual([]);
+  expect(
+    t.frames.slice(mark).filter((f) => f.type !== "acp.inventory"),
+  ).toEqual([]);
 });
 
 test("an ack for a heartbeat sent before a turn's end keeps the turn", async () => {
@@ -1084,7 +1110,15 @@ test("an ack releases only frames sent before its own beat on this connection", 
   t.host.acked();
   t.host.detach();
   t.host.attach(t.send);
+  // Everything went up after that beat (the replay and the live frame): nothing was let go.
   expect(ofType(t.frames, "acp.session")).toEqual([
+    {
+      type: "acp.session",
+      agentId: "agent_1",
+      threadId: "th_1",
+      sessionId: "sess_1",
+      loaded: false,
+    },
     {
       type: "acp.session",
       agentId: "agent_1",
@@ -1093,6 +1127,7 @@ test("an ack releases only frames sent before its own beat on this connection", 
       loaded: true,
     },
   ]);
+  expect(ended(t.frames, "turn_1")).toBe(true);
 });
 
 test("past the cap on ended turns the oldest are dropped first", async () => {
@@ -1220,4 +1255,122 @@ test("a down frame without an agentId is dropped", async () => {
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(t.frames.slice(before)).toEqual([]);
   expect(t.spawns).toHaveLength(1);
+});
+
+test("an ended turn replayed on a socket that silently dies is replayed again, until a beat's ack", async () => {
+  const t = setup({ turns: [{ steps: [{ update: chunk("x") }] }] });
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => t.settled() === 1);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  // Reconnected, the whole ended turn is replayed into a socket that is already gone.
+  const lost: Frame[] = [];
+  t.host.attach((frame) => lost.push(frame));
+  expect(ended(lost, "turn_1")).toBe(true);
+  t.host.detach();
+  // The next connection gets it again: nothing proved the first replay arrived.
+  let mark = t.frames.length;
+  t.host.attach(t.send);
+  const again = t.frames.slice(mark);
+  expect(ofTurn(again, "turn_1").map((f) => [f.type, f.seq])).toEqual([
+    ["acp.turn.ack", undefined],
+    ["acp.update", 1],
+    ["acp.turn.end", undefined],
+  ]);
+  expect(ofType(again, "acp.session")).toHaveLength(1);
+  // A beat after the replay, acked: now it has arrived and is let go.
+  t.host.heartbeatSent();
+  t.host.acked();
+  t.host.detach();
+  mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(
+    t.frames.slice(mark).filter((f) => f.type !== "acp.inventory"),
+  ).toEqual([]);
+});
+
+test("every attach sends the inventory first: this process, its turns and waiting requests", async () => {
+  // agent_1's process ends one turn, then asks; agent_2's runs until cancelled.
+  const t = setup((spawn) =>
+    spawn === 1
+      ? {
+          turns: [
+            { steps: [{ update: chunk("done") }] },
+            {
+              steps: [
+                {
+                  permission: {
+                    toolCall: {
+                      toolCallId: "call_1",
+                      kind: "edit",
+                      title: "Edit",
+                    },
+                    options: [
+                      {
+                        optionId: "opt-allow",
+                        name: "Allow",
+                        kind: "allow_once",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }
+      : { turns: [{ steps: [{ waitForCancel: true }] }] },
+  );
+  t.host.attach(t.send);
+  expect(t.frames[0]).toEqual({
+    type: "acp.inventory",
+    instanceId: expect.any(String),
+    turns: [],
+    requestIds: [],
+  });
+  const instanceId = t.frames[0]?.instanceId;
+  await t.host.handle(open("th_1"));
+  await t.host.handle(open("th_2", { agentId: "agent_2" }));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  await t.host.handle(prompt("th_1", "turn_2"));
+  await waitFor(() => ofType(t.frames, "acp.permission.request").length === 1);
+  await t.host.handle(prompt("th_2", "turn_3", "agent_2"));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 2);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const requestId = ofType(t.frames, "acp.permission.request")[0]?.requestId;
+
+  t.host.detach();
+  const mark = t.frames.length;
+  t.host.attach(t.send);
+  const after = t.frames.slice(mark);
+  expect(after[0]).toEqual({
+    type: "acp.inventory",
+    instanceId,
+    turns: [
+      {
+        agentId: "agent_1",
+        threadId: "th_1",
+        turnId: "turn_1",
+        state: "ended",
+      },
+      {
+        agentId: "agent_1",
+        threadId: "th_1",
+        turnId: "turn_2",
+        state: "awaiting",
+      },
+      {
+        agentId: "agent_2",
+        threadId: "th_2",
+        turnId: "turn_3",
+        state: "running",
+      },
+    ],
+    requestIds: [requestId],
+  });
+  expect(ofType(after, "acp.inventory")).toHaveLength(1);
+  // A new runner process is a new instance.
+  const other = setup({});
+  other.host.attach(other.send);
+  expect(other.frames[0]?.instanceId).not.toBe(instanceId);
 });

@@ -100,8 +100,9 @@ export type AcpTurnAckFrame = {
 
 /**
  * Device → server: one `session/update` of a turn, as the agent sent it. `seq` counts from 1 per
- * turn. The device keeps every frame of a turn that is not over and sends them all again, in order,
- * each time it reconnects, so the same `(turnId, seq)` can arrive more than once: drop repeats.
+ * turn. The device keeps every frame of a turn, and of an ended turn until a heartbeat's ack proves
+ * it arrived, and sends them all again, in order, each time it reconnects, so the same
+ * `(turnId, seq)` (and the same `acp.turn.end`) can arrive more than once: drop repeats.
  * Past 1000 updates or 5 MB a turn keeps only the latest plan and each tool call's last state, so
  * `seq` may then skip.
  */
@@ -194,7 +195,30 @@ export type AcpErrorFrame = {
   message: string;
 };
 
+/** A turn as `acp.inventory` reports it. `awaiting`: running, and waiting for a permission answer. */
+export type AcpInventoryTurn = {
+  agentId: string;
+  threadId: string;
+  turnId: string;
+  state: "running" | "awaiting" | "ended";
+};
+
+/**
+ * Device → server: the first frame of every connection, before anything is replayed, so the server
+ * can reconcile. `instanceId` is random per runner process: a new one means the runner restarted,
+ * and every turn the server thought was running on the old one is gone (it will not end by itself).
+ * `turns`: every turn this process still remembers (a queued turn reads `running`); `requestIds`:
+ * the permission requests it still waits on (each is sent again right after the replay).
+ */
+export type AcpInventoryFrame = {
+  type: "acp.inventory";
+  instanceId: string;
+  turns: AcpInventoryTurn[];
+  requestIds: string[];
+};
+
 export type AcpUpFrame =
+  | AcpInventoryFrame
   | AcpTurnAckFrame
   | AcpUpdateFrame
   | AcpPermissionRequestFrame
