@@ -33,8 +33,8 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
-import { createTeamBots } from "../src/team-bots/team-bots";
 import { createTaskProjector } from "../src/tasks/projector";
+import { createTeamBots } from "../src/team-bots/team-bots";
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -659,6 +659,58 @@ describe("group conversations in PostgreSQL", () => {
         }),
       ).toBe(false);
     });
+  });
+
+  test("自动压缩的结果记在回复上，只告诉发起的人", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: "xiongbao.compaction.failed",
+            value: { auto: true },
+          });
+          return "a";
+        },
+        [grace]: (input) => {
+          input.onCustom?.({
+            name: "xiongbao.compaction.done",
+            value: { auto: true, compactionId: "c1" },
+          });
+          return "g";
+        },
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-compaction`,
+        text: "go",
+      });
+      await drain(conversations);
+    });
+    const mine = await as(owner, () =>
+      conversations.list(owner.id, channel.id),
+    );
+    expect(
+      mine.messages.map((row) => [row.agentId, row.compaction ?? null]),
+    ).toEqual([
+      [null, null],
+      [ada, { outcome: "failed" }],
+      [grace, { outcome: "done" }],
+    ]);
+    const theirs = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(theirs.messages.some((row) => "compaction" in row)).toBe(false);
   });
 
   test("a member can add another signed-in person, who then reads the shared transcript", async () => {

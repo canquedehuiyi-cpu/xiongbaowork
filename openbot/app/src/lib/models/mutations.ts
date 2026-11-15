@@ -75,6 +75,22 @@ export function setModelEnabledMutationOptions(queryClient: QueryClient) {
   });
 }
 
+/** 改模型的上下文长度（token）；null 是不知道。 */
+export function setModelContextWindowMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: (variables: {
+      id: string;
+      contextWindow: number | null;
+    }): Promise<ConnectedModel> =>
+      client(`/api/models/${variables.id}`, "model", {
+        method: "PATCH",
+        body: { contextWindow: variables.contextWindow },
+        fallback: "无法保存上下文长度。",
+      }),
+    onSuccess: () => refresh(queryClient),
+  });
+}
+
 export function deleteModelMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: async (id: string): Promise<void> => {

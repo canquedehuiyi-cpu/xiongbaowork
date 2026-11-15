@@ -5201,6 +5201,11 @@ await startupLifecycle.run(async (startup) => {
       contextWindowFor: (provider, modelName, baseUrl) =>
         modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
       meteringTenants: (agentIds) => meteringTenantsFor(database, agentIds),
+      // 「压缩会话」的预估数字数，读的和压缩同一个线程存储。
+      loadMessages: async (threadId) => {
+        await localThreadRunner.hydrate();
+        return localThreadRunner.getThreadMessages(threadId);
+      },
       ...(config.tenantRuntime === "device"
         ? {
             // Read only: where each Bot's actions would go, without making a pick (`peek`).

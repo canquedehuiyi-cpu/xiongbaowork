@@ -23,6 +23,10 @@ export type GroupMessage = {
   answeredBy?: string;
   /** A Team Bot asking the person whose turn it was to use their own account. */
   consent?: { botId: string; serverId: string };
+  /**
+   * 这一轮开始前，这位员工在你和它那条线程上的上下文自动压缩了（`done`）或没压成（`failed`）。只给发起的人。
+   */
+  compaction?: { outcome: "done" | "failed" };
 };
 export type GroupPerson = {
   userId: string;
