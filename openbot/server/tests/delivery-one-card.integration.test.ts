@@ -1541,6 +1541,122 @@ describe("group", () => {
       ).toBeNull();
     });
   });
+
+  test("group: a round that cannot be hung on the followed card says so and runs on a card of its own", async () => {
+    const ownerId = await tenant("group-hang");
+    const owner: AgentActor = { id: ownerId, role: "user" };
+    await runAsTenant(ownerId, async () => {
+      const make = async (name: string) => {
+        const profile = await profileStore.create(owner, {
+          name,
+          title: "Tester",
+          roleDescription: "Answer briefly.",
+          visibility: "private",
+        });
+        createdAgents.push(profile.id);
+        return profile.id;
+      };
+      const ada = await make("Ada");
+      const grace = await make("Grace");
+      const channel = await channelStore.create(owner, [ada, grace]);
+      createdChannels.push(channel.id);
+      const calls: Parameters<TurnRunner>[0][] = [];
+      let breakLookup = false;
+      let breakAttach = false;
+      const conversations = createGroupConversations({
+        store: createGroupStore(database, () => threadIdentity.mint()),
+        queue: createWorkQueue(database),
+        owner: `${prefix}-hang-replica`,
+        roster: async () => [
+          { id: ada, name: "Ada" },
+          { id: grace, name: "Grace" },
+        ],
+        runTurn: async (input) => {
+          calls.push(input);
+          return { replyText: "在做。" };
+        },
+        caps: { maxDepth: 0, maxPerRun: 2 },
+        mayAddress: async () => false,
+        auditStore: { insert: async () => undefined },
+        progressEveryMs: 0,
+        board: parkingBoard,
+        delivery: {
+          ...delivery,
+          openTrackedCard: (...args) =>
+            breakLookup
+              ? Promise.reject(new Error("在跟卡查不出来"))
+              : delivery.openTrackedCard(...args),
+          attachRun: (...args) =>
+            breakAttach
+              ? Promise.reject(new Error("挂不上卡"))
+              : delivery.attachRun(...args),
+        },
+      });
+      const drain = async () => {
+        for (let i = 0; i < 10 && (await conversations.sweep()); i++) {}
+      };
+      // Ada's card, followed on her group thread with this person.
+      await conversations.send(ownerId, channel.id, {
+        id: `${prefix}-h1`,
+        text: "@Ada 核对三家供应商的发票",
+      });
+      await drain();
+      const [adaCard] = await cardsOf(ownerId, eq(tasks.executorAgentId, ada));
+      if (!adaCard) throw new Error("no card for Ada");
+      await delivery.markTracked(ownerId, adaCard.id, `user:${ownerId}`);
+
+      const logged: string[] = [];
+      const quiet = spyOn(console, "error").mockImplementation(
+        (line: unknown) => {
+          logged.push(String(line));
+        },
+      );
+      try {
+        breakAttach = true;
+        await conversations.send(ownerId, channel.id, {
+          id: `${prefix}-h2`,
+          text: "@Ada 进度怎么样？",
+        });
+        await drain();
+        breakAttach = false;
+        breakLookup = true;
+        await conversations.send(ownerId, channel.id, {
+          id: `${prefix}-h3`,
+          text: "@Ada 还差几家？",
+        });
+        await drain();
+      } finally {
+        quiet.mockRestore();
+        breakAttach = false;
+        breakLookup = false;
+      }
+      const types = logged.map(
+        (line) => (JSON.parse(line) as { type?: string }).type,
+      );
+      expect(types).toContain("group-turn-attach-failed");
+      expect(types).toContain("group-turn-tracked-card-lookup-failed");
+
+      // Neither round claimed the followed card: each was filed on a card of its own, under its run.
+      const [attachFailed, lookupFailed] = calls.slice(-2);
+      expect(attachFailed).toBeDefined();
+      expect(lookupFailed).toBeDefined();
+      const cards = await cardsOf(ownerId, eq(tasks.executorAgentId, ada));
+      expect(cards).toHaveLength(3);
+      for (const round of [attachFailed, lookupFailed]) {
+        const own = cards.find((card) => card.runRef === round?.runId);
+        expect(own).toBeDefined();
+        expect(own?.tracked).toBe(false);
+        expect(round?.cardOwnedByCaller).toBe(true);
+      }
+      // The followed card is as it was: no round named on it, no line from either round.
+      const followed = cards.find((card) => card.id === adaCard.id);
+      expect(followed).toBeDefined();
+      expect(followed?.activeRunRef).toBeNull();
+      expect(
+        (await eventsOf(ownerId, adaCard.id)).map((line) => line.kind),
+      ).toEqual(["dispatched"]);
+    });
+  });
 });
 
 afterAll(async () => {

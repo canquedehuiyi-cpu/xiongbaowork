@@ -1474,16 +1474,43 @@ export function createGroupConversations(deps: {
      * and charges nothing (the runner is told the card is taken, as for any card the caller owns). A
      * peer's hop is the hand-off it is, with a card of its own, as the runner treats a hop.
      */
-    const followed =
+    /*
+     * A lookup or a hang that fails is said, and the round is then an ordinary one with its card
+     * (`openCard` below). Not hung is not hung: claiming the followed card without `active_run_ref`
+     * naming this run would leave an approval the round raises parking nothing and a `deliver_task`
+     * finding no card, silently. A card of its own keeps the round on the board and answerable; the
+     * person's message is still answered, which failing the round would not do for a fault of ours.
+     */
+    const trackedCardFault = (type: string, error: unknown) =>
+      console.error(
+        JSON.stringify({
+          type,
+          error: error instanceof Error ? error.message : String(error),
+          context: { channelId: turn.channelId, agentId, runId },
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    let followed =
       deps.board && deps.delivery && !turn.fromAgentId
         ? await deps.delivery
             .openTrackedCard(turn.ownerUserId, threadId, agentId, turn.taskId)
-            .catch(() => null)
+            .catch((error: unknown) => {
+              trackedCardFault("group-turn-tracked-card-lookup-failed", error);
+              return null;
+            })
         : null;
-    if (followed)
-      await deps.delivery
-        ?.attachRun(turn.ownerUserId, followed.id, runId)
-        .catch(() => undefined);
+    if (followed && deps.delivery) {
+      const hung = await deps.delivery
+        .attachRun(turn.ownerUserId, followed.id, runId)
+        .then(
+          () => true,
+          (error: unknown) => {
+            trackedCardFault("group-turn-attach-failed", error);
+            return false;
+          },
+        );
+      if (!hung) followed = null;
+    }
     const cardId = followed
       ? followed.id
       : await openCard(turn, agentId, runId);
