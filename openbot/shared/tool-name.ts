@@ -222,11 +222,64 @@ export function approvalPhrase(action: {
   target?: unknown;
   /** 这个人在该应用上的哪一个账号（他有多个时）：地点读作「Gmail 账号 dana@work.example」。 */
   account?: string;
+  /** 动作的效果（`share_private` 是「分享到群」检查）。 */
+  effect?: string;
 }): string {
+  const internal = internalPhrase(action);
+  if (internal) return internal;
   const { action: words, place, form } = approvalParts(action);
   if (form === "in") return `${words}（${inFolder(undefined, place)}）`;
   if (form === "follows") return `${words} ${place}`;
   return atPlace(words, place);
+}
+
+/** 外部员工（ACP）请求许可的动作，按 kind 说成中文。 */
+const ACP_APPROVAL_WORDS: Record<string, string> = {
+  read: "读文件",
+  edit: "改文件",
+  delete: "删除文件",
+  move: "移动文件",
+  search: "搜索",
+  execute: "运行命令",
+  fetch: "联网下载",
+  think: "想一想",
+  switch_mode: "切换工作模式",
+};
+
+/** 「分享到群」检查按要发到哪里说（`proactive/private-share.ts` 的 audience.kind）。 */
+const SHARE_PLACES: Record<string, string> = {
+  group: "把回答发到群里",
+  channel: "把回答发到频道里",
+  slack_channel: "把回答发到频道里",
+  handoff: "把回答转给别人",
+};
+
+/**
+ * 两种只有内部名字的审批，说成通俗中文，不带它们的 toolRef 和 scope：外部员工的 `acp/<kind>`（scope
+ * 是规则的内部键），和「分享到群」检查（按效果认，内部名字只认它的后半段）。卡片标题、Slack/Teams 卡片
+ * 和拒绝后的回复都从这里拿这句话，所以这些名字以前会原样出现在三处。
+ */
+function internalPhrase(action: {
+  toolRef: string;
+  target?: unknown;
+  effect?: string;
+}): string | null {
+  if (action.toolRef.startsWith("acp/"))
+    return ACP_APPROVAL_WORDS[action.toolRef.slice(4)] ?? "执行一个操作";
+  if (
+    action.effect === "share_private" ||
+    action.toolRef.endsWith("/share_private_information")
+  ) {
+    const kind =
+      action.target && typeof action.target === "object"
+        ? (action.target as { kind?: unknown }).kind
+        : undefined;
+    const where =
+      (typeof kind === "string" ? SHARE_PLACES[kind] : undefined) ??
+      "把回答发给别人";
+    return `${where}（可能含私人信息）`;
+  }
+  return null;
 }
 
 /**

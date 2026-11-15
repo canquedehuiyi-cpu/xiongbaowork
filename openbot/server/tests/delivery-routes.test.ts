@@ -975,6 +975,65 @@ for (const offerConversation of [true, false])
       offerConversation ? "已在这次对话里都允许" : "已允许这一次",
     );
   });
+for (const [name, action, phrase] of [
+  [
+    "an external employee's command",
+    {
+      toolRef: "acp/execute",
+      scope: "push+runCommand:git push origin main",
+      args: { command: "git push origin main" },
+    },
+    "运行命令",
+  ],
+  [
+    "an external employee's unknown kind",
+    { toolRef: "acp/other", scope: "other", args: {} },
+    "执行一个操作",
+  ],
+  [
+    "the share check",
+    {
+      toolRef: ["openbot", "share_private_information"].join("/"),
+      effect: "share_private",
+      scope: "group:g-1:members:abc",
+      args: { preview: "修好了" },
+      target: { kind: "group", id: "g-1" },
+    },
+    "把回答发到群里（可能含私人信息）",
+  ],
+] as const)
+  test(`${name} is named in plain words when denied in a chat app, never by its internal name`, async () => {
+    const f = fixture({
+      action,
+      converse: {
+        kind: "waiting",
+        binding: bound,
+        inboxId: "in1",
+        replyText: "",
+        extras: { approvals: [APPROVAL], questions: [] },
+      },
+    });
+    const asked = await run(f, {
+      context: [sender()],
+      messages: [{ id: "m9", role: "user", content: "<@UBOT> do it" }],
+    });
+    const denied = await run(f, {
+      forwardedProps: {
+        command: {
+          resume: {
+            "0f8fad5bd9cb469fa16570867728950e": {
+              confirmed: false,
+              by: "slack:T1:U1",
+            },
+          },
+        },
+      },
+    });
+    expect(said(denied.events)).toBe(`已拒绝。Research Bot 不会${phrase}。`);
+    expect(JSON.stringify([asked.events, denied.events])).not.toMatch(
+      /openbot|acp\/|share_private|group:g-1/i,
+    );
+  });
 test("SMS STOP and START record opt-out without a turn or a second reply", async () => {
   const f = fixture();
   const signedRequest = (params: URLSearchParams) => {
