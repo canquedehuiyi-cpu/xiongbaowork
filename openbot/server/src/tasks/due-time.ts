@@ -90,7 +90,13 @@ function offsetAt(instant: number, timeZone: string): number {
   return asUtc - Math.floor(instant / 1000) * 1000;
 }
 
-/** The instant a wall-clock time in a zone names (the day may overflow; `Date.UTC` carries it). */
+const DAY = 24 * 60 * MINUTE;
+
+/**
+ * The instant a wall-clock time in a zone names (the day and hour may overflow; `Date.UTC` carries
+ * them). A time the clocks skipped -- inside a daylight-saving jump -- is the first moment after the
+ * jump; a time they passed twice is the first of the two.
+ */
 function wallClock(
   timeZone: string,
   date: { year: number; month: number; day: number },
@@ -98,18 +104,32 @@ function wallClock(
   minute: number,
 ): Date {
   const asUtc = Date.UTC(date.year, date.month - 1, date.day, hour, minute);
-  let instant = asUtc - offsetAt(asUtc, timeZone);
-  // Once more, for a day the offset changes on.
-  instant = asUtc - offsetAt(instant, timeZone);
-  return new Date(instant);
+  const before = offsetAt(asUtc - DAY, timeZone);
+  const after = offsetAt(asUtc + DAY, timeZone);
+  for (const offset of before === after ? [before] : [before, after]) {
+    const instant = asUtc - offset;
+    if (offsetAt(instant, timeZone) === offset) return new Date(instant);
+  }
+  // Skipped: find the jump between the two readings, to the minute.
+  let low = Math.min(asUtc - before, asUtc - after);
+  let high = Math.max(asUtc - before, asUtc - after);
+  while (high - low > MINUTE) {
+    const middle = low + Math.floor((high - low) / 2 / MINUTE) * MINUTE;
+    if (offsetAt(middle, timeZone) === after) high = middle;
+    else low = middle;
+  }
+  return new Date(high);
 }
 
 /** 「15:00」「15点30分」「八点半」「3点」 as an hour and a minute, unchecked; undefined otherwise. */
 function clockReading(
   text: string,
-): { hour: number | undefined; minute: number | undefined } | undefined {
+):
+  | { hour: number | undefined; minute: number | undefined; spoken: boolean }
+  | undefined {
   const colon = /^(\d{1,2}):(\d{2})$/.exec(text);
-  if (colon) return { hour: Number(colon[1]), minute: Number(colon[2]) };
+  if (colon)
+    return { hour: Number(colon[1]), minute: Number(colon[2]), spoken: false };
   const spoken = new RegExp(
     `^${NUMBER}\\s*点\\s*(?:(半)|${NUMBER}\\s*分?)?\\s*钟?$`,
   ).exec(text);
@@ -117,6 +137,7 @@ function clockReading(
   return {
     hour: numberOf(spoken[1] ?? ""),
     minute: spoken[2] ? 30 : spoken[3] ? numberOf(spoken[3]) : 0,
+    spoken: true,
   };
 }
 
@@ -126,43 +147,114 @@ const DAY_WORDS: [RegExp, number][] = [
   [/^(?:明天|明日|明早|明晚|tomorrow)/i, 1],
   [/^(?:后天)/, 2],
 ];
-/** 「上午」「下午」…: what a 12-hour clock reading means. */
-const PERIODS: [RegExp, "am" | "noon" | "pm"][] = [
+type Period = "am" | "noon" | "afternoon" | "night";
+/** 「上午」「下午」「晚上」…: what a 12-hour clock reading means. */
+const PERIODS: [RegExp, Period][] = [
   [/^(?:上午|早上|早晨|早|凌晨)/, "am"],
   [/^(?:中午)/, "noon"],
-  [/^(?:下午|傍晚|晚上|晚)/, "pm"],
+  [/^(?:下午|傍晚)/, "afternoon"],
+  [/^(?:晚上|夜里|夜间|半夜|深夜|晚)/, "night"],
 ];
 
+/** A 12-hour reading in its period, on the 24-hour clock of the day it was said for (may pass 24). */
+function inPeriod(hour: number, period: Period | undefined): number {
+  switch (period) {
+    case "am":
+      return hour === 12 ? 0 : hour;
+    case "noon":
+      return hour < 11 ? hour + 12 : hour;
+    case "afternoon":
+      return hour < 12 ? hour + 12 : hour;
+    case "night":
+      // 「晚上十二点」 is that night's midnight; 「夜里一点」 the small hours after it.
+      if (hour === 12) return 24;
+      if (hour < 6) return hour + 24;
+      return hour < 12 ? hour + 12 : hour;
+    default:
+      return hour;
+  }
+}
+
+/** Why a due time could not be taken. */
+export type DueRefusal = "unreadable" | "past" | "too_far";
+
+/** What `text` says the due time is, or why it says none. */
+export type DueReading = { at: Date } | { at: null; why: DueRefusal };
+
+/** The reason a due time was not taken, in a sentence for the coworker. */
+export function dueRefusalText(why: DueRefusal): string {
+  switch (why) {
+    case "past":
+      return "这个时间已经过了";
+    case "too_far":
+      return `这个时间在 ${MOST_DAYS} 天以后`;
+    default:
+      return "没认出是几点";
+  }
+}
+
+const ISO =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/i;
+
 /**
- * The moment `text` names, said at `now` in `timeZone`, or null when it names none.
+ * The moment `text` names, said at `now` in `timeZone`, or why it names none.
  *
  * - A relative duration (「40 分钟」「2 小时」「半小时」「3 天」, and the English units): from `now`,
- *   at most 30 days ahead.
- * - A clock time (「15:00」「15点30分」「下午三点」「晚上八点半」), with an optional day word
- *   (「今天」「明早」「明天下午」「后天」). Without a day word, a time already past today is
- *   tomorrow's: 「15:00」 said at 16:00 is tomorrow at 15:00. With one, it is that day's, past or not.
- * - A full ISO-8601 moment with its offset.
+ *   at most 30 days ahead (a longer one is cut to 30 days).
+ * - A clock time (「15:00」「15点30分」「下午三点」「晚上八点半」「晚上12点」), with an optional day
+ *   word (「今天」「明早」「明天下午」「后天」). Without a day word, a time already past today is
+ *   tomorrow's: 「15:00」 said at 16:00 is tomorrow at 15:00 -- except a spoken 「N点」 with no
+ *   morning or afternoon whose afternoon reading is still ahead today: 「3点」 said at 14:00 is 15:00.
+ * - An ISO-8601 moment; without an offset it is read on the person's clock.
+ *
+ * A moment (not a duration) already past, or more than 30 days off, is refused: a due time nobody
+ * could meet, or one the checker would never reach, is not taken.
  */
-export function parseDueTime(
+export function readDueTime(
   text: string,
   now: Date,
   timeZone: string,
-): Date | null {
+): DueReading {
+  const unreadable = { at: null, why: "unreadable" } as const;
   let rest = text
     .trim()
     .replace(/：/g, ":")
     .replace(/^(?:预计|大约|大概|约|在|于|by|in|within)\s*/i, "")
-    .replace(/(?:之内|以内|内|后|左右|前)$/, "")
+    .replace(/\s*(?:之前|以前|之内|以内|之后|以后|内|后|左右|前)$/, "")
     .trim();
-  if (!rest) return null;
+  if (!rest) return unreadable;
+  const moment = (at: Date): DueReading =>
+    at.getTime() <= now.getTime()
+      ? { at: null, why: "past" }
+      : at.getTime() > now.getTime() + LONGEST
+        ? { at: null, why: "too_far" }
+        : { at };
 
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(rest)) {
-    const instant = Date.parse(rest);
-    return Number.isNaN(instant) ? null : new Date(instant);
+  const iso = ISO.exec(rest);
+  if (iso) {
+    if (iso[6]) {
+      const instant = Date.parse(rest.replace(" ", "T"));
+      return Number.isNaN(instant) ? unreadable : moment(new Date(instant));
+    }
+    // No offset: the person's own clock, as a person writing it means it.
+    const [year, month, day, hour, minute] = iso.slice(1, 6).map(Number);
+    if (
+      !year ||
+      !month ||
+      month > 12 ||
+      !day ||
+      day > 31 ||
+      hour === undefined ||
+      hour > 23 ||
+      minute === undefined ||
+      minute > 59
+    )
+      return unreadable;
+    return moment(wallClock(timeZone, { year, month, day }, hour, minute));
   }
 
   if (/^半(?:个)?(?:小时|钟头)$/.test(rest))
-    return new Date(now.getTime() + 30 * MINUTE);
+    return { at: new Date(now.getTime() + 30 * MINUTE) };
   const relative = new RegExp(
     `^${NUMBER}\\s*(?:个)?\\s*([a-zA-Z\\u4e00-\\u9fff]+)$`,
   ).exec(rest);
@@ -172,9 +264,9 @@ export function parseDueTime(
       pattern.test((relative[2] ?? "").replace(/^个/, "")),
     );
     if (amount !== undefined && unit) {
-      if (!(amount > 0)) return null;
+      if (!(amount > 0)) return unreadable;
       const span = Math.min(amount * unit[1] * MINUTE, LONGEST);
-      return new Date(now.getTime() + Math.round(span));
+      return { at: new Date(now.getTime() + Math.round(span)) };
     }
   }
 
@@ -190,7 +282,7 @@ export function parseDueTime(
       rest.slice(word.length).trim();
     break;
   }
-  let period: "am" | "noon" | "pm" | undefined;
+  let period: Period | undefined;
   for (const [pattern, which] of PERIODS) {
     const match = pattern.exec(rest);
     if (!match) continue;
@@ -200,31 +292,46 @@ export function parseDueTime(
   }
 
   const reading = clockReading(rest);
-  if (!reading) return null;
-  let { hour } = reading;
-  const { minute } = reading;
+  if (!reading) return unreadable;
+  const { hour: said, minute, spoken } = reading;
   if (
-    hour === undefined ||
+    said === undefined ||
     minute === undefined ||
-    !Number.isInteger(hour) ||
+    !Number.isInteger(said) ||
     !Number.isInteger(minute) ||
-    hour > 23 ||
+    said > 23 ||
     minute > 59
   )
-    return null;
-  if (period === "pm" && hour < 12) hour += 12;
-  if (period === "noon" && hour < 11) hour += 12;
-  if (period === "am" && hour === 12) hour = 0;
+    return unreadable;
+  // 「下午15点」 is already on the 24-hour clock.
+  return readAs24(said > 12 ? said : inPeriod(said, period));
 
-  const today = localParts(now, timeZone);
-  const on = (days: number) =>
-    wallClock(
-      timeZone,
-      { year: today.year, month: today.month, day: today.day + days },
-      hour,
-      minute,
-    );
-  if (daysAhead !== undefined) return on(daysAhead);
-  const todays = on(0);
-  return todays.getTime() > now.getTime() ? todays : on(1);
+  function readAs24(hour: number): DueReading {
+    const today = localParts(now, timeZone);
+    const on = (days: number, at = hour) =>
+      wallClock(
+        timeZone,
+        { year: today.year, month: today.month, day: today.day + days },
+        at,
+        minute as number,
+      );
+    if (daysAhead !== undefined) return moment(on(daysAhead));
+    const todays = on(0);
+    if (todays.getTime() > now.getTime()) return { at: todays };
+    // 「3点」 said at 14:00 means this afternoon, not three tomorrow morning.
+    if (spoken && period === undefined && hour >= 1 && hour < 12) {
+      const afternoon = on(0, hour + 12);
+      if (afternoon.getTime() > now.getTime()) return { at: afternoon };
+    }
+    return { at: on(1) };
+  }
+}
+
+/** The moment `text` names, or null when it names none (see {@link readDueTime}). */
+export function parseDueTime(
+  text: string,
+  now: Date,
+  timeZone: string,
+): Date | null {
+  return readDueTime(text, now, timeZone).at;
 }

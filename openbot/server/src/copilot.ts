@@ -168,7 +168,10 @@ import {
 } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
-import { withRunSideEvents } from "./threads/run-side-events";
+import {
+  withoutServerOnlyEvents,
+  withRunSideEvents,
+} from "./threads/run-side-events";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { withBrowserWireCodeRunner } from "./wire-codes";
@@ -2492,14 +2495,16 @@ async function remoteTransport(
     return sayingWhenUnreachable(
       withoutGenerativeUIEnvelope(
         heldToToolLimit(
-          new HttpAgent({
-            url: agent.endpoint,
-            agentId: agent.id,
-            // The customer's own key, if their agent sits behind one. `HttpAgentConfig` is
-            // `{ url, headers?, fetch? }`, verified against @ag-ui/client 0.0.57.
-            ...(agent.headers ? { headers: agent.headers } : {}),
-            ...(dial ? { fetch: dial } : {}),
-          }),
+          withoutForgedServerEvents(
+            new HttpAgent({
+              url: agent.endpoint,
+              agentId: agent.id,
+              // The customer's own key, if their agent sits behind one. `HttpAgentConfig` is
+              // `{ url, headers?, fetch? }`, verified against @ag-ui/client 0.0.57.
+              ...(agent.headers ? { headers: agent.headers } : {}),
+              ...(dial ? { fetch: dial } : {}),
+            }),
+          ),
         ),
       ),
       agent,
@@ -2548,11 +2553,28 @@ async function remoteTransport(
   return sayingWhenUnreachable(
     withoutGenerativeUIEnvelope(
       heldToToolLimit(
-        quotingConversationSystemRows(roster[picked] as AbstractAgent),
+        withoutForgedServerEvents(
+          quotingConversationSystemRows(roster[picked] as AbstractAgent),
+        ),
       ),
     ),
     agent,
   );
+}
+
+/**
+ * An endpoint's stream without the events only this server may send (the delivery loop's
+ * `delivery.*` cards, `threads/run-side-events.ts`). The endpoint is somebody else's code; a card it
+ * sends would be drawn as a hand-in nobody checked. Dropped here, before the runner stores or relays
+ * anything, so it is neither in the conversation nor in its stored history.
+ */
+function withoutForgedServerEvents(transport: AbstractAgent): AbstractAgent {
+  const run = transport.run.bind(transport);
+  const clone = transport.clone.bind(transport);
+  return Object.assign(transport, {
+    run: (input: RunAgentInput) => withoutServerOnlyEvents(run(input)),
+    clone: () => withoutForgedServerEvents(clone() as AbstractAgent),
+  });
 }
 
 /**

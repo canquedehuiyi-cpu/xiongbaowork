@@ -7,7 +7,7 @@ import { type GrantedTool, REFUSAL_MARKER } from "../plugins/tools";
 import { TenantContextError } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
 import type { Delivery } from "./delivery";
-import { parseDueTime } from "./due-time";
+import { dueRefusalText, readDueTime } from "./due-time";
 import { DELIVERY_ITEM_KINDS, type EvidenceGate } from "./evidence-gate";
 import type { TaskProjector, TriggerSource } from "./projector";
 import { entryCardRefOf, roundOnCard } from "./turn-cards";
@@ -195,9 +195,10 @@ export function deliveryTools(options: {
       async (value) => {
         const run = currentRun();
         if (!run) return OUTSIDE_A_RUN;
-        const dueAt = value.due_at
-          ? parseDueTime(value.due_at, now(), zone())
+        const due = value.due_at
+          ? readDueTime(value.due_at, now(), zone())
           : null;
+        const dueAt = due?.at ?? null;
         const card = await cardOf(run);
         let taskId: string;
         if (card && !(card.tracked && card.acceptedAt)) taskId = card.id;
@@ -247,8 +248,8 @@ export function deliveryTools(options: {
           dueReported: dueAt !== null,
           note: dueAt
             ? `已接下，预计 ${localTime(dueAt)} 交。做完用 deliver_task 交付物和自查；交不了就用 request_extension。`
-            : value.due_at
-              ? `已接下，但预计时间「${value.due_at}」没认出来：这件活按没报时间处理，接下后 2 小时核对。可以在回复里告诉对方大概几点交。`
+            : due && due.at === null
+              ? `已接下，但预计时间「${value.due_at}」没有记上（${dueRefusalText(due.why)}）：这件活按没报时间处理，接下后 2 小时核对。可以在回复里告诉对方大概几点交。`
               : "已接下，没报预计时间：接下后 2 小时核对。",
         });
       },
@@ -321,9 +322,10 @@ export function deliveryTools(options: {
         const card = await cardOf(run);
         if (!card?.tracked)
           return `${REFUSAL_MARKER} 这一轮没有接下的活，不用申请延期。`;
-        const dueAt = parseDueTime(value.due_at, now(), zone());
-        if (!dueAt)
-          return `${REFUSAL_MARKER} 没认出「${value.due_at}」是几点：换成「1 小时」「17:30」「明早 10 点」这样的写法再申请。`;
+        const due = readDueTime(value.due_at, now(), zone());
+        if (due.at === null)
+          return `${REFUSAL_MARKER} 「${value.due_at}」不能用来申请延期（${dueRefusalText(due.why)}）：换成「1 小时」「17:30」「明早 10 点」这样、30 天以内的时间再申请。`;
+        const dueAt = due.at;
         const asked = await delivery.requestExtension(tenantId, card.id, {
           dueAt,
           reason: value.reason,

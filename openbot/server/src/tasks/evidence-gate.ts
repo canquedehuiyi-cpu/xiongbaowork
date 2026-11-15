@@ -1,4 +1,4 @@
-import type { BaseEvent } from "@ag-ui/client";
+import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
@@ -15,6 +15,7 @@ import {
   type DeliverableComponent,
   type DeliverableRef,
   drawnComponents,
+  producedAttachments,
 } from "./projector";
 
 /**
@@ -102,6 +103,35 @@ export function requiredItemsOf(criteria: string | null | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
+/**
+ * The attachments a round produced: those its own assistant messages carry, a message being the
+ * round's own when the round streamed it (an event of the round names its id). What the person
+ * attached, and what an earlier round said, ride in the same snapshots and are not counted.
+ */
+export function attachmentsProduced(events: readonly BaseEvent[]): string[] {
+  const own = new Set<string>();
+  for (const event of events) {
+    const value = event as BaseEvent & {
+      messageId?: unknown;
+      parentMessageId?: unknown;
+    };
+    if (typeof value.messageId === "string") own.add(value.messageId);
+    if (typeof value.parentMessageId === "string")
+      own.add(value.parentMessageId);
+  }
+  const ids = new Set<string>();
+  for (const event of events) {
+    if (event.type !== EventType.MESSAGES_SNAPSHOT) continue;
+    const messages =
+      (event as BaseEvent & { messages?: Message[] }).messages ?? [];
+    for (const id of producedAttachments(
+      messages.filter((message) => own.has(message.id)),
+    ))
+      ids.add(id.toLowerCase());
+  }
+  return [...ids];
+}
+
 const comparable = (text: string) => text.toLowerCase().replace(/\s+/g, "");
 
 export function createEvidenceGate(database: Database): EvidenceGate {
@@ -133,8 +163,11 @@ export function createEvidenceGate(database: Database): EvidenceGate {
     ];
   }
 
-  /** What the card's rounds drew: the stored runs, and the run still open in this process. */
-  async function drawnOnCard(tenantId: string, taskId: string) {
+  /** Each of the card's rounds, as its events: the stored runs, and the run still open here. */
+  async function roundsOf(
+    tenantId: string,
+    taskId: string,
+  ): Promise<BaseEvent[][]> {
     const runIds = await runsOf(tenantId, taskId);
     if (runIds.length === 0) return [];
     const stored = await database
@@ -157,13 +190,18 @@ export function createEvidenceGate(database: Database): EvidenceGate {
       list.push(event);
       byRun.set(row.runId, list);
     }
-    return runIds.flatMap((runId) =>
-      drawnComponents([...(byRun.get(runId) ?? []), ...runEventsSoFar(runId)]),
-    );
+    return runIds.map((runId) => [
+      ...(byRun.get(runId) ?? []),
+      ...runEventsSoFar(runId),
+    ]);
   }
 
-  /** Which of these attachments are in the card's thread (its channel, or its group's channel). */
+  /**
+   * Which of these attachments are this tenant's and in the card's thread (its channel, or its
+   * group's channel): the second check, behind "produced in one of the card's rounds".
+   */
   async function attachmentsInThread(
+    tenantId: string,
     threadRef: string | null,
     ids: string[],
   ): Promise<Set<string>> {
@@ -180,6 +218,7 @@ export function createEvidenceGate(database: Database): EvidenceGate {
       .from(attachments)
       .where(
         and(
+          eq(attachments.tenantId, tenantId),
           inArray(attachments.id, ids),
           sql`${attachments.channelId} in ${channelsOfThread}`,
         ),
@@ -212,22 +251,34 @@ export function createEvidenceGate(database: Database): EvidenceGate {
           .map((item) => attachmentIdOf(item.ref))
           .filter((id): id is string => id !== undefined);
         const inThread = await attachmentsInThread(
+          input.tenantId,
           input.threadRef,
           wantedAttachments,
         );
-        const drawn = items.some((item) => item.kind === "component")
-          ? await drawnOnCard(input.tenantId, input.taskId)
+        const rounds = items.some(
+          (item) => item.kind === "component" || item.kind === "attachment",
+        )
+          ? await roundsOf(input.tenantId, input.taskId)
           : [];
+        const drawn = rounds.flatMap((events) => drawnComponents(events));
+        const produced = new Set(
+          rounds.flatMap((events) => attachmentsProduced(events)),
+        );
 
         for (const item of items) {
           const name = nameOf(item);
           switch (item.kind) {
             case "attachment": {
               const id = attachmentIdOf(item.ref);
-              if (!id || !inThread.has(id))
+              /*
+               * Produced by the coworker in one of this card's rounds, and this card's thread's: a
+               * file the person uploaded, an older one, another member's, or one staged and never
+               * sent is input or somebody else's, not this work's output.
+               */
+              if (!id || !produced.has(id) || !inThread.has(id))
                 return {
                   ok: false,
-                  reason: `附件「${name}」不在这件活的对话里，交不了。只能交这个对话里的附件。`,
+                  reason: `附件「${name}」不是你在这件活里做出来的文件，交不了。对方上传的原件、这件活以前的文件、别人的文件都不能当交付物。`,
                   missing: [name],
                 };
               attachmentIds.push(id);

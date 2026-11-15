@@ -1,5 +1,5 @@
-import type { BaseEvent } from "@ag-ui/client";
-import { Observable } from "rxjs";
+import { type BaseEvent, EventType } from "@ag-ui/client";
+import { filter, Observable } from "rxjs";
 
 /**
  * Events a server tool adds to the run it is called in.
@@ -16,6 +16,25 @@ import { Observable } from "rxjs";
  * tool finds its run by the id it was called with, and the agent's stream registers itself under that
  * id while it is open. A run id names one run, and one run is one stream.
  */
+
+/**
+ * Events only the server may put in a run: the delivery loop's cards (`delivery.*`). Drawn as
+ * "已交成果" and the like, so one an agent's own stream carries -- an external coworker's endpoint can
+ * send any event it likes -- is a forgery, and is dropped before anything stores or shows it. The
+ * real ones enter through {@link emitRunEvent}, after the agent's stream has been cleaned.
+ */
+export function isServerOnlyEvent(event: BaseEvent): boolean {
+  if (event.type !== EventType.CUSTOM) return false;
+  const name = (event as BaseEvent & { name?: unknown }).name;
+  return typeof name === "string" && name.startsWith("delivery.");
+}
+
+/** An agent's own stream without the events only the server may send. */
+export function withoutServerOnlyEvents(
+  stream: Observable<BaseEvent>,
+): Observable<BaseEvent> {
+  return stream.pipe(filter((event) => !isServerOnlyEvent(event)));
+}
 
 type OpenRun = {
   emit(event: BaseEvent): void;
@@ -50,6 +69,8 @@ export function withRunSideEvents(
     };
     const inner = stream.subscribe({
       next(event) {
+        // The run's own stream may not carry the server's cards; only `emitRunEvent` adds them.
+        if (isServerOnlyEvent(event)) return;
         run.seen.push(event);
         subscriber.next(event);
       },
