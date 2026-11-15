@@ -194,10 +194,26 @@ async function until<T>(
 // ---------------------------------------------------------------------------------------------
 
 let deploymentHits = 0;
+let deploymentListReads = 0;
 const deploymentStub = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
-  fetch() {
+  fetch(request) {
+    /*
+     * Listing the models (`GET /v1/models`) is not running one. The server's model catalogue reads
+     * the listing at boot, on its timer and on a provider's refusal, through `OPENAI_BASE_URL` —
+     * here the stub — and a listing asks which models exist, spends no tokens and puts nothing in a
+     * transcript. Counted separately so the assertion below can say it saw one without failing on
+     * it, the same reading `wakerflow-lifecycle.ts`'s proxy takes (112c00e3).
+     */
+    const url = new URL(request.url);
+    if (
+      request.method === "GET" &&
+      /^\/(v1\/)?models$/.test(url.pathname.replace(/\/+$/, ""))
+    ) {
+      deploymentListReads += 1;
+      return new Response(null, { status: 503 });
+    }
     deploymentHits += 1;
     return new Response(null, { status: 503 });
   },
@@ -917,6 +933,10 @@ try {
 
   await step("nothing reached the deployment's own model", async () => {
     equal(deploymentHits, 0, "the deployment model stub was never asked");
+    // Said out loud so a listing read is on the record, without being counted as a model call.
+    console.log(
+      `   the model list was read through the deployment endpoint ${deploymentListReads} time(s)`,
+    );
     if (config.mock)
       check(
         mockCalls.plan === 1 && mockCalls.step >= 3,
