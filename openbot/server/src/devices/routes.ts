@@ -171,7 +171,11 @@ export function createDeviceRoutes(
 
 const DISCOVERED = new Set(["codex", "claude-code", "hermes"]);
 
-/** A machine's `agents.discover` answer, kept to the fields and agents XiongBao knows. */
+/**
+ * A machine's `agents.discover` answer, kept to the fields and agents XiongBao knows. The runner
+ * answers `{agents: [...]}` (runner/src/acp/discover.ts `discoverAgents`, carried as the action's
+ * `output`); a bare list is read the same way.
+ */
 export function discoveredAgents(output: unknown): {
   harness: "codex" | "claude-code" | "hermes";
   version: string | null;
@@ -179,9 +183,14 @@ export function discoveredAgents(output: unknown): {
   acpReady: boolean;
   signedIn: boolean | null;
 }[] {
-  if (!Array.isArray(output)) return [];
+  const list = Array.isArray(output)
+    ? output
+    : output && typeof output === "object"
+      ? (output as { agents?: unknown }).agents
+      : undefined;
+  if (!Array.isArray(list)) return [];
   const kept: ReturnType<typeof discoveredAgents> = [];
-  for (const entry of output) {
+  for (const entry of list) {
     const { harness, version, installed, acpReady, signedIn } = (entry ??
       {}) as Record<string, unknown>;
     if (typeof harness !== "string" || !DISCOVERED.has(harness)) continue;

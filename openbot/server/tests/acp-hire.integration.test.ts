@@ -1,4 +1,9 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createAppRegistry } from "../../runner/src/apps";
+import { createDiscoverActions } from "../../runner/src/discover-actions";
 import { randomBytes, randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
@@ -667,6 +672,67 @@ describe("finding what a computer has", () => {
       ],
     });
     expect(asked).toEqual([{ tenantId: owner.id, deviceId: device.deviceId }]);
+
+    // What a real runner sends: its `agents.discover` action's output, `{agents: [...]}`.
+    const scratch = mkdtempSync(join(tmpdir(), "acp-hire-discover-"));
+    try {
+      const answered = await createDiscoverActions({
+        dataDir: scratch,
+        registry: createAppRegistry({ dataDir: scratch }),
+        agents: {
+          which: (command) =>
+            command === "codex" || command === "npx"
+              ? `/usr/local/bin/${command}`
+              : undefined,
+          run: async (command, args) => ({
+            code: 0,
+            stdout:
+              [command, ...args].join(" ") === "/usr/local/bin/codex --version"
+                ? "codex-cli 0.169.0\n"
+                : "Logged in using ChatGPT\n",
+            stderr: "",
+            timedOut: false,
+          }),
+        },
+      })("agents.discover", {});
+      if (!answered.ok) throw new Error("the runner's discovery failed");
+      const real = await call(
+        owner,
+        "GET",
+        `/devices/${device.deviceId}/agents`,
+        undefined,
+        { isReachable: () => true, discover: async () => answered.output },
+      );
+      expect(real.status).toBe(200);
+      expect(await real.json()).toEqual({
+        online: true,
+        agents: [
+          {
+            harness: "codex",
+            version: "0.169.0",
+            installed: true,
+            acpReady: true,
+            signedIn: true,
+          },
+          {
+            harness: "claude-code",
+            version: null,
+            installed: false,
+            acpReady: true,
+            signedIn: null,
+          },
+          {
+            harness: "hermes",
+            version: null,
+            installed: false,
+            acpReady: false,
+            signedIn: null,
+          },
+        ],
+      });
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
 
     const offline = await call(
       owner,
