@@ -768,11 +768,26 @@ export const nudgeTask = (id: string) =>
  * 准许延期到某个时间。员工申请过、还没答复，就答复那条申请；没申请过就直接改预计时间（你改的直接生效）。
  * `dueAt` 是你写的字（「16:00」「40 分钟」），由服务器按你的时区认。
  */
-export const extendTask = (id: string, dueAt: string, answering: boolean) =>
+/**
+ * 准许延期 / 改预计时间（看板、详情、接活回执上的弹层）。`answering` 是在答复员工那条待答复的申请：走
+ * `POST /extension grant`，带上那条申请要的时间（`requestedDueAt`），员工后来又申请了一次时服务器拒（409），
+ * 不拿旧弹层去答新申请；没有待答复的申请时就是你直接改预计时间（`PATCH dueAt`）。
+ */
+export const extendTask = (
+  id: string,
+  dueAt: string,
+  answering: { requestedDueAt: string | null } | null,
+) =>
   answering
     ? client(`${cardPath(id)}/extension`, {
         method: "POST",
-        body: { decision: "grant", dueAt },
+        body: {
+          decision: "grant",
+          dueAt,
+          ...(answering.requestedDueAt
+            ? { requestedDueAt: answering.requestedDueAt }
+            : {}),
+        },
         fallback: "延期没改成，请稍后再试。",
       })
     : client(cardPath(id), {

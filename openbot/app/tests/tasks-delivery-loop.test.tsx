@@ -789,12 +789,16 @@ test("准许延期：员工申请过就答复那条申请（照准 grant，或�
   const requested = within(dialog).getByRole<HTMLInputElement>("textbox", {
     name: "延到几点",
   });
-  await waitFor(() => expect(requested.value).not.toBe(""));
+  // 输入框里是给人看的说法；没改就提交时，送的是那条申请的原时间（ISO），并点名答复的是它。
+  const asked = ACCEPTED_EVENTS[1]?.detail.dueAt as string;
+  await waitFor(() =>
+    expect(requested.value).toMatch(/^(今天|明早|明天) \d\d:\d\d$/),
+  );
   await user().click(within(dialog).getByRole("button", { name: "准许延期" }));
   const extension = `/api/tasks/${ACCEPTED.id}/extension`;
   await waitFor(() =>
     expect(posted(calls, "POST", extension).map((call) => call.body)).toEqual([
-      { decision: "grant", dueAt: requested.value },
+      { decision: "grant", dueAt: asked, requestedDueAt: asked },
     ]),
   );
   expect(posted(calls, "PATCH", `/api/tasks/${ACCEPTED.id}`)).toEqual([]);
@@ -815,7 +819,7 @@ test("准许延期：员工申请过就答复那条申请（照准 grant，或�
       posted(calls, "POST", extension)
         .slice(1)
         .map((call) => call.body),
-    ).toEqual([{ decision: "deny" }]),
+    ).toEqual([{ decision: "deny", requestedDueAt: asked }]),
   );
 });
 

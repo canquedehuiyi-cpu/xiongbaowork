@@ -35,6 +35,7 @@ import { Route as TaskDetailRoute } from "@/routes/_authed/_app/tasks.$taskId";
 import { setSkin } from "@/skins/store";
 import { BriefingPage } from "@/skins/xiongbao/briefing-page";
 import { GoalBody } from "@/skins/xiongbao/conversation-sidebar/goal";
+import { ExtendDialog } from "@/skins/xiongbao/delivery-actions";
 import type { SidebarGoal } from "../../shared/conversation-sidebar";
 import { settleReactWork } from "./settle-react-work";
 
@@ -894,6 +895,123 @@ test("芝加哥的浏览器、上海的作息：卡片详情顶上写明，流�
       clockText(ago(35), now),
     );
   });
+});
+
+/** 上海的「明天 10:30」那一刻（作息时区在上海）。 */
+function shanghaiTomorrowAt(hour: number, minute: number): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(new Date());
+  const of = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return new Date(
+    Date.UTC(of("year"), of("month") - 1, of("day") + 1, hour - 8, minute),
+  ).toISOString();
+}
+
+/** 员工申请延到上海明天 10:30、还没答复的一张卡，弹层用到的接口。 */
+function extensionFetch(asked: string) {
+  const calls: Call[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    const method = init?.method ?? "GET";
+    calls.push({
+      method,
+      path,
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+    });
+    if (method !== "GET") return json({ ok: true });
+    if (path === `/api/tasks/${OVERDUE_CARD.id}/events`)
+      return json({
+        events: [
+          {
+            id: "x1",
+            kind: "extension_requested",
+            actor: `agent:${XIAOZHOU.id}`,
+            detail: { dueAt: asked, reason: "C 家明早才回" },
+            createdAt: ago(3),
+          },
+        ],
+      });
+    if (path === "/api/settings/preferences")
+      return json({ preferences: preferences(workHours()) });
+    return json({ agents: [] });
+  }) as typeof fetch;
+  return calls;
+}
+
+test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」，没改就提交那条申请的原时间并点名它", async () => {
+  const asked = shanghaiTomorrowAt(10, 30);
+  for (const mode of ["extend", "edit"] as const) {
+    const calls = extensionFetch(asked);
+    const queryClient = preferencesClient(`user-extend-${mode}`, workHours());
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <ExtendDialog card={OVERDUE_CARD} mode={mode} onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    const input = await view.findByRole<HTMLInputElement>("textbox", {
+      name: mode === "edit" ? "改到几点" : "延到几点",
+    });
+    await waitFor(() => expect(input.value).toBe("明早 10:30"));
+    await userEvent.click(
+      view.getByRole("button", {
+        name: mode === "edit" ? "按这个时间准许" : "准许延期",
+      }),
+    );
+    // 送的是 ISO（服务器 `readDueTime` 直接认），不是「明早 10:30」这段字；申请的时间也一起带上。
+    await waitFor(() =>
+      expect(
+        calls.filter((call) => call.method === "POST").map((call) => call.body),
+      ).toEqual([{ decision: "grant", dueAt: asked, requestedDueAt: asked }]),
+    );
+    expect(Number.isNaN(Date.parse(asked))).toBe(false);
+    cleanup();
+  }
+
+  // 改了输入框：送你写的话，仍点名答复的是这条申请；「不批」也点名它。
+  const calls = extensionFetch(asked);
+  const queryClient = preferencesClient("user-extend-typed", workHours());
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <ExtendDialog card={OVERDUE_CARD} onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  const input = await view.findByRole<HTMLInputElement>("textbox", {
+    name: "延到几点",
+  });
+  await waitFor(() => expect(input.value).toBe("明早 10:30"));
+  fireEvent.change(input, { target: { value: "明天下午三点" } });
+  await userEvent.click(view.getByRole("button", { name: "准许延期" }));
+  await waitFor(() =>
+    expect(
+      calls.filter((call) => call.method === "POST").map((call) => call.body),
+    ).toEqual([
+      { decision: "grant", dueAt: "明天下午三点", requestedDueAt: asked },
+    ]),
+  );
+  cleanup();
+  const denyCalls = extensionFetch(asked);
+  const denyView = render(
+    <QueryClientProvider
+      client={preferencesClient("user-extend-deny", workHours())}
+    >
+      <ExtendDialog card={OVERDUE_CARD} onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  await userEvent.click(
+    await denyView.findByRole("button", { name: "不批，按原时间交" }),
+  );
+  await waitFor(() =>
+    expect(
+      denyCalls
+        .filter((call) => call.method === "POST")
+        .map((call) => call.body),
+    ).toEqual([{ decision: "deny", requestedDueAt: asked }]),
+  );
 });
 
 // ---------------------------------------------------------------- 侧栏目标

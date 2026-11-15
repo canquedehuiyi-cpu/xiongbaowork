@@ -1117,6 +1117,17 @@ test("answering an extension the chat's card names: a request that is no longer 
       })
     ).status,
   ).toBe(409);
+  // A request time that names no moment at all is a malformed answer (400), not a stale one (409).
+  for (const decision of ["grant", "deny"] as const) {
+    const garbled = await call("POST", `${taskId}/extension`, {
+      decision,
+      ...(decision === "grant" ? { dueAt: second.toISOString() } : {}),
+      requestedDueAt: "11月16日 10:30",
+    });
+    expect(garbled.status).toBe(400);
+    expect(garbled.body.error).toBe("没认出这条申请要延到几点，刷新后再答复。");
+    expect(garbled.body.code).toBeUndefined();
+  }
   // Nothing written: the due time stands, and no answer is on the record.
   expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
     due.toISOString(),

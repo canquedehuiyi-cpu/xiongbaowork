@@ -11,10 +11,10 @@ import { useScheduleZone, useZoneNote } from "@/lib/settings/work-hours";
 import { taskAction } from "@/lib/tasks/actions";
 import {
   cancelTask,
-  clockText,
   type DeliveryVerb,
   deliveryErrorText,
   denyExtension,
+  dueText,
   editCriteria,
   extendTask,
   nudgeTask,
@@ -423,20 +423,30 @@ export function ExtendDialog({
   const editing = mode === "edit";
   const events = useQuery(taskEventsQueryOptions(card.id));
   const pending = events.data ? pendingExtension(events.data) : null;
-  // 员工要的时间按作息时区写进输入框：提交的「16:00」服务器也按作息时区认。
+  /*
+   * 员工要的时间按作息时区写进输入框（「明早 10:30」），只给人看。没改输入框就提交时，送的是那条申请里的
+   * 原时间（ISO），不是这段文字：服务器不用再认一遍字，作息时区还没读到时也不会差几个小时。改了输入框的，
+   * 照旧送你写的话，服务器按作息时区认。
+   */
   const zone = useScheduleZone();
-  const requested = pending?.dueAt ? clockText(pending.dueAt, now, zone) : "";
+  const requested = pending?.dueAt ? dueText(pending.dueAt, now, zone) : "";
   const [typed, setTyped] = useState<string | null>(null);
   const value = typed ?? requested;
   const settled = useSettled();
   const send = useMutation({
-    mutationFn: (dueAt: string) => extendTask(card.id, dueAt, pending !== null),
+    mutationFn: (dueAt: string) =>
+      extendTask(
+        card.id,
+        dueAt,
+        pending ? { requestedDueAt: pending.dueAt } : null,
+      ),
     retry: false,
     onSuccess: () => onClose(),
     onSettled: settled,
   });
   const deny = useMutation({
-    mutationFn: () => denyExtension(card.id),
+    // 不批的也是弹层里这一条：员工后来又申请了一次时服务器拒，不替你否掉一条你没看到的申请。
+    mutationFn: () => denyExtension(card.id, pending?.dueAt ?? undefined),
     retry: false,
     onSuccess: () => onClose(),
     onSettled: settled,
@@ -468,7 +478,8 @@ export function ExtendDialog({
         className="flex flex-col gap-3"
         onSubmit={(event) => {
           event.preventDefault();
-          const dueAt = value.trim();
+          const dueAt =
+            typed === null && pending?.dueAt ? pending.dueAt : value.trim();
           if (dueAt && !busy && !unknown && !events.isPending)
             send.mutate(dueAt);
         }}

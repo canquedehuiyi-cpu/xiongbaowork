@@ -806,7 +806,19 @@ export function createTaskRoutes(
     if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
     const body = extensionBody.safeParse(await bodyOf(context));
     if (!body.success)
-      return context.json({ error: "decision 只能是 grant 或 deny。" }, 400);
+      return context.json({ error: "只能准许或者不批这条延期申请。" }, 400);
+    /*
+     * 答复的那条申请的时间写错了（认不出是哪一刻）：是请求本身有误，不是员工后来又申请了一次，所以是 400，
+     * 不是 409 的「不是最新的了」。
+     */
+    if (
+      body.data.requestedDueAt !== undefined &&
+      Number.isNaN(Date.parse(body.data.requestedDueAt))
+    )
+      return context.json(
+        { error: "没认出这条申请要延到几点，刷新后再答复。" },
+        400,
+      );
     const decided = await delivery.decideExtension(tenantId, taskId, {
       actor: `user:${tenantId}`,
       decision: body.data.decision,
