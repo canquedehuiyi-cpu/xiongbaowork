@@ -20,8 +20,16 @@ import {
   skillSharingInSnapshot,
 } from "./admin/controls";
 import { fixSettings } from "./admin/settings-store";
+import {
+  ACP_TURN_TIMEOUT_MS,
+  createAcpSessionHints,
+  createAcpTurnStarter,
+  routeExternalTurns,
+  useDeviceAcp,
+} from "./agents/acp/agent";
+import { createAcpContextLoader } from "./agents/acp/context";
 import { createAcpRelay } from "./agents/acp/relay";
-import { createAcpTurnStore } from "./agents/acp/turns";
+import { type AcpTurnRow, createAcpTurnStore } from "./agents/acp/turns";
 import {
   CoworkerUnavailableError,
   createActorAgentResolver,
@@ -50,7 +58,10 @@ import { readAgentPresence } from "./agents/presence";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
 import { isUnattended, runModeOf } from "./agents/run-mode";
-import { createRuntimeAgentLoader } from "./agents/runtime-agents";
+import {
+  createRuntimeAgentLoader,
+  loadDeviceAcpEmployee,
+} from "./agents/runtime-agents";
 import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
 import { serverTurnAdmission } from "./agents/turn-admission";
@@ -224,6 +235,7 @@ import {
 import { createDatabase } from "./db/client";
 import { ROLE_FACTS_SQL } from "./db/rls-role";
 import {
+  agents,
   channelAgents,
   channelMemberships,
   channels,
@@ -880,16 +892,28 @@ await startupLifecycle.run(async (startup) => {
    * External employees (Codex, Claude Code, Hermes on the owner's computer): their turns, queued per
    * employee and thread, and their `acp.*` frames on the same runner sockets (agents/acp/*).
    *
-   * Nothing starts a queued turn yet: the `device_acp` transport that runs one is not wired, so a
-   * claimed turn is put straight back. No turn can be queued before that transport exists either.
+   * A turn queued while the computer was away (or its lane busy) is started, once the relay claims
+   * it, as a run of its own posted into its thread (`createAcpTurnStarter`), through the thread
+   * runner built further down; until that exists, a claimed turn goes back to the queue.
    */
   const acpTurnStore = createAcpTurnStore(database);
+  let startAcpTurn: ((row: AcpTurnRow) => Promise<void>) | undefined;
   const acpRelay = createAcpRelay({
     channel: deviceChannel,
     turns: acpTurnStore,
-    startQueuedTurn: async () => {
-      throw new Error("外部员工的轮次在这台服务器上还不能运行。");
+    startQueuedTurn: async (row) => {
+      if (!startAcpTurn)
+        throw new Error("外部员工的轮次在这台服务器上还不能运行。");
+      await startAcpTurn(row);
     },
+  });
+  // What `device_acp` agents are built with, deep inside the runtime (copilot.ts).
+  useDeviceAcp({
+    relay: acpRelay,
+    turns: acpTurnStore,
+    channel: deviceChannel,
+    sessions: createAcpSessionHints(),
+    context: createAcpContextLoader(database),
   });
   /*
    * Who holds the wheel of a coworker's browser on one of those machines. The gateway asks it before
@@ -3123,6 +3147,42 @@ await startupLifecycle.run(async (startup) => {
     }),
   });
 
+  /*
+   * An external employee's turn that waited for its computer, posted into its own thread through this
+   * same runner. Its answer then reaches the conversation as a relayed answer does: into a group's
+   * shared transcript for a group thread, else the roster is bumped like a queued action's outcome.
+   */
+  startAcpTurn = createAcpTurnStarter({
+    database,
+    turns: acpTurnStore,
+    runner: localThreadRunner,
+    employeeFor: (row) => loadDeviceAcpEmployee(database, row.agentId),
+    announce: async ({ threadId, agentId, ownerUserId, text }) => {
+      if (
+        await groupConversations.announceHandoff({
+          threadId,
+          actorId: ownerUserId,
+          agentId,
+          text,
+        })
+      )
+        return;
+      const [mapped] = await database
+        .select({ channelId: intelligenceChannelMappings.channelId })
+        .from(intelligenceChannelMappings)
+        .where(eq(intelligenceChannelMappings.threadId, threadId))
+        .limit(1);
+      if (!mapped) return;
+      const actor = await actorFor(ownerUserId).catch(() => null);
+      if (!actor) return;
+      await channelStore.recordActivity(actor, mapped.channelId, {
+        text,
+        agentId,
+        at: new Date(),
+      });
+    },
+  });
+
   const routineIntelligence: ThreadPlatform =
     createLocalThreadPlatform(localThreadRunner);
 
@@ -4171,6 +4231,52 @@ await startupLifecycle.run(async (startup) => {
   /** Whether this person may run the Bot in a group; the crew routes ask the same (`canUse`). */
   const canUseGroupBot = async (ownerUserId: string, agentId: string) =>
     Boolean(await agentProfileStore.get(await actorFor(ownerUserId), agentId));
+  const groupTurnOptions: Parameters<typeof createTurnRunner>[0] = {
+    prepareRunInput: prepareProductRunInput,
+    onKnownStop: productTelemetry.stopKnown,
+    intelligence: routineIntelligence,
+    runner: routineAgentRunner,
+    components: headlessComponents,
+    buildAgentFor,
+    toolsForTurn: async ({ ownerUserId, agentId, initiator }) => {
+      if (!computerGateway) return [];
+      const actor = await actorFor(ownerUserId);
+      const profile = await agentProfileStore.get(actor, agentId);
+      if (!profile) throw new Error("That Bot is not available to this owner.");
+      // A Team Bot's teammate uses the Bot, not its owner's signed-in computer.
+      if (!canUseComputer(profile, actor)) return [];
+      return createHeadlessComputerTools({
+        gateway: computerGateway,
+        seat: await computerGateway.seatFor(agentId, actor.id),
+        actor: { id: actor.id, userId: actor.id, initiator },
+        auditStore: bootAuditStore,
+        ...(signInService ? { signIn: signInService } : {}),
+        machine: computerMachine,
+        apps: await usesDeviceApps(agentId, actor.id),
+        disabled: await approvalService.disabledTools(actor.id, agentId),
+      });
+    },
+  };
+  /*
+   * An external employee in a group runs through the same transport as in its own chat, in its own
+   * group thread (its lane is that thread). Its turn may wait hours for its owner's permission, so it
+   * gets the long backstop instead of the five-minute deadline every other Bot's group turn has.
+   */
+  const groupTurnRunner = routeExternalTurns({
+    isExternal: async (agentId) => {
+      const [row] = await database
+        .select({ type: agents.type })
+        .from(agents)
+        .where(eq(agents.id, agentId))
+        .limit(1);
+      return row?.type === "device_acp";
+    },
+    normal: createTurnRunner(groupTurnOptions),
+    external: createTurnRunner({
+      ...groupTurnOptions,
+      turnTimeoutMs: ACP_TURN_TIMEOUT_MS,
+    }),
+  });
   const baseGroupConversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
@@ -4186,33 +4292,7 @@ await startupLifecycle.run(async (startup) => {
       }
       return bots;
     },
-    runTurn: createTurnRunner({
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
-      intelligence: routineIntelligence,
-      runner: routineAgentRunner,
-      components: headlessComponents,
-      buildAgentFor,
-      toolsForTurn: async ({ ownerUserId, agentId, initiator }) => {
-        if (!computerGateway) return [];
-        const actor = await actorFor(ownerUserId);
-        const profile = await agentProfileStore.get(actor, agentId);
-        if (!profile)
-          throw new Error("That Bot is not available to this owner.");
-        // A Team Bot's teammate uses the Bot, not its owner's signed-in computer.
-        if (!canUseComputer(profile, actor)) return [];
-        return createHeadlessComputerTools({
-          gateway: computerGateway,
-          seat: await computerGateway.seatFor(agentId, actor.id),
-          actor: { id: actor.id, userId: actor.id, initiator },
-          auditStore: bootAuditStore,
-          ...(signInService ? { signIn: signInService } : {}),
-          machine: computerMachine,
-          apps: await usesDeviceApps(agentId, actor.id),
-          disabled: await approvalService.disabledTools(actor.id, agentId),
-        });
-      },
-    }),
+    runTurn: groupTurnRunner,
     caps: config.handoff,
     // The handoff desk's own grant check, read per hop and failing closed.
     mayAddress: async (fromBotId, toBotId) =>

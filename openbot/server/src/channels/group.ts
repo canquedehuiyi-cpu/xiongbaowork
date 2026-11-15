@@ -1031,6 +1031,11 @@ export function createGroupConversations(deps: {
   /** How often a running reply's partial text is written for the transcript to show. */
   progressEveryMs?: number;
   /**
+   * How often the claimed turn's lease is renewed while one Bot is answering. An external employee
+   * (`device_acp`) can work, or wait for its owner's permission, far longer than the lease.
+   */
+  leaseRenewEveryMs?: number;
+  /**
    * The owner's permission before a Bot's words reach other people in the group. A Bot run as this
    * person can draw on their private memory and conversations, and nothing can prove a reply did
    * not, so with anyone else in the group the owner is asked once per Bot and group (or always).
@@ -2047,7 +2052,30 @@ export function createGroupConversations(deps: {
                 }))
               )
                 throw new Error("The group turn lease was lost.");
-              const failed = await runBot(turn, agentId);
+              /*
+               * Kept while the Bot answers, too: a turn that outlives its lease would be claimed and
+               * run again by another sweep while this one is still running it.
+               */
+              const keep = setInterval(
+                () => {
+                  void deps.queue
+                    .renew({
+                      kind: item.kind,
+                      key: item.key,
+                      owner: deps.owner,
+                      leaseMs: 15 * 60_000,
+                    })
+                    .catch(() => false);
+                },
+                deps.leaseRenewEveryMs ?? 5 * 60_000,
+              );
+              keep.unref?.();
+              let failed: string | undefined;
+              try {
+                failed = await runBot(turn, agentId);
+              } finally {
+                clearInterval(keep);
+              }
               if (failed) unrecorded.push(failed);
             }
             /*

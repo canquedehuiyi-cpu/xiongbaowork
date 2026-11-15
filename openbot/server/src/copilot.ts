@@ -50,6 +50,8 @@ import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
+import { type DeviceAcpEmployee, deviceAcpAgentFor } from "./agents/acp/agent";
+import { acpPersonaText } from "./agents/acp/context";
 import {
   type ActorAgentResolver,
   CoworkerUnavailableError,
@@ -153,6 +155,7 @@ import {
   runtimeTelemetryOptions,
 } from "./telemetry/runtime-telemetry";
 import {
+  currentTenant,
   isPersonTenant,
   runAsTenant,
   TenantContextError,
@@ -239,6 +242,16 @@ type RegisteredRemoteAgent =
   | (RegisteredRemoteAgentFacts & { type: "remote_mastra" });
 
 /**
+ * An external employee (`device_acp`): Codex, Claude Code, Hermes or the owner's own agent on the
+ * owner's computer, run through the runner socket (agents/acp/agent.ts), never at an address. The
+ * standing role is kept for the runs answered on OpenBot's own runner instead (`onOpenBotRunner`).
+ */
+type RegisteredDeviceAcpAgent = DeviceAcpEmployee & {
+  type: "device_acp";
+  standingMessage: StandingRoleMessage;
+};
+
+/**
  * A coworker the caller may see but may not run: its profile was deleted while a channel it worked
  * in still exists. It is registered so Intelligence can restore that thread and the person can read
  * what was said; every run is refused here, without contacting the endpoint.
@@ -253,6 +266,7 @@ type RegisteredUnavailableAgent = {
 export type RegisteredAgent =
   | RegisteredBuiltInAgent
   | RegisteredRemoteAgent
+  | RegisteredDeviceAcpAgent
   | RegisteredUnavailableAgent;
 
 type AgentRunInput = Parameters<AbstractAgent["run"]>[0];
@@ -436,6 +450,18 @@ const BROUGHT_BOT_GUIDANCE = `\n\n${workingGuidance({
  * A built-in Bot, or one OpenBot cannot run at all, is returned as it is.
  */
 export function onOpenBotRunner(agent: RegisteredAgent): RegisteredAgent {
+  /*
+   * An external employee is never run on the owner's computer for a run nobody asked for (a
+   * check-in, a title): that would spend the owner's own subscription and land in its agent's
+   * history. It answers here, as itself, from its standing role.
+   */
+  if (agent.type === "device_acp")
+    return {
+      id: agent.id,
+      name: agent.name,
+      type: "built_in",
+      systemPrompt: agent.standingMessage.content,
+    };
   if (agent.type !== "remote_ag_ui" && agent.type !== "remote_mastra")
     return agent;
   return {
@@ -453,6 +479,8 @@ export function onOpenBotRunner(agent: RegisteredAgent): RegisteredAgent {
  * deployment's own token. Any other address is somebody's own agent, run for their own purposes.
  */
 function runByThisDeployment(agent: RegisteredAgent): boolean {
+  // An external employee runs on its owner's computer, with the owner's own subscription.
+  if (agent.type === "device_acp") return false;
   const token = process.env.MANAGED_AGENT_TOKEN;
   return (
     (agent.type === "remote_ag_ui" || agent.type === "remote_mastra") &&
@@ -478,7 +506,9 @@ function answersOwnRunsHere(
 ): boolean {
   return (
     !!holdsTools &&
-    (agent.type === "remote_ag_ui" || agent.type === "remote_mastra") &&
+    (agent.type === "remote_ag_ui" ||
+      agent.type === "remote_mastra" ||
+      agent.type === "device_acp") &&
     !runByThisDeployment(agent)
   );
 }
@@ -607,7 +637,11 @@ type RuntimeAgentRow = {
   roleDescription: string;
   persona?: Persona | null;
   bible?: string | null;
+  /** Who hired it; an external employee (`device_acp`) without one is not built. */
+  ownerUserId?: string | null;
 };
+
+const ACP_HARNESSES = new Set(["codex", "claude-code", "hermes", "custom"]);
 
 export function registeredAgentFromRow(
   row: RuntimeAgentRow,
@@ -633,6 +667,37 @@ export function registeredAgentFromRow(
           ...(row.bible ? { bible: row.bible } : {}),
         }
       : null;
+  }
+
+  if (row.type === "device_acp") {
+    /*
+     * Where and what it runs, by reference only (`fld_…`, `app_…`): the paths and the command stay on
+     * the owner's computer. A row missing any of it is skipped, like an endpoint that is not a URL.
+     */
+    const { deviceId, harness, workdirRef, appRef } = configuration;
+    if (
+      typeof deviceId !== "string" ||
+      !deviceId ||
+      typeof harness !== "string" ||
+      !ACP_HARNESSES.has(harness) ||
+      typeof workdirRef !== "string" ||
+      !workdirRef ||
+      (harness === "custom" && (typeof appRef !== "string" || !appRef)) ||
+      !row.ownerUserId
+    )
+      return null;
+    return {
+      id: row.id,
+      name: row.name,
+      type: "device_acp",
+      ownerUserId: row.ownerUserId,
+      deviceId,
+      harness: harness as DeviceAcpEmployee["harness"],
+      workdirRef,
+      ...(typeof appRef === "string" && appRef ? { appRef } : {}),
+      persona: acpPersonaText(row),
+      standingMessage: standingRoleMessage(row),
+    };
   }
 
   const endpoint = configuration?.endpoint;
@@ -1737,6 +1802,49 @@ async function buildAgent(
 ): Promise<AbstractAgent> {
   if (agent.type === "unavailable") {
     return new UnavailableAgent(agent);
+  }
+
+  if (agent.type === "device_acp") {
+    /*
+     * Run by this deployment's own transport, on the owner's computer, never dialled: no tools, no
+     * model, no endpoint. Its tools are its agent's own; what it may do is the permission bridge's.
+     * A run the runtime makes for itself (a title) is answered on OpenBot's own runner instead
+     * (`answersOwnRunsHere`), holding nothing, so it never reaches the computer.
+     */
+    const device = deviceAcpAgentFor(agent, { tenantId: currentTenant() });
+    if (!answersOwnRunsHere(agent, holdsTools)) return device;
+    const asked = holdsTools as HoldsTools;
+    return new RunBuiltAgent(
+      { agentId: agent.id, description: agent.name },
+      device,
+      async (input) =>
+        asked(input)
+          ? device.clone()
+          : buildAgent(
+              onOpenBotRunner(agent),
+              model,
+              apiKey,
+              stallGuard,
+              async () => [],
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              null,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              // Metered like any other run on the deployment model (audit defect #11).
+              resolveAgentModel,
+            ),
+    );
   }
 
   // Whether anybody is watching this run: a routine or a check-in is told it runs unattended.

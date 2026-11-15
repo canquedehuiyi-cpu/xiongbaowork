@@ -501,6 +501,25 @@ describe("acp relay", () => {
     expect(await relay.drain({ ...target, connectionId: "conn-2" })).toBeTrue();
   });
 
+  test("draining one connection keeps another connection's failure for that one's drain", async () => {
+    const { relay, turn, from, turns } = setup();
+    await turn("turn-1", {}, "running");
+    const read = turns.get;
+    let blips = 1;
+    turns.get = async (...args) => {
+      if (blips-- > 0) throw new Error("database away");
+      return read(...args);
+    };
+    relay.fromRunner(from("conn-1"), update("turn-1", 1));
+    // The new connection drains first: clean, and conn-1's failure is still conn-1's.
+    expect(await relay.drain({ ...target, connectionId: "conn-2" })).toBeTrue();
+    expect(
+      await relay.drain({ ...target, connectionId: "conn-1" }),
+    ).toBeFalse();
+    // Reported once: the mark goes with the drain that reported it.
+    expect(await relay.drain({ ...target, connectionId: "conn-1" })).toBeTrue();
+  });
+
   test("a runner of another tenant can neither answer nor take over a request id", async () => {
     const { relay, turn, from, settle, statusOf, turns } = setup();
     await turn("turn-a", {}, "running");

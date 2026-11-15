@@ -66,8 +66,8 @@ export type AcpRelay = {
   resumeQueued(target: DispatchTarget): Promise<number>;
   /**
    * Resolves once every frame from this device so far has been dealt with: false when a frame of
-   * this connection (`target.connectionId`) could not be taken in (the database failed) since the
-   * device's last `drain`, true otherwise.
+   * this connection (`target.connectionId`) could not be taken in (the database failed) since this
+   * connection's last `drain`, true otherwise.
    */
   drain(target: AcpFrameSource): Promise<boolean>;
 };
@@ -135,7 +135,7 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   const chains = new Map<string, Promise<void>>();
   /**
    * device → the connections (or, for a source without one, the device itself) whose frame could
-   * not be taken in since the device's last `drain`. Per connection: a failure on a connection that
+   * not be taken in since that connection's last `drain`. Per connection: a failure on a connection that
    * is gone was replayed on the new one, and must not close that one too.
    */
   const failed = new Map<string, Set<string>>();
@@ -609,8 +609,10 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     async drain(target) {
       const key = keyOf(target);
       await (chains.get(key) ?? Promise.resolve());
-      const ok = !failed.get(key)?.has(failKey(target));
-      failed.delete(key);
+      const marks = failed.get(key);
+      // Only this connection's mark: another connection's is for that one's own drain to report.
+      const ok = !marks?.delete(failKey(target));
+      if (marks?.size === 0) failed.delete(key);
       return ok;
     },
   };
