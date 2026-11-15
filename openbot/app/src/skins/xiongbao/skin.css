@@ -411,6 +411,16 @@
   filter: brightness(1.08);
 }
 
+/* 「去配对一台电脑」：工作台的链接色（设计稿 `a`），带下划线，一眼看得出能点。 */
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-link"] {
+  color: var(--wb-accent2);
+  text-decoration-line: underline;
+  text-decoration-color: currentColor;
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-link"]:hover {
+  color: var(--wb-accent);
+}
+
 /* 手机上工作台页头已经有「返回」，招聘设置自己的那个收起来，只留一个。 */
 :root:not([data-skin])
   [data-workbench-frame][data-workbench-phone]

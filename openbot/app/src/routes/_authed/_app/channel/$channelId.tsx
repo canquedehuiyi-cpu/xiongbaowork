@@ -230,11 +230,18 @@ function RouteComponent() {
           </>
         )}
         <div className="flex flex-row gap-1.5">
-          <ComputerChatControls
-            computerId={agentId}
-            open={isWatching}
-            onOpenChange={(open) => show(open ? "watch" : null)}
-          />
+          {card?.external ? (
+            <WatchScreenButton
+              onClick={() => show(isWatching ? null : "watch")}
+              open={isWatching}
+            />
+          ) : (
+            <ComputerChatControls
+              computerId={agentId}
+              open={isWatching}
+              onOpenChange={(open) => show(open ? "watch" : null)}
+            />
+          )}
           {card ? <EmployeeCardButton agentId={card.id} /> : null}
           {workbench ? (
             sidebarThread ? (
@@ -400,6 +407,36 @@ function EmployeeCardButton({ agentId }: { agentId: string }) {
       type="button"
     >
       名片
+    </button>
+  );
+}
+
+/** The header's tool buttons: the workbench tokens, each with the app's own theme behind it. */
+const HEADER_TOOL_CLASS =
+  "h-8 shrink-0 cursor-pointer rounded-[var(--wb-radius-sm,var(--radius-md))] border border-[color:var(--wb-line2,var(--border))] bg-[color:var(--wb-card,var(--card))] px-2.5 text-[12px] text-[color:var(--wb-fg2,var(--foreground))] outline-none transition-colors hover:bg-[color:var(--wb-hover,var(--accent))] focus-visible:outline-2 focus-visible:outline-[color:var(--wb-accent,var(--ring))] aria-pressed:text-[color:var(--wb-fg,var(--foreground))]";
+
+/**
+ * 「看它的屏幕」 (外部员工 Task 11, the mock's third screen): an external employee works in its own
+ * agent on its hirer's computer, not in a browser of ours, so it has no wheel to take; the button
+ * opens the live screen viewer every employee already has (`?watch`, `ComputerViewPanel`) in the
+ * shared detail pane, and closes it again.
+ */
+function WatchScreenButton({
+  open,
+  onClick,
+}: {
+  open: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-pressed={open}
+      className={HEADER_TOOL_CLASS}
+      data-watch-screen-button=""
+      onClick={onClick}
+      type="button"
+    >
+      看它的屏幕
     </button>
   );
 }

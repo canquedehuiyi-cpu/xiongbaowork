@@ -2,16 +2,21 @@ import {
   mutationOptions,
   type QueryClient,
   queryOptions,
+  useQuery,
 } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { client } from "@/lib/client";
-import type { RegisteredDevice } from "@/lib/devices/queries";
+import {
+  devicesQueryOptions,
+  type RegisteredDevice,
+} from "@/lib/devices/queries";
 import {
   ACP_RULE_DEFAULTS,
   type AcpHarness,
   type AcpRuleKey,
   type AcpRuleValue,
 } from "../../../../shared/acp";
-import { agentKeys } from "./queries";
+import { type AgentProfile, agentKeys, type ExternalRun } from "./queries";
 
 /**
  * 从我的电脑招（外部员工，Task 10）：把用户电脑上已经装好的 Codex、Claude Code、Hermes（或在桌面端登记的
@@ -159,6 +164,136 @@ export function hireExternalMutationOptions(queryClient: QueryClient) {
         body: input,
         fallback: "没能招进来，请稍后再试。",
       });
+      return ((await response.json()) as { agent: HiredAgent }).agent;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: agentKeys.all }),
+  });
+}
+
+/*
+ * 招进来以后（外部员工 Task 11）：外部员工在通讯录、名片、对话顶栏、消息列表上怎么认出来、在哪台电脑上、
+ * 电脑离线时排着几件活；以及招聘设置的编辑态（`PATCH /api/agents/external/:id`）。员工自己怎么跑从员工
+ * 资料的 `external` 读（只有招聘人读得到），电脑名从「我的电脑」列表读。
+ */
+
+/** 外部员工用的是哪一家：三家照名字；本机智能体用电脑上登记的名字，读不到时写「本机智能体」。 */
+export function externalHarnessName(
+  external: Pick<ExternalRun, "harness" | "appRef">,
+  device?: Pick<RegisteredDevice, "apps">,
+): string {
+  if (external.harness !== "custom") return HARNESS_LABEL[external.harness];
+  return (
+    device?.apps?.find((app) => app.ref === external.appRef)?.name ??
+    "本机智能体"
+  );
+}
+
+/** 标记文案「外部员工 · Codex」（Global Constraints）。 */
+export function externalMark(
+  external: Pick<ExternalRun, "harness" | "appRef">,
+  device?: Pick<RegisteredDevice, "apps">,
+): string {
+  return `外部员工 · ${externalHarnessName(external, device)}`;
+}
+
+/** 工作文件夹在那台电脑上叫什么；电脑不再共享它时读不到，是 null。 */
+export function externalWorkdirName(
+  external: Pick<ExternalRun, "workdirRef">,
+  device?: Pick<RegisteredDevice, "roots">,
+): string | null {
+  return (
+    device?.roots?.find((root) => root.ref === external.workdirRef)?.name ??
+    null
+  );
+}
+
+/**
+ * 「本机智能体」可能从不请求许可（规格第 4 节第 139 行）：这时熊宝拦不住它的动作，名片上要写明。服务器
+ * 分不出它到底会不会问，所以每个本机智能体都写。
+ */
+export function mayNeverAsk(external: Pick<ExternalRun, "harness">): boolean {
+  return external.harness === "custom";
+}
+
+/**
+ * 能不能交给它没人在场的活（例行任务、长期职责、主动巡检、定时唤醒）：外部员工这一步不行，那些活没人在场
+ * 批它的许可请求，服务器对它一律 409（规格「不做」第 53 行），所以这些入口对它不显示。
+ */
+export function takesUnattendedWork(
+  agent: Pick<AgentProfile, "external">,
+): boolean {
+  return !agent.external;
+}
+
+/** 和服务器拒绝时说的同一句话（`EXTERNAL_UNATTENDED_REFUSAL`）。 */
+export const EXTERNAL_UNATTENDED_NOTE =
+  "外部员工现在只接有人发起的活（单聊、群里 @、别人转给它），例行任务、职责、主动工作和定时唤醒还不能交给它。";
+
+/** 对话顶栏的副标题：「状态 · 此刻 · 在 <电脑名> 上」，哪一段没有就省掉那一段，不留空的「·」。 */
+export function externalSubtitle(
+  summary: string,
+  deviceName: string | undefined,
+): string {
+  return [
+    summary.trim(),
+    deviceName?.trim() ? `在 ${deviceName.trim()} 上` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+const NO_DEVICES: ReadonlyMap<string, RegisteredDevice> = new Map();
+
+/**
+ * 这些员工里外部员工所在的电脑，按 `deviceId` 查。没有外部员工时不去读电脑列表；读不到时是空的，调用的人
+ * 就不写电脑名，不编。
+ */
+export function useExternalDevices(
+  agents: readonly (Pick<AgentProfile, "external"> | undefined)[],
+): ReadonlyMap<string, RegisteredDevice> {
+  const any = agents.some((agent) => agent?.external);
+  const devices = useQuery({ ...devicesQueryOptions(), enabled: any });
+  const rows = any && !devices.isError ? devices.data : undefined;
+  return useMemo(
+    () =>
+      Array.isArray(rows)
+        ? new Map(rows.map((device) => [device.deviceId, device]))
+        : NO_DEVICES,
+    [rows],
+  );
+}
+
+/** 一位外部员工所在的那台电脑；不是外部员工、或者读不到时是 undefined。 */
+export function useExternalDevice(
+  agent: Pick<AgentProfile, "external"> | undefined,
+): RegisteredDevice | undefined {
+  const devices = useExternalDevices([agent]);
+  return agent?.external ? devices.get(agent.external.deviceId) : undefined;
+}
+
+export type ExternalEdit = {
+  name?: string;
+  department?: string;
+  deviceId?: string;
+  workdirRef?: string;
+  appRef?: string;
+  rules?: Record<AcpRuleKey, AcpRuleValue>;
+};
+
+/** 招聘设置的编辑态：改名字、部门、电脑、工作文件夹、本机智能体和五项规则（换不了是哪一家）。 */
+export function updateExternalMutationOptions(queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: async ({
+      agentId,
+      input,
+    }: {
+      agentId: string;
+      input: ExternalEdit;
+    }): Promise<HiredAgent> => {
+      const response = await client(
+        `/api/agents/external/${encodeURIComponent(agentId)}`,
+        { method: "PATCH", body: input, fallback: "没能保存，请再试一次。" },
+      );
       return ((await response.json()) as { agent: HiredAgent }).agent;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: agentKeys.all }),

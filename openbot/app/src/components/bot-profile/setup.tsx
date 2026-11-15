@@ -1,3 +1,4 @@
+import { OPENBOT_HARNESS_NAME } from "@openbot/shared/harnesses";
 import {
   IconChevronRight,
   IconDeviceDesktop,
@@ -12,10 +13,11 @@ import {
   IconTextCaption,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 import type { ZodType } from "zod";
-import { OPENBOT_HARNESS_NAME } from "@openbot/shared/harnesses";
 import { CallbackTokenPanel } from "@/components/agents/callback-token-panel";
+import { NoPermissionWarning } from "@/components/agents/external/external-marks";
 import { PageRows, PageSection } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +47,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  externalHarnessName,
+  externalWorkdirName,
+  mayNeverAsk,
+  RULE_ROWS,
+  RULE_VALUE_LABEL,
+  useExternalDevice,
+} from "@/lib/agents/external";
 import {
   type AgentFormValues,
   agentFormSchema,
@@ -168,7 +178,8 @@ export function SetupSections({ agent }: { agent: AgentProfile }) {
               </Item>
             </Fragment>
           ))}
-          {personal ? null : (
+          {/* 外部员工永远只归招它的人，也不另开电脑：这两行服务器都不让改，不画。 */}
+          {personal || agent.external ? null : (
             <>
               <Separator />
               <VisibilityRow
@@ -476,6 +487,7 @@ function EditTextDialog({
  * deployment's tool credential, so there is nothing to show but that sentence.
  */
 function ConnectionSection({ agent }: { agent: AgentProfile }) {
+  if (agent.external) return <ExternalConnectionSection agent={agent} />;
   const builtIn = !agent.endpoint || agent.builtIn;
   return (
     <PageSection title="运行方式">
@@ -517,6 +529,91 @@ function ConnectionSection({ agent }: { agent: AgentProfile }) {
           fromOpenBot={agent.keyFromOpenBot === true}
         />
       ) : null}
+    </PageSection>
+  );
+}
+
+/**
+ * 外部员工的「运行方式」（外部员工 Task 11）：用的是哪个智能体、在哪台电脑上、哪个工作文件夹、哪些事要先问你；
+ * 本机智能体写明它不会请求许可。招聘人在这里打开招聘设置的编辑态改电脑、文件夹和规则。
+ */
+function ExternalConnectionSection({ agent }: { agent: AgentProfile }) {
+  const device = useExternalDevice(agent);
+  const external = agent.external;
+  if (!external) return null;
+  const workdir = externalWorkdirName(external, device);
+  const asks = RULE_ROWS.filter((row) => external.rules[row.key] !== "direct")
+    .map(
+      (row) =>
+        `${row.label}${external.rules[row.key] === "dangerous" ? `（${RULE_VALUE_LABEL.dangerous}）` : ""}`,
+    )
+    .join("、");
+  const rows: { icon: typeof IconStack2; title: string; value: string }[] = [
+    {
+      icon: IconStack2,
+      title: "智能体",
+      value: `外部员工 · ${externalHarnessName(external, device)} · 用它自己的模型和订阅`,
+    },
+    {
+      icon: IconDeviceDesktop,
+      title: "电脑",
+      value: device
+        ? device.online
+          ? device.name
+          : `${device.name}（离线，派给它的活会排队）`
+        : "读不到这台电脑",
+    },
+    {
+      icon: IconNotes,
+      title: "工作文件夹",
+      value: workdir ?? "这台电脑不再共享这个文件夹，请重新选一个",
+    },
+    {
+      icon: IconShieldCheck,
+      title: "先问你",
+      value: asks || "都直接做（底线仍然每次交给你）",
+    },
+  ];
+  return (
+    <PageSection
+      action={
+        agent.canManage ? (
+          <Button
+            render={
+              <Link
+                params={{ agentId: agent.id }}
+                search={{ edit: "run" }}
+                to="/bots/$agentId/setup"
+              />
+            }
+            size="sm"
+            variant="outline"
+          >
+            改电脑、文件夹和规则
+          </Button>
+        ) : undefined
+      }
+      title="运行方式"
+    >
+      <PageRows>
+        {rows.map(({ icon: Icon, title, value }, index) => (
+          <Fragment key={title}>
+            {index > 0 ? <Separator /> : null}
+            <Item size="sm">
+              <ItemMedia variant="icon">
+                <Icon />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>{title}</ItemTitle>
+                <ItemDescription data-external-run={title}>
+                  {value}
+                </ItemDescription>
+              </ItemContent>
+            </Item>
+          </Fragment>
+        ))}
+      </PageRows>
+      {mayNeverAsk(external) ? <NoPermissionWarning className="mt-3" /> : null}
     </PageSection>
   );
 }

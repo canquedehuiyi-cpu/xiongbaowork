@@ -256,7 +256,8 @@ export function HireFromComputer({
           Codex、Claude Code、Hermes 招进来当员工。
         </p>
         <Link
-          className="w-fit text-primary underline-offset-4 hover:underline"
+          className="w-fit text-primary underline underline-offset-4"
+          data-slot="hire-link"
           to="/settings/devices"
         >
           去配对一台电脑
@@ -379,7 +380,8 @@ function DeviceBar({
 function PairLink() {
   return (
     <Link
-      className="w-fit text-primary underline-offset-4 hover:underline"
+      className="w-fit text-primary underline underline-offset-4"
+      data-slot="hire-link"
       to="/settings/devices"
     >
       去配对一台电脑

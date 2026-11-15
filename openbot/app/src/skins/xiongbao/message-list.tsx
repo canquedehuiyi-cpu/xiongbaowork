@@ -32,12 +32,14 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { useBotNames } from "@/lib/agents/bot-names";
+import { useExternalDevices } from "@/lib/agents/external";
 import {
   knownPresence,
   type Presence,
   presenceSummary,
   usePresence,
 } from "@/lib/agents/presence";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { approvalInboxOptions } from "@/lib/approvals";
 import { untitledLine } from "@/lib/channels/label";
 import {
@@ -50,6 +52,7 @@ import {
 } from "@/lib/settings/message-list";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { iconButtonClassName, ListHead } from "./list-head";
+import { OfflineBanner, offlineComputers } from "./offline-banner";
 
 /** 「消息」列表的筛选：全部、未读、待我确认、群组。 */
 export type MessageFilter = "all" | "unread" | "needsMe" | "groups";
@@ -180,11 +183,19 @@ export function MessageList() {
   );
   // 整个列表一次读出已经载入的单聊员工此刻的状态，不是每行一个。取全部载入的会话（按最近排、截到上限），
   // 不取筛选、搜索之后剩下的：换筛选或敲一个字不换这一批，不重新问。
-  const presence = usePresence(
-    byRecency(channels.data ?? []).flatMap(
+  // 外部员工也在这一批里（没有单聊的也算）：有谁的电脑离线了，顶上要有提示条。
+  const externals = useQuery({
+    ...agentListQueryOptions(),
+    select: (agents) => agents.filter((agent) => agent.external),
+  }).data;
+  const presence = usePresence([
+    ...byRecency(channels.data ?? []).flatMap(
       (channel) => directAgentId(channel) ?? [],
     ),
-  );
+    ...(externals ?? []).map((agent) => agent.id),
+  ]);
+  const devices = useExternalDevices(externals ?? []);
+  const offline = offlineComputers(externals ?? [], presence, devices);
   const loaded = channels.data !== undefined;
   // 「待我确认」还不知道答案时，不说「没有」。
   const waitingUnknown = filter === "needsMe" && waiting.bots === undefined;
@@ -193,6 +204,9 @@ export function MessageList() {
       <ListHead rail="msg">
         <NewMenu />
       </ListHead>
+      {offline.map((computer) => (
+        <OfflineBanner computer={computer} key={computer.deviceId} />
+      ))}
       <label className="mx-4 mb-2 flex items-center gap-1.5 rounded-(--wb-radius-sm) bg-(--wb-card2) px-[11px] py-2 text-(--wb-muted) text-[13px]">
         <IconSearch aria-hidden="true" className="size-4 shrink-0" />
         <input
@@ -481,6 +495,8 @@ const MessageRow = memo(function MessageRow({
   // A turn running, or work the conversation waits on between turns: a hop, a routine.
   const busy = (channel.busy ?? false) || (channel.work?.length ?? 0) > 0;
   const known = group ? undefined : knownPresence(presence);
+  // 外部员工的电脑离线时，第二行写「离线 · 2 件排队中」（设计稿第 6 屏），不写最后一条消息。
+  const shown = known?.status === "offline" ? presenceSummary(known) : second;
   return (
     <ChannelMenu
       canRename={channel.canRename ?? false}
@@ -540,18 +556,18 @@ const MessageRow = memo(function MessageRow({
               </time>
             ) : null}
           </span>
-          {second || waitsOnMe || unread ? (
+          {shown || waitsOnMe || unread ? (
             <span className="mt-[3px] flex min-w-0 items-center gap-1.5">
               <span
                 className="min-w-0 flex-1 truncate text-(--wb-muted) text-[12.5px]"
                 data-message-second=""
-                title={second || undefined}
+                title={shown || undefined}
               >
                 {waitsOnMe ? (
                   <em className="text-(--wb-accent) not-italic">[待你确认]</em>
                 ) : null}
-                {waitsOnMe && second ? " " : null}
-                {second}
+                {waitsOnMe && shown ? " " : null}
+                {shown}
               </span>
               {unread ? (
                 <span className="size-2 shrink-0 rounded-full bg-(--wb-accent)">

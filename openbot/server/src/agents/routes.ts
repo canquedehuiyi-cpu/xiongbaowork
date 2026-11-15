@@ -641,9 +641,11 @@ export function createAgentRoutes(
      * Whether it runs on this deployment's model, so a person can pick the model and effort per
      * conversation: a `built_in` Bot (no endpoint), or the harness picked in setup when it is one of
      * OpenBot's own that takes the choice. A Bot on any other framework picks its own model.
+     * So does an external employee: no endpoint, but its agent runs on its hirer's own computer.
      */
     runsOnOpenBotModel:
-      agent.endpoint === null || takesModelChoice(agent.endpoint),
+      !agent.externalRun &&
+      (agent.endpoint === null || takesModelChoice(agent.endpoint)),
     /*
      * Whether OpenBot gives it a key on every run, as it does at every address it runs itself: the
      * Bot in the box and the harness picked in setup (see runtime-agents.ts). Such a Bot uses its
@@ -1478,6 +1480,8 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     ...(agent.instructions ? { instructions: agent.instructions } : {}),
     // What runs it, by name, so a page can say that where it would otherwise show an address.
     ...(agent.framework ? { framework: agent.framework } : {}),
+    // 外部员工: its computer, agent, folder and rules, by reference. Only its hirer sees the Bot.
+    ...(agent.externalRun ? { external: agent.externalRun } : {}),
     canManage: canManageAgent(actor, agent),
     // Ownership, kept separate from permission. `canManage` is also true for an administrator on
     // another user's coworker, so a roster that split "mine" on it would file other people's work

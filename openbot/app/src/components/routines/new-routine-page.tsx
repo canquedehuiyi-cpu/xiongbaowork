@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { takesUnattendedWork } from "@/lib/agents/external";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { shortName } from "@/lib/brand";
 import { untitledLine } from "@/lib/channels/label";
@@ -209,20 +210,26 @@ export function NewRoutinePage({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          {(agents.data ?? []).map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {/* Hidden: the name beside it already says who. */}
-                              <span aria-hidden="true" className="contents">
-                                <AbstractAvatar
-                                  name={agent.name}
-                                  seed={agent.avatarSeed}
-                                  portrait={{ kind: "coworker", id: agent.id }}
-                                  size={18}
-                                />
-                              </span>
-                              {agent.name}
-                            </SelectItem>
-                          ))}
+                          {/* 外部员工这一步不接定时任务（外部员工规格「不做」），不列它。 */}
+                          {(agents.data ?? [])
+                            .filter(takesUnattendedWork)
+                            .map((agent) => (
+                              <SelectItem key={agent.id} value={agent.id}>
+                                {/* Hidden: the name beside it already says who. */}
+                                <span aria-hidden="true" className="contents">
+                                  <AbstractAvatar
+                                    name={agent.name}
+                                    seed={agent.avatarSeed}
+                                    portrait={{
+                                      kind: "coworker",
+                                      id: agent.id,
+                                    }}
+                                    size={18}
+                                  />
+                                </span>
+                                {agent.name}
+                              </SelectItem>
+                            ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>

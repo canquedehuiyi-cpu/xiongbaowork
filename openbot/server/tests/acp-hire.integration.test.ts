@@ -1,12 +1,12 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAppRegistry } from "../../runner/src/apps";
-import { createDiscoverActions } from "../../runner/src/discover-actions";
-import { randomBytes, randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
+import { createAppRegistry } from "../../runner/src/apps";
+import { createDiscoverActions } from "../../runner/src/discover-actions";
 import {
   externalEmployeesAmong,
   externalHirerOf,
@@ -506,6 +506,21 @@ describe("an external employee's configuration", () => {
         })
       ).status,
     ).toBe(400);
+    // Its hirer reads how it runs through the generic routes too (its badge, card and settings),
+    // and it never gets the model picker: its agent picks its own model.
+    const read = await call(owner, "GET", `/agents/${agent.id}`);
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({
+      agent: {
+        runsOnOpenBotModel: false,
+        external: {
+          harness: "codex",
+          deviceId: device.deviceId,
+          workdirRef: other,
+          rules: { ...RULES, push: "direct" },
+        },
+      },
+    });
     // Somebody else: refused, and the generic routes do not even show it to them.
     expect(
       (

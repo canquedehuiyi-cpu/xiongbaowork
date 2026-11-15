@@ -23,6 +23,7 @@ tests/agent-connection-slow-agent.test.ts
 tests/agent-department.integration.test.ts
 tests/agent-endpoint.test.ts
 tests/agent-escalation.test.ts
+tests/agent-external-field.test.ts
 tests/agent-handoff-answer.integration.test.ts
 tests/agent-handoff-delivery.test.ts
 tests/agent-handoff-endtoend.integration.test.ts

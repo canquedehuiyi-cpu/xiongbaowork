@@ -1,3 +1,4 @@
+import type { AcpHarness, AcpRuleKey, AcpRuleValue } from "../../../shared/acp";
 import type { Persona } from "../../../shared/persona";
 import type { PortraitPreset } from "../portraits/store";
 
@@ -113,6 +114,25 @@ export type AgentProfile = {
    * what runs it, never its subtitle (`frameworkOf`).
    */
   framework?: string;
+  /**
+   * An external employee's (`device_acp`) computer, agent, folder and rules, by reference only (外部
+   * 员工 spec §1): what its badge, card and header show and what its settings edit. Absent for every
+   * other Bot. Only its hirer can see the Bot at all (it is always private). Published as `external`;
+   * not named so here, where `update`'s input already has an `external` of its own shape.
+   */
+  externalRun?: AgentExternalRun;
+};
+
+/** What {@link AgentProfile.externalRun} carries: `agents.configuration` of a `device_acp` Bot, read back. */
+export type AgentExternalRun = {
+  harness: AcpHarness;
+  deviceId: string;
+  workdirRef: string;
+  /** `custom` only: the hirer's own agent registered on that computer (`app_…`). */
+  appRef?: string;
+  rules: Record<AcpRuleKey, AcpRuleValue>;
+  /** `custom` only: hired knowing it may never ask before it acts. */
+  noPermissionAcknowledged?: true;
 };
 
 export type CreateAgentInput = Pick<
