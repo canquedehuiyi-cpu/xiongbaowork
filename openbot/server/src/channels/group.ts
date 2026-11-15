@@ -242,11 +242,6 @@ export type GroupStore = {
     userId: string,
     unlink?: readonly string[],
   ): Promise<void>;
-  /**
-   * Unlink these Bots from the group as the caller's frame may (no floor: a person leaving takes
-   * their own external employees with them). How many rows went.
-   */
-  unlinkBots(channelId: string, agentIds: readonly string[]): Promise<number>;
 };
 
 /** The executor `database.transaction` hands its callback, which reads like the database itself. */
@@ -729,19 +724,6 @@ export function createGroupStore(
         .innerJoin(users, eq(users.id, channelMemberships.userId))
         .where(eq(channelMemberships.channelId, channelId))
         .orderBy(asc(channelMemberships.createdAt), asc(users.email));
-    },
-    async unlinkBots(channelId, agentIds) {
-      if (agentIds.length === 0) return 0;
-      const removed = await database
-        .delete(channelAgents)
-        .where(
-          and(
-            eq(channelAgents.channelId, channelId),
-            inArray(channelAgents.agentId, [...agentIds]),
-          ),
-        )
-        .returning({ agentId: channelAgents.agentId });
-      return removed.length;
     },
     async removeMember(channelId, userId, unlink = []) {
       await database.transaction(async (tx) => {
@@ -1938,14 +1920,6 @@ export function createGroupConversations(deps: {
         userId,
         await externalOf(channel, userId),
       );
-    },
-    /**
-     * Unlink the caller's own external employees from a group they are about to leave by a path that
-     * does not go through `removeMember` (the creator handing a shared group over). Idempotent.
-     */
-    async unlinkOwnExternal(owner: string, channel: string): Promise<void> {
-      const own = await externalOf(channel, owner);
-      if (own.length > 0) await deps.store.unlinkBots(channel, own);
     },
     /**
      * An approval that paused a group turn was decided: run the continuation, then write what the Bot

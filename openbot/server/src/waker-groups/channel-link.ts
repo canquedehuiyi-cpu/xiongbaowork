@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import {
   type GroupConversations,
   GroupRefusedError,
@@ -8,6 +8,7 @@ import {
 import type { ChannelStore } from "../channels/routes";
 import type { Database } from "../db/client";
 import {
+  agents,
   botTasks,
   channelAgents,
   channelMemberships,
@@ -198,7 +199,9 @@ export type WakerGroupLink = {
   /**
    * 创建者本人退群（3.1.1 第 4.2 条）：owner 帧一个事务：
    * `select … from channels where id = $1 and deleted_at is null for update`（要求 tenant_id = 'team'、created_by = owner）
+   * → 先解除自己招的外部员工（`device_acp`）在这个群的链接（0218 要求删的人仍是成员，所以放在删成员行之前）
    * → 删自己的成员行与 intelligence_channel_mappings → select xiongbao_team_channel_hand_over($1)。
+   * 退群被拒（55006）时解链随事务一起回滚。
    * 读不到、不是 team、或不是创建者时返回 null（交给上游）。55006 时整体回滚，抛 GroupRefusedError("有组团流程正在运行，先停下再退群。")。
    *
    * `heir`：接手的人；没有人接手时为 null（最后一人离开、聊天已软删，或只剩停用的成员）。
@@ -630,6 +633,24 @@ export function createWakerGroupLink(deps: {
               row.created_by !== owner
             )
               return null;
+            // Their own external employees go with them, while row security still counts them a member.
+            await tx.delete(channelAgents).where(
+              and(
+                eq(channelAgents.channelId, channelId),
+                inArray(
+                  channelAgents.agentId,
+                  tx
+                    .select({ id: agents.id })
+                    .from(agents)
+                    .where(
+                      and(
+                        eq(agents.tenantId, owner),
+                        sql`${agents.type}::text = 'device_acp'`,
+                      ),
+                    ),
+                ),
+              ),
+            );
             const removed = await tx
               .delete(channelMemberships)
               .where(
@@ -683,8 +704,7 @@ const messageOf = (error: unknown) =>
 type LinkedGroupWrites = Pick<
   GroupConversations,
   "create" | "addBots" | "removeBots" | "reorder" | "removeMember"
-> &
-  Partial<Pick<GroupConversations, "unlinkOwnExternal">>;
+>;
 
 /**
  * 4.2 写入口：群聊服务的四个写操作在上游成功之后同步群组。上游的校验（创建者、可用员工、2–20 位）
@@ -753,8 +773,6 @@ export function withWakerGroupLink<T extends LinkedGroupWrites>(
       reconciled(channel, groups.reorder(owner, channel, input)),
     async removeMember(owner: string, channel: string, userId: string) {
       if (userId !== owner) return groups.removeMember(owner, channel, userId);
-      // The creator's own external employees leave with them (before the membership goes: 0218).
-      await groups.unlinkOwnExternal?.(owner, channel);
       const left = await link.leave(owner, channel);
       if (left === null) return groups.removeMember(owner, channel, userId);
       if (left.heir) {

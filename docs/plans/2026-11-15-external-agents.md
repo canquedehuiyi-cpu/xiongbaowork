@@ -45,7 +45,7 @@
 1. 电脑重连时同一个许可请求再报一次：不能出现两条「等你确认」（按 `requestId` 去重）。→ Task 7 测试。
 2. 工作文件夹判定遇到 `..`、符号链接、Windows 大小写不同的路径：按设备上 `realpath` 后的结果判定，`C:\Code\x` 与 `c:\code\x\..\x` 算同一处。→ Task 4 测试。
 3. 等许可等几个小时：这一轮不能被 stall guard 或运行超时杀掉，看板保持「需要操作」。→ Task 6 测试。
-4. 群里非招聘人直接调审批接口批外部员工的许可：403，许可保持挂起。→ Task 7 测试。
+4. 群里非招聘人直接调审批接口批外部员工的许可：拒绝（404，不泄露这条审批存在），许可保持挂起。→ Task 7 测试。
 5. 自定义智能体从不请求许可：招聘时必须二次确认，名片上有警示。→ Task 8、Task 11 测试。
 
 ---
@@ -197,7 +197,7 @@
 
 **Files:**
 - Create: `openbot/server/src/agents/acp/permissions.ts`
-- Modify: `openbot/server/src/approvals/service.ts`：新增 `onDecided(listener: (record: ApprovalRecord, decision: ApprovalDecision) => void): () => void`，在 `decide`（738）落库后同步通知；`decide` 对 `toolRef` 以 `acp/` 开头的记录要求 `ownerUserId` 等于外部员工的招聘人（否则抛与现有越权相同的错误 → 403）
+- Modify: `openbot/server/src/approvals/service.ts`：新增 `onDecided(listener: (record: ApprovalRecord, decision: ApprovalDecision) => void): () => void`，在 `decide`（738）落库后同步通知；`decide` 对 `toolRef` 以 `acp/` 开头的记录要求 `ownerUserId` 等于外部员工的招聘人（招聘人判断在决定人自己的帧里读：别人读不到这条审批，存储照常答 404，不泄露它存在）
 - Test: `openbot/server/tests/acp-permissions.test.ts`、`openbot/server/tests/acp-permissions.integration.test.ts`
 
 **Interfaces:**
@@ -211,7 +211,7 @@
 
 - [ ] **Step 1: 测试**：
   - 规则：每个 `AcpRuleKey` 的 direct/ask 两种取值各一例；`test("several rules matched → the strictest wins")`；`test("delete always asks and never offers conversation-wide allow")`；`test("payment/outbound/credentials floors ask and never offer conversation-wide allow")`；`test("admin deny / SEC1 disabled / custom deny auto-reject with the rule named")`；`test("approvals switched off turns rule-level ask into allow but keeps floors")`；`test("insideWorkdir null is treated as outside")`。
-  - 集成：`test("same requestId reported twice opens one approval")`（Review Focus 1）；`test("a group member who is not the hirer gets 403 deciding")`（Review Focus 4）；`test("allow_conversation answers allow_always and auto-allows the next same-kind request in the thread")`；`test("deny answers reject_once")`。
+  - 集成：`test("same requestId reported twice opens one approval")`（Review Focus 1）；`test("a group member who is not the hirer cannot decide (not theirs: 404)")`（Review Focus 4）；`test("allow_conversation answers allow_always and auto-allows the next same-kind request in the thread")`；`test("deny answers reject_once")`。
 - [ ] **Step 2–4: 失败 → 实现 → 通过**；含 `bun test tests/approvals-policy.test.ts` 无回归。
 - [ ] **Step 5: Commit** `feat(server): 外部员工许可桥（规则、底线、审批、回答）`
 
@@ -282,6 +282,7 @@
 - Modify: `openbot/app/src/components/approvals/inline-approval.tsx:82`（`acp/` 审批：命令原文、说明、批准 / 拒绝 / 这次对话里都允许；`offerConversation` 为假时不显示第三个；非招聘人显示「等 <招聘人> 确认」且无按钮；底部「已同时推到你的手机」）、`openbot/app/src/components/channels/chat-transcript.tsx`（渲染上述 CUSTOM 事件）、审批详情的手机布局（`routes/_authed/_app/approvals.tsx` 详情视图：设计稿第 5 屏）
 - Test: `openbot/app/tests/acp-cards.test.tsx`
 
+- 群里许可卡要不要出按钮、显示「等 <招聘人> 确认」，只看卡片自带的数据（群转录里卡片带的招聘人 id / 名字）来判断，不能调审批接口（`GET /approvals/:id` 或决定接口）去试探：成员帧里这两个都是 404。
 - [ ] **Step 1: 测试**：`test("plan card ticks done steps and dots the running one")`、`test("diff card lists files with +/- and expands")`、`test("permission card offers three choices, two when offerConversation is false")`、`test("non-hirer sees 等 X 确认 and no buttons")`、`test("interrupted card re-sends the original prompt as a new turn on 重新派")`、`test("phone approval page has a fixed bottom 批准 button at 390px")`。
 - [ ] **Step 2–4: 失败 → 实现 → 通过**；app 全量 `bun test`、`bunx tsc --noEmit`、biome 干净。
 - [ ] **Step 5: Commit** `feat(app): 外部员工的进度、改动、许可与中断卡片`
