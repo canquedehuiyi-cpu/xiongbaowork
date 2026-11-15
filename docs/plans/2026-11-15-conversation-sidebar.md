@@ -22,7 +22,7 @@
 ## Global Constraints
 
 - 用量只来自 `model_token_calls`；`usage_status = 'unknown'` 的不算；取不到时显示「—」或「还没有用量数据」，不编数。
-- 已用口径：服务商单独报缓存（缓存数不含在 `input_tokens` 里，如 Anthropic 家族）时已用 = `input_tokens + cached_input_tokens + cache_write_tokens`；否则只取 `input_tokens`。
+- 已用口径：已用 = 计量记录的 `input_tokens`。AI SDK v3 报的输入总数已含缓存读写（如 Anthropic），不再另加缓存数。
 - 上限取值顺序：员工绑定的 `model_registry` 行 → `platform_model_pool` 行 → 按实际调用的服务商 + 模型名查模型目录（models.dev `limit.context`）→ 无（不显示百分比、不自动压缩）。
 - 自动压缩预留 = 上限的 10%；空余 = max(0, 上限 − 已用 − 预留)；「距自动压缩还剩」= 空余。
 - 分类键与顺序：`messages` 消息、`system` 人设与系统提示、`tools` 工具、`skills` 技能、`memory` 记忆；另有派生的 `reserve` 自动压缩预留、`free` 空余。
